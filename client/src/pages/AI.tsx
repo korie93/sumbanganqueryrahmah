@@ -9,18 +9,31 @@ type ChatMessage = {
 };
 
 export default function AI() {
+  const isLowSpecMode =
+    typeof document !== "undefined" &&
+    document.documentElement.classList.contains("low-spec");
+  const MAX_CHAT_MESSAGES = isLowSpecMode ? 60 : 200;
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const timeoutMs = 20000;
   const retryMs = 2500;
+  const maxRetries = 6;
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: isLowSpecMode ? "auto" : "smooth" });
   }, [messages]);
 
-  const sendQuery = async (text: string, isRetry = false) => {
+  const appendMessage = (msg: ChatMessage) => {
+    setMessages((prev) => {
+      const next = [...prev, msg];
+      if (next.length <= MAX_CHAT_MESSAGES) return next;
+      return next.slice(next.length - MAX_CHAT_MESSAGES);
+    });
+  };
+
+  const sendQuery = async (text: string, isRetry = false, retryCount = 0) => {
     if (!text || (loading && !isRetry)) return;
     if (!isRetry) {
       const userMessage: ChatMessage = {
@@ -28,7 +41,7 @@ export default function AI() {
         content: text,
         timestamp: new Date().toISOString(),
       };
-      setMessages((prev) => [...prev, userMessage]);
+      appendMessage(userMessage);
       setLoading(true);
     }
     let keepLoading = false;
@@ -53,6 +66,15 @@ export default function AI() {
       }
       const data = await res.json();
       if (data?.processing) {
+        if (retryCount >= maxRetries) {
+          const aiMessage: ChatMessage = {
+            role: "assistant",
+            content: "Sistem masih memproses. Sila klik Send sekali lagi selepas beberapa saat.",
+            timestamp: new Date().toISOString(),
+          };
+          appendMessage(aiMessage);
+          return;
+        }
         keepLoading = true;
         if (!isRetry) {
           const aiMessage: ChatMessage = {
@@ -60,11 +82,11 @@ export default function AI() {
             content: data?.ai_explanation || "Sedang proses carian. Sila tunggu beberapa saat.",
             timestamp: new Date().toISOString(),
           };
-          setMessages((prev) => [...prev, aiMessage]);
+          appendMessage(aiMessage);
         }
         setTimeout(() => {
-          sendQuery(text, true);
-        }, retryMs);
+          sendQuery(text, true, retryCount + 1);
+        }, retryMs + retryCount * 500);
         return;
       }
       const aiMessage: ChatMessage = {
@@ -72,14 +94,23 @@ export default function AI() {
         content: data?.ai_explanation || "Tiada cadangan AI.",
         timestamp: new Date().toISOString(),
       };
-      setMessages((prev) => [...prev, aiMessage]);
+      appendMessage(aiMessage);
     } catch (err: any) {
       const isAbort = err?.name === "AbortError";
       if (isAbort && isRetry) {
+        if (retryCount >= maxRetries) {
+          const aiMessage: ChatMessage = {
+            role: "assistant",
+            content: "Permintaan mengambil masa terlalu lama. Sila cuba semula.",
+            timestamp: new Date().toISOString(),
+          };
+          appendMessage(aiMessage);
+          return;
+        }
         keepLoading = true;
         setTimeout(() => {
-          sendQuery(text, true);
-        }, retryMs);
+          sendQuery(text, true, retryCount + 1);
+        }, retryMs + retryCount * 500);
         return;
       }
       const aiMessage: ChatMessage = {
@@ -89,7 +120,7 @@ export default function AI() {
           : err?.message || "Ralat semasa memproses carian.",
         timestamp: new Date().toISOString(),
       };
-      setMessages((prev) => [...prev, aiMessage]);
+      appendMessage(aiMessage);
     } finally {
       if (!keepLoading) setLoading(false);
     }
@@ -108,7 +139,7 @@ export default function AI() {
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-semibold text-foreground">AI Chat</h1>
           <p className="text-muted-foreground">
-            Tanya seperti ChatGPT. Sistem akan menjawab berdasarkan data DB + rule engine (offline).
+            Tanya biasa je tak power macam ChatGPT. Jangan tanya yang bukan-bukan.
           </p>
         </div>
 

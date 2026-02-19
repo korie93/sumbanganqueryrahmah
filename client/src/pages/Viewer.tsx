@@ -17,8 +17,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { getImportData } from "@/lib/api";
-import jsPDF from "jspdf";
-import * as XLSX from "xlsx";
 
 interface ViewerProps {
   onNavigate: (page: string) => void;
@@ -52,6 +50,9 @@ function extractHeadersFromRows(rows: DataRowWithId[]): string[] {
 }
 
 export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) {
+  const isLowSpecMode =
+    typeof document !== "undefined" &&
+    document.documentElement.classList.contains("low-spec");
   const isSuperuser = userRole === "superuser";
   const [rows, setRows] = useState<DataRowWithId[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -70,6 +71,7 @@ export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) 
   const [selectAllFiltered, setSelectAllFiltered] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
+  const rowIdCounterRef = useRef(0);
   const [emptyHint, setEmptyHint] = useState("");
   const [isCleared, setIsCleared] = useState(false);
 
@@ -77,13 +79,16 @@ export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) 
   const [totalRows, setTotalRows] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [hasMore, setHasMore] = useState(false);
-  const ROWS_PER_PAGE = 100;
+  const [loadedRowsCount, setLoadedRowsCount] = useState(0);
+  const [tableScrollTop, setTableScrollTop] = useState(0);
+  const ROWS_PER_PAGE = isLowSpecMode ? 40 : 100;
+  const MAX_ROWS_IN_MEMORY = isLowSpecMode ? 240 : 1200;
   const MIN_SEARCH_LENGTH = 2;
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search.trim());
-    }, 400); // 300–500ms sesuai
+    }, isLowSpecMode ? 700 : 400); // 300–700ms based on device mode
 
     return () => clearTimeout(timer);
   }, [search]);
@@ -93,6 +98,8 @@ export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) 
       setImportName("Data Viewer");
       setHeaders([]);
       setHeadersLocked(false);
+      rowIdCounterRef.current = 0;
+      setLoadedRowsCount(0);
       setEmptyHint("");
       setIsCleared(false);
       fetchData(importId, 1, false);
@@ -160,13 +167,14 @@ export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) 
 
       const apiRows = response.rows ?? [];
       const total = response.total ?? 0;
-
-      const startIndex = append ? rows.length : 0;
+      if (page === 1 && !append) {
+        rowIdCounterRef.current = 0;
+      }
 
       const parsedRows: DataRowWithId[] = apiRows.map(
-        (row: any, index: number) => ({
+        (row: any) => ({
           ...(row.jsonDataJsonb ?? {}),
-          __rowId: startIndex + index,
+          __rowId: rowIdCounterRef.current++,
         })
       );
 
@@ -182,14 +190,23 @@ export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) 
 
       // 🔹 SET ROWS
       if (append) {
-        setRows((prev) => [...prev, ...parsedRows]);
+        setRows((prev) => {
+          const merged = [...prev, ...parsedRows];
+          if (merged.length <= MAX_ROWS_IN_MEMORY) return merged;
+          return merged.slice(merged.length - MAX_ROWS_IN_MEMORY);
+        });
       } else {
         setRows(parsedRows);
       }
 
+      const nextLoadedRowsCount = append
+        ? loadedRowsCount + parsedRows.length
+        : parsedRows.length;
+
       setCurrentPage(page);
       setTotalRows(total);
-      setHasMore(startIndex + parsedRows.length < total);
+      setLoadedRowsCount(nextLoadedRowsCount);
+      setHasMore(nextLoadedRowsCount < total);
     } catch (err: any) {
       setError(err?.message || "Failed to fetch data");
     } finally {
@@ -244,6 +261,8 @@ export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) 
     setTotalRows(0);
     setHasMore(false);
     setCurrentPage(1);
+    setLoadedRowsCount(0);
+    rowIdCounterRef.current = 0;
     setIsCleared(true);
   };
 
@@ -333,6 +352,7 @@ export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) 
 
     setExportingPdf(true);
     try {
+      const { default: jsPDF } = await import("jspdf");
       const exportHeaders = headers.filter((h) => selectedColumns.has(h));
       const isDark = document.documentElement.classList.contains("dark");
 
@@ -462,7 +482,7 @@ export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) 
     }
   };
 
-  const exportToExcel = (exportFiltered: boolean = false, exportSelected: boolean = false) => {
+  const exportToExcel = async (exportFiltered: boolean = false, exportSelected: boolean = false) => {
     let dataToExport: DataRowWithId[] = rows;
     if (exportFiltered) {
       dataToExport = filteredRows;
@@ -495,42 +515,48 @@ export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) 
       return rowData;
     });
 
-    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+    try {
+      const XLSX = await import("xlsx");
+      const worksheet = XLSX.utils.json_to_sheet(worksheetData);
 
-    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-    for (let C = range.s.c; C <= range.e.c; C++) {
-      const headerCell = XLSX.utils.encode_cell({ r: 0, c: C });
-      const headerValue = worksheet[headerCell]?.v;
+      const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1");
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const headerCell = XLSX.utils.encode_cell({ r: 0, c: C });
+        const headerValue = worksheet[headerCell]?.v;
 
-      const isIcColumn = potentialIcColumns.includes(headerValue);
+        const isIcColumn = potentialIcColumns.includes(headerValue);
 
-      if (isIcColumn) {
-        for (let R = range.s.r + 1; R <= range.e.r; R++) {
-          const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
-          if (worksheet[cellAddress]) {
-            worksheet[cellAddress].t = 's';
-            worksheet[cellAddress].z = '@';
+        if (isIcColumn) {
+          for (let R = range.s.r + 1; R <= range.e.r; R++) {
+            const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+            if (worksheet[cellAddress]) {
+              worksheet[cellAddress].t = "s";
+              worksheet[cellAddress].z = "@";
+            }
           }
         }
       }
+
+      const colWidths = exportHeaders.map((h) => {
+        const maxLength = Math.max(
+          h.length,
+          ...dataToExport.slice(0, 100).map((row) => String(row[h] || "").length)
+        );
+        return { wch: Math.min(maxLength + 2, 50) };
+      });
+      worksheet["!cols"] = colWidths;
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
+
+      let filename = `SQR-${importName || "export"}`;
+      if (exportFiltered) filename += "-filtered";
+      if (exportSelected) filename += "-selected";
+      XLSX.writeFile(workbook, `${filename}-${new Date().toISOString().split("T")[0]}.xlsx`);
+    } catch (error: any) {
+      console.error("Failed to export Excel:", error);
+      alert("Failed to export Excel: " + (error?.message || "Unknown error"));
     }
-
-    const colWidths = exportHeaders.map((h) => {
-      const maxLength = Math.max(
-        h.length,
-        ...dataToExport.slice(0, 100).map(row => String(row[h] || "").length)
-      );
-      return { wch: Math.min(maxLength + 2, 50) };
-    });
-    worksheet['!cols'] = colWidths;
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
-
-    let filename = `SQR-${importName || "export"}`;
-    if (exportFiltered) filename += "-filtered";
-    if (exportSelected) filename += "-selected";
-    XLSX.writeFile(workbook, `${filename}-${new Date().toISOString().split("T")[0]}.xlsx`);
   };
 
   const visibleHeaders = useMemo(
@@ -574,6 +600,48 @@ export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) 
       })
     );
   }, [rows, columnFilters]);
+
+  const enableVirtualRows = isLowSpecMode && filteredRows.length > 80;
+  const rowHeightPx = 48;
+  const viewportHeightPx = 520;
+  const overscanRows = 10;
+  const virtualStartRow = enableVirtualRows
+    ? Math.max(0, Math.floor(tableScrollTop / rowHeightPx) - overscanRows)
+    : 0;
+  const virtualVisibleRows = enableVirtualRows
+    ? Math.ceil(viewportHeightPx / rowHeightPx) + overscanRows * 2
+    : filteredRows.length;
+  const virtualEndRow = enableVirtualRows
+    ? Math.min(filteredRows.length, virtualStartRow + virtualVisibleRows)
+    : filteredRows.length;
+  const virtualRows = enableVirtualRows
+    ? filteredRows.slice(virtualStartRow, virtualEndRow)
+    : filteredRows;
+  const topSpacerHeight = enableVirtualRows ? virtualStartRow * rowHeightPx : 0;
+  const bottomSpacerHeight = enableVirtualRows
+    ? Math.max(0, (filteredRows.length - virtualEndRow) * rowHeightPx)
+    : 0;
+
+  useEffect(() => {
+    setTableScrollTop(0);
+  }, [filteredRows.length, currentPage, debouncedSearch]);
+
+  useEffect(() => {
+    setSelectedRowIds((prev) => {
+      if (prev.size === 0) return prev;
+      const availableIds = new Set(rows.map((r) => r.__rowId));
+      let changed = false;
+      const next = new Set<number>();
+      prev.forEach((id) => {
+        if (availableIds.has(id)) {
+          next.add(id);
+        } else {
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [rows]);
 
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
@@ -908,7 +976,10 @@ export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) 
               )}
             </div>
 
-            <div className="overflow-x-auto rounded-lg border border-border">
+            <div
+              className="overflow-x-auto overflow-y-auto max-h-[560px] rounded-lg border border-border"
+              onScroll={enableVirtualRows ? (e) => setTableScrollTop(e.currentTarget.scrollTop) : undefined}
+            >
               <table className="w-full text-sm">
                 <thead className="bg-muted sticky top-0 z-10">
                   <tr>
@@ -928,10 +999,15 @@ export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) 
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRows.map((row) => (
+                  {enableVirtualRows && topSpacerHeight > 0 && (
+                    <tr aria-hidden="true">
+                      <td colSpan={visibleHeaders.length + 2} style={{ height: `${topSpacerHeight}px`, padding: 0 }} />
+                    </tr>
+                  )}
+                  {virtualRows.map((row) => (
                     <tr
                       key={row.__rowId}
-                      className={`border-t border-border hover:bg-muted/50 ${selectedRowIds.has(row.__rowId) ? "bg-primary/10" : ""
+                      className={`border-t border-border hover:bg-muted/50 h-[48px] ${selectedRowIds.has(row.__rowId) ? "bg-primary/10" : ""
                         }`}
                     >
                       <td className="p-3">
@@ -946,12 +1022,21 @@ export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) 
                       </td>
 
                       {visibleHeaders.map((header) => (
-                        <td key={header} className="p-3 text-foreground">
+                        <td
+                          key={header}
+                          className="p-3 text-foreground max-w-[300px] truncate whitespace-nowrap"
+                          title={String(row[header] ?? "-")}
+                        >
                           {row[header] ?? "-"}
                         </td>
                       ))}
                     </tr>
                   ))}
+                  {enableVirtualRows && bottomSpacerHeight > 0 && (
+                    <tr aria-hidden="true">
+                      <td colSpan={visibleHeaders.length + 2} style={{ height: `${bottomSpacerHeight}px`, padding: 0 }} />
+                    </tr>
+                  )}
                 </tbody>
               </table>
               {/* 🔒 MIN SEARCH LENGTH UX MESSAGE */}

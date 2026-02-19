@@ -25,6 +25,7 @@ import { eq, desc, and, or, gte, lte, count, sql, inArray } from "drizzle-orm";
 import crypto from "crypto";
 const MAX_SEARCH_LIMIT = 200;
 const ANALYTICS_TZ = process.env.ANALYTICS_TZ || "Asia/Kuala_Lumpur";
+const STORAGE_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
 const ALLOWED_OPERATORS = new Set([
   "contains",
   "equals",
@@ -866,6 +867,25 @@ export class PostgresStorage implements IStorage {
     }
   }
 
+  private parseBackupMetadataSafe(raw: unknown): Record<string, any> | null {
+    if (!raw) return null;
+    if (typeof raw === "object") return raw as Record<string, any>;
+    if (typeof raw !== "string") return null;
+
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+
+    // Guard against pathological legacy rows that can break JSON parsing/allocation.
+    if (trimmed.length > 200_000) return null;
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
   private async seedDefaultUsers() {
     const defaultUsers = [
       { username: "superuser", password: "0441024k", role: "superuser" },
@@ -965,8 +985,8 @@ export class PostgresStorage implements IStorage {
       let jsonData = row.json_data_jsonb;
       
       // Debug first row
-      if (idx === 0) {
-        console.log(`🔍 DEBUG first row keys: ${Object.keys(row).join(', ')}`);
+      if (idx === 0 && STORAGE_DEBUG_LOGS) {
+        console.log(`🔍 DEBUG first row keys: ${Object.keys(row).join(", ")}`);
         console.log(`🔍 DEBUG json_data type: ${typeof jsonData}, isArray: ${Array.isArray(jsonData)}, value sample: ${JSON.stringify(jsonData).substring(0, 100)}`);
       }
 
@@ -974,7 +994,9 @@ export class PostgresStorage implements IStorage {
         try {
           jsonData = JSON.parse(jsonData);
         } catch (e) {
-          console.log(`🔍 Failed to parse json_data as JSON, treating as string`);
+          if (STORAGE_DEBUG_LOGS) {
+            console.log(`🔍 Failed to parse json_data as JSON, treating as string`);
+          }
         }
       }
 
@@ -985,7 +1007,9 @@ export class PostgresStorage implements IStorage {
           obj[`col_${i + 1}`] = jsonData[i];
         }
         jsonData = obj;
-        if (idx === 0) console.log(`🔍 Converted array to object with keys: ${Object.keys(jsonData).join(',')}`);
+        if (idx === 0 && STORAGE_DEBUG_LOGS) {
+          console.log(`🔍 Converted array to object with keys: ${Object.keys(jsonData).join(",")}`);
+        }
       }
 
       return {
@@ -1092,14 +1116,18 @@ export class PostgresStorage implements IStorage {
   }
 
   async getDataRowsByImport(importId: string): Promise<DataRow[]> {
-    console.log("🧪 VIEWER importId received:", importId);
+    if (STORAGE_DEBUG_LOGS) {
+      console.log("🧪 VIEWER importId received:", importId);
+    }
 
     const rows = await db
       .select()
       .from(dataRows)
       .where(eq(dataRows.importId, importId));
 
-    console.log("🧪 ROW COUNT:", rows.length);
+    if (STORAGE_DEBUG_LOGS) {
+      console.log("🧪 ROW COUNT:", rows.length);
+    }
 
     return rows;
   }
@@ -1123,7 +1151,9 @@ export class PostgresStorage implements IStorage {
     // Properly handle empty string - convert to null
     const trimmedSearch = search && search.trim() ? search.trim() : null;
 
-    console.log(`🔍 searchDataRows called: search="${search}" -> trimmed="${trimmedSearch}"`);
+    if (STORAGE_DEBUG_LOGS) {
+      console.log(`🔍 searchDataRows called: search="${search}" -> trimmed="${trimmedSearch}"`);
+    }
 
     const safeLimit = Math.min(limit, MAX_SEARCH_LIMIT);
     const safeOffset = Math.max(offset, 0);
@@ -1145,13 +1175,17 @@ export class PostgresStorage implements IStorage {
         .from(dataRows)
         .where(eq(dataRows.importId, importId));
 
-      console.log("🔍 searchDataRows (no search) - returned:", rows.length, "rows");
+      if (STORAGE_DEBUG_LOGS) {
+        console.log("🔍 searchDataRows (no search) - returned:", rows.length, "rows");
+      }
 
       return { rows, total: Number(count) };
     }
 
     // When using raw SQL, need to convert column names
-    console.log(`🔍 Executing search query for: "${trimmedSearch}"`);
+    if (STORAGE_DEBUG_LOGS) {
+      console.log(`🔍 Executing search query for: "${trimmedSearch}"`);
+    }
     
     // Cast json_data to ensure it's properly returned as object (not array)
     const rowsResult = await db.execute(sql`
@@ -1174,7 +1208,9 @@ export class PostgresStorage implements IStorage {
   `);
 
     const totalCount = totalResult.rows && totalResult.rows[0] ? Number(totalResult.rows[0].total) : 0;
-    console.log(`🔍 Search results: ${rowsResult.rows.length} rows found (total: ${totalCount})`);
+    if (STORAGE_DEBUG_LOGS) {
+      console.log(`🔍 Search results: ${rowsResult.rows.length} rows found (total: ${totalCount})`);
+    }
 
     const convertedRows = rowsResult.rows.map((row: any) => {
       let jsonData = row.json_data;
@@ -1186,7 +1222,9 @@ export class PostgresStorage implements IStorage {
           obj[`col_${i + 1}`] = jsonData[i];
         }
         jsonData = obj;
-        console.log(`🔍 Converted array row id=${row.id} to object with keys: ${Object.keys(jsonData).join(',')}`);
+        if (STORAGE_DEBUG_LOGS) {
+          console.log(`🔍 Converted array row id=${row.id} to object with keys: ${Object.keys(jsonData).join(",")}`);
+        }
       }
 
       return {
@@ -2767,7 +2805,7 @@ export class PostgresStorage implements IStorage {
         name,
         created_at as "createdAt",
         created_by as "createdBy",
-        backup_data as "backupData",
+        ''::text as "backupData",
         metadata
     `);
 
@@ -2782,21 +2820,17 @@ export class PostgresStorage implements IStorage {
         name,
         created_at as "createdAt",
         created_by as "createdBy",
-        backup_data as "backupData",
-        metadata
+        ''::text as "backupData",
+        CASE
+          WHEN metadata IS NULL THEN NULL
+          WHEN length(metadata) > 200000 THEN NULL
+          ELSE metadata
+        END as metadata
       FROM public.backups
       ORDER BY created_at DESC
     `);
     return (result.rows as Backup[]).map((row: any) => {
-      let metadata = row.metadata;
-      if (typeof metadata === "string") {
-        try {
-          metadata = JSON.parse(metadata);
-        } catch {
-          metadata = null;
-        }
-      }
-      return { ...row, metadata };
+      return { ...row, metadata: this.parseBackupMetadataSafe(row.metadata) };
     });
   }
 
@@ -2809,22 +2843,18 @@ export class PostgresStorage implements IStorage {
         created_at as "createdAt",
         created_by as "createdBy",
         backup_data as "backupData",
-        metadata
+        CASE
+          WHEN metadata IS NULL THEN NULL
+          WHEN length(metadata) > 200000 THEN NULL
+          ELSE metadata
+        END as metadata
       FROM public.backups
       WHERE id = ${id}
       LIMIT 1
     `);
     const row = result.rows[0] as any;
     if (!row) return undefined;
-    let metadata = row.metadata;
-    if (typeof metadata === "string") {
-      try {
-        metadata = JSON.parse(metadata);
-      } catch {
-        metadata = null;
-      }
-    }
-    return { ...row, metadata } as Backup;
+    return { ...row, metadata: this.parseBackupMetadataSafe(row.metadata) } as Backup;
   }
 
   async deleteBackup(id: string): Promise<boolean> {

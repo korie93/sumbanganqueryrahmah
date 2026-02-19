@@ -113,23 +113,58 @@ export default function BackupRestore() {
   const [dateTo, setDateTo] = useState("");
   const [exportingPdf, setExportingPdf] = useState(false);
 
-  const { data, isLoading, refetch, isRefetching } = useQuery<BackupsResponse>({
+  const normalizeBackup = (raw: any): BackupRecord => {
+    let metadata = raw?.metadata ?? null;
+    if (typeof metadata === "string") {
+      if (metadata.length > 200_000) {
+        metadata = null;
+      } else {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch {
+        metadata = null;
+      }
+      }
+    }
+    return {
+      id: String(raw?.id ?? ""),
+      name: String(raw?.name ?? ""),
+      createdAt: String(raw?.createdAt ?? raw?.created_at ?? new Date().toISOString()),
+      createdBy: String(raw?.createdBy ?? raw?.created_by ?? "system"),
+      metadata: metadata && typeof metadata === "object" ? metadata : null,
+    };
+  };
+
+  const { data, isLoading, refetch, isRefetching, error } = useQuery<BackupsResponse>({
     queryKey: ["/api/backups"],
-    queryFn: () => getBackups(),
+    queryFn: async () => {
+      const response = await getBackups();
+      const list = Array.isArray(response?.backups) ? response.backups : [];
+      return { backups: list.map(normalizeBackup) };
+    },
+    retry: 1,
   });
 
   const backups = data?.backups || [];
 
   const createBackupMutation = useMutation({
     mutationFn: (name: string) => createBackup(name),
-    onSuccess: () => {
+    onSuccess: async (createdRaw: any) => {
+      const created = normalizeBackup(createdRaw);
+      queryClient.setQueryData<BackupsResponse>(["/api/backups"], (prev) => {
+        const prevList = prev?.backups ?? [];
+        const withoutSame = prevList.filter((b) => b.id !== created.id);
+        return { backups: [created, ...withoutSame] };
+      });
       toast({
         title: "Success",
         description: "Backup has been successfully created.",
       });
       setShowCreateDialog(false);
       setBackupName("");
-      queryClient.invalidateQueries({ queryKey: ["/api/backups"] });
+      clearAllFilters();
+      await queryClient.invalidateQueries({ queryKey: ["/api/backups"] });
+      await refetch();
     },
     onError: (err) => {
       console.error("Failed to create backup:", err);
@@ -733,6 +768,19 @@ export default function BackupRestore() {
           </CollapsibleContent>
         </Collapsible>
       </Card>
+
+      {error && (
+        <Card className="border-destructive/40">
+          <CardContent className="pt-6 flex items-center justify-between gap-3">
+            <div className="text-sm text-destructive">
+              Failed to load backup list. {(error as Error)?.message || ""}
+            </div>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Collapsible open={backupsOpen} onOpenChange={setBackupsOpen}>
         <Card>

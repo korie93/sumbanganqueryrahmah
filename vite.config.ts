@@ -8,6 +8,18 @@ export default defineConfig({
   build: {
     outDir: "../dist-local/public",
     emptyOutDir: true,
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom"],
+          query: ["@tanstack/react-query"],
+          charts: ["recharts"],
+          excel: ["xlsx"],
+          pdf: ["jspdf", "html2canvas"],
+        },
+      },
+    },
   },
   resolve: {
     alias: {

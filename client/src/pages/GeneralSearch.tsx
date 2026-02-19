@@ -9,7 +9,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import jsPDF from "jspdf";
 import {
   Select,
   SelectContent,
@@ -56,6 +55,9 @@ interface GeneralSearchProps {
 }
 
 export default function GeneralSearch({ userRole }: GeneralSearchProps) {
+  const isLowSpecMode =
+    typeof document !== "undefined" &&
+    document.documentElement.classList.contains("low-spec");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -65,8 +67,9 @@ export default function GeneralSearch({ userRole }: GeneralSearchProps) {
   const [exportingPdf, setExportingPdf] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalResults, setTotalResults] = useState(0);
-  const [resultsPerPage, setResultsPerPage] = useState(50);
+  const [resultsPerPage, setResultsPerPage] = useState(isLowSpecMode ? 20 : 50);
   const [selectedRecord, setSelectedRecord] = useState<Record<string, any> | null>(null);
+  const [tableScrollTop, setTableScrollTop] = useState(0);
 
   const [advancedMode, setAdvancedMode] = useState(false);
   const [filters, setFilters] = useState<FilterRow[]>([
@@ -76,7 +79,29 @@ export default function GeneralSearch({ userRole }: GeneralSearchProps) {
   const [columns, setColumns] = useState<string[]>([]);
   const [loadingColumns, setLoadingColumns] = useState(false);
   const canSeeSourceFile = userRole === "superuser" || userRole === "admin";
-  const pageSizeOptions = [25, 50, 100, 200];
+  const pageSizeOptions = isLowSpecMode ? [20, 40, 80] : [25, 50, 100, 200];
+  const enableVirtualRows = isLowSpecMode && results.length > 40;
+  const rowHeightPx = 52;
+  const viewportHeightPx = 540;
+  const overscanRows = 8;
+  const virtualStartRow = enableVirtualRows
+    ? Math.max(0, Math.floor(tableScrollTop / rowHeightPx) - overscanRows)
+    : 0;
+  const virtualVisibleRows = enableVirtualRows
+    ? Math.ceil(viewportHeightPx / rowHeightPx) + overscanRows * 2
+    : results.length;
+  const virtualEndRow = enableVirtualRows
+    ? Math.min(results.length, virtualStartRow + virtualVisibleRows)
+    : results.length;
+  const virtualRows = enableVirtualRows
+    ? results.slice(virtualStartRow, virtualEndRow)
+    : results;
+  const topSpacerHeight = enableVirtualRows ? virtualStartRow * rowHeightPx : 0;
+  const bottomSpacerHeight = enableVirtualRows ? Math.max(0, (results.length - virtualEndRow) * rowHeightPx) : 0;
+
+  useEffect(() => {
+    setTableScrollTop(0);
+  }, [results, currentPage, resultsPerPage]);
   const normalizeKey = (key: string) => key.toLowerCase().replace(/[^a-z0-9]/g, "");
   const getPriorityRank = (key: string): number => {
     const k = normalizeKey(key);
@@ -286,6 +311,7 @@ export default function GeneralSearch({ userRole }: GeneralSearchProps) {
 
     setExportingPdf(true);
     try {
+      const { default: jsPDF } = await import("jspdf");
       const isDark = document.documentElement.classList.contains("dark");
 
       const pdf = new jsPDF({
@@ -728,7 +754,10 @@ export default function GeneralSearch({ userRole }: GeneralSearchProps) {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto overflow-y-auto rounded-lg border border-border max-h-[600px] scrollbar-visible">
+                <div
+                  className="overflow-x-auto overflow-y-auto rounded-lg border border-border max-h-[600px] scrollbar-visible"
+                  onScroll={enableVirtualRows ? (e) => setTableScrollTop(e.currentTarget.scrollTop) : undefined}
+                >
                   <style>{`
                     .scrollbar-visible {
                       scrollbar-width: thin;
@@ -766,15 +795,22 @@ export default function GeneralSearch({ userRole }: GeneralSearchProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {results.map((row, rowIdx) => (
-                        <tr key={rowIdx} className="border-t border-border hover:bg-muted/50">
-                          <td className="p-3 text-muted-foreground">{rowIdx + 1}</td>
+                      {enableVirtualRows && topSpacerHeight > 0 && (
+                        <tr aria-hidden="true">
+                          <td colSpan={headers.length + 2} style={{ height: `${topSpacerHeight}px`, padding: 0 }} />
+                        </tr>
+                      )}
+                      {virtualRows.map((row, rowIdx) => {
+                        const actualRowIndex = enableVirtualRows ? virtualStartRow + rowIdx : rowIdx;
+                        return (
+                        <tr key={actualRowIndex} className="border-t border-border hover:bg-muted/50 h-[52px]">
+                          <td className="p-3 text-muted-foreground">{actualRowIndex + 1}</td>
                           <td className="p-3">
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => setSelectedRecord(row)}
-                              data-testid={`button-view-${rowIdx}`}
+                              data-testid={`button-view-${actualRowIndex}`}
                             >
                               <Eye className="w-4 h-4 mr-2" />
                               View
@@ -783,9 +819,17 @@ export default function GeneralSearch({ userRole }: GeneralSearchProps) {
                           {headers.map((header, colIdx) => (
                             <td
                               key={colIdx}
-                              className={`p-3 text-foreground ${
+                              className={`p-3 text-foreground max-w-[280px] truncate whitespace-nowrap ${
                                 getPriorityRank(header) <= 2 ? "font-semibold" : ""
                               }`}
+                              title={(() => {
+                                const rawValue = row?.[header];
+                                if (typeof rawValue === "string") return rawValue;
+                                if (rawValue === null || rawValue === undefined) return "-";
+                                if (Array.isArray(rawValue)) return rawValue.join(", ");
+                                if (typeof rawValue === "object") return JSON.stringify(rawValue);
+                                return String(rawValue);
+                              })()}
                             >
                               {(() => {
                                 const rawValue = row?.[header];
@@ -803,12 +847,19 @@ export default function GeneralSearch({ userRole }: GeneralSearchProps) {
 
                                 return advancedMode
                                   ? safeText
-                                  : highlightMatch(safeText, query);
+                                  : isLowSpecMode
+                                    ? safeText
+                                    : highlightMatch(safeText, query);
                               })()}
                             </td>
                           ))}
                         </tr>
-                      ))}
+                      )})}
+                      {enableVirtualRows && bottomSpacerHeight > 0 && (
+                        <tr aria-hidden="true">
+                          <td colSpan={headers.length + 2} style={{ height: `${bottomSpacerHeight}px`, padding: 0 }} />
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>

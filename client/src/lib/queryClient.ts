@@ -1,5 +1,18 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+const isLowSpecClient = (() => {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return false;
+  }
+  const cores = navigator.hardwareConcurrency || 4;
+  const ramGb = (navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4;
+  const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
+  return cores <= 4 || ramGb <= 4 || saveData;
+})();
+
+const QUERY_STALE_TIME = isLowSpecClient ? 15_000 : 60_000;
+const QUERY_GC_TIME = isLowSpecClient ? 60_000 : 5 * 60_000;
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -57,7 +70,9 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
+      refetchOnMount: false,
+      staleTime: QUERY_STALE_TIME,
+      gcTime: QUERY_GC_TIME,
       retry: false,
     },
     mutations: {

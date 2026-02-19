@@ -1,25 +1,26 @@
-import { useState, useEffect, useCallback } from "react";
+import { lazy, Suspense, useState, useEffect, useCallback } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-import Login from "@/pages/Login";
-import Home from "@/pages/Home";
-import Import from "@/pages/Import";
-import Saved from "@/pages/Saved";
-import Viewer from "@/pages/Viewer";
-import GeneralSearch from "@/pages/GeneralSearch";
-import Analysis from "@/pages/Analysis";
-import Activity from "@/pages/Activity";
-import AuditLogs from "@/pages/AuditLogs";
-import BackupRestore from "@/pages/BackupRestore";
-import Dashboard from "@/pages/Dashboard";
-import AI from "@/pages/AI";
-import Banned from "@/pages/Banned";
 import Navbar from "@/components/Navbar";
 import AutoLogout from "@/components/AutoLogout";
 import { activityLogout, getImports } from "@/lib/api";
+
+const Login = lazy(() => import("@/pages/Login"));
+const Home = lazy(() => import("@/pages/Home"));
+const Import = lazy(() => import("@/pages/Import"));
+const Saved = lazy(() => import("@/pages/Saved"));
+const Viewer = lazy(() => import("@/pages/Viewer"));
+const GeneralSearch = lazy(() => import("@/pages/GeneralSearch"));
+const Analysis = lazy(() => import("@/pages/Analysis"));
+const Activity = lazy(() => import("@/pages/Activity"));
+const AuditLogs = lazy(() => import("@/pages/AuditLogs"));
+const BackupRestore = lazy(() => import("@/pages/BackupRestore"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const AI = lazy(() => import("@/pages/AI"));
+const Banned = lazy(() => import("@/pages/Banned"));
 
 interface User {
   username: string;
@@ -86,8 +87,6 @@ function AppContent() {
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    console.log("🫀 Heartbeat started");
-
     const interval = setInterval(() => {
       fetch("/api/activity/heartbeat", {
         method: "POST",
@@ -98,7 +97,6 @@ function AppContent() {
     }, 30_000);
 
     return () => {
-      console.log("🛑 Heartbeat stopped");
       clearInterval(interval);
     };
   }, [user]);
@@ -155,12 +153,26 @@ function AppContent() {
     );
   }
 
+  const pageFallback = (
+    <div className="min-h-[calc(100vh-3.5rem)] bg-background flex items-center justify-center">
+      <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+    </div>
+  );
+
   if (localStorage.getItem("banned") === "1") {
-    return <Banned />;
+    return (
+      <Suspense fallback={pageFallback}>
+        <Banned />
+      </Suspense>
+    );
   }
 
   if (!user) {
-    return <Login onLoginSuccess={ handleLoginSuccess } />;
+    return (
+      <Suspense fallback={pageFallback}>
+        <Login onLoginSuccess={handleLoginSuccess} />
+      </Suspense>
+    );
   }
 
   const renderPage = () => {
@@ -256,7 +268,9 @@ function AppContent() {
   username = { user.username }
   savedCount = { savedCount }
     />
-    <main>{ renderPage() } </main>
+    <Suspense fallback={pageFallback}>
+      <main>{ renderPage() } </main>
+    </Suspense>
     </div>
   );
 }
