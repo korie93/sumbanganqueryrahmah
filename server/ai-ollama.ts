@@ -1,4 +1,4 @@
-type OllamaMessage = {
+export type OllamaMessage = {
   role: "system" | "user" | "assistant";
   content: string;
 };

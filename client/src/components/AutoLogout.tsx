@@ -17,6 +17,7 @@ export default function AutoLogout({
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
+  const lastResetByEventRef = useRef<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
 
   const timeoutMs = timeoutMinutes * 60 * 1000;
@@ -66,9 +67,12 @@ export default function AutoLogout({
   }, []);
 
   useEffect(() => {
-    const events = ["mousedown", "mousemove", "keydown", "scroll", "touchstart", "click"];
+    const events = ["mousedown", "keydown", "touchstart", "click"];
 
     const handleActivity = () => {
+      const now = Date.now();
+      if (now - lastResetByEventRef.current < 1000) return;
+      lastResetByEventRef.current = now;
       resetTimeout();
     };
 
@@ -137,46 +141,36 @@ export default function AutoLogout({
     const currentUsername = username || localStorage.getItem("username");
     const token = localStorage.getItem("token");
     if (!currentUsername || !token) {
-      console.log("AutoLogout: No username or token, skipping WebSocket connection");
       return;
     }
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
-    
-    console.log(`AutoLogout: Preparing WebSocket connection for ${currentUsername}`);
-    console.log(`AutoLogout: Host = ${host}, Protocol = ${protocol}`);
 
     const connectWebSocket = () => {
       try {
         const currentToken = localStorage.getItem("token");
         if (!currentToken) {
-          console.log("AutoLogout: Token removed, not reconnecting");
           return;
         }
         
         const wsUrl = `${protocol}//${host}/ws?token=${encodeURIComponent(currentToken)}`;
-        console.log(`AutoLogout: Connecting to WebSocket at ${wsUrl.substring(0, 50)}...`);
         
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
-        ws.onopen = () => {
-          console.log("WebSocket connected for real-time notifications");
-        };
+        ws.onopen = () => {};
 
         ws.onmessage = (event) => {
           try {
             const message = JSON.parse(event.data);
             
             if (message.type === "kicked") {
-              console.log("User kicked by admin:", message.reason);
               alert(message.reason || "Anda telah dilogout oleh pentadbir.");
               handleLogout();
             }
             
             if (message.type === "banned") {
-              console.log("User banned:", message.reason);
               localStorage.setItem("banned", "1");
               alert(message.reason || "Akaun anda telah disekat.");
               window.location.href = "/";
@@ -187,18 +181,15 @@ export default function AutoLogout({
         };
 
         ws.onclose = (event) => {
-          console.log(`WebSocket disconnected: code=${event.code}, reason=${event.reason}`);
           setTimeout(() => {
             if (localStorage.getItem("token")) {
-              console.log("AutoLogout: Attempting WebSocket reconnection...");
               connectWebSocket();
             }
           }, 5000);
         };
 
         ws.onerror = (error) => {
-          console.error("WebSocket error:", error);
-          console.error("WebSocket readyState:", ws.readyState);
+          console.warn("WebSocket error:", error);
         };
       } catch (err) {
         console.warn("Failed to connect WebSocket:", err);

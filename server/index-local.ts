@@ -9,7 +9,7 @@ import bcrypt from "bcrypt";
 import { PostgresStorage } from "./storage-postgres";
 import { StringDecoder } from "string_decoder";
 import { searchRateLimiter } from "./middleware/rate-limit";
-import { ollamaChat, ollamaEmbed, getOllamaConfig } from "./ai-ollama";
+import { ollamaChat, ollamaEmbed, getOllamaConfig, type OllamaMessage } from "./ai-ollama";
 
 const storage = new PostgresStorage();
 const app = express();
@@ -21,6 +21,7 @@ const connectedClients = new Map<string, WebSocket>();
 const WS_IDLE_MINUTES = 3;
 const WS_IDLE_MS = WS_IDLE_MINUTES * 60 * 1000;
 const AI_PRECOMPUTE_ON_START = String(process.env.AI_PRECOMPUTE_ON_START || "0") === "1";
+const API_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
 let idleSweepRunning = false;
 
 const buildEmbeddingText = (data: Record<string, any>): string => {
@@ -613,12 +614,14 @@ app.post("/api/activity/heartbeat", authenticateToken, async (req: Authenticated
 
     const activityId = req.user!.activityId;
 
-    console.log("================================");
-    console.log("HEARTBEAT MASUK");
-    console.log("Username:", req.user.username);
-    console.log("ActivityId:", activityId);
-    console.log("Time:", new Date().toISOString());
-    console.log("================================");
+    if (API_DEBUG_LOGS) {
+      console.log("================================");
+      console.log("HEARTBEAT MASUK");
+      console.log("Username:", req.user.username);
+      console.log("ActivityId:", activityId);
+      console.log("Time:", new Date().toISOString());
+      console.log("================================");
+    }
 
     await storage.updateActivity(activityId, {
       lastActivityTime: new Date(),
@@ -712,7 +715,9 @@ app.get(
       const offset = (page - 1) * limit;
       const search = String(req.query.search || "").trim();
 
-      console.log(`📥 /api/imports/:id/data called: importId=${importId}, page=${page}, search="${search}"`);
+      if (API_DEBUG_LOGS) {
+        console.log(`📥 /api/imports/:id/data called: importId=${importId}, page=${page}, search="${search}"`);
+      }
 
       if (!importId) {
         return res.status(400).json({ message: "importId is required" });
@@ -733,7 +738,9 @@ app.get(
         jsonDataJsonb: row.jsonDataJsonb,
       }));
 
-      console.log(`📤 Returning ${formattedRows.length} rows, total: ${result.total}`);
+      if (API_DEBUG_LOGS) {
+        console.log(`📤 Returning ${formattedRows.length} rows, total: ${result.total}`);
+      }
 
       // RESPONSE FORMAT EXPECTED BY VIEWER
       return res.json({
@@ -757,14 +764,18 @@ app.get(
   async (req, res) => {
     try {
       const search = String(req.query.q || "").trim();
+      if (API_DEBUG_LOGS) {
         console.log(`🔎 /api/search/global called: search="${search}"`);
+      }
       
       const page = Math.max(1, Number(req.query.page ?? 1));
       const limit = Math.min(Number(req.query.limit ?? 50), 200);
       const offset = (page - 1) * limit;
 
       if (search.length < 2) {
+        if (API_DEBUG_LOGS) {
           console.log(`🔎 Search too short (${search.length} chars), returning empty`);
+        }
         return res.json({
           columns: [],
           rows: [],
@@ -779,7 +790,9 @@ app.get(
         offset,
       });
 
+      if (API_DEBUG_LOGS) {
         console.log(`🔎 Global search found: ${result.rows.length} rows (total: ${result.total})`);
+      }
 
       const parsedRows = result.rows.map((r: any) => {
         const base =
@@ -799,10 +812,12 @@ app.get(
         Object.keys(row).forEach((key) => columnSet.add(key));
       }
 
-      if (parsedRows.length > 0) {
-        console.log(`🔎 Sample parsed row keys: ${Object.keys(parsedRows[0]).slice(0,20).join(',')}`);
-      } else {
-        console.log('🔎 No parsed rows to sample');
+      if (API_DEBUG_LOGS) {
+        if (parsedRows.length > 0) {
+          console.log(`🔎 Sample parsed row keys: ${Object.keys(parsedRows[0]).slice(0, 20).join(",")}`);
+        } else {
+          console.log("🔎 No parsed rows to sample");
+        }
       }
 
       return res.json({
@@ -1461,7 +1476,7 @@ const parseIntent = async (query: string): Promise<AiIntent> => {
     `Format WAJIB:\n` +
     `{"intent":"search_person","entities":{"name":null,"ic":null,"account_no":null,"phone":null,"address":null},"need_nearest_branch":false}\n` +
     `Jika IC/MyKad ada, isi "ic". Jika akaun, isi "account_no". Jika nombor telefon, isi "phone".`;
-  const messages = [
+  const messages: OllamaMessage[] = [
     { role: "system", content: system },
     { role: "user", content: query },
   ];
@@ -1576,6 +1591,20 @@ const extractLatLng = (data: Record<string, any>): { lat: number; lng: number } 
   const lng = findValue(["lng", "long", "longitude", "longitud"]);
   if (lat === null || lng === null) return null;
   return { lat, lng };
+};
+
+const isLatLng = (value: unknown): value is { lat: number; lng: number } => {
+  if (!value || typeof value !== "object") return false;
+  const v = value as { lat?: unknown; lng?: unknown };
+  return typeof v.lat === "number" && Number.isFinite(v.lat) && typeof v.lng === "number" && Number.isFinite(v.lng);
+};
+
+const isNonEmptyString = (value: unknown): value is string => {
+  return typeof value === "string" && value.trim().length > 0;
+};
+
+const hasPostcodeCoord = (value: unknown): value is { lat: number; lng: number } => {
+  return isLatLng(value);
 };
 
 const buildExplanation = async (payload: {
@@ -1804,8 +1833,9 @@ const computeAiSearch = async (query: string, userKey: string) => {
     }
         } else if (personForBranch && shouldFindBranch) {
           const coords = extractLatLng(personForBranch.jsonDataJsonb || {});
-          if (coords) {
-            const branches = await storage.getNearestBranches({ lat: coords.lat, lng: coords.lng, limit: 1 });
+          if (isLatLng(coords)) {
+            const safeCoords = coords as { lat: number; lng: number };
+            const branches = await storage.getNearestBranches({ lat: safeCoords.lat, lng: safeCoords.lng, limit: 1 });
             nearestBranch = branches[0] || null;
           } else {
             const data = personForBranch.jsonDataJsonb || {};
@@ -1817,16 +1847,18 @@ const computeAiSearch = async (query: string, userKey: string) => {
               data["OfficePostcode"] ||
               null;
           if (postcode) {
-            const postcodeDigits = String(postcode).match(/\d{5}/)?.[0] || null;
-            if (postcodeDigits) {
-              const pc = await storage.getPostcodeLatLng(postcodeDigits);
-              if (pc) {
-                const branches = await storage.getNearestBranches({ lat: pc.lat, lng: pc.lng, limit: 1 });
+            const postcodeDigits = String(postcode).match(/\d{5}/)?.[0] ?? null;
+            if (isNonEmptyString(postcodeDigits)) {
+              const postcodeDigitsSafe = postcodeDigits as string;
+              const pc = await storage.getPostcodeLatLng(postcodeDigitsSafe);
+              if (hasPostcodeCoord(pc)) {
+                const pcSafe = pc as { lat: number; lng: number };
+                const branches = await storage.getNearestBranches({ lat: pcSafe.lat, lng: pcSafe.lng, limit: 1 });
                 nearestBranch = branches[0] || null;
               } else {
                 missingCoords = true;
                 branchTextSearch = true;
-                const branches = await storage.findBranchesByText({ query: postcodeDigits, limit: 1 });
+                const branches = await storage.findBranchesByText({ query: postcodeDigitsSafe, limit: 1 });
                 nearestBranch = branches[0] || null;
               }
             } else {
@@ -2287,8 +2319,9 @@ app.post(
         }
       } else if (personForBranch && shouldFindBranch) {
         const coords = extractLatLng(personForBranch.jsonDataJsonb || {});
-        if (coords) {
-          const branches = await storage.getNearestBranches({ lat: coords.lat, lng: coords.lng, limit: 1 });
+        if (isLatLng(coords)) {
+          const safeCoords = coords as { lat: number; lng: number };
+          const branches = await storage.getNearestBranches({ lat: safeCoords.lat, lng: safeCoords.lng, limit: 1 });
           nearestBranch = branches[0] || null;
         } else {
           const data = personForBranch.jsonDataJsonb || {};
@@ -2300,16 +2333,18 @@ app.post(
             data["OfficePostcode"] ||
             null;
           if (postcode) {
-            const postcodeDigits = String(postcode).match(/\d{5}/)?.[0] || null;
-            if (postcodeDigits) {
-              const pc = await storage.getPostcodeLatLng(postcodeDigits);
-              if (pc) {
-                const branches = await storage.getNearestBranches({ lat: pc.lat, lng: pc.lng, limit: 1 });
+            const postcodeDigits = String(postcode).match(/\d{5}/)?.[0] ?? null;
+            if (isNonEmptyString(postcodeDigits)) {
+              const postcodeDigitsSafe = postcodeDigits as string;
+              const pc = await storage.getPostcodeLatLng(postcodeDigitsSafe);
+              if (hasPostcodeCoord(pc)) {
+                const pcSafe = pc as { lat: number; lng: number };
+                const branches = await storage.getNearestBranches({ lat: pcSafe.lat, lng: pcSafe.lng, limit: 1 });
                 nearestBranch = branches[0] || null;
               } else {
                 missingCoords = true;
                 branchTextSearch = true;
-                const branches = await storage.findBranchesByText({ query: postcodeDigits, limit: 1 });
+                const branches = await storage.findBranchesByText({ query: postcodeDigitsSafe, limit: 1 });
                 nearestBranch = branches[0] || null;
               }
             } else {
@@ -2829,7 +2864,7 @@ app.post(
           ? `DATA SISTEM (HASIL CARIAN KATA KUNCI: ${searchTerms.join(", ")}):\n${contextRows.join("\n\n")}`
           : "DATA SISTEM: TIADA REKOD DIJUMPAI UNTUK KATA KUNCI INI.";
 
-      const chatMessages = [
+      const chatMessages: OllamaMessage[] = [
         {
           role: "system",
           content:
@@ -3191,6 +3226,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
         const backups = await storage.getBackups();
         res.json({ backups: backups });
       } catch (error: any) {
+        console.error("Get backups error:", error);
         res.status(500).json({ message: error.message });
       }
     });

@@ -139,6 +139,7 @@ import { eq, desc, and, or, gte, lte, count, sql, inArray } from "drizzle-orm";
 import crypto from "crypto";
 var MAX_SEARCH_LIMIT = 200;
 var ANALYTICS_TZ = process.env.ANALYTICS_TZ || "Asia/Kuala_Lumpur";
+var STORAGE_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
 var ALLOWED_OPERATORS = /* @__PURE__ */ new Set([
   "contains",
   "equals",
@@ -745,6 +746,20 @@ var PostgresStorage = class {
       console.error("\u274C Failed to ensure backups table:", err?.message || err);
     }
   }
+  parseBackupMetadataSafe(raw) {
+    if (!raw) return null;
+    if (typeof raw === "object") return raw;
+    if (typeof raw !== "string") return null;
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    if (trimmed.length > 2e5) return null;
+    try {
+      const parsed = JSON.parse(trimmed);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
   async seedDefaultUsers() {
     const defaultUsers = [
       { username: "superuser", password: "0441024k", role: "superuser" },
@@ -816,7 +831,7 @@ var PostgresStorage = class {
   `);
     const convertedRows = rowsResult.rows.map((row, idx) => {
       let jsonData = row.json_data_jsonb;
-      if (idx === 0) {
+      if (idx === 0 && STORAGE_DEBUG_LOGS) {
         console.log(`\u{1F50D} DEBUG first row keys: ${Object.keys(row).join(", ")}`);
         console.log(`\u{1F50D} DEBUG json_data type: ${typeof jsonData}, isArray: ${Array.isArray(jsonData)}, value sample: ${JSON.stringify(jsonData).substring(0, 100)}`);
       }
@@ -824,7 +839,9 @@ var PostgresStorage = class {
         try {
           jsonData = JSON.parse(jsonData);
         } catch (e) {
-          console.log(`\u{1F50D} Failed to parse json_data as JSON, treating as string`);
+          if (STORAGE_DEBUG_LOGS) {
+            console.log(`\u{1F50D} Failed to parse json_data as JSON, treating as string`);
+          }
         }
       }
       if (Array.isArray(jsonData)) {
@@ -833,7 +850,9 @@ var PostgresStorage = class {
           obj[`col_${i + 1}`] = jsonData[i];
         }
         jsonData = obj;
-        if (idx === 0) console.log(`\u{1F50D} Converted array to object with keys: ${Object.keys(jsonData).join(",")}`);
+        if (idx === 0 && STORAGE_DEBUG_LOGS) {
+          console.log(`\u{1F50D} Converted array to object with keys: ${Object.keys(jsonData).join(",")}`);
+        }
       }
       return {
         id: row.id,
@@ -905,9 +924,13 @@ var PostgresStorage = class {
     return result[0];
   }
   async getDataRowsByImport(importId) {
-    console.log("\u{1F9EA} VIEWER importId received:", importId);
+    if (STORAGE_DEBUG_LOGS) {
+      console.log("\u{1F9EA} VIEWER importId received:", importId);
+    }
     const rows = await db.select().from(dataRows).where(eq(dataRows.importId, importId));
-    console.log("\u{1F9EA} ROW COUNT:", rows.length);
+    if (STORAGE_DEBUG_LOGS) {
+      console.log("\u{1F9EA} ROW COUNT:", rows.length);
+    }
     return rows;
   }
   async getDataRowCountByImport(importId) {
@@ -917,7 +940,9 @@ var PostgresStorage = class {
   async searchDataRows(params) {
     const { importId, search, limit, offset } = params;
     const trimmedSearch = search && search.trim() ? search.trim() : null;
-    console.log(`\u{1F50D} searchDataRows called: search="${search}" -> trimmed="${trimmedSearch}"`);
+    if (STORAGE_DEBUG_LOGS) {
+      console.log(`\u{1F50D} searchDataRows called: search="${search}" -> trimmed="${trimmedSearch}"`);
+    }
     const safeLimit = Math.min(limit, MAX_SEARCH_LIMIT);
     const safeOffset = Math.max(offset, 0);
     if (trimmedSearch && trimmedSearch.length < 2) {
@@ -926,10 +951,14 @@ var PostgresStorage = class {
     if (!trimmedSearch) {
       const rows = await db.select().from(dataRows).where(eq(dataRows.importId, importId)).limit(safeLimit).offset(safeOffset);
       const [{ count: count2 }] = await db.select({ count: sql`count(*)` }).from(dataRows).where(eq(dataRows.importId, importId));
-      console.log("\u{1F50D} searchDataRows (no search) - returned:", rows.length, "rows");
+      if (STORAGE_DEBUG_LOGS) {
+        console.log("\u{1F50D} searchDataRows (no search) - returned:", rows.length, "rows");
+      }
       return { rows, total: Number(count2) };
     }
-    console.log(`\u{1F50D} Executing search query for: "${trimmedSearch}"`);
+    if (STORAGE_DEBUG_LOGS) {
+      console.log(`\u{1F50D} Executing search query for: "${trimmedSearch}"`);
+    }
     const rowsResult = await db.execute(sql`
     SELECT 
       id,
@@ -948,7 +977,9 @@ var PostgresStorage = class {
       AND json_data::text ILIKE ${"%" + trimmedSearch + "%"}
   `);
     const totalCount = totalResult.rows && totalResult.rows[0] ? Number(totalResult.rows[0].total) : 0;
-    console.log(`\u{1F50D} Search results: ${rowsResult.rows.length} rows found (total: ${totalCount})`);
+    if (STORAGE_DEBUG_LOGS) {
+      console.log(`\u{1F50D} Search results: ${rowsResult.rows.length} rows found (total: ${totalCount})`);
+    }
     const convertedRows = rowsResult.rows.map((row) => {
       let jsonData = row.json_data;
       if (Array.isArray(jsonData)) {
@@ -957,7 +988,9 @@ var PostgresStorage = class {
           obj[`col_${i + 1}`] = jsonData[i];
         }
         jsonData = obj;
-        console.log(`\u{1F50D} Converted array row id=${row.id} to object with keys: ${Object.keys(jsonData).join(",")}`);
+        if (STORAGE_DEBUG_LOGS) {
+          console.log(`\u{1F50D} Converted array row id=${row.id} to object with keys: ${Object.keys(jsonData).join(",")}`);
+        }
       }
       return {
         id: row.id,
@@ -2156,7 +2189,7 @@ var PostgresStorage = class {
         name,
         created_at as "createdAt",
         created_by as "createdBy",
-        backup_data as "backupData",
+        ''::text as "backupData",
         metadata
     `);
     return result.rows[0];
@@ -2169,21 +2202,17 @@ var PostgresStorage = class {
         name,
         created_at as "createdAt",
         created_by as "createdBy",
-        backup_data as "backupData",
-        metadata
+        ''::text as "backupData",
+        CASE
+          WHEN metadata IS NULL THEN NULL
+          WHEN length(metadata) > 200000 THEN NULL
+          ELSE metadata
+        END as metadata
       FROM public.backups
       ORDER BY created_at DESC
     `);
     return result.rows.map((row) => {
-      let metadata = row.metadata;
-      if (typeof metadata === "string") {
-        try {
-          metadata = JSON.parse(metadata);
-        } catch {
-          metadata = null;
-        }
-      }
-      return { ...row, metadata };
+      return { ...row, metadata: this.parseBackupMetadataSafe(row.metadata) };
     });
   }
   async getBackupById(id) {
@@ -2195,22 +2224,18 @@ var PostgresStorage = class {
         created_at as "createdAt",
         created_by as "createdBy",
         backup_data as "backupData",
-        metadata
+        CASE
+          WHEN metadata IS NULL THEN NULL
+          WHEN length(metadata) > 200000 THEN NULL
+          ELSE metadata
+        END as metadata
       FROM public.backups
       WHERE id = ${id}
       LIMIT 1
     `);
     const row = result.rows[0];
     if (!row) return void 0;
-    let metadata = row.metadata;
-    if (typeof metadata === "string") {
-      try {
-        metadata = JSON.parse(metadata);
-      } catch {
-        metadata = null;
-      }
-    }
-    return { ...row, metadata };
+    return { ...row, metadata: this.parseBackupMetadataSafe(row.metadata) };
   }
   async deleteBackup(id) {
     await this.ensureBackupsTable();
@@ -2522,6 +2547,7 @@ var connectedClients = /* @__PURE__ */ new Map();
 var WS_IDLE_MINUTES = 3;
 var WS_IDLE_MS = WS_IDLE_MINUTES * 60 * 1e3;
 var AI_PRECOMPUTE_ON_START = String(process.env.AI_PRECOMPUTE_ON_START || "0") === "1";
+var API_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
 var idleSweepRunning = false;
 var buildEmbeddingText = (data) => {
   const preferredKeys = [
@@ -3012,12 +3038,14 @@ app.post("/api/activity/heartbeat", authenticateToken, async (req, res) => {
       return res.status(401).json({ ok: false, message: "Unauthenticated" });
     }
     const activityId = req.user.activityId;
-    console.log("================================");
-    console.log("HEARTBEAT MASUK");
-    console.log("Username:", req.user.username);
-    console.log("ActivityId:", activityId);
-    console.log("Time:", (/* @__PURE__ */ new Date()).toISOString());
-    console.log("================================");
+    if (API_DEBUG_LOGS) {
+      console.log("================================");
+      console.log("HEARTBEAT MASUK");
+      console.log("Username:", req.user.username);
+      console.log("ActivityId:", activityId);
+      console.log("Time:", (/* @__PURE__ */ new Date()).toISOString());
+      console.log("================================");
+    }
     await storage.updateActivity(activityId, {
       lastActivityTime: /* @__PURE__ */ new Date(),
       isActive: true
@@ -3099,7 +3127,9 @@ app.get(
       const limit = Math.min(Number(req.query.limit ?? 100), 500);
       const offset = (page - 1) * limit;
       const search = String(req.query.search || "").trim();
-      console.log(`\u{1F4E5} /api/imports/:id/data called: importId=${importId}, page=${page}, search="${search}"`);
+      if (API_DEBUG_LOGS) {
+        console.log(`\u{1F4E5} /api/imports/:id/data called: importId=${importId}, page=${page}, search="${search}"`);
+      }
       if (!importId) {
         return res.status(400).json({ message: "importId is required" });
       }
@@ -3115,7 +3145,9 @@ app.get(
         importId: row.importId,
         jsonDataJsonb: row.jsonDataJsonb
       }));
-      console.log(`\u{1F4E4} Returning ${formattedRows.length} rows, total: ${result.total}`);
+      if (API_DEBUG_LOGS) {
+        console.log(`\u{1F4E4} Returning ${formattedRows.length} rows, total: ${result.total}`);
+      }
       return res.json({
         rows: formattedRows,
         total: result.total || 0,
@@ -3135,12 +3167,16 @@ app.get(
   async (req, res) => {
     try {
       const search = String(req.query.q || "").trim();
-      console.log(`\u{1F50E} /api/search/global called: search="${search}"`);
+      if (API_DEBUG_LOGS) {
+        console.log(`\u{1F50E} /api/search/global called: search="${search}"`);
+      }
       const page = Math.max(1, Number(req.query.page ?? 1));
       const limit = Math.min(Number(req.query.limit ?? 50), 200);
       const offset = (page - 1) * limit;
       if (search.length < 2) {
-        console.log(`\u{1F50E} Search too short (${search.length} chars), returning empty`);
+        if (API_DEBUG_LOGS) {
+          console.log(`\u{1F50E} Search too short (${search.length} chars), returning empty`);
+        }
         return res.json({
           columns: [],
           rows: [],
@@ -3153,7 +3189,9 @@ app.get(
         limit,
         offset
       });
-      console.log(`\u{1F50E} Global search found: ${result.rows.length} rows (total: ${result.total})`);
+      if (API_DEBUG_LOGS) {
+        console.log(`\u{1F50E} Global search found: ${result.rows.length} rows (total: ${result.total})`);
+      }
       const parsedRows = result.rows.map((r) => {
         const base = r.jsonDataJsonb && typeof r.jsonDataJsonb === "object" ? r.jsonDataJsonb : {};
         const sourceFile = r.importFilename || r.importName || "";
@@ -3166,10 +3204,12 @@ app.get(
       for (const row of parsedRows) {
         Object.keys(row).forEach((key) => columnSet.add(key));
       }
-      if (parsedRows.length > 0) {
-        console.log(`\u{1F50E} Sample parsed row keys: ${Object.keys(parsedRows[0]).slice(0, 20).join(",")}`);
-      } else {
-        console.log("\u{1F50E} No parsed rows to sample");
+      if (API_DEBUG_LOGS) {
+        if (parsedRows.length > 0) {
+          console.log(`\u{1F50E} Sample parsed row keys: ${Object.keys(parsedRows[0]).slice(0, 20).join(",")}`);
+        } else {
+          console.log("\u{1F50E} No parsed rows to sample");
+        }
       }
       return res.json({
         columns: Array.from(columnSet),
@@ -3808,6 +3848,17 @@ var extractLatLng = (data) => {
   if (lat === null || lng === null) return null;
   return { lat, lng };
 };
+var isLatLng = (value) => {
+  if (!value || typeof value !== "object") return false;
+  const v = value;
+  return typeof v.lat === "number" && Number.isFinite(v.lat) && typeof v.lng === "number" && Number.isFinite(v.lng);
+};
+var isNonEmptyString = (value) => {
+  return typeof value === "string" && value.trim().length > 0;
+};
+var hasPostcodeCoord = (value) => {
+  return isLatLng(value);
+};
 var buildExplanation = async (payload) => {
   const template = () => {
     if (payload.countSummary && payload.countSummary.length > 0) {
@@ -3979,23 +4030,26 @@ var computeAiSearch = async (query, userKey) => {
     }
   } else if (personForBranch && shouldFindBranch) {
     const coords = extractLatLng(personForBranch.jsonDataJsonb || {});
-    if (coords) {
-      const branches = await storage.getNearestBranches({ lat: coords.lat, lng: coords.lng, limit: 1 });
+    if (isLatLng(coords)) {
+      const safeCoords = coords;
+      const branches = await storage.getNearestBranches({ lat: safeCoords.lat, lng: safeCoords.lng, limit: 1 });
       nearestBranch = branches[0] || null;
     } else {
       const data = personForBranch.jsonDataJsonb || {};
       const postcode = data["Poskod"] || data["Postcode"] || data["Postal Code"] || data["HomePostcode"] || data["OfficePostcode"] || null;
       if (postcode) {
-        const postcodeDigits = String(postcode).match(/\d{5}/)?.[0] || null;
-        if (postcodeDigits) {
-          const pc = await storage.getPostcodeLatLng(postcodeDigits);
-          if (pc) {
-            const branches = await storage.getNearestBranches({ lat: pc.lat, lng: pc.lng, limit: 1 });
+        const postcodeDigits = String(postcode).match(/\d{5}/)?.[0] ?? null;
+        if (isNonEmptyString(postcodeDigits)) {
+          const postcodeDigitsSafe = postcodeDigits;
+          const pc = await storage.getPostcodeLatLng(postcodeDigitsSafe);
+          if (hasPostcodeCoord(pc)) {
+            const pcSafe = pc;
+            const branches = await storage.getNearestBranches({ lat: pcSafe.lat, lng: pcSafe.lng, limit: 1 });
             nearestBranch = branches[0] || null;
           } else {
             missingCoords = true;
             branchTextSearch = true;
-            const branches = await storage.findBranchesByText({ query: postcodeDigits, limit: 1 });
+            const branches = await storage.findBranchesByText({ query: postcodeDigitsSafe, limit: 1 });
             nearestBranch = branches[0] || null;
           }
         } else {
@@ -4401,23 +4455,26 @@ app.post(
         }
       } else if (personForBranch && shouldFindBranch) {
         const coords = extractLatLng(personForBranch.jsonDataJsonb || {});
-        if (coords) {
-          const branches = await storage.getNearestBranches({ lat: coords.lat, lng: coords.lng, limit: 1 });
+        if (isLatLng(coords)) {
+          const safeCoords = coords;
+          const branches = await storage.getNearestBranches({ lat: safeCoords.lat, lng: safeCoords.lng, limit: 1 });
           nearestBranch = branches[0] || null;
         } else {
           const data = personForBranch.jsonDataJsonb || {};
           const postcode = data["Poskod"] || data["Postcode"] || data["Postal Code"] || data["HomePostcode"] || data["OfficePostcode"] || null;
           if (postcode) {
-            const postcodeDigits = String(postcode).match(/\d{5}/)?.[0] || null;
-            if (postcodeDigits) {
-              const pc = await storage.getPostcodeLatLng(postcodeDigits);
-              if (pc) {
-                const branches = await storage.getNearestBranches({ lat: pc.lat, lng: pc.lng, limit: 1 });
+            const postcodeDigits = String(postcode).match(/\d{5}/)?.[0] ?? null;
+            if (isNonEmptyString(postcodeDigits)) {
+              const postcodeDigitsSafe = postcodeDigits;
+              const pc = await storage.getPostcodeLatLng(postcodeDigitsSafe);
+              if (hasPostcodeCoord(pc)) {
+                const pcSafe = pc;
+                const branches = await storage.getNearestBranches({ lat: pcSafe.lat, lng: pcSafe.lng, limit: 1 });
                 nearestBranch = branches[0] || null;
               } else {
                 missingCoords = true;
                 branchTextSearch = true;
-                const branches = await storage.findBranchesByText({ query: postcodeDigits, limit: 1 });
+                const branches = await storage.findBranchesByText({ query: postcodeDigitsSafe, limit: 1 });
                 nearestBranch = branches[0] || null;
               }
             } else {
@@ -5200,6 +5257,7 @@ app.get("/api/backups", authenticateToken, requireRole("superuser"), async (req,
     const backups3 = await storage.getBackups();
     res.json({ backups: backups3 });
   } catch (error) {
+    console.error("Get backups error:", error);
     res.status(500).json({ message: error.message });
   }
 });
