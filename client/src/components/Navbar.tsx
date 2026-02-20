@@ -1,4 +1,4 @@
-import { Home, Upload, BookMarked, Eye, Search, BarChart3, Activity, FileText, Database, LogOut, ShieldCheck, LayoutDashboard, Sparkles } from "lucide-react";
+import { Home, Upload, BookMarked, Eye, Search, BarChart3, Activity, FileText, Database, LogOut, ShieldCheck, LayoutDashboard, Sparkles, SlidersHorizontal } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import ThemeToggle from "./ThemeToggle";
 
@@ -24,6 +24,7 @@ export default function Navbar({ currentPage, onNavigate, onLogout, userRole, us
     { id: "analysis", label: "Analysis", icon: BarChart3, roles: ["admin", "superuser"] },
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["superuser"] },
     { id: "ai", label: "AI", icon: Sparkles, roles: ["user", "admin", "superuser"] },
+    { id: "settings", label: "Settings", icon: SlidersHorizontal, roles: ["admin", "superuser"] },
     { id: "activity", label: "Activity", icon: Activity, roles: ["superuser"] },
     { id: "audit-logs", label: "Audit", icon: FileText, roles: ["superuser"] },
     { id: "backup", label: "Backup", icon: Database, roles: ["superuser"] },

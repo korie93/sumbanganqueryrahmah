@@ -129,6 +129,46 @@ type CategoryRule = {
   enabled?: boolean;
 };
 
+type SettingInputType = "text" | "number" | "boolean" | "select" | "timestamp";
+
+type SettingsPermission = {
+  canView: boolean;
+  canEdit: boolean;
+};
+
+type SettingsOption = {
+  value: string;
+  label: string;
+};
+
+type SystemSettingItem = {
+  key: string;
+  label: string;
+  description: string | null;
+  type: SettingInputType;
+  value: string;
+  defaultValue: string | null;
+  isCritical: boolean;
+  updatedAt: Date | null;
+  permission: SettingsPermission;
+  options: SettingsOption[];
+};
+
+type SystemSettingCategory = {
+  id: string;
+  name: string;
+  description: string | null;
+  settings: SystemSettingItem[];
+};
+
+type MaintenanceState = {
+  maintenance: boolean;
+  message: string;
+  type: "soft" | "hard";
+  startTime: string | null;
+  endTime: string | null;
+};
+
 function ensureObject(value: unknown): Record<string, any> | null {
   if (value && typeof value === "object") {
     return value as Record<string, any>;
@@ -287,6 +327,20 @@ function ensureObject(value: unknown): Record<string, any> | null {
   }>>;
   getPostcodeLatLng(postcode: string): Promise<{ lat: number; lng: number } | null>;
   importBranchesFromRows(params: { importId: string; nameKey?: string | null; latKey?: string | null; lngKey?: string | null }): Promise<{ inserted: number; skipped: number; usedKeys: { nameKey: string; latKey: string; lngKey: string } }>;
+  getSettingsForRole(role: string): Promise<SystemSettingCategory[]>;
+  updateSystemSetting(params: {
+    role: string;
+    settingKey: string;
+    value: string | number | boolean | null;
+    confirmCritical?: boolean;
+    updatedBy: string;
+  }): Promise<{
+    status: "updated" | "unchanged" | "forbidden" | "not_found" | "requires_confirmation" | "invalid";
+    message: string;
+    setting?: SystemSettingItem;
+    shouldBroadcast?: boolean;
+  }>;
+  getMaintenanceState(now?: Date): Promise<MaintenanceState>;
 
   createAuditLog(data: InsertAuditLog): Promise<AuditLog>;
   getAuditLogs(): Promise<AuditLog[]>;
@@ -329,6 +383,7 @@ export class PostgresStorage implements IStorage {
     await this.ensureSpatialTables();
     await this.ensureCategoryRulesTable();
     await this.ensureCategoryStatsTable();
+    await this.ensureSettingsTables();
   }
 
   private async ensurePerformanceIndexes() {
@@ -746,6 +801,386 @@ export class PostgresStorage implements IStorage {
       }
     } catch (err: any) {
       console.error("❌ Failed to ensure ai_category_rules table:", err?.message || err);
+    }
+  }
+
+  private async ensureSettingsTables() {
+    try {
+      await db.execute(sql`SET search_path TO public`);
+      await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.setting_categories (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          name text UNIQUE NOT NULL,
+          description text,
+          created_at timestamp DEFAULT now()
+        )
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.system_settings (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          category_id uuid REFERENCES public.setting_categories(id) ON DELETE CASCADE,
+          key text UNIQUE NOT NULL,
+          label text NOT NULL,
+          description text,
+          type text NOT NULL,
+          value text NOT NULL,
+          default_value text,
+          is_critical boolean DEFAULT false,
+          updated_at timestamp DEFAULT now()
+        )
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.setting_options (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          setting_id uuid REFERENCES public.system_settings(id) ON DELETE CASCADE,
+          value text NOT NULL,
+          label text NOT NULL
+        )
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.role_setting_permissions (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          role text NOT NULL,
+          setting_key text NOT NULL,
+          can_view boolean DEFAULT false,
+          can_edit boolean DEFAULT false
+        )
+      `);
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_role_setting_permissions_unique
+        ON public.role_setting_permissions (role, setting_key)
+      `);
+
+      // Optional enterprise-ready tables
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.setting_versions (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          setting_key text NOT NULL,
+          old_value text,
+          new_value text NOT NULL,
+          changed_by text NOT NULL,
+          changed_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_setting_versions_key_time
+        ON public.setting_versions (setting_key, changed_at DESC)
+      `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.feature_flags (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          key text UNIQUE NOT NULL,
+          enabled boolean NOT NULL DEFAULT false,
+          description text,
+          updated_at timestamp DEFAULT now()
+        )
+      `);
+
+      const categories = [
+        { name: "General", description: "Global platform behavior and identity settings." },
+        { name: "Security", description: "Authentication, session, and security policy controls." },
+        { name: "AI & Search", description: "AI assistant and search tuning configuration." },
+        { name: "Data Management", description: "Data processing, viewer, and indexing limits." },
+        { name: "Backup & Restore", description: "Backup lifecycle and recovery controls." },
+        { name: "Roles & Permissions", description: "Role behavior and privilege defaults." },
+        { name: "System Monitoring", description: "WebSocket and runtime diagnostics settings." },
+      ];
+
+      for (const category of categories) {
+        await db.execute(sql`
+          INSERT INTO public.setting_categories (name, description)
+          VALUES (${category.name}, ${category.description})
+          ON CONFLICT (name) DO UPDATE SET
+            description = EXCLUDED.description
+        `);
+      }
+
+      const settingsSeed: Array<{
+        categoryName: string;
+        key: string;
+        label: string;
+        description: string;
+        type: SettingInputType;
+        value: string;
+        defaultValue: string;
+        isCritical: boolean;
+      }> = [
+        {
+          categoryName: "General",
+          key: "system_name",
+          label: "System Name",
+          description: "Display name shown in application header.",
+          type: "text",
+          value: "SQR System",
+          defaultValue: "SQR System",
+          isCritical: false,
+        },
+        {
+          categoryName: "General",
+          key: "session_timeout_minutes",
+          label: "Session Timeout (Minutes)",
+          description: "Default idle timeout duration for authenticated sessions.",
+          type: "number",
+          value: "30",
+          defaultValue: "30",
+          isCritical: true,
+        },
+        {
+          categoryName: "Security",
+          key: "jwt_expiry_hours",
+          label: "JWT Expiry (Hours)",
+          description: "Token validity period used during login.",
+          type: "number",
+          value: "24",
+          defaultValue: "24",
+          isCritical: true,
+        },
+        {
+          categoryName: "Security",
+          key: "enforce_superuser_single_session",
+          label: "Enforce Single Superuser Session",
+          description: "Force single active session for superuser accounts.",
+          type: "boolean",
+          value: "true",
+          defaultValue: "true",
+          isCritical: false,
+        },
+        {
+          categoryName: "AI & Search",
+          key: "ai_enabled",
+          label: "Enable AI Assistant",
+          description: "Controls AI endpoints and chat behavior.",
+          type: "boolean",
+          value: "true",
+          defaultValue: "true",
+          isCritical: false,
+        },
+        {
+          categoryName: "AI & Search",
+          key: "semantic_search_enabled",
+          label: "Enable Semantic Search",
+          description: "Allow pgvector semantic retrieval for AI workflows.",
+          type: "boolean",
+          value: "true",
+          defaultValue: "true",
+          isCritical: false,
+        },
+        {
+          categoryName: "AI & Search",
+          key: "ai_timeout_ms",
+          label: "AI Timeout (ms)",
+          description: "Server timeout for AI requests before fallback response.",
+          type: "number",
+          value: "6000",
+          defaultValue: "6000",
+          isCritical: false,
+        },
+        {
+          categoryName: "Data Management",
+          key: "search_result_limit",
+          label: "Search Result Limit",
+          description: "Maximum records returned in search APIs.",
+          type: "number",
+          value: "200",
+          defaultValue: "200",
+          isCritical: false,
+        },
+        {
+          categoryName: "Data Management",
+          key: "viewer_rows_per_page",
+          label: "Viewer Rows Per Page",
+          description: "Default row count per viewer page.",
+          type: "number",
+          value: "100",
+          defaultValue: "100",
+          isCritical: false,
+        },
+        {
+          categoryName: "Backup & Restore",
+          key: "backup_retention_days",
+          label: "Backup Retention (Days)",
+          description: "Retention target for automated backup lifecycle policies.",
+          type: "number",
+          value: "30",
+          defaultValue: "30",
+          isCritical: false,
+        },
+        {
+          categoryName: "Backup & Restore",
+          key: "backup_auto_cleanup_enabled",
+          label: "Enable Backup Auto Cleanup",
+          description: "Automatically remove backups older than retention policy.",
+          type: "boolean",
+          value: "false",
+          defaultValue: "false",
+          isCritical: false,
+        },
+        {
+          categoryName: "Roles & Permissions",
+          key: "admin_can_edit_maintenance_message",
+          label: "Admin Can Edit Maintenance Message",
+          description: "Allow admin role to edit maintenance message and window only.",
+          type: "boolean",
+          value: "true",
+          defaultValue: "true",
+          isCritical: false,
+        },
+        {
+          categoryName: "System Monitoring",
+          key: "ws_idle_minutes",
+          label: "WebSocket Idle Timeout (Minutes)",
+          description: "Idle timeout before websocket session termination.",
+          type: "number",
+          value: "3",
+          defaultValue: "3",
+          isCritical: false,
+        },
+        {
+          categoryName: "System Monitoring",
+          key: "debug_logs_enabled",
+          label: "Enable Debug Logs",
+          description: "Enable verbose API debug logging.",
+          type: "boolean",
+          value: "false",
+          defaultValue: "false",
+          isCritical: false,
+        },
+        {
+          categoryName: "System Monitoring",
+          key: "maintenance_mode",
+          label: "Maintenance Mode",
+          description: "Master switch for maintenance mode activation.",
+          type: "boolean",
+          value: "false",
+          defaultValue: "false",
+          isCritical: true,
+        },
+        {
+          categoryName: "System Monitoring",
+          key: "maintenance_message",
+          label: "Maintenance Message",
+          description: "Message shown to end users while maintenance is active.",
+          type: "text",
+          value: "Sistem sedang diselenggara. Sila cuba semula sebentar lagi.",
+          defaultValue: "Sistem sedang diselenggara. Sila cuba semula sebentar lagi.",
+          isCritical: false,
+        },
+        {
+          categoryName: "System Monitoring",
+          key: "maintenance_type",
+          label: "Maintenance Type",
+          description: "Soft mode limits selected modules. Hard mode blocks all protected routes.",
+          type: "select",
+          value: "soft",
+          defaultValue: "soft",
+          isCritical: true,
+        },
+        {
+          categoryName: "System Monitoring",
+          key: "maintenance_start_time",
+          label: "Maintenance Start Time",
+          description: "Optional ISO timestamp to schedule maintenance start.",
+          type: "timestamp",
+          value: "",
+          defaultValue: "",
+          isCritical: false,
+        },
+        {
+          categoryName: "System Monitoring",
+          key: "maintenance_end_time",
+          label: "Maintenance End Time",
+          description: "Optional ISO timestamp to auto-end maintenance.",
+          type: "timestamp",
+          value: "",
+          defaultValue: "",
+          isCritical: false,
+        },
+      ];
+
+      for (const setting of settingsSeed) {
+        await db.execute(sql`
+          INSERT INTO public.system_settings (
+            category_id, key, label, description, type, value, default_value, is_critical, updated_at
+          )
+          VALUES (
+            (SELECT id FROM public.setting_categories WHERE name = ${setting.categoryName}),
+            ${setting.key},
+            ${setting.label},
+            ${setting.description},
+            ${setting.type},
+            ${setting.value},
+            ${setting.defaultValue},
+            ${setting.isCritical},
+            now()
+          )
+          ON CONFLICT (key) DO UPDATE SET
+            category_id = EXCLUDED.category_id,
+            label = EXCLUDED.label,
+            description = EXCLUDED.description,
+            type = EXCLUDED.type,
+            default_value = EXCLUDED.default_value,
+            is_critical = EXCLUDED.is_critical
+        `);
+      }
+
+      const selectOptions: Array<{ settingKey: string; value: string; label: string }> = [
+        { settingKey: "maintenance_type", value: "soft", label: "Soft Maintenance" },
+        { settingKey: "maintenance_type", value: "hard", label: "Hard Maintenance" },
+      ];
+      for (const option of selectOptions) {
+        await db.execute(sql`
+          INSERT INTO public.setting_options (setting_id, value, label)
+          VALUES (
+            (SELECT id FROM public.system_settings WHERE key = ${option.settingKey}),
+            ${option.value},
+            ${option.label}
+          )
+          ON CONFLICT DO NOTHING
+        `);
+      }
+
+      const adminEditable = new Set([
+        "system_name",
+        "ai_enabled",
+        "semantic_search_enabled",
+        "ai_timeout_ms",
+        "search_result_limit",
+        "viewer_rows_per_page",
+        "maintenance_message",
+        "maintenance_start_time",
+        "maintenance_end_time",
+      ]);
+
+      for (const setting of settingsSeed) {
+        await db.execute(sql`
+          INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
+          VALUES ('superuser', ${setting.key}, true, true)
+          ON CONFLICT (role, setting_key) DO UPDATE SET
+            can_view = EXCLUDED.can_view,
+            can_edit = EXCLUDED.can_edit
+        `);
+        await db.execute(sql`
+          INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
+          VALUES ('admin', ${setting.key}, true, ${adminEditable.has(setting.key)})
+          ON CONFLICT (role, setting_key) DO UPDATE SET
+            can_view = EXCLUDED.can_view,
+            can_edit = EXCLUDED.can_edit
+        `);
+        await db.execute(sql`
+          INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
+          VALUES ('user', ${setting.key}, false, false)
+          ON CONFLICT (role, setting_key) DO UPDATE SET
+            can_view = EXCLUDED.can_view,
+            can_edit = EXCLUDED.can_edit
+        `);
+      }
+    } catch (err: any) {
+      console.error("❌ Failed to ensure enterprise settings tables:", err?.message || err);
     }
   }
 
@@ -2756,6 +3191,286 @@ export class PostgresStorage implements IStorage {
       LIMIT ${limit} OFFSET ${offset}
     `);
     return result.rows as Array<{ id: string; jsonDataJsonb: any }>;
+  }
+
+  private parseSettingType(raw: unknown): SettingInputType {
+    const t = String(raw || "text").toLowerCase();
+    if (t === "number" || t === "boolean" || t === "select" || t === "timestamp") {
+      return t;
+    }
+    return "text";
+  }
+
+  private normalizeSettingValue(type: SettingInputType, value: string | number | boolean | null): string | null {
+    if (value === null || value === undefined) {
+      return type === "timestamp" ? "" : null;
+    }
+
+    if (type === "boolean") {
+      if (typeof value === "boolean") return value ? "true" : "false";
+      const str = String(value).trim().toLowerCase();
+      if (["true", "1", "yes", "on"].includes(str)) return "true";
+      if (["false", "0", "no", "off"].includes(str)) return "false";
+      return null;
+    }
+
+    if (type === "number") {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return null;
+      return String(num);
+    }
+
+    if (type === "timestamp") {
+      const str = String(value).trim();
+      if (!str) return "";
+      const d = new Date(str);
+      if (Number.isNaN(d.getTime())) return null;
+      return d.toISOString();
+    }
+
+    return String(value);
+  }
+
+  async getSettingsForRole(role: string): Promise<SystemSettingCategory[]> {
+    await this.ensureSettingsTables();
+    const rows = await db.execute(sql`
+      SELECT
+        c.id as category_id,
+        c.name as category_name,
+        c.description as category_description,
+        s.id as setting_id,
+        s.key,
+        s.label,
+        s.description,
+        s.type,
+        s.value,
+        s.default_value,
+        s.is_critical,
+        s.updated_at,
+        COALESCE(p.can_view, false) as can_view,
+        COALESCE(p.can_edit, false) as can_edit
+      FROM public.setting_categories c
+      JOIN public.system_settings s ON s.category_id = c.id
+      LEFT JOIN public.role_setting_permissions p
+        ON p.setting_key = s.key
+       AND p.role = ${role}
+      WHERE COALESCE(p.can_view, false) = true
+      ORDER BY c.name, s.label
+    `);
+
+    const settingIds = (rows.rows as any[])
+      .map((r) => String(r.setting_id))
+      .filter((v) => v.length > 0);
+    const optionsMap = new Map<string, SettingsOption[]>();
+    if (settingIds.length > 0) {
+      const quoted = settingIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
+      const optionsRows = await db.execute(sql`
+        SELECT setting_id, value, label
+        FROM public.setting_options
+        WHERE setting_id IN (${sql.raw(quoted)})
+        ORDER BY label
+      `);
+      for (const row of optionsRows.rows as any[]) {
+        const list = optionsMap.get(String(row.setting_id)) || [];
+        list.push({ value: String(row.value), label: String(row.label) });
+        optionsMap.set(String(row.setting_id), list);
+      }
+    }
+
+    const categoryMap = new Map<string, SystemSettingCategory>();
+    for (const row of rows.rows as any[]) {
+      const categoryId = String(row.category_id);
+      if (!categoryMap.has(categoryId)) {
+        categoryMap.set(categoryId, {
+          id: categoryId,
+          name: String(row.category_name),
+          description: row.category_description ? String(row.category_description) : null,
+          settings: [],
+        });
+      }
+      categoryMap.get(categoryId)!.settings.push({
+        key: String(row.key),
+        label: String(row.label),
+        description: row.description ? String(row.description) : null,
+        type: this.parseSettingType(row.type),
+        value: String(row.value ?? ""),
+        defaultValue: row.default_value === null || row.default_value === undefined ? null : String(row.default_value),
+        isCritical: row.is_critical === true,
+        updatedAt: row.updated_at ? new Date(row.updated_at) : null,
+        permission: {
+          canView: row.can_view === true,
+          canEdit: row.can_edit === true,
+        },
+        options: optionsMap.get(String(row.setting_id)) || [],
+      });
+    }
+
+    return Array.from(categoryMap.values());
+  }
+
+  async updateSystemSetting(params: {
+    role: string;
+    settingKey: string;
+    value: string | number | boolean | null;
+    confirmCritical?: boolean;
+    updatedBy: string;
+  }): Promise<{
+    status: "updated" | "unchanged" | "forbidden" | "not_found" | "requires_confirmation" | "invalid";
+    message: string;
+    setting?: SystemSettingItem;
+    shouldBroadcast?: boolean;
+  }> {
+    await this.ensureSettingsTables();
+    const settingRes = await db.execute(sql`
+      SELECT
+        s.id,
+        s.key,
+        s.label,
+        s.description,
+        s.type,
+        s.value,
+        s.default_value,
+        s.is_critical,
+        s.updated_at,
+        COALESCE(p.can_edit, false) as can_edit
+      FROM public.system_settings s
+      LEFT JOIN public.role_setting_permissions p
+        ON p.setting_key = s.key
+       AND p.role = ${params.role}
+      WHERE s.key = ${params.settingKey}
+      LIMIT 1
+    `);
+    const current = (settingRes.rows as any[])[0];
+    if (!current) {
+      return { status: "not_found", message: "Setting not found." };
+    }
+    if (current.can_edit !== true) {
+      return { status: "forbidden", message: "You do not have permission to edit this setting." };
+    }
+    if (current.is_critical === true && !params.confirmCritical) {
+      return {
+        status: "requires_confirmation",
+        message: "Critical setting requires explicit confirmation.",
+      };
+    }
+
+    const settingType = this.parseSettingType(current.type);
+    const normalized = this.normalizeSettingValue(settingType, params.value);
+    if (normalized === null) {
+      return { status: "invalid", message: `Invalid value for type ${settingType}.` };
+    }
+
+    if (settingType === "select") {
+      const optionRes = await db.execute(sql`
+        SELECT 1
+        FROM public.setting_options
+        WHERE setting_id = ${current.id}
+          AND value = ${normalized}
+        LIMIT 1
+      `);
+      if ((optionRes.rows as any[]).length === 0) {
+        return { status: "invalid", message: "Selected option is not allowed." };
+      }
+    }
+
+    const previousValue = String(current.value ?? "");
+    if (previousValue === normalized) {
+      return { status: "unchanged", message: "No change detected." };
+    }
+
+    await db.execute(sql`
+      UPDATE public.system_settings
+      SET value = ${normalized}, updated_at = now()
+      WHERE id = ${current.id}
+    `);
+
+    await db.execute(sql`
+      INSERT INTO public.setting_versions (setting_key, old_value, new_value, changed_by, changed_at)
+      VALUES (${params.settingKey}, ${previousValue}, ${normalized}, ${params.updatedBy}, now())
+    `);
+
+    const latestRes = await db.execute(sql`
+      SELECT
+        id,
+        key,
+        label,
+        description,
+        type,
+        value,
+        default_value,
+        is_critical,
+        updated_at
+      FROM public.system_settings
+      WHERE id = ${current.id}
+      LIMIT 1
+    `);
+    const latest = (latestRes.rows as any[])[0];
+    const shouldBroadcast = String(params.settingKey).startsWith("maintenance_");
+    return {
+      status: "updated",
+      message: "Setting updated successfully.",
+      shouldBroadcast,
+      setting: {
+        key: String(latest.key),
+        label: String(latest.label),
+        description: latest.description ? String(latest.description) : null,
+        type: this.parseSettingType(latest.type),
+        value: String(latest.value ?? ""),
+        defaultValue: latest.default_value === null || latest.default_value === undefined ? null : String(latest.default_value),
+        isCritical: latest.is_critical === true,
+        updatedAt: latest.updated_at ? new Date(latest.updated_at) : null,
+        permission: { canView: true, canEdit: true },
+        options: [],
+      },
+    };
+  }
+
+  async getMaintenanceState(now: Date = new Date()): Promise<MaintenanceState> {
+    await this.ensureSettingsTables();
+    const rows = await db.execute(sql`
+      SELECT key, value
+      FROM public.system_settings
+      WHERE key IN (
+        'maintenance_mode',
+        'maintenance_message',
+        'maintenance_type',
+        'maintenance_start_time',
+        'maintenance_end_time'
+      )
+    `);
+    const map = new Map<string, string>();
+    for (const row of rows.rows as any[]) {
+      map.set(String(row.key), String(row.value ?? ""));
+    }
+
+    const modeValue = (map.get("maintenance_mode") || "false").toLowerCase();
+    const baseEnabled = ["true", "1", "yes", "on"].includes(modeValue);
+    const type = (map.get("maintenance_type") || "soft").toLowerCase() === "hard" ? "hard" : "soft";
+    const message = map.get("maintenance_message") || "Sistem sedang diselenggara. Sila cuba semula sebentar lagi.";
+    const startTime = (map.get("maintenance_start_time") || "").trim() || null;
+    const endTime = (map.get("maintenance_end_time") || "").trim() || null;
+
+    let enabled = baseEnabled;
+    if (enabled && startTime) {
+      const start = new Date(startTime);
+      if (!Number.isNaN(start.getTime()) && now < start) {
+        enabled = false;
+      }
+    }
+    if (enabled && endTime) {
+      const end = new Date(endTime);
+      if (!Number.isNaN(end.getTime()) && now > end) {
+        enabled = false;
+      }
+    }
+
+    return {
+      maintenance: enabled,
+      message,
+      type,
+      startTime,
+      endTime,
+    };
   }
 
   async getAccounts(): Promise<Array<{

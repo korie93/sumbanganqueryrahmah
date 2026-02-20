@@ -60,7 +60,26 @@ export async function activityLogout(activityId: string) {
   return response.json();
 }
 
-export async function activityHeartbeat() {
+export async function activityHeartbeat(payload?: {
+  activityId?: string;
+  pcName?: string;
+  browser?: string;
+  fingerprint?: string;
+}) {
+  const token = localStorage.getItem("token");
+  if (!token) return;
+
+  return fetch("/api/activity/heartbeat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload || {}),
+  });
+}
+
+export async function activityHeartbeatLight() {
   const token = localStorage.getItem("token");
   if (!token) return;
 
@@ -272,6 +291,30 @@ export async function aiChat(message: string, conversationId?: string | null) {
 
 export async function getAiConfig() {
   const response = await apiRequest("GET", "/api/ai/config");
+  return response.json();
+}
+
+export async function getSettings() {
+  const response = await apiRequest("GET", "/api/settings");
+  return response.json();
+}
+
+export async function updateSetting(payload: {
+  key: string;
+  value: string | number | boolean | null;
+  confirmCritical?: boolean;
+}) {
+  const response = await apiRequest("PATCH", "/api/settings", payload);
+  return response.json();
+}
+
+export async function getMaintenanceStatus() {
+  const response = await fetch("/api/maintenance-status", {
+    credentials: "include",
+    headers: {
+      ...getAuthHeader(),
+    },
+  });
   return response.json();
 }
 
