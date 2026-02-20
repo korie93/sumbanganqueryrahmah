@@ -1,12 +1,11 @@
 import { lazy, Suspense, useState, useEffect, useCallback } from "react";
-import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-
 import Navbar from "@/components/Navbar";
 import AutoLogout from "@/components/AutoLogout";
-import { activityLogout, getImports } from "@/lib/api";
+import { activityLogout, getImports, getMaintenanceStatus } from "@/lib/api";
 
 const Login = lazy(() => import("@/pages/Login"));
 const Home = lazy(() => import("@/pages/Home"));
@@ -21,6 +20,8 @@ const BackupRestore = lazy(() => import("@/pages/BackupRestore"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const AI = lazy(() => import("@/pages/AI"));
 const Banned = lazy(() => import("@/pages/Banned"));
+const SettingsPage = lazy(() => import("@/pages/Settings"));
+const MaintenancePage = lazy(() => import("@/pages/Maintenance"));
 
 interface User {
   username: string;
@@ -46,6 +47,13 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    const pathname = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "/";
+    if (pathname === "/maintenance") {
+      setCurrentPage("maintenance");
+    } else if (pathname === "/settings") {
+      setCurrentPage("settings");
+    }
+
     const banned = localStorage.getItem("banned");
     if (banned === "1") {
       setIsInitialized(true);
@@ -58,15 +66,19 @@ function AppContent() {
 
     if (token && savedUser) {
       try {
-        const parsedUser = JSON.parse(savedUser);
+        const parsedUser = JSON.parse(savedUser) as User;
         setUser(parsedUser);
 
-        if (parsedUser.role === "user") {
+        if (pathname === "/maintenance") {
+          setCurrentPage("maintenance");
+        } else if (pathname === "/settings" && parsedUser.role !== "user") {
+          setCurrentPage("settings");
+        } else if (parsedUser.role === "user") {
           setCurrentPage("general-search");
         } else if (savedPage) {
           setCurrentPage(savedPage);
         }
-      } catch (e) {
+      } catch {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
       }
@@ -82,8 +94,48 @@ function AppContent() {
   }, [user, fetchSavedCount]);
 
   useEffect(() => {
-    if (!user) return;
+    const onMaintenanceUpdated = (event: Event) => {
+      const custom = event as CustomEvent<{ maintenance?: boolean }>;
+      if (custom.detail?.maintenance) {
+        setCurrentPage("maintenance");
+      } else if (currentPage === "maintenance") {
+        setCurrentPage(user?.role === "user" ? "general-search" : "home");
+      }
+    };
 
+    window.addEventListener("maintenance-updated", onMaintenanceUpdated as EventListener);
+    return () => window.removeEventListener("maintenance-updated", onMaintenanceUpdated as EventListener);
+  }, [currentPage, user]);
+
+  useEffect(() => {
+    if (!user || user.role === "admin" || user.role === "superuser") return;
+    let cancelled = false;
+
+    const checkMaintenance = async () => {
+      try {
+        const state = await getMaintenanceStatus();
+        if (cancelled) return;
+        if (state?.maintenance === true) {
+          localStorage.setItem("maintenanceState", JSON.stringify(state));
+          setCurrentPage("maintenance");
+        } else if (currentPage === "maintenance") {
+          setCurrentPage("general-search");
+        }
+      } catch {
+        // ignore polling errors
+      }
+    };
+
+    checkMaintenance();
+    const timer = setInterval(checkMaintenance, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [user, currentPage]);
+
+  useEffect(() => {
+    if (!user) return;
     const token = localStorage.getItem("token");
     if (!token) return;
 
@@ -93,12 +145,10 @@ function AppContent() {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-      }).catch(() => { });
+      }).catch(() => {});
     }, 30_000);
 
-    return () => {
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [user]);
 
   const handleLoginSuccess = useCallback((loggedInUser: User) => {
@@ -140,24 +190,30 @@ function AppContent() {
     localStorage.setItem("activeTab", page);
     localStorage.setItem("lastPage", page);
 
+    if (typeof window !== "undefined") {
+      if (page === "settings") window.history.replaceState({}, "", "/settings");
+      else if (page === "maintenance") window.history.replaceState({}, "", "/maintenance");
+      else window.history.replaceState({}, "", "/");
+    }
+
     if (importId) {
       setSelectedImportId(importId);
     }
   }, []);
-
-  if (!isInitialized) {
-    return (
-      <div className= "min-h-screen bg-background flex items-center justify-center" >
-      <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-        </div>
-    );
-  }
 
   const pageFallback = (
     <div className="min-h-[calc(100vh-3.5rem)] bg-background flex items-center justify-center">
       <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
     </div>
   );
+
+  if (!isInitialized) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   if (localStorage.getItem("banned") === "1") {
     return (
@@ -168,6 +224,13 @@ function AppContent() {
   }
 
   if (!user) {
+    if (currentPage === "maintenance") {
+      return (
+        <Suspense fallback={pageFallback}>
+          <MaintenancePage />
+        </Suspense>
+      );
+    }
     return (
       <Suspense fallback={pageFallback}>
         <Login onLoginSuccess={handleLoginSuccess} />
@@ -175,113 +238,82 @@ function AppContent() {
     );
   }
 
+  if (currentPage === "maintenance" && user.role === "user") {
+    return (
+      <Suspense fallback={pageFallback}>
+        <MaintenancePage />
+      </Suspense>
+    );
+  }
+
   const renderPage = () => {
     switch (currentPage) {
       case "home":
-        if (user.role === "user") {
-          return <GeneralSearch userRole={ user.role } />;
-        }
-        return <Home onNavigate={ handleNavigate } userRole = { user.role } />;
-
+        return user.role === "user"
+          ? <GeneralSearch userRole={user.role} />
+          : <Home onNavigate={handleNavigate} userRole={user.role} />;
       case "import":
-        if (user.role === "user") {
-          return <GeneralSearch userRole={ user.role } />;
-        }
-        return <Import onNavigate={ handleNavigate } />;
-
+        return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <Import onNavigate={handleNavigate} />;
       case "saved":
-        if (user.role === "user") {
-          return <GeneralSearch userRole={ user.role } />;
-        }
-        return <Saved onNavigate={ handleNavigate } userRole = { user.role } />;
-
+        return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <Saved onNavigate={handleNavigate} userRole={user.role} />;
       case "viewer":
-        if (user.role === "user") {
-          return <GeneralSearch userRole={ user.role } />;
-        }
-        return <Viewer onNavigate={ handleNavigate } importId = { selectedImportId } userRole = { user.role } />;
-
+        return user.role === "user"
+          ? <GeneralSearch userRole={user.role} />
+          : <Viewer onNavigate={handleNavigate} importId={selectedImportId} userRole={user.role} />;
       case "general-search":
-        return <GeneralSearch userRole={ user.role } />;
-
+        return <GeneralSearch userRole={user.role} />;
       case "analysis":
-        if (user.role === "user") {
-          return <GeneralSearch userRole={ user.role } />;
-        }
-        return <Analysis onNavigate={ handleNavigate } />;
-
+        return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <Analysis onNavigate={handleNavigate} />;
       case "activity":
-        if (user.role !== "superuser") {
-          if (user.role === "user") {
-            return <GeneralSearch userRole={ user.role } />;
-          }
-          return <Home onNavigate={ handleNavigate } userRole = { user.role } />;
-        }
+        if (user.role !== "superuser") return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <Home onNavigate={handleNavigate} userRole={user.role} />;
         return <Activity />;
-
       case "audit-logs":
-        if (user.role !== "superuser") {
-          if (user.role === "user") {
-            return <GeneralSearch userRole={ user.role } />;
-          }
-          return <Home onNavigate={ handleNavigate } userRole = { user.role } />;
-        }
+        if (user.role !== "superuser") return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <Home onNavigate={handleNavigate} userRole={user.role} />;
         return <AuditLogs />;
-
       case "backup":
-        if (user.role !== "superuser") {
-          if (user.role === "user") {
-            return <GeneralSearch userRole={ user.role } />;
-          }
-          return <Home onNavigate={ handleNavigate } userRole = { user.role } />;
-        }
+        if (user.role !== "superuser") return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <Home onNavigate={handleNavigate} userRole={user.role} />;
         return <BackupRestore />;
-
       case "ai":
         return <AI />;
-
       case "dashboard":
-        if (user.role !== "superuser") {
-          if (user.role === "user") {
-            return <GeneralSearch userRole={ user.role } />;
-          }
-          return <Home onNavigate={ handleNavigate } userRole = { user.role } />;
-        }
+        if (user.role !== "superuser") return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <Home onNavigate={handleNavigate} userRole={user.role} />;
         return <Dashboard />;
-
+      case "settings":
+        return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <SettingsPage />;
+      case "maintenance":
+        return <MaintenancePage />;
       default:
-        if (user.role === "user") {
-          return <GeneralSearch userRole={ user.role } />;
-        }
-        return <Home onNavigate={ handleNavigate } userRole = { user.role } />;
+        return user.role === "user"
+          ? <GeneralSearch userRole={user.role} />
+          : <Home onNavigate={handleNavigate} userRole={user.role} />;
     }
   };
 
   return (
-    <div className= "min-h-screen bg-background" >
-    <AutoLogout onLogout={ handleLogout } timeoutMinutes = { 30} heartbeatIntervalMinutes = { 5} username = { user.username } />
+    <div className="min-h-screen bg-background">
+      <AutoLogout onLogout={handleLogout} timeoutMinutes={30} heartbeatIntervalMinutes={5} username={user.username} />
       <Navbar
-        currentPage={ currentPage }
-  onNavigate = { handleNavigate }
-  onLogout = { handleLogout }
-  userRole = { user.role }
-  username = { user.username }
-  savedCount = { savedCount }
-    />
-    <Suspense fallback={pageFallback}>
-      <main>{ renderPage() } </main>
-    </Suspense>
+        currentPage={currentPage}
+        onNavigate={handleNavigate}
+        onLogout={handleLogout}
+        userRole={user.role}
+        username={user.username}
+        savedCount={savedCount}
+      />
+      <Suspense fallback={pageFallback}>
+        <main>{renderPage()}</main>
+      </Suspense>
     </div>
   );
 }
 
 function App() {
   return (
-    <QueryClientProvider client= { queryClient } >
-    <TooltipProvider>
-    <Toaster />
-    < AppContent />
-    </TooltipProvider>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <AppContent />
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }

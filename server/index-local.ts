@@ -22,7 +22,12 @@ const WS_IDLE_MINUTES = 3;
 const WS_IDLE_MS = WS_IDLE_MINUTES * 60 * 1000;
 const AI_PRECOMPUTE_ON_START = String(process.env.AI_PRECOMPUTE_ON_START || "0") === "1";
 const API_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
+const MAINTENANCE_CACHE_TTL_MS = 3000;
 let idleSweepRunning = false;
+let maintenanceCache: {
+  state: { maintenance: boolean; message: string; type: "soft" | "hard"; startTime: string | null; endTime: string | null };
+  cachedAt: number;
+} | null = null;
 
 const buildEmbeddingText = (data: Record<string, any>): string => {
   const preferredKeys = [
@@ -206,8 +211,113 @@ function requireRole(...roles: string[]) {
   };
 }
 
+function broadcastWsMessage(payload: Record<string, unknown>) {
+  const msg = JSON.stringify(payload);
+  for (const [, ws] of connectedClients) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(msg);
+    }
+  }
+}
+
+function invalidateMaintenanceCache() {
+  maintenanceCache = null;
+}
+
+async function getMaintenanceStateCached(force = false) {
+  const now = Date.now();
+  if (!force && maintenanceCache && now - maintenanceCache.cachedAt < MAINTENANCE_CACHE_TTL_MS) {
+    return maintenanceCache.state;
+  }
+  const state = await storage.getMaintenanceState(new Date());
+  maintenanceCache = { state, cachedAt: now };
+  return state;
+}
+
+function extractRoleFromToken(req: Request): string | null {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.split(" ")[1];
+  if (!token) return null;
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as { role?: string };
+    return decoded?.role || null;
+  } catch {
+    return null;
+  }
+}
+
+function isMaintenanceBypassPath(pathname: string) {
+  return pathname.startsWith("/api/login")
+    || pathname.startsWith("/api/auth/login")
+    || pathname.startsWith("/api/health")
+    || pathname.startsWith("/api/maintenance-status")
+    || pathname.startsWith("/api/settings/maintenance")
+    || pathname.startsWith("/ws");
+}
+
+async function maintenanceGuard(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    if (isMaintenanceBypassPath(req.path)) {
+      return next();
+    }
+
+    const state = await getMaintenanceStateCached();
+    if (!state.maintenance) {
+      return next();
+    }
+
+    const role = req.user?.role || extractRoleFromToken(req);
+    if (role === "superuser" || role === "admin") {
+      return next();
+    }
+
+    const maintenanceResponse = {
+      maintenance: true,
+      message: state.message,
+      type: state.type,
+      startTime: state.startTime,
+      endTime: state.endTime,
+    };
+
+    if (req.path.startsWith("/api/")) {
+      if (state.type === "soft") {
+        const blockedSoftPrefixes = ["/api/search", "/api/imports", "/api/ai"];
+        if (!blockedSoftPrefixes.some((p) => req.path.startsWith(p))) {
+          return next();
+        }
+      }
+      return res.status(503).json(maintenanceResponse);
+    }
+
+    // Keep static assets available so /maintenance can render.
+    if (req.path.startsWith("/assets/") || req.path.match(/\.(js|css|png|jpg|svg|ico)$/i)) {
+      return next();
+    }
+
+    if (state.type === "hard" && req.path !== "/maintenance") {
+      return res.redirect(302, "/maintenance");
+    }
+
+    return next();
+  } catch (err) {
+    console.error("Maintenance guard error:", err);
+    return next();
+  }
+}
+
+app.use(maintenanceGuard);
+
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", mode: "postgresql" });
+});
+
+app.get("/api/maintenance-status", async (req, res) => {
+  try {
+    const state = await getMaintenanceStateCached();
+    res.json(state);
+  } catch (err: any) {
+    res.status(500).json({ message: err?.message || "Failed to load maintenance status" });
+  }
 });
 
 app.get("/api/data-rows", authenticateToken, async (req, res) => {
@@ -604,6 +714,86 @@ app.get("/api/auth/me", authenticateToken, (req: AuthenticatedRequest, res) => {
       activityId: req.user.activityId,
     },
   });
+});
+
+app.get("/api/settings", authenticateToken, requireRole("admin", "superuser"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const role = req.user?.role || "user";
+    const categories = await storage.getSettingsForRole(role);
+    res.json({ categories });
+  } catch (err: any) {
+    console.error("Settings GET error:", err);
+    res.status(500).json({ message: err?.message || "Failed to load settings" });
+  }
+});
+
+app.patch("/api/settings", authenticateToken, requireRole("admin", "superuser"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { key, value, confirmCritical } = req.body || {};
+    if (!key || typeof key !== "string") {
+      return res.status(400).json({ message: "Invalid setting key" });
+    }
+
+    const role = req.user?.role || "user";
+    const result = await storage.updateSystemSetting({
+      role,
+      settingKey: key,
+      value: value ?? null,
+      confirmCritical: Boolean(confirmCritical),
+      updatedBy: req.user?.username || "system",
+    });
+
+    if (result.status === "not_found") {
+      return res.status(404).json({ message: result.message });
+    }
+    if (result.status === "forbidden") {
+      return res.status(403).json({ message: result.message });
+    }
+    if (result.status === "requires_confirmation") {
+      return res.status(409).json({ message: result.message, requiresConfirmation: true });
+    }
+    if (result.status === "invalid") {
+      return res.status(400).json({ message: result.message });
+    }
+
+    if (result.status === "updated") {
+      await storage.createAuditLog({
+        action: result.setting?.isCritical ? "CRITICAL_SETTING_UPDATED" : "SETTING_UPDATED",
+        performedBy: req.user?.username || "system",
+        targetResource: key,
+        details: `Updated setting ${key} to "${String(result.setting?.value ?? "")}"`,
+      });
+
+      if (result.shouldBroadcast) {
+        invalidateMaintenanceCache();
+        const maintenanceState = await getMaintenanceStateCached(true);
+        broadcastWsMessage({
+          type: "maintenance_update",
+          maintenance: maintenanceState.maintenance,
+          message: maintenanceState.message,
+          mode: maintenanceState.type,
+          startTime: maintenanceState.startTime,
+          endTime: maintenanceState.endTime,
+        });
+      } else {
+        broadcastWsMessage({
+          type: "settings_updated",
+          key,
+          updatedBy: req.user?.username || "system",
+        });
+      }
+    }
+
+    return res.json({
+      success: result.status === "updated" || result.status === "unchanged",
+      status: result.status,
+      message: result.message,
+      setting: result.setting || null,
+    });
+  } catch (err: any) {
+    console.error("Settings PATCH error:", err);
+    res.status(500).json({ message: err?.message || "Failed to update setting" });
+  }
 });
 
 app.post("/api/activity/heartbeat", authenticateToken, async (req: AuthenticatedRequest, res) => {

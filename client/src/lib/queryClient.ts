@@ -16,6 +16,19 @@ const QUERY_GC_TIME = isLowSpecClient ? 60_000 : 5 * 60_000;
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
+    if (res.status === 503) {
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed?.maintenance) {
+          localStorage.setItem("maintenanceState", JSON.stringify(parsed));
+          if (typeof window !== "undefined") {
+            window.location.href = "/maintenance";
+          }
+        }
+      } catch {
+        // ignore JSON parse failure, keep default error path
+      }
+    }
     throw new Error(`${res.status}: ${text}`);
   }
 }

@@ -175,6 +175,21 @@ export default function AutoLogout({
               alert(message.reason || "Akaun anda telah disekat.");
               window.location.href = "/";
             }
+
+            if (message.type === "maintenance_update") {
+              const payload = {
+                maintenance: !!message.maintenance,
+                message: String(message.message || ""),
+                type: message.mode === "hard" ? "hard" : "soft",
+                startTime: message.startTime || null,
+                endTime: message.endTime || null,
+              };
+              localStorage.setItem("maintenanceState", JSON.stringify(payload));
+              window.dispatchEvent(new CustomEvent("maintenance-updated", { detail: payload }));
+              if (payload.maintenance) {
+                window.location.href = "/maintenance";
+              }
+            }
           } catch (err) {
             console.warn("Failed to parse WebSocket message:", err);
           }
