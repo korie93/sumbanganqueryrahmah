@@ -3,6 +3,7 @@ import { BarChart3, Users, Shield, Plane, AlertTriangle, RefreshCw, ArrowLeft, C
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { analyzeImport, analyzeAll } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -319,6 +320,89 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
     );
   };
 
+  const renderLoadingSkeleton = () => (
+    // CSS-only stagger for smoother perceived loading on low-spec clients.
+    // No JS timers/intervals are used.
+    (() => {
+      const pulseStyle = (delayMs: number) => ({
+        animationDelay: `${delayMs}ms`,
+        animationDuration: "1.4s",
+      });
+
+      return (
+    <div className="space-y-6" data-testid="analysis-loading-skeleton">
+      <Card className="glass-wrapper border-0">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-5 w-5 rounded-full motion-reduce:animate-none" style={pulseStyle(0)} />
+              <Skeleton className="h-4 w-32 motion-reduce:animate-none" style={pulseStyle(80)} />
+              <Skeleton className="h-6 w-20 motion-reduce:animate-none" style={pulseStyle(160)} />
+            </div>
+            <Skeleton className="h-6 w-40 motion-reduce:animate-none" style={pulseStyle(240)} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="glass-wrapper border-0">
+          <CardHeader>
+            <Skeleton className="h-6 w-56 motion-reduce:animate-none" style={pulseStyle(300)} />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-[250px] w-full motion-reduce:animate-none" style={pulseStyle(360)} />
+          </CardContent>
+        </Card>
+        <Card className="glass-wrapper border-0">
+          <CardHeader>
+            <Skeleton className="h-6 w-52 motion-reduce:animate-none" style={pulseStyle(420)} />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-[250px] w-full motion-reduce:animate-none" style={pulseStyle(480)} />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div>
+        <Skeleton className="h-6 w-44 mb-4 motion-reduce:animate-none" style={pulseStyle(520)} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <Card key={`analysis-skeleton-card-${idx}`} className="glass-wrapper border-0">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-4 w-24 motion-reduce:animate-none" style={pulseStyle(580 + idx * 60)} />
+                  <Skeleton className="h-4 w-4 rounded-full motion-reduce:animate-none" style={pulseStyle(620 + idx * 60)} />
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Skeleton className="h-8 w-24 motion-reduce:animate-none" style={pulseStyle(660 + idx * 60)} />
+                <Skeleton className="h-3 w-full motion-reduce:animate-none" style={pulseStyle(700 + idx * 60)} />
+                <Skeleton className="h-3 w-5/6 motion-reduce:animate-none" style={pulseStyle(740 + idx * 60)} />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      <Card className="glass-wrapper border-0">
+        <CardContent className="p-4">
+          <div className="space-y-3">
+            <Skeleton className="h-6 w-64 motion-reduce:animate-none" style={pulseStyle(820)} />
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <Skeleton
+                key={`analysis-skeleton-row-${idx}`}
+                className="h-12 w-full motion-reduce:animate-none"
+                style={pulseStyle(860 + idx * 80)}
+              />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+      );
+    })()
+  );
+
   const analysis = getCurrentAnalysis();
   const totalRows = getTotalRows();
   const genderPieData = getGenderPieData();
@@ -383,10 +467,7 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
         )}
 
         {loading && (
-          <div className="glass-wrapper p-12 text-center">
-            <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-muted-foreground">Analyzing data...</p>
-          </div>
+          renderLoadingSkeleton()
         )}
 
         {!loading && !error && analysis && (

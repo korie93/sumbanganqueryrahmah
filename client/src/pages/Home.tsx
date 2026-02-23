@@ -3,9 +3,10 @@ import { Upload, BookMarked, Eye, Search, BarChart3, Activity, ClipboardList, Da
 interface HomeProps {
   onNavigate: (page: string) => void;
   userRole: string;
+  tabVisibility?: Record<string, boolean> | null;
 }
 
-export default function Home({ onNavigate, userRole }: HomeProps) {
+export default function Home({ onNavigate, userRole, tabVisibility }: HomeProps) {
   const isSuperuser = userRole === "superuser";
 
   const menuItems = [
@@ -14,21 +15,21 @@ export default function Home({ onNavigate, userRole }: HomeProps) {
       title: "Import Data",
       description: "Import data from Excel/CSV",
       icon: Upload,
-      roles: ["admin", "superuser"],
+      roles: ["user", "admin", "superuser"],
     },
     {
       id: "saved",
       title: "Saved Imports",
       description: "View all saved data",
       icon: BookMarked,
-      roles: ["admin", "superuser"],
+      roles: ["user", "admin", "superuser"],
     },
     {
       id: "viewer",
       title: "Data Viewer",
       description: "Detailed data display",
       icon: Eye,
-      roles: ["admin", "superuser"],
+      roles: ["user", "admin", "superuser"],
     },
     {
       id: "general-search",
@@ -42,14 +43,14 @@ export default function Home({ onNavigate, userRole }: HomeProps) {
       title: "Analysis",
       description: "Data analysis and reports",
       icon: BarChart3,
-      roles: ["admin", "superuser"],
+      roles: ["user", "admin", "superuser"],
     },
     {
       id: "dashboard",
       title: "Dashboard",
       description: "Analytics and system overview",
       icon: LayoutDashboard,
-      roles: ["superuser"],
+      roles: ["user", "admin", "superuser"],
     },
     {
       id: "ai",
@@ -63,25 +64,30 @@ export default function Home({ onNavigate, userRole }: HomeProps) {
       title: "Activity Monitor",
       description: "Monitor user activity",
       icon: Activity,
-      roles: ["superuser"],
+      roles: ["user", "admin", "superuser"],
     },
     {
       id: "audit-logs",
       title: "Audit Log",
       description: "View system activity logs",
       icon: ClipboardList,
-      roles: ["superuser"],
+      roles: ["user", "admin", "superuser"],
     },
     {
       id: "backup",
       title: "Backup & Restore",
       description: "Backup and restore system data",
       icon: Database,
-      roles: ["superuser"],
+      roles: ["user", "admin", "superuser"],
     },
   ];
 
-  const visibleItems = menuItems.filter((item) => item.roles.includes(userRole));
+  const visibleItems = menuItems.filter((item) => {
+    if (!item.roles.includes(userRole)) return false;
+    if (userRole === "superuser") return true;
+    if (!tabVisibility) return true;
+    return tabVisibility[item.id] !== false;
+  });
 
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">

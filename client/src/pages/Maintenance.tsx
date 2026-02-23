@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Clock3, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Clock3, ShieldAlert, TimerReset, Wrench } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMaintenanceStatus } from "@/lib/api";
 
@@ -70,43 +70,63 @@ export default function MaintenancePage() {
     [state.endTime, now]
   );
 
+  const formatTime = (raw?: string | null) => {
+    if (!raw) return "-";
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return "-";
+    return date.toLocaleString();
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 text-slate-100 flex items-center justify-center p-6">
-      <Card className="w-full max-w-2xl border-slate-700 bg-slate-900/80 backdrop-blur">
-        <CardHeader className="space-y-3">
-          <div className="flex items-center gap-2 text-amber-400">
-            <ShieldAlert className="w-5 h-5" />
-            <span className="text-sm uppercase tracking-wide">System Maintenance</span>
+    <div className="min-h-screen bg-gradient-to-br from-[#0b1220] via-[#101a2d] to-[#14213d] text-slate-100 flex items-center justify-center p-4 sm:p-6">
+      <Card className="w-full max-w-3xl border-slate-700/80 bg-slate-900/75 backdrop-blur-md shadow-2xl">
+        <CardHeader className="space-y-4 border-b border-slate-800 pb-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-amber-300">
+              <ShieldAlert className="w-5 h-5" />
+              <span className="text-xs sm:text-sm uppercase tracking-wide">System Maintenance</span>
+            </div>
+            <div className="rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1 text-xs text-slate-300">
+              {state.type === "hard" ? "Hard Mode" : "Soft Mode"}
+            </div>
           </div>
-          <CardTitle className="text-3xl font-bold text-slate-100">SQR Sedang Diselenggara</CardTitle>
+          <CardTitle className="text-2xl sm:text-3xl font-bold text-slate-100">Sistem Sedang Diselenggara</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-4">
+        <CardContent className="space-y-5 pt-6">
+          <div className="rounded-lg border border-slate-700/90 bg-slate-800/70 p-4">
             <p className="text-slate-100 leading-relaxed">{state.message}</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-              <p className="text-slate-400">Mode</p>
-              <p className="font-semibold uppercase">{state.type}</p>
-            </div>
-            <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-              <p className="text-slate-400">Status</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+            <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
+              <p className="text-slate-400 mb-1">Status</p>
               <p className="font-semibold">{state.maintenance ? "Aktif" : "Tidak Aktif"}</p>
+            </div>
+            <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
+              <p className="text-slate-400 mb-1">Start Time</p>
+              <p className="font-semibold text-xs sm:text-sm">{formatTime(state.startTime)}</p>
+            </div>
+            <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
+              <p className="text-slate-400 mb-1">End Time</p>
+              <p className="font-semibold text-xs sm:text-sm">{formatTime(state.endTime)}</p>
             </div>
           </div>
 
           {countdown && (
-            <div className="rounded-lg border border-blue-700/50 bg-blue-950/40 p-4 flex items-center gap-3">
-              <Clock3 className="w-5 h-5 text-blue-300" />
-              <div>
-                <p className="text-xs text-blue-200">Anggaran Tamat Maintenance</p>
-                <p className="text-2xl font-semibold text-blue-100">{countdown}</p>
+            <div className="rounded-lg border border-blue-700/50 bg-blue-950/40 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Clock3 className="w-5 h-5 text-blue-300" />
+                <p className="text-xs text-blue-200">Anggaran tamat maintenance</p>
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-md border border-blue-700/50 px-3 py-1 bg-blue-900/20">
+                <TimerReset className="w-4 h-4 text-blue-200" />
+                <p className="text-2xl font-semibold tracking-wide text-blue-100 font-mono">{countdown}</p>
               </div>
             </div>
           )}
 
-          <div className="text-xs text-slate-400 flex items-center gap-2">
+          <div className="text-xs text-slate-400 flex items-center gap-2 rounded-md border border-slate-800 bg-slate-900/50 p-3">
+            <Wrench className="w-4 h-4" />
             <AlertTriangle className="w-4 h-4" />
             Jika anda admin/superuser, log masuk semula untuk bypass maintenance mode.
           </div>

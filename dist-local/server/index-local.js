@@ -213,6 +213,36 @@ function buildSqlCondition(field, operator, value) {
       return sql`false`;
   }
 }
+var ROLE_TAB_SETTINGS = {
+  admin: [
+    { pageId: "home", suffix: "home", label: "Admin Tab: Home", description: "Allow admin to open Home tab.", defaultEnabled: true },
+    { pageId: "import", suffix: "import", label: "Admin Tab: Import", description: "Allow admin to open Import tab.", defaultEnabled: true },
+    { pageId: "saved", suffix: "saved", label: "Admin Tab: Saved", description: "Allow admin to open Saved tab.", defaultEnabled: true },
+    { pageId: "viewer", suffix: "viewer", label: "Admin Tab: Viewer", description: "Allow admin to open Viewer tab.", defaultEnabled: true },
+    { pageId: "general-search", suffix: "general_search", label: "Admin Tab: Search", description: "Allow admin to open Search tab.", defaultEnabled: true },
+    { pageId: "analysis", suffix: "analysis", label: "Admin Tab: Analysis", description: "Allow admin to open Analysis tab.", defaultEnabled: true },
+    { pageId: "dashboard", suffix: "dashboard", label: "Admin Tab: Dashboard", description: "Allow admin to open Dashboard tab.", defaultEnabled: false },
+    { pageId: "ai", suffix: "ai", label: "Admin Tab: AI", description: "Allow admin to open AI tab.", defaultEnabled: true },
+    { pageId: "activity", suffix: "activity", label: "Admin Tab: Activity", description: "Allow admin to open Activity tab.", defaultEnabled: false },
+    { pageId: "audit-logs", suffix: "audit_logs", label: "Admin Tab: Audit", description: "Allow admin to open Audit tab.", defaultEnabled: false },
+    { pageId: "backup", suffix: "backup", label: "Admin Tab: Backup", description: "Allow admin to open Backup tab.", defaultEnabled: false },
+    { pageId: "settings", suffix: "settings", label: "Admin Tab: Settings", description: "Allow admin to open Settings tab.", defaultEnabled: true }
+  ],
+  user: [
+    { pageId: "home", suffix: "home", label: "User Tab: Home", description: "Allow user to open Home tab.", defaultEnabled: false },
+    { pageId: "import", suffix: "import", label: "User Tab: Import", description: "Allow user to open Import tab.", defaultEnabled: false },
+    { pageId: "saved", suffix: "saved", label: "User Tab: Saved", description: "Allow user to open Saved tab.", defaultEnabled: false },
+    { pageId: "viewer", suffix: "viewer", label: "User Tab: Viewer", description: "Allow user to open Viewer tab.", defaultEnabled: false },
+    { pageId: "general-search", suffix: "general_search", label: "User Tab: Search", description: "Allow user to open Search tab.", defaultEnabled: true },
+    { pageId: "analysis", suffix: "analysis", label: "User Tab: Analysis", description: "Allow user to open Analysis tab.", defaultEnabled: false },
+    { pageId: "dashboard", suffix: "dashboard", label: "User Tab: Dashboard", description: "Allow user to open Dashboard tab.", defaultEnabled: false },
+    { pageId: "ai", suffix: "ai", label: "User Tab: AI", description: "Allow user to open AI tab.", defaultEnabled: true },
+    { pageId: "activity", suffix: "activity", label: "User Tab: Activity", description: "Allow user to open Activity tab.", defaultEnabled: false },
+    { pageId: "audit-logs", suffix: "audit_logs", label: "User Tab: Audit", description: "Allow user to open Audit tab.", defaultEnabled: false },
+    { pageId: "backup", suffix: "backup", label: "User Tab: Backup", description: "Allow user to open Backup tab.", defaultEnabled: false }
+  ]
+};
+var roleTabSettingKey = (role, suffix) => `tab_${role}_${suffix}_enabled`;
 var PostgresStorage = class {
   constructor() {
     this.seedDefaultUsers();
@@ -910,6 +940,21 @@ var PostgresStorage = class {
           isCritical: false
         }
       ];
+      for (const [role, tabSettings] of Object.entries(ROLE_TAB_SETTINGS)) {
+        for (const tabSetting of tabSettings) {
+          const key = roleTabSettingKey(role, tabSetting.suffix);
+          settingsSeed.push({
+            categoryName: "Roles & Permissions",
+            key,
+            label: tabSetting.label,
+            description: tabSetting.description,
+            type: "boolean",
+            value: tabSetting.defaultEnabled ? "true" : "false",
+            defaultValue: tabSetting.defaultEnabled ? "true" : "false",
+            isCritical: false
+          });
+        }
+      }
       for (const setting of settingsSeed) {
         await db.execute(sql`
           INSERT INTO public.system_settings (
@@ -1436,6 +1481,14 @@ var PostgresStorage = class {
     await db.update(userActivity).set({
       lastActivityTime: /* @__PURE__ */ new Date()
     }).where(eq(userActivity.id, activityId));
+  }
+  async getActiveActivitiesByUsername(username) {
+    return await db.select().from(userActivity).where(
+      and(
+        eq(userActivity.username, username),
+        eq(userActivity.isActive, true)
+      )
+    ).orderBy(desc(userActivity.loginTime));
   }
   async updateActivity(id, data) {
     const updateData = {};
@@ -2546,6 +2599,20 @@ var PostgresStorage = class {
     }
     return String(value);
   }
+  isAdminMaintenanceEditableKey(settingKey) {
+    return settingKey === "maintenance_message" || settingKey === "maintenance_start_time" || settingKey === "maintenance_end_time";
+  }
+  async isAdminMaintenanceEditingEnabled() {
+    const res = await db.execute(sql`
+      SELECT value
+      FROM public.system_settings
+      WHERE key = 'admin_can_edit_maintenance_message'
+      LIMIT 1
+    `);
+    const row = res.rows[0];
+    const raw = String(row?.value ?? "").trim().toLowerCase();
+    return ["true", "1", "yes", "on"].includes(raw);
+  }
   async getSettingsForRole(role) {
     await this.ensureSettingsTables();
     const rows = await db.execute(sql`
@@ -2588,6 +2655,7 @@ var PostgresStorage = class {
         optionsMap.set(String(row.setting_id), list);
       }
     }
+    const adminMaintenanceEditingEnabled = role === "admin" ? await this.isAdminMaintenanceEditingEnabled() : true;
     const categoryMap = /* @__PURE__ */ new Map();
     for (const row of rows.rows) {
       const categoryId = String(row.category_id);
@@ -2599,8 +2667,11 @@ var PostgresStorage = class {
           settings: []
         });
       }
+      const key = String(row.key);
+      const canEditFromPermission = row.can_edit === true;
+      const canEdit = role === "admin" && this.isAdminMaintenanceEditableKey(key) && !adminMaintenanceEditingEnabled ? false : canEditFromPermission;
       categoryMap.get(categoryId).settings.push({
-        key: String(row.key),
+        key,
         label: String(row.label),
         description: row.description ? String(row.description) : null,
         type: this.parseSettingType(row.type),
@@ -2610,12 +2681,63 @@ var PostgresStorage = class {
         updatedAt: row.updated_at ? new Date(row.updated_at) : null,
         permission: {
           canView: row.can_view === true,
-          canEdit: row.can_edit === true
+          canEdit
         },
         options: optionsMap.get(String(row.setting_id)) || []
       });
     }
     return Array.from(categoryMap.values());
+  }
+  async getBooleanSystemSetting(key, fallback = false) {
+    await this.ensureSettingsTables();
+    const res = await db.execute(sql`
+      SELECT value
+      FROM public.system_settings
+      WHERE key = ${key}
+      LIMIT 1
+    `);
+    const row = res.rows[0];
+    if (!row) return fallback;
+    const raw = String(row.value ?? "").trim().toLowerCase();
+    if (!raw) return fallback;
+    return ["true", "1", "yes", "on"].includes(raw);
+  }
+  async getRoleTabVisibility(role) {
+    await this.ensureSettingsTables();
+    if (role === "superuser") {
+      return {};
+    }
+    const roleKey = role === "admin" ? "admin" : role === "user" ? "user" : null;
+    if (!roleKey) {
+      return {};
+    }
+    const settings = ROLE_TAB_SETTINGS[roleKey];
+    const visibility = {};
+    for (const tab of settings) {
+      visibility[tab.pageId] = tab.defaultEnabled;
+    }
+    const keys = settings.map((tab) => roleTabSettingKey(roleKey, tab.suffix));
+    if (keys.length === 0) {
+      return visibility;
+    }
+    const keyList = keys.map((v) => `'${v.replace(/'/g, "''")}'`).join(",");
+    const rows = await db.execute(sql`
+      SELECT key, value
+      FROM public.system_settings
+      WHERE key IN (${sql.raw(keyList)})
+    `);
+    const keyToPage = /* @__PURE__ */ new Map();
+    for (const tab of settings) {
+      keyToPage.set(roleTabSettingKey(roleKey, tab.suffix), tab.pageId);
+    }
+    for (const row of rows.rows) {
+      const key = String(row.key || "");
+      const pageId = keyToPage.get(key);
+      if (!pageId) continue;
+      const raw = String(row.value ?? "").trim().toLowerCase();
+      visibility[pageId] = ["true", "1", "yes", "on"].includes(raw);
+    }
+    return visibility;
   }
   async updateSystemSetting(params) {
     await this.ensureSettingsTables();
@@ -2641,6 +2763,9 @@ var PostgresStorage = class {
     const current = settingRes.rows[0];
     if (!current) {
       return { status: "not_found", message: "Setting not found." };
+    }
+    if (params.role === "admin" && this.isAdminMaintenanceEditableKey(String(current.key)) && !await this.isAdminMaintenanceEditingEnabled()) {
+      return { status: "forbidden", message: "Admin is not allowed to edit maintenance message settings." };
     }
     if (current.can_edit !== true) {
       return { status: "forbidden", message: "You do not have permission to edit this setting." };
@@ -2759,6 +2884,18 @@ var PostgresStorage = class {
       startTime,
       endTime
     };
+  }
+  async getAppConfig() {
+    await this.ensureSettingsTables();
+    const res = await db.execute(sql`
+      SELECT value
+      FROM public.system_settings
+      WHERE key = 'system_name'
+      LIMIT 1
+    `);
+    const row = res.rows[0];
+    const systemName = String(row?.value ?? "").trim() || "SQR System";
+    return { systemName };
   }
   async getAccounts() {
     return await db.select({
@@ -3311,6 +3448,41 @@ function requireRole(...roles) {
     next();
   };
 }
+var TAB_VISIBILITY_CACHE_TTL_MS = 5e3;
+var tabVisibilityCache = /* @__PURE__ */ new Map();
+async function getRoleTabVisibilityCached(role) {
+  if (role === "superuser") return {};
+  const now = Date.now();
+  const cached = tabVisibilityCache.get(role);
+  if (cached && now - cached.cachedAt < TAB_VISIBILITY_CACHE_TTL_MS) {
+    return cached.tabs;
+  }
+  const tabs = await storage.getRoleTabVisibility(role);
+  tabVisibilityCache.set(role, { tabs, cachedAt: now });
+  return tabs;
+}
+function requireTabAccess(tabId) {
+  return async (req, res, next) => {
+    try {
+      const role = req.user?.role;
+      if (!role) return res.status(401).json({ message: "Unauthenticated" });
+      if (role === "superuser") return next();
+      if (role !== "admin" && role !== "user") {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      const tabs = await getRoleTabVisibilityCached(role);
+      const hasExplicit = Object.prototype.hasOwnProperty.call(tabs, tabId);
+      const enabled = hasExplicit ? tabs[tabId] !== false : false;
+      if (!enabled) {
+        return res.status(403).json({ message: `Tab '${tabId}' is disabled for role '${role}'` });
+      }
+      return next();
+    } catch (err) {
+      console.error("Tab access guard error:", err);
+      return res.status(500).json({ message: err?.message || "Failed to validate tab access" });
+    }
+  };
+}
 function broadcastWsMessage(payload) {
   const msg = JSON.stringify(payload);
   for (const [, ws] of connectedClients) {
@@ -3459,7 +3631,24 @@ async function handleLogin(req, res) {
     }
     const browserName = parseBrowser(browser || req.headers["user-agent"]);
     if (user.role === "superuser") {
-      await storage.deactivateUserActivities(username, "NEW_LOGIN");
+      const enforceSingleSuperuserSession = await storage.getBooleanSystemSetting(
+        "enforce_superuser_single_session",
+        false
+      );
+      if (enforceSingleSuperuserSession) {
+        const activeSessions = await storage.getActiveActivitiesByUsername(username);
+        if (activeSessions.length > 0) {
+          await storage.createAuditLog({
+            action: "LOGIN_BLOCKED_SINGLE_SESSION",
+            performedBy: username,
+            details: `Superuser single-session policy blocked login. Active sessions: ${activeSessions.length}`
+          });
+          return res.status(409).json({
+            message: "Single superuser session is enforced. Logout from the current session first.",
+            code: "SUPERUSER_SINGLE_SESSION_ENFORCED"
+          });
+        }
+      }
     } else if (user.role === "admin" && fingerprint) {
       await storage.deactivateUserSessionsByFingerprint(
         username,
@@ -3536,7 +3725,7 @@ app.post("/api/activity/logout", authenticateToken, async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
-app.get("/api/activity/all", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+app.get("/api/activity/all", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
   try {
     const activities = await storage.getAllActivities();
     res.json({ activities });
@@ -3544,7 +3733,7 @@ app.get("/api/activity/all", authenticateToken, requireRole("admin", "superuser"
     res.status(500).json({ message: error.message });
   }
 });
-app.get("/api/activity/filter", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+app.get("/api/activity/filter", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
   try {
     const filters = {};
     if (req.query.status) {
@@ -3565,6 +3754,7 @@ app.delete(
   "/api/activity/:id",
   authenticateToken,
   requireRole("admin", "superuser"),
+  requireTabAccess("activity"),
   async (req, res) => {
     try {
       const activityId = String(req.params.id);
@@ -3586,6 +3776,7 @@ app.post(
   "/api/activity/kick",
   authenticateToken,
   requireRole("admin", "superuser"),
+  requireTabAccess("activity"),
   async (req, res) => {
     try {
       const activityId = String(req.body.activityId);
@@ -3630,6 +3821,7 @@ app.post(
   "/api/activity/ban",
   authenticateToken,
   requireRole("superuser"),
+  requireTabAccess("activity"),
   async (req, res) => {
     try {
       const activityId = String(req.body.activityId);
@@ -3683,7 +3875,7 @@ app.post(
     }
   }
 );
-app.get("/api/users/banned", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+app.get("/api/users/banned", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
   try {
     const bannedSessions = await storage.getBannedSessions();
     const usersWithVisitorId = bannedSessions.map((s) => ({
@@ -3722,6 +3914,25 @@ app.get("/api/auth/me", authenticateToken, (req, res) => {
     }
   });
 });
+app.get("/api/app-config", authenticateToken, async (req, res) => {
+  try {
+    const config = await storage.getAppConfig();
+    res.json(config);
+  } catch (err) {
+    console.error("App config GET error:", err);
+    res.status(500).json({ message: err?.message || "Failed to load app config" });
+  }
+});
+app.get("/api/settings/tab-visibility", authenticateToken, async (req, res) => {
+  try {
+    const role = req.user?.role || "user";
+    const tabs = await storage.getRoleTabVisibility(role);
+    res.json({ role, tabs });
+  } catch (err) {
+    console.error("Tab visibility GET error:", err);
+    res.status(500).json({ message: err?.message || "Failed to load tab visibility" });
+  }
+});
 app.get("/api/settings", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
   try {
     const role = req.user?.role || "user";
@@ -3759,6 +3970,7 @@ app.patch("/api/settings", authenticateToken, requireRole("admin", "superuser"),
       return res.status(400).json({ message: result.message });
     }
     if (result.status === "updated") {
+      tabVisibilityCache.clear();
       await storage.createAuditLog({
         action: result.setting?.isCritical ? "CRITICAL_SETTING_UPDATED" : "SETTING_UPDATED",
         performedBy: req.user?.username || "system",
@@ -4148,23 +4360,29 @@ function analyzeDataRows(rows) {
     duplicates: { count: duplicateItems.length, items: duplicateItems.slice(0, 50) }
   };
 }
-app.get("/api/imports/:id/analyze", authenticateToken, async (req, res) => {
-  try {
-    const importRecord = await storage.getImportById(req.params.id);
-    if (!importRecord) {
-      return res.status(404).json({ message: "Import not found" });
+app.get(
+  "/api/imports/:id/analyze",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("analysis"),
+  async (req, res) => {
+    try {
+      const importRecord = await storage.getImportById(req.params.id);
+      if (!importRecord) {
+        return res.status(404).json({ message: "Import not found" });
+      }
+      const rows = await storage.getDataRowsByImport(req.params.id);
+      const analysis = analyzeDataRows(rows);
+      res.json({
+        import: { id: importRecord.id, name: importRecord.name, filename: importRecord.filename },
+        totalRows: rows.length,
+        analysis
+      });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
     }
-    const rows = await storage.getDataRowsByImport(req.params.id);
-    const analysis = analyzeDataRows(rows);
-    res.json({
-      import: { id: importRecord.id, name: importRecord.name, filename: importRecord.filename },
-      totalRows: rows.length,
-      analysis
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
   }
-});
+);
 app.get("/api/analyze/all-summary", authenticateToken, async (req, res) => {
   try {
     const imports2 = await storage.getImports();
@@ -5749,7 +5967,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
-app.get("/api/activities", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+app.get("/api/activities", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
   try {
     const activities = await storage.getAllActivities();
     res.json(activities);
@@ -5757,7 +5975,7 @@ app.get("/api/activities", authenticateToken, requireRole("admin", "superuser"),
     res.status(500).json({ message: error.message });
   }
 });
-app.get("/api/activities/active", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+app.get("/api/activities/active", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
   try {
     const activities = await storage.getActiveActivities();
     res.json(activities);
@@ -5765,7 +5983,7 @@ app.get("/api/activities/active", authenticateToken, requireRole("admin", "super
     res.status(500).json({ message: error.message });
   }
 });
-app.post("/api/activities/filter", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+app.post("/api/activities/filter", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
   try {
     const filters = req.body;
     const activities = await storage.getFilteredActivities(filters);
@@ -5823,6 +6041,7 @@ app.post(
   "/api/admin/unban",
   authenticateToken,
   requireRole("superuser"),
+  requireTabAccess("activity"),
   async (req, res) => {
     try {
       const { banId } = req.body;
@@ -5873,7 +6092,7 @@ app.post("/api/users", authenticateToken, requireRole("superuser"), async (req, 
     res.status(500).json({ message: error.message });
   }
 });
-app.get("/api/audit-logs", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+app.get("/api/audit-logs", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("audit-logs"), async (req, res) => {
   try {
     const logs = await storage.getAuditLogs();
     res.json({ logs });
@@ -5881,7 +6100,7 @@ app.get("/api/audit-logs", authenticateToken, requireRole("admin", "superuser"),
     res.status(500).json({ message: error.message });
   }
 });
-app.get("/api/audit-logs/stats", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+app.get("/api/audit-logs/stats", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("audit-logs"), async (req, res) => {
   try {
     const logs = await storage.getAuditLogs();
     const stats = {
@@ -5902,44 +6121,50 @@ app.get("/api/audit-logs/stats", authenticateToken, requireRole("admin", "superu
     res.status(500).json({ message: error.message });
   }
 });
-app.get("/api/analyze/all", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
-  try {
-    const imports2 = await storage.getImports();
-    if (imports2.length === 0) {
+app.get(
+  "/api/analyze/all",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("analysis"),
+  async (req, res) => {
+    try {
+      const imports2 = await storage.getImports();
+      if (imports2.length === 0) {
+        return res.json({
+          totalImports: 0,
+          totalRows: 0,
+          imports: [],
+          analysis: {
+            icLelaki: { count: 0, samples: [] },
+            icPerempuan: { count: 0, samples: [] },
+            noPolis: { count: 0, samples: [] },
+            noTentera: { count: 0, samples: [] },
+            passportMY: { count: 0, samples: [] },
+            passportLuarNegara: { count: 0, samples: [] },
+            duplicates: { count: 0, items: [] }
+          }
+        });
+      }
+      let allRows = [];
+      const importsWithCounts = await Promise.all(
+        imports2.map(async (imp) => {
+          const rows = await storage.getDataRowsByImport(imp.id);
+          allRows = allRows.concat(rows);
+          return { id: imp.id, name: imp.name, filename: imp.filename, rowCount: rows.length };
+        })
+      );
+      const analysis = analyzeDataRows(allRows);
       return res.json({
-        totalImports: 0,
-        totalRows: 0,
-        imports: [],
-        analysis: {
-          icLelaki: { count: 0, samples: [] },
-          icPerempuan: { count: 0, samples: [] },
-          noPolis: { count: 0, samples: [] },
-          noTentera: { count: 0, samples: [] },
-          passportMY: { count: 0, samples: [] },
-          passportLuarNegara: { count: 0, samples: [] },
-          duplicates: { count: 0, items: [] }
-        }
+        totalImports: imports2.length,
+        totalRows: allRows.length,
+        imports: importsWithCounts,
+        analysis
       });
+    } catch (error) {
+      return res.status(500).json({ message: error.message });
     }
-    let allRows = [];
-    const importsWithCounts = await Promise.all(
-      imports2.map(async (imp) => {
-        const rows = await storage.getDataRowsByImport(imp.id);
-        allRows = allRows.concat(rows);
-        return { id: imp.id, name: imp.name, filename: imp.filename, rowCount: rows.length };
-      })
-    );
-    const analysis = analyzeDataRows(allRows);
-    return res.json({
-      totalImports: imports2.length,
-      totalRows: allRows.length,
-      imports: importsWithCounts,
-      analysis
-    });
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
   }
-});
+);
 app.get("/api/debug/websocket-clients", authenticateToken, requireRole("superuser"), async (req, res) => {
   try {
     const clients = Array.from(connectedClients.keys());
@@ -5948,7 +6173,7 @@ app.get("/api/debug/websocket-clients", authenticateToken, requireRole("superuse
     res.status(500).json({ message: error.message });
   }
 });
-app.delete("/api/audit-logs/cleanup", authenticateToken, requireRole("superuser"), async (req, res) => {
+app.delete("/api/audit-logs/cleanup", authenticateToken, requireRole("superuser"), requireTabAccess("audit-logs"), async (req, res) => {
   try {
     const { olderThanDays } = req.body;
     const cutoffDate = /* @__PURE__ */ new Date();
@@ -5973,7 +6198,7 @@ app.delete("/api/audit-logs/cleanup", authenticateToken, requireRole("superuser"
     res.status(500).json({ message: error.message });
   }
 });
-app.get("/api/analytics/summary", authenticateToken, requireRole("superuser"), async (req, res) => {
+app.get("/api/analytics/summary", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
   try {
     const summary = await storage.getDashboardSummary();
     res.json(summary);
@@ -5981,7 +6206,7 @@ app.get("/api/analytics/summary", authenticateToken, requireRole("superuser"), a
     res.status(500).json({ message: error.message });
   }
 });
-app.get("/api/analytics/login-trends", authenticateToken, requireRole("superuser"), async (req, res) => {
+app.get("/api/analytics/login-trends", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 7;
     const trends = await storage.getLoginTrends(days);
@@ -5990,7 +6215,7 @@ app.get("/api/analytics/login-trends", authenticateToken, requireRole("superuser
     res.status(500).json({ message: error.message });
   }
 });
-app.get("/api/analytics/top-users", authenticateToken, requireRole("superuser"), async (req, res) => {
+app.get("/api/analytics/top-users", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
     const topUsers = await storage.getTopActiveUsers(limit);
@@ -5999,7 +6224,7 @@ app.get("/api/analytics/top-users", authenticateToken, requireRole("superuser"),
     res.status(500).json({ message: error.message });
   }
 });
-app.get("/api/analytics/peak-hours", authenticateToken, requireRole("superuser"), async (req, res) => {
+app.get("/api/analytics/peak-hours", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
   try {
     const peakHours = await storage.getPeakHours();
     res.json(peakHours);
@@ -6007,7 +6232,7 @@ app.get("/api/analytics/peak-hours", authenticateToken, requireRole("superuser")
     res.status(500).json({ message: error.message });
   }
 });
-app.get("/api/analytics/role-distribution", authenticateToken, requireRole("superuser"), async (req, res) => {
+app.get("/api/analytics/role-distribution", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
   try {
     const distribution = await storage.getRoleDistribution();
     res.json(distribution);
@@ -6015,7 +6240,7 @@ app.get("/api/analytics/role-distribution", authenticateToken, requireRole("supe
     res.status(500).json({ message: error.message });
   }
 });
-app.get("/api/backups", authenticateToken, requireRole("superuser"), async (req, res) => {
+app.get("/api/backups", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("backup"), async (req, res) => {
   try {
     const backups3 = await storage.getBackups();
     res.json({ backups: backups3 });
@@ -6024,7 +6249,7 @@ app.get("/api/backups", authenticateToken, requireRole("superuser"), async (req,
     res.status(500).json({ message: error.message });
   }
 });
-app.post("/api/backups", authenticateToken, requireRole("superuser"), async (req, res) => {
+app.post("/api/backups", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("backup"), async (req, res) => {
   try {
     const { name } = req.body;
     const startTime = Date.now();
@@ -6056,7 +6281,7 @@ app.post("/api/backups", authenticateToken, requireRole("superuser"), async (req
     res.status(500).json({ message: error.message });
   }
 });
-app.get("/api/backups/:id", authenticateToken, requireRole("superuser"), async (req, res) => {
+app.get("/api/backups/:id", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("backup"), async (req, res) => {
   try {
     const backup = await storage.getBackupById(req.params.id);
     if (!backup) {
@@ -6067,7 +6292,7 @@ app.get("/api/backups/:id", authenticateToken, requireRole("superuser"), async (
     res.status(500).json({ message: error.message });
   }
 });
-app.post("/api/backups/:id/restore", authenticateToken, requireRole("superuser"), async (req, res) => {
+app.post("/api/backups/:id/restore", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("backup"), async (req, res) => {
   try {
     const backup = await storage.getBackupById(req.params.id);
     if (!backup) {
@@ -6093,7 +6318,7 @@ app.post("/api/backups/:id/restore", authenticateToken, requireRole("superuser")
     res.status(500).json({ message: error.message });
   }
 });
-app.delete("/api/backups/:id", authenticateToken, requireRole("superuser"), async (req, res) => {
+app.delete("/api/backups/:id", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("backup"), async (req, res) => {
   try {
     const backup = await storage.getBackupById(req.params.id);
     const deleted = await storage.deleteBackup(req.params.id);

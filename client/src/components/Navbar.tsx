@@ -8,29 +8,36 @@ interface NavbarProps {
   onLogout: () => void;
   userRole: string;
   username: string;
+  systemName?: string;
   savedCount?: number;
+  tabVisibility?: Record<string, boolean> | null;
 }
 
-export default function Navbar({ currentPage, onNavigate, onLogout, userRole, username, savedCount }: NavbarProps) {
+export default function Navbar({ currentPage, onNavigate, onLogout, userRole, username, systemName, savedCount, tabVisibility }: NavbarProps) {
   const isSuperuser = userRole === "superuser";
   const isAdminOrSuperuser = userRole === "admin" || userRole === "superuser";
 
   const navItems = [
-    { id: "home", label: "Home", icon: Home, roles: ["admin", "superuser"] },
-    { id: "import", label: "Import", icon: Upload, roles: ["admin", "superuser"] },
-    { id: "saved", label: "Saved", icon: BookMarked, roles: ["admin", "superuser"] },
-    { id: "viewer", label: "Viewer", icon: Eye, roles: ["admin", "superuser"] },
+    { id: "home", label: "Home", icon: Home, roles: ["user", "admin", "superuser"] },
+    { id: "import", label: "Import", icon: Upload, roles: ["user", "admin", "superuser"] },
+    { id: "saved", label: "Saved", icon: BookMarked, roles: ["user", "admin", "superuser"] },
+    { id: "viewer", label: "Viewer", icon: Eye, roles: ["user", "admin", "superuser"] },
     { id: "general-search", label: "Search", icon: Search, roles: ["admin", "superuser", "user"] },
-    { id: "analysis", label: "Analysis", icon: BarChart3, roles: ["admin", "superuser"] },
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["superuser"] },
+    { id: "analysis", label: "Analysis", icon: BarChart3, roles: ["user", "admin", "superuser"] },
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["user", "admin", "superuser"] },
     { id: "ai", label: "AI", icon: Sparkles, roles: ["user", "admin", "superuser"] },
     { id: "settings", label: "Settings", icon: SlidersHorizontal, roles: ["admin", "superuser"] },
-    { id: "activity", label: "Activity", icon: Activity, roles: ["superuser"] },
-    { id: "audit-logs", label: "Audit", icon: FileText, roles: ["superuser"] },
-    { id: "backup", label: "Backup", icon: Database, roles: ["superuser"] },
+    { id: "activity", label: "Activity", icon: Activity, roles: ["user", "admin", "superuser"] },
+    { id: "audit-logs", label: "Audit", icon: FileText, roles: ["user", "admin", "superuser"] },
+    { id: "backup", label: "Backup", icon: Database, roles: ["user", "admin", "superuser"] },
   ];
 
-  const visibleItems = navItems.filter((item) => item.roles.includes(userRole));
+  const visibleItems = navItems.filter((item) => {
+    if (!item.roles.includes(userRole)) return false;
+    if (userRole === "superuser") return true;
+    if (!tabVisibility) return true;
+    return tabVisibility[item.id] !== false;
+  });
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-lg">
@@ -40,7 +47,7 @@ export default function Navbar({ currentPage, onNavigate, onLogout, userRole, us
             <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
               <ShieldCheck className="w-4 h-4 text-primary" />
             </div>
-            <span className="font-semibold text-sm hidden sm:inline">SQR System</span>
+            <span className="font-semibold text-sm hidden sm:inline">{systemName || "SQR System"}</span>
           </div>
         </div>
 

@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Navbar from "@/components/Navbar";
 import AutoLogout from "@/components/AutoLogout";
-import { activityLogout, getImports, getMaintenanceStatus } from "@/lib/api";
+import { activityLogout, getAppConfig, getImports, getMaintenanceStatus, getTabVisibility } from "@/lib/api";
 
 const Login = lazy(() => import("@/pages/Login"));
 const Home = lazy(() => import("@/pages/Home"));
@@ -34,6 +34,8 @@ function AppContent() {
   const [selectedImportId, setSelectedImportId] = useState<string | undefined>();
   const [isInitialized, setIsInitialized] = useState(false);
   const [savedCount, setSavedCount] = useState<number>(0);
+  const [systemName, setSystemName] = useState<string>("SQR System");
+  const [tabVisibility, setTabVisibility] = useState<Record<string, boolean> | null>(null);
 
   const fetchSavedCount = useCallback(async () => {
     try {
@@ -44,6 +46,23 @@ function AppContent() {
     } catch {
       setSavedCount(0);
     }
+  }, []);
+
+  const getDefaultPageForRole = useCallback((role: string, tabs: Record<string, boolean> | null) => {
+    if (role === "superuser") return "home";
+    const candidates = role === "user"
+      ? ["general-search", "ai"]
+      : ["home", "general-search", "ai", "saved"];
+    for (const candidate of candidates) {
+      if (!tabs || tabs[candidate] !== false) return candidate;
+    }
+    return role === "user" ? "general-search" : "home";
+  }, []);
+
+  const isPageEnabled = useCallback((role: string | undefined, page: string, tabs: Record<string, boolean> | null) => {
+    if (!role || role === "superuser") return true;
+    if (!tabs) return true;
+    return tabs[page] !== false;
   }, []);
 
   useEffect(() => {
@@ -94,6 +113,76 @@ function AppContent() {
   }, [user, fetchSavedCount]);
 
   useEffect(() => {
+    if (!user) {
+      setSystemName("SQR System");
+      return;
+    }
+
+    let cancelled = false;
+    const loadSystemName = async () => {
+      try {
+        const response = await getAppConfig();
+        const name = String(response?.systemName || "").trim();
+        if (!cancelled) {
+          setSystemName(name || "SQR System");
+        }
+      } catch {
+        if (!cancelled) {
+          setSystemName("SQR System");
+        }
+      }
+    };
+
+    loadSystemName();
+    const onSettingsUpdated = () => {
+      loadSystemName();
+    };
+    window.addEventListener("settings-updated", onSettingsUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("settings-updated", onSettingsUpdated);
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) {
+      setTabVisibility(null);
+      return;
+    }
+
+    let cancelled = false;
+    const loadTabVisibility = async () => {
+      if (user.role === "superuser") {
+        if (!cancelled) setTabVisibility(null);
+        return;
+      }
+      try {
+        const response = await getTabVisibility();
+        const tabs = response?.tabs && typeof response.tabs === "object" ? response.tabs : {};
+        if (!cancelled) {
+          setTabVisibility(tabs);
+        }
+      } catch {
+        if (!cancelled) {
+          setTabVisibility(null);
+        }
+      }
+    };
+
+    loadTabVisibility();
+
+    const onSettingsUpdated = () => {
+      loadTabVisibility();
+    };
+    window.addEventListener("settings-updated", onSettingsUpdated);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("settings-updated", onSettingsUpdated);
+    };
+  }, [user]);
+
+  useEffect(() => {
     const onMaintenanceUpdated = (event: Event) => {
       const custom = event as CustomEvent<{ maintenance?: boolean }>;
       if (custom.detail?.maintenance) {
@@ -133,6 +222,12 @@ function AppContent() {
       clearInterval(timer);
     };
   }, [user, currentPage]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (isPageEnabled(user.role, currentPage, tabVisibility)) return;
+    setCurrentPage(getDefaultPageForRole(user.role, tabVisibility));
+  }, [user, currentPage, tabVisibility, isPageEnabled, getDefaultPageForRole]);
 
   useEffect(() => {
     if (!user) return;
@@ -186,6 +281,11 @@ function AppContent() {
   }, []);
 
   const handleNavigate = useCallback((page: string, importId?: string) => {
+    if (!isPageEnabled(user?.role, page, tabVisibility)) {
+      setCurrentPage(getDefaultPageForRole(user?.role || "user", tabVisibility));
+      return;
+    }
+
     setCurrentPage(page);
     localStorage.setItem("activeTab", page);
     localStorage.setItem("lastPage", page);
@@ -199,7 +299,7 @@ function AppContent() {
     if (importId) {
       setSelectedImportId(importId);
     }
-  }, []);
+  }, [user?.role, tabVisibility, isPageEnabled, getDefaultPageForRole]);
 
   const pageFallback = (
     <div className="min-h-[calc(100vh-3.5rem)] bg-background flex items-center justify-center">
@@ -247,36 +347,34 @@ function AppContent() {
   }
 
   const renderPage = () => {
+    if (!isPageEnabled(user.role, currentPage, tabVisibility)) {
+      return user.role === "user"
+        ? <GeneralSearch userRole={user.role} />
+        : <Home onNavigate={handleNavigate} userRole={user.role} tabVisibility={tabVisibility} />;
+    }
+
     switch (currentPage) {
       case "home":
-        return user.role === "user"
-          ? <GeneralSearch userRole={user.role} />
-          : <Home onNavigate={handleNavigate} userRole={user.role} />;
+        return <Home onNavigate={handleNavigate} userRole={user.role} tabVisibility={tabVisibility} />;
       case "import":
-        return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <Import onNavigate={handleNavigate} />;
+        return <Import onNavigate={handleNavigate} />;
       case "saved":
-        return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <Saved onNavigate={handleNavigate} userRole={user.role} />;
+        return <Saved onNavigate={handleNavigate} userRole={user.role} />;
       case "viewer":
-        return user.role === "user"
-          ? <GeneralSearch userRole={user.role} />
-          : <Viewer onNavigate={handleNavigate} importId={selectedImportId} userRole={user.role} />;
+        return <Viewer onNavigate={handleNavigate} importId={selectedImportId} userRole={user.role} />;
       case "general-search":
         return <GeneralSearch userRole={user.role} />;
       case "analysis":
-        return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <Analysis onNavigate={handleNavigate} />;
+        return <Analysis onNavigate={handleNavigate} />;
       case "activity":
-        if (user.role !== "superuser") return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <Home onNavigate={handleNavigate} userRole={user.role} />;
         return <Activity />;
       case "audit-logs":
-        if (user.role !== "superuser") return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <Home onNavigate={handleNavigate} userRole={user.role} />;
         return <AuditLogs />;
       case "backup":
-        if (user.role !== "superuser") return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <Home onNavigate={handleNavigate} userRole={user.role} />;
-        return <BackupRestore />;
+        return <BackupRestore userRole={user.role} />;
       case "ai":
         return <AI />;
       case "dashboard":
-        if (user.role !== "superuser") return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <Home onNavigate={handleNavigate} userRole={user.role} />;
         return <Dashboard />;
       case "settings":
         return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <SettingsPage />;
@@ -285,7 +383,7 @@ function AppContent() {
       default:
         return user.role === "user"
           ? <GeneralSearch userRole={user.role} />
-          : <Home onNavigate={handleNavigate} userRole={user.role} />;
+          : <Home onNavigate={handleNavigate} userRole={user.role} tabVisibility={tabVisibility} />;
     }
   };
 
@@ -298,7 +396,9 @@ function AppContent() {
         onLogout={handleLogout}
         userRole={user.role}
         username={user.username}
+        systemName={systemName}
         savedCount={savedCount}
+        tabVisibility={tabVisibility}
       />
       <Suspense fallback={pageFallback}>
         <main>{renderPage()}</main>
