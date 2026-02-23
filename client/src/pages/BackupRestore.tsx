@@ -94,7 +94,12 @@ const sortOptions = [
   { value: "name-desc", label: "Name (Z-A)" },
 ];
 
-export default function BackupRestore() {
+interface BackupRestoreProps {
+  userRole?: string;
+}
+
+export default function BackupRestore({ userRole }: BackupRestoreProps) {
+  const canManageBackups = userRole === "admin" || userRole === "superuser";
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState<BackupRecord | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState<BackupRecord | null>(null);
@@ -568,13 +573,15 @@ export default function BackupRestore() {
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-          <Button
-            onClick={() => setShowCreateDialog(true)}
-            data-testid="button-create-backup"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Create Backup
-          </Button>
+          {canManageBackups && (
+            <Button
+              onClick={() => setShowCreateDialog(true)}
+              data-testid="button-create-backup"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create Backup
+            </Button>
+          )}
         </div>
       </div>
 
@@ -870,28 +877,30 @@ export default function BackupRestore() {
                         </div>
                       )}
 
-                      <div className="flex items-center gap-2 pt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowRestoreDialog(backup)}
-                          disabled={restoringId === backup.id}
-                          data-testid={`button-restore-${backup.id}`}
-                        >
-                          <RotateCcw className={`h-4 w-4 mr-2 ${restoringId === backup.id ? "animate-spin" : ""}`} />
-                          Restore
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => setShowDeleteDialog(backup)}
-                          disabled={deletingId === backup.id}
-                          data-testid={`button-delete-backup-${backup.id}`}
-                        >
-                          <Trash2 className={`h-4 w-4 mr-2 ${deletingId === backup.id ? "animate-spin" : ""}`} />
-                          Delete
-                        </Button>
-                      </div>
+                      {canManageBackups && (
+                        <div className="flex items-center gap-2 pt-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowRestoreDialog(backup)}
+                            disabled={restoringId === backup.id}
+                            data-testid={`button-restore-${backup.id}`}
+                          >
+                            <RotateCcw className={`h-4 w-4 mr-2 ${restoringId === backup.id ? "animate-spin" : ""}`} />
+                            Restore
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => setShowDeleteDialog(backup)}
+                            disabled={deletingId === backup.id}
+                            data-testid={`button-delete-backup-${backup.id}`}
+                          >
+                            <Trash2 className={`h-4 w-4 mr-2 ${deletingId === backup.id ? "animate-spin" : ""}`} />
+                            Delete
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -901,7 +910,7 @@ export default function BackupRestore() {
         </Card>
       </Collapsible>
 
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+      <Dialog open={canManageBackups && showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create New Backup</DialogTitle>

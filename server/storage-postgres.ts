@@ -169,6 +169,47 @@ type MaintenanceState = {
   endTime: string | null;
 };
 
+type RoleTabSetting = {
+  pageId: string;
+  suffix: string;
+  label: string;
+  description: string;
+  defaultEnabled: boolean;
+};
+
+const ROLE_TAB_SETTINGS: Record<"admin" | "user", RoleTabSetting[]> = {
+  admin: [
+    { pageId: "home", suffix: "home", label: "Admin Tab: Home", description: "Allow admin to open Home tab.", defaultEnabled: true },
+    { pageId: "import", suffix: "import", label: "Admin Tab: Import", description: "Allow admin to open Import tab.", defaultEnabled: true },
+    { pageId: "saved", suffix: "saved", label: "Admin Tab: Saved", description: "Allow admin to open Saved tab.", defaultEnabled: true },
+    { pageId: "viewer", suffix: "viewer", label: "Admin Tab: Viewer", description: "Allow admin to open Viewer tab.", defaultEnabled: true },
+    { pageId: "general-search", suffix: "general_search", label: "Admin Tab: Search", description: "Allow admin to open Search tab.", defaultEnabled: true },
+    { pageId: "analysis", suffix: "analysis", label: "Admin Tab: Analysis", description: "Allow admin to open Analysis tab.", defaultEnabled: true },
+    { pageId: "dashboard", suffix: "dashboard", label: "Admin Tab: Dashboard", description: "Allow admin to open Dashboard tab.", defaultEnabled: false },
+    { pageId: "ai", suffix: "ai", label: "Admin Tab: AI", description: "Allow admin to open AI tab.", defaultEnabled: true },
+    { pageId: "activity", suffix: "activity", label: "Admin Tab: Activity", description: "Allow admin to open Activity tab.", defaultEnabled: false },
+    { pageId: "audit-logs", suffix: "audit_logs", label: "Admin Tab: Audit", description: "Allow admin to open Audit tab.", defaultEnabled: false },
+    { pageId: "backup", suffix: "backup", label: "Admin Tab: Backup", description: "Allow admin to open Backup tab.", defaultEnabled: false },
+    { pageId: "settings", suffix: "settings", label: "Admin Tab: Settings", description: "Allow admin to open Settings tab.", defaultEnabled: true },
+  ],
+  user: [
+    { pageId: "home", suffix: "home", label: "User Tab: Home", description: "Allow user to open Home tab.", defaultEnabled: false },
+    { pageId: "import", suffix: "import", label: "User Tab: Import", description: "Allow user to open Import tab.", defaultEnabled: false },
+    { pageId: "saved", suffix: "saved", label: "User Tab: Saved", description: "Allow user to open Saved tab.", defaultEnabled: false },
+    { pageId: "viewer", suffix: "viewer", label: "User Tab: Viewer", description: "Allow user to open Viewer tab.", defaultEnabled: false },
+    { pageId: "general-search", suffix: "general_search", label: "User Tab: Search", description: "Allow user to open Search tab.", defaultEnabled: true },
+    { pageId: "analysis", suffix: "analysis", label: "User Tab: Analysis", description: "Allow user to open Analysis tab.", defaultEnabled: false },
+    { pageId: "dashboard", suffix: "dashboard", label: "User Tab: Dashboard", description: "Allow user to open Dashboard tab.", defaultEnabled: false },
+    { pageId: "ai", suffix: "ai", label: "User Tab: AI", description: "Allow user to open AI tab.", defaultEnabled: true },
+    { pageId: "activity", suffix: "activity", label: "User Tab: Activity", description: "Allow user to open Activity tab.", defaultEnabled: false },
+    { pageId: "audit-logs", suffix: "audit_logs", label: "User Tab: Audit", description: "Allow user to open Audit tab.", defaultEnabled: false },
+    { pageId: "backup", suffix: "backup", label: "User Tab: Backup", description: "Allow user to open Backup tab.", defaultEnabled: false },
+  ],
+};
+
+const roleTabSettingKey = (role: "admin" | "user", suffix: string): string =>
+  `tab_${role}_${suffix}_enabled`;
+
 function ensureObject(value: unknown): Record<string, any> | null {
   if (value && typeof value === "object") {
     return value as Record<string, any>;
@@ -205,6 +246,7 @@ function ensureObject(value: unknown): Record<string, any> | null {
   getAllColumnNames(): Promise<string[]>;
 
   createActivity(data: InsertUserActivity): Promise<UserActivity>;
+  getActiveActivitiesByUsername(username: string): Promise<UserActivity[]>;
   updateActivity(id: string, data: Partial<UserActivity>): Promise<UserActivity | undefined>;
   getActivityById(id: string): Promise<UserActivity | undefined>;
   getActiveActivities(): Promise<UserActivity[]>;
@@ -328,6 +370,8 @@ function ensureObject(value: unknown): Record<string, any> | null {
   getPostcodeLatLng(postcode: string): Promise<{ lat: number; lng: number } | null>;
   importBranchesFromRows(params: { importId: string; nameKey?: string | null; latKey?: string | null; lngKey?: string | null }): Promise<{ inserted: number; skipped: number; usedKeys: { nameKey: string; latKey: string; lngKey: string } }>;
   getSettingsForRole(role: string): Promise<SystemSettingCategory[]>;
+  getBooleanSystemSetting(key: string, fallback?: boolean): Promise<boolean>;
+  getRoleTabVisibility(role: string): Promise<Record<string, boolean>>;
   updateSystemSetting(params: {
     role: string;
     settingKey: string;
@@ -341,6 +385,7 @@ function ensureObject(value: unknown): Record<string, any> | null {
     shouldBroadcast?: boolean;
   }>;
   getMaintenanceState(now?: Date): Promise<MaintenanceState>;
+  getAppConfig(): Promise<{ systemName: string }>;
 
   createAuditLog(data: InsertAuditLog): Promise<AuditLog>;
   getAuditLogs(): Promise<AuditLog[]>;
@@ -1102,6 +1147,22 @@ export class PostgresStorage implements IStorage {
         },
       ];
 
+      for (const [role, tabSettings] of Object.entries(ROLE_TAB_SETTINGS) as Array<[("admin" | "user"), RoleTabSetting[]]>) {
+        for (const tabSetting of tabSettings) {
+          const key = roleTabSettingKey(role, tabSetting.suffix);
+          settingsSeed.push({
+            categoryName: "Roles & Permissions",
+            key,
+            label: tabSetting.label,
+            description: tabSetting.description,
+            type: "boolean",
+            value: tabSetting.defaultEnabled ? "true" : "false",
+            defaultValue: tabSetting.defaultEnabled ? "true" : "false",
+            isCritical: false,
+          });
+        }
+      }
+
       for (const setting of settingsSeed) {
         await db.execute(sql`
           INSERT INTO public.system_settings (
@@ -1805,6 +1866,19 @@ export class PostgresStorage implements IStorage {
         lastActivityTime: new Date(),
       })
       .where(eq(userActivity.id, activityId));
+  }
+
+  async getActiveActivitiesByUsername(username: string): Promise<UserActivity[]> {
+    return await db
+      .select()
+      .from(userActivity)
+      .where(
+        and(
+          eq(userActivity.username, username),
+          eq(userActivity.isActive, true)
+        )
+      )
+      .orderBy(desc(userActivity.loginTime));
   }
 
   async updateActivity(id: string, data: Partial<UserActivity>): Promise<UserActivity | undefined> {
@@ -3231,6 +3305,24 @@ export class PostgresStorage implements IStorage {
     return String(value);
   }
 
+  private isAdminMaintenanceEditableKey(settingKey: string): boolean {
+    return settingKey === "maintenance_message"
+      || settingKey === "maintenance_start_time"
+      || settingKey === "maintenance_end_time";
+  }
+
+  private async isAdminMaintenanceEditingEnabled(): Promise<boolean> {
+    const res = await db.execute(sql`
+      SELECT value
+      FROM public.system_settings
+      WHERE key = 'admin_can_edit_maintenance_message'
+      LIMIT 1
+    `);
+    const row = (res.rows as any[])[0];
+    const raw = String(row?.value ?? "").trim().toLowerCase();
+    return ["true", "1", "yes", "on"].includes(raw);
+  }
+
   async getSettingsForRole(role: string): Promise<SystemSettingCategory[]> {
     await this.ensureSettingsTables();
     const rows = await db.execute(sql`
@@ -3277,6 +3369,9 @@ export class PostgresStorage implements IStorage {
       }
     }
 
+    const adminMaintenanceEditingEnabled =
+      role === "admin" ? await this.isAdminMaintenanceEditingEnabled() : true;
+
     const categoryMap = new Map<string, SystemSettingCategory>();
     for (const row of rows.rows as any[]) {
       const categoryId = String(row.category_id);
@@ -3288,8 +3383,16 @@ export class PostgresStorage implements IStorage {
           settings: [],
         });
       }
+      const key = String(row.key);
+      const canEditFromPermission = row.can_edit === true;
+      const canEdit = role === "admin"
+        && this.isAdminMaintenanceEditableKey(key)
+        && !adminMaintenanceEditingEnabled
+        ? false
+        : canEditFromPermission;
+
       categoryMap.get(categoryId)!.settings.push({
-        key: String(row.key),
+        key,
         label: String(row.label),
         description: row.description ? String(row.description) : null,
         type: this.parseSettingType(row.type),
@@ -3299,13 +3402,73 @@ export class PostgresStorage implements IStorage {
         updatedAt: row.updated_at ? new Date(row.updated_at) : null,
         permission: {
           canView: row.can_view === true,
-          canEdit: row.can_edit === true,
+          canEdit,
         },
         options: optionsMap.get(String(row.setting_id)) || [],
       });
     }
 
     return Array.from(categoryMap.values());
+  }
+
+  async getBooleanSystemSetting(key: string, fallback = false): Promise<boolean> {
+    await this.ensureSettingsTables();
+    const res = await db.execute(sql`
+      SELECT value
+      FROM public.system_settings
+      WHERE key = ${key}
+      LIMIT 1
+    `);
+    const row = (res.rows as any[])[0];
+    if (!row) return fallback;
+    const raw = String(row.value ?? "").trim().toLowerCase();
+    if (!raw) return fallback;
+    return ["true", "1", "yes", "on"].includes(raw);
+  }
+
+  async getRoleTabVisibility(role: string): Promise<Record<string, boolean>> {
+    await this.ensureSettingsTables();
+    if (role === "superuser") {
+      return {};
+    }
+
+    const roleKey = role === "admin" ? "admin" : role === "user" ? "user" : null;
+    if (!roleKey) {
+      return {};
+    }
+
+    const settings = ROLE_TAB_SETTINGS[roleKey];
+    const visibility: Record<string, boolean> = {};
+    for (const tab of settings) {
+      visibility[tab.pageId] = tab.defaultEnabled;
+    }
+
+    const keys = settings.map((tab) => roleTabSettingKey(roleKey, tab.suffix));
+    if (keys.length === 0) {
+      return visibility;
+    }
+
+    const keyList = keys.map((v) => `'${v.replace(/'/g, "''")}'`).join(",");
+    const rows = await db.execute(sql`
+      SELECT key, value
+      FROM public.system_settings
+      WHERE key IN (${sql.raw(keyList)})
+    `);
+
+    const keyToPage = new Map<string, string>();
+    for (const tab of settings) {
+      keyToPage.set(roleTabSettingKey(roleKey, tab.suffix), tab.pageId);
+    }
+
+    for (const row of rows.rows as any[]) {
+      const key = String(row.key || "");
+      const pageId = keyToPage.get(key);
+      if (!pageId) continue;
+      const raw = String(row.value ?? "").trim().toLowerCase();
+      visibility[pageId] = ["true", "1", "yes", "on"].includes(raw);
+    }
+
+    return visibility;
   }
 
   async updateSystemSetting(params: {
@@ -3344,6 +3507,15 @@ export class PostgresStorage implements IStorage {
     if (!current) {
       return { status: "not_found", message: "Setting not found." };
     }
+
+    if (
+      params.role === "admin"
+      && this.isAdminMaintenanceEditableKey(String(current.key))
+      && !(await this.isAdminMaintenanceEditingEnabled())
+    ) {
+      return { status: "forbidden", message: "Admin is not allowed to edit maintenance message settings." };
+    }
+
     if (current.can_edit !== true) {
       return { status: "forbidden", message: "You do not have permission to edit this setting." };
     }
@@ -3471,6 +3643,19 @@ export class PostgresStorage implements IStorage {
       startTime,
       endTime,
     };
+  }
+
+  async getAppConfig(): Promise<{ systemName: string }> {
+    await this.ensureSettingsTables();
+    const res = await db.execute(sql`
+      SELECT value
+      FROM public.system_settings
+      WHERE key = 'system_name'
+      LIMIT 1
+    `);
+    const row = (res.rows as any[])[0];
+    const systemName = String(row?.value ?? "").trim() || "SQR System";
+    return { systemName };
   }
 
   async getAccounts(): Promise<Array<{

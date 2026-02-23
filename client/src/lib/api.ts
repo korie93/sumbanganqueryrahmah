@@ -299,6 +299,16 @@ export async function getSettings() {
   return response.json();
 }
 
+export async function getAppConfig() {
+  const response = await apiRequest("GET", "/api/app-config");
+  return response.json();
+}
+
+export async function getTabVisibility() {
+  const response = await apiRequest("GET", "/api/settings/tab-visibility");
+  return response.json();
+}
+
 export async function updateSetting(payload: {
   key: string;
   value: string | number | boolean | null;

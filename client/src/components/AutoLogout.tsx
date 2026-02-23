@@ -190,6 +190,10 @@ export default function AutoLogout({
                 window.location.href = "/maintenance";
               }
             }
+
+            if (message.type === "settings_updated") {
+              window.dispatchEvent(new CustomEvent("settings-updated", { detail: message }));
+            }
           } catch (err) {
             console.warn("Failed to parse WebSocket message:", err);
           }

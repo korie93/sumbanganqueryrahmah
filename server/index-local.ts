@@ -211,6 +211,45 @@ function requireRole(...roles: string[]) {
   };
 }
 
+const TAB_VISIBILITY_CACHE_TTL_MS = 5000;
+const tabVisibilityCache = new Map<string, { tabs: Record<string, boolean>; cachedAt: number }>();
+
+async function getRoleTabVisibilityCached(role: string): Promise<Record<string, boolean>> {
+  if (role === "superuser") return {};
+  const now = Date.now();
+  const cached = tabVisibilityCache.get(role);
+  if (cached && now - cached.cachedAt < TAB_VISIBILITY_CACHE_TTL_MS) {
+    return cached.tabs;
+  }
+  const tabs = await storage.getRoleTabVisibility(role);
+  tabVisibilityCache.set(role, { tabs, cachedAt: now });
+  return tabs;
+}
+
+function requireTabAccess(tabId: string) {
+  return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const role = req.user?.role;
+      if (!role) return res.status(401).json({ message: "Unauthenticated" });
+      if (role === "superuser") return next();
+      if (role !== "admin" && role !== "user") {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+
+      const tabs = await getRoleTabVisibilityCached(role);
+      const hasExplicit = Object.prototype.hasOwnProperty.call(tabs, tabId);
+      const enabled = hasExplicit ? tabs[tabId] !== false : false;
+      if (!enabled) {
+        return res.status(403).json({ message: `Tab '${tabId}' is disabled for role '${role}'` });
+      }
+      return next();
+    } catch (err: any) {
+      console.error("Tab access guard error:", err);
+      return res.status(500).json({ message: err?.message || "Failed to validate tab access" });
+    }
+  };
+}
+
 function broadcastWsMessage(payload: Record<string, unknown>) {
   const msg = JSON.stringify(payload);
   for (const [, ws] of connectedClients) {
@@ -391,12 +430,28 @@ async function handleLogin(req: Request, res: Response) {
 
     const browserName = parseBrowser(browser || req.headers["user-agent"]);
 
-    // 🔐 ROLE-BASED SESSION CONTROL (TAMBAH DI SINI SAHAJA)
+    // 🔐 ROLE-BASED SESSION CONTROL
     if (user.role === "superuser") {
-      // ❌ SUPERUSER: 1 SESSION GLOBAL SAHAJA
-      await storage.deactivateUserActivities(username, "NEW_LOGIN");
-    }
-    else if (user.role === "admin" && fingerprint) {
+      const enforceSingleSuperuserSession = await storage.getBooleanSystemSetting(
+        "enforce_superuser_single_session",
+        false
+      );
+
+      if (enforceSingleSuperuserSession) {
+        const activeSessions = await storage.getActiveActivitiesByUsername(username);
+        if (activeSessions.length > 0) {
+          await storage.createAuditLog({
+            action: "LOGIN_BLOCKED_SINGLE_SESSION",
+            performedBy: username,
+            details: `Superuser single-session policy blocked login. Active sessions: ${activeSessions.length}`,
+          });
+          return res.status(409).json({
+            message: "Single superuser session is enforced. Logout from the current session first.",
+            code: "SUPERUSER_SINGLE_SESSION_ENFORCED",
+          });
+        }
+      }
+    } else if (user.role === "admin" && fingerprint) {
       // ⚠️ ADMIN: 1 SESSION PER DEVICE
       await storage.deactivateUserSessionsByFingerprint(
         username,
@@ -493,7 +548,7 @@ app.post("/api/activity/logout", authenticateToken, async (req: AuthenticatedReq
   }
 });
 
-app.get("/api/activity/all", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+app.get("/api/activity/all", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
   try {
     const activities = await storage.getAllActivities();
     res.json({ activities });
@@ -502,7 +557,7 @@ app.get("/api/activity/all", authenticateToken, requireRole("admin", "superuser"
   }
 });
 
-app.get("/api/activity/filter", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+app.get("/api/activity/filter", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
   try {
     const filters: any = {};
     if (req.query.status) {
@@ -525,6 +580,7 @@ app.delete(
   "/api/activity/:id",
   authenticateToken,
   requireRole("admin", "superuser"),
+  requireTabAccess("activity"),
   async (req: AuthenticatedRequest, res) => {
     try {
       const activityId = String(req.params.id);
@@ -550,6 +606,7 @@ app.post(
   "/api/activity/kick",
   authenticateToken,
   requireRole("admin", "superuser"),
+  requireTabAccess("activity"),
   async (req: AuthenticatedRequest, res) => {
     try {
       const activityId = String(req.body.activityId);
@@ -607,6 +664,7 @@ app.post(
   "/api/activity/ban",
   authenticateToken,
   requireRole("superuser"),
+  requireTabAccess("activity"),
   async (req: AuthenticatedRequest, res) => {
     try {
       const activityId = String(req.body.activityId);
@@ -673,7 +731,7 @@ app.post(
   }
 );
 
-app.get("/api/users/banned", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+app.get("/api/users/banned", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
   try {
     const bannedSessions = await storage.getBannedSessions();
     const usersWithVisitorId = bannedSessions.map((s) => ({
@@ -714,6 +772,27 @@ app.get("/api/auth/me", authenticateToken, (req: AuthenticatedRequest, res) => {
       activityId: req.user.activityId,
     },
   });
+});
+
+app.get("/api/app-config", authenticateToken, async (req, res) => {
+  try {
+    const config = await storage.getAppConfig();
+    res.json(config);
+  } catch (err: any) {
+    console.error("App config GET error:", err);
+    res.status(500).json({ message: err?.message || "Failed to load app config" });
+  }
+});
+
+app.get("/api/settings/tab-visibility", authenticateToken, async (req: AuthenticatedRequest, res) => {
+  try {
+    const role = req.user?.role || "user";
+    const tabs = await storage.getRoleTabVisibility(role);
+    res.json({ role, tabs });
+  } catch (err: any) {
+    console.error("Tab visibility GET error:", err);
+    res.status(500).json({ message: err?.message || "Failed to load tab visibility" });
+  }
 });
 
 app.get("/api/settings", authenticateToken, requireRole("admin", "superuser"), async (req: AuthenticatedRequest, res) => {
@@ -757,6 +836,7 @@ app.patch("/api/settings", authenticateToken, requireRole("admin", "superuser"),
     }
 
     if (result.status === "updated") {
+      tabVisibilityCache.clear();
       await storage.createAuditLog({
         action: result.setting?.isCritical ? "CRITICAL_SETTING_UPDATED" : "SETTING_UPDATED",
         performedBy: req.user?.username || "system",
@@ -1210,7 +1290,12 @@ function analyzeDataRows(rows: any[]) {
   };
 }
 
-app.get("/api/imports/:id/analyze", authenticateToken, async (req, res) => {
+app.get(
+  "/api/imports/:id/analyze",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("analysis"),
+  async (req, res) => {
   try {
     const importRecord = await storage.getImportById(req.params.id);
     if (!importRecord) {
@@ -3104,7 +3189,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
 
-    app.get("/api/activities", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+    app.get("/api/activities", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
       try {
         const activities = await storage.getAllActivities();
         res.json(activities);
@@ -3113,7 +3198,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
     
-    app.get("/api/activities/active", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+    app.get("/api/activities/active", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
       try {
         const activities = await storage.getActiveActivities();
         res.json(activities);
@@ -3122,7 +3207,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
 
-    app.post("/api/activities/filter", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+    app.post("/api/activities/filter", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
       try {
         const filters = req.body;
         const activities = await storage.getFilteredActivities(filters);
@@ -3196,6 +3281,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       "/api/admin/unban",
       authenticateToken,
       requireRole("superuser"),
+      requireTabAccess("activity"),
       async (req: AuthenticatedRequest, res) => {
         try {
           const { banId } = req.body;
@@ -3252,7 +3338,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
 
-    app.get("/api/audit-logs", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+    app.get("/api/audit-logs", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("audit-logs"), async (req, res) => {
       try {
         const logs = await storage.getAuditLogs();
         res.json({ logs: logs });
@@ -3261,7 +3347,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
 
-    app.get("/api/audit-logs/stats", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+    app.get("/api/audit-logs/stats", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("audit-logs"), async (req, res) => {
       try {
         const logs = await storage.getAuditLogs();
         const stats = {
@@ -3283,7 +3369,12 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
 
-    app.get("/api/analyze/all", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
+    app.get(
+      "/api/analyze/all",
+      authenticateToken,
+      requireRole("user", "admin", "superuser"),
+      requireTabAccess("analysis"),
+      async (req, res) => {
       try {
         const imports = await storage.getImports();
         if (imports.length === 0) {
@@ -3334,7 +3425,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
 
-    app.delete("/api/audit-logs/cleanup", authenticateToken, requireRole("superuser"), async (req: AuthenticatedRequest, res) => {
+    app.delete("/api/audit-logs/cleanup", authenticateToken, requireRole("superuser"), requireTabAccess("audit-logs"), async (req: AuthenticatedRequest, res) => {
       try {
         const { olderThanDays } = req.body;
         const cutoffDate = new Date();
@@ -3364,7 +3455,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
 
-    app.get("/api/analytics/summary", authenticateToken, requireRole("superuser"), async (req, res) => {
+    app.get("/api/analytics/summary", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
       try {
         const summary = await storage.getDashboardSummary();
         res.json(summary);
@@ -3373,7 +3464,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
 
-    app.get("/api/analytics/login-trends", authenticateToken, requireRole("superuser"), async (req, res) => {
+    app.get("/api/analytics/login-trends", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
       try {
         const days = parseInt(req.query.days as string) || 7;
         const trends = await storage.getLoginTrends(days);
@@ -3383,7 +3474,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
 
-    app.get("/api/analytics/top-users", authenticateToken, requireRole("superuser"), async (req, res) => {
+    app.get("/api/analytics/top-users", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
       try {
         const limit = parseInt(req.query.limit as string) || 10;
         const topUsers = await storage.getTopActiveUsers(limit);
@@ -3393,7 +3484,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
 
-    app.get("/api/analytics/peak-hours", authenticateToken, requireRole("superuser"), async (req, res) => {
+    app.get("/api/analytics/peak-hours", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
       try {
         const peakHours = await storage.getPeakHours();
         res.json(peakHours);
@@ -3402,7 +3493,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
 
-    app.get("/api/analytics/role-distribution", authenticateToken, requireRole("superuser"), async (req, res) => {
+    app.get("/api/analytics/role-distribution", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
       try {
         const distribution = await storage.getRoleDistribution();
         res.json(distribution);
@@ -3411,7 +3502,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
 
-    app.get("/api/backups", authenticateToken, requireRole("superuser"), async (req, res) => {
+    app.get("/api/backups", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("backup"), async (req, res) => {
       try {
         const backups = await storage.getBackups();
         res.json({ backups: backups });
@@ -3421,7 +3512,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
 
-    app.post("/api/backups", authenticateToken, requireRole("superuser"), async (req: AuthenticatedRequest, res) => {
+    app.post("/api/backups", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("backup"), async (req: AuthenticatedRequest, res) => {
       try {
         const { name } = req.body;
         const startTime = Date.now();
@@ -3454,7 +3545,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
 
-    app.get("/api/backups/:id", authenticateToken, requireRole("superuser"), async (req, res) => {
+    app.get("/api/backups/:id", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("backup"), async (req, res) => {
       try {
         const backup = await storage.getBackupById(req.params.id);
         if (!backup) {
@@ -3466,7 +3557,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
 
-    app.post("/api/backups/:id/restore", authenticateToken, requireRole("superuser"), async (req: AuthenticatedRequest, res) => {
+    app.post("/api/backups/:id/restore", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("backup"), async (req: AuthenticatedRequest, res) => {
       try {
         const backup = await storage.getBackupById(req.params.id);
         if (!backup) {
@@ -3493,7 +3584,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     });
 
-    app.delete("/api/backups/:id", authenticateToken, requireRole("superuser"), async (req: AuthenticatedRequest, res) => {
+    app.delete("/api/backups/:id", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("backup"), async (req: AuthenticatedRequest, res) => {
       try {
         const backup = await storage.getBackupById(req.params.id);
         const deleted = await storage.deleteBackup(req.params.id);

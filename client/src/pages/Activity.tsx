@@ -62,6 +62,17 @@ const STATUS_OPTIONS: { value: ActivityStatus; label: string }[] = [
 ];
 
 export default function Activity() {
+  const currentRole = (() => {
+    try {
+      const raw = localStorage.getItem("user");
+      if (!raw) return "";
+      const parsed = JSON.parse(raw) as { role?: string };
+      return parsed.role || "";
+    } catch {
+      return "";
+    }
+  })();
+  const canModerateActivity = currentRole === "admin" || currentRole === "superuser";
   const [activities, setActivities] = useState<ActivityRecord[]>([]);
   const [bannedUsers, setBannedUsers] = useState<BannedUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,15 +119,19 @@ export default function Activity() {
       } else {
         activityResponse = await getAllActivity();
       }
-      const bannedResponse = await getBannedUsers();
       setActivities(activityResponse.activities || []);
-      setBannedUsers(bannedResponse.users || []);
+      if (canModerateActivity) {
+        const bannedResponse = await getBannedUsers();
+        setBannedUsers(bannedResponse.users || []);
+      } else {
+        setBannedUsers([]);
+      }
     } catch (err) {
       console.error("Failed to fetch activities:", err);
     } finally {
       setLoading(false);
     }
-  }, [hasActiveFilters]);
+  }, [hasActiveFilters, canModerateActivity]);
 
   useEffect(() => {
     filtersRef.current = filters;
@@ -637,7 +652,7 @@ export default function Activity() {
           </div>
         </div>
 
-        {bannedUsers.length > 0 && (
+        {canModerateActivity && bannedUsers.length > 0 && (
           <div className="glass-wrapper p-6 mb-6">
             <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
               <Shield className="w-5 h-5 text-destructive" />
@@ -731,7 +746,9 @@ export default function Activity() {
                           <th className="text-left p-3 font-medium text-muted-foreground">Login</th>
                           <th className="text-left p-3 font-medium text-muted-foreground">Logout</th>
                           <th className="text-left p-3 font-medium text-muted-foreground">Duration</th>
-                          <th className="text-right p-3 font-medium text-muted-foreground">Actions</th>
+                          {canModerateActivity && (
+                            <th className="text-right p-3 font-medium text-muted-foreground">Actions</th>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
@@ -760,45 +777,47 @@ export default function Activity() {
                               <td className="p-3 text-muted-foreground text-xs">
                                 {getSessionDuration(activity.loginTime, activity.logoutTime)}
                               </td>
-                              <td className="p-3">
-                                <div className="flex gap-1 justify-end">
-                                  {activity.isActive && (
-                                    <>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleKickClick(activity)}
-                                        disabled={actionLoading === activity.id}
-                                        data-testid={`button-kick-${activity.id}`}
-                                      >
-                                        <UserX className="w-4 h-4" />
-                                      </Button>
-                                      {activity.role !== "superuser" && (
+                              {canModerateActivity && (
+                                <td className="p-3">
+                                  <div className="flex gap-1 justify-end">
+                                    {activity.isActive && (
+                                      <>
                                         <Button
                                           variant="ghost"
                                           size="sm"
-                                          onClick={() => handleBanClick(activity)}
+                                          onClick={() => handleKickClick(activity)}
                                           disabled={actionLoading === activity.id}
-                                          className="text-destructive"
-                                          data-testid={`button-ban-${activity.id}`}
+                                          data-testid={`button-kick-${activity.id}`}
                                         >
-                                          <Shield className="w-4 h-4" />
+                                          <UserX className="w-4 h-4" />
                                         </Button>
-                                      )}
-                                    </>
-                                  )}
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleDeleteClick(activity)}
-                                    disabled={actionLoading === activity.id}
-                                    className="text-destructive"
-                                    data-testid={`button-delete-${activity.id}`}
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              </td>
+                                        {activity.role !== "superuser" && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleBanClick(activity)}
+                                            disabled={actionLoading === activity.id}
+                                            className="text-destructive"
+                                            data-testid={`button-ban-${activity.id}`}
+                                          >
+                                            <Shield className="w-4 h-4" />
+                                          </Button>
+                                        )}
+                                      </>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleDeleteClick(activity)}
+                                      disabled={actionLoading === activity.id}
+                                      className="text-destructive"
+                                      data-testid={`button-delete-${activity.id}`}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              )}
                             </tr>
                           );
                         })}

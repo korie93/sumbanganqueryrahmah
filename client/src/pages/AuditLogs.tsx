@@ -102,6 +102,17 @@ const datePresets = [
 ];
 
 export default function AuditLogs() {
+  const currentRole = (() => {
+    try {
+      const raw = localStorage.getItem("user");
+      if (!raw) return "";
+      const parsed = JSON.parse(raw) as { role?: string };
+      return parsed.role || "";
+    } catch {
+      return "";
+    }
+  })();
+  const canCleanupLogs = currentRole === "superuser";
   const [logs, setLogs] = useState<AuditLogRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(true);
@@ -738,76 +749,78 @@ export default function AuditLogs() {
         </Collapsible>
       </Card>
 
-      <Card>
-        <Collapsible open={cleanupOpen} onOpenChange={setCleanupOpen}>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <CollapsibleTrigger asChild>
-                <Button variant="ghost" className="p-0 h-auto gap-2">
-                  <Settings className="h-5 w-5" />
-                  <CardTitle className="text-lg">Log Cleanup</CardTitle>
-                  <ChevronDown className={`h-4 w-4 transition-transform ${cleanupOpen ? "rotate-180" : ""}`} />
-                </Button>
-              </CollapsibleTrigger>
-            </div>
-          </CardHeader>
-          <CollapsibleContent>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 rounded-lg bg-muted/30 space-y-1">
-                  <p className="text-sm text-muted-foreground">Total Logs</p>
-                  <p className="text-2xl font-bold" data-testid="text-total-logs">{stats?.total ?? logs.length}</p>
-                </div>
-                <div className="p-4 rounded-lg bg-muted/30 space-y-1">
-                  <p className="text-sm text-muted-foreground">Older than 30 Days</p>
-                  <p className="text-2xl font-bold text-amber-600 dark:text-amber-400" data-testid="text-old-30-days">{stats?.olderThan30Days ?? 0}</p>
-                </div>
-                <div className="p-4 rounded-lg bg-muted/30 space-y-1">
-                  <p className="text-sm text-muted-foreground">Older than 90 Days</p>
-                  <p className="text-2xl font-bold text-red-600 dark:text-red-400" data-testid="text-old-90-days">{stats?.olderThan90Days ?? 0}</p>
-                </div>
+      {canCleanupLogs && (
+        <Card>
+          <Collapsible open={cleanupOpen} onOpenChange={setCleanupOpen}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" className="p-0 h-auto gap-2">
+                    <Settings className="h-5 w-5" />
+                    <CardTitle className="text-lg">Log Cleanup</CardTitle>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${cleanupOpen ? "rotate-180" : ""}`} />
+                  </Button>
+                </CollapsibleTrigger>
               </div>
-
-              {stats?.oldestLogDate && (
-                <p className="text-sm text-muted-foreground">
-                  Oldest log entry: {formatTime(stats.oldestLogDate)}
-                </p>
-              )}
-
-              <div className="flex items-end gap-4 flex-wrap pt-2 border-t">
-                <div className="space-y-2">
-                  <Label htmlFor="cleanup-days" className="text-sm font-medium">
-                    Delete logs older than (days)
-                  </Label>
-                  <Select value={cleanupDays} onValueChange={setCleanupDays}>
-                    <SelectTrigger className="w-[180px]" data-testid="select-cleanup-days">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="30">30 days</SelectItem>
-                      <SelectItem value="60">60 days</SelectItem>
-                      <SelectItem value="90">90 days</SelectItem>
-                      <SelectItem value="180">180 days</SelectItem>
-                      <SelectItem value="365">1 year</SelectItem>
-                    </SelectContent>
-                  </Select>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-lg bg-muted/30 space-y-1">
+                    <p className="text-sm text-muted-foreground">Total Logs</p>
+                    <p className="text-2xl font-bold" data-testid="text-total-logs">{stats?.total ?? logs.length}</p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted/30 space-y-1">
+                    <p className="text-sm text-muted-foreground">Older than 30 Days</p>
+                    <p className="text-2xl font-bold text-amber-600 dark:text-amber-400" data-testid="text-old-30-days">{stats?.olderThan30Days ?? 0}</p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted/30 space-y-1">
+                    <p className="text-sm text-muted-foreground">Older than 90 Days</p>
+                    <p className="text-2xl font-bold text-red-600 dark:text-red-400" data-testid="text-old-90-days">{stats?.olderThan90Days ?? 0}</p>
+                  </div>
                 </div>
-                <Button
-                  variant="destructive"
-                  onClick={() => setCleanupDialogOpen(true)}
-                  disabled={cleanupLoading || getLogsToDeleteCount() === 0}
-                  data-testid="button-cleanup-logs"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Cleanup ({getLogsToDeleteCount()} logs)
-                </Button>
-              </div>
-            </CardContent>
-          </CollapsibleContent>
-        </Collapsible>
-      </Card>
 
-      <AlertDialog open={cleanupDialogOpen} onOpenChange={setCleanupDialogOpen}>
+                {stats?.oldestLogDate && (
+                  <p className="text-sm text-muted-foreground">
+                    Oldest log entry: {formatTime(stats.oldestLogDate)}
+                  </p>
+                )}
+
+                <div className="flex items-end gap-4 flex-wrap pt-2 border-t">
+                  <div className="space-y-2">
+                    <Label htmlFor="cleanup-days" className="text-sm font-medium">
+                      Delete logs older than (days)
+                    </Label>
+                    <Select value={cleanupDays} onValueChange={setCleanupDays}>
+                      <SelectTrigger className="w-[180px]" data-testid="select-cleanup-days">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="30">30 days</SelectItem>
+                        <SelectItem value="60">60 days</SelectItem>
+                        <SelectItem value="90">90 days</SelectItem>
+                        <SelectItem value="180">180 days</SelectItem>
+                        <SelectItem value="365">1 year</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setCleanupDialogOpen(true)}
+                    disabled={cleanupLoading || getLogsToDeleteCount() === 0}
+                    data-testid="button-cleanup-logs"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Cleanup ({getLogsToDeleteCount()} logs)
+                  </Button>
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </Card>
+      )}
+
+      <AlertDialog open={canCleanupLogs && cleanupDialogOpen} onOpenChange={setCleanupDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
