@@ -28,6 +28,13 @@ interface User {
   role: string;
 }
 
+type AppRuntimeConfig = {
+  sessionTimeoutMinutes: number;
+  heartbeatIntervalMinutes: number;
+  aiTimeoutMs: number;
+  aiEnabled: boolean;
+};
+
 function AppContent() {
   const [user, setUser] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState("home");
@@ -36,6 +43,12 @@ function AppContent() {
   const [savedCount, setSavedCount] = useState<number>(0);
   const [systemName, setSystemName] = useState<string>("SQR System");
   const [tabVisibility, setTabVisibility] = useState<Record<string, boolean> | null>(null);
+  const [runtimeConfig, setRuntimeConfig] = useState<AppRuntimeConfig>({
+    sessionTimeoutMinutes: 30,
+    heartbeatIntervalMinutes: 5,
+    aiTimeoutMs: 6000,
+    aiEnabled: true,
+  });
 
   const fetchSavedCount = useCallback(async () => {
     try {
@@ -115,27 +128,48 @@ function AppContent() {
   useEffect(() => {
     if (!user) {
       setSystemName("SQR System");
+      setRuntimeConfig({
+        sessionTimeoutMinutes: 30,
+        heartbeatIntervalMinutes: 5,
+        aiTimeoutMs: 6000,
+        aiEnabled: true,
+      });
       return;
     }
 
     let cancelled = false;
-    const loadSystemName = async () => {
+    const loadAppRuntimeConfig = async () => {
       try {
         const response = await getAppConfig();
         const name = String(response?.systemName || "").trim();
+        const sessionTimeoutMinutes = Number(response?.sessionTimeoutMinutes);
+        const heartbeatIntervalMinutes = Number(response?.heartbeatIntervalMinutes);
+        const aiTimeoutMs = Number(response?.aiTimeoutMs);
         if (!cancelled) {
           setSystemName(name || "SQR System");
+          setRuntimeConfig({
+            sessionTimeoutMinutes: Number.isFinite(sessionTimeoutMinutes) ? Math.max(1, sessionTimeoutMinutes) : 30,
+            heartbeatIntervalMinutes: Number.isFinite(heartbeatIntervalMinutes) ? Math.max(1, heartbeatIntervalMinutes) : 5,
+            aiTimeoutMs: Number.isFinite(aiTimeoutMs) ? Math.max(1000, aiTimeoutMs) : 6000,
+            aiEnabled: response?.aiEnabled !== false,
+          });
         }
       } catch {
         if (!cancelled) {
           setSystemName("SQR System");
+          setRuntimeConfig({
+            sessionTimeoutMinutes: 30,
+            heartbeatIntervalMinutes: 5,
+            aiTimeoutMs: 6000,
+            aiEnabled: true,
+          });
         }
       }
     };
 
-    loadSystemName();
+    loadAppRuntimeConfig();
     const onSettingsUpdated = () => {
-      loadSystemName();
+      loadAppRuntimeConfig();
     };
     window.addEventListener("settings-updated", onSettingsUpdated);
     return () => {
@@ -229,22 +263,7 @@ function AppContent() {
     setCurrentPage(getDefaultPageForRole(user.role, tabVisibility));
   }, [user, currentPage, tabVisibility, isPageEnabled, getDefaultPageForRole]);
 
-  useEffect(() => {
-    if (!user) return;
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    const interval = setInterval(() => {
-      fetch("/api/activity/heartbeat", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }).catch(() => {});
-    }, 30_000);
-
-    return () => clearInterval(interval);
-  }, [user]);
+  // Heartbeat is handled by <AutoLogout /> and follows runtime settings.
 
   const handleLoginSuccess = useCallback((loggedInUser: User) => {
     setUser(loggedInUser);
@@ -371,9 +390,12 @@ function AppContent() {
       case "audit-logs":
         return <AuditLogs />;
       case "backup":
-        return <BackupRestore userRole={user.role} />;
+      return <BackupRestore userRole={user.role} />;
       case "ai":
-        return <AI />;
+        if (!runtimeConfig.aiEnabled) {
+          return <GeneralSearch userRole={user.role} />;
+        }
+        return <AI timeoutMs={runtimeConfig.aiTimeoutMs} aiEnabled={runtimeConfig.aiEnabled} />;
       case "dashboard":
         return <Dashboard />;
       case "settings":
@@ -389,7 +411,12 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AutoLogout onLogout={handleLogout} timeoutMinutes={30} heartbeatIntervalMinutes={5} username={user.username} />
+      <AutoLogout
+        onLogout={handleLogout}
+        timeoutMinutes={runtimeConfig.sessionTimeoutMinutes}
+        heartbeatIntervalMinutes={runtimeConfig.heartbeatIntervalMinutes}
+        username={user.username}
+      />
       <Navbar
         currentPage={currentPage}
         onNavigate={handleNavigate}
