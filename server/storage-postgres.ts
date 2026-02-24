@@ -330,6 +330,18 @@ function ensureObject(value: unknown): Record<string, any> | null {
     applicationAvailability: string | null;
     aeonLounge: string | null;
   }>>;
+  findBranchesByPostcode(params: { postcode: string; limit: number }): Promise<Array<{
+    name: string;
+    address: string | null;
+    phone: string | null;
+    fax: string | null;
+    businessHour: string | null;
+    dayOpen: string | null;
+    atmCdm: string | null;
+    inquiryAvailability: string | null;
+    applicationAvailability: string | null;
+    aeonLounge: string | null;
+  }>>;
   countRowsByKeywords(params: { groups: Array<CategoryRule> }): Promise<{
     totalRows: number;
     counts: Record<string, number>;
@@ -385,7 +397,15 @@ function ensureObject(value: unknown): Record<string, any> | null {
     shouldBroadcast?: boolean;
   }>;
   getMaintenanceState(now?: Date): Promise<MaintenanceState>;
-  getAppConfig(): Promise<{ systemName: string }>;
+  getAppConfig(): Promise<{
+    systemName: string;
+    sessionTimeoutMinutes: number;
+    heartbeatIntervalMinutes: number;
+    wsIdleMinutes: number;
+    aiEnabled: boolean;
+    semanticSearchEnabled: boolean;
+    aiTimeoutMs: number;
+  }>;
 
   createAuditLog(data: InsertAuditLog): Promise<AuditLog>;
   getAuditLogs(): Promise<AuditLog[]>;
@@ -416,6 +436,9 @@ type TopActiveUserRow = {
 };
 
 export class PostgresStorage implements IStorage {
+  private settingsTablesReady = false;
+  private settingsTablesInitPromise: Promise<void> | null = null;
+
   constructor() {
     this.seedDefaultUsers();
   }
@@ -850,20 +873,27 @@ export class PostgresStorage implements IStorage {
   }
 
   private async ensureSettingsTables() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
+    if (this.settingsTablesReady) return;
+    if (this.settingsTablesInitPromise) {
+      await this.settingsTablesInitPromise;
+      return;
+    }
 
-      await db.execute(sql`
+    this.settingsTablesInitPromise = (async () => {
+      try {
+        await db.execute(sql`SET search_path TO public`);
+        await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
+
+        await db.execute(sql`
         CREATE TABLE IF NOT EXISTS public.setting_categories (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           name text UNIQUE NOT NULL,
           description text,
           created_at timestamp DEFAULT now()
         )
-      `);
+        `);
 
-      await db.execute(sql`
+        await db.execute(sql`
         CREATE TABLE IF NOT EXISTS public.system_settings (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           category_id uuid REFERENCES public.setting_categories(id) ON DELETE CASCADE,
@@ -876,18 +906,49 @@ export class PostgresStorage implements IStorage {
           is_critical boolean DEFAULT false,
           updated_at timestamp DEFAULT now()
         )
-      `);
+        `);
 
-      await db.execute(sql`
+        await db.execute(sql`
         CREATE TABLE IF NOT EXISTS public.setting_options (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           setting_id uuid REFERENCES public.system_settings(id) ON DELETE CASCADE,
           value text NOT NULL,
           label text NOT NULL
         )
-      `);
+        `);
+        // Cleanup legacy duplicate options, then enforce uniqueness per setting/value.
+        try {
+          await db.execute(sql`
+          WITH ranked AS (
+            SELECT
+              ctid,
+              row_number() OVER (PARTITION BY setting_id, value ORDER BY id) AS rn
+            FROM public.setting_options
+          )
+          DELETE FROM public.setting_options so
+          USING ranked r
+          WHERE so.ctid = r.ctid
+            AND r.rn > 1
+        `);
+        } catch (dupCleanupErr: any) {
+          console.warn("⚠️ setting_options duplicate cleanup skipped:", dupCleanupErr?.message || dupCleanupErr);
+        }
 
-      await db.execute(sql`
+        try {
+          await db.execute(sql`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_setting_options_unique_value
+          ON public.setting_options (setting_id, value)
+        `);
+        } catch (idxErr: any) {
+          console.warn("⚠️ setting_options unique index not created:", idxErr?.message || idxErr);
+        }
+
+        await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_setting_options_setting_id
+        ON public.setting_options (setting_id)
+        `);
+
+        await db.execute(sql`
         CREATE TABLE IF NOT EXISTS public.role_setting_permissions (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           role text NOT NULL,
@@ -895,14 +956,14 @@ export class PostgresStorage implements IStorage {
           can_view boolean DEFAULT false,
           can_edit boolean DEFAULT false
         )
-      `);
-      await db.execute(sql`
+        `);
+        await db.execute(sql`
         CREATE UNIQUE INDEX IF NOT EXISTS idx_role_setting_permissions_unique
         ON public.role_setting_permissions (role, setting_key)
-      `);
+        `);
 
-      // Optional enterprise-ready tables
-      await db.execute(sql`
+        // Optional enterprise-ready tables
+        await db.execute(sql`
         CREATE TABLE IF NOT EXISTS public.setting_versions (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           setting_key text NOT NULL,
@@ -911,12 +972,12 @@ export class PostgresStorage implements IStorage {
           changed_by text NOT NULL,
           changed_at timestamp DEFAULT now()
         )
-      `);
-      await db.execute(sql`
+        `);
+        await db.execute(sql`
         CREATE INDEX IF NOT EXISTS idx_setting_versions_key_time
         ON public.setting_versions (setting_key, changed_at DESC)
-      `);
-      await db.execute(sql`
+        `);
+        await db.execute(sql`
         CREATE TABLE IF NOT EXISTS public.feature_flags (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           key text UNIQUE NOT NULL,
@@ -924,7 +985,7 @@ export class PostgresStorage implements IStorage {
           description text,
           updated_at timestamp DEFAULT now()
         )
-      `);
+        `);
 
       const categories = [
         { name: "General", description: "Global platform behavior and identity settings." },
@@ -936,14 +997,14 @@ export class PostgresStorage implements IStorage {
         { name: "System Monitoring", description: "WebSocket and runtime diagnostics settings." },
       ];
 
-      for (const category of categories) {
-        await db.execute(sql`
+        for (const category of categories) {
+          await db.execute(sql`
           INSERT INTO public.setting_categories (name, description)
           VALUES (${category.name}, ${category.description})
           ON CONFLICT (name) DO UPDATE SET
             description = EXCLUDED.description
         `);
-      }
+        }
 
       const settingsSeed: Array<{
         categoryName: string;
@@ -1147,24 +1208,24 @@ export class PostgresStorage implements IStorage {
         },
       ];
 
-      for (const [role, tabSettings] of Object.entries(ROLE_TAB_SETTINGS) as Array<[("admin" | "user"), RoleTabSetting[]]>) {
-        for (const tabSetting of tabSettings) {
-          const key = roleTabSettingKey(role, tabSetting.suffix);
-          settingsSeed.push({
-            categoryName: "Roles & Permissions",
-            key,
-            label: tabSetting.label,
-            description: tabSetting.description,
-            type: "boolean",
-            value: tabSetting.defaultEnabled ? "true" : "false",
-            defaultValue: tabSetting.defaultEnabled ? "true" : "false",
-            isCritical: false,
-          });
+        for (const [role, tabSettings] of Object.entries(ROLE_TAB_SETTINGS) as Array<[("admin" | "user"), RoleTabSetting[]]>) {
+          for (const tabSetting of tabSettings) {
+            const key = roleTabSettingKey(role, tabSetting.suffix);
+            settingsSeed.push({
+              categoryName: "Roles & Permissions",
+              key,
+              label: tabSetting.label,
+              description: tabSetting.description,
+              type: "boolean",
+              value: tabSetting.defaultEnabled ? "true" : "false",
+              defaultValue: tabSetting.defaultEnabled ? "true" : "false",
+              isCritical: false,
+            });
+          }
         }
-      }
 
-      for (const setting of settingsSeed) {
-        await db.execute(sql`
+        for (const setting of settingsSeed) {
+          await db.execute(sql`
           INSERT INTO public.system_settings (
             category_id, key, label, description, type, value, default_value, is_critical, updated_at
           )
@@ -1187,61 +1248,74 @@ export class PostgresStorage implements IStorage {
             default_value = EXCLUDED.default_value,
             is_critical = EXCLUDED.is_critical
         `);
-      }
+        }
 
-      const selectOptions: Array<{ settingKey: string; value: string; label: string }> = [
-        { settingKey: "maintenance_type", value: "soft", label: "Soft Maintenance" },
-        { settingKey: "maintenance_type", value: "hard", label: "Hard Maintenance" },
-      ];
-      for (const option of selectOptions) {
-        await db.execute(sql`
-          INSERT INTO public.setting_options (setting_id, value, label)
-          VALUES (
-            (SELECT id FROM public.system_settings WHERE key = ${option.settingKey}),
-            ${option.value},
-            ${option.label}
-          )
-          ON CONFLICT DO NOTHING
+        // Normalize maintenance_type options to exactly 2 values (legacy databases may contain thousands).
+        const maintenanceTypeRes = await db.execute(sql`
+          SELECT id
+          FROM public.system_settings
+          WHERE key = 'maintenance_type'
+          LIMIT 1
         `);
-      }
+        const maintenanceTypeId = String((maintenanceTypeRes.rows as any[])[0]?.id || "").trim();
+        if (maintenanceTypeId) {
+          await db.execute(sql`
+            DELETE FROM public.setting_options
+            WHERE setting_id = ${maintenanceTypeId}
+          `);
+          await db.execute(sql`
+            INSERT INTO public.setting_options (setting_id, value, label)
+            VALUES
+              (${maintenanceTypeId}, 'soft', 'Soft Maintenance'),
+              (${maintenanceTypeId}, 'hard', 'Hard Maintenance')
+          `);
+        }
 
-      const adminEditable = new Set([
-        "system_name",
-        "ai_enabled",
-        "semantic_search_enabled",
-        "ai_timeout_ms",
-        "search_result_limit",
-        "viewer_rows_per_page",
-        "maintenance_message",
-        "maintenance_start_time",
-        "maintenance_end_time",
-      ]);
+        const adminEditable = new Set([
+          "system_name",
+          "ai_enabled",
+          "semantic_search_enabled",
+          "ai_timeout_ms",
+          "search_result_limit",
+          "viewer_rows_per_page",
+          "maintenance_message",
+          "maintenance_start_time",
+          "maintenance_end_time",
+        ]);
 
-      for (const setting of settingsSeed) {
-        await db.execute(sql`
+        for (const setting of settingsSeed) {
+          await db.execute(sql`
           INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
           VALUES ('superuser', ${setting.key}, true, true)
           ON CONFLICT (role, setting_key) DO UPDATE SET
             can_view = EXCLUDED.can_view,
             can_edit = EXCLUDED.can_edit
         `);
-        await db.execute(sql`
+          await db.execute(sql`
           INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
           VALUES ('admin', ${setting.key}, true, ${adminEditable.has(setting.key)})
           ON CONFLICT (role, setting_key) DO UPDATE SET
             can_view = EXCLUDED.can_view,
             can_edit = EXCLUDED.can_edit
         `);
-        await db.execute(sql`
+          await db.execute(sql`
           INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
           VALUES ('user', ${setting.key}, false, false)
           ON CONFLICT (role, setting_key) DO UPDATE SET
             can_view = EXCLUDED.can_view,
             can_edit = EXCLUDED.can_edit
         `);
+        }
+        this.settingsTablesReady = true;
+      } catch (err: any) {
+        console.error("❌ Failed to ensure enterprise settings tables:", err?.message || err);
       }
-    } catch (err: any) {
-      console.error("❌ Failed to ensure enterprise settings tables:", err?.message || err);
+    })();
+
+    try {
+      await this.settingsTablesInitPromise;
+    } finally {
+      this.settingsTablesInitPromise = null;
     }
   }
 
@@ -2252,58 +2326,31 @@ export class PostgresStorage implements IStorage {
     importFilename: string | null;
     jsonDataJsonb: any;
   }>> {
-    const q = params.query;
+    const q = String(params.query || "");
     const digits = q.replace(/[^0-9]/g, "");
-    const hasDigits = digits.length >= 6;
-    const icKeysMatch = hasDigits
-      ? sql`
-        (
-          coalesce((dr.json_data::jsonb)->>'No. MyKad','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'No Pengenalan','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'No. IC','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'IC','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'NRIC','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'MyKad','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'ID No','') = ${digits}
-        )
-      `
-      : sql`FALSE`;
-    const phoneKeysMatch = hasDigits
-      ? sql`
-        (
-          coalesce((dr.json_data::jsonb)->>'No. Telefon Rumah','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'No. Telefon Bimbit','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'Telefon','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'Phone','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'HP','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'Handphone','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'OfficePhone','') = ${digits}
-        )
-      `
-      : sql`FALSE`;
-    const accountKeysMatch = hasDigits
-      ? sql`
-        (
-          coalesce((dr.json_data::jsonb)->>'Nombor Akaun Bank Pemohon','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'Account No','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'Account Number','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'No Akaun','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'Card No','') = ${digits}
-        )
-      `
-      : sql`FALSE`;
+    const limit = Math.max(1, Math.min(50, params.limit || 10));
+    if (digits.length < 6) return [];
 
     const isIc = digits.length === 12;
     const isPhone = digits.length >= 9 && digits.length <= 11;
-    const isAccount = digits.length >= 10 && digits.length <= 16;
+    const icFields = ["No. MyKad", "ID No", "No Pengenalan", "IC", "NRIC", "MyKad"];
+    const phoneFields = ["No. Telefon Rumah", "No. Telefon Bimbit", "Telefon", "Phone", "HP", "Handphone", "OfficePhone"];
+    const accountFields = ["Nombor Akaun Bank Pemohon", "Account No", "Account Number", "No Akaun", "Card No"];
 
-    const whereCondition = isIc
-      ? sql`(${icKeysMatch})`
+    const primaryFields: string[] = isIc
+      ? icFields
       : isPhone
-        ? sql`(${phoneKeysMatch})`
-        : isAccount
-          ? sql`(${accountKeysMatch})`
-          : sql`FALSE`;
+        ? phoneFields
+        : accountFields;
+
+    if (primaryFields.length === 0) return [];
+
+    const perFieldMatch = sql.join(
+      primaryFields.map((key) =>
+        sql`coalesce((dr.json_data::jsonb)->>${key}, '') = ${digits}`
+      ),
+      sql` OR `
+    );
     const result = await db.execute(sql`
       SELECT
         dr.id as "rowId",
@@ -2314,9 +2361,9 @@ export class PostgresStorage implements IStorage {
       FROM data_rows dr
       JOIN imports i ON i.id = dr.import_id
       WHERE i.is_deleted = false
-        AND ${whereCondition}
+        AND (${perFieldMatch})
       ORDER BY dr.id
-      LIMIT ${params.limit}
+      LIMIT ${limit}
     `);
     return result.rows as any;
   }
@@ -2472,11 +2519,11 @@ export class PostgresStorage implements IStorage {
             name
           LIMIT ${limit}
         `);
-        return (result.rows as any[]).map((row) => ({
-          name: row.name,
-          address: row.branch_address,
-          phone: row.phone_number,
-          fax: row.fax_number,
+      return (result.rows as any[]).map((row) => ({
+        name: row.name,
+        address: row.branch_address,
+        phone: row.phone_number,
+        fax: row.fax_number,
           businessHour: row.business_hour,
           dayOpen: row.day_open,
           atmCdm: row.atm_cdm,
@@ -2513,9 +2560,103 @@ export class PostgresStorage implements IStorage {
           atmCdm: row.atm_cdm,
           inquiryAvailability: row.inquiry_availability,
           applicationAvailability: row.application_availability,
-          aeonLounge: row.aeon_lounge,
-        }));
+        aeonLounge: row.aeon_lounge,
+      }));
+    }
+  }
+
+  async findBranchesByPostcode(params: { postcode: string; limit: number }): Promise<Array<{
+      name: string;
+      address: string | null;
+      phone: string | null;
+      fax: string | null;
+      businessHour: string | null;
+      dayOpen: string | null;
+      atmCdm: string | null;
+      inquiryAvailability: string | null;
+      applicationAvailability: string | null;
+      aeonLounge: string | null;
+    }>> {
+      await this.ensureSpatialTables();
+      const rawDigits = String(params.postcode || "").replace(/\D/g, "");
+      const postcode = rawDigits.length === 4 ? `0${rawDigits}` : rawDigits.slice(0, 5);
+      if (postcode.length !== 5) return [];
+      const limit = Math.max(1, Math.min(5, params.limit));
+
+      let result = await db.execute(sql`
+        (
+          SELECT DISTINCT
+            b.name,
+            b.branch_address,
+            b.phone_number,
+            b.fax_number,
+            b.business_hour,
+            b.day_open,
+            b.atm_cdm,
+            b.inquiry_availability,
+            b.application_availability,
+            b.aeon_lounge
+          FROM public.aeon_branch_postcodes p
+          JOIN public.aeon_branches b
+            ON lower(b.name) = lower(p.source_branch)
+          WHERE p.postcode = ${postcode}
+        )
+        UNION
+        (
+          SELECT
+            b.name,
+            b.branch_address,
+            b.phone_number,
+            b.fax_number,
+            b.business_hour,
+            b.day_open,
+            b.atm_cdm,
+            b.inquiry_availability,
+            b.application_availability,
+            b.aeon_lounge
+          FROM public.aeon_branches b
+          WHERE coalesce(b.branch_address, '') ~ ('(^|\\D)' || ${postcode} || '(\\D|$)')
+        )
+        ORDER BY name
+        LIMIT ${limit}
+      `);
+
+      // If exact postcode is missing, we may still infer nearest branch by numeric postcode.
+      // This is especially important when source data lost leading zero (e.g. 6200 -> 06200).
+      if ((result.rows as any[]).length === 0) {
+        result = await db.execute(sql`
+          SELECT
+            b.name,
+            b.branch_address,
+            b.phone_number,
+            b.fax_number,
+            b.business_hour,
+            b.day_open,
+            b.atm_cdm,
+            b.inquiry_availability,
+            b.application_availability,
+            b.aeon_lounge
+          FROM public.aeon_branch_postcodes p
+          JOIN public.aeon_branches b
+            ON lower(b.name) = lower(p.source_branch)
+          WHERE p.postcode ~ '^[0-9]{5}$'
+          ORDER BY abs((p.postcode)::int - (${postcode})::int), b.name
+          LIMIT ${limit}
+        `);
       }
+
+      return (result.rows as any[]).map((row) => ({
+        name: row.name,
+        address: row.branch_address ?? null,
+        phone: row.phone_number ?? null,
+        fax: row.fax_number ?? null,
+        businessHour: row.business_hour ?? null,
+        dayOpen: row.day_open ?? null,
+        atmCdm: row.atm_cdm ?? null,
+        inquiryAvailability: row.inquiry_availability ?? null,
+        applicationAvailability: row.application_availability ?? null,
+        aeonLounge: row.aeon_lounge ?? null,
+      }));
     }
 
   async countRowsByKeywords(params: { groups: Array<CategoryRule> }): Promise<{
@@ -3051,11 +3192,17 @@ export class PostgresStorage implements IStorage {
 
   async getPostcodeLatLng(postcode: string): Promise<{ lat: number; lng: number } | null> {
     await this.ensureSpatialTables();
+    const postcodeNorm = (() => {
+      const digits = String(postcode || "").replace(/\D/g, "");
+      if (digits.length === 4) return `0${digits}`;
+      return digits.length >= 5 ? digits.slice(0, 5) : digits;
+    })();
+    if (!postcodeNorm) return null;
     const lookup = async () => {
       const result = await db.execute(sql`
         SELECT lat, lng
         FROM public.aeon_branch_postcodes
-        WHERE postcode = ${postcode}
+        WHERE postcode = ${postcodeNorm}
         LIMIT 1
       `);
       return result.rows?.[0] as any;
@@ -3077,9 +3224,10 @@ export class PostgresStorage implements IStorage {
       `);
       for (const b of branches.rows as any[]) {
         const address = String(b.branch_address || "");
-        const match = address.match(/\b\d{5}\b/);
-        if (!match) continue;
-        const pc = match[0];
+        const match5 = address.match(/\b\d{5}\b/);
+        const match4 = address.match(/\b\d{4}\b/);
+        const pc = match5 ? match5[0] : match4 ? `0${match4[0]}` : null;
+        if (!pc) continue;
         await db.execute(sql`
           INSERT INTO public.aeon_branch_postcodes (postcode, lat, lng, source_branch, state)
           VALUES (${pc}, ${Number(b.branch_lat)}, ${Number(b.branch_lng)}, ${String(b.name)}, null)
@@ -3229,15 +3377,22 @@ export class PostgresStorage implements IStorage {
         )
         ON CONFLICT DO NOTHING
         `);
+        const normalizePostcode = (value: unknown): string | null => {
+          if (value === undefined || value === null) return null;
+          const raw = String(value);
+          const five = raw.match(/\b\d{5}\b/);
+          if (five) return five[0];
+          const four = raw.match(/\b\d{4}\b/);
+          if (four) return `0${four[0]}`;
+          return null;
+        };
+
         let postcode: string | null = null;
         if (postcodeVal) {
-          const pcDigits = String(postcodeVal).match(/\d{5}/)?.[0] || null;
-          postcode = pcDigits;
+          postcode = normalizePostcode(postcodeVal);
         }
         if (!postcode && addressVal) {
-          const addressStr = String(addressVal);
-          const postcodeMatch = addressStr.match(/\b\d{5}\b/);
-          postcode = postcodeMatch ? postcodeMatch[0] : null;
+          postcode = normalizePostcode(addressVal);
         }
         if (postcode) {
           await db.execute(sql`
@@ -3357,15 +3512,23 @@ export class PostgresStorage implements IStorage {
     if (settingIds.length > 0) {
       const quoted = settingIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
       const optionsRows = await db.execute(sql`
-        SELECT setting_id, value, label
+        SELECT DISTINCT ON (setting_id, value) setting_id, value, label
         FROM public.setting_options
         WHERE setting_id IN (${sql.raw(quoted)})
-        ORDER BY label
+        ORDER BY setting_id, value, label
       `);
+      const perSettingValueSeen = new Map<string, Set<string>>();
       for (const row of optionsRows.rows as any[]) {
-        const list = optionsMap.get(String(row.setting_id)) || [];
-        list.push({ value: String(row.value), label: String(row.label) });
-        optionsMap.set(String(row.setting_id), list);
+        const settingId = String(row.setting_id);
+        const optionValue = String(row.value);
+        const seen = perSettingValueSeen.get(settingId) || new Set<string>();
+        if (seen.has(optionValue)) continue;
+        seen.add(optionValue);
+        perSettingValueSeen.set(settingId, seen);
+
+        const list = optionsMap.get(settingId) || [];
+        list.push({ value: optionValue, label: String(row.label) });
+        optionsMap.set(settingId, list);
       }
     }
 
@@ -3645,17 +3808,62 @@ export class PostgresStorage implements IStorage {
     };
   }
 
-  async getAppConfig(): Promise<{ systemName: string }> {
+  async getAppConfig(): Promise<{
+    systemName: string;
+    sessionTimeoutMinutes: number;
+    heartbeatIntervalMinutes: number;
+    wsIdleMinutes: number;
+    aiEnabled: boolean;
+    semanticSearchEnabled: boolean;
+    aiTimeoutMs: number;
+  }> {
     await this.ensureSettingsTables();
     const res = await db.execute(sql`
-      SELECT value
+      SELECT key, value
       FROM public.system_settings
-      WHERE key = 'system_name'
-      LIMIT 1
+      WHERE key IN (
+        'system_name',
+        'session_timeout_minutes',
+        'ws_idle_minutes',
+        'ai_enabled',
+        'semantic_search_enabled',
+        'ai_timeout_ms'
+      )
     `);
-    const row = (res.rows as any[])[0];
-    const systemName = String(row?.value ?? "").trim() || "SQR System";
-    return { systemName };
+
+    const map = new Map<string, string>();
+    for (const row of res.rows as any[]) {
+      map.set(String(row.key), String(row.value ?? ""));
+    }
+
+    const asNumber = (key: string, fallback: number, min: number, max: number): number => {
+      const raw = Number(map.get(key) ?? "");
+      if (!Number.isFinite(raw)) return fallback;
+      return Math.min(max, Math.max(min, Math.floor(raw)));
+    };
+    const asBool = (key: string, fallback: boolean): boolean => {
+      const raw = String(map.get(key) ?? "").trim().toLowerCase();
+      if (!raw) return fallback;
+      return ["true", "1", "yes", "on"].includes(raw);
+    };
+
+    const systemName = String(map.get("system_name") ?? "").trim() || "SQR System";
+    const sessionTimeoutMinutes = asNumber("session_timeout_minutes", 30, 1, 1440);
+    const wsIdleMinutes = asNumber("ws_idle_minutes", 3, 1, 1440);
+    const aiTimeoutMs = asNumber("ai_timeout_ms", 6000, 1000, 120000);
+    const aiEnabled = asBool("ai_enabled", true);
+    const semanticSearchEnabled = asBool("semantic_search_enabled", true);
+    const heartbeatIntervalMinutes = Math.max(1, Math.min(10, Math.floor(sessionTimeoutMinutes / 2) || 1));
+
+    return {
+      systemName,
+      sessionTimeoutMinutes,
+      heartbeatIntervalMinutes,
+      wsIdleMinutes,
+      aiEnabled,
+      semanticSearchEnabled,
+      aiTimeoutMs,
+    };
   }
 
   async getAccounts(): Promise<Array<{

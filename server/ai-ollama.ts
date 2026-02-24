@@ -35,9 +35,9 @@ export async function ollamaEmbed(input: string): Promise<number[]> {
 
 export async function ollamaChat(
   messages: OllamaMessage[],
-  options?: { num_predict?: number; temperature?: number; top_p?: number }
+  options?: { num_predict?: number; temperature?: number; top_p?: number; timeoutMs?: number }
 ): Promise<string> {
-  const timeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS || 2000);
+  const timeoutMs = Number(options?.timeoutMs ?? process.env.OLLAMA_TIMEOUT_MS ?? 2000);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;

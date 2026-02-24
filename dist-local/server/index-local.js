@@ -245,6 +245,8 @@ var ROLE_TAB_SETTINGS = {
 var roleTabSettingKey = (role, suffix) => `tab_${role}_${suffix}_enabled`;
 var PostgresStorage = class {
   constructor() {
+    this.settingsTablesReady = false;
+    this.settingsTablesInitPromise = null;
     this.seedDefaultUsers();
   }
   async init() {
@@ -662,18 +664,24 @@ var PostgresStorage = class {
     }
   }
   async ensureSettingsTables() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
-      await db.execute(sql`
+    if (this.settingsTablesReady) return;
+    if (this.settingsTablesInitPromise) {
+      await this.settingsTablesInitPromise;
+      return;
+    }
+    this.settingsTablesInitPromise = (async () => {
+      try {
+        await db.execute(sql`SET search_path TO public`);
+        await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
+        await db.execute(sql`
         CREATE TABLE IF NOT EXISTS public.setting_categories (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           name text UNIQUE NOT NULL,
           description text,
           created_at timestamp DEFAULT now()
         )
-      `);
-      await db.execute(sql`
+        `);
+        await db.execute(sql`
         CREATE TABLE IF NOT EXISTS public.system_settings (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           category_id uuid REFERENCES public.setting_categories(id) ON DELETE CASCADE,
@@ -686,16 +694,44 @@ var PostgresStorage = class {
           is_critical boolean DEFAULT false,
           updated_at timestamp DEFAULT now()
         )
-      `);
-      await db.execute(sql`
+        `);
+        await db.execute(sql`
         CREATE TABLE IF NOT EXISTS public.setting_options (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           setting_id uuid REFERENCES public.system_settings(id) ON DELETE CASCADE,
           value text NOT NULL,
           label text NOT NULL
         )
-      `);
-      await db.execute(sql`
+        `);
+        try {
+          await db.execute(sql`
+          WITH ranked AS (
+            SELECT
+              ctid,
+              row_number() OVER (PARTITION BY setting_id, value ORDER BY id) AS rn
+            FROM public.setting_options
+          )
+          DELETE FROM public.setting_options so
+          USING ranked r
+          WHERE so.ctid = r.ctid
+            AND r.rn > 1
+        `);
+        } catch (dupCleanupErr) {
+          console.warn("\u26A0\uFE0F setting_options duplicate cleanup skipped:", dupCleanupErr?.message || dupCleanupErr);
+        }
+        try {
+          await db.execute(sql`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_setting_options_unique_value
+          ON public.setting_options (setting_id, value)
+        `);
+        } catch (idxErr) {
+          console.warn("\u26A0\uFE0F setting_options unique index not created:", idxErr?.message || idxErr);
+        }
+        await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_setting_options_setting_id
+        ON public.setting_options (setting_id)
+        `);
+        await db.execute(sql`
         CREATE TABLE IF NOT EXISTS public.role_setting_permissions (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           role text NOT NULL,
@@ -703,12 +739,12 @@ var PostgresStorage = class {
           can_view boolean DEFAULT false,
           can_edit boolean DEFAULT false
         )
-      `);
-      await db.execute(sql`
+        `);
+        await db.execute(sql`
         CREATE UNIQUE INDEX IF NOT EXISTS idx_role_setting_permissions_unique
         ON public.role_setting_permissions (role, setting_key)
-      `);
-      await db.execute(sql`
+        `);
+        await db.execute(sql`
         CREATE TABLE IF NOT EXISTS public.setting_versions (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           setting_key text NOT NULL,
@@ -717,12 +753,12 @@ var PostgresStorage = class {
           changed_by text NOT NULL,
           changed_at timestamp DEFAULT now()
         )
-      `);
-      await db.execute(sql`
+        `);
+        await db.execute(sql`
         CREATE INDEX IF NOT EXISTS idx_setting_versions_key_time
         ON public.setting_versions (setting_key, changed_at DESC)
-      `);
-      await db.execute(sql`
+        `);
+        await db.execute(sql`
         CREATE TABLE IF NOT EXISTS public.feature_flags (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           key text UNIQUE NOT NULL,
@@ -730,233 +766,233 @@ var PostgresStorage = class {
           description text,
           updated_at timestamp DEFAULT now()
         )
-      `);
-      const categories = [
-        { name: "General", description: "Global platform behavior and identity settings." },
-        { name: "Security", description: "Authentication, session, and security policy controls." },
-        { name: "AI & Search", description: "AI assistant and search tuning configuration." },
-        { name: "Data Management", description: "Data processing, viewer, and indexing limits." },
-        { name: "Backup & Restore", description: "Backup lifecycle and recovery controls." },
-        { name: "Roles & Permissions", description: "Role behavior and privilege defaults." },
-        { name: "System Monitoring", description: "WebSocket and runtime diagnostics settings." }
-      ];
-      for (const category of categories) {
-        await db.execute(sql`
+        `);
+        const categories = [
+          { name: "General", description: "Global platform behavior and identity settings." },
+          { name: "Security", description: "Authentication, session, and security policy controls." },
+          { name: "AI & Search", description: "AI assistant and search tuning configuration." },
+          { name: "Data Management", description: "Data processing, viewer, and indexing limits." },
+          { name: "Backup & Restore", description: "Backup lifecycle and recovery controls." },
+          { name: "Roles & Permissions", description: "Role behavior and privilege defaults." },
+          { name: "System Monitoring", description: "WebSocket and runtime diagnostics settings." }
+        ];
+        for (const category of categories) {
+          await db.execute(sql`
           INSERT INTO public.setting_categories (name, description)
           VALUES (${category.name}, ${category.description})
           ON CONFLICT (name) DO UPDATE SET
             description = EXCLUDED.description
         `);
-      }
-      const settingsSeed = [
-        {
-          categoryName: "General",
-          key: "system_name",
-          label: "System Name",
-          description: "Display name shown in application header.",
-          type: "text",
-          value: "SQR System",
-          defaultValue: "SQR System",
-          isCritical: false
-        },
-        {
-          categoryName: "General",
-          key: "session_timeout_minutes",
-          label: "Session Timeout (Minutes)",
-          description: "Default idle timeout duration for authenticated sessions.",
-          type: "number",
-          value: "30",
-          defaultValue: "30",
-          isCritical: true
-        },
-        {
-          categoryName: "Security",
-          key: "jwt_expiry_hours",
-          label: "JWT Expiry (Hours)",
-          description: "Token validity period used during login.",
-          type: "number",
-          value: "24",
-          defaultValue: "24",
-          isCritical: true
-        },
-        {
-          categoryName: "Security",
-          key: "enforce_superuser_single_session",
-          label: "Enforce Single Superuser Session",
-          description: "Force single active session for superuser accounts.",
-          type: "boolean",
-          value: "true",
-          defaultValue: "true",
-          isCritical: false
-        },
-        {
-          categoryName: "AI & Search",
-          key: "ai_enabled",
-          label: "Enable AI Assistant",
-          description: "Controls AI endpoints and chat behavior.",
-          type: "boolean",
-          value: "true",
-          defaultValue: "true",
-          isCritical: false
-        },
-        {
-          categoryName: "AI & Search",
-          key: "semantic_search_enabled",
-          label: "Enable Semantic Search",
-          description: "Allow pgvector semantic retrieval for AI workflows.",
-          type: "boolean",
-          value: "true",
-          defaultValue: "true",
-          isCritical: false
-        },
-        {
-          categoryName: "AI & Search",
-          key: "ai_timeout_ms",
-          label: "AI Timeout (ms)",
-          description: "Server timeout for AI requests before fallback response.",
-          type: "number",
-          value: "6000",
-          defaultValue: "6000",
-          isCritical: false
-        },
-        {
-          categoryName: "Data Management",
-          key: "search_result_limit",
-          label: "Search Result Limit",
-          description: "Maximum records returned in search APIs.",
-          type: "number",
-          value: "200",
-          defaultValue: "200",
-          isCritical: false
-        },
-        {
-          categoryName: "Data Management",
-          key: "viewer_rows_per_page",
-          label: "Viewer Rows Per Page",
-          description: "Default row count per viewer page.",
-          type: "number",
-          value: "100",
-          defaultValue: "100",
-          isCritical: false
-        },
-        {
-          categoryName: "Backup & Restore",
-          key: "backup_retention_days",
-          label: "Backup Retention (Days)",
-          description: "Retention target for automated backup lifecycle policies.",
-          type: "number",
-          value: "30",
-          defaultValue: "30",
-          isCritical: false
-        },
-        {
-          categoryName: "Backup & Restore",
-          key: "backup_auto_cleanup_enabled",
-          label: "Enable Backup Auto Cleanup",
-          description: "Automatically remove backups older than retention policy.",
-          type: "boolean",
-          value: "false",
-          defaultValue: "false",
-          isCritical: false
-        },
-        {
-          categoryName: "Roles & Permissions",
-          key: "admin_can_edit_maintenance_message",
-          label: "Admin Can Edit Maintenance Message",
-          description: "Allow admin role to edit maintenance message and window only.",
-          type: "boolean",
-          value: "true",
-          defaultValue: "true",
-          isCritical: false
-        },
-        {
-          categoryName: "System Monitoring",
-          key: "ws_idle_minutes",
-          label: "WebSocket Idle Timeout (Minutes)",
-          description: "Idle timeout before websocket session termination.",
-          type: "number",
-          value: "3",
-          defaultValue: "3",
-          isCritical: false
-        },
-        {
-          categoryName: "System Monitoring",
-          key: "debug_logs_enabled",
-          label: "Enable Debug Logs",
-          description: "Enable verbose API debug logging.",
-          type: "boolean",
-          value: "false",
-          defaultValue: "false",
-          isCritical: false
-        },
-        {
-          categoryName: "System Monitoring",
-          key: "maintenance_mode",
-          label: "Maintenance Mode",
-          description: "Master switch for maintenance mode activation.",
-          type: "boolean",
-          value: "false",
-          defaultValue: "false",
-          isCritical: true
-        },
-        {
-          categoryName: "System Monitoring",
-          key: "maintenance_message",
-          label: "Maintenance Message",
-          description: "Message shown to end users while maintenance is active.",
-          type: "text",
-          value: "Sistem sedang diselenggara. Sila cuba semula sebentar lagi.",
-          defaultValue: "Sistem sedang diselenggara. Sila cuba semula sebentar lagi.",
-          isCritical: false
-        },
-        {
-          categoryName: "System Monitoring",
-          key: "maintenance_type",
-          label: "Maintenance Type",
-          description: "Soft mode limits selected modules. Hard mode blocks all protected routes.",
-          type: "select",
-          value: "soft",
-          defaultValue: "soft",
-          isCritical: true
-        },
-        {
-          categoryName: "System Monitoring",
-          key: "maintenance_start_time",
-          label: "Maintenance Start Time",
-          description: "Optional ISO timestamp to schedule maintenance start.",
-          type: "timestamp",
-          value: "",
-          defaultValue: "",
-          isCritical: false
-        },
-        {
-          categoryName: "System Monitoring",
-          key: "maintenance_end_time",
-          label: "Maintenance End Time",
-          description: "Optional ISO timestamp to auto-end maintenance.",
-          type: "timestamp",
-          value: "",
-          defaultValue: "",
-          isCritical: false
         }
-      ];
-      for (const [role, tabSettings] of Object.entries(ROLE_TAB_SETTINGS)) {
-        for (const tabSetting of tabSettings) {
-          const key = roleTabSettingKey(role, tabSetting.suffix);
-          settingsSeed.push({
-            categoryName: "Roles & Permissions",
-            key,
-            label: tabSetting.label,
-            description: tabSetting.description,
-            type: "boolean",
-            value: tabSetting.defaultEnabled ? "true" : "false",
-            defaultValue: tabSetting.defaultEnabled ? "true" : "false",
+        const settingsSeed = [
+          {
+            categoryName: "General",
+            key: "system_name",
+            label: "System Name",
+            description: "Display name shown in application header.",
+            type: "text",
+            value: "SQR System",
+            defaultValue: "SQR System",
             isCritical: false
-          });
+          },
+          {
+            categoryName: "General",
+            key: "session_timeout_minutes",
+            label: "Session Timeout (Minutes)",
+            description: "Default idle timeout duration for authenticated sessions.",
+            type: "number",
+            value: "30",
+            defaultValue: "30",
+            isCritical: true
+          },
+          {
+            categoryName: "Security",
+            key: "jwt_expiry_hours",
+            label: "JWT Expiry (Hours)",
+            description: "Token validity period used during login.",
+            type: "number",
+            value: "24",
+            defaultValue: "24",
+            isCritical: true
+          },
+          {
+            categoryName: "Security",
+            key: "enforce_superuser_single_session",
+            label: "Enforce Single Superuser Session",
+            description: "Force single active session for superuser accounts.",
+            type: "boolean",
+            value: "true",
+            defaultValue: "true",
+            isCritical: false
+          },
+          {
+            categoryName: "AI & Search",
+            key: "ai_enabled",
+            label: "Enable AI Assistant",
+            description: "Controls AI endpoints and chat behavior.",
+            type: "boolean",
+            value: "true",
+            defaultValue: "true",
+            isCritical: false
+          },
+          {
+            categoryName: "AI & Search",
+            key: "semantic_search_enabled",
+            label: "Enable Semantic Search",
+            description: "Allow pgvector semantic retrieval for AI workflows.",
+            type: "boolean",
+            value: "true",
+            defaultValue: "true",
+            isCritical: false
+          },
+          {
+            categoryName: "AI & Search",
+            key: "ai_timeout_ms",
+            label: "AI Timeout (ms)",
+            description: "Server timeout for AI requests before fallback response.",
+            type: "number",
+            value: "6000",
+            defaultValue: "6000",
+            isCritical: false
+          },
+          {
+            categoryName: "Data Management",
+            key: "search_result_limit",
+            label: "Search Result Limit",
+            description: "Maximum records returned in search APIs.",
+            type: "number",
+            value: "200",
+            defaultValue: "200",
+            isCritical: false
+          },
+          {
+            categoryName: "Data Management",
+            key: "viewer_rows_per_page",
+            label: "Viewer Rows Per Page",
+            description: "Default row count per viewer page.",
+            type: "number",
+            value: "100",
+            defaultValue: "100",
+            isCritical: false
+          },
+          {
+            categoryName: "Backup & Restore",
+            key: "backup_retention_days",
+            label: "Backup Retention (Days)",
+            description: "Retention target for automated backup lifecycle policies.",
+            type: "number",
+            value: "30",
+            defaultValue: "30",
+            isCritical: false
+          },
+          {
+            categoryName: "Backup & Restore",
+            key: "backup_auto_cleanup_enabled",
+            label: "Enable Backup Auto Cleanup",
+            description: "Automatically remove backups older than retention policy.",
+            type: "boolean",
+            value: "false",
+            defaultValue: "false",
+            isCritical: false
+          },
+          {
+            categoryName: "Roles & Permissions",
+            key: "admin_can_edit_maintenance_message",
+            label: "Admin Can Edit Maintenance Message",
+            description: "Allow admin role to edit maintenance message and window only.",
+            type: "boolean",
+            value: "true",
+            defaultValue: "true",
+            isCritical: false
+          },
+          {
+            categoryName: "System Monitoring",
+            key: "ws_idle_minutes",
+            label: "WebSocket Idle Timeout (Minutes)",
+            description: "Idle timeout before websocket session termination.",
+            type: "number",
+            value: "3",
+            defaultValue: "3",
+            isCritical: false
+          },
+          {
+            categoryName: "System Monitoring",
+            key: "debug_logs_enabled",
+            label: "Enable Debug Logs",
+            description: "Enable verbose API debug logging.",
+            type: "boolean",
+            value: "false",
+            defaultValue: "false",
+            isCritical: false
+          },
+          {
+            categoryName: "System Monitoring",
+            key: "maintenance_mode",
+            label: "Maintenance Mode",
+            description: "Master switch for maintenance mode activation.",
+            type: "boolean",
+            value: "false",
+            defaultValue: "false",
+            isCritical: true
+          },
+          {
+            categoryName: "System Monitoring",
+            key: "maintenance_message",
+            label: "Maintenance Message",
+            description: "Message shown to end users while maintenance is active.",
+            type: "text",
+            value: "Sistem sedang diselenggara. Sila cuba semula sebentar lagi.",
+            defaultValue: "Sistem sedang diselenggara. Sila cuba semula sebentar lagi.",
+            isCritical: false
+          },
+          {
+            categoryName: "System Monitoring",
+            key: "maintenance_type",
+            label: "Maintenance Type",
+            description: "Soft mode limits selected modules. Hard mode blocks all protected routes.",
+            type: "select",
+            value: "soft",
+            defaultValue: "soft",
+            isCritical: true
+          },
+          {
+            categoryName: "System Monitoring",
+            key: "maintenance_start_time",
+            label: "Maintenance Start Time",
+            description: "Optional ISO timestamp to schedule maintenance start.",
+            type: "timestamp",
+            value: "",
+            defaultValue: "",
+            isCritical: false
+          },
+          {
+            categoryName: "System Monitoring",
+            key: "maintenance_end_time",
+            label: "Maintenance End Time",
+            description: "Optional ISO timestamp to auto-end maintenance.",
+            type: "timestamp",
+            value: "",
+            defaultValue: "",
+            isCritical: false
+          }
+        ];
+        for (const [role, tabSettings] of Object.entries(ROLE_TAB_SETTINGS)) {
+          for (const tabSetting of tabSettings) {
+            const key = roleTabSettingKey(role, tabSetting.suffix);
+            settingsSeed.push({
+              categoryName: "Roles & Permissions",
+              key,
+              label: tabSetting.label,
+              description: tabSetting.description,
+              type: "boolean",
+              value: tabSetting.defaultEnabled ? "true" : "false",
+              defaultValue: tabSetting.defaultEnabled ? "true" : "false",
+              isCritical: false
+            });
+          }
         }
-      }
-      for (const setting of settingsSeed) {
-        await db.execute(sql`
+        for (const setting of settingsSeed) {
+          await db.execute(sql`
           INSERT INTO public.system_settings (
             category_id, key, label, description, type, value, default_value, is_critical, updated_at
           )
@@ -979,58 +1015,69 @@ var PostgresStorage = class {
             default_value = EXCLUDED.default_value,
             is_critical = EXCLUDED.is_critical
         `);
-      }
-      const selectOptions = [
-        { settingKey: "maintenance_type", value: "soft", label: "Soft Maintenance" },
-        { settingKey: "maintenance_type", value: "hard", label: "Hard Maintenance" }
-      ];
-      for (const option of selectOptions) {
-        await db.execute(sql`
-          INSERT INTO public.setting_options (setting_id, value, label)
-          VALUES (
-            (SELECT id FROM public.system_settings WHERE key = ${option.settingKey}),
-            ${option.value},
-            ${option.label}
-          )
-          ON CONFLICT DO NOTHING
+        }
+        const maintenanceTypeRes = await db.execute(sql`
+          SELECT id
+          FROM public.system_settings
+          WHERE key = 'maintenance_type'
+          LIMIT 1
         `);
-      }
-      const adminEditable = /* @__PURE__ */ new Set([
-        "system_name",
-        "ai_enabled",
-        "semantic_search_enabled",
-        "ai_timeout_ms",
-        "search_result_limit",
-        "viewer_rows_per_page",
-        "maintenance_message",
-        "maintenance_start_time",
-        "maintenance_end_time"
-      ]);
-      for (const setting of settingsSeed) {
-        await db.execute(sql`
+        const maintenanceTypeId = String(maintenanceTypeRes.rows[0]?.id || "").trim();
+        if (maintenanceTypeId) {
+          await db.execute(sql`
+            DELETE FROM public.setting_options
+            WHERE setting_id = ${maintenanceTypeId}
+          `);
+          await db.execute(sql`
+            INSERT INTO public.setting_options (setting_id, value, label)
+            VALUES
+              (${maintenanceTypeId}, 'soft', 'Soft Maintenance'),
+              (${maintenanceTypeId}, 'hard', 'Hard Maintenance')
+          `);
+        }
+        const adminEditable = /* @__PURE__ */ new Set([
+          "system_name",
+          "ai_enabled",
+          "semantic_search_enabled",
+          "ai_timeout_ms",
+          "search_result_limit",
+          "viewer_rows_per_page",
+          "maintenance_message",
+          "maintenance_start_time",
+          "maintenance_end_time"
+        ]);
+        for (const setting of settingsSeed) {
+          await db.execute(sql`
           INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
           VALUES ('superuser', ${setting.key}, true, true)
           ON CONFLICT (role, setting_key) DO UPDATE SET
             can_view = EXCLUDED.can_view,
             can_edit = EXCLUDED.can_edit
         `);
-        await db.execute(sql`
+          await db.execute(sql`
           INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
           VALUES ('admin', ${setting.key}, true, ${adminEditable.has(setting.key)})
           ON CONFLICT (role, setting_key) DO UPDATE SET
             can_view = EXCLUDED.can_view,
             can_edit = EXCLUDED.can_edit
         `);
-        await db.execute(sql`
+          await db.execute(sql`
           INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
           VALUES ('user', ${setting.key}, false, false)
           ON CONFLICT (role, setting_key) DO UPDATE SET
             can_view = EXCLUDED.can_view,
             can_edit = EXCLUDED.can_edit
         `);
+        }
+        this.settingsTablesReady = true;
+      } catch (err) {
+        console.error("\u274C Failed to ensure enterprise settings tables:", err?.message || err);
       }
-    } catch (err) {
-      console.error("\u274C Failed to ensure enterprise settings tables:", err?.message || err);
+    })();
+    try {
+      await this.settingsTablesInitPromise;
+    } finally {
+      this.settingsTablesInitPromise = null;
     }
   }
   async ensureSpatialTables() {
@@ -1733,44 +1780,23 @@ var PostgresStorage = class {
     });
   }
   async aiKeywordSearch(params) {
-    const q = params.query;
+    const q = String(params.query || "");
     const digits = q.replace(/[^0-9]/g, "");
-    const hasDigits = digits.length >= 6;
-    const icKeysMatch = hasDigits ? sql`
-        (
-          coalesce((dr.json_data::jsonb)->>'No. MyKad','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'No Pengenalan','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'No. IC','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'IC','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'NRIC','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'MyKad','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'ID No','') = ${digits}
-        )
-      ` : sql`FALSE`;
-    const phoneKeysMatch = hasDigits ? sql`
-        (
-          coalesce((dr.json_data::jsonb)->>'No. Telefon Rumah','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'No. Telefon Bimbit','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'Telefon','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'Phone','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'HP','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'Handphone','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'OfficePhone','') = ${digits}
-        )
-      ` : sql`FALSE`;
-    const accountKeysMatch = hasDigits ? sql`
-        (
-          coalesce((dr.json_data::jsonb)->>'Nombor Akaun Bank Pemohon','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'Account No','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'Account Number','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'No Akaun','') = ${digits} OR
-          coalesce((dr.json_data::jsonb)->>'Card No','') = ${digits}
-        )
-      ` : sql`FALSE`;
+    const limit = Math.max(1, Math.min(50, params.limit || 10));
+    if (digits.length < 6) return [];
     const isIc = digits.length === 12;
     const isPhone = digits.length >= 9 && digits.length <= 11;
-    const isAccount = digits.length >= 10 && digits.length <= 16;
-    const whereCondition = isIc ? sql`(${icKeysMatch})` : isPhone ? sql`(${phoneKeysMatch})` : isAccount ? sql`(${accountKeysMatch})` : sql`FALSE`;
+    const icFields = ["No. MyKad", "ID No", "No Pengenalan", "IC", "NRIC", "MyKad"];
+    const phoneFields = ["No. Telefon Rumah", "No. Telefon Bimbit", "Telefon", "Phone", "HP", "Handphone", "OfficePhone"];
+    const accountFields = ["Nombor Akaun Bank Pemohon", "Account No", "Account Number", "No Akaun", "Card No"];
+    const primaryFields = isIc ? icFields : isPhone ? phoneFields : accountFields;
+    if (primaryFields.length === 0) return [];
+    const perFieldMatch = sql.join(
+      primaryFields.map(
+        (key) => sql`coalesce((dr.json_data::jsonb)->>${key}, '') = ${digits}`
+      ),
+      sql` OR `
+    );
     const result = await db.execute(sql`
       SELECT
         dr.id as "rowId",
@@ -1781,9 +1807,9 @@ var PostgresStorage = class {
       FROM data_rows dr
       JOIN imports i ON i.id = dr.import_id
       WHERE i.is_deleted = false
-        AND ${whereCondition}
+        AND (${perFieldMatch})
       ORDER BY dr.id
-      LIMIT ${params.limit}
+      LIMIT ${limit}
     `);
     return result.rows;
   }
@@ -1943,6 +1969,83 @@ var PostgresStorage = class {
         aeonLounge: row.aeon_lounge
       }));
     }
+  }
+  async findBranchesByPostcode(params) {
+    await this.ensureSpatialTables();
+    const rawDigits = String(params.postcode || "").replace(/\D/g, "");
+    const postcode = rawDigits.length === 4 ? `0${rawDigits}` : rawDigits.slice(0, 5);
+    if (postcode.length !== 5) return [];
+    const limit = Math.max(1, Math.min(5, params.limit));
+    let result = await db.execute(sql`
+        (
+          SELECT DISTINCT
+            b.name,
+            b.branch_address,
+            b.phone_number,
+            b.fax_number,
+            b.business_hour,
+            b.day_open,
+            b.atm_cdm,
+            b.inquiry_availability,
+            b.application_availability,
+            b.aeon_lounge
+          FROM public.aeon_branch_postcodes p
+          JOIN public.aeon_branches b
+            ON lower(b.name) = lower(p.source_branch)
+          WHERE p.postcode = ${postcode}
+        )
+        UNION
+        (
+          SELECT
+            b.name,
+            b.branch_address,
+            b.phone_number,
+            b.fax_number,
+            b.business_hour,
+            b.day_open,
+            b.atm_cdm,
+            b.inquiry_availability,
+            b.application_availability,
+            b.aeon_lounge
+          FROM public.aeon_branches b
+          WHERE coalesce(b.branch_address, '') ~ ('(^|\\D)' || ${postcode} || '(\\D|$)')
+        )
+        ORDER BY name
+        LIMIT ${limit}
+      `);
+    if (result.rows.length === 0) {
+      result = await db.execute(sql`
+          SELECT
+            b.name,
+            b.branch_address,
+            b.phone_number,
+            b.fax_number,
+            b.business_hour,
+            b.day_open,
+            b.atm_cdm,
+            b.inquiry_availability,
+            b.application_availability,
+            b.aeon_lounge
+          FROM public.aeon_branch_postcodes p
+          JOIN public.aeon_branches b
+            ON lower(b.name) = lower(p.source_branch)
+          WHERE p.postcode ~ '^[0-9]{5}$'
+          ORDER BY abs((p.postcode)::int - (${postcode})::int), b.name
+          LIMIT ${limit}
+        `);
+    }
+    return result.rows.map((row) => ({
+      name: row.name,
+      address: row.branch_address ?? null,
+      phone: row.phone_number ?? null,
+      fax: row.fax_number ?? null,
+      businessHour: row.business_hour ?? null,
+      dayOpen: row.day_open ?? null,
+      atmCdm: row.atm_cdm ?? null,
+      inquiryAvailability: row.inquiry_availability ?? null,
+      applicationAvailability: row.application_availability ?? null,
+      aeonLounge: row.aeon_lounge ?? null
+    }));
   }
   async countRowsByKeywords(params) {
     const groups = params.groups || [];
@@ -2377,11 +2480,17 @@ var PostgresStorage = class {
   }
   async getPostcodeLatLng(postcode) {
     await this.ensureSpatialTables();
+    const postcodeNorm = (() => {
+      const digits = String(postcode || "").replace(/\D/g, "");
+      if (digits.length === 4) return `0${digits}`;
+      return digits.length >= 5 ? digits.slice(0, 5) : digits;
+    })();
+    if (!postcodeNorm) return null;
     const lookup = async () => {
       const result = await db.execute(sql`
         SELECT lat, lng
         FROM public.aeon_branch_postcodes
-        WHERE postcode = ${postcode}
+        WHERE postcode = ${postcodeNorm}
         LIMIT 1
       `);
       return result.rows?.[0];
@@ -2400,9 +2509,10 @@ var PostgresStorage = class {
       `);
       for (const b of branches.rows) {
         const address = String(b.branch_address || "");
-        const match = address.match(/\b\d{5}\b/);
-        if (!match) continue;
-        const pc = match[0];
+        const match5 = address.match(/\b\d{5}\b/);
+        const match4 = address.match(/\b\d{4}\b/);
+        const pc = match5 ? match5[0] : match4 ? `0${match4[0]}` : null;
+        if (!pc) continue;
         await db.execute(sql`
           INSERT INTO public.aeon_branch_postcodes (postcode, lat, lng, source_branch, state)
           VALUES (${pc}, ${Number(b.branch_lat)}, ${Number(b.branch_lng)}, ${String(b.name)}, null)
@@ -2536,15 +2646,21 @@ var PostgresStorage = class {
         )
         ON CONFLICT DO NOTHING
         `);
+      const normalizePostcode = (value) => {
+        if (value === void 0 || value === null) return null;
+        const raw = String(value);
+        const five = raw.match(/\b\d{5}\b/);
+        if (five) return five[0];
+        const four = raw.match(/\b\d{4}\b/);
+        if (four) return `0${four[0]}`;
+        return null;
+      };
       let postcode = null;
       if (postcodeVal) {
-        const pcDigits = String(postcodeVal).match(/\d{5}/)?.[0] || null;
-        postcode = pcDigits;
+        postcode = normalizePostcode(postcodeVal);
       }
       if (!postcode && addressVal) {
-        const addressStr = String(addressVal);
-        const postcodeMatch = addressStr.match(/\b\d{5}\b/);
-        postcode = postcodeMatch ? postcodeMatch[0] : null;
+        postcode = normalizePostcode(addressVal);
       }
       if (postcode) {
         await db.execute(sql`
@@ -2644,15 +2760,22 @@ var PostgresStorage = class {
     if (settingIds.length > 0) {
       const quoted = settingIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
       const optionsRows = await db.execute(sql`
-        SELECT setting_id, value, label
+        SELECT DISTINCT ON (setting_id, value) setting_id, value, label
         FROM public.setting_options
         WHERE setting_id IN (${sql.raw(quoted)})
-        ORDER BY label
+        ORDER BY setting_id, value, label
       `);
+      const perSettingValueSeen = /* @__PURE__ */ new Map();
       for (const row of optionsRows.rows) {
-        const list = optionsMap.get(String(row.setting_id)) || [];
-        list.push({ value: String(row.value), label: String(row.label) });
-        optionsMap.set(String(row.setting_id), list);
+        const settingId = String(row.setting_id);
+        const optionValue = String(row.value);
+        const seen = perSettingValueSeen.get(settingId) || /* @__PURE__ */ new Set();
+        if (seen.has(optionValue)) continue;
+        seen.add(optionValue);
+        perSettingValueSeen.set(settingId, seen);
+        const list = optionsMap.get(settingId) || [];
+        list.push({ value: optionValue, label: String(row.label) });
+        optionsMap.set(settingId, list);
       }
     }
     const adminMaintenanceEditingEnabled = role === "admin" ? await this.isAdminMaintenanceEditingEnabled() : true;
@@ -2888,14 +3011,47 @@ var PostgresStorage = class {
   async getAppConfig() {
     await this.ensureSettingsTables();
     const res = await db.execute(sql`
-      SELECT value
+      SELECT key, value
       FROM public.system_settings
-      WHERE key = 'system_name'
-      LIMIT 1
+      WHERE key IN (
+        'system_name',
+        'session_timeout_minutes',
+        'ws_idle_minutes',
+        'ai_enabled',
+        'semantic_search_enabled',
+        'ai_timeout_ms'
+      )
     `);
-    const row = res.rows[0];
-    const systemName = String(row?.value ?? "").trim() || "SQR System";
-    return { systemName };
+    const map = /* @__PURE__ */ new Map();
+    for (const row of res.rows) {
+      map.set(String(row.key), String(row.value ?? ""));
+    }
+    const asNumber = (key, fallback, min, max) => {
+      const raw = Number(map.get(key) ?? "");
+      if (!Number.isFinite(raw)) return fallback;
+      return Math.min(max, Math.max(min, Math.floor(raw)));
+    };
+    const asBool = (key, fallback) => {
+      const raw = String(map.get(key) ?? "").trim().toLowerCase();
+      if (!raw) return fallback;
+      return ["true", "1", "yes", "on"].includes(raw);
+    };
+    const systemName = String(map.get("system_name") ?? "").trim() || "SQR System";
+    const sessionTimeoutMinutes = asNumber("session_timeout_minutes", 30, 1, 1440);
+    const wsIdleMinutes = asNumber("ws_idle_minutes", 3, 1, 1440);
+    const aiTimeoutMs = asNumber("ai_timeout_ms", 6e3, 1e3, 12e4);
+    const aiEnabled = asBool("ai_enabled", true);
+    const semanticSearchEnabled = asBool("semantic_search_enabled", true);
+    const heartbeatIntervalMinutes = Math.max(1, Math.min(10, Math.floor(sessionTimeoutMinutes / 2) || 1));
+    return {
+      systemName,
+      sessionTimeoutMinutes,
+      heartbeatIntervalMinutes,
+      wsIdleMinutes,
+      aiEnabled,
+      semanticSearchEnabled,
+      aiTimeoutMs
+    };
   }
   async getAccounts() {
     return await db.select({
@@ -3240,7 +3396,7 @@ async function ollamaEmbed(input) {
   return Array.isArray(data.embedding) ? data.embedding : [];
 }
 async function ollamaChat(messages, options) {
-  const timeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS || 2e3);
+  const timeoutMs = Number(options?.timeoutMs ?? process.env.OLLAMA_TIMEOUT_MS ?? 2e3);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let res;
@@ -3285,13 +3441,16 @@ var server = createServer(app);
 var wss = new WebSocketServer({ server, path: "/ws" });
 var JWT_SECRET = process.env.SESSION_SECRET || "sqr-local-secret-key-2025";
 var connectedClients = /* @__PURE__ */ new Map();
-var WS_IDLE_MINUTES = 3;
-var WS_IDLE_MS = WS_IDLE_MINUTES * 60 * 1e3;
+var DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
+var DEFAULT_WS_IDLE_MINUTES = 3;
+var DEFAULT_AI_TIMEOUT_MS = 6e3;
 var AI_PRECOMPUTE_ON_START = String(process.env.AI_PRECOMPUTE_ON_START || "0") === "1";
 var API_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
 var MAINTENANCE_CACHE_TTL_MS = 3e3;
 var idleSweepRunning = false;
 var maintenanceCache = null;
+var RUNTIME_SETTINGS_CACHE_TTL_MS = 3e3;
+var runtimeSettingsCache = null;
 var buildEmbeddingText = (data) => {
   const preferredKeys = [
     "nama",
@@ -3493,6 +3652,25 @@ function broadcastWsMessage(payload) {
 }
 function invalidateMaintenanceCache() {
   maintenanceCache = null;
+}
+function invalidateRuntimeSettingsCache() {
+  runtimeSettingsCache = null;
+}
+async function getRuntimeSettingsCached(force = false) {
+  const now = Date.now();
+  if (!force && runtimeSettingsCache && now - runtimeSettingsCache.cachedAt < RUNTIME_SETTINGS_CACHE_TTL_MS) {
+    return runtimeSettingsCache.settings;
+  }
+  const config = await storage.getAppConfig();
+  const settings = {
+    sessionTimeoutMinutes: Number.isFinite(config.sessionTimeoutMinutes) ? Math.max(1, config.sessionTimeoutMinutes) : DEFAULT_SESSION_TIMEOUT_MINUTES,
+    wsIdleMinutes: Number.isFinite(config.wsIdleMinutes) ? Math.max(1, config.wsIdleMinutes) : DEFAULT_WS_IDLE_MINUTES,
+    aiEnabled: config.aiEnabled !== false,
+    semanticSearchEnabled: config.semanticSearchEnabled !== false,
+    aiTimeoutMs: Number.isFinite(config.aiTimeoutMs) ? Math.max(1e3, config.aiTimeoutMs) : DEFAULT_AI_TIMEOUT_MS
+  };
+  runtimeSettingsCache = { settings, cachedAt: now };
+  return settings;
 }
 async function getMaintenanceStateCached(force = false) {
   const now = Date.now();
@@ -3917,6 +4095,9 @@ app.get("/api/auth/me", authenticateToken, (req, res) => {
 app.get("/api/app-config", authenticateToken, async (req, res) => {
   try {
     const config = await storage.getAppConfig();
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     res.json(config);
   } catch (err) {
     console.error("App config GET error:", err);
@@ -3971,12 +4152,16 @@ app.patch("/api/settings", authenticateToken, requireRole("admin", "superuser"),
     }
     if (result.status === "updated") {
       tabVisibilityCache.clear();
+      invalidateRuntimeSettingsCache();
       await storage.createAuditLog({
         action: result.setting?.isCritical ? "CRITICAL_SETTING_UPDATED" : "SETTING_UPDATED",
         performedBy: req.user?.username || "system",
         targetResource: key,
         details: `Updated setting ${key} to "${String(result.setting?.value ?? "")}"`
       });
+      if (key === "ai_timeout_ms") {
+        process.env.OLLAMA_TIMEOUT_MS = String(result.setting?.value ?? DEFAULT_AI_TIMEOUT_MS);
+      }
       if (result.shouldBroadcast) {
         invalidateMaintenanceCache();
         const maintenanceState = await getMaintenanceStateCached(true);
@@ -4504,7 +4689,13 @@ app.post("/api/search/advanced", authenticateToken, async (req, res) => {
   }
 });
 app.get("/api/ai/config", authenticateToken, requireRole("user", "admin", "superuser"), async (req, res) => {
-  res.json(getOllamaConfig());
+  const runtimeSettings = await getRuntimeSettingsCached();
+  res.json({
+    ...getOllamaConfig(),
+    aiEnabled: runtimeSettings.aiEnabled,
+    semanticSearchEnabled: runtimeSettings.semanticSearchEnabled,
+    aiTimeoutMs: runtimeSettings.aiTimeoutMs
+  });
 });
 var extractJsonObject = (text2) => {
   const first = text2.indexOf("{");
@@ -4729,7 +4920,7 @@ var buildFieldMatchSummary = (data, query) => {
   }
   return matches.sort((a, b) => b.score - a.score).slice(0, 6).map((m) => `${m.key}: ${m.value}`);
 };
-var parseIntent = async (query) => {
+var parseIntent = async (query, timeoutMs = DEFAULT_AI_TIMEOUT_MS) => {
   const intentMode = String(process.env.AI_INTENT_MODE || "fast").toLowerCase();
   if (intentMode === "fast") {
     return parseIntentFallback(query);
@@ -4743,7 +4934,12 @@ Jika IC/MyKad ada, isi "ic". Jika akaun, isi "account_no". Jika nombor telefon, 
     { role: "user", content: query }
   ];
   try {
-    const raw = await ollamaChat(messages, { num_predict: 160, temperature: 0.1, top_p: 0.9 });
+    const raw = await ollamaChat(messages, {
+      num_predict: 160,
+      temperature: 0.1,
+      top_p: 0.9,
+      timeoutMs
+    });
     const parsed = extractJsonObject(raw);
     if (parsed && parsed.intent && parsed.entities) {
       return {
@@ -4840,6 +5036,100 @@ var isNonEmptyString = (value) => {
 var hasPostcodeCoord = (value) => {
   return isLatLng(value);
 };
+var extractCustomerPostcode = (data) => {
+  if (!data || typeof data !== "object") return null;
+  const entries = Object.entries(data);
+  const normalize = (v) => v.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const relationWords = [
+    "pasangan",
+    "wakil",
+    "hubungan",
+    "spouse",
+    "guardian",
+    "emergency",
+    "waris",
+    "ibu",
+    "bapa",
+    "suami",
+    "isteri"
+  ];
+  const relationWordsNorm = relationWords.map(normalize);
+  const extractDigits = (value) => {
+    if (value === void 0 || value === null) return null;
+    const raw = String(value);
+    const five = raw.match(/\b\d{5}\b/);
+    if (five) return five[0];
+    const four = raw.match(/\b\d{4}\b/);
+    if (four) return `0${four[0]}`;
+    return null;
+  };
+  const isRelationKey = (normalizedKey) => {
+    return relationWordsNorm.some((w) => normalizedKey.includes(w));
+  };
+  const pickByKey = (matcher, valueMatcher) => {
+    for (const [rawKey, rawValue] of entries) {
+      const keyNorm = normalize(rawKey);
+      if (!matcher(keyNorm, rawKey)) continue;
+      if (valueMatcher && !valueMatcher(keyNorm, rawValue)) continue;
+      const pc = extractDigits(rawValue);
+      if (pc) return pc;
+    }
+    return null;
+  };
+  const homePostcode = pickByKey(
+    (k) => !isRelationKey(k) && k.includes("home") && (k.includes("postcode") || k.includes("postalcode") || k.includes("poskod"))
+  );
+  if (homePostcode) return homePostcode;
+  const genericPostcode = pickByKey((k) => {
+    const isGenericPostcode = k === "poskod" || k === "postcode" || k === "postalcode" || k.endsWith("postcode") || k.endsWith("poskod");
+    if (!isGenericPostcode) return false;
+    if (/[23]$/.test(k)) return false;
+    if (k.includes("office")) return false;
+    if (isRelationKey(k)) return false;
+    return true;
+  });
+  if (genericPostcode) return genericPostcode;
+  return pickByKey(
+    (k) => {
+      if (isRelationKey(k)) return false;
+      if (k.includes("office")) return false;
+      return k.includes("homeaddress") || k.includes("alamatsuratmenyurat") || k === "address" || k.includes("alamat");
+    },
+    (_k, rawValue) => isNonEmptyString(rawValue)
+  );
+};
+var extractCustomerLocationHint = (data) => {
+  if (!data || typeof data !== "object") return "";
+  const normalizeKey = (v) => v.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const relationWords = ["pasangan", "wakil", "hubungan", "spouse", "guardian", "waris", "ibu", "bapa", "suami", "isteri"];
+  const relationWordsNorm = relationWords.map(normalizeKey);
+  const isRelationKey = (normalizedKey) => relationWordsNorm.some((w) => normalizedKey.includes(w));
+  const parts = [];
+  for (const [rawKey, rawValue] of Object.entries(data)) {
+    if (!isNonEmptyString(rawValue)) continue;
+    const key = normalizeKey(rawKey);
+    if (isRelationKey(key)) continue;
+    if (key.includes("office")) continue;
+    const isLocationField = key.includes("homeaddress") || key.includes("alamatsuratmenyurat") || key === "address" || key.includes("alamat") || key === "bandar" || key === "city" || key.includes("citytown") || key === "negeri" || key === "state" || key.includes("postcode") || key.includes("poskod");
+    if (!isLocationField) continue;
+    const val = String(rawValue).trim();
+    if (val) parts.push(val);
+  }
+  return Array.from(new Set(parts)).join(" ");
+};
+var toObjectJson = (value) => {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
 var buildExplanation = async (payload) => {
   const template = () => {
     if (payload.countSummary && payload.countSummary.length > 0) {
@@ -4894,8 +5184,8 @@ var withTimeout = (promise, ms) => {
     });
   });
 };
-var computeAiSearch = async (query, userKey) => {
-  const intent = await parseIntent(query);
+var computeAiSearch = async (query, userKey, semanticSearchEnabled, aiTimeoutMs) => {
+  const intent = await parseIntent(query, aiTimeoutMs);
   const entities = intent.entities || {};
   const keywordTerms = [
     entities.ic,
@@ -4909,7 +5199,7 @@ var computeAiSearch = async (query, userKey) => {
   const keywordResults = hasDigitsQuery ? await storage.aiKeywordSearch({ query: keywordQuery, limit: 10 }) : await storage.aiNameSearch({ query: keywordQuery, limit: 10 });
   const queryDigits = keywordQuery.replace(/[^0-9]/g, "");
   let fallbackDigitsResults = [];
-  if (keywordResults.length === 0 && queryDigits.length >= 6) {
+  if (!hasDigitsQuery && keywordResults.length === 0 && queryDigits.length >= 6) {
     fallbackDigitsResults = await storage.aiDigitsSearch({ digits: queryDigits, limit: 25 });
   }
   if (process.env.AI_DEBUG === "1") {
@@ -4922,8 +5212,7 @@ var computeAiSearch = async (query, userKey) => {
     });
   }
   let vectorResults = [];
-  const vectorMode = String(process.env.AI_VECTOR_MODE || "off").toLowerCase();
-  if (vectorMode === "on" && !hasDigitsQuery) {
+  if (semanticSearchEnabled && !hasDigitsQuery) {
     try {
       const embedding = await ollamaEmbed(query);
       if (embedding.length > 0) {
@@ -4993,64 +5282,123 @@ var computeAiSearch = async (query, userKey) => {
   const hasPersonId = Boolean(entities.ic || entities.account_no || entities.phone);
   const shouldFindBranch = intent.need_nearest_branch || hasPersonId;
   const branchTextPreferred = shouldFindBranch && !hasPersonId;
-  const personForBranch = branchTextPreferred ? null : best || fallbackPerson || null;
+  const personForBranch = branchTextPreferred ? null : best || (!hasPersonId ? fallbackPerson : null) || null;
   const normalizeLocationHint = (value) => value.replace(/[^a-z0-9\s]/gi, " ").replace(/\s+/g, " ").trim();
+  const branchTimeoutMs = Math.max(700, Math.min(2200, Math.floor(aiTimeoutMs * 0.35)));
+  const safeFindBranchesByText = async (text2, limit) => {
+    try {
+      return await withTimeout(storage.findBranchesByText({ query: text2, limit }), branchTimeoutMs);
+    } catch {
+      return [];
+    }
+  };
+  const safeFindBranchesByPostcode = async (postcode, limit) => {
+    try {
+      return await withTimeout(storage.findBranchesByPostcode({ postcode, limit }), branchTimeoutMs);
+    } catch {
+      return [];
+    }
+  };
+  const safeNearestBranches = async (lat, lng, limit) => {
+    try {
+      return await withTimeout(storage.getNearestBranches({ lat, lng, limit }), branchTimeoutMs);
+    } catch {
+      return [];
+    }
+  };
+  const safePostcodeLatLng = async (postcode) => {
+    try {
+      return await withTimeout(storage.getPostcodeLatLng(postcode), branchTimeoutMs);
+    } catch {
+      return null;
+    }
+  };
   let nearestBranch = null;
   let missingCoords = false;
   let branchTextSearch = false;
-  if (branchTextPreferred) {
-    const locationHint = normalizeLocationHint(
-      query.replace(/cawangan|branch|terdekat|nearest|lokasi|alamat|di|yang|paling|dekat/gi, " ")
-    );
-    if (locationHint.length >= 3) {
-      branchTextSearch = true;
-      const branches = await storage.findBranchesByText({ query: locationHint, limit: 3 });
-      nearestBranch = branches[0] || null;
-    } else {
-      branchTextSearch = true;
-    }
-  } else if (personForBranch && shouldFindBranch) {
-    const coords = extractLatLng(personForBranch.jsonDataJsonb || {});
-    if (isLatLng(coords)) {
-      const safeCoords = coords;
-      const branches = await storage.getNearestBranches({ lat: safeCoords.lat, lng: safeCoords.lng, limit: 1 });
-      nearestBranch = branches[0] || null;
-    } else {
-      const data = personForBranch.jsonDataJsonb || {};
-      const postcode = data["Poskod"] || data["Postcode"] || data["Postal Code"] || data["HomePostcode"] || data["OfficePostcode"] || null;
-      if (postcode) {
-        const postcodeDigits = String(postcode).match(/\d{5}/)?.[0] ?? null;
-        if (isNonEmptyString(postcodeDigits)) {
-          const postcodeDigitsSafe = postcodeDigits;
-          const pc = await storage.getPostcodeLatLng(postcodeDigitsSafe);
-          if (hasPostcodeCoord(pc)) {
-            const pcSafe = pc;
-            const branches = await storage.getNearestBranches({ lat: pcSafe.lat, lng: pcSafe.lng, limit: 1 });
-            nearestBranch = branches[0] || null;
+  try {
+    if (branchTextPreferred) {
+      const locationHint = normalizeLocationHint(
+        query.replace(/cawangan|branch|terdekat|nearest|lokasi|alamat|di|yang|paling|dekat/gi, " ")
+      );
+      if (locationHint.length >= 3) {
+        branchTextSearch = true;
+        const branches = await safeFindBranchesByText(locationHint, 3);
+        nearestBranch = branches[0] || null;
+      } else {
+        branchTextSearch = true;
+      }
+    } else if (personForBranch && shouldFindBranch) {
+      const coords = extractLatLng(personForBranch.jsonDataJsonb || {});
+      if (isLatLng(coords)) {
+        const safeCoords = coords;
+        const branches = await safeNearestBranches(safeCoords.lat, safeCoords.lng, 1);
+        nearestBranch = branches[0] || null;
+      } else {
+        let data = toObjectJson(personForBranch.jsonDataJsonb) || {};
+        const basePostcode = extractCustomerPostcode(data);
+        const baseHint = normalizeLocationHint(extractCustomerLocationHint(data));
+        if (!basePostcode && baseHint.length < 3) {
+          const locationCandidateRows = [best, ...keywordResults, ...fallbackDigitsResults];
+          for (const candidate of locationCandidateRows) {
+            const candidateData = toObjectJson(candidate?.jsonDataJsonb);
+            if (!candidateData) continue;
+            const candidatePostcode = extractCustomerPostcode(candidateData);
+            const candidateHint = normalizeLocationHint(extractCustomerLocationHint(candidateData));
+            if (candidatePostcode || candidateHint.length >= 3) {
+              data = candidateData;
+              break;
+            }
+          }
+        }
+        let postcodeWasProvided = false;
+        const postcode = extractCustomerPostcode(data);
+        if (postcode) {
+          postcodeWasProvided = true;
+          if (isNonEmptyString(postcode)) {
+            const postcodeDigitsSafe = postcode;
+            const pc = await safePostcodeLatLng(postcodeDigitsSafe);
+            if (hasPostcodeCoord(pc)) {
+              const pcSafe = pc;
+              const branches = await safeNearestBranches(pcSafe.lat, pcSafe.lng, 1);
+              nearestBranch = branches[0] || null;
+              if (process.env.AI_DEBUG === "1") {
+                console.log("\u{1F9E0} AI_SEARCH POSTCODE_COORD", { postcode: postcodeDigitsSafe, lat: pcSafe.lat, lng: pcSafe.lng, branchCount: branches.length });
+              }
+            } else {
+              let branches = await safeFindBranchesByPostcode(postcodeDigitsSafe, 1);
+              if (!branches.length) {
+                try {
+                  branches = await storage.findBranchesByPostcode({ postcode: postcodeDigitsSafe, limit: 1 });
+                } catch {
+                  branches = [];
+                }
+              }
+              nearestBranch = branches[0] || null;
+              if (process.env.AI_DEBUG === "1") {
+                console.log("\u{1F9E0} AI_SEARCH POSTCODE_TEXT", { postcode: postcodeDigitsSafe, branchCount: branches.length, branch: branches[0]?.name || null });
+              }
+              if (!nearestBranch) missingCoords = false;
+            }
           } else {
             missingCoords = true;
-            branchTextSearch = true;
-            const branches = await storage.findBranchesByText({ query: postcodeDigitsSafe, limit: 1 });
-            nearestBranch = branches[0] || null;
           }
         } else {
           missingCoords = true;
         }
-      } else {
-        missingCoords = true;
-      }
-      if (!nearestBranch && missingCoords) {
-        const city = data["Bandar"] || data["City"] || data["City/Town"] || null;
-        const state = data["Negeri"] || data["State"] || null;
-        const address = data["Alamat Surat Menyurat"] || data["HomeAddress1"] || data["OfficeAddress1"] || data["Address"] || null;
-        const hint = normalizeLocationHint([city, state, address].filter(Boolean).join(" "));
-        if (hint.length >= 3) {
-          branchTextSearch = true;
-          const branches = await storage.findBranchesByText({ query: hint, limit: 1 });
-          nearestBranch = branches[0] ? { ...branches[0], distanceKm: void 0 } : null;
+        if (!nearestBranch && missingCoords && !postcodeWasProvided) {
+          const hint = normalizeLocationHint(extractCustomerLocationHint(data));
+          if (hint.length >= 3) {
+            branchTextSearch = true;
+            const branches = await safeFindBranchesByText(hint, 1);
+            nearestBranch = branches[0] ? { ...branches[0], distanceKm: void 0 } : null;
+          }
         }
       }
     }
+  } catch {
+    missingCoords = true;
+    nearestBranch = null;
   }
   let decision = null;
   let travelMode = null;
@@ -5122,6 +5470,9 @@ var computeAiSearch = async (query, userKey) => {
     pushIf("HomeAddress1", "HomeAddress1");
     pushIf("HomeAddress2", "HomeAddress2");
     pushIf("HomeAddress3", "HomeAddress3");
+    pushIf("HomePostcode", "HomePostcode");
+    pushIf("Home Post Code", "Home Post Code");
+    pushIf("Home Postal Code", "Home Postal Code");
     pushIf("Bandar", "Bandar");
     pushIf("Negeri", "Negeri");
     pushIf("Poskod", "Poskod");
@@ -5211,6 +5562,13 @@ app.post(
       if (!query) {
         return res.status(400).json({ message: "Query required" });
       }
+      const runtimeSettings = await getRuntimeSettingsCached();
+      if (!runtimeSettings.aiEnabled) {
+        return res.status(503).json({
+          message: "AI assistant is disabled by system settings.",
+          disabled: true
+        });
+      }
       const rules = await loadCategoryRules();
       const countGroups = detectCountRequest(query, rules);
       if (countGroups) {
@@ -5226,7 +5584,8 @@ app.post(
           const computeKeys = staleStats ? keys : Array.from(/* @__PURE__ */ new Set([...missingKeys, "__all__"]));
           let readyNow = false;
           try {
-            await withTimeout(storage.computeCategoryStatsForKeys(computeKeys, rules), 12e3);
+            const statsTimeoutMs = Math.max(3e3, runtimeSettings.aiTimeoutMs || DEFAULT_AI_TIMEOUT_MS);
+            await withTimeout(storage.computeCategoryStatsForKeys(computeKeys, rules), statsTimeoutMs);
             statsRows = await storage.getCategoryStats(keys);
             statsMap = new Map(statsRows.map((row) => [row.key, row]));
             totalRow = statsMap.get("__all__");
@@ -5287,7 +5646,12 @@ app.post(
       }
       let inflight = searchInflight.get(cacheKey);
       if (!inflight) {
-        inflight = computeAiSearch(query, req.user.activityId || req.user.username).then((result) => {
+        inflight = computeAiSearch(
+          query,
+          req.user.activityId || req.user.username,
+          runtimeSettings.semanticSearchEnabled,
+          runtimeSettings.aiTimeoutMs
+        ).then((result) => {
           searchCache.set(cacheKey, { ts: Date.now(), payload: result.payload, audit: result.audit });
           searchInflight.delete(cacheKey);
           return result;
@@ -5298,7 +5662,14 @@ app.post(
         searchInflight.set(cacheKey, inflight);
       }
       try {
-        const result = await withTimeout(inflight, SEARCH_FAST_TIMEOUT_MS);
+        const timeoutMs = Math.max(
+          1e3,
+          Math.min(
+            runtimeSettings.aiTimeoutMs || SEARCH_FAST_TIMEOUT_MS,
+            (runtimeSettings.aiTimeoutMs || SEARCH_FAST_TIMEOUT_MS) - 1200
+          )
+        );
+        const result = await withTimeout(inflight, timeoutMs);
         setTimeout(() => {
           storage.createAuditLog({
             action: "AI_SEARCH",
@@ -5310,7 +5681,10 @@ app.post(
           });
         }, 0);
         return res.json(result.payload);
-      } catch {
+      } catch (err) {
+        if (err?.message && err.message !== "timeout") {
+          console.error("AI search compute failed:", err?.message || err);
+        }
         return res.json({
           person: null,
           nearest_branch: null,
@@ -5441,34 +5815,48 @@ app.post(
           const branches = await storage.getNearestBranches({ lat: safeCoords.lat, lng: safeCoords.lng, limit: 1 });
           nearestBranch = branches[0] || null;
         } else {
-          const data = personForBranch.jsonDataJsonb || {};
-          const postcode = data["Poskod"] || data["Postcode"] || data["Postal Code"] || data["HomePostcode"] || data["OfficePostcode"] || null;
-          if (postcode) {
-            const postcodeDigits = String(postcode).match(/\d{5}/)?.[0] ?? null;
-            if (isNonEmptyString(postcodeDigits)) {
-              const postcodeDigitsSafe = postcodeDigits;
-              const pc = await storage.getPostcodeLatLng(postcodeDigitsSafe);
-              if (hasPostcodeCoord(pc)) {
-                const pcSafe = pc;
-                const branches = await storage.getNearestBranches({ lat: pcSafe.lat, lng: pcSafe.lng, limit: 1 });
-                nearestBranch = branches[0] || null;
-              } else {
-                missingCoords = true;
-                branchTextSearch = true;
-                const branches = await storage.findBranchesByText({ query: postcodeDigitsSafe, limit: 1 });
-                nearestBranch = branches[0] || null;
+          const initialData = toObjectJson(personForBranch.jsonDataJsonb);
+          let data = initialData ?? {};
+          const basePostcode = extractCustomerPostcode(data);
+          const baseHint = normalizeLocationHint(extractCustomerLocationHint(data));
+          if (!basePostcode && baseHint.length < 3) {
+            const locationCandidateRows = [best, ...keywordResults, ...fallbackDigitsResults];
+            for (const candidate of locationCandidateRows) {
+              const candidateDataRaw = toObjectJson(candidate?.jsonDataJsonb);
+              if (!candidateDataRaw || typeof candidateDataRaw !== "object") continue;
+              const candidateData = candidateDataRaw;
+              const candidatePostcode = extractCustomerPostcode(candidateData);
+              const candidateHint = normalizeLocationHint(extractCustomerLocationHint(candidateData));
+              if (candidatePostcode || candidateHint.length >= 3) {
+                data = candidateData;
+                break;
               }
+            }
+          }
+          let postcodeWasProvided = false;
+          const postcodeRaw = extractCustomerPostcode(data);
+          const trimmedPostcode = (postcodeRaw ?? "").trim();
+          const postcodeDigitsSafe = trimmedPostcode.length > 0 ? trimmedPostcode : "";
+          if (postcodeDigitsSafe) {
+            postcodeWasProvided = true;
+            const pc = await storage.getPostcodeLatLng(postcodeDigitsSafe);
+            if (pc === null) {
+              const branches = await storage.findBranchesByPostcode({ postcode: postcodeDigitsSafe, limit: 1 });
+              nearestBranch = branches[0] || null;
+              if (!nearestBranch) missingCoords = false;
+            } else if (hasPostcodeCoord(pc)) {
+              const branches = await storage.getNearestBranches({ lat: pc.lat, lng: pc.lng, limit: 1 });
+              nearestBranch = branches[0] || null;
             } else {
-              missingCoords = true;
+              const branches = await storage.findBranchesByPostcode({ postcode: postcodeDigitsSafe, limit: 1 });
+              nearestBranch = branches[0] || null;
+              if (!nearestBranch) missingCoords = false;
             }
           } else {
             missingCoords = true;
           }
-          if (!nearestBranch && missingCoords) {
-            const city = data["Bandar"] || data["City"] || data["City/Town"] || null;
-            const state = data["Negeri"] || data["State"] || null;
-            const address = data["Alamat Surat Menyurat"] || data["HomeAddress1"] || data["OfficeAddress1"] || data["Address"] || null;
-            const hint = normalizeLocationHint([city, state, address].filter(Boolean).join(" "));
+          if (!nearestBranch && missingCoords && !postcodeWasProvided) {
+            const hint = normalizeLocationHint(extractCustomerLocationHint(data));
             if (hint.length >= 3) {
               branchTextSearch = true;
               const branches = await storage.findBranchesByText({ query: hint, limit: 1 });
@@ -5547,6 +5935,9 @@ app.post(
         pushIf("HomeAddress1", "HomeAddress1");
         pushIf("HomeAddress2", "HomeAddress2");
         pushIf("HomeAddress3", "HomeAddress3");
+        pushIf("HomePostcode", "HomePostcode");
+        pushIf("Home Post Code", "Home Post Code");
+        pushIf("Home Postal Code", "Home Postal Code");
         pushIf("Bandar", "Bandar");
         pushIf("Negeri", "Negeri");
         pushIf("Poskod", "Poskod");
@@ -5646,6 +6037,10 @@ app.post(
   requireRole("user", "admin", "superuser"),
   async (req, res) => {
     try {
+      const runtimeSettings = await getRuntimeSettingsCached();
+      if (!runtimeSettings.aiEnabled) {
+        return res.status(503).json({ message: "AI assistant is disabled by system settings." });
+      }
       const importId = req.params.id;
       const importRecord = await storage.getImportById(importId);
       if (!importRecord) {
@@ -5735,6 +6130,10 @@ app.post(
       const message = String(req.body?.message || "").trim();
       if (!message) {
         return res.status(400).json({ message: "Message required" });
+      }
+      const runtimeSettings = await getRuntimeSettingsCached();
+      if (!runtimeSettings.aiEnabled) {
+        return res.status(503).json({ message: "AI assistant is disabled by system settings." });
       }
       const extractKeywords = (text2) => {
         const raw = text2.toLowerCase();
@@ -5937,7 +6336,12 @@ ${contextRows.join("\n\n")}` : "DATA SISTEM: TIADA REKOD DIJUMPAI UNTUK KATA KUN
       ];
       let reply = "";
       try {
-        reply = await ollamaChat(chatMessages, { num_predict: 96, temperature: 0.2, top_p: 0.9 });
+        reply = await ollamaChat(chatMessages, {
+          num_predict: 96,
+          temperature: 0.2,
+          top_p: 0.9,
+          timeoutMs: runtimeSettings.aiTimeoutMs
+        });
       } catch (err) {
         if (err?.name === "AbortError") {
           reply = buildQuickReply();
@@ -6433,18 +6837,24 @@ setInterval(async () => {
   try {
     const now = Date.now();
     const activities = await storage.getActiveActivities();
+    const runtimeSettings = await getRuntimeSettingsCached();
+    const idleMinutes = Math.max(
+      1,
+      runtimeSettings.sessionTimeoutMinutes || runtimeSettings.wsIdleMinutes || DEFAULT_SESSION_TIMEOUT_MINUTES
+    );
+    const idleMs = idleMinutes * 60 * 1e3;
     for (const activity of activities) {
       if (!activity.lastActivityTime) continue;
       const last = new Date(activity.lastActivityTime).getTime();
       const diff = now - last;
-      if (diff > WS_IDLE_MS) {
+      if (diff > idleMs) {
         const freshActivity = await storage.getActivityById(activity.id);
         if (!freshActivity || freshActivity.isActive === false) {
           continue;
         }
         const freshLast = freshActivity.lastActivityTime ? new Date(freshActivity.lastActivityTime).getTime() : 0;
         const freshDiff = now - freshLast;
-        if (!freshLast || freshDiff <= WS_IDLE_MS) {
+        if (!freshLast || freshDiff <= idleMs) {
           continue;
         }
         console.log(
@@ -6467,7 +6877,7 @@ setInterval(async () => {
         await storage.createAuditLog({
           action: "SESSION_IDLE_TIMEOUT",
           performedBy: activity.username,
-          details: `Auto logout after ${WS_IDLE_MINUTES} minutes idle`
+          details: `Auto logout after ${idleMinutes} minutes idle`
         });
       }
     }

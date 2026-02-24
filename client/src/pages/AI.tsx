@@ -8,7 +8,12 @@ type ChatMessage = {
   timestamp: string;
 };
 
-export default function AI() {
+type AIProps = {
+  timeoutMs?: number;
+  aiEnabled?: boolean;
+};
+
+export default function AI({ timeoutMs = 20000, aiEnabled = true }: AIProps) {
   const isLowSpecMode =
     typeof document !== "undefined" &&
     document.documentElement.classList.contains("low-spec");
@@ -17,7 +22,6 @@ export default function AI() {
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const timeoutMs = 20000;
   const retryMs = 2500;
   const maxRetries = 6;
 
@@ -127,6 +131,7 @@ export default function AI() {
   };
 
   const handleSend = async () => {
+    if (!aiEnabled) return;
     const trimmed = query.trim();
     if (!trimmed || loading) return;
     setQuery("");
@@ -144,6 +149,11 @@ export default function AI() {
         </div>
 
         <div className="rounded-2xl border border-border bg-background/70 backdrop-blur p-4 space-y-4">
+          {!aiEnabled && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              AI assistant is disabled by system settings.
+            </div>
+          )}
           <div className="flex items-center justify-end">
             <Button
               variant="outline"
@@ -192,8 +202,9 @@ export default function AI() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Taip soalan anda..."
               rows={2}
+              disabled={!aiEnabled || loading}
             />
-            <Button onClick={handleSend} disabled={loading}>
+            <Button onClick={handleSend} disabled={!aiEnabled || loading}>
               {loading ? "Memproses..." : "Send"}
             </Button>
           </div>

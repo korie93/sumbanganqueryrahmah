@@ -18,8 +18,9 @@ const wss = new WebSocketServer({ server, path: "/ws" });
 
 const JWT_SECRET = process.env.SESSION_SECRET || "sqr-local-secret-key-2025";
 const connectedClients = new Map<string, WebSocket>();
-const WS_IDLE_MINUTES = 3;
-const WS_IDLE_MS = WS_IDLE_MINUTES * 60 * 1000;
+const DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
+const DEFAULT_WS_IDLE_MINUTES = 3;
+const DEFAULT_AI_TIMEOUT_MS = 6000;
 const AI_PRECOMPUTE_ON_START = String(process.env.AI_PRECOMPUTE_ON_START || "0") === "1";
 const API_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
 const MAINTENANCE_CACHE_TTL_MS = 3000;
@@ -28,6 +29,15 @@ let maintenanceCache: {
   state: { maintenance: boolean; message: string; type: "soft" | "hard"; startTime: string | null; endTime: string | null };
   cachedAt: number;
 } | null = null;
+type RuntimeSettings = {
+  sessionTimeoutMinutes: number;
+  wsIdleMinutes: number;
+  aiEnabled: boolean;
+  semanticSearchEnabled: boolean;
+  aiTimeoutMs: number;
+};
+const RUNTIME_SETTINGS_CACHE_TTL_MS = 3000;
+let runtimeSettingsCache: { settings: RuntimeSettings; cachedAt: number } | null = null;
 
 const buildEmbeddingText = (data: Record<string, any>): string => {
   const preferredKeys = [
@@ -261,6 +271,35 @@ function broadcastWsMessage(payload: Record<string, unknown>) {
 
 function invalidateMaintenanceCache() {
   maintenanceCache = null;
+}
+
+function invalidateRuntimeSettingsCache() {
+  runtimeSettingsCache = null;
+}
+
+async function getRuntimeSettingsCached(force = false): Promise<RuntimeSettings> {
+  const now = Date.now();
+  if (!force && runtimeSettingsCache && now - runtimeSettingsCache.cachedAt < RUNTIME_SETTINGS_CACHE_TTL_MS) {
+    return runtimeSettingsCache.settings;
+  }
+
+  const config = await storage.getAppConfig();
+  const settings: RuntimeSettings = {
+    sessionTimeoutMinutes: Number.isFinite(config.sessionTimeoutMinutes)
+      ? Math.max(1, config.sessionTimeoutMinutes)
+      : DEFAULT_SESSION_TIMEOUT_MINUTES,
+    wsIdleMinutes: Number.isFinite(config.wsIdleMinutes)
+      ? Math.max(1, config.wsIdleMinutes)
+      : DEFAULT_WS_IDLE_MINUTES,
+    aiEnabled: config.aiEnabled !== false,
+    semanticSearchEnabled: config.semanticSearchEnabled !== false,
+    aiTimeoutMs: Number.isFinite(config.aiTimeoutMs)
+      ? Math.max(1000, config.aiTimeoutMs)
+      : DEFAULT_AI_TIMEOUT_MS,
+  };
+
+  runtimeSettingsCache = { settings, cachedAt: now };
+  return settings;
 }
 
 async function getMaintenanceStateCached(force = false) {
@@ -777,6 +816,9 @@ app.get("/api/auth/me", authenticateToken, (req: AuthenticatedRequest, res) => {
 app.get("/api/app-config", authenticateToken, async (req, res) => {
   try {
     const config = await storage.getAppConfig();
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     res.json(config);
   } catch (err: any) {
     console.error("App config GET error:", err);
@@ -837,12 +879,17 @@ app.patch("/api/settings", authenticateToken, requireRole("admin", "superuser"),
 
     if (result.status === "updated") {
       tabVisibilityCache.clear();
+      invalidateRuntimeSettingsCache();
       await storage.createAuditLog({
         action: result.setting?.isCritical ? "CRITICAL_SETTING_UPDATED" : "SETTING_UPDATED",
         performedBy: req.user?.username || "system",
         targetResource: key,
         details: `Updated setting ${key} to "${String(result.setting?.value ?? "")}"`,
       });
+
+      if (key === "ai_timeout_ms") {
+        process.env.OLLAMA_TIMEOUT_MS = String(result.setting?.value ?? DEFAULT_AI_TIMEOUT_MS);
+      }
 
       if (result.shouldBroadcast) {
         invalidateMaintenanceCache();
@@ -1448,7 +1495,13 @@ app.post("/api/search/advanced", authenticateToken, async (req, res) => {
 });
 
 app.get("/api/ai/config", authenticateToken, requireRole("user", "admin", "superuser"), async (req, res) => {
-  res.json(getOllamaConfig());
+  const runtimeSettings = await getRuntimeSettingsCached();
+  res.json({
+    ...getOllamaConfig(),
+    aiEnabled: runtimeSettings.aiEnabled,
+    semanticSearchEnabled: runtimeSettings.semanticSearchEnabled,
+    aiTimeoutMs: runtimeSettings.aiTimeoutMs,
+  });
 });
 
 type AiIntent = {
@@ -1742,7 +1795,7 @@ const buildFieldMatchSummary = (data: Record<string, any>, query: string): strin
     .map((m) => `${m.key}: ${m.value}`);
 };
 
-const parseIntent = async (query: string): Promise<AiIntent> => {
+const parseIntent = async (query: string, timeoutMs: number = DEFAULT_AI_TIMEOUT_MS): Promise<AiIntent> => {
   const intentMode = String(process.env.AI_INTENT_MODE || "fast").toLowerCase();
   if (intentMode === "fast") {
     return parseIntentFallback(query);
@@ -1756,7 +1809,12 @@ const parseIntent = async (query: string): Promise<AiIntent> => {
     { role: "user", content: query },
   ];
   try {
-    const raw = await ollamaChat(messages, { num_predict: 160, temperature: 0.1, top_p: 0.9 });
+    const raw = await ollamaChat(messages, {
+      num_predict: 160,
+      temperature: 0.1,
+      top_p: 0.9,
+      timeoutMs,
+    });
     const parsed = extractJsonObject(raw);
     if (parsed && parsed.intent && parsed.entities) {
       return {
@@ -1882,6 +1940,143 @@ const hasPostcodeCoord = (value: unknown): value is { lat: number; lng: number }
   return isLatLng(value);
 };
 
+const extractCustomerPostcode = (data: Record<string, any>): string | null => {
+  if (!data || typeof data !== "object") return null;
+  const entries = Object.entries(data);
+  const normalize = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const relationWords = [
+    "pasangan",
+    "wakil",
+    "hubungan",
+    "spouse",
+    "guardian",
+    "emergency",
+    "waris",
+    "ibu",
+    "bapa",
+    "suami",
+    "isteri",
+  ];
+  const relationWordsNorm = relationWords.map(normalize);
+
+  const extractDigits = (value: unknown): string | null => {
+    if (value === undefined || value === null) return null;
+    const raw = String(value);
+    const five = raw.match(/\b\d{5}\b/);
+    if (five) return five[0];
+    // Common data issue: postcode stored as 4 digits because leading 0 is dropped (e.g. 5150 -> 05150).
+    const four = raw.match(/\b\d{4}\b/);
+    if (four) return `0${four[0]}`;
+    return null;
+  };
+
+  const isRelationKey = (normalizedKey: string): boolean => {
+    return relationWordsNorm.some((w) => normalizedKey.includes(w));
+  };
+
+  const pickByKey = (
+    matcher: (normalizedKey: string, rawKey: string) => boolean,
+    valueMatcher?: (normalizedKey: string, rawValue: unknown) => boolean
+  ): string | null => {
+    for (const [rawKey, rawValue] of entries) {
+      const keyNorm = normalize(rawKey);
+      if (!matcher(keyNorm, rawKey)) continue;
+      if (valueMatcher && !valueMatcher(keyNorm, rawValue)) continue;
+      const pc = extractDigits(rawValue);
+      if (pc) return pc;
+    }
+    return null;
+  };
+
+  // Priority: explicit customer home postcode fields only.
+  const homePostcode = pickByKey((k) =>
+    !isRelationKey(k) &&
+    k.includes("home") &&
+    (k.includes("postcode") || k.includes("postalcode") || k.includes("poskod"))
+  );
+  if (homePostcode) return homePostcode;
+
+  // Fallback: generic customer postcode fields.
+  const genericPostcode = pickByKey((k) => {
+    const isGenericPostcode =
+      k === "poskod" ||
+      k === "postcode" ||
+      k === "postalcode" ||
+      k.endsWith("postcode") ||
+      k.endsWith("poskod");
+    if (!isGenericPostcode) return false;
+    if (/[23]$/.test(k)) return false;
+    if (k.includes("office")) return false;
+    if (isRelationKey(k)) return false;
+    return true;
+  });
+  if (genericPostcode) return genericPostcode;
+
+  // Last fallback: detect postcode inside customer address fields.
+  return pickByKey(
+    (k) => {
+      if (isRelationKey(k)) return false;
+      if (k.includes("office")) return false;
+      return (
+        k.includes("homeaddress") ||
+        k.includes("alamatsuratmenyurat") ||
+        k === "address" ||
+        k.includes("alamat")
+      );
+    },
+    (_k, rawValue) => isNonEmptyString(rawValue)
+  );
+};
+
+const extractCustomerLocationHint = (data: Record<string, any>): string => {
+  if (!data || typeof data !== "object") return "";
+  const normalizeKey = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const relationWords = ["pasangan", "wakil", "hubungan", "spouse", "guardian", "waris", "ibu", "bapa", "suami", "isteri"];
+  const relationWordsNorm = relationWords.map(normalizeKey);
+  const isRelationKey = (normalizedKey: string): boolean => relationWordsNorm.some((w) => normalizedKey.includes(w));
+
+  const parts: string[] = [];
+  for (const [rawKey, rawValue] of Object.entries(data)) {
+    if (!isNonEmptyString(rawValue)) continue;
+    const key = normalizeKey(rawKey);
+    if (isRelationKey(key)) continue;
+    if (key.includes("office")) continue;
+
+    const isLocationField =
+      key.includes("homeaddress") ||
+      key.includes("alamatsuratmenyurat") ||
+      key === "address" ||
+      key.includes("alamat") ||
+      key === "bandar" ||
+      key === "city" ||
+      key.includes("citytown") ||
+      key === "negeri" ||
+      key === "state" ||
+      key.includes("postcode") ||
+      key.includes("poskod");
+
+    if (!isLocationField) continue;
+    const val = String(rawValue).trim();
+    if (val) parts.push(val);
+  }
+
+  return Array.from(new Set(parts)).join(" ");
+};
+
+const toObjectJson = (value: unknown): Record<string, any> | null => {
+  if (!value) return null;
+  if (typeof value === "object") return value as Record<string, any>;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" ? (parsed as Record<string, any>) : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
+
 const buildExplanation = async (payload: {
   decision: string | null;
   distanceKm: number | null;
@@ -1971,8 +2166,13 @@ const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
   });
 };
 
-const computeAiSearch = async (query: string, userKey: string) => {
-  const intent = await parseIntent(query);
+const computeAiSearch = async (
+  query: string,
+  userKey: string,
+  semanticSearchEnabled: boolean,
+  aiTimeoutMs: number
+) => {
+  const intent = await parseIntent(query, aiTimeoutMs);
   const entities = intent.entities || {};
 
   const keywordTerms = [
@@ -1990,7 +2190,7 @@ const computeAiSearch = async (query: string, userKey: string) => {
     : await storage.aiNameSearch({ query: keywordQuery, limit: 10 });
   const queryDigits = keywordQuery.replace(/[^0-9]/g, "");
   let fallbackDigitsResults: any[] = [];
-  if (keywordResults.length === 0 && queryDigits.length >= 6) {
+  if (!hasDigitsQuery && keywordResults.length === 0 && queryDigits.length >= 6) {
     fallbackDigitsResults = await storage.aiDigitsSearch({ digits: queryDigits, limit: 25 });
   }
 
@@ -2005,8 +2205,7 @@ const computeAiSearch = async (query: string, userKey: string) => {
   }
 
   let vectorResults: any[] = [];
-  const vectorMode = String(process.env.AI_VECTOR_MODE || "off").toLowerCase();
-  if (vectorMode === "on" && !hasDigitsQuery) {
+  if (semanticSearchEnabled && !hasDigitsQuery) {
     try {
       const embedding = await ollamaEmbed(query);
       if (embedding.length > 0) {
@@ -2088,79 +2287,131 @@ const computeAiSearch = async (query: string, userKey: string) => {
   const hasPersonId = Boolean(entities.ic || entities.account_no || entities.phone);
   const shouldFindBranch = intent.need_nearest_branch || hasPersonId;
   const branchTextPreferred = shouldFindBranch && !hasPersonId;
-  const personForBranch = branchTextPreferred ? null : (best || fallbackPerson || null);
+  const personForBranch = branchTextPreferred
+    ? null
+    : (best || (!hasPersonId ? fallbackPerson : null) || null);
   const normalizeLocationHint = (value: string) =>
     value.replace(/[^a-z0-9\s]/gi, " ").replace(/\s+/g, " ").trim();
+  const branchTimeoutMs = Math.max(700, Math.min(2200, Math.floor(aiTimeoutMs * 0.35)));
+  const safeFindBranchesByText = async (text: string, limit: number) => {
+    try {
+      return await withTimeout(storage.findBranchesByText({ query: text, limit }), branchTimeoutMs);
+    } catch {
+      return [];
+    }
+  };
+  const safeFindBranchesByPostcode = async (postcode: string, limit: number) => {
+    try {
+      return await withTimeout(storage.findBranchesByPostcode({ postcode, limit }), branchTimeoutMs);
+    } catch {
+      return [];
+    }
+  };
+  const safeNearestBranches = async (lat: number, lng: number, limit: number) => {
+    try {
+      return await withTimeout(storage.getNearestBranches({ lat, lng, limit }), branchTimeoutMs);
+    } catch {
+      return [];
+    }
+  };
+  const safePostcodeLatLng = async (postcode: string) => {
+    try {
+      return await withTimeout(storage.getPostcodeLatLng(postcode), branchTimeoutMs);
+    } catch {
+      return null;
+    }
+  };
 
   let nearestBranch: any | null = null;
   let missingCoords = false;
   let branchTextSearch = false;
-  if (branchTextPreferred) {
-    const locationHint = normalizeLocationHint(query
-      .replace(/cawangan|branch|terdekat|nearest|lokasi|alamat|di|yang|paling|dekat/gi, " ")
-    );
-    if (locationHint.length >= 3) {
-      branchTextSearch = true;
-      const branches = await storage.findBranchesByText({ query: locationHint, limit: 3 });
-      nearestBranch = branches[0] || null;
-    } else {
-      branchTextSearch = true;
-    }
-        } else if (personForBranch && shouldFindBranch) {
-          const coords = extractLatLng(personForBranch.jsonDataJsonb || {});
-          if (isLatLng(coords)) {
-            const safeCoords = coords as { lat: number; lng: number };
-            const branches = await storage.getNearestBranches({ lat: safeCoords.lat, lng: safeCoords.lng, limit: 1 });
-            nearestBranch = branches[0] || null;
-          } else {
-            const data = personForBranch.jsonDataJsonb || {};
-            const postcode =
-              data["Poskod"] ||
-              data["Postcode"] ||
-              data["Postal Code"] ||
-              data["HomePostcode"] ||
-              data["OfficePostcode"] ||
-              null;
-          if (postcode) {
-            const postcodeDigits = String(postcode).match(/\d{5}/)?.[0] ?? null;
-            if (isNonEmptyString(postcodeDigits)) {
-              const postcodeDigitsSafe = postcodeDigits as string;
-              const pc = await storage.getPostcodeLatLng(postcodeDigitsSafe);
-              if (hasPostcodeCoord(pc)) {
-                const pcSafe = pc as { lat: number; lng: number };
-                const branches = await storage.getNearestBranches({ lat: pcSafe.lat, lng: pcSafe.lng, limit: 1 });
-                nearestBranch = branches[0] || null;
-              } else {
-                missingCoords = true;
-                branchTextSearch = true;
-                const branches = await storage.findBranchesByText({ query: postcodeDigitsSafe, limit: 1 });
-                nearestBranch = branches[0] || null;
+  try {
+    if (branchTextPreferred) {
+      const locationHint = normalizeLocationHint(
+        query.replace(/cawangan|branch|terdekat|nearest|lokasi|alamat|di|yang|paling|dekat/gi, " ")
+      );
+      if (locationHint.length >= 3) {
+        branchTextSearch = true;
+        const branches = await safeFindBranchesByText(locationHint, 3);
+        nearestBranch = branches[0] || null;
+      } else {
+        branchTextSearch = true;
+      }
+    } else if (personForBranch && shouldFindBranch) {
+      const coords = extractLatLng(personForBranch.jsonDataJsonb || {});
+      if (isLatLng(coords)) {
+        const safeCoords = coords as { lat: number; lng: number };
+        const branches = await safeNearestBranches(safeCoords.lat, safeCoords.lng, 1);
+        nearestBranch = branches[0] || null;
+      } else {
+        let data = toObjectJson(personForBranch.jsonDataJsonb) || {};
+        const basePostcode = extractCustomerPostcode(data);
+        const baseHint = normalizeLocationHint(extractCustomerLocationHint(data));
+        if (!basePostcode && baseHint.length < 3) {
+          const locationCandidateRows = [best, ...keywordResults, ...fallbackDigitsResults];
+          for (const candidate of locationCandidateRows) {
+            const candidateData = toObjectJson((candidate as any)?.jsonDataJsonb);
+            if (!candidateData) continue;
+            const candidatePostcode = extractCustomerPostcode(candidateData);
+            const candidateHint = normalizeLocationHint(extractCustomerLocationHint(candidateData));
+            if (candidatePostcode || candidateHint.length >= 3) {
+              data = candidateData as Record<string, any>;
+              break;
+            }
+          }
+        }
+        let postcodeWasProvided = false;
+        const postcode = extractCustomerPostcode(data);
+        if (postcode) {
+          postcodeWasProvided = true;
+          if (isNonEmptyString(postcode)) {
+            const postcodeDigitsSafe = postcode;
+            const pc = await safePostcodeLatLng(postcodeDigitsSafe);
+            if (hasPostcodeCoord(pc)) {
+              const pcSafe = pc;
+              const branches = await safeNearestBranches(pcSafe.lat, pcSafe.lng, 1);
+              nearestBranch = branches[0] || null;
+              if (process.env.AI_DEBUG === "1") {
+                console.log("🧠 AI_SEARCH POSTCODE_COORD", { postcode: postcodeDigitsSafe, lat: pcSafe.lat, lng: pcSafe.lng, branchCount: branches.length });
               }
             } else {
-              missingCoords = true;
+              let branches = await safeFindBranchesByPostcode(postcodeDigitsSafe, 1);
+              if (!branches.length) {
+                try {
+                  branches = await storage.findBranchesByPostcode({ postcode: postcodeDigitsSafe, limit: 1 });
+                } catch {
+                  branches = [];
+                }
+              }
+              nearestBranch = branches[0] || null;
+              if (process.env.AI_DEBUG === "1") {
+                console.log("🧠 AI_SEARCH POSTCODE_TEXT", { postcode: postcodeDigitsSafe, branchCount: branches.length, branch: branches[0]?.name || null });
+              }
+              // Postcode exists but no mapping: avoid address-text fallback that can suggest wrong state.
+              if (!nearestBranch) missingCoords = false;
             }
           } else {
             missingCoords = true;
           }
+        } else {
+          missingCoords = true;
+        }
 
-          if (!nearestBranch && missingCoords) {
-            const city = data["Bandar"] || data["City"] || data["City/Town"] || null;
-            const state = data["Negeri"] || data["State"] || null;
-            const address =
-              data["Alamat Surat Menyurat"] ||
-              data["HomeAddress1"] ||
-              data["OfficeAddress1"] ||
-              data["Address"] ||
-              null;
-            const hint = normalizeLocationHint([city, state, address].filter(Boolean).join(" "));
-            if (hint.length >= 3) {
-              branchTextSearch = true;
-              const branches = await storage.findBranchesByText({ query: hint, limit: 1 });
-              nearestBranch = branches[0] ? { ...branches[0], distanceKm: undefined } : null;
-            }
+        // Fallback text lookup from customer location fields (including HomeAddress) only when postcode is unavailable.
+        if (!nearestBranch && missingCoords && !postcodeWasProvided) {
+          const hint = normalizeLocationHint(extractCustomerLocationHint(data));
+          if (hint.length >= 3) {
+            branchTextSearch = true;
+            const branches = await safeFindBranchesByText(hint, 1);
+            nearestBranch = branches[0] ? { ...branches[0], distanceKm: undefined } : null;
           }
         }
       }
+    }
+  } catch {
+    missingCoords = true;
+    nearestBranch = null;
+  }
 
   let decision: string | null = null;
   let travelMode: string | null = null;
@@ -2245,6 +2496,9 @@ const computeAiSearch = async (query: string, userKey: string) => {
     pushIf("HomeAddress1", "HomeAddress1");
     pushIf("HomeAddress2", "HomeAddress2");
     pushIf("HomeAddress3", "HomeAddress3");
+    pushIf("HomePostcode", "HomePostcode");
+    pushIf("Home Post Code", "Home Post Code");
+    pushIf("Home Postal Code", "Home Postal Code");
     pushIf("Bandar", "Bandar");
     pushIf("Negeri", "Negeri");
     pushIf("Poskod", "Poskod");
@@ -2344,6 +2598,14 @@ app.post(
         return res.status(400).json({ message: "Query required" });
       }
 
+      const runtimeSettings = await getRuntimeSettingsCached();
+      if (!runtimeSettings.aiEnabled) {
+        return res.status(503).json({
+          message: "AI assistant is disabled by system settings.",
+          disabled: true,
+        });
+      }
+
       const rules = await loadCategoryRules();
       const countGroups = detectCountRequest(query, rules);
       if (countGroups) {
@@ -2360,7 +2622,8 @@ app.post(
           const computeKeys = staleStats ? keys : Array.from(new Set([...missingKeys, "__all__"]));
           let readyNow = false;
           try {
-            await withTimeout(storage.computeCategoryStatsForKeys(computeKeys, rules), 12000);
+            const statsTimeoutMs = Math.max(3000, runtimeSettings.aiTimeoutMs || DEFAULT_AI_TIMEOUT_MS);
+            await withTimeout(storage.computeCategoryStatsForKeys(computeKeys, rules), statsTimeoutMs);
             statsRows = await storage.getCategoryStats(keys);
             statsMap = new Map(statsRows.map((row) => [row.key, row]));
             totalRow = statsMap.get("__all__");
@@ -2423,7 +2686,12 @@ app.post(
 
       let inflight = searchInflight.get(cacheKey);
       if (!inflight) {
-        inflight = computeAiSearch(query, req.user!.activityId || req.user!.username)
+        inflight = computeAiSearch(
+          query,
+          req.user!.activityId || req.user!.username,
+          runtimeSettings.semanticSearchEnabled,
+          runtimeSettings.aiTimeoutMs
+        )
           .then((result) => {
             searchCache.set(cacheKey, { ts: Date.now(), payload: result.payload, audit: result.audit });
             searchInflight.delete(cacheKey);
@@ -2437,7 +2705,15 @@ app.post(
       }
 
       try {
-        const result = await withTimeout(inflight, SEARCH_FAST_TIMEOUT_MS);
+        // Keep server-side timeout slightly below client abort timeout to avoid client-side timeout race.
+        const timeoutMs = Math.max(
+          1000,
+          Math.min(
+            runtimeSettings.aiTimeoutMs || SEARCH_FAST_TIMEOUT_MS,
+            (runtimeSettings.aiTimeoutMs || SEARCH_FAST_TIMEOUT_MS) - 1200
+          )
+        );
+        const result = await withTimeout(inflight, timeoutMs);
         setTimeout(() => {
           storage.createAuditLog({
             action: "AI_SEARCH",
@@ -2449,7 +2725,10 @@ app.post(
           });
         }, 0);
         return res.json(result.payload);
-      } catch {
+      } catch (err: any) {
+        if (err?.message && err.message !== "timeout") {
+          console.error("AI search compute failed:", err?.message || err);
+        }
         return res.json({
           person: null,
           nearest_branch: null,
@@ -2599,46 +2878,50 @@ app.post(
           const branches = await storage.getNearestBranches({ lat: safeCoords.lat, lng: safeCoords.lng, limit: 1 });
           nearestBranch = branches[0] || null;
         } else {
-          const data = personForBranch.jsonDataJsonb || {};
-          const postcode =
-            data["Poskod"] ||
-            data["Postcode"] ||
-            data["Postal Code"] ||
-            data["HomePostcode"] ||
-            data["OfficePostcode"] ||
-            null;
-          if (postcode) {
-            const postcodeDigits = String(postcode).match(/\d{5}/)?.[0] ?? null;
-            if (isNonEmptyString(postcodeDigits)) {
-              const postcodeDigitsSafe = postcodeDigits as string;
-              const pc = await storage.getPostcodeLatLng(postcodeDigitsSafe);
-              if (hasPostcodeCoord(pc)) {
-                const pcSafe = pc as { lat: number; lng: number };
-                const branches = await storage.getNearestBranches({ lat: pcSafe.lat, lng: pcSafe.lng, limit: 1 });
-                nearestBranch = branches[0] || null;
-              } else {
-                missingCoords = true;
-                branchTextSearch = true;
-                const branches = await storage.findBranchesByText({ query: postcodeDigitsSafe, limit: 1 });
-                nearestBranch = branches[0] || null;
+          const initialData = toObjectJson(personForBranch.jsonDataJsonb);
+          let data: Record<string, any> = initialData ?? {};
+          const basePostcode = extractCustomerPostcode(data);
+          const baseHint = normalizeLocationHint(extractCustomerLocationHint(data));
+          if (!basePostcode && baseHint.length < 3) {
+            const locationCandidateRows = [best, ...keywordResults, ...fallbackDigitsResults];
+            for (const candidate of locationCandidateRows) {
+              const candidateDataRaw = toObjectJson((candidate as any)?.jsonDataJsonb);
+              if (!candidateDataRaw || typeof candidateDataRaw !== "object") continue;
+              const candidateData: Record<string, any> = candidateDataRaw as Record<string, any>;
+              const candidatePostcode = extractCustomerPostcode(candidateData);
+              const candidateHint = normalizeLocationHint(extractCustomerLocationHint(candidateData));
+              if (candidatePostcode || candidateHint.length >= 3) {
+                data = candidateData;
+                break;
               }
+            }
+          }
+
+          let postcodeWasProvided = false;
+          const postcodeRaw = extractCustomerPostcode(data);
+          const trimmedPostcode = (postcodeRaw ?? "").trim();
+          const postcodeDigitsSafe = trimmedPostcode.length > 0 ? trimmedPostcode : "";
+          if (postcodeDigitsSafe) {
+            postcodeWasProvided = true;
+            const pc = await storage.getPostcodeLatLng(postcodeDigitsSafe);
+            if (pc === null) {
+              const branches = await storage.findBranchesByPostcode({ postcode: postcodeDigitsSafe, limit: 1 });
+              nearestBranch = branches[0] || null;
+              if (!nearestBranch) missingCoords = false;
+            } else if (hasPostcodeCoord(pc)) {
+              const branches = await storage.getNearestBranches({ lat: pc!.lat, lng: pc!.lng, limit: 1 });
+              nearestBranch = branches[0] || null;
             } else {
-              missingCoords = true;
+              const branches = await storage.findBranchesByPostcode({ postcode: postcodeDigitsSafe, limit: 1 });
+              nearestBranch = branches[0] || null;
+              if (!nearestBranch) missingCoords = false;
             }
           } else {
             missingCoords = true;
           }
 
-          if (!nearestBranch && missingCoords) {
-            const city = data["Bandar"] || data["City"] || data["City/Town"] || null;
-            const state = data["Negeri"] || data["State"] || null;
-            const address =
-              data["Alamat Surat Menyurat"] ||
-              data["HomeAddress1"] ||
-              data["OfficeAddress1"] ||
-              data["Address"] ||
-              null;
-            const hint = normalizeLocationHint([city, state, address].filter(Boolean).join(" "));
+          if (!nearestBranch && missingCoords && !postcodeWasProvided) {
+            const hint = normalizeLocationHint(extractCustomerLocationHint(data));
             if (hint.length >= 3) {
               branchTextSearch = true;
               const branches = await storage.findBranchesByText({ query: hint, limit: 1 });
@@ -2731,6 +3014,9 @@ app.post(
         pushIf("HomeAddress1", "HomeAddress1");
         pushIf("HomeAddress2", "HomeAddress2");
         pushIf("HomeAddress3", "HomeAddress3");
+        pushIf("HomePostcode", "HomePostcode");
+        pushIf("Home Post Code", "Home Post Code");
+        pushIf("Home Postal Code", "Home Postal Code");
         pushIf("Bandar", "Bandar");
         pushIf("Negeri", "Negeri");
         pushIf("Poskod", "Poskod");
@@ -2839,6 +3125,10 @@ app.post(
   requireRole("user", "admin", "superuser"),
   async (req: AuthenticatedRequest, res) => {
     try {
+      const runtimeSettings = await getRuntimeSettingsCached();
+      if (!runtimeSettings.aiEnabled) {
+        return res.status(503).json({ message: "AI assistant is disabled by system settings." });
+      }
       const importId = req.params.id;
       const importRecord = await storage.getImportById(importId);
       if (!importRecord) {
@@ -2938,6 +3228,11 @@ app.post(
       const message = String(req.body?.message || "").trim();
       if (!message) {
         return res.status(400).json({ message: "Message required" });
+      }
+
+      const runtimeSettings = await getRuntimeSettingsCached();
+      if (!runtimeSettings.aiEnabled) {
+        return res.status(503).json({ message: "AI assistant is disabled by system settings." });
       }
 
       const extractKeywords = (text: string): string[] => {
@@ -3154,7 +3449,12 @@ app.post(
 
       let reply = "";
       try {
-        reply = await ollamaChat(chatMessages, { num_predict: 96, temperature: 0.2, top_p: 0.9 });
+        reply = await ollamaChat(chatMessages, {
+          num_predict: 96,
+          temperature: 0.2,
+          top_p: 0.9,
+          timeoutMs: runtimeSettings.aiTimeoutMs,
+        });
       } catch (err: any) {
         if (err?.name === "AbortError") {
           reply = buildQuickReply();
@@ -3726,6 +4026,12 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       try {
         const now = Date.now();
         const activities = await storage.getActiveActivities();
+        const runtimeSettings = await getRuntimeSettingsCached();
+        const idleMinutes = Math.max(
+          1,
+          runtimeSettings.sessionTimeoutMinutes || runtimeSettings.wsIdleMinutes || DEFAULT_SESSION_TIMEOUT_MINUTES
+        );
+        const idleMs = idleMinutes * 60 * 1000;
 
         for (const activity of activities) {
           if (!activity.lastActivityTime) continue;
@@ -3733,7 +4039,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
           const last = new Date(activity.lastActivityTime).getTime();
           const diff = now - last;
 
-          if (diff > WS_IDLE_MS) {
+          if (diff > idleMs) {
 
             // 🔐 FIX #2B — PROTECT RACE CONDITION
             const freshActivity = await storage.getActivityById(activity.id);
@@ -3744,7 +4050,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
               ? new Date(freshActivity.lastActivityTime).getTime()
               : 0;
             const freshDiff = now - freshLast;
-            if (!freshLast || freshDiff <= WS_IDLE_MS) {
+            if (!freshLast || freshDiff <= idleMs) {
               continue;
             }
 
@@ -3775,7 +4081,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
             await storage.createAuditLog({
               action: "SESSION_IDLE_TIMEOUT",
               performedBy: activity.username,
-              details: `Auto logout after ${WS_IDLE_MINUTES} minutes idle`,
+              details: `Auto logout after ${idleMinutes} minutes idle`,
             });
           }
         }
@@ -3851,3 +4157,5 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
     }
 
     startServer();
+
+

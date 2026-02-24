@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Info, Save, Settings2, ShieldCheck, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -115,6 +114,139 @@ const getRoleSettingOrder = (key: string) => {
   return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
 };
 
+const toDateTimeLocalInputValue = (value: string): string => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) return raw;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+type SettingCardProps = {
+  setting: SettingItem;
+  value: string | number | boolean | null;
+  isDirty: boolean;
+  saving: boolean;
+  onChange: (key: string, value: string | number | boolean | null) => void;
+};
+
+const SettingCard = memo(function SettingCard({
+  setting,
+  value,
+  isDirty,
+  saving,
+  onChange,
+}: SettingCardProps) {
+  const disabled = !setting.permission.canEdit || saving;
+  const asString = String(value ?? "");
+  const actionHint = getActionTooltip(setting);
+
+  const handleValueChange = useCallback(
+    (nextValue: string | number | boolean | null) => {
+      onChange(setting.key, nextValue);
+    },
+    [onChange, setting.key],
+  );
+
+  const renderControl = () => {
+    if (setting.type === "boolean") {
+      const checked = String(value).toLowerCase() === "true";
+      return (
+        <Switch
+          checked={checked}
+          disabled={disabled}
+          onCheckedChange={(checkedValue) => handleValueChange(checkedValue)}
+          title={actionHint}
+          aria-label={actionHint}
+        />
+      );
+    }
+
+    if (setting.type === "select") {
+      return (
+        <Select
+          value={asString}
+          disabled={disabled}
+          onValueChange={(selected) => handleValueChange(selected)}
+        >
+          <SelectTrigger className="w-full max-w-sm" title={actionHint} aria-label={actionHint}>
+            <SelectValue placeholder="Select a value" />
+          </SelectTrigger>
+          <SelectContent>
+            {(setting.options || []).map((option) => (
+              <SelectItem key={`${setting.key}-${option.value}`} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    }
+
+    if (setting.key === "maintenance_message") {
+      return (
+        <Textarea
+          value={asString}
+          disabled={disabled}
+          onChange={(e) => handleValueChange(e.target.value)}
+          rows={3}
+          className="max-w-2xl"
+          title={actionHint}
+          aria-label={actionHint}
+        />
+      );
+    }
+
+    const inputValue = setting.type === "timestamp" ? toDateTimeLocalInputValue(asString) : asString;
+    return (
+      <Input
+        type={setting.type === "number" ? "number" : setting.type === "timestamp" ? "datetime-local" : "text"}
+        value={inputValue}
+        disabled={disabled}
+        onChange={(e) => handleValueChange(e.target.value)}
+        className="max-w-sm"
+        title={actionHint}
+        aria-label={actionHint}
+      />
+    );
+  };
+
+  return (
+    <Card
+      className="border-border/60 bg-background/70"
+      style={{ contentVisibility: "auto", containIntrinsicSize: "140px" }}
+    >
+      <CardContent className="p-4">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold">{setting.label}</h3>
+              <span
+                className="text-muted-foreground"
+                title={setting.description || "No description available for this setting."}
+                aria-label={setting.description || "No description available for this setting."}
+              >
+                <Info className="w-3.5 h-3.5" />
+              </span>
+              {setting.isCritical && (
+                <Badge variant="destructive" className="gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  Critical
+                </Badge>
+              )}
+              {isDirty && <Badge variant="secondary">Unsaved</Badge>}
+            </div>
+            <p className="text-xs text-muted-foreground">Key: {setting.key}</p>
+          </div>
+          <div className="w-full lg:w-auto">{renderControl()}</div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+});
+
 export default function SettingsPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -175,6 +307,18 @@ export default function SettingsPage() {
   const dirtyCount = dirtyKeys.size;
   const dirtyCriticalCount = Array.from(dirtyKeys).filter((key) => settingMap.get(key)?.isCritical).length;
   const isRolePermissionCategory = currentCategory?.name === "Roles & Permissions";
+  const categoryDirtyMap = useMemo(() => {
+    const next = new Map<string, number>();
+    if (dirtyKeys.size === 0) return next;
+    for (const category of categories) {
+      let count = 0;
+      for (const setting of category.settings) {
+        if (dirtyKeys.has(setting.key)) count++;
+      }
+      if (count > 0) next.set(category.id, count);
+    }
+    return next;
+  }, [categories, dirtyKeys]);
 
   const roleSections = useMemo(() => {
     if (!isRolePermissionCategory || !currentCategory) return null;
@@ -195,14 +339,34 @@ export default function SettingsPage() {
       ? draftValues[setting.key]
       : setting.value;
 
-  const markDirty = (key: string, value: string | number | boolean | null) => {
-    setDraftValues((prev) => ({ ...prev, [key]: value }));
-    setDirtyKeys((prev) => {
-      const next = new Set(prev);
-      next.add(key);
-      return next;
-    });
-  };
+  const markDirty = useCallback(
+    (key: string, value: string | number | boolean | null) => {
+      const originalValue = settingMap.get(key)?.value ?? null;
+      const sameAsOriginal = String(value ?? "") === String(originalValue ?? "");
+
+      setDraftValues((prev) => {
+        if (sameAsOriginal) {
+          if (!Object.prototype.hasOwnProperty.call(prev, key)) return prev;
+          const { [key]: _removed, ...rest } = prev;
+          return rest;
+        }
+        const currentValue = Object.prototype.hasOwnProperty.call(prev, key) ? prev[key] : originalValue;
+        if (String(currentValue ?? "") === String(value ?? "")) return prev;
+        return { ...prev, [key]: value };
+      });
+
+      setDirtyKeys((prev) => {
+        const hasKey = prev.has(key);
+        if (sameAsOriginal && !hasKey) return prev;
+        if (!sameAsOriginal && hasKey) return prev;
+        const next = new Set(prev);
+        if (sameAsOriginal) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    },
+    [settingMap],
+  );
 
   const persistChanges = async (confirmCritical: boolean) => {
     if (dirtyKeys.size === 0) return;
@@ -256,114 +420,20 @@ export default function SettingsPage() {
     await persistChanges(false);
   };
 
-  const renderControl = (setting: SettingItem) => {
-    const value = getEffectiveValue(setting);
-    const disabled = !setting.permission.canEdit || saving;
-    const asString = String(value ?? "");
-    const actionHint = getActionTooltip(setting);
-
-    const withActionTooltip = (node: ReactNode) => (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div>{node}</div>
-        </TooltipTrigger>
-        <TooltipContent side="top" align="end">
-          <p>{actionHint}</p>
-        </TooltipContent>
-      </Tooltip>
-    );
-
-    if (setting.type === "boolean") {
-      const checked = String(value).toLowerCase() === "true";
-      return withActionTooltip(
-        <Switch
-          checked={checked}
-          disabled={disabled}
-          onCheckedChange={(checkedValue) => markDirty(setting.key, checkedValue)}
-        />
-      );
-    }
-
-    if (setting.type === "select") {
-      return withActionTooltip(
-        <Select
-          value={asString}
-          disabled={disabled}
-          onValueChange={(selected) => markDirty(setting.key, selected)}
-        >
-          <SelectTrigger className="w-full max-w-sm">
-            <SelectValue placeholder="Select a value" />
-          </SelectTrigger>
-          <SelectContent>
-            {(setting.options || []).map((option) => (
-              <SelectItem key={`${setting.key}-${option.value}`} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      );
-    }
-
-    if (setting.key === "maintenance_message") {
-      return withActionTooltip(
-        <Textarea
-          value={asString}
-          disabled={disabled}
-          onChange={(e) => markDirty(setting.key, e.target.value)}
-          rows={3}
-          className="max-w-2xl"
-        />
-      );
-    }
-
-    return withActionTooltip(
-      <Input
-        type={setting.type === "number" ? "number" : setting.type === "timestamp" ? "datetime-local" : "text"}
-        value={asString}
-        disabled={disabled}
-        onChange={(e) => markDirty(setting.key, e.target.value)}
-        className="max-w-sm"
-      />
-    );
-  };
-
   const renderSettingCard = (setting: SettingItem) => (
-    <Card key={setting.key} className="border-border/60 bg-background/70 backdrop-blur">
-      <CardContent className="p-4">
-        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold">{setting.label}</h3>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
-                    <Info className="w-3.5 h-3.5" />
-                  </button>
-                </TooltipTrigger>
-                  <TooltipContent side="top" align="start">
-                    <p>{setting.description || "No description available for this setting."}</p>
-                  </TooltipContent>
-              </Tooltip>
-              {setting.isCritical && (
-                <Badge variant="destructive" className="gap-1">
-                  <AlertTriangle className="w-3 h-3" />
-                  Critical
-                </Badge>
-              )}
-              {dirtyKeys.has(setting.key) && <Badge variant="secondary">Unsaved</Badge>}
-            </div>
-            <p className="text-xs text-muted-foreground">Key: {setting.key}</p>
-          </div>
-          <div className="w-full lg:w-auto">{renderControl(setting)}</div>
-        </div>
-      </CardContent>
-    </Card>
+    <SettingCard
+      key={setting.key}
+      setting={setting}
+      value={getEffectiveValue(setting)}
+      isDirty={dirtyKeys.has(setting.key)}
+      saving={saving}
+      onChange={markDirty}
+    />
   );
 
   if (loading) {
     return (
-      <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
+      <div className="min-h-[calc(100vh-3.5rem)] bg-background p-6">
         <div className="max-w-7xl mx-auto">
           <Card className="border-border/60 bg-background/70">
             <CardContent className="p-10 text-center text-muted-foreground">Loading system settings...</CardContent>
@@ -374,9 +444,9 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
+      <div className="min-h-[calc(100vh-3.5rem)] bg-background p-6">
       <div className="max-w-7xl mx-auto grid grid-cols-12 gap-6">
-        <Card className="col-span-12 lg:col-span-3 border-border/60 bg-background/70 backdrop-blur">
+        <Card className="col-span-12 lg:col-span-3 border-border/60 bg-background/70">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Settings2 className="w-4 h-4" />
@@ -385,35 +455,30 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {categories.map((category) => {
-              const categoryDirty = category.settings.filter((setting) => dirtyKeys.has(setting.key)).length;
+              const categoryDirty = categoryDirtyMap.get(category.id) || 0;
               const active = selectedCategory === category.id;
               return (
-                <Tooltip key={category.id}>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCategory(category.id)}
-                      className={`w-full text-left rounded-md border px-3 py-2 transition ${
-                        active ? "border-primary bg-primary/10" : "border-border bg-background/40 hover:bg-accent/40"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-sm">{category.name}</span>
-                        {categoryDirty > 0 && <Badge variant="secondary">{categoryDirty}</Badge>}
-                      </div>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" align="start">
-                    <p>{category.description || `Open ${category.name} settings`}</p>
-                  </TooltipContent>
-                </Tooltip>
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => setSelectedCategory(category.id)}
+                  title={category.description || `Open ${category.name} settings`}
+                  className={`w-full text-left rounded-md border px-3 py-2 transition ${
+                    active ? "border-primary bg-primary/10" : "border-border bg-background/40 hover:bg-accent/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-sm">{category.name}</span>
+                    {categoryDirty > 0 && <Badge variant="secondary">{categoryDirty}</Badge>}
+                  </div>
+                </button>
               );
             })}
           </CardContent>
         </Card>
 
         <div className="col-span-12 lg:col-span-9 space-y-4">
-          <Card className="border-border/60 bg-background/70 backdrop-blur">
+          <Card className="border-border/60 bg-background/70">
             <CardHeader>
               <CardTitle className="text-2xl">{currentCategory?.name || "System Settings"}</CardTitle>
               <p className="text-sm text-muted-foreground">
@@ -424,7 +489,7 @@ export default function SettingsPage() {
 
           {isRolePermissionCategory && roleSections ? (
             <div className="space-y-4">
-              <Card className="border-border/60 bg-background/70 backdrop-blur">
+              <Card className="border-border/60 bg-background/70">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-primary" />
@@ -437,7 +502,7 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
 
-              <Card className="border-border/60 bg-background/70 backdrop-blur">
+              <Card className="border-border/60 bg-background/70">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Users className="w-4 h-4 text-primary" />
@@ -451,7 +516,7 @@ export default function SettingsPage() {
               </Card>
 
               {roleSections.other.length > 0 && (
-                <Card className="border-border/60 bg-background/70 backdrop-blur">
+                <Card className="border-border/60 bg-background/70">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Other Permission Settings</CardTitle>
                   </CardHeader>
@@ -465,8 +530,8 @@ export default function SettingsPage() {
             (currentCategory?.settings || []).map(renderSettingCard)
           )}
 
-          <div className="sticky bottom-4 z-10">
-            <Card className="border-primary/40 bg-background/95 backdrop-blur">
+          <div className="z-10">
+            <Card className="border-primary/40 bg-background/95">
               <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-center gap-2 text-sm">
                   {dirtyCount > 0 ? (
@@ -481,19 +546,12 @@ export default function SettingsPage() {
                     </>
                   )}
                 </div>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span>
-                      <Button onClick={handleSave} disabled={dirtyCount === 0 || saving} className="gap-2">
-                        <Save className="w-4 h-4" />
-                        {saving ? "Saving..." : "Save Changes"}
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="end">
-                    <p>Save all setting changes now.</p>
-                  </TooltipContent>
-                </Tooltip>
+                <span title="Save all setting changes now.">
+                  <Button onClick={handleSave} disabled={dirtyCount === 0 || saving} className="gap-2">
+                    <Save className="w-4 h-4" />
+                    {saving ? "Saving..." : "Save Changes"}
+                  </Button>
+                </span>
               </CardContent>
             </Card>
           </div>
