@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Navbar from "@/components/Navbar";
 import AutoLogout from "@/components/AutoLogout";
+import FloatingAI from "@/components/FloatingAI";
+import { AIProvider } from "@/context/AIContext";
 import { activityLogout, getAppConfig, getImports, getMaintenanceStatus, getTabVisibility } from "@/lib/api";
 
 const Login = lazy(() => import("@/pages/Login"));
@@ -492,6 +494,11 @@ function AppContent() {
       <Suspense fallback={pageFallback}>
         <main>{renderPage()}</main>
       </Suspense>
+      <FloatingAI
+        timeoutMs={runtimeConfig.aiTimeoutMs}
+        aiEnabled={runtimeConfig.aiEnabled}
+        activePage={currentPage}
+      />
     </div>
   );
 }
@@ -499,10 +506,12 @@ function AppContent() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <AppContent />
-      </TooltipProvider>
+      <AIProvider>
+        <TooltipProvider>
+          <Toaster />
+          <AppContent />
+        </TooltipProvider>
+      </AIProvider>
     </QueryClientProvider>
   );
 }
