@@ -362,6 +362,168 @@ export async function getRoleDistribution() {
   return response.json();
 }
 
+export type MonitorRequestState = "ok" | "unauthorized" | "forbidden" | "network_error";
+
+export type MonitorApiResult<T> = {
+  state: MonitorRequestState;
+  status: number;
+  data: T | null;
+  message: string | null;
+};
+
+export type MonitorAlert = {
+  id: string;
+  severity: "CRITICAL" | "WARNING" | "INFO";
+  message: string;
+  timestamp: string;
+  source?: string;
+};
+
+export type SystemHealthPayload = {
+  score: number;
+  mode: string;
+  cpuPercent: number;
+  ramPercent: number;
+  p95LatencyMs: number;
+  errorRate: number;
+  dbLatencyMs: number;
+  aiLatencyMs: number;
+  eventLoopLagMs: number;
+  requestRate: number;
+  activeRequests: number;
+  queueLength: number;
+  workerCount: number;
+  maxWorkers: number;
+  dbProtection: boolean;
+  slowQueryCount: number;
+  dbConnections: number;
+  aiFailRate: number;
+  bottleneckType: string;
+  activeAlertCount: number;
+  updatedAt: number;
+};
+
+export type SystemModePayload = {
+  mode: string;
+  throttleFactor: number;
+  rejectHeavyRoutes: boolean;
+  dbProtection: boolean;
+  preAllocatedMB: number;
+  updatedAt: number;
+};
+
+export type WorkerSnapshot = {
+  workerId: number;
+  pid: number;
+  cpuPercent: number;
+  reqRate: number;
+  latencyP95Ms: number;
+  eventLoopLagMs: number;
+  activeRequests: number;
+  heapUsedMB: number;
+  oldSpaceMB: number;
+  dbLatencyMs: number;
+  aiLatencyMs: number;
+  ts: number;
+};
+
+export type WorkersPayload = {
+  count: number;
+  maxWorkers: number;
+  workers: WorkerSnapshot[];
+  updatedAt: number;
+};
+
+export type AlertsPayload = {
+  alerts: MonitorAlert[];
+  updatedAt: number;
+};
+
+async function parseMonitorErrorMessage(response: Response): Promise<string> {
+  try {
+    const text = await response.text();
+    if (!text) return response.statusText || "Request failed";
+    try {
+      const parsed = JSON.parse(text);
+      return String(parsed?.message || parsed?.error || text);
+    } catch {
+      return text;
+    }
+  } catch {
+    return response.statusText || "Request failed";
+  }
+}
+
+async function fetchMonitorEndpoint<T>(endpoint: string): Promise<MonitorApiResult<T>> {
+  try {
+    const response = await fetch(endpoint, {
+      method: "GET",
+      headers: {
+        ...getAuthHeader(),
+      },
+      credentials: "include",
+    });
+
+    if (response.status === 401) {
+      return {
+        state: "unauthorized",
+        status: 401,
+        data: null,
+        message: await parseMonitorErrorMessage(response),
+      };
+    }
+
+    if (response.status === 403) {
+      return {
+        state: "forbidden",
+        status: 403,
+        data: null,
+        message: await parseMonitorErrorMessage(response),
+      };
+    }
+
+    if (!response.ok) {
+      return {
+        state: "network_error",
+        status: response.status,
+        data: null,
+        message: await parseMonitorErrorMessage(response),
+      };
+    }
+
+    const data = (await response.json()) as T;
+    return {
+      state: "ok",
+      status: 200,
+      data,
+      message: null,
+    };
+  } catch (error: unknown) {
+    return {
+      state: "network_error",
+      status: 0,
+      data: null,
+      message: error instanceof Error ? error.message : "Network error",
+    };
+  }
+}
+
+export async function getSystemHealth() {
+  return fetchMonitorEndpoint<SystemHealthPayload>("/internal/system-health");
+}
+
+export async function getSystemMode() {
+  return fetchMonitorEndpoint<SystemModePayload>("/internal/system-mode");
+}
+
+export async function getWorkers() {
+  return fetchMonitorEndpoint<WorkersPayload>("/internal/workers");
+}
+
+export async function getAlerts() {
+  return fetchMonitorEndpoint<AlertsPayload>("/internal/alerts");
+}
+
 export async function generateFingerprint(): Promise<string> {
   const data = [
     navigator.userAgent,
