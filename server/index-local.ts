@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { createServer } from "http";
+import { monitorEventLoopDelay, PerformanceObserver } from "node:perf_hooks";
 import path from "path";
 import fs from "fs";
 import { WebSocketServer, WebSocket } from "ws";
@@ -10,6 +11,7 @@ import { PostgresStorage } from "./storage-postgres";
 import { StringDecoder } from "string_decoder";
 import { searchRateLimiter } from "./middleware/rate-limit";
 import { ollamaChat, ollamaEmbed, getOllamaConfig, type OllamaMessage } from "./ai-ollama";
+import { CircuitBreaker, CircuitOpenError } from "./internal/circuitBreaker";
 
 const storage = new PostgresStorage();
 const app = express();
@@ -38,6 +40,142 @@ type RuntimeSettings = {
 };
 const RUNTIME_SETTINGS_CACHE_TTL_MS = 3000;
 let runtimeSettingsCache: { settings: RuntimeSettings; cachedAt: number } | null = null;
+
+type WorkerControlState = {
+  mode: "NORMAL" | "DEGRADED" | "PROTECTION";
+  healthScore: number;
+  dbProtection: boolean;
+  rejectHeavyRoutes: boolean;
+  throttleFactor: number;
+  predictor: {
+    requestRateMA: number;
+    latencyMA: number;
+    cpuMA: number;
+    requestRateTrend: number;
+    latencyTrend: number;
+    cpuTrend: number;
+    sustainedUpward: boolean;
+    lastUpdatedAt: number | null;
+  };
+  workerCount: number;
+  maxWorkers: number;
+  queueLength: number;
+  preAllocateMB: number;
+  updatedAt: number;
+  workers: Array<{
+    workerId: number;
+    pid: number;
+    cpuPercent: number;
+    reqRate: number;
+    latencyP95Ms: number;
+    eventLoopLagMs: number;
+    activeRequests: number;
+    heapUsedMB: number;
+    oldSpaceMB: number;
+    dbLatencyMs: number;
+    aiLatencyMs: number;
+    ts: number;
+  }>;
+  circuits: {
+    aiOpenWorkers: number;
+    dbOpenWorkers: number;
+    exportOpenWorkers: number;
+  };
+};
+
+const defaultControlState: WorkerControlState = {
+  mode: "NORMAL",
+  healthScore: 100,
+  dbProtection: false,
+  rejectHeavyRoutes: false,
+  throttleFactor: 1,
+  predictor: {
+    requestRateMA: 0,
+    latencyMA: 0,
+    cpuMA: 0,
+    requestRateTrend: 0,
+    latencyTrend: 0,
+    cpuTrend: 0,
+    sustainedUpward: false,
+    lastUpdatedAt: null,
+  },
+  workerCount: 1,
+  maxWorkers: 1,
+  queueLength: 0,
+  preAllocateMB: 0,
+  updatedAt: Date.now(),
+  workers: [],
+  circuits: {
+    aiOpenWorkers: 0,
+    dbOpenWorkers: 0,
+    exportOpenWorkers: 0,
+  },
+};
+
+let controlState: WorkerControlState = defaultControlState;
+let preAllocatedBuffer: Buffer | null = null;
+
+let activeRequests = 0;
+const latencySamples: number[] = [];
+const LATENCY_WINDOW = 400;
+let requestCounter = 0;
+let reqRatePerSec = 0;
+let lastCpuUsage = process.cpuUsage();
+let lastCpuTs = Date.now();
+let cpuPercent = 0;
+let gcCountWindow = 0;
+let gcPerMinute = 0;
+let lastDbLatencyMs = 0;
+let lastAiLatencyMs = 0;
+
+const eventLoopHistogram = monitorEventLoopDelay({ resolution: 20 });
+eventLoopHistogram.enable();
+
+const circuitAi = new CircuitBreaker({
+  name: "ai",
+  threshold: 0.4,
+  minRequests: 10,
+  cooldownMs: 8000,
+});
+const circuitDb = new CircuitBreaker({
+  name: "db",
+  threshold: 0.35,
+  minRequests: 20,
+  cooldownMs: 12000,
+});
+const circuitExport = new CircuitBreaker({
+  name: "export",
+  threshold: 0.4,
+  minRequests: 8,
+  cooldownMs: 15000,
+});
+
+const DB_METHOD_WRAP_EXCLUDE = new Set<string>([
+  "constructor",
+]);
+
+const storageProto = Object.getPrototypeOf(storage) as Record<string, any>;
+for (const methodName of Object.getOwnPropertyNames(storageProto)) {
+  if (DB_METHOD_WRAP_EXCLUDE.has(methodName)) continue;
+  const method = (storage as any)[methodName];
+  if (typeof method !== "function") continue;
+  if (method.constructor?.name !== "AsyncFunction") continue;
+
+  const original = method.bind(storage);
+  (storage as any)[methodName] = async (...args: any[]) => {
+    return withDbCircuit(async () => original(...args));
+  };
+}
+
+try {
+  const gcObserver = new PerformanceObserver((list) => {
+    const entries = list.getEntries();
+    if (entries.length > 0) gcCountWindow += entries.length;
+  });
+  gcObserver.observe({ entryTypes: ["gc"] });
+} catch {
+  // GC observer is best-effort only.
+}
 
 const buildEmbeddingText = (data: Record<string, any>): string => {
   const preferredKeys = [
@@ -136,6 +274,239 @@ function parseBrowser(userAgent: string | null | undefined): string {
   return "Unknown";
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function percentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.floor(clamp(p, 0, 100) / 100 * (sorted.length - 1));
+  return sorted[index];
+}
+
+function recordLatency(ms: number) {
+  if (!Number.isFinite(ms) || ms < 0) return;
+  latencySamples.push(ms);
+  if (latencySamples.length > LATENCY_WINDOW) {
+    latencySamples.splice(0, latencySamples.length - LATENCY_WINDOW);
+  }
+}
+
+function getEventLoopLagMs(): number {
+  const lagMs = Number(eventLoopHistogram.mean) / 1_000_000;
+  return Number.isFinite(lagMs) ? lagMs : 0;
+}
+
+function observeDbLatency(ms: number) {
+  if (!Number.isFinite(ms) || ms < 0) return;
+  // EMA smoothing to avoid spiky protection toggles.
+  if (lastDbLatencyMs <= 0) {
+    lastDbLatencyMs = ms;
+  } else {
+    lastDbLatencyMs = (lastDbLatencyMs * 0.75) + (ms * 0.25);
+  }
+}
+
+function observeAiLatency(ms: number) {
+  if (!Number.isFinite(ms) || ms < 0) return;
+  if (lastAiLatencyMs <= 0) {
+    lastAiLatencyMs = ms;
+  } else {
+    lastAiLatencyMs = (lastAiLatencyMs * 0.75) + (ms * 0.25);
+  }
+}
+
+async function withDbCircuit<T>(operation: () => Promise<T>): Promise<T> {
+  return circuitDb.execute(async () => {
+    const start = Date.now();
+    try {
+      return await operation();
+    } finally {
+      observeDbLatency(Date.now() - start);
+    }
+  });
+}
+
+async function withAiCircuit<T>(operation: () => Promise<T>): Promise<T> {
+  return circuitAi.execute(async () => {
+    const start = Date.now();
+    try {
+      return await operation();
+    } finally {
+      observeAiLatency(Date.now() - start);
+    }
+  });
+}
+
+async function withExportCircuit<T>(operation: () => Promise<T>): Promise<T> {
+  return circuitExport.execute(operation);
+}
+
+function isHeavyRoute(pathname: string): boolean {
+  return pathname.startsWith("/api/ai/")
+    || pathname.startsWith("/api/imports")
+    || pathname.startsWith("/api/search/advanced")
+    || pathname.startsWith("/api/backups");
+}
+
+function getSearchQueueLength(): number {
+  const map = (global as any).__searchInflightMap as Map<string, Promise<unknown>> | undefined;
+  return map?.size ?? 0;
+}
+
+const adaptiveRateState = new Map<string, { count: number; resetAt: number }>();
+function adaptiveRateLimit(req: Request, res: Response, next: NextFunction) {
+  if (!req.path.startsWith("/api/")) return next();
+  const windowMs = 10_000;
+  const now = Date.now();
+  const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+  const baseLimit = req.path.startsWith("/api/ai/") ? 14 : 40;
+  const modePenalty = controlState.mode === "PROTECTION" ? 0.5 : controlState.mode === "DEGRADED" ? 0.75 : 1;
+  const dynamicLimit = Math.max(4, Math.floor(baseLimit * modePenalty * clamp(controlState.throttleFactor || 1, 0.2, 1.2)));
+
+  const bucket = adaptiveRateState.get(ip);
+  if (!bucket || now >= bucket.resetAt) {
+    adaptiveRateState.set(ip, { count: 1, resetAt: now + windowMs });
+    return next();
+  }
+
+  bucket.count += 1;
+  if (bucket.count > dynamicLimit) {
+    return res.status(429).json({
+      message: "Too many requests under current system load.",
+      limit: dynamicLimit,
+      retryAfterMs: Math.max(0, bucket.resetAt - now),
+      mode: controlState.mode,
+    });
+  }
+  return next();
+}
+
+function systemProtectionMiddleware(req: Request, res: Response, next: NextFunction) {
+  if (!req.path.startsWith("/api/")) return next();
+  if (req.path.startsWith("/api/health") || req.path.startsWith("/api/maintenance-status")) {
+    return next();
+  }
+
+  const dbProtection = controlState.dbProtection || lastDbLatencyMs > 1000;
+
+  if (dbProtection && req.path.startsWith("/api/search/advanced")) {
+    return res.status(503).json({
+      message: "Advanced search is temporarily disabled to protect database stability.",
+      protection: true,
+      reason: "db_latency_high",
+    });
+  }
+
+  if (dbProtection && req.path.startsWith("/api/backups") && req.method !== "GET") {
+    return res.status(503).json({
+      message: "Export/backup write operations are temporarily disabled.",
+      protection: true,
+      reason: "db_latency_high",
+    });
+  }
+
+  if (controlState.rejectHeavyRoutes && isHeavyRoute(req.path)) {
+    return res.status(503).json({
+      message: "Route temporarily throttled by protection mode.",
+      protection: true,
+      mode: controlState.mode,
+    });
+  }
+
+  return next();
+}
+
+if (typeof process.on === "function") {
+  process.on("message", (msg: any) => {
+    if (!msg || typeof msg !== "object") return;
+    if (msg.type !== "control-state" || !msg.payload) return;
+    controlState = {
+      ...defaultControlState,
+      ...msg.payload,
+    };
+    if (controlState.preAllocateMB > 0) {
+      const targetBytes = controlState.preAllocateMB * 1024 * 1024;
+      if (!preAllocatedBuffer || preAllocatedBuffer.length !== targetBytes) {
+        preAllocatedBuffer = Buffer.alloc(targetBytes);
+      }
+    } else {
+      preAllocatedBuffer = null;
+    }
+  });
+
+  process.on("message", (msg: any) => {
+    if (!msg || typeof msg !== "object") return;
+    if (msg.type !== "graceful-shutdown") return;
+    setTimeout(() => {
+      server.close(() => process.exit(0));
+      setTimeout(() => process.exit(0), 25_000).unref();
+    }, 50);
+  });
+}
+
+setInterval(() => {
+  reqRatePerSec = requestCounter / 5;
+  requestCounter = 0;
+  gcPerMinute = gcCountWindow * 12;
+  gcCountWindow = 0;
+
+  const now = Date.now();
+  const currentCpu = process.cpuUsage();
+  const cpuDeltaMicros = (currentCpu.user - lastCpuUsage.user) + (currentCpu.system - lastCpuUsage.system);
+  const elapsedMs = Math.max(1, now - lastCpuTs);
+  const cpuCorePercent = (cpuDeltaMicros / 1000) / elapsedMs * 100;
+  cpuPercent = clamp(cpuCorePercent / Math.max(1, controlState.workerCount || 1), 0, 100);
+  lastCpuUsage = currentCpu;
+  lastCpuTs = now;
+
+  if ((process as any).send) {
+    const mem = process.memoryUsage();
+    (process as any).send({
+      type: "worker-metrics",
+      payload: {
+        workerId: Number(process.env.NODE_UNIQUE_ID || 0),
+        pid: process.pid,
+        cpuPercent,
+        reqRate: reqRatePerSec,
+        latencyP95Ms: percentile(latencySamples, 95),
+        eventLoopLagMs: getEventLoopLagMs(),
+        activeRequests,
+        queueLength: getSearchQueueLength(),
+        heapUsedMB: mem.heapUsed / (1024 * 1024),
+        heapTotalMB: mem.heapTotal / (1024 * 1024),
+        oldSpaceMB: mem.heapUsed / (1024 * 1024), // best-effort without v8 stats overhead
+        gcPerMin: gcPerMinute,
+        dbLatencyMs: lastDbLatencyMs,
+        aiLatencyMs: lastAiLatencyMs,
+        ts: Date.now(),
+        circuit: {
+          ai: { state: circuitAi.getState(), failureRate: circuitAi.getSnapshot().failureRate },
+          db: { state: circuitDb.getState(), failureRate: circuitDb.getSnapshot().failureRate },
+          export: { state: circuitExport.getState(), failureRate: circuitExport.getSnapshot().failureRate },
+        },
+      },
+    });
+  }
+
+  const mem = process.memoryUsage();
+  const heapRatio = mem.heapTotal > 0 ? mem.heapUsed / mem.heapTotal : 0;
+  if (heapRatio > 0.88) {
+    searchCache.clear();
+    if ((process as any).send) {
+      (process as any).send({ type: "worker-event", payload: { kind: "memory-pressure" } });
+    }
+    if (typeof (global as any).gc === "function" && activeRequests === 0) {
+      try {
+        (global as any).gc();
+      } catch {
+        // noop
+      }
+    }
+  }
+}, 5_000).unref();
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
@@ -148,6 +519,23 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+app.use((req, res, next) => {
+  const start = process.hrtime.bigint();
+  activeRequests += 1;
+  requestCounter += 1;
+
+  res.on("finish", () => {
+    const elapsedMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+    activeRequests = Math.max(0, activeRequests - 1);
+    recordLatency(elapsedMs);
+  });
+
+  next();
+});
+
+app.use(adaptiveRateLimit);
+app.use(systemProtectionMiddleware);
 
 interface AuthenticatedUser {
   username: string;
@@ -330,6 +718,7 @@ function isMaintenanceBypassPath(pathname: string) {
     || pathname.startsWith("/api/health")
     || pathname.startsWith("/api/maintenance-status")
     || pathname.startsWith("/api/settings/maintenance")
+    || pathname.startsWith("/internal/")
     || pathname.startsWith("/ws");
 }
 
@@ -396,6 +785,67 @@ app.get("/api/maintenance-status", async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ message: err?.message || "Failed to load maintenance status" });
   }
+});
+
+app.get("/internal/system-health", (req, res) => {
+  const health = {
+    score: controlState.healthScore,
+    mode: controlState.mode,
+    cpuPercent: cpuPercent,
+    dbLatencyMs: lastDbLatencyMs,
+    aiLatencyMs: lastAiLatencyMs,
+    eventLoopLagMs: getEventLoopLagMs(),
+    requestRate: reqRatePerSec,
+    activeRequests,
+    queueLength: getSearchQueueLength(),
+    workerCount: controlState.workerCount,
+    maxWorkers: controlState.maxWorkers,
+    dbProtection: controlState.dbProtection || lastDbLatencyMs > 1000,
+    updatedAt: controlState.updatedAt,
+  };
+  res.json(health);
+});
+
+app.get("/internal/system-mode", (req, res) => {
+  res.json({
+    mode: controlState.mode,
+    throttleFactor: controlState.throttleFactor,
+    rejectHeavyRoutes: controlState.rejectHeavyRoutes,
+    dbProtection: controlState.dbProtection || lastDbLatencyMs > 1000,
+    preAllocatedMB: controlState.preAllocateMB,
+    updatedAt: controlState.updatedAt,
+  });
+});
+
+app.get("/internal/workers", (req, res) => {
+  res.json({
+    count: controlState.workerCount,
+    maxWorkers: controlState.maxWorkers,
+    workers: controlState.workers,
+    updatedAt: controlState.updatedAt,
+  });
+});
+
+app.get("/internal/load-trend", (req, res) => {
+  res.json({
+    predictor: controlState.predictor,
+    queueLength: controlState.queueLength,
+    requestRate: reqRatePerSec,
+    p95LatencyMs: percentile(latencySamples, 95),
+    updatedAt: controlState.updatedAt,
+  });
+});
+
+app.get("/internal/circuit-status", (req, res) => {
+  res.json({
+    local: {
+      ai: circuitAi.getSnapshot(),
+      db: circuitDb.getSnapshot(),
+      export: circuitExport.getSnapshot(),
+    },
+    cluster: controlState.circuits,
+    updatedAt: controlState.updatedAt,
+  });
 });
 
 app.get("/api/data-rows", authenticateToken, async (req, res) => {
@@ -1028,7 +1478,9 @@ app.get(
     try {
       const importId = req.params.id;
       const page = Math.max(1, Number(req.query.page ?? 1));
-      const limit = Math.min(Number(req.query.limit ?? 100), 500);
+      const dbProtected = controlState.dbProtection || lastDbLatencyMs > 1000;
+      const maxLimit = dbProtected ? 120 : 500;
+      const limit = Math.min(Number(req.query.limit ?? 100), maxLimit);
       const offset = (page - 1) * limit;
       const search = String(req.query.search || "").trim();
 
@@ -1086,7 +1538,9 @@ app.get(
       }
       
       const page = Math.max(1, Number(req.query.page ?? 1));
-      const limit = Math.min(Number(req.query.limit ?? 50), 200);
+      const dbProtected = controlState.dbProtection || lastDbLatencyMs > 1000;
+      const maxLimit = dbProtected ? 80 : 200;
+      const limit = Math.min(Number(req.query.limit ?? 50), maxLimit);
       const offset = (page - 1) * limit;
 
       if (search.length < 2) {
@@ -1809,12 +2263,12 @@ const parseIntent = async (query: string, timeoutMs: number = DEFAULT_AI_TIMEOUT
     { role: "user", content: query },
   ];
   try {
-    const raw = await ollamaChat(messages, {
+    const raw = await withAiCircuit(() => ollamaChat(messages, {
       num_predict: 160,
       temperature: 0.1,
       top_p: 0.9,
       timeoutMs,
-    });
+    }));
     const parsed = extractJsonObject(raw);
     if (parsed && parsed.intent && parsed.entities) {
       return {
@@ -2148,6 +2602,7 @@ const buildExplanation = async (payload: {
 
 const searchCache = new Map<string, { ts: number; payload: any; audit: any }>();
 const searchInflight = new Map<string, Promise<{ payload: any; audit: any }>>();
+(global as any).__searchInflightMap = searchInflight;
 const SEARCH_CACHE_MS = 60_000;
 const SEARCH_FAST_TIMEOUT_MS = 5500;
 
@@ -2207,7 +2662,7 @@ const computeAiSearch = async (
   let vectorResults: any[] = [];
   if (semanticSearchEnabled && !hasDigitsQuery) {
     try {
-      const embedding = await ollamaEmbed(query);
+      const embedding = await withAiCircuit(() => ollamaEmbed(query));
       if (embedding.length > 0) {
         vectorResults = await storage.semanticSearch({ embedding, limit: 10 });
       }
@@ -2686,12 +3141,12 @@ app.post(
 
       let inflight = searchInflight.get(cacheKey);
       if (!inflight) {
-        inflight = computeAiSearch(
+        inflight = withAiCircuit(() => computeAiSearch(
           query,
           req.user!.activityId || req.user!.username,
           runtimeSettings.semanticSearchEnabled,
           runtimeSettings.aiTimeoutMs
-        )
+        ))
           .then((result) => {
             searchCache.set(cacheKey, { ts: Date.now(), payload: result.payload, audit: result.audit });
             searchInflight.delete(cacheKey);
@@ -2726,6 +3181,16 @@ app.post(
         }, 0);
         return res.json(result.payload);
       } catch (err: any) {
+        if (err instanceof CircuitOpenError) {
+          return res.status(503).json({
+            person: null,
+            nearest_branch: null,
+            decision: null,
+            ai_explanation: "AI service is temporarily throttled for system stability. Please retry in a few seconds.",
+            processing: false,
+            circuit: "OPEN",
+          });
+        }
         if (err?.message && err.message !== "timeout") {
           console.error("AI search compute failed:", err?.message || err);
         }
@@ -3449,13 +3914,19 @@ app.post(
 
       let reply = "";
       try {
-        reply = await ollamaChat(chatMessages, {
+        reply = await withAiCircuit(() => ollamaChat(chatMessages, {
           num_predict: 96,
           temperature: 0.2,
           top_p: 0.9,
           timeoutMs: runtimeSettings.aiTimeoutMs,
-        });
+        }));
       } catch (err: any) {
+        if (err instanceof CircuitOpenError) {
+          return res.status(503).json({
+            message: "AI circuit is OPEN. Please retry after cooldown.",
+            circuit: "OPEN",
+          });
+        }
         if (err?.name === "AbortError") {
           reply = buildQuickReply();
         } else {
@@ -3815,32 +4286,38 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
     app.post("/api/backups", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("backup"), async (req: AuthenticatedRequest, res) => {
       try {
         const { name } = req.body;
-        const startTime = Date.now();
-        const backupData = await storage.getBackupDataForExport();
-        const metadata = {
-          timestamp: new Date().toISOString(),
-          importsCount: backupData.imports.length,
-          dataRowsCount: backupData.dataRows.length,
-          usersCount: backupData.users.length,
-          auditLogsCount: backupData.auditLogs.length,
-        };
-        const backup = await storage.createBackup({
-          name,
-          createdBy: req.user!.username,
-          backupData: JSON.stringify(backupData),
-          metadata: JSON.stringify(metadata),
-        });
-        await storage.createAuditLog({
-          action: "CREATE_BACKUP",
-          performedBy: req.user!.username,
-          targetResource: name,
-          details: JSON.stringify({
-            ...metadata,
-            durationMs: Date.now() - startTime,
-          }),
+        const backup = await withExportCircuit(async () => {
+          const startTime = Date.now();
+          const backupData = await storage.getBackupDataForExport();
+          const metadata = {
+            timestamp: new Date().toISOString(),
+            importsCount: backupData.imports.length,
+            dataRowsCount: backupData.dataRows.length,
+            usersCount: backupData.users.length,
+            auditLogsCount: backupData.auditLogs.length,
+          };
+          const created = await storage.createBackup({
+            name,
+            createdBy: req.user!.username,
+            backupData: JSON.stringify(backupData),
+            metadata: JSON.stringify(metadata),
+          });
+          await storage.createAuditLog({
+            action: "CREATE_BACKUP",
+            performedBy: req.user!.username,
+            targetResource: name,
+            details: JSON.stringify({
+              ...metadata,
+              durationMs: Date.now() - startTime,
+            }),
+          });
+          return created;
         });
         res.json(backup);
       } catch (error: any) {
+        if (error instanceof CircuitOpenError) {
+          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
+        }
         res.status(500).json({ message: error.message });
       }
     });
@@ -3859,35 +4336,41 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
 
     app.post("/api/backups/:id/restore", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("backup"), async (req: AuthenticatedRequest, res) => {
       try {
-        const backup = await storage.getBackupById(req.params.id);
+        const backup = await withExportCircuit(() => storage.getBackupById(req.params.id));
         if (!backup) {
           return res.status(404).json({ message: "Backup not found" });
         }
-        const startTime = Date.now();
-        const backupData = JSON.parse(backup.backupData);
-        const result = await storage.restoreFromBackup(backupData);
-        await storage.createAuditLog({
-          action: "RESTORE_BACKUP",
-          performedBy: req.user!.username,
-          targetResource: backup.name,
-          details: JSON.stringify({
-            ...result.stats,
-            durationMs: Date.now() - startTime,
-          }),
+        const result = await withExportCircuit(async () => {
+          const startTime = Date.now();
+          const backupData = JSON.parse(backup.backupData);
+          const restored = await storage.restoreFromBackup(backupData);
+          await storage.createAuditLog({
+            action: "RESTORE_BACKUP",
+            performedBy: req.user!.username,
+            targetResource: backup.name,
+            details: JSON.stringify({
+              ...restored.stats,
+              durationMs: Date.now() - startTime,
+            }),
+          });
+          return { restored, startTime };
         });
         res.json({
-          ...result,
-          message: `Restore completed in ${Math.round((Date.now() - startTime) / 1000)}s`,
+          ...result.restored,
+          message: `Restore completed in ${Math.round((Date.now() - result.startTime) / 1000)}s`,
         });
       } catch (error: any) {
+        if (error instanceof CircuitOpenError) {
+          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
+        }
         res.status(500).json({ message: error.message });
       }
     });
 
     app.delete("/api/backups/:id", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("backup"), async (req: AuthenticatedRequest, res) => {
       try {
-        const backup = await storage.getBackupById(req.params.id);
-        const deleted = await storage.deleteBackup(req.params.id);
+        const backup = await withExportCircuit(() => storage.getBackupById(req.params.id));
+        const deleted = await withExportCircuit(() => storage.deleteBackup(req.params.id));
         if (!deleted) {
           return res.status(404).json({ message: "Backup not found" });
         }
@@ -3898,6 +4381,9 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
         });
         res.json({ success: true });
       } catch (error: any) {
+        if (error instanceof CircuitOpenError) {
+          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
+        }
         res.status(500).json({ message: error.message });
       }
     });
