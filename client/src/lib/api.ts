@@ -439,6 +439,67 @@ export type AlertsPayload = {
   updatedAt: number;
 };
 
+export type GovernanceState =
+  | "IDLE"
+  | "PROPOSED"
+  | "CONSENSUS_PENDING"
+  | "EXECUTED"
+  | "COOLDOWN"
+  | "LOCKDOWN"
+  | "FAIL_SAFE";
+
+export type StrategyDecision = {
+  strategy: "CONSERVATIVE" | "AGGRESSIVE" | "ADAPTIVE";
+  recommendedAction: "NONE" | "ENABLE_THROTTLE_MODE" | "PAUSE_AI_QUEUE" | "REDUCE_WORKER_COUNT" | "SELECTIVE_WORKER_RESTART";
+  confidenceScore: number;
+  reason: string;
+};
+
+export type IntelligenceExplainPayload = {
+  anomalyBreakdown: {
+    normalizedZScore: number;
+    slopeWeight: number;
+    percentileShift: number;
+    correlationWeight: number;
+    forecastRisk: number;
+    mutationFactor: number;
+    weightedScore: number;
+  };
+  correlationMatrix: {
+    cpuToLatency: number;
+    dbToErrors: number;
+    aiToQueue: number;
+    boostedPairs: string[];
+  };
+  slopeValues: Record<string, number>;
+  forecastProjection: number[];
+  governanceState: GovernanceState;
+  chosenStrategy: StrategyDecision;
+  decisionReason: string;
+};
+
+export type ChaosType = "cpu_spike" | "db_latency_spike" | "ai_delay" | "worker_crash" | "memory_pressure";
+
+export type ChaosInjectPayload = {
+  type: ChaosType;
+  magnitude?: number;
+  durationMs?: number;
+};
+
+export type ChaosEventPayload = {
+  id: string;
+  type: ChaosType;
+  magnitude: number;
+  createdAt: number;
+  expiresAt: number;
+};
+
+export type ChaosInjectResponse = {
+  success: boolean;
+  injected: ChaosEventPayload;
+  active: ChaosEventPayload[];
+};
+
 async function parseMonitorErrorMessage(response: Response): Promise<string> {
   try {
     const text = await response.text();
@@ -508,6 +569,62 @@ async function fetchMonitorEndpoint<T>(endpoint: string): Promise<MonitorApiResu
   }
 }
 
+async function postMonitorEndpoint<T>(endpoint: string, body: unknown): Promise<MonitorApiResult<T>> {
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      },
+      credentials: "include",
+      body: JSON.stringify(body ?? {}),
+    });
+
+    if (response.status === 401) {
+      return {
+        state: "unauthorized",
+        status: 401,
+        data: null,
+        message: await parseMonitorErrorMessage(response),
+      };
+    }
+
+    if (response.status === 403) {
+      return {
+        state: "forbidden",
+        status: 403,
+        data: null,
+        message: await parseMonitorErrorMessage(response),
+      };
+    }
+
+    if (!response.ok) {
+      return {
+        state: "network_error",
+        status: response.status,
+        data: null,
+        message: await parseMonitorErrorMessage(response),
+      };
+    }
+
+    const data = (await response.json()) as T;
+    return {
+      state: "ok",
+      status: 200,
+      data,
+      message: null,
+    };
+  } catch (error: unknown) {
+    return {
+      state: "network_error",
+      status: 0,
+      data: null,
+      message: error instanceof Error ? error.message : "Network error",
+    };
+  }
+}
+
 export async function getSystemHealth() {
   return fetchMonitorEndpoint<SystemHealthPayload>("/internal/system-health");
 }
@@ -522,6 +639,14 @@ export async function getWorkers() {
 
 export async function getAlerts() {
   return fetchMonitorEndpoint<AlertsPayload>("/internal/alerts");
+}
+
+export async function getIntelligenceExplain() {
+  return fetchMonitorEndpoint<IntelligenceExplainPayload>("/internal/intelligence/explain");
+}
+
+export async function injectChaos(payload: ChaosInjectPayload) {
+  return postMonitorEndpoint<ChaosInjectResponse>("/internal/chaos/inject", payload);
 }
 
 export async function generateFingerprint(): Promise<string> {

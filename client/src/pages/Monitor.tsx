@@ -1,12 +1,17 @@
-import { useMemo, useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronUp, CircleHelp, ShieldAlert } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, BrainCircuit, ChevronDown, ChevronUp, CircleHelp, FlaskConical, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Input } from "@/components/ui/input";
 import { MetricPanel, type MetricStatus, type MetricTrend } from "@/components/monitor/MetricPanel";
 import { TimeSeriesChart } from "@/components/monitor/TimeSeriesChart";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useToast } from "@/hooks/use-toast";
 import { useSystemMetrics } from "@/hooks/useSystemMetrics";
+import { type ChaosType, injectChaos } from "@/lib/api";
 
 const getTrend = (values: number[]): MetricTrend => {
   if (values.length < 2) return "neutral";
@@ -28,6 +33,58 @@ const getStatus = (value: number, warning: number, critical: number, inverse = f
   if (value <= warning) return "warning";
   return "good";
 };
+
+const CHAOS_OPTIONS: Array<{
+  type: ChaosType;
+  label: string;
+  description: string;
+  defaultMagnitude: number;
+  defaultDurationMs: number;
+}> = [
+  {
+    type: "cpu_spike",
+    label: "CPU Spike",
+    description: "Simulate abrupt CPU pressure to validate throttling and overload behavior.",
+    defaultMagnitude: 25,
+    defaultDurationMs: 20000,
+  },
+  {
+    type: "db_latency_spike",
+    label: "DB Latency Spike",
+    description: "Inject query slowdown to validate database protection and response impact.",
+    defaultMagnitude: 450,
+    defaultDurationMs: 20000,
+  },
+  {
+    type: "ai_delay",
+    label: "AI Delay",
+    description: "Delay AI operations to validate queue handling and fail-rate resilience.",
+    defaultMagnitude: 600,
+    defaultDurationMs: 20000,
+  },
+  {
+    type: "worker_crash",
+    label: "Worker Crash",
+    description: "Simulate worker loss to validate system stability under reduced capacity.",
+    defaultMagnitude: 1,
+    defaultDurationMs: 20000,
+  },
+  {
+    type: "memory_pressure",
+    label: "Memory Pressure",
+    description: "Increase memory pressure to validate event-loop and runtime degradation handling.",
+    defaultMagnitude: 18,
+    defaultDurationMs: 20000,
+  },
+];
+
+const toTitleLabel = (value: string): string =>
+  value
+    .replace(/([A-Z])/g, " $1")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^./, (letter) => letter.toUpperCase());
 
 function InfoHint({ text }: { text: string }) {
   return (
@@ -51,7 +108,40 @@ function InfoHint({ text }: { text: string }) {
 
 export default function Monitor() {
   const [alertsOpen, setAlertsOpen] = useState(true);
-  const { isLoading, snapshot, history, alerts, accessDenied, hasNetworkFailure, lastUpdated } = useSystemMetrics();
+  const [chaosType, setChaosType] = useState<ChaosType>("cpu_spike");
+  const [chaosMagnitude, setChaosMagnitude] = useState(String(CHAOS_OPTIONS[0].defaultMagnitude));
+  const [chaosDurationMs, setChaosDurationMs] = useState(String(CHAOS_OPTIONS[0].defaultDurationMs));
+  const [chaosLoading, setChaosLoading] = useState(false);
+  const [lastChaosMessage, setLastChaosMessage] = useState<string | null>(null);
+  const { toast } = useToast();
+  const { isLoading, snapshot, history, alerts, intelligence, accessDenied, hasNetworkFailure, lastUpdated } = useSystemMetrics();
+
+  const userRole = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("user");
+      if (raw) {
+        const parsed = JSON.parse(raw) as { role?: string };
+        if (parsed.role) return parsed.role;
+      }
+      return localStorage.getItem("role") || "";
+    } catch {
+      return localStorage.getItem("role") || "";
+    }
+  }, []);
+
+  const canInjectChaos = userRole === "admin" || userRole === "superuser";
+
+  useEffect(() => {
+    if (!accessDenied) return;
+    if (typeof window === "undefined") return;
+    if (window.location.pathname === "/403") return;
+    window.location.assign("/403");
+  }, [accessDenied]);
+
+  const selectedChaosProfile = useMemo(
+    () => CHAOS_OPTIONS.find((item) => item.type === chaosType) || CHAOS_OPTIONS[0],
+    [chaosType],
+  );
 
   const scoreStatus = useMemo(() => {
     if (snapshot.score >= 85) return "good";
@@ -64,6 +154,16 @@ export default function Monitor() {
     if (snapshot.mode === "DEGRADED") return "bg-amber-500/15 text-amber-500 border-amber-500/30";
     return "bg-red-500/15 text-red-500 border-red-500/30";
   }, [snapshot.mode]);
+
+  const governanceClass = useMemo(() => {
+    if (intelligence.governanceState === "LOCKDOWN" || intelligence.governanceState === "FAIL_SAFE") {
+      return "border-red-500/35 bg-red-500/15 text-red-500";
+    }
+    if (intelligence.governanceState === "COOLDOWN" || intelligence.governanceState === "CONSENSUS_PENDING") {
+      return "border-amber-500/35 bg-amber-500/15 text-amber-500";
+    }
+    return "border-emerald-500/35 bg-emerald-500/15 text-emerald-500";
+  }, [intelligence.governanceState]);
 
   const metricGroups = useMemo(
     () => [
@@ -259,6 +359,175 @@ export default function Monitor() {
     ],
     [history],
   );
+
+  const forecastSeries = useMemo(
+    () => intelligence.forecastProjection.map((value, index) => ({
+      ts: (lastUpdated || 0) + (index * 5000),
+      value,
+    })),
+    [intelligence.forecastProjection, lastUpdated],
+  );
+
+  const anomalyRows = useMemo(
+    () => [
+      {
+        label: "Normalized Z-Score",
+        key: "normalizedZScore",
+        value: intelligence.anomalyBreakdown.normalizedZScore,
+        description: "Distance from baseline behavior after normalization.",
+      },
+      {
+        label: "Slope Weight",
+        key: "slopeWeight",
+        value: intelligence.anomalyBreakdown.slopeWeight,
+        description: "Trend acceleration impact from linear slope analysis.",
+      },
+      {
+        label: "Percentile Shift",
+        key: "percentileShift",
+        value: intelligence.anomalyBreakdown.percentileShift,
+        description: "Shift against historical percentile position.",
+      },
+      {
+        label: "Correlation Weight",
+        key: "correlationWeight",
+        value: intelligence.anomalyBreakdown.correlationWeight,
+        description: "Boost from cross-metric correlation detection.",
+      },
+      {
+        label: "Forecast Risk",
+        key: "forecastRisk",
+        value: intelligence.anomalyBreakdown.forecastRisk,
+        description: "Predicted near-term instability contribution.",
+      },
+      {
+        label: "Mutation Factor",
+        key: "mutationFactor",
+        value: intelligence.anomalyBreakdown.mutationFactor,
+        description: "Adaptive reduction factor from repeated stability signatures.",
+      },
+      {
+        label: "Weighted Score",
+        key: "weightedScore",
+        value: intelligence.anomalyBreakdown.weightedScore,
+        description: "Final weighted anomaly score used in decision flow.",
+      },
+    ],
+    [intelligence.anomalyBreakdown],
+  );
+
+  const correlationRows = useMemo(
+    () => [
+      {
+        label: "CPU to Latency",
+        value: intelligence.correlationMatrix.cpuToLatency,
+        key: "cpu_to_latency",
+        boostedKey: "CPU↔P95_LATENCY",
+        description: "Relationship between CPU load and high-latency behavior.",
+      },
+      {
+        label: "DB to Errors",
+        value: intelligence.correlationMatrix.dbToErrors,
+        key: "db_to_errors",
+        boostedKey: "DB_LATENCY↔ERROR_RATE",
+        description: "Relationship between DB delays and runtime failure rate.",
+      },
+      {
+        label: "AI to Queue",
+        value: intelligence.correlationMatrix.aiToQueue,
+        key: "ai_to_queue",
+        boostedKey: "AI_LATENCY↔QUEUE_SIZE",
+        description: "Relationship between AI delay and queue expansion pressure.",
+      },
+    ],
+    [intelligence.correlationMatrix],
+  );
+
+  const slopeRows = useMemo(() => {
+    const entries = Object.entries(intelligence.slopeValues);
+    if (entries.length === 0) {
+      return [{ key: "none", label: "No slope values available yet", value: 0 }];
+    }
+    return entries.map(([key, value]) => ({
+      key,
+      label: toTitleLabel(key),
+      value: Number(value),
+    }));
+  }, [intelligence.slopeValues]);
+
+  const boostedPairLookup = useMemo(
+    () => new Set(intelligence.correlationMatrix.boostedPairs),
+    [intelligence.correlationMatrix.boostedPairs],
+  );
+
+  const handleChaosTypeChange = useCallback((nextType: ChaosType) => {
+    setChaosType(nextType);
+    const profile = CHAOS_OPTIONS.find((item) => item.type === nextType);
+    if (!profile) return;
+    setChaosMagnitude(String(profile.defaultMagnitude));
+    setChaosDurationMs(String(profile.defaultDurationMs));
+  }, []);
+
+  const submitChaos = useCallback(async () => {
+    if (!canInjectChaos) return;
+
+    const magnitude = chaosMagnitude.trim() === "" ? undefined : Number(chaosMagnitude);
+    const durationMs = chaosDurationMs.trim() === "" ? undefined : Number(chaosDurationMs);
+
+    if (magnitude !== undefined && !Number.isFinite(magnitude)) {
+      toast({
+        variant: "destructive",
+        title: "Invalid magnitude",
+        description: "Magnitude must be a valid number.",
+      });
+      return;
+    }
+
+    if (durationMs !== undefined && (!Number.isFinite(durationMs) || durationMs <= 0)) {
+      toast({
+        variant: "destructive",
+        title: "Invalid duration",
+        description: "Duration must be a positive number in milliseconds.",
+      });
+      return;
+    }
+
+    setChaosLoading(true);
+    try {
+      const result = await injectChaos({
+        type: chaosType,
+        magnitude,
+        durationMs,
+      });
+
+      if (result.state === "ok" && result.data?.success) {
+        const message = `Injected ${chaosType}. Active chaos events: ${result.data.active.length}.`;
+        setLastChaosMessage(message);
+        toast({
+          title: "Chaos injected",
+          description: message,
+        });
+        return;
+      }
+
+      if (result.state === "forbidden" || result.state === "unauthorized") {
+        toast({
+          variant: "destructive",
+          title: "Permission denied",
+          description: "Only admin and superuser can inject chaos scenarios.",
+        });
+        return;
+      }
+
+      toast({
+        variant: "destructive",
+        title: "Chaos injection failed",
+        description: result.message || "Request failed.",
+      });
+    } finally {
+      setChaosLoading(false);
+    }
+  }, [canInjectChaos, chaosDurationMs, chaosMagnitude, chaosType, toast]);
 
   if (accessDenied) {
     return (
@@ -475,6 +744,241 @@ export default function Monitor() {
               </CardContent>
             </Card>
           </Collapsible>
+        </section>
+
+        <section className="space-y-4 rounded-2xl border border-border/60 bg-background/30 p-4 backdrop-blur-sm">
+          <div>
+            <div className="flex items-center gap-2">
+              <BrainCircuit className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold text-foreground">Intelligence Insights</h2>
+              <InfoHint text="Deterministic explainability feed from anomaly, correlation, forecast, and governance engines." />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Decision transparency for autonomous diagnostics and action recommendation flow.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <Card className="border-border/60 bg-background/45">
+              <CardContent className="space-y-3 p-4">
+                <div className="flex items-center gap-2">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Governance State</p>
+                  <InfoHint text="State machine gate controlling whether autonomous actions can be executed." />
+                </div>
+                <Badge variant="outline" className={governanceClass}>
+                  {intelligence.governanceState}
+                </Badge>
+                <div className="pt-1 text-xs text-muted-foreground">
+                  Decision path follows cooldown, consensus, and fail-safe safeguards.
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/60 bg-background/45">
+              <CardContent className="space-y-2 p-4">
+                <div className="flex items-center gap-2">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Chosen Strategy</p>
+                  <InfoHint text="Winning strategy selected from conservative, aggressive, and adaptive competition." />
+                </div>
+                <p className="text-lg font-semibold text-foreground">{intelligence.chosenStrategy.strategy}</p>
+                <p className="text-xs text-muted-foreground">
+                  Action: <span className="font-medium text-foreground">{intelligence.chosenStrategy.recommendedAction}</span>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Confidence: <span className="font-medium text-foreground">{(intelligence.chosenStrategy.confidenceScore * 100).toFixed(1)}%</span>
+                </p>
+                <p className="text-xs text-muted-foreground">{intelligence.chosenStrategy.reason}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/60 bg-background/45">
+              <CardContent className="space-y-2 p-4">
+                <div className="flex items-center gap-2">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Decision Reason</p>
+                  <InfoHint text="Merged reason from strategy selection and control-engine execution guard." />
+                </div>
+                <p className="text-sm leading-relaxed text-foreground">{intelligence.decisionReason}</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <Card className="border-border/60 bg-background/45">
+              <CardContent className="space-y-3 p-4">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Anomaly Breakdown</p>
+                  <InfoHint text="Weighted components used to compute final anomaly score." />
+                </div>
+                <div className="space-y-2">
+                  {anomalyRows.map((row) => {
+                    const fillWidth = Math.max(0, Math.min(100, row.value * 100));
+                    return (
+                      <div key={row.key} className="space-y-1">
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="inline-flex items-center gap-1 text-muted-foreground">
+                            {row.label}
+                            <InfoHint text={row.description} />
+                          </span>
+                          <span className="font-medium text-foreground">{row.value.toFixed(4)}</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-muted/50">
+                          <div
+                            className="h-full rounded-full bg-primary/80 transition-[width]"
+                            style={{ width: `${fillWidth}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/60 bg-background/45">
+              <CardContent className="space-y-4 p-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Correlation Matrix</p>
+                    <InfoHint text="Pearson relationships used to boost anomaly confidence." />
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {correlationRows.map((row) => {
+                      const boosted = boostedPairLookup.has(row.boostedKey);
+                      return (
+                        <div key={row.key} className="rounded-lg border border-border/60 bg-background/45 p-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              {row.label}
+                              <InfoHint text={row.description} />
+                            </span>
+                            <span className="text-sm font-semibold text-foreground">{row.value.toFixed(3)}</span>
+                          </div>
+                          {boosted ? (
+                            <Badge variant="outline" className="mt-2 border-amber-500/35 bg-amber-500/10 text-amber-500">
+                              Boosted +15%
+                            </Badge>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Slope Values</p>
+                    <InfoHint text="Linear trend velocity per metric used for directional risk assessment." />
+                  </div>
+                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {slopeRows.map((row) => (
+                      <div key={row.key} className="rounded-lg border border-border/60 bg-background/45 p-2.5">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{row.label}</p>
+                        <p className="mt-1 text-sm font-semibold text-foreground">{row.value.toFixed(4)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <TimeSeriesChart
+            title="Forecast Projection"
+            description="Predicted latency projection over the next decision horizon."
+            color="#64748b"
+            unit="ms"
+            data={forecastSeries}
+          />
+        </section>
+
+        <section className="space-y-4 rounded-2xl border border-border/60 bg-background/30 p-4 backdrop-blur-sm">
+          <div>
+            <div className="flex items-center gap-2">
+              <FlaskConical className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold text-foreground">Chaos Lab</h2>
+              <InfoHint text="Internal non-destructive fault injection tool for resilience testing in monitor workflow." />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Use controlled chaos scenarios to validate alerting, stability governance, and response behavior.
+            </p>
+          </div>
+
+          {canInjectChaos ? (
+            <Card className="border-border/60 bg-background/45">
+              <CardContent className="space-y-4 p-4">
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Scenario Type</p>
+                      <InfoHint text="Select the fault profile to inject into intelligence simulation stream." />
+                    </div>
+                    <Select value={chaosType} onValueChange={(value) => handleChaosTypeChange(value as ChaosType)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose scenario" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CHAOS_OPTIONS.map((option) => (
+                          <SelectItem key={option.type} value={option.type}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">{selectedChaosProfile.description}</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Magnitude</p>
+                      <InfoHint text="Controls intensity of the selected chaos scenario." />
+                    </div>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      value={chaosMagnitude}
+                      onChange={(event) => setChaosMagnitude(event.target.value)}
+                      placeholder={String(selectedChaosProfile.defaultMagnitude)}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Duration (ms)</p>
+                      <InfoHint text="Controls how long the injected scenario remains active before expiry." />
+                    </div>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      value={chaosDurationMs}
+                      onChange={(event) => setChaosDurationMs(event.target.value)}
+                      placeholder={String(selectedChaosProfile.defaultDurationMs)}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button type="button" disabled={chaosLoading} onClick={submitChaos}>
+                    {chaosLoading ? "Injecting..." : "Inject Chaos Event"}
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    Admin and superuser only. Backend permission is still enforced.
+                  </span>
+                </div>
+
+                {lastChaosMessage ? (
+                  <p className="rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400">
+                    {lastChaosMessage}
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-border/60 bg-background/45">
+              <CardContent className="p-4 text-sm text-muted-foreground">
+                Chaos injection controls are restricted to admin and superuser. You can still observe resulting effects in charts and alerts.
+              </CardContent>
+            </Card>
+          )}
         </section>
 
         <section className="rounded-2xl border border-border/60 bg-slate-200/40 p-4 dark:bg-slate-900/60">

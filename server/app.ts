@@ -4,7 +4,7 @@ import importRoutes from "./routes/imports.routes";
 import searchRoutes from "./routes/search.routes";
 import activityRoutes from "./routes/activity.routes";
 import { analyzeAll } from "./controllers/import.controller";
-import { authenticateToken } from "./middlewares/authenticate";
+import { authenticateToken } from "./middleware/authenticate";
 
 const app = express();
 

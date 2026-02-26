@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  type IntelligenceExplainPayload,
   type MonitorAlert,
   type MonitorRequestState,
   getAlerts,
+  getIntelligenceExplain,
   getSystemHealth,
   getSystemMode,
   getWorkers,
@@ -34,6 +36,7 @@ type EndpointState = {
   mode: MonitorRequestState;
   workers: MonitorRequestState;
   alerts: MonitorRequestState;
+  explain: MonitorRequestState;
 };
 
 export type MonitorSnapshot = {
@@ -64,6 +67,7 @@ type UseSystemMetricsResult = {
   snapshot: MonitorSnapshot;
   history: Record<HistoryKey, SeriesPoint[]>;
   alerts: MonitorAlert[];
+  intelligence: IntelligenceExplainPayload;
   endpointState: EndpointState;
   accessDenied: boolean;
   hasNetworkFailure: boolean;
@@ -109,6 +113,34 @@ const initialHistory: Record<HistoryKey, SeriesPoint[]> = {
   aiLatencyMs: [],
   queueSize: [],
   aiFailRate: [],
+};
+
+const initialIntelligence: IntelligenceExplainPayload = {
+  anomalyBreakdown: {
+    normalizedZScore: 0,
+    slopeWeight: 0,
+    percentileShift: 0,
+    correlationWeight: 0,
+    forecastRisk: 0,
+    mutationFactor: 1,
+    weightedScore: 0,
+  },
+  correlationMatrix: {
+    cpuToLatency: 0,
+    dbToErrors: 0,
+    aiToQueue: 0,
+    boostedPairs: [],
+  },
+  slopeValues: {},
+  forecastProjection: [],
+  governanceState: "IDLE",
+  chosenStrategy: {
+    strategy: "CONSERVATIVE",
+    recommendedAction: "NONE",
+    confidenceScore: 0.5,
+    reason: "No evaluation yet.",
+  },
+  decisionReason: "No evaluation yet.",
 };
 
 const toFixedNumber = (value: number, digits = 2) => {
@@ -171,7 +203,11 @@ const snapshotsEqual = (a: MonitorSnapshot, b: MonitorSnapshot) => (
 );
 
 const endpointStatesEqual = (a: EndpointState, b: EndpointState) =>
-  a.health === b.health && a.mode === b.mode && a.workers === b.workers && a.alerts === b.alerts;
+  a.health === b.health &&
+  a.mode === b.mode &&
+  a.workers === b.workers &&
+  a.alerts === b.alerts &&
+  a.explain === b.explain;
 
 const alertsEqual = (a: MonitorAlert[], b: MonitorAlert[]) => {
   if (a.length !== b.length) return false;
@@ -188,21 +224,73 @@ const alertsEqual = (a: MonitorAlert[], b: MonitorAlert[]) => {
   return true;
 };
 
+const numberArraysEqual = (a: number[], b: number[]) => {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+};
+
+const stringArraysEqual = (a: string[], b: string[]) => {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+};
+
+const numberRecordsEqual = (a: Record<string, number>, b: Record<string, number>) => {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    if (!(key in b)) return false;
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+};
+
+const explainabilityEqual = (a: IntelligenceExplainPayload, b: IntelligenceExplainPayload) => (
+  a.anomalyBreakdown.normalizedZScore === b.anomalyBreakdown.normalizedZScore &&
+  a.anomalyBreakdown.slopeWeight === b.anomalyBreakdown.slopeWeight &&
+  a.anomalyBreakdown.percentileShift === b.anomalyBreakdown.percentileShift &&
+  a.anomalyBreakdown.correlationWeight === b.anomalyBreakdown.correlationWeight &&
+  a.anomalyBreakdown.forecastRisk === b.anomalyBreakdown.forecastRisk &&
+  a.anomalyBreakdown.mutationFactor === b.anomalyBreakdown.mutationFactor &&
+  a.anomalyBreakdown.weightedScore === b.anomalyBreakdown.weightedScore &&
+  a.correlationMatrix.cpuToLatency === b.correlationMatrix.cpuToLatency &&
+  a.correlationMatrix.dbToErrors === b.correlationMatrix.dbToErrors &&
+  a.correlationMatrix.aiToQueue === b.correlationMatrix.aiToQueue &&
+  stringArraysEqual(a.correlationMatrix.boostedPairs, b.correlationMatrix.boostedPairs) &&
+  numberRecordsEqual(a.slopeValues, b.slopeValues) &&
+  numberArraysEqual(a.forecastProjection, b.forecastProjection) &&
+  a.governanceState === b.governanceState &&
+  a.chosenStrategy.strategy === b.chosenStrategy.strategy &&
+  a.chosenStrategy.recommendedAction === b.chosenStrategy.recommendedAction &&
+  a.chosenStrategy.confidenceScore === b.chosenStrategy.confidenceScore &&
+  a.chosenStrategy.reason === b.chosenStrategy.reason &&
+  a.decisionReason === b.decisionReason
+);
+
 export function useSystemMetrics(): UseSystemMetricsResult {
   const [snapshot, setSnapshot] = useState<MonitorSnapshot>(initialSnapshot);
   const [history, setHistory] = useState<Record<HistoryKey, SeriesPoint[]>>(initialHistory);
   const [alerts, setAlerts] = useState<MonitorAlert[]>([]);
+  const [intelligence, setIntelligence] = useState<IntelligenceExplainPayload>(initialIntelligence);
   const [endpointState, setEndpointState] = useState<EndpointState>({
     health: "ok",
     mode: "ok",
     workers: "ok",
     alerts: "ok",
+    explain: "ok",
   });
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const historyRef = useRef(history);
   const snapshotRef = useRef(snapshot);
   const alertsRef = useRef(alerts);
+  const intelligenceRef = useRef(intelligence);
   const endpointStateRef = useRef(endpointState);
   const inFlightRef = useRef(false);
 
@@ -229,6 +317,10 @@ export function useSystemMetrics(): UseSystemMetricsResult {
   }, [alerts]);
 
   useEffect(() => {
+    intelligenceRef.current = intelligence;
+  }, [intelligence]);
+
+  useEffect(() => {
     endpointStateRef.current = endpointState;
   }, [endpointState]);
 
@@ -237,11 +329,12 @@ export function useSystemMetrics(): UseSystemMetricsResult {
     inFlightRef.current = true;
 
     try {
-      const [healthRes, modeRes, workersRes, alertsRes] = await Promise.all([
+      const [healthRes, modeRes, workersRes, alertsRes, explainRes] = await Promise.all([
         getSystemHealth(),
         getSystemMode(),
         getWorkers(),
         getAlerts(),
+        getIntelligenceExplain(),
       ]);
 
       const previous = snapshotRef.current;
@@ -328,11 +421,16 @@ export function useSystemMetrics(): UseSystemMetricsResult {
 
       const snapshotChanged = !snapshotsEqual(snapshotRef.current, nextSnapshot);
       const alertsChanged = !alertsEqual(alertsRef.current, nextAlerts);
+      const nextIntelligence = explainRes.data ?? intelligenceRef.current;
+      const intelligenceChanged = !explainabilityEqual(intelligenceRef.current, nextIntelligence);
       if (snapshotChanged) {
         setSnapshot(nextSnapshot);
       }
       if (alertsChanged) {
         setAlerts(nextAlerts);
+      }
+      if (intelligenceChanged) {
+        setIntelligence(nextIntelligence);
       }
 
       const nextEndpointState: EndpointState = {
@@ -340,13 +438,14 @@ export function useSystemMetrics(): UseSystemMetricsResult {
         mode: modeRes.state,
         workers: workersRes.state,
         alerts: alertsRes.state,
+        explain: explainRes.state,
       };
       const endpointChanged = !endpointStatesEqual(endpointStateRef.current, nextEndpointState);
       if (endpointChanged) {
         setEndpointState(nextEndpointState);
       }
 
-      if (snapshotChanged || alertsChanged || endpointChanged || historyChanged) {
+      if (snapshotChanged || alertsChanged || intelligenceChanged || endpointChanged || historyChanged) {
         const responseTs = Number(
           healthRes.data?.updatedAt ??
             modeRes.data?.updatedAt ??
@@ -376,10 +475,12 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       endpointState.mode === "forbidden" ||
       endpointState.workers === "forbidden" ||
       endpointState.alerts === "forbidden" ||
+      endpointState.explain === "forbidden" ||
       endpointState.health === "unauthorized" ||
       endpointState.mode === "unauthorized" ||
       endpointState.workers === "unauthorized" ||
-      endpointState.alerts === "unauthorized",
+      endpointState.alerts === "unauthorized" ||
+      endpointState.explain === "unauthorized",
     [endpointState],
   );
 
@@ -388,7 +489,8 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       endpointState.health === "network_error" ||
       endpointState.mode === "network_error" ||
       endpointState.workers === "network_error" ||
-      endpointState.alerts === "network_error",
+      endpointState.alerts === "network_error" ||
+      endpointState.explain === "network_error",
     [endpointState],
   );
 
@@ -398,6 +500,7 @@ export function useSystemMetrics(): UseSystemMetricsResult {
     snapshot,
     history,
     alerts,
+    intelligence,
     endpointState,
     accessDenied,
     hasNetworkFailure,

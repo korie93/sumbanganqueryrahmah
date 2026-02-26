@@ -3589,6 +3589,1169 @@ var init_circuitBreaker = __esm({
   }
 });
 
+// server/intelligence/anomaly/AnomalyEngine.ts
+var WEIGHTS, clamp01, AnomalyEngine;
+var init_AnomalyEngine = __esm({
+  "server/intelligence/anomaly/AnomalyEngine.ts"() {
+    "use strict";
+    WEIGHTS = {
+      normalizedZScore: 0.3,
+      slopeWeight: 0.2,
+      percentileShift: 0.2,
+      correlationWeight: 0.2,
+      forecastRisk: 0.1
+    };
+    clamp01 = (value) => Math.max(0, Math.min(1, value));
+    AnomalyEngine = class {
+      constructor(stats) {
+        this.stats = stats;
+      }
+      evaluate(params) {
+        try {
+          const { snapshot, history, correlationMatrix, predictiveResult } = params;
+          const mutationFactor = Number.isFinite(params.mutationFactor) ? params.mutationFactor : 1;
+          const mean = this.stats.computeMean(history.p95LatencyMs);
+          const stdDev = this.stats.computeStdDev(history.p95LatencyMs);
+          const zScore = this.stats.computeZScore(snapshot.p95LatencyMs, mean, stdDev);
+          const normalizedZScore = clamp01(Math.abs(zScore) / 5);
+          const slope = this.stats.computeSlope(history.p95LatencyMs);
+          const slopeWeight = clamp01(Math.abs(slope) / 50);
+          const p90 = this.stats.computePercentile(history.p95LatencyMs, 90);
+          const p50 = this.stats.computePercentile(history.p95LatencyMs, 50);
+          const baseline = Math.max(1, p90 - p50);
+          const percentileShift = clamp01(Math.max(0, (snapshot.p95LatencyMs - p90) / baseline));
+          const maxCorrelation = Math.max(
+            0,
+            correlationMatrix.cpuToLatency,
+            correlationMatrix.dbToErrors,
+            correlationMatrix.aiToQueue
+          );
+          const correlationWeight = clamp01(maxCorrelation);
+          const forecastRisk = this.computeForecastRisk(predictiveResult);
+          const weightedBase = WEIGHTS.normalizedZScore * normalizedZScore + WEIGHTS.slopeWeight * slopeWeight + WEIGHTS.percentileShift * percentileShift + WEIGHTS.correlationWeight * correlationWeight + WEIGHTS.forecastRisk * forecastRisk;
+          const withMutation = weightedBase * clamp01(Math.max(0.1, mutationFactor));
+          const boosted = correlationMatrix.boostedPairs.length > 0 ? Math.min(1, withMutation * 1.15) : withMutation;
+          const score = clamp01(boosted);
+          const severity = this.resolveSeverity(score);
+          const breakdown = {
+            normalizedZScore,
+            slopeWeight,
+            percentileShift,
+            correlationWeight,
+            forecastRisk,
+            mutationFactor: clamp01(mutationFactor),
+            weightedScore: score
+          };
+          return {
+            score,
+            severity,
+            breakdown
+          };
+        } catch {
+          return this.failSafe();
+        }
+      }
+      computeForecastRisk(predictiveResult) {
+        if (predictiveResult.predictiveState === "CRITICAL_IMMINENT") return 1;
+        if (predictiveResult.predictiveState === "PREEMPTIVE_DEGRADATION") return 0.65;
+        return 0.1;
+      }
+      resolveSeverity(score) {
+        if (score >= 0.85) return "EMERGENCY";
+        if (score >= 0.65) return "CRITICAL";
+        if (score >= 0.4) return "WARNING";
+        return "NORMAL";
+      }
+      failSafe() {
+        return {
+          score: 0,
+          severity: "NORMAL",
+          breakdown: {
+            normalizedZScore: 0,
+            slopeWeight: 0,
+            percentileShift: 0,
+            correlationWeight: 0,
+            forecastRisk: 0,
+            mutationFactor: 1,
+            weightedScore: 0
+          }
+        };
+      }
+    };
+  }
+});
+
+// server/intelligence/chaos/ChaosEngine.ts
+import crypto2 from "crypto";
+var DEFAULT_DURATION_MS, MAX_DURATION_MS, DEFAULT_MAGNITUDE, clamp, ChaosEngine;
+var init_ChaosEngine = __esm({
+  "server/intelligence/chaos/ChaosEngine.ts"() {
+    "use strict";
+    DEFAULT_DURATION_MS = 2e4;
+    MAX_DURATION_MS = 5 * 6e4;
+    DEFAULT_MAGNITUDE = {
+      cpu_spike: 25,
+      db_latency_spike: 450,
+      ai_delay: 600,
+      worker_crash: 1,
+      memory_pressure: 18
+    };
+    clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    ChaosEngine = class {
+      constructor() {
+        this.events = /* @__PURE__ */ new Map();
+      }
+      inject(input) {
+        const now = Date.now();
+        const magnitude = Number.isFinite(input.magnitude) ? Number(input.magnitude) : DEFAULT_MAGNITUDE[input.type];
+        const durationMs = clamp(
+          Number.isFinite(input.durationMs) ? Number(input.durationMs) : DEFAULT_DURATION_MS,
+          5e3,
+          MAX_DURATION_MS
+        );
+        const event = {
+          id: crypto2.randomUUID(),
+          type: input.type,
+          magnitude,
+          createdAt: now,
+          expiresAt: now + durationMs
+        };
+        this.events.set(event.id, event);
+        return event;
+      }
+      apply(snapshot) {
+        this.cleanupExpired();
+        if (this.events.size === 0) return snapshot;
+        const next = {
+          ...snapshot
+        };
+        for (const event of this.events.values()) {
+          switch (event.type) {
+            case "cpu_spike":
+              next.cpuPercent = clamp(next.cpuPercent + event.magnitude, 0, 100);
+              next.p95LatencyMs += event.magnitude * 2;
+              break;
+            case "db_latency_spike":
+              next.dbLatencyMs = Math.max(0, next.dbLatencyMs + event.magnitude);
+              next.p95LatencyMs += event.magnitude * 0.4;
+              next.errorRate = clamp(next.errorRate + 1.5, 0, 100);
+              break;
+            case "ai_delay":
+              next.aiLatencyMs = Math.max(0, next.aiLatencyMs + event.magnitude);
+              next.queueSize = Math.max(0, next.queueSize + Math.ceil(event.magnitude / 120));
+              next.aiFailRate = clamp(next.aiFailRate + 0.8, 0, 100);
+              break;
+            case "worker_crash": {
+              const drop = Math.max(1, Math.floor(event.magnitude));
+              next.workerCount = Math.max(1, next.workerCount - drop);
+              next.p95LatencyMs += 80 * drop;
+              next.activeRequests += 10 * drop;
+              break;
+            }
+            case "memory_pressure":
+              next.ramPercent = clamp(next.ramPercent + event.magnitude, 0, 100);
+              next.eventLoopLagMs += event.magnitude * 1.5;
+              break;
+            default:
+              break;
+          }
+        }
+        next.score = clamp(next.score - 10, 0, 100);
+        return next;
+      }
+      listActive(now = Date.now()) {
+        this.cleanupExpired(now);
+        return Array.from(this.events.values()).sort((a, b) => a.expiresAt - b.expiresAt);
+      }
+      cleanupExpired(now = Date.now()) {
+        for (const [id, event] of this.events.entries()) {
+          if (event.expiresAt <= now) {
+            this.events.delete(id);
+          }
+        }
+      }
+    };
+  }
+});
+
+// server/intelligence/governance/GovernanceEngine.ts
+var COOLDOWN_MS, LOCKDOWN_WINDOW_MS, OSCILLATION_GUARD_MS, GovernanceEngine;
+var init_GovernanceEngine = __esm({
+  "server/intelligence/governance/GovernanceEngine.ts"() {
+    "use strict";
+    COOLDOWN_MS = 6e4;
+    LOCKDOWN_WINDOW_MS = 10 * 6e4;
+    OSCILLATION_GUARD_MS = 5e3;
+    GovernanceEngine = class {
+      constructor() {
+        this.state = "IDLE" /* IDLE */;
+        this.cooldownUntil = 0;
+        this.lastTransitionAt = 0;
+        this.emergencyEvents = [];
+        this.transitionLogs = [];
+      }
+      update(input, now = Date.now()) {
+        this.recordEmergency(input.severity, now);
+        this.pruneEmergencyWindow(now);
+        if (input.failSafe === true) {
+          this.transition("FAIL_SAFE" /* FAIL_SAFE */, "Fail-safe trigger received.", now);
+          return this.state;
+        }
+        if (this.emergencyEvents.length >= 3) {
+          this.transition("LOCKDOWN" /* LOCKDOWN */, "Emergency threshold reached (3 in 10 minutes).", now);
+          this.cooldownUntil = Math.max(this.cooldownUntil, now + COOLDOWN_MS);
+          return this.state;
+        }
+        switch (this.state) {
+          case "FAIL_SAFE" /* FAIL_SAFE */: {
+            if (input.manualReset === true) {
+              this.transition("COOLDOWN" /* COOLDOWN */, "Manual reset from fail-safe.", now);
+              this.cooldownUntil = now + COOLDOWN_MS;
+            }
+            return this.state;
+          }
+          case "LOCKDOWN" /* LOCKDOWN */: {
+            if (input.manualReset === true && now >= this.cooldownUntil) {
+              this.transition("COOLDOWN" /* COOLDOWN */, "Manual reset from lockdown.", now);
+              this.cooldownUntil = now + COOLDOWN_MS;
+            }
+            return this.state;
+          }
+          case "IDLE" /* IDLE */: {
+            if (this.shouldPropose(input)) {
+              this.transition("PROPOSED" /* PROPOSED */, "Action proposed from idle.", now);
+            }
+            return this.state;
+          }
+          case "PROPOSED" /* PROPOSED */: {
+            if (!this.shouldPropose(input)) {
+              this.transition("IDLE" /* IDLE */, "Proposal cancelled due to stable condition.", now);
+              return this.state;
+            }
+            this.transition("CONSENSUS_PENDING" /* CONSENSUS_PENDING */, "Proposal accepted, waiting consensus.", now);
+            return this.state;
+          }
+          case "CONSENSUS_PENDING" /* CONSENSUS_PENDING */: {
+            if (!this.shouldPropose(input)) {
+              this.transition("IDLE" /* IDLE */, "Consensus abandoned due to stable condition.", now);
+              return this.state;
+            }
+            if (input.consensusApproved === true) {
+              this.transition("EXECUTED" /* EXECUTED */, "Consensus approved.", now);
+            }
+            return this.state;
+          }
+          case "EXECUTED" /* EXECUTED */: {
+            this.transition("COOLDOWN" /* COOLDOWN */, "Execution completed, entering cooldown.", now);
+            this.cooldownUntil = now + COOLDOWN_MS;
+            return this.state;
+          }
+          case "COOLDOWN" /* COOLDOWN */: {
+            if (now < this.cooldownUntil) return this.state;
+            if (this.shouldPropose(input)) {
+              this.transition("PROPOSED" /* PROPOSED */, "Cooldown elapsed, new proposal required.", now);
+            } else {
+              this.transition("IDLE" /* IDLE */, "Cooldown elapsed and stable.", now);
+            }
+            return this.state;
+          }
+          default:
+            return this.state;
+        }
+      }
+      getState() {
+        return this.state;
+      }
+      getCooldownRemainingMs(now = Date.now()) {
+        if (this.state !== "COOLDOWN" /* COOLDOWN */ && this.state !== "LOCKDOWN" /* LOCKDOWN */) return 0;
+        return Math.max(0, this.cooldownUntil - now);
+      }
+      getTransitionLogs(limit = 100) {
+        const safeLimit = Math.max(1, Math.min(500, limit));
+        if (this.transitionLogs.length <= safeLimit) return [...this.transitionLogs];
+        return this.transitionLogs.slice(this.transitionLogs.length - safeLimit);
+      }
+      shouldPropose(input) {
+        return input.recommendedAction !== "NONE" && input.severity !== "NORMAL";
+      }
+      recordEmergency(severity, now) {
+        if (severity === "EMERGENCY") {
+          this.emergencyEvents.push(now);
+        }
+      }
+      pruneEmergencyWindow(now) {
+        const boundary = now - LOCKDOWN_WINDOW_MS;
+        this.emergencyEvents = this.emergencyEvents.filter((ts) => ts >= boundary);
+      }
+      transition(next, reason, now) {
+        if (next === this.state) return;
+        if (!this.passesOscillationGuard(next, now)) return;
+        const previous = this.state;
+        this.state = next;
+        this.lastTransitionAt = now;
+        this.transitionLogs.push({
+          from: previous,
+          to: next,
+          reason,
+          timestamp: now
+        });
+        if (this.transitionLogs.length > 500) {
+          this.transitionLogs.splice(0, this.transitionLogs.length - 500);
+        }
+      }
+      passesOscillationGuard(next, now) {
+        if (this.lastTransitionAt === 0) return true;
+        if (now - this.lastTransitionAt >= OSCILLATION_GUARD_MS) return true;
+        const guardedStates = /* @__PURE__ */ new Set([
+          "IDLE" /* IDLE */,
+          "PROPOSED" /* PROPOSED */,
+          "CONSENSUS_PENDING" /* CONSENSUS_PENDING */,
+          "EXECUTED" /* EXECUTED */
+        ]);
+        if (guardedStates.has(this.state) && guardedStates.has(next)) {
+          return false;
+        }
+        return true;
+      }
+    };
+  }
+});
+
+// server/intelligence/control/AdaptiveControlEngine.ts
+var AdaptiveControlEngine;
+var init_AdaptiveControlEngine = __esm({
+  "server/intelligence/control/AdaptiveControlEngine.ts"() {
+    "use strict";
+    AdaptiveControlEngine = class {
+      resolve(input) {
+        if (input.governanceState === "LOCKDOWN" || input.governanceState === "FAIL_SAFE") {
+          return "NONE";
+        }
+        if (input.predictiveState === "CRITICAL_IMMINENT" && input.requestedAction === "NONE") {
+          return "ENABLE_THROTTLE_MODE";
+        }
+        if (input.severity === "EMERGENCY" && input.requestedAction === "PAUSE_AI_QUEUE") {
+          return "SELECTIVE_WORKER_RESTART";
+        }
+        return input.requestedAction;
+      }
+    };
+  }
+});
+
+// server/intelligence/control/ControlEngine.ts
+var ACTION_COOLDOWN_MS, AUTO_HEALING_ENABLED, ControlEngine;
+var init_ControlEngine = __esm({
+  "server/intelligence/control/ControlEngine.ts"() {
+    "use strict";
+    init_GovernanceEngine();
+    init_AdaptiveControlEngine();
+    ACTION_COOLDOWN_MS = 6e4;
+    AUTO_HEALING_ENABLED = false;
+    ControlEngine = class {
+      constructor(callbacks) {
+        this.adaptiveControl = new AdaptiveControlEngine();
+        this.lastActionByKey = /* @__PURE__ */ new Map();
+        this.lastAction = "NONE";
+        this.callbacks = callbacks || {};
+      }
+      async execute(input, now = Date.now()) {
+        const action = this.adaptiveControl.resolve({
+          requestedAction: input.requestedAction,
+          governanceState: input.governanceState,
+          severity: input.severity,
+          predictiveState: input.predictiveState
+        });
+        if (action === "NONE") {
+          return { action, executed: false, reason: "No action requested by adaptive control." };
+        }
+        if (!AUTO_HEALING_ENABLED) {
+          return { action, executed: false, reason: "AUTO_HEALING_ENABLED is false." };
+        }
+        if (!this.isGovernanceAllowed(input.governanceState)) {
+          return { action, executed: false, reason: "Governance state does not allow autonomous control." };
+        }
+        if (!this.passesCooldown(action, now)) {
+          return { action, executed: false, reason: "Action is in cooldown window." };
+        }
+        if (!this.passesOscillationGuard(action, now)) {
+          return { action, executed: false, reason: "Oscillation guard blocked rapid action flip." };
+        }
+        const executed = await this.executeAction(action);
+        if (!executed) {
+          return { action, executed: false, reason: "Control callback returned false." };
+        }
+        this.lastActionByKey.set(action, now);
+        this.lastAction = action;
+        return { action, executed: true, reason: "Action executed successfully." };
+      }
+      async reduceWorkerCount() {
+        return this.runCallback(this.callbacks.reduceWorkerCount);
+      }
+      async enableThrottleMode() {
+        return this.runCallback(this.callbacks.enableThrottleMode);
+      }
+      async pauseAIQueue() {
+        return this.runCallback(this.callbacks.pauseAIQueue);
+      }
+      async triggerSelectiveWorkerRestart() {
+        return this.runCallback(this.callbacks.triggerSelectiveWorkerRestart);
+      }
+      isGovernanceAllowed(governanceState) {
+        if (governanceState === "LOCKDOWN" /* LOCKDOWN */ || governanceState === "FAIL_SAFE" /* FAIL_SAFE */) return false;
+        return governanceState === "EXECUTED" /* EXECUTED */ || governanceState === "CONSENSUS_PENDING" /* CONSENSUS_PENDING */ || governanceState === "PROPOSED" /* PROPOSED */;
+      }
+      passesCooldown(action, now) {
+        const last = this.lastActionByKey.get(action);
+        if (!last) return true;
+        return now - last >= ACTION_COOLDOWN_MS;
+      }
+      passesOscillationGuard(action, now) {
+        if (this.lastAction === "NONE" || this.lastAction === action) return true;
+        const last = this.lastActionByKey.get(this.lastAction);
+        if (!last) return true;
+        return now - last >= ACTION_COOLDOWN_MS;
+      }
+      async executeAction(action) {
+        switch (action) {
+          case "REDUCE_WORKER_COUNT":
+            return this.reduceWorkerCount();
+          case "ENABLE_THROTTLE_MODE":
+            return this.enableThrottleMode();
+          case "PAUSE_AI_QUEUE":
+            return this.pauseAIQueue();
+          case "SELECTIVE_WORKER_RESTART":
+            return this.triggerSelectiveWorkerRestart();
+          default:
+            return false;
+        }
+      }
+      async runCallback(callback) {
+        if (!callback) return true;
+        try {
+          const result = await Promise.resolve(callback());
+          return result !== false;
+        } catch {
+          return false;
+        }
+      }
+    };
+  }
+});
+
+// server/intelligence/correlation/CorrelationEngine.ts
+var BOOST_THRESHOLD, BOOST_MULTIPLIER, CorrelationEngine;
+var init_CorrelationEngine = __esm({
+  "server/intelligence/correlation/CorrelationEngine.ts"() {
+    "use strict";
+    BOOST_THRESHOLD = 0.6;
+    BOOST_MULTIPLIER = 1.15;
+    CorrelationEngine = class {
+      constructor(stats) {
+        this.stats = stats;
+      }
+      evaluate(history) {
+        const cpuToLatency = this.safeCorrelation(history.cpuPercent, history.p95LatencyMs);
+        const dbToErrors = this.safeCorrelation(history.dbLatencyMs, history.errorRate);
+        const aiToQueue = this.safeCorrelation(history.aiLatencyMs, history.queueSize);
+        const pairs = [
+          { pair: "CPU\u2194P95_LATENCY", coefficient: cpuToLatency, boosted: cpuToLatency > BOOST_THRESHOLD },
+          { pair: "DB_LATENCY\u2194ERROR_RATE", coefficient: dbToErrors, boosted: dbToErrors > BOOST_THRESHOLD },
+          { pair: "AI_LATENCY\u2194QUEUE_SIZE", coefficient: aiToQueue, boosted: aiToQueue > BOOST_THRESHOLD }
+        ];
+        return {
+          matrix: {
+            cpuToLatency,
+            dbToErrors,
+            aiToQueue,
+            boostedPairs: pairs.filter((p) => p.boosted).map((p) => p.pair)
+          },
+          pairs
+        };
+      }
+      applyBoost(baseScore, matrix) {
+        if (!Number.isFinite(baseScore)) return 0;
+        if (matrix.boostedPairs.length === 0) return baseScore;
+        return Math.min(1, baseScore * BOOST_MULTIPLIER);
+      }
+      safeCorrelation(x, y) {
+        try {
+          return this.stats.computeCorrelation(x, y);
+        } catch {
+          return 0;
+        }
+      }
+    };
+  }
+});
+
+// server/intelligence/learning/StabilityDnaEngine.ts
+var StabilityDnaEngine;
+var init_StabilityDnaEngine = __esm({
+  "server/intelligence/learning/StabilityDnaEngine.ts"() {
+    "use strict";
+    init_db_postgres();
+    StabilityDnaEngine = class {
+      constructor() {
+        this.ensurePromise = null;
+      }
+      async ensureTable() {
+        if (this.ensurePromise) return this.ensurePromise;
+        this.ensurePromise = (async () => {
+          await pool.query(`
+        CREATE TABLE IF NOT EXISTS system_stability_patterns (
+          id BIGSERIAL PRIMARY KEY,
+          metric_signature TEXT NOT NULL,
+          hour INTEGER NOT NULL,
+          weekday INTEGER NOT NULL,
+          severity TEXT NOT NULL,
+          action_taken TEXT NOT NULL,
+          duration_ms BIGINT NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+          await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_stability_patterns_signature_window
+        ON system_stability_patterns (metric_signature, hour, weekday, severity)
+      `);
+        })().catch((error) => {
+          this.ensurePromise = null;
+          throw error;
+        });
+        return this.ensurePromise;
+      }
+      buildMetricSignature(snapshot) {
+        const cpu = Math.round(snapshot.cpuPercent / 10) * 10;
+        const ram = Math.round(snapshot.ramPercent / 10) * 10;
+        const p95 = Math.round(snapshot.p95LatencyMs / 100) * 100;
+        const db2 = Math.round(snapshot.dbLatencyMs / 100) * 100;
+        const ai = Math.round(snapshot.aiLatencyMs / 100) * 100;
+        const queue = Math.round(snapshot.queueSize / 5) * 5;
+        return `cpu:${cpu}|ram:${ram}|p95:${p95}|db:${db2}|ai:${ai}|q:${queue}|mode:${snapshot.mode}`;
+      }
+      async getMutationFactor(metricSignature) {
+        try {
+          await this.ensureTable();
+          const result = await pool.query(
+            `
+          SELECT COUNT(*)::int AS count
+          FROM system_stability_patterns
+          WHERE metric_signature = $1
+        `,
+            [metricSignature]
+          );
+          const count2 = Number(result.rows?.[0]?.count || 0);
+          if (count2 > 5) return 0.85;
+          return 1;
+        } catch {
+          return 1;
+        }
+      }
+      async recordPattern(input) {
+        try {
+          await this.ensureTable();
+          await pool.query(
+            `
+          INSERT INTO system_stability_patterns (
+            metric_signature,
+            hour,
+            weekday,
+            severity,
+            action_taken,
+            duration_ms
+          )
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `,
+            [
+              input.metricSignature,
+              input.hour,
+              input.weekday,
+              input.severity,
+              input.actionTaken,
+              Math.max(0, Math.round(input.durationMs))
+            ]
+          );
+        } catch {
+        }
+      }
+    };
+  }
+});
+
+// server/intelligence/predictive/PredictiveEngine.ts
+var DEFAULT_CONFIG, PredictiveEngine;
+var init_PredictiveEngine = __esm({
+  "server/intelligence/predictive/PredictiveEngine.ts"() {
+    "use strict";
+    DEFAULT_CONFIG = {
+      warningLatencyMs: 800,
+      criticalLatencyMs: 1200,
+      projectionSteps: 3
+      // 5s polling * 3 = ~15 seconds
+    };
+    PredictiveEngine = class {
+      constructor(stats, config) {
+        this.stats = stats;
+        this.config = {
+          ...DEFAULT_CONFIG,
+          ...config || {}
+        };
+      }
+      evaluate(history) {
+        const projection = this.stats.forecastNext(history.p95LatencyMs || [], this.config.projectionSteps);
+        const maxProjectedLatencyMs = projection.reduce((max, value) => Math.max(max, value), 0);
+        if (maxProjectedLatencyMs >= this.config.criticalLatencyMs) {
+          return {
+            predictiveState: "CRITICAL_IMMINENT",
+            projection,
+            maxProjectedLatencyMs
+          };
+        }
+        if (maxProjectedLatencyMs >= this.config.warningLatencyMs) {
+          return {
+            predictiveState: "PREEMPTIVE_DEGRADATION",
+            projection,
+            maxProjectedLatencyMs
+          };
+        }
+        return {
+          predictiveState: "NORMAL",
+          projection,
+          maxProjectedLatencyMs
+        };
+      }
+    };
+  }
+});
+
+// server/intelligence/statistical/StatisticalEngine.ts
+var StatisticalEngine;
+var init_StatisticalEngine = __esm({
+  "server/intelligence/statistical/StatisticalEngine.ts"() {
+    "use strict";
+    StatisticalEngine = class {
+      constructor(maxSamples = 300) {
+        this.maxSamples = Math.max(10, maxSamples);
+      }
+      boundBuffer(values) {
+        if (!Array.isArray(values) || values.length === 0) return [];
+        if (values.length <= this.maxSamples) return values.filter((v) => Number.isFinite(v));
+        return values.slice(values.length - this.maxSamples).filter((v) => Number.isFinite(v));
+      }
+      pushSample(values, sample) {
+        if (!Number.isFinite(sample)) return this.boundBuffer(values);
+        const next = [...this.boundBuffer(values), sample];
+        if (next.length <= this.maxSamples) return next;
+        return next.slice(next.length - this.maxSamples);
+      }
+      computeMean(values) {
+        const bounded = this.boundBuffer(values);
+        if (bounded.length === 0) return 0;
+        let sum = 0;
+        for (let i = 0; i < bounded.length; i += 1) sum += bounded[i];
+        return sum / bounded.length;
+      }
+      computeStdDev(values) {
+        const bounded = this.boundBuffer(values);
+        if (bounded.length < 2) return 0;
+        const mean = this.computeMean(bounded);
+        let varianceSum = 0;
+        for (let i = 0; i < bounded.length; i += 1) {
+          const diff = bounded[i] - mean;
+          varianceSum += diff * diff;
+        }
+        return Math.sqrt(varianceSum / bounded.length);
+      }
+      computeZScore(value, mean, stdDev) {
+        if (!Number.isFinite(value) || !Number.isFinite(mean) || !Number.isFinite(stdDev) || stdDev === 0) {
+          return 0;
+        }
+        return (value - mean) / stdDev;
+      }
+      computeSlope(values) {
+        const bounded = this.boundBuffer(values);
+        const n = bounded.length;
+        if (n < 2) return 0;
+        let sumX = 0;
+        let sumY = 0;
+        let sumXY = 0;
+        let sumXX = 0;
+        for (let i = 0; i < n; i += 1) {
+          const x = i + 1;
+          const y = bounded[i];
+          sumX += x;
+          sumY += y;
+          sumXY += x * y;
+          sumXX += x * x;
+        }
+        const denominator = n * sumXX - sumX * sumX;
+        if (denominator === 0) return 0;
+        return (n * sumXY - sumX * sumY) / denominator;
+      }
+      computePercentile(values, p) {
+        const bounded = this.boundBuffer(values);
+        if (bounded.length === 0) return 0;
+        const normalizedP = Math.max(0, Math.min(100, p));
+        const rank = Math.floor(normalizedP / 100 * (bounded.length - 1));
+        const copy = bounded.slice();
+        return this.quickSelect(copy, rank);
+      }
+      computeCorrelation(x, y) {
+        const aligned = this.alignSeries(x, y);
+        if (aligned.x.length < 2) return 0;
+        const xMean = this.computeMean(aligned.x);
+        const yMean = this.computeMean(aligned.y);
+        let numerator = 0;
+        let xVariance = 0;
+        let yVariance = 0;
+        for (let i = 0; i < aligned.x.length; i += 1) {
+          const dx = aligned.x[i] - xMean;
+          const dy = aligned.y[i] - yMean;
+          numerator += dx * dy;
+          xVariance += dx * dx;
+          yVariance += dy * dy;
+        }
+        const denominator = Math.sqrt(xVariance * yVariance);
+        if (denominator === 0) return 0;
+        return numerator / denominator;
+      }
+      forecastNext(values, steps = 2) {
+        const bounded = this.boundBuffer(values);
+        const safeSteps = Math.max(1, Math.min(12, Math.floor(steps)));
+        if (bounded.length === 0) return Array.from({ length: safeSteps }, () => 0);
+        if (bounded.length === 1) return Array.from({ length: safeSteps }, () => bounded[0]);
+        const slope = this.computeSlope(bounded);
+        const mean = this.computeMean(bounded);
+        const tail = bounded[bounded.length - 1];
+        const momentum = (tail - mean) * 0.08;
+        const forecast = [];
+        for (let i = 1; i <= safeSteps; i += 1) {
+          forecast.push(tail + slope * i + momentum);
+        }
+        return forecast;
+      }
+      alignSeries(x, y) {
+        const safeX = this.boundBuffer(x);
+        const safeY = this.boundBuffer(y);
+        const n = Math.min(safeX.length, safeY.length);
+        if (n === 0) return { x: [], y: [] };
+        return {
+          x: safeX.slice(safeX.length - n),
+          y: safeY.slice(safeY.length - n)
+        };
+      }
+      quickSelect(values, targetIndex) {
+        let left = 0;
+        let right = values.length - 1;
+        while (left <= right) {
+          const pivotIndex = this.partition(values, left, right);
+          if (pivotIndex === targetIndex) return values[pivotIndex];
+          if (pivotIndex < targetIndex) left = pivotIndex + 1;
+          else right = pivotIndex - 1;
+        }
+        return values[Math.max(0, Math.min(values.length - 1, targetIndex))];
+      }
+      partition(values, left, right) {
+        const pivotIndex = Math.floor((left + right) / 2);
+        const pivotValue = values[pivotIndex];
+        [values[pivotIndex], values[right]] = [values[right], values[pivotIndex]];
+        let store = left;
+        for (let i = left; i < right; i += 1) {
+          if (values[i] < pivotValue) {
+            [values[i], values[store]] = [values[store], values[i]];
+            store += 1;
+          }
+        }
+        [values[store], values[right]] = [values[right], values[store]];
+        return store;
+      }
+    };
+  }
+});
+
+// server/intelligence/strategy/StrategyEngine.ts
+var STRATEGY_ORDER, StrategyEngine;
+var init_StrategyEngine = __esm({
+  "server/intelligence/strategy/StrategyEngine.ts"() {
+    "use strict";
+    STRATEGY_ORDER = ["ADAPTIVE", "CONSERVATIVE", "AGGRESSIVE"];
+    StrategyEngine = class {
+      constructor() {
+        this.strategyStats = {
+          CONSERVATIVE: { wins: 0, plays: 0 },
+          AGGRESSIVE: { wins: 0, plays: 0 },
+          ADAPTIVE: { wins: 0, plays: 0 }
+        };
+        this.anomalyOutcomes = [];
+      }
+      evaluate(context) {
+        const conservative = this.runConservative(context);
+        const aggressive = this.runAggressive(context);
+        const adaptive = this.runAdaptive(context, conservative, aggressive);
+        const candidates = [conservative, aggressive, adaptive];
+        const winRates = this.getWinRates();
+        const scored = candidates.map((candidate) => {
+          const winRateBoost = winRates[candidate.strategy] * 0.2;
+          return {
+            candidate,
+            score: candidate.confidenceScore + winRateBoost
+          };
+        });
+        scored.sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          return STRATEGY_ORDER.indexOf(a.candidate.strategy) - STRATEGY_ORDER.indexOf(b.candidate.strategy);
+        });
+        return {
+          chosen: scored[0].candidate,
+          candidates,
+          winRates
+        };
+      }
+      recordOutcome(strategy, success) {
+        const stats = this.strategyStats[strategy];
+        stats.plays += 1;
+        if (success) stats.wins += 1;
+      }
+      recordAnomalyOutcome(severity) {
+        this.anomalyOutcomes.push(severity);
+        if (this.anomalyOutcomes.length > 30) {
+          this.anomalyOutcomes = this.anomalyOutcomes.slice(this.anomalyOutcomes.length - 30);
+        }
+      }
+      getLastThreeOutcomes() {
+        if (this.anomalyOutcomes.length <= 3) return [...this.anomalyOutcomes];
+        return this.anomalyOutcomes.slice(this.anomalyOutcomes.length - 3);
+      }
+      getWinRates() {
+        return {
+          CONSERVATIVE: this.computeWinRate("CONSERVATIVE"),
+          AGGRESSIVE: this.computeWinRate("AGGRESSIVE"),
+          ADAPTIVE: this.computeWinRate("ADAPTIVE")
+        };
+      }
+      computeWinRate(strategy) {
+        const stats = this.strategyStats[strategy];
+        if (stats.plays === 0) return 0.5;
+        return stats.wins / stats.plays;
+      }
+      runConservative(context) {
+        if (context.anomalySeverity === "EMERGENCY") {
+          return {
+            strategy: "CONSERVATIVE",
+            recommendedAction: "ENABLE_THROTTLE_MODE",
+            confidenceScore: 0.72,
+            reason: "Emergency detected; conservative strategy enables throttle first."
+          };
+        }
+        if (context.predictiveState === "PREEMPTIVE_DEGRADATION" || context.anomalySeverity === "CRITICAL") {
+          return {
+            strategy: "CONSERVATIVE",
+            recommendedAction: "PAUSE_AI_QUEUE",
+            confidenceScore: 0.66,
+            reason: "High latency risk; conservative strategy pauses AI queue to protect stability."
+          };
+        }
+        if (context.anomalySeverity === "WARNING") {
+          return {
+            strategy: "CONSERVATIVE",
+            recommendedAction: "ENABLE_THROTTLE_MODE",
+            confidenceScore: 0.58,
+            reason: "Warning state; conservative strategy applies mild traffic control."
+          };
+        }
+        return {
+          strategy: "CONSERVATIVE",
+          recommendedAction: "NONE",
+          confidenceScore: 0.52,
+          reason: "Normal state; conservative strategy keeps system unchanged."
+        };
+      }
+      runAggressive(context) {
+        if (context.anomalySeverity === "EMERGENCY" || context.predictiveState === "CRITICAL_IMMINENT") {
+          return {
+            strategy: "AGGRESSIVE",
+            recommendedAction: "SELECTIVE_WORKER_RESTART",
+            confidenceScore: 0.82,
+            reason: "Critical imminent condition; aggressive strategy favors rapid worker reset."
+          };
+        }
+        if (context.anomalySeverity === "CRITICAL") {
+          return {
+            strategy: "AGGRESSIVE",
+            recommendedAction: "REDUCE_WORKER_COUNT",
+            confidenceScore: 0.74,
+            reason: "Critical instability; aggressive strategy trims worker pressure quickly."
+          };
+        }
+        if (context.anomalySeverity === "WARNING") {
+          return {
+            strategy: "AGGRESSIVE",
+            recommendedAction: "PAUSE_AI_QUEUE",
+            confidenceScore: 0.61,
+            reason: "Warning state with aggressive posture; AI queue is paused preemptively."
+          };
+        }
+        return {
+          strategy: "AGGRESSIVE",
+          recommendedAction: "NONE",
+          confidenceScore: 0.48,
+          reason: "Normal state; aggressive strategy does not force intervention."
+        };
+      }
+      runAdaptive(context, conservative, aggressive) {
+        const emergencyCount = context.lastThreeAnomalyOutcomes.filter((s) => s === "EMERGENCY").length;
+        const criticalCount = context.lastThreeAnomalyOutcomes.filter((s) => s === "CRITICAL").length;
+        const unstableTrend = emergencyCount > 0 || criticalCount >= 2 || context.stabilityAverage5m < 62;
+        if (unstableTrend || context.predictiveState === "CRITICAL_IMMINENT") {
+          return {
+            strategy: "ADAPTIVE",
+            recommendedAction: aggressive.recommendedAction,
+            confidenceScore: Math.min(0.92, aggressive.confidenceScore + 0.08),
+            reason: "Adaptive strategy selected aggressive mode due to instability trend in last outcomes."
+          };
+        }
+        if (context.stabilityAverage5m >= 80 && context.anomalySeverity === "NORMAL") {
+          return {
+            strategy: "ADAPTIVE",
+            recommendedAction: "NONE",
+            confidenceScore: 0.84,
+            reason: "Adaptive strategy keeps no-op under strong 5-minute stability."
+          };
+        }
+        return {
+          strategy: "ADAPTIVE",
+          recommendedAction: conservative.recommendedAction,
+          confidenceScore: Math.min(0.88, conservative.confidenceScore + 0.1),
+          reason: "Adaptive strategy selected conservative mode for balanced recovery."
+        };
+      }
+    };
+  }
+});
+
+// server/intelligence/index.ts
+function clamp2(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+function normalizeHistory(history, stats) {
+  return {
+    cpuPercent: stats.boundBuffer(history.cpuPercent || []).slice(-MAX_HISTORY),
+    p95LatencyMs: stats.boundBuffer(history.p95LatencyMs || []).slice(-MAX_HISTORY),
+    dbLatencyMs: stats.boundBuffer(history.dbLatencyMs || []).slice(-MAX_HISTORY),
+    errorRate: stats.boundBuffer(history.errorRate || []).slice(-MAX_HISTORY),
+    aiLatencyMs: stats.boundBuffer(history.aiLatencyMs || []).slice(-MAX_HISTORY),
+    queueSize: stats.boundBuffer(history.queueSize || []).slice(-MAX_HISTORY),
+    ramPercent: stats.boundBuffer(history.ramPercent || []).slice(-MAX_HISTORY),
+    requestRate: stats.boundBuffer(history.requestRate || []).slice(-MAX_HISTORY),
+    workerCount: stats.boundBuffer(history.workerCount || []).slice(-MAX_HISTORY)
+  };
+}
+async function evaluateSystem(snapshot, history) {
+  return ecosystem.evaluateSystem(snapshot, history);
+}
+function getIntelligenceExplainability() {
+  return ecosystem.getExplainability();
+}
+function injectChaos(input) {
+  return ecosystem.injectChaos(input);
+}
+var MAX_HISTORY, IntelligenceEcosystem, ecosystem;
+var init_intelligence = __esm({
+  "server/intelligence/index.ts"() {
+    "use strict";
+    init_AnomalyEngine();
+    init_ChaosEngine();
+    init_ControlEngine();
+    init_CorrelationEngine();
+    init_GovernanceEngine();
+    init_StabilityDnaEngine();
+    init_PredictiveEngine();
+    init_StatisticalEngine();
+    init_StrategyEngine();
+    MAX_HISTORY = 300;
+    IntelligenceEcosystem = class {
+      constructor() {
+        this.stats = new StatisticalEngine(MAX_HISTORY);
+        this.correlation = new CorrelationEngine(this.stats);
+        this.predictive = new PredictiveEngine(this.stats);
+        this.anomaly = new AnomalyEngine(this.stats);
+        this.governance = new GovernanceEngine();
+        this.strategy = new StrategyEngine();
+        this.chaos = new ChaosEngine();
+        this.dna = new StabilityDnaEngine();
+        this.control = new ControlEngine();
+        this.explainability = {
+          anomalyBreakdown: {
+            normalizedZScore: 0,
+            slopeWeight: 0,
+            percentileShift: 0,
+            correlationWeight: 0,
+            forecastRisk: 0,
+            mutationFactor: 1,
+            weightedScore: 0
+          },
+          correlationMatrix: {
+            cpuToLatency: 0,
+            dbToErrors: 0,
+            aiToQueue: 0,
+            boostedPairs: []
+          },
+          slopeValues: {},
+          forecastProjection: [],
+          governanceState: "IDLE",
+          chosenStrategy: {
+            strategy: "CONSERVATIVE",
+            recommendedAction: "NONE",
+            confidenceScore: 0.5,
+            reason: "No evaluation yet."
+          },
+          decisionReason: "No evaluation yet."
+        };
+        this.stabilitySamples = [];
+        this.previousStabilityIndex = 100;
+        this.previousChosenStrategy = null;
+        this.activeIncident = null;
+        void this.dna.ensureTable();
+      }
+      setControlCallbacks(callbacks) {
+        this.control = new ControlEngine(callbacks);
+      }
+      async evaluateSystem(snapshot, history) {
+        const normalizedHistory = normalizeHistory(history, this.stats);
+        const chaosSnapshot = this.chaos.apply(snapshot);
+        const signature = this.dna.buildMetricSignature(chaosSnapshot);
+        const mutationFactor = await this.dna.getMutationFactor(signature);
+        const correlationResult = this.correlation.evaluate(normalizedHistory);
+        const predictiveResult = this.predictive.evaluate(normalizedHistory);
+        const anomalySummary = this.anomaly.evaluate({
+          snapshot: chaosSnapshot,
+          history: normalizedHistory,
+          correlationMatrix: correlationResult.matrix,
+          predictiveResult,
+          mutationFactor
+        });
+        const stabilityIndex = clamp2(100 - anomalySummary.score * 100, 0, 100);
+        this.pushStabilitySample(stabilityIndex, chaosSnapshot.timestamp);
+        this.strategy.recordAnomalyOutcome(anomalySummary.severity);
+        const strategyOutcome = this.strategy.evaluate({
+          snapshot: chaosSnapshot,
+          anomalySeverity: anomalySummary.severity,
+          predictiveState: predictiveResult.predictiveState,
+          governanceState: this.governance.getState(),
+          stabilityAverage5m: this.getStabilityAverage5m(chaosSnapshot.timestamp),
+          lastThreeAnomalyOutcomes: this.strategy.getLastThreeOutcomes()
+        });
+        const governanceState = this.governance.update({
+          severity: anomalySummary.severity,
+          recommendedAction: strategyOutcome.chosen.recommendedAction,
+          consensusApproved: anomalySummary.severity !== "NORMAL"
+        });
+        const controlResult = await this.control.execute({
+          requestedAction: strategyOutcome.chosen.recommendedAction,
+          governanceState,
+          severity: anomalySummary.severity,
+          predictiveState: predictiveResult.predictiveState
+        });
+        if (this.previousChosenStrategy) {
+          const success = stabilityIndex >= this.previousStabilityIndex;
+          this.strategy.recordOutcome(this.previousChosenStrategy, success);
+        }
+        this.previousChosenStrategy = strategyOutcome.chosen.strategy;
+        this.previousStabilityIndex = stabilityIndex;
+        await this.updateIncidentLearning({
+          snapshot: chaosSnapshot,
+          severity: anomalySummary.severity,
+          action: strategyOutcome.chosen.recommendedAction
+        });
+        this.explainability = {
+          anomalyBreakdown: anomalySummary.breakdown,
+          correlationMatrix: correlationResult.matrix,
+          slopeValues: {
+            cpuSlope: this.stats.computeSlope(normalizedHistory.cpuPercent),
+            latencySlope: this.stats.computeSlope(normalizedHistory.p95LatencyMs),
+            dbSlope: this.stats.computeSlope(normalizedHistory.dbLatencyMs),
+            aiSlope: this.stats.computeSlope(normalizedHistory.aiLatencyMs),
+            errorSlope: this.stats.computeSlope(normalizedHistory.errorRate)
+          },
+          forecastProjection: predictiveResult.projection,
+          governanceState,
+          chosenStrategy: strategyOutcome.chosen,
+          decisionReason: `${strategyOutcome.chosen.reason} Control: ${controlResult.reason}`
+        };
+        return {
+          stabilityIndex,
+          anomalySummary,
+          recommendedAction: strategyOutcome.chosen.recommendedAction,
+          predictiveState: predictiveResult.predictiveState,
+          governanceState
+        };
+      }
+      getExplainability() {
+        return this.explainability;
+      }
+      injectChaos(input) {
+        const event = this.chaos.inject(input);
+        return {
+          injected: event,
+          active: this.chaos.listActive()
+        };
+      }
+      pushStabilitySample(stabilityIndex, now) {
+        this.stabilitySamples.push({ ts: now, stabilityIndex });
+        const boundary = now - 10 * 6e4;
+        this.stabilitySamples = this.stabilitySamples.filter((sample) => sample.ts >= boundary);
+      }
+      getStabilityAverage5m(now) {
+        const boundary = now - 5 * 6e4;
+        const slice = this.stabilitySamples.filter((sample) => sample.ts >= boundary);
+        if (slice.length === 0) return this.previousStabilityIndex;
+        const sum = slice.reduce((acc, sample) => acc + sample.stabilityIndex, 0);
+        return sum / slice.length;
+      }
+      async updateIncidentLearning(params) {
+        if (params.severity !== "NORMAL" && !this.activeIncident) {
+          this.activeIncident = {
+            startedAt: params.snapshot.timestamp,
+            metricSignature: this.dna.buildMetricSignature(params.snapshot),
+            severity: params.severity,
+            actionTaken: params.action
+          };
+          return;
+        }
+        if (params.severity !== "NORMAL" && this.activeIncident) {
+          this.activeIncident.severity = this.maxSeverity(this.activeIncident.severity, params.severity);
+          this.activeIncident.actionTaken = params.action;
+          return;
+        }
+        if (params.severity === "NORMAL" && this.activeIncident) {
+          const startedAt = this.activeIncident.startedAt;
+          const now = params.snapshot.timestamp;
+          const date = new Date(startedAt);
+          await this.dna.recordPattern({
+            metricSignature: this.activeIncident.metricSignature,
+            hour: date.getHours(),
+            weekday: date.getDay(),
+            severity: this.activeIncident.severity,
+            actionTaken: this.activeIncident.actionTaken,
+            durationMs: Math.max(0, now - startedAt)
+          });
+          this.activeIncident = null;
+        }
+      }
+      maxSeverity(a, b) {
+        const rank = {
+          NORMAL: 0,
+          WARNING: 1,
+          CRITICAL: 2,
+          EMERGENCY: 3
+        };
+        return rank[a] >= rank[b] ? a : b;
+      }
+    };
+    ecosystem = new IntelligenceEcosystem();
+  }
+});
+
 // server/index-local.ts
 var index_local_exports = {};
 import "dotenv/config";
@@ -3659,13 +4822,13 @@ function parseBrowser(userAgent) {
   }
   return "Unknown";
 }
-function clamp(value, min, max) {
+function clamp3(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 function percentile(values, p) {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.floor(clamp(p, 0, 100) / 100 * (sorted.length - 1));
+  const index = Math.floor(clamp3(p, 0, 100) / 100 * (sorted.length - 1));
   return sorted[index];
 }
 function recordLatency(ms) {
@@ -3741,9 +4904,9 @@ function computeInternalMonitorSnapshot() {
   const maxWorkerP95 = workerSamples.reduce((max, worker) => Math.max(max, Number(worker.latencyP95Ms || 0)), 0);
   const p95LatencyMs = Math.max(percentile(latencySamples, 95), maxWorkerP95);
   const slowQueryCount = workerSamples.filter((worker) => Number(worker.dbLatencyMs || 0) > 600).length;
-  const aiFailureRate = clamp(circuitAi.getSnapshot().failureRate * 100, 0, 100);
-  const dbFailureRate = clamp(circuitDb.getSnapshot().failureRate * 100, 0, 100);
-  const exportFailureRate = clamp(circuitExport.getSnapshot().failureRate * 100, 0, 100);
+  const aiFailureRate = clamp3(circuitAi.getSnapshot().failureRate * 100, 0, 100);
+  const dbFailureRate = clamp3(circuitDb.getSnapshot().failureRate * 100, 0, 100);
+  const exportFailureRate = clamp3(circuitExport.getSnapshot().failureRate * 100, 0, 100);
   const errorRate = Math.max(aiFailureRate, dbFailureRate, exportFailureRate);
   const mode2 = controlState.mode;
   const cpu = roundMetric(cpuPercent, 2);
@@ -3843,6 +5006,60 @@ function buildInternalMonitorAlerts(snapshot) {
   }
   return alerts;
 }
+function appendIntelligenceValue(key, value) {
+  if (!Number.isFinite(value)) return;
+  const series = intelligenceHistory[key];
+  series.push(value);
+  if (series.length > MAX_INTELLIGENCE_HISTORY) {
+    series.splice(0, series.length - MAX_INTELLIGENCE_HISTORY);
+  }
+}
+function toIntelligenceSnapshot(snapshot) {
+  return {
+    timestamp: snapshot.updatedAt || Date.now(),
+    score: snapshot.score,
+    mode: snapshot.mode,
+    cpuPercent: snapshot.cpuPercent,
+    ramPercent: snapshot.ramPercent,
+    p95LatencyMs: snapshot.p95LatencyMs,
+    errorRate: snapshot.errorRate,
+    dbLatencyMs: snapshot.dbLatencyMs,
+    aiLatencyMs: snapshot.aiLatencyMs,
+    eventLoopLagMs: snapshot.eventLoopLagMs,
+    requestRate: snapshot.requestRate,
+    activeRequests: snapshot.activeRequests,
+    queueSize: snapshot.queueLength,
+    workerCount: snapshot.workerCount,
+    maxWorkers: snapshot.maxWorkers,
+    dbConnections: snapshot.dbConnections,
+    aiFailRate: snapshot.aiFailRate,
+    bottleneckType: snapshot.bottleneckType
+  };
+}
+async function runIntelligenceCycle() {
+  if (intelligenceInFlight) return;
+  intelligenceInFlight = true;
+  try {
+    const monitorSnapshot = computeInternalMonitorSnapshot();
+    const snapshot = toIntelligenceSnapshot(monitorSnapshot);
+    appendIntelligenceValue("cpuPercent", snapshot.cpuPercent);
+    appendIntelligenceValue("p95LatencyMs", snapshot.p95LatencyMs);
+    appendIntelligenceValue("dbLatencyMs", snapshot.dbLatencyMs);
+    appendIntelligenceValue("errorRate", snapshot.errorRate);
+    appendIntelligenceValue("aiLatencyMs", snapshot.aiLatencyMs);
+    appendIntelligenceValue("queueSize", snapshot.queueSize);
+    appendIntelligenceValue("ramPercent", snapshot.ramPercent);
+    appendIntelligenceValue("requestRate", snapshot.requestRate);
+    appendIntelligenceValue("workerCount", snapshot.workerCount);
+    lastIntelligenceResult = await evaluateSystem(snapshot, intelligenceHistory);
+  } catch (err) {
+    if (API_DEBUG_LOGS) {
+      console.warn("Intelligence cycle error:", err);
+    }
+  } finally {
+    intelligenceInFlight = false;
+  }
+}
 function adaptiveRateLimit(req, res, next) {
   if (!req.path.startsWith("/api/")) return next();
   const windowMs = 1e4;
@@ -3850,7 +5067,7 @@ function adaptiveRateLimit(req, res, next) {
   const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim();
   const baseLimit = req.path.startsWith("/api/ai/") ? 14 : 40;
   const modePenalty = controlState.mode === "PROTECTION" ? 0.5 : controlState.mode === "DEGRADED" ? 0.75 : 1;
-  const dynamicLimit = Math.max(4, Math.floor(baseLimit * modePenalty * clamp(controlState.throttleFactor || 1, 0.2, 1.2)));
+  const dynamicLimit = Math.max(4, Math.floor(baseLimit * modePenalty * clamp3(controlState.throttleFactor || 1, 0.2, 1.2)));
   const bucket = adaptiveRateState.get(ip);
   if (!bucket || now >= bucket.resetAt) {
     adaptiveRateState.set(ip, { count: 1, resetAt: now + windowMs });
@@ -4397,7 +5614,7 @@ async function startServer() {
     }, 0);
   }
 }
-var storage, app, server, wss, JWT_SECRET, connectedClients, DEFAULT_SESSION_TIMEOUT_MINUTES, DEFAULT_WS_IDLE_MINUTES, DEFAULT_AI_TIMEOUT_MS, AI_PRECOMPUTE_ON_START, API_DEBUG_LOGS, MAINTENANCE_CACHE_TTL_MS, idleSweepRunning, maintenanceCache, RUNTIME_SETTINGS_CACHE_TTL_MS, runtimeSettingsCache, defaultControlState, controlState, preAllocatedBuffer, activeRequests, latencySamples, LATENCY_WINDOW, requestCounter, reqRatePerSec, lastCpuUsage, lastCpuTs, cpuPercent, gcCountWindow, gcPerMinute, lastDbLatencyMs, lastAiLatencyMs, eventLoopHistogram, circuitAi, circuitDb, circuitExport, DB_METHOD_WRAP_EXCLUDE, storageProto, buildEmbeddingText, adaptiveRateState, TAB_VISIBILITY_CACHE_TTL_MS, tabVisibilityCache, excludeColumnsFromIC, excludeColumnsFromPolice, extractJsonObject, parseIntentFallback, DEFAULT_COUNT_GROUPS, CATEGORY_RULES_CACHE_MS, categoryRulesCache, loadCategoryRules, detectCountRequest, categoryStatsInflight, enqueueCategoryStatsCompute, tokenizeQuery, buildFieldMatchSummary, parseIntent, rowScore, scoreRowDigits, extractLatLng, isLatLng, isNonEmptyString, hasPostcodeCoord, extractCustomerPostcode, extractCustomerLocationHint, toObjectJson, buildExplanation, searchCache, searchInflight, SEARCH_CACHE_MS, SEARCH_FAST_TIMEOUT_MS, withTimeout, computeAiSearch;
+var storage, app, server, wss, JWT_SECRET, connectedClients, DEFAULT_SESSION_TIMEOUT_MINUTES, DEFAULT_WS_IDLE_MINUTES, DEFAULT_AI_TIMEOUT_MS, AI_PRECOMPUTE_ON_START, API_DEBUG_LOGS, MAINTENANCE_CACHE_TTL_MS, idleSweepRunning, maintenanceCache, RUNTIME_SETTINGS_CACHE_TTL_MS, runtimeSettingsCache, defaultControlState, controlState, preAllocatedBuffer, activeRequests, latencySamples, LATENCY_WINDOW, requestCounter, reqRatePerSec, lastCpuUsage, lastCpuTs, cpuPercent, gcCountWindow, gcPerMinute, lastDbLatencyMs, lastAiLatencyMs, lastIntelligenceResult, intelligenceInFlight, MAX_INTELLIGENCE_HISTORY, intelligenceHistory, eventLoopHistogram, circuitAi, circuitDb, circuitExport, DB_METHOD_WRAP_EXCLUDE, storageProto, buildEmbeddingText, adaptiveRateState, TAB_VISIBILITY_CACHE_TTL_MS, tabVisibilityCache, excludeColumnsFromIC, excludeColumnsFromPolice, extractJsonObject, parseIntentFallback, DEFAULT_COUNT_GROUPS, CATEGORY_RULES_CACHE_MS, categoryRulesCache, loadCategoryRules, detectCountRequest, categoryStatsInflight, enqueueCategoryStatsCompute, tokenizeQuery, buildFieldMatchSummary, parseIntent, rowScore, scoreRowDigits, extractLatLng, isLatLng, isNonEmptyString, hasPostcodeCoord, extractCustomerPostcode, extractCustomerLocationHint, toObjectJson, buildExplanation, searchCache, searchInflight, SEARCH_CACHE_MS, SEARCH_FAST_TIMEOUT_MS, withTimeout, computeAiSearch;
 var init_index_local = __esm({
   "server/index-local.ts"() {
     "use strict";
@@ -4406,6 +5623,7 @@ var init_index_local = __esm({
     init_rate_limit();
     init_ai_ollama();
     init_circuitBreaker();
+    init_intelligence();
     storage = new PostgresStorage();
     app = express();
     server = createServer(app);
@@ -4464,6 +5682,20 @@ var init_index_local = __esm({
     gcPerMinute = 0;
     lastDbLatencyMs = 0;
     lastAiLatencyMs = 0;
+    lastIntelligenceResult = null;
+    intelligenceInFlight = false;
+    MAX_INTELLIGENCE_HISTORY = 300;
+    intelligenceHistory = {
+      cpuPercent: [],
+      p95LatencyMs: [],
+      dbLatencyMs: [],
+      errorRate: [],
+      aiLatencyMs: [],
+      queueSize: [],
+      ramPercent: [],
+      requestRate: [],
+      workerCount: []
+    };
     eventLoopHistogram = monitorEventLoopDelay({ resolution: 20 });
     eventLoopHistogram.enable();
     circuitAi = new CircuitBreaker({
@@ -4587,7 +5819,7 @@ var init_index_local = __esm({
       const cpuDeltaMicros = currentCpu.user - lastCpuUsage.user + (currentCpu.system - lastCpuUsage.system);
       const elapsedMs = Math.max(1, now - lastCpuTs);
       const cpuCorePercent = cpuDeltaMicros / 1e3 / elapsedMs * 100;
-      cpuPercent = clamp(cpuCorePercent / Math.max(1, controlState.workerCount || 1), 0, 100);
+      cpuPercent = clamp3(cpuCorePercent / Math.max(1, controlState.workerCount || 1), 0, 100);
       lastCpuUsage = currentCpu;
       lastCpuTs = now;
       if (process.send) {
@@ -4633,7 +5865,9 @@ var init_index_local = __esm({
           }
         }
       }
+      void runIntelligenceCycle();
     }, 5e3).unref();
+    void runIntelligenceCycle();
     app.use(express.json({ limit: "50mb" }));
     app.use(express.urlencoded({ extended: true, limit: "50mb" }));
     app.use((req, res, next) => {
@@ -4760,6 +5994,63 @@ var init_index_local = __esm({
           cluster: controlState.circuits,
           updatedAt: controlState.updatedAt
         });
+      }
+    );
+    app.get(
+      "/internal/intelligence/explain",
+      authenticateToken,
+      requireRole("user", "admin", "superuser"),
+      requireMonitorAccess,
+      (req, res) => {
+        const explain = getIntelligenceExplainability();
+        res.json({
+          anomalyBreakdown: explain.anomalyBreakdown,
+          correlationMatrix: explain.correlationMatrix,
+          slopeValues: explain.slopeValues,
+          forecastProjection: explain.forecastProjection,
+          governanceState: explain.governanceState,
+          chosenStrategy: explain.chosenStrategy,
+          decisionReason: explain.decisionReason
+        });
+      }
+    );
+    app.post(
+      "/internal/chaos/inject",
+      authenticateToken,
+      requireRole("admin", "superuser"),
+      async (req, res) => {
+        try {
+          const { type, magnitude, durationMs } = req.body || {};
+          const allowed = /* @__PURE__ */ new Set([
+            "cpu_spike",
+            "db_latency_spike",
+            "ai_delay",
+            "worker_crash",
+            "memory_pressure"
+          ]);
+          if (!allowed.has(type)) {
+            return res.status(400).json({
+              message: "Invalid chaos type.",
+              allowed: Array.from(allowed)
+            });
+          }
+          const result = injectChaos({
+            type,
+            magnitude: Number.isFinite(Number(magnitude)) ? Number(magnitude) : void 0,
+            durationMs: Number.isFinite(Number(durationMs)) ? Number(durationMs) : void 0
+          });
+          await storage.createAuditLog({
+            action: "CHAOS_INJECTED",
+            performedBy: req.user?.username || "system",
+            details: `Chaos injected: ${type}`
+          });
+          return res.json({
+            success: true,
+            ...result
+          });
+        } catch (err) {
+          return res.status(500).json({ message: err?.message || "Failed to inject chaos event." });
+        }
       }
     );
     app.get("/api/data-rows", authenticateToken, async (req, res) => {
