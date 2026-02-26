@@ -22,6 +22,8 @@ const AI = lazy(() => import("@/pages/AI"));
 const Banned = lazy(() => import("@/pages/Banned"));
 const SettingsPage = lazy(() => import("@/pages/Settings"));
 const MaintenancePage = lazy(() => import("@/pages/Maintenance"));
+const Monitor = lazy(() => import("@/pages/Monitor"));
+const Forbidden = lazy(() => import("@/pages/Forbidden"));
 
 interface User {
   username: string;
@@ -43,6 +45,7 @@ function AppContent() {
   const [savedCount, setSavedCount] = useState<number>(0);
   const [systemName, setSystemName] = useState<string>("SQR System");
   const [tabVisibility, setTabVisibility] = useState<Record<string, boolean> | null>(null);
+  const [tabVisibilityLoaded, setTabVisibilityLoaded] = useState(false);
   const [runtimeConfig, setRuntimeConfig] = useState<AppRuntimeConfig>({
     sessionTimeoutMinutes: 30,
     heartbeatIntervalMinutes: 5,
@@ -73,10 +76,18 @@ function AppContent() {
   }, []);
 
   const isPageEnabled = useCallback((role: string | undefined, page: string, tabs: Record<string, boolean> | null) => {
+    if (page === "monitor") {
+      if (role === "admin" || role === "superuser") return true;
+      if (role === "user") {
+        if (!tabVisibilityLoaded) return true;
+        return tabs?.monitor === true;
+      }
+      return false;
+    }
     if (!role || role === "superuser") return true;
     if (!tabs) return true;
     return tabs[page] !== false;
-  }, []);
+  }, [tabVisibilityLoaded]);
 
   useEffect(() => {
     const pathname = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "/";
@@ -84,6 +95,10 @@ function AppContent() {
       setCurrentPage("maintenance");
     } else if (pathname === "/settings") {
       setCurrentPage("settings");
+    } else if (pathname === "/monitor") {
+      setCurrentPage("monitor");
+    } else if (pathname === "/403") {
+      setCurrentPage("forbidden");
     }
 
     const banned = localStorage.getItem("banned");
@@ -105,6 +120,10 @@ function AppContent() {
           setCurrentPage("maintenance");
         } else if (pathname === "/settings" && parsedUser.role !== "user") {
           setCurrentPage("settings");
+        } else if (pathname === "/monitor") {
+          setCurrentPage("monitor");
+        } else if (pathname === "/403") {
+          setCurrentPage("forbidden");
         } else if (parsedUser.role === "user") {
           setCurrentPage("general-search");
         } else if (savedPage) {
@@ -181,13 +200,20 @@ function AppContent() {
   useEffect(() => {
     if (!user) {
       setTabVisibility(null);
+      setTabVisibilityLoaded(false);
       return;
     }
 
     let cancelled = false;
     const loadTabVisibility = async () => {
+      if (!cancelled) {
+        setTabVisibilityLoaded(false);
+      }
       if (user.role === "superuser") {
-        if (!cancelled) setTabVisibility(null);
+        if (!cancelled) {
+          setTabVisibility(null);
+          setTabVisibilityLoaded(true);
+        }
         return;
       }
       try {
@@ -195,10 +221,12 @@ function AppContent() {
         const tabs = response?.tabs && typeof response.tabs === "object" ? response.tabs : {};
         if (!cancelled) {
           setTabVisibility(tabs);
+          setTabVisibilityLoaded(true);
         }
       } catch {
         if (!cancelled) {
           setTabVisibility(null);
+          setTabVisibilityLoaded(true);
         }
       }
     };
@@ -258,8 +286,24 @@ function AppContent() {
   }, [user, currentPage]);
 
   useEffect(() => {
+    if (!user || currentPage !== "monitor") return;
+    if (isPageEnabled(user.role, "monitor", tabVisibility)) return;
+    setCurrentPage("forbidden");
+    if (typeof window !== "undefined") {
+      window.history.replaceState({}, "", "/403");
+    }
+  }, [user, currentPage, tabVisibility, isPageEnabled]);
+
+  useEffect(() => {
     if (!user) return;
     if (isPageEnabled(user.role, currentPage, tabVisibility)) return;
+    if (currentPage === "monitor") {
+      setCurrentPage("forbidden");
+      if (typeof window !== "undefined") {
+        window.history.replaceState({}, "", "/403");
+      }
+      return;
+    }
     setCurrentPage(getDefaultPageForRole(user.role, tabVisibility));
   }, [user, currentPage, tabVisibility, isPageEnabled, getDefaultPageForRole]);
 
@@ -301,6 +345,15 @@ function AppContent() {
 
   const handleNavigate = useCallback((page: string, importId?: string) => {
     if (!isPageEnabled(user?.role, page, tabVisibility)) {
+      if (page === "monitor") {
+        setCurrentPage("forbidden");
+        localStorage.setItem("activeTab", "forbidden");
+        localStorage.setItem("lastPage", "forbidden");
+        if (typeof window !== "undefined") {
+          window.history.replaceState({}, "", "/403");
+        }
+        return;
+      }
       setCurrentPage(getDefaultPageForRole(user?.role || "user", tabVisibility));
       return;
     }
@@ -312,6 +365,8 @@ function AppContent() {
     if (typeof window !== "undefined") {
       if (page === "settings") window.history.replaceState({}, "", "/settings");
       else if (page === "maintenance") window.history.replaceState({}, "", "/maintenance");
+      else if (page === "monitor") window.history.replaceState({}, "", "/monitor");
+      else if (page === "forbidden") window.history.replaceState({}, "", "/403");
       else window.history.replaceState({}, "", "/");
     }
 
@@ -367,6 +422,9 @@ function AppContent() {
 
   const renderPage = () => {
     if (!isPageEnabled(user.role, currentPage, tabVisibility)) {
+      if (currentPage === "monitor") {
+        return <Forbidden />;
+      }
       return user.role === "user"
         ? <GeneralSearch userRole={user.role} />
         : <Home onNavigate={handleNavigate} userRole={user.role} tabVisibility={tabVisibility} />;
@@ -402,6 +460,10 @@ function AppContent() {
         return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <SettingsPage />;
       case "maintenance":
         return <MaintenancePage />;
+      case "monitor":
+        return <Monitor />;
+      case "forbidden":
+        return <Forbidden />;
       default:
         return user.role === "user"
           ? <GeneralSearch userRole={user.role} />

@@ -1,4 +1,4 @@
-import { Home, Upload, BookMarked, Eye, Search, BarChart3, Activity, FileText, Database, LogOut, ShieldCheck, LayoutDashboard, Sparkles, SlidersHorizontal } from "lucide-react";
+import { Home, Upload, BookMarked, Eye, Search, BarChart3, Activity, FileText, Database, LogOut, ShieldCheck, LayoutDashboard, Sparkles, SlidersHorizontal, Server } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import ThemeToggle from "./ThemeToggle";
 
@@ -26,6 +26,7 @@ export default function Navbar({ currentPage, onNavigate, onLogout, userRole, us
     { id: "analysis", label: "Analysis", icon: BarChart3, roles: ["user", "admin", "superuser"] },
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["user", "admin", "superuser"] },
     { id: "ai", label: "AI", icon: Sparkles, roles: ["user", "admin", "superuser"] },
+    { id: "monitor", label: "System Monitor", icon: Server, roles: ["user", "admin", "superuser"] },
     { id: "settings", label: "Settings", icon: SlidersHorizontal, roles: ["admin", "superuser"] },
     { id: "activity", label: "Activity", icon: Activity, roles: ["user", "admin", "superuser"] },
     { id: "audit-logs", label: "Audit", icon: FileText, roles: ["user", "admin", "superuser"] },
@@ -34,6 +35,10 @@ export default function Navbar({ currentPage, onNavigate, onLogout, userRole, us
 
   const visibleItems = navItems.filter((item) => {
     if (!item.roles.includes(userRole)) return false;
+    if (item.id === "monitor") {
+      if (userRole === "admin" || userRole === "superuser") return true;
+      return tabVisibility?.monitor === true;
+    }
     if (userRole === "superuser") return true;
     if (!tabVisibility) return true;
     return tabVisibility[item.id] !== false;

@@ -74,6 +74,7 @@ const roleTabOrder = [
   "general_search",
   "analysis",
   "dashboard",
+  "monitor",
   "ai",
   "activity",
   "audit_logs",

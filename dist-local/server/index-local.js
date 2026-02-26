@@ -3,6 +3,7 @@ import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import { monitorEventLoopDelay, PerformanceObserver } from "node:perf_hooks";
+import os from "node:os";
 import path from "path";
 import fs from "fs";
 import { WebSocketServer, WebSocket } from "ws";
@@ -237,6 +238,7 @@ var ROLE_TAB_SETTINGS = {
     { pageId: "general-search", suffix: "general_search", label: "User Tab: Search", description: "Allow user to open Search tab.", defaultEnabled: true },
     { pageId: "analysis", suffix: "analysis", label: "User Tab: Analysis", description: "Allow user to open Analysis tab.", defaultEnabled: false },
     { pageId: "dashboard", suffix: "dashboard", label: "User Tab: Dashboard", description: "Allow user to open Dashboard tab.", defaultEnabled: false },
+    { pageId: "monitor", suffix: "monitor", label: "User Tab: System Monitor", description: "Allow user to open System Monitor tab.", defaultEnabled: false },
     { pageId: "ai", suffix: "ai", label: "User Tab: AI", description: "Allow user to open AI tab.", defaultEnabled: true },
     { pageId: "activity", suffix: "activity", label: "User Tab: Activity", description: "Allow user to open Activity tab.", defaultEnabled: false },
     { pageId: "audit-logs", suffix: "audit_logs", label: "User Tab: Audit", description: "Allow user to open Audit tab.", defaultEnabled: false },
@@ -3827,6 +3829,124 @@ function getSearchQueueLength() {
   const map = global.__searchInflightMap;
   return map?.size ?? 0;
 }
+function roundMetric(value, digits = 2) {
+  if (!Number.isFinite(value)) return 0;
+  const p = 10 ** digits;
+  return Math.round(value * p) / p;
+}
+function getRamPercent() {
+  const total = Number(os.totalmem() || 0);
+  const free = Number(os.freemem() || 0);
+  if (total <= 0) return 0;
+  return roundMetric((total - free) / total * 100, 2);
+}
+function computeInternalMonitorSnapshot() {
+  const workerSamples = controlState.workers || [];
+  const maxWorkerP95 = workerSamples.reduce((max, worker) => Math.max(max, Number(worker.latencyP95Ms || 0)), 0);
+  const p95LatencyMs = Math.max(percentile(latencySamples, 95), maxWorkerP95);
+  const slowQueryCount = workerSamples.filter((worker) => Number(worker.dbLatencyMs || 0) > 600).length;
+  const aiFailureRate = clamp(circuitAi.getSnapshot().failureRate * 100, 0, 100);
+  const dbFailureRate = clamp(circuitDb.getSnapshot().failureRate * 100, 0, 100);
+  const exportFailureRate = clamp(circuitExport.getSnapshot().failureRate * 100, 0, 100);
+  const errorRate = Math.max(aiFailureRate, dbFailureRate, exportFailureRate);
+  const mode = controlState.mode;
+  const cpu = roundMetric(cpuPercent, 2);
+  const ram = getRamPercent();
+  const dbLatency = roundMetric(lastDbLatencyMs, 2);
+  const aiLatency = roundMetric(lastAiLatencyMs, 2);
+  const loopLag = roundMetric(getEventLoopLagMs(), 2);
+  let bottleneckType = "NONE";
+  const pressureScore = [
+    { type: "CPU", score: cpu / 100 },
+    { type: "RAM", score: ram / 100 },
+    { type: "DB", score: dbLatency / 1200 },
+    { type: "AI", score: aiLatency / 1500 },
+    { type: "EVENT_LOOP", score: loopLag / 180 },
+    { type: "ERRORS", score: errorRate / 10 }
+  ].sort((a, b) => b.score - a.score)[0];
+  if (pressureScore && pressureScore.score >= 0.5) {
+    bottleneckType = pressureScore.type;
+  }
+  return {
+    score: roundMetric(controlState.healthScore, 2),
+    mode,
+    cpuPercent: cpu,
+    ramPercent: ram,
+    p95LatencyMs: roundMetric(p95LatencyMs, 2),
+    errorRate: roundMetric(errorRate, 2),
+    dbLatencyMs: dbLatency,
+    aiLatencyMs: aiLatency,
+    eventLoopLagMs: loopLag,
+    requestRate: roundMetric(reqRatePerSec, 2),
+    activeRequests,
+    queueLength: getSearchQueueLength(),
+    workerCount: controlState.workerCount,
+    maxWorkers: controlState.maxWorkers,
+    dbProtection: controlState.dbProtection || lastDbLatencyMs > 1e3,
+    slowQueryCount,
+    dbConnections: Math.max(0, Number(pool.totalCount || 0) + Number(pool.waitingCount || 0)),
+    aiFailRate: roundMetric(aiFailureRate, 2),
+    bottleneckType,
+    updatedAt: controlState.updatedAt
+  };
+}
+function buildInternalMonitorAlerts(snapshot) {
+  const alerts = [];
+  const timestamp2 = new Date(snapshot.updatedAt || Date.now()).toISOString();
+  const pushAlert = (severity, source, message) => {
+    alerts.push({
+      id: `${source.toLowerCase().replace(/[^a-z0-9_]/g, "_")}_${severity.toLowerCase()}`,
+      severity,
+      source,
+      message,
+      timestamp: timestamp2
+    });
+  };
+  if (snapshot.mode === "PROTECTION") {
+    pushAlert("CRITICAL", "MODE", "System is in PROTECTION mode. Heavy routes are restricted.");
+  } else if (snapshot.mode === "DEGRADED") {
+    pushAlert("WARNING", "MODE", "System is in DEGRADED mode. Throughput throttling is active.");
+  }
+  if (snapshot.cpuPercent >= 88) {
+    pushAlert("CRITICAL", "CPU", `CPU usage is critically high at ${snapshot.cpuPercent.toFixed(1)}%.`);
+  } else if (snapshot.cpuPercent >= 75) {
+    pushAlert("WARNING", "CPU", `CPU usage is elevated at ${snapshot.cpuPercent.toFixed(1)}%.`);
+  }
+  if (snapshot.ramPercent >= 92) {
+    pushAlert("CRITICAL", "RAM", `RAM usage is critically high at ${snapshot.ramPercent.toFixed(1)}%.`);
+  } else if (snapshot.ramPercent >= 80) {
+    pushAlert("WARNING", "RAM", `RAM usage is elevated at ${snapshot.ramPercent.toFixed(1)}%.`);
+  }
+  if (snapshot.dbLatencyMs >= 1e3) {
+    pushAlert("CRITICAL", "DB", `Database latency is critical (${snapshot.dbLatencyMs.toFixed(0)} ms).`);
+  } else if (snapshot.dbLatencyMs >= 400) {
+    pushAlert("WARNING", "DB", `Database latency is elevated (${snapshot.dbLatencyMs.toFixed(0)} ms).`);
+  }
+  if (snapshot.aiLatencyMs >= 1400) {
+    pushAlert("CRITICAL", "AI", `AI latency is critical (${snapshot.aiLatencyMs.toFixed(0)} ms).`);
+  } else if (snapshot.aiLatencyMs >= 700) {
+    pushAlert("WARNING", "AI", `AI latency is elevated (${snapshot.aiLatencyMs.toFixed(0)} ms).`);
+  }
+  if (snapshot.eventLoopLagMs >= 170) {
+    pushAlert("CRITICAL", "EVENT_LOOP", `Event loop lag is critical (${snapshot.eventLoopLagMs.toFixed(1)} ms).`);
+  } else if (snapshot.eventLoopLagMs >= 90) {
+    pushAlert("WARNING", "EVENT_LOOP", `Event loop lag is elevated (${snapshot.eventLoopLagMs.toFixed(1)} ms).`);
+  }
+  if (snapshot.errorRate >= 5) {
+    pushAlert("CRITICAL", "ERRORS", `Runtime failure rate is high (${snapshot.errorRate.toFixed(2)}%).`);
+  } else if (snapshot.errorRate >= 2) {
+    pushAlert("WARNING", "ERRORS", `Runtime failure rate is elevated (${snapshot.errorRate.toFixed(2)}%).`);
+  }
+  if (snapshot.queueLength >= 10) {
+    pushAlert("CRITICAL", "QUEUE", `Request queue is saturated (${snapshot.queueLength} pending).`);
+  } else if (snapshot.queueLength >= 5) {
+    pushAlert("WARNING", "QUEUE", `Request queue is growing (${snapshot.queueLength} pending).`);
+  }
+  if (snapshot.workerCount >= snapshot.maxWorkers && snapshot.maxWorkers > 0) {
+    pushAlert("WARNING", "WORKERS", `Worker capacity reached (${snapshot.workerCount}/${snapshot.maxWorkers}).`);
+  }
+  return alerts;
+}
 var adaptiveRateState = /* @__PURE__ */ new Map();
 function adaptiveRateLimit(req, res, next) {
   if (!req.path.startsWith("/api/")) return next();
@@ -4066,6 +4186,24 @@ function requireTabAccess(tabId) {
     }
   };
 }
+async function requireMonitorAccess(req, res, next) {
+  try {
+    const role = req.user?.role;
+    if (!role) return res.status(401).json({ message: "Unauthenticated" });
+    if (role === "superuser" || role === "admin") return next();
+    if (role !== "user") {
+      return res.status(403).json({ message: "Insufficient permissions" });
+    }
+    const tabs = await getRoleTabVisibilityCached(role);
+    if (tabs.monitor !== true) {
+      return res.status(403).json({ message: "System Monitor access is disabled for this role." });
+    }
+    return next();
+  } catch (err) {
+    console.error("Monitor access guard error:", err);
+    return res.status(500).json({ message: err?.message || "Failed to validate monitor access" });
+  }
+}
 function broadcastWsMessage(payload) {
   const msg = JSON.stringify(payload);
   for (const [, ws] of connectedClients) {
@@ -4172,62 +4310,96 @@ app.get("/api/maintenance-status", async (req, res) => {
     res.status(500).json({ message: err?.message || "Failed to load maintenance status" });
   }
 });
-app.get("/internal/system-health", (req, res) => {
-  const health = {
-    score: controlState.healthScore,
-    mode: controlState.mode,
-    cpuPercent,
-    dbLatencyMs: lastDbLatencyMs,
-    aiLatencyMs: lastAiLatencyMs,
-    eventLoopLagMs: getEventLoopLagMs(),
-    requestRate: reqRatePerSec,
-    activeRequests,
-    queueLength: getSearchQueueLength(),
-    workerCount: controlState.workerCount,
-    maxWorkers: controlState.maxWorkers,
-    dbProtection: controlState.dbProtection || lastDbLatencyMs > 1e3,
-    updatedAt: controlState.updatedAt
-  };
-  res.json(health);
-});
-app.get("/internal/system-mode", (req, res) => {
-  res.json({
-    mode: controlState.mode,
-    throttleFactor: controlState.throttleFactor,
-    rejectHeavyRoutes: controlState.rejectHeavyRoutes,
-    dbProtection: controlState.dbProtection || lastDbLatencyMs > 1e3,
-    preAllocatedMB: controlState.preAllocateMB,
-    updatedAt: controlState.updatedAt
-  });
-});
-app.get("/internal/workers", (req, res) => {
-  res.json({
-    count: controlState.workerCount,
-    maxWorkers: controlState.maxWorkers,
-    workers: controlState.workers,
-    updatedAt: controlState.updatedAt
-  });
-});
-app.get("/internal/load-trend", (req, res) => {
-  res.json({
-    predictor: controlState.predictor,
-    queueLength: controlState.queueLength,
-    requestRate: reqRatePerSec,
-    p95LatencyMs: percentile(latencySamples, 95),
-    updatedAt: controlState.updatedAt
-  });
-});
-app.get("/internal/circuit-status", (req, res) => {
-  res.json({
-    local: {
-      ai: circuitAi.getSnapshot(),
-      db: circuitDb.getSnapshot(),
-      export: circuitExport.getSnapshot()
-    },
-    cluster: controlState.circuits,
-    updatedAt: controlState.updatedAt
-  });
-});
+app.get(
+  "/internal/system-health",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireMonitorAccess,
+  (req, res) => {
+    const snapshot = computeInternalMonitorSnapshot();
+    const alerts = buildInternalMonitorAlerts(snapshot);
+    res.json({
+      ...snapshot,
+      activeAlertCount: alerts.length
+    });
+  }
+);
+app.get(
+  "/internal/system-mode",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireMonitorAccess,
+  (req, res) => {
+    res.json({
+      mode: controlState.mode,
+      throttleFactor: controlState.throttleFactor,
+      rejectHeavyRoutes: controlState.rejectHeavyRoutes,
+      dbProtection: controlState.dbProtection || lastDbLatencyMs > 1e3,
+      preAllocatedMB: controlState.preAllocateMB,
+      updatedAt: controlState.updatedAt
+    });
+  }
+);
+app.get(
+  "/internal/workers",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireMonitorAccess,
+  (req, res) => {
+    res.json({
+      count: controlState.workerCount,
+      maxWorkers: controlState.maxWorkers,
+      workers: controlState.workers,
+      updatedAt: controlState.updatedAt
+    });
+  }
+);
+app.get(
+  "/internal/alerts",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireMonitorAccess,
+  (req, res) => {
+    const snapshot = computeInternalMonitorSnapshot();
+    const alerts = buildInternalMonitorAlerts(snapshot);
+    res.json({
+      alerts,
+      updatedAt: snapshot.updatedAt
+    });
+  }
+);
+app.get(
+  "/internal/load-trend",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireMonitorAccess,
+  (req, res) => {
+    res.json({
+      predictor: controlState.predictor,
+      queueLength: controlState.queueLength,
+      requestRate: reqRatePerSec,
+      p95LatencyMs: percentile(latencySamples, 95),
+      updatedAt: controlState.updatedAt
+    });
+  }
+);
+app.get(
+  "/internal/circuit-status",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireMonitorAccess,
+  (req, res) => {
+    res.json({
+      local: {
+        ai: circuitAi.getSnapshot(),
+        db: circuitDb.getSnapshot(),
+        export: circuitExport.getSnapshot()
+      },
+      cluster: controlState.circuits,
+      updatedAt: controlState.updatedAt
+    });
+  }
+);
 app.get("/api/data-rows", authenticateToken, async (req, res) => {
   try {
     const importId = req.query.importId;
