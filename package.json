@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "npx vite build && npx esbuild server/index-local.ts --bundle --platform=node --packages=external --outfile=dist-local/server/index-local.js --format=esm",
-    "start": "node dist-local/server/index-local.js"
+    "build": "npx vite build && npx esbuild server/index-local.ts --bundle --platform=node --packages=external --outfile=dist-local/server/index-local.js --format=esm && npx esbuild server/cluster-local.ts --bundle --platform=node --packages=external --outfile=dist-local/server/cluster-local.js --format=esm",
+    "start": "node dist-local/server/cluster-local.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
