@@ -1,6 +1,8 @@
 import { WebSocketServer, WebSocket } from "ws";
 import jwt from "jsonwebtoken";
-import { storage } from "./storage";
+import { PostgresStorage } from "../storage-postgres";
+
+const storage = new PostgresStorage();
 
 export const connectedClients = new Map<string, WebSocket>();
 

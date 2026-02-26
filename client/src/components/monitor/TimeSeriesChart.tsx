@@ -5,12 +5,12 @@ import {
   Line,
   LineChart,
   ResponsiveContainer,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip as HintTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type TimeSeriesPoint = {
   ts: number;
@@ -48,7 +48,7 @@ function TimeSeriesChartImpl({ title, color, unit = "", description, data }: Tim
         <CardTitle className="flex items-center gap-2 text-sm font-medium">
           <span>{title}</span>
           {description ? (
-            <Tooltip>
+            <HintTooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
@@ -61,7 +61,7 @@ function TimeSeriesChartImpl({ title, color, unit = "", description, data }: Tim
               <TooltipContent>
                 <p className="max-w-xs text-xs">{description}</p>
               </TooltipContent>
-            </Tooltip>
+            </HintTooltip>
           ) : null}
         </CardTitle>
         {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
@@ -90,7 +90,7 @@ function TimeSeriesChartImpl({ title, color, unit = "", description, data }: Tim
                 tickLine={false}
                 width={44}
               />
-              <Tooltip
+              <RechartsTooltip
                 isAnimationActive={false}
                 contentStyle={tooltipStyle}
                 labelFormatter={(value) =>

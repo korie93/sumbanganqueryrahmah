@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { authenticateToken } from "../middlewares/authenticate";
-import { searchRateLimiter } from "../middlewares/rateLimit";
+import { authenticateToken } from "../middleware/authenticate";
+import { searchRateLimiter } from "../middleware/rate-limit";
 import {
   getImports,
   getImportData,

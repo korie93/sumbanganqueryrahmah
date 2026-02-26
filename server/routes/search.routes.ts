@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { authenticateToken } from "../middlewares/authenticate";
+import { authenticateToken } from "../middleware/authenticate";
 import { searchGlobal, advancedSearch, getSearchColumns } from "../controllers/search.controller";
-import { searchRateLimiter } from "../middlewares/rateLimit";
+import { searchRateLimiter } from "../middleware/rate-limit";
 
 const router = Router();
 

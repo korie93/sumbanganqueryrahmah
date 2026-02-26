@@ -14,6 +14,8 @@ import { StringDecoder } from "string_decoder";
 import { searchRateLimiter } from "./middleware/rate-limit";
 import { ollamaChat, ollamaEmbed, getOllamaConfig, type OllamaMessage } from "./ai-ollama";
 import { CircuitBreaker, CircuitOpenError } from "./internal/circuitBreaker";
+import { evaluateSystem, getIntelligenceExplainability, injectChaos } from "./intelligence";
+import type { ChaosType, EvaluateSystemResult, SystemHistory, SystemSnapshot } from "./intelligence/types";
 
 const storage = new PostgresStorage();
 const app = express();
@@ -160,6 +162,21 @@ let gcCountWindow = 0;
 let gcPerMinute = 0;
 let lastDbLatencyMs = 0;
 let lastAiLatencyMs = 0;
+let lastIntelligenceResult: EvaluateSystemResult | null = null;
+let intelligenceInFlight = false;
+
+const MAX_INTELLIGENCE_HISTORY = 300;
+const intelligenceHistory: SystemHistory = {
+  cpuPercent: [],
+  p95LatencyMs: [],
+  dbLatencyMs: [],
+  errorRate: [],
+  aiLatencyMs: [],
+  queueSize: [],
+  ramPercent: [],
+  requestRate: [],
+  workerCount: [],
+};
 
 const eventLoopHistogram = monitorEventLoopDelay({ resolution: 20 });
 eventLoopHistogram.enable();
@@ -525,6 +542,65 @@ function buildInternalMonitorAlerts(snapshot: InternalMonitorSnapshot): Internal
   return alerts;
 }
 
+function appendIntelligenceValue(key: keyof SystemHistory, value: number) {
+  if (!Number.isFinite(value)) return;
+  const series = intelligenceHistory[key];
+  series.push(value);
+  if (series.length > MAX_INTELLIGENCE_HISTORY) {
+    series.splice(0, series.length - MAX_INTELLIGENCE_HISTORY);
+  }
+}
+
+function toIntelligenceSnapshot(snapshot: InternalMonitorSnapshot): SystemSnapshot {
+  return {
+    timestamp: snapshot.updatedAt || Date.now(),
+    score: snapshot.score,
+    mode: snapshot.mode,
+    cpuPercent: snapshot.cpuPercent,
+    ramPercent: snapshot.ramPercent,
+    p95LatencyMs: snapshot.p95LatencyMs,
+    errorRate: snapshot.errorRate,
+    dbLatencyMs: snapshot.dbLatencyMs,
+    aiLatencyMs: snapshot.aiLatencyMs,
+    eventLoopLagMs: snapshot.eventLoopLagMs,
+    requestRate: snapshot.requestRate,
+    activeRequests: snapshot.activeRequests,
+    queueSize: snapshot.queueLength,
+    workerCount: snapshot.workerCount,
+    maxWorkers: snapshot.maxWorkers,
+    dbConnections: snapshot.dbConnections,
+    aiFailRate: snapshot.aiFailRate,
+    bottleneckType: snapshot.bottleneckType,
+  };
+}
+
+async function runIntelligenceCycle() {
+  if (intelligenceInFlight) return;
+  intelligenceInFlight = true;
+  try {
+    const monitorSnapshot = computeInternalMonitorSnapshot();
+    const snapshot = toIntelligenceSnapshot(monitorSnapshot);
+
+    appendIntelligenceValue("cpuPercent", snapshot.cpuPercent);
+    appendIntelligenceValue("p95LatencyMs", snapshot.p95LatencyMs);
+    appendIntelligenceValue("dbLatencyMs", snapshot.dbLatencyMs);
+    appendIntelligenceValue("errorRate", snapshot.errorRate);
+    appendIntelligenceValue("aiLatencyMs", snapshot.aiLatencyMs);
+    appendIntelligenceValue("queueSize", snapshot.queueSize);
+    appendIntelligenceValue("ramPercent", snapshot.ramPercent);
+    appendIntelligenceValue("requestRate", snapshot.requestRate);
+    appendIntelligenceValue("workerCount", snapshot.workerCount);
+
+    lastIntelligenceResult = await evaluateSystem(snapshot, intelligenceHistory);
+  } catch (err) {
+    if (API_DEBUG_LOGS) {
+      console.warn("Intelligence cycle error:", err);
+    }
+  } finally {
+    intelligenceInFlight = false;
+  }
+}
+
 const adaptiveRateState = new Map<string, { count: number; resetAt: number }>();
 function adaptiveRateLimit(req: Request, res: Response, next: NextFunction) {
   if (!req.path.startsWith("/api/")) return next();
@@ -675,7 +751,10 @@ setInterval(() => {
       }
     }
   }
+
+  void runIntelligenceCycle();
 }, 5_000).unref();
+void runIntelligenceCycle();
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -1071,6 +1150,69 @@ app.get(
       cluster: controlState.circuits,
       updatedAt: controlState.updatedAt,
     });
+  },
+);
+
+app.get(
+  "/internal/intelligence/explain",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireMonitorAccess,
+  (req, res) => {
+    const explain = getIntelligenceExplainability();
+    res.json({
+      anomalyBreakdown: explain.anomalyBreakdown,
+      correlationMatrix: explain.correlationMatrix,
+      slopeValues: explain.slopeValues,
+      forecastProjection: explain.forecastProjection,
+      governanceState: explain.governanceState,
+      chosenStrategy: explain.chosenStrategy,
+      decisionReason: explain.decisionReason,
+    });
+  },
+);
+
+app.post(
+  "/internal/chaos/inject",
+  authenticateToken,
+  requireRole("admin", "superuser"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const { type, magnitude, durationMs } = req.body || {};
+      const allowed = new Set<ChaosType>([
+        "cpu_spike",
+        "db_latency_spike",
+        "ai_delay",
+        "worker_crash",
+        "memory_pressure",
+      ]);
+
+      if (!allowed.has(type)) {
+        return res.status(400).json({
+          message: "Invalid chaos type.",
+          allowed: Array.from(allowed),
+        });
+      }
+
+      const result = injectChaos({
+        type,
+        magnitude: Number.isFinite(Number(magnitude)) ? Number(magnitude) : undefined,
+        durationMs: Number.isFinite(Number(durationMs)) ? Number(durationMs) : undefined,
+      });
+
+      await storage.createAuditLog({
+        action: "CHAOS_INJECTED",
+        performedBy: req.user?.username || "system",
+        details: `Chaos injected: ${type}`,
+      });
+
+      return res.json({
+        success: true,
+        ...result,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ message: err?.message || "Failed to inject chaos event." });
+    }
   },
 );
 
