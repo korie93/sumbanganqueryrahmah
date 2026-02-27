@@ -86,6 +86,8 @@ const CPU_COUNT = os.cpus().length;
 const MAX_WORKERS_HARD_CAP = Math.min(CPU_COUNT, 3);
 const MIN_WORKERS = 1;
 const SCALE_COOLDOWN_MS = 15_000; // 15 seconds between scale operations
+const RESTART_THROTTLE_MS = 2_000; // 2 second throttle between restart attempts
+const MAX_RESTART_ATTEMPTS = 5; // Stop restarting after 5 consecutive failures
 
 const predictor = new LoadPredictor({
   shortWindowSec: 30,
@@ -97,6 +99,10 @@ const predictor = new LoadPredictor({
 const workerMetrics = new Map<number, WorkerMetrics>();
 const intentionalExits = new Set<number>();
 const drainingWorkers = new Set<number>();
+const restartAttempts = new Map<number, number>(); // Track restart attempts per worker
+let lastRestartTime = -Infinity; // Initialize to allow first restart immediately
+let lastSpawnAttemptTime = -Infinity; // Track actual spawn attempts (not exits)
+let consecutiveRestarts = 0;
 let lastBroadcast: WorkerControlState | null = null;
 let lowLoadSince: number | null = null;
 let mode: WorkerControlState["mode"] = "NORMAL";
@@ -262,10 +268,11 @@ function broadcastControl(control: WorkerControlState) {
 
 // 🔒 SAFE FORK: Prevents uncontrolled spawn + adds error handling
 function safeFork(reason: string): Worker | null {
-  const currentWorkers = getWorkers().length;
+  // Count only workers that are actually running (not exiting/dead)
+  const aliveWorkers = getWorkers().filter(w => !w.isDead() && w.isConnected());
   const maxWorkers = getMaxWorkers();
 
-  if (currentWorkers >= maxWorkers) {
+  if (aliveWorkers.length >= maxWorkers) {
     console.log(`⚠ Max workers (${maxWorkers}) reached. Skipping spawn for: ${reason}`);
     return null;
   }
@@ -448,6 +455,8 @@ function bootCluster() {
 
   cluster.on("online", (worker) => {
     wireWorker(worker);
+    // Reset consecutive restarts counter on successful worker online
+    consecutiveRestarts = 0;
     if (lastBroadcast) {
       // Safe send with connection check
       if (worker.isConnected() && !worker.isDead()) {
@@ -466,19 +475,53 @@ function bootCluster() {
     const intentional = intentionalExits.has(worker.id);
     if (intentional) {
       intentionalExits.delete(worker.id);
+      restartAttempts.delete(worker.id);
+      consecutiveRestarts = 0; // Reset on successful graceful exit
     } else {
+      // 🔒 Restart Throttling & Circuit Breaker: Prevent infinite loops
+      const now = Date.now();
+      const timeSinceLastSpawn = now - lastSpawnAttemptTime;
+      
+      // Check if we've exceeded max consecutive restarts - STOP ALL SPAWNING
+      consecutiveRestarts++;
+      if (consecutiveRestarts > MAX_RESTART_ATTEMPTS) {
+        console.error(
+          `❌ CRASH LOOP DETECTED: Worker#${worker.id} failed (code=${code}). ` +
+          `Exceeded max restart attempts (${MAX_RESTART_ATTEMPTS}). ` +
+          `Stopping automatic restarts to prevent cascade. Check logs for root cause.`
+        );
+        return; // Do NOT spawn any new worker
+      }
+      
       console.error(`❌ Worker#${worker.id} exited unexpectedly (code=${code}, signal=${signal}). Restarting...`);
-      const w = safeFork("unexpected-exit-restart");
-      if (w) {
-        wireWorker(w);
+      
+      // 🔒 Only allow ONE spawn attempt per RESTART_THROTTLE_MS period
+      // This prevents rapid respawning when multiple workers fail in succession
+      if (timeSinceLastSpawn >= RESTART_THROTTLE_MS) {
+        lastSpawnAttemptTime = now; // Mark spawn attempt NOW (before actual fork)
+        const w = safeFork("unexpected-exit-restart");
+        if (w) {
+          wireWorker(w);
+          console.log(`  ✓ Spawned replacement worker in response to failure`);
+        } else {
+          console.log(`  ⚠ Failed to spawn replacement (hard cap or resource limit)`);
+        }
+      } else {
+        // We just spawned within the throttle window - don't spawn again yet
+        const remainingDelay = RESTART_THROTTLE_MS - timeSinceLastSpawn;
+        console.log(`⏱  Throttling restart (${remainingDelay}ms) - spawn already attempted recently`);
       }
     }
 
-    // Keep minimum worker availability.
+    // Keep minimum worker availability (but respect throttle for min workers too)
     if (getWorkers().length < getMinWorkers()) {
-      const w = safeFork("min-capacity-restore");
-      if (w) {
-        wireWorker(w);
+      const now = Date.now();
+      if (now - lastSpawnAttemptTime >= RESTART_THROTTLE_MS) {
+        lastSpawnAttemptTime = now;
+        const w = safeFork("min-capacity-restore");
+        if (w) {
+          wireWorker(w);
+        }
       }
     }
   });

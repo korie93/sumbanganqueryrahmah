@@ -4965,6 +4965,19 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       const PORT = parseInt(process.env.PORT || "5000", 10);
       const HOST = "0.0.0.0";
 
+      // Enable SO_REUSEADDR to allow rapid rebinding after process restart
+      server.on("error", (err: any) => {
+        if (err.code === "EADDRINUSE") {
+          console.error(`❌ Port ${PORT} is already in use.`);
+          console.error(`   This usually means a previous server process hasn't fully released the port yet.`);
+          console.error(`   Please wait a few seconds and try again, or use: lsof -i :${PORT} (or netstat -ano | findstr :${PORT} on Windows)`);
+          process.exit(1);
+        } else {
+          console.error(`❌ Server error:`, err);
+          process.exit(1);
+        }
+      });
+
       server.listen(PORT, HOST, () => {
         console.log("");
         console.log("=========================================");
