@@ -1,6 +1,4 @@
-shot;
-  workerCount: number;
-  maxWorkers: number;import cluster, { type Worker } from "node:cluster";
+import cluster, { type Worker } from "node:cluster";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,7 +33,9 @@ type WorkerControlState = {
   dbProtection: boolean;
   rejectHeavyRoutes: boolean;
   throttleFactor: number;
-  predictor: LoadTrendSnap
+  predictor: LoadTrendSnapshot;
+  workerCount: number;
+  maxWorkers: number;
   queueLength: number;
   preAllocateMB: number;
   updatedAt: number;
@@ -80,6 +80,13 @@ const LOW_REQ_RATE_THRESHOLD = 8;
 const PREALLOCATE_MB = 64;
 const MAX_SPAWN_PER_CYCLE = 1;
 
+// 🔒 HARD CAP: Prevent uncontrolled worker spawning
+// For i7 3770 (4 cores) + 16GB RAM: max 3 workers ensures stability
+const CPU_COUNT = os.cpus().length;
+const MAX_WORKERS_HARD_CAP = Math.min(CPU_COUNT, 3);
+const MIN_WORKERS = 1;
+const SCALE_COOLDOWN_MS = 15_000; // 15 seconds between scale operations
+
 const predictor = new LoadPredictor({
   shortWindowSec: 30,
   longWindowSec: 90,
@@ -95,18 +102,20 @@ let lowLoadSince: number | null = null;
 let mode: WorkerControlState["mode"] = "NORMAL";
 let preAllocBuffer: Buffer | null = null;
 let rollingRestartInProgress = false;
+let lastScaleTime = 0; // Track cooldown for scaling operations
 
 function round(value: number, digits = 2): number {
   const p = 10 ** digits;
   return Math.round(value * p) / p;
 }
 
+// 🔒 Hard-capped max workers (production safety)
 function getMaxWorkers() {
-  return Math.max(1, os.cpus().length - 1);
+  return MAX_WORKERS_HARD_CAP;
 }
 
 function getMinWorkers() {
-  return 1;
+  return MIN_WORKERS;
 }
 
 function getWorkers(): Worker[] {
@@ -234,18 +243,55 @@ function buildControlState(agg: Aggregate, trend: LoadTrendSnapshot): WorkerCont
 
 function broadcastControl(control: WorkerControlState) {
   lastBroadcast = control;
-  for (const worker of getWorkers()) {
-    worker.send({ type: "control-state", payload: control });
+  const workers = getWorkers();
+
+  for (const worker of workers) {
+    // 🔒 SAFE SEND: Check worker is alive before sending IPC
+    if (!worker || !worker.isConnected() || worker.isDead()) {
+      continue;
+    }
+
+    try {
+      worker.send({ type: "control-state", payload: control });
+    } catch (err) {
+      // Silently skip if send fails (worker may have disconnected)
+      console.warn(`⚠ Failed to send control-state to worker#${worker.id}`);
+    }
   }
 }
 
-function spawnWorker(reason: string) {
-  const workers = getWorkers();
+// 🔒 SAFE FORK: Prevents uncontrolled spawn + adds error handling
+function safeFork(reason: string): Worker | null {
+  const currentWorkers = getWorkers().length;
   const maxWorkers = getMaxWorkers();
-  if (workers.length >= maxWorkers) return false;
-  const w = cluster.fork({ ...process.env, SQR_CLUSTER_WORKER: "1" });
-  console.log(`🧩 Spawn worker#${w.id} (${reason})`);
-  return true;
+
+  if (currentWorkers >= maxWorkers) {
+    console.log(`⚠ Max workers (${maxWorkers}) reached. Skipping spawn for: ${reason}`);
+    return null;
+  }
+
+  try {
+    const worker = cluster.fork({ ...process.env, SQR_CLUSTER_WORKER: "1" });
+    console.log(`🧩 Spawn worker#${worker.id} (${reason})`);
+
+    // Prevent IPC crash on worker errors
+    worker.on("error", (err) => {
+      console.error(`Worker#${worker.id} error:`, err);
+    });
+
+    worker.on("disconnect", () => {
+      console.warn(`Worker#${worker.id} disconnected`);
+    });
+
+    return worker;
+  } catch (err) {
+    console.error(`Failed to fork worker for ${reason}:`, err);
+    return null;
+  }
+}
+
+function spawnWorker(reason: string): boolean {
+  return safeFork(reason) !== null;
 }
 
 async function drainAndRestartWorker(worker: Worker, reason: string) {
@@ -303,12 +349,26 @@ function evaluateScale() {
     cpuPercent: agg.cpuPercent,
   });
 
+  // 🔒 SCALE COOLDOWN: Prevent rapid spawn loops
+  const now = Date.now();
+  const timeSinceLastScale = now - lastScaleTime;
+  const canScale = timeSinceLastScale >= SCALE_COOLDOWN_MS;
+
+  // 🔒 MEMORY PROTECTION: Skip scaling on high memory usage
+  const memUsageMB = process.memoryUsage().rss / 1024 / 1024;
+  const memoryPressureHigh = memUsageMB > 1200;
+
+  if (memoryPressureHigh) {
+    console.log(`⚠ High memory (${Math.round(memUsageMB)}MB). Skipping scale up.`);
+  }
+
   // Predictive actions before overload.
-  if (trend.sustainedUpward) {
+  if (trend.sustainedUpward && canScale && !memoryPressureHigh) {
     let spawned = 0;
     while (spawned < MAX_SPAWN_PER_CYCLE && workers.length + spawned < maxWorkers) {
       if (!spawnWorker("predictive-uptrend")) break;
       spawned += 1;
+      lastScaleTime = now;
     }
     if (!preAllocBuffer) {
       preAllocBuffer = Buffer.alloc(PREALLOCATE_MB * 1024 * 1024);
@@ -317,13 +377,16 @@ function evaluateScale() {
     preAllocBuffer = null;
   }
 
-  // Reactive scale-up rules.
+  // Reactive scale-up rules (with cooldown & memory checks).
   const highLoad =
     agg.cpuPercent > 70 ||
     agg.p95 > 600 ||
     agg.activeRequests > ACTIVE_REQUESTS_THRESHOLD * Math.max(1, workers.length);
-  if (highLoad) {
-    spawnWorker("reactive-high-load");
+
+  if (highLoad && canScale && !memoryPressureHigh) {
+    if (spawnWorker("reactive-high-load")) {
+      lastScaleTime = now;
+    }
   }
 
   // Scale-down rules.
@@ -339,7 +402,7 @@ function evaluateScale() {
     lowLoadSince = null;
   }
 
-  // Memory protection.
+  // Memory protection restart.
   const memoryPressure =
     agg.heapUsedMB > 0 &&
     agg.oldSpaceMB / Math.max(agg.heapUsedMB, 1) > 0.75 &&
@@ -377,14 +440,23 @@ function bootCluster() {
 
   const initialWorkers = 1;
   for (let i = 0; i < initialWorkers; i += 1) {
-    const worker = cluster.fork({ ...process.env, SQR_CLUSTER_WORKER: "1" });
-    wireWorker(worker);
+    const worker = safeFork("initial-boot");
+    if (worker) {
+      wireWorker(worker);
+    }
   }
 
   cluster.on("online", (worker) => {
     wireWorker(worker);
     if (lastBroadcast) {
-      worker.send({ type: "control-state", payload: lastBroadcast });
+      // Safe send with connection check
+      if (worker.isConnected() && !worker.isDead()) {
+        try {
+          worker.send({ type: "control-state", payload: lastBroadcast });
+        } catch {
+          // Ignore if send fails
+        }
+      }
     }
   });
 
@@ -396,20 +468,35 @@ function bootCluster() {
       intentionalExits.delete(worker.id);
     } else {
       console.error(`❌ Worker#${worker.id} exited unexpectedly (code=${code}, signal=${signal}). Restarting...`);
-      const w = cluster.fork({ ...process.env, SQR_CLUSTER_WORKER: "1" });
-      wireWorker(w);
+      const w = safeFork("unexpected-exit-restart");
+      if (w) {
+        wireWorker(w);
+      }
     }
 
     // Keep minimum worker availability.
     if (getWorkers().length < getMinWorkers()) {
-      const w = cluster.fork({ ...process.env, SQR_CLUSTER_WORKER: "1" });
-      wireWorker(w);
+      const w = safeFork("min-capacity-restore");
+      if (w) {
+        wireWorker(w);
+      }
     }
   });
 
   setInterval(evaluateScale, SCALE_INTERVAL_MS);
   console.log(`🧠 Cluster master online. workers=${initialWorkers}/${getMaxWorkers()} (min=${getMinWorkers()})`);
 }
+
+// 🔒 GLOBAL ERROR PROTECTION: Master must NEVER crash
+process.on("uncaughtException", (err) => {
+  console.error("❌ Uncaught Exception in master:", err);
+  // Log but don't exit - cluster must survive
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("❌ Unhandled Rejection in master:", reason);
+  // Log but don't exit - cluster must survive
+});
 
 if (cluster.isPrimary) {
   bootCluster();
