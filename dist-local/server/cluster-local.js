@@ -5574,6 +5574,17 @@ async function startServer() {
   serveStatic();
   const PORT = parseInt(process.env.PORT || "5000", 10);
   const HOST = "0.0.0.0";
+  server.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(`\u274C Port ${PORT} is already in use.`);
+      console.error(`   This usually means a previous server process hasn't fully released the port yet.`);
+      console.error(`   Please wait a few seconds and try again, or use: lsof -i :${PORT} (or netstat -ano | findstr :${PORT} on Windows)`);
+      process.exit(1);
+    } else {
+      console.error(`\u274C Server error:`, err);
+      process.exit(1);
+    }
+  });
   server.listen(PORT, HOST, () => {
     console.log("");
     console.log("=========================================");
@@ -9058,6 +9069,8 @@ var CPU_COUNT = os2.cpus().length;
 var MAX_WORKERS_HARD_CAP = Math.min(CPU_COUNT, 3);
 var MIN_WORKERS = 1;
 var SCALE_COOLDOWN_MS = 15e3;
+var RESTART_THROTTLE_MS = 2e3;
+var MAX_RESTART_ATTEMPTS = 5;
 var predictor = new LoadPredictor({
   shortWindowSec: 30,
   longWindowSec: 90,
@@ -9067,6 +9080,9 @@ var predictor = new LoadPredictor({
 var workerMetrics = /* @__PURE__ */ new Map();
 var intentionalExits = /* @__PURE__ */ new Set();
 var drainingWorkers = /* @__PURE__ */ new Set();
+var restartAttempts = /* @__PURE__ */ new Map();
+var lastSpawnAttemptTime = -Infinity;
+var consecutiveRestarts = 0;
 var lastBroadcast = null;
 var lowLoadSince = null;
 var mode = "NORMAL";
@@ -9202,9 +9218,9 @@ function broadcastControl(control) {
   }
 }
 function safeFork(reason) {
-  const currentWorkers = getWorkers().length;
+  const aliveWorkers = getWorkers().filter((w) => !w.isDead() && w.isConnected());
   const maxWorkers = getMaxWorkers();
-  if (currentWorkers >= maxWorkers) {
+  if (aliveWorkers.length >= maxWorkers) {
     console.log(`\u26A0 Max workers (${maxWorkers}) reached. Skipping spawn for: ${reason}`);
     return null;
   }
@@ -9348,6 +9364,7 @@ function bootCluster() {
   }
   cluster.on("online", (worker) => {
     wireWorker(worker);
+    consecutiveRestarts = 0;
     if (lastBroadcast) {
       if (worker.isConnected() && !worker.isDead()) {
         try {
@@ -9363,17 +9380,41 @@ function bootCluster() {
     const intentional = intentionalExits.has(worker.id);
     if (intentional) {
       intentionalExits.delete(worker.id);
+      restartAttempts.delete(worker.id);
+      consecutiveRestarts = 0;
     } else {
+      const now = Date.now();
+      const timeSinceLastSpawn = now - lastSpawnAttemptTime;
+      consecutiveRestarts++;
+      if (consecutiveRestarts > MAX_RESTART_ATTEMPTS) {
+        console.error(
+          `\u274C CRASH LOOP DETECTED: Worker#${worker.id} failed (code=${code}). Exceeded max restart attempts (${MAX_RESTART_ATTEMPTS}). Stopping automatic restarts to prevent cascade. Check logs for root cause.`
+        );
+        return;
+      }
       console.error(`\u274C Worker#${worker.id} exited unexpectedly (code=${code}, signal=${signal}). Restarting...`);
-      const w = safeFork("unexpected-exit-restart");
-      if (w) {
-        wireWorker(w);
+      if (timeSinceLastSpawn >= RESTART_THROTTLE_MS) {
+        lastSpawnAttemptTime = now;
+        const w = safeFork("unexpected-exit-restart");
+        if (w) {
+          wireWorker(w);
+          console.log(`  \u2713 Spawned replacement worker in response to failure`);
+        } else {
+          console.log(`  \u26A0 Failed to spawn replacement (hard cap or resource limit)`);
+        }
+      } else {
+        const remainingDelay = RESTART_THROTTLE_MS - timeSinceLastSpawn;
+        console.log(`\u23F1  Throttling restart (${remainingDelay}ms) - spawn already attempted recently`);
       }
     }
     if (getWorkers().length < getMinWorkers()) {
-      const w = safeFork("min-capacity-restore");
-      if (w) {
-        wireWorker(w);
+      const now = Date.now();
+      if (now - lastSpawnAttemptTime >= RESTART_THROTTLE_MS) {
+        lastSpawnAttemptTime = now;
+        const w = safeFork("min-capacity-restore");
+        if (w) {
+          wireWorker(w);
+        }
       }
     }
   });
