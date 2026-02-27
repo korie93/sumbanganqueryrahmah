@@ -1,4 +1,6 @@
-import cluster, { type Worker } from "node:cluster";
+shot;
+  workerCount: number;
+  maxWorkers: number;import cluster, { type Worker } from "node:cluster";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,9 +35,7 @@ type WorkerControlState = {
   dbProtection: boolean;
   rejectHeavyRoutes: boolean;
   throttleFactor: number;
-  predictor: LoadTrendSnapshot;
-  workerCount: number;
-  maxWorkers: number;
+  predictor: LoadTrendSnap
   queueLength: number;
   preAllocateMB: number;
   updatedAt: number;
