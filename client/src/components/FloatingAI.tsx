@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { Bot, Minimize2 } from "lucide-react";
 import { useLocation } from "wouter";
-import AI from "@/pages/AI";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAIContext } from "@/context/AIContext";
 import { cn } from "@/lib/utils";
 import styles from "./FloatingAI.module.css";
+
+const AI = lazy(() => import("@/pages/AI"));
 
 type FloatingAIProps = {
   timeoutMs: number;
@@ -94,12 +95,20 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
             </div>
           </header>
           <div className="h-[calc(100%-56px)] p-3">
-            <AI
-              timeoutMs={timeoutMs}
-              aiEnabled={aiEnabled}
-              embedded
-              showResetButton={false}
-            />
+            <Suspense
+              fallback={
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  Loading AI...
+                </div>
+              }
+            >
+              <AI
+                timeoutMs={timeoutMs}
+                aiEnabled={aiEnabled}
+                embedded
+                showResetButton={false}
+              />
+            </Suspense>
           </div>
         </section>
       </div>
