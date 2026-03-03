@@ -1,2 +1,0 @@
-# sumbanganqueryrahmah
-MY PROJECT
