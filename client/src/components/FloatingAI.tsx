@@ -1,14 +1,15 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bot, Minimize2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import AIChat, { type AIChatStatus } from "@/components/AIChat";
 import { useAIContext } from "@/context/AIContext";
 import { cn } from "@/lib/utils";
 import styles from "./FloatingAI.module.css";
 
-const AI = lazy(() => import("@/pages/AI"));
+const AI_RESET_EVENT = "ai-chat-reset";
 
 type FloatingAIProps = {
   timeoutMs: number;
@@ -18,7 +19,9 @@ type FloatingAIProps = {
 
 export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: FloatingAIProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [aiStatus, setAiStatus] = useState<AIChatStatus>("IDLE");
   const [location] = useLocation();
+  const cancelAISearchRef = useRef<(() => void) | null>(null);
   const {
     messages,
     isThinking,
@@ -51,64 +54,78 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     lastAssistantCountRef.current = assistantCount;
   }, [assistantCount, isOpen, setUnreadCount]);
 
+  const handleMinimize = useCallback(() => {
+    setIsOpen(false);
+  }, []);
+
+  const handleReset = useCallback(() => {
+    cancelAISearchRef.current?.();
+    window.dispatchEvent(new Event(AI_RESET_EVENT));
+    resetSession();
+  }, [resetSession]);
+
   const hiddenForAiPage = activePage === "ai" || location.toLowerCase() === "/ai";
   if (hiddenForAiPage) return null;
 
+  const minimizedStatus = useMemo(() => {
+    if (aiStatus === "SEARCHING") return "AI sedang mencari maklumat...";
+    if (aiStatus === "PROCESSING") return "AI sedang memproses data...";
+    if (aiStatus === "TYPING") return "AI sedang menaip jawapan...";
+    return "AI sedang memproses...";
+  }, [aiStatus]);
+
   return (
     <div className="pointer-events-none fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3">
-      {isOpen ? (
-        <div className="pointer-events-auto transition-all duration-200 translate-y-0 opacity-100">
-          <section
-            className="h-[min(520px,calc(100vh-120px))] w-[min(380px,calc(100vw-48px))] rounded-[16px] border border-border bg-card text-card-foreground shadow-xl"
-            aria-label="AI SQR Popup"
-          >
-            <header className="flex h-14 items-center justify-between border-b border-border px-4">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground">AI SQR</p>
-                <p className="truncate text-[11px] text-muted-foreground">Smart Query Engine</p>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 px-2 text-xs"
-                  onClick={resetSession}
-                  disabled={messages.length === 0}
-                >
-                  Reset Sesi
-                </Button>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8"
-                  onClick={() => setIsOpen(false)}
-                  aria-label="Minimize AI panel"
-                >
-                  <Minimize2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </header>
-            <div className="h-[calc(100%-56px)] p-3">
-              <Suspense
-                fallback={
-                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                    Loading AI...
-                  </div>
-                }
-              >
-                <AI
-                  timeoutMs={timeoutMs}
-                  aiEnabled={aiEnabled}
-                  embedded
-                  showResetButton={false}
-                />
-              </Suspense>
+      <div
+        className={cn(
+          "pointer-events-auto transition-all duration-200",
+          isOpen ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-2 opacity-0",
+        )}
+      >
+        <section
+          className="h-[min(520px,calc(100vh-120px))] w-[min(380px,calc(100vw-48px))] rounded-[16px] border border-border bg-card text-card-foreground shadow-xl"
+          aria-label="AI SQR Popup"
+        >
+          <header className="flex h-14 items-center justify-between border-b border-border px-4">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-foreground">AI SQR</p>
+              <p className="truncate text-[11px] text-muted-foreground">Smart Query Engine</p>
             </div>
-          </section>
-        </div>
-      ) : null}
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2 text-xs"
+                onClick={handleReset}
+                disabled={messages.length === 0 && !isThinking}
+              >
+                Reset Sesi
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8"
+                onClick={handleMinimize}
+                aria-label="Minimize AI panel"
+              >
+                <Minimize2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </header>
+          <div className="h-[calc(100%-56px)] p-3">
+            <AIChat
+              timeoutMs={timeoutMs}
+              aiEnabled={aiEnabled}
+              onStatusChange={setAiStatus}
+              onCancelAISearchReady={(cancelFn) => {
+                cancelAISearchRef.current = cancelFn;
+              }}
+            />
+          </div>
+        </section>
+      </div>
 
       <Tooltip>
         <TooltipTrigger asChild>
@@ -138,6 +155,11 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           <p>AI SQR — Klik untuk bantuan pintar</p>
         </TooltipContent>
       </Tooltip>
+      {!isOpen && isThinking ? (
+        <div className="pointer-events-none max-w-[220px] rounded-lg border border-blue-500/35 bg-blue-500/10 px-3 py-1.5 text-[11px] text-blue-200 shadow-sm">
+          {minimizedStatus}
+        </div>
+      ) : null}
     </div>
   );
 }
