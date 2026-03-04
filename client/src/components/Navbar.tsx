@@ -1,4 +1,4 @@
-import { Home, Upload, BookMarked, Eye, Search, BarChart3, Activity, FileText, Database, LogOut, ShieldCheck, LayoutDashboard, SlidersHorizontal, Server } from "lucide-react";
+import { Home, Upload, BookMarked, Eye, Search, BarChart3, FileText, Database, LogOut, ShieldCheck, SlidersHorizontal, Server } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import ThemeToggle from "./ThemeToggle";
 
@@ -21,10 +21,8 @@ export default function Navbar({ currentPage, onNavigate, onLogout, userRole, us
     { id: "viewer", label: "Viewer", icon: Eye, roles: ["user", "admin", "superuser"] },
     { id: "general-search", label: "Search", icon: Search, roles: ["admin", "superuser", "user"] },
     { id: "analysis", label: "Analysis", icon: BarChart3, roles: ["user", "admin", "superuser"] },
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["user", "admin", "superuser"] },
     { id: "monitor", label: "System Monitor", icon: Server, roles: ["user", "admin", "superuser"] },
     { id: "settings", label: "Settings", icon: SlidersHorizontal, roles: ["admin", "superuser"] },
-    { id: "activity", label: "Activity", icon: Activity, roles: ["user", "admin", "superuser"] },
     { id: "audit-logs", label: "Audit", icon: FileText, roles: ["user", "admin", "superuser"] },
     { id: "backup", label: "Backup", icon: Database, roles: ["user", "admin", "superuser"] },
   ];
@@ -32,8 +30,12 @@ export default function Navbar({ currentPage, onNavigate, onLogout, userRole, us
   const visibleItems = navItems.filter((item) => {
     if (!item.roles.includes(userRole)) return false;
     if (item.id === "monitor") {
-      if (userRole === "admin" || userRole === "superuser") return true;
-      return tabVisibility?.monitor === true;
+      if (userRole === "superuser") return true;
+      if (!tabVisibility) return true;
+      const showSystemPerformance = userRole === "admin" ? tabVisibility.monitor !== false : tabVisibility.monitor === true;
+      const showDashboard = tabVisibility.dashboard !== false;
+      const showActivity = tabVisibility.activity !== false;
+      return showSystemPerformance || showDashboard || showActivity;
     }
     if (userRole === "superuser") return true;
     if (!tabVisibility) return true;

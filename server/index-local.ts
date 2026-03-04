@@ -29,6 +29,17 @@ const DEFAULT_WS_IDLE_MINUTES = 3;
 const DEFAULT_AI_TIMEOUT_MS = 6000;
 const AI_PRECOMPUTE_ON_START = String(process.env.AI_PRECOMPUTE_ON_START || "0") === "1";
 const API_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
+const LOW_MEMORY_MODE = String(process.env.SQR_LOW_MEMORY_MODE ?? "1") === "1";
+const AI_GATE_GLOBAL_LIMIT = Math.max(1, Number(process.env.AI_GATE_GLOBAL_LIMIT ?? "4"));
+const AI_GATE_QUEUE_LIMIT = Math.max(0, Number(process.env.AI_GATE_QUEUE_LIMIT ?? "20"));
+const AI_GATE_QUEUE_WAIT_MS = Math.max(1000, Number(process.env.AI_GATE_QUEUE_WAIT_MS ?? "12000"));
+const AI_GATE_ROLE_LIMITS = {
+  user: Math.max(1, Number(process.env.AI_GATE_USER_LIMIT ?? "2")),
+  admin: Math.max(1, Number(process.env.AI_GATE_ADMIN_LIMIT ?? "1")),
+  superuser: Math.max(1, Number(process.env.AI_GATE_SUPERUSER_LIMIT ?? "1")),
+} as const;
+const AI_LATENCY_STALE_AFTER_MS = Math.max(5_000, Number(process.env.AI_LATENCY_STALE_AFTER_MS ?? "20000"));
+const AI_LATENCY_DECAY_HALF_LIFE_MS = Math.max(5_000, Number(process.env.AI_LATENCY_DECAY_HALF_LIFE_MS ?? "30000"));
 const MAINTENANCE_CACHE_TTL_MS = 3000;
 let idleSweepRunning = false;
 let maintenanceCache: {
@@ -162,6 +173,7 @@ let gcCountWindow = 0;
 let gcPerMinute = 0;
 let lastDbLatencyMs = 0;
 let lastAiLatencyMs = 0;
+let lastAiLatencyObservedAt = 0;
 let lastIntelligenceResult: EvaluateSystemResult | null = null;
 let intelligenceInFlight = false;
 
@@ -365,6 +377,22 @@ function observeAiLatency(ms: number) {
   } else {
     lastAiLatencyMs = (lastAiLatencyMs * 0.75) + (ms * 0.25);
   }
+  lastAiLatencyObservedAt = Date.now();
+}
+
+function getEffectiveAiLatencyMs(now = Date.now()): number {
+  if (!Number.isFinite(lastAiLatencyMs) || lastAiLatencyMs <= 0) return 0;
+  if (lastAiLatencyObservedAt <= 0) return Math.max(0, lastAiLatencyMs);
+
+  const idleMs = Math.max(0, now - lastAiLatencyObservedAt);
+  if (idleMs <= AI_LATENCY_STALE_AFTER_MS) {
+    return Math.max(0, lastAiLatencyMs);
+  }
+
+  const decayWindowMs = idleMs - AI_LATENCY_STALE_AFTER_MS;
+  const decayFactor = Math.exp((-Math.LN2 * decayWindowMs) / AI_LATENCY_DECAY_HALF_LIFE_MS);
+  const decayed = lastAiLatencyMs * decayFactor;
+  return Math.max(0, decayed);
 }
 
 async function withDbCircuit<T>(operation: () => Promise<T>): Promise<T> {
@@ -433,7 +461,7 @@ function computeInternalMonitorSnapshot(): InternalMonitorSnapshot {
   const cpu = roundMetric(cpuPercent, 2);
   const ram = getRamPercent();
   const dbLatency = roundMetric(lastDbLatencyMs, 2);
-  const aiLatency = roundMetric(lastAiLatencyMs, 2);
+  const aiLatency = roundMetric(getEffectiveAiLatencyMs(), 2);
   const loopLag = roundMetric(getEventLoopLagMs(), 2);
 
   let bottleneckType = "NONE";
@@ -672,8 +700,9 @@ if (typeof process.on === "function") {
       ...defaultControlState,
       ...msg.payload,
     };
-    if (controlState.preAllocateMB > 0) {
-      const targetBytes = controlState.preAllocateMB * 1024 * 1024;
+    const preAllocateMB = clamp(controlState.preAllocateMB, 0, LOW_MEMORY_MODE ? 8 : 32);
+    if (preAllocateMB > 0) {
+      const targetBytes = preAllocateMB * 1024 * 1024;
       if (!preAllocatedBuffer || preAllocatedBuffer.length !== targetBytes) {
         preAllocatedBuffer = Buffer.alloc(targetBytes);
       }
@@ -725,7 +754,7 @@ setInterval(() => {
         oldSpaceMB: mem.heapUsed / (1024 * 1024), // best-effort without v8 stats overhead
         gcPerMin: gcPerMinute,
         dbLatencyMs: lastDbLatencyMs,
-        aiLatencyMs: lastAiLatencyMs,
+        aiLatencyMs: getEffectiveAiLatencyMs(),
         ts: Date.now(),
         circuit: {
           ai: { state: circuitAi.getState(), failureRate: circuitAi.getSnapshot().failureRate },
@@ -916,6 +945,212 @@ async function requireMonitorAccess(req: AuthenticatedRequest, res: Response, ne
     console.error("Monitor access guard error:", err);
     return res.status(500).json({ message: err?.message || "Failed to validate monitor access" });
   }
+}
+
+type AiRole = "user" | "admin" | "superuser";
+type AiRoute = "search" | "chat";
+
+type AiGateLease = {
+  role: AiRole;
+  route: AiRoute;
+  released: boolean;
+};
+
+type AiGateAcquireResult = {
+  lease: AiGateLease;
+  waitedMs: number;
+};
+
+type AiGateQueueItem = {
+  id: number;
+  role: AiRole;
+  route: AiRoute;
+  enqueuedAt: number;
+  resolve: (result: AiGateAcquireResult) => void;
+  reject: (error: Error & { code?: string; status?: number }) => void;
+  timeout: NodeJS.Timeout;
+};
+
+let aiGateSeq = 0;
+let aiGateInflightGlobal = 0;
+const aiGateInflightByRole: Record<AiRole, number> = {
+  user: 0,
+  admin: 0,
+  superuser: 0,
+};
+const aiGateQueue: AiGateQueueItem[] = [];
+
+function normalizeAiRole(role: string | undefined): AiRole {
+  if (role === "superuser") return "superuser";
+  if (role === "admin") return "admin";
+  return "user";
+}
+
+function getAiGateSnapshot(role?: AiRole) {
+  const safeRole = role ? normalizeAiRole(role) : "user";
+  return {
+    globalInFlight: aiGateInflightGlobal,
+    globalLimit: AI_GATE_GLOBAL_LIMIT,
+    queueSize: aiGateQueue.length,
+    queueLimit: AI_GATE_QUEUE_LIMIT,
+    role: safeRole,
+    roleInFlight: aiGateInflightByRole[safeRole],
+    roleLimit: AI_GATE_ROLE_LIMITS[safeRole],
+  };
+}
+
+function aiGateCanAcquire(role: AiRole) {
+  return aiGateInflightGlobal < AI_GATE_GLOBAL_LIMIT && aiGateInflightByRole[role] < AI_GATE_ROLE_LIMITS[role];
+}
+
+function aiGateAcquire(role: AiRole, route: AiRoute): AiGateLease {
+  aiGateInflightGlobal += 1;
+  aiGateInflightByRole[role] += 1;
+  return {
+    role,
+    route,
+    released: false,
+  };
+}
+
+function aiGateRelease(lease: AiGateLease) {
+  if (lease.released) return;
+  lease.released = true;
+
+  aiGateInflightGlobal = Math.max(0, aiGateInflightGlobal - 1);
+  aiGateInflightByRole[lease.role] = Math.max(0, aiGateInflightByRole[lease.role] - 1);
+
+  queueMicrotask(() => {
+    drainAiGateQueue();
+  });
+}
+
+function drainAiGateQueue() {
+  if (aiGateQueue.length === 0) return;
+
+  let progressed = true;
+  while (progressed && aiGateQueue.length > 0) {
+    progressed = false;
+    for (let i = 0; i < aiGateQueue.length; i += 1) {
+      const item = aiGateQueue[i];
+      if (!aiGateCanAcquire(item.role)) continue;
+
+      aiGateQueue.splice(i, 1);
+      clearTimeout(item.timeout);
+      progressed = true;
+
+      item.resolve({
+        lease: aiGateAcquire(item.role, item.route),
+        waitedMs: Math.max(0, Date.now() - item.enqueuedAt),
+      });
+      break;
+    }
+  }
+}
+
+function createAiGateError(
+  message: string,
+  code: string,
+  status = 429,
+): Error & { code?: string; status?: number } {
+  const err = new Error(message) as Error & { code?: string; status?: number };
+  err.code = code;
+  err.status = status;
+  return err;
+}
+
+function acquireAiGate(role: AiRole, route: AiRoute): Promise<AiGateAcquireResult> {
+  if (aiGateCanAcquire(role)) {
+    return Promise.resolve({
+      lease: aiGateAcquire(role, route),
+      waitedMs: 0,
+    });
+  }
+
+  if (aiGateQueue.length >= AI_GATE_QUEUE_LIMIT) {
+    return Promise.reject(
+      createAiGateError(
+        "AI queue is full. Please retry in a few seconds.",
+        "AI_GATE_QUEUE_FULL",
+        429,
+      ),
+    );
+  }
+
+  return new Promise<AiGateAcquireResult>((resolve, reject) => {
+    const id = ++aiGateSeq;
+    const timeout = setTimeout(() => {
+      const index = aiGateQueue.findIndex((item) => item.id === id);
+      if (index >= 0) {
+        aiGateQueue.splice(index, 1);
+      }
+      reject(
+        createAiGateError(
+          "AI queue wait timed out. Please retry.",
+          "AI_GATE_WAIT_TIMEOUT",
+          429,
+        ),
+      );
+    }, AI_GATE_QUEUE_WAIT_MS).unref();
+
+    aiGateQueue.push({
+      id,
+      role,
+      route,
+      enqueuedAt: Date.now(),
+      resolve,
+      reject,
+      timeout,
+    });
+
+    drainAiGateQueue();
+  });
+}
+
+function withAiConcurrencyGate(
+  route: AiRoute,
+  handler: (req: AuthenticatedRequest, res: Response) => Promise<unknown>,
+) {
+  return async (req: AuthenticatedRequest, res: Response) => {
+    const role = normalizeAiRole(req.user?.role);
+    let acquired: AiGateAcquireResult | null = null;
+
+    try {
+      acquired = await acquireAiGate(role, route);
+    } catch (error: any) {
+      const status = Number.isFinite(error?.status) ? Number(error.status) : 429;
+      const snapshot = getAiGateSnapshot(role);
+      return res.status(status).json({
+        message: error?.message || "AI queue is currently busy. Please retry shortly.",
+        gate: {
+          ...snapshot,
+          queueWaitMs: AI_GATE_QUEUE_WAIT_MS,
+          code: error?.code || "AI_GATE_BUSY",
+        },
+      });
+    }
+
+    const releaseOnce = () => {
+      if (!acquired) return;
+      aiGateRelease(acquired.lease);
+      acquired = null;
+    };
+
+    res.once("finish", releaseOnce);
+    res.once("close", releaseOnce);
+    res.setHeader("x-ai-gate-global-limit", String(AI_GATE_GLOBAL_LIMIT));
+    res.setHeader("x-ai-gate-inflight", String(aiGateInflightGlobal));
+    res.setHeader("x-ai-gate-queue-size", String(aiGateQueue.length));
+    if (acquired.waitedMs > 0) {
+      res.setHeader("x-ai-gate-wait-ms", String(Math.round(acquired.waitedMs)));
+    }
+
+    try {
+      await handler(req, res);
+    } finally {
+      releaseOnce();
+    }
+  };
 }
 
 function broadcastWsMessage(payload: Record<string, unknown>) {
@@ -2524,6 +2759,7 @@ const statsCache = new Map<string, { ts: number; payload: any }>();
 const statsInflight = new Map<string, boolean>();
 const STATS_CACHE_MS = 60_000;
 const categoryStatsInflight = new Map<string, Promise<void>>();
+const MAX_STATS_CACHE_ENTRIES = Number(process.env.SQR_MAX_STATS_CACHE_ENTRIES ?? (LOW_MEMORY_MODE ? "40" : "120"));
 
 const enqueueCategoryStatsCompute = (keys: string[], rules: Array<CategoryRule>) => {
   const normalized = Array.from(new Set(keys)).filter(Boolean).sort();
@@ -2972,7 +3208,44 @@ const searchCache = new Map<string, { ts: number; payload: any; audit: any }>();
 const searchInflight = new Map<string, Promise<{ payload: any; audit: any }>>();
 (global as any).__searchInflightMap = searchInflight;
 const SEARCH_CACHE_MS = 60_000;
+const MAX_SEARCH_CACHE_ENTRIES = Number(process.env.SQR_MAX_SEARCH_CACHE_ENTRIES ?? (LOW_MEMORY_MODE ? "60" : "180"));
 const SEARCH_FAST_TIMEOUT_MS = 5500;
+
+function trimCacheEntries<T extends { ts: number }>(cache: Map<string, T>, maxEntries: number) {
+  if (cache.size <= maxEntries) return;
+  const excess = cache.size - maxEntries;
+  const keysByAge = Array.from(cache.entries())
+    .sort((a, b) => a[1].ts - b[1].ts)
+    .slice(0, excess)
+    .map(([key]) => key);
+  for (const key of keysByAge) {
+    cache.delete(key);
+  }
+}
+
+setInterval(() => {
+  const now = Date.now();
+
+  for (const [ip, bucket] of adaptiveRateState.entries()) {
+    if (now >= bucket.resetAt + 60_000) {
+      adaptiveRateState.delete(ip);
+    }
+  }
+
+  for (const [key, entry] of searchCache.entries()) {
+    if (now - entry.ts >= SEARCH_CACHE_MS) {
+      searchCache.delete(key);
+    }
+  }
+  trimCacheEntries(searchCache, Math.max(10, MAX_SEARCH_CACHE_ENTRIES));
+
+  for (const [key, entry] of statsCache.entries()) {
+    if (now - entry.ts >= STATS_CACHE_MS) {
+      statsCache.delete(key);
+    }
+  }
+  trimCacheEntries(statsCache, Math.max(10, MAX_STATS_CACHE_ENTRIES));
+}, 30_000).unref();
 
 const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
   return new Promise((resolve, reject) => {
@@ -3414,7 +3687,7 @@ app.post(
   "/api/ai/search",
   authenticateToken,
   requireRole("user", "admin", "superuser"),
-  async (req: AuthenticatedRequest, res) => {
+  withAiConcurrencyGate("search", async (req: AuthenticatedRequest, res) => {
     try {
       const query = String(req.body?.query || "").trim();
       if (!query) {
@@ -3506,6 +3779,9 @@ app.post(
         }, 0);
         return res.json(cached.payload);
       }
+      if (cached) {
+        searchCache.delete(cacheKey);
+      }
 
       let inflight = searchInflight.get(cacheKey);
       if (!inflight) {
@@ -3517,6 +3793,7 @@ app.post(
         ))
           .then((result) => {
             searchCache.set(cacheKey, { ts: Date.now(), payload: result.payload, audit: result.audit });
+            trimCacheEntries(searchCache, Math.max(10, MAX_SEARCH_CACHE_ENTRIES));
             searchInflight.delete(cacheKey);
             return result;
           })
@@ -3949,7 +4226,7 @@ app.post(
       console.error("AI search error:", error);
       return res.status(500).json({ message: error.message });
     }
-  }
+  })
 );
 
 app.post(
@@ -4056,7 +4333,7 @@ app.post(
   "/api/ai/chat",
   authenticateToken,
   requireRole("user", "admin", "superuser"),
-  async (req: AuthenticatedRequest, res) => {
+  withAiConcurrencyGate("chat", async (req: AuthenticatedRequest, res) => {
     try {
       const message = String(req.body?.message || "").trim();
       if (!message) {
@@ -4316,7 +4593,7 @@ app.post(
       console.error("AI chat error:", error);
       res.status(500).json({ message: error.message });
     }
-  }
+  })
 );
 
 app.get("/api/columns", authenticateToken, async (req, res) => {

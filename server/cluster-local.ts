@@ -77,15 +77,18 @@ const SCALE_INTERVAL_MS = 5_000;
 const LOW_LOAD_HOLD_MS = 60_000;
 const ACTIVE_REQUESTS_THRESHOLD = 80;
 const LOW_REQ_RATE_THRESHOLD = 8;
-const PREALLOCATE_MB = 64;
+const LOW_MEMORY_MODE = String(process.env.SQR_LOW_MEMORY_MODE ?? "1") === "1";
+const PREALLOCATE_MB = Number(process.env.SQR_PREALLOCATE_MB ?? (LOW_MEMORY_MODE ? "0" : "32"));
 const MAX_SPAWN_PER_CYCLE = 1;
 
 // 🔒 HARD CAP: Prevent uncontrolled worker spawning
 // For i7 3770 (4 cores) + 16GB RAM: max 3 workers ensures stability
 const CPU_COUNT = os.cpus().length;
-const MAX_WORKERS_HARD_CAP = Math.min(CPU_COUNT, 3);
+const requestedMaxWorkers = Number(process.env.SQR_MAX_WORKERS ?? (LOW_MEMORY_MODE ? "1" : "3"));
+const normalizedMaxWorkers = Number.isFinite(requestedMaxWorkers) ? Math.floor(requestedMaxWorkers) : 1;
+const MAX_WORKERS_HARD_CAP = Math.max(1, Math.min(CPU_COUNT, normalizedMaxWorkers));
 const MIN_WORKERS = 1;
-const SCALE_COOLDOWN_MS = 15_000; // 15 seconds between scale operations
+const SCALE_COOLDOWN_MS = LOW_MEMORY_MODE ? 30_000 : 15_000; // more conservative in low-memory mode
 const RESTART_THROTTLE_MS = 2_000; // 2 second throttle between restart attempts
 const MAX_RESTART_ATTEMPTS = 5; // Stop restarting after 5 consecutive failures
 
@@ -240,7 +243,7 @@ function buildControlState(agg: Aggregate, trend: LoadTrendSnapshot): WorkerCont
     workerCount: workers.length,
     maxWorkers,
     queueLength: agg.queueLength,
-    preAllocateMB: trend.sustainedUpward ? PREALLOCATE_MB : 0,
+    preAllocateMB: PREALLOCATE_MB > 0 && trend.sustainedUpward ? PREALLOCATE_MB : 0,
     updatedAt: Date.now(),
     workers: sampleList,
     circuits,
@@ -363,7 +366,8 @@ function evaluateScale() {
 
   // 🔒 MEMORY PROTECTION: Skip scaling on high memory usage
   const memUsageMB = process.memoryUsage().rss / 1024 / 1024;
-  const memoryPressureHigh = memUsageMB > 1200;
+  const memoryScaleUpBlockMB = LOW_MEMORY_MODE ? 220 : 1200;
+  const memoryPressureHigh = memUsageMB > memoryScaleUpBlockMB;
 
   if (memoryPressureHigh) {
     console.log(`⚠ High memory (${Math.round(memUsageMB)}MB). Skipping scale up.`);
@@ -377,7 +381,7 @@ function evaluateScale() {
       spawned += 1;
       lastScaleTime = now;
     }
-    if (!preAllocBuffer) {
+    if (PREALLOCATE_MB > 0 && !preAllocBuffer) {
       preAllocBuffer = Buffer.alloc(PREALLOCATE_MB * 1024 * 1024);
     }
   } else if (preAllocBuffer && agg.cpuPercent < 55 && agg.reqRate < LOW_REQ_RATE_THRESHOLD) {
@@ -385,9 +389,10 @@ function evaluateScale() {
   }
 
   // Reactive scale-up rules (with cooldown & memory checks).
+  const latencyPressure = agg.p95 > 900 && agg.reqRate > LOW_REQ_RATE_THRESHOLD;
   const highLoad =
     agg.cpuPercent > 70 ||
-    agg.p95 > 600 ||
+    latencyPressure ||
     agg.activeRequests > ACTIVE_REQUESTS_THRESHOLD * Math.max(1, workers.length);
 
   if (highLoad && canScale && !memoryPressureHigh) {
