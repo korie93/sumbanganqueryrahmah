@@ -1,21 +1,51 @@
-import { memo, useEffect, useMemo, useState } from "react";
-import { BarChart3, ChevronLeft, ChevronRight, ClipboardList, Menu, Server } from "lucide-react";
+import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from "react";
+import { BarChart3, ChevronLeft, ChevronRight, ClipboardList, FileText, Menu, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import DashboardPage from "@/pages/Dashboard";
-import ActivityPage from "@/pages/Activity";
-import SystemPerformancePage from "@/pages/Monitor";
 
-type MonitorSection = "dashboard" | "activity" | "monitor";
+const DashboardPage = lazy(() => import("@/pages/Dashboard"));
+const ActivityPage = lazy(() => import("@/pages/Activity"));
+const SystemPerformancePage = lazy(() => import("@/pages/Monitor"));
+const AnalysisPage = lazy(() => import("@/pages/Analysis"));
+const AuditLogsPage = lazy(() => import("@/pages/AuditLogs"));
+
+type MonitorSection = "dashboard" | "activity" | "monitor" | "analysis" | "audit";
 
 type SystemMonitorLayoutProps = {
   showDashboard: boolean;
   showActivity: boolean;
   showSystemPerformance: boolean;
+  showAnalysis: boolean;
+  showAuditLogs: boolean;
   requestedSection: MonitorSection;
   onSectionChange?: (section: MonitorSection) => void;
+  onNavigate?: (page: string) => void;
 };
+
+type AnalysisSectionProps = {
+  onNavigate?: (page: string) => void;
+};
+
+const DashboardSection = memo(function DashboardSection() {
+  return <DashboardPage />;
+});
+
+const ActivitySection = memo(function ActivitySection() {
+  return <ActivityPage />;
+});
+
+const SystemPerformanceSection = memo(function SystemPerformanceSection() {
+  return <SystemPerformancePage />;
+});
+
+const AnalysisSection = memo(function AnalysisSection({ onNavigate }: AnalysisSectionProps) {
+  return <AnalysisPage onNavigate={onNavigate || (() => undefined)} />;
+});
+
+const AuditLogsSection = memo(function AuditLogsSection() {
+  return <AuditLogsPage />;
+});
 
 const sectionMeta: Record<
   MonitorSection,
@@ -36,26 +66,27 @@ const sectionMeta: Record<
     icon: Server,
     description: "Runtime, infra and diagnostics",
   },
+  analysis: {
+    label: "Analysis",
+    icon: BarChart3,
+    description: "Analytics engine and data summary",
+  },
+  audit: {
+    label: "Audit Logs",
+    icon: FileText,
+    description: "Compliance and security logs",
+  },
 };
-
-const DashboardContent = memo(function DashboardContent() {
-  return <DashboardPage />;
-});
-
-const ActivityContent = memo(function ActivityContent() {
-  return <ActivityPage />;
-});
-
-const MonitorContent = memo(function MonitorContent() {
-  return <SystemPerformancePage />;
-});
 
 export default function SystemMonitorLayout({
   showDashboard,
   showActivity,
   showSystemPerformance,
+  showAnalysis,
+  showAuditLogs,
   requestedSection,
   onSectionChange,
+  onNavigate,
 }: SystemMonitorLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -64,22 +95,24 @@ export default function SystemMonitorLayout({
     if (showDashboard) sections.push("dashboard");
     if (showActivity) sections.push("activity");
     if (showSystemPerformance) sections.push("monitor");
+    if (showAnalysis) sections.push("analysis");
+    if (showAuditLogs) sections.push("audit");
     return sections;
-  }, [showActivity, showDashboard, showSystemPerformance]);
+  }, [showActivity, showAnalysis, showAuditLogs, showDashboard, showSystemPerformance]);
 
   const defaultSection = useMemo<MonitorSection>(() => {
     if (showSystemPerformance) return "monitor";
     if (showDashboard) return "dashboard";
     if (showActivity) return "activity";
+    if (showAnalysis) return "analysis";
+    if (showAuditLogs) return "audit";
     return "monitor";
-  }, [showActivity, showDashboard, showSystemPerformance]);
+  }, [showActivity, showAnalysis, showAuditLogs, showDashboard, showSystemPerformance]);
 
-  const [activeSection, setActiveSection] = useState<MonitorSection>(defaultSection);
-  const [mountedSections, setMountedSections] = useState<Record<MonitorSection, boolean>>({
-    dashboard: defaultSection === "dashboard",
-    activity: defaultSection === "activity",
-    monitor: defaultSection === "monitor",
-  });
+  const [activeSection, setActiveSection] = useState<MonitorSection>(() =>
+    availableSections.includes(requestedSection) ? requestedSection : defaultSection,
+  );
+  const lastEmittedSectionRef = useRef<MonitorSection | null>(null);
 
   useEffect(() => {
     if (availableSections.length === 0) return;
@@ -91,11 +124,12 @@ export default function SystemMonitorLayout({
 
   useEffect(() => {
     if (!availableSections.includes(requestedSection)) return;
-    setActiveSection(requestedSection);
+    setActiveSection((prev) => (prev === requestedSection ? prev : requestedSection));
   }, [availableSections, requestedSection]);
 
   useEffect(() => {
-    setMountedSections((prev) => (prev[activeSection] ? prev : { ...prev, [activeSection]: true }));
+    if (lastEmittedSectionRef.current === activeSection) return;
+    lastEmittedSectionRef.current = activeSection;
     onSectionChange?.(activeSection);
   }, [activeSection, onSectionChange]);
 
@@ -114,6 +148,22 @@ export default function SystemMonitorLayout({
       </div>
     );
   }
+
+  const renderActiveSection = () => {
+    if (activeSection === "dashboard") return <DashboardSection />;
+    if (activeSection === "activity") return <ActivitySection />;
+    if (activeSection === "analysis") {
+      return <AnalysisSection onNavigate={onNavigate} />;
+    }
+    if (activeSection === "audit") return <AuditLogsSection />;
+    return <SystemPerformanceSection />;
+  };
+
+  const sectionFallback = (
+    <div className="flex min-h-[420px] items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+    </div>
+  );
 
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 md:p-6">
@@ -171,15 +221,9 @@ export default function SystemMonitorLayout({
           </aside>
 
           <section className="min-w-0 flex-1 rounded-2xl border border-border/60 bg-background/35 backdrop-blur-sm">
-            <div className={cn(activeSection === "dashboard" ? "block" : "hidden")}>
-              {mountedSections.dashboard ? <DashboardContent /> : null}
-            </div>
-            <div className={cn(activeSection === "activity" ? "block" : "hidden")}>
-              {mountedSections.activity ? <ActivityContent /> : null}
-            </div>
-            <div className={cn(activeSection === "monitor" ? "block" : "hidden")}>
-              {mountedSections.monitor ? <MonitorContent /> : null}
-            </div>
+            <Suspense fallback={sectionFallback}>
+              {renderActiveSection()}
+            </Suspense>
           </section>
         </div>
       </div>

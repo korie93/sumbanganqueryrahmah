@@ -4,14 +4,18 @@ const isLowSpecClient = (() => {
   if (typeof window === "undefined" || typeof navigator === "undefined") {
     return false;
   }
+  const perfOverride = localStorage.getItem("perf_mode");
+  if (perfOverride === "low") return true;
+  if (perfOverride === "high") return false;
+
   const cores = navigator.hardwareConcurrency || 4;
   const ramGb = (navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4;
   const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
   return cores <= 4 || ramGb <= 4 || saveData;
 })();
 
-const QUERY_STALE_TIME = isLowSpecClient ? 15_000 : 60_000;
-const QUERY_GC_TIME = isLowSpecClient ? 60_000 : 5 * 60_000;
+const QUERY_STALE_TIME = isLowSpecClient ? 10_000 : 30_000;
+const QUERY_GC_TIME = isLowSpecClient ? 45_000 : 2 * 60_000;
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
