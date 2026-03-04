@@ -47,6 +47,9 @@ interface AllAnalysisResult {
 }
 
 type AnalysisMode = "single" | "all";
+const TABLE_PAGE_SIZE = typeof document !== "undefined" && document.documentElement.classList.contains("low-spec")
+  ? 100
+  : 250;
 
 const CHART_COLORS = {
   blue: "#3b82f6",
@@ -68,10 +71,35 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
   const [copiedItems, setCopiedItems] = useState<Record<string, boolean>>({});
   const [duplicatesOpen, setDuplicatesOpen] = useState(true);
   const [filesListOpen, setFilesListOpen] = useState(true);
+  const [tablePages, setTablePages] = useState<Record<string, number>>({});
   const { toast } = useToast();
 
   const toggleSection = (key: string) => {
     setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const getPage = (key: string) => tablePages[key] ?? 0;
+
+  const setPage = (key: string, page: number, totalItems: number) => {
+    const maxPage = Math.max(0, Math.ceil(totalItems / TABLE_PAGE_SIZE) - 1);
+    const nextPage = Math.max(0, Math.min(maxPage, page));
+    setTablePages((prev) => {
+      if (prev[key] === nextPage) return prev;
+      return { ...prev, [key]: nextPage };
+    });
+  };
+
+  const getPaginatedItems = <T,>(key: string, items: T[]) => {
+    const page = getPage(key);
+    const start = page * TABLE_PAGE_SIZE;
+    const end = Math.min(start + TABLE_PAGE_SIZE, items.length);
+    return {
+      page,
+      start,
+      end,
+      totalPages: Math.max(1, Math.ceil(items.length / TABLE_PAGE_SIZE)),
+      items: items.slice(start, end),
+    };
   };
 
   const fetchSingleAnalysis = async () => {
@@ -204,6 +232,7 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
     if (items.length === 0) return null;
     const Icon = icon;
     const isExpanded = expandedSections[key] || false;
+    const paged = getPaginatedItems(key, items);
 
     return (
       <Collapsible open={isExpanded} onOpenChange={() => toggleSection(key)} className="glass-wrapper">
@@ -249,11 +278,12 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item, idx) => {
-                    const itemKey = `${key}-${idx}`;
+                  {paged.items.map((item, idx) => {
+                    const rowIndex = paged.start + idx;
+                    const itemKey = `${key}-${rowIndex}`;
                     return (
-                      <tr key={idx} className="border-t border-border hover:bg-muted/50">
-                        <td className="p-3 text-muted-foreground">{idx + 1}</td>
+                      <tr key={rowIndex} className="border-t border-border hover:bg-muted/50">
+                        <td className="p-3 text-muted-foreground">{rowIndex + 1}</td>
                         <td className="p-3 font-mono text-foreground">{item}</td>
                         <td className="p-3 text-right">
                           <Button
@@ -275,6 +305,36 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
                 </tbody>
               </table>
             </div>
+            {items.length > TABLE_PAGE_SIZE ? (
+              <div className="flex items-center justify-between gap-2 border-t border-border bg-muted/20 p-3">
+                <span className="text-xs text-muted-foreground">
+                  Showing {paged.start + 1}-{paged.end} of {items.length.toLocaleString()}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(key, paged.page - 1, items.length)}
+                    disabled={paged.page <= 0}
+                  >
+                    Prev
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    Page {paged.page + 1} / {paged.totalPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(key, paged.page + 1, items.length)}
+                    disabled={paged.page >= paged.totalPages - 1}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </CollapsibleContent>
       </Collapsible>
@@ -407,6 +467,8 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
   const totalRows = getTotalRows();
   const genderPieData = getGenderPieData();
   const categoryBarData = getCategoryBarData();
+  const filesPaged = getPaginatedItems("files-list", allResult?.imports || []);
+  const duplicatesPaged = getPaginatedItems("duplicates-list", analysis?.duplicates.items || []);
 
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
@@ -592,9 +654,9 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
                             </tr>
                           </thead>
                           <tbody>
-                            {allResult.imports.map((imp, idx) => (
+                            {filesPaged.items.map((imp, idx) => (
                               <tr key={imp.id} className="border-t border-border hover:bg-muted/50">
-                                <td className="p-3 text-muted-foreground">{idx + 1}</td>
+                                <td className="p-3 text-muted-foreground">{filesPaged.start + idx + 1}</td>
                                 <td className="p-3 font-medium text-foreground">{imp.name}</td>
                                 <td className="p-3 text-muted-foreground">{imp.filename}</td>
                                 <td className="p-3 text-right">
@@ -605,6 +667,36 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
                           </tbody>
                         </table>
                       </div>
+                      {allResult.imports.length > TABLE_PAGE_SIZE ? (
+                        <div className="mt-3 flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            Showing {filesPaged.start + 1}-{filesPaged.end} of {allResult.imports.length.toLocaleString()}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPage("files-list", filesPaged.page - 1, allResult.imports.length)}
+                              disabled={filesPaged.page <= 0}
+                            >
+                              Prev
+                            </Button>
+                            <span className="text-xs text-muted-foreground">
+                              Page {filesPaged.page + 1} / {filesPaged.totalPages}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPage("files-list", filesPaged.page + 1, allResult.imports.length)}
+                              disabled={filesPaged.page >= filesPaged.totalPages - 1}
+                            >
+                              Next
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </CollapsibleContent>
                 </div>
@@ -641,9 +733,9 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
                             </tr>
                           </thead>
                           <tbody>
-                            {analysis.duplicates.items.map((dup, idx) => (
-                              <tr key={idx} className="border-t border-border hover:bg-muted/50">
-                                <td className="p-3 text-muted-foreground">{idx + 1}</td>
+                            {duplicatesPaged.items.map((dup, idx) => (
+                              <tr key={`${dup.value}-${duplicatesPaged.start + idx}`} className="border-t border-border hover:bg-muted/50">
+                                <td className="p-3 text-muted-foreground">{duplicatesPaged.start + idx + 1}</td>
                                 <td className="p-3 font-mono text-foreground">{dup.value}</td>
                                 <td className="p-3">
                                   <Badge variant="destructive">{dup.count}x</Badge>
@@ -663,6 +755,36 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
                           </tbody>
                         </table>
                       </div>
+                      {analysis.duplicates.items.length > TABLE_PAGE_SIZE ? (
+                        <div className="mt-3 flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            Showing {duplicatesPaged.start + 1}-{duplicatesPaged.end} of {analysis.duplicates.items.length.toLocaleString()}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPage("duplicates-list", duplicatesPaged.page - 1, analysis.duplicates.items.length)}
+                              disabled={duplicatesPaged.page <= 0}
+                            >
+                              Prev
+                            </Button>
+                            <span className="text-xs text-muted-foreground">
+                              Page {duplicatesPaged.page + 1} / {duplicatesPaged.totalPages}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPage("duplicates-list", duplicatesPaged.page + 1, analysis.duplicates.items.length)}
+                              disabled={duplicatesPaged.page >= duplicatesPaged.totalPages - 1}
+                            >
+                              Next
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   )}
                 </CollapsibleContent>

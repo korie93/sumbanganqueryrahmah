@@ -15,8 +15,6 @@ const Import = lazy(() => import("@/pages/Import"));
 const Saved = lazy(() => import("@/pages/Saved"));
 const Viewer = lazy(() => import("@/pages/Viewer"));
 const GeneralSearch = lazy(() => import("@/pages/GeneralSearch"));
-const Analysis = lazy(() => import("@/pages/Analysis"));
-const AuditLogs = lazy(() => import("@/pages/AuditLogs"));
 const BackupRestore = lazy(() => import("@/pages/BackupRestore"));
 const AI = lazy(() => import("@/pages/AI"));
 const Banned = lazy(() => import("@/pages/Banned"));
@@ -37,7 +35,7 @@ type AppRuntimeConfig = {
   aiEnabled: boolean;
 };
 
-type MonitorSection = "dashboard" | "activity" | "monitor";
+type MonitorSection = "dashboard" | "activity" | "monitor" | "analysis" | "audit";
 
 function AppContent() {
   const [user, setUser] = useState<User | null>(null);
@@ -103,35 +101,80 @@ function AppContent() {
     return tabs.activity !== false;
   }, []);
 
+  const canViewAnalysisSection = useCallback((role: string | undefined, tabs: Record<string, boolean> | null) => {
+    if (!role || role === "superuser") return true;
+    if (!tabs) return true;
+    return tabs.analysis !== false;
+  }, []);
+
+  const canViewAuditSection = useCallback((role: string | undefined, tabs: Record<string, boolean> | null) => {
+    if (!role || role === "superuser") return true;
+    if (!tabs) return true;
+    if (Object.prototype.hasOwnProperty.call(tabs, "audit")) {
+      return tabs.audit !== false;
+    }
+    if (Object.prototype.hasOwnProperty.call(tabs, "audit-logs")) {
+      return tabs["audit-logs"] !== false;
+    }
+    return false;
+  }, []);
+
   const getMonitorSectionVisibility = useCallback((role: string | undefined, tabs: Record<string, boolean> | null) => ({
     dashboard: canViewDashboardSection(role, tabs),
     activity: canViewActivitySection(role, tabs),
     monitor: canViewMonitorSection(role, tabs),
-  }), [canViewActivitySection, canViewDashboardSection, canViewMonitorSection]);
+    analysis: canViewAnalysisSection(role, tabs),
+    audit: canViewAuditSection(role, tabs),
+  }), [canViewActivitySection, canViewAnalysisSection, canViewAuditSection, canViewDashboardSection, canViewMonitorSection]);
 
   const getDefaultMonitorSection = useCallback((role: string | undefined, tabs: Record<string, boolean> | null): MonitorSection => {
     const visibility = getMonitorSectionVisibility(role, tabs);
     if (visibility.monitor) return "monitor";
     if (visibility.dashboard) return "dashboard";
     if (visibility.activity) return "activity";
+    if (visibility.analysis) return "analysis";
+    if (visibility.audit) return "audit";
     return "monitor";
   }, [getMonitorSectionVisibility]);
 
   const parseMonitorSectionFromQuery = useCallback((search: string): MonitorSection | null => {
     const section = new URLSearchParams(search).get("section");
-    if (section === "dashboard" || section === "activity" || section === "monitor") return section;
+    if (section === "dashboard" || section === "activity" || section === "monitor" || section === "analysis" || section === "audit") return section;
+    if (section === "audit-logs") return "audit";
     return null;
   }, []);
+
+  const parseMonitorSectionFromPageInput = useCallback((page: string): MonitorSection | null => {
+    if (!page) return null;
+    if (page === "monitor") return "monitor";
+    if (page === "dashboard") return "dashboard";
+    if (page === "activity") return "activity";
+    if (page === "analysis") return "analysis";
+    if (page === "audit" || page === "audit-logs") return "audit";
+    if (!page.startsWith("/monitor")) return null;
+
+    try {
+      const url = new URL(page, window.location.origin);
+      if (url.pathname.toLowerCase() !== "/monitor") return null;
+      return parseMonitorSectionFromQuery(url.search) || "monitor";
+    } catch {
+      return null;
+    }
+  }, [parseMonitorSectionFromQuery]);
 
   const isPageEnabled = useCallback((role: string | undefined, page: string, tabs: Record<string, boolean> | null) => {
     if (page === "monitor") {
       const visibility = getMonitorSectionVisibility(role, tabs);
-      return visibility.monitor || visibility.dashboard || visibility.activity;
+      return visibility.monitor || visibility.dashboard || visibility.activity || visibility.analysis || visibility.audit;
     }
+    if (page === "dashboard") return canViewDashboardSection(role, tabs);
+    if (page === "activity") return canViewActivitySection(role, tabs);
+    if (page === "analysis") return canViewAnalysisSection(role, tabs);
+    if (page === "audit" || page === "audit-logs") return canViewAuditSection(role, tabs);
     if (!role || role === "superuser") return true;
     if (!tabs) return true;
     return tabs[page] !== false;
-  }, [getMonitorSectionVisibility]);
+  }, [canViewActivitySection, canViewAnalysisSection, canViewAuditSection, canViewDashboardSection, getMonitorSectionVisibility]);
 
   useEffect(() => {
     const pathname = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "/";
@@ -152,6 +195,18 @@ function AppContent() {
       setMonitorSection("activity");
       if (typeof window !== "undefined") {
         window.history.replaceState({}, "", "/monitor?section=activity");
+      }
+    } else if (pathname === "/analysis") {
+      setCurrentPage("monitor");
+      setMonitorSection("analysis");
+      if (typeof window !== "undefined") {
+        window.history.replaceState({}, "", "/monitor?section=analysis");
+      }
+    } else if (pathname === "/audit" || pathname === "/audit-logs") {
+      setCurrentPage("monitor");
+      setMonitorSection("audit");
+      if (typeof window !== "undefined") {
+        window.history.replaceState({}, "", "/monitor?section=audit");
       }
     } else if (pathname === "/monitor") {
       setCurrentPage("monitor");
@@ -191,6 +246,18 @@ function AppContent() {
           if (typeof window !== "undefined") {
             window.history.replaceState({}, "", "/monitor?section=activity");
           }
+        } else if (pathname === "/analysis") {
+          setCurrentPage("monitor");
+          setMonitorSection("analysis");
+          if (typeof window !== "undefined") {
+            window.history.replaceState({}, "", "/monitor?section=analysis");
+          }
+        } else if (pathname === "/audit" || pathname === "/audit-logs") {
+          setCurrentPage("monitor");
+          setMonitorSection("audit");
+          if (typeof window !== "undefined") {
+            window.history.replaceState({}, "", "/monitor?section=audit");
+          }
         } else if (pathname === "/monitor") {
           setCurrentPage("monitor");
           setMonitorSection(requestedMonitorSection || "monitor");
@@ -199,9 +266,9 @@ function AppContent() {
         } else if (parsedUser.role === "user") {
           setCurrentPage("general-search");
         } else if (savedPage) {
-          if (savedPage === "dashboard" || savedPage === "activity" || savedPage === "monitor") {
+          if (savedPage === "dashboard" || savedPage === "activity" || savedPage === "monitor" || savedPage === "analysis" || savedPage === "audit" || savedPage === "audit-logs") {
             setCurrentPage("monitor");
-            setMonitorSection(savedPage === "monitor" ? "monitor" : savedPage);
+            setMonitorSection(savedPage === "monitor" ? "monitor" : savedPage === "audit-logs" ? "audit" : savedPage as MonitorSection);
           } else {
             setCurrentPage(savedPage);
           }
@@ -377,7 +444,9 @@ function AppContent() {
     const requestedAllowed =
       (monitorSection === "monitor" && visibility.monitor) ||
       (monitorSection === "dashboard" && visibility.dashboard) ||
-      (monitorSection === "activity" && visibility.activity);
+      (monitorSection === "activity" && visibility.activity) ||
+      (monitorSection === "analysis" && visibility.analysis) ||
+      (monitorSection === "audit" && visibility.audit);
     if (requestedAllowed) return;
     setMonitorSection(getDefaultMonitorSection(user.role, tabVisibility));
   }, [user, currentPage, tabVisibility, monitorSection, getDefaultMonitorSection, getMonitorSectionVisibility]);
@@ -432,7 +501,8 @@ function AppContent() {
   }, []);
 
   const handleNavigate = useCallback((page: string, importId?: string) => {
-    const requestedPage = page === "dashboard" || page === "activity" ? "monitor" : page;
+    const monitorSectionTarget = parseMonitorSectionFromPageInput(page);
+    const requestedPage = monitorSectionTarget ? "monitor" : page;
     if (!isPageEnabled(user?.role, requestedPage, tabVisibility)) {
       if (requestedPage === "monitor") {
         setCurrentPage("forbidden");
@@ -447,14 +517,18 @@ function AppContent() {
       return;
     }
 
-    if (page === "monitor" || page === "dashboard" || page === "activity") {
-      const nextSection: MonitorSection = page === "monitor" ? "monitor" : page;
+    if (monitorSectionTarget) {
+      const nextSection: MonitorSection = monitorSectionTarget;
       setCurrentPage("monitor");
       setMonitorSection(nextSection);
       localStorage.setItem("activeTab", "monitor");
       localStorage.setItem("lastPage", "monitor");
       if (typeof window !== "undefined") {
-        window.history.replaceState({}, "", `/monitor?section=${nextSection}`);
+        const targetUrl = `/monitor?section=${nextSection}`;
+        const currentUrl = `${window.location.pathname}${window.location.search}`;
+        if (currentUrl !== targetUrl) {
+          window.history.replaceState({}, "", targetUrl);
+        }
       }
       return;
     }
@@ -473,7 +547,18 @@ function AppContent() {
     if (importId) {
       setSelectedImportId(importId);
     }
-  }, [user?.role, tabVisibility, isPageEnabled, getDefaultPageForRole]);
+  }, [user?.role, tabVisibility, isPageEnabled, getDefaultPageForRole, parseMonitorSectionFromPageInput]);
+
+  const handleMonitorSectionChange = useCallback((section: MonitorSection) => {
+    setMonitorSection((prev) => (prev === section ? prev : section));
+    if (typeof window !== "undefined") {
+      const targetUrl = `/monitor?section=${section}`;
+      const currentUrl = `${window.location.pathname}${window.location.search}`;
+      if (currentUrl !== targetUrl) {
+        window.history.replaceState({}, "", targetUrl);
+      }
+    }
+  }, []);
 
   const pageFallback = (
     <div className="min-h-[calc(100vh-3.5rem)] bg-background flex items-center justify-center">
@@ -543,10 +628,6 @@ function AppContent() {
         return <Viewer onNavigate={handleNavigate} importId={selectedImportId} userRole={user.role} />;
       case "general-search":
         return <GeneralSearch userRole={user.role} />;
-      case "analysis":
-        return <Analysis onNavigate={handleNavigate} />;
-      case "audit-logs":
-        return <AuditLogs />;
       case "backup":
       return <BackupRestore userRole={user.role} />;
       case "ai":
@@ -558,6 +639,9 @@ function AppContent() {
         return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <SettingsPage />;
       case "maintenance":
         return <MaintenancePage />;
+      case "analysis":
+      case "audit":
+      case "audit-logs":
       case "dashboard":
       case "activity":
       case "monitor":
@@ -566,13 +650,11 @@ function AppContent() {
             showDashboard={monitorVisibility.dashboard}
             showActivity={monitorVisibility.activity}
             showSystemPerformance={monitorVisibility.monitor}
+            showAnalysis={monitorVisibility.analysis}
+            showAuditLogs={monitorVisibility.audit}
             requestedSection={monitorSection}
-            onSectionChange={(section) => {
-              setMonitorSection(section);
-              if (typeof window !== "undefined") {
-                window.history.replaceState({}, "", `/monitor?section=${section}`);
-              }
-            }}
+            onNavigate={handleNavigate}
+            onSectionChange={handleMonitorSectionChange}
           />
         );
       case "forbidden":

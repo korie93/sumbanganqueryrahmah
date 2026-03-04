@@ -56,62 +56,59 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
 
   return (
     <div className="pointer-events-none fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3">
-      <div
-        className={cn(
-          "pointer-events-auto transition-all duration-200",
-          isOpen ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-2 opacity-0",
-        )}
-      >
-        <section
-          className="h-[min(520px,calc(100vh-120px))] w-[min(380px,calc(100vw-48px))] rounded-[16px] border border-border bg-card text-card-foreground shadow-xl"
-          aria-label="AI SQR Popup"
-        >
-          <header className="flex h-14 items-center justify-between border-b border-border px-4">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-foreground">AI SQR</p>
-              <p className="truncate text-[11px] text-muted-foreground">Smart Query Engine</p>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="h-8 px-2 text-xs"
-                onClick={resetSession}
-                disabled={messages.length === 0}
+      {isOpen ? (
+        <div className="pointer-events-auto transition-all duration-200 translate-y-0 opacity-100">
+          <section
+            className="h-[min(520px,calc(100vh-120px))] w-[min(380px,calc(100vw-48px))] rounded-[16px] border border-border bg-card text-card-foreground shadow-xl"
+            aria-label="AI SQR Popup"
+          >
+            <header className="flex h-14 items-center justify-between border-b border-border px-4">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-foreground">AI SQR</p>
+                <p className="truncate text-[11px] text-muted-foreground">Smart Query Engine</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2 text-xs"
+                  onClick={resetSession}
+                  disabled={messages.length === 0}
+                >
+                  Reset Sesi
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8"
+                  onClick={() => setIsOpen(false)}
+                  aria-label="Minimize AI panel"
+                >
+                  <Minimize2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </header>
+            <div className="h-[calc(100%-56px)] p-3">
+              <Suspense
+                fallback={
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                    Loading AI...
+                  </div>
+                }
               >
-                Reset Sesi
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8"
-                onClick={() => setIsOpen(false)}
-                aria-label="Minimize AI panel"
-              >
-                <Minimize2 className="h-4 w-4" />
-              </Button>
+                <AI
+                  timeoutMs={timeoutMs}
+                  aiEnabled={aiEnabled}
+                  embedded
+                  showResetButton={false}
+                />
+              </Suspense>
             </div>
-          </header>
-          <div className="h-[calc(100%-56px)] p-3">
-            <Suspense
-              fallback={
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                  Loading AI...
-                </div>
-              }
-            >
-              <AI
-                timeoutMs={timeoutMs}
-                aiEnabled={aiEnabled}
-                embedded
-                showResetButton={false}
-              />
-            </Suspense>
-          </div>
-        </section>
-      </div>
+          </section>
+        </div>
+      ) : null}
 
       <Tooltip>
         <TooltipTrigger asChild>

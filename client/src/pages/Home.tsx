@@ -1,4 +1,4 @@
-import { Upload, BookMarked, Eye, Search, BarChart3, Activity, ClipboardList, Database, LayoutDashboard, Sparkles } from "lucide-react";
+import { Upload, BookMarked, Eye, Search, BarChart3, Activity, ClipboardList, Database, LayoutDashboard } from "lucide-react";
 
 interface HomeProps {
   onNavigate: (page: string) => void;
@@ -8,6 +8,14 @@ interface HomeProps {
 
 export default function Home({ onNavigate, userRole, tabVisibility }: HomeProps) {
   const isSuperuser = userRole === "superuser";
+  const monitorTargetMap: Record<string, string> = {
+    dashboard: "/monitor?section=dashboard",
+    activity: "/monitor?section=activity",
+    monitor: "/monitor?section=monitor",
+    analysis: "/monitor?section=analysis",
+    audit: "/monitor?section=audit",
+    "audit-logs": "/monitor?section=audit",
+  };
 
   const menuItems = [
     {
@@ -50,13 +58,6 @@ export default function Home({ onNavigate, userRole, tabVisibility }: HomeProps)
       title: "Dashboard",
       description: "Analytics and system overview",
       icon: LayoutDashboard,
-      roles: ["user", "admin", "superuser"],
-    },
-    {
-      id: "ai",
-      title: "AI Center",
-      description: "Offline AI search and assistant",
-      icon: Sparkles,
       roles: ["user", "admin", "superuser"],
     },
     {
@@ -104,10 +105,11 @@ export default function Home({ onNavigate, userRole, tabVisibility }: HomeProps)
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {visibleItems.map((item, index) => {
             const Icon = item.icon;
+            const target = monitorTargetMap[item.id] || item.id;
             return (
               <div
                 key={item.id}
-                onClick={() => onNavigate(item.id)}
+                onClick={() => onNavigate(target)}
                 className="home-card flex items-center gap-4"
                 data-testid={`card-${item.id}`}
                 style={{ animationDelay: `${index * 0.1}s` }}
