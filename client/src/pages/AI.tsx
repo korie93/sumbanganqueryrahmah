@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Brain, PencilLine, Search, StopCircle, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { type AIChatMessage, useAIContext } from "@/context/AIContext";
@@ -10,6 +11,11 @@ type AIProps = {
   showResetButton?: boolean;
 };
 
+type AIStatus = "IDLE" | "SEARCHING" | "PROCESSING" | "TYPING";
+
+const AI_RESET_EVENT = "ai-chat-reset";
+const AI_CANCEL_EVENT = "ai-chat-cancel";
+
 export default function AI({
   timeoutMs = 20000,
   aiEnabled = true,
@@ -20,29 +26,120 @@ export default function AI({
     typeof document !== "undefined" &&
     document.documentElement.classList.contains("low-spec");
   const MAX_CHAT_MESSAGES = isLowSpecMode ? 60 : 200;
+  const TYPING_INTERVAL_MS = isLowSpecMode ? 18 : 12;
   const { messages, isThinking, setIsThinking, setMessages, resetSession } = useAIContext();
 
   const [query, setQuery] = useState("");
+  const [aiStatus, setAiStatus] = useState<AIStatus>("IDLE");
   const [gateNotice, setGateNotice] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const [slowNotice, setSlowNotice] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
+  const [streamingTimestamp, setStreamingTimestamp] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const pendingSendRef = useRef(false);
+  const processingRef = useRef(false);
+  const requestControllerRef = useRef<AbortController | null>(null);
+  const sessionRef = useRef(0);
+  const typingTimerRef = useRef<number | null>(null);
+  const slowNoticeTimerRef = useRef<number | null>(null);
   const retryMs = 2500;
   const maxRetries = 6;
   const isMountedRef = useRef(true);
   const retryTimersRef = useRef<number[]>([]);
 
+  const clearRetryTimers = useCallback(() => {
+    retryTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+    retryTimersRef.current = [];
+  }, []);
+
+  const clearSlowNoticeTimer = useCallback(() => {
+    if (slowNoticeTimerRef.current) {
+      window.clearTimeout(slowNoticeTimerRef.current);
+      slowNoticeTimerRef.current = null;
+    }
+  }, []);
+
+  const stopTyping = useCallback(() => {
+    if (typingTimerRef.current) {
+      window.clearInterval(typingTimerRef.current);
+      typingTimerRef.current = null;
+    }
+  }, []);
+
+  const abortActiveRequest = useCallback(() => {
+    if (requestControllerRef.current) {
+      requestControllerRef.current.abort();
+      requestControllerRef.current = null;
+    }
+  }, []);
+
+  const stopProcessingState = useCallback(() => {
+    processingRef.current = false;
+    pendingSendRef.current = false;
+    setIsProcessing(false);
+    setIsTyping(false);
+    setIsThinking(false);
+    setAiStatus("IDLE");
+    setSlowNotice(false);
+  }, [setIsThinking]);
+
+  const cancelAI = useCallback(() => {
+    sessionRef.current += 1;
+    stopTyping();
+    clearRetryTimers();
+    clearSlowNoticeTimer();
+    abortActiveRequest();
+    setStreamingText("");
+    stopProcessingState();
+  }, [abortActiveRequest, clearRetryTimers, clearSlowNoticeTimer, stopProcessingState, stopTyping]);
+
+  const resetChat = useCallback(() => {
+    cancelAI();
+    setGateNotice(null);
+    setQuery("");
+    resetSession();
+  }, [cancelAI, resetSession]);
+
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      retryTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
-      retryTimersRef.current = [];
+      cancelAI();
     };
-  }, []);
+  }, [cancelAI]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: isLowSpecMode ? "auto" : "smooth" });
-  }, [isLowSpecMode, messages, isThinking]);
+    const onReset = () => {
+      resetChat();
+    };
+    const onCancel = () => {
+      cancelAI();
+    };
+    window.addEventListener(AI_RESET_EVENT, onReset as EventListener);
+    window.addEventListener(AI_CANCEL_EVENT, onCancel as EventListener);
+    return () => {
+      window.removeEventListener(AI_RESET_EVENT, onReset as EventListener);
+      window.removeEventListener(AI_CANCEL_EVENT, onCancel as EventListener);
+    };
+  }, [cancelAI, resetChat]);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    container.scrollTop = container.scrollHeight;
+  }, [messages, isThinking, isTyping, streamingText]);
+
+  const startSlowNoticeWatch = useCallback((sessionId: number) => {
+    clearSlowNoticeTimer();
+    slowNoticeTimerRef.current = window.setTimeout(() => {
+      if (!isMountedRef.current) return;
+      if (sessionRef.current !== sessionId) return;
+      if (!processingRef.current) return;
+      setSlowNotice(true);
+    }, 1500);
+  }, [clearSlowNoticeTimer]);
 
   const appendMessage = useCallback((msg: AIChatMessage) => {
     setMessages((prev) => {
@@ -52,28 +149,82 @@ export default function AI({
     });
   }, [MAX_CHAT_MESSAGES, setMessages]);
 
-  const sendQuery = useCallback(async (text: string, isRetry = false, retryCount = 0) => {
-    if (!text || (isThinking && !isRetry)) return;
+  const startTyping = useCallback((text: string, sessionId: number) => {
+    stopTyping();
+    setStreamingText("");
+    setStreamingTimestamp(new Date().toISOString());
+
+    if (!text.trim()) {
+      appendMessage({
+        role: "assistant",
+        content: "Tiada cadangan AI.",
+        timestamp: new Date().toISOString(),
+      });
+      stopProcessingState();
+      return;
+    }
+
+    setIsTyping(true);
+    setAiStatus("TYPING");
+    setIsThinking(true);
+    let index = 0;
+
+    typingTimerRef.current = window.setInterval(() => {
+      if (!isMountedRef.current || sessionRef.current !== sessionId) {
+        stopTyping();
+        return;
+      }
+      index += 1;
+      setStreamingText(text.slice(0, index));
+      if (index >= text.length) {
+        stopTyping();
+        if (!isMountedRef.current || sessionRef.current !== sessionId) return;
+        setStreamingText("");
+        appendMessage({
+          role: "assistant",
+          content: text,
+          timestamp: new Date().toISOString(),
+        });
+        stopProcessingState();
+      }
+    }, TYPING_INTERVAL_MS);
+  }, [TYPING_INTERVAL_MS, appendMessage, setIsThinking, stopProcessingState, stopTyping]);
+
+  const sendQuery = useCallback(async (text: string, isRetry = false, retryCount = 0, activeSessionId?: number) => {
+    if (!text) return;
+    if (!isRetry && (processingRef.current || pendingSendRef.current)) return;
+
+    const sessionId = isRetry ? (activeSessionId ?? sessionRef.current) : sessionRef.current + 1;
 
     if (!isRetry) {
-      if (pendingSendRef.current) return;
+      sessionRef.current = sessionId;
       pendingSendRef.current = true;
+      processingRef.current = true;
+      setIsProcessing(true);
+      setIsTyping(false);
+      setAiStatus("SEARCHING");
+      setSlowNotice(false);
       setGateNotice(null);
-      const userMessage: AIChatMessage = {
+      setStreamingText("");
+      startSlowNoticeWatch(sessionId);
+      appendMessage({
         role: "user",
         content: text,
         timestamp: new Date().toISOString(),
-      };
-      appendMessage(userMessage);
+      });
       setIsThinking(true);
     }
-    let keepThinking = false;
+
+    abortActiveRequest();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    let shouldStopProcessing = false;
+    let waitingNextRetry = false;
 
     try {
       const token = localStorage.getItem("token");
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
-      const controller = new AbortController();
       const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
       const res = await fetch("/api/ai/search", {
         method: "POST",
@@ -83,6 +234,8 @@ export default function AI({
         signal: controller.signal,
       });
       window.clearTimeout(timeout);
+
+      if (sessionRef.current !== sessionId) return;
 
       const gateWaitMs = Number(res.headers.get("x-ai-gate-wait-ms") || "0");
       if (!res.ok) {
@@ -111,19 +264,22 @@ export default function AI({
         throw new Error(responseMessage);
       }
       const data = await res.json();
+      if (sessionRef.current !== sessionId) return;
+
       if (!isRetry && gateWaitMs > 0) {
         setGateNotice(`AI request queued for ${Math.max(1, Math.round(gateWaitMs / 1000))}s due to current traffic.`);
       }
       if (data?.processing) {
+        setAiStatus("PROCESSING");
         if (retryCount >= maxRetries) {
           appendMessage({
             role: "assistant",
             content: "Sistem masih memproses. Sila klik Send sekali lagi selepas beberapa saat.",
             timestamp: new Date().toISOString(),
           });
+          shouldStopProcessing = true;
           return;
         }
-        keepThinking = true;
         if (!isRetry) {
           appendMessage({
             role: "assistant",
@@ -131,60 +287,81 @@ export default function AI({
             timestamp: new Date().toISOString(),
           });
         }
+        waitingNextRetry = true;
         const timerId = window.setTimeout(() => {
-          void sendQuery(text, true, retryCount + 1);
+          void sendQuery(text, true, retryCount + 1, sessionId);
         }, retryMs + retryCount * 500);
         retryTimersRef.current.push(timerId);
         return;
       }
-      appendMessage({
-        role: "assistant",
-        content: data?.ai_explanation || "Tiada cadangan AI.",
-        timestamp: new Date().toISOString(),
-      });
+      startTyping(data?.ai_explanation || "Tiada cadangan AI.", sessionId);
     } catch (err: unknown) {
       const error = err as { name?: string; message?: string };
       const isAbort = error?.name === "AbortError";
-      if (isAbort && isRetry) {
-        if (retryCount >= maxRetries) {
-          appendMessage({
-            role: "assistant",
-            content: "Permintaan mengambil masa terlalu lama. Sila cuba semula.",
-            timestamp: new Date().toISOString(),
-          });
-          return;
-        }
-        keepThinking = true;
-        const timerId = window.setTimeout(() => {
-          void sendQuery(text, true, retryCount + 1);
-        }, retryMs + retryCount * 500);
-        retryTimersRef.current.push(timerId);
+      if (isAbort || sessionRef.current !== sessionId) {
         return;
       }
       appendMessage({
         role: "assistant",
-        content: isAbort
-          ? `Maaf, AI mengambil masa terlalu lama (timeout ${timeoutMs / 1000}s). Sila cuba soalan lebih ringkas.`
-          : error?.message || "Ralat semasa memproses carian.",
+        content: error?.message || "AI tidak dapat memproses permintaan sekarang.\nSila cuba semula.",
         timestamp: new Date().toISOString(),
       });
+      shouldStopProcessing = true;
     } finally {
-      if (!keepThinking && isMountedRef.current) {
-        setIsThinking(false);
+      if (requestControllerRef.current === controller) {
+        requestControllerRef.current = null;
       }
-      if (!keepThinking) {
-        pendingSendRef.current = false;
+      if (shouldStopProcessing && isMountedRef.current && sessionRef.current === sessionId) {
+        stopProcessingState();
       }
     }
-  }, [appendMessage, isThinking, setIsThinking, timeoutMs]);
+  }, [
+    abortActiveRequest,
+    appendMessage,
+    retryMs,
+    setIsThinking,
+    startSlowNoticeWatch,
+    startTyping,
+    stopProcessingState,
+    timeoutMs,
+  ]);
 
   const handleSend = useCallback(async () => {
     if (!aiEnabled) return;
     const trimmed = query.trim();
-    if (!trimmed || isThinking || pendingSendRef.current) return;
+    if (!trimmed || processingRef.current || pendingSendRef.current) return;
     setQuery("");
     await sendQuery(trimmed);
-  }, [aiEnabled, isThinking, query, sendQuery]);
+  }, [aiEnabled, query, sendQuery]);
+
+  const statusContent = useMemo(() => {
+    if (aiStatus === "SEARCHING") {
+      return {
+        icon: Search,
+        text: "AI sedang mencari maklumat...",
+        className: "border-blue-500/35 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+      };
+    }
+    if (aiStatus === "PROCESSING") {
+      return {
+        icon: Brain,
+        text: "AI sedang memproses data...",
+        className: "border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+      };
+    }
+    if (aiStatus === "TYPING") {
+      return {
+        icon: PencilLine,
+        text: "AI sedang menaip jawapan...",
+        className: "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+      };
+    }
+    return {
+      icon: Search,
+      text: "AI idle.",
+      className: "border-border bg-muted/30 text-muted-foreground",
+    };
+  }, [aiStatus]);
 
   const chatHeightClass = useMemo(
     () => (embedded ? "h-full max-h-[350px]" : "h-[60vh]"),
@@ -199,24 +376,44 @@ export default function AI({
             AI assistant is disabled by system settings.
           </div>
         ) : null}
+        {aiEnabled ? (
+          <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${statusContent.className}`}>
+            <statusContent.icon className="h-3.5 w-3.5" />
+            <span>{statusContent.text}</span>
+          </div>
+        ) : null}
         {aiEnabled && gateNotice ? (
           <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
             {gateNotice}
           </div>
         ) : null}
+        {aiEnabled && slowNotice ? (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+            <p className="font-medium">Sistem sedang memproses data.</p>
+            <p>Ini mungkin mengambil masa sedikit pada komputer spesifikasi rendah.</p>
+          </div>
+        ) : null}
         {showResetButton ? (
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-end gap-2">
             <Button
               variant="outline"
-              onClick={resetSession}
-              disabled={messages.length === 0}
+              onClick={cancelAI}
+              disabled={!isProcessing && !isTyping}
+            >
+              <StopCircle className="mr-2 h-4 w-4" />
+              Stop AI
+            </Button>
+            <Button
+              variant="outline"
+              onClick={resetChat}
+              disabled={messages.length === 0 && !isProcessing && !isTyping}
             >
               New Chat
             </Button>
           </div>
         ) : null}
 
-        <div className={`${chatHeightClass} overflow-y-auto space-y-3 pr-2`}>
+        <div ref={messagesContainerRef} className={`${chatHeightClass} overflow-y-auto space-y-3 pr-2`}>
           {messages.length === 0 ? (
             <div className="text-sm text-muted-foreground">
               Mula dengan soalan seperti: <span className="font-semibold">IC 840703115667</span> atau{" "}
@@ -235,7 +432,15 @@ export default function AI({
               {msg.content}
             </div>
           ))}
-          {isThinking ? (
+          {streamingText ? (
+            <div
+              key={`streaming-${streamingTimestamp}`}
+              className="mr-auto max-w-[85%] whitespace-pre-wrap rounded-2xl bg-muted px-4 py-3 text-sm text-foreground"
+            >
+              {streamingText}
+            </div>
+          ) : null}
+          {isThinking && !streamingText ? (
             <div className="mr-auto max-w-[70%] rounded-2xl bg-muted px-4 py-3 text-sm text-foreground">
               <span className="inline-flex items-center gap-2">
                 <span className="h-2 w-2 animate-bounce rounded-full bg-foreground/70" />
@@ -245,7 +450,6 @@ export default function AI({
               </span>
             </div>
           ) : null}
-          <div ref={messagesEndRef} />
         </div>
 
         <div className="flex items-end gap-2">
@@ -254,13 +458,32 @@ export default function AI({
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Taip soalan anda..."
             rows={2}
-            disabled={!aiEnabled || isThinking}
+            disabled={!aiEnabled || isProcessing}
             className={embedded ? "min-h-[72px]" : ""}
           />
-          <Button onClick={handleSend} disabled={!aiEnabled || isThinking}>
-            {isThinking ? "Memproses..." : "Send"}
+          <Button onClick={handleSend} disabled={!aiEnabled || isProcessing}>
+            {isProcessing ? "Memproses..." : "Send"}
           </Button>
         </div>
+        {!showResetButton ? (
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={cancelAI}
+              disabled={!isProcessing && !isTyping}
+            >
+              <StopCircle className="mr-2 h-4 w-4" />
+              Stop AI
+            </Button>
+          </div>
+        ) : null}
+        {aiEnabled && aiStatus === "IDLE" && gateNotice === null && slowNotice === false ? (
+          <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <p>Tip: untuk respon lebih cepat pada komputer lama, gunakan soalan ringkas dan spesifik.</p>
+          </div>
+        ) : null}
       </div>
     </div>
   );
