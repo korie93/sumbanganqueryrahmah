@@ -23,7 +23,9 @@ export default function AI({
   const { messages, isThinking, setIsThinking, setMessages, resetSession } = useAIContext();
 
   const [query, setQuery] = useState("");
+  const [gateNotice, setGateNotice] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const pendingSendRef = useRef(false);
   const retryMs = 2500;
   const maxRetries = 6;
   const isMountedRef = useRef(true);
@@ -54,6 +56,9 @@ export default function AI({
     if (!text || (isThinking && !isRetry)) return;
 
     if (!isRetry) {
+      if (pendingSendRef.current) return;
+      pendingSendRef.current = true;
+      setGateNotice(null);
       const userMessage: AIChatMessage = {
         role: "user",
         content: text,
@@ -78,11 +83,37 @@ export default function AI({
         signal: controller.signal,
       });
       window.clearTimeout(timeout);
+
+      const gateWaitMs = Number(res.headers.get("x-ai-gate-wait-ms") || "0");
       if (!res.ok) {
-        const responseText = (await res.text()) || res.statusText;
-        throw new Error(responseText);
+        let responseMessage = res.statusText || "AI request failed.";
+        const contentType = String(res.headers.get("content-type") || "").toLowerCase();
+        if (contentType.includes("application/json")) {
+          const payload = await res.json();
+          const gate = payload?.gate;
+          if (typeof payload?.message === "string" && payload.message.trim()) {
+            responseMessage = payload.message.trim();
+          }
+          if (gate && Number.isFinite(Number(gate.queueSize)) && Number.isFinite(Number(gate.queueLimit))) {
+            const queueSize = Number(gate.queueSize);
+            const queueLimit = Number(gate.queueLimit);
+            const waitMs = Number(gate.queueWaitMs || 0);
+            setGateNotice(
+              waitMs > 0
+                ? `AI queue busy (${queueSize}/${queueLimit}). Estimated wait ${Math.max(1, Math.round(waitMs / 1000))}s.`
+                : `AI queue busy (${queueSize}/${queueLimit}). Please retry shortly.`,
+            );
+          }
+        } else {
+          const responseText = (await res.text()).trim();
+          if (responseText) responseMessage = responseText;
+        }
+        throw new Error(responseMessage);
       }
       const data = await res.json();
+      if (!isRetry && gateWaitMs > 0) {
+        setGateNotice(`AI request queued for ${Math.max(1, Math.round(gateWaitMs / 1000))}s due to current traffic.`);
+      }
       if (data?.processing) {
         if (retryCount >= maxRetries) {
           appendMessage({
@@ -141,13 +172,16 @@ export default function AI({
       if (!keepThinking && isMountedRef.current) {
         setIsThinking(false);
       }
+      if (!keepThinking) {
+        pendingSendRef.current = false;
+      }
     }
   }, [appendMessage, isThinking, setIsThinking, timeoutMs]);
 
   const handleSend = useCallback(async () => {
     if (!aiEnabled) return;
     const trimmed = query.trim();
-    if (!trimmed || isThinking) return;
+    if (!trimmed || isThinking || pendingSendRef.current) return;
     setQuery("");
     await sendQuery(trimmed);
   }, [aiEnabled, isThinking, query, sendQuery]);
@@ -163,6 +197,11 @@ export default function AI({
         {!aiEnabled ? (
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
             AI assistant is disabled by system settings.
+          </div>
+        ) : null}
+        {aiEnabled && gateNotice ? (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+            {gateNotice}
           </div>
         ) : null}
         {showResetButton ? (
