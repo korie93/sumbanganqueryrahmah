@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import jsPDF from "jspdf";
 import {
   Select,
   SelectContent,
@@ -120,6 +119,7 @@ export default function AuditLogs() {
   const [cleanupOpen, setCleanupOpen] = useState(true);
 
   const [searchText, setSearchText] = useState("");
+  const [debouncedSearchText, setDebouncedSearchText] = useState("");
   const [performedByFilter, setPerformedByFilter] = useState("");
   const [targetUserFilter, setTargetUserFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
@@ -159,6 +159,13 @@ export default function AuditLogs() {
     fetchLogs();
     fetchStats();
   }, [fetchLogs, fetchStats]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchText(searchText.trim());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchText]);
 
   const handleCleanup = async () => {
     const days = parseInt(cleanupDays);
@@ -252,8 +259,8 @@ export default function AuditLogs() {
         return false;
       }
 
-      if (searchText) {
-        const searchLower = searchText.toLowerCase();
+      if (debouncedSearchText) {
+        const searchLower = debouncedSearchText.toLowerCase();
         const matchesDetails = log.details?.toLowerCase().includes(searchLower);
         const matchesResource = log.targetResource?.toLowerCase().includes(searchLower);
         const matchesAction = actionLabels[log.action]?.label.toLowerCase().includes(searchLower);
@@ -271,7 +278,7 @@ export default function AuditLogs() {
 
       return true;
     });
-  }, [logs, actionFilter, performedByFilter, targetUserFilter, searchText, datePreset, getDateRange]);
+  }, [logs, actionFilter, performedByFilter, targetUserFilter, debouncedSearchText, datePreset, getDateRange]);
 
   const clearAllFilters = () => {
     setSearchText("");
@@ -317,6 +324,7 @@ export default function AuditLogs() {
 
     setExportingPdf(true);
     try {
+      const { default: jsPDF } = await import("jspdf");
       const isDark = document.documentElement.classList.contains("dark");
       
       const pdf = new jsPDF({

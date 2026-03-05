@@ -6,6 +6,7 @@ export type OllamaMessage = {
 const OLLAMA_HOST = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
 const OLLAMA_CHAT_MODEL = process.env.OLLAMA_CHAT_MODEL || "llama3:8b";
 const OLLAMA_EMBED_MODEL = process.env.OLLAMA_EMBED_MODEL || "nomic-embed-text";
+const MAX_OLLAMA_MESSAGES = 50;
 
 function ensureText(input: string) {
   return (input || "").trim();
@@ -38,6 +39,9 @@ export async function ollamaChat(
   options?: { num_predict?: number; temperature?: number; top_p?: number; timeoutMs?: number }
 ): Promise<string> {
   const timeoutMs = Number(options?.timeoutMs ?? process.env.OLLAMA_TIMEOUT_MS ?? 2000);
+  const boundedMessages = Array.isArray(messages)
+    ? messages.slice(Math.max(0, messages.length - MAX_OLLAMA_MESSAGES))
+    : [];
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
@@ -48,7 +52,7 @@ export async function ollamaChat(
       signal: controller.signal,
       body: JSON.stringify({
         model: OLLAMA_CHAT_MODEL,
-        messages,
+        messages: boundedMessages,
         stream: false,
         options: {
           num_predict: options?.num_predict ?? 96,

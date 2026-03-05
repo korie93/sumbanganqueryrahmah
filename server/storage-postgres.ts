@@ -24,6 +24,8 @@ import { db } from "./db-postgres";
 import { eq, desc, and, or, gte, lte, count, sql, inArray } from "drizzle-orm";
 import crypto from "crypto";
 const MAX_SEARCH_LIMIT = 200;
+const QUERY_PAGE_LIMIT = 1000;
+const MAX_COLUMN_KEYS = 500;
 const ANALYTICS_TZ = process.env.ANALYTICS_TZ || "Asia/Kuala_Lumpur";
 const STORAGE_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
 const BCRYPT_COST = 12;
@@ -1654,19 +1656,42 @@ export class PostgresStorage implements IStorage {
     isBanned: boolean | null;
   }>> {
     if (!Array.isArray(roles) || roles.length === 0) return [];
-    return await db
-      .select({
-        id: users.id,
-        username: users.username,
-        role: users.role,
-        createdAt: users.createdAt,
-        updatedAt: users.updatedAt,
-        passwordChangedAt: users.passwordChangedAt,
-        isBanned: users.isBanned,
-      })
-      .from(users)
-      .where(inArray(users.role, roles))
-      .orderBy(users.role, users.username);
+    const results: Array<{
+      id: string;
+      username: string;
+      role: string;
+      createdAt: Date;
+      updatedAt: Date;
+      passwordChangedAt: Date | null;
+      isBanned: boolean | null;
+    }> = [];
+    let offset = 0;
+
+    while (true) {
+      const chunk = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          role: users.role,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+          passwordChangedAt: users.passwordChangedAt,
+          isBanned: users.isBanned,
+        })
+        .from(users)
+        .where(inArray(users.role, roles))
+        .orderBy(users.role, users.username)
+        .limit(QUERY_PAGE_LIMIT)
+        .offset(offset);
+
+      if (!chunk.length) break;
+      results.push(...chunk);
+
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
+
+    return results;
   }
 
   async updateActivitiesUsername(oldUsername: string, newUsername: string): Promise<void> {
@@ -1802,7 +1827,26 @@ export class PostgresStorage implements IStorage {
   }
 
   async getImports(): Promise<Import[]> {
-    return await db.select().from(imports).where(eq(imports.isDeleted, false)).orderBy(desc(imports.createdAt));
+    const results: Import[] = [];
+    let offset = 0;
+
+    while (true) {
+      const chunk = await db
+        .select()
+        .from(imports)
+        .where(eq(imports.isDeleted, false))
+        .orderBy(desc(imports.createdAt))
+        .limit(QUERY_PAGE_LIMIT)
+        .offset(offset);
+
+      if (!chunk.length) break;
+      results.push(...chunk);
+
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
+
+    return results;
   }
 
   async getImportById(id: string): Promise<Import | undefined> {
@@ -1847,10 +1891,23 @@ export class PostgresStorage implements IStorage {
       console.log("🧪 VIEWER importId received:", importId);
     }
 
-    const rows = await db
-      .select()
-      .from(dataRows)
-      .where(eq(dataRows.importId, importId));
+    const rows: DataRow[] = [];
+    let offset = 0;
+
+    while (true) {
+      const chunk = await db
+        .select()
+        .from(dataRows)
+        .where(eq(dataRows.importId, importId))
+        .limit(QUERY_PAGE_LIMIT)
+        .offset(offset);
+
+      if (!chunk.length) break;
+      rows.push(...chunk);
+
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
 
     if (STORAGE_DEBUG_LOGS) {
       console.log("🧪 ROW COUNT:", rows.length);
@@ -2039,29 +2096,20 @@ export class PostgresStorage implements IStorage {
   }
 
   async getAllColumnNames(): Promise<string[]> {
-    const columnSet = new Set<string>();
+    const result = await db.execute(sql`
+      SELECT DISTINCT key AS column_name
+      FROM public.data_rows dr
+      JOIN public.imports i ON i.id = dr.import_id
+      CROSS JOIN LATERAL jsonb_object_keys(dr.json_data::jsonb) AS key
+      WHERE i.is_deleted = false
+        AND jsonb_typeof(dr.json_data::jsonb) = 'object'
+      ORDER BY key
+      LIMIT ${MAX_COLUMN_KEYS}
+    `);
 
-    // Ambil import yang masih aktif sahaja
-    const activeImports = await this.getImports();
-    const activeImportIds = new Set(activeImports.map((imp) => imp.id));
-
-    const allRows = await db.select().from(dataRows);
-
-    for (const row of allRows) {
-      if (!activeImportIds.has(row.importId)) continue;
-
-      const data = row.jsonDataJsonb;
-
-      // 🔒 STEP 6.5.4.1 — TYPE GUARD
-      if (!data || typeof data !== "object") continue;
-
-      // 🔒 STEP 6.5.4.2 — AMBIL KEY TERUS DARI JSONB
-      for (const key of Object.keys(data as Record<string, unknown>)) {
-        columnSet.add(key);
-      }
-    }
-
-    return Array.from(columnSet).sort();
+    return (result.rows || [])
+      .map((row: any) => String(row.column_name || "").trim())
+      .filter((name: string) => name.length > 0);
   }
 
   async createActivity(data: InsertUserActivity): Promise<UserActivity> {
@@ -2100,16 +2148,31 @@ export class PostgresStorage implements IStorage {
   }
 
   async getActiveActivitiesByUsername(username: string): Promise<UserActivity[]> {
-    return await db
-      .select()
-      .from(userActivity)
-      .where(
-        and(
-          eq(userActivity.username, username),
-          eq(userActivity.isActive, true)
+    const activities: UserActivity[] = [];
+    let offset = 0;
+
+    while (true) {
+      const chunk = await db
+        .select()
+        .from(userActivity)
+        .where(
+          and(
+            eq(userActivity.username, username),
+            eq(userActivity.isActive, true)
+          )
         )
-      )
-      .orderBy(desc(userActivity.loginTime));
+        .orderBy(desc(userActivity.loginTime))
+        .limit(QUERY_PAGE_LIMIT)
+        .offset(offset);
+
+      if (!chunk.length) break;
+      activities.push(...chunk);
+
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
+
+    return activities;
   }
 
   async updateActivity(id: string, data: Partial<UserActivity>): Promise<UserActivity | undefined> {
@@ -2132,14 +2195,46 @@ export class PostgresStorage implements IStorage {
   }
 
   async getActiveActivities(): Promise<UserActivity[]> {
-    return await db.select().from(userActivity).where(eq(userActivity.isActive, true)).orderBy(desc(userActivity.loginTime));
+    const activities: UserActivity[] = [];
+    let offset = 0;
+
+    while (true) {
+      const chunk = await db
+        .select()
+        .from(userActivity)
+        .where(eq(userActivity.isActive, true))
+        .orderBy(desc(userActivity.loginTime))
+        .limit(QUERY_PAGE_LIMIT)
+        .offset(offset);
+
+      if (!chunk.length) break;
+      activities.push(...chunk);
+
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
+
+    return activities;
   }
 
   async getAllActivities(): Promise<(UserActivity & { status: string })[]> {
-    const activities = await db
-      .select()
-      .from(userActivity)
-      .orderBy(desc(userActivity.loginTime));
+    const activities: UserActivity[] = [];
+    let offset = 0;
+
+    while (true) {
+      const chunk = await db
+        .select()
+        .from(userActivity)
+        .orderBy(desc(userActivity.loginTime))
+        .limit(QUERY_PAGE_LIMIT)
+        .offset(offset);
+
+      if (!chunk.length) break;
+      activities.push(...chunk);
+
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
 
     return activities.map(a => ({
       ...a,
@@ -2200,11 +2295,24 @@ export class PostgresStorage implements IStorage {
       whereConditions.push(lte(userActivity.loginTime, endOfDay));
     }
 
-    const activities = await db
-      .select()
-      .from(userActivity)
-      .where(whereConditions.length ? and(...whereConditions) : undefined)
-      .orderBy(desc(userActivity.loginTime));
+    const activities: UserActivity[] = [];
+    let offset = 0;
+
+    while (true) {
+      const chunk = await db
+        .select()
+        .from(userActivity)
+        .where(whereConditions.length ? and(...whereConditions) : undefined)
+        .orderBy(desc(userActivity.loginTime))
+        .limit(QUERY_PAGE_LIMIT)
+        .offset(offset);
+
+      if (!chunk.length) break;
+      activities.push(...chunk);
+
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
 
     if (filters.status?.length) {
       return activities.filter(a =>
@@ -2269,12 +2377,16 @@ export class PostgresStorage implements IStorage {
       const activities = await db
         .select()
         .from(userActivity)
-        .where(eq(userActivity.logoutReason, "BANNED"))
-        .orderBy(desc(userActivity.logoutTime));
+        .where(
+          and(
+            eq(userActivity.logoutReason, "BANNED"),
+            sql`lower(${userActivity.username}) = lower(${user.username})`
+          )
+        )
+        .orderBy(desc(userActivity.logoutTime))
+        .limit(1);
 
-      const lastBannedActivity = activities.find(
-        (a) => a.username.toLowerCase() === user.username.toLowerCase()
-      );
+      const lastBannedActivity = activities[0];
 
       const banInfo = lastBannedActivity
         ? {
@@ -4088,14 +4200,33 @@ export class PostgresStorage implements IStorage {
     role: string;
     isBanned: boolean | null;
   }>> {
-    return await db
-      .select({
-        username: users.username,
-        role: users.role,
-        isBanned: users.isBanned,
-      })
-      .from(users)
-      .orderBy(users.role);
+    const rows: Array<{
+      username: string;
+      role: string;
+      isBanned: boolean | null;
+    }> = [];
+    let offset = 0;
+
+    while (true) {
+      const chunk = await db
+        .select({
+          username: users.username,
+          role: users.role,
+          isBanned: users.isBanned,
+        })
+        .from(users)
+        .orderBy(users.role)
+        .limit(QUERY_PAGE_LIMIT)
+        .offset(offset);
+
+      if (!chunk.length) break;
+      rows.push(...chunk);
+
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
+
+    return rows;
   }
 
   async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {
@@ -4116,7 +4247,25 @@ export class PostgresStorage implements IStorage {
   }
 
   async getAuditLogs(): Promise<AuditLog[]> {
-    return await db.select().from(auditLogs).orderBy(desc(auditLogs.timestamp));
+    const logs: AuditLog[] = [];
+    let offset = 0;
+
+    while (true) {
+      const chunk = await db
+        .select()
+        .from(auditLogs)
+        .orderBy(desc(auditLogs.timestamp))
+        .limit(QUERY_PAGE_LIMIT)
+        .offset(offset);
+
+      if (!chunk.length) break;
+      logs.push(...chunk);
+
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
+
+    return logs;
   }
 
   async createBackup(data: InsertBackup): Promise<Backup> {
@@ -4139,22 +4288,37 @@ export class PostgresStorage implements IStorage {
 
   async getBackups(): Promise<Backup[]> {
     await this.ensureBackupsTable();
-    const result = await db.execute(sql`
-      SELECT
-        id,
-        name,
-        created_at as "createdAt",
-        created_by as "createdBy",
-        ''::text as "backupData",
-        CASE
-          WHEN metadata IS NULL THEN NULL
-          WHEN length(metadata) > 200000 THEN NULL
-          ELSE metadata
-        END as metadata
-      FROM public.backups
-      ORDER BY created_at DESC
-    `);
-    return (result.rows as Backup[]).map((row: any) => {
+    const rows: any[] = [];
+    let offset = 0;
+
+    while (true) {
+      const result = await db.execute(sql`
+        SELECT
+          id,
+          name,
+          created_at as "createdAt",
+          created_by as "createdBy",
+          ''::text as "backupData",
+          CASE
+            WHEN metadata IS NULL THEN NULL
+            WHEN length(metadata) > 200000 THEN NULL
+            ELSE metadata
+          END as metadata
+        FROM public.backups
+        ORDER BY created_at DESC
+        LIMIT ${QUERY_PAGE_LIMIT}
+        OFFSET ${offset}
+      `);
+
+      const chunk = result.rows || [];
+      if (!chunk.length) break;
+      rows.push(...chunk);
+
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
+
+    return (rows as Backup[]).map((row: any) => {
       return { ...row, metadata: this.parseBackupMetadataSafe(row.metadata) };
     });
   }

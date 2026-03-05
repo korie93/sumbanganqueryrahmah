@@ -25,7 +25,7 @@ export default function AI({
   const isLowSpecMode =
     typeof document !== "undefined" &&
     document.documentElement.classList.contains("low-spec");
-  const MAX_CHAT_MESSAGES = isLowSpecMode ? 60 : 200;
+  const MAX_CHAT_MESSAGES = 50;
   const TYPING_INTERVAL_MS = isLowSpecMode ? 18 : 12;
   const { messages, isThinking, setIsThinking, setMessages, resetSession } = useAIContext();
 

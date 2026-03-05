@@ -136,6 +136,9 @@ var pool = new Pool({
   user: process.env.PG_USER || "postgres",
   password: process.env.PG_PASSWORD || "Postgres@123",
   database: process.env.PG_DATABASE || "sqr_db",
+  max: 5,
+  idleTimeoutMillis: 3e4,
+  connectionTimeoutMillis: 5e3,
   options: "-c search_path=public"
 });
 var db = drizzle(pool);
@@ -144,6 +147,8 @@ var db = drizzle(pool);
 import { eq, desc, and, or, gte, lte, count, sql, inArray } from "drizzle-orm";
 import crypto from "crypto";
 var MAX_SEARCH_LIMIT = 200;
+var QUERY_PAGE_LIMIT = 1e3;
+var MAX_COLUMN_KEYS = 500;
 var ANALYTICS_TZ = process.env.ANALYTICS_TZ || "Asia/Kuala_Lumpur";
 var STORAGE_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
 var BCRYPT_COST = 12;
@@ -1359,15 +1364,24 @@ var PostgresStorage = class {
   }
   async getUsersByRoles(roles) {
     if (!Array.isArray(roles) || roles.length === 0) return [];
-    return await db.select({
-      id: users.id,
-      username: users.username,
-      role: users.role,
-      createdAt: users.createdAt,
-      updatedAt: users.updatedAt,
-      passwordChangedAt: users.passwordChangedAt,
-      isBanned: users.isBanned
-    }).from(users).where(inArray(users.role, roles)).orderBy(users.role, users.username);
+    const results = [];
+    let offset = 0;
+    while (true) {
+      const chunk = await db.select({
+        id: users.id,
+        username: users.username,
+        role: users.role,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        passwordChangedAt: users.passwordChangedAt,
+        isBanned: users.isBanned
+      }).from(users).where(inArray(users.role, roles)).orderBy(users.role, users.username).limit(QUERY_PAGE_LIMIT).offset(offset);
+      if (!chunk.length) break;
+      results.push(...chunk);
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
+    return results;
   }
   async updateActivitiesUsername(oldUsername, newUsername) {
     await db.update(userActivity).set({ username: newUsername }).where(eq(userActivity.username, oldUsername));
@@ -1464,7 +1478,16 @@ var PostgresStorage = class {
     return result[0];
   }
   async getImports() {
-    return await db.select().from(imports).where(eq(imports.isDeleted, false)).orderBy(desc(imports.createdAt));
+    const results = [];
+    let offset = 0;
+    while (true) {
+      const chunk = await db.select().from(imports).where(eq(imports.isDeleted, false)).orderBy(desc(imports.createdAt)).limit(QUERY_PAGE_LIMIT).offset(offset);
+      if (!chunk.length) break;
+      results.push(...chunk);
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
+    return results;
   }
   async getImportById(id) {
     const result = await db.select().from(imports).where(and(eq(imports.id, id), eq(imports.isDeleted, false))).limit(1);
@@ -1493,7 +1516,15 @@ var PostgresStorage = class {
     if (STORAGE_DEBUG_LOGS) {
       console.log("\u{1F9EA} VIEWER importId received:", importId);
     }
-    const rows = await db.select().from(dataRows).where(eq(dataRows.importId, importId));
+    const rows = [];
+    let offset = 0;
+    while (true) {
+      const chunk = await db.select().from(dataRows).where(eq(dataRows.importId, importId)).limit(QUERY_PAGE_LIMIT).offset(offset);
+      if (!chunk.length) break;
+      rows.push(...chunk);
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
     if (STORAGE_DEBUG_LOGS) {
       console.log("\u{1F9EA} ROW COUNT:", rows.length);
     }
@@ -1607,19 +1638,17 @@ var PostgresStorage = class {
     return { rows, total: Number(count2) };
   }
   async getAllColumnNames() {
-    const columnSet = /* @__PURE__ */ new Set();
-    const activeImports = await this.getImports();
-    const activeImportIds = new Set(activeImports.map((imp) => imp.id));
-    const allRows = await db.select().from(dataRows);
-    for (const row of allRows) {
-      if (!activeImportIds.has(row.importId)) continue;
-      const data = row.jsonDataJsonb;
-      if (!data || typeof data !== "object") continue;
-      for (const key of Object.keys(data)) {
-        columnSet.add(key);
-      }
-    }
-    return Array.from(columnSet).sort();
+    const result = await db.execute(sql`
+      SELECT DISTINCT key AS column_name
+      FROM public.data_rows dr
+      JOIN public.imports i ON i.id = dr.import_id
+      CROSS JOIN LATERAL jsonb_object_keys(dr.json_data::jsonb) AS key
+      WHERE i.is_deleted = false
+        AND jsonb_typeof(dr.json_data::jsonb) = 'object'
+      ORDER BY key
+      LIMIT ${MAX_COLUMN_KEYS}
+    `);
+    return (result.rows || []).map((row) => String(row.column_name || "").trim()).filter((name) => name.length > 0);
   }
   async createActivity(data) {
     const now = /* @__PURE__ */ new Date();
@@ -1646,12 +1675,21 @@ var PostgresStorage = class {
     }).where(eq(userActivity.id, activityId));
   }
   async getActiveActivitiesByUsername(username) {
-    return await db.select().from(userActivity).where(
-      and(
-        eq(userActivity.username, username),
-        eq(userActivity.isActive, true)
-      )
-    ).orderBy(desc(userActivity.loginTime));
+    const activities = [];
+    let offset = 0;
+    while (true) {
+      const chunk = await db.select().from(userActivity).where(
+        and(
+          eq(userActivity.username, username),
+          eq(userActivity.isActive, true)
+        )
+      ).orderBy(desc(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT).offset(offset);
+      if (!chunk.length) break;
+      activities.push(...chunk);
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
+    return activities;
   }
   async updateActivity(id, data) {
     const updateData = {};
@@ -1670,10 +1708,27 @@ var PostgresStorage = class {
     return result[0];
   }
   async getActiveActivities() {
-    return await db.select().from(userActivity).where(eq(userActivity.isActive, true)).orderBy(desc(userActivity.loginTime));
+    const activities = [];
+    let offset = 0;
+    while (true) {
+      const chunk = await db.select().from(userActivity).where(eq(userActivity.isActive, true)).orderBy(desc(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT).offset(offset);
+      if (!chunk.length) break;
+      activities.push(...chunk);
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
+    return activities;
   }
   async getAllActivities() {
-    const activities = await db.select().from(userActivity).orderBy(desc(userActivity.loginTime));
+    const activities = [];
+    let offset = 0;
+    while (true) {
+      const chunk = await db.select().from(userActivity).orderBy(desc(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT).offset(offset);
+      if (!chunk.length) break;
+      activities.push(...chunk);
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
     return activities.map((a) => ({
       ...a,
       status: this.computeActivityStatus(a)
@@ -1716,7 +1771,15 @@ var PostgresStorage = class {
       endOfDay.setHours(23, 59, 59, 999);
       whereConditions.push(lte(userActivity.loginTime, endOfDay));
     }
-    const activities = await db.select().from(userActivity).where(whereConditions.length ? and(...whereConditions) : void 0).orderBy(desc(userActivity.loginTime));
+    const activities = [];
+    let offset = 0;
+    while (true) {
+      const chunk = await db.select().from(userActivity).where(whereConditions.length ? and(...whereConditions) : void 0).orderBy(desc(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT).offset(offset);
+      if (!chunk.length) break;
+      activities.push(...chunk);
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
     if (filters.status?.length) {
       return activities.filter(
         (a) => filters.status.includes(this.computeActivityStatus(a))
@@ -1756,10 +1819,13 @@ var PostgresStorage = class {
     const bannedUsers = await db.select().from(users).where(eq(users.isBanned, true));
     const enrichedUsers = [];
     for (const user of bannedUsers) {
-      const activities = await db.select().from(userActivity).where(eq(userActivity.logoutReason, "BANNED")).orderBy(desc(userActivity.logoutTime));
-      const lastBannedActivity = activities.find(
-        (a) => a.username.toLowerCase() === user.username.toLowerCase()
-      );
+      const activities = await db.select().from(userActivity).where(
+        and(
+          eq(userActivity.logoutReason, "BANNED"),
+          sql`lower(${userActivity.username}) = lower(${user.username})`
+        )
+      ).orderBy(desc(userActivity.logoutTime)).limit(1);
+      const lastBannedActivity = activities[0];
       const banInfo = lastBannedActivity ? {
         ipAddress: lastBannedActivity.ipAddress,
         browser: lastBannedActivity.browser,
@@ -3216,11 +3282,20 @@ var PostgresStorage = class {
     };
   }
   async getAccounts() {
-    return await db.select({
-      username: users.username,
-      role: users.role,
-      isBanned: users.isBanned
-    }).from(users).orderBy(users.role);
+    const rows = [];
+    let offset = 0;
+    while (true) {
+      const chunk = await db.select({
+        username: users.username,
+        role: users.role,
+        isBanned: users.isBanned
+      }).from(users).orderBy(users.role).limit(QUERY_PAGE_LIMIT).offset(offset);
+      if (!chunk.length) break;
+      rows.push(...chunk);
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
+    return rows;
   }
   async createAuditLog(data) {
     const result = await db.insert(auditLogs).values({
@@ -3235,7 +3310,16 @@ var PostgresStorage = class {
     return result[0];
   }
   async getAuditLogs() {
-    return await db.select().from(auditLogs).orderBy(desc(auditLogs.timestamp));
+    const logs = [];
+    let offset = 0;
+    while (true) {
+      const chunk = await db.select().from(auditLogs).orderBy(desc(auditLogs.timestamp)).limit(QUERY_PAGE_LIMIT).offset(offset);
+      if (!chunk.length) break;
+      logs.push(...chunk);
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
+    return logs;
   }
   async createBackup(data) {
     await this.ensureBackupsTable();
@@ -3255,22 +3339,33 @@ var PostgresStorage = class {
   }
   async getBackups() {
     await this.ensureBackupsTable();
-    const result = await db.execute(sql`
-      SELECT
-        id,
-        name,
-        created_at as "createdAt",
-        created_by as "createdBy",
-        ''::text as "backupData",
-        CASE
-          WHEN metadata IS NULL THEN NULL
-          WHEN length(metadata) > 200000 THEN NULL
-          ELSE metadata
-        END as metadata
-      FROM public.backups
-      ORDER BY created_at DESC
-    `);
-    return result.rows.map((row) => {
+    const rows = [];
+    let offset = 0;
+    while (true) {
+      const result = await db.execute(sql`
+        SELECT
+          id,
+          name,
+          created_at as "createdAt",
+          created_by as "createdBy",
+          ''::text as "backupData",
+          CASE
+            WHEN metadata IS NULL THEN NULL
+            WHEN length(metadata) > 200000 THEN NULL
+            ELSE metadata
+          END as metadata
+        FROM public.backups
+        ORDER BY created_at DESC
+        LIMIT ${QUERY_PAGE_LIMIT}
+        OFFSET ${offset}
+      `);
+      const chunk = result.rows || [];
+      if (!chunk.length) break;
+      rows.push(...chunk);
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
+    return rows.map((row) => {
       return { ...row, metadata: this.parseBackupMetadataSafe(row.metadata) };
     });
   }
@@ -3540,6 +3635,7 @@ var searchRateLimiter = rateLimit({
 var OLLAMA_HOST = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
 var OLLAMA_CHAT_MODEL = process.env.OLLAMA_CHAT_MODEL || "llama3:8b";
 var OLLAMA_EMBED_MODEL = process.env.OLLAMA_EMBED_MODEL || "nomic-embed-text";
+var MAX_OLLAMA_MESSAGES = 50;
 function ensureText(input) {
   return (input || "").trim();
 }
@@ -3563,6 +3659,7 @@ async function ollamaEmbed(input) {
 }
 async function ollamaChat(messages, options) {
   const timeoutMs = Number(options?.timeoutMs ?? process.env.OLLAMA_TIMEOUT_MS ?? 2e3);
+  const boundedMessages = Array.isArray(messages) ? messages.slice(Math.max(0, messages.length - MAX_OLLAMA_MESSAGES)) : [];
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let res;
@@ -3573,7 +3670,7 @@ async function ollamaChat(messages, options) {
       signal: controller.signal,
       body: JSON.stringify({
         model: OLLAMA_CHAT_MODEL,
-        messages,
+        messages: boundedMessages,
         stream: false,
         options: {
           num_predict: options?.num_predict ?? 96,
@@ -4818,6 +4915,9 @@ var connectedClients = /* @__PURE__ */ new Map();
 var DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
 var DEFAULT_WS_IDLE_MINUTES = 3;
 var DEFAULT_AI_TIMEOUT_MS = 6e3;
+var DEFAULT_BODY_LIMIT = "2mb";
+var IMPORT_BODY_LIMIT = process.env.IMPORT_BODY_LIMIT || "50mb";
+var PG_POOL_WARN_COOLDOWN_MS = 6e4;
 var AI_PRECOMPUTE_ON_START = String(process.env.AI_PRECOMPUTE_ON_START || "0") === "1";
 var API_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
 var LOW_MEMORY_MODE = String(process.env.SQR_LOW_MEMORY_MODE ?? "1") === "1";
@@ -4881,6 +4981,8 @@ var lastAiLatencyMs = 0;
 var lastAiLatencyObservedAt = 0;
 var lastIntelligenceResult = null;
 var intelligenceInFlight = false;
+var lastPgPoolWarningAt = 0;
+var lastPgPoolWarningSignature = "";
 var MAX_INTELLIGENCE_HISTORY = 300;
 var intelligenceHistory = {
   cpuPercent: [],
@@ -5086,6 +5188,28 @@ function getEffectiveAiLatencyMs(now = Date.now()) {
   const decayed = lastAiLatencyMs * decayFactor;
   return Math.max(0, decayed);
 }
+function maybeWarnPgPoolPressure(source) {
+  const total = Number(pool.totalCount || 0);
+  const idle = Number(pool.idleCount || 0);
+  const waiting = Number(pool.waitingCount || 0);
+  const max = Number(pool?.options?.max || 0);
+  const nearMax = max > 0 ? total >= Math.max(1, max - 1) : false;
+  const hasPressure = waiting > 0 || idle === 0 || nearMax;
+  if (!hasPressure) {
+    lastPgPoolWarningSignature = "";
+    return;
+  }
+  const signature = `${total}:${idle}:${waiting}:${max}`;
+  const now = Date.now();
+  if (signature === lastPgPoolWarningSignature && now - lastPgPoolWarningAt < PG_POOL_WARN_COOLDOWN_MS) {
+    return;
+  }
+  lastPgPoolWarningAt = now;
+  lastPgPoolWarningSignature = signature;
+  console.warn(
+    `[PG_POOL] total=${total} idle=${idle} waiting=${waiting} max=${max} source=${source}`
+  );
+}
 async function withDbCircuit(operation) {
   return circuitDb.execute(async () => {
     const start = Date.now();
@@ -5093,6 +5217,7 @@ async function withDbCircuit(operation) {
       return await operation();
     } finally {
       observeDbLatency(Date.now() - start);
+      maybeWarnPgPoolPressure("db-circuit");
     }
   });
 }
@@ -5428,8 +5553,10 @@ setInterval(() => {
   void runIntelligenceCycle();
 }, 5e3).unref();
 void runIntelligenceCycle();
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use("/api/imports", express.json({ limit: IMPORT_BODY_LIMIT }));
+app.use("/api/imports", express.urlencoded({ extended: true, limit: IMPORT_BODY_LIMIT }));
+app.use(express.json({ limit: DEFAULT_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT }));
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
@@ -5751,12 +5878,25 @@ function withAiConcurrencyGate(route, handler) {
 }
 function broadcastWsMessage(payload) {
   const msg = JSON.stringify(payload);
-  for (const [, ws] of connectedClients) {
-    if (ws.readyState === WebSocket.OPEN) {
+  for (const [activityId, ws] of connectedClients.entries()) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      connectedClients.delete(activityId);
+      continue;
+    }
+    try {
       ws.send(msg);
+    } catch {
+      connectedClients.delete(activityId);
     }
   }
 }
+setInterval(() => {
+  for (const [activityId, ws] of connectedClients.entries()) {
+    if (!ws || ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING) {
+      connectedClients.delete(activityId);
+    }
+  }
+}, 3e4).unref();
 function invalidateMaintenanceCache() {
   maintenanceCache = null;
 }
@@ -6790,11 +6930,17 @@ app.post("/api/imports", authenticateToken, async (req, res) => {
       filename,
       createdBy: req.user?.username
     });
-    for (const row of dataRows2) {
-      await storage.createDataRow({
-        importId: importRecord.id,
-        jsonDataJsonb: row
-      });
+    const INSERT_CHUNK_SIZE = 20;
+    for (let i = 0; i < dataRows2.length; i += INSERT_CHUNK_SIZE) {
+      const chunk = dataRows2.slice(i, i + INSERT_CHUNK_SIZE);
+      await Promise.all(
+        chunk.map(
+          (row) => storage.createDataRow({
+            importId: importRecord.id,
+            jsonDataJsonb: row
+          })
+        )
+      );
     }
     await storage.createAuditLog({
       action: "IMPORT_DATA",
@@ -9430,12 +9576,16 @@ wss.on("connection", async (ws, req) => {
     }
     connectedClients.set(activityId, ws);
     console.log(`\u2705 WebSocket connected for activityId=${activityId}`);
-    ws.on("close", () => {
+    const cleanupSocket = () => {
       if (connectedClients.get(activityId) === ws) {
         connectedClients.delete(activityId);
       }
+    };
+    ws.on("close", () => {
+      cleanupSocket();
       console.log(`WebSocket closed for activityId=${activityId}`);
     });
+    ws.on("error", cleanupSocket);
   } catch (err) {
     console.log("\u274C WS handshake failed");
     ws.close();

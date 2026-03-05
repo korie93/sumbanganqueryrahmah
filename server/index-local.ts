@@ -27,6 +27,9 @@ const connectedClients = new Map<string, WebSocket>();
 const DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
 const DEFAULT_WS_IDLE_MINUTES = 3;
 const DEFAULT_AI_TIMEOUT_MS = 6000;
+const DEFAULT_BODY_LIMIT = "2mb";
+const IMPORT_BODY_LIMIT = process.env.IMPORT_BODY_LIMIT || "50mb";
+const PG_POOL_WARN_COOLDOWN_MS = 60_000;
 const AI_PRECOMPUTE_ON_START = String(process.env.AI_PRECOMPUTE_ON_START || "0") === "1";
 const API_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
 const LOW_MEMORY_MODE = String(process.env.SQR_LOW_MEMORY_MODE ?? "1") === "1";
@@ -178,6 +181,8 @@ let lastAiLatencyMs = 0;
 let lastAiLatencyObservedAt = 0;
 let lastIntelligenceResult: EvaluateSystemResult | null = null;
 let intelligenceInFlight = false;
+let lastPgPoolWarningAt = 0;
+let lastPgPoolWarningSignature = "";
 
 const MAX_INTELLIGENCE_HISTORY = 300;
 const intelligenceHistory: SystemHistory = {
@@ -397,6 +402,35 @@ function getEffectiveAiLatencyMs(now = Date.now()): number {
   return Math.max(0, decayed);
 }
 
+function maybeWarnPgPoolPressure(source: string) {
+  const total = Number(pool.totalCount || 0);
+  const idle = Number(pool.idleCount || 0);
+  const waiting = Number(pool.waitingCount || 0);
+  const max = Number((pool as any)?.options?.max || 0);
+  const nearMax = max > 0 ? total >= Math.max(1, max - 1) : false;
+  const hasPressure = waiting > 0 || idle === 0 || nearMax;
+
+  if (!hasPressure) {
+    lastPgPoolWarningSignature = "";
+    return;
+  }
+
+  const signature = `${total}:${idle}:${waiting}:${max}`;
+  const now = Date.now();
+  if (
+    signature === lastPgPoolWarningSignature &&
+    now - lastPgPoolWarningAt < PG_POOL_WARN_COOLDOWN_MS
+  ) {
+    return;
+  }
+
+  lastPgPoolWarningAt = now;
+  lastPgPoolWarningSignature = signature;
+  console.warn(
+    `[PG_POOL] total=${total} idle=${idle} waiting=${waiting} max=${max} source=${source}`,
+  );
+}
+
 async function withDbCircuit<T>(operation: () => Promise<T>): Promise<T> {
   return circuitDb.execute(async () => {
     const start = Date.now();
@@ -404,6 +438,7 @@ async function withDbCircuit<T>(operation: () => Promise<T>): Promise<T> {
       return await operation();
     } finally {
       observeDbLatency(Date.now() - start);
+      maybeWarnPgPoolPressure("db-circuit");
     }
   });
 }
@@ -787,8 +822,11 @@ setInterval(() => {
 }, 5_000).unref();
 void runIntelligenceCycle();
 
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+// Keep default parser small; enable larger payload only for import endpoints.
+app.use("/api/imports", express.json({ limit: IMPORT_BODY_LIMIT }));
+app.use("/api/imports", express.urlencoded({ extended: true, limit: IMPORT_BODY_LIMIT }));
+app.use(express.json({ limit: DEFAULT_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT }));
 
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
@@ -1232,12 +1270,26 @@ function withAiConcurrencyGate(
 
 function broadcastWsMessage(payload: Record<string, unknown>) {
   const msg = JSON.stringify(payload);
-  for (const [, ws] of connectedClients) {
-    if (ws.readyState === WebSocket.OPEN) {
+  for (const [activityId, ws] of connectedClients.entries()) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      connectedClients.delete(activityId);
+      continue;
+    }
+    try {
       ws.send(msg);
+    } catch {
+      connectedClients.delete(activityId);
     }
   }
 }
+
+setInterval(() => {
+  for (const [activityId, ws] of connectedClients.entries()) {
+    if (!ws || (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING)) {
+      connectedClients.delete(activityId);
+    }
+  }
+}, 30_000).unref();
 
 function invalidateMaintenanceCache() {
   maintenanceCache = null;
@@ -2473,11 +2525,17 @@ app.post("/api/imports", authenticateToken, async (req: AuthenticatedRequest, re
       createdBy: req.user?.username,
     });
 
-    for (const row of dataRows) {
-      await storage.createDataRow({
-        importId: importRecord.id,
-        jsonDataJsonb: row,
-      });
+    const INSERT_CHUNK_SIZE = 20;
+    for (let i = 0; i < dataRows.length; i += INSERT_CHUNK_SIZE) {
+      const chunk = dataRows.slice(i, i + INSERT_CHUNK_SIZE);
+      await Promise.all(
+        chunk.map((row) =>
+          storage.createDataRow({
+            importId: importRecord.id,
+            jsonDataJsonb: row,
+          })
+        )
+      );
     }
 
     await storage.createAuditLog({
@@ -5558,12 +5616,17 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
         connectedClients.set(activityId, ws);
         console.log(`✅ WebSocket connected for activityId=${activityId}`);
 
-        ws.on("close", () => {
+        const cleanupSocket = () => {
           if (connectedClients.get(activityId) === ws) {
             connectedClients.delete(activityId);
           }
+        };
+
+        ws.on("close", () => {
+          cleanupSocket();
           console.log(`WebSocket closed for activityId=${activityId}`);
         });
+        ws.on("error", cleanupSocket);
       } catch (err) {
         console.log("❌ WS handshake failed");
         ws.close();

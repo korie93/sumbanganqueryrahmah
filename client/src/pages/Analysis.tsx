@@ -8,6 +8,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { analyzeImport, analyzeAll } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { FixedSizeList, type ListChildComponentProps } from "react-window";
 
 interface AnalysisProps {
   onNavigate: (page: string) => void;
@@ -21,6 +22,14 @@ interface AnalysisCategory {
 interface DuplicateItem {
   value: string;
   count: number;
+}
+
+interface AnalysisVirtualRowData {
+  items: string[];
+  startIndex: number;
+  sectionKey: string;
+  copiedItems: Record<string, boolean>;
+  copyToClipboard: (text: string, itemKey?: string) => void;
 }
 
 interface AnalysisData {
@@ -233,6 +242,41 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
     const Icon = icon;
     const isExpanded = expandedSections[key] || false;
     const paged = getPaginatedItems(key, items);
+    const useVirtualRows = paged.items.length > 80;
+    const rowHeight = 46;
+    const virtualRowData: AnalysisVirtualRowData = {
+      items: paged.items,
+      startIndex: paged.start,
+      sectionKey: key,
+      copiedItems,
+      copyToClipboard,
+    };
+
+    const renderVirtualRow = ({ index, style, data }: ListChildComponentProps<AnalysisVirtualRowData>) => {
+      const item = data.items[index];
+      const rowIndex = data.startIndex + index;
+      const itemKey = `${data.sectionKey}-${rowIndex}`;
+      return (
+        <div style={style} className="grid grid-cols-[64px_1fr_96px] items-center border-t border-border hover:bg-muted/50">
+          <div className="px-3 text-muted-foreground">{rowIndex + 1}</div>
+          <div className="truncate px-3 font-mono text-foreground">{item}</div>
+          <div className="px-3 text-right">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => data.copyToClipboard(item, itemKey)}
+              data-testid={`button-copy-${data.sectionKey}-${index}`}
+            >
+              {data.copiedItems[itemKey] ? (
+                <Check className="h-4 w-4 text-green-500" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </div>
+      );
+    };
 
     return (
       <Collapsible open={isExpanded} onOpenChange={() => toggleSection(key)} className="glass-wrapper">
@@ -269,23 +313,32 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
               </Button>
             </div>
             <div className="max-h-64 overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted sticky top-0">
-                  <tr>
-                    <th className="text-left p-3 font-medium text-muted-foreground w-16">#</th>
-                    <th className="text-left p-3 font-medium text-muted-foreground">Value</th>
-                    <th className="text-right p-3 font-medium text-muted-foreground w-24">Copy</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <div className="grid grid-cols-[64px_1fr_96px] bg-muted text-sm">
+                <div className="p-3 font-medium text-muted-foreground">#</div>
+                <div className="p-3 font-medium text-muted-foreground">Value</div>
+                <div className="p-3 text-right font-medium text-muted-foreground">Copy</div>
+              </div>
+              {useVirtualRows ? (
+                <FixedSizeList
+                  height={256}
+                  itemCount={paged.items.length}
+                  itemSize={rowHeight}
+                  itemData={virtualRowData}
+                  width="100%"
+                  overscanCount={8}
+                >
+                  {renderVirtualRow}
+                </FixedSizeList>
+              ) : (
+                <div>
                   {paged.items.map((item, idx) => {
                     const rowIndex = paged.start + idx;
                     const itemKey = `${key}-${rowIndex}`;
                     return (
-                      <tr key={rowIndex} className="border-t border-border hover:bg-muted/50">
-                        <td className="p-3 text-muted-foreground">{rowIndex + 1}</td>
-                        <td className="p-3 font-mono text-foreground">{item}</td>
-                        <td className="p-3 text-right">
+                      <div key={rowIndex} className="grid grid-cols-[64px_1fr_96px] items-center border-t border-border text-sm hover:bg-muted/50">
+                        <div className="px-3 py-2 text-muted-foreground">{rowIndex + 1}</div>
+                        <div className="truncate px-3 py-2 font-mono text-foreground">{item}</div>
+                        <div className="px-3 py-2 text-right">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -293,17 +346,17 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
                             data-testid={`button-copy-${key}-${idx}`}
                           >
                             {copiedItems[itemKey] ? (
-                              <Check className="w-4 h-4 text-green-500" />
+                              <Check className="h-4 w-4 text-green-500" />
                             ) : (
-                              <Copy className="w-4 h-4" />
+                              <Copy className="h-4 w-4" />
                             )}
                           </Button>
-                        </td>
-                      </tr>
+                        </div>
+                      </div>
                     );
                   })}
-                </tbody>
-              </table>
+                </div>
+              )}
             </div>
             {items.length > TABLE_PAGE_SIZE ? (
               <div className="flex items-center justify-between gap-2 border-t border-border bg-muted/20 p-3">

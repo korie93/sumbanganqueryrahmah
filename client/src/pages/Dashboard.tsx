@@ -10,7 +10,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
+import {
   Users, 
   Activity, 
   LogIn, 
@@ -23,8 +23,6 @@ import {
   Crown,
   Download
 } from "lucide-react";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
 import {
   AreaChart,
   Area,
@@ -128,6 +126,10 @@ export default function Dashboard() {
     
     setExportingPdf(true);
     try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
       const element = dashboardRef.current;
       const isDark = document.documentElement.classList.contains("dark");
       const bgColor = isDark ? "#1e293b" : "#ffffff";
