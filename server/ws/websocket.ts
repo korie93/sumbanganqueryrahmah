@@ -23,5 +23,9 @@ export function setupWebSocket(server: any) {
     ws.on("close", () => {
       connectedClients.delete(activity.id);
     });
+
+    ws.on("error", () => {
+      connectedClients.delete(activity.id);
+    });
   });
 }

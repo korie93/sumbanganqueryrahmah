@@ -8,8 +8,14 @@ import { authenticateToken } from "./middleware/authenticate";
 
 const app = express();
 
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+const DEFAULT_BODY_LIMIT = "2mb";
+const IMPORT_BODY_LIMIT = "50mb";
+
+// Allow larger payload only for import endpoints.
+app.use("/api/imports", express.json({ limit: IMPORT_BODY_LIMIT }));
+app.use("/api/imports", express.urlencoded({ extended: true, limit: IMPORT_BODY_LIMIT }));
+app.use(express.json({ limit: DEFAULT_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT }));
 
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");

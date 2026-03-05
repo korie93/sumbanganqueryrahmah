@@ -7,7 +7,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { createImport } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import * as XLSX from "xlsx";
+
+type XlsxModule = typeof import("xlsx");
+let xlsxModulePromise: Promise<XlsxModule> | null = null;
+
+async function loadXlsx(): Promise<XlsxModule> {
+  if (!xlsxModulePromise) {
+    xlsxModulePromise = import("xlsx");
+  }
+  return xlsxModulePromise;
+}
 
 interface ImportProps {
   onNavigate: (page: string) => void;
@@ -136,6 +145,7 @@ export default function Import({ onNavigate }: ImportProps) {
 
   const parseExcel = async (file: File) => {
     const arrayBuffer = await file.arrayBuffer();
+    const XLSX = await loadXlsx();
     const workbook = XLSX.read(arrayBuffer, { type: "array", cellDates: true, cellNF: false, cellText: false });
     
     const firstSheetName = workbook.SheetNames[0];
@@ -247,6 +257,7 @@ export default function Import({ onNavigate }: ImportProps) {
         return { data: rows };
       } else {
         const arrayBuffer = await file.arrayBuffer();
+        const XLSX = await loadXlsx();
         let workbook;
         try {
           workbook = XLSX.read(arrayBuffer, { type: "array", cellDates: true, cellNF: false, cellText: false });

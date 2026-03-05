@@ -9,6 +9,9 @@ export const pool = new Pool({
   user: process.env.PG_USER || "postgres",
   password: process.env.PG_PASSWORD || "Postgres@123",
   database: process.env.PG_DATABASE || "sqr_db",
+  max: 5,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 5_000,
   options: "-c search_path=public",
 });
 

@@ -766,11 +766,6 @@ function AppContent() {
         tabVisibility={tabVisibility}
         featureLockdown={isFeatureLockdownMode}
       />
-      {isFeatureLockdownMode && (
-        <div className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
-          Most features are currently disabled by a superuser. Search is still available.
-        </div>
-      )}
       <Suspense fallback={pageFallback}>
         <main>{renderPage()}</main>
       </Suspense>

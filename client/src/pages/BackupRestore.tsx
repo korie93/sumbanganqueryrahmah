@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Database, RefreshCw, Plus, RotateCcw, Trash2, Clock, User, HardDrive, FileText, Users, Archive, Search, Filter, Calendar, X, ChevronDown, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import jsPDF from "jspdf";
 import {
   Dialog,
   DialogContent,
@@ -111,12 +110,20 @@ export default function BackupRestore({ userRole }: BackupRestoreProps) {
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [backupsOpen, setBackupsOpen] = useState(true);
   const [searchName, setSearchName] = useState("");
+  const [debouncedSearchName, setDebouncedSearchName] = useState("");
   const [createdByFilter, setCreatedByFilter] = useState("");
   const [sortBy, setSortBy] = useState("newest");
   const [datePreset, setDatePreset] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [exportingPdf, setExportingPdf] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchName(searchName.trim());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchName]);
 
   const normalizeBackup = (raw: any): BackupRecord => {
     let metadata = raw?.metadata ?? null;
@@ -285,7 +292,7 @@ export default function BackupRestore({ userRole }: BackupRestoreProps) {
 
   const filteredAndSortedBackups = useMemo(() => {
     let filtered = backups.filter((backup) => {
-      if (searchName && !backup.name.toLowerCase().includes(searchName.toLowerCase())) {
+      if (debouncedSearchName && !backup.name.toLowerCase().includes(debouncedSearchName.toLowerCase())) {
         return false;
       }
 
@@ -319,7 +326,7 @@ export default function BackupRestore({ userRole }: BackupRestoreProps) {
     });
 
     return filtered;
-  }, [backups, searchName, createdByFilter, datePreset, dateFrom, dateTo, sortBy]);
+  }, [backups, debouncedSearchName, createdByFilter, datePreset, dateFrom, dateTo, sortBy]);
 
   const clearAllFilters = () => {
     setSearchName("");
@@ -365,6 +372,7 @@ export default function BackupRestore({ userRole }: BackupRestoreProps) {
 
     setExportingPdf(true);
     try {
+      const { default: jsPDF } = await import("jspdf");
       const isDark = document.documentElement.classList.contains("dark");
       
       const pdf = new jsPDF({

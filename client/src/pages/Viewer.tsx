@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Eye, Download, ArrowLeft, Search, AlertCircle, Filter, X, Check, Columns, Trash2, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { getImportData } from "@/lib/api";
+import { FixedSizeList, type ListChildComponentProps } from "react-window";
 
 interface ViewerProps {
   onNavigate: (page: string) => void;
@@ -34,6 +35,14 @@ interface ColumnFilter {
 interface DataRowWithId {
   __rowId: number;
   [key: string]: any;
+}
+
+interface ViewerVirtualRowData {
+  rows: DataRowWithId[];
+  visibleHeaders: string[];
+  selectedRowIds: Set<number>;
+  onToggleRowSelection: (rowId: number) => void;
+  gridTemplateColumns: string;
 }
 
 function extractHeadersFromRows(rows: DataRowWithId[]): string[] {
@@ -76,7 +85,6 @@ export default function Viewer({ onNavigate, importId, userRole, viewerRowsPerPa
   const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
   const [selectAllFiltered, setSelectAllFiltered] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
-  const tableRef = useRef<HTMLDivElement>(null);
   const rowIdCounterRef = useRef(0);
   const [emptyHint, setEmptyHint] = useState("");
   const [isCleared, setIsCleared] = useState(false);
@@ -86,18 +94,18 @@ export default function Viewer({ onNavigate, importId, userRole, viewerRowsPerPa
   const [totalPages, setTotalPages] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadedRowsCount, setLoadedRowsCount] = useState(0);
-  const [tableScrollTop, setTableScrollTop] = useState(0);
   const ROWS_PER_PAGE = configuredRowsPerPage;
   const MAX_ROWS_IN_MEMORY = isLowSpecMode ? 240 : 1200;
   const MIN_SEARCH_LENGTH = 2;
+  const SEARCH_DEBOUNCE_MS = 300;
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search.trim());
-    }, isLowSpecMode ? 700 : 400); // 300–700ms based on device mode
+    }, SEARCH_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [search, SEARCH_DEBOUNCE_MS]);
 
   useEffect(() => {
     if (importId) {
@@ -607,30 +615,59 @@ export default function Viewer({ onNavigate, importId, userRole, viewerRowsPerPa
     );
   }, [rows, columnFilters]);
 
-  const enableVirtualRows = isLowSpecMode && filteredRows.length > 80;
+  const enableVirtualRows = filteredRows.length > (isLowSpecMode ? 60 : 120);
   const rowHeightPx = 48;
   const viewportHeightPx = 520;
-  const overscanRows = 10;
-  const virtualStartRow = enableVirtualRows
-    ? Math.max(0, Math.floor(tableScrollTop / rowHeightPx) - overscanRows)
-    : 0;
-  const virtualVisibleRows = enableVirtualRows
-    ? Math.ceil(viewportHeightPx / rowHeightPx) + overscanRows * 2
-    : filteredRows.length;
-  const virtualEndRow = enableVirtualRows
-    ? Math.min(filteredRows.length, virtualStartRow + virtualVisibleRows)
-    : filteredRows.length;
-  const virtualRows = enableVirtualRows
-    ? filteredRows.slice(virtualStartRow, virtualEndRow)
-    : filteredRows;
-  const topSpacerHeight = enableVirtualRows ? virtualStartRow * rowHeightPx : 0;
-  const bottomSpacerHeight = enableVirtualRows
-    ? Math.max(0, (filteredRows.length - virtualEndRow) * rowHeightPx)
-    : 0;
-
-  useEffect(() => {
-    setTableScrollTop(0);
-  }, [filteredRows.length, currentPage, debouncedSearch]);
+  const virtualTableMinWidth = useMemo(
+    () => Math.max(900, 100 + visibleHeaders.length * 180),
+    [visibleHeaders.length],
+  );
+  const gridTemplateColumns = useMemo(
+    () => `44px 56px repeat(${Math.max(1, visibleHeaders.length)}, minmax(180px, 1fr))`,
+    [visibleHeaders.length],
+  );
+  const virtualRowData = useMemo<ViewerVirtualRowData>(
+    () => ({
+      rows: filteredRows,
+      visibleHeaders,
+      selectedRowIds,
+      onToggleRowSelection: toggleRowSelection,
+      gridTemplateColumns,
+    }),
+    [filteredRows, gridTemplateColumns, selectedRowIds, toggleRowSelection, visibleHeaders],
+  );
+  const renderVirtualRow = useCallback(
+    ({ index, style, data }: ListChildComponentProps<ViewerVirtualRowData>) => {
+      const row = data.rows[index];
+      const selected = data.selectedRowIds.has(row.__rowId);
+      return (
+        <div style={style}>
+          <div
+            className={`grid h-[48px] items-center border-t border-border px-0 hover:bg-muted/50 ${selected ? "bg-primary/10" : ""}`}
+            style={{ gridTemplateColumns: data.gridTemplateColumns }}
+          >
+            <div className="px-3">
+              <Checkbox
+                checked={selected}
+                onCheckedChange={() => data.onToggleRowSelection(row.__rowId)}
+              />
+            </div>
+            <div className="px-3 text-muted-foreground">{row.__rowId + 1}</div>
+            {data.visibleHeaders.map((header) => (
+              <div
+                key={`${row.__rowId}-${header}`}
+                className="truncate whitespace-nowrap px-3 text-foreground"
+                title={String(row[header] ?? "-")}
+              >
+                {row[header] ?? "-"}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    },
+    [],
+  );
 
   useEffect(() => {
     setSelectedRowIds((prev) => {
@@ -982,69 +1019,88 @@ export default function Viewer({ onNavigate, importId, userRole, viewerRowsPerPa
               )}
             </div>
 
-            <div
-              className="overflow-x-auto overflow-y-auto max-h-[560px] rounded-lg border border-border"
-              onScroll={enableVirtualRows ? (e) => setTableScrollTop(e.currentTarget.scrollTop) : undefined}
-            >
-              <table className="w-full text-sm">
-                <thead className="bg-muted sticky top-0 z-10">
-                  <tr>
-                    <th className="text-left p-3 font-medium text-muted-foreground w-10">
-                      <Checkbox
-                        checked={selectAllFiltered && filteredRows.length > 0}
-                        onCheckedChange={toggleSelectAllFiltered}
-                        data-testid="checkbox-select-all-rows"
-                      />
-                    </th>
-                    <th className="text-left p-3 font-medium text-muted-foreground w-12">#</th>
-                    {visibleHeaders.map((header, idx) => (
-                      <th key={idx} className="text-left p-3 font-medium text-muted-foreground whitespace-nowrap">
-                        {header}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {enableVirtualRows && topSpacerHeight > 0 && (
-                    <tr aria-hidden="true">
-                      <td colSpan={visibleHeaders.length + 2} style={{ height: `${topSpacerHeight}px`, padding: 0 }} />
-                    </tr>
-                  )}
-                  {virtualRows.map((row) => (
-                    <tr
-                      key={row.__rowId}
-                      className={`border-t border-border hover:bg-muted/50 h-[48px] ${selectedRowIds.has(row.__rowId) ? "bg-primary/10" : ""
-                        }`}
+            <div className="overflow-x-auto rounded-lg border border-border">
+              {enableVirtualRows ? (
+                <div style={{ minWidth: `${virtualTableMinWidth}px` }}>
+                  <div className="sticky top-0 z-10 border-b border-border bg-muted">
+                    <div
+                      className="grid h-12 items-center"
+                      style={{ gridTemplateColumns }}
                     >
-                      <td className="p-3">
+                      <div className="px-3">
                         <Checkbox
-                          checked={selectedRowIds.has(row.__rowId)}
-                          onCheckedChange={() => toggleRowSelection(row.__rowId)}
+                          checked={selectAllFiltered && filteredRows.length > 0}
+                          onCheckedChange={toggleSelectAllFiltered}
+                          data-testid="checkbox-select-all-rows"
                         />
-                      </td>
-
-                      <td className="p-3 text-muted-foreground">
-                        {row.__rowId + 1}
-                      </td>
-
-                      {visibleHeaders.map((header) => (
-                        <td
-                          key={header}
-                          className="p-3 text-foreground max-w-[300px] truncate whitespace-nowrap"
-                          title={String(row[header] ?? "-")}
-                        >
-                          {row[header] ?? "-"}
-                        </td>
+                      </div>
+                      <div className="px-3 font-medium text-muted-foreground">#</div>
+                      {visibleHeaders.map((header, idx) => (
+                        <div key={idx} className="truncate whitespace-nowrap px-3 font-medium text-muted-foreground">
+                          {header}
+                        </div>
                       ))}
-                    </tr>
-                  ))}
-                  {enableVirtualRows && bottomSpacerHeight > 0 && (
-                    <tr aria-hidden="true">
-                      <td colSpan={visibleHeaders.length + 2} style={{ height: `${bottomSpacerHeight}px`, padding: 0 }} />
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    </div>
+                  </div>
+                  <FixedSizeList
+                    height={viewportHeightPx}
+                    itemCount={filteredRows.length}
+                    itemSize={rowHeightPx}
+                    itemData={virtualRowData}
+                    width="100%"
+                    overscanCount={10}
+                  >
+                    {renderVirtualRow}
+                  </FixedSizeList>
+                </div>
+              ) : (
+                <div className="max-h-[560px] overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 z-10 bg-muted">
+                      <tr>
+                        <th className="w-10 p-3 text-left font-medium text-muted-foreground">
+                          <Checkbox
+                            checked={selectAllFiltered && filteredRows.length > 0}
+                            onCheckedChange={toggleSelectAllFiltered}
+                            data-testid="checkbox-select-all-rows"
+                          />
+                        </th>
+                        <th className="w-12 p-3 text-left font-medium text-muted-foreground">#</th>
+                        {visibleHeaders.map((header, idx) => (
+                          <th key={idx} className="whitespace-nowrap p-3 text-left font-medium text-muted-foreground">
+                            {header}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRows.map((row) => (
+                        <tr
+                          key={row.__rowId}
+                          className={`h-[48px] border-t border-border hover:bg-muted/50 ${selectedRowIds.has(row.__rowId) ? "bg-primary/10" : ""}`}
+                        >
+                          <td className="p-3">
+                            <Checkbox
+                              checked={selectedRowIds.has(row.__rowId)}
+                              onCheckedChange={() => toggleRowSelection(row.__rowId)}
+                            />
+                          </td>
+                          <td className="p-3 text-muted-foreground">{row.__rowId + 1}</td>
+                          {visibleHeaders.map((header) => (
+                            <td
+                              key={header}
+                              className="max-w-[300px] truncate whitespace-nowrap p-3 text-foreground"
+                              title={String(row[header] ?? "-")}
+                            >
+                              {row[header] ?? "-"}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
               {/* 🔒 MIN SEARCH LENGTH UX MESSAGE */}
               {debouncedSearch &&
                 debouncedSearch.length < MIN_SEARCH_LENGTH && (

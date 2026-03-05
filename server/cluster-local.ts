@@ -82,11 +82,10 @@ const PREALLOCATE_MB = Number(process.env.SQR_PREALLOCATE_MB ?? (LOW_MEMORY_MODE
 const MAX_SPAWN_PER_CYCLE = 1;
 
 // 🔒 HARD CAP: Prevent uncontrolled worker spawning
-// For i7 3770 (4 cores) + 16GB RAM: max 3 workers ensures stability
-const CPU_COUNT = os.cpus().length;
-const requestedMaxWorkers = Number(process.env.SQR_MAX_WORKERS ?? (LOW_MEMORY_MODE ? "1" : "3"));
+const MAX_WORKERS = Math.min(4, os.cpus().length);
+const requestedMaxWorkers = Number(process.env.SQR_MAX_WORKERS ?? (LOW_MEMORY_MODE ? "1" : String(MAX_WORKERS)));
 const normalizedMaxWorkers = Number.isFinite(requestedMaxWorkers) ? Math.floor(requestedMaxWorkers) : 1;
-const MAX_WORKERS_HARD_CAP = Math.max(1, Math.min(CPU_COUNT, normalizedMaxWorkers));
+const MAX_WORKERS_HARD_CAP = Math.max(1, Math.min(MAX_WORKERS, normalizedMaxWorkers));
 const MIN_WORKERS = 1;
 const SCALE_COOLDOWN_MS = LOW_MEMORY_MODE ? 30_000 : 15_000; // more conservative in low-memory mode
 const RESTART_THROTTLE_MS = 2_000; // 2 second throttle between restart attempts
@@ -308,7 +307,13 @@ async function drainAndRestartWorker(worker: Worker, reason: string) {
   if (drainingWorkers.has(worker.id)) return;
   drainingWorkers.add(worker.id);
   intentionalExits.add(worker.id);
-  worker.send({ type: "graceful-shutdown", reason });
+  if (worker.isConnected() && !worker.isDead()) {
+    try {
+      worker.send({ type: "graceful-shutdown", reason });
+    } catch {
+      // Ignore IPC send failure; timeout/kill fallback below will still apply.
+    }
+  }
 
   const timeout = setTimeout(() => {
     try {
