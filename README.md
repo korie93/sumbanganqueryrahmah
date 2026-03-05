@@ -1,5 +1,9 @@
 # Sumbangan Query Rahmah
 
+## Client User Manual
+Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin`, `user`), rujuk:
+- [README_CLIENT_MANUAL.md](./README_CLIENT_MANUAL.md)
+
 ## Description
 Sumbangan Query Rahmah is a project designed to streamline and manage contributions effectively. It aims to provide a comprehensive solution for tracking donations, processing queries, and managing community support initiatives. This platform enables users to easily contribute and allows administrators to efficiently oversee and analyze the contributions made by the community.
 
