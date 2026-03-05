@@ -26,6 +26,7 @@ import crypto from "crypto";
 const MAX_SEARCH_LIMIT = 200;
 const ANALYTICS_TZ = process.env.ANALYTICS_TZ || "Asia/Kuala_Lumpur";
 const STORAGE_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
+const BCRYPT_COST = 12;
 const ALLOWED_OPERATORS = new Set([
   "contains",
   "equals",
@@ -221,6 +222,22 @@ function ensureObject(value: unknown): Record<string, any> | null {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUserCredentials(params: {
+    userId: string;
+    newUsername?: string;
+    newPasswordHash?: string;
+    passwordChangedAt?: Date | null;
+  }): Promise<User | undefined>;
+  getUsersByRoles(roles: string[]): Promise<Array<{
+    id: string;
+    username: string;
+    role: string;
+    createdAt: Date;
+    updatedAt: Date;
+    passwordChangedAt: Date | null;
+    isBanned: boolean | null;
+  }>>;
+  updateActivitiesUsername(oldUsername: string, newUsername: string): Promise<void>;
   updateUserBan(username: string, isBanned: boolean): Promise<User | undefined>;
   getAccounts(): Promise<Array<{
     username: string;
@@ -441,11 +458,11 @@ export class PostgresStorage implements IStorage {
   private settingsTablesReady = false;
   private settingsTablesInitPromise: Promise<void> | null = null;
 
-  constructor() {
-    this.seedDefaultUsers();
-  }
+  constructor() {}
 
   public async init() {
+    await this.ensureUsersTable();
+    await this.seedDefaultUsers();
     await this.ensureBackupsTable();
     await this.ensurePerformanceIndexes();
     await this.ensureBannedSessionsTable();
@@ -454,6 +471,76 @@ export class PostgresStorage implements IStorage {
     await this.ensureCategoryRulesTable();
     await this.ensureCategoryStatsTable();
     await this.ensureSettingsTables();
+  }
+
+  private async ensureUsersTable() {
+    try {
+      await db.execute(sql`SET search_path TO public`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.users (
+          id text PRIMARY KEY,
+          username text NOT NULL,
+          role text NOT NULL DEFAULT 'user',
+          password_hash text,
+          password text,
+          is_banned boolean DEFAULT false,
+          created_at timestamp DEFAULT now(),
+          updated_at timestamp DEFAULT now(),
+          password_changed_at timestamp
+        )
+      `);
+      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role text`);
+      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_hash text`);
+      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password text`);
+      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_banned boolean DEFAULT false`);
+      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_changed_at timestamp`);
+
+      // Migrate legacy column naming: password -> password_hash.
+      await db.execute(sql`
+        UPDATE public.users
+        SET password_hash = password
+        WHERE password_hash IS NULL
+          AND password IS NOT NULL
+      `);
+
+      const missingHashRows = await db.execute(sql`
+        SELECT id
+        FROM public.users
+        WHERE password_hash IS NULL
+      `);
+      for (const row of missingHashRows.rows as Array<{ id?: string }>) {
+        const userId = String(row.id || "").trim();
+        if (!userId) continue;
+        const fallbackHash = await bcrypt.hash(randomUUID(), BCRYPT_COST);
+        await db.execute(sql`
+          UPDATE public.users
+          SET password_hash = ${fallbackHash}
+          WHERE id = ${userId}
+        `);
+      }
+
+      await db.execute(sql`
+        UPDATE public.users
+        SET
+          role = COALESCE(NULLIF(role, ''), 'user'),
+          created_at = COALESCE(created_at, now()),
+          updated_at = COALESCE(updated_at, now()),
+          is_banned = COALESCE(is_banned, false)
+      `);
+
+      await db.execute(sql`ALTER TABLE public.users ALTER COLUMN username SET NOT NULL`);
+      await db.execute(sql`ALTER TABLE public.users ALTER COLUMN role SET NOT NULL`);
+      await db.execute(sql`ALTER TABLE public.users ALTER COLUMN password_hash SET NOT NULL`);
+
+      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower_unique ON public.users (lower(username))`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_username_lower ON public.users (lower(username))`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_role ON public.users (role)`);
+    } catch (err: any) {
+      console.error("❌ Failed to ensure users table:", err?.message || err);
+      throw err;
+    }
   }
 
   private async ensurePerformanceIndexes() {
@@ -1478,12 +1565,16 @@ export class PostgresStorage implements IStorage {
     for (const user of defaultUsers) {
       const existing = await this.getUserByUsername(user.username);
       if (!existing) {
-        const hashedPassword = await bcrypt.hash(user.password, 10);
+        const now = new Date();
+        const hashedPassword = await bcrypt.hash(user.password, BCRYPT_COST);
         await db.insert(users).values({
           id: crypto.randomUUID(),
           username: user.username,
-          password: hashedPassword,
+          passwordHash: hashedPassword,
           role: user.role,
+          createdAt: now,
+          updatedAt: now,
+          passwordChangedAt: now,
           isBanned: false,
         });
       }
@@ -1501,34 +1592,88 @@ export class PostgresStorage implements IStorage {
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
+    const normalized = String(username || "").trim();
+    if (!normalized) return undefined;
     const result = await db
       .select()
       .from(users)
-      .where(eq(users.username, username))
+      .where(sql`lower(${users.username}) = lower(${normalized})`)
       .limit(1);
-
     return result[0];
   }
 
   async createUser(user: InsertUser): Promise<User> {
     const id = crypto.randomUUID();
-    const hashedPassword = await bcrypt.hash(user.password, 10);
+    const now = new Date();
+    const hashedPassword = await bcrypt.hash(user.password, BCRYPT_COST);
 
     await db.insert(users).values({
       id,
       username: user.username,
-      password: hashedPassword,
+      passwordHash: hashedPassword,
       role: user.role ?? "user",
+      createdAt: now,
+      updatedAt: now,
+      passwordChangedAt: now,
       isBanned: false,
     });
+    return (await this.getUser(id))!;
+  }
 
-    return {
-      id,
-      username: user.username,
-      password: hashedPassword,
-      role: user.role ?? "user",
-      isBanned: false,
+  async updateUserCredentials(params: {
+    userId: string;
+    newUsername?: string;
+    newPasswordHash?: string;
+    passwordChangedAt?: Date | null;
+  }): Promise<User | undefined> {
+    const next: Partial<typeof users.$inferInsert> = {
+      updatedAt: new Date(),
     };
+
+    if (typeof params.newUsername === "string" && params.newUsername.trim()) {
+      next.username = params.newUsername.trim();
+    }
+    if (typeof params.newPasswordHash === "string" && params.newPasswordHash.trim()) {
+      next.passwordHash = params.newPasswordHash.trim();
+      next.passwordChangedAt = params.passwordChangedAt ?? new Date();
+    } else if (params.passwordChangedAt !== undefined) {
+      next.passwordChangedAt = params.passwordChangedAt;
+    }
+
+    await db.update(users).set(next).where(eq(users.id, params.userId));
+    return this.getUser(params.userId);
+  }
+
+  async getUsersByRoles(roles: string[]): Promise<Array<{
+    id: string;
+    username: string;
+    role: string;
+    createdAt: Date;
+    updatedAt: Date;
+    passwordChangedAt: Date | null;
+    isBanned: boolean | null;
+  }>> {
+    if (!Array.isArray(roles) || roles.length === 0) return [];
+    return await db
+      .select({
+        id: users.id,
+        username: users.username,
+        role: users.role,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        passwordChangedAt: users.passwordChangedAt,
+        isBanned: users.isBanned,
+      })
+      .from(users)
+      .where(inArray(users.role, roles))
+      .orderBy(users.role, users.username);
+  }
+
+  async updateActivitiesUsername(oldUsername: string, newUsername: string): Promise<void> {
+    await db
+      .update(userActivity)
+      .set({ username: newUsername })
+      .where(eq(userActivity.username, oldUsername));
   }
 
   async searchGlobalDataRows(params: {
@@ -1626,7 +1771,7 @@ export class PostgresStorage implements IStorage {
   async updateUserBan(username: string, isBanned: boolean): Promise<User | undefined> {
     await db
       .update(users)
-      .set({ isBanned: isBanned })
+      .set({ isBanned: isBanned, updatedAt: new Date() })
       .where(eq(users.username, username));
 
     const result = await db
@@ -4056,7 +4201,7 @@ export class PostgresStorage implements IStorage {
       username: u.username,
       role: u.role,
       isBanned: u.isBanned,
-      passwordHash: u.password,
+      passwordHash: u.passwordHash,
     }));
 
     const allAuditLogs = await db.select().from(auditLogs);
@@ -4133,13 +4278,17 @@ export class PostgresStorage implements IStorage {
       }
 
       if (backupData.users.length > 0) {
+        const now = new Date();
         const userRows = backupData.users
           .filter((u) => u.passwordHash)
           .map((u) => ({
             id: crypto.randomUUID(),
             username: u.username,
-            password: u.passwordHash!,
+            passwordHash: u.passwordHash!,
             role: u.role,
+            createdAt: now,
+            updatedAt: now,
+            passwordChangedAt: now,
             isBanned: u.isBanned ?? false,
           }));
         for (const chunk of chunkArray(userRows, BACKUP_CHUNK_SIZE)) {

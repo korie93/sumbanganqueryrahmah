@@ -299,6 +299,42 @@ export async function getSettings() {
   return response.json();
 }
 
+export type CurrentUser = {
+  id: string;
+  username: string;
+  role: string;
+};
+
+export async function getMe(): Promise<CurrentUser> {
+  const response = await apiRequest("GET", "/api/me");
+  return response.json();
+}
+
+export async function updateMyCredentials(payload: {
+  newUsername?: string;
+  currentPassword?: string;
+  newPassword?: string;
+}) {
+  const response = await apiRequest("PATCH", "/api/me/credentials", payload);
+  return response.json();
+}
+
+export async function getSuperuserManagedUsers(): Promise<{
+  ok: boolean;
+  users: Array<{ id: string; username: string; role: string }>;
+}> {
+  const response = await apiRequest("GET", "/api/admin/users");
+  return response.json();
+}
+
+export async function updateSuperuserManagedUserCredentials(
+  userId: string,
+  payload: { newUsername?: string; newPassword?: string },
+) {
+  const response = await apiRequest("PATCH", `/api/admin/users/${encodeURIComponent(userId)}/credentials`, payload);
+  return response.json();
+}
+
 export async function getAppConfig() {
   const response = await apiRequest("GET", "/api/app-config");
   return response.json();
