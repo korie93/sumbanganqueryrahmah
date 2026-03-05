@@ -22,7 +22,7 @@ export default function Navbar({ currentPage, onNavigate, onLogout, userRole, us
     { id: "viewer", label: "Viewer", icon: Eye, roles: ["user", "admin", "superuser"] },
     { id: "general-search", label: "Search", icon: Search, roles: ["admin", "superuser", "user"] },
     { id: "monitor", label: "System Monitor", icon: Server, roles: ["user", "admin", "superuser"] },
-    { id: "settings", label: "Settings", icon: SlidersHorizontal, roles: ["admin", "superuser"] },
+    { id: "settings", label: "Settings", icon: SlidersHorizontal, roles: ["admin", "superuser", "user"] },
     { id: "backup", label: "Backup", icon: Database, roles: ["user", "admin", "superuser"] },
   ];
 

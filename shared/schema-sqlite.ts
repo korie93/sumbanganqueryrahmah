@@ -5,8 +5,11 @@ import { z } from "zod";
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("user"),
+  createdAt: integer("created_at", { mode: "timestamp" }),
+  updatedAt: integer("updated_at", { mode: "timestamp" }),
+  passwordChangedAt: integer("password_changed_at", { mode: "timestamp" }),
   isBanned: integer("is_banned", { mode: "boolean" }).default(false),
 });
 
@@ -59,10 +62,10 @@ export const backups = sqliteTable("backups", {
   metadata: text("metadata"),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-  role: true,
+export const insertUserSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+  role: z.string().optional(),
 });
 
 export const insertImportSchema = createInsertSchema(imports).pick({

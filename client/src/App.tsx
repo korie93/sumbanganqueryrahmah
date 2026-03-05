@@ -249,7 +249,7 @@ function AppContent() {
 
         if (pathname === "/maintenance") {
           setCurrentPage("maintenance");
-        } else if (pathname === "/settings" && parsedUser.role !== "user") {
+        } else if (pathname === "/settings") {
           setCurrentPage("settings");
         } else if (pathname === "/dashboard") {
           setCurrentPage("monitor");
@@ -281,7 +281,7 @@ function AppContent() {
         } else if (pathname === "/403") {
           setCurrentPage("forbidden");
         } else if (parsedUser.role === "user") {
-          setCurrentPage("general-search");
+          setCurrentPage(savedPage === "settings" ? "settings" : "general-search");
         } else if (savedPage) {
           if (savedPage === "dashboard" || savedPage === "activity" || savedPage === "monitor" || savedPage === "analysis" || savedPage === "audit" || savedPage === "audit-logs") {
             setCurrentPage("monitor");
@@ -304,6 +304,22 @@ function AppContent() {
       fetchSavedCount();
     }
   }, [user, fetchSavedCount]);
+
+  useEffect(() => {
+    const onProfileUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ username?: string; role?: string }>).detail;
+      if (!detail?.username || !detail?.role) return;
+      setUser((prev) => {
+        if (!prev) {
+          return { username: detail.username!, role: detail.role! };
+        }
+        return { ...prev, username: detail.username, role: detail.role };
+      });
+    };
+
+    window.addEventListener("profile-updated", onProfileUpdated as EventListener);
+    return () => window.removeEventListener("profile-updated", onProfileUpdated as EventListener);
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -701,7 +717,7 @@ function AppContent() {
         }
         return <AI timeoutMs={runtimeConfig.aiTimeoutMs} aiEnabled={runtimeConfig.aiEnabled} />;
       case "settings":
-        return user.role === "user" ? <GeneralSearch userRole={user.role} searchResultLimit={runtimeConfig.searchResultLimit} /> : <SettingsPage />;
+        return <SettingsPage />;
       case "maintenance":
         return <MaintenancePage />;
       case "analysis":

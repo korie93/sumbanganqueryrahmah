@@ -19,8 +19,11 @@ import { jsonb } from "drizzle-orm/pg-core";
 var users = pgTable("users", {
   id: text("id").primaryKey(),
   username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("user"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  passwordChangedAt: timestamp("password_changed_at"),
   isBanned: boolean("is_banned").default(false)
 });
 var imports = pgTable("imports", {
@@ -69,10 +72,10 @@ var backups = pgTable("backups", {
   backupData: text("backup_data").notNull(),
   metadata: text("metadata")
 });
-var insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-  role: true
+var insertUserSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+  role: z.string().optional()
 });
 var insertImportSchema = createInsertSchema(imports).pick({
   name: true,
@@ -120,6 +123,7 @@ var dataRowRelations = relations(dataRows, ({ one }) => ({
 }));
 
 // server/storage-postgres.ts
+import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
 
 // server/db-postgres.ts
@@ -142,6 +146,7 @@ import crypto from "crypto";
 var MAX_SEARCH_LIMIT = 200;
 var ANALYTICS_TZ = process.env.ANALYTICS_TZ || "Asia/Kuala_Lumpur";
 var STORAGE_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
+var BCRYPT_COST = 12;
 var ALLOWED_OPERATORS = /* @__PURE__ */ new Set([
   "contains",
   "equals",
@@ -249,9 +254,10 @@ var PostgresStorage = class {
   constructor() {
     this.settingsTablesReady = false;
     this.settingsTablesInitPromise = null;
-    this.seedDefaultUsers();
   }
   async init() {
+    await this.ensureUsersTable();
+    await this.seedDefaultUsers();
     await this.ensureBackupsTable();
     await this.ensurePerformanceIndexes();
     await this.ensureBannedSessionsTable();
@@ -260,6 +266,69 @@ var PostgresStorage = class {
     await this.ensureCategoryRulesTable();
     await this.ensureCategoryStatsTable();
     await this.ensureSettingsTables();
+  }
+  async ensureUsersTable() {
+    try {
+      await db.execute(sql`SET search_path TO public`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.users (
+          id text PRIMARY KEY,
+          username text NOT NULL,
+          role text NOT NULL DEFAULT 'user',
+          password_hash text,
+          password text,
+          is_banned boolean DEFAULT false,
+          created_at timestamp DEFAULT now(),
+          updated_at timestamp DEFAULT now(),
+          password_changed_at timestamp
+        )
+      `);
+      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role text`);
+      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_hash text`);
+      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password text`);
+      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_banned boolean DEFAULT false`);
+      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_changed_at timestamp`);
+      await db.execute(sql`
+        UPDATE public.users
+        SET password_hash = password
+        WHERE password_hash IS NULL
+          AND password IS NOT NULL
+      `);
+      const missingHashRows = await db.execute(sql`
+        SELECT id
+        FROM public.users
+        WHERE password_hash IS NULL
+      `);
+      for (const row of missingHashRows.rows) {
+        const userId = String(row.id || "").trim();
+        if (!userId) continue;
+        const fallbackHash = await bcrypt.hash(randomUUID(), BCRYPT_COST);
+        await db.execute(sql`
+          UPDATE public.users
+          SET password_hash = ${fallbackHash}
+          WHERE id = ${userId}
+        `);
+      }
+      await db.execute(sql`
+        UPDATE public.users
+        SET
+          role = COALESCE(NULLIF(role, ''), 'user'),
+          created_at = COALESCE(created_at, now()),
+          updated_at = COALESCE(updated_at, now()),
+          is_banned = COALESCE(is_banned, false)
+      `);
+      await db.execute(sql`ALTER TABLE public.users ALTER COLUMN username SET NOT NULL`);
+      await db.execute(sql`ALTER TABLE public.users ALTER COLUMN role SET NOT NULL`);
+      await db.execute(sql`ALTER TABLE public.users ALTER COLUMN password_hash SET NOT NULL`);
+      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower_unique ON public.users (lower(username))`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_username_lower ON public.users (lower(username))`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_role ON public.users (role)`);
+    } catch (err) {
+      console.error("\u274C Failed to ensure users table:", err?.message || err);
+      throw err;
+    }
   }
   async ensurePerformanceIndexes() {
     try {
@@ -1231,12 +1300,16 @@ var PostgresStorage = class {
     for (const user of defaultUsers) {
       const existing = await this.getUserByUsername(user.username);
       if (!existing) {
-        const hashedPassword = await bcrypt.hash(user.password, 10);
+        const now = /* @__PURE__ */ new Date();
+        const hashedPassword = await bcrypt.hash(user.password, BCRYPT_COST);
         await db.insert(users).values({
           id: crypto.randomUUID(),
           username: user.username,
-          password: hashedPassword,
+          passwordHash: hashedPassword,
           role: user.role,
+          createdAt: now,
+          updatedAt: now,
+          passwordChangedAt: now,
           isBanned: false
         });
       }
@@ -1247,26 +1320,57 @@ var PostgresStorage = class {
     return result[0];
   }
   async getUserByUsername(username) {
-    const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    const normalized = String(username || "").trim();
+    if (!normalized) return void 0;
+    const result = await db.select().from(users).where(sql`lower(${users.username}) = lower(${normalized})`).limit(1);
     return result[0];
   }
   async createUser(user) {
     const id = crypto.randomUUID();
-    const hashedPassword = await bcrypt.hash(user.password, 10);
+    const now = /* @__PURE__ */ new Date();
+    const hashedPassword = await bcrypt.hash(user.password, BCRYPT_COST);
     await db.insert(users).values({
       id,
       username: user.username,
-      password: hashedPassword,
+      passwordHash: hashedPassword,
       role: user.role ?? "user",
+      createdAt: now,
+      updatedAt: now,
+      passwordChangedAt: now,
       isBanned: false
     });
-    return {
-      id,
-      username: user.username,
-      password: hashedPassword,
-      role: user.role ?? "user",
-      isBanned: false
+    return await this.getUser(id);
+  }
+  async updateUserCredentials(params) {
+    const next = {
+      updatedAt: /* @__PURE__ */ new Date()
     };
+    if (typeof params.newUsername === "string" && params.newUsername.trim()) {
+      next.username = params.newUsername.trim();
+    }
+    if (typeof params.newPasswordHash === "string" && params.newPasswordHash.trim()) {
+      next.passwordHash = params.newPasswordHash.trim();
+      next.passwordChangedAt = params.passwordChangedAt ?? /* @__PURE__ */ new Date();
+    } else if (params.passwordChangedAt !== void 0) {
+      next.passwordChangedAt = params.passwordChangedAt;
+    }
+    await db.update(users).set(next).where(eq(users.id, params.userId));
+    return this.getUser(params.userId);
+  }
+  async getUsersByRoles(roles) {
+    if (!Array.isArray(roles) || roles.length === 0) return [];
+    return await db.select({
+      id: users.id,
+      username: users.username,
+      role: users.role,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
+      passwordChangedAt: users.passwordChangedAt,
+      isBanned: users.isBanned
+    }).from(users).where(inArray(users.role, roles)).orderBy(users.role, users.username);
+  }
+  async updateActivitiesUsername(oldUsername, newUsername) {
+    await db.update(userActivity).set({ username: newUsername }).where(eq(userActivity.username, oldUsername));
   }
   async searchGlobalDataRows(params) {
     const { search, limit, offset } = params;
@@ -1343,7 +1447,7 @@ var PostgresStorage = class {
   `);
   }
   async updateUserBan(username, isBanned) {
-    await db.update(users).set({ isBanned }).where(eq(users.username, username));
+    await db.update(users).set({ isBanned, updatedAt: /* @__PURE__ */ new Date() }).where(eq(users.username, username));
     const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
     return result[0];
   }
@@ -3205,7 +3309,7 @@ var PostgresStorage = class {
       username: u.username,
       role: u.role,
       isBanned: u.isBanned,
-      passwordHash: u.password
+      passwordHash: u.passwordHash
     }));
     const allAuditLogs = await db.select().from(auditLogs);
     return {
@@ -3265,11 +3369,15 @@ var PostgresStorage = class {
         }
       }
       if (backupData.users.length > 0) {
+        const now = /* @__PURE__ */ new Date();
         const userRows = backupData.users.filter((u) => u.passwordHash).map((u) => ({
           id: crypto.randomUUID(),
           username: u.username,
-          password: u.passwordHash,
+          passwordHash: u.passwordHash,
           role: u.role,
+          createdAt: now,
+          updatedAt: now,
+          passwordChangedAt: now,
           isBanned: u.isBanned ?? false
         }));
         for (const chunk of chunkArray(userRows, BACKUP_CHUNK_SIZE)) {
@@ -5344,6 +5452,50 @@ app.use((req, res, next) => {
 });
 app.use(adaptiveRateLimit);
 app.use(systemProtectionMiddleware);
+var CREDENTIAL_USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,32}$/;
+var CREDENTIAL_PASSWORD_MIN_LENGTH = 8;
+var CREDENTIAL_BCRYPT_COST = 12;
+function ensureObject(value) {
+  if (value && typeof value === "object") {
+    return value;
+  }
+  return null;
+}
+function normalizeUsernameInput(raw) {
+  return String(raw ?? "").trim().toLowerCase();
+}
+function isStrongPassword(raw) {
+  if (raw.length < CREDENTIAL_PASSWORD_MIN_LENGTH) return false;
+  return /[A-Za-z]/.test(raw) && /\d/.test(raw);
+}
+function sendCredentialError(res, status, code, message) {
+  return res.status(status).json({
+    ok: false,
+    error: { code, message }
+  });
+}
+function buildCredentialAuditDetails(payload) {
+  return JSON.stringify({
+    actor_user_id: payload.actor_user_id,
+    target_user_id: payload.target_user_id,
+    metadata: {
+      changedField: payload.changedField
+    }
+  });
+}
+function closeActivitySockets(activityIds, reason) {
+  for (const activityId of activityIds) {
+    const ws = connectedClients.get(activityId);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: "logout",
+        reason
+      }));
+      ws.close();
+    }
+    connectedClients.delete(activityId);
+  }
+}
 async function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
   const token = authHeader?.split(" ")[1];
@@ -5373,7 +5525,12 @@ async function authenticateToken(req, res, next) {
       lastActivityTime: /* @__PURE__ */ new Date(),
       isActive: true
     });
-    req.user = decoded;
+    req.user = {
+      userId: activity.userId || decoded.userId,
+      username: activity.username || decoded.username,
+      role: activity.role || decoded.role,
+      activityId: decoded.activityId
+    };
     next();
   } catch (err) {
     return res.status(403).json({ message: "Invalid token" });
@@ -5871,11 +6028,12 @@ app.get("/api/data-rows", authenticateToken, async (req, res) => {
 async function handleLogin(req, res) {
   try {
     const { username, password, fingerprint, pcName, browser } = req.body;
-    const user = await storage.getUserByUsername(username);
+    const normalizedUsername = normalizeUsernameInput(username);
+    const user = await storage.getUserByUsername(normalizedUsername);
     if (!user) {
       await storage.createAuditLog({
         action: "LOGIN_FAILED",
-        performedBy: username,
+        performedBy: normalizedUsername || "unknown",
         details: "User not found"
       });
       return res.status(401).json({ message: "Invalid credentials" });
@@ -5884,7 +6042,7 @@ async function handleLogin(req, res) {
     if (isVisitorBanned) {
       await storage.createAuditLog({
         action: "LOGIN_FAILED_BANNED",
-        performedBy: username,
+        performedBy: user.username,
         details: "Visitor is banned"
       });
       return res.status(403).json({ message: "Account is banned", banned: true });
@@ -5892,16 +6050,16 @@ async function handleLogin(req, res) {
     if (user.isBanned) {
       await storage.createAuditLog({
         action: "LOGIN_FAILED_BANNED",
-        performedBy: username,
+        performedBy: user.username,
         details: "User is banned"
       });
       return res.status(403).json({ message: "Account is banned", banned: true });
     }
-    const validPassword = await bcrypt2.compare(password, user.password);
+    const validPassword = await bcrypt2.compare(String(password ?? ""), user.passwordHash);
     if (!validPassword) {
       await storage.createAuditLog({
         action: "LOGIN_FAILED",
-        performedBy: username,
+        performedBy: user.username,
         details: "Invalid password"
       });
       return res.status(401).json({ message: "Invalid credentials" });
@@ -5913,11 +6071,11 @@ async function handleLogin(req, res) {
         false
       );
       if (enforceSingleSuperuserSession) {
-        const activeSessions = await storage.getActiveActivitiesByUsername(username);
+        const activeSessions = await storage.getActiveActivitiesByUsername(user.username);
         if (activeSessions.length > 0) {
           await storage.createAuditLog({
             action: "LOGIN_BLOCKED_SINGLE_SESSION",
-            performedBy: username,
+            performedBy: user.username,
             details: `Superuser single-session policy blocked login. Active sessions: ${activeSessions.length}`
           });
           return res.status(409).json({
@@ -5928,7 +6086,7 @@ async function handleLogin(req, res) {
       }
     } else if (user.role === "admin" && fingerprint) {
       await storage.deactivateUserSessionsByFingerprint(
-        username,
+        user.username,
         fingerprint
       );
     }
@@ -5943,6 +6101,7 @@ async function handleLogin(req, res) {
     });
     const token = jwt.sign(
       {
+        userId: user.id,
         username: user.username,
         role: user.role,
         activityId: activity.id
@@ -5952,7 +6111,7 @@ async function handleLogin(req, res) {
     );
     await storage.createAuditLog({
       action: "LOGIN_SUCCESS",
-      performedBy: username,
+      performedBy: user.username,
       details: `Login from ${browserName}`
     });
     res.json({
@@ -6190,6 +6349,292 @@ app.get("/api/auth/me", authenticateToken, (req, res) => {
       activityId: req.user.activityId
     }
   });
+});
+app.get("/api/me", authenticateToken, async (req, res) => {
+  try {
+    if (!req.user) {
+      return sendCredentialError(res, 401, "PERMISSION_DENIED", "Authentication required.");
+    }
+    const user = req.user.userId ? await storage.getUser(req.user.userId) : await storage.getUserByUsername(req.user.username);
+    if (!user) {
+      return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
+    }
+    return res.json({
+      id: user.id,
+      username: user.username,
+      role: user.role
+    });
+  } catch (err) {
+    return sendCredentialError(res, 500, "PERMISSION_DENIED", err?.message || "Failed to load user profile.");
+  }
+});
+app.patch("/api/me/credentials", authenticateToken, async (req, res) => {
+  try {
+    if (!req.user) {
+      return sendCredentialError(res, 401, "PERMISSION_DENIED", "Authentication required.");
+    }
+    const actor = req.user.userId ? await storage.getUser(req.user.userId) : await storage.getUserByUsername(req.user.username);
+    if (!actor) {
+      return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
+    }
+    const body = ensureObject(req.body) || {};
+    const hasUsernameField = Object.prototype.hasOwnProperty.call(body, "newUsername");
+    const hasPasswordField = Object.prototype.hasOwnProperty.call(body, "newPassword");
+    let nextUsername;
+    let nextPasswordHash;
+    let usernameChanged = false;
+    let passwordChanged = false;
+    if (hasUsernameField) {
+      const normalized = normalizeUsernameInput(body.newUsername);
+      if (!normalized || !CREDENTIAL_USERNAME_REGEX.test(normalized)) {
+        return sendCredentialError(
+          res,
+          400,
+          "USERNAME_TAKEN",
+          "Username must match ^[a-zA-Z0-9._-]{3,32}$."
+        );
+      }
+      const existing = await storage.getUserByUsername(normalized);
+      if (existing && existing.id !== actor.id) {
+        return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
+      }
+      if (normalized !== actor.username) {
+        nextUsername = normalized;
+        usernameChanged = true;
+      }
+    }
+    if (hasPasswordField) {
+      const nextPasswordRaw = String(body.newPassword ?? "");
+      const currentPasswordRaw = String(body.currentPassword ?? "");
+      if (!currentPasswordRaw) {
+        return sendCredentialError(res, 400, "INVALID_CURRENT_PASSWORD", "Current password is required.");
+      }
+      const currentPasswordMatch = await bcrypt2.compare(currentPasswordRaw, actor.passwordHash);
+      if (!currentPasswordMatch) {
+        return sendCredentialError(res, 400, "INVALID_CURRENT_PASSWORD", "Current password is invalid.");
+      }
+      if (!isStrongPassword(nextPasswordRaw)) {
+        return sendCredentialError(
+          res,
+          400,
+          "INVALID_PASSWORD",
+          "Password must be at least 8 characters and include at least one letter and one number."
+        );
+      }
+      const sameAsCurrent = await bcrypt2.compare(nextPasswordRaw, actor.passwordHash);
+      if (sameAsCurrent) {
+        return sendCredentialError(res, 400, "INVALID_PASSWORD", "New password must be different from current password.");
+      }
+      nextPasswordHash = await bcrypt2.hash(nextPasswordRaw, CREDENTIAL_BCRYPT_COST);
+      passwordChanged = true;
+    }
+    if (!usernameChanged && !passwordChanged) {
+      return res.json({
+        ok: true,
+        user: {
+          id: actor.id,
+          username: actor.username,
+          role: actor.role
+        }
+      });
+    }
+    const activeSessions = passwordChanged ? await storage.getActiveActivitiesByUsername(actor.username) : [];
+    const updatedUser = await storage.updateUserCredentials({
+      userId: actor.id,
+      newUsername: nextUsername,
+      newPasswordHash: nextPasswordHash,
+      passwordChangedAt: passwordChanged ? /* @__PURE__ */ new Date() : void 0
+    });
+    if (!updatedUser) {
+      return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
+    }
+    if (usernameChanged && !passwordChanged && nextUsername) {
+      await storage.updateActivitiesUsername(actor.username, nextUsername);
+    }
+    if (usernameChanged) {
+      await storage.createAuditLog({
+        action: "USER_USERNAME_CHANGED",
+        performedBy: actor.id,
+        targetUser: updatedUser.id,
+        details: buildCredentialAuditDetails({
+          actor_user_id: actor.id,
+          target_user_id: updatedUser.id,
+          changedField: "username"
+        })
+      });
+    }
+    if (passwordChanged) {
+      await storage.createAuditLog({
+        action: "USER_PASSWORD_CHANGED",
+        performedBy: actor.id,
+        targetUser: updatedUser.id,
+        details: buildCredentialAuditDetails({
+          actor_user_id: actor.id,
+          target_user_id: updatedUser.id,
+          changedField: "password"
+        })
+      });
+      await storage.deactivateUserActivities(actor.username, "PASSWORD_CHANGED");
+      if (updatedUser.username !== actor.username) {
+        await storage.deactivateUserActivities(updatedUser.username, "PASSWORD_CHANGED");
+      }
+      closeActivitySockets(
+        activeSessions.map((activity) => activity.id),
+        "Password changed. Please login again."
+      );
+    }
+    return res.json({
+      ok: true,
+      forceLogout: passwordChanged,
+      user: {
+        id: updatedUser.id,
+        username: updatedUser.username,
+        role: updatedUser.role
+      }
+    });
+  } catch (err) {
+    if (String(err?.code || "") === "23505") {
+      return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
+    }
+    return sendCredentialError(res, 500, "PERMISSION_DENIED", err?.message || "Failed to update credentials.");
+  }
+});
+app.get("/api/admin/users", authenticateToken, async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== "superuser") {
+      return sendCredentialError(res, 403, "PERMISSION_DENIED", "Only superuser can access this resource.");
+    }
+    const users2 = await storage.getUsersByRoles(["admin", "user"]);
+    return res.json({
+      ok: true,
+      users: users2.map((item) => ({
+        id: item.id,
+        username: item.username,
+        role: item.role
+      }))
+    });
+  } catch (err) {
+    return sendCredentialError(res, 500, "PERMISSION_DENIED", err?.message || "Failed to load users.");
+  }
+});
+app.patch("/api/admin/users/:id/credentials", authenticateToken, async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== "superuser") {
+      return sendCredentialError(res, 403, "PERMISSION_DENIED", "Only superuser can access this resource.");
+    }
+    const actor = req.user.userId ? await storage.getUser(req.user.userId) : await storage.getUserByUsername(req.user.username);
+    if (!actor) {
+      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Actor user not found.");
+    }
+    const targetUserId = String(req.params.id || "").trim();
+    if (!targetUserId) {
+      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Target user not found.");
+    }
+    const target = await storage.getUser(targetUserId);
+    if (!target) {
+      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Target user not found.");
+    }
+    if (target.role !== "admin" && target.role !== "user") {
+      return sendCredentialError(res, 403, "PERMISSION_DENIED", "Target role is not allowed.");
+    }
+    const body = ensureObject(req.body) || {};
+    const hasUsernameField = Object.prototype.hasOwnProperty.call(body, "newUsername");
+    const hasPasswordField = Object.prototype.hasOwnProperty.call(body, "newPassword");
+    let nextUsername;
+    let nextPasswordHash;
+    let usernameChanged = false;
+    let passwordChanged = false;
+    if (hasUsernameField) {
+      const normalized = normalizeUsernameInput(body.newUsername);
+      if (!normalized || !CREDENTIAL_USERNAME_REGEX.test(normalized)) {
+        return sendCredentialError(
+          res,
+          400,
+          "USERNAME_TAKEN",
+          "Username must match ^[a-zA-Z0-9._-]{3,32}$."
+        );
+      }
+      const existing = await storage.getUserByUsername(normalized);
+      if (existing && existing.id !== target.id) {
+        return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
+      }
+      if (normalized !== target.username) {
+        nextUsername = normalized;
+        usernameChanged = true;
+      }
+    }
+    if (hasPasswordField) {
+      const nextPasswordRaw = String(body.newPassword ?? "");
+      if (!isStrongPassword(nextPasswordRaw)) {
+        return sendCredentialError(
+          res,
+          400,
+          "INVALID_PASSWORD",
+          "Password must be at least 8 characters and include at least one letter and one number."
+        );
+      }
+      const sameAsCurrent = await bcrypt2.compare(nextPasswordRaw, target.passwordHash);
+      if (sameAsCurrent) {
+        return sendCredentialError(res, 400, "INVALID_PASSWORD", "New password must be different from current password.");
+      }
+      nextPasswordHash = await bcrypt2.hash(nextPasswordRaw, CREDENTIAL_BCRYPT_COST);
+      passwordChanged = true;
+    }
+    if (!usernameChanged && !passwordChanged) {
+      return res.json({ ok: true });
+    }
+    const activeSessions = passwordChanged ? await storage.getActiveActivitiesByUsername(target.username) : [];
+    const updatedUser = await storage.updateUserCredentials({
+      userId: target.id,
+      newUsername: nextUsername,
+      newPasswordHash: nextPasswordHash,
+      passwordChangedAt: passwordChanged ? /* @__PURE__ */ new Date() : void 0
+    });
+    if (!updatedUser) {
+      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Target user not found.");
+    }
+    if (usernameChanged && !passwordChanged && nextUsername) {
+      await storage.updateActivitiesUsername(target.username, nextUsername);
+    }
+    if (usernameChanged) {
+      await storage.createAuditLog({
+        action: "USER_USERNAME_CHANGED",
+        performedBy: actor.id,
+        targetUser: updatedUser.id,
+        details: buildCredentialAuditDetails({
+          actor_user_id: actor.id,
+          target_user_id: updatedUser.id,
+          changedField: "username"
+        })
+      });
+    }
+    if (passwordChanged) {
+      await storage.createAuditLog({
+        action: "USER_PASSWORD_CHANGED",
+        performedBy: actor.id,
+        targetUser: updatedUser.id,
+        details: buildCredentialAuditDetails({
+          actor_user_id: actor.id,
+          target_user_id: updatedUser.id,
+          changedField: "password"
+        })
+      });
+      await storage.deactivateUserActivities(target.username, "PASSWORD_RESET_BY_SUPERUSER");
+      if (updatedUser.username !== target.username) {
+        await storage.deactivateUserActivities(updatedUser.username, "PASSWORD_RESET_BY_SUPERUSER");
+      }
+      closeActivitySockets(
+        activeSessions.map((activity) => activity.id),
+        "Password reset by superuser. Please login again."
+      );
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    if (String(err?.code || "") === "23505") {
+      return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
+    }
+    return sendCredentialError(res, 500, "PERMISSION_DENIED", err?.message || "Failed to update credentials.");
+  }
 });
 app.get("/api/app-config", authenticateToken, async (req, res) => {
   try {
@@ -8677,13 +9122,28 @@ app.get("/api/accounts", authenticateToken, requireRole("superuser"), async (req
 app.post("/api/users", authenticateToken, requireRole("superuser"), async (req, res) => {
   try {
     const { username, password, role } = req.body;
-    const hashedPassword = await bcrypt2.hash(password, 10);
-    const user = await storage.createUser({ username, password: hashedPassword, role });
+    const normalizedUsername = normalizeUsernameInput(username);
+    const passwordRaw = String(password ?? "");
+    const roleRaw = String(role ?? "user").trim().toLowerCase();
+    if (!CREDENTIAL_USERNAME_REGEX.test(normalizedUsername)) {
+      return res.status(400).json({ message: "Invalid username format." });
+    }
+    if (!isStrongPassword(passwordRaw)) {
+      return res.status(400).json({ message: "Password does not meet minimum strength requirements." });
+    }
+    if (!["superuser", "admin", "user"].includes(roleRaw)) {
+      return res.status(400).json({ message: "Invalid role." });
+    }
+    const existing = await storage.getUserByUsername(normalizedUsername);
+    if (existing) {
+      return res.status(409).json({ message: "Username already exists." });
+    }
+    const user = await storage.createUser({ username: normalizedUsername, password: passwordRaw, role: roleRaw });
     await storage.createAuditLog({
       action: "CREATE_USER",
       performedBy: req.user.username,
-      targetUser: username,
-      details: `Created user with role: ${role}`
+      targetUser: user.id,
+      details: `Created user with role: ${user.role}`
     });
     res.json({ id: user.id, username: user.username, role: user.role, isBanned: user.isBanned });
   } catch (error) {

@@ -7,8 +7,11 @@ import { jsonb } from "drizzle-orm/pg-core";
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
   username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("user"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  passwordChangedAt: timestamp("password_changed_at"),
   isBanned: boolean("is_banned").default(false),
 });
 
@@ -62,10 +65,10 @@ export const backups = pgTable("backups", {
   metadata: text("metadata"),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-  role: true,
+export const insertUserSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+  role: z.string().optional(),
 });
 
 export const insertImportSchema = createInsertSchema(imports).pick({
