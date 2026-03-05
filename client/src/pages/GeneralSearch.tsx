@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Search, Download, AlertCircle, FileText, Plus, X, Filter, ChevronDown, ChevronUp, RotateCcw, Loader2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,12 +52,18 @@ interface FilterRow {
 
 interface GeneralSearchProps {
   userRole?: string;
+  searchResultLimit?: number;
 }
 
-export default function GeneralSearch({ userRole }: GeneralSearchProps) {
+export default function GeneralSearch({ userRole, searchResultLimit }: GeneralSearchProps) {
   const isLowSpecMode =
     typeof document !== "undefined" &&
     document.documentElement.classList.contains("low-spec");
+  const configuredSearchResultLimit = useMemo(() => {
+    const parsed = Number(searchResultLimit);
+    if (!Number.isFinite(parsed)) return 200;
+    return Math.min(5000, Math.max(10, Math.floor(parsed)));
+  }, [searchResultLimit]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -67,7 +73,7 @@ export default function GeneralSearch({ userRole }: GeneralSearchProps) {
   const [exportingPdf, setExportingPdf] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalResults, setTotalResults] = useState(0);
-  const [resultsPerPage, setResultsPerPage] = useState(isLowSpecMode ? 20 : 50);
+  const [resultsPerPage, setResultsPerPage] = useState(configuredSearchResultLimit);
   const [selectedRecord, setSelectedRecord] = useState<Record<string, any> | null>(null);
   const [tableScrollTop, setTableScrollTop] = useState(0);
 
@@ -79,7 +85,12 @@ export default function GeneralSearch({ userRole }: GeneralSearchProps) {
   const [columns, setColumns] = useState<string[]>([]);
   const [loadingColumns, setLoadingColumns] = useState(false);
   const canSeeSourceFile = userRole === "superuser" || userRole === "admin";
-  const pageSizeOptions = isLowSpecMode ? [20, 40, 80] : [25, 50, 100, 200];
+  const pageSizeOptions = useMemo(() => {
+    const base = isLowSpecMode ? [20, 40, 80] : [25, 50, 100, 200, 500, 1000];
+    const withinLimit = base.filter((value) => value <= configuredSearchResultLimit);
+    const withConfigured = Array.from(new Set([...withinLimit, configuredSearchResultLimit]));
+    return withConfigured.sort((a, b) => a - b);
+  }, [configuredSearchResultLimit, isLowSpecMode]);
   const enableVirtualRows = isLowSpecMode && results.length > 40;
   const rowHeightPx = 52;
   const viewportHeightPx = 540;
@@ -102,6 +113,21 @@ export default function GeneralSearch({ userRole }: GeneralSearchProps) {
   useEffect(() => {
     setTableScrollTop(0);
   }, [results, currentPage, resultsPerPage]);
+
+  useEffect(() => {
+    setResultsPerPage((prev) => (prev === configuredSearchResultLimit ? prev : configuredSearchResultLimit));
+    setCurrentPage(1);
+  }, [configuredSearchResultLimit]);
+
+  useEffect(() => {
+    if (!searched) return;
+    if (advancedMode) {
+      void handleAdvancedSearch(1);
+      return;
+    }
+    void handleSimpleSearch(1);
+  }, [resultsPerPage]);
+
   const normalizeKey = (key: string) => key.toLowerCase().replace(/[^a-z0-9]/g, "");
   const getPriorityRank = (key: string): number => {
     const k = normalizeKey(key);
@@ -150,21 +176,26 @@ export default function GeneralSearch({ userRole }: GeneralSearchProps) {
     }
   };
 
-  const handleSimpleSearch = async (pageNum: number = 1) => {
+  const handleSimpleSearch = async (pageNum: number = 1, limitOverride?: number) => {
     const trimmed = query.trim();
     if (!trimmed || trimmed.length < 2) {
       setError("Please enter at least 2 characters.");
       return;
     }
+    const effectiveLimit = Math.min(
+      configuredSearchResultLimit,
+      Math.max(10, Number(limitOverride ?? resultsPerPage) || configuredSearchResultLimit),
+    );
 
     setLoading(true);
     setError("");
     setSearched(true);
 
     try {
-      const response = await searchData(trimmed, pageNum, resultsPerPage);
+      const response = await searchData(trimmed, pageNum, effectiveLimit);
       const results = response.results || response.rows || [];
-      setTotalResults(response.total || results.length);
+      const cappedTotal = Math.min(Number(response.total || results.length), configuredSearchResultLimit);
+      setTotalResults(cappedTotal);
       setCurrentPage(pageNum);
 
       if (results.length > 0) {
@@ -184,7 +215,7 @@ export default function GeneralSearch({ userRole }: GeneralSearchProps) {
         setHeaders([]);
       }
 
-      setResults(results);
+      setResults(results.slice(0, effectiveLimit));
     } catch (err: any) {
       setError(err?.message || "Failed to search data.");
       setResults([]);
@@ -193,7 +224,7 @@ export default function GeneralSearch({ userRole }: GeneralSearchProps) {
     }
   };
 
-  const handleAdvancedSearch = async (pageNum: number = 1) => {
+  const handleAdvancedSearch = async (pageNum: number = 1, limitOverride?: number) => {
     const validFilters = filters.filter(
       f => f.field && (f.operator === "isEmpty" || f.operator === "isNotEmpty" || f.value.trim())
     );
@@ -202,15 +233,20 @@ export default function GeneralSearch({ userRole }: GeneralSearchProps) {
       setError("Please add at least one valid filter.");
       return;
     }
+    const effectiveLimit = Math.min(
+      configuredSearchResultLimit,
+      Math.max(10, Number(limitOverride ?? resultsPerPage) || configuredSearchResultLimit),
+    );
 
     setLoading(true);
     setError("");
     setSearched(true);
 
     try {
-      const response = await advancedSearchData(validFilters, logic, pageNum, resultsPerPage);
+      const response = await advancedSearchData(validFilters, logic, pageNum, effectiveLimit);
       const results = response.results || response.rows || [];
-      setTotalResults(response.total || results.length);
+      const cappedTotal = Math.min(Number(response.total || results.length), configuredSearchResultLimit);
+      setTotalResults(cappedTotal);
       setCurrentPage(pageNum);
 
       if (results.length > 0) {
@@ -230,7 +266,7 @@ export default function GeneralSearch({ userRole }: GeneralSearchProps) {
         setHeaders([]);
       }
 
-      setResults(results);
+      setResults(results.slice(0, effectiveLimit));
     } catch (err: any) {
       setError(err?.message || "Advanced search failed.");
       setResults([]);
@@ -699,11 +735,6 @@ export default function GeneralSearch({ userRole }: GeneralSearchProps) {
                           const nextSize = Number(value);
                           setResultsPerPage(nextSize);
                           setCurrentPage(1);
-                          if (advancedMode) {
-                            handleAdvancedSearch(1);
-                          } else {
-                            handleSimpleSearch(1);
-                          }
                         }}
                       >
                         <SelectTrigger className="w-[110px]" data-testid="select-rows-per-page">

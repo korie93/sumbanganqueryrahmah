@@ -33,6 +33,8 @@ type AppRuntimeConfig = {
   heartbeatIntervalMinutes: number;
   aiTimeoutMs: number;
   aiEnabled: boolean;
+  searchResultLimit: number;
+  viewerRowsPerPage: number;
 };
 
 type MonitorSection = "dashboard" | "activity" | "monitor" | "analysis" | "audit";
@@ -52,6 +54,8 @@ function AppContent() {
     heartbeatIntervalMinutes: 5,
     aiTimeoutMs: 6000,
     aiEnabled: true,
+    searchResultLimit: 200,
+    viewerRowsPerPage: 100,
   });
 
   const fetchSavedCount = useCallback(async () => {
@@ -65,16 +69,26 @@ function AppContent() {
     }
   }, []);
 
+  const isSuperuserFeatureOffMode = useCallback((role: string | undefined, tabs: Record<string, boolean> | null) => {
+    if (!role || role === "superuser") return false;
+    if (!tabVisibilityLoaded || !tabs) return false;
+    const nonSearchEntries = Object.entries(tabs).filter(([key]) => key !== "general-search" && key !== "canViewSystemPerformance");
+    if (nonSearchEntries.length === 0) return false;
+    return nonSearchEntries.every(([, enabled]) => enabled === false);
+  }, [tabVisibilityLoaded]);
+
   const getDefaultPageForRole = useCallback((role: string, tabs: Record<string, boolean> | null) => {
+    if (isSuperuserFeatureOffMode(role, tabs)) return "general-search";
     if (role === "superuser") return "home";
     const candidates = role === "user"
-      ? ["general-search", "ai"]
-      : ["home", "general-search", "ai", "saved"];
+      ? ["general-search"]
+      : ["home", "general-search", "saved"];
     for (const candidate of candidates) {
+      if (candidate === "general-search" && isSuperuserFeatureOffMode(role, tabs)) return "general-search";
       if (!tabs || tabs[candidate] !== false) return candidate;
     }
     return role === "user" ? "general-search" : "home";
-  }, []);
+  }, [isSuperuserFeatureOffMode]);
 
   const canViewMonitorSection = useCallback((role: string | undefined, tabs: Record<string, boolean> | null) => {
     if (role === "superuser") return true;
@@ -163,6 +177,9 @@ function AppContent() {
   }, [parseMonitorSectionFromQuery]);
 
   const isPageEnabled = useCallback((role: string | undefined, page: string, tabs: Record<string, boolean> | null) => {
+    if (isSuperuserFeatureOffMode(role, tabs)) {
+      return page === "general-search" || page === "forbidden" || page === "maintenance";
+    }
     if (page === "monitor") {
       const visibility = getMonitorSectionVisibility(role, tabs);
       return visibility.monitor || visibility.dashboard || visibility.activity || visibility.analysis || visibility.audit;
@@ -174,7 +191,7 @@ function AppContent() {
     if (!role || role === "superuser") return true;
     if (!tabs) return true;
     return tabs[page] !== false;
-  }, [canViewActivitySection, canViewAnalysisSection, canViewAuditSection, canViewDashboardSection, getMonitorSectionVisibility]);
+  }, [canViewActivitySection, canViewAnalysisSection, canViewAuditSection, canViewDashboardSection, getMonitorSectionVisibility, isSuperuserFeatureOffMode]);
 
   useEffect(() => {
     const pathname = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "/";
@@ -296,6 +313,8 @@ function AppContent() {
         heartbeatIntervalMinutes: 5,
         aiTimeoutMs: 6000,
         aiEnabled: true,
+        searchResultLimit: 200,
+        viewerRowsPerPage: 100,
       });
       return;
     }
@@ -308,6 +327,8 @@ function AppContent() {
         const sessionTimeoutMinutes = Number(response?.sessionTimeoutMinutes);
         const heartbeatIntervalMinutes = Number(response?.heartbeatIntervalMinutes);
         const aiTimeoutMs = Number(response?.aiTimeoutMs);
+        const searchResultLimit = Number(response?.searchResultLimit);
+        const viewerRowsPerPage = Number(response?.viewerRowsPerPage);
         if (!cancelled) {
           setSystemName(name || "SQR System");
           setRuntimeConfig({
@@ -315,6 +336,8 @@ function AppContent() {
             heartbeatIntervalMinutes: Number.isFinite(heartbeatIntervalMinutes) ? Math.max(1, heartbeatIntervalMinutes) : 5,
             aiTimeoutMs: Number.isFinite(aiTimeoutMs) ? Math.max(1000, aiTimeoutMs) : 6000,
             aiEnabled: response?.aiEnabled !== false,
+            searchResultLimit: Number.isFinite(searchResultLimit) ? Math.min(5000, Math.max(10, Math.floor(searchResultLimit))) : 200,
+            viewerRowsPerPage: Number.isFinite(viewerRowsPerPage) ? Math.min(500, Math.max(10, Math.floor(viewerRowsPerPage))) : 100,
           });
         }
       } catch {
@@ -325,6 +348,8 @@ function AppContent() {
             heartbeatIntervalMinutes: 5,
             aiTimeoutMs: 6000,
             aiEnabled: true,
+            searchResultLimit: 200,
+            viewerRowsPerPage: 100,
           });
         }
       }
@@ -431,16 +456,31 @@ function AppContent() {
 
   useEffect(() => {
     if (!user || currentPage !== "monitor") return;
+    if (isSuperuserFeatureOffMode(user.role, tabVisibility)) return;
     if (isPageEnabled(user.role, "monitor", tabVisibility)) return;
     setCurrentPage("forbidden");
     if (typeof window !== "undefined") {
       window.history.replaceState({}, "", "/403");
     }
-  }, [user, currentPage, tabVisibility, isPageEnabled]);
+  }, [user, currentPage, tabVisibility, isPageEnabled, isSuperuserFeatureOffMode]);
 
   useEffect(() => {
     if (!user || currentPage !== "monitor") return;
     const visibility = getMonitorSectionVisibility(user.role, tabVisibility);
+    const hasExplicitMonitorSectionQuery = typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).has("section")
+      : false;
+    if (monitorSection === "monitor" && !visibility.monitor) {
+      if (hasExplicitMonitorSectionQuery) {
+        setCurrentPage("forbidden");
+        if (typeof window !== "undefined") {
+          window.history.replaceState({}, "", "/403");
+        }
+        return;
+      }
+      setMonitorSection(getDefaultMonitorSection(user.role, tabVisibility));
+      return;
+    }
     const requestedAllowed =
       (monitorSection === "monitor" && visibility.monitor) ||
       (monitorSection === "dashboard" && visibility.dashboard) ||
@@ -454,6 +494,13 @@ function AppContent() {
   useEffect(() => {
     if (!user) return;
     if (isPageEnabled(user.role, currentPage, tabVisibility)) return;
+    if (isSuperuserFeatureOffMode(user.role, tabVisibility)) {
+      setCurrentPage("general-search");
+      if (typeof window !== "undefined") {
+        window.history.replaceState({}, "", "/");
+      }
+      return;
+    }
     if (currentPage === "monitor") {
       setCurrentPage("forbidden");
       if (typeof window !== "undefined") {
@@ -462,7 +509,7 @@ function AppContent() {
       return;
     }
     setCurrentPage(getDefaultPageForRole(user.role, tabVisibility));
-  }, [user, currentPage, tabVisibility, isPageEnabled, getDefaultPageForRole]);
+  }, [user, currentPage, tabVisibility, isPageEnabled, getDefaultPageForRole, isSuperuserFeatureOffMode]);
 
   // Heartbeat is handled by <AutoLogout /> and follows runtime settings.
 
@@ -503,6 +550,15 @@ function AppContent() {
   const handleNavigate = useCallback((page: string, importId?: string) => {
     const monitorSectionTarget = parseMonitorSectionFromPageInput(page);
     const requestedPage = monitorSectionTarget ? "monitor" : page;
+    if (isSuperuserFeatureOffMode(user?.role, tabVisibility) && requestedPage !== "general-search") {
+      setCurrentPage("general-search");
+      localStorage.setItem("activeTab", "general-search");
+      localStorage.setItem("lastPage", "general-search");
+      if (typeof window !== "undefined") {
+        window.history.replaceState({}, "", "/");
+      }
+      return;
+    }
     if (!isPageEnabled(user?.role, requestedPage, tabVisibility)) {
       if (requestedPage === "monitor") {
         setCurrentPage("forbidden");
@@ -518,7 +574,11 @@ function AppContent() {
     }
 
     if (monitorSectionTarget) {
-      const nextSection: MonitorSection = monitorSectionTarget;
+      const visibility = getMonitorSectionVisibility(user?.role, tabVisibility);
+      let nextSection: MonitorSection = monitorSectionTarget;
+      if (nextSection === "monitor" && !visibility.monitor) {
+        nextSection = getDefaultMonitorSection(user?.role, tabVisibility);
+      }
       setCurrentPage("monitor");
       setMonitorSection(nextSection);
       localStorage.setItem("activeTab", "monitor");
@@ -547,7 +607,7 @@ function AppContent() {
     if (importId) {
       setSelectedImportId(importId);
     }
-  }, [user?.role, tabVisibility, isPageEnabled, getDefaultPageForRole, parseMonitorSectionFromPageInput]);
+  }, [user?.role, tabVisibility, isPageEnabled, getDefaultPageForRole, parseMonitorSectionFromPageInput, isSuperuserFeatureOffMode, getMonitorSectionVisibility, getDefaultMonitorSection]);
 
   const handleMonitorSectionChange = useCallback((section: MonitorSection) => {
     setMonitorSection((prev) => (prev === section ? prev : section));
@@ -565,6 +625,8 @@ function AppContent() {
       <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
     </div>
   );
+
+  const isFeatureLockdownMode = isSuperuserFeatureOffMode(user?.role, tabVisibility);
 
   if (!isInitialized) {
     return (
@@ -609,11 +671,14 @@ function AppContent() {
 
   const renderPage = () => {
     if (!isPageEnabled(user.role, currentPage, tabVisibility)) {
+      if (isFeatureLockdownMode) {
+        return <GeneralSearch userRole={user.role} searchResultLimit={runtimeConfig.searchResultLimit} />;
+      }
       if (currentPage === "monitor") {
         return <Forbidden />;
       }
       return user.role === "user"
-        ? <GeneralSearch userRole={user.role} />
+        ? <GeneralSearch userRole={user.role} searchResultLimit={runtimeConfig.searchResultLimit} />
         : <Home onNavigate={handleNavigate} userRole={user.role} tabVisibility={tabVisibility} />;
     }
 
@@ -625,18 +690,18 @@ function AppContent() {
       case "saved":
         return <Saved onNavigate={handleNavigate} userRole={user.role} />;
       case "viewer":
-        return <Viewer onNavigate={handleNavigate} importId={selectedImportId} userRole={user.role} />;
+        return <Viewer onNavigate={handleNavigate} importId={selectedImportId} userRole={user.role} viewerRowsPerPage={runtimeConfig.viewerRowsPerPage} />;
       case "general-search":
-        return <GeneralSearch userRole={user.role} />;
+        return <GeneralSearch userRole={user.role} searchResultLimit={runtimeConfig.searchResultLimit} />;
       case "backup":
       return <BackupRestore userRole={user.role} />;
       case "ai":
         if (!runtimeConfig.aiEnabled) {
-          return <GeneralSearch userRole={user.role} />;
+          return <GeneralSearch userRole={user.role} searchResultLimit={runtimeConfig.searchResultLimit} />;
         }
         return <AI timeoutMs={runtimeConfig.aiTimeoutMs} aiEnabled={runtimeConfig.aiEnabled} />;
       case "settings":
-        return user.role === "user" ? <GeneralSearch userRole={user.role} /> : <SettingsPage />;
+        return user.role === "user" ? <GeneralSearch userRole={user.role} searchResultLimit={runtimeConfig.searchResultLimit} /> : <SettingsPage />;
       case "maintenance":
         return <MaintenancePage />;
       case "analysis":
@@ -661,7 +726,7 @@ function AppContent() {
         return <Forbidden />;
       default:
         return user.role === "user"
-          ? <GeneralSearch userRole={user.role} />
+          ? <GeneralSearch userRole={user.role} searchResultLimit={runtimeConfig.searchResultLimit} />
           : <Home onNavigate={handleNavigate} userRole={user.role} tabVisibility={tabVisibility} />;
     }
   };
@@ -683,7 +748,13 @@ function AppContent() {
         systemName={systemName}
         savedCount={savedCount}
         tabVisibility={tabVisibility}
+        featureLockdown={isFeatureLockdownMode}
       />
+      {isFeatureLockdownMode && (
+        <div className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
+          Most features are currently disabled by a superuser. Search is still available.
+        </div>
+      )}
       <Suspense fallback={pageFallback}>
         <main>{renderPage()}</main>
       </Suspense>

@@ -75,7 +75,6 @@ const roleTabOrder = [
   "analysis",
   "dashboard",
   "monitor",
-  "ai",
   "activity",
   "audit_logs",
   "backup",
@@ -323,14 +322,18 @@ export default function SettingsPage() {
 
   const roleSections = useMemo(() => {
     if (!isRolePermissionCategory || !currentCategory) return null;
+    const isObsoleteAiToggle = (setting: SettingItem) =>
+      setting.key === "tab_admin_ai_enabled" || setting.key === "tab_user_ai_enabled";
     const admin = currentCategory.settings
-      .filter((setting) => setting.key.startsWith("tab_admin_"))
+      .filter((setting) => setting.key.startsWith("tab_admin_") || setting.key === "canViewSystemPerformance")
+      .filter((setting) => !isObsoleteAiToggle(setting))
       .sort((a, b) => getRoleSettingOrder(a.key) - getRoleSettingOrder(b.key) || a.label.localeCompare(b.label));
     const user = currentCategory.settings
       .filter((setting) => setting.key.startsWith("tab_user_"))
+      .filter((setting) => !isObsoleteAiToggle(setting))
       .sort((a, b) => getRoleSettingOrder(a.key) - getRoleSettingOrder(b.key) || a.label.localeCompare(b.label));
     const other = currentCategory.settings
-      .filter((setting) => !setting.key.startsWith("tab_admin_") && !setting.key.startsWith("tab_user_"))
+      .filter((setting) => !setting.key.startsWith("tab_admin_") && !setting.key.startsWith("tab_user_") && setting.key !== "canViewSystemPerformance")
       .sort((a, b) => a.label.localeCompare(b.label));
     return { admin, user, other };
   }, [isRolePermissionCategory, currentCategory]);
