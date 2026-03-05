@@ -22,6 +22,7 @@ interface ViewerProps {
   onNavigate: (page: string) => void;
   importId?: string;
   userRole: string;
+  viewerRowsPerPage?: number;
 }
 
 interface ColumnFilter {
@@ -49,10 +50,15 @@ function extractHeadersFromRows(rows: DataRowWithId[]): string[] {
   return Array.from(headerSet);
 }
 
-export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) {
+export default function Viewer({ onNavigate, importId, userRole, viewerRowsPerPage }: ViewerProps) {
   const isLowSpecMode =
     typeof document !== "undefined" &&
     document.documentElement.classList.contains("low-spec");
+  const configuredRowsPerPage = useMemo(() => {
+    const parsed = Number(viewerRowsPerPage);
+    if (!Number.isFinite(parsed)) return isLowSpecMode ? 40 : 100;
+    return Math.min(500, Math.max(10, Math.floor(parsed)));
+  }, [viewerRowsPerPage, isLowSpecMode]);
   const isSuperuser = userRole === "superuser";
   const [rows, setRows] = useState<DataRowWithId[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -81,7 +87,7 @@ export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) 
   const [hasMore, setHasMore] = useState(false);
   const [loadedRowsCount, setLoadedRowsCount] = useState(0);
   const [tableScrollTop, setTableScrollTop] = useState(0);
-  const ROWS_PER_PAGE = isLowSpecMode ? 40 : 100;
+  const ROWS_PER_PAGE = configuredRowsPerPage;
   const MAX_ROWS_IN_MEMORY = isLowSpecMode ? 240 : 1200;
   const MIN_SEARCH_LENGTH = 2;
 
@@ -140,7 +146,7 @@ export default function Viewer({ onNavigate, importId, userRole }: ViewerProps) 
     }
 
     fetchData(savedId, 1, false);
-  }, [debouncedSearch, columnFilters]);
+  }, [debouncedSearch, columnFilters, ROWS_PER_PAGE]);
 
   const fetchData = async (
     id: string,

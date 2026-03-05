@@ -11,9 +11,10 @@ interface NavbarProps {
   systemName?: string;
   savedCount?: number;
   tabVisibility?: Record<string, boolean> | null;
+  featureLockdown?: boolean;
 }
 
-export default function Navbar({ currentPage, onNavigate, onLogout, userRole, username, systemName, savedCount, tabVisibility }: NavbarProps) {
+export default function Navbar({ currentPage, onNavigate, onLogout, userRole, username, systemName, savedCount, tabVisibility, featureLockdown = false }: NavbarProps) {
   const navItems = [
     { id: "home", label: "Home", icon: Home, roles: ["user", "admin", "superuser"] },
     { id: "import", label: "Import", icon: Upload, roles: ["user", "admin", "superuser"] },
@@ -27,6 +28,7 @@ export default function Navbar({ currentPage, onNavigate, onLogout, userRole, us
 
   const visibleItems = navItems.filter((item) => {
     if (!item.roles.includes(userRole)) return false;
+    if (featureLockdown) return item.id === "general-search";
     if (item.id === "monitor") {
       if (userRole === "superuser") return true;
       if (!tabVisibility) return true;

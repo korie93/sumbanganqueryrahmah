@@ -52,6 +52,8 @@ type RuntimeSettings = {
   aiEnabled: boolean;
   semanticSearchEnabled: boolean;
   aiTimeoutMs: number;
+  searchResultLimit: number;
+  viewerRowsPerPage: number;
 };
 const RUNTIME_SETTINGS_CACHE_TTL_MS = 3000;
 let runtimeSettingsCache: { settings: RuntimeSettings; cachedAt: number } | null = null;
@@ -930,8 +932,8 @@ async function requireMonitorAccess(req: AuthenticatedRequest, res: Response, ne
   try {
     const role = req.user?.role;
     if (!role) return res.status(401).json({ message: "Unauthenticated" });
-    if (role === "superuser" || role === "admin") return next();
-    if (role !== "user") {
+    if (role === "superuser") return next();
+    if (role !== "admin" && role !== "user") {
       return res.status(403).json({ message: "Insufficient permissions" });
     }
 
@@ -1189,6 +1191,12 @@ async function getRuntimeSettingsCached(force = false): Promise<RuntimeSettings>
     aiTimeoutMs: Number.isFinite(config.aiTimeoutMs)
       ? Math.max(1000, config.aiTimeoutMs)
       : DEFAULT_AI_TIMEOUT_MS,
+    searchResultLimit: Number.isFinite(config.searchResultLimit)
+      ? Math.min(5000, Math.max(10, Math.floor(config.searchResultLimit)))
+      : 200,
+    viewerRowsPerPage: Number.isFinite(config.viewerRowsPerPage)
+      ? Math.min(500, Math.max(10, Math.floor(config.viewerRowsPerPage)))
+      : 100,
   };
 
   runtimeSettingsCache = { settings, cachedAt: now };
@@ -2079,11 +2087,15 @@ app.get(
   searchRateLimiter,
   async (req, res) => {
     try {
+      const runtimeSettings = await getRuntimeSettingsCached();
       const importId = req.params.id;
-      const page = Math.max(1, Number(req.query.page ?? 1));
+      const rawPage = Number(req.query.page ?? 1);
+      const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
       const dbProtected = controlState.dbProtection || lastDbLatencyMs > 1000;
-      const maxLimit = dbProtected ? 120 : 500;
-      const limit = Math.min(Number(req.query.limit ?? 100), maxLimit);
+      const maxLimit = Math.min(dbProtected ? 120 : 500, runtimeSettings.viewerRowsPerPage);
+      const rawLimit = Number(req.query.limit ?? runtimeSettings.viewerRowsPerPage);
+      const requestedLimit = Number.isFinite(rawLimit) ? Math.floor(rawLimit) : runtimeSettings.viewerRowsPerPage;
+      const limit = Math.max(10, Math.min(requestedLimit, maxLimit));
       const offset = (page - 1) * limit;
       const search = String(req.query.search || "").trim();
 
@@ -2140,11 +2152,28 @@ app.get(
         console.log(`🔎 /api/search/global called: search="${search}"`);
       }
       
-      const page = Math.max(1, Number(req.query.page ?? 1));
+      const runtimeSettings = await getRuntimeSettingsCached();
+      const rawPage = Number(req.query.page ?? 1);
+      const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
       const dbProtected = controlState.dbProtection || lastDbLatencyMs > 1000;
-      const maxLimit = dbProtected ? 80 : 200;
-      const limit = Math.min(Number(req.query.limit ?? 50), maxLimit);
+      const maxTotal = runtimeSettings.searchResultLimit;
+      const maxLimit = dbProtected ? Math.min(maxTotal, 80) : maxTotal;
+      const requestedLimit = Number(req.query.limit ?? 50);
+      const safeRequestedLimit = Number.isFinite(requestedLimit) ? Math.floor(requestedLimit) : 50;
+      const limit = Math.max(10, Math.min(safeRequestedLimit, maxLimit));
       const offset = (page - 1) * limit;
+      if (offset >= maxTotal) {
+        return res.json({
+          columns: [],
+          rows: [],
+          results: [],
+          total: maxTotal,
+          page,
+          limit,
+        });
+      }
+      const remainingBudget = Math.max(1, maxTotal - offset);
+      const effectiveLimit = Math.min(limit, remainingBudget);
 
       if (search.length < 2) {
         if (API_DEBUG_LOGS) {
@@ -2160,7 +2189,7 @@ app.get(
 
       const result = await storage.searchGlobalDataRows({
         search,
-        limit,
+        limit: effectiveLimit,
         offset,
       });
 
@@ -2198,9 +2227,9 @@ app.get(
         columns: Array.from(columnSet),
         rows: parsedRows,
         results: parsedRows,
-        total: result.total,
+        total: Math.min(result.total, maxTotal),
         page,
-        limit,
+        limit: effectiveLimit,
       });
 
     } catch (error: any) {
@@ -2517,11 +2546,28 @@ app.delete("/api/imports/:id", authenticateToken, requireRole("admin", "superuse
 app.post("/api/search/advanced", authenticateToken, async (req, res) => {
   try {
     const { filters, logic, page = 1, limit = 50 } = req.body;
-    const safePage = Math.max(1, Number(page));
-    const safeLimit = Math.min(Number(limit), 200);
+    const runtimeSettings = await getRuntimeSettingsCached();
+    const parsedPage = Number(page);
+    const safePage = Number.isFinite(parsedPage) ? Math.max(1, Math.floor(parsedPage)) : 1;
+    const maxTotal = runtimeSettings.searchResultLimit;
+    const maxLimit = maxTotal;
+    const parsedLimit = Number(limit);
+    const safeRequestedLimit = Number.isFinite(parsedLimit) ? Math.floor(parsedLimit) : 50;
+    const safeLimit = Math.max(10, Math.min(safeRequestedLimit, maxLimit));
     const offset = (safePage - 1) * safeLimit;
+    if (offset >= maxTotal) {
+      return res.json({
+        results: [],
+        headers: [],
+        total: maxTotal,
+        page: safePage,
+        limit: safeLimit,
+      });
+    }
+    const remainingBudget = Math.max(1, maxTotal - offset);
+    const effectiveLimit = Math.min(safeLimit, remainingBudget);
 
-    const rawResult = await storage.advancedSearchDataRows(filters, logic || "AND", safeLimit, offset);
+    const rawResult = await storage.advancedSearchDataRows(filters, logic || "AND", effectiveLimit, offset);
     const importsList = await storage.getImports();
     const importMap = new Map(importsList.map((imp) => [imp.id, imp]));
     const parsedResults = rawResult.rows.map((row: any) => {
@@ -2542,9 +2588,9 @@ app.post("/api/search/advanced", authenticateToken, async (req, res) => {
     res.json({
       results: parsedResults,
       headers,
-      total: rawResult.total || 0,
+      total: Math.min(rawResult.total || 0, maxTotal),
       page: safePage,
-      limit: safeLimit,
+      limit: effectiveLimit,
     });
   } catch (error: any) {
     res.status(500).json({ message: error.message });

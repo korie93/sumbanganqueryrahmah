@@ -224,7 +224,7 @@ var ROLE_TAB_SETTINGS = {
     { pageId: "general-search", suffix: "general_search", label: "Admin Tab: Search", description: "Allow admin to open Search tab.", defaultEnabled: true },
     { pageId: "analysis", suffix: "analysis", label: "Admin Tab: Analysis", description: "Allow admin to open Analysis tab.", defaultEnabled: true },
     { pageId: "dashboard", suffix: "dashboard", label: "Admin Tab: Dashboard", description: "Allow admin to open Dashboard tab.", defaultEnabled: false },
-    { pageId: "ai", suffix: "ai", label: "Admin Tab: AI", description: "Allow admin to open AI tab.", defaultEnabled: true },
+    { pageId: "monitor", suffix: "monitor", label: "Admin Tab: System Monitor", description: "Allow admin to open System Monitor tab.", defaultEnabled: true },
     { pageId: "activity", suffix: "activity", label: "Admin Tab: Activity", description: "Allow admin to open Activity tab.", defaultEnabled: false },
     { pageId: "audit-logs", suffix: "audit_logs", label: "Admin Tab: Audit", description: "Allow admin to open Audit tab.", defaultEnabled: false },
     { pageId: "backup", suffix: "backup", label: "Admin Tab: Backup", description: "Allow admin to open Backup tab.", defaultEnabled: false },
@@ -239,7 +239,6 @@ var ROLE_TAB_SETTINGS = {
     { pageId: "analysis", suffix: "analysis", label: "User Tab: Analysis", description: "Allow user to open Analysis tab.", defaultEnabled: false },
     { pageId: "dashboard", suffix: "dashboard", label: "User Tab: Dashboard", description: "Allow user to open Dashboard tab.", defaultEnabled: false },
     { pageId: "monitor", suffix: "monitor", label: "User Tab: System Monitor", description: "Allow user to open System Monitor tab.", defaultEnabled: false },
-    { pageId: "ai", suffix: "ai", label: "User Tab: AI", description: "Allow user to open AI tab.", defaultEnabled: true },
     { pageId: "activity", suffix: "activity", label: "User Tab: Activity", description: "Allow user to open Activity tab.", defaultEnabled: false },
     { pageId: "audit-logs", suffix: "audit_logs", label: "User Tab: Audit", description: "Allow user to open Audit tab.", defaultEnabled: false },
     { pageId: "backup", suffix: "backup", label: "User Tab: Backup", description: "Allow user to open Backup tab.", defaultEnabled: false }
@@ -906,6 +905,16 @@ var PostgresStorage = class {
             type: "boolean",
             value: "true",
             defaultValue: "true",
+            isCritical: false
+          },
+          {
+            categoryName: "Roles & Permissions",
+            key: "canViewSystemPerformance",
+            label: "View System Performance",
+            description: "Allow admin role to view System Performance in System Monitor.",
+            type: "boolean",
+            value: "false",
+            defaultValue: "false",
             isCritical: false
           },
           {
@@ -2718,6 +2727,29 @@ var PostgresStorage = class {
     }
     return String(value);
   }
+  applySettingConstraints(settingKey, type, normalizedValue) {
+    if (type !== "number") {
+      return { valid: true, value: normalizedValue };
+    }
+    const numericValue = Number(normalizedValue);
+    if (!Number.isFinite(numericValue)) {
+      return { valid: false, value: normalizedValue, message: "Numeric setting value is invalid." };
+    }
+    const clampInteger = (min, max) => String(Math.min(max, Math.max(min, Math.floor(numericValue))));
+    if (settingKey === "search_result_limit") {
+      if (numericValue < 10 || numericValue > 5e3) {
+        return { valid: false, value: normalizedValue, message: "Search Result Limit must be between 10 and 5000." };
+      }
+      return { valid: true, value: clampInteger(10, 5e3) };
+    }
+    if (settingKey === "viewer_rows_per_page") {
+      if (numericValue < 10 || numericValue > 500) {
+        return { valid: false, value: normalizedValue, message: "Viewer Rows Per Page must be between 10 and 500." };
+      }
+      return { valid: true, value: clampInteger(10, 500) };
+    }
+    return { valid: true, value: normalizedValue };
+  }
   isAdminMaintenanceEditableKey(settingKey) {
     return settingKey === "maintenance_message" || settingKey === "maintenance_start_time" || settingKey === "maintenance_end_time";
   }
@@ -2863,6 +2895,18 @@ var PostgresStorage = class {
       const raw = String(row.value ?? "").trim().toLowerCase();
       visibility[pageId] = ["true", "1", "yes", "on"].includes(raw);
     }
+    if (roleKey === "admin") {
+      const canViewRes = await db.execute(sql`
+        SELECT value
+        FROM public.system_settings
+        WHERE key = 'canViewSystemPerformance'
+        LIMIT 1
+      `);
+      const canViewRaw = String(canViewRes.rows[0]?.value ?? "").trim().toLowerCase();
+      const canViewSystemPerformance = ["true", "1", "yes", "on"].includes(canViewRaw);
+      visibility.canViewSystemPerformance = canViewSystemPerformance;
+      visibility.monitor = visibility.monitor === true && canViewSystemPerformance;
+    }
     return visibility;
   }
   async updateSystemSetting(params) {
@@ -2907,6 +2951,11 @@ var PostgresStorage = class {
     if (normalized === null) {
       return { status: "invalid", message: `Invalid value for type ${settingType}.` };
     }
+    const constrained = this.applySettingConstraints(String(current.key), settingType, normalized);
+    if (!constrained.valid) {
+      return { status: "invalid", message: constrained.message || "Invalid setting value." };
+    }
+    const nextValue = constrained.value;
     if (settingType === "select") {
       const optionRes = await db.execute(sql`
         SELECT 1
@@ -2920,17 +2969,17 @@ var PostgresStorage = class {
       }
     }
     const previousValue = String(current.value ?? "");
-    if (previousValue === normalized) {
+    if (previousValue === nextValue) {
       return { status: "unchanged", message: "No change detected." };
     }
     await db.execute(sql`
       UPDATE public.system_settings
-      SET value = ${normalized}, updated_at = now()
+      SET value = ${nextValue}, updated_at = now()
       WHERE id = ${current.id}
     `);
     await db.execute(sql`
       INSERT INTO public.setting_versions (setting_key, old_value, new_value, changed_by, changed_at)
-      VALUES (${params.settingKey}, ${previousValue}, ${normalized}, ${params.updatedBy}, now())
+      VALUES (${params.settingKey}, ${previousValue}, ${nextValue}, ${params.updatedBy}, now())
     `);
     const latestRes = await db.execute(sql`
       SELECT
@@ -3022,7 +3071,9 @@ var PostgresStorage = class {
         'ws_idle_minutes',
         'ai_enabled',
         'semantic_search_enabled',
-        'ai_timeout_ms'
+        'ai_timeout_ms',
+        'search_result_limit',
+        'viewer_rows_per_page'
       )
     `);
     const map = /* @__PURE__ */ new Map();
@@ -3043,6 +3094,8 @@ var PostgresStorage = class {
     const sessionTimeoutMinutes = asNumber("session_timeout_minutes", 30, 1, 1440);
     const wsIdleMinutes = asNumber("ws_idle_minutes", 3, 1, 1440);
     const aiTimeoutMs = asNumber("ai_timeout_ms", 6e3, 1e3, 12e4);
+    const searchResultLimit = asNumber("search_result_limit", 200, 10, 5e3);
+    const viewerRowsPerPage = asNumber("viewer_rows_per_page", 100, 10, 500);
     const aiEnabled = asBool("ai_enabled", true);
     const semanticSearchEnabled = asBool("semantic_search_enabled", true);
     const heartbeatIntervalMinutes = Math.max(1, Math.min(10, Math.floor(sessionTimeoutMinutes / 2) || 1));
@@ -3053,7 +3106,9 @@ var PostgresStorage = class {
       wsIdleMinutes,
       aiEnabled,
       semanticSearchEnabled,
-      aiTimeoutMs
+      aiTimeoutMs,
+      searchResultLimit,
+      viewerRowsPerPage
     };
   }
   async getAccounts() {
@@ -5371,8 +5426,8 @@ async function requireMonitorAccess(req, res, next) {
   try {
     const role = req.user?.role;
     if (!role) return res.status(401).json({ message: "Unauthenticated" });
-    if (role === "superuser" || role === "admin") return next();
-    if (role !== "user") {
+    if (role === "superuser") return next();
+    if (role !== "admin" && role !== "user") {
       return res.status(403).json({ message: "Insufficient permissions" });
     }
     const tabs = await getRoleTabVisibilityCached(role);
@@ -5562,7 +5617,9 @@ async function getRuntimeSettingsCached(force = false) {
     wsIdleMinutes: Number.isFinite(config.wsIdleMinutes) ? Math.max(1, config.wsIdleMinutes) : DEFAULT_WS_IDLE_MINUTES,
     aiEnabled: config.aiEnabled !== false,
     semanticSearchEnabled: config.semanticSearchEnabled !== false,
-    aiTimeoutMs: Number.isFinite(config.aiTimeoutMs) ? Math.max(1e3, config.aiTimeoutMs) : DEFAULT_AI_TIMEOUT_MS
+    aiTimeoutMs: Number.isFinite(config.aiTimeoutMs) ? Math.max(1e3, config.aiTimeoutMs) : DEFAULT_AI_TIMEOUT_MS,
+    searchResultLimit: Number.isFinite(config.searchResultLimit) ? Math.min(5e3, Math.max(10, Math.floor(config.searchResultLimit))) : 200,
+    viewerRowsPerPage: Number.isFinite(config.viewerRowsPerPage) ? Math.min(500, Math.max(10, Math.floor(config.viewerRowsPerPage))) : 100
   };
   runtimeSettingsCache = { settings, cachedAt: now };
   return settings;
@@ -6324,11 +6381,15 @@ app.get(
   searchRateLimiter,
   async (req, res) => {
     try {
+      const runtimeSettings = await getRuntimeSettingsCached();
       const importId = req.params.id;
-      const page = Math.max(1, Number(req.query.page ?? 1));
+      const rawPage = Number(req.query.page ?? 1);
+      const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
       const dbProtected = controlState.dbProtection || lastDbLatencyMs > 1e3;
-      const maxLimit = dbProtected ? 120 : 500;
-      const limit = Math.min(Number(req.query.limit ?? 100), maxLimit);
+      const maxLimit = Math.min(dbProtected ? 120 : 500, runtimeSettings.viewerRowsPerPage);
+      const rawLimit = Number(req.query.limit ?? runtimeSettings.viewerRowsPerPage);
+      const requestedLimit = Number.isFinite(rawLimit) ? Math.floor(rawLimit) : runtimeSettings.viewerRowsPerPage;
+      const limit = Math.max(10, Math.min(requestedLimit, maxLimit));
       const offset = (page - 1) * limit;
       const search = String(req.query.search || "").trim();
       if (API_DEBUG_LOGS) {
@@ -6374,11 +6435,28 @@ app.get(
       if (API_DEBUG_LOGS) {
         console.log(`\u{1F50E} /api/search/global called: search="${search}"`);
       }
-      const page = Math.max(1, Number(req.query.page ?? 1));
+      const runtimeSettings = await getRuntimeSettingsCached();
+      const rawPage = Number(req.query.page ?? 1);
+      const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
       const dbProtected = controlState.dbProtection || lastDbLatencyMs > 1e3;
-      const maxLimit = dbProtected ? 80 : 200;
-      const limit = Math.min(Number(req.query.limit ?? 50), maxLimit);
+      const maxTotal = runtimeSettings.searchResultLimit;
+      const maxLimit = dbProtected ? Math.min(maxTotal, 80) : maxTotal;
+      const requestedLimit = Number(req.query.limit ?? 50);
+      const safeRequestedLimit = Number.isFinite(requestedLimit) ? Math.floor(requestedLimit) : 50;
+      const limit = Math.max(10, Math.min(safeRequestedLimit, maxLimit));
       const offset = (page - 1) * limit;
+      if (offset >= maxTotal) {
+        return res.json({
+          columns: [],
+          rows: [],
+          results: [],
+          total: maxTotal,
+          page,
+          limit
+        });
+      }
+      const remainingBudget = Math.max(1, maxTotal - offset);
+      const effectiveLimit = Math.min(limit, remainingBudget);
       if (search.length < 2) {
         if (API_DEBUG_LOGS) {
           console.log(`\u{1F50E} Search too short (${search.length} chars), returning empty`);
@@ -6392,7 +6470,7 @@ app.get(
       }
       const result = await storage.searchGlobalDataRows({
         search,
-        limit,
+        limit: effectiveLimit,
         offset
       });
       if (API_DEBUG_LOGS) {
@@ -6421,9 +6499,9 @@ app.get(
         columns: Array.from(columnSet),
         rows: parsedRows,
         results: parsedRows,
-        total: result.total,
+        total: Math.min(result.total, maxTotal),
         page,
-        limit
+        limit: effectiveLimit
       });
     } catch (error) {
       console.error("GET /api/search/global error:", error);
@@ -6706,10 +6784,27 @@ app.delete("/api/imports/:id", authenticateToken, requireRole("admin", "superuse
 app.post("/api/search/advanced", authenticateToken, async (req, res) => {
   try {
     const { filters, logic, page = 1, limit = 50 } = req.body;
-    const safePage = Math.max(1, Number(page));
-    const safeLimit = Math.min(Number(limit), 200);
+    const runtimeSettings = await getRuntimeSettingsCached();
+    const parsedPage = Number(page);
+    const safePage = Number.isFinite(parsedPage) ? Math.max(1, Math.floor(parsedPage)) : 1;
+    const maxTotal = runtimeSettings.searchResultLimit;
+    const maxLimit = maxTotal;
+    const parsedLimit = Number(limit);
+    const safeRequestedLimit = Number.isFinite(parsedLimit) ? Math.floor(parsedLimit) : 50;
+    const safeLimit = Math.max(10, Math.min(safeRequestedLimit, maxLimit));
     const offset = (safePage - 1) * safeLimit;
-    const rawResult = await storage.advancedSearchDataRows(filters, logic || "AND", safeLimit, offset);
+    if (offset >= maxTotal) {
+      return res.json({
+        results: [],
+        headers: [],
+        total: maxTotal,
+        page: safePage,
+        limit: safeLimit
+      });
+    }
+    const remainingBudget = Math.max(1, maxTotal - offset);
+    const effectiveLimit = Math.min(safeLimit, remainingBudget);
+    const rawResult = await storage.advancedSearchDataRows(filters, logic || "AND", effectiveLimit, offset);
     const importsList = await storage.getImports();
     const importMap = new Map(importsList.map((imp) => [imp.id, imp]));
     const parsedResults = rawResult.rows.map((row) => {
@@ -6726,9 +6821,9 @@ app.post("/api/search/advanced", authenticateToken, async (req, res) => {
     res.json({
       results: parsedResults,
       headers,
-      total: rawResult.total || 0,
+      total: Math.min(rawResult.total || 0, maxTotal),
       page: safePage,
-      limit: safeLimit
+      limit: effectiveLimit
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

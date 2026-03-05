@@ -186,7 +186,7 @@ const ROLE_TAB_SETTINGS: Record<"admin" | "user", RoleTabSetting[]> = {
     { pageId: "general-search", suffix: "general_search", label: "Admin Tab: Search", description: "Allow admin to open Search tab.", defaultEnabled: true },
     { pageId: "analysis", suffix: "analysis", label: "Admin Tab: Analysis", description: "Allow admin to open Analysis tab.", defaultEnabled: true },
     { pageId: "dashboard", suffix: "dashboard", label: "Admin Tab: Dashboard", description: "Allow admin to open Dashboard tab.", defaultEnabled: false },
-    { pageId: "ai", suffix: "ai", label: "Admin Tab: AI", description: "Allow admin to open AI tab.", defaultEnabled: true },
+    { pageId: "monitor", suffix: "monitor", label: "Admin Tab: System Monitor", description: "Allow admin to open System Monitor tab.", defaultEnabled: true },
     { pageId: "activity", suffix: "activity", label: "Admin Tab: Activity", description: "Allow admin to open Activity tab.", defaultEnabled: false },
     { pageId: "audit-logs", suffix: "audit_logs", label: "Admin Tab: Audit", description: "Allow admin to open Audit tab.", defaultEnabled: false },
     { pageId: "backup", suffix: "backup", label: "Admin Tab: Backup", description: "Allow admin to open Backup tab.", defaultEnabled: false },
@@ -201,7 +201,6 @@ const ROLE_TAB_SETTINGS: Record<"admin" | "user", RoleTabSetting[]> = {
     { pageId: "analysis", suffix: "analysis", label: "User Tab: Analysis", description: "Allow user to open Analysis tab.", defaultEnabled: false },
     { pageId: "dashboard", suffix: "dashboard", label: "User Tab: Dashboard", description: "Allow user to open Dashboard tab.", defaultEnabled: false },
     { pageId: "monitor", suffix: "monitor", label: "User Tab: System Monitor", description: "Allow user to open System Monitor tab.", defaultEnabled: false },
-    { pageId: "ai", suffix: "ai", label: "User Tab: AI", description: "Allow user to open AI tab.", defaultEnabled: true },
     { pageId: "activity", suffix: "activity", label: "User Tab: Activity", description: "Allow user to open Activity tab.", defaultEnabled: false },
     { pageId: "audit-logs", suffix: "audit_logs", label: "User Tab: Audit", description: "Allow user to open Audit tab.", defaultEnabled: false },
     { pageId: "backup", suffix: "backup", label: "User Tab: Backup", description: "Allow user to open Backup tab.", defaultEnabled: false },
@@ -406,6 +405,8 @@ function ensureObject(value: unknown): Record<string, any> | null {
     aiEnabled: boolean;
     semanticSearchEnabled: boolean;
     aiTimeoutMs: number;
+    searchResultLimit: number;
+    viewerRowsPerPage: number;
   }>;
 
   createAuditLog(data: InsertAuditLog): Promise<AuditLog>;
@@ -1135,6 +1136,16 @@ export class PostgresStorage implements IStorage {
           type: "boolean",
           value: "true",
           defaultValue: "true",
+          isCritical: false,
+        },
+        {
+          categoryName: "Roles & Permissions",
+          key: "canViewSystemPerformance",
+          label: "View System Performance",
+          description: "Allow admin role to view System Performance in System Monitor.",
+          type: "boolean",
+          value: "false",
+          defaultValue: "false",
           isCritical: false,
         },
         {
@@ -3461,6 +3472,40 @@ export class PostgresStorage implements IStorage {
     return String(value);
   }
 
+  private applySettingConstraints(settingKey: string, type: SettingInputType, normalizedValue: string): {
+    valid: boolean;
+    value: string;
+    message?: string;
+  } {
+    if (type !== "number") {
+      return { valid: true, value: normalizedValue };
+    }
+
+    const numericValue = Number(normalizedValue);
+    if (!Number.isFinite(numericValue)) {
+      return { valid: false, value: normalizedValue, message: "Numeric setting value is invalid." };
+    }
+
+    const clampInteger = (min: number, max: number) =>
+      String(Math.min(max, Math.max(min, Math.floor(numericValue))));
+
+    if (settingKey === "search_result_limit") {
+      if (numericValue < 10 || numericValue > 5000) {
+        return { valid: false, value: normalizedValue, message: "Search Result Limit must be between 10 and 5000." };
+      }
+      return { valid: true, value: clampInteger(10, 5000) };
+    }
+
+    if (settingKey === "viewer_rows_per_page") {
+      if (numericValue < 10 || numericValue > 500) {
+        return { valid: false, value: normalizedValue, message: "Viewer Rows Per Page must be between 10 and 500." };
+      }
+      return { valid: true, value: clampInteger(10, 500) };
+    }
+
+    return { valid: true, value: normalizedValue };
+  }
+
   private isAdminMaintenanceEditableKey(settingKey: string): boolean {
     return settingKey === "maintenance_message"
       || settingKey === "maintenance_start_time"
@@ -3632,6 +3677,19 @@ export class PostgresStorage implements IStorage {
       visibility[pageId] = ["true", "1", "yes", "on"].includes(raw);
     }
 
+    if (roleKey === "admin") {
+      const canViewRes = await db.execute(sql`
+        SELECT value
+        FROM public.system_settings
+        WHERE key = 'canViewSystemPerformance'
+        LIMIT 1
+      `);
+      const canViewRaw = String((canViewRes.rows as any[])[0]?.value ?? "").trim().toLowerCase();
+      const canViewSystemPerformance = ["true", "1", "yes", "on"].includes(canViewRaw);
+      visibility.canViewSystemPerformance = canViewSystemPerformance;
+      visibility.monitor = visibility.monitor === true && canViewSystemPerformance;
+    }
+
     return visibility;
   }
 
@@ -3695,6 +3753,11 @@ export class PostgresStorage implements IStorage {
     if (normalized === null) {
       return { status: "invalid", message: `Invalid value for type ${settingType}.` };
     }
+    const constrained = this.applySettingConstraints(String(current.key), settingType, normalized);
+    if (!constrained.valid) {
+      return { status: "invalid", message: constrained.message || "Invalid setting value." };
+    }
+    const nextValue = constrained.value;
 
     if (settingType === "select") {
       const optionRes = await db.execute(sql`
@@ -3710,19 +3773,19 @@ export class PostgresStorage implements IStorage {
     }
 
     const previousValue = String(current.value ?? "");
-    if (previousValue === normalized) {
+    if (previousValue === nextValue) {
       return { status: "unchanged", message: "No change detected." };
     }
 
     await db.execute(sql`
       UPDATE public.system_settings
-      SET value = ${normalized}, updated_at = now()
+      SET value = ${nextValue}, updated_at = now()
       WHERE id = ${current.id}
     `);
 
     await db.execute(sql`
       INSERT INTO public.setting_versions (setting_key, old_value, new_value, changed_by, changed_at)
-      VALUES (${params.settingKey}, ${previousValue}, ${normalized}, ${params.updatedBy}, now())
+      VALUES (${params.settingKey}, ${previousValue}, ${nextValue}, ${params.updatedBy}, now())
     `);
 
     const latestRes = await db.execute(sql`
@@ -3817,6 +3880,8 @@ export class PostgresStorage implements IStorage {
     aiEnabled: boolean;
     semanticSearchEnabled: boolean;
     aiTimeoutMs: number;
+    searchResultLimit: number;
+    viewerRowsPerPage: number;
   }> {
     await this.ensureSettingsTables();
     const res = await db.execute(sql`
@@ -3828,7 +3893,9 @@ export class PostgresStorage implements IStorage {
         'ws_idle_minutes',
         'ai_enabled',
         'semantic_search_enabled',
-        'ai_timeout_ms'
+        'ai_timeout_ms',
+        'search_result_limit',
+        'viewer_rows_per_page'
       )
     `);
 
@@ -3852,6 +3919,8 @@ export class PostgresStorage implements IStorage {
     const sessionTimeoutMinutes = asNumber("session_timeout_minutes", 30, 1, 1440);
     const wsIdleMinutes = asNumber("ws_idle_minutes", 3, 1, 1440);
     const aiTimeoutMs = asNumber("ai_timeout_ms", 6000, 1000, 120000);
+    const searchResultLimit = asNumber("search_result_limit", 200, 10, 5000);
+    const viewerRowsPerPage = asNumber("viewer_rows_per_page", 100, 10, 500);
     const aiEnabled = asBool("ai_enabled", true);
     const semanticSearchEnabled = asBool("semantic_search_enabled", true);
     const heartbeatIntervalMinutes = Math.max(1, Math.min(10, Math.floor(sessionTimeoutMinutes / 2) || 1));
@@ -3864,6 +3933,8 @@ export class PostgresStorage implements IStorage {
       aiEnabled,
       semanticSearchEnabled,
       aiTimeoutMs,
+      searchResultLimit,
+      viewerRowsPerPage,
     };
   }
 
