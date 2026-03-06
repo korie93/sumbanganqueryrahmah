@@ -335,6 +335,87 @@ export async function updateSuperuserManagedUserCredentials(
   return response.json();
 }
 
+export type CollectionBatch = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
+
+export type CollectionRecord = {
+  id: string;
+  customerName: string;
+  icNumber: string;
+  customerPhone: string;
+  accountNumber: string;
+  batch: CollectionBatch;
+  paymentDate: string;
+  amount: string;
+  receiptFile: string | null;
+  createdByLogin: string;
+  collectionStaffNickname: string;
+  createdAt: string;
+};
+
+export type CollectionReceiptPayload = {
+  fileName: string;
+  mimeType: string;
+  contentBase64: string;
+};
+
+export type CreateCollectionPayload = {
+  customerName: string;
+  icNumber: string;
+  customerPhone: string;
+  accountNumber: string;
+  batch: CollectionBatch;
+  paymentDate: string;
+  amount: number;
+  collectionStaffNickname: string;
+  receipt?: CollectionReceiptPayload | null;
+};
+
+export type UpdateCollectionPayload = Partial<CreateCollectionPayload> & {
+  removeReceipt?: boolean;
+};
+
+export async function createCollectionRecord(payload: CreateCollectionPayload) {
+  const response = await apiRequest("POST", "/api/collection", payload);
+  return response.json();
+}
+
+export async function getCollectionRecords(filters?: { from?: string; to?: string; search?: string }) {
+  const params = new URLSearchParams();
+  if (filters?.from) params.set("from", filters.from);
+  if (filters?.to) params.set("to", filters.to);
+  if (filters?.search) params.set("search", filters.search);
+  const query = params.toString();
+  const response = await apiRequest("GET", query ? `/api/collection/list?${query}` : "/api/collection/list");
+  return response.json();
+}
+
+export type CollectionMonthlySummary = {
+  month: number;
+  monthName: string;
+  totalRecords: number;
+  totalAmount: number;
+};
+
+export async function getCollectionMonthlySummary(filters: { year: number; staff?: string }) {
+  const params = new URLSearchParams();
+  params.set("year", String(filters.year));
+  if (filters.staff && filters.staff.trim()) {
+    params.set("staff", filters.staff.trim());
+  }
+  const response = await apiRequest("GET", `/api/collection/summary?${params.toString()}`);
+  return response.json() as Promise<{ ok: boolean; year: number; summary: CollectionMonthlySummary[] }>;
+}
+
+export async function updateCollectionRecord(id: string, payload: UpdateCollectionPayload) {
+  const response = await apiRequest("PATCH", `/api/collection/${encodeURIComponent(id)}`, payload);
+  return response.json();
+}
+
+export async function deleteCollectionRecord(id: string) {
+  const response = await apiRequest("DELETE", `/api/collection/${encodeURIComponent(id)}`);
+  return response.json();
+}
+
 export async function getAppConfig() {
   const response = await apiRequest("GET", "/api/app-config");
   return response.json();
