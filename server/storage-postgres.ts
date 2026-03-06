@@ -43,6 +43,70 @@ const ALLOWED_OPERATORS = new Set([
   "isNotEmpty",
 ]);
 const BACKUP_CHUNK_SIZE = 500;
+const COLLECTION_BATCH_VALUES = ["P10", "P25", "MDD02", "MDD10", "MDD18", "MDD25"] as const;
+const COLLECTION_MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+type CollectionBatch = typeof COLLECTION_BATCH_VALUES[number];
+
+export type CollectionRecord = {
+  id: string;
+  customerName: string;
+  icNumber: string;
+  customerPhone: string;
+  accountNumber: string;
+  batch: CollectionBatch;
+  paymentDate: string;
+  amount: string;
+  receiptFile: string | null;
+  createdByLogin: string;
+  collectionStaffNickname: string;
+  createdAt: Date;
+};
+
+export type CollectionMonthlySummary = {
+  month: number;
+  monthName: string;
+  totalRecords: number;
+  totalAmount: number;
+};
+
+export type CreateCollectionRecordInput = {
+  customerName: string;
+  icNumber: string;
+  customerPhone: string;
+  accountNumber: string;
+  batch: CollectionBatch;
+  paymentDate: string;
+  amount: number;
+  receiptFile?: string | null;
+  createdByLogin: string;
+  collectionStaffNickname: string;
+};
+
+export type UpdateCollectionRecordInput = {
+  customerName?: string;
+  icNumber?: string;
+  customerPhone?: string;
+  accountNumber?: string;
+  batch?: CollectionBatch;
+  paymentDate?: string;
+  amount?: number;
+  receiptFile?: string | null;
+  collectionStaffNickname?: string;
+};
 
 function detectValueType(value: string): "number" | "date" | "string" {
   if (!value) return "string";
@@ -187,6 +251,7 @@ const ROLE_TAB_SETTINGS: Record<"admin" | "user", RoleTabSetting[]> = {
     { pageId: "saved", suffix: "saved", label: "Admin Tab: Saved", description: "Allow admin to open Saved tab.", defaultEnabled: true },
     { pageId: "viewer", suffix: "viewer", label: "Admin Tab: Viewer", description: "Allow admin to open Viewer tab.", defaultEnabled: true },
     { pageId: "general-search", suffix: "general_search", label: "Admin Tab: Search", description: "Allow admin to open Search tab.", defaultEnabled: true },
+    { pageId: "collection-report", suffix: "collection_report", label: "Admin Tab: Collection Report", description: "Allow admin to open Collection Report tab.", defaultEnabled: true },
     { pageId: "analysis", suffix: "analysis", label: "Admin Tab: Analysis", description: "Allow admin to open Analysis tab.", defaultEnabled: true },
     { pageId: "dashboard", suffix: "dashboard", label: "Admin Tab: Dashboard", description: "Allow admin to open Dashboard tab.", defaultEnabled: false },
     { pageId: "monitor", suffix: "monitor", label: "Admin Tab: System Monitor", description: "Allow admin to open System Monitor tab.", defaultEnabled: true },
@@ -201,6 +266,7 @@ const ROLE_TAB_SETTINGS: Record<"admin" | "user", RoleTabSetting[]> = {
     { pageId: "saved", suffix: "saved", label: "User Tab: Saved", description: "Allow user to open Saved tab.", defaultEnabled: false },
     { pageId: "viewer", suffix: "viewer", label: "User Tab: Viewer", description: "Allow user to open Viewer tab.", defaultEnabled: false },
     { pageId: "general-search", suffix: "general_search", label: "User Tab: Search", description: "Allow user to open Search tab.", defaultEnabled: true },
+    { pageId: "collection-report", suffix: "collection_report", label: "User Tab: Collection Report", description: "Allow user to open Collection Report tab.", defaultEnabled: true },
     { pageId: "analysis", suffix: "analysis", label: "User Tab: Analysis", description: "Allow user to open Analysis tab.", defaultEnabled: false },
     { pageId: "dashboard", suffix: "dashboard", label: "User Tab: Dashboard", description: "Allow user to open Dashboard tab.", defaultEnabled: false },
     { pageId: "monitor", suffix: "monitor", label: "User Tab: System Monitor", description: "Allow user to open System Monitor tab.", defaultEnabled: false },
@@ -246,6 +312,20 @@ function ensureObject(value: unknown): Record<string, any> | null {
     role: string;
     isBanned: boolean | null;
   }>>;
+  createCollectionRecord(data: CreateCollectionRecordInput): Promise<CollectionRecord>;
+  listCollectionRecords(filters?: {
+    from?: string;
+    to?: string;
+    search?: string;
+    limit?: number;
+  }): Promise<CollectionRecord[]>;
+  getCollectionMonthlySummary(filters: {
+    year: number;
+    staff?: string;
+  }): Promise<CollectionMonthlySummary[]>;
+  getCollectionRecordById(id: string): Promise<CollectionRecord | undefined>;
+  updateCollectionRecord(id: string, data: UpdateCollectionRecordInput): Promise<CollectionRecord | undefined>;
+  deleteCollectionRecord(id: string): Promise<boolean>;
 
   createImport(data: InsertImport & { createdBy?: string }): Promise<Import>;
   getImports(): Promise<Import[]>;
@@ -464,6 +544,7 @@ export class PostgresStorage implements IStorage {
 
   public async init() {
     await this.ensureUsersTable();
+    await this.ensureCollectionRecordsTable();
     await this.seedDefaultUsers();
     await this.ensureBackupsTable();
     await this.ensurePerformanceIndexes();
@@ -541,6 +622,66 @@ export class PostgresStorage implements IStorage {
       await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_role ON public.users (role)`);
     } catch (err: any) {
       console.error("❌ Failed to ensure users table:", err?.message || err);
+      throw err;
+    }
+  }
+
+  private async ensureCollectionRecordsTable() {
+    try {
+      await db.execute(sql`SET search_path TO public`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.collection_records (
+          id uuid PRIMARY KEY,
+          customer_name text NOT NULL,
+          ic_number text NOT NULL,
+          customer_phone text NOT NULL,
+          account_number text NOT NULL,
+          batch text NOT NULL,
+          payment_date date NOT NULL,
+          amount numeric(14,2) NOT NULL,
+          receipt_file text,
+          created_by_login text NOT NULL,
+          collection_staff_nickname text NOT NULL,
+          staff_username text NOT NULL,
+          created_at timestamp DEFAULT now() NOT NULL
+        )
+      `);
+      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name text`);
+      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number text`);
+      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_phone text`);
+      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number text`);
+      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS batch text`);
+      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS payment_date date`);
+      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS amount numeric(14,2)`);
+      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_file text`);
+      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_by_login text`);
+      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS collection_staff_nickname text`);
+      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS staff_username text`);
+      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+      await db.execute(sql`
+        UPDATE public.collection_records
+        SET customer_phone = COALESCE(NULLIF(customer_phone, ''), '-')
+      `);
+      await db.execute(sql`
+        UPDATE public.collection_records
+        SET created_by_login = COALESCE(NULLIF(created_by_login, ''), NULLIF(staff_username, ''), 'unknown')
+      `);
+      await db.execute(sql`
+        UPDATE public.collection_records
+        SET collection_staff_nickname = COALESCE(NULLIF(collection_staff_nickname, ''), NULLIF(staff_username, ''), NULLIF(created_by_login, ''), 'unknown')
+      `);
+      await db.execute(sql`
+        UPDATE public.collection_records
+        SET staff_username = COALESCE(NULLIF(staff_username, ''), NULLIF(collection_staff_nickname, ''), NULLIF(created_by_login, ''), 'unknown')
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_payment_date ON public.collection_records(payment_date)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_at ON public.collection_records(created_at DESC)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_username ON public.collection_records(staff_username)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_by_login ON public.collection_records(created_by_login)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`);
+    } catch (err: any) {
+      console.error("❌ Failed to ensure collection_records table:", err?.message || err);
       throw err;
     }
   }
@@ -4227,6 +4368,292 @@ export class PostgresStorage implements IStorage {
     }
 
     return rows;
+  }
+
+  private mapCollectionRecordRow(row: any): CollectionRecord {
+    const paymentDateRaw = row.payment_date ?? row.paymentDate;
+    const paymentDate =
+      typeof paymentDateRaw === "string"
+        ? paymentDateRaw.slice(0, 10)
+        : paymentDateRaw instanceof Date
+          ? paymentDateRaw.toISOString().slice(0, 10)
+          : "";
+
+    const createdAtRaw = row.created_at ?? row.createdAt;
+    const createdAt = createdAtRaw instanceof Date
+      ? createdAtRaw
+      : new Date(createdAtRaw ?? Date.now());
+
+    return {
+      id: String(row.id),
+      customerName: String(row.customer_name ?? row.customerName ?? ""),
+      icNumber: String(row.ic_number ?? row.icNumber ?? ""),
+      customerPhone: String(row.customer_phone ?? row.customerPhone ?? ""),
+      accountNumber: String(row.account_number ?? row.accountNumber ?? ""),
+      batch: String(row.batch ?? "") as CollectionBatch,
+      paymentDate,
+      amount: String(row.amount ?? "0"),
+      receiptFile: row.receipt_file ?? row.receiptFile ?? null,
+      createdByLogin: String(row.created_by_login ?? row.createdByLogin ?? row.staff_username ?? row.staffUsername ?? ""),
+      collectionStaffNickname: String(row.collection_staff_nickname ?? row.collectionStaffNickname ?? row.staff_username ?? row.staffUsername ?? ""),
+      createdAt,
+    };
+  }
+
+  async createCollectionRecord(data: CreateCollectionRecordInput): Promise<CollectionRecord> {
+    const id = crypto.randomUUID();
+    const result = await db.execute(sql`
+      INSERT INTO public.collection_records (
+        id,
+        customer_name,
+        ic_number,
+        customer_phone,
+        account_number,
+        batch,
+        payment_date,
+        amount,
+        receipt_file,
+        created_by_login,
+        collection_staff_nickname,
+        staff_username,
+        created_at
+      )
+      VALUES (
+        ${id}::uuid,
+        ${data.customerName},
+        ${data.icNumber},
+        ${data.customerPhone},
+        ${data.accountNumber},
+        ${data.batch},
+        ${data.paymentDate}::date,
+        ${data.amount},
+        ${data.receiptFile ?? null},
+        ${data.createdByLogin},
+        ${data.collectionStaffNickname},
+        ${data.collectionStaffNickname},
+        now()
+      )
+      RETURNING
+        id,
+        customer_name,
+        ic_number,
+        customer_phone,
+        account_number,
+        batch,
+        payment_date,
+        amount,
+        receipt_file,
+        created_by_login,
+        collection_staff_nickname,
+        staff_username,
+        created_at
+    `);
+
+    return this.mapCollectionRecordRow(result.rows[0]);
+  }
+
+  async listCollectionRecords(filters?: {
+    from?: string;
+    to?: string;
+    search?: string;
+    limit?: number;
+  }): Promise<CollectionRecord[]> {
+    const conditions: any[] = [];
+    if (filters?.from) {
+      conditions.push(sql`payment_date >= ${filters.from}::date`);
+    }
+    if (filters?.to) {
+      conditions.push(sql`payment_date <= ${filters.to}::date`);
+    }
+    const search = String(filters?.search || "").trim();
+    if (search) {
+      const like = `%${search}%`;
+      conditions.push(sql`(
+        customer_name ILIKE ${like}
+        OR ic_number ILIKE ${like}
+        OR account_number ILIKE ${like}
+        OR customer_phone ILIKE ${like}
+        OR amount::text ILIKE ${like}
+      )`);
+    }
+
+    const whereSql = conditions.length
+      ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
+      : sql``;
+    const parsedLimit = Number(filters?.limit);
+    const safeLimit = Number.isFinite(parsedLimit)
+      ? Math.min(2000, Math.max(1, Math.floor(parsedLimit)))
+      : 500;
+
+    const result = await db.execute(sql`
+      SELECT
+        id,
+        customer_name,
+        ic_number,
+        customer_phone,
+        account_number,
+        batch,
+        payment_date,
+        amount,
+        receipt_file,
+        created_by_login,
+        collection_staff_nickname,
+        staff_username,
+        created_at
+      FROM public.collection_records
+      ${whereSql}
+      ORDER BY payment_date DESC, created_at DESC
+      LIMIT ${safeLimit}
+    `);
+
+    return (result.rows || []).map((row: any) => this.mapCollectionRecordRow(row));
+  }
+
+  async getCollectionMonthlySummary(filters: {
+    year: number;
+    staff?: string;
+  }): Promise<CollectionMonthlySummary[]> {
+    const safeYear = Number.isFinite(filters.year)
+      ? Math.min(2100, Math.max(2000, Math.floor(filters.year)))
+      : new Date().getFullYear();
+    const yearStart = `${safeYear}-01-01`;
+    const yearEnd = `${safeYear}-12-31`;
+    const staffNeedle = String(filters.staff || "").trim();
+
+    const conditions: any[] = [
+      sql`payment_date >= ${yearStart}::date`,
+      sql`payment_date <= ${yearEnd}::date`,
+    ];
+    if (staffNeedle) {
+      const like = `%${staffNeedle}%`;
+      conditions.push(sql`collection_staff_nickname ILIKE ${like}`);
+    }
+
+    const whereSql = sql`WHERE ${sql.join(conditions, sql` AND `)}`;
+    const result = await db.execute(sql`
+      SELECT
+        EXTRACT(MONTH FROM payment_date)::int AS month,
+        COUNT(*)::int AS total_records,
+        COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
+      FROM public.collection_records
+      ${whereSql}
+      GROUP BY 1
+      ORDER BY 1
+      LIMIT 12
+    `);
+
+    const byMonth = new Map<number, { totalRecords: number; totalAmount: number }>();
+    for (const row of result.rows || []) {
+      const month = Number(row.month ?? 0);
+      if (!Number.isFinite(month) || month < 1 || month > 12) continue;
+      byMonth.set(month, {
+        totalRecords: Number(row.total_records ?? 0),
+        totalAmount: Number(row.total_amount ?? 0),
+      });
+    }
+
+    return COLLECTION_MONTH_NAMES.map((monthName, index) => {
+      const month = index + 1;
+      const data = byMonth.get(month);
+      return {
+        month,
+        monthName,
+        totalRecords: data?.totalRecords ?? 0,
+        totalAmount: data?.totalAmount ?? 0,
+      };
+    });
+  }
+
+  async getCollectionRecordById(id: string): Promise<CollectionRecord | undefined> {
+    const result = await db.execute(sql`
+      SELECT
+        id,
+        customer_name,
+        ic_number,
+        customer_phone,
+        account_number,
+        batch,
+        payment_date,
+        amount,
+        receipt_file,
+        created_by_login,
+        collection_staff_nickname,
+        staff_username,
+        created_at
+      FROM public.collection_records
+      WHERE id = ${id}::uuid
+      LIMIT 1
+    `);
+
+    const row = result.rows?.[0];
+    if (!row) return undefined;
+    return this.mapCollectionRecordRow(row);
+  }
+
+  async updateCollectionRecord(id: string, data: UpdateCollectionRecordInput): Promise<CollectionRecord | undefined> {
+    const updateChunks: any[] = [];
+
+    if (data.customerName !== undefined) {
+      updateChunks.push(sql`customer_name = ${data.customerName}`);
+    }
+    if (data.icNumber !== undefined) {
+      updateChunks.push(sql`ic_number = ${data.icNumber}`);
+    }
+    if (data.customerPhone !== undefined) {
+      updateChunks.push(sql`customer_phone = ${data.customerPhone}`);
+    }
+    if (data.accountNumber !== undefined) {
+      updateChunks.push(sql`account_number = ${data.accountNumber}`);
+    }
+    if (data.batch !== undefined) {
+      updateChunks.push(sql`batch = ${data.batch}`);
+    }
+    if (data.paymentDate !== undefined) {
+      updateChunks.push(sql`payment_date = ${data.paymentDate}::date`);
+    }
+    if (data.amount !== undefined) {
+      updateChunks.push(sql`amount = ${data.amount}`);
+    }
+    if (Object.prototype.hasOwnProperty.call(data, "receiptFile")) {
+      updateChunks.push(sql`receipt_file = ${data.receiptFile ?? null}`);
+    }
+    if (data.collectionStaffNickname !== undefined) {
+      updateChunks.push(sql`collection_staff_nickname = ${data.collectionStaffNickname}`);
+      updateChunks.push(sql`staff_username = ${data.collectionStaffNickname}`);
+    }
+
+    if (!updateChunks.length) {
+      return this.getCollectionRecordById(id);
+    }
+
+    const result = await db.execute(sql`
+      UPDATE public.collection_records
+      SET ${sql.join(updateChunks, sql`, `)}
+      WHERE id = ${id}::uuid
+      RETURNING
+        id,
+        customer_name,
+        ic_number,
+        customer_phone,
+        account_number,
+        batch,
+        payment_date,
+        amount,
+        receipt_file,
+        created_by_login,
+        collection_staff_nickname,
+        staff_username,
+        created_at
+    `);
+
+    const row = result.rows?.[0];
+    if (!row) return undefined;
+    return this.mapCollectionRecordRow(row);
+  }
+
+  async deleteCollectionRecord(id: string): Promise<boolean> {
+    await db.execute(sql`DELETE FROM public.collection_records WHERE id = ${id}::uuid`);
+    return true;
   }
 
   async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {

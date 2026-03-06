@@ -208,7 +208,7 @@ function buildSqlCondition(field, operator, value) {
       return sql`false`;
   }
 }
-var MAX_SEARCH_LIMIT, QUERY_PAGE_LIMIT, MAX_COLUMN_KEYS, ANALYTICS_TZ, STORAGE_DEBUG_LOGS, BCRYPT_COST, ALLOWED_OPERATORS, BACKUP_CHUNK_SIZE, ROLE_TAB_SETTINGS, roleTabSettingKey, PostgresStorage;
+var MAX_SEARCH_LIMIT, QUERY_PAGE_LIMIT, MAX_COLUMN_KEYS, ANALYTICS_TZ, STORAGE_DEBUG_LOGS, BCRYPT_COST, ALLOWED_OPERATORS, BACKUP_CHUNK_SIZE, COLLECTION_MONTH_NAMES, ROLE_TAB_SETTINGS, roleTabSettingKey, PostgresStorage;
 var init_storage_postgres = __esm({
   "server/storage-postgres.ts"() {
     "use strict";
@@ -234,6 +234,20 @@ var init_storage_postgres = __esm({
       "isNotEmpty"
     ]);
     BACKUP_CHUNK_SIZE = 500;
+    COLLECTION_MONTH_NAMES = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December"
+    ];
     ROLE_TAB_SETTINGS = {
       admin: [
         { pageId: "home", suffix: "home", label: "Admin Tab: Home", description: "Allow admin to open Home tab.", defaultEnabled: true },
@@ -241,6 +255,7 @@ var init_storage_postgres = __esm({
         { pageId: "saved", suffix: "saved", label: "Admin Tab: Saved", description: "Allow admin to open Saved tab.", defaultEnabled: true },
         { pageId: "viewer", suffix: "viewer", label: "Admin Tab: Viewer", description: "Allow admin to open Viewer tab.", defaultEnabled: true },
         { pageId: "general-search", suffix: "general_search", label: "Admin Tab: Search", description: "Allow admin to open Search tab.", defaultEnabled: true },
+        { pageId: "collection-report", suffix: "collection_report", label: "Admin Tab: Collection Report", description: "Allow admin to open Collection Report tab.", defaultEnabled: true },
         { pageId: "analysis", suffix: "analysis", label: "Admin Tab: Analysis", description: "Allow admin to open Analysis tab.", defaultEnabled: true },
         { pageId: "dashboard", suffix: "dashboard", label: "Admin Tab: Dashboard", description: "Allow admin to open Dashboard tab.", defaultEnabled: false },
         { pageId: "monitor", suffix: "monitor", label: "Admin Tab: System Monitor", description: "Allow admin to open System Monitor tab.", defaultEnabled: true },
@@ -255,6 +270,7 @@ var init_storage_postgres = __esm({
         { pageId: "saved", suffix: "saved", label: "User Tab: Saved", description: "Allow user to open Saved tab.", defaultEnabled: false },
         { pageId: "viewer", suffix: "viewer", label: "User Tab: Viewer", description: "Allow user to open Viewer tab.", defaultEnabled: false },
         { pageId: "general-search", suffix: "general_search", label: "User Tab: Search", description: "Allow user to open Search tab.", defaultEnabled: true },
+        { pageId: "collection-report", suffix: "collection_report", label: "User Tab: Collection Report", description: "Allow user to open Collection Report tab.", defaultEnabled: true },
         { pageId: "analysis", suffix: "analysis", label: "User Tab: Analysis", description: "Allow user to open Analysis tab.", defaultEnabled: false },
         { pageId: "dashboard", suffix: "dashboard", label: "User Tab: Dashboard", description: "Allow user to open Dashboard tab.", defaultEnabled: false },
         { pageId: "monitor", suffix: "monitor", label: "User Tab: System Monitor", description: "Allow user to open System Monitor tab.", defaultEnabled: false },
@@ -271,6 +287,7 @@ var init_storage_postgres = __esm({
       }
       async init() {
         await this.ensureUsersTable();
+        await this.ensureCollectionRecordsTable();
         await this.seedDefaultUsers();
         await this.ensureBackupsTable();
         await this.ensurePerformanceIndexes();
@@ -341,6 +358,65 @@ var init_storage_postgres = __esm({
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_role ON public.users (role)`);
         } catch (err) {
           console.error("\u274C Failed to ensure users table:", err?.message || err);
+          throw err;
+        }
+      }
+      async ensureCollectionRecordsTable() {
+        try {
+          await db.execute(sql`SET search_path TO public`);
+          await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.collection_records (
+          id uuid PRIMARY KEY,
+          customer_name text NOT NULL,
+          ic_number text NOT NULL,
+          customer_phone text NOT NULL,
+          account_number text NOT NULL,
+          batch text NOT NULL,
+          payment_date date NOT NULL,
+          amount numeric(14,2) NOT NULL,
+          receipt_file text,
+          created_by_login text NOT NULL,
+          collection_staff_nickname text NOT NULL,
+          staff_username text NOT NULL,
+          created_at timestamp DEFAULT now() NOT NULL
+        )
+      `);
+          await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name text`);
+          await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number text`);
+          await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_phone text`);
+          await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number text`);
+          await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS batch text`);
+          await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS payment_date date`);
+          await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS amount numeric(14,2)`);
+          await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_file text`);
+          await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_by_login text`);
+          await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS collection_staff_nickname text`);
+          await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS staff_username text`);
+          await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+          await db.execute(sql`
+        UPDATE public.collection_records
+        SET customer_phone = COALESCE(NULLIF(customer_phone, ''), '-')
+      `);
+          await db.execute(sql`
+        UPDATE public.collection_records
+        SET created_by_login = COALESCE(NULLIF(created_by_login, ''), NULLIF(staff_username, ''), 'unknown')
+      `);
+          await db.execute(sql`
+        UPDATE public.collection_records
+        SET collection_staff_nickname = COALESCE(NULLIF(collection_staff_nickname, ''), NULLIF(staff_username, ''), NULLIF(created_by_login, ''), 'unknown')
+      `);
+          await db.execute(sql`
+        UPDATE public.collection_records
+        SET staff_username = COALESCE(NULLIF(staff_username, ''), NULLIF(collection_staff_nickname, ''), NULLIF(created_by_login, ''), 'unknown')
+      `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_payment_date ON public.collection_records(payment_date)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_at ON public.collection_records(created_at DESC)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_username ON public.collection_records(staff_username)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_by_login ON public.collection_records(created_by_login)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`);
+        } catch (err) {
+          console.error("\u274C Failed to ensure collection_records table:", err?.message || err);
           throw err;
         }
       }
@@ -3306,6 +3382,249 @@ var init_storage_postgres = __esm({
         }
         return rows;
       }
+      mapCollectionRecordRow(row) {
+        const paymentDateRaw = row.payment_date ?? row.paymentDate;
+        const paymentDate = typeof paymentDateRaw === "string" ? paymentDateRaw.slice(0, 10) : paymentDateRaw instanceof Date ? paymentDateRaw.toISOString().slice(0, 10) : "";
+        const createdAtRaw = row.created_at ?? row.createdAt;
+        const createdAt = createdAtRaw instanceof Date ? createdAtRaw : new Date(createdAtRaw ?? Date.now());
+        return {
+          id: String(row.id),
+          customerName: String(row.customer_name ?? row.customerName ?? ""),
+          icNumber: String(row.ic_number ?? row.icNumber ?? ""),
+          customerPhone: String(row.customer_phone ?? row.customerPhone ?? ""),
+          accountNumber: String(row.account_number ?? row.accountNumber ?? ""),
+          batch: String(row.batch ?? ""),
+          paymentDate,
+          amount: String(row.amount ?? "0"),
+          receiptFile: row.receipt_file ?? row.receiptFile ?? null,
+          createdByLogin: String(row.created_by_login ?? row.createdByLogin ?? row.staff_username ?? row.staffUsername ?? ""),
+          collectionStaffNickname: String(row.collection_staff_nickname ?? row.collectionStaffNickname ?? row.staff_username ?? row.staffUsername ?? ""),
+          createdAt
+        };
+      }
+      async createCollectionRecord(data) {
+        const id = crypto.randomUUID();
+        const result = await db.execute(sql`
+      INSERT INTO public.collection_records (
+        id,
+        customer_name,
+        ic_number,
+        customer_phone,
+        account_number,
+        batch,
+        payment_date,
+        amount,
+        receipt_file,
+        created_by_login,
+        collection_staff_nickname,
+        staff_username,
+        created_at
+      )
+      VALUES (
+        ${id}::uuid,
+        ${data.customerName},
+        ${data.icNumber},
+        ${data.customerPhone},
+        ${data.accountNumber},
+        ${data.batch},
+        ${data.paymentDate}::date,
+        ${data.amount},
+        ${data.receiptFile ?? null},
+        ${data.createdByLogin},
+        ${data.collectionStaffNickname},
+        ${data.collectionStaffNickname},
+        now()
+      )
+      RETURNING
+        id,
+        customer_name,
+        ic_number,
+        customer_phone,
+        account_number,
+        batch,
+        payment_date,
+        amount,
+        receipt_file,
+        created_by_login,
+        collection_staff_nickname,
+        staff_username,
+        created_at
+    `);
+        return this.mapCollectionRecordRow(result.rows[0]);
+      }
+      async listCollectionRecords(filters) {
+        const conditions = [];
+        if (filters?.from) {
+          conditions.push(sql`payment_date >= ${filters.from}::date`);
+        }
+        if (filters?.to) {
+          conditions.push(sql`payment_date <= ${filters.to}::date`);
+        }
+        const search = String(filters?.search || "").trim();
+        if (search) {
+          const like = `%${search}%`;
+          conditions.push(sql`(
+        customer_name ILIKE ${like}
+        OR ic_number ILIKE ${like}
+        OR account_number ILIKE ${like}
+        OR customer_phone ILIKE ${like}
+        OR amount::text ILIKE ${like}
+      )`);
+        }
+        const whereSql = conditions.length ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
+        const parsedLimit = Number(filters?.limit);
+        const safeLimit = Number.isFinite(parsedLimit) ? Math.min(2e3, Math.max(1, Math.floor(parsedLimit))) : 500;
+        const result = await db.execute(sql`
+      SELECT
+        id,
+        customer_name,
+        ic_number,
+        customer_phone,
+        account_number,
+        batch,
+        payment_date,
+        amount,
+        receipt_file,
+        created_by_login,
+        collection_staff_nickname,
+        staff_username,
+        created_at
+      FROM public.collection_records
+      ${whereSql}
+      ORDER BY payment_date DESC, created_at DESC
+      LIMIT ${safeLimit}
+    `);
+        return (result.rows || []).map((row) => this.mapCollectionRecordRow(row));
+      }
+      async getCollectionMonthlySummary(filters) {
+        const safeYear = Number.isFinite(filters.year) ? Math.min(2100, Math.max(2e3, Math.floor(filters.year))) : (/* @__PURE__ */ new Date()).getFullYear();
+        const yearStart = `${safeYear}-01-01`;
+        const yearEnd = `${safeYear}-12-31`;
+        const staffNeedle = String(filters.staff || "").trim();
+        const conditions = [
+          sql`payment_date >= ${yearStart}::date`,
+          sql`payment_date <= ${yearEnd}::date`
+        ];
+        if (staffNeedle) {
+          const like = `%${staffNeedle}%`;
+          conditions.push(sql`collection_staff_nickname ILIKE ${like}`);
+        }
+        const whereSql = sql`WHERE ${sql.join(conditions, sql` AND `)}`;
+        const result = await db.execute(sql`
+      SELECT
+        EXTRACT(MONTH FROM payment_date)::int AS month,
+        COUNT(*)::int AS total_records,
+        COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
+      FROM public.collection_records
+      ${whereSql}
+      GROUP BY 1
+      ORDER BY 1
+      LIMIT 12
+    `);
+        const byMonth = /* @__PURE__ */ new Map();
+        for (const row of result.rows || []) {
+          const month = Number(row.month ?? 0);
+          if (!Number.isFinite(month) || month < 1 || month > 12) continue;
+          byMonth.set(month, {
+            totalRecords: Number(row.total_records ?? 0),
+            totalAmount: Number(row.total_amount ?? 0)
+          });
+        }
+        return COLLECTION_MONTH_NAMES.map((monthName, index) => {
+          const month = index + 1;
+          const data = byMonth.get(month);
+          return {
+            month,
+            monthName,
+            totalRecords: data?.totalRecords ?? 0,
+            totalAmount: data?.totalAmount ?? 0
+          };
+        });
+      }
+      async getCollectionRecordById(id) {
+        const result = await db.execute(sql`
+      SELECT
+        id,
+        customer_name,
+        ic_number,
+        customer_phone,
+        account_number,
+        batch,
+        payment_date,
+        amount,
+        receipt_file,
+        created_by_login,
+        collection_staff_nickname,
+        staff_username,
+        created_at
+      FROM public.collection_records
+      WHERE id = ${id}::uuid
+      LIMIT 1
+    `);
+        const row = result.rows?.[0];
+        if (!row) return void 0;
+        return this.mapCollectionRecordRow(row);
+      }
+      async updateCollectionRecord(id, data) {
+        const updateChunks = [];
+        if (data.customerName !== void 0) {
+          updateChunks.push(sql`customer_name = ${data.customerName}`);
+        }
+        if (data.icNumber !== void 0) {
+          updateChunks.push(sql`ic_number = ${data.icNumber}`);
+        }
+        if (data.customerPhone !== void 0) {
+          updateChunks.push(sql`customer_phone = ${data.customerPhone}`);
+        }
+        if (data.accountNumber !== void 0) {
+          updateChunks.push(sql`account_number = ${data.accountNumber}`);
+        }
+        if (data.batch !== void 0) {
+          updateChunks.push(sql`batch = ${data.batch}`);
+        }
+        if (data.paymentDate !== void 0) {
+          updateChunks.push(sql`payment_date = ${data.paymentDate}::date`);
+        }
+        if (data.amount !== void 0) {
+          updateChunks.push(sql`amount = ${data.amount}`);
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "receiptFile")) {
+          updateChunks.push(sql`receipt_file = ${data.receiptFile ?? null}`);
+        }
+        if (data.collectionStaffNickname !== void 0) {
+          updateChunks.push(sql`collection_staff_nickname = ${data.collectionStaffNickname}`);
+          updateChunks.push(sql`staff_username = ${data.collectionStaffNickname}`);
+        }
+        if (!updateChunks.length) {
+          return this.getCollectionRecordById(id);
+        }
+        const result = await db.execute(sql`
+      UPDATE public.collection_records
+      SET ${sql.join(updateChunks, sql`, `)}
+      WHERE id = ${id}::uuid
+      RETURNING
+        id,
+        customer_name,
+        ic_number,
+        customer_phone,
+        account_number,
+        batch,
+        payment_date,
+        amount,
+        receipt_file,
+        created_by_login,
+        collection_staff_nickname,
+        staff_username,
+        created_at
+    `);
+        const row = result.rows?.[0];
+        if (!row) return void 0;
+        return this.mapCollectionRecordRow(row);
+      }
+      async deleteCollectionRecord(id) {
+        await db.execute(sql`DELETE FROM public.collection_records WHERE id = ${id}::uuid`);
+        return true;
+      }
       async createAuditLog(data) {
         const result = await db.insert(auditLogs).values({
           id: crypto.randomUUID(),
@@ -5021,9 +5340,23 @@ import { monitorEventLoopDelay, PerformanceObserver } from "node:perf_hooks";
 import os from "node:os";
 import path from "path";
 import fs from "fs";
+import { randomUUID as randomUUID2 } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import jwt from "jsonwebtoken";
 import bcrypt2 from "bcrypt";
+function notifyMasterFatalStartup(reason, details) {
+  if (startupFatalReason) return;
+  startupFatalReason = reason;
+  if (typeof process.send === "function") {
+    try {
+      process.send({
+        type: "worker-fatal",
+        payload: { reason, details: details || "" }
+      });
+    } catch {
+    }
+  }
+}
 function parseBrowser(userAgent) {
   if (!userAgent) return "Unknown";
   const ua = userAgent;
@@ -5448,6 +5781,86 @@ function closeActivitySockets(activityIds, reason) {
       ws.close();
     }
     connectedClients.delete(activityId);
+  }
+}
+function normalizeCollectionText(value) {
+  return String(value ?? "").trim();
+}
+function isValidCollectionDate(value) {
+  if (!COLLECTION_DATE_REGEX.test(value)) return false;
+  const parsed = /* @__PURE__ */ new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime());
+}
+function parseCollectionAmount(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  if (num <= 0) return null;
+  return Math.round(num * 100) / 100;
+}
+function isValidCollectionPhone(value) {
+  const normalized = String(value || "").trim();
+  if (normalized.length < 8 || normalized.length > 20) return false;
+  return COLLECTION_PHONE_REGEX.test(normalized);
+}
+function resolveReceiptExtension(receipt) {
+  const originalFileName = String(receipt.fileName || "").trim();
+  const mimeType = String(receipt.mimeType || "").trim().toLowerCase();
+  const extFromName = path.extname(originalFileName).toLowerCase();
+  if (extFromName && COLLECTION_RECEIPT_ALLOWED_EXT.has(extFromName)) {
+    return extFromName === ".jpeg" ? ".jpg" : extFromName;
+  }
+  if (mimeType === "image/jpeg") return ".jpg";
+  if (mimeType === "image/png") return ".png";
+  if (mimeType === "application/pdf") return ".pdf";
+  return null;
+}
+function extractReceiptBuffer(receipt) {
+  const rawBase64 = String(receipt.contentBase64 || "").trim();
+  if (!rawBase64) return null;
+  const sanitized = rawBase64.replace(/^data:[^;]+;base64,/, "").replace(/\s+/g, "");
+  if (!sanitized) return null;
+  try {
+    const buffer = Buffer.from(sanitized, "base64");
+    if (!buffer.length) return null;
+    return buffer;
+  } catch {
+    return null;
+  }
+}
+async function saveCollectionReceipt(receipt) {
+  const mimeType = String(receipt.mimeType || "").trim().toLowerCase();
+  if (mimeType && !COLLECTION_RECEIPT_ALLOWED_MIME.has(mimeType)) {
+    throw new Error("Receipt file type is not allowed.");
+  }
+  const extension = resolveReceiptExtension(receipt);
+  if (!extension) {
+    throw new Error("Receipt file extension is not allowed.");
+  }
+  const buffer = extractReceiptBuffer(receipt);
+  if (!buffer) {
+    throw new Error("Invalid receipt payload.");
+  }
+  if (buffer.length > COLLECTION_RECEIPT_MAX_BYTES) {
+    throw new Error("Receipt file exceeds 5MB.");
+  }
+  await fs.promises.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
+  const originalFileName = String(receipt.fileName || "receipt").trim();
+  const stem = path.basename(originalFileName, path.extname(originalFileName)).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40) || "receipt";
+  const storedFileName = `${Date.now()}-${randomUUID2()}-${stem}${extension}`;
+  const absolutePath = path.join(COLLECTION_RECEIPT_DIR, storedFileName);
+  await fs.promises.writeFile(absolutePath, buffer);
+  return `${COLLECTION_RECEIPT_PUBLIC_PREFIX}/${storedFileName}`.replace(/\\/g, "/");
+}
+async function removeCollectionReceiptFile(receiptPath) {
+  const normalized = String(receiptPath || "").trim().replace(/\\/g, "/");
+  if (!normalized.startsWith(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`)) return;
+  const fileName = normalized.slice(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`.length);
+  if (!fileName || fileName.includes("..") || fileName.includes("/") || fileName.includes("\\")) return;
+  const absolutePath = path.resolve(COLLECTION_RECEIPT_DIR, fileName);
+  if (!absolutePath.startsWith(COLLECTION_RECEIPT_DIR)) return;
+  try {
+    await fs.promises.unlink(absolutePath);
+  } catch {
   }
 }
 async function authenticateToken(req, res, next) {
@@ -6080,13 +6493,15 @@ async function startServer() {
   const HOST = "0.0.0.0";
   server.on("error", (err) => {
     if (err.code === "EADDRINUSE") {
+      notifyMasterFatalStartup("EADDRINUSE", `Port ${PORT} is already in use`);
       console.error(`\u274C Port ${PORT} is already in use.`);
       console.error(`   This usually means a previous server process hasn't fully released the port yet.`);
       console.error(`   Please wait a few seconds and try again, or use: lsof -i :${PORT} (or netstat -ano | findstr :${PORT} on Windows)`);
-      process.exit(1);
+      setTimeout(() => process.exit(98), 10).unref();
     } else {
+      notifyMasterFatalStartup("SERVER_STARTUP_ERROR", String(err?.message || err));
       console.error(`\u274C Server error:`, err);
-      process.exit(1);
+      setTimeout(() => process.exit(1), 10).unref();
     }
   });
   server.listen(PORT, HOST, () => {
@@ -6129,7 +6544,7 @@ async function startServer() {
     }, 0);
   }
 }
-var storage, app, server, wss, JWT_SECRET, connectedClients, DEFAULT_SESSION_TIMEOUT_MINUTES, DEFAULT_WS_IDLE_MINUTES, DEFAULT_AI_TIMEOUT_MS, DEFAULT_BODY_LIMIT, IMPORT_BODY_LIMIT, PG_POOL_WARN_COOLDOWN_MS, AI_PRECOMPUTE_ON_START, API_DEBUG_LOGS, LOW_MEMORY_MODE, AI_GATE_GLOBAL_LIMIT, AI_GATE_QUEUE_LIMIT, AI_GATE_QUEUE_WAIT_MS, AI_GATE_ROLE_LIMITS, AI_LATENCY_STALE_AFTER_MS, AI_LATENCY_DECAY_HALF_LIFE_MS, MAINTENANCE_CACHE_TTL_MS, idleSweepRunning, maintenanceCache, RUNTIME_SETTINGS_CACHE_TTL_MS, runtimeSettingsCache, defaultControlState, controlState, preAllocatedBuffer, activeRequests, latencySamples, LATENCY_WINDOW, requestCounter, reqRatePerSec, lastCpuUsage, lastCpuTs, cpuPercent, gcCountWindow, gcPerMinute, lastDbLatencyMs, lastAiLatencyMs, lastAiLatencyObservedAt, lastIntelligenceResult, intelligenceInFlight, lastPgPoolWarningAt, lastPgPoolWarningSignature, MAX_INTELLIGENCE_HISTORY, intelligenceHistory, eventLoopHistogram, circuitAi, circuitDb, circuitExport, DB_METHOD_WRAP_EXCLUDE, storageProto, buildEmbeddingText, adaptiveRateState, CREDENTIAL_USERNAME_REGEX, CREDENTIAL_PASSWORD_MIN_LENGTH, CREDENTIAL_BCRYPT_COST, TAB_VISIBILITY_CACHE_TTL_MS, tabVisibilityCache, aiGateSeq, aiGateInflightGlobal, aiGateInflightByRole, aiGateQueue, excludeColumnsFromIC, excludeColumnsFromPolice, extractJsonObject, parseIntentFallback, DEFAULT_COUNT_GROUPS, CATEGORY_RULES_CACHE_MS, categoryRulesCache, loadCategoryRules, detectCountRequest, statsCache, STATS_CACHE_MS, categoryStatsInflight, MAX_STATS_CACHE_ENTRIES, enqueueCategoryStatsCompute, tokenizeQuery, buildFieldMatchSummary, parseIntent, rowScore, scoreRowDigits, extractLatLng, isLatLng, isNonEmptyString, hasPostcodeCoord, extractCustomerPostcode, extractCustomerLocationHint, toObjectJson, buildExplanation, searchCache, searchInflight, SEARCH_CACHE_MS, MAX_SEARCH_CACHE_ENTRIES, SEARCH_FAST_TIMEOUT_MS, withTimeout, computeAiSearch;
+var storage, app, server, wss, startupFatalReason, JWT_SECRET, connectedClients, DEFAULT_SESSION_TIMEOUT_MINUTES, DEFAULT_WS_IDLE_MINUTES, DEFAULT_AI_TIMEOUT_MS, DEFAULT_BODY_LIMIT, IMPORT_BODY_LIMIT, COLLECTION_BODY_LIMIT, COLLECTION_BATCHES, COLLECTION_RECEIPT_MAX_BYTES, COLLECTION_RECEIPT_ALLOWED_EXT, COLLECTION_RECEIPT_ALLOWED_MIME, UPLOADS_ROOT_DIR, COLLECTION_RECEIPT_DIR, COLLECTION_RECEIPT_PUBLIC_PREFIX, PG_POOL_WARN_COOLDOWN_MS, AI_PRECOMPUTE_ON_START, API_DEBUG_LOGS, LOW_MEMORY_MODE, AI_GATE_GLOBAL_LIMIT, AI_GATE_QUEUE_LIMIT, AI_GATE_QUEUE_WAIT_MS, AI_GATE_ROLE_LIMITS, AI_LATENCY_STALE_AFTER_MS, AI_LATENCY_DECAY_HALF_LIFE_MS, MAINTENANCE_CACHE_TTL_MS, idleSweepRunning, maintenanceCache, RUNTIME_SETTINGS_CACHE_TTL_MS, runtimeSettingsCache, defaultControlState, controlState, preAllocatedBuffer, activeRequests, latencySamples, LATENCY_WINDOW, requestCounter, reqRatePerSec, lastCpuUsage, lastCpuTs, cpuPercent, gcCountWindow, gcPerMinute, lastDbLatencyMs, lastAiLatencyMs, lastAiLatencyObservedAt, lastIntelligenceResult, intelligenceInFlight, lastPgPoolWarningAt, lastPgPoolWarningSignature, MAX_INTELLIGENCE_HISTORY, intelligenceHistory, eventLoopHistogram, circuitAi, circuitDb, circuitExport, DB_METHOD_WRAP_EXCLUDE, storageProto, buildEmbeddingText, adaptiveRateState, CREDENTIAL_USERNAME_REGEX, CREDENTIAL_PASSWORD_MIN_LENGTH, CREDENTIAL_BCRYPT_COST, COLLECTION_STAFF_NICKNAME_MIN_LENGTH, COLLECTION_DATE_REGEX, COLLECTION_PHONE_REGEX, TAB_VISIBILITY_CACHE_TTL_MS, tabVisibilityCache, aiGateSeq, aiGateInflightGlobal, aiGateInflightByRole, aiGateQueue, handleUpdateCollectionRecord, excludeColumnsFromIC, excludeColumnsFromPolice, extractJsonObject, parseIntentFallback, DEFAULT_COUNT_GROUPS, CATEGORY_RULES_CACHE_MS, categoryRulesCache, loadCategoryRules, detectCountRequest, statsCache, STATS_CACHE_MS, categoryStatsInflight, MAX_STATS_CACHE_ENTRIES, enqueueCategoryStatsCompute, tokenizeQuery, buildFieldMatchSummary, parseIntent, rowScore, scoreRowDigits, extractLatLng, isLatLng, isNonEmptyString, hasPostcodeCoord, extractCustomerPostcode, extractCustomerLocationHint, toObjectJson, buildExplanation, searchCache, searchInflight, SEARCH_CACHE_MS, MAX_SEARCH_CACHE_ENTRIES, SEARCH_FAST_TIMEOUT_MS, withTimeout, computeAiSearch;
 var init_index_local = __esm({
   "server/index-local.ts"() {
     "use strict";
@@ -6143,6 +6558,17 @@ var init_index_local = __esm({
     app = express();
     server = createServer(app);
     wss = new WebSocketServer({ server, path: "/ws" });
+    startupFatalReason = null;
+    wss.on("error", (err) => {
+      const code = String(err?.code || "");
+      if (code === "EADDRINUSE") {
+        notifyMasterFatalStartup("EADDRINUSE", "WebSocket server failed to bind address");
+        console.error("\u274C WebSocket startup failed: port already in use.");
+        setTimeout(() => process.exit(98), 10).unref();
+        return;
+      }
+      console.error("\u274C WebSocket server error:", err);
+    });
     JWT_SECRET = process.env.SESSION_SECRET || "sqr-local-secret-key-2025";
     connectedClients = /* @__PURE__ */ new Map();
     DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
@@ -6150,6 +6576,14 @@ var init_index_local = __esm({
     DEFAULT_AI_TIMEOUT_MS = 6e3;
     DEFAULT_BODY_LIMIT = "2mb";
     IMPORT_BODY_LIMIT = process.env.IMPORT_BODY_LIMIT || "50mb";
+    COLLECTION_BODY_LIMIT = process.env.COLLECTION_BODY_LIMIT || "8mb";
+    COLLECTION_BATCHES = /* @__PURE__ */ new Set(["P10", "P25", "MDD02", "MDD10", "MDD18", "MDD25"]);
+    COLLECTION_RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
+    COLLECTION_RECEIPT_ALLOWED_EXT = /* @__PURE__ */ new Set([".jpg", ".jpeg", ".png", ".pdf"]);
+    COLLECTION_RECEIPT_ALLOWED_MIME = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "application/pdf"]);
+    UPLOADS_ROOT_DIR = path.resolve(process.cwd(), "uploads");
+    COLLECTION_RECEIPT_DIR = path.resolve(UPLOADS_ROOT_DIR, "collection-receipts");
+    COLLECTION_RECEIPT_PUBLIC_PREFIX = "/uploads/collection-receipts";
     PG_POOL_WARN_COOLDOWN_MS = 6e4;
     AI_PRECOMPUTE_ON_START = String(process.env.AI_PRECOMPUTE_ON_START || "0") === "1";
     API_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
@@ -6403,6 +6837,8 @@ var init_index_local = __esm({
     void runIntelligenceCycle();
     app.use("/api/imports", express.json({ limit: IMPORT_BODY_LIMIT }));
     app.use("/api/imports", express.urlencoded({ extended: true, limit: IMPORT_BODY_LIMIT }));
+    app.use("/api/collection", express.json({ limit: COLLECTION_BODY_LIMIT }));
+    app.use("/api/collection", express.urlencoded({ extended: true, limit: COLLECTION_BODY_LIMIT }));
     app.use(express.json({ limit: DEFAULT_BODY_LIMIT }));
     app.use(express.urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT }));
     app.use((req, res, next) => {
@@ -6414,6 +6850,7 @@ var init_index_local = __esm({
       }
       next();
     });
+    app.use("/uploads", express.static(UPLOADS_ROOT_DIR));
     app.use((req, res, next) => {
       const start = process.hrtime.bigint();
       activeRequests += 1;
@@ -6430,6 +6867,9 @@ var init_index_local = __esm({
     CREDENTIAL_USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,32}$/;
     CREDENTIAL_PASSWORD_MIN_LENGTH = 8;
     CREDENTIAL_BCRYPT_COST = 12;
+    COLLECTION_STAFF_NICKNAME_MIN_LENGTH = 2;
+    COLLECTION_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+    COLLECTION_PHONE_REGEX = /^[0-9+\-\s]{8,20}$/;
     TAB_VISIBILITY_CACHE_TTL_MS = 5e3;
     tabVisibilityCache = /* @__PURE__ */ new Map();
     aiGateSeq = 0;
@@ -6839,6 +7279,291 @@ var init_index_local = __esm({
         res.status(500).json({ message: error.message });
       }
     });
+    app.post(
+      "/api/collection",
+      authenticateToken,
+      requireRole("user", "admin", "superuser"),
+      requireTabAccess("collection-report"),
+      async (req, res) => {
+        let uploadedReceiptPath = null;
+        try {
+          if (!req.user) {
+            return res.status(401).json({ ok: false, message: "Unauthenticated" });
+          }
+          const body = ensureObject(req.body) || {};
+          const customerName = normalizeCollectionText(body.customerName);
+          const icNumber = normalizeCollectionText(body.icNumber);
+          const customerPhone = normalizeCollectionText(body.customerPhone);
+          const accountNumber = normalizeCollectionText(body.accountNumber);
+          const batch = normalizeCollectionText(body.batch).toUpperCase();
+          const paymentDate = normalizeCollectionText(body.paymentDate);
+          const collectionStaffNickname = normalizeCollectionText(body.collectionStaffNickname);
+          const amount = parseCollectionAmount(body.amount);
+          if (!customerName) {
+            return res.status(400).json({ ok: false, message: "Customer Name is required." });
+          }
+          if (!icNumber) {
+            return res.status(400).json({ ok: false, message: "IC Number is required." });
+          }
+          if (!isValidCollectionPhone(customerPhone)) {
+            return res.status(400).json({ ok: false, message: "Customer Phone Number is invalid." });
+          }
+          if (!accountNumber) {
+            return res.status(400).json({ ok: false, message: "Account Number is required." });
+          }
+          if (!COLLECTION_BATCHES.has(batch)) {
+            return res.status(400).json({ ok: false, message: "Invalid batch value." });
+          }
+          if (!paymentDate || !isValidCollectionDate(paymentDate)) {
+            return res.status(400).json({ ok: false, message: "Invalid payment date." });
+          }
+          if (amount === null) {
+            return res.status(400).json({ ok: false, message: "Amount must be a positive number." });
+          }
+          if (collectionStaffNickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
+            return res.status(400).json({ ok: false, message: "Staff nickname must be at least 2 characters." });
+          }
+          const receiptPayload = ensureObject(body.receipt);
+          if (receiptPayload) {
+            uploadedReceiptPath = await saveCollectionReceipt(receiptPayload);
+          }
+          const record = await storage.createCollectionRecord({
+            customerName,
+            icNumber,
+            customerPhone,
+            accountNumber,
+            batch,
+            paymentDate,
+            amount,
+            receiptFile: uploadedReceiptPath,
+            createdByLogin: req.user.username,
+            collectionStaffNickname
+          });
+          await storage.createAuditLog({
+            action: "COLLECTION_RECORD_CREATED",
+            performedBy: req.user.username,
+            targetResource: record.id,
+            details: `Collection record created by ${req.user.username}`
+          });
+          return res.json({ ok: true, record });
+        } catch (err) {
+          if (uploadedReceiptPath) {
+            await removeCollectionReceiptFile(uploadedReceiptPath);
+          }
+          return res.status(500).json({ ok: false, message: err?.message || "Failed to create collection record." });
+        }
+      }
+    );
+    app.get(
+      "/api/collection/summary",
+      authenticateToken,
+      requireRole("user", "admin", "superuser"),
+      requireTabAccess("collection-report"),
+      async (req, res) => {
+        try {
+          const yearRaw = normalizeCollectionText(req.query.year);
+          const staff = normalizeCollectionText(req.query.staff);
+          const parsedYear = yearRaw ? Number.parseInt(yearRaw, 10) : (/* @__PURE__ */ new Date()).getFullYear();
+          if (!Number.isInteger(parsedYear) || parsedYear < 2e3 || parsedYear > 2100) {
+            return res.status(400).json({ ok: false, message: "Invalid year." });
+          }
+          const summary = await storage.getCollectionMonthlySummary({
+            year: parsedYear,
+            staff: staff || void 0
+          });
+          return res.json({
+            ok: true,
+            year: parsedYear,
+            summary
+          });
+        } catch (err) {
+          return res.status(500).json({ ok: false, message: err?.message || "Failed to load collection summary." });
+        }
+      }
+    );
+    app.get(
+      "/api/collection/list",
+      authenticateToken,
+      requireRole("user", "admin", "superuser"),
+      requireTabAccess("collection-report"),
+      async (req, res) => {
+        try {
+          const from = normalizeCollectionText(req.query.from);
+          const to = normalizeCollectionText(req.query.to);
+          const search = normalizeCollectionText(req.query.search);
+          if (from && !isValidCollectionDate(from)) {
+            return res.status(400).json({ ok: false, message: "Invalid from date." });
+          }
+          if (to && !isValidCollectionDate(to)) {
+            return res.status(400).json({ ok: false, message: "Invalid to date." });
+          }
+          if (from && to && from > to) {
+            return res.status(400).json({ ok: false, message: "From date cannot be later than To date." });
+          }
+          const records = await storage.listCollectionRecords({
+            from: from || void 0,
+            to: to || void 0,
+            search: search || void 0,
+            limit: 1e3
+          });
+          return res.json({ ok: true, records });
+        } catch (err) {
+          return res.status(500).json({ ok: false, message: err?.message || "Failed to load collection records." });
+        }
+      }
+    );
+    handleUpdateCollectionRecord = async (req, res) => {
+      let uploadedReceiptPath = null;
+      try {
+        if (!req.user) {
+          return res.status(401).json({ ok: false, message: "Unauthenticated" });
+        }
+        const id = normalizeCollectionText(req.params.id);
+        if (!id) {
+          return res.status(400).json({ ok: false, message: "Collection id is required." });
+        }
+        const existing = await storage.getCollectionRecordById(id);
+        if (!existing) {
+          return res.status(404).json({ ok: false, message: "Collection record not found." });
+        }
+        const body = ensureObject(req.body) || {};
+        const updatePayload = {};
+        const customerName = normalizeCollectionText(body.customerName);
+        const icNumber = normalizeCollectionText(body.icNumber);
+        const customerPhone = normalizeCollectionText(body.customerPhone);
+        const accountNumber = normalizeCollectionText(body.accountNumber);
+        const batch = normalizeCollectionText(body.batch).toUpperCase();
+        const paymentDate = normalizeCollectionText(body.paymentDate);
+        const collectionStaffNickname = normalizeCollectionText(body.collectionStaffNickname);
+        const amount = body.amount !== void 0 ? parseCollectionAmount(body.amount) : null;
+        if (body.customerName !== void 0) {
+          if (!customerName) return res.status(400).json({ ok: false, message: "Customer Name cannot be empty." });
+          updatePayload.customerName = customerName;
+        }
+        if (body.icNumber !== void 0) {
+          if (!icNumber) return res.status(400).json({ ok: false, message: "IC Number cannot be empty." });
+          updatePayload.icNumber = icNumber;
+        }
+        if (body.customerPhone !== void 0) {
+          if (!isValidCollectionPhone(customerPhone)) {
+            return res.status(400).json({ ok: false, message: "Customer Phone Number is invalid." });
+          }
+          updatePayload.customerPhone = customerPhone;
+        }
+        if (body.accountNumber !== void 0) {
+          if (!accountNumber) return res.status(400).json({ ok: false, message: "Account Number cannot be empty." });
+          updatePayload.accountNumber = accountNumber;
+        }
+        if (body.batch !== void 0) {
+          if (!COLLECTION_BATCHES.has(batch)) {
+            return res.status(400).json({ ok: false, message: "Invalid batch value." });
+          }
+          updatePayload.batch = batch;
+        }
+        if (body.paymentDate !== void 0) {
+          if (!paymentDate || !isValidCollectionDate(paymentDate)) {
+            return res.status(400).json({ ok: false, message: "Invalid payment date." });
+          }
+          updatePayload.paymentDate = paymentDate;
+        }
+        if (body.amount !== void 0) {
+          if (amount === null) {
+            return res.status(400).json({ ok: false, message: "Amount must be a positive number." });
+          }
+          updatePayload.amount = amount;
+        }
+        if (body.collectionStaffNickname !== void 0) {
+          if (collectionStaffNickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
+            return res.status(400).json({ ok: false, message: "Staff nickname must be at least 2 characters." });
+          }
+          updatePayload.collectionStaffNickname = collectionStaffNickname;
+        }
+        const shouldRemoveReceipt = body.removeReceipt === true;
+        const receiptPayload = ensureObject(body.receipt);
+        if (shouldRemoveReceipt && receiptPayload) {
+          return res.status(400).json({ ok: false, message: "Cannot remove and upload receipt at the same time." });
+        }
+        if (receiptPayload) {
+          uploadedReceiptPath = await saveCollectionReceipt(receiptPayload);
+          updatePayload.receiptFile = uploadedReceiptPath;
+        } else if (shouldRemoveReceipt) {
+          updatePayload.receiptFile = null;
+        }
+        if (Object.keys(updatePayload).length === 0) {
+          return res.json({ ok: true, record: existing });
+        }
+        const updated = await storage.updateCollectionRecord(id, updatePayload);
+        if (!updated) {
+          if (uploadedReceiptPath) {
+            await removeCollectionReceiptFile(uploadedReceiptPath);
+          }
+          return res.status(404).json({ ok: false, message: "Collection record not found." });
+        }
+        if ((receiptPayload || shouldRemoveReceipt) && existing.receiptFile) {
+          await removeCollectionReceiptFile(existing.receiptFile);
+        }
+        await storage.createAuditLog({
+          action: "COLLECTION_RECORD_UPDATED",
+          performedBy: req.user.username,
+          targetResource: updated.id,
+          details: `Collection record updated by ${req.user.username}`
+        });
+        return res.json({ ok: true, record: updated });
+      } catch (err) {
+        if (uploadedReceiptPath) {
+          await removeCollectionReceiptFile(uploadedReceiptPath);
+        }
+        return res.status(500).json({ ok: false, message: err?.message || "Failed to update collection record." });
+      }
+    };
+    app.patch(
+      "/api/collection/:id",
+      authenticateToken,
+      requireRole("user", "admin", "superuser"),
+      requireTabAccess("collection-report"),
+      handleUpdateCollectionRecord
+    );
+    app.put(
+      "/api/collection/:id",
+      authenticateToken,
+      requireRole("user", "admin", "superuser"),
+      requireTabAccess("collection-report"),
+      handleUpdateCollectionRecord
+    );
+    app.delete(
+      "/api/collection/:id",
+      authenticateToken,
+      requireRole("user", "admin", "superuser"),
+      requireTabAccess("collection-report"),
+      async (req, res) => {
+        try {
+          if (!req.user) {
+            return res.status(401).json({ ok: false, message: "Unauthenticated" });
+          }
+          const id = normalizeCollectionText(req.params.id);
+          if (!id) {
+            return res.status(400).json({ ok: false, message: "Collection id is required." });
+          }
+          const existing = await storage.getCollectionRecordById(id);
+          if (!existing) {
+            return res.status(404).json({ ok: false, message: "Collection record not found." });
+          }
+          await storage.deleteCollectionRecord(id);
+          if (existing.receiptFile) {
+            await removeCollectionReceiptFile(existing.receiptFile);
+          }
+          await storage.createAuditLog({
+            action: "COLLECTION_RECORD_DELETED",
+            performedBy: req.user.username,
+            targetResource: existing.id,
+            details: `Collection record deleted by ${req.user.username}`
+          });
+          return res.json({ ok: true });
+        } catch (err) {
+          return res.status(500).json({ ok: false, message: err?.message || "Failed to delete collection record." });
+        }
+      }
+    );
     app.get("/api/auth/me", authenticateToken, (req, res) => {
       if (!req.user) {
         return res.status(401).json({ message: "Unauthenticated" });
@@ -9993,6 +10718,8 @@ var MIN_WORKERS = 1;
 var SCALE_COOLDOWN_MS = LOW_MEMORY_MODE2 ? 3e4 : 15e3;
 var RESTART_THROTTLE_MS = 2e3;
 var MAX_RESTART_ATTEMPTS = 5;
+var RESTART_FAILURE_WINDOW_MS = 6e4;
+var RESTART_BLOCK_MS = 6e4;
 var predictor = new LoadPredictor({
   shortWindowSec: 30,
   longWindowSec: 90,
@@ -10000,17 +10727,23 @@ var predictor = new LoadPredictor({
   sustainedMs: 3e4
 });
 var workerMetrics = /* @__PURE__ */ new Map();
+var workerFatalReasons = /* @__PURE__ */ new Map();
+var wiredWorkers = /* @__PURE__ */ new Set();
 var intentionalExits = /* @__PURE__ */ new Set();
 var drainingWorkers = /* @__PURE__ */ new Set();
 var restartAttempts = /* @__PURE__ */ new Map();
 var lastSpawnAttemptTime = -Infinity;
-var consecutiveRestarts = 0;
 var lastBroadcast = null;
 var lowLoadSince = null;
 var mode = "NORMAL";
 var preAllocBuffer = null;
 var rollingRestartInProgress = false;
 var lastScaleTime = 0;
+var unexpectedExitTimestamps = [];
+var restartBlockedUntil = 0;
+var lastRestartBlockLogAt = 0;
+var fatalStartupLockReason = null;
+var fatalShutdownScheduled = false;
 function round(value, digits = 2) {
   const p = 10 ** digits;
   return Math.round(value * p) / p;
@@ -10023,6 +10756,12 @@ function getMinWorkers() {
 }
 function getWorkers() {
   return Object.values(cluster.workers ?? {}).filter((w) => Boolean(w));
+}
+function shutdownMasterDueToFatalStartup(reason) {
+  if (fatalShutdownScheduled) return;
+  fatalShutdownScheduled = true;
+  console.error(`\u{1F6D1} Cluster master shutting down due to unrecoverable startup error: ${reason}`);
+  setTimeout(() => process.exit(1), 50).unref();
 }
 function aggregateMetrics() {
   const samples = Array.from(workerMetrics.values());
@@ -10140,6 +10879,21 @@ function broadcastControl(control) {
   }
 }
 function safeFork(reason) {
+  if (fatalStartupLockReason) {
+    console.error(`\u26D4 Spawn blocked due to fatal startup condition: ${fatalStartupLockReason}`);
+    return null;
+  }
+  const now = Date.now();
+  if (now < restartBlockedUntil) {
+    if (now - lastRestartBlockLogAt > 5e3) {
+      const remainingMs = Math.max(0, restartBlockedUntil - now);
+      console.error(
+        `\u26D4 Restart temporarily blocked (${Math.ceil(remainingMs / 1e3)}s left). Skipping spawn for: ${reason}`
+      );
+      lastRestartBlockLogAt = now;
+    }
+    return null;
+  }
   const aliveWorkers = getWorkers().filter((w) => !w.isDead() && w.isConnected());
   const maxWorkers = getMaxWorkers();
   if (aliveWorkers.length >= maxWorkers) {
@@ -10265,8 +11019,25 @@ function evaluateScale() {
   broadcastControl(control);
 }
 function wireWorker(worker) {
+  if (wiredWorkers.has(worker.id)) return;
+  wiredWorkers.add(worker.id);
   worker.on("message", (msg) => {
     if (!msg || typeof msg !== "object") return;
+    if (msg.type === "worker-fatal") {
+      const reason = String(msg.payload?.reason || "UNKNOWN_FATAL");
+      workerFatalReasons.set(worker.id, reason);
+      if (reason === "EADDRINUSE") {
+        fatalStartupLockReason = reason;
+        restartBlockedUntil = Date.now() + RESTART_BLOCK_MS;
+        lastRestartBlockLogAt = Date.now();
+        console.error(
+          "\u{1F6D1} Worker reported fatal startup error: EADDRINUSE. Auto-restart is disabled until process restart to prevent respawn loop."
+        );
+      } else {
+        console.error(`\u{1F6D1} Worker reported fatal startup error: ${reason}`);
+      }
+      return;
+    }
     if (msg.type === "worker-metrics" && msg.payload) {
       const payload = msg.payload;
       workerMetrics.set(worker.id, { ...payload, workerId: worker.id, pid: worker.process.pid ?? payload.pid });
@@ -10293,7 +11064,6 @@ function bootCluster() {
   }
   cluster.on("online", (worker) => {
     wireWorker(worker);
-    consecutiveRestarts = 0;
     if (lastBroadcast) {
       if (worker.isConnected() && !worker.isDead()) {
         try {
@@ -10305,19 +11075,36 @@ function bootCluster() {
   });
   cluster.on("exit", (worker, code, signal) => {
     workerMetrics.delete(worker.id);
+    wiredWorkers.delete(worker.id);
     drainingWorkers.delete(worker.id);
+    const fatalReason = workerFatalReasons.get(worker.id);
+    workerFatalReasons.delete(worker.id);
+    if (fatalReason === "EADDRINUSE") {
+      fatalStartupLockReason = "EADDRINUSE";
+      console.error(
+        `\u{1F6D1} Worker#${worker.id} exited due to EADDRINUSE (port already in use). Skipping automatic restart to prevent infinite respawn.`
+      );
+      if (getWorkers().length === 0) {
+        shutdownMasterDueToFatalStartup("EADDRINUSE");
+      }
+      return;
+    }
     const intentional = intentionalExits.has(worker.id);
     if (intentional) {
       intentionalExits.delete(worker.id);
       restartAttempts.delete(worker.id);
-      consecutiveRestarts = 0;
     } else {
       const now = Date.now();
       const timeSinceLastSpawn = now - lastSpawnAttemptTime;
-      consecutiveRestarts++;
-      if (consecutiveRestarts > MAX_RESTART_ATTEMPTS) {
+      unexpectedExitTimestamps = unexpectedExitTimestamps.filter(
+        (ts) => now - ts <= RESTART_FAILURE_WINDOW_MS
+      );
+      unexpectedExitTimestamps.push(now);
+      if (unexpectedExitTimestamps.length > MAX_RESTART_ATTEMPTS) {
+        restartBlockedUntil = now + RESTART_BLOCK_MS;
+        lastRestartBlockLogAt = now;
         console.error(
-          `\u274C CRASH LOOP DETECTED: Worker#${worker.id} failed (code=${code}). Exceeded max restart attempts (${MAX_RESTART_ATTEMPTS}). Stopping automatic restarts to prevent cascade. Check logs for root cause.`
+          `\u274C CRASH LOOP DETECTED: Worker#${worker.id} failed (code=${code}). Exceeded max restart attempts (${MAX_RESTART_ATTEMPTS}) within ${Math.round(RESTART_FAILURE_WINDOW_MS / 1e3)}s. Pausing restarts for ${Math.round(RESTART_BLOCK_MS / 1e3)}s. Check root cause (for example, EADDRINUSE).`
         );
         return;
       }
@@ -10335,6 +11122,12 @@ function bootCluster() {
         const remainingDelay = RESTART_THROTTLE_MS - timeSinceLastSpawn;
         console.log(`\u23F1  Throttling restart (${remainingDelay}ms) - spawn already attempted recently`);
       }
+    }
+    if (fatalStartupLockReason) {
+      return;
+    }
+    if (Date.now() < restartBlockedUntil) {
+      return;
     }
     if (getWorkers().length < getMinWorkers()) {
       const now = Date.now();

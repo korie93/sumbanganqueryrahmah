@@ -5,6 +5,7 @@ import { monitorEventLoopDelay, PerformanceObserver } from "node:perf_hooks";
 import os from "node:os";
 import path from "path";
 import fs from "fs";
+import { randomUUID } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
@@ -21,6 +22,34 @@ const storage = new PostgresStorage();
 const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
+let startupFatalReason: string | null = null;
+
+function notifyMasterFatalStartup(reason: string, details?: string) {
+  if (startupFatalReason) return;
+  startupFatalReason = reason;
+
+  if (typeof (process as any).send === "function") {
+    try {
+      (process as any).send({
+        type: "worker-fatal",
+        payload: { reason, details: details || "" },
+      });
+    } catch {
+      // no-op
+    }
+  }
+}
+
+wss.on("error", (err: any) => {
+  const code = String(err?.code || "");
+  if (code === "EADDRINUSE") {
+    notifyMasterFatalStartup("EADDRINUSE", "WebSocket server failed to bind address");
+    console.error("❌ WebSocket startup failed: port already in use.");
+    setTimeout(() => process.exit(98), 10).unref();
+    return;
+  }
+  console.error("❌ WebSocket server error:", err);
+});
 
 const JWT_SECRET = process.env.SESSION_SECRET || "sqr-local-secret-key-2025";
 const connectedClients = new Map<string, WebSocket>();
@@ -29,6 +58,14 @@ const DEFAULT_WS_IDLE_MINUTES = 3;
 const DEFAULT_AI_TIMEOUT_MS = 6000;
 const DEFAULT_BODY_LIMIT = "2mb";
 const IMPORT_BODY_LIMIT = process.env.IMPORT_BODY_LIMIT || "50mb";
+const COLLECTION_BODY_LIMIT = process.env.COLLECTION_BODY_LIMIT || "8mb";
+const COLLECTION_BATCHES = new Set(["P10", "P25", "MDD02", "MDD10", "MDD18", "MDD25"]);
+const COLLECTION_RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
+const COLLECTION_RECEIPT_ALLOWED_EXT = new Set([".jpg", ".jpeg", ".png", ".pdf"]);
+const COLLECTION_RECEIPT_ALLOWED_MIME = new Set(["image/jpeg", "image/png", "application/pdf"]);
+const UPLOADS_ROOT_DIR = path.resolve(process.cwd(), "uploads");
+const COLLECTION_RECEIPT_DIR = path.resolve(UPLOADS_ROOT_DIR, "collection-receipts");
+const COLLECTION_RECEIPT_PUBLIC_PREFIX = "/uploads/collection-receipts";
 const PG_POOL_WARN_COOLDOWN_MS = 60_000;
 const AI_PRECOMPUTE_ON_START = String(process.env.AI_PRECOMPUTE_ON_START || "0") === "1";
 const API_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
@@ -825,6 +862,8 @@ void runIntelligenceCycle();
 // Keep default parser small; enable larger payload only for import endpoints.
 app.use("/api/imports", express.json({ limit: IMPORT_BODY_LIMIT }));
 app.use("/api/imports", express.urlencoded({ extended: true, limit: IMPORT_BODY_LIMIT }));
+app.use("/api/collection", express.json({ limit: COLLECTION_BODY_LIMIT }));
+app.use("/api/collection", express.urlencoded({ extended: true, limit: COLLECTION_BODY_LIMIT }));
 app.use(express.json({ limit: DEFAULT_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT }));
 
@@ -837,6 +876,8 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+app.use("/uploads", express.static(UPLOADS_ROOT_DIR));
 
 app.use((req, res, next) => {
   const start = process.hrtime.bigint();
@@ -921,6 +962,137 @@ function closeActivitySockets(activityIds: string[], reason: string) {
       ws.close();
     }
     connectedClients.delete(activityId);
+  }
+}
+
+type CollectionReceiptPayload = {
+  fileName?: string;
+  mimeType?: string;
+  contentBase64?: string;
+};
+
+type CollectionCreatePayload = {
+  customerName?: string;
+  icNumber?: string;
+  customerPhone?: string;
+  accountNumber?: string;
+  batch?: string;
+  paymentDate?: string;
+  amount?: number | string;
+  collectionStaffNickname?: string;
+  receipt?: CollectionReceiptPayload | null;
+};
+
+type CollectionUpdatePayload = Partial<CollectionCreatePayload> & {
+  removeReceipt?: boolean;
+};
+
+type CollectionBatchValue = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
+const COLLECTION_STAFF_NICKNAME_MIN_LENGTH = 2;
+
+const COLLECTION_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const COLLECTION_PHONE_REGEX = /^[0-9+\-\s]{8,20}$/;
+
+function normalizeCollectionText(value: unknown): string {
+  return String(value ?? "").trim();
+}
+
+function isValidCollectionDate(value: string): boolean {
+  if (!COLLECTION_DATE_REGEX.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime());
+}
+
+function parseCollectionAmount(value: unknown): number | null {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  if (num <= 0) return null;
+  return Math.round(num * 100) / 100;
+}
+
+function isValidCollectionPhone(value: string): boolean {
+  const normalized = String(value || "").trim();
+  if (normalized.length < 8 || normalized.length > 20) return false;
+  return COLLECTION_PHONE_REGEX.test(normalized);
+}
+
+function resolveReceiptExtension(receipt: CollectionReceiptPayload): string | null {
+  const originalFileName = String(receipt.fileName || "").trim();
+  const mimeType = String(receipt.mimeType || "").trim().toLowerCase();
+  const extFromName = path.extname(originalFileName).toLowerCase();
+
+  if (extFromName && COLLECTION_RECEIPT_ALLOWED_EXT.has(extFromName)) {
+    return extFromName === ".jpeg" ? ".jpg" : extFromName;
+  }
+
+  if (mimeType === "image/jpeg") return ".jpg";
+  if (mimeType === "image/png") return ".png";
+  if (mimeType === "application/pdf") return ".pdf";
+  return null;
+}
+
+function extractReceiptBuffer(receipt: CollectionReceiptPayload): Buffer | null {
+  const rawBase64 = String(receipt.contentBase64 || "").trim();
+  if (!rawBase64) return null;
+  const sanitized = rawBase64.replace(/^data:[^;]+;base64,/, "").replace(/\s+/g, "");
+  if (!sanitized) return null;
+
+  try {
+    const buffer = Buffer.from(sanitized, "base64");
+    if (!buffer.length) return null;
+    return buffer;
+  } catch {
+    return null;
+  }
+}
+
+async function saveCollectionReceipt(receipt: CollectionReceiptPayload): Promise<string> {
+  const mimeType = String(receipt.mimeType || "").trim().toLowerCase();
+  if (mimeType && !COLLECTION_RECEIPT_ALLOWED_MIME.has(mimeType)) {
+    throw new Error("Receipt file type is not allowed.");
+  }
+
+  const extension = resolveReceiptExtension(receipt);
+  if (!extension) {
+    throw new Error("Receipt file extension is not allowed.");
+  }
+
+  const buffer = extractReceiptBuffer(receipt);
+  if (!buffer) {
+    throw new Error("Invalid receipt payload.");
+  }
+
+  if (buffer.length > COLLECTION_RECEIPT_MAX_BYTES) {
+    throw new Error("Receipt file exceeds 5MB.");
+  }
+
+  await fs.promises.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
+  const originalFileName = String(receipt.fileName || "receipt").trim();
+  const stem = path
+    .basename(originalFileName, path.extname(originalFileName))
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .slice(0, 40) || "receipt";
+  const storedFileName = `${Date.now()}-${randomUUID()}-${stem}${extension}`;
+  const absolutePath = path.join(COLLECTION_RECEIPT_DIR, storedFileName);
+  await fs.promises.writeFile(absolutePath, buffer);
+
+  return `${COLLECTION_RECEIPT_PUBLIC_PREFIX}/${storedFileName}`.replace(/\\/g, "/");
+}
+
+async function removeCollectionReceiptFile(receiptPath: string | null | undefined): Promise<void> {
+  const normalized = String(receiptPath || "").trim().replace(/\\/g, "/");
+  if (!normalized.startsWith(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`)) return;
+
+  const fileName = normalized.slice(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`.length);
+  if (!fileName || fileName.includes("..") || fileName.includes("/") || fileName.includes("\\")) return;
+
+  const absolutePath = path.resolve(COLLECTION_RECEIPT_DIR, fileName);
+  if (!absolutePath.startsWith(COLLECTION_RECEIPT_DIR)) return;
+
+  try {
+    await fs.promises.unlink(absolutePath);
+  } catch {
+    // best effort only
   }
 }
 
@@ -1988,6 +2160,324 @@ app.get("/api/search/columns", authenticateToken, async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
+app.post(
+  "/api/collection",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    let uploadedReceiptPath: string | null = null;
+    try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
+      const body = (ensureObject(req.body) || {}) as CollectionCreatePayload;
+      const customerName = normalizeCollectionText(body.customerName);
+      const icNumber = normalizeCollectionText(body.icNumber);
+      const customerPhone = normalizeCollectionText(body.customerPhone);
+      const accountNumber = normalizeCollectionText(body.accountNumber);
+      const batch = normalizeCollectionText(body.batch).toUpperCase();
+      const paymentDate = normalizeCollectionText(body.paymentDate);
+      const collectionStaffNickname = normalizeCollectionText(body.collectionStaffNickname);
+      const amount = parseCollectionAmount(body.amount);
+
+      if (!customerName) {
+        return res.status(400).json({ ok: false, message: "Customer Name is required." });
+      }
+      if (!icNumber) {
+        return res.status(400).json({ ok: false, message: "IC Number is required." });
+      }
+      if (!isValidCollectionPhone(customerPhone)) {
+        return res.status(400).json({ ok: false, message: "Customer Phone Number is invalid." });
+      }
+      if (!accountNumber) {
+        return res.status(400).json({ ok: false, message: "Account Number is required." });
+      }
+      if (!COLLECTION_BATCHES.has(batch)) {
+        return res.status(400).json({ ok: false, message: "Invalid batch value." });
+      }
+      if (!paymentDate || !isValidCollectionDate(paymentDate)) {
+        return res.status(400).json({ ok: false, message: "Invalid payment date." });
+      }
+      if (amount === null) {
+        return res.status(400).json({ ok: false, message: "Amount must be a positive number." });
+      }
+      if (collectionStaffNickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
+        return res.status(400).json({ ok: false, message: "Staff nickname must be at least 2 characters." });
+      }
+
+      const receiptPayload = ensureObject(body.receipt) as CollectionReceiptPayload | null;
+      if (receiptPayload) {
+        uploadedReceiptPath = await saveCollectionReceipt(receiptPayload);
+      }
+
+      const record = await storage.createCollectionRecord({
+        customerName,
+        icNumber,
+        customerPhone,
+        accountNumber,
+        batch: batch as CollectionBatchValue,
+        paymentDate,
+        amount,
+        receiptFile: uploadedReceiptPath,
+        createdByLogin: req.user.username,
+        collectionStaffNickname,
+      });
+
+      await storage.createAuditLog({
+        action: "COLLECTION_RECORD_CREATED",
+        performedBy: req.user.username,
+        targetResource: record.id,
+        details: `Collection record created by ${req.user.username}`,
+      });
+
+      return res.json({ ok: true, record });
+    } catch (err: any) {
+      if (uploadedReceiptPath) {
+        await removeCollectionReceiptFile(uploadedReceiptPath);
+      }
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to create collection record." });
+    }
+  },
+);
+
+app.get(
+  "/api/collection/summary",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const yearRaw = normalizeCollectionText(req.query.year);
+      const staff = normalizeCollectionText(req.query.staff);
+      const parsedYear = yearRaw ? Number.parseInt(yearRaw, 10) : new Date().getFullYear();
+
+      if (!Number.isInteger(parsedYear) || parsedYear < 2000 || parsedYear > 2100) {
+        return res.status(400).json({ ok: false, message: "Invalid year." });
+      }
+
+      const summary = await storage.getCollectionMonthlySummary({
+        year: parsedYear,
+        staff: staff || undefined,
+      });
+
+      return res.json({
+        ok: true,
+        year: parsedYear,
+        summary,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to load collection summary." });
+    }
+  },
+);
+
+app.get(
+  "/api/collection/list",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const from = normalizeCollectionText(req.query.from);
+      const to = normalizeCollectionText(req.query.to);
+      const search = normalizeCollectionText(req.query.search);
+
+      if (from && !isValidCollectionDate(from)) {
+        return res.status(400).json({ ok: false, message: "Invalid from date." });
+      }
+      if (to && !isValidCollectionDate(to)) {
+        return res.status(400).json({ ok: false, message: "Invalid to date." });
+      }
+      if (from && to && from > to) {
+        return res.status(400).json({ ok: false, message: "From date cannot be later than To date." });
+      }
+
+      const records = await storage.listCollectionRecords({
+        from: from || undefined,
+        to: to || undefined,
+        search: search || undefined,
+        limit: 1000,
+      });
+      return res.json({ ok: true, records });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to load collection records." });
+    }
+  },
+);
+
+const handleUpdateCollectionRecord = async (req: AuthenticatedRequest, res: Response) => {
+  let uploadedReceiptPath: string | null = null;
+  try {
+    if (!req.user) {
+      return res.status(401).json({ ok: false, message: "Unauthenticated" });
+    }
+
+    const id = normalizeCollectionText(req.params.id);
+    if (!id) {
+      return res.status(400).json({ ok: false, message: "Collection id is required." });
+    }
+
+    const existing = await storage.getCollectionRecordById(id);
+    if (!existing) {
+      return res.status(404).json({ ok: false, message: "Collection record not found." });
+    }
+
+    const body = (ensureObject(req.body) || {}) as CollectionUpdatePayload;
+    const updatePayload: any = {};
+    const customerName = normalizeCollectionText(body.customerName);
+    const icNumber = normalizeCollectionText(body.icNumber);
+    const customerPhone = normalizeCollectionText(body.customerPhone);
+    const accountNumber = normalizeCollectionText(body.accountNumber);
+    const batch = normalizeCollectionText(body.batch).toUpperCase();
+    const paymentDate = normalizeCollectionText(body.paymentDate);
+    const collectionStaffNickname = normalizeCollectionText(body.collectionStaffNickname);
+    const amount = body.amount !== undefined ? parseCollectionAmount(body.amount) : null;
+
+    if (body.customerName !== undefined) {
+      if (!customerName) return res.status(400).json({ ok: false, message: "Customer Name cannot be empty." });
+      updatePayload.customerName = customerName;
+    }
+    if (body.icNumber !== undefined) {
+      if (!icNumber) return res.status(400).json({ ok: false, message: "IC Number cannot be empty." });
+      updatePayload.icNumber = icNumber;
+    }
+    if (body.customerPhone !== undefined) {
+      if (!isValidCollectionPhone(customerPhone)) {
+        return res.status(400).json({ ok: false, message: "Customer Phone Number is invalid." });
+      }
+      updatePayload.customerPhone = customerPhone;
+    }
+    if (body.accountNumber !== undefined) {
+      if (!accountNumber) return res.status(400).json({ ok: false, message: "Account Number cannot be empty." });
+      updatePayload.accountNumber = accountNumber;
+    }
+    if (body.batch !== undefined) {
+      if (!COLLECTION_BATCHES.has(batch)) {
+        return res.status(400).json({ ok: false, message: "Invalid batch value." });
+      }
+      updatePayload.batch = batch;
+    }
+    if (body.paymentDate !== undefined) {
+      if (!paymentDate || !isValidCollectionDate(paymentDate)) {
+        return res.status(400).json({ ok: false, message: "Invalid payment date." });
+      }
+      updatePayload.paymentDate = paymentDate;
+    }
+    if (body.amount !== undefined) {
+      if (amount === null) {
+        return res.status(400).json({ ok: false, message: "Amount must be a positive number." });
+      }
+      updatePayload.amount = amount;
+    }
+    if (body.collectionStaffNickname !== undefined) {
+      if (collectionStaffNickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
+        return res.status(400).json({ ok: false, message: "Staff nickname must be at least 2 characters." });
+      }
+      updatePayload.collectionStaffNickname = collectionStaffNickname;
+    }
+
+    const shouldRemoveReceipt = body.removeReceipt === true;
+    const receiptPayload = ensureObject(body.receipt) as CollectionReceiptPayload | null;
+    if (shouldRemoveReceipt && receiptPayload) {
+      return res.status(400).json({ ok: false, message: "Cannot remove and upload receipt at the same time." });
+    }
+    if (receiptPayload) {
+      uploadedReceiptPath = await saveCollectionReceipt(receiptPayload);
+      updatePayload.receiptFile = uploadedReceiptPath;
+    } else if (shouldRemoveReceipt) {
+      updatePayload.receiptFile = null;
+    }
+
+    if (Object.keys(updatePayload).length === 0) {
+      return res.json({ ok: true, record: existing });
+    }
+
+    const updated = await storage.updateCollectionRecord(id, updatePayload);
+    if (!updated) {
+      if (uploadedReceiptPath) {
+        await removeCollectionReceiptFile(uploadedReceiptPath);
+      }
+      return res.status(404).json({ ok: false, message: "Collection record not found." });
+    }
+
+    if ((receiptPayload || shouldRemoveReceipt) && existing.receiptFile) {
+      await removeCollectionReceiptFile(existing.receiptFile);
+    }
+
+    await storage.createAuditLog({
+      action: "COLLECTION_RECORD_UPDATED",
+      performedBy: req.user.username,
+      targetResource: updated.id,
+      details: `Collection record updated by ${req.user.username}`,
+    });
+
+    return res.json({ ok: true, record: updated });
+  } catch (err: any) {
+    if (uploadedReceiptPath) {
+      await removeCollectionReceiptFile(uploadedReceiptPath);
+    }
+    return res.status(500).json({ ok: false, message: err?.message || "Failed to update collection record." });
+  }
+};
+
+app.patch(
+  "/api/collection/:id",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("collection-report"),
+  handleUpdateCollectionRecord,
+);
+
+app.put(
+  "/api/collection/:id",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("collection-report"),
+  handleUpdateCollectionRecord,
+);
+
+app.delete(
+  "/api/collection/:id",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
+      const id = normalizeCollectionText(req.params.id);
+      if (!id) {
+        return res.status(400).json({ ok: false, message: "Collection id is required." });
+      }
+
+      const existing = await storage.getCollectionRecordById(id);
+      if (!existing) {
+        return res.status(404).json({ ok: false, message: "Collection record not found." });
+      }
+
+      await storage.deleteCollectionRecord(id);
+      if (existing.receiptFile) {
+        await removeCollectionReceiptFile(existing.receiptFile);
+      }
+
+      await storage.createAuditLog({
+        action: "COLLECTION_RECORD_DELETED",
+        performedBy: req.user.username,
+        targetResource: existing.id,
+        details: `Collection record deleted by ${req.user.username}`,
+      });
+
+      return res.json({ ok: true });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to delete collection record." });
+    }
+  },
+);
 
 app.get("/api/auth/me", authenticateToken, (req: AuthenticatedRequest, res) => {
   if (!req.user) {
@@ -5798,13 +6288,15 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       // Enable SO_REUSEADDR to allow rapid rebinding after process restart
       server.on("error", (err: any) => {
         if (err.code === "EADDRINUSE") {
+          notifyMasterFatalStartup("EADDRINUSE", `Port ${PORT} is already in use`);
           console.error(`❌ Port ${PORT} is already in use.`);
           console.error(`   This usually means a previous server process hasn't fully released the port yet.`);
           console.error(`   Please wait a few seconds and try again, or use: lsof -i :${PORT} (or netstat -ano | findstr :${PORT} on Windows)`);
-          process.exit(1);
+          setTimeout(() => process.exit(98), 10).unref();
         } else {
+          notifyMasterFatalStartup("SERVER_STARTUP_ERROR", String(err?.message || err));
           console.error(`❌ Server error:`, err);
-          process.exit(1);
+          setTimeout(() => process.exit(1), 10).unref();
         }
       });
 

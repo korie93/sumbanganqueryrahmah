@@ -107,6 +107,7 @@ const roleTabOrder = [
   "saved",
   "viewer",
   "general_search",
+  "collection_report",
   "analysis",
   "dashboard",
   "monitor",
@@ -321,6 +322,7 @@ export default function SettingsPage() {
 
   const canEditSystemSettings = currentUser?.role === "admin" || currentUser?.role === "superuser";
   const isSuperuser = currentUser?.role === "superuser";
+  const canAccessAccountSecurity = currentUser?.role === "superuser";
 
   const syncLocalUser = useCallback((nextUser: CurrentUser) => {
     localStorage.setItem("username", nextUser.username);
@@ -914,7 +916,13 @@ export default function SettingsPage() {
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        {!canEditSystemSettings && renderAccountSecuritySection()}
+        {!canEditSystemSettings && (
+          <Card className="border-border/60 bg-background/70">
+            <CardContent className="p-10 text-center text-muted-foreground">
+              Hanya admin dan superuser dibenarkan mengakses Settings.
+            </CardContent>
+          </Card>
+        )}
 
         {canEditSystemSettings && (
           <div className="grid grid-cols-12 gap-6">
@@ -959,7 +967,7 @@ export default function SettingsPage() {
                 </CardHeader>
               </Card>
 
-              {isSecurityCategory && renderAccountSecuritySection()}
+              {isSecurityCategory && canAccessAccountSecurity && renderAccountSecuritySection()}
 
               {isRolePermissionCategory && roleSections ? (
                 <div className="space-y-4">

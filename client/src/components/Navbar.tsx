@@ -1,4 +1,4 @@
-import { Home, Upload, BookMarked, Eye, Search, Database, LogOut, ShieldCheck, SlidersHorizontal, Server } from "lucide-react";
+import { Home, Upload, BookMarked, Eye, Search, Database, LogOut, ShieldCheck, SlidersHorizontal, Server, FileText } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import ThemeToggle from "./ThemeToggle";
 
@@ -21,8 +21,9 @@ export default function Navbar({ currentPage, onNavigate, onLogout, userRole, us
     { id: "saved", label: "Saved", icon: BookMarked, roles: ["user", "admin", "superuser"] },
     { id: "viewer", label: "Viewer", icon: Eye, roles: ["user", "admin", "superuser"] },
     { id: "general-search", label: "Search", icon: Search, roles: ["admin", "superuser", "user"] },
+    { id: "collection-report", label: "Collection Report", icon: FileText, roles: ["admin", "superuser", "user"] },
     { id: "monitor", label: "System Monitor", icon: Server, roles: ["user", "admin", "superuser"] },
-    { id: "settings", label: "Settings", icon: SlidersHorizontal, roles: ["admin", "superuser", "user"] },
+    { id: "settings", label: "Settings", icon: SlidersHorizontal, roles: ["admin", "superuser"] },
     { id: "backup", label: "Backup", icon: Database, roles: ["user", "admin", "superuser"] },
   ];
 

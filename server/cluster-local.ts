@@ -90,6 +90,8 @@ const MIN_WORKERS = 1;
 const SCALE_COOLDOWN_MS = LOW_MEMORY_MODE ? 30_000 : 15_000; // more conservative in low-memory mode
 const RESTART_THROTTLE_MS = 2_000; // 2 second throttle between restart attempts
 const MAX_RESTART_ATTEMPTS = 5; // Stop restarting after 5 consecutive failures
+const RESTART_FAILURE_WINDOW_MS = 60_000; // Count crashes inside rolling window
+const RESTART_BLOCK_MS = 60_000; // Pause restart attempts after crash-loop detection
 
 const predictor = new LoadPredictor({
   shortWindowSec: 30,
@@ -99,18 +101,24 @@ const predictor = new LoadPredictor({
 });
 
 const workerMetrics = new Map<number, WorkerMetrics>();
+const workerFatalReasons = new Map<number, string>();
+const wiredWorkers = new Set<number>();
 const intentionalExits = new Set<number>();
 const drainingWorkers = new Set<number>();
 const restartAttempts = new Map<number, number>(); // Track restart attempts per worker
 let lastRestartTime = -Infinity; // Initialize to allow first restart immediately
 let lastSpawnAttemptTime = -Infinity; // Track actual spawn attempts (not exits)
-let consecutiveRestarts = 0;
 let lastBroadcast: WorkerControlState | null = null;
 let lowLoadSince: number | null = null;
 let mode: WorkerControlState["mode"] = "NORMAL";
 let preAllocBuffer: Buffer | null = null;
 let rollingRestartInProgress = false;
 let lastScaleTime = 0; // Track cooldown for scaling operations
+let unexpectedExitTimestamps: number[] = [];
+let restartBlockedUntil = 0;
+let lastRestartBlockLogAt = 0;
+let fatalStartupLockReason: string | null = null;
+let fatalShutdownScheduled = false;
 
 function round(value: number, digits = 2): number {
   const p = 10 ** digits;
@@ -128,6 +136,13 @@ function getMinWorkers() {
 
 function getWorkers(): Worker[] {
   return Object.values(cluster.workers ?? {}).filter((w): w is Worker => Boolean(w));
+}
+
+function shutdownMasterDueToFatalStartup(reason: string) {
+  if (fatalShutdownScheduled) return;
+  fatalShutdownScheduled = true;
+  console.error(`🛑 Cluster master shutting down due to unrecoverable startup error: ${reason}`);
+  setTimeout(() => process.exit(1), 50).unref();
 }
 
 function aggregateMetrics(): Aggregate {
@@ -270,6 +285,23 @@ function broadcastControl(control: WorkerControlState) {
 
 // 🔒 SAFE FORK: Prevents uncontrolled spawn + adds error handling
 function safeFork(reason: string): Worker | null {
+  if (fatalStartupLockReason) {
+    console.error(`⛔ Spawn blocked due to fatal startup condition: ${fatalStartupLockReason}`);
+    return null;
+  }
+
+  const now = Date.now();
+  if (now < restartBlockedUntil) {
+    if (now - lastRestartBlockLogAt > 5_000) {
+      const remainingMs = Math.max(0, restartBlockedUntil - now);
+      console.error(
+        `⛔ Restart temporarily blocked (${Math.ceil(remainingMs / 1000)}s left). Skipping spawn for: ${reason}`,
+      );
+      lastRestartBlockLogAt = now;
+    }
+    return null;
+  }
+
   // Count only workers that are actually running (not exiting/dead)
   const aliveWorkers = getWorkers().filter(w => !w.isDead() && w.isConnected());
   const maxWorkers = getMaxWorkers();
@@ -433,8 +465,29 @@ function evaluateScale() {
 }
 
 function wireWorker(worker: Worker) {
+  if (wiredWorkers.has(worker.id)) return;
+  wiredWorkers.add(worker.id);
+
   worker.on("message", (msg: any) => {
     if (!msg || typeof msg !== "object") return;
+    if (msg.type === "worker-fatal") {
+      const reason = String(msg.payload?.reason || "UNKNOWN_FATAL");
+      workerFatalReasons.set(worker.id, reason);
+
+      if (reason === "EADDRINUSE") {
+        fatalStartupLockReason = reason;
+        restartBlockedUntil = Date.now() + RESTART_BLOCK_MS;
+        lastRestartBlockLogAt = Date.now();
+        console.error(
+          "🛑 Worker reported fatal startup error: EADDRINUSE. " +
+          "Auto-restart is disabled until process restart to prevent respawn loop."
+        );
+      } else {
+        console.error(`🛑 Worker reported fatal startup error: ${reason}`);
+      }
+      return;
+    }
+
     if (msg.type === "worker-metrics" && msg.payload) {
       const payload = msg.payload as WorkerMetrics;
       workerMetrics.set(worker.id, { ...payload, workerId: worker.id, pid: worker.process.pid ?? payload.pid });
@@ -465,8 +518,6 @@ function bootCluster() {
 
   cluster.on("online", (worker) => {
     wireWorker(worker);
-    // Reset consecutive restarts counter on successful worker online
-    consecutiveRestarts = 0;
     if (lastBroadcast) {
       // Safe send with connection check
       if (worker.isConnected() && !worker.isDead()) {
@@ -481,26 +532,47 @@ function bootCluster() {
 
   cluster.on("exit", (worker, code, signal) => {
     workerMetrics.delete(worker.id);
+    wiredWorkers.delete(worker.id);
     drainingWorkers.delete(worker.id);
+    const fatalReason = workerFatalReasons.get(worker.id);
+    workerFatalReasons.delete(worker.id);
+
+    if (fatalReason === "EADDRINUSE") {
+      fatalStartupLockReason = "EADDRINUSE";
+      console.error(
+        `🛑 Worker#${worker.id} exited due to EADDRINUSE (port already in use). ` +
+        "Skipping automatic restart to prevent infinite respawn."
+      );
+      if (getWorkers().length === 0) {
+        shutdownMasterDueToFatalStartup("EADDRINUSE");
+      }
+      return;
+    }
+
     const intentional = intentionalExits.has(worker.id);
     if (intentional) {
       intentionalExits.delete(worker.id);
       restartAttempts.delete(worker.id);
-      consecutiveRestarts = 0; // Reset on successful graceful exit
     } else {
       // 🔒 Restart Throttling & Circuit Breaker: Prevent infinite loops
       const now = Date.now();
       const timeSinceLastSpawn = now - lastSpawnAttemptTime;
-      
-      // Check if we've exceeded max consecutive restarts - STOP ALL SPAWNING
-      consecutiveRestarts++;
-      if (consecutiveRestarts > MAX_RESTART_ATTEMPTS) {
+
+      // Check if we've exceeded restart threshold inside rolling window
+      unexpectedExitTimestamps = unexpectedExitTimestamps.filter(
+        (ts) => now - ts <= RESTART_FAILURE_WINDOW_MS,
+      );
+      unexpectedExitTimestamps.push(now);
+
+      if (unexpectedExitTimestamps.length > MAX_RESTART_ATTEMPTS) {
+        restartBlockedUntil = now + RESTART_BLOCK_MS;
+        lastRestartBlockLogAt = now;
         console.error(
           `❌ CRASH LOOP DETECTED: Worker#${worker.id} failed (code=${code}). ` +
-          `Exceeded max restart attempts (${MAX_RESTART_ATTEMPTS}). ` +
-          `Stopping automatic restarts to prevent cascade. Check logs for root cause.`
+          `Exceeded max restart attempts (${MAX_RESTART_ATTEMPTS}) within ${Math.round(RESTART_FAILURE_WINDOW_MS / 1000)}s. ` +
+          `Pausing restarts for ${Math.round(RESTART_BLOCK_MS / 1000)}s. Check root cause (for example, EADDRINUSE).`
         );
-        return; // Do NOT spawn any new worker
+        return;
       }
       
       console.error(`❌ Worker#${worker.id} exited unexpectedly (code=${code}, signal=${signal}). Restarting...`);
@@ -523,7 +595,13 @@ function bootCluster() {
       }
     }
 
-    // Keep minimum worker availability (but respect throttle for min workers too)
+    // Keep minimum worker availability (but respect throttle and restart block)
+    if (fatalStartupLockReason) {
+      return;
+    }
+    if (Date.now() < restartBlockedUntil) {
+      return;
+    }
     if (getWorkers().length < getMinWorkers()) {
       const now = Date.now();
       if (now - lastSpawnAttemptTime >= RESTART_THROTTLE_MS) {

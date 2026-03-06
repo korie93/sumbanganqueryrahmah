@@ -21,6 +21,7 @@ const Banned = lazy(() => import("@/pages/Banned"));
 const SettingsPage = lazy(() => import("@/pages/Settings"));
 const MaintenancePage = lazy(() => import("@/pages/Maintenance"));
 const SystemMonitorLayout = lazy(() => import("@/pages/SystemMonitorLayout"));
+const CollectionReport = lazy(() => import("@/pages/CollectionReport"));
 const Forbidden = lazy(() => import("@/pages/Forbidden"));
 
 interface User {
@@ -201,6 +202,8 @@ function AppContent() {
       setCurrentPage("maintenance");
     } else if (pathname === "/settings") {
       setCurrentPage("settings");
+    } else if (pathname === "/collection-report" || pathname.startsWith("/collection/")) {
+      setCurrentPage("collection-report");
     } else if (pathname === "/dashboard") {
       setCurrentPage("monitor");
       setMonitorSection("dashboard");
@@ -251,6 +254,8 @@ function AppContent() {
           setCurrentPage("maintenance");
         } else if (pathname === "/settings") {
           setCurrentPage("settings");
+        } else if (pathname === "/collection-report" || pathname.startsWith("/collection/")) {
+          setCurrentPage("collection-report");
         } else if (pathname === "/dashboard") {
           setCurrentPage("monitor");
           setMonitorSection("dashboard");
@@ -615,6 +620,7 @@ function AppContent() {
 
     if (typeof window !== "undefined") {
       if (requestedPage === "settings") window.history.replaceState({}, "", "/settings");
+      else if (requestedPage === "collection-report") window.history.replaceState({}, "", "/collection/save");
       else if (requestedPage === "maintenance") window.history.replaceState({}, "", "/maintenance");
       else if (requestedPage === "forbidden") window.history.replaceState({}, "", "/403");
       else window.history.replaceState({}, "", "/");
@@ -711,6 +717,8 @@ function AppContent() {
         return <GeneralSearch userRole={user.role} searchResultLimit={runtimeConfig.searchResultLimit} />;
       case "backup":
       return <BackupRestore userRole={user.role} />;
+      case "collection-report":
+        return <CollectionReport />;
       case "ai":
         if (!runtimeConfig.aiEnabled) {
           return <GeneralSearch userRole={user.role} searchResultLimit={runtimeConfig.searchResultLimit} />;

@@ -1,4 +1,4 @@
-import { Upload, BookMarked, Eye, Search, BarChart3, Activity, ClipboardList, Database, LayoutDashboard } from "lucide-react";
+import { Upload, BookMarked, Eye, Search, BarChart3, Activity, ClipboardList, Database, LayoutDashboard, FileText } from "lucide-react";
 
 interface HomeProps {
   onNavigate: (page: string) => void;
@@ -7,7 +7,6 @@ interface HomeProps {
 }
 
 export default function Home({ onNavigate, userRole, tabVisibility }: HomeProps) {
-  const isSuperuser = userRole === "superuser";
   const monitorTargetMap: Record<string, string> = {
     dashboard: "/monitor?section=dashboard",
     activity: "/monitor?section=activity",
@@ -44,6 +43,13 @@ export default function Home({ onNavigate, userRole, tabVisibility }: HomeProps)
       title: "General Search",
       description: "General data search",
       icon: Search,
+      roles: ["admin", "superuser", "user"],
+    },
+    {
+      id: "collection-report",
+      title: "Collection Report",
+      description: "Save and review collection records",
+      icon: FileText,
       roles: ["admin", "superuser", "user"],
     },
     {
