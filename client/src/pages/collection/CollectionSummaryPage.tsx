@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { getCollectionMonthlySummary, getCollectionNicknames, type CollectionMonthlySummary, type CollectionStaffNickname } from "@/lib/api";
+import {
+  getCollectionMonthlySummary,
+  getCollectionNicknames,
+  getCollectionRecords,
+  type CollectionMonthlySummary,
+  type CollectionRecord,
+  type CollectionStaffNickname,
+} from "@/lib/api";
 import { formatAmountRM, parseApiError } from "./utils";
 
 const MONTH_NAMES = [
@@ -77,12 +84,31 @@ function normalizeNicknameSelection(values: string[]): string[] {
   return result;
 }
 
+function toDisplayDate(value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const [year, month, day] = value.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function buildMonthRange(year: number, month: number): { from: string; to: string } {
+  const safeMonth = Math.min(12, Math.max(1, month));
+  const monthText = String(safeMonth).padStart(2, "0");
+  const from = `${year}-${monthText}-01`;
+  const lastDay = new Date(year, safeMonth, 0).getDate();
+  const to = `${year}-${monthText}-${String(lastDay).padStart(2, "0")}`;
+  return { from, to };
+}
+
 type CollectionSummaryPageProps = {
   role: string;
 };
 
-export default function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
+function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
   const { toast } = useToast();
+  const isMountedRef = useRef(true);
+  const summaryRequestIdRef = useRef(0);
+  const monthRecordsRequestIdRef = useRef(0);
+  const nicknamesRequestIdRef = useRef(0);
   const currentYear = useMemo(() => new Date().getFullYear(), []);
   const canFilterByNickname = role === "admin" || role === "superuser";
   const yearOptions = useMemo(() => {
@@ -99,6 +125,15 @@ export default function CollectionSummaryPage({ role }: CollectionSummaryPagePro
   const [nicknameDropdownOpen, setNicknameDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [summaryRows, setSummaryRows] = useState<CollectionMonthlySummary[]>(() => buildEmptySummary());
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+  const [monthRecords, setMonthRecords] = useState<CollectionRecord[]>([]);
+  const [loadingMonthRecords, setLoadingMonthRecords] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const visibleNicknameOptions = useMemo(() => {
     const byLower = new Map<string, CollectionStaffNickname>();
@@ -119,6 +154,7 @@ export default function CollectionSummaryPage({ role }: CollectionSummaryPagePro
   );
 
   const loadNicknameOptions = useCallback(async () => {
+    const requestId = ++nicknamesRequestIdRef.current;
     if (!canFilterByNickname) {
       setNicknameOptions([]);
       setSelectedNicknames([]);
@@ -126,9 +162,11 @@ export default function CollectionSummaryPage({ role }: CollectionSummaryPagePro
     }
     try {
       const response = await getCollectionNicknames();
+      if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
       const options = Array.isArray(response?.nicknames) ? response.nicknames : [];
       setNicknameOptions(options);
     } catch (error: unknown) {
+      if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
       toast({
         title: "Failed to Load Nicknames",
         description: parseApiError(error),
@@ -138,11 +176,14 @@ export default function CollectionSummaryPage({ role }: CollectionSummaryPagePro
   }, [canFilterByNickname, toast]);
 
   const loadSummary = useCallback(async (year: number, nicknames?: string[]) => {
+    const requestId = ++summaryRequestIdRef.current;
     setLoading(true);
     try {
       const response = await getCollectionMonthlySummary({ year, nicknames });
+      if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
       setSummaryRows(normalizeSummaryRows(response?.summary));
     } catch (error: unknown) {
+      if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
       setSummaryRows(buildEmptySummary());
       toast({
         title: "Failed to Load Summary",
@@ -150,7 +191,45 @@ export default function CollectionSummaryPage({ role }: CollectionSummaryPagePro
         variant: "destructive",
       });
     } finally {
+      if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
       setLoading(false);
+    }
+  }, [toast]);
+
+  const loadMonthRecords = useCallback(async (year: number, month: number, nicknames?: string[]) => {
+    const requestId = ++monthRecordsRequestIdRef.current;
+    setLoadingMonthRecords(true);
+    try {
+      const range = buildMonthRange(year, month);
+      const normalizedFilters = Array.isArray(nicknames) && nicknames.length > 0
+        ? Array.from(new Set(nicknames.map((value) => String(value || "").trim()).filter(Boolean)))
+        : [];
+
+      const response = await getCollectionRecords({
+        from: range.from,
+        to: range.to,
+        nickname: normalizedFilters.length === 1 ? normalizedFilters[0] : undefined,
+      });
+      if (!isMountedRef.current || requestId !== monthRecordsRequestIdRef.current) return;
+      const records = Array.isArray(response?.records) ? response.records : [];
+      const normalizedFiltersSet = normalizedFilters.length > 1
+        ? new Set(normalizedFilters.map((value) => value.toLowerCase()))
+        : null;
+      const filteredRecords = normalizedFiltersSet
+        ? records.filter((item) => normalizedFiltersSet.has(String(item.collectionStaffNickname || "").trim().toLowerCase()))
+        : records;
+      setMonthRecords(filteredRecords);
+    } catch (error: unknown) {
+      if (!isMountedRef.current || requestId !== monthRecordsRequestIdRef.current) return;
+      setMonthRecords([]);
+      toast({
+        title: "Failed to Load Monthly Records",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
+    } finally {
+      if (!isMountedRef.current || requestId !== monthRecordsRequestIdRef.current) return;
+      setLoadingMonthRecords(false);
     }
   }, [toast]);
 
@@ -179,6 +258,22 @@ export default function CollectionSummaryPage({ role }: CollectionSummaryPagePro
     void loadSummary(year, nicknames);
   }, [selectedYear, canFilterByNickname, selectedNicknames, loadSummary]);
 
+  useEffect(() => {
+    if (selectedMonth === null) {
+      setMonthRecords([]);
+      return;
+    }
+    const year = Number(selectedYear);
+    if (!Number.isInteger(year) || selectedMonth < 1 || selectedMonth > 12) {
+      setMonthRecords([]);
+      return;
+    }
+    const nicknames = canFilterByNickname && selectedNicknames.length > 0
+      ? selectedNicknames
+      : undefined;
+    void loadMonthRecords(year, selectedMonth, nicknames);
+  }, [selectedYear, selectedMonth, canFilterByNickname, selectedNicknames, loadMonthRecords]);
+
   const grandTotal = useMemo(() => {
     return summaryRows.reduce(
       (acc, row) => {
@@ -189,6 +284,35 @@ export default function CollectionSummaryPage({ role }: CollectionSummaryPagePro
       { totalRecords: 0, totalAmount: 0 },
     );
   }, [summaryRows]);
+
+  const selectedMonthSummary = useMemo(() => {
+    if (selectedMonth === null) return null;
+    return summaryRows.find((item) => item.month === selectedMonth) || null;
+  }, [summaryRows, selectedMonth]);
+
+  const selectedMonthRange = useMemo(() => {
+    if (selectedMonth === null) return null;
+    const year = Number(selectedYear);
+    if (!Number.isInteger(year)) return null;
+    const range = buildMonthRange(year, selectedMonth);
+    return {
+      from: range.from,
+      to: range.to,
+      label: `Dari ${toDisplayDate(range.from)} hingga ${toDisplayDate(range.to)}`,
+    };
+  }, [selectedYear, selectedMonth]);
+
+  const monthRecordTotals = useMemo(() => {
+    return monthRecords.reduce(
+      (acc, row) => {
+        acc.totalRecords += 1;
+        const amount = Number(row.amount);
+        acc.totalAmount += Number.isFinite(amount) ? amount : 0;
+        return acc;
+      },
+      { totalRecords: 0, totalAmount: 0 },
+    );
+  }, [monthRecords]);
 
   const selectedNicknameSet = useMemo(
     () => new Set(selectedNicknames.map((value) => value.toLowerCase())),
@@ -326,7 +450,11 @@ export default function CollectionSummaryPage({ role }: CollectionSummaryPagePro
                 </TableRow>
               ) : (
                 summaryRows.map((row) => (
-                  <TableRow key={row.month}>
+                  <TableRow
+                    key={row.month}
+                    className={`cursor-pointer ${selectedMonth === row.month ? "bg-primary/10" : ""}`}
+                    onClick={() => setSelectedMonth(row.month)}
+                  >
                     <TableCell className="font-medium">{row.monthName}</TableCell>
                     <TableCell>{row.totalRecords}</TableCell>
                     <TableCell>{formatAmountRM(row.totalAmount)}</TableCell>
@@ -335,6 +463,88 @@ export default function CollectionSummaryPage({ role }: CollectionSummaryPagePro
               )}
             </TableBody>
           </Table>
+        </div>
+
+        <div className="rounded-md border border-border/60 p-3 space-y-3">
+          <div>
+            <p className="text-sm font-semibold">Senarai Kutipan Bulanan</p>
+            {selectedMonthSummary && selectedMonthRange ? (
+              <div className="text-xs text-muted-foreground">
+                <p>{selectedMonthSummary.monthName} {selectedYear}</p>
+                <p>{selectedMonthRange.label}</p>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Klik mana-mana bulan di jadual summary untuk lihat senarai kutipan customer.</p>
+            )}
+          </div>
+
+          {selectedMonthSummary && (
+            <div className="grid gap-2 md:grid-cols-2">
+              <Card className="border-border/60 bg-background/60">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Total Records (Bulan Dipilih)</p>
+                  <p className="text-lg font-semibold">{monthRecordTotals.totalRecords}</p>
+                </CardContent>
+              </Card>
+              <Card className="border-border/60 bg-background/60">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Total Amount (Bulan Dipilih)</p>
+                  <p className="text-lg font-semibold">{formatAmountRM(monthRecordTotals.totalAmount)}</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          <div className="max-h-[420px] overflow-auto rounded-md border border-border/60">
+            <Table className="text-sm">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Customer Name</TableHead>
+                  <TableHead>IC Number</TableHead>
+                  <TableHead>Customer Phone</TableHead>
+                  <TableHead>Account Number</TableHead>
+                  <TableHead>Batch</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Staff Nickname</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {selectedMonth === null ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="py-6 text-center text-muted-foreground">
+                      Sila pilih bulan terlebih dahulu.
+                    </TableCell>
+                  </TableRow>
+                ) : loadingMonthRecords ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="py-6 text-center text-muted-foreground">
+                      Loading monthly records...
+                    </TableCell>
+                  </TableRow>
+                ) : monthRecords.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="py-6 text-center text-muted-foreground">
+                      Tiada rekod kutipan untuk bulan yang dipilih.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  monthRecords.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>{toDisplayDate(row.paymentDate)}</TableCell>
+                      <TableCell className="font-medium">{row.customerName}</TableCell>
+                      <TableCell>{row.icNumber}</TableCell>
+                      <TableCell>{row.customerPhone}</TableCell>
+                      <TableCell>{row.accountNumber}</TableCell>
+                      <TableCell>{row.batch}</TableCell>
+                      <TableCell>{formatAmountRM(row.amount)}</TableCell>
+                      <TableCell>{row.collectionStaffNickname}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">
@@ -355,3 +565,8 @@ export default function CollectionSummaryPage({ role }: CollectionSummaryPagePro
     </Card>
   );
 }
+
+const MemoizedCollectionSummaryPage = memo(CollectionSummaryPage);
+MemoizedCollectionSummaryPage.displayName = "CollectionSummaryPage";
+
+export default MemoizedCollectionSummaryPage;
