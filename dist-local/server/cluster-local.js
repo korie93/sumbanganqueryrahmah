@@ -442,6 +442,7 @@ var init_storage_postgres = __esm({
           role_scope text NOT NULL DEFAULT 'both',
           nickname_password_hash text,
           must_change_password boolean NOT NULL DEFAULT true,
+          password_reset_by_superuser boolean NOT NULL DEFAULT false,
           password_updated_at timestamp,
           created_by text,
           created_at timestamp NOT NULL DEFAULT now()
@@ -452,6 +453,7 @@ var init_storage_postgres = __esm({
           await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS role_scope text DEFAULT 'both'`);
           await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS nickname_password_hash text`);
           await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS must_change_password boolean DEFAULT true`);
+          await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS password_reset_by_superuser boolean DEFAULT false`);
           await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS password_updated_at timestamp`);
           await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_by text`);
           await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
@@ -473,6 +475,7 @@ var init_storage_postgres = __esm({
               ELSE false
             END
           ),
+          password_reset_by_superuser = COALESCE(password_reset_by_superuser, false),
           created_at = COALESCE(created_at, now())
       `);
           await db.execute(sql`DELETE FROM public.collection_staff_nicknames WHERE nickname = ''`);
@@ -480,6 +483,7 @@ var init_storage_postgres = __esm({
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_active ON public.collection_staff_nicknames(is_active)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_role_scope ON public.collection_staff_nicknames(role_scope)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_must_change_password ON public.collection_staff_nicknames(must_change_password)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_password_reset ON public.collection_staff_nicknames(password_reset_by_superuser)`);
           const seedRows = await db.execute(sql`
         SELECT DISTINCT trim(collection_staff_nickname) AS nickname
         FROM public.collection_records
@@ -497,6 +501,7 @@ var init_storage_postgres = __esm({
             is_active,
             nickname_password_hash,
             must_change_password,
+            password_reset_by_superuser,
             password_updated_at,
             created_by,
             created_at
@@ -507,6 +512,7 @@ var init_storage_postgres = __esm({
             true,
             NULL,
             true,
+            false,
             NULL,
             'system-seed',
             now()
@@ -3763,6 +3769,7 @@ var init_storage_postgres = __esm({
           isActive: Boolean(row.is_active ?? row.isActive),
           roleScope: normalizeCollectionNicknameRoleScope(row.role_scope ?? row.roleScope),
           mustChangePassword: Boolean(row.must_change_password ?? row.mustChangePassword ?? true),
+          passwordResetBySuperuser: Boolean(row.password_reset_by_superuser ?? row.passwordResetBySuperuser ?? false),
           nicknamePasswordHash: row.nickname_password_hash ?? row.nicknamePasswordHash ?? null,
           passwordUpdatedAt
         };
@@ -4432,6 +4439,7 @@ var init_storage_postgres = __esm({
         role_scope,
         nickname_password_hash,
         must_change_password,
+        password_reset_by_superuser,
         password_updated_at
       FROM public.collection_staff_nicknames
       WHERE lower(nickname) = lower(${normalized})
@@ -4445,6 +4453,7 @@ var init_storage_postgres = __esm({
         const nicknameId = String(params.nicknameId || "").trim();
         const passwordHash = String(params.passwordHash || "").trim();
         const mustChangePassword = params.mustChangePassword ?? false;
+        const passwordResetBySuperuser = params.passwordResetBySuperuser ?? false;
         const passwordUpdatedAt = params.passwordUpdatedAt ?? /* @__PURE__ */ new Date();
         if (!nicknameId) {
           throw new Error("nicknameId is required.");
@@ -4457,6 +4466,7 @@ var init_storage_postgres = __esm({
       SET
         nickname_password_hash = ${passwordHash},
         must_change_password = ${mustChangePassword},
+        password_reset_by_superuser = ${passwordResetBySuperuser},
         password_updated_at = ${passwordUpdatedAt}
       WHERE id = ${nicknameId}::uuid
     `);
@@ -4470,6 +4480,7 @@ var init_storage_postgres = __esm({
         role_scope,
         nickname_password_hash,
         must_change_password,
+        password_reset_by_superuser,
         password_updated_at,
         created_by,
         created_at
@@ -4481,6 +4492,7 @@ var init_storage_postgres = __esm({
         ${normalizeCollectionNicknameRoleScope(data.roleScope)},
         NULL,
         true,
+        false,
         NULL,
         ${data.createdBy},
         now()
@@ -7897,7 +7909,7 @@ async function startServer() {
     }, 0);
   }
 }
-var storage, app, server, wss, startupFatalReason, JWT_SECRET, connectedClients, DEFAULT_SESSION_TIMEOUT_MINUTES, DEFAULT_WS_IDLE_MINUTES, DEFAULT_AI_TIMEOUT_MS, DEFAULT_BODY_LIMIT, IMPORT_BODY_LIMIT, COLLECTION_BODY_LIMIT, COLLECTION_BATCHES, COLLECTION_RECEIPT_MAX_BYTES, COLLECTION_RECEIPT_ALLOWED_EXT, COLLECTION_RECEIPT_ALLOWED_MIME, UPLOADS_ROOT_DIR, COLLECTION_RECEIPT_DIR, COLLECTION_RECEIPT_PUBLIC_PREFIX, PG_POOL_WARN_COOLDOWN_MS, AI_PRECOMPUTE_ON_START, API_DEBUG_LOGS, LOW_MEMORY_MODE, AI_GATE_GLOBAL_LIMIT, AI_GATE_QUEUE_LIMIT, AI_GATE_QUEUE_WAIT_MS, AI_GATE_ROLE_LIMITS, AI_LATENCY_STALE_AFTER_MS, AI_LATENCY_DECAY_HALF_LIFE_MS, MAINTENANCE_CACHE_TTL_MS, idleSweepRunning, maintenanceCache, RUNTIME_SETTINGS_CACHE_TTL_MS, runtimeSettingsCache, defaultControlState, controlState, preAllocatedBuffer, activeRequests, latencySamples, LATENCY_WINDOW, requestCounter, reqRatePerSec, lastCpuUsage, lastCpuTs, cpuPercent, gcCountWindow, gcPerMinute, lastDbLatencyMs, lastAiLatencyMs, lastAiLatencyObservedAt, lastIntelligenceResult, intelligenceInFlight, lastPgPoolWarningAt, lastPgPoolWarningSignature, MAX_INTELLIGENCE_HISTORY, intelligenceHistory, eventLoopHistogram, circuitAi, circuitDb, circuitExport, DB_METHOD_WRAP_EXCLUDE, storageProto, buildEmbeddingText, adaptiveRateState, CREDENTIAL_USERNAME_REGEX, CREDENTIAL_PASSWORD_MIN_LENGTH, CREDENTIAL_BCRYPT_COST, COLLECTION_STAFF_NICKNAME_MIN_LENGTH, COLLECTION_SUMMARY_MONTH_NAMES, COLLECTION_DATE_REGEX, COLLECTION_PHONE_REGEX, COLLECTION_NICKNAME_ROLE_SCOPE_SET, TAB_VISIBILITY_CACHE_TTL_MS, tabVisibilityCache, aiGateSeq, aiGateInflightGlobal, aiGateInflightByRole, aiGateQueue, handleUpdateCollectionRecord, excludeColumnsFromIC, excludeColumnsFromPolice, extractJsonObject, parseIntentFallback, DEFAULT_COUNT_GROUPS, CATEGORY_RULES_CACHE_MS, categoryRulesCache, loadCategoryRules, detectCountRequest, statsCache, STATS_CACHE_MS, categoryStatsInflight, MAX_STATS_CACHE_ENTRIES, enqueueCategoryStatsCompute, tokenizeQuery, buildFieldMatchSummary, parseIntent, rowScore, scoreRowDigits, extractLatLng, isLatLng, isNonEmptyString, hasPostcodeCoord, extractCustomerPostcode, extractCustomerLocationHint, toObjectJson, buildExplanation, searchCache, searchInflight, SEARCH_CACHE_MS, MAX_SEARCH_CACHE_ENTRIES, SEARCH_FAST_TIMEOUT_MS, withTimeout, computeAiSearch;
+var storage, app, server, wss, startupFatalReason, JWT_SECRET, connectedClients, DEFAULT_SESSION_TIMEOUT_MINUTES, DEFAULT_WS_IDLE_MINUTES, DEFAULT_AI_TIMEOUT_MS, DEFAULT_BODY_LIMIT, IMPORT_BODY_LIMIT, COLLECTION_BODY_LIMIT, COLLECTION_BATCHES, COLLECTION_RECEIPT_MAX_BYTES, COLLECTION_RECEIPT_ALLOWED_EXT, COLLECTION_RECEIPT_ALLOWED_MIME, UPLOADS_ROOT_DIR, COLLECTION_RECEIPT_DIR, COLLECTION_RECEIPT_PUBLIC_PREFIX, PG_POOL_WARN_COOLDOWN_MS, AI_PRECOMPUTE_ON_START, API_DEBUG_LOGS, LOW_MEMORY_MODE, AI_GATE_GLOBAL_LIMIT, AI_GATE_QUEUE_LIMIT, AI_GATE_QUEUE_WAIT_MS, AI_GATE_ROLE_LIMITS, AI_LATENCY_STALE_AFTER_MS, AI_LATENCY_DECAY_HALF_LIFE_MS, MAINTENANCE_CACHE_TTL_MS, idleSweepRunning, maintenanceCache, RUNTIME_SETTINGS_CACHE_TTL_MS, runtimeSettingsCache, defaultControlState, controlState, preAllocatedBuffer, activeRequests, latencySamples, LATENCY_WINDOW, requestCounter, reqRatePerSec, lastCpuUsage, lastCpuTs, cpuPercent, gcCountWindow, gcPerMinute, lastDbLatencyMs, lastAiLatencyMs, lastAiLatencyObservedAt, lastIntelligenceResult, intelligenceInFlight, lastPgPoolWarningAt, lastPgPoolWarningSignature, MAX_INTELLIGENCE_HISTORY, intelligenceHistory, eventLoopHistogram, circuitAi, circuitDb, circuitExport, DB_METHOD_WRAP_EXCLUDE, storageProto, buildEmbeddingText, adaptiveRateState, CREDENTIAL_USERNAME_REGEX, CREDENTIAL_PASSWORD_MIN_LENGTH, CREDENTIAL_BCRYPT_COST, COLLECTION_NICKNAME_TEMP_PASSWORD, COLLECTION_STAFF_NICKNAME_MIN_LENGTH, COLLECTION_SUMMARY_MONTH_NAMES, COLLECTION_DATE_REGEX, COLLECTION_PHONE_REGEX, COLLECTION_NICKNAME_ROLE_SCOPE_SET, TAB_VISIBILITY_CACHE_TTL_MS, tabVisibilityCache, aiGateSeq, aiGateInflightGlobal, aiGateInflightByRole, aiGateQueue, handleUpdateCollectionRecord, excludeColumnsFromIC, excludeColumnsFromPolice, extractJsonObject, parseIntentFallback, DEFAULT_COUNT_GROUPS, CATEGORY_RULES_CACHE_MS, categoryRulesCache, loadCategoryRules, detectCountRequest, statsCache, STATS_CACHE_MS, categoryStatsInflight, MAX_STATS_CACHE_ENTRIES, enqueueCategoryStatsCompute, tokenizeQuery, buildFieldMatchSummary, parseIntent, rowScore, scoreRowDigits, extractLatLng, isLatLng, isNonEmptyString, hasPostcodeCoord, extractCustomerPostcode, extractCustomerLocationHint, toObjectJson, buildExplanation, searchCache, searchInflight, SEARCH_CACHE_MS, MAX_SEARCH_CACHE_ENTRIES, SEARCH_FAST_TIMEOUT_MS, withTimeout, computeAiSearch;
 var init_index_local = __esm({
   "server/index-local.ts"() {
     "use strict";
@@ -8220,6 +8232,7 @@ var init_index_local = __esm({
     CREDENTIAL_USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,32}$/;
     CREDENTIAL_PASSWORD_MIN_LENGTH = 8;
     CREDENTIAL_BCRYPT_COST = 12;
+    COLLECTION_NICKNAME_TEMP_PASSWORD = "12345678a";
     COLLECTION_STAFF_NICKNAME_MIN_LENGTH = 2;
     COLLECTION_SUMMARY_MONTH_NAMES = [
       "January",
@@ -8705,14 +8718,20 @@ var init_index_local = __esm({
           }
           const hasPassword = Boolean(normalizeCollectionText(resolved.profile.nicknamePasswordHash));
           const mustChangePassword = Boolean(resolved.profile.mustChangePassword || !hasPassword);
+          const passwordResetBySuperuser = Boolean(resolved.profile.passwordResetBySuperuser);
+          const requiresPasswordSetup = !hasPassword;
+          const requiresPasswordLogin = hasPassword;
+          const requiresForcedPasswordChange = hasPassword && (mustChangePassword || passwordResetBySuperuser);
           return res.json({
             ok: true,
             nickname: {
               id: resolved.profile.id,
               nickname: resolved.profile.nickname,
               mustChangePassword,
-              requiresPasswordSetup: mustChangePassword,
-              requiresPasswordLogin: !mustChangePassword
+              passwordResetBySuperuser,
+              requiresPasswordSetup,
+              requiresPasswordLogin,
+              requiresForcedPasswordChange
             }
           });
         } catch (err) {
@@ -8735,6 +8754,7 @@ var init_index_local = __esm({
           if (!resolved.ok) {
             return res.status(resolved.status).json({ ok: false, message: resolved.message });
           }
+          const currentPassword = String(body.currentPassword || "");
           const newPassword = String(body.newPassword || "");
           const confirmPassword = String(body.confirmPassword || "");
           if (!newPassword || !confirmPassword) {
@@ -8749,15 +8769,27 @@ var init_index_local = __esm({
               message: `Password mesti sekurang-kurangnya ${CREDENTIAL_PASSWORD_MIN_LENGTH} aksara dan mengandungi huruf serta nombor.`
             });
           }
-          const hasExistingPassword = Boolean(normalizeCollectionText(resolved.profile.nicknamePasswordHash));
-          if (!resolved.profile.mustChangePassword && hasExistingPassword) {
-            return res.status(400).json({ ok: false, message: "Nickname ini sudah mempunyai password. Sila login biasa." });
+          const existingHash = normalizeCollectionText(resolved.profile.nicknamePasswordHash);
+          const hasExistingPassword = Boolean(existingHash);
+          if (hasExistingPassword) {
+            if (!currentPassword) {
+              return res.status(400).json({ ok: false, message: "Current password diperlukan untuk tukar password nickname." });
+            }
+            const validCurrentPassword = await bcrypt2.compare(currentPassword, existingHash);
+            if (!validCurrentPassword) {
+              return res.status(401).json({ ok: false, message: "Current password nickname tidak sah." });
+            }
+            const sameAsCurrent = await bcrypt2.compare(newPassword, existingHash);
+            if (sameAsCurrent) {
+              return res.status(400).json({ ok: false, message: "Password baharu mesti berbeza daripada password semasa." });
+            }
           }
           const passwordHash = await bcrypt2.hash(newPassword, CREDENTIAL_BCRYPT_COST);
           await storage.setCollectionNicknamePassword({
             nicknameId: resolved.profile.id,
             passwordHash,
             mustChangePassword: false,
+            passwordResetBySuperuser: false,
             passwordUpdatedAt: /* @__PURE__ */ new Date()
           });
           await storage.createAuditLog({
@@ -8779,7 +8811,8 @@ var init_index_local = __esm({
             nickname: {
               id: resolved.profile.id,
               nickname: resolved.profile.nickname,
-              mustChangePassword: false
+              mustChangePassword: false,
+              passwordResetBySuperuser: false
             }
           });
         } catch (err) {
@@ -8807,7 +8840,7 @@ var init_index_local = __esm({
             return res.status(400).json({ ok: false, message: "Password diperlukan." });
           }
           const hash = normalizeCollectionText(resolved.profile.nicknamePasswordHash);
-          if (resolved.profile.mustChangePassword || !hash) {
+          if (!hash) {
             return res.status(400).json({
               ok: false,
               message: "Sila tetapkan kata laluan baharu untuk nickname ini sebelum meneruskan."
@@ -8816,6 +8849,19 @@ var init_index_local = __esm({
           const valid = await bcrypt2.compare(password, hash);
           if (!valid) {
             return res.status(401).json({ ok: false, message: "Password nickname tidak sah." });
+          }
+          const requiresForcedPasswordChange = Boolean(resolved.profile.mustChangePassword) || Boolean(resolved.profile.passwordResetBySuperuser);
+          if (requiresForcedPasswordChange) {
+            return res.json({
+              ok: true,
+              nickname: {
+                id: resolved.profile.id,
+                nickname: resolved.profile.nickname,
+                mustChangePassword: true,
+                passwordResetBySuperuser: Boolean(resolved.profile.passwordResetBySuperuser),
+                requiresForcedPasswordChange: true
+              }
+            });
           }
           if (req.user.activityId) {
             await storage.setCollectionNicknameSession({
@@ -8830,7 +8876,9 @@ var init_index_local = __esm({
             nickname: {
               id: resolved.profile.id,
               nickname: resolved.profile.nickname,
-              mustChangePassword: false
+              mustChangePassword: false,
+              passwordResetBySuperuser: false,
+              requiresForcedPasswordChange: false
             }
           });
         } catch (err) {
@@ -9199,6 +9247,52 @@ var init_index_local = __esm({
           return res.json({ ok: true, nickname: updated });
         } catch (err) {
           return res.status(500).json({ ok: false, message: err?.message || "Failed to update nickname status." });
+        }
+      }
+    );
+    app.post(
+      "/api/collection/nicknames/:id/reset-password",
+      authenticateToken,
+      requireRole("superuser"),
+      requireTabAccess("collection-report"),
+      async (req, res) => {
+        try {
+          if (!req.user) {
+            return res.status(401).json({ ok: false, message: "Unauthenticated" });
+          }
+          const id = normalizeCollectionText(req.params.id);
+          if (!id) {
+            return res.status(400).json({ ok: false, message: "Nickname id is required." });
+          }
+          const nickname = await storage.getCollectionStaffNicknameById(id);
+          if (!nickname) {
+            return res.status(404).json({ ok: false, message: "Nickname not found." });
+          }
+          const passwordHash = await bcrypt2.hash(COLLECTION_NICKNAME_TEMP_PASSWORD, CREDENTIAL_BCRYPT_COST);
+          await storage.setCollectionNicknamePassword({
+            nicknameId: nickname.id,
+            passwordHash,
+            mustChangePassword: true,
+            passwordResetBySuperuser: true,
+            passwordUpdatedAt: /* @__PURE__ */ new Date()
+          });
+          await storage.createAuditLog({
+            action: "COLLECTION_NICKNAME_PASSWORD_RESET",
+            performedBy: req.user.username,
+            targetResource: nickname.id,
+            details: `Password nickname reset by superuser for ${nickname.nickname}`
+          });
+          return res.json({
+            ok: true,
+            nickname: {
+              id: nickname.id,
+              nickname: nickname.nickname,
+              mustChangePassword: true,
+              passwordResetBySuperuser: true
+            }
+          });
+        } catch (err) {
+          return res.status(500).json({ ok: false, message: err?.message || "Failed to reset nickname password." });
         }
       }
     );

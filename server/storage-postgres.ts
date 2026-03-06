@@ -98,6 +98,7 @@ export type CollectionNicknameAuthProfile = {
   isActive: boolean;
   roleScope: "admin" | "user" | "both";
   mustChangePassword: boolean;
+  passwordResetBySuperuser: boolean;
   nicknamePasswordHash: string | null;
   passwordUpdatedAt: Date | null;
 };
@@ -442,6 +443,7 @@ function ensureObject(value: unknown): Record<string, any> | null {
     nicknameId: string;
     passwordHash: string;
     mustChangePassword?: boolean;
+    passwordResetBySuperuser?: boolean;
     passwordUpdatedAt?: Date | null;
   }): Promise<void>;
   createCollectionStaffNickname(data: CreateCollectionStaffNicknameInput): Promise<CollectionStaffNickname>;
@@ -826,6 +828,7 @@ export class PostgresStorage implements IStorage {
           role_scope text NOT NULL DEFAULT 'both',
           nickname_password_hash text,
           must_change_password boolean NOT NULL DEFAULT true,
+          password_reset_by_superuser boolean NOT NULL DEFAULT false,
           password_updated_at timestamp,
           created_by text,
           created_at timestamp NOT NULL DEFAULT now()
@@ -836,6 +839,7 @@ export class PostgresStorage implements IStorage {
       await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS role_scope text DEFAULT 'both'`);
       await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS nickname_password_hash text`);
       await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS must_change_password boolean DEFAULT true`);
+      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS password_reset_by_superuser boolean DEFAULT false`);
       await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS password_updated_at timestamp`);
       await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_by text`);
       await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
@@ -857,6 +861,7 @@ export class PostgresStorage implements IStorage {
               ELSE false
             END
           ),
+          password_reset_by_superuser = COALESCE(password_reset_by_superuser, false),
           created_at = COALESCE(created_at, now())
       `);
       await db.execute(sql`DELETE FROM public.collection_staff_nicknames WHERE nickname = ''`);
@@ -864,6 +869,7 @@ export class PostgresStorage implements IStorage {
       await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_active ON public.collection_staff_nicknames(is_active)`);
       await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_role_scope ON public.collection_staff_nicknames(role_scope)`);
       await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_must_change_password ON public.collection_staff_nicknames(must_change_password)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_password_reset ON public.collection_staff_nicknames(password_reset_by_superuser)`);
 
       // Seed master nickname list from existing records to keep old workflows valid.
       const seedRows = await db.execute(sql`
@@ -883,6 +889,7 @@ export class PostgresStorage implements IStorage {
             is_active,
             nickname_password_hash,
             must_change_password,
+            password_reset_by_superuser,
             password_updated_at,
             created_by,
             created_at
@@ -893,6 +900,7 @@ export class PostgresStorage implements IStorage {
             true,
             NULL,
             true,
+            false,
             NULL,
             'system-seed',
             now()
@@ -4902,6 +4910,7 @@ export class PostgresStorage implements IStorage {
       isActive: Boolean(row.is_active ?? row.isActive),
       roleScope: normalizeCollectionNicknameRoleScope(row.role_scope ?? row.roleScope),
       mustChangePassword: Boolean(row.must_change_password ?? row.mustChangePassword ?? true),
+      passwordResetBySuperuser: Boolean(row.password_reset_by_superuser ?? row.passwordResetBySuperuser ?? false),
       nicknamePasswordHash: row.nickname_password_hash ?? row.nicknamePasswordHash ?? null,
       passwordUpdatedAt,
     };
@@ -5726,6 +5735,7 @@ export class PostgresStorage implements IStorage {
         role_scope,
         nickname_password_hash,
         must_change_password,
+        password_reset_by_superuser,
         password_updated_at
       FROM public.collection_staff_nicknames
       WHERE lower(nickname) = lower(${normalized})
@@ -5740,11 +5750,13 @@ export class PostgresStorage implements IStorage {
     nicknameId: string;
     passwordHash: string;
     mustChangePassword?: boolean;
+    passwordResetBySuperuser?: boolean;
     passwordUpdatedAt?: Date | null;
   }): Promise<void> {
     const nicknameId = String(params.nicknameId || "").trim();
     const passwordHash = String(params.passwordHash || "").trim();
     const mustChangePassword = params.mustChangePassword ?? false;
+    const passwordResetBySuperuser = params.passwordResetBySuperuser ?? false;
     const passwordUpdatedAt = params.passwordUpdatedAt ?? new Date();
 
     if (!nicknameId) {
@@ -5759,6 +5771,7 @@ export class PostgresStorage implements IStorage {
       SET
         nickname_password_hash = ${passwordHash},
         must_change_password = ${mustChangePassword},
+        password_reset_by_superuser = ${passwordResetBySuperuser},
         password_updated_at = ${passwordUpdatedAt}
       WHERE id = ${nicknameId}::uuid
     `);
@@ -5773,6 +5786,7 @@ export class PostgresStorage implements IStorage {
         role_scope,
         nickname_password_hash,
         must_change_password,
+        password_reset_by_superuser,
         password_updated_at,
         created_by,
         created_at
@@ -5784,6 +5798,7 @@ export class PostgresStorage implements IStorage {
         ${normalizeCollectionNicknameRoleScope(data.roleScope)},
         NULL,
         true,
+        false,
         NULL,
         ${data.createdBy},
         now()

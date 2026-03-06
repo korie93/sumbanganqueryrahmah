@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import {
   AlertDialog,
@@ -27,6 +27,7 @@ import {
   deleteCollectionNickname,
   getCollectionAdminGroups,
   getCollectionNicknames,
+  resetCollectionNicknamePassword,
   setCollectionNicknameStatus,
   type CollectionAdminGroup,
   type CollectionStaffNickname,
@@ -64,7 +65,7 @@ const sameIds = (left: string[], right: string[]) => {
 
 const scopeLabel = (scope: string) => (scope === "admin" ? "Admin" : scope === "user" ? "User" : "Admin + User");
 
-export default function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListChanged }: Props) {
+function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListChanged }: Props) {
   const { toast } = useToast();
   const isSuperuser = role === "superuser";
 
@@ -105,6 +106,8 @@ export default function ManageCollectionNicknamesPage({ role, currentNickname, o
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
   const [pendingDeleteNickname, setPendingDeleteNickname] = useState<CollectionStaffNickname | null>(null);
   const [deletingNicknameId, setDeletingNicknameId] = useState<string | null>(null);
+  const [pendingResetPassword, setPendingResetPassword] = useState<CollectionStaffNickname | null>(null);
+  const [resettingNicknameId, setResettingNicknameId] = useState<string | null>(null);
   const [pendingUngroup, setPendingUngroup] = useState<PendingUngroup | null>(null);
   const [ungrouping, setUngrouping] = useState(false);
 
@@ -393,6 +396,24 @@ export default function ManageCollectionNicknamesPage({ role, currentNickname, o
     }
   };
 
+  const confirmResetPassword = async () => {
+    if (!pendingResetPassword || resettingNicknameId) return;
+    const target = pendingResetPassword;
+    setResettingNicknameId(target.id);
+    try {
+      await resetCollectionNicknamePassword(target.id);
+      setPendingResetPassword(null);
+      toast({
+        title: "Password Nickname Direset",
+        description: `${target.nickname} telah direset. Password sementara: 12345678a`,
+      });
+    } catch (error: unknown) {
+      toast({ title: "Failed to Reset Password", description: parseApiError(error), variant: "destructive" });
+    } finally {
+      setResettingNicknameId(null);
+    }
+  };
+
   const confirmUngroup = async () => {
     if (!pendingUngroup || ungrouping) return;
     const group = groups.find((g) => g.id === pendingUngroup.groupId);
@@ -541,6 +562,14 @@ export default function ManageCollectionNicknamesPage({ role, currentNickname, o
                               ) : (
                                 <Button size="sm" variant="outline" onClick={() => void updateStatus(item, true)} disabled={statusBusyId === item.id}>Aktifkan</Button>
                               )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setPendingResetPassword(item)}
+                                disabled={resettingNicknameId === item.id}
+                              >
+                                Reset Password
+                              </Button>
                               <Button size="sm" variant="destructive" onClick={() => setPendingDeleteNickname(item)} disabled={deletingNicknameId === item.id}>Delete</Button>
                             </div>
                           </TableCell>
@@ -694,6 +723,21 @@ export default function ManageCollectionNicknamesPage({ role, currentNickname, o
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={Boolean(pendingResetPassword)} onOpenChange={(open) => !open && setPendingResetPassword(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Password Nickname</AlertDialogTitle>
+            <AlertDialogDescription>Adakah anda pasti mahu reset password nickname ini?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(resettingNicknameId)}>Batal</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmResetPassword()} disabled={!pendingResetPassword || Boolean(resettingNicknameId)}>
+              {resettingNicknameId ? "Processing..." : "Reset Password"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={Boolean(pendingUngroup)} onOpenChange={(open) => !open && setPendingUngroup(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -724,3 +768,8 @@ export default function ManageCollectionNicknamesPage({ role, currentNickname, o
     </>
   );
 }
+
+const MemoizedManageCollectionNicknamesPage = memo(ManageCollectionNicknamesPage);
+MemoizedManageCollectionNicknamesPage.displayName = "ManageCollectionNicknamesPage";
+
+export default MemoizedManageCollectionNicknamesPage;

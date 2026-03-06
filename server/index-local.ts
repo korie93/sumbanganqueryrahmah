@@ -933,6 +933,7 @@ app.use(systemProtectionMiddleware);
 const CREDENTIAL_USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,32}$/;
 const CREDENTIAL_PASSWORD_MIN_LENGTH = 8;
 const CREDENTIAL_BCRYPT_COST = 12;
+const COLLECTION_NICKNAME_TEMP_PASSWORD = "12345678a";
 
 type CredentialErrorCode =
   | "USERNAME_TAKEN"
@@ -1040,6 +1041,7 @@ type CollectionAdminGroupPayload = {
 type CollectionNicknameAuthPayload = {
   nickname?: string;
   password?: string;
+  currentPassword?: string;
   newPassword?: string;
   confirmPassword?: string;
 };
@@ -2477,6 +2479,10 @@ app.post(
 
       const hasPassword = Boolean(normalizeCollectionText(resolved.profile.nicknamePasswordHash));
       const mustChangePassword = Boolean(resolved.profile.mustChangePassword || !hasPassword);
+      const passwordResetBySuperuser = Boolean(resolved.profile.passwordResetBySuperuser);
+      const requiresPasswordSetup = !hasPassword;
+      const requiresPasswordLogin = hasPassword;
+      const requiresForcedPasswordChange = hasPassword && (mustChangePassword || passwordResetBySuperuser);
 
       return res.json({
         ok: true,
@@ -2484,8 +2490,10 @@ app.post(
           id: resolved.profile.id,
           nickname: resolved.profile.nickname,
           mustChangePassword,
-          requiresPasswordSetup: mustChangePassword,
-          requiresPasswordLogin: !mustChangePassword,
+          passwordResetBySuperuser,
+          requiresPasswordSetup,
+          requiresPasswordLogin,
+          requiresForcedPasswordChange,
         },
       });
     } catch (err: any) {
@@ -2511,6 +2519,7 @@ app.post(
         return res.status(resolved.status).json({ ok: false, message: resolved.message });
       }
 
+      const currentPassword = String(body.currentPassword || "");
       const newPassword = String(body.newPassword || "");
       const confirmPassword = String(body.confirmPassword || "");
       if (!newPassword || !confirmPassword) {
@@ -2526,9 +2535,20 @@ app.post(
         });
       }
 
-      const hasExistingPassword = Boolean(normalizeCollectionText(resolved.profile.nicknamePasswordHash));
-      if (!resolved.profile.mustChangePassword && hasExistingPassword) {
-        return res.status(400).json({ ok: false, message: "Nickname ini sudah mempunyai password. Sila login biasa." });
+      const existingHash = normalizeCollectionText(resolved.profile.nicknamePasswordHash);
+      const hasExistingPassword = Boolean(existingHash);
+      if (hasExistingPassword) {
+        if (!currentPassword) {
+          return res.status(400).json({ ok: false, message: "Current password diperlukan untuk tukar password nickname." });
+        }
+        const validCurrentPassword = await bcrypt.compare(currentPassword, existingHash);
+        if (!validCurrentPassword) {
+          return res.status(401).json({ ok: false, message: "Current password nickname tidak sah." });
+        }
+        const sameAsCurrent = await bcrypt.compare(newPassword, existingHash);
+        if (sameAsCurrent) {
+          return res.status(400).json({ ok: false, message: "Password baharu mesti berbeza daripada password semasa." });
+        }
       }
 
       const passwordHash = await bcrypt.hash(newPassword, CREDENTIAL_BCRYPT_COST);
@@ -2536,6 +2556,7 @@ app.post(
         nicknameId: resolved.profile.id,
         passwordHash,
         mustChangePassword: false,
+        passwordResetBySuperuser: false,
         passwordUpdatedAt: new Date(),
       });
 
@@ -2561,6 +2582,7 @@ app.post(
           id: resolved.profile.id,
           nickname: resolved.profile.nickname,
           mustChangePassword: false,
+          passwordResetBySuperuser: false,
         },
       });
     } catch (err: any) {
@@ -2592,7 +2614,7 @@ app.post(
       }
 
       const hash = normalizeCollectionText(resolved.profile.nicknamePasswordHash);
-      if (resolved.profile.mustChangePassword || !hash) {
+      if (!hash) {
         return res.status(400).json({
           ok: false,
           message: "Sila tetapkan kata laluan baharu untuk nickname ini sebelum meneruskan.",
@@ -2602,6 +2624,22 @@ app.post(
       const valid = await bcrypt.compare(password, hash);
       if (!valid) {
         return res.status(401).json({ ok: false, message: "Password nickname tidak sah." });
+      }
+
+      const requiresForcedPasswordChange =
+        Boolean(resolved.profile.mustChangePassword) || Boolean(resolved.profile.passwordResetBySuperuser);
+
+      if (requiresForcedPasswordChange) {
+        return res.json({
+          ok: true,
+          nickname: {
+            id: resolved.profile.id,
+            nickname: resolved.profile.nickname,
+            mustChangePassword: true,
+            passwordResetBySuperuser: Boolean(resolved.profile.passwordResetBySuperuser),
+            requiresForcedPasswordChange: true,
+          },
+        });
       }
 
       if (req.user.activityId) {
@@ -2619,6 +2657,8 @@ app.post(
           id: resolved.profile.id,
           nickname: resolved.profile.nickname,
           mustChangePassword: false,
+          passwordResetBySuperuser: false,
+          requiresForcedPasswordChange: false,
         },
       });
     } catch (err: any) {
@@ -3039,6 +3079,58 @@ app.patch(
       return res.json({ ok: true, nickname: updated });
     } catch (err: any) {
       return res.status(500).json({ ok: false, message: err?.message || "Failed to update nickname status." });
+    }
+  },
+);
+
+app.post(
+  "/api/collection/nicknames/:id/reset-password",
+  authenticateToken,
+  requireRole("superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
+      const id = normalizeCollectionText(req.params.id);
+      if (!id) {
+        return res.status(400).json({ ok: false, message: "Nickname id is required." });
+      }
+
+      const nickname = await storage.getCollectionStaffNicknameById(id);
+      if (!nickname) {
+        return res.status(404).json({ ok: false, message: "Nickname not found." });
+      }
+
+      const passwordHash = await bcrypt.hash(COLLECTION_NICKNAME_TEMP_PASSWORD, CREDENTIAL_BCRYPT_COST);
+      await storage.setCollectionNicknamePassword({
+        nicknameId: nickname.id,
+        passwordHash,
+        mustChangePassword: true,
+        passwordResetBySuperuser: true,
+        passwordUpdatedAt: new Date(),
+      });
+
+      await storage.createAuditLog({
+        action: "COLLECTION_NICKNAME_PASSWORD_RESET",
+        performedBy: req.user.username,
+        targetResource: nickname.id,
+        details: `Password nickname reset by superuser for ${nickname.nickname}`,
+      });
+
+      return res.json({
+        ok: true,
+        nickname: {
+          id: nickname.id,
+          nickname: nickname.nickname,
+          mustChangePassword: true,
+          passwordResetBySuperuser: true,
+        },
+      });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to reset nickname password." });
     }
   },
 );

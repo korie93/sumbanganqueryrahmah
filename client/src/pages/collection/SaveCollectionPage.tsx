@@ -1,4 +1,4 @@
-import { type ChangeEvent, useMemo, useRef, useState } from "react";
+import { memo, type ChangeEvent, useMemo, useRef, useState } from "react";
 import { Paperclip, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +22,7 @@ type SaveCollectionPageProps = {
   onSaved?: () => void;
 };
 
-export default function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps) {
+function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -229,3 +229,8 @@ export default function SaveCollectionPage({ staffNickname, onSaved }: SaveColle
     </Card>
   );
 }
+
+const MemoizedSaveCollectionPage = memo(SaveCollectionPage);
+MemoizedSaveCollectionPage.displayName = "SaveCollectionPage";
+
+export default MemoizedSaveCollectionPage;

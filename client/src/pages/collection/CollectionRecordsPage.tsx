@@ -1,4 +1,4 @@
-import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Edit3, Eye, FileText, RotateCcw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,9 +39,14 @@ function fitText(value: string, maxLength: number): string {
   return `${value.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
-export default function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
+function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
   const { toast } = useToast();
   const editReceiptInputRef = useRef<HTMLInputElement | null>(null);
+  const isMountedRef = useRef(true);
+  const recordsRequestIdRef = useRef(0);
+  const nicknamesRequestIdRef = useRef(0);
+  const skipInitialAutoFetchRef = useRef(true);
+  const skipNextAutoFetchRef = useRef(false);
   const canEdit = role === "user" || role === "admin" || role === "superuser";
   const canDeleteGlobal = role === "admin" || role === "superuser" || role === "user";
   const canUseNicknameFilter = role === "admin" || role === "superuser";
@@ -76,43 +81,77 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [viewAllLoading, setViewAllLoading] = useState(false);
   const [viewAllRecords, setViewAllRecords] = useState<CollectionRecord[]>([]);
+  const [tablePage, setTablePage] = useState(1);
+  const [tablePageSize, setTablePageSize] = useState(50);
 
   const visibleRecords = records;
   const summary = useMemo(() => computeSummary(records), [records]);
   const viewAllSummary = useMemo(() => computeSummary(viewAllRecords), [viewAllRecords]);
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(visibleRecords.length / tablePageSize)), [visibleRecords.length, tablePageSize]);
+  const paginatedRecords = useMemo(() => {
+    const start = (tablePage - 1) * tablePageSize;
+    return visibleRecords.slice(start, start + tablePageSize);
+  }, [visibleRecords, tablePage, tablePageSize]);
+  const pagedStart = visibleRecords.length === 0 ? 0 : (tablePage - 1) * tablePageSize + 1;
+  const pagedEnd = Math.min(visibleRecords.length, tablePage * tablePageSize);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setTablePage(1);
+  }, [fromDate, toDate, searchInput, nicknameFilter, tablePageSize]);
+
+  useEffect(() => {
+    if (tablePage > totalPages) {
+      setTablePage(totalPages);
+    }
+  }, [tablePage, totalPages]);
 
   const loadNicknames = useCallback(async () => {
+    const requestId = ++nicknamesRequestIdRef.current;
     setLoadingNicknames(true);
     try {
       const response = await getCollectionNicknames();
+      if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
       const options = Array.isArray(response?.nicknames) ? response.nicknames : [];
       setNicknameOptions(options);
       if (nicknameFilter !== "all" && !options.some((item) => item.nickname === nicknameFilter)) {
         setNicknameFilter("all");
       }
     } catch (error: unknown) {
+      if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
       toast({
         title: "Failed to Load Nicknames",
         description: parseApiError(error),
         variant: "destructive",
       });
     } finally {
+      if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
       setLoadingNicknames(false);
     }
   }, [nicknameFilter, toast]);
 
   const loadRecords = useCallback(async (filters?: { from?: string; to?: string; search?: string; nickname?: string }) => {
+    const requestId = ++recordsRequestIdRef.current;
     setLoadingRecords(true);
     try {
       const response = await getCollectionRecords(filters);
+      if (!isMountedRef.current || requestId !== recordsRequestIdRef.current) return;
       setRecords(Array.isArray(response?.records) ? response.records : []);
+      setTablePage(1);
     } catch (error: unknown) {
+      if (!isMountedRef.current || requestId !== recordsRequestIdRef.current) return;
       toast({
         title: "Failed to Load Records",
         description: parseApiError(error),
         variant: "destructive",
       });
     } finally {
+      if (!isMountedRef.current || requestId !== recordsRequestIdRef.current) return;
       setLoadingRecords(false);
     }
   }, [toast]);
@@ -127,6 +166,14 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
 
   useEffect(() => {
     const trimmedSearch = searchInput.trim();
+    if (skipInitialAutoFetchRef.current) {
+      skipInitialAutoFetchRef.current = false;
+      return;
+    }
+    if (skipNextAutoFetchRef.current) {
+      skipNextAutoFetchRef.current = false;
+      return;
+    }
     const timer = window.setTimeout(() => {
       if (fromDate && !isValidDate(fromDate)) return;
       if (toDate && !isValidDate(toDate)) return;
@@ -163,6 +210,7 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
   };
 
   const handleResetFilter = async () => {
+    skipNextAutoFetchRef.current = true;
     setFromDate("");
     setToDate("");
     setSearchInput("");
@@ -528,13 +576,13 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <Card className="border-border/60 bg-background/70">
-        <CardHeader className="pb-4">
+        <CardHeader className="pb-3">
           <CardTitle className="text-xl">View Rekod Collection</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className={`grid gap-3 ${canUseNicknameFilter ? "lg:grid-cols-[1fr_1fr_1.5fr_1fr_auto_auto]" : "lg:grid-cols-[1fr_1fr_1.5fr_auto_auto]"}`}>
+        <CardContent className="space-y-3">
+          <div className={`grid gap-3 ${canUseNicknameFilter ? "xl:grid-cols-[170px_170px_minmax(260px,1fr)_220px_auto_auto]" : "xl:grid-cols-[170px_170px_minmax(260px,1fr)_auto_auto]"}`}>
             <div className="space-y-1">
               <Label>From Date</Label>
               <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
@@ -585,15 +633,15 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
 
           <div className="grid gap-3 md:grid-cols-2">
             <Card className="border-border/60 bg-background/60">
-              <CardContent className="p-3">
+              <CardContent className="px-3 py-2">
                 <p className="text-xs text-muted-foreground">Total Records</p>
-                <p className="text-xl font-semibold">{summary.totalRecords}</p>
+                <p className="text-lg font-semibold leading-tight">{summary.totalRecords}</p>
               </CardContent>
             </Card>
             <Card className="border-border/60 bg-background/60">
-              <CardContent className="p-3">
+              <CardContent className="px-3 py-2">
                 <p className="text-xs text-muted-foreground">Total Collection Amount</p>
-                <p className="text-xl font-semibold">{formatAmountRM(summary.totalAmount)}</p>
+                <p className="text-lg font-semibold leading-tight">{formatAmountRM(summary.totalAmount)}</p>
               </CardContent>
             </Card>
           </div>
@@ -612,8 +660,45 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
             </Button>
           </div>
 
-          <div className="rounded-md border border-border/60 max-h-[52vh] overflow-auto">
-            <Table className="text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/50 px-3 py-2">
+            <p className="text-xs text-muted-foreground">
+              Showing {pagedStart}-{pagedEnd} of {visibleRecords.length} records
+            </p>
+            <div className="flex items-center gap-2">
+              <Select value={String(tablePageSize)} onValueChange={(value) => setTablePageSize(Number(value))}>
+                <SelectTrigger className="h-8 w-[120px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="50">50 / page</SelectItem>
+                  <SelectItem value="100">100 / page</SelectItem>
+                  <SelectItem value="200">200 / page</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={tablePage <= 1}
+                onClick={() => setTablePage((prev) => Math.max(1, prev - 1))}
+              >
+                Prev
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Page {tablePage} / {totalPages}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={tablePage >= totalPages}
+                onClick={() => setTablePage((prev) => Math.min(totalPages, prev + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-md border border-border/60 min-h-[420px] max-h-[64vh] overflow-auto">
+            <Table className="min-w-[1220px] text-sm">
               <TableHeader>
                 <TableRow>
                   <TableHead className="sticky top-0 bg-background z-10">Date</TableHead>
@@ -638,16 +723,16 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
                     <TableCell colSpan={10} className="text-center text-muted-foreground py-6">No collection records found.</TableCell>
                   </TableRow>
                 ) : (
-                  visibleRecords.map((record) => (
+                  paginatedRecords.map((record) => (
                     <TableRow key={record.id}>
-                      <TableCell className="py-2">{record.paymentDate}</TableCell>
-                      <TableCell className="py-2">{record.customerName}</TableCell>
-                      <TableCell className="py-2">{record.icNumber}</TableCell>
-                      <TableCell className="py-2">{record.customerPhone}</TableCell>
-                      <TableCell className="py-2">{record.accountNumber}</TableCell>
-                      <TableCell className="py-2">{record.batch}</TableCell>
-                      <TableCell className="py-2">{formatAmountRM(record.amount)}</TableCell>
-                      <TableCell className="py-2">
+                      <TableCell className="py-1.5 whitespace-nowrap">{record.paymentDate}</TableCell>
+                      <TableCell className="py-1.5">{record.customerName}</TableCell>
+                      <TableCell className="py-1.5 whitespace-nowrap">{record.icNumber}</TableCell>
+                      <TableCell className="py-1.5 whitespace-nowrap">{record.customerPhone}</TableCell>
+                      <TableCell className="py-1.5 whitespace-nowrap">{record.accountNumber}</TableCell>
+                      <TableCell className="py-1.5 whitespace-nowrap">{record.batch}</TableCell>
+                      <TableCell className="py-1.5 whitespace-nowrap">{formatAmountRM(record.amount)}</TableCell>
+                      <TableCell className="py-1.5 whitespace-nowrap">
                         {record.receiptFile ? (
                           <a href={record.receiptFile} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
                             <Eye className="w-3.5 h-3.5" />
@@ -657,8 +742,8 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
                           <span className="text-muted-foreground">-</span>
                         )}
                       </TableCell>
-                      <TableCell className="py-2">{record.collectionStaffNickname}</TableCell>
-                      <TableCell className="py-2 text-right">
+                      <TableCell className="py-1.5 whitespace-nowrap">{record.collectionStaffNickname}</TableCell>
+                      <TableCell className="py-1.5 text-right whitespace-nowrap">
                         <div className="inline-flex items-center gap-2">
                           {canEdit && (
                             <Button size="sm" variant="outline" onClick={() => openEditDialog(record)}>
@@ -878,3 +963,8 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
     </div>
   );
 }
+
+const MemoizedCollectionRecordsPage = memo(CollectionRecordsPage);
+MemoizedCollectionRecordsPage.displayName = "CollectionRecordsPage";
+
+export default MemoizedCollectionRecordsPage;

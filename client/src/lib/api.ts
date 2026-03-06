@@ -461,8 +461,10 @@ export type CollectionNicknameAuthCheckResult = {
     id: string;
     nickname: string;
     mustChangePassword: boolean;
+    passwordResetBySuperuser: boolean;
     requiresPasswordSetup: boolean;
     requiresPasswordLogin: boolean;
+    requiresForcedPasswordChange: boolean;
   };
 };
 
@@ -473,16 +475,34 @@ export async function checkCollectionNicknameAuth(nickname: string) {
 
 export async function setupCollectionNicknamePassword(payload: {
   nickname: string;
+  currentPassword?: string;
   newPassword: string;
   confirmPassword: string;
 }) {
   const response = await apiRequest("POST", "/api/collection/nickname-auth/setup-password", payload);
-  return response.json() as Promise<{ ok: boolean; nickname: { id: string; nickname: string; mustChangePassword: boolean } }>;
+  return response.json() as Promise<{
+    ok: boolean;
+    nickname: {
+      id: string;
+      nickname: string;
+      mustChangePassword: boolean;
+      passwordResetBySuperuser: boolean;
+    };
+  }>;
 }
 
 export async function loginCollectionNickname(payload: { nickname: string; password: string }) {
   const response = await apiRequest("POST", "/api/collection/nickname-auth/login", payload);
-  return response.json() as Promise<{ ok: boolean; nickname: { id: string; nickname: string; mustChangePassword: boolean } }>;
+  return response.json() as Promise<{
+    ok: boolean;
+    nickname: {
+      id: string;
+      nickname: string;
+      mustChangePassword: boolean;
+      passwordResetBySuperuser: boolean;
+      requiresForcedPasswordChange: boolean;
+    };
+  }>;
 }
 
 export async function createCollectionNickname(payload: { nickname: string; roleScope?: "admin" | "user" | "both" }) {
@@ -503,6 +523,19 @@ export async function setCollectionNicknameStatus(id: string, isActive: boolean)
 export async function deleteCollectionNickname(id: string) {
   const response = await apiRequest("DELETE", `/api/collection/nicknames/${encodeURIComponent(id)}`);
   return response.json() as Promise<{ ok: boolean; deleted: boolean; deactivated: boolean }>;
+}
+
+export async function resetCollectionNicknamePassword(id: string) {
+  const response = await apiRequest("POST", `/api/collection/nicknames/${encodeURIComponent(id)}/reset-password`);
+  return response.json() as Promise<{
+    ok: boolean;
+    nickname: {
+      id: string;
+      nickname: string;
+      mustChangePassword: boolean;
+      passwordResetBySuperuser: boolean;
+    };
+  }>;
 }
 
 export async function getCollectionAdmins() {
