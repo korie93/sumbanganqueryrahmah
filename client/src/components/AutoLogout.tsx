@@ -24,13 +24,10 @@ export default function AutoLogout({
   const heartbeatMs = heartbeatIntervalMinutes * 60 * 1000;
 
   const handleLogout = useCallback(async () => {
-    const activityId = localStorage.getItem("activityId");
-    if (activityId) {
-      try {
-        await activityLogout(activityId);
-      } catch (err) {
-        console.warn("Failed to log activity logout:", err);
-      }
+    try {
+      await activityLogout(localStorage.getItem("activityId") || undefined);
+    } catch (err) {
+      console.warn("Failed to log activity logout:", err);
     }
     onLogout();
   }, [onLogout]);

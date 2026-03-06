@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import { PostgresStorage } from "./storage-postgres";
+import { PostgresStorage, type CollectionNicknameAuthProfile } from "./storage-postgres";
 import { pool } from "./db-postgres";
 import { StringDecoder } from "string_decoder";
 import { searchRateLimiter } from "./middleware/rate-limit";
@@ -704,18 +704,52 @@ async function runIntelligenceCycle() {
 }
 
 const adaptiveRateState = new Map<string, { count: number; resetAt: number }>();
+
+function resolveAdaptiveRateBucket(req: Request): {
+  bucketKey: string;
+  dynamicLimit: number;
+} {
+  const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+  const method = String(req.method || "GET").toUpperCase();
+  const path = req.path || "/";
+
+  let bucketScope = "api";
+  let baseLimit = 40;
+  let minLimit = 8;
+
+  if (path.startsWith("/api/ai/")) {
+    bucketScope = "ai";
+    baseLimit = 14;
+    minLimit = 4;
+  } else if (path.startsWith("/api/activity/heartbeat")) {
+    // Keep heartbeat resilient so it does not starve normal API calls.
+    bucketScope = "heartbeat";
+    baseLimit = 120;
+    minLimit = 20;
+  } else if (
+    method === "GET" &&
+    (path.startsWith("/api/collection/nicknames") || path.startsWith("/api/collection/admin-groups"))
+  ) {
+    // Lightweight metadata endpoints used by Collection Report management UI.
+    bucketScope = "collection-meta";
+    baseLimit = 120;
+    minLimit = 24;
+  }
+
+  const modePenalty = controlState.mode === "PROTECTION" ? 0.5 : controlState.mode === "DEGRADED" ? 0.75 : 1;
+  const throttle = clamp(controlState.throttleFactor || 1, 0.2, 1.2);
+  const dynamicLimit = Math.max(minLimit, Math.floor(baseLimit * modePenalty * throttle));
+  return { bucketKey: `${ip}:${bucketScope}`, dynamicLimit };
+}
+
 function adaptiveRateLimit(req: Request, res: Response, next: NextFunction) {
   if (!req.path.startsWith("/api/")) return next();
   const windowMs = 10_000;
   const now = Date.now();
-  const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "unknown").split(",")[0].trim();
-  const baseLimit = req.path.startsWith("/api/ai/") ? 14 : 40;
-  const modePenalty = controlState.mode === "PROTECTION" ? 0.5 : controlState.mode === "DEGRADED" ? 0.75 : 1;
-  const dynamicLimit = Math.max(4, Math.floor(baseLimit * modePenalty * clamp(controlState.throttleFactor || 1, 0.2, 1.2)));
-
-  const bucket = adaptiveRateState.get(ip);
+  const { bucketKey, dynamicLimit } = resolveAdaptiveRateBucket(req);
+  const bucket = adaptiveRateState.get(bucketKey);
   if (!bucket || now >= bucket.resetAt) {
-    adaptiveRateState.set(ip, { count: 1, resetAt: now + windowMs });
+    adaptiveRateState.set(bucketKey, { count: 1, resetAt: now + windowMs });
     return next();
   }
 
@@ -962,6 +996,7 @@ function closeActivitySockets(activityIds: string[], reason: string) {
       ws.close();
     }
     connectedClients.delete(activityId);
+    void storage.clearCollectionNicknameSessionByActivity(activityId);
   }
 }
 
@@ -987,14 +1022,72 @@ type CollectionUpdatePayload = Partial<CollectionCreatePayload> & {
   removeReceipt?: boolean;
 };
 
+type CollectionNicknamePayload = {
+  nickname?: string;
+  isActive?: boolean;
+  roleScope?: "admin" | "user" | "both" | string;
+};
+
+type CollectionNicknameAssignmentPayload = {
+  nicknameIds?: unknown;
+};
+
+type CollectionAdminGroupPayload = {
+  leaderNicknameId?: unknown;
+  memberNicknameIds?: unknown;
+};
+
+type CollectionNicknameAuthPayload = {
+  nickname?: string;
+  password?: string;
+  newPassword?: string;
+  confirmPassword?: string;
+};
+
 type CollectionBatchValue = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
 const COLLECTION_STAFF_NICKNAME_MIN_LENGTH = 2;
+const COLLECTION_SUMMARY_MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
 
 const COLLECTION_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const COLLECTION_PHONE_REGEX = /^[0-9+\-\s]{8,20}$/;
+const COLLECTION_NICKNAME_ROLE_SCOPE_SET = new Set(["admin", "user", "both"]);
 
 function normalizeCollectionText(value: unknown): string {
   return String(value ?? "").trim();
+}
+
+function normalizeCollectionStringList(values: unknown[]): string[] {
+  return values
+    .map((value) => normalizeCollectionText(value))
+    .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index);
+}
+
+function normalizeCollectionNicknameRoleScope(value: unknown, fallback: "admin" | "user" | "both" = "both"): "admin" | "user" | "both" {
+  const normalized = normalizeCollectionText(value).toLowerCase();
+  if (COLLECTION_NICKNAME_ROLE_SCOPE_SET.has(normalized)) {
+    return normalized as "admin" | "user" | "both";
+  }
+  return fallback;
+}
+
+function isNicknameScopeAllowedForRole(scope: "admin" | "user" | "both", role: string): boolean {
+  if (role === "superuser") return true;
+  if (role === "admin") return scope === "admin" || scope === "both";
+  if (role === "user") return scope === "user" || scope === "both";
+  return false;
 }
 
 function isValidCollectionDate(value: string): boolean {
@@ -1014,6 +1107,163 @@ function isValidCollectionPhone(value: string): boolean {
   const normalized = String(value || "").trim();
   if (normalized.length < 8 || normalized.length > 20) return false;
   return COLLECTION_PHONE_REGEX.test(normalized);
+}
+
+async function resolveAuthenticatedUserId(user: AuthenticatedUser): Promise<string | null> {
+  if (user.userId) {
+    return user.userId;
+  }
+  const dbUser = await storage.getUserByUsername(user.username);
+  return dbUser?.id || null;
+}
+
+async function resolveCurrentCollectionNicknameFromSession(user: AuthenticatedUser): Promise<string | null> {
+  const activityId = normalizeCollectionText(user.activityId);
+  if (!activityId) return null;
+
+  const session = await storage.getCollectionNicknameSessionByActivity(activityId);
+  if (!session) return null;
+  if (normalizeCollectionText(session.username).toLowerCase() !== normalizeCollectionText(user.username).toLowerCase()) {
+    return null;
+  }
+  if (normalizeCollectionText(session.userRole).toLowerCase() !== normalizeCollectionText(user.role).toLowerCase()) {
+    return null;
+  }
+  const nickname = normalizeCollectionText(session.nickname);
+  return nickname || null;
+}
+
+async function getAdminVisibleNicknameValues(user: AuthenticatedUser): Promise<string[]> {
+  return getAdminGroupNicknameValues(user);
+}
+
+function tokenizeCollectionIdentity(value: unknown): string[] {
+  return normalizeCollectionText(value)
+    .toLowerCase()
+    .split(/[^a-z0-9]+/g)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function nicknameLooksLikeOwner(nickname: string, username: string): boolean {
+  const nicknameTokens = tokenizeCollectionIdentity(nickname);
+  const usernameTokens = tokenizeCollectionIdentity(username);
+  if (!nicknameTokens.length || !usernameTokens.length) return false;
+  return usernameTokens.some((token) => nicknameTokens.includes(token));
+}
+
+function orderNicknameValuesWithOwnFirst(values: string[], username: string): string[] {
+  const unique = normalizeCollectionStringList(values);
+  if (!unique.length) return [];
+
+  unique.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+
+  const own: string[] = [];
+  const others: string[] = [];
+  for (const value of unique) {
+    if (nicknameLooksLikeOwner(value, username)) own.push(value);
+    else others.push(value);
+  }
+  return [...own, ...others];
+}
+
+async function getAdminGroupNicknameValues(user: AuthenticatedUser): Promise<string[]> {
+  const currentNickname = await resolveCurrentCollectionNicknameFromSession(user);
+  if (!currentNickname) return [];
+
+  const visibleFromGroup = await storage.getCollectionAdminGroupVisibleNicknameValuesByLeader(currentNickname);
+  const normalized = normalizeCollectionStringList(visibleFromGroup);
+  if (normalized.length > 0) {
+    const leaderLower = currentNickname.toLowerCase();
+    const own = normalized.filter((value) => value.toLowerCase() === leaderLower);
+    const others = normalized
+      .filter((value) => value.toLowerCase() !== leaderLower)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    return [...own, ...others];
+  }
+
+  // Safe fallback for unmapped admin: only own verified nickname, never full dataset.
+  const ownProfile = await storage.getCollectionStaffNicknameByName(currentNickname);
+  if (ownProfile && ownProfile.isActive && isNicknameScopeAllowedForRole(ownProfile.roleScope, user.role)) {
+    return [ownProfile.nickname];
+  }
+  return [];
+}
+
+function readNicknameFiltersFromQuery(query: Record<string, unknown>): string[] {
+  const candidates: string[] = [];
+  const pushValue = (raw: unknown) => {
+    if (Array.isArray(raw)) {
+      for (const item of raw) pushValue(item);
+      return;
+    }
+    const normalized = normalizeCollectionText(raw);
+    if (!normalized) return;
+    const parts = normalized
+      .split(",")
+      .map((part) => normalizeCollectionText(part))
+      .filter(Boolean);
+    candidates.push(...parts);
+  };
+
+  pushValue(query.nickname);
+  pushValue(query.staff);
+  pushValue(query.nicknames);
+  return normalizeCollectionStringList(candidates);
+}
+
+function hasNicknameValue(values: string[], target: string): boolean {
+  const normalizedTarget = normalizeCollectionText(target).toLowerCase();
+  if (!normalizedTarget) return false;
+  return values.some((value) => value.toLowerCase() === normalizedTarget);
+}
+
+type CollectionNicknameAccessResolution =
+  | { ok: true; profile: CollectionNicknameAuthProfile }
+  | { ok: false; status: number; message: string };
+
+async function resolveCollectionNicknameAccessForUser(
+  user: AuthenticatedUser,
+  nicknameRaw: unknown,
+): Promise<CollectionNicknameAccessResolution> {
+  const nickname = normalizeCollectionText(nicknameRaw);
+  if (nickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
+    return {
+      ok: false,
+      status: 400,
+      message: "Staff nickname mesti sekurang-kurangnya 2 aksara.",
+    };
+  }
+
+  const profile = await storage.getCollectionNicknameAuthProfileByName(nickname);
+  if (!profile || !profile.isActive) {
+    return {
+      ok: false,
+      status: 400,
+      message: "Staff nickname tidak sah atau sudah inactive.",
+    };
+  }
+
+  if (user.role === "admin") {
+    if (!isNicknameScopeAllowedForRole(profile.roleScope, user.role)) {
+      return {
+        ok: false,
+        status: 403,
+        message: "Staff nickname tidak dibenarkan untuk role semasa.",
+      };
+    }
+    return { ok: true, profile };
+  }
+
+  if (!isNicknameScopeAllowedForRole(profile.roleScope, user.role)) {
+    return {
+      ok: false,
+      status: 403,
+      message: "Staff nickname tidak dibenarkan untuk role semasa.",
+    };
+  }
+
+  return { ok: true, profile };
 }
 
 function resolveReceiptExtension(receipt: CollectionReceiptPayload): string | null {
@@ -1445,12 +1695,14 @@ function broadcastWsMessage(payload: Record<string, unknown>) {
   for (const [activityId, ws] of connectedClients.entries()) {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       connectedClients.delete(activityId);
+      void storage.clearCollectionNicknameSessionByActivity(activityId);
       continue;
     }
     try {
       ws.send(msg);
     } catch {
       connectedClients.delete(activityId);
+      void storage.clearCollectionNicknameSessionByActivity(activityId);
     }
   }
 }
@@ -1936,6 +2188,7 @@ app.post("/api/activity/logout", authenticateToken, async (req: AuthenticatedReq
     }
 
     connectedClients.delete(activityId);
+    await storage.clearCollectionNicknameSessionByActivity(activityId);
 
     // 3️⃣ AUDIT LOG
     await storage.createAuditLog({
@@ -2161,6 +2414,670 @@ app.get("/api/search/columns", authenticateToken, async (req, res) => {
   }
 });
 
+app.get(
+  "/api/collection/nicknames",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
+      const includeInactive = normalizeCollectionText(req.query.includeInactive) === "1";
+      let nicknames;
+      if (req.user.role === "superuser") {
+        const activeOnly = !includeInactive;
+        nicknames = await storage.getCollectionStaffNicknames({ activeOnly });
+      } else if (req.user.role === "admin") {
+        const allowedValues = await getAdminGroupNicknameValues(req.user);
+        if (allowedValues.length === 0) {
+          nicknames = [];
+        } else {
+          const activeNicknames = await storage.getCollectionStaffNicknames({ activeOnly: true });
+          const byName = new Map<string, any>();
+          for (const item of activeNicknames) {
+            const key = normalizeCollectionText(item.nickname).toLowerCase();
+            if (key && !byName.has(key)) byName.set(key, item);
+          }
+          nicknames = allowedValues
+            .map((value) => byName.get(value.toLowerCase()))
+            .filter(Boolean);
+        }
+      } else {
+        nicknames = await storage.getCollectionStaffNicknames({
+          activeOnly: true,
+          allowedRole: "user",
+        });
+      }
+      return res.json({ ok: true, nicknames });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to load staff nicknames." });
+    }
+  },
+);
+
+app.post(
+  "/api/collection/nickname-auth/check",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
+      const body = (ensureObject(req.body) || {}) as CollectionNicknameAuthPayload;
+      const resolved = await resolveCollectionNicknameAccessForUser(req.user, body.nickname);
+      if (!resolved.ok) {
+        return res.status(resolved.status).json({ ok: false, message: resolved.message });
+      }
+
+      const hasPassword = Boolean(normalizeCollectionText(resolved.profile.nicknamePasswordHash));
+      const mustChangePassword = Boolean(resolved.profile.mustChangePassword || !hasPassword);
+
+      return res.json({
+        ok: true,
+        nickname: {
+          id: resolved.profile.id,
+          nickname: resolved.profile.nickname,
+          mustChangePassword,
+          requiresPasswordSetup: mustChangePassword,
+          requiresPasswordLogin: !mustChangePassword,
+        },
+      });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to validate nickname." });
+    }
+  },
+);
+
+app.post(
+  "/api/collection/nickname-auth/setup-password",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
+      const body = (ensureObject(req.body) || {}) as CollectionNicknameAuthPayload;
+      const resolved = await resolveCollectionNicknameAccessForUser(req.user, body.nickname);
+      if (!resolved.ok) {
+        return res.status(resolved.status).json({ ok: false, message: resolved.message });
+      }
+
+      const newPassword = String(body.newPassword || "");
+      const confirmPassword = String(body.confirmPassword || "");
+      if (!newPassword || !confirmPassword) {
+        return res.status(400).json({ ok: false, message: "New password dan confirm password diperlukan." });
+      }
+      if (newPassword !== confirmPassword) {
+        return res.status(400).json({ ok: false, message: "Password dan confirm password tidak sepadan." });
+      }
+      if (!isStrongPassword(newPassword)) {
+        return res.status(400).json({
+          ok: false,
+          message: `Password mesti sekurang-kurangnya ${CREDENTIAL_PASSWORD_MIN_LENGTH} aksara dan mengandungi huruf serta nombor.`,
+        });
+      }
+
+      const hasExistingPassword = Boolean(normalizeCollectionText(resolved.profile.nicknamePasswordHash));
+      if (!resolved.profile.mustChangePassword && hasExistingPassword) {
+        return res.status(400).json({ ok: false, message: "Nickname ini sudah mempunyai password. Sila login biasa." });
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, CREDENTIAL_BCRYPT_COST);
+      await storage.setCollectionNicknamePassword({
+        nicknameId: resolved.profile.id,
+        passwordHash,
+        mustChangePassword: false,
+        passwordUpdatedAt: new Date(),
+      });
+
+      await storage.createAuditLog({
+        action: "COLLECTION_NICKNAME_PASSWORD_SET",
+        performedBy: req.user.username,
+        targetResource: resolved.profile.id,
+        details: `Nickname password set for ${resolved.profile.nickname}`,
+      });
+
+      if (req.user.activityId) {
+        await storage.setCollectionNicknameSession({
+          activityId: req.user.activityId,
+          username: req.user.username,
+          userRole: req.user.role,
+          nickname: resolved.profile.nickname,
+        });
+      }
+
+      return res.json({
+        ok: true,
+        nickname: {
+          id: resolved.profile.id,
+          nickname: resolved.profile.nickname,
+          mustChangePassword: false,
+        },
+      });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to set nickname password." });
+    }
+  },
+);
+
+app.post(
+  "/api/collection/nickname-auth/login",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
+      const body = (ensureObject(req.body) || {}) as CollectionNicknameAuthPayload;
+      const resolved = await resolveCollectionNicknameAccessForUser(req.user, body.nickname);
+      if (!resolved.ok) {
+        return res.status(resolved.status).json({ ok: false, message: resolved.message });
+      }
+
+      const password = String(body.password || "");
+      if (!password) {
+        return res.status(400).json({ ok: false, message: "Password diperlukan." });
+      }
+
+      const hash = normalizeCollectionText(resolved.profile.nicknamePasswordHash);
+      if (resolved.profile.mustChangePassword || !hash) {
+        return res.status(400).json({
+          ok: false,
+          message: "Sila tetapkan kata laluan baharu untuk nickname ini sebelum meneruskan.",
+        });
+      }
+
+      const valid = await bcrypt.compare(password, hash);
+      if (!valid) {
+        return res.status(401).json({ ok: false, message: "Password nickname tidak sah." });
+      }
+
+      if (req.user.activityId) {
+        await storage.setCollectionNicknameSession({
+          activityId: req.user.activityId,
+          username: req.user.username,
+          userRole: req.user.role,
+          nickname: resolved.profile.nickname,
+        });
+      }
+
+      return res.json({
+        ok: true,
+        nickname: {
+          id: resolved.profile.id,
+          nickname: resolved.profile.nickname,
+          mustChangePassword: false,
+        },
+      });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to login nickname." });
+    }
+  },
+);
+
+app.get(
+  "/api/collection/admins",
+  authenticateToken,
+  requireRole("superuser"),
+  requireTabAccess("collection-report"),
+  async (_req: AuthenticatedRequest, res) => {
+    try {
+      const admins = await storage.getCollectionAdminUsers();
+      return res.json({ ok: true, admins });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to load admin list." });
+    }
+  },
+);
+
+app.get(
+  "/api/collection/admin-groups",
+  authenticateToken,
+  requireRole("superuser"),
+  requireTabAccess("collection-report"),
+  async (_req: AuthenticatedRequest, res) => {
+    try {
+      const groups = await storage.getCollectionAdminGroups();
+      return res.json({ ok: true, groups });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to load admin groups." });
+    }
+  },
+);
+
+app.post(
+  "/api/collection/admin-groups",
+  authenticateToken,
+  requireRole("superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
+      const body = (ensureObject(req.body) || {}) as CollectionAdminGroupPayload;
+      const leaderNicknameId = normalizeCollectionText(body.leaderNicknameId);
+      if (!leaderNicknameId) {
+        return res.status(400).json({ ok: false, message: "leaderNicknameId is required." });
+      }
+      const memberNicknameIds = Array.isArray(body.memberNicknameIds)
+        ? normalizeCollectionStringList(body.memberNicknameIds as unknown[])
+        : [];
+
+      const group = await storage.createCollectionAdminGroup({
+        leaderNicknameId,
+        memberNicknameIds,
+        createdBy: req.user.username,
+      });
+
+      await storage.createAuditLog({
+        action: "COLLECTION_ADMIN_GROUP_CREATED",
+        performedBy: req.user.username,
+        targetResource: group.id,
+        details: `Admin group created for leader ${group.leaderNickname}. members=${group.memberNicknames.length}`,
+      });
+
+      return res.json({ ok: true, group });
+    } catch (err: any) {
+      const message = String(err?.message || "");
+      const lower = message.toLowerCase();
+      if (lower.includes("already assigned")) {
+        return res.status(409).json({ ok: false, message: "This nickname is already assigned to another admin group." });
+      }
+      if (lower.includes("invalid nickname ids") || lower.includes("invalid leader nickname")) {
+        return res.status(400).json({ ok: false, message: "Invalid nickname ids." });
+      }
+      if (lower.includes("must have admin scope")) {
+        return res.status(400).json({ ok: false, message: "Leader nickname must be admin scope." });
+      }
+      if (lower.includes("must be active")) {
+        return res.status(400).json({ ok: false, message: "Leader nickname must be active." });
+      }
+      if (lower.includes("cannot be a member")) {
+        return res.status(400).json({ ok: false, message: "Leader nickname cannot be included as member." });
+      }
+      return res.status(500).json({ ok: false, message: message || "Failed to create admin group." });
+    }
+  },
+);
+
+app.put(
+  "/api/collection/admin-groups/:groupId",
+  authenticateToken,
+  requireRole("superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
+      const groupId = normalizeCollectionText(req.params.groupId);
+      if (!groupId) {
+        return res.status(400).json({ ok: false, message: "groupId is required." });
+      }
+
+      const body = (ensureObject(req.body) || {}) as CollectionAdminGroupPayload;
+      const hasLeader = Object.prototype.hasOwnProperty.call(body, "leaderNicknameId");
+      const hasMembers = Object.prototype.hasOwnProperty.call(body, "memberNicknameIds");
+      if (!hasLeader && !hasMembers) {
+        return res.status(400).json({ ok: false, message: "No admin group update payload provided." });
+      }
+
+      const leaderNicknameId = hasLeader ? normalizeCollectionText(body.leaderNicknameId) : undefined;
+      if (hasLeader && !leaderNicknameId) {
+        return res.status(400).json({ ok: false, message: "leaderNicknameId is required." });
+      }
+      const memberNicknameIds = hasMembers
+        ? (Array.isArray(body.memberNicknameIds)
+          ? normalizeCollectionStringList(body.memberNicknameIds as unknown[])
+          : [])
+        : undefined;
+
+      const group = await storage.updateCollectionAdminGroup({
+        groupId,
+        leaderNicknameId,
+        memberNicknameIds,
+        updatedBy: req.user.username,
+      });
+
+      if (!group) {
+        return res.status(404).json({ ok: false, message: "Admin group not found." });
+      }
+
+      await storage.createAuditLog({
+        action: "COLLECTION_ADMIN_GROUP_UPDATED",
+        performedBy: req.user.username,
+        targetResource: group.id,
+        details: `Admin group updated for leader ${group.leaderNickname}. members=${group.memberNicknames.length}`,
+      });
+
+      return res.json({ ok: true, group });
+    } catch (err: any) {
+      const message = String(err?.message || "");
+      const lower = message.toLowerCase();
+      if (lower.includes("already assigned")) {
+        return res.status(409).json({ ok: false, message: "This nickname is already assigned to another admin group." });
+      }
+      if (lower.includes("invalid nickname ids") || lower.includes("invalid leader nickname")) {
+        return res.status(400).json({ ok: false, message: "Invalid nickname ids." });
+      }
+      if (lower.includes("must have admin scope")) {
+        return res.status(400).json({ ok: false, message: "Leader nickname must be admin scope." });
+      }
+      if (lower.includes("must be active")) {
+        return res.status(400).json({ ok: false, message: "Leader nickname must be active." });
+      }
+      if (lower.includes("cannot be a member")) {
+        return res.status(400).json({ ok: false, message: "Leader nickname cannot be included as member." });
+      }
+      return res.status(500).json({ ok: false, message: message || "Failed to update admin group." });
+    }
+  },
+);
+
+app.delete(
+  "/api/collection/admin-groups/:groupId",
+  authenticateToken,
+  requireRole("superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
+      const groupId = normalizeCollectionText(req.params.groupId);
+      if (!groupId) {
+        return res.status(400).json({ ok: false, message: "groupId is required." });
+      }
+
+      const deleted = await storage.deleteCollectionAdminGroup(groupId);
+      if (!deleted) {
+        return res.status(404).json({ ok: false, message: "Admin group not found." });
+      }
+
+      await storage.createAuditLog({
+        action: "COLLECTION_ADMIN_GROUP_DELETED",
+        performedBy: req.user.username,
+        targetResource: groupId,
+        details: "Admin group deleted.",
+      });
+
+      return res.json({ ok: true });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to delete admin group." });
+    }
+  },
+);
+
+app.get(
+  "/api/collection/nickname-assignments/:adminId",
+  authenticateToken,
+  requireRole("superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const adminId = normalizeCollectionText(req.params.adminId);
+      if (!adminId) {
+        return res.status(400).json({ ok: false, message: "Admin id is required." });
+      }
+
+      const admin = await storage.getCollectionAdminUserById(adminId);
+      if (!admin) {
+        return res.status(404).json({ ok: false, message: "Admin not found." });
+      }
+
+      const nicknameIds = await storage.getCollectionAdminAssignedNicknameIds(adminId);
+      return res.json({ ok: true, admin, nicknameIds });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to load nickname assignments." });
+    }
+  },
+);
+
+app.put(
+  "/api/collection/nickname-assignments/:adminId",
+  authenticateToken,
+  requireRole("superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
+      const adminId = normalizeCollectionText(req.params.adminId);
+      if (!adminId) {
+        return res.status(400).json({ ok: false, message: "Admin id is required." });
+      }
+
+      const body = (ensureObject(req.body) || {}) as CollectionNicknameAssignmentPayload;
+      if (!Array.isArray(body.nicknameIds)) {
+        return res.status(400).json({ ok: false, message: "nicknameIds must be an array." });
+      }
+      const nicknameIds = normalizeCollectionStringList(body.nicknameIds);
+
+      const assignedNicknameIds = await storage.setCollectionAdminAssignedNicknameIds({
+        adminUserId: adminId,
+        nicknameIds,
+        createdBySuperuser: req.user.username,
+      });
+
+      await storage.createAuditLog({
+        action: "COLLECTION_NICKNAME_ASSIGNMENTS_UPDATED",
+        performedBy: req.user.username,
+        targetResource: adminId,
+        details: `Updated admin nickname assignments. total=${assignedNicknameIds.length}`,
+      });
+
+      return res.json({
+        ok: true,
+        adminId,
+        nicknameIds: assignedNicknameIds,
+      });
+    } catch (err: any) {
+      const message = String(err?.message || "");
+      if (message.toLowerCase().includes("admin user not found")) {
+        return res.status(404).json({ ok: false, message: "Admin not found." });
+      }
+      if (message.toLowerCase().includes("invalid nickname ids")) {
+        return res.status(400).json({ ok: false, message: "Invalid nickname ids." });
+      }
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to save nickname assignments." });
+    }
+  },
+);
+
+app.post(
+  "/api/collection/nicknames",
+  authenticateToken,
+  requireRole("superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
+      const body = (ensureObject(req.body) || {}) as CollectionNicknamePayload;
+      const nickname = normalizeCollectionText(body.nickname);
+      const roleScope = normalizeCollectionNicknameRoleScope(body.roleScope, "both");
+      if (nickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
+        return res.status(400).json({ ok: false, message: "Nickname mesti sekurang-kurangnya 2 aksara." });
+      }
+
+      const existing = await storage.getCollectionStaffNicknameByName(nickname);
+      if (existing) {
+        return res.status(409).json({ ok: false, message: "Nickname already exists." });
+      }
+
+      const created = await storage.createCollectionStaffNickname({
+        nickname,
+        createdBy: req.user.username,
+        roleScope,
+      });
+
+      await storage.createAuditLog({
+        action: "COLLECTION_NICKNAME_CREATED",
+        performedBy: req.user.username,
+        targetResource: created.id,
+        details: `Collection nickname created: ${created.nickname} (scope=${created.roleScope})`,
+      });
+
+      return res.json({ ok: true, nickname: created });
+    } catch (err: any) {
+      const rawMessage = String(err?.message || "").toLowerCase();
+      if (rawMessage.includes("duplicate")) {
+        return res.status(409).json({ ok: false, message: "Nickname already exists." });
+      }
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to create nickname." });
+    }
+  },
+);
+
+app.put(
+  "/api/collection/nicknames/:id",
+  authenticateToken,
+  requireRole("superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
+      const id = normalizeCollectionText(req.params.id);
+      const body = (ensureObject(req.body) || {}) as CollectionNicknamePayload;
+      const nickname = normalizeCollectionText(body.nickname);
+      const roleScopeProvided = Object.prototype.hasOwnProperty.call(body, "roleScope");
+      const roleScope = normalizeCollectionNicknameRoleScope(body.roleScope, "both");
+      if (!id) {
+        return res.status(400).json({ ok: false, message: "Nickname id is required." });
+      }
+      if (nickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
+        return res.status(400).json({ ok: false, message: "Nickname mesti sekurang-kurangnya 2 aksara." });
+      }
+
+      const existingByName = await storage.getCollectionStaffNicknameByName(nickname);
+      if (existingByName && existingByName.id !== id) {
+        return res.status(409).json({ ok: false, message: "Nickname already exists." });
+      }
+
+      const updated = await storage.updateCollectionStaffNickname(id, {
+        nickname,
+        ...(roleScopeProvided ? { roleScope } : {}),
+      });
+      if (!updated) {
+        return res.status(404).json({ ok: false, message: "Nickname not found." });
+      }
+
+      await storage.createAuditLog({
+        action: "COLLECTION_NICKNAME_UPDATED",
+        performedBy: req.user.username,
+        targetResource: updated.id,
+        details: `Collection nickname updated to ${updated.nickname} (scope=${updated.roleScope})`,
+      });
+
+      return res.json({ ok: true, nickname: updated });
+    } catch (err: any) {
+      const rawMessage = String(err?.message || "").toLowerCase();
+      if (rawMessage.includes("duplicate")) {
+        return res.status(409).json({ ok: false, message: "Nickname already exists." });
+      }
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to update nickname." });
+    }
+  },
+);
+
+app.patch(
+  "/api/collection/nicknames/:id",
+  authenticateToken,
+  requireRole("superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
+      const id = normalizeCollectionText(req.params.id);
+      if (!id) {
+        return res.status(400).json({ ok: false, message: "Nickname id is required." });
+      }
+
+      const body = (ensureObject(req.body) || {}) as CollectionNicknamePayload;
+      if (!Object.prototype.hasOwnProperty.call(body, "isActive")) {
+        return res.status(400).json({ ok: false, message: "isActive is required." });
+      }
+      const isActive = Boolean(body.isActive);
+      const updated = await storage.updateCollectionStaffNickname(id, { isActive });
+      if (!updated) {
+        return res.status(404).json({ ok: false, message: "Nickname not found." });
+      }
+
+      await storage.createAuditLog({
+        action: "COLLECTION_NICKNAME_STATUS_UPDATED",
+        performedBy: req.user.username,
+        targetResource: updated.id,
+        details: `Collection nickname ${updated.nickname} set active=${updated.isActive}`,
+      });
+
+      return res.json({ ok: true, nickname: updated });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to update nickname status." });
+    }
+  },
+);
+
+app.delete(
+  "/api/collection/nicknames/:id",
+  authenticateToken,
+  requireRole("superuser"),
+  requireTabAccess("collection-report"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
+      const id = normalizeCollectionText(req.params.id);
+      if (!id) {
+        return res.status(400).json({ ok: false, message: "Nickname id is required." });
+      }
+
+      const result = await storage.deleteCollectionStaffNickname(id);
+      if (!result.deleted && !result.deactivated) {
+        return res.status(404).json({ ok: false, message: "Nickname not found." });
+      }
+
+      await storage.createAuditLog({
+        action: result.deleted ? "COLLECTION_NICKNAME_DELETED" : "COLLECTION_NICKNAME_DEACTIVATED",
+        performedBy: req.user.username,
+        targetResource: id,
+        details: result.deleted ? "Collection nickname deleted." : "Collection nickname deactivated due to existing usage.",
+      });
+
+      return res.json({ ok: true, ...result });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, message: err?.message || "Failed to delete nickname." });
+    }
+  },
+);
+
 app.post(
   "/api/collection",
   authenticateToken,
@@ -2207,6 +3124,18 @@ app.post(
       if (collectionStaffNickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
         return res.status(400).json({ ok: false, message: "Staff nickname must be at least 2 characters." });
       }
+      const staffNickname = await storage.getCollectionStaffNicknameByName(collectionStaffNickname);
+      if (!staffNickname?.isActive) {
+        return res.status(400).json({ ok: false, message: "Staff nickname tidak sah atau sudah inactive." });
+      }
+      if (req.user.role === "admin") {
+        const allowedNicknames = await getAdminVisibleNicknameValues(req.user);
+        if (!hasNicknameValue(allowedNicknames, collectionStaffNickname)) {
+          return res.status(403).json({ ok: false, message: "Nickname tidak dibenarkan untuk akaun admin ini." });
+        }
+      } else if (!isNicknameScopeAllowedForRole(staffNickname.roleScope, req.user.role)) {
+        return res.status(403).json({ ok: false, message: "Nickname ini tidak dibenarkan untuk role semasa." });
+      }
 
       const receiptPayload = ensureObject(body.receipt) as CollectionReceiptPayload | null;
       if (receiptPayload) {
@@ -2250,17 +3179,61 @@ app.get(
   requireTabAccess("collection-report"),
   async (req: AuthenticatedRequest, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
       const yearRaw = normalizeCollectionText(req.query.year);
-      const staff = normalizeCollectionText(req.query.staff);
+      const requestedNicknameFilters = readNicknameFiltersFromQuery(req.query as Record<string, unknown>);
       const parsedYear = yearRaw ? Number.parseInt(yearRaw, 10) : new Date().getFullYear();
 
       if (!Number.isInteger(parsedYear) || parsedYear < 2000 || parsedYear > 2100) {
         return res.status(400).json({ ok: false, message: "Invalid year." });
       }
 
+      let nicknameFilters: string[] | undefined;
+      if (req.user.role === "superuser") {
+        if (requestedNicknameFilters.length > 0) {
+          const activeNicknames = await storage.getCollectionStaffNicknames({ activeOnly: true });
+          const activeSet = new Set(
+            activeNicknames
+              .map((item) => normalizeCollectionText(item.nickname).toLowerCase())
+              .filter(Boolean),
+          );
+          const hasInvalid = requestedNicknameFilters.some((value) => !activeSet.has(value.toLowerCase()));
+          if (hasInvalid) {
+            return res.status(400).json({ ok: false, message: "Invalid nickname filter." });
+          }
+          nicknameFilters = requestedNicknameFilters;
+        }
+      } else if (req.user.role === "admin") {
+        const allowedNicknames = await getAdminGroupNicknameValues(req.user);
+        if (requestedNicknameFilters.length > 0) {
+          const hasInvalid = requestedNicknameFilters.some((value) => !hasNicknameValue(allowedNicknames, value));
+          if (hasInvalid) {
+            return res.status(400).json({ ok: false, message: "Invalid nickname filter." });
+          }
+          nicknameFilters = requestedNicknameFilters;
+        } else if (allowedNicknames.length === 0) {
+          return res.json({
+            ok: true,
+            year: parsedYear,
+            summary: COLLECTION_SUMMARY_MONTH_NAMES.map((monthName, index) => ({
+              month: index + 1,
+              monthName,
+              totalRecords: 0,
+              totalAmount: 0,
+            })),
+          });
+        } else {
+          nicknameFilters = allowedNicknames;
+        }
+      }
+
       const summary = await storage.getCollectionMonthlySummary({
         year: parsedYear,
-        staff: staff || undefined,
+        nicknames: nicknameFilters,
+        createdByLogin: req.user.role === "user" ? req.user.username : undefined,
       });
 
       return res.json({
@@ -2281,9 +3254,14 @@ app.get(
   requireTabAccess("collection-report"),
   async (req: AuthenticatedRequest, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ ok: false, message: "Unauthenticated" });
+      }
+
       const from = normalizeCollectionText(req.query.from);
       const to = normalizeCollectionText(req.query.to);
       const search = normalizeCollectionText(req.query.search);
+      const nickname = normalizeCollectionText(req.query.nickname);
 
       if (from && !isValidCollectionDate(from)) {
         return res.status(400).json({ ok: false, message: "Invalid from date." });
@@ -2295,10 +3273,35 @@ app.get(
         return res.status(400).json({ ok: false, message: "From date cannot be later than To date." });
       }
 
+      let nicknameFilters: string[] | undefined;
+      if (req.user.role === "superuser") {
+        if (nickname) {
+          const isActiveNickname = await storage.isCollectionStaffNicknameActive(nickname);
+          if (!isActiveNickname) {
+            return res.status(400).json({ ok: false, message: "Invalid nickname filter." });
+          }
+          nicknameFilters = [nickname];
+        }
+      } else if (req.user.role === "admin") {
+        const allowedNicknames = await getAdminVisibleNicknameValues(req.user);
+        if (nickname) {
+          if (!hasNicknameValue(allowedNicknames, nickname)) {
+            return res.status(400).json({ ok: false, message: "Invalid nickname filter." });
+          }
+          nicknameFilters = [nickname];
+        } else if (allowedNicknames.length === 0) {
+          return res.json({ ok: true, records: [] });
+        } else {
+          nicknameFilters = allowedNicknames;
+        }
+      }
+
       const records = await storage.listCollectionRecords({
         from: from || undefined,
         to: to || undefined,
         search: search || undefined,
+        createdByLogin: req.user.role === "user" ? req.user.username : undefined,
+        nicknames: nicknameFilters,
         limit: 1000,
       });
       return res.json({ ok: true, records });
@@ -2375,6 +3378,18 @@ const handleUpdateCollectionRecord = async (req: AuthenticatedRequest, res: Resp
     if (body.collectionStaffNickname !== undefined) {
       if (collectionStaffNickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
         return res.status(400).json({ ok: false, message: "Staff nickname must be at least 2 characters." });
+      }
+      const staffNickname = await storage.getCollectionStaffNicknameByName(collectionStaffNickname);
+      if (!staffNickname?.isActive) {
+        return res.status(400).json({ ok: false, message: "Staff nickname tidak sah atau sudah inactive." });
+      }
+      if (req.user.role === "admin") {
+        const allowedNicknames = await getAdminVisibleNicknameValues(req.user);
+        if (!hasNicknameValue(allowedNicknames, collectionStaffNickname)) {
+          return res.status(403).json({ ok: false, message: "Nickname tidak dibenarkan untuk akaun admin ini." });
+        }
+      } else if (!isNicknameScopeAllowedForRole(staffNickname.roleScope, req.user.role)) {
+        return res.status(403).json({ ok: false, message: "Nickname ini tidak dibenarkan untuk role semasa." });
       }
       updatePayload.collectionStaffNickname = collectionStaffNickname;
     }

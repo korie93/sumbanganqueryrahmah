@@ -11,10 +11,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import {
   deleteCollectionRecord,
+  getCollectionNicknames,
   getCollectionRecords,
   updateCollectionRecord,
   type CollectionBatch,
   type CollectionRecord,
+  type CollectionStaffNickname,
 } from "@/lib/api";
 import {
   COLLECTION_BATCH_OPTIONS,
@@ -42,13 +44,16 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
   const editReceiptInputRef = useRef<HTMLInputElement | null>(null);
   const canEdit = role === "user" || role === "admin" || role === "superuser";
   const canDeleteGlobal = role === "admin" || role === "superuser" || role === "user";
+  const canUseNicknameFilter = role === "admin" || role === "superuser";
 
   const [records, setRecords] = useState<CollectionRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [searchInput, setSearchInput] = useState("");
-  const [staffFilter, setStaffFilter] = useState("");
+  const [nicknameOptions, setNicknameOptions] = useState<CollectionStaffNickname[]>([]);
+  const [nicknameFilter, setNicknameFilter] = useState<string>("all");
+  const [loadingNicknames, setLoadingNicknames] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
 
@@ -72,16 +77,31 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
   const [viewAllLoading, setViewAllLoading] = useState(false);
   const [viewAllRecords, setViewAllRecords] = useState<CollectionRecord[]>([]);
 
-  const visibleRecords = useMemo(() => {
-    const staffNeedle = staffFilter.trim().toLowerCase();
-    if (!staffNeedle) return records;
-    return records.filter((record) => record.collectionStaffNickname.toLowerCase().includes(staffNeedle));
-  }, [records, staffFilter]);
-
-  const summary = useMemo(() => computeSummary(visibleRecords), [visibleRecords]);
+  const visibleRecords = records;
+  const summary = useMemo(() => computeSummary(records), [records]);
   const viewAllSummary = useMemo(() => computeSummary(viewAllRecords), [viewAllRecords]);
 
-  const loadRecords = useCallback(async (filters?: { from?: string; to?: string; search?: string }) => {
+  const loadNicknames = useCallback(async () => {
+    setLoadingNicknames(true);
+    try {
+      const response = await getCollectionNicknames();
+      const options = Array.isArray(response?.nicknames) ? response.nicknames : [];
+      setNicknameOptions(options);
+      if (nicknameFilter !== "all" && !options.some((item) => item.nickname === nicknameFilter)) {
+        setNicknameFilter("all");
+      }
+    } catch (error: unknown) {
+      toast({
+        title: "Failed to Load Nicknames",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingNicknames(false);
+    }
+  }, [nicknameFilter, toast]);
+
+  const loadRecords = useCallback(async (filters?: { from?: string; to?: string; search?: string; nickname?: string }) => {
     setLoadingRecords(true);
     try {
       const response = await getCollectionRecords(filters);
@@ -102,6 +122,10 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
   }, [loadRecords]);
 
   useEffect(() => {
+    void loadNicknames();
+  }, [loadNicknames]);
+
+  useEffect(() => {
     const trimmedSearch = searchInput.trim();
     const timer = window.setTimeout(() => {
       if (fromDate && !isValidDate(fromDate)) return;
@@ -111,10 +135,11 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
         from: fromDate || undefined,
         to: toDate || undefined,
         search: trimmedSearch || undefined,
+        nickname: canUseNicknameFilter && nicknameFilter !== "all" ? nicknameFilter : undefined,
       });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [searchInput, fromDate, toDate, loadRecords]);
+  }, [searchInput, fromDate, toDate, loadRecords, canUseNicknameFilter, nicknameFilter]);
 
   const handleFilter = async () => {
     if (fromDate && !isValidDate(fromDate)) {
@@ -133,6 +158,7 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
       from: fromDate || undefined,
       to: toDate || undefined,
       search: searchInput.trim() || undefined,
+      nickname: canUseNicknameFilter && nicknameFilter !== "all" ? nicknameFilter : undefined,
     });
   };
 
@@ -140,7 +166,7 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
     setFromDate("");
     setToDate("");
     setSearchInput("");
-    setStaffFilter("");
+    setNicknameFilter("all");
     await loadRecords();
   };
 
@@ -253,9 +279,18 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
       toast({ title: "Validation Error", description: "Amount must be greater than 0.", variant: "destructive" });
       return;
     }
-    if (editStaffNickname.trim().length < 2) {
-      toast({ title: "Validation Error", description: "Staff Nickname must be at least 2 characters.", variant: "destructive" });
-      return;
+    const normalizedEditNickname = editStaffNickname.trim();
+    const staffNicknameChanged = normalizedEditNickname !== editingRecord.collectionStaffNickname;
+    if (staffNicknameChanged) {
+      const isOfficialNickname = nicknameOptions.some((item) => item.nickname === normalizedEditNickname && item.isActive);
+      if (!isOfficialNickname) {
+        toast({
+          title: "Validation Error",
+          description: "Sila pilih Staff Nickname rasmi daripada senarai.",
+          variant: "destructive",
+        });
+        return;
+      }
     }
     if (editReceiptFile && editRemoveReceipt) {
       toast({
@@ -276,8 +311,11 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
         batch: editBatch,
         paymentDate: editPaymentDate,
         amount: Number(editAmount),
-        collectionStaffNickname: editStaffNickname.trim(),
       };
+
+      if (staffNicknameChanged) {
+        payload.collectionStaffNickname = normalizedEditNickname;
+      }
 
       if (editRemoveReceipt) payload.removeReceipt = true;
       if (!editRemoveReceipt && editReceiptFile) payload.receipt = await toReceiptPayload(editReceiptFile);
@@ -290,6 +328,7 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
         from: fromDate || undefined,
         to: toDate || undefined,
         search: searchInput.trim() || undefined,
+        nickname: canUseNicknameFilter && nicknameFilter !== "all" ? nicknameFilter : undefined,
       });
     } catch (error: unknown) {
       toast({ title: "Failed to Update Record", description: parseApiError(error), variant: "destructive" });
@@ -311,6 +350,7 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
         from: fromDate || undefined,
         to: toDate || undefined,
         search: searchInput.trim() || undefined,
+        nickname: canUseNicknameFilter && nicknameFilter !== "all" ? nicknameFilter : undefined,
       });
     } catch (error: unknown) {
       toast({ title: "Failed to Delete Record", description: parseApiError(error), variant: "destructive" });
@@ -417,7 +457,8 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
         pdf.setFontSize(10);
         pdf.text(`Generated Date: ${new Date().toLocaleString()}`, margin, y);
         y += 5;
-        pdf.text(`Staff: ${staffFilter.trim() || "All"}`, margin, y);
+        const staffLabel = canUseNicknameFilter && nicknameFilter !== "all" ? nicknameFilter : "All";
+        pdf.text(`Staff: ${staffLabel}`, margin, y);
         y += 5;
         pdf.text(`Date Range: ${fromDate || "All"} - ${toDate || "All"}`, margin, y);
         y += 6;
@@ -493,7 +534,7 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
           <CardTitle className="text-xl">View Rekod Collection</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1.5fr_1fr_auto_auto]">
+          <div className={`grid gap-3 ${canUseNicknameFilter ? "lg:grid-cols-[1fr_1fr_1.5fr_1fr_auto_auto]" : "lg:grid-cols-[1fr_1fr_1.5fr_auto_auto]"}`}>
             <div className="space-y-1">
               <Label>From Date</Label>
               <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
@@ -514,10 +555,26 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
                 />
               </div>
             </div>
-            <div className="space-y-1">
-              <Label>Staff (optional)</Label>
-              <Input value={staffFilter} onChange={(e) => setStaffFilter(e.target.value)} placeholder="Contoh: Sathia" />
-            </div>
+            {canUseNicknameFilter && (
+              <div className="space-y-1">
+                <Label>Staff Nickname (optional)</Label>
+                <Select value={nicknameFilter} onValueChange={setNicknameFilter} disabled={loadingNicknames}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Semua staff" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Semua staff</SelectItem>
+                    {nicknameOptions
+                      .filter((item) => item.isActive)
+                      .map((item) => (
+                        <SelectItem key={item.id} value={item.nickname}>
+                          {item.nickname}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="flex items-end">
               <Button variant="outline" onClick={handleFilter} disabled={loadingRecords}>Filter</Button>
             </div>
@@ -669,7 +726,25 @@ export default function CollectionRecordsPage({ role }: CollectionRecordsPagePro
             </div>
             <div className="space-y-2">
               <Label>Staff Nickname</Label>
-              <Input value={editStaffNickname} onChange={(e) => setEditStaffNickname(e.target.value)} disabled={savingEdit} />
+              <Select value={editStaffNickname} onValueChange={setEditStaffNickname} disabled={savingEdit || loadingNicknames}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih staff nickname" />
+                </SelectTrigger>
+                <SelectContent>
+                  {nicknameOptions
+                    .filter((item) => item.isActive)
+                    .map((item) => (
+                      <SelectItem key={item.id} value={item.nickname}>
+                        {item.nickname}
+                      </SelectItem>
+                    ))}
+                  {editStaffNickname && !nicknameOptions.some((item) => item.nickname === editStaffNickname && item.isActive) && (
+                    <SelectItem value={editStaffNickname}>
+                      {editStaffNickname} (inactive)
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2 md:col-span-2">
               <Label>Receipt Upload</Label>
