@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { getCollectionMonthlySummary, type CollectionMonthlySummary } from "@/lib/api";
+import { getCollectionMonthlySummary, getCollectionNicknames, type CollectionMonthlySummary, type CollectionStaffNickname } from "@/lib/api";
 import { formatAmountRM, parseApiError } from "./utils";
 
 const MONTH_NAMES = [
@@ -61,9 +63,28 @@ function normalizeSummaryRows(rows: CollectionMonthlySummary[] | undefined): Col
   });
 }
 
-export default function CollectionSummaryPage() {
+function normalizeNicknameSelection(values: string[]): string[] {
+  const unique = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const normalized = String(value || "").trim();
+    if (!normalized) continue;
+    const key = normalized.toLowerCase();
+    if (unique.has(key)) continue;
+    unique.add(key);
+    result.push(normalized);
+  }
+  return result;
+}
+
+type CollectionSummaryPageProps = {
+  role: string;
+};
+
+export default function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
   const { toast } = useToast();
   const currentYear = useMemo(() => new Date().getFullYear(), []);
+  const canFilterByNickname = role === "admin" || role === "superuser";
   const yearOptions = useMemo(() => {
     const years: number[] = [];
     for (let year = currentYear + 1; year >= currentYear - 5; year -= 1) {
@@ -73,15 +94,53 @@ export default function CollectionSummaryPage() {
   }, [currentYear]);
 
   const [selectedYear, setSelectedYear] = useState(String(currentYear));
-  const [staffInput, setStaffInput] = useState("");
-  const [appliedStaff, setAppliedStaff] = useState("");
+  const [nicknameOptions, setNicknameOptions] = useState<CollectionStaffNickname[]>([]);
+  const [selectedNicknames, setSelectedNicknames] = useState<string[]>([]);
+  const [nicknameDropdownOpen, setNicknameDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [summaryRows, setSummaryRows] = useState<CollectionMonthlySummary[]>(() => buildEmptySummary());
 
-  const loadSummary = useCallback(async (year: number, staff?: string) => {
+  const visibleNicknameOptions = useMemo(() => {
+    const byLower = new Map<string, CollectionStaffNickname>();
+    for (const item of nicknameOptions) {
+      const nickname = String(item.nickname || "").trim();
+      if (!nickname) continue;
+      const key = nickname.toLowerCase();
+      if (!byLower.has(key)) {
+        byLower.set(key, { ...item, nickname });
+      }
+    }
+    return Array.from(byLower.values());
+  }, [nicknameOptions]);
+
+  const visibleNicknameValues = useMemo(
+    () => visibleNicknameOptions.map((item) => item.nickname),
+    [visibleNicknameOptions],
+  );
+
+  const loadNicknameOptions = useCallback(async () => {
+    if (!canFilterByNickname) {
+      setNicknameOptions([]);
+      setSelectedNicknames([]);
+      return;
+    }
+    try {
+      const response = await getCollectionNicknames();
+      const options = Array.isArray(response?.nicknames) ? response.nicknames : [];
+      setNicknameOptions(options);
+    } catch (error: unknown) {
+      toast({
+        title: "Failed to Load Nicknames",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
+    }
+  }, [canFilterByNickname, toast]);
+
+  const loadSummary = useCallback(async (year: number, nicknames?: string[]) => {
     setLoading(true);
     try {
-      const response = await getCollectionMonthlySummary({ year, staff });
+      const response = await getCollectionMonthlySummary({ year, nicknames });
       setSummaryRows(normalizeSummaryRows(response?.summary));
     } catch (error: unknown) {
       setSummaryRows(buildEmptySummary());
@@ -96,10 +155,29 @@ export default function CollectionSummaryPage() {
   }, [toast]);
 
   useEffect(() => {
+    void loadNicknameOptions();
+  }, [loadNicknameOptions]);
+
+  useEffect(() => {
+    if (!canFilterByNickname) return;
+    const visibleSet = new Set(visibleNicknameValues.map((value) => value.toLowerCase()));
+    setSelectedNicknames((prev) => {
+      const next = normalizeNicknameSelection(prev).filter((value) => visibleSet.has(value.toLowerCase()));
+      if (next.length === prev.length && next.every((value, index) => value === prev[index])) {
+        return prev;
+      }
+      return next;
+    });
+  }, [canFilterByNickname, visibleNicknameValues]);
+
+  useEffect(() => {
     const year = Number(selectedYear);
     if (!Number.isInteger(year)) return;
-    void loadSummary(year, appliedStaff || undefined);
-  }, [appliedStaff, selectedYear, loadSummary]);
+    const nicknames = canFilterByNickname && selectedNicknames.length > 0
+      ? selectedNicknames
+      : undefined;
+    void loadSummary(year, nicknames);
+  }, [selectedYear, canFilterByNickname, selectedNicknames, loadSummary]);
 
   const grandTotal = useMemo(() => {
     return summaryRows.reduce(
@@ -112,13 +190,47 @@ export default function CollectionSummaryPage() {
     );
   }, [summaryRows]);
 
+  const selectedNicknameSet = useMemo(
+    () => new Set(selectedNicknames.map((value) => value.toLowerCase())),
+    [selectedNicknames],
+  );
+
+  const allSelected = canFilterByNickname
+    && visibleNicknameValues.length > 0
+    && selectedNicknames.length === visibleNicknameValues.length;
+  const partiallySelected = canFilterByNickname
+    && selectedNicknames.length > 0
+    && selectedNicknames.length < visibleNicknameValues.length;
+
+  const toggleNickname = (nickname: string, checked: boolean) => {
+    setSelectedNicknames((prev) => {
+      if (checked) {
+        return normalizeNicknameSelection([...prev, nickname]);
+      }
+      const target = nickname.toLowerCase();
+      return prev.filter((value) => value.toLowerCase() !== target);
+    });
+  };
+
+  const selectAllVisible = () => {
+    setSelectedNicknames(normalizeNicknameSelection(visibleNicknameValues));
+  };
+
+  const clearAllSelected = () => {
+    setSelectedNicknames([]);
+  };
+
+  const selectedNicknameLabel = selectedNicknames.length === 0
+    ? "Semua staff"
+    : `${selectedNicknames.length} nickname dipilih`;
+
   return (
     <Card className="border-border/60 bg-background/70">
       <CardHeader className="pb-4">
         <CardTitle className="text-xl">Collection Summary</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-3 lg:grid-cols-[220px_1fr_auto_auto]">
+        <div className={`grid gap-3 ${canFilterByNickname ? "lg:grid-cols-[220px_minmax(0,1fr)]" : "lg:grid-cols-[220px]"}`}>
           <div className="space-y-1">
             <Label>Year</Label>
             <Select value={selectedYear} onValueChange={setSelectedYear}>
@@ -134,36 +246,66 @@ export default function CollectionSummaryPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1">
-            <Label>Staff Nickname (optional)</Label>
-            <Input
-              value={staffInput}
-              onChange={(event) => setStaffInput(event.target.value)}
-              placeholder="Contoh: Sathia"
-              maxLength={64}
-            />
-          </div>
-          <div className="flex items-end">
-            <Button
-              variant="outline"
-              onClick={() => setAppliedStaff(staffInput.trim())}
-              disabled={loading}
-            >
-              Filter
-            </Button>
-          </div>
-          <div className="flex items-end">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setStaffInput("");
-                setAppliedStaff("");
-              }}
-              disabled={loading}
-            >
-              Reset
-            </Button>
-          </div>
+
+          {canFilterByNickname && (
+            <div className="space-y-1">
+              <Label>Staff Nickname (optional)</Label>
+              <Popover open={nicknameDropdownOpen} onOpenChange={setNicknameDropdownOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between"
+                    disabled={loading}
+                  >
+                    <span className="truncate text-left">{selectedNicknameLabel}</span>
+                    <ChevronDown className="h-4 w-4 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-[340px] p-2">
+                  {visibleNicknameOptions.length === 0 ? (
+                    <p className="px-2 py-3 text-sm text-muted-foreground">Tiada nickname tersedia untuk akaun anda.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={allSelected ? true : partiallySelected ? "indeterminate" : false}
+                            onCheckedChange={(checked) => {
+                              if (checked === true) selectAllVisible();
+                              else clearAllSelected();
+                            }}
+                            disabled={loading}
+                          />
+                          <span className="text-xs font-medium">Select All</span>
+                        </div>
+                        <Button size="sm" variant="ghost" onClick={clearAllSelected} disabled={selectedNicknames.length === 0 || loading}>
+                          Clear All
+                        </Button>
+                      </div>
+                      <div className="max-h-52 overflow-y-auto space-y-1 pr-1">
+                        {visibleNicknameOptions.map((item) => {
+                          const checked = selectedNicknameSet.has(item.nickname.toLowerCase());
+                          return (
+                            <label
+                              key={item.id}
+                              className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-accent/40"
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(state) => toggleNickname(item.nickname, state === true)}
+                                disabled={loading}
+                              />
+                              <span className="text-sm">{item.nickname}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
+          )}
         </div>
 
         <div className="rounded-md border border-border/60 overflow-hidden">

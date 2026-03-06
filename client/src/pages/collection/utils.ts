@@ -4,6 +4,7 @@ export const COLLECTION_BATCH_OPTIONS: CollectionBatch[] = ["P10", "P25", "MDD02
 export const COLLECTION_ACCEPTED_FILE_TYPES = ["image/jpeg", "image/png", "application/pdf"];
 export const COLLECTION_MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 export const COLLECTION_STAFF_NICKNAME_KEY = "collection_staff_nickname";
+export const COLLECTION_STAFF_NICKNAME_AUTH_KEY = "collection_staff_nickname_auth";
 export const COLLECTION_PHONE_REGEX = /^[0-9+\-\s]{8,20}$/;
 
 export function parseApiError(error: unknown): string {
@@ -48,6 +49,20 @@ export function getCurrentRole(): string {
     // ignore parse issues
   }
   return String(localStorage.getItem("role") || "user").trim().toLowerCase();
+}
+
+export function getCurrentUsername(): string {
+  try {
+    const userRaw = localStorage.getItem("user");
+    if (userRaw) {
+      const parsed = JSON.parse(userRaw);
+      const username = String(parsed?.username || "").trim().toLowerCase();
+      if (username) return username;
+    }
+  } catch {
+    // ignore parse issues
+  }
+  return String(localStorage.getItem("username") || "").trim().toLowerCase();
 }
 
 export async function toReceiptPayload(file: File): Promise<CollectionReceiptPayload> {

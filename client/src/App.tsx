@@ -7,7 +7,7 @@ import Navbar from "@/components/Navbar";
 import AutoLogout from "@/components/AutoLogout";
 import FloatingAI from "@/components/FloatingAI";
 import { AIProvider } from "@/context/AIContext";
-import { activityLogout, getAppConfig, getImports, getMaintenanceStatus, getTabVisibility } from "@/lib/api";
+import { activityLogout, getAppConfig, getImports, getMaintenanceStatus, getMe, getTabVisibility } from "@/lib/api";
 
 const Login = lazy(() => import("@/pages/Login"));
 const Home = lazy(() => import("@/pages/Home"));
@@ -58,6 +58,41 @@ function AppContent() {
     searchResultLimit: 200,
     viewerRowsPerPage: 100,
   });
+
+  const clearClientSessionStorage = useCallback(() => {
+    const localStorageKeys = [
+      "token",
+      "user",
+      "username",
+      "role",
+      "activityId",
+      "activeTab",
+      "lastPage",
+      "selectedImportId",
+      "selectedImportName",
+      "fingerprint",
+    ];
+    for (const key of localStorageKeys) {
+      localStorage.removeItem(key);
+    }
+
+    sessionStorage.removeItem("collection_staff_nickname");
+    sessionStorage.removeItem("collection_staff_nickname_auth");
+    queryClient.clear();
+  }, []);
+
+  const applyLoggedOutClientState = useCallback((redirectToLogin = true) => {
+    clearClientSessionStorage();
+    setUser(null);
+    setCurrentPage("home");
+    setMonitorSection("monitor");
+    setSelectedImportId(undefined);
+    setTabVisibility(null);
+    setTabVisibilityLoaded(false);
+    if (redirectToLogin && typeof window !== "undefined" && window.location.pathname !== "/") {
+      window.history.replaceState({}, "", "/");
+    }
+  }, [clearClientSessionStorage]);
 
   const fetchSavedCount = useCallback(async () => {
     try {
@@ -296,19 +331,57 @@ function AppContent() {
           }
         }
       } catch {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
+        clearClientSessionStorage();
       }
     }
 
     setIsInitialized(true);
-  }, [parseMonitorSectionFromQuery]);
+  }, [clearClientSessionStorage, parseMonitorSectionFromQuery]);
 
   useEffect(() => {
     if (user && user.role !== "user") {
       fetchSavedCount();
     }
   }, [user, fetchSavedCount]);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    const validateSession = async () => {
+      try {
+        const me = await getMe();
+        if (cancelled) return;
+
+        const username = String(me?.username || "").trim();
+        const role = String(me?.role || "").trim();
+        if (!username || !role) {
+          throw new Error("Invalid session");
+        }
+
+        localStorage.setItem("username", username);
+        localStorage.setItem("role", role);
+        localStorage.setItem("user", JSON.stringify({ username, role }));
+      } catch {
+        if (cancelled) return;
+        applyLoggedOutClientState(true);
+      }
+    };
+
+    void validateSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [applyLoggedOutClientState, user?.role, user?.username]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || user) return;
+    const pathname = window.location.pathname.toLowerCase();
+    if (pathname === "/collection-report" || pathname.startsWith("/collection/")) {
+      window.history.replaceState({}, "", "/");
+      setCurrentPage("home");
+    }
+  }, [user]);
 
   useEffect(() => {
     const onProfileUpdated = (event: Event) => {
@@ -544,29 +617,13 @@ function AppContent() {
   }, []);
 
   const handleLogout = useCallback(async () => {
-    const activityId = localStorage.getItem("activityId");
-    if (activityId) {
-      try {
-        await activityLogout(activityId);
-      } catch (err) {
-        console.warn("Logout activity failed:", err);
-      }
+    try {
+      await activityLogout(localStorage.getItem("activityId") || undefined);
+    } catch (err) {
+      console.warn("Logout activity failed:", err);
     }
-
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("username");
-    localStorage.removeItem("role");
-    localStorage.removeItem("activityId");
-    localStorage.removeItem("activeTab");
-    localStorage.removeItem("lastPage");
-    localStorage.removeItem("selectedImportId");
-    localStorage.removeItem("selectedImportName");
-    localStorage.removeItem("fingerprint");
-
-    setUser(null);
-    setCurrentPage("home");
-  }, []);
+    applyLoggedOutClientState(true);
+  }, [applyLoggedOutClientState]);
 
   const handleNavigate = useCallback((page: string, importId?: string) => {
     const monitorSectionTarget = parseMonitorSectionFromPageInput(page);

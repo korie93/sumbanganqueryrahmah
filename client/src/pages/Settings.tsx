@@ -345,6 +345,8 @@ export default function SettingsPage() {
     localStorage.removeItem("selectedImportId");
     localStorage.removeItem("selectedImportName");
     localStorage.removeItem("fingerprint");
+    sessionStorage.removeItem("collection_staff_nickname");
+    sessionStorage.removeItem("collection_staff_nickname_auth");
     localStorage.setItem("forceLogout", "true");
     window.location.href = "/";
   }, []);

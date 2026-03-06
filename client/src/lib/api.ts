@@ -55,8 +55,9 @@ export async function activityLogin(data: {
   return response.json();
 }
 
-export async function activityLogout(activityId: string) {
-  const response = await apiRequest("POST", "/api/activity/logout", { activityId });
+export async function activityLogout(activityId?: string) {
+  const payload = activityId ? { activityId } : {};
+  const response = await apiRequest("POST", "/api/activity/logout", payload);
   return response.json();
 }
 
@@ -352,6 +353,37 @@ export type CollectionRecord = {
   createdAt: string;
 };
 
+export type CollectionStaffNickname = {
+  id: string;
+  nickname: string;
+  isActive: boolean;
+  roleScope: "admin" | "user" | "both";
+  createdBy: string | null;
+  createdAt: string;
+};
+
+export type CollectionAdminUser = {
+  id: string;
+  username: string;
+  role: "admin";
+  isBanned: boolean | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CollectionAdminGroup = {
+  id: string;
+  leaderNickname: string;
+  leaderNicknameId: string | null;
+  leaderIsActive: boolean;
+  leaderRoleScope: "admin" | "user" | "both" | null;
+  memberNicknames: string[];
+  memberNicknameIds: string[];
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CollectionReceiptPayload = {
   fileName: string;
   mimeType: string;
@@ -379,11 +411,12 @@ export async function createCollectionRecord(payload: CreateCollectionPayload) {
   return response.json();
 }
 
-export async function getCollectionRecords(filters?: { from?: string; to?: string; search?: string }) {
+export async function getCollectionRecords(filters?: { from?: string; to?: string; search?: string; nickname?: string }) {
   const params = new URLSearchParams();
   if (filters?.from) params.set("from", filters.from);
   if (filters?.to) params.set("to", filters.to);
   if (filters?.search) params.set("search", filters.search);
+  if (filters?.nickname) params.set("nickname", filters.nickname);
   const query = params.toString();
   const response = await apiRequest("GET", query ? `/api/collection/list?${query}` : "/api/collection/list");
   return response.json();
@@ -396,14 +429,126 @@ export type CollectionMonthlySummary = {
   totalAmount: number;
 };
 
-export async function getCollectionMonthlySummary(filters: { year: number; staff?: string }) {
+export async function getCollectionMonthlySummary(filters: { year: number; nickname?: string; nicknames?: string[] }) {
   const params = new URLSearchParams();
   params.set("year", String(filters.year));
-  if (filters.staff && filters.staff.trim()) {
-    params.set("staff", filters.staff.trim());
+  const nicknameList = Array.isArray(filters.nicknames)
+    ? filters.nicknames.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  if (nicknameList.length > 0) {
+    params.set("nicknames", nicknameList.join(","));
+  }
+  if (filters.nickname && filters.nickname.trim()) {
+    params.set("nickname", filters.nickname.trim());
   }
   const response = await apiRequest("GET", `/api/collection/summary?${params.toString()}`);
   return response.json() as Promise<{ ok: boolean; year: number; summary: CollectionMonthlySummary[] }>;
+}
+
+export async function getCollectionNicknames(filters?: { includeInactive?: boolean }) {
+  const params = new URLSearchParams();
+  if (filters?.includeInactive) {
+    params.set("includeInactive", "1");
+  }
+  const query = params.toString();
+  const response = await apiRequest("GET", query ? `/api/collection/nicknames?${query}` : "/api/collection/nicknames");
+  return response.json() as Promise<{ ok: boolean; nicknames: CollectionStaffNickname[] }>;
+}
+
+export type CollectionNicknameAuthCheckResult = {
+  ok: boolean;
+  nickname: {
+    id: string;
+    nickname: string;
+    mustChangePassword: boolean;
+    requiresPasswordSetup: boolean;
+    requiresPasswordLogin: boolean;
+  };
+};
+
+export async function checkCollectionNicknameAuth(nickname: string) {
+  const response = await apiRequest("POST", "/api/collection/nickname-auth/check", { nickname });
+  return response.json() as Promise<CollectionNicknameAuthCheckResult>;
+}
+
+export async function setupCollectionNicknamePassword(payload: {
+  nickname: string;
+  newPassword: string;
+  confirmPassword: string;
+}) {
+  const response = await apiRequest("POST", "/api/collection/nickname-auth/setup-password", payload);
+  return response.json() as Promise<{ ok: boolean; nickname: { id: string; nickname: string; mustChangePassword: boolean } }>;
+}
+
+export async function loginCollectionNickname(payload: { nickname: string; password: string }) {
+  const response = await apiRequest("POST", "/api/collection/nickname-auth/login", payload);
+  return response.json() as Promise<{ ok: boolean; nickname: { id: string; nickname: string; mustChangePassword: boolean } }>;
+}
+
+export async function createCollectionNickname(payload: { nickname: string; roleScope?: "admin" | "user" | "both" }) {
+  const response = await apiRequest("POST", "/api/collection/nicknames", payload);
+  return response.json() as Promise<{ ok: boolean; nickname: CollectionStaffNickname }>;
+}
+
+export async function updateCollectionNickname(id: string, payload: { nickname: string; roleScope?: "admin" | "user" | "both" }) {
+  const response = await apiRequest("PUT", `/api/collection/nicknames/${encodeURIComponent(id)}`, payload);
+  return response.json() as Promise<{ ok: boolean; nickname: CollectionStaffNickname }>;
+}
+
+export async function setCollectionNicknameStatus(id: string, isActive: boolean) {
+  const response = await apiRequest("PATCH", `/api/collection/nicknames/${encodeURIComponent(id)}`, { isActive });
+  return response.json() as Promise<{ ok: boolean; nickname: CollectionStaffNickname }>;
+}
+
+export async function deleteCollectionNickname(id: string) {
+  const response = await apiRequest("DELETE", `/api/collection/nicknames/${encodeURIComponent(id)}`);
+  return response.json() as Promise<{ ok: boolean; deleted: boolean; deactivated: boolean }>;
+}
+
+export async function getCollectionAdmins() {
+  const response = await apiRequest("GET", "/api/collection/admins");
+  return response.json() as Promise<{ ok: boolean; admins: CollectionAdminUser[] }>;
+}
+
+export async function getCollectionNicknameAssignments(adminId: string) {
+  const response = await apiRequest("GET", `/api/collection/nickname-assignments/${encodeURIComponent(adminId)}`);
+  return response.json() as Promise<{ ok: boolean; admin: CollectionAdminUser; nicknameIds: string[] }>;
+}
+
+export async function saveCollectionNicknameAssignments(adminId: string, nicknameIds: string[]) {
+  const response = await apiRequest("PUT", `/api/collection/nickname-assignments/${encodeURIComponent(adminId)}`, {
+    nicknameIds,
+  });
+  return response.json() as Promise<{ ok: boolean; adminId: string; nicknameIds: string[] }>;
+}
+
+export async function getCollectionAdminGroups() {
+  const response = await apiRequest("GET", "/api/collection/admin-groups");
+  return response.json() as Promise<{ ok: boolean; groups: CollectionAdminGroup[] }>;
+}
+
+export async function createCollectionAdminGroup(payload: {
+  leaderNicknameId: string;
+  memberNicknameIds?: string[];
+}) {
+  const response = await apiRequest("POST", "/api/collection/admin-groups", payload);
+  return response.json() as Promise<{ ok: boolean; group: CollectionAdminGroup }>;
+}
+
+export async function updateCollectionAdminGroup(
+  groupId: string,
+  payload: {
+    leaderNicknameId?: string;
+    memberNicknameIds?: string[];
+  },
+) {
+  const response = await apiRequest("PUT", `/api/collection/admin-groups/${encodeURIComponent(groupId)}`, payload);
+  return response.json() as Promise<{ ok: boolean; group: CollectionAdminGroup }>;
+}
+
+export async function deleteCollectionAdminGroup(groupId: string) {
+  const response = await apiRequest("DELETE", `/api/collection/admin-groups/${encodeURIComponent(groupId)}`);
+  return response.json() as Promise<{ ok: boolean }>;
 }
 
 export async function updateCollectionRecord(id: string, payload: UpdateCollectionPayload) {

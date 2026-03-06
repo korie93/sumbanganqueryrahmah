@@ -83,6 +83,56 @@ export type CollectionMonthlySummary = {
   totalAmount: number;
 };
 
+export type CollectionStaffNickname = {
+  id: string;
+  nickname: string;
+  isActive: boolean;
+  roleScope: "admin" | "user" | "both";
+  createdBy: string | null;
+  createdAt: Date;
+};
+
+export type CollectionNicknameAuthProfile = {
+  id: string;
+  nickname: string;
+  isActive: boolean;
+  roleScope: "admin" | "user" | "both";
+  mustChangePassword: boolean;
+  nicknamePasswordHash: string | null;
+  passwordUpdatedAt: Date | null;
+};
+
+export type CollectionAdminUser = {
+  id: string;
+  username: string;
+  role: "admin";
+  isBanned: boolean | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type CollectionAdminGroup = {
+  id: string;
+  leaderNickname: string;
+  leaderNicknameId: string | null;
+  leaderIsActive: boolean;
+  leaderRoleScope: "admin" | "user" | "both" | null;
+  memberNicknames: string[];
+  memberNicknameIds: string[];
+  createdBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type CollectionNicknameSession = {
+  activityId: string;
+  username: string;
+  userRole: string;
+  nickname: string;
+  verifiedAt: Date;
+  updatedAt: Date;
+};
+
 export type CreateCollectionRecordInput = {
   customerName: string;
   icNumber: string;
@@ -107,6 +157,26 @@ export type UpdateCollectionRecordInput = {
   receiptFile?: string | null;
   collectionStaffNickname?: string;
 };
+
+export type CreateCollectionStaffNicknameInput = {
+  nickname: string;
+  createdBy: string;
+  roleScope?: "admin" | "user" | "both";
+};
+
+export type UpdateCollectionStaffNicknameInput = {
+  nickname?: string;
+  isActive?: boolean;
+  roleScope?: "admin" | "user" | "both";
+};
+
+function normalizeCollectionNicknameRoleScope(value: unknown): "admin" | "user" | "both" {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "admin" || normalized === "user" || normalized === "both") {
+    return normalized;
+  }
+  return "both";
+}
 
 function detectValueType(value: string): "number" | "date" | "string" {
   if (!value) return "string";
@@ -317,12 +387,67 @@ function ensureObject(value: unknown): Record<string, any> | null {
     from?: string;
     to?: string;
     search?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
     limit?: number;
   }): Promise<CollectionRecord[]>;
   getCollectionMonthlySummary(filters: {
     year: number;
-    staff?: string;
+    nicknames?: string[];
+    createdByLogin?: string;
   }): Promise<CollectionMonthlySummary[]>;
+  getCollectionStaffNicknames(filters?: {
+    activeOnly?: boolean;
+    allowedRole?: "admin" | "user";
+  }): Promise<CollectionStaffNickname[]>;
+  getCollectionAdminUsers(): Promise<CollectionAdminUser[]>;
+  getCollectionAdminUserById(adminUserId: string): Promise<CollectionAdminUser | undefined>;
+  getCollectionAdminAssignedNicknameIds(adminUserId: string): Promise<string[]>;
+  getCollectionAdminVisibleNicknames(
+    adminUserId: string,
+    filters?: { activeOnly?: boolean; allowedRole?: "admin" | "user" },
+  ): Promise<CollectionStaffNickname[]>;
+  setCollectionAdminAssignedNicknameIds(params: {
+    adminUserId: string;
+    nicknameIds: string[];
+    createdBySuperuser: string;
+  }): Promise<string[]>;
+  getCollectionAdminGroups(): Promise<CollectionAdminGroup[]>;
+  getCollectionAdminGroupById(groupId: string): Promise<CollectionAdminGroup | undefined>;
+  createCollectionAdminGroup(params: {
+    leaderNicknameId: string;
+    memberNicknameIds: string[];
+    createdBy: string;
+  }): Promise<CollectionAdminGroup>;
+  updateCollectionAdminGroup(params: {
+    groupId: string;
+    leaderNicknameId?: string;
+    memberNicknameIds?: string[];
+    updatedBy: string;
+  }): Promise<CollectionAdminGroup | undefined>;
+  deleteCollectionAdminGroup(groupId: string): Promise<boolean>;
+  getCollectionAdminGroupVisibleNicknameValuesByLeader(leaderNickname: string): Promise<string[]>;
+  setCollectionNicknameSession(params: {
+    activityId: string;
+    username: string;
+    userRole: string;
+    nickname: string;
+  }): Promise<void>;
+  getCollectionNicknameSessionByActivity(activityId: string): Promise<CollectionNicknameSession | undefined>;
+  clearCollectionNicknameSessionByActivity(activityId: string): Promise<void>;
+  getCollectionStaffNicknameById(id: string): Promise<CollectionStaffNickname | undefined>;
+  getCollectionStaffNicknameByName(nickname: string): Promise<CollectionStaffNickname | undefined>;
+  getCollectionNicknameAuthProfileByName(nickname: string): Promise<CollectionNicknameAuthProfile | undefined>;
+  setCollectionNicknamePassword(params: {
+    nicknameId: string;
+    passwordHash: string;
+    mustChangePassword?: boolean;
+    passwordUpdatedAt?: Date | null;
+  }): Promise<void>;
+  createCollectionStaffNickname(data: CreateCollectionStaffNicknameInput): Promise<CollectionStaffNickname>;
+  updateCollectionStaffNickname(id: string, data: UpdateCollectionStaffNicknameInput): Promise<CollectionStaffNickname | undefined>;
+  deleteCollectionStaffNickname(id: string): Promise<{ deleted: boolean; deactivated: boolean }>;
+  isCollectionStaffNicknameActive(nickname: string): Promise<boolean>;
   getCollectionRecordById(id: string): Promise<CollectionRecord | undefined>;
   updateCollectionRecord(id: string, data: UpdateCollectionRecordInput): Promise<CollectionRecord | undefined>;
   deleteCollectionRecord(id: string): Promise<boolean>;
@@ -545,6 +670,10 @@ export class PostgresStorage implements IStorage {
   public async init() {
     await this.ensureUsersTable();
     await this.ensureCollectionRecordsTable();
+    await this.ensureCollectionStaffNicknamesTable();
+    await this.ensureCollectionAdminGroupsTables();
+    await this.ensureCollectionNicknameSessionsTable();
+    await this.ensureCollectionAdminVisibleNicknamesTable();
     await this.seedDefaultUsers();
     await this.ensureBackupsTable();
     await this.ensurePerformanceIndexes();
@@ -682,6 +811,378 @@ export class PostgresStorage implements IStorage {
       await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`);
     } catch (err: any) {
       console.error("❌ Failed to ensure collection_records table:", err?.message || err);
+      throw err;
+    }
+  }
+
+  private async ensureCollectionStaffNicknamesTable() {
+    try {
+      await db.execute(sql`SET search_path TO public`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.collection_staff_nicknames (
+          id uuid PRIMARY KEY,
+          nickname text NOT NULL,
+          is_active boolean NOT NULL DEFAULT true,
+          role_scope text NOT NULL DEFAULT 'both',
+          nickname_password_hash text,
+          must_change_password boolean NOT NULL DEFAULT true,
+          password_updated_at timestamp,
+          created_by text,
+          created_at timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS nickname text`);
+      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true`);
+      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS role_scope text DEFAULT 'both'`);
+      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS nickname_password_hash text`);
+      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS must_change_password boolean DEFAULT true`);
+      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS password_updated_at timestamp`);
+      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_by text`);
+      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+      await db.execute(sql`
+        UPDATE public.collection_staff_nicknames
+        SET
+          nickname = trim(COALESCE(nickname, '')),
+          is_active = COALESCE(is_active, true),
+          role_scope = CASE
+            WHEN lower(trim(COALESCE(role_scope, ''))) IN ('admin', 'user', 'both')
+              THEN lower(trim(COALESCE(role_scope, '')))
+            ELSE 'both'
+          END,
+          nickname_password_hash = NULLIF(trim(COALESCE(nickname_password_hash, '')), ''),
+          must_change_password = COALESCE(
+            must_change_password,
+            CASE
+              WHEN NULLIF(trim(COALESCE(nickname_password_hash, '')), '') IS NULL THEN true
+              ELSE false
+            END
+          ),
+          created_at = COALESCE(created_at, now())
+      `);
+      await db.execute(sql`DELETE FROM public.collection_staff_nicknames WHERE nickname = ''`);
+      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_staff_nicknames_lower_unique ON public.collection_staff_nicknames(lower(nickname))`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_active ON public.collection_staff_nicknames(is_active)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_role_scope ON public.collection_staff_nicknames(role_scope)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_must_change_password ON public.collection_staff_nicknames(must_change_password)`);
+
+      // Seed master nickname list from existing records to keep old workflows valid.
+      const seedRows = await db.execute(sql`
+        SELECT DISTINCT trim(collection_staff_nickname) AS nickname
+        FROM public.collection_records
+        WHERE collection_staff_nickname IS NOT NULL
+          AND trim(collection_staff_nickname) <> ''
+        LIMIT 5000
+      `);
+      for (const row of seedRows.rows as Array<{ nickname?: string }>) {
+        const nickname = String(row.nickname || "").trim();
+        if (!nickname) continue;
+        await db.execute(sql`
+          INSERT INTO public.collection_staff_nicknames (
+            id,
+            nickname,
+            is_active,
+            nickname_password_hash,
+            must_change_password,
+            password_updated_at,
+            created_by,
+            created_at
+          )
+          VALUES (
+            ${crypto.randomUUID()}::uuid,
+            ${nickname},
+            true,
+            NULL,
+            true,
+            NULL,
+            'system-seed',
+            now()
+          )
+          ON CONFLICT ((lower(nickname))) DO NOTHING
+        `);
+      }
+    } catch (err: any) {
+      console.error("❌ Failed to ensure collection_staff_nicknames table:", err?.message || err);
+      throw err;
+    }
+  }
+
+  private async ensureCollectionAdminGroupsTables() {
+    try {
+      await db.execute(sql`SET search_path TO public`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.admin_groups (
+          id uuid PRIMARY KEY,
+          leader_nickname text NOT NULL,
+          created_by text NOT NULL,
+          created_at timestamp NOT NULL DEFAULT now(),
+          updated_at timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.admin_group_members (
+          id uuid PRIMARY KEY,
+          admin_group_id uuid NOT NULL,
+          member_nickname text NOT NULL,
+          created_at timestamp NOT NULL DEFAULT now()
+        )
+      `);
+
+      await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS leader_nickname text`);
+      await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_by text`);
+      await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+      await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+
+      await db.execute(sql`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS admin_group_id uuid`);
+      await db.execute(sql`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS member_nickname text`);
+      await db.execute(sql`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+
+      await db.execute(sql`
+        UPDATE public.admin_groups
+        SET
+          leader_nickname = trim(COALESCE(leader_nickname, '')),
+          created_by = COALESCE(NULLIF(trim(COALESCE(created_by, '')), ''), 'system-seed'),
+          created_at = COALESCE(created_at, now()),
+          updated_at = COALESCE(updated_at, now())
+      `);
+      await db.execute(sql`DELETE FROM public.admin_groups WHERE trim(COALESCE(leader_nickname, '')) = ''`);
+
+      await db.execute(sql`
+        UPDATE public.admin_group_members
+        SET
+          member_nickname = trim(COALESCE(member_nickname, '')),
+          created_at = COALESCE(created_at, now())
+      `);
+      await db.execute(sql`DELETE FROM public.admin_group_members WHERE trim(COALESCE(member_nickname, '')) = ''`);
+      await db.execute(sql`
+        DELETE FROM public.admin_group_members m
+        WHERE m.admin_group_id IS NULL
+           OR NOT EXISTS (
+            SELECT 1
+            FROM public.admin_groups g
+            WHERE g.id = m.admin_group_id
+          )
+      `);
+
+      await db.execute(sql`
+        DELETE FROM public.admin_group_members m
+        USING public.admin_groups g
+        WHERE g.id = m.admin_group_id
+          AND lower(g.leader_nickname) = lower(m.member_nickname)
+      `);
+
+      await db.execute(sql`
+        DELETE FROM public.admin_groups a
+        USING public.admin_groups b
+        WHERE lower(a.leader_nickname) = lower(b.leader_nickname)
+          AND a.ctid > b.ctid
+      `);
+
+      await db.execute(sql`
+        DELETE FROM public.admin_group_members a
+        USING public.admin_group_members b
+        WHERE a.admin_group_id = b.admin_group_id
+          AND lower(a.member_nickname) = lower(b.member_nickname)
+          AND a.ctid > b.ctid
+      `);
+
+      await db.execute(sql`
+        DELETE FROM public.admin_group_members a
+        USING public.admin_group_members b
+        WHERE lower(a.member_nickname) = lower(b.member_nickname)
+          AND a.ctid > b.ctid
+      `);
+
+      await db.execute(sql`
+        DELETE FROM public.admin_group_members m
+        WHERE EXISTS (
+          SELECT 1
+          FROM public.admin_groups g
+          WHERE lower(g.leader_nickname) = lower(m.member_nickname)
+            AND g.id <> m.admin_group_id
+        )
+      `);
+
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_groups_leader_nickname_unique
+        ON public.admin_groups (lower(leader_nickname))
+      `);
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_group_members_group_member_unique
+        ON public.admin_group_members (admin_group_id, lower(member_nickname))
+      `);
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_group_members_member_unique
+        ON public.admin_group_members (lower(member_nickname))
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_admin_group_members_group
+        ON public.admin_group_members (admin_group_id)
+      `);
+    } catch (err: any) {
+      console.error("❌ Failed to ensure admin group tables:", err?.message || err);
+      throw err;
+    }
+  }
+
+  private async ensureCollectionNicknameSessionsTable() {
+    try {
+      await db.execute(sql`SET search_path TO public`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.collection_nickname_sessions (
+          activity_id text PRIMARY KEY,
+          username text NOT NULL,
+          user_role text NOT NULL,
+          nickname text NOT NULL,
+          verified_at timestamp NOT NULL DEFAULT now(),
+          updated_at timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS username text`);
+      await db.execute(sql`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS user_role text`);
+      await db.execute(sql`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS nickname text`);
+      await db.execute(sql`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS verified_at timestamp DEFAULT now()`);
+      await db.execute(sql`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+      await db.execute(sql`
+        UPDATE public.collection_nickname_sessions
+        SET
+          username = trim(COALESCE(username, '')),
+          user_role = trim(COALESCE(user_role, '')),
+          nickname = trim(COALESCE(nickname, '')),
+          verified_at = COALESCE(verified_at, now()),
+          updated_at = COALESCE(updated_at, now())
+      `);
+      await db.execute(sql`
+        DELETE FROM public.collection_nickname_sessions
+        WHERE trim(COALESCE(username, '')) = ''
+          OR trim(COALESCE(user_role, '')) = ''
+          OR trim(COALESCE(nickname, '')) = ''
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_username
+        ON public.collection_nickname_sessions (username)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_nickname
+        ON public.collection_nickname_sessions (lower(nickname))
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_updated_at
+        ON public.collection_nickname_sessions (updated_at DESC)
+      `);
+    } catch (err: any) {
+      console.error("❌ Failed to ensure collection nickname session table:", err?.message || err);
+      throw err;
+    }
+  }
+
+  private async ensureCollectionAdminVisibleNicknamesTable() {
+    try {
+      await db.execute(sql`SET search_path TO public`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.admin_visible_nicknames (
+          id uuid PRIMARY KEY,
+          admin_user_id text NOT NULL,
+          nickname_id uuid NOT NULL,
+          created_by_superuser text,
+          created_at timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS admin_user_id text`);
+      await db.execute(sql`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS nickname_id uuid`);
+      await db.execute(sql`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS created_by_superuser text`);
+      await db.execute(sql`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+      await db.execute(sql`
+        UPDATE public.admin_visible_nicknames
+        SET created_at = COALESCE(created_at, now())
+      `);
+      await db.execute(sql`
+        DELETE FROM public.admin_visible_nicknames avn
+        WHERE avn.admin_user_id IS NULL
+          OR avn.nickname_id IS NULL
+      `);
+      await db.execute(sql`
+        DELETE FROM public.admin_visible_nicknames avn
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM public.users u
+          WHERE u.id = avn.admin_user_id
+            AND u.role = 'admin'
+        )
+      `);
+      await db.execute(sql`
+        DELETE FROM public.admin_visible_nicknames avn
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM public.collection_staff_nicknames c
+          WHERE c.id = avn.nickname_id
+        )
+      `);
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_visible_nicknames_admin_nickname_unique
+        ON public.admin_visible_nicknames(admin_user_id, nickname_id)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_admin_visible_nicknames_admin
+        ON public.admin_visible_nicknames(admin_user_id)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_admin_visible_nicknames_nickname
+        ON public.admin_visible_nicknames(nickname_id)
+      `);
+
+      const existingCount = await db.execute(sql`
+        SELECT COUNT(*)::int AS total
+        FROM public.admin_visible_nicknames
+        LIMIT 1
+      `);
+      const total = Number(existingCount.rows?.[0]?.total ?? 0);
+      if (total === 0) {
+        const admins = await db.execute(sql`
+          SELECT id
+          FROM public.users
+          WHERE role = 'admin'
+          ORDER BY username ASC
+          LIMIT 5000
+        `);
+        const nicknames = await db.execute(sql`
+          SELECT id
+          FROM public.collection_staff_nicknames
+          WHERE is_active = true
+          ORDER BY lower(nickname) ASC
+          LIMIT 5000
+        `);
+
+        const adminIds = (admins.rows || [])
+          .map((row: any) => String(row.id || "").trim())
+          .filter(Boolean);
+        const nicknameIds = (nicknames.rows || [])
+          .map((row: any) => String(row.id || "").trim())
+          .filter(Boolean);
+
+        for (const adminUserId of adminIds) {
+          for (const nicknameId of nicknameIds) {
+            await db.execute(sql`
+              INSERT INTO public.admin_visible_nicknames (
+                id,
+                admin_user_id,
+                nickname_id,
+                created_by_superuser,
+                created_at
+              )
+              VALUES (
+                ${randomUUID()}::uuid,
+                ${adminUserId},
+                ${nicknameId}::uuid,
+                'system-seed',
+                now()
+              )
+              ON CONFLICT (admin_user_id, nickname_id) DO NOTHING
+            `);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error("❌ Failed to ensure admin_visible_nicknames table:", err?.message || err);
       throw err;
     }
   }
@@ -4370,6 +4871,124 @@ export class PostgresStorage implements IStorage {
     return rows;
   }
 
+  private mapCollectionStaffNicknameRow(row: any): CollectionStaffNickname {
+    const createdAtRaw = row.created_at ?? row.createdAt;
+    const createdAt = createdAtRaw instanceof Date
+      ? createdAtRaw
+      : new Date(createdAtRaw ?? Date.now());
+
+    return {
+      id: String(row.id ?? ""),
+      nickname: String(row.nickname ?? ""),
+      isActive: Boolean(row.is_active ?? row.isActive),
+      roleScope: normalizeCollectionNicknameRoleScope(row.role_scope ?? row.roleScope),
+      createdBy: row.created_by ?? row.createdBy ?? null,
+      createdAt,
+    };
+  }
+
+  private mapCollectionNicknameAuthProfileRow(row: any): CollectionNicknameAuthProfile {
+    const passwordUpdatedAtRaw = row.password_updated_at ?? row.passwordUpdatedAt ?? null;
+    const passwordUpdatedAt =
+      passwordUpdatedAtRaw instanceof Date
+        ? passwordUpdatedAtRaw
+        : passwordUpdatedAtRaw
+          ? new Date(passwordUpdatedAtRaw)
+          : null;
+
+    return {
+      id: String(row.id ?? ""),
+      nickname: String(row.nickname ?? ""),
+      isActive: Boolean(row.is_active ?? row.isActive),
+      roleScope: normalizeCollectionNicknameRoleScope(row.role_scope ?? row.roleScope),
+      mustChangePassword: Boolean(row.must_change_password ?? row.mustChangePassword ?? true),
+      nicknamePasswordHash: row.nickname_password_hash ?? row.nicknamePasswordHash ?? null,
+      passwordUpdatedAt,
+    };
+  }
+
+  private mapCollectionAdminUserRow(row: any): CollectionAdminUser {
+    const createdAtRaw = row.created_at ?? row.createdAt;
+    const createdAt = createdAtRaw instanceof Date
+      ? createdAtRaw
+      : new Date(createdAtRaw ?? Date.now());
+    const updatedAtRaw = row.updated_at ?? row.updatedAt;
+    const updatedAt = updatedAtRaw instanceof Date
+      ? updatedAtRaw
+      : new Date(updatedAtRaw ?? Date.now());
+
+    return {
+      id: String(row.id ?? ""),
+      username: String(row.username ?? ""),
+      role: "admin",
+      isBanned: row.is_banned ?? row.isBanned ?? null,
+      createdAt,
+      updatedAt,
+    };
+  }
+
+  private mapCollectionAdminGroupRow(
+    row: any,
+    nicknameIdByLowerName: Map<string, string>,
+  ): CollectionAdminGroup {
+    const createdAtRaw = row.created_at ?? row.createdAt;
+    const createdAt = createdAtRaw instanceof Date
+      ? createdAtRaw
+      : new Date(createdAtRaw ?? Date.now());
+    const updatedAtRaw = row.updated_at ?? row.updatedAt;
+    const updatedAt = updatedAtRaw instanceof Date
+      ? updatedAtRaw
+      : new Date(updatedAtRaw ?? Date.now());
+
+    const rawMembers: unknown[] = Array.isArray(row.member_nicknames)
+      ? row.member_nicknames
+      : Array.isArray(row.memberNicknames)
+        ? row.memberNicknames
+        : [];
+
+    const memberNicknames = Array.from(new Set(
+      rawMembers
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean),
+    )).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+
+    const memberNicknameIds = memberNicknames
+      .map((name) => nicknameIdByLowerName.get(name.toLowerCase()) || "")
+      .filter(Boolean);
+
+    return {
+      id: String(row.id ?? ""),
+      leaderNickname: String(row.leader_nickname ?? row.leaderNickname ?? ""),
+      leaderNicknameId: row.leader_nickname_id || row.leaderNicknameId
+        ? String(row.leader_nickname_id ?? row.leaderNicknameId)
+        : null,
+      leaderIsActive: Boolean(row.leader_is_active ?? row.leaderIsActive ?? false),
+      leaderRoleScope: row.leader_role_scope
+        ? normalizeCollectionNicknameRoleScope(row.leader_role_scope)
+        : row.leaderRoleScope
+          ? normalizeCollectionNicknameRoleScope(row.leaderRoleScope)
+          : null,
+      memberNicknames,
+      memberNicknameIds,
+      createdBy: row.created_by ?? row.createdBy ?? null,
+      createdAt,
+      updatedAt,
+    };
+  }
+
+  private mapCollectionNicknameSessionRow(row: any): CollectionNicknameSession {
+    const verifiedAtRaw = row.verified_at ?? row.verifiedAt;
+    const updatedAtRaw = row.updated_at ?? row.updatedAt;
+    return {
+      activityId: String(row.activity_id ?? row.activityId ?? ""),
+      username: String(row.username ?? ""),
+      userRole: String(row.user_role ?? row.userRole ?? ""),
+      nickname: String(row.nickname ?? ""),
+      verifiedAt: verifiedAtRaw instanceof Date ? verifiedAtRaw : new Date(verifiedAtRaw ?? Date.now()),
+      updatedAt: updatedAtRaw instanceof Date ? updatedAtRaw : new Date(updatedAtRaw ?? Date.now()),
+    };
+  }
+
   private mapCollectionRecordRow(row: any): CollectionRecord {
     const paymentDateRaw = row.payment_date ?? row.paymentDate;
     const paymentDate =
@@ -4398,6 +5017,910 @@ export class PostgresStorage implements IStorage {
       collectionStaffNickname: String(row.collection_staff_nickname ?? row.collectionStaffNickname ?? row.staff_username ?? row.staffUsername ?? ""),
       createdAt,
     };
+  }
+
+  async getCollectionStaffNicknames(filters?: {
+    activeOnly?: boolean;
+    allowedRole?: "admin" | "user";
+  }): Promise<CollectionStaffNickname[]> {
+    const conditions: any[] = [];
+    if (filters?.activeOnly === true) {
+      conditions.push(sql`is_active = true`);
+    }
+    if (filters?.allowedRole === "admin") {
+      conditions.push(sql`role_scope IN ('admin', 'both')`);
+    } else if (filters?.allowedRole === "user") {
+      conditions.push(sql`role_scope IN ('user', 'both')`);
+    }
+    const whereSql = conditions.length > 0
+      ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
+      : sql``;
+
+    const result = await db.execute(sql`
+      SELECT
+        id,
+        nickname,
+        is_active,
+        role_scope,
+        created_by,
+        created_at
+      FROM public.collection_staff_nicknames
+      ${whereSql}
+      ORDER BY is_active DESC, lower(nickname) ASC
+      LIMIT 1000
+    `);
+
+    return (result.rows || []).map((row: any) => this.mapCollectionStaffNicknameRow(row));
+  }
+
+  async getCollectionAdminUsers(): Promise<CollectionAdminUser[]> {
+    const result = await db.execute(sql`
+      SELECT
+        id,
+        username,
+        role,
+        is_banned,
+        created_at,
+        updated_at
+      FROM public.users
+      WHERE role = 'admin'
+      ORDER BY lower(username) ASC
+      LIMIT 1000
+    `);
+    return (result.rows || []).map((row: any) => this.mapCollectionAdminUserRow(row));
+  }
+
+  async getCollectionAdminUserById(adminUserId: string): Promise<CollectionAdminUser | undefined> {
+    const normalized = String(adminUserId || "").trim();
+    if (!normalized) return undefined;
+
+    const result = await db.execute(sql`
+      SELECT
+        id,
+        username,
+        role,
+        is_banned,
+        created_at,
+        updated_at
+      FROM public.users
+      WHERE id = ${normalized}
+        AND role = 'admin'
+      LIMIT 1
+    `);
+    const row = result.rows?.[0];
+    if (!row) return undefined;
+    return this.mapCollectionAdminUserRow(row);
+  }
+
+  async getCollectionAdminAssignedNicknameIds(adminUserId: string): Promise<string[]> {
+    const normalized = String(adminUserId || "").trim();
+    if (!normalized) return [];
+
+    const result = await db.execute(sql`
+      SELECT avn.nickname_id
+      FROM public.admin_visible_nicknames avn
+      WHERE avn.admin_user_id = ${normalized}
+      ORDER BY avn.nickname_id ASC
+      LIMIT 5000
+    `);
+    return (result.rows || [])
+      .map((row: any) => String(row.nickname_id || "").trim())
+      .filter(Boolean);
+  }
+
+  async getCollectionAdminVisibleNicknames(
+    adminUserId: string,
+    filters?: { activeOnly?: boolean; allowedRole?: "admin" | "user" },
+  ): Promise<CollectionStaffNickname[]> {
+    const normalized = String(adminUserId || "").trim();
+    if (!normalized) return [];
+
+    const conditions: any[] = [sql`avn.admin_user_id = ${normalized}`];
+    if (filters?.activeOnly === true) {
+      conditions.push(sql`n.is_active = true`);
+    }
+    if (filters?.allowedRole === "admin") {
+      conditions.push(sql`n.role_scope IN ('admin', 'both')`);
+    } else if (filters?.allowedRole === "user") {
+      conditions.push(sql`n.role_scope IN ('user', 'both')`);
+    }
+    const whereSql = sql`WHERE ${sql.join(conditions, sql` AND `)}`;
+
+    const result = await db.execute(sql`
+      SELECT
+        n.id,
+        n.nickname,
+        n.is_active,
+        n.role_scope,
+        n.created_by,
+        n.created_at
+      FROM public.admin_visible_nicknames avn
+      INNER JOIN public.collection_staff_nicknames n
+        ON n.id = avn.nickname_id
+      INNER JOIN public.users u
+        ON u.id = avn.admin_user_id
+       AND u.role = 'admin'
+      ${whereSql}
+      ORDER BY n.is_active DESC, lower(n.nickname) ASC
+      LIMIT 1000
+    `);
+
+    return (result.rows || []).map((row: any) => this.mapCollectionStaffNicknameRow(row));
+  }
+
+  async setCollectionAdminAssignedNicknameIds(params: {
+    adminUserId: string;
+    nicknameIds: string[];
+    createdBySuperuser: string;
+  }): Promise<string[]> {
+    const adminUserId = String(params.adminUserId || "").trim();
+    const createdBySuperuser = String(params.createdBySuperuser || "").trim();
+    if (!adminUserId) {
+      throw new Error("adminUserId is required.");
+    }
+    if (!createdBySuperuser) {
+      throw new Error("createdBySuperuser is required.");
+    }
+
+    const normalizedNicknameIds = Array.isArray(params.nicknameIds)
+      ? params.nicknameIds
+        .map((value) => String(value || "").trim())
+        .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index)
+      : [];
+
+    return db.transaction(async (tx) => {
+      const adminCheck = await tx.execute(sql`
+        SELECT id
+        FROM public.users
+        WHERE id = ${adminUserId}
+          AND role = 'admin'
+        LIMIT 1
+      `);
+      if (!adminCheck.rows?.[0]) {
+        throw new Error("Admin user not found.");
+      }
+
+      let validNicknameIds: string[] = [];
+      if (normalizedNicknameIds.length > 0) {
+        const nicknameSql = sql.join(
+          normalizedNicknameIds.map((value) => sql`${value}::uuid`),
+          sql`, `,
+        );
+        const validRows = await tx.execute(sql`
+          SELECT id
+          FROM public.collection_staff_nicknames
+          WHERE id IN (${nicknameSql})
+          LIMIT 5000
+        `);
+        validNicknameIds = (validRows.rows || [])
+          .map((row: any) => String(row.id || "").trim())
+          .filter(Boolean);
+        if (validNicknameIds.length !== normalizedNicknameIds.length) {
+          throw new Error("Invalid nickname ids.");
+        }
+      }
+
+      await tx.execute(sql`
+        DELETE FROM public.admin_visible_nicknames
+        WHERE admin_user_id = ${adminUserId}
+      `);
+
+      for (const nicknameId of validNicknameIds) {
+        await tx.execute(sql`
+          INSERT INTO public.admin_visible_nicknames (
+            id,
+            admin_user_id,
+            nickname_id,
+            created_by_superuser,
+            created_at
+          )
+          VALUES (
+            ${randomUUID()}::uuid,
+            ${adminUserId},
+            ${nicknameId}::uuid,
+            ${createdBySuperuser},
+            now()
+          )
+          ON CONFLICT (admin_user_id, nickname_id) DO NOTHING
+        `);
+      }
+
+      const assignedRows = await tx.execute(sql`
+        SELECT nickname_id
+        FROM public.admin_visible_nicknames
+        WHERE admin_user_id = ${adminUserId}
+        ORDER BY nickname_id ASC
+      `);
+      return (assignedRows.rows || [])
+        .map((row: any) => String(row.nickname_id || "").trim())
+        .filter(Boolean);
+    });
+  }
+
+  private async resolveNicknameNamesByIds(
+    tx: { execute: (query: any) => Promise<any> },
+    nicknameIds: string[],
+  ): Promise<Array<{ id: string; nickname: string; roleScope: "admin" | "user" | "both"; isActive: boolean }>> {
+    const normalizedIds = Array.isArray(nicknameIds)
+      ? nicknameIds
+        .map((value) => String(value || "").trim())
+        .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index)
+      : [];
+    if (!normalizedIds.length) return [];
+
+    const idSql = sql.join(normalizedIds.map((value) => sql`${value}::uuid`), sql`, `);
+    const result = await tx.execute(sql`
+      SELECT id, nickname, role_scope, is_active
+      FROM public.collection_staff_nicknames
+      WHERE id IN (${idSql})
+      LIMIT 5000
+    `);
+    const rows = (result.rows || []).map((row: any) => ({
+      id: String(row.id || "").trim(),
+      nickname: String(row.nickname || "").trim(),
+      roleScope: normalizeCollectionNicknameRoleScope(row.role_scope),
+      isActive: Boolean(row.is_active),
+    }));
+    if (rows.length !== normalizedIds.length) {
+      throw new Error("Invalid nickname ids.");
+    }
+    return rows;
+  }
+
+  private async validateAdminGroupComposition(params: {
+    tx: { execute: (query: any) => Promise<any> };
+    groupIdToExclude?: string;
+    leaderNickname: string;
+    memberNicknames: string[];
+  }): Promise<void> {
+    const leaderLower = params.leaderNickname.toLowerCase();
+    const uniqueMembers = Array.from(new Set(
+      params.memberNicknames
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ));
+    const memberLower = uniqueMembers.map((value) => value.toLowerCase());
+
+    if (memberLower.includes(leaderLower)) {
+      throw new Error("Leader nickname cannot be a member of the same group.");
+    }
+
+    const leaderRows = await params.tx.execute(sql`
+      SELECT id
+      FROM public.admin_groups
+      WHERE lower(leader_nickname) = lower(${params.leaderNickname})
+        ${params.groupIdToExclude ? sql`AND id <> ${params.groupIdToExclude}::uuid` : sql``}
+      LIMIT 1
+    `);
+    if (leaderRows.rows?.[0]) {
+      throw new Error("Leader nickname already assigned.");
+    }
+
+    if (!memberLower.length) return;
+
+    const membersSql = sql.join(memberLower.map((value) => sql`${value}`), sql`, `);
+    const memberConflict = await params.tx.execute(sql`
+      SELECT member_nickname
+      FROM public.admin_group_members
+      WHERE lower(member_nickname) IN (${membersSql})
+        ${params.groupIdToExclude ? sql`AND admin_group_id <> ${params.groupIdToExclude}::uuid` : sql``}
+      LIMIT 1
+    `);
+    if (memberConflict.rows?.[0]) {
+      throw new Error("This nickname is already assigned to another admin group.");
+    }
+
+    const leaderConflict = await params.tx.execute(sql`
+      SELECT leader_nickname
+      FROM public.admin_groups
+      WHERE lower(leader_nickname) IN (${membersSql})
+        ${params.groupIdToExclude ? sql`AND id <> ${params.groupIdToExclude}::uuid` : sql``}
+      LIMIT 1
+    `);
+    if (leaderConflict.rows?.[0]) {
+      throw new Error("Group member conflicts with another group leader.");
+    }
+  }
+
+  async getCollectionAdminGroups(): Promise<CollectionAdminGroup[]> {
+    const nicknameRows = await db.execute(sql`
+      SELECT id, nickname
+      FROM public.collection_staff_nicknames
+      LIMIT 5000
+    `);
+    const nicknameIdByLowerName = new Map<string, string>();
+    for (const row of nicknameRows.rows || []) {
+      const nickname = String((row as any).nickname || "").trim().toLowerCase();
+      const id = String((row as any).id || "").trim();
+      if (!nickname || !id || nicknameIdByLowerName.has(nickname)) continue;
+      nicknameIdByLowerName.set(nickname, id);
+    }
+
+    const result = await db.execute(sql`
+      SELECT
+        g.id,
+        g.leader_nickname,
+        g.created_by,
+        g.created_at,
+        g.updated_at,
+        leader.id AS leader_nickname_id,
+        leader.is_active AS leader_is_active,
+        leader.role_scope AS leader_role_scope,
+        COALESCE(
+          array_agg(DISTINCT gm.member_nickname) FILTER (WHERE gm.member_nickname IS NOT NULL),
+          ARRAY[]::text[]
+        ) AS member_nicknames
+      FROM public.admin_groups g
+      LEFT JOIN public.collection_staff_nicknames leader
+        ON lower(leader.nickname) = lower(g.leader_nickname)
+      LEFT JOIN public.admin_group_members gm
+        ON gm.admin_group_id = g.id
+      GROUP BY
+        g.id,
+        g.leader_nickname,
+        g.created_by,
+        g.created_at,
+        g.updated_at,
+        leader.id,
+        leader.is_active,
+        leader.role_scope
+      ORDER BY lower(g.leader_nickname) ASC
+      LIMIT 5000
+    `);
+
+    return (result.rows || []).map((row: any) => this.mapCollectionAdminGroupRow(row, nicknameIdByLowerName));
+  }
+
+  async getCollectionAdminGroupById(groupId: string): Promise<CollectionAdminGroup | undefined> {
+    const normalizedGroupId = String(groupId || "").trim();
+    if (!normalizedGroupId) return undefined;
+    const groups = await this.getCollectionAdminGroups();
+    return groups.find((item) => item.id === normalizedGroupId);
+  }
+
+  async createCollectionAdminGroup(params: {
+    leaderNicknameId: string;
+    memberNicknameIds: string[];
+    createdBy: string;
+  }): Promise<CollectionAdminGroup> {
+    const createdBy = String(params.createdBy || "").trim();
+    if (!createdBy) {
+      throw new Error("createdBy is required.");
+    }
+    const createdGroupId = await db.transaction(async (tx) => {
+      const leaderRows = await this.resolveNicknameNamesByIds(tx, [params.leaderNicknameId]);
+      const leader = leaderRows[0];
+      if (!leader || !leader.nickname) {
+        throw new Error("Invalid leader nickname.");
+      }
+      if (!(leader.roleScope === "admin" || leader.roleScope === "both")) {
+        throw new Error("Leader nickname must have admin scope.");
+      }
+      if (!leader.isActive) {
+        throw new Error("Leader nickname must be active.");
+      }
+
+      const memberRows = await this.resolveNicknameNamesByIds(tx, params.memberNicknameIds || []);
+      const memberNicknames = memberRows.map((item) => item.nickname).filter(Boolean);
+
+      await this.validateAdminGroupComposition({
+        tx,
+        leaderNickname: leader.nickname,
+        memberNicknames,
+      });
+
+      const groupId = randomUUID();
+      await tx.execute(sql`
+        INSERT INTO public.admin_groups (
+          id,
+          leader_nickname,
+          created_by,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          ${groupId}::uuid,
+          ${leader.nickname},
+          ${createdBy},
+          now(),
+          now()
+        )
+      `);
+
+      for (const memberNickname of memberNicknames) {
+        if (!memberNickname || memberNickname.toLowerCase() === leader.nickname.toLowerCase()) continue;
+        await tx.execute(sql`
+          INSERT INTO public.admin_group_members (
+            id,
+            admin_group_id,
+            member_nickname,
+            created_at
+          )
+          VALUES (
+            ${randomUUID()}::uuid,
+            ${groupId}::uuid,
+            ${memberNickname},
+            now()
+          )
+          ON CONFLICT DO NOTHING
+        `);
+      }
+      return groupId;
+    });
+    const created = await this.getCollectionAdminGroupById(createdGroupId);
+    if (!created) {
+      throw new Error("Failed to create admin group.");
+    }
+    return created;
+  }
+
+  async updateCollectionAdminGroup(params: {
+    groupId: string;
+    leaderNicknameId?: string;
+    memberNicknameIds?: string[];
+    updatedBy: string;
+  }): Promise<CollectionAdminGroup | undefined> {
+    const groupId = String(params.groupId || "").trim();
+    const updatedBy = String(params.updatedBy || "").trim();
+    if (!groupId) {
+      throw new Error("groupId is required.");
+    }
+    if (!updatedBy) {
+      throw new Error("updatedBy is required.");
+    }
+
+    const updatedGroupId = await db.transaction(async (tx) => {
+      const existingRow = await tx.execute(sql`
+        SELECT id, leader_nickname
+        FROM public.admin_groups
+        WHERE id = ${groupId}::uuid
+        LIMIT 1
+      `);
+      const existing = existingRow.rows?.[0];
+      if (!existing) {
+        return null;
+      }
+
+      let leaderNickname = String(existing.leader_nickname || "").trim();
+      if (params.leaderNicknameId) {
+        const leaderRows = await this.resolveNicknameNamesByIds(tx, [params.leaderNicknameId]);
+        const leader = leaderRows[0];
+        if (!leader || !leader.nickname) {
+          throw new Error("Invalid leader nickname.");
+        }
+        if (!(leader.roleScope === "admin" || leader.roleScope === "both")) {
+          throw new Error("Leader nickname must have admin scope.");
+        }
+        if (!leader.isActive) {
+          throw new Error("Leader nickname must be active.");
+        }
+        leaderNickname = leader.nickname;
+      }
+
+      let memberNicknames: string[] = [];
+      if (params.memberNicknameIds !== undefined) {
+        const memberRows = await this.resolveNicknameNamesByIds(tx, params.memberNicknameIds || []);
+        memberNicknames = memberRows.map((item) => item.nickname).filter(Boolean);
+      } else {
+        const existingMembers = await tx.execute(sql`
+          SELECT member_nickname
+          FROM public.admin_group_members
+          WHERE admin_group_id = ${groupId}::uuid
+          LIMIT 5000
+        `);
+        memberNicknames = (existingMembers.rows || [])
+          .map((row: any) => String(row.member_nickname || "").trim())
+          .filter(Boolean);
+      }
+
+      await this.validateAdminGroupComposition({
+        tx,
+        groupIdToExclude: groupId,
+        leaderNickname,
+        memberNicknames,
+      });
+
+      await tx.execute(sql`
+        UPDATE public.admin_groups
+        SET
+          leader_nickname = ${leaderNickname},
+          created_by = COALESCE(NULLIF(trim(COALESCE(created_by, '')), ''), ${updatedBy}),
+          updated_at = now()
+        WHERE id = ${groupId}::uuid
+      `);
+
+      await tx.execute(sql`
+        DELETE FROM public.admin_group_members
+        WHERE admin_group_id = ${groupId}::uuid
+      `);
+      for (const memberNickname of memberNicknames) {
+        if (!memberNickname || memberNickname.toLowerCase() === leaderNickname.toLowerCase()) continue;
+        await tx.execute(sql`
+          INSERT INTO public.admin_group_members (
+            id,
+            admin_group_id,
+            member_nickname,
+            created_at
+          )
+          VALUES (
+            ${randomUUID()}::uuid,
+            ${groupId}::uuid,
+            ${memberNickname},
+            now()
+          )
+          ON CONFLICT DO NOTHING
+        `);
+      }
+      return groupId;
+    });
+    if (!updatedGroupId) return undefined;
+    return this.getCollectionAdminGroupById(updatedGroupId);
+  }
+
+  async deleteCollectionAdminGroup(groupId: string): Promise<boolean> {
+    const normalizedGroupId = String(groupId || "").trim();
+    if (!normalizedGroupId) return false;
+
+    return db.transaction(async (tx) => {
+      await tx.execute(sql`
+        DELETE FROM public.admin_group_members
+        WHERE admin_group_id = ${normalizedGroupId}::uuid
+      `);
+      const result = await tx.execute(sql`
+        DELETE FROM public.admin_groups
+        WHERE id = ${normalizedGroupId}::uuid
+        RETURNING id
+      `);
+      return Boolean(result.rows?.[0]);
+    });
+  }
+
+  async getCollectionAdminGroupVisibleNicknameValuesByLeader(leaderNickname: string): Promise<string[]> {
+    const normalizedLeader = String(leaderNickname || "").trim();
+    if (!normalizedLeader) return [];
+
+    const rows = await db.execute(sql`
+      SELECT
+        g.leader_nickname,
+        COALESCE(
+          array_agg(DISTINCT gm.member_nickname) FILTER (WHERE gm.member_nickname IS NOT NULL),
+          ARRAY[]::text[]
+        ) AS member_nicknames
+      FROM public.admin_groups g
+      LEFT JOIN public.admin_group_members gm
+        ON gm.admin_group_id = g.id
+      WHERE lower(g.leader_nickname) = lower(${normalizedLeader})
+      GROUP BY g.id, g.leader_nickname
+      LIMIT 1
+    `);
+
+    const row = rows.rows?.[0];
+    if (!row) {
+      return [normalizedLeader];
+    }
+
+    const members: string[] = Array.isArray((row as any).member_nicknames)
+      ? (row as any).member_nicknames.map((value: unknown) => String(value || "").trim()).filter(Boolean)
+      : [];
+    const uniqueMembers = Array.from(new Set(members.filter((value) => value.toLowerCase() !== normalizedLeader.toLowerCase())))
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    return [String((row as any).leader_nickname || normalizedLeader).trim(), ...uniqueMembers];
+  }
+
+  async setCollectionNicknameSession(params: {
+    activityId: string;
+    username: string;
+    userRole: string;
+    nickname: string;
+  }): Promise<void> {
+    const activityId = String(params.activityId || "").trim();
+    const username = String(params.username || "").trim();
+    const userRole = String(params.userRole || "").trim();
+    const nickname = String(params.nickname || "").trim();
+    if (!activityId || !username || !userRole || !nickname) {
+      throw new Error("Invalid collection nickname session payload.");
+    }
+    await db.execute(sql`
+      INSERT INTO public.collection_nickname_sessions (
+        activity_id,
+        username,
+        user_role,
+        nickname,
+        verified_at,
+        updated_at
+      )
+      VALUES (
+        ${activityId},
+        ${username},
+        ${userRole},
+        ${nickname},
+        now(),
+        now()
+      )
+      ON CONFLICT (activity_id) DO UPDATE
+      SET
+        username = EXCLUDED.username,
+        user_role = EXCLUDED.user_role,
+        nickname = EXCLUDED.nickname,
+        updated_at = now()
+    `);
+  }
+
+  async getCollectionNicknameSessionByActivity(activityId: string): Promise<CollectionNicknameSession | undefined> {
+    const normalizedActivityId = String(activityId || "").trim();
+    if (!normalizedActivityId) return undefined;
+    const result = await db.execute(sql`
+      SELECT
+        activity_id,
+        username,
+        user_role,
+        nickname,
+        verified_at,
+        updated_at
+      FROM public.collection_nickname_sessions
+      WHERE activity_id = ${normalizedActivityId}
+      LIMIT 1
+    `);
+    const row = result.rows?.[0];
+    if (!row) return undefined;
+    return this.mapCollectionNicknameSessionRow(row);
+  }
+
+  async clearCollectionNicknameSessionByActivity(activityId: string): Promise<void> {
+    const normalizedActivityId = String(activityId || "").trim();
+    if (!normalizedActivityId) return;
+    await db.execute(sql`
+      DELETE FROM public.collection_nickname_sessions
+      WHERE activity_id = ${normalizedActivityId}
+    `);
+  }
+
+  async getCollectionStaffNicknameById(id: string): Promise<CollectionStaffNickname | undefined> {
+    const result = await db.execute(sql`
+      SELECT
+        id,
+        nickname,
+        is_active,
+        role_scope,
+        created_by,
+        created_at
+      FROM public.collection_staff_nicknames
+      WHERE id = ${id}::uuid
+      LIMIT 1
+    `);
+    const row = result.rows?.[0];
+    if (!row) return undefined;
+    return this.mapCollectionStaffNicknameRow(row);
+  }
+
+  async getCollectionStaffNicknameByName(nickname: string): Promise<CollectionStaffNickname | undefined> {
+    const normalized = String(nickname || "").trim();
+    if (!normalized) return undefined;
+
+    const result = await db.execute(sql`
+      SELECT
+        id,
+        nickname,
+        is_active,
+        role_scope,
+        created_by,
+        created_at
+      FROM public.collection_staff_nicknames
+      WHERE lower(nickname) = lower(${normalized})
+      LIMIT 1
+    `);
+    const row = result.rows?.[0];
+    if (!row) return undefined;
+    return this.mapCollectionStaffNicknameRow(row);
+  }
+
+  async getCollectionNicknameAuthProfileByName(nickname: string): Promise<CollectionNicknameAuthProfile | undefined> {
+    const normalized = String(nickname || "").trim();
+    if (!normalized) return undefined;
+
+    const result = await db.execute(sql`
+      SELECT
+        id,
+        nickname,
+        is_active,
+        role_scope,
+        nickname_password_hash,
+        must_change_password,
+        password_updated_at
+      FROM public.collection_staff_nicknames
+      WHERE lower(nickname) = lower(${normalized})
+      LIMIT 1
+    `);
+    const row = result.rows?.[0];
+    if (!row) return undefined;
+    return this.mapCollectionNicknameAuthProfileRow(row);
+  }
+
+  async setCollectionNicknamePassword(params: {
+    nicknameId: string;
+    passwordHash: string;
+    mustChangePassword?: boolean;
+    passwordUpdatedAt?: Date | null;
+  }): Promise<void> {
+    const nicknameId = String(params.nicknameId || "").trim();
+    const passwordHash = String(params.passwordHash || "").trim();
+    const mustChangePassword = params.mustChangePassword ?? false;
+    const passwordUpdatedAt = params.passwordUpdatedAt ?? new Date();
+
+    if (!nicknameId) {
+      throw new Error("nicknameId is required.");
+    }
+    if (!passwordHash) {
+      throw new Error("passwordHash is required.");
+    }
+
+    await db.execute(sql`
+      UPDATE public.collection_staff_nicknames
+      SET
+        nickname_password_hash = ${passwordHash},
+        must_change_password = ${mustChangePassword},
+        password_updated_at = ${passwordUpdatedAt}
+      WHERE id = ${nicknameId}::uuid
+    `);
+  }
+
+  async createCollectionStaffNickname(data: CreateCollectionStaffNicknameInput): Promise<CollectionStaffNickname> {
+    const result = await db.execute(sql`
+      INSERT INTO public.collection_staff_nicknames (
+        id,
+        nickname,
+        is_active,
+        role_scope,
+        nickname_password_hash,
+        must_change_password,
+        password_updated_at,
+        created_by,
+        created_at
+      )
+      VALUES (
+        ${crypto.randomUUID()}::uuid,
+        ${data.nickname},
+        true,
+        ${normalizeCollectionNicknameRoleScope(data.roleScope)},
+        NULL,
+        true,
+        NULL,
+        ${data.createdBy},
+        now()
+      )
+      RETURNING
+        id,
+        nickname,
+        is_active,
+        role_scope,
+        created_by,
+        created_at
+    `);
+    return this.mapCollectionStaffNicknameRow(result.rows[0]);
+  }
+
+  async updateCollectionStaffNickname(
+    id: string,
+    data: UpdateCollectionStaffNicknameInput,
+  ): Promise<CollectionStaffNickname | undefined> {
+    const existing = await this.getCollectionStaffNicknameById(id);
+    if (!existing) return undefined;
+
+    const updates: any[] = [];
+    if (data.nickname !== undefined) {
+      updates.push(sql`nickname = ${data.nickname}`);
+    }
+    if (data.isActive !== undefined) {
+      updates.push(sql`is_active = ${data.isActive}`);
+    }
+    if (data.roleScope !== undefined) {
+      updates.push(sql`role_scope = ${normalizeCollectionNicknameRoleScope(data.roleScope)}`);
+    }
+    if (!updates.length) {
+      return existing;
+    }
+
+    return db.transaction(async (tx) => {
+      const result = await tx.execute(sql`
+        UPDATE public.collection_staff_nicknames
+        SET ${sql.join(updates, sql`, `)}
+        WHERE id = ${id}::uuid
+        RETURNING
+          id,
+          nickname,
+          is_active,
+          role_scope,
+          created_by,
+          created_at
+      `);
+      const row = result.rows?.[0];
+      if (!row) return undefined;
+
+      const updated = this.mapCollectionStaffNicknameRow(row);
+      const oldNickname = String(existing.nickname || "").trim();
+      const newNickname = String(updated.nickname || "").trim();
+      if (oldNickname && newNickname && oldNickname.toLowerCase() !== newNickname.toLowerCase()) {
+        await tx.execute(sql`
+          UPDATE public.admin_groups
+          SET
+            leader_nickname = ${newNickname},
+            updated_at = now()
+          WHERE lower(leader_nickname) = lower(${oldNickname})
+        `);
+        await tx.execute(sql`
+          UPDATE public.admin_group_members
+          SET member_nickname = ${newNickname}
+          WHERE lower(member_nickname) = lower(${oldNickname})
+        `);
+        await tx.execute(sql`
+          UPDATE public.collection_nickname_sessions
+          SET
+            nickname = ${newNickname},
+            updated_at = now()
+          WHERE lower(nickname) = lower(${oldNickname})
+        `);
+      }
+      return updated;
+    });
+  }
+
+  async deleteCollectionStaffNickname(id: string): Promise<{ deleted: boolean; deactivated: boolean }> {
+    const existing = await this.getCollectionStaffNicknameById(id);
+    if (!existing) {
+      return { deleted: false, deactivated: false };
+    }
+
+    const usage = await db.execute(sql`
+      SELECT COUNT(*)::int AS total
+      FROM public.collection_records
+      WHERE lower(collection_staff_nickname) = lower(${existing.nickname})
+      LIMIT 1
+    `);
+    const total = Number(usage.rows?.[0]?.total ?? 0);
+    if (total > 0) {
+      await db.execute(sql`
+        UPDATE public.collection_staff_nicknames
+        SET is_active = false
+        WHERE id = ${id}::uuid
+      `);
+      return { deleted: false, deactivated: true };
+    }
+
+    await db.execute(sql`
+      DELETE FROM public.admin_visible_nicknames
+      WHERE nickname_id = ${id}::uuid
+    `);
+    await db.execute(sql`
+      DELETE FROM public.admin_group_members
+      WHERE lower(member_nickname) = lower(${existing.nickname})
+    `);
+    await db.execute(sql`
+      DELETE FROM public.admin_groups
+      WHERE lower(leader_nickname) = lower(${existing.nickname})
+    `);
+    await db.execute(sql`
+      DELETE FROM public.collection_nickname_sessions
+      WHERE lower(nickname) = lower(${existing.nickname})
+    `);
+    await db.execute(sql`
+      DELETE FROM public.collection_staff_nicknames
+      WHERE id = ${id}::uuid
+    `);
+    return { deleted: true, deactivated: false };
+  }
+
+  async isCollectionStaffNicknameActive(nickname: string): Promise<boolean> {
+    const normalized = String(nickname || "").trim();
+    if (!normalized) return false;
+
+    const result = await db.execute(sql`
+      SELECT id
+      FROM public.collection_staff_nicknames
+      WHERE lower(nickname) = lower(${normalized})
+        AND is_active = true
+      LIMIT 1
+    `);
+    return Boolean(result.rows?.[0]);
   }
 
   async createCollectionRecord(data: CreateCollectionRecordInput): Promise<CollectionRecord> {
@@ -4456,6 +5979,8 @@ export class PostgresStorage implements IStorage {
     from?: string;
     to?: string;
     search?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
     limit?: number;
   }): Promise<CollectionRecord[]> {
     const conditions: any[] = [];
@@ -4475,6 +6000,20 @@ export class PostgresStorage implements IStorage {
         OR customer_phone ILIKE ${like}
         OR amount::text ILIKE ${like}
       )`);
+    }
+    const createdByLogin = String(filters?.createdByLogin || "").trim();
+    if (createdByLogin) {
+      conditions.push(sql`created_by_login = ${createdByLogin}`);
+    }
+    const nicknameSource = filters?.nicknames;
+    const nicknames = Array.isArray(nicknameSource)
+      ? nicknameSource
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index)
+      : [];
+    if (nicknames.length > 0) {
+      const nicknameSql = sql.join(nicknames.map((value) => sql`${value}`), sql`, `);
+      conditions.push(sql`lower(collection_staff_nickname) IN (${nicknameSql})`);
     }
 
     const whereSql = conditions.length
@@ -4511,22 +6050,32 @@ export class PostgresStorage implements IStorage {
 
   async getCollectionMonthlySummary(filters: {
     year: number;
-    staff?: string;
+    nicknames?: string[];
+    createdByLogin?: string;
   }): Promise<CollectionMonthlySummary[]> {
     const safeYear = Number.isFinite(filters.year)
       ? Math.min(2100, Math.max(2000, Math.floor(filters.year)))
       : new Date().getFullYear();
     const yearStart = `${safeYear}-01-01`;
     const yearEnd = `${safeYear}-12-31`;
-    const staffNeedle = String(filters.staff || "").trim();
+    const createdByLogin = String(filters.createdByLogin || "").trim();
+    const nicknameSource = filters.nicknames;
+    const nicknames = Array.isArray(nicknameSource)
+      ? nicknameSource
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index)
+      : [];
 
     const conditions: any[] = [
       sql`payment_date >= ${yearStart}::date`,
       sql`payment_date <= ${yearEnd}::date`,
     ];
-    if (staffNeedle) {
-      const like = `%${staffNeedle}%`;
-      conditions.push(sql`collection_staff_nickname ILIKE ${like}`);
+    if (nicknames.length > 0) {
+      const nicknameSql = sql.join(nicknames.map((value) => sql`${value}`), sql`, `);
+      conditions.push(sql`lower(collection_staff_nickname) IN (${nicknameSql})`);
+    }
+    if (createdByLogin) {
+      conditions.push(sql`created_by_login = ${createdByLogin}`);
     }
 
     const whereSql = sql`WHERE ${sql.join(conditions, sql` AND `)}`;
