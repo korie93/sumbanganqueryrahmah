@@ -6498,6 +6498,7 @@ var COLLECTION_BATCHES = /* @__PURE__ */ new Set(["P10", "P25", "MDD02", "MDD10"
 var COLLECTION_RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
 var COLLECTION_RECEIPT_ALLOWED_EXT = /* @__PURE__ */ new Set([".jpg", ".jpeg", ".png", ".pdf"]);
 var COLLECTION_RECEIPT_ALLOWED_MIME = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "application/pdf"]);
+var COLLECTION_RECEIPT_INLINE_MIME = /* @__PURE__ */ new Set(["application/pdf", "image/png", "image/jpeg"]);
 var UPLOADS_ROOT_DIR = path.resolve(process.cwd(), "uploads");
 var COLLECTION_RECEIPT_DIR = path.resolve(UPLOADS_ROOT_DIR, "collection-receipts");
 var COLLECTION_RECEIPT_PUBLIC_PREFIX = "/uploads/collection-receipts";
@@ -7174,6 +7175,9 @@ app.use((req, res, next) => {
   }
   next();
 });
+app.use("/uploads/collection-receipts", (_req, res) => {
+  return res.status(404).json({ ok: false, message: "Not found." });
+});
 app.use("/uploads", express.static(UPLOADS_ROOT_DIR));
 app.use((req, res, next) => {
   const start = process.hrtime.bigint();
@@ -7321,6 +7325,19 @@ async function getAdminGroupNicknameValues(user) {
   }
   return [];
 }
+async function canUserAccessCollectionRecord(user, record) {
+  if (user.role === "superuser") return true;
+  if (user.role === "user") {
+    const owner = normalizeCollectionText(record.createdByLogin).toLowerCase();
+    const current = normalizeCollectionText(user.username).toLowerCase();
+    return Boolean(owner) && owner === current;
+  }
+  if (user.role === "admin") {
+    const allowedNicknames = await getAdminVisibleNicknameValues(user);
+    return hasNicknameValue(allowedNicknames, normalizeCollectionText(record.collectionStaffNickname));
+  }
+  return false;
+}
 function readNicknameFiltersFromQuery(query) {
   const candidates = [];
   const pushValue = (raw) => {
@@ -7439,6 +7456,35 @@ async function removeCollectionReceiptFile(receiptPath) {
     await fs.promises.unlink(absolutePath);
   } catch {
   }
+}
+function resolveCollectionReceiptMimeTypeFromFileName(fileName) {
+  const extension = path.extname(fileName).toLowerCase();
+  if (extension === ".pdf") return "application/pdf";
+  if (extension === ".png") return "image/png";
+  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  return "application/octet-stream";
+}
+function sanitizeReceiptDownloadName(fileName) {
+  const sanitized = String(fileName || "").replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").slice(0, 120);
+  return sanitized || "receipt";
+}
+function resolveCollectionReceiptFile(receiptPath) {
+  const normalized = String(receiptPath || "").trim().replace(/\\/g, "/");
+  if (!normalized.startsWith(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`)) return null;
+  const storedFileName = normalized.slice(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`.length);
+  if (!storedFileName) return null;
+  if (storedFileName.includes("..") || storedFileName.includes("/") || storedFileName.includes("\\")) return null;
+  if (path.basename(storedFileName) !== storedFileName) return null;
+  const absolutePath = path.resolve(COLLECTION_RECEIPT_DIR, storedFileName);
+  const relativePath = path.relative(COLLECTION_RECEIPT_DIR, absolutePath);
+  if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) return null;
+  const mimeType = resolveCollectionReceiptMimeTypeFromFileName(storedFileName);
+  return {
+    absolutePath,
+    storedFileName,
+    mimeType,
+    isInlinePreviewSupported: COLLECTION_RECEIPT_INLINE_MIME.has(mimeType)
+  };
 }
 async function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -9174,6 +9220,95 @@ app.get(
     } catch (err) {
       return res.status(500).json({ ok: false, message: err?.message || "Failed to load collection records." });
     }
+  }
+);
+async function serveCollectionReceipt(req, res, mode) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ ok: false, message: "Unauthenticated" });
+    }
+    const id = normalizeCollectionText(req.params.id);
+    if (!id) {
+      return res.status(400).json({ ok: false, message: "Collection id is required." });
+    }
+    const record = await storage.getCollectionRecordById(id);
+    if (!record) {
+      return res.status(404).json({ ok: false, message: "Collection record not found." });
+    }
+    const canAccessRecord = await canUserAccessCollectionRecord(req.user, {
+      createdByLogin: record.createdByLogin,
+      collectionStaffNickname: record.collectionStaffNickname
+    });
+    if (!canAccessRecord) {
+      return res.status(403).json({ ok: false, message: "Forbidden" });
+    }
+    if (!record.receiptFile) {
+      return res.status(404).json({ ok: false, message: "Receipt file not found." });
+    }
+    const resolved = resolveCollectionReceiptFile(record.receiptFile);
+    if (!resolved) {
+      return res.status(404).json({ ok: false, message: "Receipt file path is invalid." });
+    }
+    try {
+      await fs.promises.access(resolved.absolutePath, fs.constants.R_OK);
+    } catch {
+      return res.status(404).json({ ok: false, message: "Receipt file not found." });
+    }
+    if (mode === "view" && !resolved.isInlinePreviewSupported) {
+      return res.status(415).json({ ok: false, message: "Preview not available for this file type." });
+    }
+    const safeFileName = sanitizeReceiptDownloadName(resolved.storedFileName);
+    res.setHeader("Content-Type", resolved.mimeType);
+    res.setHeader(
+      "Content-Disposition",
+      `${mode === "download" ? "attachment" : "inline"}; filename="${safeFileName}"`
+    );
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.sendFile(resolved.absolutePath, (err) => {
+      if (!err || res.headersSent) return;
+      const sendErr = err;
+      const status = sendErr.code === "ENOENT" ? 404 : 500;
+      const message = status === 404 ? "Receipt file not found." : "Failed to serve receipt file.";
+      res.status(status).json({ ok: false, message });
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, message: err?.message || "Failed to load receipt file." });
+  }
+}
+app.get(
+  "/api/collection/:id/receipt/view",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("collection-report"),
+  async (req, res) => {
+    return serveCollectionReceipt(req, res, "view");
+  }
+);
+app.get(
+  "/api/collection/:id/receipt/download",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("collection-report"),
+  async (req, res) => {
+    return serveCollectionReceipt(req, res, "download");
+  }
+);
+app.get(
+  "/api/receipts/:id/view",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("collection-report"),
+  async (req, res) => {
+    return serveCollectionReceipt(req, res, "view");
+  }
+);
+app.get(
+  "/api/receipts/:id/download",
+  authenticateToken,
+  requireRole("user", "admin", "superuser"),
+  requireTabAccess("collection-report"),
+  async (req, res) => {
+    return serveCollectionReceipt(req, res, "download");
   }
 );
 var handleUpdateCollectionRecord = async (req, res) => {
