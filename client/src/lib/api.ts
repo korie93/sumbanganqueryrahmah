@@ -422,6 +422,36 @@ export async function getCollectionRecords(filters?: { from?: string; to?: strin
   return response.json();
 }
 
+function parseFilenameFromContentDisposition(contentDisposition: string | null): string | null {
+  const raw = String(contentDisposition || "").trim();
+  if (!raw) return null;
+
+  const utfMatch = raw.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utfMatch?.[1]) {
+    try {
+      return decodeURIComponent(utfMatch[1]).trim() || null;
+    } catch {
+      return utfMatch[1].trim() || null;
+    }
+  }
+
+  const fallbackMatch = raw.match(/filename=\"?([^\";]+)\"?/i);
+  if (!fallbackMatch?.[1]) return null;
+  const normalized = fallbackMatch[1].trim();
+  return normalized || null;
+}
+
+export async function fetchCollectionReceiptBlob(recordId: string, mode: "view" | "download") {
+  const response = await apiRequest(
+    "GET",
+    `/api/collection/${encodeURIComponent(recordId)}/receipt/${mode}`,
+  );
+  const blob = await response.blob();
+  const mimeType = String(response.headers.get("Content-Type") || blob.type || "").toLowerCase();
+  const fileName = parseFilenameFromContentDisposition(response.headers.get("Content-Disposition"));
+  return { blob, mimeType, fileName };
+}
+
 export type CollectionMonthlySummary = {
   month: number;
   monthName: string;

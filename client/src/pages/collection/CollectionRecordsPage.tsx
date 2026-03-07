@@ -2,7 +2,7 @@ import { memo, type ChangeEvent, useCallback, useEffect, useMemo, useRef, useSta
 import { Download, Edit3, Eye, FileText, RotateCcw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import {
   deleteCollectionRecord,
+  fetchCollectionReceiptBlob,
   getCollectionNicknames,
   getCollectionRecords,
   updateCollectionRecord,
@@ -39,9 +40,37 @@ function fitText(value: string, maxLength: number): string {
   return `${value.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
+type ReceiptPreviewKind = "pdf" | "image" | "unsupported";
+
+function inferReceiptMimeTypeFromName(fileName: string): string {
+  const normalized = String(fileName || "").trim().toLowerCase();
+  if (!normalized) return "";
+  if (normalized.endsWith(".pdf")) return "application/pdf";
+  if (normalized.endsWith(".png")) return "image/png";
+  if (normalized.endsWith(".jpg") || normalized.endsWith(".jpeg")) return "image/jpeg";
+  return "";
+}
+
+function resolveReceiptPreviewKind(input: {
+  mimeType?: string;
+  fileName?: string;
+  receiptPath?: string;
+}): ReceiptPreviewKind {
+  const mimeType = String(input.mimeType || "").toLowerCase();
+  const fileName = String(input.fileName || "");
+  const receiptPath = String(input.receiptPath || "");
+  const inferredMime = inferReceiptMimeTypeFromName(fileName) || inferReceiptMimeTypeFromName(receiptPath);
+  const effectiveMime = mimeType || inferredMime;
+
+  if (effectiveMime.includes("pdf")) return "pdf";
+  if (effectiveMime.startsWith("image/")) return "image";
+  return "unsupported";
+}
+
 function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
   const { toast } = useToast();
   const editReceiptInputRef = useRef<HTMLInputElement | null>(null);
+  const receiptPreviewUrlRef = useRef<string | null>(null);
   const isMountedRef = useRef(true);
   const recordsRequestIdRef = useRef(0);
   const nicknamesRequestIdRef = useRef(0);
@@ -83,6 +112,22 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
   const [viewAllRecords, setViewAllRecords] = useState<CollectionRecord[]>([]);
   const [tablePage, setTablePage] = useState(1);
   const [tablePageSize, setTablePageSize] = useState(50);
+  const [receiptPreviewOpen, setReceiptPreviewOpen] = useState(false);
+  const [receiptPreviewRecord, setReceiptPreviewRecord] = useState<CollectionRecord | null>(null);
+  const [receiptPreviewLoading, setReceiptPreviewLoading] = useState(false);
+  const [receiptPreviewDownloading, setReceiptPreviewDownloading] = useState(false);
+  const [receiptPreviewSource, setReceiptPreviewSource] = useState("");
+  const [receiptPreviewMimeType, setReceiptPreviewMimeType] = useState("");
+  const [receiptPreviewFileName, setReceiptPreviewFileName] = useState("");
+  const [receiptPreviewError, setReceiptPreviewError] = useState("");
+  const receiptPreviewKind = useMemo(
+    () => resolveReceiptPreviewKind({
+      mimeType: receiptPreviewMimeType,
+      fileName: receiptPreviewFileName,
+      receiptPath: receiptPreviewRecord?.receiptFile || "",
+    }),
+    [receiptPreviewFileName, receiptPreviewMimeType, receiptPreviewRecord?.receiptFile],
+  );
 
   const visibleRecords = records;
   const summary = useMemo(() => computeSummary(records), [records]);
@@ -95,11 +140,19 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
   const pagedStart = visibleRecords.length === 0 ? 0 : (tablePage - 1) * tablePageSize + 1;
   const pagedEnd = Math.min(visibleRecords.length, tablePage * tablePageSize);
 
+  const clearReceiptPreviewObjectUrl = useCallback(() => {
+    if (receiptPreviewUrlRef.current) {
+      URL.revokeObjectURL(receiptPreviewUrlRef.current);
+      receiptPreviewUrlRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     return () => {
+      clearReceiptPreviewObjectUrl();
       isMountedRef.current = false;
     };
-  }, []);
+  }, [clearReceiptPreviewObjectUrl]);
 
   useEffect(() => {
     setTablePage(1);
@@ -261,6 +314,108 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
     }
   };
 
+  const closeReceiptPreview = useCallback(() => {
+    clearReceiptPreviewObjectUrl();
+    setReceiptPreviewOpen(false);
+    setReceiptPreviewRecord(null);
+    setReceiptPreviewLoading(false);
+    setReceiptPreviewDownloading(false);
+    setReceiptPreviewSource("");
+    setReceiptPreviewMimeType("");
+    setReceiptPreviewFileName("");
+    setReceiptPreviewError("");
+  }, [clearReceiptPreviewObjectUrl]);
+
+  const handleReceiptPreviewOpenChange = useCallback((open: boolean) => {
+    if (open) {
+      setReceiptPreviewOpen(true);
+      return;
+    }
+    closeReceiptPreview();
+  }, [closeReceiptPreview]);
+
+  const handleViewReceipt = useCallback(async (record: CollectionRecord) => {
+    if (!record.receiptFile) return;
+
+    clearReceiptPreviewObjectUrl();
+    setReceiptPreviewRecord(record);
+    setReceiptPreviewOpen(true);
+    setReceiptPreviewLoading(true);
+    setReceiptPreviewDownloading(false);
+    setReceiptPreviewSource("");
+    setReceiptPreviewMimeType("");
+    setReceiptPreviewFileName("");
+    setReceiptPreviewError("");
+
+    try {
+      const { blob, mimeType, fileName } = await fetchCollectionReceiptBlob(record.id, "view");
+      const normalizedFileName = fileName || `receipt-${record.id}`;
+      const normalizedMimeType =
+        String(mimeType || "").toLowerCase() ||
+        inferReceiptMimeTypeFromName(normalizedFileName) ||
+        inferReceiptMimeTypeFromName(record.receiptFile || "");
+
+      const previewBlob =
+        normalizedMimeType && blob.type !== normalizedMimeType
+          ? new Blob([blob], { type: normalizedMimeType })
+          : blob;
+
+      const objectUrl = URL.createObjectURL(previewBlob);
+      if (!isMountedRef.current) {
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
+
+      receiptPreviewUrlRef.current = objectUrl;
+      setReceiptPreviewSource(objectUrl);
+      setReceiptPreviewMimeType(normalizedMimeType || previewBlob.type || "");
+      setReceiptPreviewFileName(normalizedFileName);
+    } catch (error: unknown) {
+      if (!isMountedRef.current) return;
+      const message = parseApiError(error);
+      const expectedKind = resolveReceiptPreviewKind({
+        fileName: record.receiptFile || "",
+        receiptPath: record.receiptFile || "",
+      });
+      if (expectedKind === "pdf") {
+        setReceiptPreviewError("PDF preview is unavailable. You can still download the file.");
+      } else if (message.toLowerCase().includes("preview not available")) {
+        setReceiptPreviewError("Preview not available for this file type.");
+      } else {
+        setReceiptPreviewError(message);
+      }
+    } finally {
+      if (!isMountedRef.current) return;
+      setReceiptPreviewLoading(false);
+    }
+  }, [clearReceiptPreviewObjectUrl]);
+
+  const handleDownloadReceipt = useCallback(async () => {
+    if (!receiptPreviewRecord || receiptPreviewDownloading) return;
+
+    setReceiptPreviewDownloading(true);
+    try {
+      const { blob, fileName } = await fetchCollectionReceiptBlob(receiptPreviewRecord.id, "download");
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = fileName || receiptPreviewFileName || `receipt-${receiptPreviewRecord.id}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (error: unknown) {
+      toast({
+        title: "Download Failed",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
+    } finally {
+      if (!isMountedRef.current) return;
+      setReceiptPreviewDownloading(false);
+    }
+  }, [receiptPreviewDownloading, receiptPreviewFileName, receiptPreviewRecord, toast]);
+
   const openEditDialog = (record: CollectionRecord) => {
     setEditingRecord(record);
     setEditCustomerName(record.customerName);
@@ -417,13 +572,13 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
     try {
       const XLSX = await import("xlsx");
       const reportRows = visibleRecords.map((record) => ([
-        record.paymentDate,
         record.customerName,
         record.icNumber,
-        record.customerPhone,
         record.accountNumber,
-        record.batch,
+        record.customerPhone,
         Number(record.amount),
+        record.paymentDate,
+        record.receiptFile ? "Available" : "-",
         record.collectionStaffNickname,
       ]));
 
@@ -434,7 +589,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
         ["Total Records", summary.totalRecords],
         ["Total Amount", summary.totalAmount],
         [],
-        ["Date", "Customer Name", "IC Number", "Customer Phone Number", "Account Number", "Batch", "Amount", "Staff Nickname"],
+        ["Customer Name", "IC Number", "Account Number", "Customer Phone Number", "Amount", "Payment Date", "Receipt", "Staff Nickname"],
         ...reportRows,
       ];
 
@@ -462,7 +617,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
         worksheet[totalAmountCell].z = "\"RM\" #,##0.00";
       }
       for (let row = 8; row < 8 + reportRows.length; row += 1) {
-        const amountCell = `G${row}`;
+        const amountCell = `E${row}`;
         if (worksheet[amountCell]) worksheet[amountCell].z = "\"RM\" #,##0.00";
       }
 
@@ -491,8 +646,8 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const rowHeight = 7;
-      const headers = ["Date", "Customer", "IC", "Account", "Batch", "Amount", "Staff"];
-      const colWidths = [22, 54, 30, 42, 18, 26, 34];
+      const headers = ["Customer", "IC", "Account", "Phone", "Amount", "Pay Date", "Receipt", "Staff"];
+      const colWidths = [46, 28, 36, 30, 22, 23, 17, 42];
       let y = 12;
       let pageNo = 1;
 
@@ -548,12 +703,13 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
         }
 
         const row = [
-          fitText(record.paymentDate, 10),
-          fitText(record.customerName, 28),
+          fitText(record.customerName, 22),
           fitText(record.icNumber, 16),
-          fitText(record.accountNumber, 20),
-          fitText(record.batch, 8),
-          fitText(formatAmountRM(record.amount), 14),
+          fitText(record.accountNumber, 18),
+          fitText(record.customerPhone, 15),
+          fitText(formatAmountRM(record.amount), 12),
+          fitText(record.paymentDate, 10),
+          record.receiptFile ? "Yes" : "-",
           fitText(record.collectionStaffNickname, 18),
         ];
 
@@ -698,16 +854,15 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
           </div>
 
           <div className="rounded-md border border-border/60 min-h-[420px] max-h-[64vh] overflow-auto">
-            <Table className="min-w-[1220px] text-sm">
+            <Table className="min-w-[1140px] text-sm">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky top-0 bg-background z-10">Date</TableHead>
                   <TableHead className="sticky top-0 bg-background z-10">Customer Name</TableHead>
                   <TableHead className="sticky top-0 bg-background z-10">IC Number</TableHead>
-                  <TableHead className="sticky top-0 bg-background z-10">Customer Phone Number</TableHead>
                   <TableHead className="sticky top-0 bg-background z-10">Account Number</TableHead>
-                  <TableHead className="sticky top-0 bg-background z-10">Batch</TableHead>
+                  <TableHead className="sticky top-0 bg-background z-10">Customer Phone Number</TableHead>
                   <TableHead className="sticky top-0 bg-background z-10">Amount</TableHead>
+                  <TableHead className="sticky top-0 bg-background z-10">Payment Date</TableHead>
                   <TableHead className="sticky top-0 bg-background z-10">Receipt</TableHead>
                   <TableHead className="sticky top-0 bg-background z-10">Staff Nickname</TableHead>
                   <TableHead className="sticky top-0 bg-background z-10 text-right">Actions</TableHead>
@@ -716,28 +871,35 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
               <TableBody>
                 {loadingRecords ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-muted-foreground py-6">Loading records...</TableCell>
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-6">Loading records...</TableCell>
                   </TableRow>
                 ) : visibleRecords.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-muted-foreground py-6">No collection records found.</TableCell>
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-6">No collection records found.</TableCell>
                   </TableRow>
                 ) : (
                   paginatedRecords.map((record) => (
                     <TableRow key={record.id}>
-                      <TableCell className="py-1.5 whitespace-nowrap">{record.paymentDate}</TableCell>
                       <TableCell className="py-1.5">{record.customerName}</TableCell>
                       <TableCell className="py-1.5 whitespace-nowrap">{record.icNumber}</TableCell>
-                      <TableCell className="py-1.5 whitespace-nowrap">{record.customerPhone}</TableCell>
                       <TableCell className="py-1.5 whitespace-nowrap">{record.accountNumber}</TableCell>
-                      <TableCell className="py-1.5 whitespace-nowrap">{record.batch}</TableCell>
+                      <TableCell className="py-1.5 whitespace-nowrap">{record.customerPhone}</TableCell>
                       <TableCell className="py-1.5 whitespace-nowrap">{formatAmountRM(record.amount)}</TableCell>
+                      <TableCell className="py-1.5 whitespace-nowrap">{record.paymentDate}</TableCell>
                       <TableCell className="py-1.5 whitespace-nowrap">
                         {record.receiptFile ? (
-                          <a href={record.receiptFile} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                          <Button
+                            type="button"
+                            variant="link"
+                            size="sm"
+                            className="h-auto px-0 text-primary"
+                            onClick={() => {
+                              void handleViewReceipt(record);
+                            }}
+                          >
                             <Eye className="w-3.5 h-3.5" />
                             View
-                          </a>
+                          </Button>
                         ) : (
                           <span className="text-muted-foreground">-</span>
                         )}
@@ -767,6 +929,70 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={receiptPreviewOpen} onOpenChange={handleReceiptPreviewOpenChange}>
+        <DialogContent className="w-[95vw] max-w-5xl h-[88vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Receipt Preview</DialogTitle>
+            <DialogDescription>
+              {receiptPreviewFileName || receiptPreviewRecord?.receiptFile || "Preview fail resit yang dimuat naik."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 min-h-0 rounded-md border border-border/60 bg-background/40 overflow-auto p-3">
+            {receiptPreviewLoading ? (
+              <div className="h-full min-h-[240px] flex items-center justify-center text-sm text-muted-foreground">
+                Loading preview...
+              </div>
+            ) : receiptPreviewError ? (
+              <div className="h-full min-h-[240px] flex items-center justify-center text-sm text-muted-foreground text-center px-4">
+                {receiptPreviewError}
+              </div>
+            ) : !receiptPreviewSource ? (
+              <div className="h-full min-h-[240px] flex items-center justify-center text-sm text-muted-foreground text-center px-4">
+                {receiptPreviewKind === "pdf"
+                  ? "PDF preview is unavailable. You can still download the file."
+                  : "Preview not available for this file type."}
+              </div>
+            ) : receiptPreviewKind === "pdf" ? (
+              <iframe
+                src={receiptPreviewSource}
+                title="Receipt PDF Preview"
+                className="w-full h-full min-h-[65vh] rounded-sm bg-white"
+              />
+            ) : receiptPreviewKind === "image" ? (
+              <div className="h-full flex items-center justify-center">
+                <img
+                  src={receiptPreviewSource}
+                  alt={receiptPreviewFileName || "Receipt preview"}
+                  className="max-w-full max-h-full object-contain"
+                />
+              </div>
+            ) : (
+              <div className="h-full min-h-[240px] flex items-center justify-center text-sm text-muted-foreground text-center px-4">
+                Preview not available for this file type.
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex flex-row items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                void handleDownloadReceipt();
+              }}
+              disabled={!receiptPreviewRecord || receiptPreviewDownloading}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {receiptPreviewDownloading ? "Downloading..." : "Download"}
+            </Button>
+            <Button type="button" variant="secondary" onClick={closeReceiptPreview}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-3xl">
@@ -908,16 +1134,15 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
 
             <div className="flex-1 min-h-0 p-4">
               <div className="h-full rounded-md border border-border/60 overflow-auto">
-                <Table className="text-sm min-w-[1220px]">
+                <Table className="text-sm min-w-[1100px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="sticky top-0 bg-background z-10">Date</TableHead>
                       <TableHead className="sticky top-0 bg-background z-10">Customer Name</TableHead>
                       <TableHead className="sticky top-0 bg-background z-10">IC Number</TableHead>
-                      <TableHead className="sticky top-0 bg-background z-10">Customer Phone Number</TableHead>
                       <TableHead className="sticky top-0 bg-background z-10">Account Number</TableHead>
-                      <TableHead className="sticky top-0 bg-background z-10">Batch</TableHead>
+                      <TableHead className="sticky top-0 bg-background z-10">Customer Phone Number</TableHead>
                       <TableHead className="sticky top-0 bg-background z-10">Amount</TableHead>
+                      <TableHead className="sticky top-0 bg-background z-10">Payment Date</TableHead>
                       <TableHead className="sticky top-0 bg-background z-10">Receipt</TableHead>
                       <TableHead className="sticky top-0 bg-background z-10">Staff Nickname</TableHead>
                     </TableRow>
@@ -925,26 +1150,33 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
                   <TableBody>
                     {viewAllRecords.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center text-muted-foreground py-6">
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
                           Tiada rekod dalam julat tarikh yang dipilih.
                         </TableCell>
                       </TableRow>
                     ) : (
                       viewAllRecords.map((record) => (
                         <TableRow key={`view-all-${record.id}`}>
-                          <TableCell className="py-2">{record.paymentDate}</TableCell>
                           <TableCell className="py-2">{record.customerName}</TableCell>
                           <TableCell className="py-2">{record.icNumber}</TableCell>
-                          <TableCell className="py-2">{record.customerPhone}</TableCell>
                           <TableCell className="py-2">{record.accountNumber}</TableCell>
-                          <TableCell className="py-2">{record.batch}</TableCell>
+                          <TableCell className="py-2">{record.customerPhone}</TableCell>
                           <TableCell className="py-2">{formatAmountRM(record.amount)}</TableCell>
+                          <TableCell className="py-2">{record.paymentDate}</TableCell>
                           <TableCell className="py-2">
                             {record.receiptFile ? (
-                              <a href={record.receiptFile} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                              <Button
+                                type="button"
+                                variant="link"
+                                size="sm"
+                                className="h-auto px-0 text-primary"
+                                onClick={() => {
+                                  void handleViewReceipt(record);
+                                }}
+                              >
                                 <Eye className="w-3.5 h-3.5" />
                                 View
-                              </a>
+                              </Button>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}

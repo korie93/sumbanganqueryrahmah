@@ -7107,6 +7107,19 @@ async function getAdminGroupNicknameValues(user) {
   }
   return [];
 }
+async function canUserAccessCollectionRecord(user, record) {
+  if (user.role === "superuser") return true;
+  if (user.role === "user") {
+    const owner = normalizeCollectionText(record.createdByLogin).toLowerCase();
+    const current = normalizeCollectionText(user.username).toLowerCase();
+    return Boolean(owner) && owner === current;
+  }
+  if (user.role === "admin") {
+    const allowedNicknames = await getAdminVisibleNicknameValues(user);
+    return hasNicknameValue(allowedNicknames, normalizeCollectionText(record.collectionStaffNickname));
+  }
+  return false;
+}
 function readNicknameFiltersFromQuery(query) {
   const candidates = [];
   const pushValue = (raw) => {
@@ -7225,6 +7238,35 @@ async function removeCollectionReceiptFile(receiptPath) {
     await fs.promises.unlink(absolutePath);
   } catch {
   }
+}
+function resolveCollectionReceiptMimeTypeFromFileName(fileName) {
+  const extension = path.extname(fileName).toLowerCase();
+  if (extension === ".pdf") return "application/pdf";
+  if (extension === ".png") return "image/png";
+  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  return "application/octet-stream";
+}
+function sanitizeReceiptDownloadName(fileName) {
+  const sanitized = String(fileName || "").replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").slice(0, 120);
+  return sanitized || "receipt";
+}
+function resolveCollectionReceiptFile(receiptPath) {
+  const normalized = String(receiptPath || "").trim().replace(/\\/g, "/");
+  if (!normalized.startsWith(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`)) return null;
+  const storedFileName = normalized.slice(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`.length);
+  if (!storedFileName) return null;
+  if (storedFileName.includes("..") || storedFileName.includes("/") || storedFileName.includes("\\")) return null;
+  if (path.basename(storedFileName) !== storedFileName) return null;
+  const absolutePath = path.resolve(COLLECTION_RECEIPT_DIR, storedFileName);
+  const relativePath = path.relative(COLLECTION_RECEIPT_DIR, absolutePath);
+  if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) return null;
+  const mimeType = resolveCollectionReceiptMimeTypeFromFileName(storedFileName);
+  return {
+    absolutePath,
+    storedFileName,
+    mimeType,
+    isInlinePreviewSupported: COLLECTION_RECEIPT_INLINE_MIME.has(mimeType)
+  };
 }
 async function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -7674,6 +7716,59 @@ async function handleLogin(req, res) {
     res.status(500).json({ message: "Internal server error" });
   }
 }
+async function serveCollectionReceipt(req, res, mode2) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ ok: false, message: "Unauthenticated" });
+    }
+    const id = normalizeCollectionText(req.params.id);
+    if (!id) {
+      return res.status(400).json({ ok: false, message: "Collection id is required." });
+    }
+    const record = await storage.getCollectionRecordById(id);
+    if (!record) {
+      return res.status(404).json({ ok: false, message: "Collection record not found." });
+    }
+    const canAccessRecord = await canUserAccessCollectionRecord(req.user, {
+      createdByLogin: record.createdByLogin,
+      collectionStaffNickname: record.collectionStaffNickname
+    });
+    if (!canAccessRecord) {
+      return res.status(403).json({ ok: false, message: "Forbidden" });
+    }
+    if (!record.receiptFile) {
+      return res.status(404).json({ ok: false, message: "Receipt file not found." });
+    }
+    const resolved = resolveCollectionReceiptFile(record.receiptFile);
+    if (!resolved) {
+      return res.status(404).json({ ok: false, message: "Receipt file path is invalid." });
+    }
+    try {
+      await fs.promises.access(resolved.absolutePath, fs.constants.R_OK);
+    } catch {
+      return res.status(404).json({ ok: false, message: "Receipt file not found." });
+    }
+    if (mode2 === "view" && !resolved.isInlinePreviewSupported) {
+      return res.status(415).json({ ok: false, message: "Preview not available for this file type." });
+    }
+    const safeFileName = sanitizeReceiptDownloadName(resolved.storedFileName);
+    res.setHeader("Content-Type", resolved.mimeType);
+    res.setHeader(
+      "Content-Disposition",
+      `${mode2 === "download" ? "attachment" : "inline"}; filename="${safeFileName}"`
+    );
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.sendFile(resolved.absolutePath, (err) => {
+      if (!err || res.headersSent) return;
+      const sendErr = err;
+      const status = sendErr.code === "ENOENT" ? 404 : 500;
+      const message = status === 404 ? "Receipt file not found." : "Failed to serve receipt file.";
+      res.status(status).json({ ok: false, message });
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, message: err?.message || "Failed to load receipt file." });
+  }
+}
 function isValidMalaysianIC(ic) {
   if (!/^\d{12}$/.test(ic)) return false;
   if (ic.startsWith("01")) return false;
@@ -7909,7 +8004,7 @@ async function startServer() {
     }, 0);
   }
 }
-var storage, app, server, wss, startupFatalReason, JWT_SECRET, connectedClients, DEFAULT_SESSION_TIMEOUT_MINUTES, DEFAULT_WS_IDLE_MINUTES, DEFAULT_AI_TIMEOUT_MS, DEFAULT_BODY_LIMIT, IMPORT_BODY_LIMIT, COLLECTION_BODY_LIMIT, COLLECTION_BATCHES, COLLECTION_RECEIPT_MAX_BYTES, COLLECTION_RECEIPT_ALLOWED_EXT, COLLECTION_RECEIPT_ALLOWED_MIME, UPLOADS_ROOT_DIR, COLLECTION_RECEIPT_DIR, COLLECTION_RECEIPT_PUBLIC_PREFIX, PG_POOL_WARN_COOLDOWN_MS, AI_PRECOMPUTE_ON_START, API_DEBUG_LOGS, LOW_MEMORY_MODE, AI_GATE_GLOBAL_LIMIT, AI_GATE_QUEUE_LIMIT, AI_GATE_QUEUE_WAIT_MS, AI_GATE_ROLE_LIMITS, AI_LATENCY_STALE_AFTER_MS, AI_LATENCY_DECAY_HALF_LIFE_MS, MAINTENANCE_CACHE_TTL_MS, idleSweepRunning, maintenanceCache, RUNTIME_SETTINGS_CACHE_TTL_MS, runtimeSettingsCache, defaultControlState, controlState, preAllocatedBuffer, activeRequests, latencySamples, LATENCY_WINDOW, requestCounter, reqRatePerSec, lastCpuUsage, lastCpuTs, cpuPercent, gcCountWindow, gcPerMinute, lastDbLatencyMs, lastAiLatencyMs, lastAiLatencyObservedAt, lastIntelligenceResult, intelligenceInFlight, lastPgPoolWarningAt, lastPgPoolWarningSignature, MAX_INTELLIGENCE_HISTORY, intelligenceHistory, eventLoopHistogram, circuitAi, circuitDb, circuitExport, DB_METHOD_WRAP_EXCLUDE, storageProto, buildEmbeddingText, adaptiveRateState, CREDENTIAL_USERNAME_REGEX, CREDENTIAL_PASSWORD_MIN_LENGTH, CREDENTIAL_BCRYPT_COST, COLLECTION_NICKNAME_TEMP_PASSWORD, COLLECTION_STAFF_NICKNAME_MIN_LENGTH, COLLECTION_SUMMARY_MONTH_NAMES, COLLECTION_DATE_REGEX, COLLECTION_PHONE_REGEX, COLLECTION_NICKNAME_ROLE_SCOPE_SET, TAB_VISIBILITY_CACHE_TTL_MS, tabVisibilityCache, aiGateSeq, aiGateInflightGlobal, aiGateInflightByRole, aiGateQueue, handleUpdateCollectionRecord, excludeColumnsFromIC, excludeColumnsFromPolice, extractJsonObject, parseIntentFallback, DEFAULT_COUNT_GROUPS, CATEGORY_RULES_CACHE_MS, categoryRulesCache, loadCategoryRules, detectCountRequest, statsCache, STATS_CACHE_MS, categoryStatsInflight, MAX_STATS_CACHE_ENTRIES, enqueueCategoryStatsCompute, tokenizeQuery, buildFieldMatchSummary, parseIntent, rowScore, scoreRowDigits, extractLatLng, isLatLng, isNonEmptyString, hasPostcodeCoord, extractCustomerPostcode, extractCustomerLocationHint, toObjectJson, buildExplanation, searchCache, searchInflight, SEARCH_CACHE_MS, MAX_SEARCH_CACHE_ENTRIES, SEARCH_FAST_TIMEOUT_MS, withTimeout, computeAiSearch;
+var storage, app, server, wss, startupFatalReason, JWT_SECRET, connectedClients, DEFAULT_SESSION_TIMEOUT_MINUTES, DEFAULT_WS_IDLE_MINUTES, DEFAULT_AI_TIMEOUT_MS, DEFAULT_BODY_LIMIT, IMPORT_BODY_LIMIT, COLLECTION_BODY_LIMIT, COLLECTION_BATCHES, COLLECTION_RECEIPT_MAX_BYTES, COLLECTION_RECEIPT_ALLOWED_EXT, COLLECTION_RECEIPT_ALLOWED_MIME, COLLECTION_RECEIPT_INLINE_MIME, UPLOADS_ROOT_DIR, COLLECTION_RECEIPT_DIR, COLLECTION_RECEIPT_PUBLIC_PREFIX, PG_POOL_WARN_COOLDOWN_MS, AI_PRECOMPUTE_ON_START, API_DEBUG_LOGS, LOW_MEMORY_MODE, AI_GATE_GLOBAL_LIMIT, AI_GATE_QUEUE_LIMIT, AI_GATE_QUEUE_WAIT_MS, AI_GATE_ROLE_LIMITS, AI_LATENCY_STALE_AFTER_MS, AI_LATENCY_DECAY_HALF_LIFE_MS, MAINTENANCE_CACHE_TTL_MS, idleSweepRunning, maintenanceCache, RUNTIME_SETTINGS_CACHE_TTL_MS, runtimeSettingsCache, defaultControlState, controlState, preAllocatedBuffer, activeRequests, latencySamples, LATENCY_WINDOW, requestCounter, reqRatePerSec, lastCpuUsage, lastCpuTs, cpuPercent, gcCountWindow, gcPerMinute, lastDbLatencyMs, lastAiLatencyMs, lastAiLatencyObservedAt, lastIntelligenceResult, intelligenceInFlight, lastPgPoolWarningAt, lastPgPoolWarningSignature, MAX_INTELLIGENCE_HISTORY, intelligenceHistory, eventLoopHistogram, circuitAi, circuitDb, circuitExport, DB_METHOD_WRAP_EXCLUDE, storageProto, buildEmbeddingText, adaptiveRateState, CREDENTIAL_USERNAME_REGEX, CREDENTIAL_PASSWORD_MIN_LENGTH, CREDENTIAL_BCRYPT_COST, COLLECTION_NICKNAME_TEMP_PASSWORD, COLLECTION_STAFF_NICKNAME_MIN_LENGTH, COLLECTION_SUMMARY_MONTH_NAMES, COLLECTION_DATE_REGEX, COLLECTION_PHONE_REGEX, COLLECTION_NICKNAME_ROLE_SCOPE_SET, TAB_VISIBILITY_CACHE_TTL_MS, tabVisibilityCache, aiGateSeq, aiGateInflightGlobal, aiGateInflightByRole, aiGateQueue, handleUpdateCollectionRecord, excludeColumnsFromIC, excludeColumnsFromPolice, extractJsonObject, parseIntentFallback, DEFAULT_COUNT_GROUPS, CATEGORY_RULES_CACHE_MS, categoryRulesCache, loadCategoryRules, detectCountRequest, statsCache, STATS_CACHE_MS, categoryStatsInflight, MAX_STATS_CACHE_ENTRIES, enqueueCategoryStatsCompute, tokenizeQuery, buildFieldMatchSummary, parseIntent, rowScore, scoreRowDigits, extractLatLng, isLatLng, isNonEmptyString, hasPostcodeCoord, extractCustomerPostcode, extractCustomerLocationHint, toObjectJson, buildExplanation, searchCache, searchInflight, SEARCH_CACHE_MS, MAX_SEARCH_CACHE_ENTRIES, SEARCH_FAST_TIMEOUT_MS, withTimeout, computeAiSearch;
 var init_index_local = __esm({
   "server/index-local.ts"() {
     "use strict";
@@ -7946,6 +8041,7 @@ var init_index_local = __esm({
     COLLECTION_RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
     COLLECTION_RECEIPT_ALLOWED_EXT = /* @__PURE__ */ new Set([".jpg", ".jpeg", ".png", ".pdf"]);
     COLLECTION_RECEIPT_ALLOWED_MIME = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "application/pdf"]);
+    COLLECTION_RECEIPT_INLINE_MIME = /* @__PURE__ */ new Set(["application/pdf", "image/png", "image/jpeg"]);
     UPLOADS_ROOT_DIR = path.resolve(process.cwd(), "uploads");
     COLLECTION_RECEIPT_DIR = path.resolve(UPLOADS_ROOT_DIR, "collection-receipts");
     COLLECTION_RECEIPT_PUBLIC_PREFIX = "/uploads/collection-receipts";
@@ -8214,6 +8310,9 @@ var init_index_local = __esm({
         return res.sendStatus(200);
       }
       next();
+    });
+    app.use("/uploads/collection-receipts", (_req, res) => {
+      return res.status(404).json({ ok: false, message: "Not found." });
     });
     app.use("/uploads", express.static(UPLOADS_ROOT_DIR));
     app.use((req, res, next) => {
@@ -9537,6 +9636,42 @@ var init_index_local = __esm({
         } catch (err) {
           return res.status(500).json({ ok: false, message: err?.message || "Failed to load collection records." });
         }
+      }
+    );
+    app.get(
+      "/api/collection/:id/receipt/view",
+      authenticateToken,
+      requireRole("user", "admin", "superuser"),
+      requireTabAccess("collection-report"),
+      async (req, res) => {
+        return serveCollectionReceipt(req, res, "view");
+      }
+    );
+    app.get(
+      "/api/collection/:id/receipt/download",
+      authenticateToken,
+      requireRole("user", "admin", "superuser"),
+      requireTabAccess("collection-report"),
+      async (req, res) => {
+        return serveCollectionReceipt(req, res, "download");
+      }
+    );
+    app.get(
+      "/api/receipts/:id/view",
+      authenticateToken,
+      requireRole("user", "admin", "superuser"),
+      requireTabAccess("collection-report"),
+      async (req, res) => {
+        return serveCollectionReceipt(req, res, "view");
+      }
+    );
+    app.get(
+      "/api/receipts/:id/download",
+      authenticateToken,
+      requireRole("user", "admin", "superuser"),
+      requireTabAccess("collection-report"),
+      async (req, res) => {
+        return serveCollectionReceipt(req, res, "download");
       }
     );
     handleUpdateCollectionRecord = async (req, res) => {
