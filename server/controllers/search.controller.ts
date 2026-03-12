@@ -1,144 +1,88 @@
-import { Request, Response } from "express";
-import { PostgresStorage } from "../storage-postgres";
+import type { Request, Response } from "express";
+import { SearchRepository } from "../repositories/search.repository";
 
-const storage = new PostgresStorage();
+const searchRepository = new SearchRepository();
 
 export async function searchGlobal(req: Request, res: Response) {
   try {
     const search = String(req.query.q || "").trim();
     const page = Math.max(1, Number(req.query.page ?? 1));
-    const limit = Math.min(Number(req.query.limit ?? 50), 200);
+    const limit = Math.max(10, Math.min(Number(req.query.limit ?? 50), 200));
     const offset = (page - 1) * limit;
 
-    console.log(`🔍 searchGlobal called: search="${search}", page=${page}, limit=${limit}`);
-
     if (search.length < 2) {
-      console.log(`⚠️ Search query too short (${search.length} chars), returning empty results`);
       return res.json({ columns: [], rows: [], results: [], total: 0, page, limit });
     }
 
-    const result = await storage.searchGlobalDataRows({ search, limit, offset });
-    console.log(`📊 searchGlobalDataRows returned: ${result.rows?.length || 0} rows, total=${result.total}`);
+    const result = await searchRepository.searchGlobalDataRows({ search, limit, offset });
+    const rows = (result.rows || []).map((row: any) => ({
+      ...(row.jsonDataJsonb || {}),
+      "Source File": row.importFilename || row.importName || "",
+    }));
 
-    // Flatten and add __rowId
-    const safeRows = result.rows || [];
-    const rows = safeRows.map((r: any) => {
-      let jsonData = r.jsonDataJsonb;
-      
-      // Parse if it's a string (JSON stored as text)
-      if (typeof jsonData === "string") {
-        try {
-          jsonData = JSON.parse(jsonData);
-        } catch (e) {
-          console.warn(`⚠️ Failed to parse jsonData for row ${r.id}, treating as string`);
-          jsonData = { raw: jsonData };
-        }
-      }
-      
-      const sourceFile = r.importFilename || r.importName || "";
-      return {
-        __rowId: r.id,
-        ...jsonData,
-        "Source File": sourceFile,
-      };
-    });
-
-    // Extract all unique columns (excluding __rowId)
-    const columnSet = new Set<string>();
-    rows.forEach((row: any) => {
-      Object.keys(row).forEach((k) => {
-        if (k !== "__rowId") {
-          columnSet.add(k);
-        }
-      });
-    });
-
-    console.log(`✅ Extracted ${columnSet.size} columns: ${Array.from(columnSet).slice(0, 5).join(", ")}...`);
+    const columns = Array.from(
+      rows.reduce((set, row: Record<string, unknown>) => {
+        Object.keys(row).forEach((key) => set.add(key));
+        return set;
+      }, new Set<string>()),
+    );
 
     return res.json({
-      columns: Array.from(columnSet),
+      columns,
       rows,
       results: rows,
       total: result.total || 0,
       page,
       limit,
     });
-  } catch (err: any) {
-    console.error("❌ ERROR in searchGlobal:", err);
-    return res.status(500).json({ message: err.message });
+  } catch (error: any) {
+    return res.status(500).json({ message: error?.message || "Global search failed" });
   }
 }
 
 export async function advancedSearch(req: Request, res: Response) {
   try {
-    const { filters, logic, page = 1, limit = 50 } = req.body;
-    const safePage = Math.max(1, Number(page));
-    const safeLimit = Math.min(Number(limit), 200);
-    const offset = (safePage - 1) * safeLimit;
+    const body = (req.body && typeof req.body === "object") ? req.body : {};
+    const filters = Array.isArray(body.filters) ? body.filters : [];
+    const logic = body.logic === "OR" ? "OR" : "AND";
+    const page = Math.max(1, Number(body.page ?? 1));
+    const limit = Math.max(10, Math.min(Number(body.limit ?? 50), 200));
+    const offset = (page - 1) * limit;
 
-    if (!filters || !Array.isArray(filters) || filters.length === 0) {
+    if (filters.length === 0) {
       return res.status(400).json({ message: "Filters are required" });
     }
 
-    const result = await storage.advancedSearchDataRows(filters, logic || "AND", safeLimit, offset);
-    const importsList = await storage.getImports();
-    const importMap = new Map(importsList.map((imp) => [imp.id, imp]));
+    const result = await searchRepository.advancedSearchDataRows(filters, logic, limit, offset);
+    const rows = (result.rows || []).map((row: any) => ({
+      ...(row.jsonDataJsonb || {}),
+      "Source File": row.importFilename || row.importName || "",
+    }));
 
-    const safeRows = result.rows || [];
-    const rowsData = safeRows.map((row: any) => {
-      let jsonData = row.jsonDataJsonb;
-      
-      // Parse if it's a string (JSON stored as text)
-      if (typeof jsonData === "string") {
-        try {
-          jsonData = JSON.parse(jsonData);
-        } catch (e) {
-          console.warn(`⚠️ Failed to parse jsonData for row ${row.id}`);
-          jsonData = {};
-        }
-      } else if (!jsonData || typeof jsonData !== "object") {
-        jsonData = {};
-      }
-      
-      const imp = importMap.get(row.importId);
-      const sourceFile = imp?.filename || imp?.name || "";
-      return {
-        __rowId: row.id,
-        ...jsonData,
-        "Source File": sourceFile,
-      };
-    });
-
-    // Extract all unique headers
-    const headerSet = new Set<string>();
-    rowsData.forEach((row: any) => {
-      Object.keys(row).forEach((key) => {
-        if (key !== "__rowId") {
-          headerSet.add(key);
-        }
-      });
-    });
+    const headers = Array.from(
+      rows.reduce((set, row: Record<string, unknown>) => {
+        Object.keys(row).forEach((key) => set.add(key));
+        return set;
+      }, new Set<string>()),
+    );
 
     return res.json({
-      rows: rowsData,
-      results: rowsData, // For frontend compatibility
-      headers: Array.from(headerSet),
+      rows,
+      results: rows,
+      headers,
       total: result.total || 0,
-      page: safePage,
-      limit: safeLimit,
+      page,
+      limit,
     });
-  } catch (err: any) {
-    console.error("❌ ERROR in advancedSearch:", err);
-    return res.status(500).json({ message: err.message });
+  } catch (error: any) {
+    return res.status(500).json({ message: error?.message || "Advanced search failed" });
   }
 }
 
-export async function getSearchColumns(req: Request, res: Response) {
+export async function getSearchColumns(_req: Request, res: Response) {
   try {
-    const columns = await storage.getAllColumnNames();
-    return res.json(columns);
-  } catch (err: any) {
-    console.error("❌ ERROR in getSearchColumns:", err);
-    return res.status(500).json({ message: err.message });
+    return res.json(await searchRepository.getAllColumnNames());
+  } catch (error: any) {
+    return res.status(500).json({ message: error?.message || "Failed to load search columns" });
   }
 }

@@ -17,8 +17,32 @@ import { ollamaChat, ollamaEmbed, getOllamaConfig, type OllamaMessage } from "./
 import { CircuitBreaker, CircuitOpenError } from "./internal/circuitBreaker";
 import { evaluateSystem, getIntelligenceExplainability, injectChaos } from "./intelligence";
 import type { ChaosType, EvaluateSystemResult, SystemHistory, SystemSnapshot } from "./intelligence/types";
+import { getCollectionNicknameTempPassword, getSessionSecret } from "./config/security";
+import { createAuthGuards } from "./auth/guards";
+import { errorHandler } from "./middleware/error-handler";
+import { registerAuthRoutes } from "./routes/auth.routes";
+import { registerActivityRoutes } from "./routes/activity.routes";
+import { registerImportRoutes } from "./routes/imports.routes";
+import { registerSearchRoutes } from "./routes/search.routes";
+import { registerSettingsRoutes } from "./routes/settings.routes";
+import { registerOperationsRoutes } from "./routes/operations.routes";
+import { ImportsRepository } from "./repositories/imports.repository";
+import { SearchRepository } from "./repositories/search.repository";
+import { AuditRepository } from "./repositories/audit.repository";
+import { AnalyticsRepository } from "./repositories/analytics.repository";
+import { BackupsRepository } from "./repositories/backups.repository";
+import { ImportAnalysisService } from "./services/import-analysis.service";
 
 const storage = new PostgresStorage();
+const importsRepository = new ImportsRepository();
+const searchRepository = new SearchRepository();
+const auditRepository = new AuditRepository();
+const analyticsRepository = new AnalyticsRepository();
+const backupsRepository = new BackupsRepository({
+  ensureBackupsTable: () => (storage as any).ensureBackupsTable(),
+  parseBackupMetadataSafe: (raw) => (storage as any).parseBackupMetadataSafe(raw),
+});
+const importAnalysisService = new ImportAnalysisService(importsRepository);
 const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
@@ -51,8 +75,13 @@ wss.on("error", (err: any) => {
   console.error("❌ WebSocket server error:", err);
 });
 
-const JWT_SECRET = process.env.SESSION_SECRET || "sqr-local-secret-key-2025";
+const JWT_SECRET = getSessionSecret();
 const connectedClients = new Map<string, WebSocket>();
+const modularAuthGuards = createAuthGuards({ storage, secret: JWT_SECRET });
+const modularAuthenticateToken = modularAuthGuards.authenticateToken;
+const modularRequireRole = modularAuthGuards.requireRole;
+const modularRequireTabAccess = modularAuthGuards.requireTabAccess;
+const clearModularTabVisibilityCache = modularAuthGuards.clearTabVisibilityCache;
 const DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
 const DEFAULT_WS_IDLE_MINUTES = 3;
 const DEFAULT_AI_TIMEOUT_MS = 6000;
@@ -938,7 +967,7 @@ app.use(systemProtectionMiddleware);
 const CREDENTIAL_USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,32}$/;
 const CREDENTIAL_PASSWORD_MIN_LENGTH = 8;
 const CREDENTIAL_BCRYPT_COST = 12;
-const COLLECTION_NICKNAME_TEMP_PASSWORD = "12345678a";
+const COLLECTION_NICKNAME_TEMP_PASSWORD = getCollectionNicknameTempPassword();
 
 type CredentialErrorCode =
   | "USERNAME_TAKEN"
@@ -2079,6 +2108,69 @@ app.post(
     }
   },
 );
+
+registerAuthRoutes(app, {
+  storage,
+  authenticateToken: modularAuthenticateToken,
+  requireRole: modularRequireRole,
+  connectedClients,
+});
+
+registerActivityRoutes(app, {
+  storage,
+  authenticateToken: modularAuthenticateToken,
+  requireRole: modularRequireRole,
+  requireTabAccess: modularRequireTabAccess,
+  connectedClients,
+});
+
+registerImportRoutes(app, {
+  storage,
+  importsRepository,
+  importAnalysisService,
+  authenticateToken: modularAuthenticateToken,
+  requireRole: modularRequireRole,
+  requireTabAccess: modularRequireTabAccess,
+  searchRateLimiter,
+  getRuntimeSettingsCached,
+  isDbProtected: () => controlState.dbProtection || lastDbLatencyMs > 1000,
+});
+
+registerSearchRoutes(app, {
+  storage,
+  searchRepository,
+  authenticateToken: modularAuthenticateToken,
+  requireRole: modularRequireRole,
+  searchRateLimiter,
+  getRuntimeSettingsCached,
+  isDbProtected: () => controlState.dbProtection || lastDbLatencyMs > 1000,
+  getOllamaConfig,
+});
+
+registerSettingsRoutes(app, {
+  storage,
+  authenticateToken: modularAuthenticateToken,
+  requireRole: modularRequireRole,
+  clearTabVisibilityCache: clearModularTabVisibilityCache,
+  invalidateRuntimeSettingsCache,
+  invalidateMaintenanceCache,
+  getMaintenanceStateCached,
+  broadcastWsMessage,
+  defaultAiTimeoutMs: DEFAULT_AI_TIMEOUT_MS,
+});
+
+registerOperationsRoutes(app, {
+  storage,
+  auditRepository,
+  backupsRepository,
+  analyticsRepository,
+  authenticateToken: modularAuthenticateToken,
+  requireRole: modularRequireRole,
+  requireTabAccess: modularRequireTabAccess,
+  withExportCircuit,
+  isExportCircuitOpenError: (error) => error instanceof CircuitOpenError,
+  connectedClients,
+});
 
 app.get("/api/data-rows", authenticateToken, async (req, res) => {
   try {
@@ -7352,6 +7444,8 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
         res.status(500).json({ message: error.message });
       }
     });
+
+    app.use(errorHandler);
 
     wss.on("connection", async (ws, req) => {
       const url = new URL(req.url!, `http://${req.headers.host}`);
