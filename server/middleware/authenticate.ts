@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { PostgresStorage } from "../storage-postgres";
+import { getSessionSecret } from "../config/security";
 
 const storage = new PostgresStorage();
-const JWT_SECRET = process.env.SESSION_SECRET || "sqr-local-secret-key-2025";
+const JWT_SECRET = getSessionSecret();
 
 export interface AuthenticatedRequest extends Request {
   user?: {

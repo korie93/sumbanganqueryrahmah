@@ -23,6 +23,14 @@ import bcrypt from "bcrypt";
 import { db } from "./db-postgres";
 import { eq, desc, and, or, gte, lte, count, sql, inArray } from "drizzle-orm";
 import crypto from "crypto";
+import { shouldSeedDefaultUsers } from "./config/security";
+import { AuthRepository } from "./repositories/auth.repository";
+import { ImportsRepository } from "./repositories/imports.repository";
+import { SearchRepository } from "./repositories/search.repository";
+import { ActivityRepository } from "./repositories/activity.repository";
+import { AuditRepository } from "./repositories/audit.repository";
+import { BackupsRepository } from "./repositories/backups.repository";
+import { AnalyticsRepository } from "./repositories/analytics.repository";
 const MAX_SEARCH_LIMIT = 200;
 const QUERY_PAGE_LIMIT = 1000;
 const MAX_COLUMN_KEYS = 500;
@@ -666,6 +674,18 @@ type TopActiveUserRow = {
 export class PostgresStorage implements IStorage {
   private settingsTablesReady = false;
   private settingsTablesInitPromise: Promise<void> | null = null;
+  private readonly authRepository = new AuthRepository();
+  private readonly importsRepository = new ImportsRepository();
+  private readonly searchRepository = new SearchRepository();
+  private readonly activityRepository = new ActivityRepository({
+    ensureBannedSessionsTable: () => this.ensureBannedSessionsTable(),
+  });
+  private readonly auditRepository = new AuditRepository();
+  private readonly backupsRepository = new BackupsRepository({
+    ensureBackupsTable: () => this.ensureBackupsTable(),
+    parseBackupMetadataSafe: (raw) => this.parseBackupMetadataSafe(raw),
+  });
+  private readonly analyticsRepository = new AnalyticsRepository();
 
   constructor() {}
 
@@ -2208,11 +2228,27 @@ export class PostgresStorage implements IStorage {
   }
 
   private async seedDefaultUsers() {
+    if (!shouldSeedDefaultUsers()) {
+      return;
+    }
+
     const defaultUsers = [
-      { username: "superuser", password: "0441024k", role: "superuser" },
-      { username: "admin1", password: "admin123", role: "admin" },
-      { username: "user1", password: "user123", role: "user" },
-    ];
+      {
+        username: process.env.SEED_SUPERUSER_USERNAME || "superuser",
+        password: process.env.SEED_SUPERUSER_PASSWORD || "",
+        role: "superuser",
+      },
+      {
+        username: process.env.SEED_ADMIN_USERNAME || "admin1",
+        password: process.env.SEED_ADMIN_PASSWORD || "",
+        role: "admin",
+      },
+      {
+        username: process.env.SEED_USER_USERNAME || "user1",
+        password: process.env.SEED_USER_PASSWORD || "",
+        role: "user",
+      },
+    ].filter((user) => user.password);
 
     for (const user of defaultUsers) {
       const existing = await this.getUserByUsername(user.username);
@@ -2234,42 +2270,15 @@ export class PostgresStorage implements IStorage {
   }
 
   async getUser(id: string): Promise<User | undefined> {
-    const result = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, id))
-      .limit(1);
-
-    return result[0];
+    return this.authRepository.getUser(id);
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const normalized = String(username || "").trim();
-    if (!normalized) return undefined;
-    const result = await db
-      .select()
-      .from(users)
-      .where(sql`lower(${users.username}) = lower(${normalized})`)
-      .limit(1);
-    return result[0];
+    return this.authRepository.getUserByUsername(username);
   }
 
   async createUser(user: InsertUser): Promise<User> {
-    const id = crypto.randomUUID();
-    const now = new Date();
-    const hashedPassword = await bcrypt.hash(user.password, BCRYPT_COST);
-
-    await db.insert(users).values({
-      id,
-      username: user.username,
-      passwordHash: hashedPassword,
-      role: user.role ?? "user",
-      createdAt: now,
-      updatedAt: now,
-      passwordChangedAt: now,
-      isBanned: false,
-    });
-    return (await this.getUser(id))!;
+    return this.authRepository.createUser(user);
   }
 
   async updateUserCredentials(params: {
@@ -2278,22 +2287,7 @@ export class PostgresStorage implements IStorage {
     newPasswordHash?: string;
     passwordChangedAt?: Date | null;
   }): Promise<User | undefined> {
-    const next: Partial<typeof users.$inferInsert> = {
-      updatedAt: new Date(),
-    };
-
-    if (typeof params.newUsername === "string" && params.newUsername.trim()) {
-      next.username = params.newUsername.trim();
-    }
-    if (typeof params.newPasswordHash === "string" && params.newPasswordHash.trim()) {
-      next.passwordHash = params.newPasswordHash.trim();
-      next.passwordChangedAt = params.passwordChangedAt ?? new Date();
-    } else if (params.passwordChangedAt !== undefined) {
-      next.passwordChangedAt = params.passwordChangedAt;
-    }
-
-    await db.update(users).set(next).where(eq(users.id, params.userId));
-    return this.getUser(params.userId);
+    return this.authRepository.updateUserCredentials(params);
   }
 
   async getUsersByRoles(roles: string[]): Promise<Array<{
@@ -2305,50 +2299,11 @@ export class PostgresStorage implements IStorage {
     passwordChangedAt: Date | null;
     isBanned: boolean | null;
   }>> {
-    if (!Array.isArray(roles) || roles.length === 0) return [];
-    const results: Array<{
-      id: string;
-      username: string;
-      role: string;
-      createdAt: Date;
-      updatedAt: Date;
-      passwordChangedAt: Date | null;
-      isBanned: boolean | null;
-    }> = [];
-    let offset = 0;
-
-    while (true) {
-      const chunk = await db
-        .select({
-          id: users.id,
-          username: users.username,
-          role: users.role,
-          createdAt: users.createdAt,
-          updatedAt: users.updatedAt,
-          passwordChangedAt: users.passwordChangedAt,
-          isBanned: users.isBanned,
-        })
-        .from(users)
-        .where(inArray(users.role, roles))
-        .orderBy(users.role, users.username)
-        .limit(QUERY_PAGE_LIMIT)
-        .offset(offset);
-
-      if (!chunk.length) break;
-      results.push(...chunk);
-
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
-      offset += chunk.length;
-    }
-
-    return results;
+    return this.authRepository.getUsersByRoles(roles);
   }
 
   async updateActivitiesUsername(oldUsername: string, newUsername: string): Promise<void> {
-    await db
-      .update(userActivity)
-      .set({ username: newUsername })
-      .where(eq(userActivity.username, oldUsername));
+    return this.authRepository.updateActivitiesUsername(oldUsername, newUsername);
   }
 
   async searchGlobalDataRows(params: {
