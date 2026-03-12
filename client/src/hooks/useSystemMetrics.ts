@@ -10,7 +10,7 @@ import {
   getWorkers,
 } from "@/lib/api";
 
-type HistoryKey =
+export type HistoryKey =
   | "cpuPercent"
   | "ramPercent"
   | "eventLoopLagMs"
@@ -30,6 +30,8 @@ export type SeriesPoint = {
   ts: number;
   value: number;
 };
+
+export type MonitorHistory = Record<HistoryKey, SeriesPoint[]>;
 
 type EndpointState = {
   health: MonitorRequestState;
@@ -65,7 +67,7 @@ type UseSystemMetricsResult = {
   isLoading: boolean;
   lastUpdated: number | null;
   snapshot: MonitorSnapshot;
-  history: Record<HistoryKey, SeriesPoint[]>;
+  history: MonitorHistory;
   alerts: MonitorAlert[];
   intelligence: IntelligenceExplainPayload;
   endpointState: EndpointState;
@@ -98,7 +100,7 @@ const initialSnapshot: MonitorSnapshot = {
   aiFailRate: 0,
 };
 
-const initialHistory: Record<HistoryKey, SeriesPoint[]> = {
+const initialHistory: MonitorHistory = {
   cpuPercent: [],
   ramPercent: [],
   eventLoopLagMs: [],
@@ -114,6 +116,23 @@ const initialHistory: Record<HistoryKey, SeriesPoint[]> = {
   queueSize: [],
   aiFailRate: [],
 };
+
+const HISTORY_KEYS: HistoryKey[] = [
+  "cpuPercent",
+  "ramPercent",
+  "eventLoopLagMs",
+  "workerCount",
+  "requestsPerSec",
+  "p95LatencyMs",
+  "errorRate",
+  "activeRequests",
+  "avgQueryTimeMs",
+  "slowQueryCount",
+  "connections",
+  "aiLatencyMs",
+  "queueSize",
+  "aiFailRate",
+];
 
 const initialIntelligence: IntelligenceExplainPayload = {
   anomalyBreakdown: {
@@ -273,9 +292,41 @@ const explainabilityEqual = (a: IntelligenceExplainPayload, b: IntelligenceExpla
   a.decisionReason === b.decisionReason
 );
 
+const getSnapshotValueByHistoryKey = (snapshot: MonitorSnapshot, key: HistoryKey) => snapshot[key];
+
+const appendHistorySnapshot = (
+  previousHistory: MonitorHistory,
+  snapshot: MonitorSnapshot,
+  ts: number,
+) => {
+  let nextHistory = previousHistory;
+
+  for (const key of HISTORY_KEYS) {
+    const value = getSnapshotValueByHistoryKey(snapshot, key);
+    const currentSeries = previousHistory[key];
+    const lastPoint = currentSeries[currentSeries.length - 1];
+
+    if (lastPoint && lastPoint.value === value) {
+      continue;
+    }
+
+    const nextSeries = currentSeries.length >= ROLLING_LIMIT
+      ? [...currentSeries.slice(currentSeries.length - ROLLING_LIMIT + 1), { ts, value }]
+      : [...currentSeries, { ts, value }];
+
+    if (nextHistory === previousHistory) {
+      nextHistory = { ...previousHistory };
+    }
+
+    nextHistory[key] = nextSeries;
+  }
+
+  return nextHistory;
+};
+
 export function useSystemMetrics(): UseSystemMetricsResult {
   const [snapshot, setSnapshot] = useState<MonitorSnapshot>(initialSnapshot);
-  const [history, setHistory] = useState<Record<HistoryKey, SeriesPoint[]>>(initialHistory);
+  const [history, setHistory] = useState<MonitorHistory>(initialHistory);
   const [alerts, setAlerts] = useState<MonitorAlert[]>([]);
   const [intelligence, setIntelligence] = useState<IntelligenceExplainPayload>(initialIntelligence);
   const [endpointState, setEndpointState] = useState<EndpointState>({
@@ -293,24 +344,22 @@ export function useSystemMetrics(): UseSystemMetricsResult {
   const intelligenceRef = useRef(intelligence);
   const endpointStateRef = useRef(endpointState);
   const inFlightRef = useRef(false);
+  const mountedRef = useRef(true);
 
-  const appendSeries = useCallback((key: HistoryKey, value: number, ts: number) => {
-    const current = historyRef.current[key];
-    const last = current[current.length - 1];
-    if (last && last.value === value) return false;
-    const nextSeries = current.length >= ROLLING_LIMIT
-      ? [...current.slice(current.length - ROLLING_LIMIT + 1), { ts, value }]
-      : [...current, { ts, value }];
-    historyRef.current = {
-      ...historyRef.current,
-      [key]: nextSeries,
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
     };
-    return true;
   }, []);
 
   useEffect(() => {
     snapshotRef.current = snapshot;
   }, [snapshot]);
+
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
 
   useEffect(() => {
     alertsRef.current = alerts;
@@ -399,24 +448,14 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       };
 
       const now = Date.now();
-      let historyChanged = false;
-      historyChanged = appendSeries("cpuPercent", nextSnapshot.cpuPercent, now) || historyChanged;
-      historyChanged = appendSeries("ramPercent", nextSnapshot.ramPercent, now) || historyChanged;
-      historyChanged = appendSeries("eventLoopLagMs", nextSnapshot.eventLoopLagMs, now) || historyChanged;
-      historyChanged = appendSeries("workerCount", nextSnapshot.workerCount, now) || historyChanged;
-      historyChanged = appendSeries("requestsPerSec", nextSnapshot.requestsPerSec, now) || historyChanged;
-      historyChanged = appendSeries("p95LatencyMs", nextSnapshot.p95LatencyMs, now) || historyChanged;
-      historyChanged = appendSeries("errorRate", nextSnapshot.errorRate, now) || historyChanged;
-      historyChanged = appendSeries("activeRequests", nextSnapshot.activeRequests, now) || historyChanged;
-      historyChanged = appendSeries("avgQueryTimeMs", nextSnapshot.avgQueryTimeMs, now) || historyChanged;
-      historyChanged = appendSeries("slowQueryCount", nextSnapshot.slowQueryCount, now) || historyChanged;
-      historyChanged = appendSeries("connections", nextSnapshot.connections, now) || historyChanged;
-      historyChanged = appendSeries("aiLatencyMs", nextSnapshot.aiLatencyMs, now) || historyChanged;
-      historyChanged = appendSeries("queueSize", nextSnapshot.queueSize, now) || historyChanged;
-      historyChanged = appendSeries("aiFailRate", nextSnapshot.aiFailRate, now) || historyChanged;
+      const nextHistory = appendHistorySnapshot(historyRef.current, nextSnapshot, now);
+      const historyChanged = nextHistory !== historyRef.current;
 
       if (historyChanged) {
-        setHistory(historyRef.current);
+        historyRef.current = nextHistory;
+        if (mountedRef.current) {
+          setHistory(nextHistory);
+        }
       }
 
       const snapshotChanged = !snapshotsEqual(snapshotRef.current, nextSnapshot);
@@ -424,13 +463,19 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       const nextIntelligence = explainRes.data ?? intelligenceRef.current;
       const intelligenceChanged = !explainabilityEqual(intelligenceRef.current, nextIntelligence);
       if (snapshotChanged) {
-        setSnapshot(nextSnapshot);
+        if (mountedRef.current) {
+          setSnapshot(nextSnapshot);
+        }
       }
       if (alertsChanged) {
-        setAlerts(nextAlerts);
+        if (mountedRef.current) {
+          setAlerts(nextAlerts);
+        }
       }
       if (intelligenceChanged) {
-        setIntelligence(nextIntelligence);
+        if (mountedRef.current) {
+          setIntelligence(nextIntelligence);
+        }
       }
 
       const nextEndpointState: EndpointState = {
@@ -442,10 +487,12 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       };
       const endpointChanged = !endpointStatesEqual(endpointStateRef.current, nextEndpointState);
       if (endpointChanged) {
-        setEndpointState(nextEndpointState);
+        if (mountedRef.current) {
+          setEndpointState(nextEndpointState);
+        }
       }
 
-      if (snapshotChanged || alertsChanged || intelligenceChanged || endpointChanged || historyChanged) {
+      if (mountedRef.current && (snapshotChanged || alertsChanged || intelligenceChanged || endpointChanged || historyChanged)) {
         const responseTs = Number(
           healthRes.data?.updatedAt ??
             modeRes.data?.updatedAt ??
@@ -457,9 +504,11 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       }
     } finally {
       inFlightRef.current = false;
-      setIsLoading(false);
+      if (mountedRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, [appendSeries]);
+  }, []);
 
   useEffect(() => {
     pollMetrics();

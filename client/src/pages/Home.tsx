@@ -1,133 +1,55 @@
-import { Upload, BookMarked, Eye, Search, BarChart3, Activity, ClipboardList, Database, LayoutDashboard, FileText } from "lucide-react";
+import { memo, useMemo } from "react";
+import { getVisibleHomeItems, resolveNavigationTarget } from "@/app/navigation";
 
 interface HomeProps {
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, importId?: string) => void;
   userRole: string;
   tabVisibility?: Record<string, boolean> | null;
 }
 
-export default function Home({ onNavigate, userRole, tabVisibility }: HomeProps) {
-  const monitorTargetMap: Record<string, string> = {
-    dashboard: "/monitor?section=dashboard",
-    activity: "/monitor?section=activity",
-    monitor: "/monitor?section=monitor",
-    analysis: "/monitor?section=analysis",
-    audit: "/monitor?section=audit",
-    "audit-logs": "/monitor?section=audit",
-  };
-
-  const menuItems = [
-    {
-      id: "import",
-      title: "Import Data",
-      description: "Import data from Excel/CSV",
-      icon: Upload,
-      roles: ["user", "admin", "superuser"],
-    },
-    {
-      id: "saved",
-      title: "Saved Imports",
-      description: "View all saved data",
-      icon: BookMarked,
-      roles: ["user", "admin", "superuser"],
-    },
-    {
-      id: "viewer",
-      title: "Data Viewer",
-      description: "Detailed data display",
-      icon: Eye,
-      roles: ["user", "admin", "superuser"],
-    },
-    {
-      id: "general-search",
-      title: "General Search",
-      description: "General data search",
-      icon: Search,
-      roles: ["admin", "superuser", "user"],
-    },
-    {
-      id: "collection-report",
-      title: "Collection Report",
-      description: "Save and review collection records",
-      icon: FileText,
-      roles: ["admin", "superuser", "user"],
-    },
-    {
-      id: "analysis",
-      title: "Analysis",
-      description: "Data analysis and reports",
-      icon: BarChart3,
-      roles: ["user", "admin", "superuser"],
-    },
-    {
-      id: "dashboard",
-      title: "Dashboard",
-      description: "Analytics and system overview",
-      icon: LayoutDashboard,
-      roles: ["user", "admin", "superuser"],
-    },
-    {
-      id: "activity",
-      title: "Activity Monitor",
-      description: "Monitor user activity",
-      icon: Activity,
-      roles: ["user", "admin", "superuser"],
-    },
-    {
-      id: "audit-logs",
-      title: "Audit Log",
-      description: "View system activity logs",
-      icon: ClipboardList,
-      roles: ["user", "admin", "superuser"],
-    },
-    {
-      id: "backup",
-      title: "Backup & Restore",
-      description: "Backup and restore system data",
-      icon: Database,
-      roles: ["user", "admin", "superuser"],
-    },
-  ];
-
-  const visibleItems = menuItems.filter((item) => {
-    if (!item.roles.includes(userRole)) return false;
-    if (userRole === "superuser") return true;
-    if (!tabVisibility) return true;
-    return tabVisibility[item.id] !== false;
-  });
+function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
+  const visibleItems = useMemo(
+    () => getVisibleHomeItems(userRole, tabVisibility || null),
+    [tabVisibility, userRole],
+  );
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
-      <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-10">
-          <h1 className="welcome-title text-4xl md:text-5xl font-bold text-foreground mb-3">
-            Welcome
-          </h1>
-          <p className="text-muted-foreground text-lg">
-            Sumbangan Query Rahmah - Data Management System
-          </p>
-        </div>
+    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 md:p-6">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <section className="glass-wrapper p-6 md:p-8">
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Workspace</p>
+          <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h1 className="welcome-title text-4xl font-bold text-foreground md:text-5xl">Welcome</h1>
+              <p className="mt-2 text-base text-muted-foreground md:text-lg">
+                Sumbangan Query Rahmah - Data Management System
+              </p>
+            </div>
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              Choose a module to continue. The menu is filtered by your role and current feature visibility settings.
+            </p>
+          </div>
+        </section>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {visibleItems.map((item, index) => {
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {visibleItems.map((item) => {
             const Icon = item.icon;
-            const target = monitorTargetMap[item.id] || item.id;
             return (
-              <div
+              <button
                 key={item.id}
-                onClick={() => onNavigate(target)}
-                className="home-card flex items-center gap-4"
+                type="button"
+                onClick={() => onNavigate(resolveNavigationTarget(item.id))}
+                className="home-card flex items-center gap-4 text-left"
                 data-testid={`card-${item.id}`}
-                style={{ animationDelay: `${index * 0.1}s` }}
               >
-                <div className="home-card-icon">
-                  <Icon className="w-6 h-6" />
-                </div>
+                <span className="home-card-icon">
+                  <Icon className="h-5 w-5" />
+                </span>
                 <div className="home-card-text">
                   <h3 className="text-base">{item.title}</h3>
                   <p>{item.description}</p>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -135,3 +57,5 @@ export default function Home({ onNavigate, userRole, tabVisibility }: HomeProps)
     </div>
   );
 }
+
+export default memo(HomeImpl);
