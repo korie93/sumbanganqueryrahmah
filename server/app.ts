@@ -2,6 +2,7 @@ import express from "express";
 import { WebSocket } from "ws";
 import { getOllamaConfig } from "./ai-ollama";
 import { createAuthGuards } from "./auth/guards";
+import { errorHandler } from "./middleware/error-handler";
 import { searchRateLimiter } from "./middleware/rate-limit";
 import { registerActivityRoutes } from "./routes/activity.routes";
 import { registerAuthRoutes } from "./routes/auth.routes";
@@ -79,5 +80,7 @@ registerSearchRoutes(app, {
   isDbProtected: () => false,
   getOllamaConfig,
 });
+
+app.use(errorHandler);
 
 export default app;

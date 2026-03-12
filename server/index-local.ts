@@ -1,4 +1,4 @@
-import "dotenv/config";
+﻿import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { createServer } from "http";
 import { monitorEventLoopDelay, PerformanceObserver } from "node:perf_hooks";
@@ -68,11 +68,11 @@ wss.on("error", (err: any) => {
   const code = String(err?.code || "");
   if (code === "EADDRINUSE") {
     notifyMasterFatalStartup("EADDRINUSE", "WebSocket server failed to bind address");
-    console.error("❌ WebSocket startup failed: port already in use.");
+    console.error("âŒ WebSocket startup failed: port already in use.");
     setTimeout(() => process.exit(98), 10).unref();
     return;
   }
-  console.error("❌ WebSocket server error:", err);
+  console.error("âŒ WebSocket server error:", err);
 });
 
 const JWT_SECRET = getSessionSecret();
@@ -964,23 +964,9 @@ app.use((req, res, next) => {
 app.use(adaptiveRateLimit);
 app.use(systemProtectionMiddleware);
 
-const CREDENTIAL_USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,32}$/;
 const CREDENTIAL_PASSWORD_MIN_LENGTH = 8;
 const CREDENTIAL_BCRYPT_COST = 12;
 const COLLECTION_NICKNAME_TEMP_PASSWORD = getCollectionNicknameTempPassword();
-
-type CredentialErrorCode =
-  | "USERNAME_TAKEN"
-  | "INVALID_PASSWORD"
-  | "INVALID_CURRENT_PASSWORD"
-  | "PERMISSION_DENIED"
-  | "USER_NOT_FOUND";
-
-type CredentialAuditPayload = {
-  actor_user_id: string;
-  target_user_id: string;
-  changedField: "username" | "password";
-};
 
 function ensureObject(value: unknown): Record<string, any> | null {
   if (value && typeof value === "object") {
@@ -989,50 +975,9 @@ function ensureObject(value: unknown): Record<string, any> | null {
   return null;
 }
 
-function normalizeUsernameInput(raw: unknown): string {
-  return String(raw ?? "").trim().toLowerCase();
-}
-
 function isStrongPassword(raw: string): boolean {
   if (raw.length < CREDENTIAL_PASSWORD_MIN_LENGTH) return false;
   return /[A-Za-z]/.test(raw) && /\d/.test(raw);
-}
-
-function sendCredentialError(
-  res: Response,
-  status: number,
-  code: CredentialErrorCode,
-  message: string,
-) {
-  return res.status(status).json({
-    ok: false,
-    error: { code, message },
-  });
-}
-
-function buildCredentialAuditDetails(payload: CredentialAuditPayload): string {
-  return JSON.stringify({
-    actor_user_id: payload.actor_user_id,
-    target_user_id: payload.target_user_id,
-    metadata: {
-      changedField: payload.changedField,
-    },
-  });
-}
-
-function closeActivitySockets(activityIds: string[], reason: string) {
-  for (const activityId of activityIds) {
-    const ws = connectedClients.get(activityId);
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: "logout",
-        reason,
-      }));
-      ws.close();
-    }
-    connectedClients.delete(activityId);
-    void storage.clearCollectionNicknameSessionByActivity(activityId);
-  }
 }
 
 type CollectionReceiptPayload = {
@@ -1471,7 +1416,7 @@ async function authenticateToken(
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as AuthenticatedUser;
 
-    // 🔐 STEP 3A — VALIDATE SESSION DARI DB
+    // ðŸ” STEP 3A â€” VALIDATE SESSION DARI DB
     const activity = await storage.getActivityById(decoded.activityId);
 
     if (
@@ -2172,409 +2117,6 @@ registerOperationsRoutes(app, {
   connectedClients,
 });
 
-app.get("/api/data-rows", authenticateToken, async (req, res) => {
-  try {
-    const importId = req.query.importId as string;
-    const limit = Number(req.query.limit ?? 10);
-    const offset = Number(req.query.offset ?? 0);
-
-    if (!importId) {
-      return res.status(400).json({ error: "importId is required" });
-    }
-
-    const search = String(req.query.q || "").trim();
-
-    const result = await storage.searchDataRows({
-      importId,
-      search,
-      limit,
-      offset,
-    });
-
-    res.json(result);
-  } catch (err) {
-    console.error("API /api/data-rows error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-async function handleLogin(req: Request, res: Response) {
-  try {
-    const { username, password, fingerprint, pcName, browser } = req.body;
-    const normalizedUsername = normalizeUsernameInput(username);
-
-    const user = await storage.getUserByUsername(normalizedUsername);
-    if (!user) {
-      await storage.createAuditLog({
-        action: "LOGIN_FAILED",
-        performedBy: normalizedUsername || "unknown",
-        details: "User not found",
-      });
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-
-    const isVisitorBanned = await storage.isVisitorBanned(fingerprint || null, req.ip || req.socket.remoteAddress || null);
-    if (isVisitorBanned) {
-      await storage.createAuditLog({
-        action: "LOGIN_FAILED_BANNED",
-        performedBy: user.username,
-        details: "Visitor is banned",
-      });
-      return res.status(403).json({ message: "Account is banned", banned: true });
-    }
-
-    if (user.isBanned) {
-      await storage.createAuditLog({
-        action: "LOGIN_FAILED_BANNED",
-        performedBy: user.username,
-        details: "User is banned",
-      });
-      return res.status(403).json({ message: "Account is banned", banned: true });
-    }
-
-    const validPassword = await bcrypt.compare(String(password ?? ""), user.passwordHash);
-    if (!validPassword) {
-      await storage.createAuditLog({
-        action: "LOGIN_FAILED",
-        performedBy: user.username,
-        details: "Invalid password",
-      });
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-
-    const browserName = parseBrowser(browser || req.headers["user-agent"]);
-
-    // 🔐 ROLE-BASED SESSION CONTROL
-    if (user.role === "superuser") {
-      const enforceSingleSuperuserSession = await storage.getBooleanSystemSetting(
-        "enforce_superuser_single_session",
-        false
-      );
-
-      if (enforceSingleSuperuserSession) {
-        const activeSessions = await storage.getActiveActivitiesByUsername(user.username);
-        if (activeSessions.length > 0) {
-          await storage.createAuditLog({
-            action: "LOGIN_BLOCKED_SINGLE_SESSION",
-            performedBy: user.username,
-            details: `Superuser single-session policy blocked login. Active sessions: ${activeSessions.length}`,
-          });
-          return res.status(409).json({
-            message: "Single superuser session is enforced. Logout from the current session first.",
-            code: "SUPERUSER_SINGLE_SESSION_ENFORCED",
-          });
-        }
-      }
-    } else if (user.role === "admin" && fingerprint) {
-      // ⚠️ ADMIN: 1 SESSION PER DEVICE
-      await storage.deactivateUserSessionsByFingerprint(
-        user.username,
-        fingerprint
-      );
-    }
-    // ✅ USER BIASA: TAK PERLU BUAT APA-APA
-
-    // ➕ CREATE SESSION BARU
-    const activity = await storage.createActivity({
-      userId: user.id,
-      username: user.username,
-      role: user.role,
-      pcName: pcName || null,
-      browser: browserName,
-      fingerprint: fingerprint || null,
-      ipAddress: req.ip || req.socket.remoteAddress || null,
-    });
-
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        username: user.username,
-        role: user.role,
-        activityId: activity.id,
-      },
-      JWT_SECRET,
-      { expiresIn: "24h" }
-    );
-
-    await storage.createAuditLog({
-      action: "LOGIN_SUCCESS",
-      performedBy: user.username,
-      details: `Login from ${browserName}`,
-    });
-
-    res.json({
-      token,
-      username: user.username,
-      role: user.role,
-      user: { username: user.username, role: user.role },
-      activityId: activity.id,
-    });
-  } catch (error: any) {
-    console.error("Login error:", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-}
-
-app.post("/api/login", handleLogin);
-app.post("/api/auth/login", handleLogin);
-
-app.post("/api/activity/logout", authenticateToken, async (req: AuthenticatedRequest, res) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ success: false });
-    }
-
-    const activityId = req.user.activityId;
-
-    // 🔐 FIX ISSUE #2 — RACE PROTECTION
-    const activity = await storage.getActivityById(activityId);
-    if (!activity || activity.isActive === false) {
-      return res.json({ success: true });
-    }
-
-    // 1️⃣ TUTUP SESSION DALAM DB
-    await storage.updateActivity(activityId, {
-      isActive: false,
-      logoutTime: new Date(),
-      logoutReason: "USER_LOGOUT",
-    });
-
-    // 2️⃣ TUTUP WEBSOCKET (JIKA ADA)
-    const ws = connectedClients.get(activityId);
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: "logout",
-        reason: "User logged out",
-      }));
-      ws.close();
-    }
-
-    connectedClients.delete(activityId);
-    await storage.clearCollectionNicknameSessionByActivity(activityId);
-
-    // 3️⃣ AUDIT LOG
-    await storage.createAuditLog({
-      action: "LOGOUT",
-      performedBy: req.user.username,
-    });
-
-    res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-app.get("/api/activity/all", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
-  try {
-    const activities = await storage.getAllActivities();
-    res.json({ activities });
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-app.get("/api/activity/filter", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
-  try {
-    const filters: any = {};
-    if (req.query.status) {
-      filters.status = (req.query.status as string).split(",");
-    }
-    if (req.query.username) filters.username = req.query.username as string;
-    if (req.query.ipAddress) filters.ipAddress = req.query.ipAddress as string;
-    if (req.query.browser) filters.browser = req.query.browser as string;
-    if (req.query.dateFrom) filters.dateFrom = new Date(req.query.dateFrom as string);
-    if (req.query.dateTo) filters.dateTo = new Date(req.query.dateTo as string);
-
-    const activities = await storage.getFilteredActivities(filters);
-    res.json({ activities });
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-app.delete(
-  "/api/activity/:id",
-  authenticateToken,
-  requireRole("admin", "superuser"),
-  requireTabAccess("activity"),
-  async (req: AuthenticatedRequest, res) => {
-    try {
-      const activityId = String(req.params.id);
-
-      if (!activityId) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid activityId",
-        });
-      }
-
-      await storage.deleteActivity(activityId);
-
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error("Delete activity error:", error);
-      res.status(500).json({ message: error.message });
-    }
-  }
-);
-
-app.post(
-  "/api/activity/kick",
-  authenticateToken,
-  requireRole("admin", "superuser"),
-  requireTabAccess("activity"),
-  async (req: AuthenticatedRequest, res) => {
-    try {
-      const activityId = String(req.body.activityId);
-
-      if (!activityId) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid activityId",
-        });
-      }
-
-      const activity = await storage.getActivityById(activityId);
-      if (!activity) {
-        return res.status(404).json({ message: "Activity not found" });
-      }
-
-      // 1️⃣ TUTUP SESSION DALAM DB
-      await storage.updateActivity(activityId, {
-        isActive: false,
-        logoutTime: new Date(),
-        logoutReason: "KICKED",
-      });
-
-      // 2️⃣ TUTUP WEBSOCKET (GUNA activityId)
-      const ws = connectedClients.get(activityId);
-
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: "kicked",
-          reason: "You have been logged out by an administrator.",
-        }));
-
-        ws.close();
-      }
-
-      connectedClients.delete(activityId);
-
-      // 3️⃣ AUDIT LOG
-      await storage.createAuditLog({
-        action: "KICK_USER",
-        performedBy: req.user!.username,
-        targetUser: activity.username,
-        details: `Kicked activityId=${activityId}`,
-      });
-
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error("Activity kick error:", error);
-      res.status(500).json({ message: error.message });
-    }
-  }
-);
-
-app.post(
-  "/api/activity/ban",
-  authenticateToken,
-  requireRole("superuser"),
-  requireTabAccess("activity"),
-  async (req: AuthenticatedRequest, res) => {
-    try {
-      const activityId = String(req.body.activityId);
-      if (!activityId) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid activityId",
-        });
-      }
-
-      const activity = await storage.getActivityById(activityId);
-      if (!activity) {
-        return res.status(404).json({ message: "Activity not found" });
-      }
-
-      // ❌ Tak boleh ban superuser
-      const targetUser = await storage.getUserByUsername(activity.username);
-      if (targetUser?.role === "superuser") {
-        return res.status(403).json({ message: "Cannot ban a superuser" });
-      }
-
-      // 1️⃣ BAN VISITOR (SESSION-LEVEL)
-      await storage.banVisitor({
-        username: activity.username,
-        role: activity.role,
-        activityId: activity.id,
-        fingerprint: activity.fingerprint ?? null,
-        ipAddress: activity.ipAddress ?? null,
-        browser: activity.browser ?? null,
-        pcName: activity.pcName ?? null,
-      });
-
-      // 2️⃣ TUTUP SESSION DB (ACTIVITY SAHAJA)
-      await storage.updateActivity(activityId, {
-        isActive: false,
-        logoutTime: new Date(),
-        logoutReason: "BANNED",
-      });
-
-      // 3️⃣ TUTUP WEBSOCKET (ACTIVITY SAHAJA)
-      const ws = connectedClients.get(activityId);
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: "banned",
-          reason: "Your account has been banned.",
-        }));
-        ws.close();
-      }
-      connectedClients.delete(activityId);
-
-      // 4️⃣ AUDIT LOG
-      await storage.createAuditLog({
-        action: "BAN_USER",
-        performedBy: req.user!.username,
-        targetUser: activity.username,
-        details: `Banned via activityId=${activityId}`,
-      });
-
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error("Activity ban error:", error);
-      res.status(500).json({ message: error.message });
-    }
-  }
-);
-
-app.get("/api/users/banned", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
-  try {
-    const bannedSessions = await storage.getBannedSessions();
-    const usersWithVisitorId = bannedSessions.map((s) => ({
-      visitorId: s.banId,
-      banId: s.banId,
-      username: s.username,
-      role: s.role,
-      banInfo: {
-        ipAddress: s.ipAddress ?? null,
-        browser: s.browser ?? null,
-        bannedAt: s.bannedAt ?? null,
-      },
-    }));
-    res.json({ users: usersWithVisitorId });
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-app.get("/api/search/columns", authenticateToken, async (req, res) => {
-  try {
-    const columns = await storage.getAllColumnNames();
-    res.json(columns);
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-});
 
 app.get(
   "/api/collection/nicknames",
@@ -3853,1107 +3395,6 @@ app.delete(
   },
 );
 
-app.get("/api/auth/me", authenticateToken, (req: AuthenticatedRequest, res) => {
-  if (!req.user) {
-    return res.status(401).json({ message: "Unauthenticated" });
-  }
-
-  res.json({
-    user: {
-      username: req.user.username,
-      role: req.user.role,
-      activityId: req.user.activityId,
-    },
-  });
-});
-
-app.get("/api/me", authenticateToken, async (req: AuthenticatedRequest, res) => {
-  try {
-    if (!req.user) {
-      return sendCredentialError(res, 401, "PERMISSION_DENIED", "Authentication required.");
-    }
-
-    const user = req.user.userId
-      ? await storage.getUser(req.user.userId)
-      : await storage.getUserByUsername(req.user.username);
-
-    if (!user) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
-    }
-
-    return res.json({
-      id: user.id,
-      username: user.username,
-      role: user.role,
-    });
-  } catch (err: any) {
-    return sendCredentialError(res, 500, "PERMISSION_DENIED", err?.message || "Failed to load user profile.");
-  }
-});
-
-app.patch("/api/me/credentials", authenticateToken, async (req: AuthenticatedRequest, res) => {
-  try {
-    if (!req.user) {
-      return sendCredentialError(res, 401, "PERMISSION_DENIED", "Authentication required.");
-    }
-
-    const actor = req.user.userId
-      ? await storage.getUser(req.user.userId)
-      : await storage.getUserByUsername(req.user.username);
-
-    if (!actor) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
-    }
-
-    const body = ensureObject(req.body) || {};
-    const hasUsernameField = Object.prototype.hasOwnProperty.call(body, "newUsername");
-    const hasPasswordField = Object.prototype.hasOwnProperty.call(body, "newPassword");
-
-    let nextUsername: string | undefined;
-    let nextPasswordHash: string | undefined;
-    let usernameChanged = false;
-    let passwordChanged = false;
-
-    if (hasUsernameField) {
-      const normalized = normalizeUsernameInput(body.newUsername);
-      if (!normalized || !CREDENTIAL_USERNAME_REGEX.test(normalized)) {
-        return sendCredentialError(
-          res,
-          400,
-          "USERNAME_TAKEN",
-          "Username must match ^[a-zA-Z0-9._-]{3,32}$.",
-        );
-      }
-
-      const existing = await storage.getUserByUsername(normalized);
-      if (existing && existing.id !== actor.id) {
-        return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
-      }
-
-      if (normalized !== actor.username) {
-        nextUsername = normalized;
-        usernameChanged = true;
-      }
-    }
-
-    if (hasPasswordField) {
-      const nextPasswordRaw = String(body.newPassword ?? "");
-      const currentPasswordRaw = String(body.currentPassword ?? "");
-
-      if (!currentPasswordRaw) {
-        return sendCredentialError(res, 400, "INVALID_CURRENT_PASSWORD", "Current password is required.");
-      }
-
-      const currentPasswordMatch = await bcrypt.compare(currentPasswordRaw, actor.passwordHash);
-      if (!currentPasswordMatch) {
-        return sendCredentialError(res, 400, "INVALID_CURRENT_PASSWORD", "Current password is invalid.");
-      }
-
-      if (!isStrongPassword(nextPasswordRaw)) {
-        return sendCredentialError(
-          res,
-          400,
-          "INVALID_PASSWORD",
-          "Password must be at least 8 characters and include at least one letter and one number.",
-        );
-      }
-
-      const sameAsCurrent = await bcrypt.compare(nextPasswordRaw, actor.passwordHash);
-      if (sameAsCurrent) {
-        return sendCredentialError(res, 400, "INVALID_PASSWORD", "New password must be different from current password.");
-      }
-
-      nextPasswordHash = await bcrypt.hash(nextPasswordRaw, CREDENTIAL_BCRYPT_COST);
-      passwordChanged = true;
-    }
-
-    if (!usernameChanged && !passwordChanged) {
-      return res.json({
-        ok: true,
-        user: {
-          id: actor.id,
-          username: actor.username,
-          role: actor.role,
-        },
-      });
-    }
-
-    const activeSessions = passwordChanged
-      ? await storage.getActiveActivitiesByUsername(actor.username)
-      : [];
-
-    const updatedUser = await storage.updateUserCredentials({
-      userId: actor.id,
-      newUsername: nextUsername,
-      newPasswordHash: nextPasswordHash,
-      passwordChangedAt: passwordChanged ? new Date() : undefined,
-    });
-
-    if (!updatedUser) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
-    }
-
-    if (usernameChanged && !passwordChanged && nextUsername) {
-      await storage.updateActivitiesUsername(actor.username, nextUsername);
-    }
-
-    if (usernameChanged) {
-      await storage.createAuditLog({
-        action: "USER_USERNAME_CHANGED",
-        performedBy: actor.id,
-        targetUser: updatedUser.id,
-        details: buildCredentialAuditDetails({
-          actor_user_id: actor.id,
-          target_user_id: updatedUser.id,
-          changedField: "username",
-        }),
-      });
-    }
-
-    if (passwordChanged) {
-      await storage.createAuditLog({
-        action: "USER_PASSWORD_CHANGED",
-        performedBy: actor.id,
-        targetUser: updatedUser.id,
-        details: buildCredentialAuditDetails({
-          actor_user_id: actor.id,
-          target_user_id: updatedUser.id,
-          changedField: "password",
-        }),
-      });
-
-      await storage.deactivateUserActivities(actor.username, "PASSWORD_CHANGED");
-      if (updatedUser.username !== actor.username) {
-        await storage.deactivateUserActivities(updatedUser.username, "PASSWORD_CHANGED");
-      }
-      closeActivitySockets(
-        activeSessions.map((activity) => activity.id),
-        "Password changed. Please login again.",
-      );
-    }
-
-    return res.json({
-      ok: true,
-      forceLogout: passwordChanged,
-      user: {
-        id: updatedUser.id,
-        username: updatedUser.username,
-        role: updatedUser.role,
-      },
-    });
-  } catch (err: any) {
-    if (String(err?.code || "") === "23505") {
-      return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
-    }
-    return sendCredentialError(res, 500, "PERMISSION_DENIED", err?.message || "Failed to update credentials.");
-  }
-});
-
-app.get("/api/admin/users", authenticateToken, async (req: AuthenticatedRequest, res) => {
-  try {
-    if (!req.user || req.user.role !== "superuser") {
-      return sendCredentialError(res, 403, "PERMISSION_DENIED", "Only superuser can access this resource.");
-    }
-
-    const users = await storage.getUsersByRoles(["admin", "user"]);
-    return res.json({
-      ok: true,
-      users: users.map((item) => ({
-        id: item.id,
-        username: item.username,
-        role: item.role,
-      })),
-    });
-  } catch (err: any) {
-    return sendCredentialError(res, 500, "PERMISSION_DENIED", err?.message || "Failed to load users.");
-  }
-});
-
-app.patch("/api/admin/users/:id/credentials", authenticateToken, async (req: AuthenticatedRequest, res) => {
-  try {
-    if (!req.user || req.user.role !== "superuser") {
-      return sendCredentialError(res, 403, "PERMISSION_DENIED", "Only superuser can access this resource.");
-    }
-
-    const actor = req.user.userId
-      ? await storage.getUser(req.user.userId)
-      : await storage.getUserByUsername(req.user.username);
-
-    if (!actor) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Actor user not found.");
-    }
-
-    const targetUserId = String(req.params.id || "").trim();
-    if (!targetUserId) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Target user not found.");
-    }
-
-    const target = await storage.getUser(targetUserId);
-    if (!target) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Target user not found.");
-    }
-
-    // Superuser endpoint can only manage admin/user accounts.
-    if (target.role !== "admin" && target.role !== "user") {
-      return sendCredentialError(res, 403, "PERMISSION_DENIED", "Target role is not allowed.");
-    }
-
-    const body = ensureObject(req.body) || {};
-    const hasUsernameField = Object.prototype.hasOwnProperty.call(body, "newUsername");
-    const hasPasswordField = Object.prototype.hasOwnProperty.call(body, "newPassword");
-
-    let nextUsername: string | undefined;
-    let nextPasswordHash: string | undefined;
-    let usernameChanged = false;
-    let passwordChanged = false;
-
-    if (hasUsernameField) {
-      const normalized = normalizeUsernameInput(body.newUsername);
-      if (!normalized || !CREDENTIAL_USERNAME_REGEX.test(normalized)) {
-        return sendCredentialError(
-          res,
-          400,
-          "USERNAME_TAKEN",
-          "Username must match ^[a-zA-Z0-9._-]{3,32}$.",
-        );
-      }
-
-      const existing = await storage.getUserByUsername(normalized);
-      if (existing && existing.id !== target.id) {
-        return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
-      }
-
-      if (normalized !== target.username) {
-        nextUsername = normalized;
-        usernameChanged = true;
-      }
-    }
-
-    if (hasPasswordField) {
-      const nextPasswordRaw = String(body.newPassword ?? "");
-      if (!isStrongPassword(nextPasswordRaw)) {
-        return sendCredentialError(
-          res,
-          400,
-          "INVALID_PASSWORD",
-          "Password must be at least 8 characters and include at least one letter and one number.",
-        );
-      }
-
-      const sameAsCurrent = await bcrypt.compare(nextPasswordRaw, target.passwordHash);
-      if (sameAsCurrent) {
-        return sendCredentialError(res, 400, "INVALID_PASSWORD", "New password must be different from current password.");
-      }
-
-      nextPasswordHash = await bcrypt.hash(nextPasswordRaw, CREDENTIAL_BCRYPT_COST);
-      passwordChanged = true;
-    }
-
-    if (!usernameChanged && !passwordChanged) {
-      return res.json({ ok: true });
-    }
-
-    const activeSessions = passwordChanged
-      ? await storage.getActiveActivitiesByUsername(target.username)
-      : [];
-
-    const updatedUser = await storage.updateUserCredentials({
-      userId: target.id,
-      newUsername: nextUsername,
-      newPasswordHash: nextPasswordHash,
-      passwordChangedAt: passwordChanged ? new Date() : undefined,
-    });
-
-    if (!updatedUser) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Target user not found.");
-    }
-
-    if (usernameChanged && !passwordChanged && nextUsername) {
-      await storage.updateActivitiesUsername(target.username, nextUsername);
-    }
-
-    if (usernameChanged) {
-      await storage.createAuditLog({
-        action: "USER_USERNAME_CHANGED",
-        performedBy: actor.id,
-        targetUser: updatedUser.id,
-        details: buildCredentialAuditDetails({
-          actor_user_id: actor.id,
-          target_user_id: updatedUser.id,
-          changedField: "username",
-        }),
-      });
-    }
-
-    if (passwordChanged) {
-      await storage.createAuditLog({
-        action: "USER_PASSWORD_CHANGED",
-        performedBy: actor.id,
-        targetUser: updatedUser.id,
-        details: buildCredentialAuditDetails({
-          actor_user_id: actor.id,
-          target_user_id: updatedUser.id,
-          changedField: "password",
-        }),
-      });
-
-      await storage.deactivateUserActivities(target.username, "PASSWORD_RESET_BY_SUPERUSER");
-      if (updatedUser.username !== target.username) {
-        await storage.deactivateUserActivities(updatedUser.username, "PASSWORD_RESET_BY_SUPERUSER");
-      }
-      closeActivitySockets(
-        activeSessions.map((activity) => activity.id),
-        "Password reset by superuser. Please login again.",
-      );
-    }
-
-    return res.json({ ok: true });
-  } catch (err: any) {
-    if (String(err?.code || "") === "23505") {
-      return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
-    }
-    return sendCredentialError(res, 500, "PERMISSION_DENIED", err?.message || "Failed to update credentials.");
-  }
-});
-
-app.get("/api/app-config", authenticateToken, async (req, res) => {
-  try {
-    const config = await storage.getAppConfig();
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
-    res.json(config);
-  } catch (err: any) {
-    console.error("App config GET error:", err);
-    res.status(500).json({ message: err?.message || "Failed to load app config" });
-  }
-});
-
-app.get("/api/settings/tab-visibility", authenticateToken, async (req: AuthenticatedRequest, res) => {
-  try {
-    const role = req.user?.role || "user";
-    const tabs = await storage.getRoleTabVisibility(role);
-    res.json({ role, tabs });
-  } catch (err: any) {
-    console.error("Tab visibility GET error:", err);
-    res.status(500).json({ message: err?.message || "Failed to load tab visibility" });
-  }
-});
-
-app.get("/api/settings", authenticateToken, requireRole("admin", "superuser"), async (req: AuthenticatedRequest, res) => {
-  try {
-    const role = req.user?.role || "user";
-    const categories = await storage.getSettingsForRole(role);
-    res.json({ categories });
-  } catch (err: any) {
-    console.error("Settings GET error:", err);
-    res.status(500).json({ message: err?.message || "Failed to load settings" });
-  }
-});
-
-app.patch("/api/settings", authenticateToken, requireRole("admin", "superuser"), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { key, value, confirmCritical } = req.body || {};
-    if (!key || typeof key !== "string") {
-      return res.status(400).json({ message: "Invalid setting key" });
-    }
-
-    const role = req.user?.role || "user";
-    const result = await storage.updateSystemSetting({
-      role,
-      settingKey: key,
-      value: value ?? null,
-      confirmCritical: Boolean(confirmCritical),
-      updatedBy: req.user?.username || "system",
-    });
-
-    if (result.status === "not_found") {
-      return res.status(404).json({ message: result.message });
-    }
-    if (result.status === "forbidden") {
-      return res.status(403).json({ message: result.message });
-    }
-    if (result.status === "requires_confirmation") {
-      return res.status(409).json({ message: result.message, requiresConfirmation: true });
-    }
-    if (result.status === "invalid") {
-      return res.status(400).json({ message: result.message });
-    }
-
-    if (result.status === "updated") {
-      tabVisibilityCache.clear();
-      invalidateRuntimeSettingsCache();
-      await storage.createAuditLog({
-        action: result.setting?.isCritical ? "CRITICAL_SETTING_UPDATED" : "SETTING_UPDATED",
-        performedBy: req.user?.username || "system",
-        targetResource: key,
-        details: `Updated setting ${key} to "${String(result.setting?.value ?? "")}"`,
-      });
-
-      if (key === "ai_timeout_ms") {
-        process.env.OLLAMA_TIMEOUT_MS = String(result.setting?.value ?? DEFAULT_AI_TIMEOUT_MS);
-      }
-
-      if (result.shouldBroadcast) {
-        invalidateMaintenanceCache();
-        const maintenanceState = await getMaintenanceStateCached(true);
-        broadcastWsMessage({
-          type: "maintenance_update",
-          maintenance: maintenanceState.maintenance,
-          message: maintenanceState.message,
-          mode: maintenanceState.type,
-          startTime: maintenanceState.startTime,
-          endTime: maintenanceState.endTime,
-        });
-      } else {
-        broadcastWsMessage({
-          type: "settings_updated",
-          key,
-          updatedBy: req.user?.username || "system",
-        });
-      }
-    }
-
-    return res.json({
-      success: result.status === "updated" || result.status === "unchanged",
-      status: result.status,
-      message: result.message,
-      setting: result.setting || null,
-    });
-  } catch (err: any) {
-    console.error("Settings PATCH error:", err);
-    res.status(500).json({ message: err?.message || "Failed to update setting" });
-  }
-});
-
-app.post("/api/activity/heartbeat", authenticateToken, async (req: AuthenticatedRequest, res) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ ok: false, message: "Unauthenticated" });
-    }
-
-    const activityId = req.user!.activityId;
-
-    if (API_DEBUG_LOGS) {
-      console.log("================================");
-      console.log("HEARTBEAT MASUK");
-      console.log("Username:", req.user.username);
-      console.log("ActivityId:", activityId);
-      console.log("Time:", new Date().toISOString());
-      console.log("================================");
-    }
-
-    await storage.updateActivity(activityId, {
-      lastActivityTime: new Date(),
-      isActive: true,
-    });
-
-    res.json({
-      ok: true,
-      status: "ONLINE",
-      lastActivityTime: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error("Heartbeat error:", err);
-    res.status(500).json({ ok: false });
-  }
-});
-
-app.get("/api/imports", authenticateToken, async (req, res) => {
-  try {
-    const allImports = await storage.getImports();
-    const importsWithRowCount = await Promise.all(
-      allImports.map(async (imp) => {
-        const rowCount = await storage.getDataRowCountByImport(imp.id);
-        return { ...imp, rowCount };
-      })
-    );
-    res.json({ imports: importsWithRowCount });
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-app.post("/api/imports", authenticateToken, async (req: AuthenticatedRequest, res) => {
-  try {
-    const { name, filename, rows, data } = req.body;
-    const dataRows = rows || data || [];
-
-    if (!Array.isArray(dataRows) || dataRows.length === 0) {
-      return res.status(400).json({ message: "No data rows provided" });
-    }
-
-    const importRecord = await storage.createImport({
-      name,
-      filename,
-      createdBy: req.user?.username,
-    });
-
-    const INSERT_CHUNK_SIZE = 20;
-    for (let i = 0; i < dataRows.length; i += INSERT_CHUNK_SIZE) {
-      const chunk = dataRows.slice(i, i + INSERT_CHUNK_SIZE);
-      await Promise.all(
-        chunk.map((row) =>
-          storage.createDataRow({
-            importId: importRecord.id,
-            jsonDataJsonb: row,
-          })
-        )
-      );
-    }
-
-    await storage.createAuditLog({
-      action: "IMPORT_DATA",
-      performedBy: req.user!.username,
-      targetResource: name,
-      details: `Imported ${dataRows.length} rows from ${filename}`,
-    });
-
-    res.json(importRecord);
-  } catch (error: any) {
-    console.error("Import error:", error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-app.get("/api/imports/:id", authenticateToken, async (req, res) => {
-  try {
-    const importRecord = await storage.getImportById(req.params.id);
-    if (!importRecord) {
-      return res.status(404).json({ message: "Import not found" });
-    }
-    const rows = await storage.getDataRowsByImport(req.params.id);
-    res.json({ import: importRecord, rows });
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-app.get(
-  "/api/imports/:id/data",
-  authenticateToken,
-  searchRateLimiter,
-  async (req, res) => {
-    try {
-      const runtimeSettings = await getRuntimeSettingsCached();
-      const importId = req.params.id;
-      const rawPage = Number(req.query.page ?? 1);
-      const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
-      const dbProtected = controlState.dbProtection || lastDbLatencyMs > 1000;
-      const maxLimit = Math.min(dbProtected ? 120 : 500, runtimeSettings.viewerRowsPerPage);
-      const rawLimit = Number(req.query.limit ?? runtimeSettings.viewerRowsPerPage);
-      const requestedLimit = Number.isFinite(rawLimit) ? Math.floor(rawLimit) : runtimeSettings.viewerRowsPerPage;
-      const limit = Math.max(10, Math.min(requestedLimit, maxLimit));
-      const offset = (page - 1) * limit;
-      const search = String(req.query.search || "").trim();
-
-      if (API_DEBUG_LOGS) {
-        console.log(`📥 /api/imports/:id/data called: importId=${importId}, page=${page}, search="${search}"`);
-      }
-
-      if (!importId) {
-        return res.status(400).json({ message: "importId is required" });
-      }
-
-      const result = await storage.searchDataRows({
-        importId,
-        search: search || null,
-        limit,
-        offset,
-      });
-
-      // Return in format expected by Viewer component
-      const safeRows = result.rows || [];
-      const formattedRows = safeRows.map((row: any) => ({
-        id: row.id,
-        importId: row.importId,
-        jsonDataJsonb: row.jsonDataJsonb,
-      }));
-
-      if (API_DEBUG_LOGS) {
-        console.log(`📤 Returning ${formattedRows.length} rows, total: ${result.total}`);
-      }
-
-      // RESPONSE FORMAT EXPECTED BY VIEWER
-      return res.json({
-        rows: formattedRows,
-        total: result.total || 0,
-        page,
-        limit,
-      });
-
-    } catch (error: any) {
-      console.error("GET /api/imports/:id/data error:", error);
-      return res.status(500).json({ message: error.message });
-    }
-  }
-);
-
-app.get(
-  "/api/search/global",
-  authenticateToken,
-  searchRateLimiter,
-  async (req, res) => {
-    try {
-      const search = String(req.query.q || "").trim();
-      if (API_DEBUG_LOGS) {
-        console.log(`🔎 /api/search/global called: search="${search}"`);
-      }
-      
-      const runtimeSettings = await getRuntimeSettingsCached();
-      const rawPage = Number(req.query.page ?? 1);
-      const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
-      const dbProtected = controlState.dbProtection || lastDbLatencyMs > 1000;
-      const maxTotal = runtimeSettings.searchResultLimit;
-      const maxLimit = dbProtected ? Math.min(maxTotal, 80) : maxTotal;
-      const requestedLimit = Number(req.query.limit ?? 50);
-      const safeRequestedLimit = Number.isFinite(requestedLimit) ? Math.floor(requestedLimit) : 50;
-      const limit = Math.max(10, Math.min(safeRequestedLimit, maxLimit));
-      const offset = (page - 1) * limit;
-      if (offset >= maxTotal) {
-        return res.json({
-          columns: [],
-          rows: [],
-          results: [],
-          total: maxTotal,
-          page,
-          limit,
-        });
-      }
-      const remainingBudget = Math.max(1, maxTotal - offset);
-      const effectiveLimit = Math.min(limit, remainingBudget);
-
-      if (search.length < 2) {
-        if (API_DEBUG_LOGS) {
-          console.log(`🔎 Search too short (${search.length} chars), returning empty`);
-        }
-        return res.json({
-          columns: [],
-          rows: [],
-          results: [],
-          total: 0,
-        });
-      }
-
-      const result = await storage.searchGlobalDataRows({
-        search,
-        limit: effectiveLimit,
-        offset,
-      });
-
-      if (API_DEBUG_LOGS) {
-        console.log(`🔎 Global search found: ${result.rows.length} rows (total: ${result.total})`);
-      }
-
-      const parsedRows = result.rows.map((r: any) => {
-        const base =
-          r.jsonDataJsonb && typeof r.jsonDataJsonb === "object"
-            ? r.jsonDataJsonb
-            : {};
-        const sourceFile = r.importFilename || r.importName || "";
-        return {
-          ...base,
-          "Source File": sourceFile,
-        };
-      });
-
-      // ✅ FIX KRITIKAL — gabung SEMUA column
-      const columnSet = new Set<string>();
-      for (const row of parsedRows) {
-        Object.keys(row).forEach((key) => columnSet.add(key));
-      }
-
-      if (API_DEBUG_LOGS) {
-        if (parsedRows.length > 0) {
-          console.log(`🔎 Sample parsed row keys: ${Object.keys(parsedRows[0]).slice(0, 20).join(",")}`);
-        } else {
-          console.log("🔎 No parsed rows to sample");
-        }
-      }
-
-      return res.json({
-        columns: Array.from(columnSet),
-        rows: parsedRows,
-        results: parsedRows,
-        total: Math.min(result.total, maxTotal),
-        page,
-        limit: effectiveLimit,
-      });
-
-    } catch (error: any) {
-      console.error("GET /api/search/global error:", error);
-      return res.status(500).json({ message: error.message });
-    }
-  }
-);
-
-app.get(
-  "/api/search",
-  authenticateToken,
-  searchRateLimiter,
-  async (req, res) => {
-    try {
-      const search = String(req.query.q || "").trim();
-
-      if (search.length < 2) {
-        return res.json({ results: [], total: 0 });
-      }
-
-      const queryResult = await storage.searchSimpleDataRows(search);
-      const rows = queryResult.rows || [];
-
-      // 🔥 PENTING: attach import context
-      const results = rows.map((r: any) => ({
-        ...r.jsonDataJsonb,
-        _importId: r.importId,
-        _importName: r.importName,
-      }));
-
-      return res.json({
-        results,
-        total: results.length,
-      });
-    } catch (err: any) {
-      console.error("GET /api/search error:", err);
-      res.status(500).json({ message: err.message });
-    }
-  }
-);
-
-// Helper function: Validate Malaysian IC date (YYMMDD)
-function isValidMalaysianIC(ic: string): boolean {
-  if (!/^\d{12}$/.test(ic)) return false;
-
-  // Malaysian phone numbers start with 01 - exclude these
-  if (ic.startsWith('01')) return false;
-
-  // Extract date parts: YYMMDD
-  const mm = parseInt(ic.substring(2, 4), 10);
-  const dd = parseInt(ic.substring(4, 6), 10);
-
-  // Validate month (01-12)
-  if (mm < 1 || mm > 12) return false;
-
-  // Validate day (01-31) - basic check
-  if (dd < 1 || dd > 31) return false;
-
-  // More specific day validation based on month
-  const daysInMonth = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  if (dd > daysInMonth[mm - 1]) return false;
-
-  return true;
-}
-
-// Column exclusion lists for IC detection
-// Note: Avoid generic terms like "NOMBOR" which would exclude valid IC columns
-const excludeColumnsFromIC = ['AGREEMENT', 'LOAN', 'ACCOUNT', 'AKAUN', 'PINJAMAN', 'CONTRACT', 'KONTRAK',
-  'REFERENCE', 'TRANSACTION', 'TRANSAKSI', 'PHONE', 'TELEFON', 'MOBILE', 'HANDPHONE',
-  'FAX', 'FAKS', 'E-MONEY'];
-const excludeColumnsFromPolice = ['VEHICLE', 'KENDERAAN', 'REGISTRATION', 'PLATE', 'RSTG',
-  'CAR', 'KERETA', 'MOTOR', 'MOTOSIKAL', 'VEH', 'PENDAFTARAN'];
-
-// Helper to split cell values by common delimiters including single spaces
-function splitCellValue(val: string): string[] {
-  // Remove labels like IC1:, IC2:, NRIC:, NO IC:, etc.
-  const withoutLabels = val.replace(/\b(IC\d*|NRIC|NO\.?\s*IC|KAD PENGENALAN|KP)\s*[:=]/gi, ' ');
-  // Split by common delimiters: / , ; | newlines AND whitespace (single or multiple)
-  return withoutLabels.split(/[\/,;|\n\r\s]+/).map(s => s.trim()).filter(s => s.length > 0);
-}
-
-function analyzeDataRows(rows: any[]) {
-  const icLelakiSet = new Set<string>();
-  const icPerempuanSet = new Set<string>();
-  const noPolisSet = new Set<string>();
-  const noTenteraSet = new Set<string>();
-  const passportMYSet = new Set<string>();
-  const passportLuarNegaraSet = new Set<string>();
-  const valueCounts: Record<string, number> = {};
-  const processedValues = new Set<string>();
-
-  const passportPattern = /^[A-Z]{1,2}\d{6,9}$/i;
-  const malaysiaPassportPrefixes = ['A', 'H', 'K', 'Q'];
-  const excludePrefixes = ['LOT', 'NO', 'PT', 'KM', 'JLN', 'BLK', 'TMN', 'KG', 'SG', 'BTU', 'RM'];
-
-  // Validation functions with minimum digit requirements to avoid false positives
-  // Single letter prefix: 5+ digits, Two letters: 4+ digits, Three+: 3+ digits
-  const isValidPolisNo = (val: string): boolean => {
-    // Exclude any police number that starts with "P"
-    if (/^P\d{3,}$/i.test(val)) return false;
-    if (/^G\d{5,10}$/i.test(val)) return true;
-    if (/^(RF|SW)\d{4,10}$/i.test(val)) return true;
-    if (/^(RFT|PDRM|POLIS|POL)\d{3,10}$/i.test(val)) return true;
-    return false;
-  };
-
-  const isValidTenteraNo = (val: string): boolean => {
-    // Exclude any military number that starts with "M"
-    if (/^M\d{3,}$/i.test(val)) return false;
-    if (/^T\d{5,10}$/i.test(val)) return true;
-    if (/^(TD|TA|TT)\d{4,10}$/i.test(val)) return true;
-    if (/^(TLDM|TUDM|ARMY|ATM|MAF|TEN|MIL)\d{3,10}$/i.test(val)) return true;
-    return false;
-  };
-
-  rows.forEach((row: any) => {
-    try {
-      const data =
-        row.jsonDataJsonb && typeof row.jsonDataJsonb === "object"
-          ? row.jsonDataJsonb
-          : {};
-      Object.entries(data).forEach(([key, val]) => {
-        if (val && typeof val === "string") {
-          const keyUpper = key.toUpperCase();
-          const isExcludedFromIC = excludeColumnsFromIC.some(excl => keyUpper.includes(excl));
-          const isExcludedFromPolice = excludeColumnsFromPolice.some(excl => keyUpper.includes(excl));
-
-          // Split cell value to handle multiple IDs per cell
-          const fragments = splitCellValue(val.toString());
-
-          for (const fragment of fragments) {
-            const cleaned = fragment.toUpperCase().replace(/[^A-Z0-9]/g, "");
-            if (cleaned.length === 0) continue;
-
-            valueCounts[cleaned] = (valueCounts[cleaned] || 0) + 1;
-
-            if (processedValues.has(cleaned)) continue;
-            processedValues.add(cleaned);
-
-            // IC Detection with proper validation
-            if (!isExcludedFromIC && isValidMalaysianIC(cleaned)) {
-              const lastDigit = parseInt(cleaned.charAt(11), 10);
-              if (lastDigit % 2 === 1) {
-                icLelakiSet.add(cleaned);
-              } else {
-                icPerempuanSet.add(cleaned);
-              }
-            } else if (!isExcludedFromPolice && isValidPolisNo(cleaned)) {
-              noPolisSet.add(cleaned);
-            } else if (isValidTenteraNo(cleaned)) {
-              noTenteraSet.add(cleaned);
-            } else if (passportPattern.test(cleaned)) {
-              const isExcluded = excludePrefixes.some(prefix => cleaned.startsWith(prefix));
-              if (!isExcluded) {
-                const firstChar = cleaned.charAt(0);
-                if (malaysiaPassportPrefixes.includes(firstChar)) {
-                  passportMYSet.add(cleaned);
-                } else {
-                  passportLuarNegaraSet.add(cleaned);
-                }
-              }
-            }
-          }
-        }
-      });
-    } catch { }
-  });
-
-  const icLelaki = Array.from(icLelakiSet);
-  const icPerempuan = Array.from(icPerempuanSet);
-  const noPolis = Array.from(noPolisSet);
-  const noTentera = Array.from(noTenteraSet);
-  const passportMY = Array.from(passportMYSet);
-  const passportLuarNegara = Array.from(passportLuarNegaraSet);
-
-  const duplicateItems = Object.entries(valueCounts)
-    .filter(([_, count]) => count > 1)
-    .map(([value, count]) => ({ value, count }))
-    .sort((a, b) => b.count - a.count);
-
-  // Return only counts and limited samples (no 'all' arrays to save memory)
-  return {
-    icLelaki: { count: icLelaki.length, samples: icLelaki.slice(0, 50) },
-    icPerempuan: { count: icPerempuan.length, samples: icPerempuan.slice(0, 50) },
-    noPolis: { count: noPolis.length, samples: noPolis.slice(0, 50) },
-    noTentera: { count: noTentera.length, samples: noTentera.slice(0, 50) },
-    passportMY: { count: passportMY.length, samples: passportMY.slice(0, 50) },
-    passportLuarNegara: { count: passportLuarNegara.length, samples: passportLuarNegara.slice(0, 50) },
-    duplicates: { count: duplicateItems.length, items: duplicateItems.slice(0, 50) },
-  };
-}
-
-app.get(
-  "/api/imports/:id/analyze",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("analysis"),
-  async (req, res) => {
-  try {
-    const importRecord = await storage.getImportById(req.params.id);
-    if (!importRecord) {
-      return res.status(404).json({ message: "Import not found" });
-    }
-    const rows = await storage.getDataRowsByImport(req.params.id);
-    const analysis = analyzeDataRows(rows);
-
-    res.json({
-      import: { id: importRecord.id, name: importRecord.name, filename: importRecord.filename },
-      totalRows: rows.length,
-      analysis,
-    });
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-app.get("/api/analyze/all-summary", authenticateToken, async (req, res) => {
-  try {
-    const imports = await storage.getImports();
-    if (imports.length === 0) {
-      return res.json({
-        totalImports: 0,
-        totalRows: 0,
-        imports: [],
-        analysis: {
-          icLelaki: { count: 0, samples: [] },
-          icPerempuan: { count: 0, samples: [] },
-          noPolis: { count: 0, samples: [] },
-          noTentera: { count: 0, samples: [] },
-          passportMY: { count: 0, samples: [] },
-          passportLuarNegara: { count: 0, samples: [] },
-          duplicates: { count: 0, items: [] },
-        },
-      });
-    }
-
-    let allRows: any[] = [];
-    const importsWithCounts = await Promise.all(
-      imports.map(async (imp: any) => {
-        const rows = await storage.getDataRowsByImport(imp.id);
-        allRows = allRows.concat(rows);
-        return { id: imp.id, name: imp.name, filename: imp.filename, rowCount: rows.length };
-      })
-    );
-
-    const analysis = analyzeDataRows(allRows);
-
-    res.json({
-      totalImports: imports.length,
-      totalRows: allRows.length,
-      imports: importsWithCounts,
-      analysis,
-    });
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-app.patch("/api/imports/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
-  try {
-    const { name } = req.body;
-    const updated = await storage.updateImportName(req.params.id, name);
-    if (!updated) {
-      return res.status(404).json({ message: "Import not found" });
-    }
-    await storage.createAuditLog({
-      action: "UPDATE_IMPORT",
-      performedBy: req.user!.username,
-      targetResource: name,
-    });
-    res.json(updated);
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-app.patch("/api/imports/:id/rename", authenticateToken, async (req: AuthenticatedRequest, res) => {
-  try {
-    const { name } = req.body;
-    const updated = await storage.updateImportName(req.params.id, name);
-    if (!updated) {
-      return res.status(404).json({ message: "Import not found" });
-    }
-    await storage.createAuditLog({
-      action: "UPDATE_IMPORT",
-      performedBy: req.user!.username,
-      targetResource: name,
-    });
-    res.json(updated);
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-app.delete("/api/imports/:id", authenticateToken, requireRole("admin", "superuser"), async (req: AuthenticatedRequest, res) => {
-  try {
-    const importRecord = await storage.getImportById(req.params.id);
-    const deleted = await storage.deleteImport(req.params.id);
-    if (!deleted) {
-      return res.status(404).json({ message: "Import not found" });
-    }
-    await storage.createAuditLog({
-      action: "DELETE_IMPORT",
-      performedBy: req.user!.username,
-      targetResource: importRecord?.name || req.params.id,
-    });
-    res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-app.post("/api/search/advanced", authenticateToken, async (req, res) => {
-  try {
-    const { filters, logic, page = 1, limit = 50 } = req.body;
-    const runtimeSettings = await getRuntimeSettingsCached();
-    const parsedPage = Number(page);
-    const safePage = Number.isFinite(parsedPage) ? Math.max(1, Math.floor(parsedPage)) : 1;
-    const maxTotal = runtimeSettings.searchResultLimit;
-    const maxLimit = maxTotal;
-    const parsedLimit = Number(limit);
-    const safeRequestedLimit = Number.isFinite(parsedLimit) ? Math.floor(parsedLimit) : 50;
-    const safeLimit = Math.max(10, Math.min(safeRequestedLimit, maxLimit));
-    const offset = (safePage - 1) * safeLimit;
-    if (offset >= maxTotal) {
-      return res.json({
-        results: [],
-        headers: [],
-        total: maxTotal,
-        page: safePage,
-        limit: safeLimit,
-      });
-    }
-    const remainingBudget = Math.max(1, maxTotal - offset);
-    const effectiveLimit = Math.min(safeLimit, remainingBudget);
-
-    const rawResult = await storage.advancedSearchDataRows(filters, logic || "AND", effectiveLimit, offset);
-    const importsList = await storage.getImports();
-    const importMap = new Map(importsList.map((imp) => [imp.id, imp]));
-    const parsedResults = rawResult.rows.map((row: any) => {
-      const base =
-        row.jsonDataJsonb && typeof row.jsonDataJsonb === "object"
-          ? row.jsonDataJsonb
-          : {};
-      const imp = importMap.get(row.importId);
-      const sourceFile = imp?.filename || imp?.name || "";
-      return { ...base, "Source File": sourceFile };
-    });
-    const columnSet = new Set<string>();
-    for (const row of parsedResults) {
-      Object.keys(row).forEach((key) => columnSet.add(key));
-    }
-
-    const headers = Array.from(columnSet);
-    res.json({
-      results: parsedResults,
-      headers,
-      total: Math.min(rawResult.total || 0, maxTotal),
-      page: safePage,
-      limit: effectiveLimit,
-    });
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-app.get("/api/ai/config", authenticateToken, requireRole("user", "admin", "superuser"), async (req, res) => {
-  const runtimeSettings = await getRuntimeSettingsCached();
-  res.json({
-    ...getOllamaConfig(),
-    aiEnabled: runtimeSettings.aiEnabled,
-    semanticSearchEnabled: runtimeSettings.semanticSearchEnabled,
-    aiTimeoutMs: runtimeSettings.aiTimeoutMs,
-  });
-});
 
 type AiIntent = {
   intent: string;
@@ -5685,7 +4126,7 @@ const computeAiSearch = async (
   }
 
   if (process.env.AI_DEBUG === "1") {
-    console.log("🧠 AI_SEARCH DEBUG", {
+    console.log("ðŸ§  AI_SEARCH DEBUG", {
       query,
       keywordQuery,
       queryDigits,
@@ -5760,7 +4201,7 @@ const computeAiSearch = async (
     const keys = best.jsonDataJsonb && typeof best.jsonDataJsonb === "object"
       ? Object.keys(best.jsonDataJsonb)
       : [];
-    console.log("🧠 AI_SEARCH BEST ROW", {
+    console.log("ðŸ§  AI_SEARCH BEST ROW", {
       rowId: best.rowId,
       jsonType: typeof best.jsonDataJsonb,
       sampleKeys: keys.slice(0, 10),
@@ -5862,7 +4303,7 @@ const computeAiSearch = async (
               const branches = await safeNearestBranches(pcSafe.lat, pcSafe.lng, 1);
               nearestBranch = branches[0] || null;
               if (process.env.AI_DEBUG === "1") {
-                console.log("🧠 AI_SEARCH POSTCODE_COORD", { postcode: postcodeDigitsSafe, lat: pcSafe.lat, lng: pcSafe.lng, branchCount: branches.length });
+                console.log("ðŸ§  AI_SEARCH POSTCODE_COORD", { postcode: postcodeDigitsSafe, lat: pcSafe.lat, lng: pcSafe.lng, branchCount: branches.length });
               }
             } else {
               let branches = await safeFindBranchesByPostcode(postcodeDigitsSafe, 1);
@@ -5875,7 +4316,7 @@ const computeAiSearch = async (
               }
               nearestBranch = branches[0] || null;
               if (process.env.AI_DEBUG === "1") {
-                console.log("🧠 AI_SEARCH POSTCODE_TEXT", { postcode: postcodeDigitsSafe, branchCount: branches.length, branch: branches[0]?.name || null });
+                console.log("ðŸ§  AI_SEARCH POSTCODE_TEXT", { postcode: postcodeDigitsSafe, branchCount: branches.length, branch: branches[0]?.name || null });
               }
               // Postcode exists but no mapping: avoid address-text fallback that can suggest wrong state.
               if (!nearestBranch) missingCoords = false;
@@ -5956,7 +4397,7 @@ const computeAiSearch = async (
       const confidence = Math.min(100, Math.round((Number(row.score || 0) / maxScore) * 100));
       const hasAny = [name, ic, addr].some((v) => v && v !== "-" && String(v).trim() !== "");
       return hasAny
-        ? `• ${name} | IC: ${ic} | Alamat: ${addr} | Keyakinan: ${confidence}%`
+        ? `â€¢ ${name} | IC: ${ic} | Alamat: ${addr} | Keyakinan: ${confidence}%`
         : "";
     }).filter(Boolean);
   }
@@ -6144,7 +4585,7 @@ app.post(
               summaryLines.push("  Contoh rekod:");
               for (const sample of row.samples.slice(0, 10)) {
                 const source = sample.source ? ` (${sample.source})` : "";
-                summaryLines.push(`  • ${sample.name} | IC: ${sample.ic}${source}`);
+                summaryLines.push(`  â€¢ ${sample.name} | IC: ${sample.ic}${source}`);
               }
             }
         }
@@ -6265,7 +4706,7 @@ app.post(
       }
 
       if (process.env.AI_DEBUG === "1") {
-        console.log("🧠 AI_SEARCH DEBUG", {
+        console.log("ðŸ§  AI_SEARCH DEBUG", {
           query,
           keywordQuery,
           queryDigits,
@@ -6340,7 +4781,7 @@ app.post(
         const keys = best.jsonDataJsonb && typeof best.jsonDataJsonb === "object"
           ? Object.keys(best.jsonDataJsonb)
           : [];
-        console.log("🧠 AI_SEARCH BEST ROW", {
+        console.log("ðŸ§  AI_SEARCH BEST ROW", {
           rowId: best.rowId,
           jsonType: typeof best.jsonDataJsonb,
           sampleKeys: keys.slice(0, 10),
@@ -6488,7 +4929,7 @@ app.post(
           const confidence = Math.min(100, Math.round((Number(row.score || 0) / maxScore) * 100));
           const hasAny = [name, ic, addr].some((v) => v && v !== "-" && String(v).trim() !== "");
           return hasAny
-            ? `• ${name} | IC: ${ic} | Alamat: ${addr} | Keyakinan: ${confidence}%`
+            ? `â€¢ ${name} | IC: ${ic} | Alamat: ${addr} | Keyakinan: ${confidence}%`
             : "";
         }).filter(Boolean);
       }
@@ -6851,7 +5292,7 @@ app.post(
             summaryLines.push("  Contoh rekod:");
             for (const sample of row.samples.slice(0, 10)) {
               const source = sample.source ? ` (${sample.source})` : "";
-              summaryLines.push(`  • ${sample.name} | IC: ${sample.ic}${source}`);
+              summaryLines.push(`  â€¢ ${sample.name} | IC: ${sample.ic}${source}`);
             }
           }
         }
@@ -7038,7 +5479,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
             return res.status(400).json({ message: "Username required" });
           }
 
-          // ❌ Tak boleh ban superuser
+          // âŒ Tak boleh ban superuser
           const targetUser = await storage.getUserByUsername(username);
           if (!targetUser) {
             return res.status(404).json({ message: "User not found" });
@@ -7048,10 +5489,10 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
             return res.status(403).json({ message: "Cannot ban a superuser" });
           }
 
-          // 1️⃣ BAN ACCOUNT
+          // 1ï¸âƒ£ BAN ACCOUNT
           await storage.updateUserBan(username, true);
 
-          // 2️⃣ TUTUP SEMUA SESSION DB
+          // 2ï¸âƒ£ TUTUP SEMUA SESSION DB
           await storage.deactivateUserActivities(username, "BANNED");
 
           const activities = await storage.getAllActivities();
@@ -7071,7 +5512,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
             connectedClients.delete(activity.id);
           }
 
-          // 4️⃣ AUDIT LOG
+          // 4ï¸âƒ£ AUDIT LOG
           await storage.createAuditLog({
             action: "BAN_USER",
             performedBy: req.user!.username,
@@ -7087,363 +5528,6 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       }
     );
 
-    app.post(
-      "/api/admin/unban",
-      authenticateToken,
-      requireRole("superuser"),
-      requireTabAccess("activity"),
-      async (req: AuthenticatedRequest, res) => {
-        try {
-          const { banId } = req.body;
-          if (!banId) {
-            return res.status(400).json({ message: "banId required" });
-          }
-
-          await storage.unbanVisitor(banId);
-
-          await storage.createAuditLog({
-            action: "UNBAN_USER",
-            performedBy: req.user!.username,
-            details: `Unbanned banId=${banId}`,
-          });
-
-          res.json({ success: true });
-        } catch (error: any) {
-          console.error("Admin unban error:", error);
-          res.status(500).json({ message: error.message });
-        }
-      }
-    );
-
-    app.get("/api/accounts", authenticateToken, requireRole("superuser"), async (req, res) => {
-      try {
-        const allUsers: any[] = [];
-        const usernames = ["superuser", "admin1", "user1"];
-        for (const username of usernames) {
-          const user = await storage.getUserByUsername(username);
-          if (user) {
-            allUsers.push({ id: user.id, username: user.username, role: user.role, isBanned: user.isBanned });
-          }
-        }
-        res.json(allUsers);
-      } catch (error: any) {
-        res.status(500).json({ message: error.message });
-      }
-    });
-
-    app.post("/api/users", authenticateToken, requireRole("superuser"), async (req: AuthenticatedRequest, res) => {
-      try {
-        const { username, password, role } = req.body;
-        const normalizedUsername = normalizeUsernameInput(username);
-        const passwordRaw = String(password ?? "");
-        const roleRaw = String(role ?? "user").trim().toLowerCase();
-
-        if (!CREDENTIAL_USERNAME_REGEX.test(normalizedUsername)) {
-          return res.status(400).json({ message: "Invalid username format." });
-        }
-        if (!isStrongPassword(passwordRaw)) {
-          return res.status(400).json({ message: "Password does not meet minimum strength requirements." });
-        }
-        if (!["superuser", "admin", "user"].includes(roleRaw)) {
-          return res.status(400).json({ message: "Invalid role." });
-        }
-
-        const existing = await storage.getUserByUsername(normalizedUsername);
-        if (existing) {
-          return res.status(409).json({ message: "Username already exists." });
-        }
-
-        const user = await storage.createUser({ username: normalizedUsername, password: passwordRaw, role: roleRaw });
-        await storage.createAuditLog({
-          action: "CREATE_USER",
-          performedBy: req.user!.username,
-          targetUser: user.id,
-          details: `Created user with role: ${user.role}`,
-        });
-        res.json({ id: user.id, username: user.username, role: user.role, isBanned: user.isBanned });
-      } catch (error: any) {
-        res.status(500).json({ message: error.message });
-      }
-    });
-
-    app.get("/api/audit-logs", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("audit-logs"), async (req, res) => {
-      try {
-        const logs = await storage.getAuditLogs();
-        res.json({ logs: logs });
-      } catch (error: any) {
-        res.status(500).json({ message: error.message });
-      }
-    });
-
-    app.get("/api/audit-logs/stats", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("audit-logs"), async (req, res) => {
-      try {
-        const logs = await storage.getAuditLogs();
-        const stats = {
-          totalLogs: logs.length,
-          todayLogs: logs.filter((l: any) => {
-            const logDate = new Date(l.timestamp || l.createdAt);
-            const today = new Date();
-            return logDate.toDateString() === today.toDateString();
-          }).length,
-          actionBreakdown: {} as Record<string, number>,
-        };
-        logs.forEach((log: any) => {
-          const action = log.action || 'UNKNOWN';
-          stats.actionBreakdown[action] = (stats.actionBreakdown[action] || 0) + 1;
-        });
-        res.json(stats);
-      } catch (error: any) {
-        res.status(500).json({ message: error.message });
-      }
-    });
-
-    app.get(
-      "/api/analyze/all",
-      authenticateToken,
-      requireRole("user", "admin", "superuser"),
-      requireTabAccess("analysis"),
-      async (req, res) => {
-      try {
-        const imports = await storage.getImports();
-        if (imports.length === 0) {
-          return res.json({
-            totalImports: 0,
-            totalRows: 0,
-            imports: [],
-            analysis: {
-              icLelaki: { count: 0, samples: [] },
-              icPerempuan: { count: 0, samples: [] },
-              noPolis: { count: 0, samples: [] },
-              noTentera: { count: 0, samples: [] },
-              passportMY: { count: 0, samples: [] },
-              passportLuarNegara: { count: 0, samples: [] },
-              duplicates: { count: 0, items: [] },
-            },
-          });
-        }
-
-        let allRows: any[] = [];
-        const importsWithCounts = await Promise.all(
-          imports.map(async (imp: any) => {
-            const rows = await storage.getDataRowsByImport(imp.id);
-            allRows = allRows.concat(rows);
-            return { id: imp.id, name: imp.name, filename: imp.filename, rowCount: rows.length };
-          })
-        );
-
-        const analysis = analyzeDataRows(allRows);
-
-        return res.json({
-          totalImports: imports.length,
-          totalRows: allRows.length,
-          imports: importsWithCounts,
-          analysis,
-        });
-      } catch (error: any) {
-        return res.status(500).json({ message: error.message });
-      }
-    });
-
-    app.get("/api/debug/websocket-clients", authenticateToken, requireRole("superuser"), async (req, res) => {
-      try {
-        const clients = Array.from(connectedClients.keys());
-        res.json({ count: clients.length, clients });
-      } catch (error: any) {
-        res.status(500).json({ message: error.message });
-      }
-    });
-
-    app.delete("/api/audit-logs/cleanup", authenticateToken, requireRole("superuser"), requireTabAccess("audit-logs"), async (req: AuthenticatedRequest, res) => {
-      try {
-        const { olderThanDays } = req.body;
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - (olderThanDays || 30));
-
-        const logs = await storage.getAuditLogs();
-        let deletedCount = 0;
-
-        for (const log of logs) {
-          if (log.timestamp) {
-            const logDate = new Date(log.timestamp);
-            if (logDate < cutoffDate) {
-              deletedCount++;
-            }
-          }
-        }
-
-        await storage.createAuditLog({
-          action: "CLEANUP_AUDIT_LOGS",
-          performedBy: req.user!.username,
-          details: `Cleanup requested for logs older than ${olderThanDays} days`,
-        });
-
-        res.json({ success: true, deletedCount, message: `Cleanup completed` });
-      } catch (error: any) {
-        res.status(500).json({ message: error.message });
-      }
-    });
-
-    app.get("/api/analytics/summary", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
-      try {
-        const summary = await storage.getDashboardSummary();
-        res.json(summary);
-      } catch (error: any) {
-        res.status(500).json({ message: error.message });
-      }
-    });
-
-    app.get("/api/analytics/login-trends", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
-      try {
-        const days = parseInt(req.query.days as string) || 7;
-        const trends = await storage.getLoginTrends(days);
-        res.json(trends);
-      } catch (error: any) {
-        res.status(500).json({ message: error.message });
-      }
-    });
-
-    app.get("/api/analytics/top-users", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
-      try {
-        const limit = parseInt(req.query.limit as string) || 10;
-        const topUsers = await storage.getTopActiveUsers(limit);
-        res.json(topUsers);
-      } catch (error: any) {
-        res.status(500).json({ message: error.message });
-      }
-    });
-
-    app.get("/api/analytics/peak-hours", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
-      try {
-        const peakHours = await storage.getPeakHours();
-        res.json(peakHours);
-      } catch (error: any) {
-        res.status(500).json({ message: error.message });
-      }
-    });
-
-    app.get("/api/analytics/role-distribution", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
-      try {
-        const distribution = await storage.getRoleDistribution();
-        res.json(distribution);
-      } catch (error: any) {
-        res.status(500).json({ message: error.message });
-      }
-    });
-
-    app.get("/api/backups", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("backup"), async (req, res) => {
-      try {
-        const backups = await storage.getBackups();
-        res.json({ backups: backups });
-      } catch (error: any) {
-        console.error("Get backups error:", error);
-        res.status(500).json({ message: error.message });
-      }
-    });
-
-    app.post("/api/backups", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("backup"), async (req: AuthenticatedRequest, res) => {
-      try {
-        const { name } = req.body;
-        const backup = await withExportCircuit(async () => {
-          const startTime = Date.now();
-          const backupData = await storage.getBackupDataForExport();
-          const metadata = {
-            timestamp: new Date().toISOString(),
-            importsCount: backupData.imports.length,
-            dataRowsCount: backupData.dataRows.length,
-            usersCount: backupData.users.length,
-            auditLogsCount: backupData.auditLogs.length,
-          };
-          const created = await storage.createBackup({
-            name,
-            createdBy: req.user!.username,
-            backupData: JSON.stringify(backupData),
-            metadata: JSON.stringify(metadata),
-          });
-          await storage.createAuditLog({
-            action: "CREATE_BACKUP",
-            performedBy: req.user!.username,
-            targetResource: name,
-            details: JSON.stringify({
-              ...metadata,
-              durationMs: Date.now() - startTime,
-            }),
-          });
-          return created;
-        });
-        res.json(backup);
-      } catch (error: any) {
-        if (error instanceof CircuitOpenError) {
-          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
-        }
-        res.status(500).json({ message: error.message });
-      }
-    });
-
-    app.get("/api/backups/:id", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("backup"), async (req, res) => {
-      try {
-        const backup = await storage.getBackupById(req.params.id);
-        if (!backup) {
-          return res.status(404).json({ message: "Backup not found" });
-        }
-        res.json(backup);
-      } catch (error: any) {
-        res.status(500).json({ message: error.message });
-      }
-    });
-
-    app.post("/api/backups/:id/restore", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("backup"), async (req: AuthenticatedRequest, res) => {
-      try {
-        const backup = await withExportCircuit(() => storage.getBackupById(req.params.id));
-        if (!backup) {
-          return res.status(404).json({ message: "Backup not found" });
-        }
-        const result = await withExportCircuit(async () => {
-          const startTime = Date.now();
-          const backupData = JSON.parse(backup.backupData);
-          const restored = await storage.restoreFromBackup(backupData);
-          await storage.createAuditLog({
-            action: "RESTORE_BACKUP",
-            performedBy: req.user!.username,
-            targetResource: backup.name,
-            details: JSON.stringify({
-              ...restored.stats,
-              durationMs: Date.now() - startTime,
-            }),
-          });
-          return { restored, startTime };
-        });
-        res.json({
-          ...result.restored,
-          message: `Restore completed in ${Math.round((Date.now() - result.startTime) / 1000)}s`,
-        });
-      } catch (error: any) {
-        if (error instanceof CircuitOpenError) {
-          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
-        }
-        res.status(500).json({ message: error.message });
-      }
-    });
-
-    app.delete("/api/backups/:id", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("backup"), async (req: AuthenticatedRequest, res) => {
-      try {
-        const backup = await withExportCircuit(() => storage.getBackupById(req.params.id));
-        const deleted = await withExportCircuit(() => storage.deleteBackup(req.params.id));
-        if (!deleted) {
-          return res.status(404).json({ message: "Backup not found" });
-        }
-        await storage.createAuditLog({
-          action: "DELETE_BACKUP",
-          performedBy: req.user!.username,
-          targetResource: backup?.name || req.params.id,
-        });
-        res.json({ success: true });
-      } catch (error: any) {
-        if (error instanceof CircuitOpenError) {
-          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
-        }
-        res.status(500).json({ message: error.message });
-      }
-    });
 
     app.use(errorHandler);
 
@@ -7460,7 +5544,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
         const decoded = jwt.verify(token, JWT_SECRET) as any;
         const activityId = decoded.activityId;
 
-        // 🔐 STEP WAJIB — VALIDATE SESSION DARI DB
+        // ðŸ” STEP WAJIB â€” VALIDATE SESSION DARI DB
         const activity = await storage.getActivityById(activityId);
 
         if (
@@ -7468,19 +5552,19 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
           activity.isActive === false ||
           activity.logoutTime !== null
         ) {
-          console.log("❌ WS rejected: invalid / expired session");
+          console.log("âŒ WS rejected: invalid / expired session");
           ws.close();
           return;
         }
 
-        // 🔐 FIX #3 — elak overwrite socket lama
+        // ðŸ” FIX #3 â€” elak overwrite socket lama
         const existingWs = connectedClients.get(activityId);
         if (existingWs && existingWs.readyState === WebSocket.OPEN) {
           existingWs.close();
         }
 
         connectedClients.set(activityId, ws);
-        console.log(`✅ WebSocket connected for activityId=${activityId}`);
+        console.log(`âœ… WebSocket connected for activityId=${activityId}`);
 
         const cleanupSocket = () => {
           if (connectedClients.get(activityId) === ws) {
@@ -7494,7 +5578,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
         });
         ws.on("error", cleanupSocket);
       } catch (err) {
-        console.log("❌ WS handshake failed");
+        console.log("âŒ WS handshake failed");
         ws.close();
       }
     });
@@ -7591,7 +5675,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
 
           if (diff > idleMs) {
 
-            // 🔐 FIX #2B — PROTECT RACE CONDITION
+            // ðŸ” FIX #2B â€” PROTECT RACE CONDITION
             const freshActivity = await storage.getActivityById(activity.id);
             if (!freshActivity || freshActivity.isActive === false) {
               continue;
@@ -7605,17 +5689,17 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
             }
 
             console.log(
-              `⏱️ IDLE TIMEOUT: ${activity.username} (${activity.id})`
+              `â±ï¸ IDLE TIMEOUT: ${activity.username} (${activity.id})`
             );
 
-            // 1️⃣ TUTUP SESSION DB
+            // 1ï¸âƒ£ TUTUP SESSION DB
             await storage.updateActivity(activity.id, {
               isActive: false,
               logoutTime: new Date(),
               logoutReason: "IDLE_TIMEOUT",
             });
 
-            // 2️⃣ TUTUP WEBSOCKET
+            // 2ï¸âƒ£ TUTUP WEBSOCKET
             const ws = connectedClients.get(activity.id);
             if (ws && ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({
@@ -7627,7 +5711,7 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
 
             connectedClients.delete(activity.id);
 
-            // 3️⃣ AUDIT LOG
+            // 3ï¸âƒ£ AUDIT LOG
             await storage.createAuditLog({
               action: "SESSION_IDLE_TIMEOUT",
               performedBy: activity.username,
@@ -7665,13 +5749,13 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
       server.on("error", (err: any) => {
         if (err.code === "EADDRINUSE") {
           notifyMasterFatalStartup("EADDRINUSE", `Port ${PORT} is already in use`);
-          console.error(`❌ Port ${PORT} is already in use.`);
+          console.error(`âŒ Port ${PORT} is already in use.`);
           console.error(`   This usually means a previous server process hasn't fully released the port yet.`);
           console.error(`   Please wait a few seconds and try again, or use: lsof -i :${PORT} (or netstat -ano | findstr :${PORT} on Windows)`);
           setTimeout(() => process.exit(98), 10).unref();
         } else {
           notifyMasterFatalStartup("SERVER_STARTUP_ERROR", String(err?.message || err));
-          console.error(`❌ Server error:`, err);
+          console.error(`âŒ Server error:`, err);
           setTimeout(() => process.exit(1), 10).unref();
         }
       });
@@ -7705,17 +5789,17 @@ app.get("/api/columns", authenticateToken, async (req, res) => {
             const isStale = Boolean(rulesUpdatedAt && statsUpdatedAt && rulesUpdatedAt > statsUpdatedAt);
 
             if (hasAllKeys && !isStale) {
-              console.log("✅ Category stats already present. Skipping precompute.");
+              console.log("âœ… Category stats already present. Skipping precompute.");
               return;
             }
 
             const missingKeys = targetKeys.filter((k) => !byKey.has(k));
             const computeKeys = isStale ? targetKeys : Array.from(new Set([...missingKeys, "__all__"]));
-            console.log(`⏱️ Precomputing category stats (${computeKeys.length} key(s))...`);
+            console.log(`â±ï¸ Precomputing category stats (${computeKeys.length} key(s))...`);
             await storage.computeCategoryStatsForKeys(computeKeys, rules);
-            console.log("✅ Precomputed category stats.");
+            console.log("âœ… Precomputed category stats.");
           } catch (err: any) {
-            console.error("❌ Precompute stats failed:", err?.message || err);
+            console.error("âŒ Precompute stats failed:", err?.message || err);
           }
         }, 0);
       }
