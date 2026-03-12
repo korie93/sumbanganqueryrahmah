@@ -1,0 +1,16 @@
+import { lazy } from "react";
+
+export const LoginPage = lazy(() => import("@/pages/Login"));
+export const HomePage = lazy(() => import("@/pages/Home"));
+export const ImportPage = lazy(() => import("@/pages/Import"));
+export const SavedPage = lazy(() => import("@/pages/Saved"));
+export const ViewerPage = lazy(() => import("@/pages/Viewer"));
+export const GeneralSearchPage = lazy(() => import("@/pages/GeneralSearch"));
+export const BackupRestorePage = lazy(() => import("@/pages/BackupRestore"));
+export const AIPage = lazy(() => import("@/pages/AI"));
+export const BannedPage = lazy(() => import("@/pages/Banned"));
+export const SettingsRoutePage = lazy(() => import("@/pages/Settings"));
+export const MaintenanceRoutePage = lazy(() => import("@/pages/Maintenance"));
+export const SystemMonitorLayoutPage = lazy(() => import("@/pages/SystemMonitorLayout"));
+export const CollectionReportPage = lazy(() => import("@/pages/CollectionReport"));
+export const ForbiddenPage = lazy(() => import("@/pages/Forbidden"));
