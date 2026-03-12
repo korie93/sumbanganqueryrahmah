@@ -1,7 +1,8 @@
 import type { Express, RequestHandler, Response } from "express";
 import type { WebSocket } from "ws";
 import type { AuthenticatedRequest } from "../auth/guards";
-import { ensureObject } from "../http/validation";
+import { asyncHandler } from "../http/async-handler";
+import { ensureObject, readInteger } from "../http/validation";
 import type { AnalyticsRepository } from "../repositories/analytics.repository";
 import type { AuditRepository } from "../repositories/audit.repository";
 import type { BackupsRepository } from "../repositories/backups.repository";
@@ -39,13 +40,9 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("audit-logs"),
-    async (_req, res) => {
-      try {
-        return res.json({ logs: await auditRepository.getAuditLogs() });
-      } catch (error: any) {
-        return res.status(500).json({ message: error?.message || "Failed to load audit logs" });
-      }
-    },
+    asyncHandler(async (_req, res) => {
+      return res.json({ logs: await auditRepository.getAuditLogs() });
+    }),
   );
 
   app.get(
@@ -53,13 +50,9 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("audit-logs"),
-    async (_req, res) => {
-      try {
-        return res.json(await auditRepository.getAuditLogStats());
-      } catch (error: any) {
-        return res.status(500).json({ message: error?.message || "Failed to load audit log stats" });
-      }
-    },
+    asyncHandler(async (_req, res) => {
+      return res.json(await auditRepository.getAuditLogStats());
+    }),
   );
 
   app.delete(
@@ -67,30 +60,26 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("superuser"),
     requireTabAccess("audit-logs"),
-    async (req: AuthenticatedRequest, res: Response) => {
-      try {
-        const body = ensureObject(req.body) || {};
-        const olderThanDays = Number(body.olderThanDays || 30);
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+    asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+      const body = ensureObject(req.body) || {};
+      const olderThanDays = Math.max(1, readInteger(body.olderThanDays, 30));
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
 
-        const deletedCount = await auditRepository.cleanupAuditLogsOlderThan(cutoffDate);
+      const deletedCount = await auditRepository.cleanupAuditLogsOlderThan(cutoffDate);
 
-        await storage.createAuditLog({
-          action: "CLEANUP_AUDIT_LOGS",
-          performedBy: req.user?.username || "system",
-          details: `Cleanup requested for logs older than ${olderThanDays} days`,
-        });
+      await storage.createAuditLog({
+        action: "CLEANUP_AUDIT_LOGS",
+        performedBy: req.user?.username || "system",
+        details: `Cleanup requested for logs older than ${olderThanDays} days`,
+      });
 
-        return res.json({
-          success: true,
-          deletedCount,
-          message: "Cleanup completed",
-        });
-      } catch (error: any) {
-        return res.status(500).json({ message: error?.message || "Failed to cleanup audit logs" });
-      }
-    },
+      return res.json({
+        success: true,
+        deletedCount,
+        message: "Cleanup completed",
+      });
+    }),
   );
 
   app.get(
@@ -98,13 +87,9 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("dashboard"),
-    async (_req, res) => {
-      try {
-        return res.json(await analyticsRepository.getDashboardSummary());
-      } catch (error: any) {
-        return res.status(500).json({ message: error?.message || "Failed to load analytics summary" });
-      }
-    },
+    asyncHandler(async (_req, res) => {
+      return res.json(await analyticsRepository.getDashboardSummary());
+    }),
   );
 
   app.get(
@@ -112,14 +97,10 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("dashboard"),
-    async (req, res) => {
-      try {
-        const days = Number(req.query.days || 7);
-        return res.json(await analyticsRepository.getLoginTrends(days));
-      } catch (error: any) {
-        return res.status(500).json({ message: error?.message || "Failed to load login trends" });
-      }
-    },
+    asyncHandler(async (req, res) => {
+      const days = Math.max(1, readInteger(req.query.days, 7));
+      return res.json(await analyticsRepository.getLoginTrends(days));
+    }),
   );
 
   app.get(
@@ -127,14 +108,10 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("dashboard"),
-    async (req, res) => {
-      try {
-        const limit = Number(req.query.limit || 10);
-        return res.json(await analyticsRepository.getTopActiveUsers(limit));
-      } catch (error: any) {
-        return res.status(500).json({ message: error?.message || "Failed to load top users" });
-      }
-    },
+    asyncHandler(async (req, res) => {
+      const limit = Math.max(1, readInteger(req.query.limit, 10));
+      return res.json(await analyticsRepository.getTopActiveUsers(limit));
+    }),
   );
 
   app.get(
@@ -142,13 +119,9 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("dashboard"),
-    async (_req, res) => {
-      try {
-        return res.json(await analyticsRepository.getPeakHours());
-      } catch (error: any) {
-        return res.status(500).json({ message: error?.message || "Failed to load peak hours" });
-      }
-    },
+    asyncHandler(async (_req, res) => {
+      return res.json(await analyticsRepository.getPeakHours());
+    }),
   );
 
   app.get(
@@ -156,13 +129,9 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("dashboard"),
-    async (_req, res) => {
-      try {
-        return res.json(await analyticsRepository.getRoleDistribution());
-      } catch (error: any) {
-        return res.status(500).json({ message: error?.message || "Failed to load role distribution" });
-      }
-    },
+    asyncHandler(async (_req, res) => {
+      return res.json(await analyticsRepository.getRoleDistribution());
+    }),
   );
 
   app.get(
@@ -170,13 +139,9 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("backup"),
-    async (_req, res) => {
-      try {
-        return res.json({ backups: await backupsRepository.getBackups() });
-      } catch (error: any) {
-        return res.status(500).json({ message: error?.message || "Failed to load backups" });
-      }
-    },
+    asyncHandler(async (_req, res) => {
+      return res.json({ backups: await backupsRepository.getBackups() });
+    }),
   );
 
   app.post(
@@ -184,11 +149,13 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("admin", "superuser"),
     requireTabAccess("backup"),
-    async (req: AuthenticatedRequest, res: Response) => {
+    asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+      const body = ensureObject(req.body) || {};
+      const name = String(body.name || "");
+
+      let backup;
       try {
-        const body = ensureObject(req.body) || {};
-        const name = String(body.name || "");
-        const backup = await withExportCircuit(async () => {
+        backup = await withExportCircuit(async () => {
           const startTime = Date.now();
           const backupData = await backupsRepository.getBackupDataForExport();
           const metadata = {
@@ -215,15 +182,15 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
           });
           return created;
         });
-
-        return res.json(backup);
       } catch (error) {
         if (isExportCircuitOpenError(error)) {
           return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
         }
-        return res.status(500).json({ message: "Failed to create backup" });
+        throw error;
       }
-    },
+
+      return res.json(backup);
+    }),
   );
 
   app.get(
@@ -231,17 +198,13 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("backup"),
-    async (req, res) => {
-      try {
-        const backup = await backupsRepository.getBackupById(req.params.id);
-        if (!backup) {
-          return res.status(404).json({ message: "Backup not found" });
-        }
-        return res.json(backup);
-      } catch (error: any) {
-        return res.status(500).json({ message: error?.message || "Failed to load backup" });
+    asyncHandler(async (req, res) => {
+      const backup = await backupsRepository.getBackupById(req.params.id);
+      if (!backup) {
+        return res.status(404).json({ message: "Backup not found" });
       }
-    },
+      return res.json(backup);
+    }),
   );
 
   app.post(
@@ -249,14 +212,24 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("admin", "superuser"),
     requireTabAccess("backup"),
-    async (req: AuthenticatedRequest, res: Response) => {
+    asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+      let backup;
       try {
-        const backup = await withExportCircuit(() => backupsRepository.getBackupById(req.params.id));
-        if (!backup) {
-          return res.status(404).json({ message: "Backup not found" });
+        backup = await withExportCircuit(() => backupsRepository.getBackupById(req.params.id));
+      } catch (error) {
+        if (isExportCircuitOpenError(error)) {
+          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
         }
+        throw error;
+      }
 
-        const result = await withExportCircuit(async () => {
+      if (!backup) {
+        return res.status(404).json({ message: "Backup not found" });
+      }
+
+      let result;
+      try {
+        result = await withExportCircuit(async () => {
           const startTime = Date.now();
           const backupData = JSON.parse(backup.backupData);
           const restored = await backupsRepository.restoreFromBackup(backupData);
@@ -271,18 +244,18 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
           });
           return { restored, startTime };
         });
-
-        return res.json({
-          ...result.restored,
-          message: `Restore completed in ${Math.round((Date.now() - result.startTime) / 1000)}s`,
-        });
       } catch (error) {
         if (isExportCircuitOpenError(error)) {
           return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
         }
-        return res.status(500).json({ message: "Failed to restore backup" });
+        throw error;
       }
-    },
+
+      return res.json({
+        ...result.restored,
+        message: `Restore completed in ${Math.round((Date.now() - result.startTime) / 1000)}s`,
+      });
+    }),
   );
 
   app.delete(
@@ -290,36 +263,36 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("admin", "superuser"),
     requireTabAccess("backup"),
-    async (req: AuthenticatedRequest, res: Response) => {
+    asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+      let backup;
+      let deleted;
+
       try {
-        const backup = await withExportCircuit(() => backupsRepository.getBackupById(req.params.id));
-        const deleted = await withExportCircuit(() => backupsRepository.deleteBackup(req.params.id));
-        if (!deleted) {
-          return res.status(404).json({ message: "Backup not found" });
-        }
-
-        await storage.createAuditLog({
-          action: "DELETE_BACKUP",
-          performedBy: req.user!.username,
-          targetResource: backup?.name || req.params.id,
-        });
-
-        return res.json({ success: true });
+        backup = await withExportCircuit(() => backupsRepository.getBackupById(req.params.id));
+        deleted = await withExportCircuit(() => backupsRepository.deleteBackup(req.params.id));
       } catch (error) {
         if (isExportCircuitOpenError(error)) {
           return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
         }
-        return res.status(500).json({ message: "Failed to delete backup" });
+        throw error;
       }
-    },
+
+      if (!deleted) {
+        return res.status(404).json({ message: "Backup not found" });
+      }
+
+      await storage.createAuditLog({
+        action: "DELETE_BACKUP",
+        performedBy: req.user!.username,
+        targetResource: backup?.name || req.params.id,
+      });
+
+      return res.json({ success: true });
+    }),
   );
 
-  app.get("/api/debug/websocket-clients", authenticateToken, requireRole("superuser"), async (_req, res) => {
-    try {
-      const clients = Array.from(connectedClients.keys());
-      return res.json({ count: clients.length, clients });
-    } catch (error: any) {
-      return res.status(500).json({ message: error?.message || "Failed to inspect websocket clients" });
-    }
-  });
+  app.get("/api/debug/websocket-clients", authenticateToken, requireRole("superuser"), asyncHandler(async (_req, res) => {
+    const clients = Array.from(connectedClients.keys());
+    return res.json({ count: clients.length, clients });
+  }));
 }

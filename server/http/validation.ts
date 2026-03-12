@@ -45,3 +45,15 @@ export function readStringList(value: unknown): string[] {
     .map((part) => readNonEmptyString(part))
     .filter(Boolean);
 }
+
+export function readDate(value: unknown): Date | undefined {
+  const normalized = readNonEmptyString(value);
+  if (!normalized) return undefined;
+
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    return undefined;
+  }
+
+  return parsed;
+}
