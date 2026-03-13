@@ -185,12 +185,14 @@ function AppContent() {
     const onProfileUpdated = (event: Event) => {
       const detail = (event as CustomEvent<{ username?: string; role?: string }>).detail;
       if (!detail?.username || !detail?.role) return;
+      const username = detail.username;
+      const role = detail.role;
 
       setUser((previous) => {
         if (!previous) {
-          return { username: detail.username!, role: detail.role! };
+          return { username, role };
         }
-        return { ...previous, username: detail.username, role: detail.role };
+        return { ...previous, username, role };
       });
     };
 

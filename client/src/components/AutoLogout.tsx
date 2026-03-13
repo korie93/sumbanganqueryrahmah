@@ -14,9 +14,9 @@ export default function AutoLogout({
   heartbeatIntervalMinutes = 5,
   username,
 }: AutoLogoutProps) {
-  const timeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
-  const heartbeatRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
-  const reconnectRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const timeoutRef = useRef<number | null>(null);
+  const heartbeatRef = useRef<number | null>(null);
+  const reconnectRef = useRef<number | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
   const lastResetByEventRef = useRef<number>(0);
   const wsRef = useRef<WebSocket | null>(null);

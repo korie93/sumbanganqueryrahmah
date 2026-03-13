@@ -1,6 +1,5 @@
 import express from "express";
 import { WebSocket } from "ws";
-import { getOllamaConfig } from "./ai-ollama";
 import { createAuthGuards } from "./auth/guards";
 import { errorHandler } from "./middleware/error-handler";
 import { searchRateLimiter } from "./middleware/rate-limit";
@@ -69,7 +68,6 @@ registerSearchRoutes(app, {
   storage,
   searchRepository,
   authenticateToken: guards.authenticateToken,
-  requireRole: guards.requireRole,
   searchRateLimiter,
   getRuntimeSettingsCached: async () => ({
     searchResultLimit: 200,
@@ -78,7 +76,6 @@ registerSearchRoutes(app, {
     aiTimeoutMs: 6000,
   }),
   isDbProtected: () => false,
-  getOllamaConfig,
 });
 
 app.use(errorHandler);

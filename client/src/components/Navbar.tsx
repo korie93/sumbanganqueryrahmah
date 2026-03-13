@@ -1,6 +1,7 @@
 import { memo, useMemo } from "react";
 import { LogOut, ShieldCheck } from "lucide-react";
 import { formatNavigationLabel, getVisibleNavItems } from "@/app/navigation";
+import type { TabVisibility } from "@/app/types";
 import ThemeToggle from "./ThemeToggle";
 
 interface NavbarProps {
@@ -11,7 +12,7 @@ interface NavbarProps {
   username: string;
   systemName?: string;
   savedCount?: number;
-  tabVisibility?: Record<string, boolean> | null;
+  tabVisibility?: TabVisibility;
   featureLockdown?: boolean;
 }
 
@@ -27,7 +28,7 @@ function NavbarImpl({
   featureLockdown = false,
 }: NavbarProps) {
   const visibleItems = useMemo(
-    () => getVisibleNavItems(userRole, tabVisibility, featureLockdown),
+    () => getVisibleNavItems(userRole, tabVisibility ?? null, featureLockdown),
     [featureLockdown, tabVisibility, userRole],
   );
   const mobileValue = visibleItems.some((item) => item.id === currentPage)

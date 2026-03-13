@@ -15,11 +15,9 @@ type SearchRouteDeps = {
   storage: PostgresStorage;
   searchRepository: SearchRepository;
   authenticateToken: RequestHandler;
-  requireRole: (...roles: string[]) => RequestHandler;
   searchRateLimiter: RequestHandler;
   getRuntimeSettingsCached: () => Promise<RuntimeSettings>;
   isDbProtected: () => boolean;
-  getOllamaConfig: () => Record<string, unknown>;
 };
 
 function buildRowsWithSource(rows: any[]) {
@@ -45,11 +43,9 @@ export function registerSearchRoutes(app: Express, deps: SearchRouteDeps) {
   const {
     searchRepository,
     authenticateToken,
-    requireRole,
     searchRateLimiter,
     getRuntimeSettingsCached,
     isDbProtected,
-    getOllamaConfig,
   } = deps;
 
   app.get("/api/search/columns", authenticateToken, asyncHandler(async (_req, res) => {
@@ -168,16 +164,6 @@ export function registerSearchRoutes(app: Express, deps: SearchRouteDeps) {
       total: Math.min(rawResult.total || 0, maxTotal),
       page,
       limit: effectiveLimit,
-    });
-  }));
-
-  app.get("/api/ai/config", authenticateToken, requireRole("user", "admin", "superuser"), asyncHandler(async (_req, res) => {
-    const runtimeSettings = await getRuntimeSettingsCached();
-    return res.json({
-      ...getOllamaConfig(),
-      aiEnabled: runtimeSettings.aiEnabled,
-      semanticSearchEnabled: runtimeSettings.semanticSearchEnabled,
-      aiTimeoutMs: runtimeSettings.aiTimeoutMs,
     });
   }));
 }
