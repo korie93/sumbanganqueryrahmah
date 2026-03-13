@@ -1,50 +1,21 @@
 import { PerformanceObserver, monitorEventLoopDelay } from "node:perf_hooks";
 import os from "node:os";
 import type { Pool } from "pg";
-import { CircuitBreaker } from "./circuitBreaker";
-import type { SystemHistory, SystemSnapshot } from "../intelligence/types";
+import { CircuitBreaker, type CircuitSnapshot } from "./circuitBreaker";
+import type {
+  EvaluateSystemResult,
+  SystemHistory,
+  SystemSnapshot,
+} from "../intelligence/types";
+import {
+  isControlStateMessage,
+  isGracefulShutdownMessage,
+  type WorkerControlState,
+  type WorkerMetricsPayload,
+  type WorkerToMasterMessage,
+} from "./worker-ipc";
 
-export type WorkerControlState = {
-  mode: "NORMAL" | "DEGRADED" | "PROTECTION";
-  healthScore: number;
-  dbProtection: boolean;
-  rejectHeavyRoutes: boolean;
-  throttleFactor: number;
-  predictor: {
-    requestRateMA: number;
-    latencyMA: number;
-    cpuMA: number;
-    requestRateTrend: number;
-    latencyTrend: number;
-    cpuTrend: number;
-    sustainedUpward: boolean;
-    lastUpdatedAt: number | null;
-  };
-  workerCount: number;
-  maxWorkers: number;
-  queueLength: number;
-  preAllocateMB: number;
-  updatedAt: number;
-  workers: Array<{
-    workerId: number;
-    pid: number;
-    cpuPercent: number;
-    reqRate: number;
-    latencyP95Ms: number;
-    eventLoopLagMs: number;
-    activeRequests: number;
-    heapUsedMB: number;
-    oldSpaceMB: number;
-    dbLatencyMs: number;
-    aiLatencyMs: number;
-    ts: number;
-  }>;
-  circuits: {
-    aiOpenWorkers: number;
-    dbOpenWorkers: number;
-    exportOpenWorkers: number;
-  };
-};
+export type { WorkerControlState } from "./worker-ipc";
 
 export type InternalMonitorSnapshot = {
   score: number;
@@ -77,6 +48,26 @@ export type InternalMonitorAlert = {
   source: string;
 };
 
+type LocalCircuitSnapshots = {
+  ai: CircuitSnapshot;
+  db: CircuitSnapshot;
+  export: CircuitSnapshot;
+};
+
+type PoolWithOptions = Pool & {
+  options?: {
+    max?: number;
+  };
+};
+
+type IpcCapableProcess = NodeJS.Process & {
+  send?: (message: WorkerToMasterMessage) => void;
+};
+
+type GcCapableGlobal = typeof globalThis & {
+  gc?: () => void;
+};
+
 type RuntimeMonitorManagerOptions = {
   pool: Pool;
   apiDebugLogs: boolean;
@@ -85,7 +76,7 @@ type RuntimeMonitorManagerOptions = {
   aiLatencyStaleAfterMs: number;
   aiLatencyDecayHalfLifeMs: number;
   getSearchQueueLength: () => number;
-  evaluateSystem: (snapshot: SystemSnapshot, history: SystemHistory) => Promise<unknown>;
+  evaluateSystem: (snapshot: SystemSnapshot, history: SystemHistory) => Promise<EvaluateSystemResult>;
 };
 
 type AttachProcessHandlersOptions = {
@@ -98,6 +89,8 @@ type StartRuntimeLoopsOptions = {
 
 const LATENCY_WINDOW = 400;
 const MAX_INTELLIGENCE_HISTORY = 300;
+const ipcProcess = process as IpcCapableProcess;
+const runtimeGlobal = globalThis as GcCapableGlobal;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -121,6 +114,11 @@ function getRamPercent(): number {
   const free = Number(os.freemem() || 0);
   if (total <= 0) return 0;
   return roundMetric(((total - free) / total) * 100, 2);
+}
+
+function sendWorkerMessage(message: WorkerToMasterMessage) {
+  if (typeof ipcProcess.send !== "function") return;
+  ipcProcess.send(message);
 }
 
 export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOptions) {
@@ -261,7 +259,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     const total = Number(options.pool.totalCount || 0);
     const idle = Number(options.pool.idleCount || 0);
     const waiting = Number(options.pool.waitingCount || 0);
-    const max = Number((options.pool as any)?.options?.max || 0);
+    const max = Number((options.pool as PoolWithOptions).options?.max || 0);
     const nearMax = max > 0 ? total >= Math.max(1, max - 1) : false;
     const hasPressure = waiting > 0 || idle === 0 || nearMax;
 
@@ -541,7 +539,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     return percentile(latencySamples, 95);
   }
 
-  function getLocalCircuitSnapshots() {
+  function getLocalCircuitSnapshots(): LocalCircuitSnapshots {
     return {
       ai: circuitAi.getSnapshot(),
       db: circuitDb.getSnapshot(),
@@ -586,15 +584,13 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
 
     processHandlersAttached = true;
 
-    process.on("message", (msg: any) => {
-      if (!msg || typeof msg !== "object") return;
-      if (msg.type !== "control-state" || !msg.payload) return;
-      applyControlState(msg.payload);
+    process.on("message", (message: unknown) => {
+      if (!isControlStateMessage(message)) return;
+      applyControlState(message.payload);
     });
 
-    process.on("message", (msg: any) => {
-      if (!msg || typeof msg !== "object") return;
-      if (msg.type !== "graceful-shutdown") return;
+    process.on("message", (message: unknown) => {
+      if (!isGracefulShutdownMessage(message)) return;
       setTimeout(() => {
         onGracefulShutdown();
       }, 50);
@@ -619,9 +615,9 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
       lastCpuUsage = currentCpu;
       lastCpuTs = now;
 
-      if (typeof (process as any).send === "function") {
+      if (typeof ipcProcess.send === "function") {
         const mem = process.memoryUsage();
-        (process as any).send({
+        sendWorkerMessage({
           type: "worker-metrics",
           payload: {
             workerId: Number(process.env.NODE_UNIQUE_ID || 0),
@@ -652,12 +648,10 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
       const heapRatio = mem.heapTotal > 0 ? mem.heapUsed / mem.heapTotal : 0;
       if (heapRatio > 0.88) {
         clearSearchCache();
-        if (typeof (process as any).send === "function") {
-          (process as any).send({ type: "worker-event", payload: { kind: "memory-pressure" } });
-        }
-        if (typeof (global as any).gc === "function" && activeRequests === 0) {
+        sendWorkerMessage({ type: "worker-event", payload: { kind: "memory-pressure" } });
+        if (typeof runtimeGlobal.gc === "function" && activeRequests === 0) {
           try {
-            (global as any).gc();
+            runtimeGlobal.gc();
           } catch {
             // noop
           }

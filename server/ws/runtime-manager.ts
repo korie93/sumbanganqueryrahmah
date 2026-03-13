@@ -34,13 +34,17 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     }
   };
 
-  setInterval(() => {
+  const staleSocketSweepHandle = setInterval(() => {
     for (const [activityId, ws] of connectedClients.entries()) {
       if (!ws || (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING)) {
         connectedClients.delete(activityId);
       }
     }
-  }, 30_000).unref();
+  }, 30_000);
+  staleSocketSweepHandle.unref();
+  wss.once("close", () => {
+    clearInterval(staleSocketSweepHandle);
+  });
 
   wss.on("connection", async (ws, req) => {
     const url = new URL(req.url!, `http://${req.headers.host}`);

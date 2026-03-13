@@ -1,57 +1,43 @@
 import type { Express, RequestHandler, Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
+import type { MaintenanceState } from "../config/system-settings";
 import { asyncHandler } from "../http/async-handler";
-import type { InjectChaosInput } from "../intelligence/chaos/ChaosEngine";
-import type { ChaosType } from "../intelligence/types";
+import type { ChaosEvent, InjectChaosInput } from "../intelligence/chaos/ChaosEngine";
+import type { ChaosType, ExplainabilityReport } from "../intelligence/types";
+import type { CircuitSnapshot } from "../internal/circuitBreaker";
 import type {
   InternalMonitorAlert,
   InternalMonitorSnapshot,
+  WorkerControlState,
 } from "../internal/runtime-monitor-manager";
+import type { AuditLog, InsertAuditLog } from "../../shared/schema-postgres";
 
-type ControlState = {
-  mode: string;
-  throttleFactor: number;
-  rejectHeavyRoutes: boolean;
-  preAllocateMB: number;
-  updatedAt: unknown;
-  workerCount: number;
-  maxWorkers: number;
-  workers: unknown;
-  predictor: unknown;
-  queueLength: number;
-  circuits: unknown;
+type LocalCircuitSnapshots = {
+  ai: CircuitSnapshot;
+  db: CircuitSnapshot;
+  export: CircuitSnapshot;
+};
+
+type ChaosInjectionResult = {
+  injected: ChaosEvent;
+  active: ChaosEvent[];
 };
 
 type SystemRouteDeps = {
   authenticateToken: RequestHandler;
   requireRole: (...roles: string[]) => RequestHandler;
   requireMonitorAccess: RequestHandler;
-  getMaintenanceStateCached: () => Promise<unknown>;
+  getMaintenanceStateCached: () => Promise<MaintenanceState>;
   computeInternalMonitorSnapshot: () => InternalMonitorSnapshot;
   buildInternalMonitorAlerts: (snapshot: InternalMonitorSnapshot) => InternalMonitorAlert[];
-  getControlState: () => ControlState;
-  getDbProtection: () => unknown;
+  getControlState: () => WorkerControlState;
+  getDbProtection: () => boolean;
   getRequestRate: () => number;
   getLatencyP95: () => number;
-  getLocalCircuitSnapshots: () => unknown;
-  getIntelligenceExplainability: () => {
-    anomalyBreakdown: unknown;
-    correlationMatrix: unknown;
-    slopeValues: unknown;
-    forecastProjection: unknown;
-    governanceState: unknown;
-    chosenStrategy: unknown;
-    decisionReason: unknown;
-  };
-  injectChaos: (params: InjectChaosInput) => {
-    injected: unknown;
-    active: unknown;
-  };
-  createAuditLog: (data: {
-    action: string;
-    performedBy: string;
-    details?: string;
-  }) => Promise<unknown>;
+  getLocalCircuitSnapshots: () => LocalCircuitSnapshots;
+  getIntelligenceExplainability: () => ExplainabilityReport;
+  injectChaos: (params: InjectChaosInput) => ChaosInjectionResult;
+  createAuditLog: (data: InsertAuditLog) => Promise<AuditLog>;
 };
 
 export function registerSystemRoutes(app: Express, deps: SystemRouteDeps) {
