@@ -1,15 +1,9 @@
 // server/index-local.ts
 import "dotenv/config";
-import express from "express";
+import express2 from "express";
 import { createServer } from "http";
-import { monitorEventLoopDelay, PerformanceObserver } from "node:perf_hooks";
-import os from "node:os";
-import path from "path";
-import fs from "fs";
-import { randomUUID as randomUUID2 } from "node:crypto";
-import { WebSocketServer, WebSocket } from "ws";
-import jwt from "jsonwebtoken";
-import bcrypt2 from "bcrypt";
+import path3 from "path";
+import { WebSocketServer } from "ws";
 
 // shared/schema-postgres.ts
 import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
@@ -124,18 +118,74 @@ var dataRowRelations = relations(dataRows, ({ one }) => ({
 }));
 
 // server/storage-postgres.ts
-import { randomUUID } from "crypto";
-import bcrypt from "bcrypt";
+import { randomUUID as randomUUID2 } from "crypto";
+import bcrypt2 from "bcrypt";
 
 // server/db-postgres.ts
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
+
+// server/config/security.ts
+import { randomBytes } from "node:crypto";
+var isProduction = process.env.NODE_ENV === "production";
+var cachedSessionSecret = null;
+var cachedCollectionNicknameTempPassword = null;
+function readEnv(name) {
+  const value = process.env[name];
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized ? normalized : null;
+}
+function buildEphemeralSecret(label) {
+  return `${label.toLowerCase()}-${randomBytes(32).toString("hex")}`;
+}
+function getSessionSecret() {
+  if (cachedSessionSecret) return cachedSessionSecret;
+  const secret = readEnv("SESSION_SECRET");
+  if (secret) {
+    cachedSessionSecret = secret;
+    return secret;
+  }
+  if (isProduction) {
+    throw new Error("SESSION_SECRET is required in production.");
+  }
+  cachedSessionSecret = buildEphemeralSecret("session");
+  return cachedSessionSecret;
+}
+function getCollectionNicknameTempPassword() {
+  if (cachedCollectionNicknameTempPassword) {
+    return cachedCollectionNicknameTempPassword;
+  }
+  const password = readEnv("COLLECTION_NICKNAME_TEMP_PASSWORD");
+  if (password) {
+    cachedCollectionNicknameTempPassword = password;
+    return password;
+  }
+  if (isProduction) {
+    throw new Error("COLLECTION_NICKNAME_TEMP_PASSWORD is required in production.");
+  }
+  cachedCollectionNicknameTempPassword = buildEphemeralSecret("collection-temp").slice(0, 16);
+  return cachedCollectionNicknameTempPassword;
+}
+function shouldSeedDefaultUsers() {
+  return String(process.env.SEED_DEFAULT_USERS || "0") === "1";
+}
+function readDatabasePassword() {
+  const password = readEnv("PG_PASSWORD");
+  if (password) return password;
+  if (isProduction) {
+    throw new Error("PG_PASSWORD is required in production.");
+  }
+  return void 0;
+}
+
+// server/db-postgres.ts
 var { Pool } = pg;
 var pool = new Pool({
   host: process.env.PG_HOST || "localhost",
   port: Number(process.env.PG_PORT || 5432),
   user: process.env.PG_USER || "postgres",
-  password: process.env.PG_PASSWORD || "Postgres@123",
+  password: readDatabasePassword(),
   database: process.env.PG_DATABASE || "sqr_db",
   max: 5,
   idleTimeoutMillis: 3e4,
@@ -145,108 +195,105 @@ var pool = new Pool({
 var db = drizzle(pool);
 
 // server/storage-postgres.ts
-import { eq, desc, and, or, gte, lte, count, sql, inArray } from "drizzle-orm";
-import crypto from "crypto";
-var MAX_SEARCH_LIMIT = 200;
-var QUERY_PAGE_LIMIT = 1e3;
-var MAX_COLUMN_KEYS = 500;
-var ANALYTICS_TZ = process.env.ANALYTICS_TZ || "Asia/Kuala_Lumpur";
-var STORAGE_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
-var BCRYPT_COST = 12;
-var ALLOWED_OPERATORS = /* @__PURE__ */ new Set([
-  "contains",
-  "equals",
-  "notEquals",
-  "startsWith",
-  "endsWith",
-  "greaterThan",
-  "lessThan",
-  "greaterThanOrEqual",
-  "lessThanOrEqual",
-  "isEmpty",
-  "isNotEmpty"
-]);
-var BACKUP_CHUNK_SIZE = 500;
-var COLLECTION_MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December"
-];
-function normalizeCollectionNicknameRoleScope(value) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  if (normalized === "admin" || normalized === "user" || normalized === "both") {
-    return normalized;
+import { eq as eq5, and as and3, or, count as count2, sql as sql13, inArray as inArray2 } from "drizzle-orm";
+import crypto6 from "crypto";
+
+// server/internal/backupsBootstrap.ts
+import { sql } from "drizzle-orm";
+var BackupsBootstrap = class {
+  constructor() {
+    this.ready = false;
+    this.initPromise = null;
   }
-  return "both";
-}
-function detectValueType(value) {
-  if (!value) return "string";
-  if (!isNaN(Number(value))) {
-    return "number";
+  async ensureTable() {
+    if (this.ready) return;
+    if (this.initPromise) {
+      await this.initPromise;
+      return;
+    }
+    this.initPromise = (async () => {
+      try {
+        await db.execute(sql`SET search_path TO public`);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS public.backups (
+            id text PRIMARY KEY,
+            name text NOT NULL,
+            created_at timestamp DEFAULT now(),
+            created_by text NOT NULL,
+            backup_data text NOT NULL,
+            metadata text
+          )
+        `);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS backups (
+            id text PRIMARY KEY,
+            name text NOT NULL,
+            created_at timestamp DEFAULT now(),
+            created_by text NOT NULL,
+            backup_data text NOT NULL,
+            metadata text
+          )
+        `);
+        await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS name text`);
+        await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS created_at timestamp`);
+        await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS created_by text`);
+        await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS backup_data text`);
+        await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS metadata text`);
+        const idTypeResult = await db.execute(sql`
+          SELECT data_type
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'backups'
+            AND column_name = 'id'
+          LIMIT 1
+        `);
+        const idType = idTypeResult.rows?.[0]?.data_type;
+        if (idType && idType !== "text") {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS public.backups_new (
+              id text PRIMARY KEY,
+              name text NOT NULL,
+              created_at timestamp DEFAULT now(),
+              created_by text NOT NULL,
+              backup_data text NOT NULL,
+              metadata text
+            )
+          `);
+          await db.execute(sql`
+            INSERT INTO public.backups_new (id, name, created_at, created_by, backup_data, metadata)
+            SELECT
+              id::text,
+              COALESCE(name, 'backup')::text,
+              COALESCE(created_at, now()),
+              COALESCE(created_by, 'system')::text,
+              COALESCE(backup_data, '{}')::text,
+              metadata
+            FROM public.backups
+            ON CONFLICT (id) DO NOTHING
+          `);
+          await db.execute(sql`DROP TABLE public.backups`);
+          await db.execute(sql`ALTER TABLE public.backups_new RENAME TO backups`);
+        }
+        const info = await db.execute(sql`SELECT current_database() AS db, current_schema() AS schema`);
+        const row = info.rows?.[0];
+        console.log(`\u{1F9FE} DB info: database=${row?.db ?? "unknown"}, schema=${row?.schema ?? "unknown"}`);
+        this.ready = true;
+      } catch (err) {
+        console.error("\u274C Failed to ensure backups table:", err?.message || err);
+      }
+    })();
+    try {
+      await this.initPromise;
+    } finally {
+      this.initPromise = null;
+    }
   }
-  const date = new Date(value);
-  if (!isNaN(date.getTime())) {
-    return "date";
-  }
-  return "string";
-}
-function buildSqlCondition(field, operator, value) {
-  const column = sql`json_data_jsonb ->> ${field}`;
-  const valueType = detectValueType(value);
-  switch (operator) {
-    case "contains":
-      return sql`${column} ILIKE ${"%" + value + "%"}`;
-    case "equals":
-      return sql`${column} = ${value}`;
-    case "notEquals":
-      return sql`${column} <> ${value}`;
-    case "startsWith":
-      return sql`${column} ILIKE ${value + "%"}`;
-    case "endsWith":
-      return sql`${column} ILIKE ${"%" + value}`;
-    case "greaterThan":
-      if (valueType === "number") {
-        return sql`(${column})::numeric > ${Number(value)}`;
-      }
-      if (valueType === "date") {
-        return sql`(${column})::date > ${value}`;
-      }
-      return sql`false`;
-    case "lessThan":
-      if (valueType === "number") {
-        return sql`(${column})::numeric < ${Number(value)}`;
-      }
-      if (valueType === "date") {
-        return sql`(${column})::date < ${value}`;
-      }
-      return sql`false`;
-    case "greaterThanOrEqual":
-      if (valueType === "number") {
-        return sql`(${column})::numeric >= ${Number(value)}`;
-      }
-      if (valueType === "date") {
-        return sql`(${column})::date >= ${value}`;
-      }
-      return sql`false`;
-    case "lessThanOrEqual":
-      if (valueType === "number") {
-        return sql`(${column})::numeric <= ${Number(value)}`;
-      }
-      if (valueType === "date") {
-        return sql`(${column})::date <= ${value}`;
-      }
-      return sql`false`;
-  }
-}
+};
+
+// server/internal/settingsBootstrap.ts
+import { sql as sql2 } from "drizzle-orm";
+
+// server/config/system-settings.ts
 var ROLE_TAB_SETTINGS = {
   admin: [
     { pageId: "home", suffix: "home", label: "Admin Tab: Home", description: "Allow admin to open Home tab.", defaultEnabled: true },
@@ -279,1012 +326,116 @@ var ROLE_TAB_SETTINGS = {
   ]
 };
 var roleTabSettingKey = (role, suffix) => `tab_${role}_${suffix}_enabled`;
-var PostgresStorage = class {
+
+// server/internal/settingsBootstrap.ts
+var SettingsBootstrap = class {
   constructor() {
-    this.settingsTablesReady = false;
-    this.settingsTablesInitPromise = null;
+    this.ready = false;
+    this.initPromise = null;
   }
-  async init() {
-    await this.ensureUsersTable();
-    await this.ensureCollectionRecordsTable();
-    await this.ensureCollectionStaffNicknamesTable();
-    await this.ensureCollectionAdminGroupsTables();
-    await this.ensureCollectionNicknameSessionsTable();
-    await this.ensureCollectionAdminVisibleNicknamesTable();
-    await this.seedDefaultUsers();
-    await this.ensureBackupsTable();
-    await this.ensurePerformanceIndexes();
-    await this.ensureBannedSessionsTable();
-    await this.ensureAiTables();
-    await this.ensureSpatialTables();
-    await this.ensureCategoryRulesTable();
-    await this.ensureCategoryStatsTable();
-    await this.ensureSettingsTables();
-  }
-  async ensureUsersTable() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.users (
-          id text PRIMARY KEY,
-          username text NOT NULL,
-          role text NOT NULL DEFAULT 'user',
-          password_hash text,
-          password text,
-          is_banned boolean DEFAULT false,
-          created_at timestamp DEFAULT now(),
-          updated_at timestamp DEFAULT now(),
-          password_changed_at timestamp
-        )
-      `);
-      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role text`);
-      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_hash text`);
-      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password text`);
-      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_banned boolean DEFAULT false`);
-      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
-      await db.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_changed_at timestamp`);
-      await db.execute(sql`
-        UPDATE public.users
-        SET password_hash = password
-        WHERE password_hash IS NULL
-          AND password IS NOT NULL
-      `);
-      const missingHashRows = await db.execute(sql`
-        SELECT id
-        FROM public.users
-        WHERE password_hash IS NULL
-      `);
-      for (const row of missingHashRows.rows) {
-        const userId = String(row.id || "").trim();
-        if (!userId) continue;
-        const fallbackHash = await bcrypt.hash(randomUUID(), BCRYPT_COST);
-        await db.execute(sql`
-          UPDATE public.users
-          SET password_hash = ${fallbackHash}
-          WHERE id = ${userId}
-        `);
-      }
-      await db.execute(sql`
-        UPDATE public.users
-        SET
-          role = COALESCE(NULLIF(role, ''), 'user'),
-          created_at = COALESCE(created_at, now()),
-          updated_at = COALESCE(updated_at, now()),
-          is_banned = COALESCE(is_banned, false)
-      `);
-      await db.execute(sql`ALTER TABLE public.users ALTER COLUMN username SET NOT NULL`);
-      await db.execute(sql`ALTER TABLE public.users ALTER COLUMN role SET NOT NULL`);
-      await db.execute(sql`ALTER TABLE public.users ALTER COLUMN password_hash SET NOT NULL`);
-      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower_unique ON public.users (lower(username))`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_username_lower ON public.users (lower(username))`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_role ON public.users (role)`);
-    } catch (err) {
-      console.error("\u274C Failed to ensure users table:", err?.message || err);
-      throw err;
+  async ensureTables() {
+    if (this.ready) return;
+    if (this.initPromise) {
+      await this.initPromise;
+      return;
     }
-  }
-  async ensureCollectionRecordsTable() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.collection_records (
-          id uuid PRIMARY KEY,
-          customer_name text NOT NULL,
-          ic_number text NOT NULL,
-          customer_phone text NOT NULL,
-          account_number text NOT NULL,
-          batch text NOT NULL,
-          payment_date date NOT NULL,
-          amount numeric(14,2) NOT NULL,
-          receipt_file text,
-          created_by_login text NOT NULL,
-          collection_staff_nickname text NOT NULL,
-          staff_username text NOT NULL,
-          created_at timestamp DEFAULT now() NOT NULL
-        )
-      `);
-      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name text`);
-      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number text`);
-      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_phone text`);
-      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number text`);
-      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS batch text`);
-      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS payment_date date`);
-      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS amount numeric(14,2)`);
-      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_file text`);
-      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_by_login text`);
-      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS collection_staff_nickname text`);
-      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS staff_username text`);
-      await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-      await db.execute(sql`
-        UPDATE public.collection_records
-        SET customer_phone = COALESCE(NULLIF(customer_phone, ''), '-')
-      `);
-      await db.execute(sql`
-        UPDATE public.collection_records
-        SET created_by_login = COALESCE(NULLIF(created_by_login, ''), NULLIF(staff_username, ''), 'unknown')
-      `);
-      await db.execute(sql`
-        UPDATE public.collection_records
-        SET collection_staff_nickname = COALESCE(NULLIF(collection_staff_nickname, ''), NULLIF(staff_username, ''), NULLIF(created_by_login, ''), 'unknown')
-      `);
-      await db.execute(sql`
-        UPDATE public.collection_records
-        SET staff_username = COALESCE(NULLIF(staff_username, ''), NULLIF(collection_staff_nickname, ''), NULLIF(created_by_login, ''), 'unknown')
-      `);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_payment_date ON public.collection_records(payment_date)`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_at ON public.collection_records(created_at DESC)`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_username ON public.collection_records(staff_username)`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_by_login ON public.collection_records(created_by_login)`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`);
-    } catch (err) {
-      console.error("\u274C Failed to ensure collection_records table:", err?.message || err);
-      throw err;
-    }
-  }
-  async ensureCollectionStaffNicknamesTable() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.collection_staff_nicknames (
-          id uuid PRIMARY KEY,
-          nickname text NOT NULL,
-          is_active boolean NOT NULL DEFAULT true,
-          role_scope text NOT NULL DEFAULT 'both',
-          nickname_password_hash text,
-          must_change_password boolean NOT NULL DEFAULT true,
-          password_reset_by_superuser boolean NOT NULL DEFAULT false,
-          password_updated_at timestamp,
-          created_by text,
-          created_at timestamp NOT NULL DEFAULT now()
-        )
-      `);
-      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS nickname text`);
-      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true`);
-      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS role_scope text DEFAULT 'both'`);
-      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS nickname_password_hash text`);
-      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS must_change_password boolean DEFAULT true`);
-      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS password_reset_by_superuser boolean DEFAULT false`);
-      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS password_updated_at timestamp`);
-      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_by text`);
-      await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-      await db.execute(sql`
-        UPDATE public.collection_staff_nicknames
-        SET
-          nickname = trim(COALESCE(nickname, '')),
-          is_active = COALESCE(is_active, true),
-          role_scope = CASE
-            WHEN lower(trim(COALESCE(role_scope, ''))) IN ('admin', 'user', 'both')
-              THEN lower(trim(COALESCE(role_scope, '')))
-            ELSE 'both'
-          END,
-          nickname_password_hash = NULLIF(trim(COALESCE(nickname_password_hash, '')), ''),
-          must_change_password = COALESCE(
-            must_change_password,
-            CASE
-              WHEN NULLIF(trim(COALESCE(nickname_password_hash, '')), '') IS NULL THEN true
-              ELSE false
-            END
-          ),
-          password_reset_by_superuser = COALESCE(password_reset_by_superuser, false),
-          created_at = COALESCE(created_at, now())
-      `);
-      await db.execute(sql`DELETE FROM public.collection_staff_nicknames WHERE nickname = ''`);
-      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_staff_nicknames_lower_unique ON public.collection_staff_nicknames(lower(nickname))`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_active ON public.collection_staff_nicknames(is_active)`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_role_scope ON public.collection_staff_nicknames(role_scope)`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_must_change_password ON public.collection_staff_nicknames(must_change_password)`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_password_reset ON public.collection_staff_nicknames(password_reset_by_superuser)`);
-      const seedRows = await db.execute(sql`
-        SELECT DISTINCT trim(collection_staff_nickname) AS nickname
-        FROM public.collection_records
-        WHERE collection_staff_nickname IS NOT NULL
-          AND trim(collection_staff_nickname) <> ''
-        LIMIT 5000
-      `);
-      for (const row of seedRows.rows) {
-        const nickname = String(row.nickname || "").trim();
-        if (!nickname) continue;
-        await db.execute(sql`
-          INSERT INTO public.collection_staff_nicknames (
-            id,
-            nickname,
-            is_active,
-            nickname_password_hash,
-            must_change_password,
-            password_reset_by_superuser,
-            password_updated_at,
-            created_by,
-            created_at
-          )
-          VALUES (
-            ${crypto.randomUUID()}::uuid,
-            ${nickname},
-            true,
-            NULL,
-            true,
-            false,
-            NULL,
-            'system-seed',
-            now()
-          )
-          ON CONFLICT ((lower(nickname))) DO NOTHING
-        `);
-      }
-    } catch (err) {
-      console.error("\u274C Failed to ensure collection_staff_nicknames table:", err?.message || err);
-      throw err;
-    }
-  }
-  async ensureCollectionAdminGroupsTables() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.admin_groups (
-          id uuid PRIMARY KEY,
-          leader_nickname text NOT NULL,
-          created_by text NOT NULL,
-          created_at timestamp NOT NULL DEFAULT now(),
-          updated_at timestamp NOT NULL DEFAULT now()
-        )
-      `);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.admin_group_members (
-          id uuid PRIMARY KEY,
-          admin_group_id uuid NOT NULL,
-          member_nickname text NOT NULL,
-          created_at timestamp NOT NULL DEFAULT now()
-        )
-      `);
-      await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS leader_nickname text`);
-      await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_by text`);
-      await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-      await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
-      await db.execute(sql`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS admin_group_id uuid`);
-      await db.execute(sql`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS member_nickname text`);
-      await db.execute(sql`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-      await db.execute(sql`
-        UPDATE public.admin_groups
-        SET
-          leader_nickname = trim(COALESCE(leader_nickname, '')),
-          created_by = COALESCE(NULLIF(trim(COALESCE(created_by, '')), ''), 'system-seed'),
-          created_at = COALESCE(created_at, now()),
-          updated_at = COALESCE(updated_at, now())
-      `);
-      await db.execute(sql`DELETE FROM public.admin_groups WHERE trim(COALESCE(leader_nickname, '')) = ''`);
-      await db.execute(sql`
-        UPDATE public.admin_group_members
-        SET
-          member_nickname = trim(COALESCE(member_nickname, '')),
-          created_at = COALESCE(created_at, now())
-      `);
-      await db.execute(sql`DELETE FROM public.admin_group_members WHERE trim(COALESCE(member_nickname, '')) = ''`);
-      await db.execute(sql`
-        DELETE FROM public.admin_group_members m
-        WHERE m.admin_group_id IS NULL
-           OR NOT EXISTS (
-            SELECT 1
-            FROM public.admin_groups g
-            WHERE g.id = m.admin_group_id
-          )
-      `);
-      await db.execute(sql`
-        DELETE FROM public.admin_group_members m
-        USING public.admin_groups g
-        WHERE g.id = m.admin_group_id
-          AND lower(g.leader_nickname) = lower(m.member_nickname)
-      `);
-      await db.execute(sql`
-        DELETE FROM public.admin_groups a
-        USING public.admin_groups b
-        WHERE lower(a.leader_nickname) = lower(b.leader_nickname)
-          AND a.ctid > b.ctid
-      `);
-      await db.execute(sql`
-        DELETE FROM public.admin_group_members a
-        USING public.admin_group_members b
-        WHERE a.admin_group_id = b.admin_group_id
-          AND lower(a.member_nickname) = lower(b.member_nickname)
-          AND a.ctid > b.ctid
-      `);
-      await db.execute(sql`
-        DELETE FROM public.admin_group_members a
-        USING public.admin_group_members b
-        WHERE lower(a.member_nickname) = lower(b.member_nickname)
-          AND a.ctid > b.ctid
-      `);
-      await db.execute(sql`
-        DELETE FROM public.admin_group_members m
-        WHERE EXISTS (
-          SELECT 1
-          FROM public.admin_groups g
-          WHERE lower(g.leader_nickname) = lower(m.member_nickname)
-            AND g.id <> m.admin_group_id
-        )
-      `);
-      await db.execute(sql`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_groups_leader_nickname_unique
-        ON public.admin_groups (lower(leader_nickname))
-      `);
-      await db.execute(sql`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_group_members_group_member_unique
-        ON public.admin_group_members (admin_group_id, lower(member_nickname))
-      `);
-      await db.execute(sql`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_group_members_member_unique
-        ON public.admin_group_members (lower(member_nickname))
-      `);
-      await db.execute(sql`
-        CREATE INDEX IF NOT EXISTS idx_admin_group_members_group
-        ON public.admin_group_members (admin_group_id)
-      `);
-    } catch (err) {
-      console.error("\u274C Failed to ensure admin group tables:", err?.message || err);
-      throw err;
-    }
-  }
-  async ensureCollectionNicknameSessionsTable() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.collection_nickname_sessions (
-          activity_id text PRIMARY KEY,
-          username text NOT NULL,
-          user_role text NOT NULL,
-          nickname text NOT NULL,
-          verified_at timestamp NOT NULL DEFAULT now(),
-          updated_at timestamp NOT NULL DEFAULT now()
-        )
-      `);
-      await db.execute(sql`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS username text`);
-      await db.execute(sql`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS user_role text`);
-      await db.execute(sql`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS nickname text`);
-      await db.execute(sql`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS verified_at timestamp DEFAULT now()`);
-      await db.execute(sql`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
-      await db.execute(sql`
-        UPDATE public.collection_nickname_sessions
-        SET
-          username = trim(COALESCE(username, '')),
-          user_role = trim(COALESCE(user_role, '')),
-          nickname = trim(COALESCE(nickname, '')),
-          verified_at = COALESCE(verified_at, now()),
-          updated_at = COALESCE(updated_at, now())
-      `);
-      await db.execute(sql`
-        DELETE FROM public.collection_nickname_sessions
-        WHERE trim(COALESCE(username, '')) = ''
-          OR trim(COALESCE(user_role, '')) = ''
-          OR trim(COALESCE(nickname, '')) = ''
-      `);
-      await db.execute(sql`
-        CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_username
-        ON public.collection_nickname_sessions (username)
-      `);
-      await db.execute(sql`
-        CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_nickname
-        ON public.collection_nickname_sessions (lower(nickname))
-      `);
-      await db.execute(sql`
-        CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_updated_at
-        ON public.collection_nickname_sessions (updated_at DESC)
-      `);
-    } catch (err) {
-      console.error("\u274C Failed to ensure collection nickname session table:", err?.message || err);
-      throw err;
-    }
-  }
-  async ensureCollectionAdminVisibleNicknamesTable() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.admin_visible_nicknames (
-          id uuid PRIMARY KEY,
-          admin_user_id text NOT NULL,
-          nickname_id uuid NOT NULL,
-          created_by_superuser text,
-          created_at timestamp NOT NULL DEFAULT now()
-        )
-      `);
-      await db.execute(sql`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS admin_user_id text`);
-      await db.execute(sql`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS nickname_id uuid`);
-      await db.execute(sql`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS created_by_superuser text`);
-      await db.execute(sql`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-      await db.execute(sql`
-        UPDATE public.admin_visible_nicknames
-        SET created_at = COALESCE(created_at, now())
-      `);
-      await db.execute(sql`
-        DELETE FROM public.admin_visible_nicknames avn
-        WHERE avn.admin_user_id IS NULL
-          OR avn.nickname_id IS NULL
-      `);
-      await db.execute(sql`
-        DELETE FROM public.admin_visible_nicknames avn
-        WHERE NOT EXISTS (
-          SELECT 1
-          FROM public.users u
-          WHERE u.id = avn.admin_user_id
-            AND u.role = 'admin'
-        )
-      `);
-      await db.execute(sql`
-        DELETE FROM public.admin_visible_nicknames avn
-        WHERE NOT EXISTS (
-          SELECT 1
-          FROM public.collection_staff_nicknames c
-          WHERE c.id = avn.nickname_id
-        )
-      `);
-      await db.execute(sql`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_visible_nicknames_admin_nickname_unique
-        ON public.admin_visible_nicknames(admin_user_id, nickname_id)
-      `);
-      await db.execute(sql`
-        CREATE INDEX IF NOT EXISTS idx_admin_visible_nicknames_admin
-        ON public.admin_visible_nicknames(admin_user_id)
-      `);
-      await db.execute(sql`
-        CREATE INDEX IF NOT EXISTS idx_admin_visible_nicknames_nickname
-        ON public.admin_visible_nicknames(nickname_id)
-      `);
-      const existingCount = await db.execute(sql`
-        SELECT COUNT(*)::int AS total
-        FROM public.admin_visible_nicknames
-        LIMIT 1
-      `);
-      const total = Number(existingCount.rows?.[0]?.total ?? 0);
-      if (total === 0) {
-        const admins = await db.execute(sql`
-          SELECT id
-          FROM public.users
-          WHERE role = 'admin'
-          ORDER BY username ASC
-          LIMIT 5000
-        `);
-        const nicknames = await db.execute(sql`
-          SELECT id
-          FROM public.collection_staff_nicknames
-          WHERE is_active = true
-          ORDER BY lower(nickname) ASC
-          LIMIT 5000
-        `);
-        const adminIds = (admins.rows || []).map((row) => String(row.id || "").trim()).filter(Boolean);
-        const nicknameIds = (nicknames.rows || []).map((row) => String(row.id || "").trim()).filter(Boolean);
-        for (const adminUserId of adminIds) {
-          for (const nicknameId of nicknameIds) {
-            await db.execute(sql`
-              INSERT INTO public.admin_visible_nicknames (
-                id,
-                admin_user_id,
-                nickname_id,
-                created_by_superuser,
-                created_at
-              )
-              VALUES (
-                ${randomUUID()}::uuid,
-                ${adminUserId},
-                ${nicknameId}::uuid,
-                'system-seed',
-                now()
-              )
-              ON CONFLICT (admin_user_id, nickname_id) DO NOTHING
-            `);
-          }
-        }
-      }
-    } catch (err) {
-      console.error("\u274C Failed to ensure admin_visible_nicknames table:", err?.message || err);
-      throw err;
-    }
-  }
-  async ensurePerformanceIndexes() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_data_rows_import_id ON data_rows(import_id)`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_is_deleted ON imports(is_deleted)`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_login_time ON user_activity(login_time)`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_logout_time ON user_activity(logout_time)`);
+    this.initPromise = (async () => {
       try {
-        await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_json_text_trgm
-          ON data_rows
-          USING GIN ((json_data::text) gin_trgm_ops)
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_mykad_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No. MyKad',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_idno_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'ID No',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_nopengenalan_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No Pengenalan',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_ic_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'IC',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_cardno_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Card No',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_accountno_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Account No',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_accountnumber_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Account Number',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_akaunpemohon_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Nombor Akaun Bank Pemohon',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_noakaun_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No Akaun',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_telrumah_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No. Telefon Rumah',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_telbimbit_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No. Telefon Bimbit',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_phone_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Phone',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_handphone_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Handphone',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_officephone_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'OfficePhone',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_nob_trgm
-          ON data_rows
-          USING GIN (((json_data::jsonb)->>'NOB') gin_trgm_ops)
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_employer_name_trgm
-          ON data_rows
-          USING GIN (((json_data::jsonb)->>'EMPLOYER NAME') gin_trgm_ops)
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_nature_business_trgm
-          ON data_rows
-          USING GIN (((json_data::jsonb)->>'NATURE OF BUSINESS') gin_trgm_ops)
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_nama_trgm
-          ON data_rows
-          USING GIN (((json_data::jsonb)->>'Nama') gin_trgm_ops)
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_customer_name_trgm
-          ON data_rows
-          USING GIN (((json_data::jsonb)->>'Customer Name') gin_trgm_ops)
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_name_trgm
-          ON data_rows
-          USING GIN (((json_data::jsonb)->>'name') gin_trgm_ops)
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_mykad_exact
-          ON data_rows (((json_data::jsonb)->>'No. MyKad'))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_idno_exact
-          ON data_rows (((json_data::jsonb)->>'ID No'))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_nopengenalan_exact
-          ON data_rows (((json_data::jsonb)->>'No Pengenalan'))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_ic_exact
-          ON data_rows (((json_data::jsonb)->>'IC'))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_accountno_exact
-          ON data_rows (((json_data::jsonb)->>'Account No'))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_accountnumber_exact
-          ON data_rows (((json_data::jsonb)->>'Account Number'))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_cardno_exact
-          ON data_rows (((json_data::jsonb)->>'Card No'))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_noakaun_exact
-          ON data_rows (((json_data::jsonb)->>'No Akaun'))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_akaunpemohon_exact
-          ON data_rows (((json_data::jsonb)->>'Nombor Akaun Bank Pemohon'))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_telrumah_exact
-          ON data_rows (((json_data::jsonb)->>'No. Telefon Rumah'))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_telbimbit_exact
-          ON data_rows (((json_data::jsonb)->>'No. Telefon Bimbit'))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_phone_exact
-          ON data_rows (((json_data::jsonb)->>'Phone'))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_handphone_exact
-          ON data_rows (((json_data::jsonb)->>'Handphone'))
-        `);
-        await db.execute(sql`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_officephone_exact
-          ON data_rows (((json_data::jsonb)->>'OfficePhone'))
-        `);
-      } catch (err) {
-        console.warn("\u26A0\uFE0F pg_trgm not available; skipping trigram index:", err?.message || err);
-      }
-    } catch (err) {
-      console.error("\u274C Failed to ensure performance indexes:", err?.message || err);
-    }
-  }
-  async ensureBannedSessionsTable() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.banned_sessions (
-          id text PRIMARY KEY,
-          username text NOT NULL,
-          role text NOT NULL,
-          activity_id text NOT NULL,
-          fingerprint text,
-          ip_address text,
-          browser text,
-          pc_name text,
-          banned_at timestamp DEFAULT now()
-        )
-      `);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_banned_sessions_fingerprint ON public.banned_sessions(fingerprint)`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_banned_sessions_ip ON public.banned_sessions(ip_address)`);
-    } catch (err) {
-      console.error("\u274C Failed to ensure banned_sessions table:", err?.message || err);
-    }
-  }
-  async ensureAiTables() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      let vectorAvailable = true;
-      try {
-        await db.execute(sql`CREATE EXTENSION IF NOT EXISTS vector`);
-      } catch (err) {
-        vectorAvailable = false;
-        console.warn("\u26A0\uFE0F pgvector extension not available. Embeddings disabled until installed.");
-      }
-      if (vectorAvailable) {
-        await db.execute(sql`
-          CREATE TABLE IF NOT EXISTS public.data_embeddings (
-            id text PRIMARY KEY,
-            import_id text NOT NULL,
-            row_id text NOT NULL UNIQUE,
-            content text NOT NULL,
-            embedding vector(768) NOT NULL,
+        await db.execute(sql2`SET search_path TO public`);
+        await db.execute(sql2`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
+        await db.execute(sql2`
+          CREATE TABLE IF NOT EXISTS public.setting_categories (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            name text UNIQUE NOT NULL,
+            description text,
             created_at timestamp DEFAULT now()
           )
         `);
-        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_data_embeddings_import_id ON public.data_embeddings(import_id)`);
-        try {
-          await db.execute(sql`
-            CREATE INDEX IF NOT EXISTS idx_data_embeddings_vector
-            ON public.data_embeddings
-            USING ivfflat (embedding vector_cosine_ops)
-          `);
-        } catch (err) {
-          console.warn("\u26A0\uFE0F Failed to create ivfflat index:", err?.message || err);
-        }
-      }
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.ai_conversations (
-          id text PRIMARY KEY,
-          created_by text NOT NULL,
-          created_at timestamp DEFAULT now()
-        )
-      `);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.ai_messages (
-          id text PRIMARY KEY,
-          conversation_id text NOT NULL,
-          role text NOT NULL,
-          content text NOT NULL,
-          created_at timestamp DEFAULT now()
-        )
-      `);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation_id ON public.ai_messages(conversation_id)`);
-    } catch (err) {
-      console.error("\u274C Failed to ensure AI tables:", err?.message || err);
-    }
-  }
-  async ensureCategoryStatsTable() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.ai_category_stats (
-          key text PRIMARY KEY,
-          total integer NOT NULL,
-          samples jsonb,
-          updated_at timestamp DEFAULT now()
-        )
-      `);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ai_category_stats_updated_at ON public.ai_category_stats(updated_at)`);
-    } catch (err) {
-      console.error("\u274C Failed to ensure ai_category_stats table:", err?.message || err);
-    }
-  }
-  async ensureCategoryRulesTable() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.ai_category_rules (
-          key text PRIMARY KEY,
-          terms text[] NOT NULL DEFAULT '{}',
-          fields text[] NOT NULL DEFAULT '{}',
-          match_mode text NOT NULL DEFAULT 'contains',
-          enabled boolean NOT NULL DEFAULT true,
-          updated_at timestamp DEFAULT now()
-        )
-      `);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ai_category_rules_updated_at ON public.ai_category_rules(updated_at)`);
-      const defaultFields = [
-        "NOB",
-        "NATURE OF BUSINESS",
-        "Nature of Business",
-        "EMPLOYER NAME",
-        "EmployerName",
-        "Company",
-        "Nama Majikan",
-        "Majikan",
-        "Department",
-        "Agensi"
-      ];
-      const defaults = [
-        {
-          key: "kerajaan",
-          terms: [
-            "GOVERNMENT",
-            "KERAJAAN",
-            "PUBLIC SECTOR",
-            "SECTOR AWAM",
-            "KEMENTERIAN",
-            "JABATAN",
-            "AGENSI",
-            "PERSEKUTUAN",
-            "NEGERI",
-            "MAJLIS",
-            "KKM",
-            "KPM",
-            "KPT",
-            "MOE",
-            "MOH",
-            "SEKOLAH",
-            "GURU",
-            "TEACHER",
-            "CIKGU",
-            "PENDIDIKAN"
-          ],
-          fields: defaultFields,
-          matchMode: "contains",
-          enabled: true
-        },
-        {
-          key: "hospital",
-          terms: [
-            "HEALTHCARE",
-            "HOSPITAL",
-            "CLINIC",
-            "KLINIK",
-            "KESIHATAN",
-            "MEDICAL",
-            "HEALTH"
-          ],
-          fields: defaultFields,
-          matchMode: "contains",
-          enabled: true
-        },
-        {
-          key: "hotel",
-          terms: [
-            "HOTEL",
-            "HOSPITALITY",
-            "RESORT",
-            "INN",
-            "MOTEL",
-            "RESTAURANT",
-            "SERVICE LINE",
-            "HOTEL,RESTAURANT",
-            "HOTEL & RESTAURANT"
-          ],
-          fields: defaultFields,
-          matchMode: "contains",
-          enabled: true
-        },
-        {
-          key: "polis",
-          terms: ["POLIS", "POLICE", "PDRM", "IPD", "IPK", "ROYAL MALAYSIA POLICE"],
-          fields: defaultFields,
-          matchMode: "contains",
-          enabled: true
-        },
-        {
-          key: "tentera",
-          terms: [
-            "TENTERA",
-            "ARMY",
-            "MILITARY",
-            "ARMED FORCES",
-            "ATM",
-            "TUDM",
-            "TLDM",
-            "TENTERA DARAT",
-            "TENTERA LAUT",
-            "TENTERA UDARA",
-            "ANGKATAN TENTERA",
-            "ANGKATAN TENTERA MALAYSIA",
-            "MINDEF",
-            "MINISTRY OF DEFENCE",
-            "KEMENTERIAN PERTAHANAN",
-            "DEFENCE",
-            "PERTAHANAN"
-          ],
-          fields: defaultFields,
-          matchMode: "contains",
-          enabled: true
-        },
-        {
-          key: "swasta",
-          terms: ["SWASTA", "PRIVATE", "SDN BHD", "BHD", "ENTERPRISE", "TRADING", "LTD", "PLC"],
-          fields: defaultFields,
-          matchMode: "complement",
-          enabled: true
-        }
-      ];
-      const toTextArray = (values) => {
-        if (!values.length) return sql`'{}'::text[]`;
-        const joined = sql.join(values.map((v) => sql`${v}`), sql`, `);
-        return sql`ARRAY[${joined}]::text[]`;
-      };
-      for (const rule of defaults) {
-        const termsSql = toTextArray(rule.terms || []);
-        const fieldsSql = toTextArray(rule.fields || []);
-        await db.execute(sql`
-          INSERT INTO public.ai_category_rules (key, terms, fields, match_mode, enabled, updated_at)
-          VALUES (${rule.key}, ${termsSql}, ${fieldsSql}, ${rule.matchMode ?? "contains"}, ${rule.enabled ?? true}, now())
-          ON CONFLICT (key) DO UPDATE SET
-            terms = EXCLUDED.terms,
-            fields = EXCLUDED.fields,
-            match_mode = EXCLUDED.match_mode,
-            enabled = EXCLUDED.enabled,
-            updated_at = now()
-        `);
-      }
-    } catch (err) {
-      console.error("\u274C Failed to ensure ai_category_rules table:", err?.message || err);
-    }
-  }
-  async ensureSettingsTables() {
-    if (this.settingsTablesReady) return;
-    if (this.settingsTablesInitPromise) {
-      await this.settingsTablesInitPromise;
-      return;
-    }
-    this.settingsTablesInitPromise = (async () => {
-      try {
-        await db.execute(sql`SET search_path TO public`);
-        await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
-        await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.setting_categories (
-          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-          name text UNIQUE NOT NULL,
-          description text,
-          created_at timestamp DEFAULT now()
-        )
-        `);
-        await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.system_settings (
-          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-          category_id uuid REFERENCES public.setting_categories(id) ON DELETE CASCADE,
-          key text UNIQUE NOT NULL,
-          label text NOT NULL,
-          description text,
-          type text NOT NULL,
-          value text NOT NULL,
-          default_value text,
-          is_critical boolean DEFAULT false,
-          updated_at timestamp DEFAULT now()
-        )
-        `);
-        await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.setting_options (
-          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-          setting_id uuid REFERENCES public.system_settings(id) ON DELETE CASCADE,
-          value text NOT NULL,
-          label text NOT NULL
-        )
-        `);
-        try {
-          await db.execute(sql`
-          WITH ranked AS (
-            SELECT
-              ctid,
-              row_number() OVER (PARTITION BY setting_id, value ORDER BY id) AS rn
-            FROM public.setting_options
+        await db.execute(sql2`
+          CREATE TABLE IF NOT EXISTS public.system_settings (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            category_id uuid REFERENCES public.setting_categories(id) ON DELETE CASCADE,
+            key text UNIQUE NOT NULL,
+            label text NOT NULL,
+            description text,
+            type text NOT NULL,
+            value text NOT NULL,
+            default_value text,
+            is_critical boolean DEFAULT false,
+            updated_at timestamp DEFAULT now()
           )
-          DELETE FROM public.setting_options so
-          USING ranked r
-          WHERE so.ctid = r.ctid
-            AND r.rn > 1
         `);
+        await db.execute(sql2`
+          CREATE TABLE IF NOT EXISTS public.setting_options (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            setting_id uuid REFERENCES public.system_settings(id) ON DELETE CASCADE,
+            value text NOT NULL,
+            label text NOT NULL
+          )
+        `);
+        try {
+          await db.execute(sql2`
+            WITH ranked AS (
+              SELECT
+                ctid,
+                row_number() OVER (PARTITION BY setting_id, value ORDER BY id) AS rn
+              FROM public.setting_options
+            )
+            DELETE FROM public.setting_options so
+            USING ranked r
+            WHERE so.ctid = r.ctid
+              AND r.rn > 1
+          `);
         } catch (dupCleanupErr) {
           console.warn("\u26A0\uFE0F setting_options duplicate cleanup skipped:", dupCleanupErr?.message || dupCleanupErr);
         }
         try {
-          await db.execute(sql`
-          CREATE UNIQUE INDEX IF NOT EXISTS idx_setting_options_unique_value
-          ON public.setting_options (setting_id, value)
-        `);
+          await db.execute(sql2`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_setting_options_unique_value
+            ON public.setting_options (setting_id, value)
+          `);
         } catch (idxErr) {
           console.warn("\u26A0\uFE0F setting_options unique index not created:", idxErr?.message || idxErr);
         }
-        await db.execute(sql`
-        CREATE INDEX IF NOT EXISTS idx_setting_options_setting_id
-        ON public.setting_options (setting_id)
+        await db.execute(sql2`
+          CREATE INDEX IF NOT EXISTS idx_setting_options_setting_id
+          ON public.setting_options (setting_id)
         `);
-        await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.role_setting_permissions (
-          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-          role text NOT NULL,
-          setting_key text NOT NULL,
-          can_view boolean DEFAULT false,
-          can_edit boolean DEFAULT false
-        )
+        await db.execute(sql2`
+          CREATE TABLE IF NOT EXISTS public.role_setting_permissions (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            role text NOT NULL,
+            setting_key text NOT NULL,
+            can_view boolean DEFAULT false,
+            can_edit boolean DEFAULT false
+          )
         `);
-        await db.execute(sql`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_role_setting_permissions_unique
-        ON public.role_setting_permissions (role, setting_key)
+        await db.execute(sql2`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_role_setting_permissions_unique
+          ON public.role_setting_permissions (role, setting_key)
         `);
-        await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.setting_versions (
-          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-          setting_key text NOT NULL,
-          old_value text,
-          new_value text NOT NULL,
-          changed_by text NOT NULL,
-          changed_at timestamp DEFAULT now()
-        )
+        await db.execute(sql2`
+          CREATE TABLE IF NOT EXISTS public.setting_versions (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            setting_key text NOT NULL,
+            old_value text,
+            new_value text NOT NULL,
+            changed_by text NOT NULL,
+            changed_at timestamp DEFAULT now()
+          )
         `);
-        await db.execute(sql`
-        CREATE INDEX IF NOT EXISTS idx_setting_versions_key_time
-        ON public.setting_versions (setting_key, changed_at DESC)
+        await db.execute(sql2`
+          CREATE INDEX IF NOT EXISTS idx_setting_versions_key_time
+          ON public.setting_versions (setting_key, changed_at DESC)
         `);
-        await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.feature_flags (
-          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-          key text UNIQUE NOT NULL,
-          enabled boolean NOT NULL DEFAULT false,
-          description text,
-          updated_at timestamp DEFAULT now()
-        )
+        await db.execute(sql2`
+          CREATE TABLE IF NOT EXISTS public.feature_flags (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            key text UNIQUE NOT NULL,
+            enabled boolean NOT NULL DEFAULT false,
+            description text,
+            updated_at timestamp DEFAULT now()
+          )
         `);
         const categories = [
           { name: "General", description: "Global platform behavior and identity settings." },
@@ -1296,12 +447,12 @@ var PostgresStorage = class {
           { name: "System Monitoring", description: "WebSocket and runtime diagnostics settings." }
         ];
         for (const category of categories) {
-          await db.execute(sql`
-          INSERT INTO public.setting_categories (name, description)
-          VALUES (${category.name}, ${category.description})
-          ON CONFLICT (name) DO UPDATE SET
-            description = EXCLUDED.description
-        `);
+          await db.execute(sql2`
+            INSERT INTO public.setting_categories (name, description)
+            VALUES (${category.name}, ${category.description})
+            ON CONFLICT (name) DO UPDATE SET
+              description = EXCLUDED.description
+          `);
         }
         const settingsSeed = [
           {
@@ -1507,10 +658,9 @@ var PostgresStorage = class {
         ];
         for (const [role, tabSettings] of Object.entries(ROLE_TAB_SETTINGS)) {
           for (const tabSetting of tabSettings) {
-            const key = roleTabSettingKey(role, tabSetting.suffix);
             settingsSeed.push({
               categoryName: "Roles & Permissions",
-              key,
+              key: roleTabSettingKey(role, tabSetting.suffix),
               label: tabSetting.label,
               description: tabSetting.description,
               type: "boolean",
@@ -1521,31 +671,31 @@ var PostgresStorage = class {
           }
         }
         for (const setting of settingsSeed) {
-          await db.execute(sql`
-          INSERT INTO public.system_settings (
-            category_id, key, label, description, type, value, default_value, is_critical, updated_at
-          )
-          VALUES (
-            (SELECT id FROM public.setting_categories WHERE name = ${setting.categoryName}),
-            ${setting.key},
-            ${setting.label},
-            ${setting.description},
-            ${setting.type},
-            ${setting.value},
-            ${setting.defaultValue},
-            ${setting.isCritical},
-            now()
-          )
-          ON CONFLICT (key) DO UPDATE SET
-            category_id = EXCLUDED.category_id,
-            label = EXCLUDED.label,
-            description = EXCLUDED.description,
-            type = EXCLUDED.type,
-            default_value = EXCLUDED.default_value,
-            is_critical = EXCLUDED.is_critical
-        `);
+          await db.execute(sql2`
+            INSERT INTO public.system_settings (
+              category_id, key, label, description, type, value, default_value, is_critical, updated_at
+            )
+            VALUES (
+              (SELECT id FROM public.setting_categories WHERE name = ${setting.categoryName}),
+              ${setting.key},
+              ${setting.label},
+              ${setting.description},
+              ${setting.type},
+              ${setting.value},
+              ${setting.defaultValue},
+              ${setting.isCritical},
+              now()
+            )
+            ON CONFLICT (key) DO UPDATE SET
+              category_id = EXCLUDED.category_id,
+              label = EXCLUDED.label,
+              description = EXCLUDED.description,
+              type = EXCLUDED.type,
+              default_value = EXCLUDED.default_value,
+              is_critical = EXCLUDED.is_critical
+          `);
         }
-        const maintenanceTypeRes = await db.execute(sql`
+        const maintenanceTypeRes = await db.execute(sql2`
           SELECT id
           FROM public.system_settings
           WHERE key = 'maintenance_type'
@@ -1553,11 +703,11 @@ var PostgresStorage = class {
         `);
         const maintenanceTypeId = String(maintenanceTypeRes.rows[0]?.id || "").trim();
         if (maintenanceTypeId) {
-          await db.execute(sql`
+          await db.execute(sql2`
             DELETE FROM public.setting_options
             WHERE setting_id = ${maintenanceTypeId}
           `);
-          await db.execute(sql`
+          await db.execute(sql2`
             INSERT INTO public.setting_options (setting_id, value, label)
             VALUES
               (${maintenanceTypeId}, 'soft', 'Soft Maintenance'),
@@ -1576,201 +726,124 @@ var PostgresStorage = class {
           "maintenance_end_time"
         ]);
         for (const setting of settingsSeed) {
-          await db.execute(sql`
-          INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
-          VALUES ('superuser', ${setting.key}, true, true)
-          ON CONFLICT (role, setting_key) DO UPDATE SET
-            can_view = EXCLUDED.can_view,
-            can_edit = EXCLUDED.can_edit
-        `);
-          await db.execute(sql`
-          INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
-          VALUES ('admin', ${setting.key}, true, ${adminEditable.has(setting.key)})
-          ON CONFLICT (role, setting_key) DO UPDATE SET
-            can_view = EXCLUDED.can_view,
-            can_edit = EXCLUDED.can_edit
-        `);
-          await db.execute(sql`
-          INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
-          VALUES ('user', ${setting.key}, false, false)
-          ON CONFLICT (role, setting_key) DO UPDATE SET
-            can_view = EXCLUDED.can_view,
-            can_edit = EXCLUDED.can_edit
-        `);
+          await db.execute(sql2`
+            INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
+            VALUES ('superuser', ${setting.key}, true, true)
+            ON CONFLICT (role, setting_key) DO UPDATE SET
+              can_view = EXCLUDED.can_view,
+              can_edit = EXCLUDED.can_edit
+          `);
+          await db.execute(sql2`
+            INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
+            VALUES ('admin', ${setting.key}, true, ${adminEditable.has(setting.key)})
+            ON CONFLICT (role, setting_key) DO UPDATE SET
+              can_view = EXCLUDED.can_view,
+              can_edit = EXCLUDED.can_edit
+          `);
+          await db.execute(sql2`
+            INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
+            VALUES ('user', ${setting.key}, false, false)
+            ON CONFLICT (role, setting_key) DO UPDATE SET
+              can_view = EXCLUDED.can_view,
+              can_edit = EXCLUDED.can_edit
+          `);
         }
-        this.settingsTablesReady = true;
+        this.ready = true;
       } catch (err) {
         console.error("\u274C Failed to ensure enterprise settings tables:", err?.message || err);
       }
     })();
     try {
-      await this.settingsTablesInitPromise;
+      await this.initPromise;
     } finally {
-      this.settingsTablesInitPromise = null;
+      this.initPromise = null;
     }
   }
-  async ensureSpatialTables() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      await db.execute(sql`CREATE EXTENSION IF NOT EXISTS postgis`);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.aeon_branches (
-          id text PRIMARY KEY,
-          name text NOT NULL,
-          branch_address text,
-          phone_number text,
-          fax_number text,
-          business_hour text,
-          day_open text,
-          atm_cdm text,
-          inquiry_availability text,
-          application_availability text,
-          aeon_lounge text,
-          branch_lat double precision NOT NULL,
-          branch_lng double precision NOT NULL
-        )
-      `);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.aeon_branch_postcodes (
-          postcode text PRIMARY KEY,
-          lat double precision NOT NULL,
-          lng double precision NOT NULL,
-          source_branch text,
-          state text
-        )
-      `);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS branch_address text`);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS phone_number text`);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS fax_number text`);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS business_hour text`);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS day_open text`);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS atm_cdm text`);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS inquiry_availability text`);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS application_availability text`);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS aeon_lounge text`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_aeon_branches_lat_lng ON public.aeon_branches (branch_lat, branch_lng)`);
-      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_aeon_branches_name_unique ON public.aeon_branches (lower(name))`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_aeon_postcodes ON public.aeon_branch_postcodes (postcode)`);
-    } catch (err) {
-      console.warn("\u26A0\uFE0F Failed to ensure PostGIS tables:", err?.message || err);
-    }
+};
+
+// server/internal/spatialBootstrap.ts
+import { sql as sql3 } from "drizzle-orm";
+var SpatialBootstrap = class {
+  constructor() {
+    this.ready = false;
+    this.initPromise = null;
   }
-  async ensureBackupsTable() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.backups (
-          id text PRIMARY KEY,
-          name text NOT NULL,
-          created_at timestamp DEFAULT now(),
-          created_by text NOT NULL,
-          backup_data text NOT NULL,
-          metadata text
-        )
-      `);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS backups (
-          id text PRIMARY KEY,
-          name text NOT NULL,
-          created_at timestamp DEFAULT now(),
-          created_by text NOT NULL,
-          backup_data text NOT NULL,
-          metadata text
-        )
-      `);
-      await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS name text`);
-      await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS created_at timestamp`);
-      await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS created_by text`);
-      await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS backup_data text`);
-      await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS metadata text`);
-      const idTypeResult = await db.execute(sql`
-        SELECT data_type
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'backups'
-          AND column_name = 'id'
-        LIMIT 1
-      `);
-      const idType = idTypeResult.rows?.[0]?.data_type;
-      if (idType && idType !== "text") {
-        await db.execute(sql`
-          CREATE TABLE IF NOT EXISTS public.backups_new (
+  async ensureTables() {
+    if (this.ready) return;
+    if (this.initPromise) {
+      await this.initPromise;
+      return;
+    }
+    this.initPromise = (async () => {
+      try {
+        await db.execute(sql3`SET search_path TO public`);
+        await db.execute(sql3`CREATE EXTENSION IF NOT EXISTS postgis`);
+        await db.execute(sql3`
+          CREATE TABLE IF NOT EXISTS public.aeon_branches (
             id text PRIMARY KEY,
             name text NOT NULL,
-            created_at timestamp DEFAULT now(),
-            created_by text NOT NULL,
-            backup_data text NOT NULL,
-            metadata text
+            branch_address text,
+            phone_number text,
+            fax_number text,
+            business_hour text,
+            day_open text,
+            atm_cdm text,
+            inquiry_availability text,
+            application_availability text,
+            aeon_lounge text,
+            branch_lat double precision NOT NULL,
+            branch_lng double precision NOT NULL
           )
         `);
-        await db.execute(sql`
-          INSERT INTO public.backups_new (id, name, created_at, created_by, backup_data, metadata)
-          SELECT
-            id::text,
-            COALESCE(name, 'backup')::text,
-            COALESCE(created_at, now()),
-            COALESCE(created_by, 'system')::text,
-            COALESCE(backup_data, '{}')::text,
-            metadata
-          FROM public.backups
-          ON CONFLICT (id) DO NOTHING
+        await db.execute(sql3`
+          CREATE TABLE IF NOT EXISTS public.aeon_branch_postcodes (
+            postcode text PRIMARY KEY,
+            lat double precision NOT NULL,
+            lng double precision NOT NULL,
+            source_branch text,
+            state text
+          )
         `);
-        await db.execute(sql`DROP TABLE public.backups`);
-        await db.execute(sql`ALTER TABLE public.backups_new RENAME TO backups`);
+        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS branch_address text`);
+        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS phone_number text`);
+        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS fax_number text`);
+        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS business_hour text`);
+        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS day_open text`);
+        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS atm_cdm text`);
+        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS inquiry_availability text`);
+        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS application_availability text`);
+        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS aeon_lounge text`);
+        await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_aeon_branches_lat_lng ON public.aeon_branches (branch_lat, branch_lng)`);
+        await db.execute(sql3`CREATE UNIQUE INDEX IF NOT EXISTS idx_aeon_branches_name_unique ON public.aeon_branches (lower(name))`);
+        await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_aeon_postcodes ON public.aeon_branch_postcodes (postcode)`);
+        this.ready = true;
+      } catch (err) {
+        console.warn("\u26A0\uFE0F Failed to ensure PostGIS tables:", err?.message || err);
       }
-      const info = await db.execute(sql`SELECT current_database() AS db, current_schema() AS schema`);
-      const row = info.rows?.[0];
-      console.log(`\u{1F9FE} DB info: database=${row?.db ?? "unknown"}, schema=${row?.schema ?? "unknown"}`);
-    } catch (err) {
-      console.error("\u274C Failed to ensure backups table:", err?.message || err);
-    }
-  }
-  parseBackupMetadataSafe(raw) {
-    if (!raw) return null;
-    if (typeof raw === "object") return raw;
-    if (typeof raw !== "string") return null;
-    const trimmed = raw.trim();
-    if (!trimmed) return null;
-    if (trimmed.length > 2e5) return null;
+    })();
     try {
-      const parsed = JSON.parse(trimmed);
-      return parsed && typeof parsed === "object" ? parsed : null;
-    } catch {
-      return null;
+      await this.initPromise;
+    } finally {
+      this.initPromise = null;
     }
   }
-  async seedDefaultUsers() {
-    const defaultUsers = [
-      { username: "superuser", password: "0441024k", role: "superuser" },
-      { username: "admin1", password: "admin123", role: "admin" },
-      { username: "user1", password: "user123", role: "user" }
-    ];
-    for (const user of defaultUsers) {
-      const existing = await this.getUserByUsername(user.username);
-      if (!existing) {
-        const now = /* @__PURE__ */ new Date();
-        const hashedPassword = await bcrypt.hash(user.password, BCRYPT_COST);
-        await db.insert(users).values({
-          id: crypto.randomUUID(),
-          username: user.username,
-          passwordHash: hashedPassword,
-          role: user.role,
-          createdAt: now,
-          updatedAt: now,
-          passwordChangedAt: now,
-          isBanned: false
-        });
-      }
-    }
-  }
+};
+
+// server/repositories/auth.repository.ts
+import bcrypt from "bcrypt";
+import crypto from "crypto";
+import { inArray, sql as sql4 } from "drizzle-orm";
+var BCRYPT_COST = 12;
+var QUERY_PAGE_LIMIT = 1e3;
+var AuthRepository = class {
   async getUser(id) {
-    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    const result = await db.select().from(users).where(sql4`${users.id} = ${id}`).limit(1);
     return result[0];
   }
   async getUserByUsername(username) {
     const normalized = String(username || "").trim();
     if (!normalized) return void 0;
-    const result = await db.select().from(users).where(sql`lower(${users.username}) = lower(${normalized})`).limit(1);
+    const result = await db.select().from(users).where(sql4`lower(${users.username}) = lower(${normalized})`).limit(1);
     return result[0];
   }
   async createUser(user) {
@@ -1802,7 +875,7 @@ var PostgresStorage = class {
     } else if (params.passwordChangedAt !== void 0) {
       next.passwordChangedAt = params.passwordChangedAt;
     }
-    await db.update(users).set(next).where(eq(users.id, params.userId));
+    await db.update(users).set(next).where(sql4`${users.id} = ${params.userId}`);
     return this.getUser(params.userId);
   }
   async getUsersByRoles(roles) {
@@ -1827,91 +900,39 @@ var PostgresStorage = class {
     return results;
   }
   async updateActivitiesUsername(oldUsername, newUsername) {
-    await db.update(userActivity).set({ username: newUsername }).where(eq(userActivity.username, oldUsername));
-  }
-  async searchGlobalDataRows(params) {
-    const { search, limit, offset } = params;
-    const rowsResult = await db.execute(sql`
-    SELECT
-      dr.id,
-      dr.import_id,
-      dr.json_data as json_data_jsonb,
-      i.name as import_name,
-      i.filename as import_filename
-    FROM data_rows dr
-    JOIN imports i ON i.id = dr.import_id
-    WHERE i.is_deleted = false
-      AND dr.json_data::text ILIKE ${"%" + search + "%"}
-    ORDER BY dr.id
-    LIMIT ${limit} OFFSET ${offset}
-  `);
-    const totalResult = await db.execute(sql`
-    SELECT COUNT(*)::int AS total
-    FROM data_rows dr
-    JOIN imports i ON i.id = dr.import_id
-    WHERE i.is_deleted = false
-      AND dr.json_data::text ILIKE ${"%" + search + "%"}
-  `);
-    const convertedRows = rowsResult.rows.map((row, idx) => {
-      let jsonData = row.json_data_jsonb;
-      if (idx === 0 && STORAGE_DEBUG_LOGS) {
-        console.log(`\u{1F50D} DEBUG first row keys: ${Object.keys(row).join(", ")}`);
-        console.log(`\u{1F50D} DEBUG json_data type: ${typeof jsonData}, isArray: ${Array.isArray(jsonData)}, value sample: ${JSON.stringify(jsonData).substring(0, 100)}`);
-      }
-      if (typeof jsonData === "string") {
-        try {
-          jsonData = JSON.parse(jsonData);
-        } catch (e) {
-          if (STORAGE_DEBUG_LOGS) {
-            console.log(`\u{1F50D} Failed to parse json_data as JSON, treating as string`);
-          }
-        }
-      }
-      if (Array.isArray(jsonData)) {
-        const obj = {};
-        for (let i = 0; i < jsonData.length; i++) {
-          obj[`col_${i + 1}`] = jsonData[i];
-        }
-        jsonData = obj;
-        if (idx === 0 && STORAGE_DEBUG_LOGS) {
-          console.log(`\u{1F50D} Converted array to object with keys: ${Object.keys(jsonData).join(",")}`);
-        }
-      }
-      return {
-        id: row.id,
-        importId: row.import_id,
-        importName: row.import_name,
-        importFilename: row.import_filename,
-        jsonDataJsonb: jsonData
-      };
-    });
-    const total = totalResult.rows && totalResult.rows[0] ? Number(totalResult.rows[0].total) : 0;
-    return {
-      rows: convertedRows,
-      total
-    };
-  }
-  async searchSimpleDataRows(search) {
-    return await db.execute(sql`
-    SELECT
-      dr.import_id as "importId",
-      i.name as "importName",
-      dr.json_data_jsonb as "jsonDataJsonb"
-    FROM data_rows dr
-    JOIN imports i ON i.id = dr.import_id
-    WHERE dr.json_data_jsonb::text ILIKE ${"%" + search + "%"}
-    LIMIT 200
-  `);
+    await db.update(userActivity).set({ username: newUsername }).where(sql4`${userActivity.username} = ${oldUsername}`);
   }
   async updateUserBan(username, isBanned) {
-    await db.update(users).set({ isBanned, updatedAt: /* @__PURE__ */ new Date() }).where(eq(users.username, username));
-    const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    await db.update(users).set({ isBanned, updatedAt: /* @__PURE__ */ new Date() }).where(sql4`${users.username} = ${username}`);
+    const result = await db.select().from(users).where(sql4`${users.username} = ${username}`).limit(1);
     return result[0];
   }
+  async getAccounts() {
+    const rows = [];
+    let offset = 0;
+    while (true) {
+      const chunk = await db.select({
+        username: users.username,
+        role: users.role,
+        isBanned: users.isBanned
+      }).from(users).orderBy(users.role, users.username).limit(QUERY_PAGE_LIMIT).offset(offset);
+      if (!chunk.length) break;
+      rows.push(...chunk);
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
+    return rows;
+  }
+};
+
+// server/repositories/imports.repository.ts
+import crypto2 from "crypto";
+import { and, desc, eq, sql as sql5 } from "drizzle-orm";
+var QUERY_PAGE_LIMIT2 = 1e3;
+var ImportsRepository = class {
   async createImport(data) {
-    const now = /* @__PURE__ */ new Date();
     const result = await db.insert(imports).values({
-      id: crypto.randomUUID(),
+      id: crypto2.randomUUID(),
       name: data.name,
       filename: data.filename,
       createdBy: data.createdBy || null,
@@ -1924,13 +945,31 @@ var PostgresStorage = class {
     const results = [];
     let offset = 0;
     while (true) {
-      const chunk = await db.select().from(imports).where(eq(imports.isDeleted, false)).orderBy(desc(imports.createdAt)).limit(QUERY_PAGE_LIMIT).offset(offset);
+      const chunk = await db.select().from(imports).where(eq(imports.isDeleted, false)).orderBy(desc(imports.createdAt)).limit(QUERY_PAGE_LIMIT2).offset(offset);
       if (!chunk.length) break;
       results.push(...chunk);
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      if (chunk.length < QUERY_PAGE_LIMIT2) break;
       offset += chunk.length;
     }
     return results;
+  }
+  async getImportsWithRowCounts() {
+    const result = await db.execute(sql5`
+      SELECT
+        i.id,
+        i.name,
+        i.filename,
+        i.created_at as "createdAt",
+        i.is_deleted as "isDeleted",
+        i.created_by as "createdBy",
+        COALESCE(COUNT(dr.id), 0)::int as "rowCount"
+      FROM public.imports i
+      LEFT JOIN public.data_rows dr ON dr.import_id = i.id
+      WHERE i.is_deleted = false
+      GROUP BY i.id, i.name, i.filename, i.created_at, i.is_deleted, i.created_by
+      ORDER BY i.created_at DESC
+    `);
+    return result.rows || [];
   }
   async getImportById(id) {
     const result = await db.select().from(imports).where(and(eq(imports.id, id), eq(imports.isDeleted, false))).limit(1);
@@ -1949,139 +988,287 @@ var PostgresStorage = class {
       throw new Error("Invalid jsonDataJsonb");
     }
     const result = await db.insert(dataRows).values({
-      id: crypto.randomUUID(),
+      id: crypto2.randomUUID(),
       importId: data.importId,
       jsonDataJsonb: data.jsonDataJsonb
     }).returning();
     return result[0];
   }
   async getDataRowsByImport(importId) {
-    if (STORAGE_DEBUG_LOGS) {
-      console.log("\u{1F9EA} VIEWER importId received:", importId);
-    }
     const rows = [];
     let offset = 0;
     while (true) {
-      const chunk = await db.select().from(dataRows).where(eq(dataRows.importId, importId)).limit(QUERY_PAGE_LIMIT).offset(offset);
+      const chunk = await db.select().from(dataRows).where(eq(dataRows.importId, importId)).limit(QUERY_PAGE_LIMIT2).offset(offset);
       if (!chunk.length) break;
       rows.push(...chunk);
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      if (chunk.length < QUERY_PAGE_LIMIT2) break;
       offset += chunk.length;
-    }
-    if (STORAGE_DEBUG_LOGS) {
-      console.log("\u{1F9EA} ROW COUNT:", rows.length);
     }
     return rows;
   }
+  async getDataRowsByImportPage(importId, limit, offset) {
+    return db.select().from(dataRows).where(eq(dataRows.importId, importId)).limit(Math.max(1, limit)).offset(Math.max(0, offset));
+  }
   async getDataRowCountByImport(importId) {
-    const [{ count: count2 }] = await db.select({ count: sql`count(*)` }).from(dataRows).where(eq(dataRows.importId, importId));
-    return Number(count2);
+    const [{ count: count3 }] = await db.select({ count: sql5`count(*)` }).from(dataRows).where(eq(dataRows.importId, importId));
+    return Number(count3);
+  }
+  async getDataRowCountsByImportIds(importIds) {
+    if (!importIds.length) {
+      return /* @__PURE__ */ new Map();
+    }
+    const result = await db.execute(sql5`
+      SELECT
+        dr.import_id as "importId",
+        COUNT(dr.id)::int as "rowCount"
+      FROM public.data_rows dr
+      WHERE dr.import_id = ANY(${importIds}::text[])
+      GROUP BY dr.import_id
+    `);
+    return new Map(
+      (result.rows || []).map((row) => [String(row.importId), Number(row.rowCount)])
+    );
+  }
+};
+
+// server/repositories/search.repository.ts
+import { sql as sql6 } from "drizzle-orm";
+var MAX_SEARCH_LIMIT = 200;
+var MAX_COLUMN_KEYS = 500;
+var ALLOWED_OPERATORS = /* @__PURE__ */ new Set([
+  "contains",
+  "equals",
+  "notEquals",
+  "startsWith",
+  "endsWith",
+  "greaterThan",
+  "lessThan",
+  "greaterThanOrEqual",
+  "lessThanOrEqual",
+  "isEmpty",
+  "isNotEmpty"
+]);
+function detectValueType(value) {
+  if (!value) return "string";
+  if (!Number.isNaN(Number(value))) return "number";
+  const date = new Date(value);
+  if (!Number.isNaN(date.getTime())) return "date";
+  return "string";
+}
+function normalizeJsonPayload(raw) {
+  let value = raw;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+  if (Array.isArray(value)) {
+    const mapped = {};
+    for (let index = 0; index < value.length; index += 1) {
+      mapped[`col_${index + 1}`] = value[index];
+    }
+    return mapped;
+  }
+  return value;
+}
+function buildFieldCondition(field, operator, value) {
+  const column = sql6`dr.json_data::jsonb ->> ${field}`;
+  const valueType = detectValueType(value);
+  switch (operator) {
+    case "contains":
+      return sql6`${column} ILIKE ${`%${value}%`}`;
+    case "equals":
+      return sql6`${column} = ${value}`;
+    case "notEquals":
+      return sql6`${column} <> ${value}`;
+    case "startsWith":
+      return sql6`${column} ILIKE ${`${value}%`}`;
+    case "endsWith":
+      return sql6`${column} ILIKE ${`%${value}`}`;
+    case "greaterThan":
+      if (valueType === "number") return sql6`NULLIF(${column}, '')::numeric > ${Number(value)}`;
+      if (valueType === "date") return sql6`NULLIF(${column}, '')::date > ${value}`;
+      return sql6`false`;
+    case "lessThan":
+      if (valueType === "number") return sql6`NULLIF(${column}, '')::numeric < ${Number(value)}`;
+      if (valueType === "date") return sql6`NULLIF(${column}, '')::date < ${value}`;
+      return sql6`false`;
+    case "greaterThanOrEqual":
+      if (valueType === "number") return sql6`NULLIF(${column}, '')::numeric >= ${Number(value)}`;
+      if (valueType === "date") return sql6`NULLIF(${column}, '')::date >= ${value}`;
+      return sql6`false`;
+    case "lessThanOrEqual":
+      if (valueType === "number") return sql6`NULLIF(${column}, '')::numeric <= ${Number(value)}`;
+      if (valueType === "date") return sql6`NULLIF(${column}, '')::date <= ${value}`;
+      return sql6`false`;
+    case "isEmpty":
+      return sql6`COALESCE(${column}, '') = ''`;
+    case "isNotEmpty":
+      return sql6`COALESCE(${column}, '') <> ''`;
+    default:
+      return sql6`false`;
+  }
+}
+var SearchRepository = class {
+  async searchGlobalDataRows(params) {
+    const { search, limit, offset } = params;
+    const rowsResult = await db.execute(sql6`
+      SELECT
+        dr.id,
+        dr.import_id,
+        dr.json_data as json_data_jsonb,
+        i.name as import_name,
+        i.filename as import_filename
+      FROM public.data_rows dr
+      JOIN public.imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+        AND dr.json_data::text ILIKE ${`%${search}%`}
+      ORDER BY dr.id
+      LIMIT ${Math.max(1, Math.min(limit, MAX_SEARCH_LIMIT))}
+      OFFSET ${Math.max(0, offset)}
+    `);
+    const totalResult = await db.execute(sql6`
+      SELECT COUNT(*)::int AS total
+      FROM public.data_rows dr
+      JOIN public.imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+        AND dr.json_data::text ILIKE ${`%${search}%`}
+    `);
+    const rows = (rowsResult.rows || []).map((row) => ({
+      id: row.id,
+      importId: row.import_id,
+      importName: row.import_name,
+      importFilename: row.import_filename,
+      jsonDataJsonb: normalizeJsonPayload(row.json_data_jsonb)
+    }));
+    const total = totalResult.rows?.[0] ? Number(totalResult.rows[0].total) : 0;
+    return { rows, total };
+  }
+  async searchSimpleDataRows(search) {
+    return db.execute(sql6`
+      SELECT
+        dr.import_id as "importId",
+        i.name as "importName",
+        dr.json_data as "jsonDataJsonb"
+      FROM public.data_rows dr
+      JOIN public.imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+        AND dr.json_data::text ILIKE ${`%${search}%`}
+      LIMIT ${MAX_SEARCH_LIMIT}
+    `);
   }
   async searchDataRows(params) {
     const { importId, search, limit, offset } = params;
     const trimmedSearch = search && search.trim() ? search.trim() : null;
-    if (STORAGE_DEBUG_LOGS) {
-      console.log(`\u{1F50D} searchDataRows called: search="${search}" -> trimmed="${trimmedSearch}"`);
-    }
-    const safeLimit = Math.min(limit, MAX_SEARCH_LIMIT);
+    const safeLimit = Math.min(Math.max(1, limit), MAX_SEARCH_LIMIT);
     const safeOffset = Math.max(offset, 0);
     if (trimmedSearch && trimmedSearch.length < 2) {
       return { rows: [], total: 0 };
     }
     if (!trimmedSearch) {
-      const rows = await db.select().from(dataRows).where(eq(dataRows.importId, importId)).limit(safeLimit).offset(safeOffset);
-      const [{ count: count2 }] = await db.select({ count: sql`count(*)` }).from(dataRows).where(eq(dataRows.importId, importId));
-      if (STORAGE_DEBUG_LOGS) {
-        console.log("\u{1F50D} searchDataRows (no search) - returned:", rows.length, "rows");
-      }
-      return { rows, total: Number(count2) };
-    }
-    if (STORAGE_DEBUG_LOGS) {
-      console.log(`\u{1F50D} Executing search query for: "${trimmedSearch}"`);
-    }
-    const rowsResult = await db.execute(sql`
-    SELECT 
-      id,
-      import_id,
-      json_data::jsonb as json_data
-    FROM data_rows
-    WHERE import_id = ${importId}
-      AND json_data::text ILIKE ${"%" + trimmedSearch + "%"}
-    ORDER BY id
-    LIMIT ${safeLimit} OFFSET ${safeOffset}
-  `);
-    const totalResult = await db.execute(sql`
-    SELECT COUNT(*)::int AS total
-    FROM data_rows
-    WHERE import_id = ${importId}
-      AND json_data::text ILIKE ${"%" + trimmedSearch + "%"}
-  `);
-    const totalCount = totalResult.rows && totalResult.rows[0] ? Number(totalResult.rows[0].total) : 0;
-    if (STORAGE_DEBUG_LOGS) {
-      console.log(`\u{1F50D} Search results: ${rowsResult.rows.length} rows found (total: ${totalCount})`);
-    }
-    const convertedRows = rowsResult.rows.map((row) => {
-      let jsonData = row.json_data;
-      if (Array.isArray(jsonData)) {
-        const obj = {};
-        for (let i = 0; i < jsonData.length; i++) {
-          obj[`col_${i + 1}`] = jsonData[i];
-        }
-        jsonData = obj;
-        if (STORAGE_DEBUG_LOGS) {
-          console.log(`\u{1F50D} Converted array row id=${row.id} to object with keys: ${Object.keys(jsonData).join(",")}`);
-        }
-      }
+      const rowsResult2 = await db.execute(sql6`
+        SELECT
+          dr.id,
+          dr.import_id as "importId",
+          dr.json_data as "jsonDataJsonb"
+        FROM public.data_rows dr
+        WHERE dr.import_id = ${importId}
+        ORDER BY dr.id
+        LIMIT ${safeLimit}
+        OFFSET ${safeOffset}
+      `);
+      const totalResult2 = await db.execute(sql6`
+        SELECT COUNT(*)::int AS total
+        FROM public.data_rows dr
+        WHERE dr.import_id = ${importId}
+      `);
       return {
-        id: row.id,
-        importId: row.import_id,
-        jsonDataJsonb: jsonData
+        rows: (rowsResult2.rows || []).map((row) => ({
+          id: row.id,
+          importId: row.importId,
+          jsonDataJsonb: normalizeJsonPayload(row.jsonDataJsonb)
+        })),
+        total: totalResult2.rows?.[0] ? Number(totalResult2.rows[0].total) : 0
       };
-    });
+    }
+    const rowsResult = await db.execute(sql6`
+      SELECT
+        dr.id,
+        dr.import_id as "importId",
+        dr.json_data as "jsonDataJsonb"
+      FROM public.data_rows dr
+      WHERE dr.import_id = ${importId}
+        AND dr.json_data::text ILIKE ${`%${trimmedSearch}%`}
+      ORDER BY dr.id
+      LIMIT ${safeLimit}
+      OFFSET ${safeOffset}
+    `);
+    const totalResult = await db.execute(sql6`
+      SELECT COUNT(*)::int AS total
+      FROM public.data_rows dr
+      WHERE dr.import_id = ${importId}
+        AND dr.json_data::text ILIKE ${`%${trimmedSearch}%`}
+    `);
     return {
-      rows: convertedRows,
-      total: totalCount
+      rows: (rowsResult.rows || []).map((row) => ({
+        id: row.id,
+        importId: row.importId,
+        jsonDataJsonb: normalizeJsonPayload(row.jsonDataJsonb)
+      })),
+      total: totalResult.rows?.[0] ? Number(totalResult.rows[0].total) : 0
     };
   }
-  async getAllowedSearchColumns() {
-    const columns = await this.getAllColumnNames();
-    return new Set(columns);
-  }
   async advancedSearchDataRows(filters, logic, limit, offset) {
-    const activeImports = await this.getImports();
-    const activeImportIds = activeImports.map((imp) => imp.id);
-    if (activeImportIds.length === 0) {
-      return { rows: [], total: 0 };
-    }
-    const allowedColumns = await this.getAllowedSearchColumns();
+    const allowedColumns = new Set(await this.getAllColumnNames());
     const safeFilters = filters.filter(
-      (f) => allowedColumns.has(f.field) && ALLOWED_OPERATORS.has(f.operator)
+      (filter) => allowedColumns.has(filter.field) && ALLOWED_OPERATORS.has(filter.operator)
     );
     if (safeFilters.length === 0) {
       return { rows: [], total: 0 };
     }
     const conditions = safeFilters.map(
-      (filter) => buildSqlCondition(filter.field, filter.operator, filter.value)
+      (filter) => buildFieldCondition(filter.field, filter.operator, String(filter.value ?? ""))
     );
-    const combinedCondition = logic === "AND" ? and(...conditions) : or(...conditions);
-    const safeLimit = Math.min(limit, MAX_SEARCH_LIMIT);
+    const conditionSql = conditions.length === 1 ? conditions[0] : sql6.join(conditions, logic === "AND" ? sql6` AND ` : sql6` OR `);
+    const safeLimit = Math.min(Math.max(1, limit), MAX_SEARCH_LIMIT);
     const safeOffset = Math.max(offset, 0);
-    const rows = await db.select().from(dataRows).where(
-      and(
-        inArray(dataRows.importId, activeImportIds),
-        combinedCondition
-      )
-    ).limit(safeLimit).offset(safeOffset);
-    const [{ count: count2 }] = await db.select({ count: sql`count(*)` }).from(dataRows).where(
-      and(
-        inArray(dataRows.importId, activeImportIds),
-        combinedCondition
-      )
-    );
-    return { rows, total: Number(count2) };
+    const rowsResult = await db.execute(sql6`
+      SELECT
+        dr.id,
+        dr.import_id as "importId",
+        dr.json_data as "jsonDataJsonb",
+        i.name as "importName",
+        i.filename as "importFilename"
+      FROM public.data_rows dr
+      JOIN public.imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+        AND (${conditionSql})
+      ORDER BY dr.id
+      LIMIT ${safeLimit}
+      OFFSET ${safeOffset}
+    `);
+    const totalResult = await db.execute(sql6`
+      SELECT COUNT(*)::int AS total
+      FROM public.data_rows dr
+      JOIN public.imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+        AND (${conditionSql})
+    `);
+    return {
+      rows: (rowsResult.rows || []).map((row) => ({
+        id: row.id,
+        importId: row.importId,
+        jsonDataJsonb: normalizeJsonPayload(row.jsonDataJsonb),
+        importName: row.importName,
+        importFilename: row.importFilename
+      })),
+      total: totalResult.rows?.[0] ? Number(totalResult.rows[0].total) : 0
+    };
   }
   async getAllColumnNames() {
-    const result = await db.execute(sql`
+    const result = await db.execute(sql6`
       SELECT DISTINCT key AS column_name
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id
@@ -2091,12 +1278,35 @@ var PostgresStorage = class {
       ORDER BY key
       LIMIT ${MAX_COLUMN_KEYS}
     `);
-    return (result.rows || []).map((row) => String(row.column_name || "").trim()).filter((name) => name.length > 0);
+    return (result.rows || []).map((row) => String(row.column_name || "").trim()).filter(Boolean);
+  }
+};
+
+// server/repositories/activity.repository.ts
+import crypto3 from "crypto";
+import { and as and2, desc as desc2, eq as eq2, gte, lte, sql as sql7 } from "drizzle-orm";
+var QUERY_PAGE_LIMIT3 = 1e3;
+var ActivityRepository = class {
+  constructor(options) {
+    this.options = options;
+  }
+  computeActivityStatus(activity) {
+    if (!activity.isActive) {
+      if (activity.logoutReason === "KICKED") return "KICKED";
+      if (activity.logoutReason === "BANNED") return "BANNED";
+      return "LOGOUT";
+    }
+    if (activity.lastActivityTime) {
+      const lastActive = new Date(activity.lastActivityTime).getTime();
+      const diffMinutes = Math.floor((Date.now() - lastActive) / 6e4);
+      if (diffMinutes >= 5) return "IDLE";
+    }
+    return "ONLINE";
   }
   async createActivity(data) {
     const now = /* @__PURE__ */ new Date();
     const result = await db.insert(userActivity).values({
-      id: crypto.randomUUID(),
+      id: crypto3.randomUUID(),
       userId: data.userId,
       username: data.username,
       role: data.role,
@@ -2106,30 +1316,23 @@ var PostgresStorage = class {
       ipAddress: data.ipAddress ?? null,
       loginTime: now,
       logoutTime: null,
-      lastActivityTime: /* @__PURE__ */ new Date(),
+      lastActivityTime: now,
       isActive: true,
       logoutReason: null
     }).returning();
     return result[0];
   }
   async touchActivity(activityId) {
-    await db.update(userActivity).set({
-      lastActivityTime: /* @__PURE__ */ new Date()
-    }).where(eq(userActivity.id, activityId));
+    await db.update(userActivity).set({ lastActivityTime: /* @__PURE__ */ new Date() }).where(eq2(userActivity.id, activityId));
   }
   async getActiveActivitiesByUsername(username) {
     const activities = [];
     let offset = 0;
     while (true) {
-      const chunk = await db.select().from(userActivity).where(
-        and(
-          eq(userActivity.username, username),
-          eq(userActivity.isActive, true)
-        )
-      ).orderBy(desc(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT).offset(offset);
+      const chunk = await db.select().from(userActivity).where(and2(eq2(userActivity.username, username), eq2(userActivity.isActive, true))).orderBy(desc2(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT3).offset(offset);
       if (!chunk.length) break;
       activities.push(...chunk);
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      if (chunk.length < QUERY_PAGE_LIMIT3) break;
       offset += chunk.length;
     }
     return activities;
@@ -2141,23 +1344,23 @@ var PostgresStorage = class {
     if (data.logoutTime !== void 0) updateData.logoutTime = data.logoutTime;
     if (data.logoutReason !== void 0) updateData.logoutReason = data.logoutReason;
     if (Object.keys(updateData).length > 0) {
-      await db.update(userActivity).set(updateData).where(eq(userActivity.id, id));
+      await db.update(userActivity).set(updateData).where(eq2(userActivity.id, id));
     }
-    const result = await db.select().from(userActivity).where(eq(userActivity.id, id)).limit(1);
+    const result = await db.select().from(userActivity).where(eq2(userActivity.id, id)).limit(1);
     return result[0];
   }
   async getActivityById(id) {
-    const result = await db.select().from(userActivity).where(eq(userActivity.id, id)).limit(1);
+    const result = await db.select().from(userActivity).where(eq2(userActivity.id, id)).limit(1);
     return result[0];
   }
   async getActiveActivities() {
     const activities = [];
     let offset = 0;
     while (true) {
-      const chunk = await db.select().from(userActivity).where(eq(userActivity.isActive, true)).orderBy(desc(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT).offset(offset);
+      const chunk = await db.select().from(userActivity).where(eq2(userActivity.isActive, true)).orderBy(desc2(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT3).offset(offset);
       if (!chunk.length) break;
       activities.push(...chunk);
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      if (chunk.length < QUERY_PAGE_LIMIT3) break;
       offset += chunk.length;
     }
     return activities;
@@ -2166,49 +1369,27 @@ var PostgresStorage = class {
     const activities = [];
     let offset = 0;
     while (true) {
-      const chunk = await db.select().from(userActivity).orderBy(desc(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT).offset(offset);
+      const chunk = await db.select().from(userActivity).orderBy(desc2(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT3).offset(offset);
       if (!chunk.length) break;
       activities.push(...chunk);
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      if (chunk.length < QUERY_PAGE_LIMIT3) break;
       offset += chunk.length;
     }
-    return activities.map((a) => ({
-      ...a,
-      status: this.computeActivityStatus(a)
+    return activities.map((activity) => ({
+      ...activity,
+      status: this.computeActivityStatus(activity)
     }));
   }
   async deleteActivity(id) {
-    await db.delete(userActivity).where(eq(userActivity.id, id));
+    await db.delete(userActivity).where(eq2(userActivity.id, id));
     return true;
-  }
-  computeActivityStatus(activity) {
-    if (!activity.isActive) {
-      if (activity.logoutReason === "KICKED") return "KICKED";
-      if (activity.logoutReason === "BANNED") return "BANNED";
-      return "LOGOUT";
-    }
-    if (activity.lastActivityTime) {
-      const lastActive = new Date(activity.lastActivityTime).getTime();
-      const now = Date.now();
-      const diffMins = Math.floor((now - lastActive) / 6e4);
-      if (diffMins >= 5) return "IDLE";
-    }
-    return "ONLINE";
   }
   async getFilteredActivities(filters) {
     const whereConditions = [];
-    if (filters.username) {
-      whereConditions.push(eq(userActivity.username, filters.username));
-    }
-    if (filters.ipAddress) {
-      whereConditions.push(eq(userActivity.ipAddress, filters.ipAddress));
-    }
-    if (filters.browser) {
-      whereConditions.push(eq(userActivity.browser, filters.browser));
-    }
-    if (filters.dateFrom) {
-      whereConditions.push(gte(userActivity.loginTime, filters.dateFrom));
-    }
+    if (filters.username) whereConditions.push(eq2(userActivity.username, filters.username));
+    if (filters.ipAddress) whereConditions.push(eq2(userActivity.ipAddress, filters.ipAddress));
+    if (filters.browser) whereConditions.push(eq2(userActivity.browser, filters.browser));
+    if (filters.dateFrom) whereConditions.push(gte(userActivity.loginTime, filters.dateFrom));
     if (filters.dateTo) {
       const endOfDay = new Date(filters.dateTo);
       endOfDay.setHours(23, 59, 59, 999);
@@ -2217,18 +1398,20 @@ var PostgresStorage = class {
     const activities = [];
     let offset = 0;
     while (true) {
-      const chunk = await db.select().from(userActivity).where(whereConditions.length ? and(...whereConditions) : void 0).orderBy(desc(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT).offset(offset);
+      const chunk = await db.select().from(userActivity).where(whereConditions.length ? and2(...whereConditions) : void 0).orderBy(desc2(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT3).offset(offset);
       if (!chunk.length) break;
       activities.push(...chunk);
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      if (chunk.length < QUERY_PAGE_LIMIT3) break;
       offset += chunk.length;
     }
+    const enriched = activities.map((activity) => ({
+      ...activity,
+      status: this.computeActivityStatus(activity)
+    }));
     if (filters.status?.length) {
-      return activities.filter(
-        (a) => filters.status.includes(this.computeActivityStatus(a))
-      );
+      return enriched.filter((activity) => filters.status.includes(activity.status));
     }
-    return activities;
+    return enriched;
   }
   async deactivateUserActivities(username, reason) {
     const updateData = {
@@ -2238,12 +1421,7 @@ var PostgresStorage = class {
     if (reason) {
       updateData.logoutReason = reason;
     }
-    await db.update(userActivity).set(updateData).where(
-      and(
-        eq(userActivity.isActive, true),
-        eq(userActivity.username, username)
-      )
-    );
+    await db.update(userActivity).set(updateData).where(and2(eq2(userActivity.isActive, true), eq2(userActivity.username, username)));
   }
   async deactivateUserSessionsByFingerprint(username, fingerprint) {
     await db.update(userActivity).set({
@@ -2251,51 +1429,67 @@ var PostgresStorage = class {
       logoutTime: /* @__PURE__ */ new Date(),
       logoutReason: "NEW_SESSION"
     }).where(
-      and(
-        eq(userActivity.username, username),
-        eq(userActivity.fingerprint, fingerprint),
-        eq(userActivity.isActive, true)
+      and2(
+        eq2(userActivity.username, username),
+        eq2(userActivity.fingerprint, fingerprint),
+        eq2(userActivity.isActive, true)
       )
     );
   }
   async getBannedUsers() {
-    const bannedUsers = await db.select().from(users).where(eq(users.isBanned, true));
-    const enrichedUsers = [];
-    for (const user of bannedUsers) {
-      const activities = await db.select().from(userActivity).where(
-        and(
-          eq(userActivity.logoutReason, "BANNED"),
-          sql`lower(${userActivity.username}) = lower(${user.username})`
-        )
-      ).orderBy(desc(userActivity.logoutTime)).limit(1);
-      const lastBannedActivity = activities[0];
-      const banInfo = lastBannedActivity ? {
-        ipAddress: lastBannedActivity.ipAddress,
-        browser: lastBannedActivity.browser,
-        bannedAt: lastBannedActivity.logoutTime ? new Date(lastBannedActivity.logoutTime) : null
-      } : void 0;
-      enrichedUsers.push({ ...user, banInfo });
-    }
-    return enrichedUsers;
+    const result = await db.execute(sql7`
+      SELECT
+        u.*,
+        ban.ip_address as "banIpAddress",
+        ban.browser as "banBrowser",
+        ban.logout_time as "banLogoutTime"
+      FROM public.users u
+      LEFT JOIN LATERAL (
+        SELECT
+          ua.ip_address,
+          ua.browser,
+          ua.logout_time
+        FROM public.user_activity ua
+        WHERE lower(ua.username) = lower(u.username)
+          AND ua.logout_reason = 'BANNED'
+        ORDER BY ua.logout_time DESC NULLS LAST
+        LIMIT 1
+      ) ban ON true
+      WHERE u.is_banned = true
+      ORDER BY u.username ASC
+    `);
+    return (result.rows || []).map((row) => ({
+      id: row.id,
+      username: row.username,
+      passwordHash: row.password_hash,
+      role: row.role,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      passwordChangedAt: row.password_changed_at,
+      isBanned: row.is_banned,
+      banInfo: row.banLogoutTime ? {
+        ipAddress: row.banIpAddress ?? null,
+        browser: row.banBrowser ?? null,
+        bannedAt: row.banLogoutTime ? new Date(row.banLogoutTime) : null
+      } : void 0
+    }));
   }
   async isVisitorBanned(fingerprint, ipAddress) {
-    await this.ensureBannedSessionsTable();
+    await this.options.ensureBannedSessionsTable();
     if (!fingerprint && !ipAddress) return false;
-    const fp = fingerprint ?? null;
-    const ip = ipAddress ?? null;
-    const result = await db.execute(sql`
+    const result = await db.execute(sql7`
       SELECT id
       FROM public.banned_sessions
-      WHERE (${fp}::text IS NOT NULL AND fingerprint = ${fp}::text)
-         OR (${ip}::text IS NOT NULL AND ip_address = ${ip}::text)
+      WHERE (${fingerprint ?? null}::text IS NOT NULL AND fingerprint = ${fingerprint ?? null}::text)
+         OR (${ipAddress ?? null}::text IS NOT NULL AND ip_address = ${ipAddress ?? null}::text)
       LIMIT 1
     `);
     return (result.rows?.length || 0) > 0;
   }
   async banVisitor(params) {
-    await this.ensureBannedSessionsTable();
-    const banId = crypto.randomUUID();
-    await db.execute(sql`
+    await this.options.ensureBannedSessionsTable();
+    const banId = crypto3.randomUUID();
+    await db.execute(sql7`
       INSERT INTO public.banned_sessions
         (id, username, role, activity_id, fingerprint, ip_address, browser, pc_name, banned_at)
       VALUES
@@ -2306,12 +1500,12 @@ var PostgresStorage = class {
     `);
   }
   async unbanVisitor(banId) {
-    await this.ensureBannedSessionsTable();
-    await db.execute(sql`DELETE FROM public.banned_sessions WHERE id = ${banId}`);
+    await this.options.ensureBannedSessionsTable();
+    await db.execute(sql7`DELETE FROM public.banned_sessions WHERE id = ${banId}`);
   }
   async getBannedSessions() {
-    await this.ensureBannedSessionsTable();
-    const result = await db.execute(sql`
+    await this.options.ensureBannedSessionsTable();
+    const result = await db.execute(sql7`
       SELECT
         id as "banId",
         username,
@@ -2323,1423 +1517,405 @@ var PostgresStorage = class {
       FROM public.banned_sessions
       ORDER BY banned_at DESC
     `);
-    return result.rows.map((row) => {
-      let jsonData = row.jsonDataJsonb;
-      if (typeof jsonData === "string") {
-        try {
-          jsonData = JSON.parse(jsonData);
-        } catch {
-        }
-      }
-      return { ...row, jsonDataJsonb: jsonData };
-    });
+    return result.rows || [];
   }
-  async createConversation(createdBy) {
-    const id = crypto.randomUUID();
-    await db.execute(sql`
-      INSERT INTO public.ai_conversations (id, created_by, created_at)
-      VALUES (${id}, ${createdBy}, ${/* @__PURE__ */ new Date()})
-    `);
-    return id;
+};
+
+// server/repositories/audit.repository.ts
+import crypto4 from "crypto";
+import { desc as desc3, gte as gte2, sql as sql8 } from "drizzle-orm";
+var QUERY_PAGE_LIMIT4 = 1e3;
+var AuditRepository = class {
+  async createAuditLog(data) {
+    const result = await db.insert(auditLogs).values({
+      id: crypto4.randomUUID(),
+      action: data.action,
+      performedBy: data.performedBy,
+      targetUser: data.targetUser ?? null,
+      targetResource: data.targetResource ?? null,
+      details: data.details ?? null,
+      timestamp: /* @__PURE__ */ new Date()
+    }).returning();
+    return result[0];
   }
-  async saveConversationMessage(conversationId, role, content) {
-    await db.execute(sql`
-      INSERT INTO public.ai_messages (id, conversation_id, role, content, created_at)
-      VALUES (${crypto.randomUUID()}, ${conversationId}, ${role}, ${content}, ${/* @__PURE__ */ new Date()})
-    `);
-  }
-  async getConversationMessages(conversationId, limit = 20) {
-    const result = await db.execute(sql`
-      SELECT role, content
-      FROM public.ai_messages
-      WHERE conversation_id = ${conversationId}
-      ORDER BY created_at ASC
-      LIMIT ${limit}
-    `);
-    return result.rows;
-  }
-  async saveEmbedding(params) {
-    const embeddingLiteral = sql.raw(`'[${params.embedding.join(",")}]'`);
-    await db.execute(sql`
-      INSERT INTO public.data_embeddings (id, import_id, row_id, content, embedding, created_at)
-      VALUES (${crypto.randomUUID()}, ${params.importId}, ${params.rowId}, ${params.content}, ${embeddingLiteral}::vector, ${/* @__PURE__ */ new Date()})
-      ON CONFLICT (row_id) DO UPDATE SET
-        import_id = EXCLUDED.import_id,
-        content = EXCLUDED.content,
-        embedding = EXCLUDED.embedding
-    `);
-  }
-  async semanticSearch(params) {
-    const embeddingLiteral = sql.raw(`'[${params.embedding.join(",")}]'`);
-    const importFilter = params.importId ? sql`AND e.import_id = ${params.importId}` : sql``;
-    try {
-      await db.execute(sql`SET ivfflat.probes = 5`);
-    } catch {
+  async getAuditLogs() {
+    const logs = [];
+    let offset = 0;
+    while (true) {
+      const chunk = await db.select().from(auditLogs).orderBy(desc3(auditLogs.timestamp)).limit(QUERY_PAGE_LIMIT4).offset(offset);
+      if (!chunk.length) break;
+      logs.push(...chunk);
+      if (chunk.length < QUERY_PAGE_LIMIT4) break;
+      offset += chunk.length;
     }
-    const result = await db.execute(sql`
-      SELECT
-        e.row_id as "rowId",
-        e.import_id as "importId",
-        e.content as "content",
-        (1 - (e.embedding <=> ${embeddingLiteral}::vector))::float as "score",
-        i.name as "importName",
-        i.filename as "importFilename",
-        dr.json_data as "jsonDataJsonb"
-      FROM public.data_embeddings e
-      JOIN data_rows dr ON dr.id = e.row_id
-      LEFT JOIN imports i ON i.id = e.import_id
-      WHERE (i.is_deleted = false OR i.is_deleted IS NULL)
-      ${importFilter}
-      ORDER BY e.embedding <=> ${embeddingLiteral}::vector
-      LIMIT ${params.limit}
-    `);
-    return result.rows.map((row) => {
-      let jsonData = row.jsonDataJsonb;
-      if (typeof jsonData === "string") {
-        try {
-          jsonData = JSON.parse(jsonData);
-        } catch {
-        }
-      }
-      return { ...row, jsonDataJsonb: jsonData };
-    });
+    return logs;
   }
-  async aiKeywordSearch(params) {
-    const q = String(params.query || "");
-    const digits = q.replace(/[^0-9]/g, "");
-    const limit = Math.max(1, Math.min(50, params.limit || 10));
-    if (digits.length < 6) return [];
-    const isIc = digits.length === 12;
-    const isPhone = digits.length >= 9 && digits.length <= 11;
-    const icFields = ["No. MyKad", "ID No", "No Pengenalan", "IC", "NRIC", "MyKad"];
-    const phoneFields = ["No. Telefon Rumah", "No. Telefon Bimbit", "Telefon", "Phone", "HP", "Handphone", "OfficePhone"];
-    const accountFields = ["Nombor Akaun Bank Pemohon", "Account No", "Account Number", "No Akaun", "Card No"];
-    const primaryFields = isIc ? icFields : isPhone ? phoneFields : accountFields;
-    if (primaryFields.length === 0) return [];
-    const perFieldMatch = sql.join(
-      primaryFields.map(
-        (key) => sql`coalesce((dr.json_data::jsonb)->>${key}, '') = ${digits}`
-      ),
-      sql` OR `
-    );
-    const result = await db.execute(sql`
-      SELECT
-        dr.id as "rowId",
-        dr.import_id as "importId",
-        i.name as "importName",
-        i.filename as "importFilename",
-        dr.json_data as "jsonDataJsonb"
-      FROM data_rows dr
-      JOIN imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-        AND (${perFieldMatch})
-      ORDER BY dr.id
-      LIMIT ${limit}
+  async getAuditLogStats() {
+    const today = /* @__PURE__ */ new Date();
+    today.setHours(0, 0, 0, 0);
+    const [totalLogs, todayLogs] = await Promise.all([
+      db.select({ value: sql8`count(*)` }).from(auditLogs),
+      db.select({ value: sql8`count(*)` }).from(auditLogs).where(gte2(auditLogs.timestamp, today))
+    ]);
+    const actionRows = await db.execute(sql8`
+      SELECT action, COUNT(*)::int AS count
+      FROM public.audit_logs
+      GROUP BY action
     `);
-    return result.rows;
-  }
-  async aiNameSearch(params) {
-    const q = String(params.query || "").trim();
-    if (!q) return [];
-    const nameKeysMatch = sql`
-      (
-        coalesce((dr.json_data::jsonb)->>'Nama','') ILIKE ${"%" + q + "%"} OR
-        coalesce((dr.json_data::jsonb)->>'Customer Name','') ILIKE ${"%" + q + "%"} OR
-        coalesce((dr.json_data::jsonb)->>'name','') ILIKE ${"%" + q + "%"} OR
-        coalesce((dr.json_data::jsonb)->>'MAKLUMAT PEMOHON','') ILIKE ${"%" + q + "%"}
-      )
-    `;
-    const result = await db.execute(sql`
-      SELECT
-        dr.id as "rowId",
-        dr.import_id as "importId",
-        i.name as "importName",
-        i.filename as "importFilename",
-        dr.json_data as "jsonDataJsonb"
-      FROM data_rows dr
-      JOIN imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-        AND ${nameKeysMatch}
-      ORDER BY dr.id
-      LIMIT ${params.limit}
-    `);
-    return result.rows;
-  }
-  async aiDigitsSearch(params) {
-    const digits = params.digits;
-    const result = await db.execute(sql`
-      SELECT
-        dr.id as "rowId",
-        dr.import_id as "importId",
-        i.name as "importName",
-        i.filename as "importFilename",
-        dr.json_data as "jsonDataJsonb"
-      FROM data_rows dr
-      JOIN imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-        AND regexp_replace(dr.json_data::text, '[^0-9]', '', 'g') LIKE ${"%" + digits + "%"}
-      ORDER BY dr.id
-      LIMIT ${params.limit}
-    `);
-    return result.rows;
-  }
-  async aiFuzzySearch(params) {
-    const raw = String(params.query || "").toLowerCase().trim();
-    const tokens = raw.split(/\s+/).map((t) => t.replace(/[^a-z0-9]/gi, "")).filter((t) => t.length >= 3);
-    if (tokens.length === 0) return [];
-    const scoreParts = tokens.map(
-      (t) => sql`CASE WHEN dr.json_data::text ILIKE ${"%" + t + "%"} THEN 1 ELSE 0 END`
-    );
-    const whereParts = tokens.map(
-      (t) => sql`dr.json_data::text ILIKE ${"%" + t + "%"}`
-    );
-    const scoreSql = sql.join(scoreParts, sql` + `);
-    const whereSql = sql.join(whereParts, sql` OR `);
-    const result = await db.execute(sql`
-      SELECT
-        dr.id as "rowId",
-        dr.import_id as "importId",
-        i.name as "importName",
-        i.filename as "importFilename",
-        dr.json_data as "jsonDataJsonb",
-        (${scoreSql})::int as "score"
-      FROM data_rows dr
-      JOIN imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-        AND (${whereSql})
-      ORDER BY "score" DESC, dr.id
-      LIMIT ${params.limit}
-    `);
-    return result.rows;
-  }
-  async findBranchesByText(params) {
-    const q = String(params.query || "").trim();
-    if (!q) return [];
-    const limit = Math.max(1, Math.min(5, params.limit));
-    try {
-      const result = await db.execute(sql`
-          SELECT
-            name,
-            branch_address,
-            phone_number,
-            fax_number,
-            business_hour,
-            day_open,
-            atm_cdm,
-            inquiry_availability,
-            application_availability,
-            aeon_lounge,
-            GREATEST(
-              similarity(coalesce(name, ''), ${q}),
-              similarity(coalesce(branch_address, ''), ${q})
-            ) AS score
-          FROM public.aeon_branches
-          WHERE
-            name ILIKE ${"%" + q + "%"}
-            OR branch_address ILIKE ${"%" + q + "%"}
-            OR GREATEST(
-              similarity(coalesce(name, ''), ${q}),
-              similarity(coalesce(branch_address, ''), ${q})
-            ) > 0.1
-          ORDER BY
-            CASE
-              WHEN name ILIKE ${"%" + q + "%"} OR branch_address ILIKE ${"%" + q + "%"} THEN 0
-              ELSE 1
-            END,
-            score DESC,
-            name
-          LIMIT ${limit}
-        `);
-      return result.rows.map((row) => ({
-        name: row.name,
-        address: row.branch_address,
-        phone: row.phone_number,
-        fax: row.fax_number,
-        businessHour: row.business_hour,
-        dayOpen: row.day_open,
-        atmCdm: row.atm_cdm,
-        inquiryAvailability: row.inquiry_availability,
-        applicationAvailability: row.application_availability,
-        aeonLounge: row.aeon_lounge
-      }));
-    } catch {
-      const result = await db.execute(sql`
-          SELECT
-            name,
-            branch_address,
-            phone_number,
-            fax_number,
-            business_hour,
-            day_open,
-            atm_cdm,
-            inquiry_availability,
-            application_availability,
-            aeon_lounge
-          FROM public.aeon_branches
-          WHERE name ILIKE ${"%" + q + "%"}
-             OR branch_address ILIKE ${"%" + q + "%"}
-          ORDER BY name
-          LIMIT ${limit}
-        `);
-      return result.rows.map((row) => ({
-        name: row.name,
-        address: row.branch_address,
-        phone: row.phone_number,
-        fax: row.fax_number,
-        businessHour: row.business_hour,
-        dayOpen: row.day_open,
-        atmCdm: row.atm_cdm,
-        inquiryAvailability: row.inquiry_availability,
-        applicationAvailability: row.application_availability,
-        aeonLounge: row.aeon_lounge
-      }));
+    const actionBreakdown = {};
+    for (const row of actionRows.rows || []) {
+      actionBreakdown[String(row.action || "UNKNOWN")] = Number(row.count || 0);
     }
-  }
-  async findBranchesByPostcode(params) {
-    await this.ensureSpatialTables();
-    const rawDigits = String(params.postcode || "").replace(/\D/g, "");
-    const postcode = rawDigits.length === 4 ? `0${rawDigits}` : rawDigits.slice(0, 5);
-    if (postcode.length !== 5) return [];
-    const limit = Math.max(1, Math.min(5, params.limit));
-    let result = await db.execute(sql`
-        (
-          SELECT DISTINCT
-            b.name,
-            b.branch_address,
-            b.phone_number,
-            b.fax_number,
-            b.business_hour,
-            b.day_open,
-            b.atm_cdm,
-            b.inquiry_availability,
-            b.application_availability,
-            b.aeon_lounge
-          FROM public.aeon_branch_postcodes p
-          JOIN public.aeon_branches b
-            ON lower(b.name) = lower(p.source_branch)
-          WHERE p.postcode = ${postcode}
-        )
-        UNION
-        (
-          SELECT
-            b.name,
-            b.branch_address,
-            b.phone_number,
-            b.fax_number,
-            b.business_hour,
-            b.day_open,
-            b.atm_cdm,
-            b.inquiry_availability,
-            b.application_availability,
-            b.aeon_lounge
-          FROM public.aeon_branches b
-          WHERE coalesce(b.branch_address, '') ~ ('(^|\\D)' || ${postcode} || '(\\D|$)')
-        )
-        ORDER BY name
-        LIMIT ${limit}
-      `);
-    if (result.rows.length === 0) {
-      result = await db.execute(sql`
-          SELECT
-            b.name,
-            b.branch_address,
-            b.phone_number,
-            b.fax_number,
-            b.business_hour,
-            b.day_open,
-            b.atm_cdm,
-            b.inquiry_availability,
-            b.application_availability,
-            b.aeon_lounge
-          FROM public.aeon_branch_postcodes p
-          JOIN public.aeon_branches b
-            ON lower(b.name) = lower(p.source_branch)
-          WHERE p.postcode ~ '^[0-9]{5}$'
-          ORDER BY abs((p.postcode)::int - (${postcode})::int), b.name
-          LIMIT ${limit}
-        `);
-    }
-    return result.rows.map((row) => ({
-      name: row.name,
-      address: row.branch_address ?? null,
-      phone: row.phone_number ?? null,
-      fax: row.fax_number ?? null,
-      businessHour: row.business_hour ?? null,
-      dayOpen: row.day_open ?? null,
-      atmCdm: row.atm_cdm ?? null,
-      inquiryAvailability: row.inquiry_availability ?? null,
-      applicationAvailability: row.application_availability ?? null,
-      aeonLounge: row.aeon_lounge ?? null
-    }));
-  }
-  async countRowsByKeywords(params) {
-    const groups = params.groups || [];
-    const countSqls = [];
-    const matchSqlByKey = /* @__PURE__ */ new Map();
-    for (const group of groups) {
-      const terms = (group.terms || []).filter((t) => t.trim().length > 0);
-      const fields = (group.fields || []).filter((f) => f.trim().length > 0);
-      const matchMode = String(group.matchMode || "contains").toLowerCase();
-      if (matchMode === "complement") {
-        continue;
-      }
-      if (terms.length === 0 || fields.length === 0) {
-        countSqls.push(sql`0::int as "${sql.raw(group.key)}"`);
-        continue;
-      }
-      const termSql = matchMode === "exact" ? sql.join(
-        fields.map((f) => {
-          const list = sql.join(
-            terms.map((v) => sql`${v.toUpperCase()}`),
-            sql`, `
-          );
-          return sql`upper(trim(coalesce((dr.json_data::jsonb)->>${f}, ''))) IN (${list})`;
-        }),
-        sql` OR `
-      ) : sql.join(
-        terms.map((t) => {
-          const perField = sql.join(
-            fields.map((f) => sql`coalesce((dr.json_data::jsonb)->>${f}, '') ILIKE ${"%" + t + "%"}`),
-            sql` OR `
-          );
-          return sql`((${perField}) OR dr.json_data::text ILIKE ${"%" + t + "%"})`;
-        }),
-        sql` OR `
-      );
-      matchSqlByKey.set(group.key, termSql);
-      countSqls.push(
-        sql`COUNT(*) FILTER (WHERE (${termSql}))::int as "${sql.raw(group.key)}"`
-      );
-    }
-    const complementGroups = groups.filter((g) => String(g.matchMode || "").toLowerCase() === "complement");
-    if (complementGroups.length > 0) {
-      if (matchSqlByKey.size > 0) {
-        const combined = sql.join(Array.from(matchSqlByKey.values()).map((v) => sql`(${v})`), sql` OR `);
-        for (const group of complementGroups) {
-          countSqls.push(
-            sql`COUNT(*) FILTER (WHERE NOT (${combined}))::int as "${sql.raw(group.key)}"`
-          );
-        }
-      } else {
-        for (const group of complementGroups) {
-          countSqls.push(
-            sql`COUNT(*)::int as "${sql.raw(group.key)}"`
-          );
-        }
-      }
-    }
-    const selectParts = countSqls.length > 0 ? sql.join(countSqls, sql`, `) : sql``;
-    const res = await db.execute(sql`
-      SELECT
-        COUNT(*)::int as "total",
-        ${selectParts}
-      FROM data_rows dr
-      JOIN imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-    `);
-    const row = res.rows[0] || {};
-    const totalRows = Number(row.total ?? 0);
-    const counts = {};
-    for (const group of groups) {
-      counts[group.key] = Number(row[group.key] ?? 0);
-    }
-    return { totalRows, counts };
-  }
-  async getCategoryRules() {
-    const normalizeArray = (value) => {
-      if (Array.isArray(value)) {
-        return value.map((v) => String(v)).filter((v) => v.trim().length > 0);
-      }
-      if (typeof value === "string") {
-        const trimmed = value.trim();
-        if (!trimmed) return [];
-        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-          return trimmed.slice(1, -1).split(",").map((v) => v.replace(/^\"|\"$/g, "").trim()).filter((v) => v.length > 0);
-        }
-        return [trimmed];
-      }
-      return [];
+    return {
+      totalLogs: Number(totalLogs[0]?.value || 0),
+      todayLogs: Number(todayLogs[0]?.value || 0),
+      actionBreakdown
     };
-    const result = await db.execute(sql`
-      SELECT key, terms, fields, match_mode, enabled
-      FROM public.ai_category_rules
-      ORDER BY key
+  }
+  async cleanupAuditLogsOlderThan(cutoffDate) {
+    const result = await db.execute(sql8`
+      DELETE FROM public.audit_logs
+      WHERE timestamp IS NOT NULL
+        AND timestamp < ${cutoffDate}
+      RETURNING id
     `);
-    return result.rows.map((row) => ({
-      key: String(row.key),
-      terms: normalizeArray(row.terms),
-      fields: normalizeArray(row.fields),
-      matchMode: String(row.match_mode || "contains"),
-      enabled: row.enabled !== false
-    }));
+    return result.rows?.length || 0;
   }
-  async getCategoryRulesMaxUpdatedAt() {
-    const result = await db.execute(sql`
-      SELECT MAX(updated_at) as updated_at
-      FROM public.ai_category_rules
-    `);
-    const row = result.rows[0];
-    return row?.updated_at ? new Date(row.updated_at) : null;
+};
+
+// server/repositories/backups.repository.ts
+import crypto5 from "crypto";
+import { eq as eq3, sql as sql9 } from "drizzle-orm";
+var BACKUP_CHUNK_SIZE = 500;
+var QUERY_PAGE_LIMIT5 = 1e3;
+var BackupsRepository = class {
+  constructor(options) {
+    this.options = options;
   }
-  async getCategoryStats(keys) {
-    if (!keys.length) return [];
-    const quoted = keys.map((k) => `'${k.replace(/'/g, "''")}'`).join(",");
-    const result = await db.execute(sql`
-      SELECT key, total, samples, updated_at
-      FROM public.ai_category_stats
-      WHERE key IN (${sql.raw(quoted)})
-    `);
-    return result.rows.map((row) => ({
-      key: row.key,
-      total: Number(row.total ?? 0),
-      samples: Array.isArray(row.samples) ? row.samples : [],
-      updatedAt: row.updated_at ? new Date(row.updated_at) : null
-    }));
-  }
-  async computeCategoryStatsForKeys(keys, groups) {
-    if (!keys.length) return [];
-    const uniqueKeys = Array.from(new Set(keys));
-    const ruleMap = new Map(groups.map((g) => [g.key, g]));
-    const requestedGroups = uniqueKeys.filter((k) => k !== "__all__").map((k) => ruleMap.get(k)).filter((g) => Boolean(g && g.enabled !== false));
-    const extractName = (data) => {
-      return data?.["Nama"] || data?.["Customer Name"] || data?.["name"] || data?.["MAKLUMAT PEMOHON"] || "-";
-    };
-    const extractIc = (data) => {
-      return data?.["No. MyKad"] || data?.["ID No"] || data?.["No Pengenalan"] || data?.["IC"] || "-";
-    };
-    const buildMatchSql = (terms, fields, matchMode) => {
-      if (terms.length === 0) return null;
-      if (fields.length === 0) {
-        return sql.join(
-          terms.map((t) => sql`dr.json_data::text ILIKE ${"%" + t + "%"}`),
-          sql` OR `
-        );
-      }
-      if (matchMode === "exact") {
-        return sql.join(
-          fields.map((f) => {
-            const list = sql.join(
-              terms.map((v) => sql`${v.toUpperCase()}`),
-              sql`, `
-            );
-            return sql`upper(trim(coalesce((dr.json_data::jsonb)->>${f}, ''))) IN (${list})`;
-          }),
-          sql` OR `
-        );
-      }
-      return sql.join(
-        terms.map((t) => {
-          const perField = sql.join(
-            fields.map((f) => sql`(dr.json_data::jsonb)->>${f} ILIKE ${"%" + t + "%"}`),
-            sql` OR `
-          );
-          return sql`(${perField})`;
-        }),
-        sql` OR `
-      );
-    };
-    if (uniqueKeys.includes("__all__")) {
-      const totalRes = await db.execute(sql`
-        SELECT COUNT(*)::int as "count"
-        FROM data_rows dr
-        JOIN imports i ON i.id = dr.import_id
-        WHERE i.is_deleted = false
-      `);
-      const totalRows = Number(totalRes.rows[0]?.count ?? 0);
-      await db.execute(sql`
-        INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
-        VALUES ('__all__', ${totalRows}, '[]'::jsonb, now())
-        ON CONFLICT (key)
-        DO UPDATE SET total = EXCLUDED.total, updated_at = now()
-      `);
-    }
-    for (const group of requestedGroups) {
-      const terms = (group.terms || []).filter((t) => t.trim().length > 0);
-      const fields = (group.fields || []).filter((f) => f.trim().length > 0);
-      const matchMode = String(group.matchMode || "contains").toLowerCase();
-      const termSql = buildMatchSql(terms, fields, matchMode);
-      if (!termSql) {
-        await db.execute(sql`
-          INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
-          VALUES (${group.key}, 0, '[]'::jsonb, now())
-          ON CONFLICT (key)
-          DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
-        `);
-        continue;
-      }
-      const countRes = await db.execute(sql`
-        SELECT COUNT(*)::int as "count"
-        FROM data_rows dr
-        JOIN imports i ON i.id = dr.import_id
-        WHERE i.is_deleted = false
-          AND (${termSql})
-      `);
-      const total = Number(countRes.rows[0]?.count ?? 0);
-      let samples = [];
-      if (total > 0) {
-        const sampleRes = await db.execute(sql`
-          SELECT dr.json_data as "jsonData", i.name as "importName", i.filename as "importFilename"
-          FROM data_rows dr
-          JOIN imports i ON i.id = dr.import_id
-          WHERE i.is_deleted = false
-            AND (${termSql})
-          LIMIT 10
-        `);
-        samples = sampleRes.rows.map((row) => {
-          let data = row.jsonData;
-          if (typeof data === "string") {
-            try {
-              data = JSON.parse(data);
-            } catch {
-              data = {};
-            }
-          }
-          const name = extractName(data);
-          const ic = extractIc(data);
-          const source = row.importName || row.importFilename || null;
-          return { name: String(name || "-"), ic: String(ic || "-"), source };
-        });
-      }
-      await db.execute(sql`
-        INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
-        VALUES (${group.key}, ${total}, ${JSON.stringify(samples)}::jsonb, now())
-        ON CONFLICT (key)
-        DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
-      `);
-    }
-    return this.getCategoryStats(uniqueKeys);
-  }
-  async rebuildCategoryStats(groups) {
-    if (!groups.length) return;
-    const totalRes = await db.execute(sql`
-      SELECT COUNT(*)::int as "count"
-      FROM data_rows dr
-      JOIN imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-    `);
-    const totalRows = Number(totalRes.rows[0]?.count ?? 0);
-    await db.execute(sql`
-      DELETE FROM public.ai_category_stats
-      WHERE key <> '__all__'
-    `);
-    await db.execute(sql`
-      INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
-      VALUES ('__all__', ${totalRows}, '[]'::jsonb, now())
-      ON CONFLICT (key)
-    DO UPDATE SET total = EXCLUDED.total, updated_at = now()
-  `);
-    const extractName = (data) => {
-      return data?.["Nama"] || data?.["Customer Name"] || data?.["name"] || data?.["MAKLUMAT PEMOHON"] || "-";
-    };
-    const extractIc = (data) => {
-      return data?.["No. MyKad"] || data?.["ID No"] || data?.["No Pengenalan"] || data?.["IC"] || "-";
-    };
-    const enabledGroups = groups.filter((g) => g.enabled !== false);
-    const matchSqlByKey = /* @__PURE__ */ new Map();
-    const buildMatchSql = (terms, fields, matchMode) => {
-      if (terms.length === 0) return null;
-      if (fields.length === 0) {
-        return sql.join(
-          terms.map((t) => sql`dr.json_data::text ILIKE ${"%" + t + "%"}`),
-          sql` OR `
-        );
-      }
-      if (matchMode === "exact") {
-        return sql.join(
-          fields.map((f) => {
-            const list = sql.join(
-              terms.map((v) => sql`${v.toUpperCase()}`),
-              sql`, `
-            );
-            return sql`upper(trim(coalesce((dr.json_data::jsonb)->>${f}, ''))) IN (${list})`;
-          }),
-          sql` OR `
-        );
-      }
-      return sql.join(
-        terms.map((t) => {
-          const perField = sql.join(
-            fields.map((f) => sql`(dr.json_data::jsonb)->>${f} ILIKE ${"%" + t + "%"}`),
-            sql` OR `
-          );
-          return sql`(${perField})`;
-        }),
-        sql` OR `
-      );
-    };
-    const baseGroups = enabledGroups.filter((g) => String(g.matchMode || "").toLowerCase() !== "complement");
-    const complementGroups = enabledGroups.filter((g) => String(g.matchMode || "").toLowerCase() === "complement");
-    for (const group of baseGroups) {
-      const terms = (group.terms || []).filter((t) => t.trim().length > 0);
-      const fields = (group.fields || []).filter((f) => f.trim().length > 0);
-      const matchMode = String(group.matchMode || "contains").toLowerCase();
-      const termSql = buildMatchSql(terms, fields, matchMode);
-      if (!termSql) {
-        await db.execute(sql`
-          INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
-          VALUES (${group.key}, 0, '[]'::jsonb, now())
-          ON CONFLICT (key)
-          DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
-        `);
-        continue;
-      }
-      matchSqlByKey.set(group.key, termSql);
-      const countRes = await db.execute(sql`
-        SELECT COUNT(*)::int as "count"
-        FROM data_rows dr
-        JOIN imports i ON i.id = dr.import_id
-        WHERE i.is_deleted = false
-          AND (${termSql})
-      `);
-      const total = Number(countRes.rows[0]?.count ?? 0);
-      const sampleRes = await db.execute(sql`
-        SELECT dr.json_data as "jsonData", i.name as "importName", i.filename as "importFilename"
-        FROM data_rows dr
-        JOIN imports i ON i.id = dr.import_id
-        WHERE i.is_deleted = false
-          AND (${termSql})
-        LIMIT 10
-      `);
-      const samples = sampleRes.rows.map((row) => {
-        let data = row.jsonData;
-        if (typeof data === "string") {
-          try {
-            data = JSON.parse(data);
-          } catch {
-            data = {};
-          }
-        }
-        const name = extractName(data);
-        const ic = extractIc(data);
-        const source = row.importName || row.importFilename || null;
-        return { name: String(name || "-"), ic: String(ic || "-"), source };
-      });
-      await db.execute(sql`
-        INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
-        VALUES (${group.key}, ${total}, ${JSON.stringify(samples)}::jsonb, now())
-        ON CONFLICT (key)
-        DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
-      `);
-    }
-    if (complementGroups.length > 0) {
-      const combined = matchSqlByKey.size > 0 ? sql.join(Array.from(matchSqlByKey.values()).map((v) => sql`(${v})`), sql` OR `) : null;
-      for (const group of complementGroups) {
-        let total = totalRows;
-        let samples = [];
-        if (combined) {
-          const countRes = await db.execute(sql`
-            SELECT COUNT(*)::int as "count"
-            FROM data_rows dr
-            JOIN imports i ON i.id = dr.import_id
-            WHERE i.is_deleted = false
-              AND NOT (${combined})
-          `);
-          total = Number(countRes.rows[0]?.count ?? 0);
-          const sampleRes = await db.execute(sql`
-            SELECT dr.json_data as "jsonData", i.name as "importName", i.filename as "importFilename"
-            FROM data_rows dr
-            JOIN imports i ON i.id = dr.import_id
-            WHERE i.is_deleted = false
-              AND NOT (${combined})
-            LIMIT 10
-          `);
-          samples = sampleRes.rows.map((row) => {
-            let data = row.jsonData;
-            if (typeof data === "string") {
-              try {
-                data = JSON.parse(data);
-              } catch {
-                data = {};
-              }
-            }
-            const name = extractName(data);
-            const ic = extractIc(data);
-            const source = row.importName || row.importFilename || null;
-            return { name: String(name || "-"), ic: String(ic || "-"), source };
-          });
-        }
-        await db.execute(sql`
-          INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
-          VALUES (${group.key}, ${total}, ${JSON.stringify(samples)}::jsonb, now())
-          ON CONFLICT (key)
-          DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
-        `);
-      }
-    }
-  }
-  async getNearestBranches(params) {
-    const limit = Math.max(1, Math.min(5, params.limit ?? 3));
-    const result = await db.execute(sql`
-      SELECT
-        name,
-        branch_address,
-        phone_number,
-        fax_number,
-        business_hour,
-        day_open,
-        atm_cdm,
-        inquiry_availability,
-        application_availability,
-        aeon_lounge,
-        ST_DistanceSphere(
-          ST_MakePoint(${params.lng}, ${params.lat}),
-          ST_MakePoint(branch_lng, branch_lat)
-        ) / 1000 AS distance_km
-      FROM public.aeon_branches
-      ORDER BY distance_km
-      LIMIT ${limit}
-    `);
-    return result.rows.map((row) => ({
-      name: row.name,
-      address: row.branch_address ?? null,
-      phone: row.phone_number ?? null,
-      fax: row.fax_number ?? null,
-      businessHour: row.business_hour ?? null,
-      dayOpen: row.day_open ?? null,
-      atmCdm: row.atm_cdm ?? null,
-      inquiryAvailability: row.inquiry_availability ?? null,
-      applicationAvailability: row.application_availability ?? null,
-      aeonLounge: row.aeon_lounge ?? null,
-      distanceKm: Number(row.distance_km)
-    }));
-  }
-  async getPostcodeLatLng(postcode) {
-    await this.ensureSpatialTables();
-    const postcodeNorm = (() => {
-      const digits = String(postcode || "").replace(/\D/g, "");
-      if (digits.length === 4) return `0${digits}`;
-      return digits.length >= 5 ? digits.slice(0, 5) : digits;
-    })();
-    if (!postcodeNorm) return null;
-    const lookup = async () => {
-      const result = await db.execute(sql`
-        SELECT lat, lng
-        FROM public.aeon_branch_postcodes
-        WHERE postcode = ${postcodeNorm}
-        LIMIT 1
-      `);
-      return result.rows?.[0];
-    };
-    let row = await lookup();
-    if (row) return { lat: Number(row.lat), lng: Number(row.lng) };
-    const countRes = await db.execute(sql`
-      SELECT COUNT(*)::int as "count"
-      FROM public.aeon_branch_postcodes
-    `);
-    const count2 = Number(countRes.rows[0]?.count ?? 0);
-    if (count2 === 0) {
-      const branches = await db.execute(sql`
-        SELECT name, branch_address, branch_lat, branch_lng
-        FROM public.aeon_branches
-      `);
-      for (const b of branches.rows) {
-        const address = String(b.branch_address || "");
-        const match5 = address.match(/\b\d{5}\b/);
-        const match4 = address.match(/\b\d{4}\b/);
-        const pc = match5 ? match5[0] : match4 ? `0${match4[0]}` : null;
-        if (!pc) continue;
-        await db.execute(sql`
-          INSERT INTO public.aeon_branch_postcodes (postcode, lat, lng, source_branch, state)
-          VALUES (${pc}, ${Number(b.branch_lat)}, ${Number(b.branch_lng)}, ${String(b.name)}, null)
-          ON CONFLICT (postcode) DO NOTHING
-        `);
-      }
-      row = await lookup();
-      if (row) return { lat: Number(row.lat), lng: Number(row.lng) };
-    }
-    return null;
-  }
-  async importBranchesFromRows(params) {
-    await this.ensureSpatialTables();
-    const rows = await db.execute(sql`
-      SELECT id, json_data as "jsonDataJsonb"
-      FROM data_rows
-      WHERE import_id = ${params.importId}
-    `);
-    const normalizeKey = (key) => key.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const detectKeys = (sample2) => {
-      const keys = Object.keys(sample2);
-      const normalized = keys.map((k) => ({ raw: k, norm: normalizeKey(k) }));
-      const findBy = (candidates) => {
-        const hit = normalized.find((k) => candidates.some((c) => k.norm.includes(c)));
-        return hit?.raw || null;
-      };
-      const nameKey2 = findBy(["branchnames", "branchname", "cawangan", "branch", "nama"]) || null;
-      const latKey2 = findBy(["latitude", "lat"]) || null;
-      const lngKey2 = findBy(["longitude", "lng", "long"]) || null;
-      const addressKey2 = findBy(["branchaddress", "address", "alamat"]) || null;
-      const postcodeKey2 = findBy(["postcode", "poskod", "postalcode", "zip"]) || null;
-      const phoneKey2 = findBy(["phonenumber", "phone", "telefon", "tel"]) || null;
-      const faxKey2 = findBy(["faxnumber", "fax"]) || null;
-      const businessHourKey2 = findBy(["businesshour", "operatinghour", "waktu", "jam"]) || null;
-      const dayOpenKey2 = findBy(["dayopen", "dayopen", "day", "hari"]) || null;
-      const atmKey2 = findBy(["atmcdm", "atm", "cdm"]) || null;
-      const inquiryKey2 = findBy(["inquiryavailability", "inquiry"]) || null;
-      const applicationKey2 = findBy(["applicationavailability", "application"]) || null;
-      const loungeKey2 = findBy(["aeonlounge", "lounge"]) || null;
-      const stateKey2 = findBy(["state", "negeri"]) || null;
-      return {
-        nameKey: nameKey2,
-        latKey: latKey2,
-        lngKey: lngKey2,
-        addressKey: addressKey2,
-        postcodeKey: postcodeKey2,
-        phoneKey: phoneKey2,
-        faxKey: faxKey2,
-        businessHourKey: businessHourKey2,
-        dayOpenKey: dayOpenKey2,
-        atmKey: atmKey2,
-        inquiryKey: inquiryKey2,
-        applicationKey: applicationKey2,
-        loungeKey: loungeKey2,
-        stateKey: stateKey2
-      };
-    };
-    const firstRow = rows.rows[0];
-    const sample = firstRow && firstRow.jsonDataJsonb && typeof firstRow.jsonDataJsonb === "object" ? firstRow.jsonDataJsonb : {};
-    const detected = detectKeys(sample);
-    const nameKey = params.nameKey || detected.nameKey;
-    const latKey = params.latKey || detected.latKey;
-    const lngKey = params.lngKey || detected.lngKey;
-    const addressKey = detected.addressKey;
-    const postcodeKey = detected.postcodeKey;
-    const phoneKey = detected.phoneKey;
-    const faxKey = detected.faxKey;
-    const businessHourKey = detected.businessHourKey;
-    const dayOpenKey = detected.dayOpenKey;
-    const atmKey = detected.atmKey;
-    const inquiryKey = detected.inquiryKey;
-    const applicationKey = detected.applicationKey;
-    const loungeKey = detected.loungeKey;
-    const stateKey = detected.stateKey;
-    if (!nameKey || !latKey || !lngKey) {
-      return {
-        inserted: 0,
-        skipped: rows.rows.length,
-        usedKeys: { nameKey: nameKey || "", latKey: latKey || "", lngKey: lngKey || "" }
-      };
-    }
-    let inserted = 0;
-    let skipped = 0;
-    for (const row of rows.rows) {
-      const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
-      const nameVal = data[nameKey];
-      const latVal = data[latKey];
-      const lngVal = data[lngKey];
-      const addressVal = addressKey ? data[addressKey] : null;
-      const postcodeVal = postcodeKey ? data[postcodeKey] : null;
-      const phoneVal = phoneKey ? data[phoneKey] : null;
-      const faxVal = faxKey ? data[faxKey] : null;
-      const businessHourVal = businessHourKey ? data[businessHourKey] : null;
-      const dayOpenVal = dayOpenKey ? data[dayOpenKey] : null;
-      const atmVal = atmKey ? data[atmKey] : null;
-      const inquiryVal = inquiryKey ? data[inquiryKey] : null;
-      const applicationVal = applicationKey ? data[applicationKey] : null;
-      const loungeVal = loungeKey ? data[loungeKey] : null;
-      const stateVal = stateKey ? data[stateKey] : null;
-      if (!nameVal || latVal === void 0 || lngVal === void 0) {
-        skipped += 1;
-        continue;
-      }
-      const lat = Number(String(latVal).replace(/[^0-9.\-]/g, ""));
-      const lng = Number(String(lngVal).replace(/[^0-9.\-]/g, ""));
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-        skipped += 1;
-        continue;
-      }
-      const id = crypto.randomUUID();
-      await db.execute(sql`
-          INSERT INTO public.aeon_branches (
-            id, name, branch_address, phone_number, fax_number, business_hour, day_open,
-            atm_cdm, inquiry_availability, application_availability, aeon_lounge,
-            branch_lat, branch_lng
-        )
-        VALUES (
-          ${id},
-          ${String(nameVal)},
-          ${addressVal ? String(addressVal) : null},
-          ${phoneVal ? String(phoneVal) : null},
-          ${faxVal ? String(faxVal) : null},
-          ${businessHourVal ? String(businessHourVal) : null},
-          ${dayOpenVal ? String(dayOpenVal) : null},
-          ${atmVal ? String(atmVal) : null},
-          ${inquiryVal ? String(inquiryVal) : null},
-          ${applicationVal ? String(applicationVal) : null},
-          ${loungeVal ? String(loungeVal) : null},
-          ${lat},
-          ${lng}
-        )
-        ON CONFLICT DO NOTHING
-        `);
-      const normalizePostcode = (value) => {
-        if (value === void 0 || value === null) return null;
-        const raw = String(value);
-        const five = raw.match(/\b\d{5}\b/);
-        if (five) return five[0];
-        const four = raw.match(/\b\d{4}\b/);
-        if (four) return `0${four[0]}`;
-        return null;
-      };
-      let postcode = null;
-      if (postcodeVal) {
-        postcode = normalizePostcode(postcodeVal);
-      }
-      if (!postcode && addressVal) {
-        postcode = normalizePostcode(addressVal);
-      }
-      if (postcode) {
-        await db.execute(sql`
-            INSERT INTO public.aeon_branch_postcodes (postcode, lat, lng, source_branch, state)
-            VALUES (${postcode}, ${lat}, ${lng}, ${String(nameVal)}, ${stateVal ? String(stateVal) : null})
-            ON CONFLICT (postcode) DO NOTHING
-          `);
-      }
-      inserted += 1;
-    }
-    return { inserted, skipped, usedKeys: { nameKey, latKey, lngKey } };
-  }
-  async getDataRowsForEmbedding(importId, limit, offset) {
-    const result = await db.execute(sql`
-      SELECT id, json_data as "jsonDataJsonb"
-      FROM data_rows
-      WHERE import_id = ${importId}
-      ORDER BY id
-      LIMIT ${limit} OFFSET ${offset}
-    `);
-    return result.rows;
-  }
-  parseSettingType(raw) {
-    const t = String(raw || "text").toLowerCase();
-    if (t === "number" || t === "boolean" || t === "select" || t === "timestamp") {
-      return t;
-    }
-    return "text";
-  }
-  normalizeSettingValue(type, value) {
-    if (value === null || value === void 0) {
-      return type === "timestamp" ? "" : null;
-    }
-    if (type === "boolean") {
-      if (typeof value === "boolean") return value ? "true" : "false";
-      const str = String(value).trim().toLowerCase();
-      if (["true", "1", "yes", "on"].includes(str)) return "true";
-      if (["false", "0", "no", "off"].includes(str)) return "false";
-      return null;
-    }
-    if (type === "number") {
-      const num = Number(value);
-      if (!Number.isFinite(num)) return null;
-      return String(num);
-    }
-    if (type === "timestamp") {
-      const str = String(value).trim();
-      if (!str) return "";
-      const d = new Date(str);
-      if (Number.isNaN(d.getTime())) return null;
-      return d.toISOString();
-    }
-    return String(value);
-  }
-  applySettingConstraints(settingKey, type, normalizedValue) {
-    if (type !== "number") {
-      return { valid: true, value: normalizedValue };
-    }
-    const numericValue = Number(normalizedValue);
-    if (!Number.isFinite(numericValue)) {
-      return { valid: false, value: normalizedValue, message: "Numeric setting value is invalid." };
-    }
-    const clampInteger = (min, max) => String(Math.min(max, Math.max(min, Math.floor(numericValue))));
-    if (settingKey === "search_result_limit") {
-      if (numericValue < 10 || numericValue > 5e3) {
-        return { valid: false, value: normalizedValue, message: "Search Result Limit must be between 10 and 5000." };
-      }
-      return { valid: true, value: clampInteger(10, 5e3) };
-    }
-    if (settingKey === "viewer_rows_per_page") {
-      if (numericValue < 10 || numericValue > 500) {
-        return { valid: false, value: normalizedValue, message: "Viewer Rows Per Page must be between 10 and 500." };
-      }
-      return { valid: true, value: clampInteger(10, 500) };
-    }
-    return { valid: true, value: normalizedValue };
-  }
-  isAdminMaintenanceEditableKey(settingKey) {
-    return settingKey === "maintenance_message" || settingKey === "maintenance_start_time" || settingKey === "maintenance_end_time";
-  }
-  async isAdminMaintenanceEditingEnabled() {
-    const res = await db.execute(sql`
-      SELECT value
-      FROM public.system_settings
-      WHERE key = 'admin_can_edit_maintenance_message'
-      LIMIT 1
-    `);
-    const row = res.rows[0];
-    const raw = String(row?.value ?? "").trim().toLowerCase();
-    return ["true", "1", "yes", "on"].includes(raw);
-  }
-  async getSettingsForRole(role) {
-    await this.ensureSettingsTables();
-    const rows = await db.execute(sql`
-      SELECT
-        c.id as category_id,
-        c.name as category_name,
-        c.description as category_description,
-        s.id as setting_id,
-        s.key,
-        s.label,
-        s.description,
-        s.type,
-        s.value,
-        s.default_value,
-        s.is_critical,
-        s.updated_at,
-        COALESCE(p.can_view, false) as can_view,
-        COALESCE(p.can_edit, false) as can_edit
-      FROM public.setting_categories c
-      JOIN public.system_settings s ON s.category_id = c.id
-      LEFT JOIN public.role_setting_permissions p
-        ON p.setting_key = s.key
-       AND p.role = ${role}
-      WHERE COALESCE(p.can_view, false) = true
-      ORDER BY c.name, s.label
-    `);
-    const settingIds = rows.rows.map((r) => String(r.setting_id)).filter((v) => v.length > 0);
-    const optionsMap = /* @__PURE__ */ new Map();
-    if (settingIds.length > 0) {
-      const quoted = settingIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
-      const optionsRows = await db.execute(sql`
-        SELECT DISTINCT ON (setting_id, value) setting_id, value, label
-        FROM public.setting_options
-        WHERE setting_id IN (${sql.raw(quoted)})
-        ORDER BY setting_id, value, label
-      `);
-      const perSettingValueSeen = /* @__PURE__ */ new Map();
-      for (const row of optionsRows.rows) {
-        const settingId = String(row.setting_id);
-        const optionValue = String(row.value);
-        const seen = perSettingValueSeen.get(settingId) || /* @__PURE__ */ new Set();
-        if (seen.has(optionValue)) continue;
-        seen.add(optionValue);
-        perSettingValueSeen.set(settingId, seen);
-        const list = optionsMap.get(settingId) || [];
-        list.push({ value: optionValue, label: String(row.label) });
-        optionsMap.set(settingId, list);
-      }
-    }
-    const adminMaintenanceEditingEnabled = role === "admin" ? await this.isAdminMaintenanceEditingEnabled() : true;
-    const categoryMap = /* @__PURE__ */ new Map();
-    for (const row of rows.rows) {
-      const categoryId = String(row.category_id);
-      if (!categoryMap.has(categoryId)) {
-        categoryMap.set(categoryId, {
-          id: categoryId,
-          name: String(row.category_name),
-          description: row.category_description ? String(row.category_description) : null,
-          settings: []
-        });
-      }
-      const key = String(row.key);
-      const canEditFromPermission = row.can_edit === true;
-      const canEdit = role === "admin" && this.isAdminMaintenanceEditableKey(key) && !adminMaintenanceEditingEnabled ? false : canEditFromPermission;
-      categoryMap.get(categoryId).settings.push({
-        key,
-        label: String(row.label),
-        description: row.description ? String(row.description) : null,
-        type: this.parseSettingType(row.type),
-        value: String(row.value ?? ""),
-        defaultValue: row.default_value === null || row.default_value === void 0 ? null : String(row.default_value),
-        isCritical: row.is_critical === true,
-        updatedAt: row.updated_at ? new Date(row.updated_at) : null,
-        permission: {
-          canView: row.can_view === true,
-          canEdit
-        },
-        options: optionsMap.get(String(row.setting_id)) || []
-      });
-    }
-    return Array.from(categoryMap.values());
-  }
-  async getBooleanSystemSetting(key, fallback = false) {
-    await this.ensureSettingsTables();
-    const res = await db.execute(sql`
-      SELECT value
-      FROM public.system_settings
-      WHERE key = ${key}
-      LIMIT 1
-    `);
-    const row = res.rows[0];
-    if (!row) return fallback;
-    const raw = String(row.value ?? "").trim().toLowerCase();
-    if (!raw) return fallback;
-    return ["true", "1", "yes", "on"].includes(raw);
-  }
-  async getRoleTabVisibility(role) {
-    await this.ensureSettingsTables();
-    if (role === "superuser") {
-      return {};
-    }
-    const roleKey = role === "admin" ? "admin" : role === "user" ? "user" : null;
-    if (!roleKey) {
-      return {};
-    }
-    const settings = ROLE_TAB_SETTINGS[roleKey];
-    const visibility = {};
-    for (const tab of settings) {
-      visibility[tab.pageId] = tab.defaultEnabled;
-    }
-    const keys = settings.map((tab) => roleTabSettingKey(roleKey, tab.suffix));
-    if (keys.length === 0) {
-      return visibility;
-    }
-    const keyList = keys.map((v) => `'${v.replace(/'/g, "''")}'`).join(",");
-    const rows = await db.execute(sql`
-      SELECT key, value
-      FROM public.system_settings
-      WHERE key IN (${sql.raw(keyList)})
-    `);
-    const keyToPage = /* @__PURE__ */ new Map();
-    for (const tab of settings) {
-      keyToPage.set(roleTabSettingKey(roleKey, tab.suffix), tab.pageId);
-    }
-    for (const row of rows.rows) {
-      const key = String(row.key || "");
-      const pageId = keyToPage.get(key);
-      if (!pageId) continue;
-      const raw = String(row.value ?? "").trim().toLowerCase();
-      visibility[pageId] = ["true", "1", "yes", "on"].includes(raw);
-    }
-    if (roleKey === "admin") {
-      const canViewRes = await db.execute(sql`
-        SELECT value
-        FROM public.system_settings
-        WHERE key = 'canViewSystemPerformance'
-        LIMIT 1
-      `);
-      const canViewRaw = String(canViewRes.rows[0]?.value ?? "").trim().toLowerCase();
-      const canViewSystemPerformance = ["true", "1", "yes", "on"].includes(canViewRaw);
-      visibility.canViewSystemPerformance = canViewSystemPerformance;
-      visibility.monitor = visibility.monitor === true && canViewSystemPerformance;
-    }
-    return visibility;
-  }
-  async updateSystemSetting(params) {
-    await this.ensureSettingsTables();
-    const settingRes = await db.execute(sql`
-      SELECT
-        s.id,
-        s.key,
-        s.label,
-        s.description,
-        s.type,
-        s.value,
-        s.default_value,
-        s.is_critical,
-        s.updated_at,
-        COALESCE(p.can_edit, false) as can_edit
-      FROM public.system_settings s
-      LEFT JOIN public.role_setting_permissions p
-        ON p.setting_key = s.key
-       AND p.role = ${params.role}
-      WHERE s.key = ${params.settingKey}
-      LIMIT 1
-    `);
-    const current = settingRes.rows[0];
-    if (!current) {
-      return { status: "not_found", message: "Setting not found." };
-    }
-    if (params.role === "admin" && this.isAdminMaintenanceEditableKey(String(current.key)) && !await this.isAdminMaintenanceEditingEnabled()) {
-      return { status: "forbidden", message: "Admin is not allowed to edit maintenance message settings." };
-    }
-    if (current.can_edit !== true) {
-      return { status: "forbidden", message: "You do not have permission to edit this setting." };
-    }
-    if (current.is_critical === true && !params.confirmCritical) {
-      return {
-        status: "requires_confirmation",
-        message: "Critical setting requires explicit confirmation."
-      };
-    }
-    const settingType = this.parseSettingType(current.type);
-    const normalized = this.normalizeSettingValue(settingType, params.value);
-    if (normalized === null) {
-      return { status: "invalid", message: `Invalid value for type ${settingType}.` };
-    }
-    const constrained = this.applySettingConstraints(String(current.key), settingType, normalized);
-    if (!constrained.valid) {
-      return { status: "invalid", message: constrained.message || "Invalid setting value." };
-    }
-    const nextValue = constrained.value;
-    if (settingType === "select") {
-      const optionRes = await db.execute(sql`
-        SELECT 1
-        FROM public.setting_options
-        WHERE setting_id = ${current.id}
-          AND value = ${normalized}
-        LIMIT 1
-      `);
-      if (optionRes.rows.length === 0) {
-        return { status: "invalid", message: "Selected option is not allowed." };
-      }
-    }
-    const previousValue = String(current.value ?? "");
-    if (previousValue === nextValue) {
-      return { status: "unchanged", message: "No change detected." };
-    }
-    await db.execute(sql`
-      UPDATE public.system_settings
-      SET value = ${nextValue}, updated_at = now()
-      WHERE id = ${current.id}
-    `);
-    await db.execute(sql`
-      INSERT INTO public.setting_versions (setting_key, old_value, new_value, changed_by, changed_at)
-      VALUES (${params.settingKey}, ${previousValue}, ${nextValue}, ${params.updatedBy}, now())
-    `);
-    const latestRes = await db.execute(sql`
-      SELECT
+  async createBackup(data) {
+    await this.options.ensureBackupsTable();
+    const id = crypto5.randomUUID();
+    const result = await db.execute(sql9`
+      INSERT INTO public.backups (id, name, created_at, created_by, backup_data, metadata)
+      VALUES (${id}, ${data.name}, ${/* @__PURE__ */ new Date()}, ${data.createdBy}, ${data.backupData}, ${data.metadata ?? null})
+      RETURNING
         id,
-        key,
-        label,
-        description,
-        type,
-        value,
-        default_value,
-        is_critical,
-        updated_at
-      FROM public.system_settings
-      WHERE id = ${current.id}
-      LIMIT 1
+        name,
+        created_at as "createdAt",
+        created_by as "createdBy",
+        ''::text as "backupData",
+        metadata
     `);
-    const latest = latestRes.rows[0];
-    const shouldBroadcast = String(params.settingKey).startsWith("maintenance_");
-    return {
-      status: "updated",
-      message: "Setting updated successfully.",
-      shouldBroadcast,
-      setting: {
-        key: String(latest.key),
-        label: String(latest.label),
-        description: latest.description ? String(latest.description) : null,
-        type: this.parseSettingType(latest.type),
-        value: String(latest.value ?? ""),
-        defaultValue: latest.default_value === null || latest.default_value === void 0 ? null : String(latest.default_value),
-        isCritical: latest.is_critical === true,
-        updatedAt: latest.updated_at ? new Date(latest.updated_at) : null,
-        permission: { canView: true, canEdit: true },
-        options: []
-      }
-    };
+    return result.rows[0];
   }
-  async getMaintenanceState(now = /* @__PURE__ */ new Date()) {
-    await this.ensureSettingsTables();
-    const rows = await db.execute(sql`
-      SELECT key, value
-      FROM public.system_settings
-      WHERE key IN (
-        'maintenance_mode',
-        'maintenance_message',
-        'maintenance_type',
-        'maintenance_start_time',
-        'maintenance_end_time'
-      )
-    `);
-    const map = /* @__PURE__ */ new Map();
-    for (const row of rows.rows) {
-      map.set(String(row.key), String(row.value ?? ""));
-    }
-    const modeValue = (map.get("maintenance_mode") || "false").toLowerCase();
-    const baseEnabled = ["true", "1", "yes", "on"].includes(modeValue);
-    const type = (map.get("maintenance_type") || "soft").toLowerCase() === "hard" ? "hard" : "soft";
-    const message = map.get("maintenance_message") || "Sistem sedang diselenggara. Sila cuba semula sebentar lagi.";
-    const startTime = (map.get("maintenance_start_time") || "").trim() || null;
-    const endTime = (map.get("maintenance_end_time") || "").trim() || null;
-    let enabled = baseEnabled;
-    if (enabled && startTime) {
-      const start = new Date(startTime);
-      if (!Number.isNaN(start.getTime()) && now < start) {
-        enabled = false;
-      }
-    }
-    if (enabled && endTime) {
-      const end = new Date(endTime);
-      if (!Number.isNaN(end.getTime()) && now > end) {
-        enabled = false;
-      }
-    }
-    return {
-      maintenance: enabled,
-      message,
-      type,
-      startTime,
-      endTime
-    };
-  }
-  async getAppConfig() {
-    await this.ensureSettingsTables();
-    const res = await db.execute(sql`
-      SELECT key, value
-      FROM public.system_settings
-      WHERE key IN (
-        'system_name',
-        'session_timeout_minutes',
-        'ws_idle_minutes',
-        'ai_enabled',
-        'semantic_search_enabled',
-        'ai_timeout_ms',
-        'search_result_limit',
-        'viewer_rows_per_page'
-      )
-    `);
-    const map = /* @__PURE__ */ new Map();
-    for (const row of res.rows) {
-      map.set(String(row.key), String(row.value ?? ""));
-    }
-    const asNumber = (key, fallback, min, max) => {
-      const raw = Number(map.get(key) ?? "");
-      if (!Number.isFinite(raw)) return fallback;
-      return Math.min(max, Math.max(min, Math.floor(raw)));
-    };
-    const asBool = (key, fallback) => {
-      const raw = String(map.get(key) ?? "").trim().toLowerCase();
-      if (!raw) return fallback;
-      return ["true", "1", "yes", "on"].includes(raw);
-    };
-    const systemName = String(map.get("system_name") ?? "").trim() || "SQR System";
-    const sessionTimeoutMinutes = asNumber("session_timeout_minutes", 30, 1, 1440);
-    const wsIdleMinutes = asNumber("ws_idle_minutes", 3, 1, 1440);
-    const aiTimeoutMs = asNumber("ai_timeout_ms", 6e3, 1e3, 12e4);
-    const searchResultLimit = asNumber("search_result_limit", 200, 10, 5e3);
-    const viewerRowsPerPage = asNumber("viewer_rows_per_page", 100, 10, 500);
-    const aiEnabled = asBool("ai_enabled", true);
-    const semanticSearchEnabled = asBool("semantic_search_enabled", true);
-    const heartbeatIntervalMinutes = Math.max(1, Math.min(10, Math.floor(sessionTimeoutMinutes / 2) || 1));
-    return {
-      systemName,
-      sessionTimeoutMinutes,
-      heartbeatIntervalMinutes,
-      wsIdleMinutes,
-      aiEnabled,
-      semanticSearchEnabled,
-      aiTimeoutMs,
-      searchResultLimit,
-      viewerRowsPerPage
-    };
-  }
-  async getAccounts() {
+  async getBackups() {
+    await this.options.ensureBackupsTable();
     const rows = [];
     let offset = 0;
     while (true) {
-      const chunk = await db.select({
-        username: users.username,
-        role: users.role,
-        isBanned: users.isBanned
-      }).from(users).orderBy(users.role).limit(QUERY_PAGE_LIMIT).offset(offset);
+      const result = await db.execute(sql9`
+        SELECT
+          id,
+          name,
+          created_at as "createdAt",
+          created_by as "createdBy",
+          ''::text as "backupData",
+          CASE
+            WHEN metadata IS NULL THEN NULL
+            WHEN length(metadata) > 200000 THEN NULL
+            ELSE metadata
+          END as metadata
+        FROM public.backups
+        ORDER BY created_at DESC
+        LIMIT ${QUERY_PAGE_LIMIT5}
+        OFFSET ${offset}
+      `);
+      const chunk = result.rows || [];
       if (!chunk.length) break;
       rows.push(...chunk);
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      if (chunk.length < QUERY_PAGE_LIMIT5) break;
       offset += chunk.length;
     }
-    return rows;
+    return rows.map((row) => ({
+      ...row,
+      metadata: this.options.parseBackupMetadataSafe(row.metadata)
+    }));
   }
+  async getBackupById(id) {
+    await this.options.ensureBackupsTable();
+    const result = await db.execute(sql9`
+      SELECT
+        id,
+        name,
+        created_at as "createdAt",
+        created_by as "createdBy",
+        backup_data as "backupData",
+        CASE
+          WHEN metadata IS NULL THEN NULL
+          WHEN length(metadata) > 200000 THEN NULL
+          ELSE metadata
+        END as metadata
+      FROM public.backups
+      WHERE id = ${id}
+      LIMIT 1
+    `);
+    const row = result.rows[0];
+    if (!row) return void 0;
+    return {
+      ...row,
+      metadata: this.options.parseBackupMetadataSafe(row.metadata)
+    };
+  }
+  async deleteBackup(id) {
+    await this.options.ensureBackupsTable();
+    await db.execute(sql9`DELETE FROM public.backups WHERE id = ${id}`);
+    return true;
+  }
+  async getBackupDataForExport() {
+    const [allImports, allDataRows, allUsersFromDb, allAuditLogs] = await Promise.all([
+      db.select().from(imports).where(eq3(imports.isDeleted, false)),
+      db.select().from(dataRows),
+      db.select().from(users),
+      db.select().from(auditLogs)
+    ]);
+    return {
+      imports: allImports,
+      dataRows: allDataRows,
+      users: allUsersFromDb.map((user) => ({
+        username: user.username,
+        role: user.role,
+        isBanned: user.isBanned,
+        passwordHash: user.passwordHash
+      })),
+      auditLogs: allAuditLogs
+    };
+  }
+  async restoreFromBackup(backupData) {
+    const stats = {
+      imports: 0,
+      dataRows: 0,
+      users: 0,
+      auditLogs: 0
+    };
+    const toDate = (value) => {
+      if (!value) return null;
+      if (value instanceof Date) return value;
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+    const chunkArray = (rows, size) => {
+      const chunks = [];
+      for (let index = 0; index < rows.length; index += size) {
+        chunks.push(rows.slice(index, index + size));
+      }
+      return chunks;
+    };
+    await db.transaction(async (tx) => {
+      if (backupData.imports.length > 0) {
+        for (const chunk of chunkArray(backupData.imports, BACKUP_CHUNK_SIZE)) {
+          const rows = chunk.map((record) => ({
+            id: record.id,
+            name: record.name,
+            filename: record.filename,
+            createdAt: toDate(record.createdAt) ?? /* @__PURE__ */ new Date(),
+            isDeleted: record.isDeleted ?? false,
+            createdBy: record.createdBy ?? null
+          }));
+          for (const row of rows) {
+            await tx.update(imports).set({ isDeleted: false }).where(eq3(imports.id, row.id));
+          }
+          await tx.insert(imports).values(rows).onConflictDoNothing();
+          stats.imports += rows.length;
+        }
+      }
+      if (backupData.dataRows.length > 0) {
+        for (const chunk of chunkArray(backupData.dataRows, BACKUP_CHUNK_SIZE)) {
+          const rows = chunk.map((row) => ({
+            id: row.id ?? crypto5.randomUUID(),
+            importId: row.importId,
+            jsonDataJsonb: row.jsonDataJsonb
+          }));
+          await tx.insert(dataRows).values(rows).onConflictDoNothing();
+          stats.dataRows += rows.length;
+        }
+      }
+      if (backupData.users.length > 0) {
+        const now = /* @__PURE__ */ new Date();
+        const rows = backupData.users.filter((user) => user.passwordHash).map((user) => ({
+          id: crypto5.randomUUID(),
+          username: user.username,
+          passwordHash: user.passwordHash,
+          role: user.role,
+          createdAt: now,
+          updatedAt: now,
+          passwordChangedAt: now,
+          isBanned: user.isBanned ?? false
+        }));
+        for (const chunk of chunkArray(rows, BACKUP_CHUNK_SIZE)) {
+          await tx.insert(users).values(chunk).onConflictDoNothing();
+          stats.users += chunk.length;
+        }
+      }
+      if (backupData.auditLogs.length > 0) {
+        for (const chunk of chunkArray(backupData.auditLogs, BACKUP_CHUNK_SIZE)) {
+          const rows = chunk.map((log2) => ({
+            id: log2.id ?? crypto5.randomUUID(),
+            action: log2.action,
+            performedBy: log2.performedBy,
+            targetUser: log2.targetUser ?? null,
+            targetResource: log2.targetResource ?? null,
+            details: log2.details ?? null,
+            timestamp: toDate(log2.timestamp) ?? /* @__PURE__ */ new Date()
+          }));
+          await tx.insert(auditLogs).values(rows).onConflictDoNothing();
+          stats.auditLogs += rows.length;
+        }
+      }
+    });
+    return { success: true, stats };
+  }
+};
+
+// server/repositories/analytics.repository.ts
+import { count, eq as eq4, gte as gte3, sql as sql10 } from "drizzle-orm";
+var ANALYTICS_TZ = process.env.ANALYTICS_TZ || "Asia/Kuala_Lumpur";
+var AnalyticsRepository = class {
+  async getDashboardSummary() {
+    const today = /* @__PURE__ */ new Date();
+    today.setHours(0, 0, 0, 0);
+    const [totalUsers, activeSessions, loginsToday, totalDataRows, totalImports, bannedUsers] = await Promise.all([
+      db.select({ value: count() }).from(users),
+      db.select({ value: count() }).from(userActivity).where(eq4(userActivity.isActive, true)),
+      db.select({ value: count() }).from(userActivity).where(gte3(userActivity.loginTime, today)),
+      db.select({ value: count() }).from(dataRows),
+      db.select({ value: count() }).from(imports).where(eq4(imports.isDeleted, false)),
+      db.select({ value: count() }).from(users).where(eq4(users.isBanned, true))
+    ]);
+    return {
+      totalUsers: totalUsers[0]?.value || 0,
+      activeSessions: activeSessions[0]?.value || 0,
+      loginsToday: loginsToday[0]?.value || 0,
+      totalDataRows: totalDataRows[0]?.value || 0,
+      totalImports: totalImports[0]?.value || 0,
+      bannedUsers: bannedUsers[0]?.value || 0
+    };
+  }
+  async getLoginTrends(days = 7) {
+    const result = await db.execute(sql10`
+      WITH bounds AS (
+        SELECT (NOW() AT TIME ZONE ${ANALYTICS_TZ})::date AS end_date
+      ),
+      days AS (
+        SELECT generate_series(
+          (SELECT end_date FROM bounds) - (${days} - 1) * INTERVAL '1 day',
+          (SELECT end_date FROM bounds),
+          INTERVAL '1 day'
+        )::date AS day
+      ),
+      logins AS (
+        SELECT
+          (login_time AT TIME ZONE 'UTC' AT TIME ZONE ${ANALYTICS_TZ})::date AS day,
+          COUNT(*)::int AS logins
+        FROM public.user_activity
+        WHERE login_time IS NOT NULL
+        GROUP BY day
+      ),
+      logouts AS (
+        SELECT
+          (logout_time AT TIME ZONE 'UTC' AT TIME ZONE ${ANALYTICS_TZ})::date AS day,
+          COUNT(*)::int AS logouts
+        FROM public.user_activity
+        WHERE logout_time IS NOT NULL
+        GROUP BY day
+      )
+      SELECT
+        days.day AS date,
+        COALESCE(logins.logins, 0)::int AS logins,
+        COALESCE(logouts.logouts, 0)::int AS logouts
+      FROM days
+      LEFT JOIN logins ON logins.day = days.day
+      LEFT JOIN logouts ON logouts.day = days.day
+      ORDER BY days.day ASC
+    `);
+    return result.rows || [];
+  }
+  async getTopActiveUsers(limit = 10) {
+    const result = await db.execute(sql10`
+      SELECT
+        username,
+        role,
+        COUNT(*)::int AS "loginCount",
+        MAX(login_time) AS "lastLogin"
+      FROM public.user_activity
+      GROUP BY username, role
+      ORDER BY "loginCount" DESC
+      LIMIT ${limit}
+    `);
+    return result.rows.map((row) => ({
+      username: row.username,
+      role: row.role,
+      loginCount: row.loginCount,
+      lastLogin: row.lastLogin ? new Date(row.lastLogin).toISOString() : null
+    }));
+  }
+  async getPeakHours() {
+    const result = await db.execute(sql10`
+      SELECT
+        EXTRACT(HOUR FROM (login_time AT TIME ZONE 'UTC' AT TIME ZONE ${ANALYTICS_TZ}))::int AS hour,
+        COUNT(*)::int AS count
+      FROM public.user_activity
+      WHERE login_time IS NOT NULL
+      GROUP BY hour
+      ORDER BY hour ASC
+    `);
+    const hoursMap = /* @__PURE__ */ new Map();
+    for (let hour = 0; hour < 24; hour += 1) {
+      hoursMap.set(hour, 0);
+    }
+    for (const row of result.rows) {
+      hoursMap.set(row.hour, row.count);
+    }
+    return Array.from(hoursMap.entries()).map(([hour, count3]) => ({
+      hour,
+      count: count3
+    }));
+  }
+  async getRoleDistribution() {
+    const result = await db.execute(sql10`
+      SELECT role, COUNT(*)::int AS count
+      FROM public.users
+      GROUP BY role
+      ORDER BY role ASC
+    `);
+    return result.rows || [];
+  }
+};
+
+// server/repositories/collection.repository.ts
+import { randomUUID } from "crypto";
+import { sql as sql11 } from "drizzle-orm";
+var COLLECTION_MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December"
+];
+function normalizeCollectionNicknameRoleScope(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "admin" || normalized === "user" || normalized === "both") {
+    return normalized;
+  }
+  return "both";
+}
+var CollectionRepository = class {
   mapCollectionStaffNicknameRow(row) {
     const createdAtRaw = row.created_at ?? row.createdAt;
     const createdAt = createdAtRaw instanceof Date ? createdAtRaw : new Date(createdAtRaw ?? Date.now());
@@ -3838,15 +2014,15 @@ var PostgresStorage = class {
   async getCollectionStaffNicknames(filters) {
     const conditions = [];
     if (filters?.activeOnly === true) {
-      conditions.push(sql`is_active = true`);
+      conditions.push(sql11`is_active = true`);
     }
     if (filters?.allowedRole === "admin") {
-      conditions.push(sql`role_scope IN ('admin', 'both')`);
+      conditions.push(sql11`role_scope IN ('admin', 'both')`);
     } else if (filters?.allowedRole === "user") {
-      conditions.push(sql`role_scope IN ('user', 'both')`);
+      conditions.push(sql11`role_scope IN ('user', 'both')`);
     }
-    const whereSql = conditions.length > 0 ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
-    const result = await db.execute(sql`
+    const whereSql = conditions.length > 0 ? sql11`WHERE ${sql11.join(conditions, sql11` AND `)}` : sql11``;
+    const result = await db.execute(sql11`
       SELECT
         id,
         nickname,
@@ -3862,7 +2038,7 @@ var PostgresStorage = class {
     return (result.rows || []).map((row) => this.mapCollectionStaffNicknameRow(row));
   }
   async getCollectionAdminUsers() {
-    const result = await db.execute(sql`
+    const result = await db.execute(sql11`
       SELECT
         id,
         username,
@@ -3880,7 +2056,7 @@ var PostgresStorage = class {
   async getCollectionAdminUserById(adminUserId) {
     const normalized = String(adminUserId || "").trim();
     if (!normalized) return void 0;
-    const result = await db.execute(sql`
+    const result = await db.execute(sql11`
       SELECT
         id,
         username,
@@ -3900,7 +2076,7 @@ var PostgresStorage = class {
   async getCollectionAdminAssignedNicknameIds(adminUserId) {
     const normalized = String(adminUserId || "").trim();
     if (!normalized) return [];
-    const result = await db.execute(sql`
+    const result = await db.execute(sql11`
       SELECT avn.nickname_id
       FROM public.admin_visible_nicknames avn
       WHERE avn.admin_user_id = ${normalized}
@@ -3912,17 +2088,17 @@ var PostgresStorage = class {
   async getCollectionAdminVisibleNicknames(adminUserId, filters) {
     const normalized = String(adminUserId || "").trim();
     if (!normalized) return [];
-    const conditions = [sql`avn.admin_user_id = ${normalized}`];
+    const conditions = [sql11`avn.admin_user_id = ${normalized}`];
     if (filters?.activeOnly === true) {
-      conditions.push(sql`n.is_active = true`);
+      conditions.push(sql11`n.is_active = true`);
     }
     if (filters?.allowedRole === "admin") {
-      conditions.push(sql`n.role_scope IN ('admin', 'both')`);
+      conditions.push(sql11`n.role_scope IN ('admin', 'both')`);
     } else if (filters?.allowedRole === "user") {
-      conditions.push(sql`n.role_scope IN ('user', 'both')`);
+      conditions.push(sql11`n.role_scope IN ('user', 'both')`);
     }
-    const whereSql = sql`WHERE ${sql.join(conditions, sql` AND `)}`;
-    const result = await db.execute(sql`
+    const whereSql = sql11`WHERE ${sql11.join(conditions, sql11` AND `)}`;
+    const result = await db.execute(sql11`
       SELECT
         n.id,
         n.nickname,
@@ -3953,7 +2129,7 @@ var PostgresStorage = class {
     }
     const normalizedNicknameIds = Array.isArray(params.nicknameIds) ? params.nicknameIds.map((value) => String(value || "").trim()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
     return db.transaction(async (tx) => {
-      const adminCheck = await tx.execute(sql`
+      const adminCheck = await tx.execute(sql11`
         SELECT id
         FROM public.users
         WHERE id = ${adminUserId}
@@ -3965,11 +2141,11 @@ var PostgresStorage = class {
       }
       let validNicknameIds = [];
       if (normalizedNicknameIds.length > 0) {
-        const nicknameSql = sql.join(
-          normalizedNicknameIds.map((value) => sql`${value}::uuid`),
-          sql`, `
+        const nicknameSql = sql11.join(
+          normalizedNicknameIds.map((value) => sql11`${value}::uuid`),
+          sql11`, `
         );
-        const validRows = await tx.execute(sql`
+        const validRows = await tx.execute(sql11`
           SELECT id
           FROM public.collection_staff_nicknames
           WHERE id IN (${nicknameSql})
@@ -3980,12 +2156,12 @@ var PostgresStorage = class {
           throw new Error("Invalid nickname ids.");
         }
       }
-      await tx.execute(sql`
+      await tx.execute(sql11`
         DELETE FROM public.admin_visible_nicknames
         WHERE admin_user_id = ${adminUserId}
       `);
       for (const nicknameId of validNicknameIds) {
-        await tx.execute(sql`
+        await tx.execute(sql11`
           INSERT INTO public.admin_visible_nicknames (
             id,
             admin_user_id,
@@ -4003,7 +2179,7 @@ var PostgresStorage = class {
           ON CONFLICT (admin_user_id, nickname_id) DO NOTHING
         `);
       }
-      const assignedRows = await tx.execute(sql`
+      const assignedRows = await tx.execute(sql11`
         SELECT nickname_id
         FROM public.admin_visible_nicknames
         WHERE admin_user_id = ${adminUserId}
@@ -4015,8 +2191,8 @@ var PostgresStorage = class {
   async resolveNicknameNamesByIds(tx, nicknameIds) {
     const normalizedIds = Array.isArray(nicknameIds) ? nicknameIds.map((value) => String(value || "").trim()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
     if (!normalizedIds.length) return [];
-    const idSql = sql.join(normalizedIds.map((value) => sql`${value}::uuid`), sql`, `);
-    const result = await tx.execute(sql`
+    const idSql = sql11.join(normalizedIds.map((value) => sql11`${value}::uuid`), sql11`, `);
+    const result = await tx.execute(sql11`
       SELECT id, nickname, role_scope, is_active
       FROM public.collection_staff_nicknames
       WHERE id IN (${idSql})
@@ -4042,33 +2218,33 @@ var PostgresStorage = class {
     if (memberLower.includes(leaderLower)) {
       throw new Error("Leader nickname cannot be a member of the same group.");
     }
-    const leaderRows = await params.tx.execute(sql`
+    const leaderRows = await params.tx.execute(sql11`
       SELECT id
       FROM public.admin_groups
       WHERE lower(leader_nickname) = lower(${params.leaderNickname})
-        ${params.groupIdToExclude ? sql`AND id <> ${params.groupIdToExclude}::uuid` : sql``}
+        ${params.groupIdToExclude ? sql11`AND id <> ${params.groupIdToExclude}::uuid` : sql11``}
       LIMIT 1
     `);
     if (leaderRows.rows?.[0]) {
       throw new Error("Leader nickname already assigned.");
     }
     if (!memberLower.length) return;
-    const membersSql = sql.join(memberLower.map((value) => sql`${value}`), sql`, `);
-    const memberConflict = await params.tx.execute(sql`
+    const membersSql = sql11.join(memberLower.map((value) => sql11`${value}`), sql11`, `);
+    const memberConflict = await params.tx.execute(sql11`
       SELECT member_nickname
       FROM public.admin_group_members
       WHERE lower(member_nickname) IN (${membersSql})
-        ${params.groupIdToExclude ? sql`AND admin_group_id <> ${params.groupIdToExclude}::uuid` : sql``}
+        ${params.groupIdToExclude ? sql11`AND admin_group_id <> ${params.groupIdToExclude}::uuid` : sql11``}
       LIMIT 1
     `);
     if (memberConflict.rows?.[0]) {
       throw new Error("This nickname is already assigned to another admin group.");
     }
-    const leaderConflict = await params.tx.execute(sql`
+    const leaderConflict = await params.tx.execute(sql11`
       SELECT leader_nickname
       FROM public.admin_groups
       WHERE lower(leader_nickname) IN (${membersSql})
-        ${params.groupIdToExclude ? sql`AND id <> ${params.groupIdToExclude}::uuid` : sql``}
+        ${params.groupIdToExclude ? sql11`AND id <> ${params.groupIdToExclude}::uuid` : sql11``}
       LIMIT 1
     `);
     if (leaderConflict.rows?.[0]) {
@@ -4076,7 +2252,7 @@ var PostgresStorage = class {
     }
   }
   async getCollectionAdminGroups() {
-    const nicknameRows = await db.execute(sql`
+    const nicknameRows = await db.execute(sql11`
       SELECT id, nickname
       FROM public.collection_staff_nicknames
       LIMIT 5000
@@ -4088,7 +2264,7 @@ var PostgresStorage = class {
       if (!nickname || !id || nicknameIdByLowerName.has(nickname)) continue;
       nicknameIdByLowerName.set(nickname, id);
     }
-    const result = await db.execute(sql`
+    const result = await db.execute(sql11`
       SELECT
         g.id,
         g.leader_nickname,
@@ -4152,7 +2328,7 @@ var PostgresStorage = class {
         memberNicknames
       });
       const groupId = randomUUID();
-      await tx.execute(sql`
+      await tx.execute(sql11`
         INSERT INTO public.admin_groups (
           id,
           leader_nickname,
@@ -4170,7 +2346,7 @@ var PostgresStorage = class {
       `);
       for (const memberNickname of memberNicknames) {
         if (!memberNickname || memberNickname.toLowerCase() === leader.nickname.toLowerCase()) continue;
-        await tx.execute(sql`
+        await tx.execute(sql11`
           INSERT INTO public.admin_group_members (
             id,
             admin_group_id,
@@ -4204,7 +2380,7 @@ var PostgresStorage = class {
       throw new Error("updatedBy is required.");
     }
     const updatedGroupId = await db.transaction(async (tx) => {
-      const existingRow = await tx.execute(sql`
+      const existingRow = await tx.execute(sql11`
         SELECT id, leader_nickname
         FROM public.admin_groups
         WHERE id = ${groupId}::uuid
@@ -4234,7 +2410,7 @@ var PostgresStorage = class {
         const memberRows = await this.resolveNicknameNamesByIds(tx, params.memberNicknameIds || []);
         memberNicknames = memberRows.map((item) => item.nickname).filter(Boolean);
       } else {
-        const existingMembers = await tx.execute(sql`
+        const existingMembers = await tx.execute(sql11`
           SELECT member_nickname
           FROM public.admin_group_members
           WHERE admin_group_id = ${groupId}::uuid
@@ -4248,7 +2424,7 @@ var PostgresStorage = class {
         leaderNickname,
         memberNicknames
       });
-      await tx.execute(sql`
+      await tx.execute(sql11`
         UPDATE public.admin_groups
         SET
           leader_nickname = ${leaderNickname},
@@ -4256,13 +2432,13 @@ var PostgresStorage = class {
           updated_at = now()
         WHERE id = ${groupId}::uuid
       `);
-      await tx.execute(sql`
+      await tx.execute(sql11`
         DELETE FROM public.admin_group_members
         WHERE admin_group_id = ${groupId}::uuid
       `);
       for (const memberNickname of memberNicknames) {
         if (!memberNickname || memberNickname.toLowerCase() === leaderNickname.toLowerCase()) continue;
-        await tx.execute(sql`
+        await tx.execute(sql11`
           INSERT INTO public.admin_group_members (
             id,
             admin_group_id,
@@ -4287,11 +2463,11 @@ var PostgresStorage = class {
     const normalizedGroupId = String(groupId || "").trim();
     if (!normalizedGroupId) return false;
     return db.transaction(async (tx) => {
-      await tx.execute(sql`
+      await tx.execute(sql11`
         DELETE FROM public.admin_group_members
         WHERE admin_group_id = ${normalizedGroupId}::uuid
       `);
-      const result = await tx.execute(sql`
+      const result = await tx.execute(sql11`
         DELETE FROM public.admin_groups
         WHERE id = ${normalizedGroupId}::uuid
         RETURNING id
@@ -4302,7 +2478,7 @@ var PostgresStorage = class {
   async getCollectionAdminGroupVisibleNicknameValuesByLeader(leaderNickname) {
     const normalizedLeader = String(leaderNickname || "").trim();
     if (!normalizedLeader) return [];
-    const rows = await db.execute(sql`
+    const rows = await db.execute(sql11`
       SELECT
         g.leader_nickname,
         COALESCE(
@@ -4332,7 +2508,7 @@ var PostgresStorage = class {
     if (!activityId || !username || !userRole || !nickname) {
       throw new Error("Invalid collection nickname session payload.");
     }
-    await db.execute(sql`
+    await db.execute(sql11`
       INSERT INTO public.collection_nickname_sessions (
         activity_id,
         username,
@@ -4360,7 +2536,7 @@ var PostgresStorage = class {
   async getCollectionNicknameSessionByActivity(activityId) {
     const normalizedActivityId = String(activityId || "").trim();
     if (!normalizedActivityId) return void 0;
-    const result = await db.execute(sql`
+    const result = await db.execute(sql11`
       SELECT
         activity_id,
         username,
@@ -4379,13 +2555,13 @@ var PostgresStorage = class {
   async clearCollectionNicknameSessionByActivity(activityId) {
     const normalizedActivityId = String(activityId || "").trim();
     if (!normalizedActivityId) return;
-    await db.execute(sql`
+    await db.execute(sql11`
       DELETE FROM public.collection_nickname_sessions
       WHERE activity_id = ${normalizedActivityId}
     `);
   }
   async getCollectionStaffNicknameById(id) {
-    const result = await db.execute(sql`
+    const result = await db.execute(sql11`
       SELECT
         id,
         nickname,
@@ -4404,7 +2580,7 @@ var PostgresStorage = class {
   async getCollectionStaffNicknameByName(nickname) {
     const normalized = String(nickname || "").trim();
     if (!normalized) return void 0;
-    const result = await db.execute(sql`
+    const result = await db.execute(sql11`
       SELECT
         id,
         nickname,
@@ -4423,7 +2599,7 @@ var PostgresStorage = class {
   async getCollectionNicknameAuthProfileByName(nickname) {
     const normalized = String(nickname || "").trim();
     if (!normalized) return void 0;
-    const result = await db.execute(sql`
+    const result = await db.execute(sql11`
       SELECT
         id,
         nickname,
@@ -4453,7 +2629,7 @@ var PostgresStorage = class {
     if (!passwordHash) {
       throw new Error("passwordHash is required.");
     }
-    await db.execute(sql`
+    await db.execute(sql11`
       UPDATE public.collection_staff_nicknames
       SET
         nickname_password_hash = ${passwordHash},
@@ -4464,7 +2640,7 @@ var PostgresStorage = class {
     `);
   }
   async createCollectionStaffNickname(data) {
-    const result = await db.execute(sql`
+    const result = await db.execute(sql11`
       INSERT INTO public.collection_staff_nicknames (
         id,
         nickname,
@@ -4478,7 +2654,7 @@ var PostgresStorage = class {
         created_at
       )
       VALUES (
-        ${crypto.randomUUID()}::uuid,
+        ${randomUUID()}::uuid,
         ${data.nickname},
         true,
         ${normalizeCollectionNicknameRoleScope(data.roleScope)},
@@ -4504,21 +2680,21 @@ var PostgresStorage = class {
     if (!existing) return void 0;
     const updates = [];
     if (data.nickname !== void 0) {
-      updates.push(sql`nickname = ${data.nickname}`);
+      updates.push(sql11`nickname = ${data.nickname}`);
     }
     if (data.isActive !== void 0) {
-      updates.push(sql`is_active = ${data.isActive}`);
+      updates.push(sql11`is_active = ${data.isActive}`);
     }
     if (data.roleScope !== void 0) {
-      updates.push(sql`role_scope = ${normalizeCollectionNicknameRoleScope(data.roleScope)}`);
+      updates.push(sql11`role_scope = ${normalizeCollectionNicknameRoleScope(data.roleScope)}`);
     }
     if (!updates.length) {
       return existing;
     }
     return db.transaction(async (tx) => {
-      const result = await tx.execute(sql`
+      const result = await tx.execute(sql11`
         UPDATE public.collection_staff_nicknames
-        SET ${sql.join(updates, sql`, `)}
+        SET ${sql11.join(updates, sql11`, `)}
         WHERE id = ${id}::uuid
         RETURNING
           id,
@@ -4534,19 +2710,19 @@ var PostgresStorage = class {
       const oldNickname = String(existing.nickname || "").trim();
       const newNickname = String(updated.nickname || "").trim();
       if (oldNickname && newNickname && oldNickname.toLowerCase() !== newNickname.toLowerCase()) {
-        await tx.execute(sql`
+        await tx.execute(sql11`
           UPDATE public.admin_groups
           SET
             leader_nickname = ${newNickname},
             updated_at = now()
           WHERE lower(leader_nickname) = lower(${oldNickname})
         `);
-        await tx.execute(sql`
+        await tx.execute(sql11`
           UPDATE public.admin_group_members
           SET member_nickname = ${newNickname}
           WHERE lower(member_nickname) = lower(${oldNickname})
         `);
-        await tx.execute(sql`
+        await tx.execute(sql11`
           UPDATE public.collection_nickname_sessions
           SET
             nickname = ${newNickname},
@@ -4562,7 +2738,7 @@ var PostgresStorage = class {
     if (!existing) {
       return { deleted: false, deactivated: false };
     }
-    const usage = await db.execute(sql`
+    const usage = await db.execute(sql11`
       SELECT COUNT(*)::int AS total
       FROM public.collection_records
       WHERE lower(collection_staff_nickname) = lower(${existing.nickname})
@@ -4570,30 +2746,30 @@ var PostgresStorage = class {
     `);
     const total = Number(usage.rows?.[0]?.total ?? 0);
     if (total > 0) {
-      await db.execute(sql`
+      await db.execute(sql11`
         UPDATE public.collection_staff_nicknames
         SET is_active = false
         WHERE id = ${id}::uuid
       `);
       return { deleted: false, deactivated: true };
     }
-    await db.execute(sql`
+    await db.execute(sql11`
       DELETE FROM public.admin_visible_nicknames
       WHERE nickname_id = ${id}::uuid
     `);
-    await db.execute(sql`
+    await db.execute(sql11`
       DELETE FROM public.admin_group_members
       WHERE lower(member_nickname) = lower(${existing.nickname})
     `);
-    await db.execute(sql`
+    await db.execute(sql11`
       DELETE FROM public.admin_groups
       WHERE lower(leader_nickname) = lower(${existing.nickname})
     `);
-    await db.execute(sql`
+    await db.execute(sql11`
       DELETE FROM public.collection_nickname_sessions
       WHERE lower(nickname) = lower(${existing.nickname})
     `);
-    await db.execute(sql`
+    await db.execute(sql11`
       DELETE FROM public.collection_staff_nicknames
       WHERE id = ${id}::uuid
     `);
@@ -4602,7 +2778,7 @@ var PostgresStorage = class {
   async isCollectionStaffNicknameActive(nickname) {
     const normalized = String(nickname || "").trim();
     if (!normalized) return false;
-    const result = await db.execute(sql`
+    const result = await db.execute(sql11`
       SELECT id
       FROM public.collection_staff_nicknames
       WHERE lower(nickname) = lower(${normalized})
@@ -4612,8 +2788,8 @@ var PostgresStorage = class {
     return Boolean(result.rows?.[0]);
   }
   async createCollectionRecord(data) {
-    const id = crypto.randomUUID();
-    const result = await db.execute(sql`
+    const id = randomUUID();
+    const result = await db.execute(sql11`
       INSERT INTO public.collection_records (
         id,
         customer_name,
@@ -4664,15 +2840,15 @@ var PostgresStorage = class {
   async listCollectionRecords(filters) {
     const conditions = [];
     if (filters?.from) {
-      conditions.push(sql`payment_date >= ${filters.from}::date`);
+      conditions.push(sql11`payment_date >= ${filters.from}::date`);
     }
     if (filters?.to) {
-      conditions.push(sql`payment_date <= ${filters.to}::date`);
+      conditions.push(sql11`payment_date <= ${filters.to}::date`);
     }
     const search = String(filters?.search || "").trim();
     if (search) {
       const like = `%${search}%`;
-      conditions.push(sql`(
+      conditions.push(sql11`(
         customer_name ILIKE ${like}
         OR ic_number ILIKE ${like}
         OR account_number ILIKE ${like}
@@ -4682,18 +2858,18 @@ var PostgresStorage = class {
     }
     const createdByLogin = String(filters?.createdByLogin || "").trim();
     if (createdByLogin) {
-      conditions.push(sql`created_by_login = ${createdByLogin}`);
+      conditions.push(sql11`created_by_login = ${createdByLogin}`);
     }
     const nicknameSource = filters?.nicknames;
     const nicknames = Array.isArray(nicknameSource) ? nicknameSource.map((value) => String(value || "").trim().toLowerCase()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
     if (nicknames.length > 0) {
-      const nicknameSql = sql.join(nicknames.map((value) => sql`${value}`), sql`, `);
-      conditions.push(sql`lower(collection_staff_nickname) IN (${nicknameSql})`);
+      const nicknameSql = sql11.join(nicknames.map((value) => sql11`${value}`), sql11`, `);
+      conditions.push(sql11`lower(collection_staff_nickname) IN (${nicknameSql})`);
     }
-    const whereSql = conditions.length ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
+    const whereSql = conditions.length ? sql11`WHERE ${sql11.join(conditions, sql11` AND `)}` : sql11``;
     const parsedLimit = Number(filters?.limit);
     const safeLimit = Number.isFinite(parsedLimit) ? Math.min(2e3, Math.max(1, Math.floor(parsedLimit))) : 500;
-    const result = await db.execute(sql`
+    const result = await db.execute(sql11`
       SELECT
         id,
         customer_name,
@@ -4723,18 +2899,18 @@ var PostgresStorage = class {
     const nicknameSource = filters.nicknames;
     const nicknames = Array.isArray(nicknameSource) ? nicknameSource.map((value) => String(value || "").trim().toLowerCase()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
     const conditions = [
-      sql`payment_date >= ${yearStart}::date`,
-      sql`payment_date <= ${yearEnd}::date`
+      sql11`payment_date >= ${yearStart}::date`,
+      sql11`payment_date <= ${yearEnd}::date`
     ];
     if (nicknames.length > 0) {
-      const nicknameSql = sql.join(nicknames.map((value) => sql`${value}`), sql`, `);
-      conditions.push(sql`lower(collection_staff_nickname) IN (${nicknameSql})`);
+      const nicknameSql = sql11.join(nicknames.map((value) => sql11`${value}`), sql11`, `);
+      conditions.push(sql11`lower(collection_staff_nickname) IN (${nicknameSql})`);
     }
     if (createdByLogin) {
-      conditions.push(sql`created_by_login = ${createdByLogin}`);
+      conditions.push(sql11`created_by_login = ${createdByLogin}`);
     }
-    const whereSql = sql`WHERE ${sql.join(conditions, sql` AND `)}`;
-    const result = await db.execute(sql`
+    const whereSql = sql11`WHERE ${sql11.join(conditions, sql11` AND `)}`;
+    const result = await db.execute(sql11`
       SELECT
         EXTRACT(MONTH FROM payment_date)::int AS month,
         COUNT(*)::int AS total_records,
@@ -4766,7 +2942,7 @@ var PostgresStorage = class {
     });
   }
   async getCollectionRecordById(id) {
-    const result = await db.execute(sql`
+    const result = await db.execute(sql11`
       SELECT
         id,
         customer_name,
@@ -4792,39 +2968,39 @@ var PostgresStorage = class {
   async updateCollectionRecord(id, data) {
     const updateChunks = [];
     if (data.customerName !== void 0) {
-      updateChunks.push(sql`customer_name = ${data.customerName}`);
+      updateChunks.push(sql11`customer_name = ${data.customerName}`);
     }
     if (data.icNumber !== void 0) {
-      updateChunks.push(sql`ic_number = ${data.icNumber}`);
+      updateChunks.push(sql11`ic_number = ${data.icNumber}`);
     }
     if (data.customerPhone !== void 0) {
-      updateChunks.push(sql`customer_phone = ${data.customerPhone}`);
+      updateChunks.push(sql11`customer_phone = ${data.customerPhone}`);
     }
     if (data.accountNumber !== void 0) {
-      updateChunks.push(sql`account_number = ${data.accountNumber}`);
+      updateChunks.push(sql11`account_number = ${data.accountNumber}`);
     }
     if (data.batch !== void 0) {
-      updateChunks.push(sql`batch = ${data.batch}`);
+      updateChunks.push(sql11`batch = ${data.batch}`);
     }
     if (data.paymentDate !== void 0) {
-      updateChunks.push(sql`payment_date = ${data.paymentDate}::date`);
+      updateChunks.push(sql11`payment_date = ${data.paymentDate}::date`);
     }
     if (data.amount !== void 0) {
-      updateChunks.push(sql`amount = ${data.amount}`);
+      updateChunks.push(sql11`amount = ${data.amount}`);
     }
     if (Object.prototype.hasOwnProperty.call(data, "receiptFile")) {
-      updateChunks.push(sql`receipt_file = ${data.receiptFile ?? null}`);
+      updateChunks.push(sql11`receipt_file = ${data.receiptFile ?? null}`);
     }
     if (data.collectionStaffNickname !== void 0) {
-      updateChunks.push(sql`collection_staff_nickname = ${data.collectionStaffNickname}`);
-      updateChunks.push(sql`staff_username = ${data.collectionStaffNickname}`);
+      updateChunks.push(sql11`collection_staff_nickname = ${data.collectionStaffNickname}`);
+      updateChunks.push(sql11`staff_username = ${data.collectionStaffNickname}`);
     }
     if (!updateChunks.length) {
       return this.getCollectionRecordById(id);
     }
-    const result = await db.execute(sql`
+    const result = await db.execute(sql11`
       UPDATE public.collection_records
-      SET ${sql.join(updateChunks, sql`, `)}
+      SET ${sql11.join(updateChunks, sql11`, `)}
       WHERE id = ${id}::uuid
       RETURNING
         id,
@@ -4846,326 +3022,3061 @@ var PostgresStorage = class {
     return this.mapCollectionRecordRow(row);
   }
   async deleteCollectionRecord(id) {
-    await db.execute(sql`DELETE FROM public.collection_records WHERE id = ${id}::uuid`);
+    await db.execute(sql11`DELETE FROM public.collection_records WHERE id = ${id}::uuid`);
     return true;
   }
-  async createAuditLog(data) {
-    const result = await db.insert(auditLogs).values({
-      id: crypto.randomUUID(),
-      action: data.action,
-      performedBy: data.performedBy,
-      targetUser: data.targetUser ?? null,
-      targetResource: data.targetResource ?? null,
-      details: data.details ?? null,
-      timestamp: /* @__PURE__ */ new Date()
-    }).returning();
-    return result[0];
-  }
-  async getAuditLogs() {
-    const logs = [];
-    let offset = 0;
-    while (true) {
-      const chunk = await db.select().from(auditLogs).orderBy(desc(auditLogs.timestamp)).limit(QUERY_PAGE_LIMIT).offset(offset);
-      if (!chunk.length) break;
-      logs.push(...chunk);
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
-      offset += chunk.length;
+};
+
+// server/repositories/settings.repository.ts
+import { sql as sql12 } from "drizzle-orm";
+var TRUTHY_SETTING_VALUES = /* @__PURE__ */ new Set(["true", "1", "yes", "on"]);
+var SettingsRepository = class {
+  parseSettingType(raw) {
+    const normalized = String(raw || "text").toLowerCase();
+    if (normalized === "number" || normalized === "boolean" || normalized === "select" || normalized === "timestamp") {
+      return normalized;
     }
-    return logs;
+    return "text";
   }
-  async createBackup(data) {
-    await this.ensureBackupsTable();
-    const id = crypto.randomUUID();
-    const result = await db.execute(sql`
-      INSERT INTO public.backups (id, name, created_at, created_by, backup_data, metadata)
-      VALUES (${id}, ${data.name}, ${/* @__PURE__ */ new Date()}, ${data.createdBy}, ${data.backupData}, ${data.metadata ?? null})
-      RETURNING
-        id,
-        name,
-        created_at as "createdAt",
-        created_by as "createdBy",
-        ''::text as "backupData",
-        metadata
-    `);
-    return result.rows[0];
-  }
-  async getBackups() {
-    await this.ensureBackupsTable();
-    const rows = [];
-    let offset = 0;
-    while (true) {
-      const result = await db.execute(sql`
-        SELECT
-          id,
-          name,
-          created_at as "createdAt",
-          created_by as "createdBy",
-          ''::text as "backupData",
-          CASE
-            WHEN metadata IS NULL THEN NULL
-            WHEN length(metadata) > 200000 THEN NULL
-            ELSE metadata
-          END as metadata
-        FROM public.backups
-        ORDER BY created_at DESC
-        LIMIT ${QUERY_PAGE_LIMIT}
-        OFFSET ${offset}
-      `);
-      const chunk = result.rows || [];
-      if (!chunk.length) break;
-      rows.push(...chunk);
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
-      offset += chunk.length;
+  normalizeSettingValue(type, value) {
+    if (value === null || value === void 0) {
+      return type === "timestamp" ? "" : null;
     }
-    return rows.map((row) => {
-      return { ...row, metadata: this.parseBackupMetadataSafe(row.metadata) };
-    });
+    if (type === "boolean") {
+      if (typeof value === "boolean") return value ? "true" : "false";
+      const normalized = String(value).trim().toLowerCase();
+      if (TRUTHY_SETTING_VALUES.has(normalized)) return "true";
+      if (["false", "0", "no", "off"].includes(normalized)) return "false";
+      return null;
+    }
+    if (type === "number") {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return null;
+      return String(numeric);
+    }
+    if (type === "timestamp") {
+      const normalized = String(value).trim();
+      if (!normalized) return "";
+      const parsed = new Date(normalized);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return parsed.toISOString();
+    }
+    return String(value);
   }
-  async getBackupById(id) {
-    await this.ensureBackupsTable();
-    const result = await db.execute(sql`
-      SELECT
-        id,
-        name,
-        created_at as "createdAt",
-        created_by as "createdBy",
-        backup_data as "backupData",
-        CASE
-          WHEN metadata IS NULL THEN NULL
-          WHEN length(metadata) > 200000 THEN NULL
-          ELSE metadata
-        END as metadata
-      FROM public.backups
-      WHERE id = ${id}
+  applySettingConstraints(settingKey, type, normalizedValue) {
+    if (type !== "number") {
+      return { valid: true, value: normalizedValue };
+    }
+    const numericValue = Number(normalizedValue);
+    if (!Number.isFinite(numericValue)) {
+      return { valid: false, value: normalizedValue, message: "Numeric setting value is invalid." };
+    }
+    const clampInteger = (min, max) => String(Math.min(max, Math.max(min, Math.floor(numericValue))));
+    if (settingKey === "search_result_limit") {
+      if (numericValue < 10 || numericValue > 5e3) {
+        return { valid: false, value: normalizedValue, message: "Search Result Limit must be between 10 and 5000." };
+      }
+      return { valid: true, value: clampInteger(10, 5e3) };
+    }
+    if (settingKey === "viewer_rows_per_page") {
+      if (numericValue < 10 || numericValue > 500) {
+        return { valid: false, value: normalizedValue, message: "Viewer Rows Per Page must be between 10 and 500." };
+      }
+      return { valid: true, value: clampInteger(10, 500) };
+    }
+    return { valid: true, value: normalizedValue };
+  }
+  isAdminMaintenanceEditableKey(settingKey) {
+    return settingKey === "maintenance_message" || settingKey === "maintenance_start_time" || settingKey === "maintenance_end_time";
+  }
+  async isAdminMaintenanceEditingEnabled() {
+    const result = await db.execute(sql12`
+      SELECT value
+      FROM public.system_settings
+      WHERE key = 'admin_can_edit_maintenance_message'
       LIMIT 1
     `);
     const row = result.rows[0];
-    if (!row) return void 0;
-    return { ...row, metadata: this.parseBackupMetadataSafe(row.metadata) };
+    return TRUTHY_SETTING_VALUES.has(String(row?.value ?? "").trim().toLowerCase());
   }
-  async deleteBackup(id) {
-    await this.ensureBackupsTable();
-    await db.execute(sql`DELETE FROM public.backups WHERE id = ${id}`);
-    return true;
+  async getSettingsForRole(role) {
+    const rows = await db.execute(sql12`
+      SELECT
+        c.id as category_id,
+        c.name as category_name,
+        c.description as category_description,
+        s.id as setting_id,
+        s.key,
+        s.label,
+        s.description,
+        s.type,
+        s.value,
+        s.default_value,
+        s.is_critical,
+        s.updated_at,
+        COALESCE(p.can_view, false) as can_view,
+        COALESCE(p.can_edit, false) as can_edit
+      FROM public.setting_categories c
+      JOIN public.system_settings s ON s.category_id = c.id
+      LEFT JOIN public.role_setting_permissions p
+        ON p.setting_key = s.key
+       AND p.role = ${role}
+      WHERE COALESCE(p.can_view, false) = true
+      ORDER BY c.name, s.label
+    `);
+    const settingIds = rows.rows.map((row) => String(row.setting_id)).filter((value) => value.length > 0);
+    const optionsMap = /* @__PURE__ */ new Map();
+    if (settingIds.length > 0) {
+      const quoted = settingIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
+      const optionsRows = await db.execute(sql12`
+        SELECT DISTINCT ON (setting_id, value) setting_id, value, label
+        FROM public.setting_options
+        WHERE setting_id IN (${sql12.raw(quoted)})
+        ORDER BY setting_id, value, label
+      `);
+      const seenOptionsBySetting = /* @__PURE__ */ new Map();
+      for (const row of optionsRows.rows) {
+        const settingId = String(row.setting_id);
+        const optionValue = String(row.value);
+        const seenOptions = seenOptionsBySetting.get(settingId) || /* @__PURE__ */ new Set();
+        if (seenOptions.has(optionValue)) continue;
+        seenOptions.add(optionValue);
+        seenOptionsBySetting.set(settingId, seenOptions);
+        const options = optionsMap.get(settingId) || [];
+        options.push({ value: optionValue, label: String(row.label) });
+        optionsMap.set(settingId, options);
+      }
+    }
+    const adminMaintenanceEditingEnabled = role === "admin" ? await this.isAdminMaintenanceEditingEnabled() : true;
+    const categories = /* @__PURE__ */ new Map();
+    for (const row of rows.rows) {
+      const categoryId = String(row.category_id);
+      if (!categories.has(categoryId)) {
+        categories.set(categoryId, {
+          id: categoryId,
+          name: String(row.category_name),
+          description: row.category_description ? String(row.category_description) : null,
+          settings: []
+        });
+      }
+      const key = String(row.key);
+      const canEditFromPermission = row.can_edit === true;
+      const canEdit = role === "admin" && this.isAdminMaintenanceEditableKey(key) && !adminMaintenanceEditingEnabled ? false : canEditFromPermission;
+      categories.get(categoryId).settings.push({
+        key,
+        label: String(row.label),
+        description: row.description ? String(row.description) : null,
+        type: this.parseSettingType(row.type),
+        value: String(row.value ?? ""),
+        defaultValue: row.default_value === null || row.default_value === void 0 ? null : String(row.default_value),
+        isCritical: row.is_critical === true,
+        updatedAt: row.updated_at ? new Date(row.updated_at) : null,
+        permission: {
+          canView: row.can_view === true,
+          canEdit
+        },
+        options: optionsMap.get(String(row.setting_id)) || []
+      });
+    }
+    return Array.from(categories.values());
   }
-  async getBackupDataForExport() {
-    const allImports = await db.select().from(imports).where(eq(imports.isDeleted, false));
-    const allDataRows = await db.select().from(dataRows);
-    const allUsersFromDb = await db.select().from(users);
-    const allUsers = allUsersFromDb.map((u) => ({
-      username: u.username,
-      role: u.role,
-      isBanned: u.isBanned,
-      passwordHash: u.passwordHash
-    }));
-    const allAuditLogs = await db.select().from(auditLogs);
+  async getBooleanSystemSetting(key, fallback = false) {
+    const result = await db.execute(sql12`
+      SELECT value
+      FROM public.system_settings
+      WHERE key = ${key}
+      LIMIT 1
+    `);
+    const row = result.rows[0];
+    if (!row) return fallback;
+    const normalized = String(row.value ?? "").trim().toLowerCase();
+    if (!normalized) return fallback;
+    return TRUTHY_SETTING_VALUES.has(normalized);
+  }
+  async getRoleTabVisibility(role) {
+    if (role === "superuser") {
+      return {};
+    }
+    const roleKey = role === "admin" ? "admin" : role === "user" ? "user" : null;
+    if (!roleKey) {
+      return {};
+    }
+    const tabs = ROLE_TAB_SETTINGS[roleKey];
+    const visibility = {};
+    for (const tab of tabs) {
+      visibility[tab.pageId] = tab.defaultEnabled;
+    }
+    const keys = tabs.map((tab) => roleTabSettingKey(roleKey, tab.suffix));
+    if (keys.length === 0) {
+      return visibility;
+    }
+    const keyList = keys.map((key) => `'${key.replace(/'/g, "''")}'`).join(",");
+    const rows = await db.execute(sql12`
+      SELECT key, value
+      FROM public.system_settings
+      WHERE key IN (${sql12.raw(keyList)})
+    `);
+    const pageIdByKey = /* @__PURE__ */ new Map();
+    for (const tab of tabs) {
+      pageIdByKey.set(roleTabSettingKey(roleKey, tab.suffix), tab.pageId);
+    }
+    for (const row of rows.rows) {
+      const key = String(row.key || "");
+      const pageId = pageIdByKey.get(key);
+      if (!pageId) continue;
+      visibility[pageId] = TRUTHY_SETTING_VALUES.has(String(row.value ?? "").trim().toLowerCase());
+    }
+    if (roleKey === "admin") {
+      const result = await db.execute(sql12`
+        SELECT value
+        FROM public.system_settings
+        WHERE key = 'canViewSystemPerformance'
+        LIMIT 1
+      `);
+      const canViewSystemPerformance = TRUTHY_SETTING_VALUES.has(
+        String(result.rows[0]?.value ?? "").trim().toLowerCase()
+      );
+      visibility.canViewSystemPerformance = canViewSystemPerformance;
+      visibility.monitor = visibility.monitor === true && canViewSystemPerformance;
+    }
+    return visibility;
+  }
+  async updateSystemSetting(params) {
+    const settingRes = await db.execute(sql12`
+      SELECT
+        s.id,
+        s.key,
+        s.label,
+        s.description,
+        s.type,
+        s.value,
+        s.default_value,
+        s.is_critical,
+        s.updated_at,
+        COALESCE(p.can_edit, false) as can_edit
+      FROM public.system_settings s
+      LEFT JOIN public.role_setting_permissions p
+        ON p.setting_key = s.key
+       AND p.role = ${params.role}
+      WHERE s.key = ${params.settingKey}
+      LIMIT 1
+    `);
+    const current = settingRes.rows[0];
+    if (!current) {
+      return { status: "not_found", message: "Setting not found." };
+    }
+    if (params.role === "admin" && this.isAdminMaintenanceEditableKey(String(current.key)) && !await this.isAdminMaintenanceEditingEnabled()) {
+      return { status: "forbidden", message: "Admin is not allowed to edit maintenance message settings." };
+    }
+    if (current.can_edit !== true) {
+      return { status: "forbidden", message: "You do not have permission to edit this setting." };
+    }
+    if (current.is_critical === true && !params.confirmCritical) {
+      return {
+        status: "requires_confirmation",
+        message: "Critical setting requires explicit confirmation."
+      };
+    }
+    const settingType = this.parseSettingType(current.type);
+    const normalized = this.normalizeSettingValue(settingType, params.value);
+    if (normalized === null) {
+      return { status: "invalid", message: `Invalid value for type ${settingType}.` };
+    }
+    const constrained = this.applySettingConstraints(String(current.key), settingType, normalized);
+    if (!constrained.valid) {
+      return { status: "invalid", message: constrained.message || "Invalid setting value." };
+    }
+    const nextValue = constrained.value;
+    if (settingType === "select") {
+      const optionRes = await db.execute(sql12`
+        SELECT 1
+        FROM public.setting_options
+        WHERE setting_id = ${current.id}
+          AND value = ${normalized}
+        LIMIT 1
+      `);
+      if (optionRes.rows.length === 0) {
+        return { status: "invalid", message: "Selected option is not allowed." };
+      }
+    }
+    const previousValue = String(current.value ?? "");
+    if (previousValue === nextValue) {
+      return { status: "unchanged", message: "No change detected." };
+    }
+    await db.execute(sql12`
+      UPDATE public.system_settings
+      SET value = ${nextValue}, updated_at = now()
+      WHERE id = ${current.id}
+    `);
+    await db.execute(sql12`
+      INSERT INTO public.setting_versions (setting_key, old_value, new_value, changed_by, changed_at)
+      VALUES (${params.settingKey}, ${previousValue}, ${nextValue}, ${params.updatedBy}, now())
+    `);
+    const latestRes = await db.execute(sql12`
+      SELECT
+        id,
+        key,
+        label,
+        description,
+        type,
+        value,
+        default_value,
+        is_critical,
+        updated_at
+      FROM public.system_settings
+      WHERE id = ${current.id}
+      LIMIT 1
+    `);
+    const latest = latestRes.rows[0];
     return {
-      imports: allImports,
-      dataRows: allDataRows,
-      users: allUsers,
-      auditLogs: allAuditLogs
+      status: "updated",
+      message: "Setting updated successfully.",
+      shouldBroadcast: String(params.settingKey).startsWith("maintenance_"),
+      setting: {
+        key: String(latest.key),
+        label: String(latest.label),
+        description: latest.description ? String(latest.description) : null,
+        type: this.parseSettingType(latest.type),
+        value: String(latest.value ?? ""),
+        defaultValue: latest.default_value === null || latest.default_value === void 0 ? null : String(latest.default_value),
+        isCritical: latest.is_critical === true,
+        updatedAt: latest.updated_at ? new Date(latest.updated_at) : null,
+        permission: { canView: true, canEdit: true },
+        options: []
+      }
     };
   }
-  async restoreFromBackup(backupData) {
-    const stats = {
-      imports: 0,
-      dataRows: 0,
-      users: 0,
-      auditLogs: 0
-    };
-    const toDate = (value) => {
-      if (!value) return null;
-      if (value instanceof Date) return value;
-      const d = new Date(value);
-      return isNaN(d.getTime()) ? null : d;
-    };
-    const chunkArray = (arr, size) => {
-      const chunks = [];
-      for (let i = 0; i < arr.length; i += size) {
-        chunks.push(arr.slice(i, i + size));
+  async getMaintenanceState(now = /* @__PURE__ */ new Date()) {
+    const rows = await db.execute(sql12`
+      SELECT key, value
+      FROM public.system_settings
+      WHERE key IN (
+        'maintenance_mode',
+        'maintenance_message',
+        'maintenance_type',
+        'maintenance_start_time',
+        'maintenance_end_time'
+      )
+    `);
+    const values = /* @__PURE__ */ new Map();
+    for (const row of rows.rows) {
+      values.set(String(row.key), String(row.value ?? ""));
+    }
+    const baseEnabled = TRUTHY_SETTING_VALUES.has((values.get("maintenance_mode") || "false").toLowerCase());
+    const type = (values.get("maintenance_type") || "soft").toLowerCase() === "hard" ? "hard" : "soft";
+    const message = values.get("maintenance_message") || "Sistem sedang diselenggara. Sila cuba semula sebentar lagi.";
+    const startTime = (values.get("maintenance_start_time") || "").trim() || null;
+    const endTime = (values.get("maintenance_end_time") || "").trim() || null;
+    let enabled = baseEnabled;
+    if (enabled && startTime) {
+      const start = new Date(startTime);
+      if (!Number.isNaN(start.getTime()) && now < start) {
+        enabled = false;
       }
-      return chunks;
+    }
+    if (enabled && endTime) {
+      const end = new Date(endTime);
+      if (!Number.isNaN(end.getTime()) && now > end) {
+        enabled = false;
+      }
+    }
+    return {
+      maintenance: enabled,
+      message,
+      type,
+      startTime,
+      endTime
     };
-    await db.transaction(async (tx) => {
-      if (backupData.imports.length > 0) {
-        for (const chunk of chunkArray(backupData.imports, BACKUP_CHUNK_SIZE)) {
-          const rows = chunk.map((imp) => ({
-            id: imp.id,
-            name: imp.name,
-            filename: imp.filename,
-            createdAt: toDate(imp.createdAt) ?? /* @__PURE__ */ new Date(),
-            isDeleted: imp.isDeleted ?? false,
-            createdBy: imp.createdBy ?? null
-          }));
-          for (const row of rows) {
-            await tx.update(imports).set({ isDeleted: false }).where(eq(imports.id, row.id));
+  }
+  async getAppConfig() {
+    const result = await db.execute(sql12`
+      SELECT key, value
+      FROM public.system_settings
+      WHERE key IN (
+        'system_name',
+        'session_timeout_minutes',
+        'ws_idle_minutes',
+        'ai_enabled',
+        'semantic_search_enabled',
+        'ai_timeout_ms',
+        'search_result_limit',
+        'viewer_rows_per_page'
+      )
+    `);
+    const values = /* @__PURE__ */ new Map();
+    for (const row of result.rows) {
+      values.set(String(row.key), String(row.value ?? ""));
+    }
+    const asNumber = (key, fallback, min, max) => {
+      const raw = Number(values.get(key) ?? "");
+      if (!Number.isFinite(raw)) return fallback;
+      return Math.min(max, Math.max(min, Math.floor(raw)));
+    };
+    const asBool = (key, fallback) => {
+      const raw = String(values.get(key) ?? "").trim().toLowerCase();
+      if (!raw) return fallback;
+      return TRUTHY_SETTING_VALUES.has(raw);
+    };
+    const systemName = String(values.get("system_name") ?? "").trim() || "SQR System";
+    const sessionTimeoutMinutes = asNumber("session_timeout_minutes", 30, 1, 1440);
+    const wsIdleMinutes = asNumber("ws_idle_minutes", 3, 1, 1440);
+    const aiTimeoutMs = asNumber("ai_timeout_ms", 6e3, 1e3, 12e4);
+    const searchResultLimit = asNumber("search_result_limit", 200, 10, 5e3);
+    const viewerRowsPerPage = asNumber("viewer_rows_per_page", 100, 10, 500);
+    const aiEnabled = asBool("ai_enabled", true);
+    const semanticSearchEnabled = asBool("semantic_search_enabled", true);
+    const heartbeatIntervalMinutes = Math.max(1, Math.min(10, Math.floor(sessionTimeoutMinutes / 2) || 1));
+    return {
+      systemName,
+      sessionTimeoutMinutes,
+      heartbeatIntervalMinutes,
+      wsIdleMinutes,
+      aiEnabled,
+      semanticSearchEnabled,
+      aiTimeoutMs,
+      searchResultLimit,
+      viewerRowsPerPage
+    };
+  }
+};
+
+// server/storage-postgres.ts
+var MAX_SEARCH_LIMIT2 = 200;
+var MAX_COLUMN_KEYS2 = 500;
+var STORAGE_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
+var BCRYPT_COST2 = 12;
+var ALLOWED_OPERATORS2 = /* @__PURE__ */ new Set([
+  "contains",
+  "equals",
+  "notEquals",
+  "startsWith",
+  "endsWith",
+  "greaterThan",
+  "lessThan",
+  "greaterThanOrEqual",
+  "lessThanOrEqual",
+  "isEmpty",
+  "isNotEmpty"
+]);
+function detectValueType2(value) {
+  if (!value) return "string";
+  if (!isNaN(Number(value))) {
+    return "number";
+  }
+  const date = new Date(value);
+  if (!isNaN(date.getTime())) {
+    return "date";
+  }
+  return "string";
+}
+function buildSqlCondition(field, operator, value) {
+  const column = sql13`json_data_jsonb ->> ${field}`;
+  const valueType = detectValueType2(value);
+  switch (operator) {
+    case "contains":
+      return sql13`${column} ILIKE ${"%" + value + "%"}`;
+    case "equals":
+      return sql13`${column} = ${value}`;
+    case "notEquals":
+      return sql13`${column} <> ${value}`;
+    case "startsWith":
+      return sql13`${column} ILIKE ${value + "%"}`;
+    case "endsWith":
+      return sql13`${column} ILIKE ${"%" + value}`;
+    case "greaterThan":
+      if (valueType === "number") {
+        return sql13`(${column})::numeric > ${Number(value)}`;
+      }
+      if (valueType === "date") {
+        return sql13`(${column})::date > ${value}`;
+      }
+      return sql13`false`;
+    case "lessThan":
+      if (valueType === "number") {
+        return sql13`(${column})::numeric < ${Number(value)}`;
+      }
+      if (valueType === "date") {
+        return sql13`(${column})::date < ${value}`;
+      }
+      return sql13`false`;
+    case "greaterThanOrEqual":
+      if (valueType === "number") {
+        return sql13`(${column})::numeric >= ${Number(value)}`;
+      }
+      if (valueType === "date") {
+        return sql13`(${column})::date >= ${value}`;
+      }
+      return sql13`false`;
+    case "lessThanOrEqual":
+      if (valueType === "number") {
+        return sql13`(${column})::numeric <= ${Number(value)}`;
+      }
+      if (valueType === "date") {
+        return sql13`(${column})::date <= ${value}`;
+      }
+      return sql13`false`;
+  }
+}
+var PostgresStorage = class {
+  constructor() {
+    this.authRepository = new AuthRepository();
+    this.importsRepository = new ImportsRepository();
+    this.searchRepository = new SearchRepository();
+    this.activityRepository = new ActivityRepository({
+      ensureBannedSessionsTable: () => this.ensureBannedSessionsTable()
+    });
+    this.auditRepository = new AuditRepository();
+    this.backupsBootstrap = new BackupsBootstrap();
+    this.backupsRepository = new BackupsRepository({
+      ensureBackupsTable: () => this.backupsBootstrap.ensureTable(),
+      parseBackupMetadataSafe: (raw) => this.parseBackupMetadataSafe(raw)
+    });
+    this.analyticsRepository = new AnalyticsRepository();
+    this.collectionRepository = new CollectionRepository();
+    this.settingsRepository = new SettingsRepository();
+    this.settingsBootstrap = new SettingsBootstrap();
+    this.spatialBootstrap = new SpatialBootstrap();
+  }
+  async init() {
+    await this.ensureUsersTable();
+    await this.ensureImportsTable();
+    await this.ensureDataRowsTable();
+    await this.ensureUserActivityTable();
+    await this.ensureAuditLogsTable();
+    await this.ensureCollectionRecordsTable();
+    await this.ensureCollectionStaffNicknamesTable();
+    await this.ensureCollectionAdminGroupsTables();
+    await this.ensureCollectionNicknameSessionsTable();
+    await this.ensureCollectionAdminVisibleNicknamesTable();
+    await this.seedDefaultUsers();
+    await this.ensureBackupsTable();
+    await this.ensurePerformanceIndexes();
+    await this.ensureBannedSessionsTable();
+    await this.ensureAiTables();
+    await this.ensureSpatialTables();
+    await this.ensureCategoryRulesTable();
+    await this.ensureCategoryStatsTable();
+    await this.ensureSettingsTables();
+  }
+  async ensureUsersTable() {
+    try {
+      await db.execute(sql13`SET search_path TO public`);
+      await db.execute(sql13`
+        CREATE TABLE IF NOT EXISTS public.users (
+          id text PRIMARY KEY,
+          username text NOT NULL,
+          role text NOT NULL DEFAULT 'user',
+          password_hash text,
+          password text,
+          is_banned boolean DEFAULT false,
+          created_at timestamp DEFAULT now(),
+          updated_at timestamp DEFAULT now(),
+          password_changed_at timestamp
+        )
+      `);
+      await db.execute(sql13`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role text`);
+      await db.execute(sql13`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_hash text`);
+      await db.execute(sql13`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password text`);
+      await db.execute(sql13`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_banned boolean DEFAULT false`);
+      await db.execute(sql13`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+      await db.execute(sql13`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+      await db.execute(sql13`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_changed_at timestamp`);
+      await db.execute(sql13`
+        UPDATE public.users
+        SET password_hash = password
+        WHERE password_hash IS NULL
+          AND password IS NOT NULL
+      `);
+      const missingHashRows = await db.execute(sql13`
+        SELECT id
+        FROM public.users
+        WHERE password_hash IS NULL
+      `);
+      for (const row of missingHashRows.rows) {
+        const userId = String(row.id || "").trim();
+        if (!userId) continue;
+        const fallbackHash = await bcrypt2.hash(randomUUID2(), BCRYPT_COST2);
+        await db.execute(sql13`
+          UPDATE public.users
+          SET password_hash = ${fallbackHash}
+          WHERE id = ${userId}
+        `);
+      }
+      await db.execute(sql13`
+        UPDATE public.users
+        SET
+          role = COALESCE(NULLIF(role, ''), 'user'),
+          created_at = COALESCE(created_at, now()),
+          updated_at = COALESCE(updated_at, now()),
+          is_banned = COALESCE(is_banned, false)
+      `);
+      await db.execute(sql13`ALTER TABLE public.users ALTER COLUMN username SET NOT NULL`);
+      await db.execute(sql13`ALTER TABLE public.users ALTER COLUMN role SET NOT NULL`);
+      await db.execute(sql13`ALTER TABLE public.users ALTER COLUMN password_hash SET NOT NULL`);
+      await db.execute(sql13`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower_unique ON public.users (lower(username))`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_users_username_lower ON public.users (lower(username))`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_users_role ON public.users (role)`);
+    } catch (err) {
+      console.error("\u274C Failed to ensure users table:", err?.message || err);
+      throw err;
+    }
+  }
+  async ensureImportsTable() {
+    try {
+      await db.execute(sql13`SET search_path TO public`);
+      await db.execute(sql13`
+        CREATE TABLE IF NOT EXISTS public.imports (
+          id text PRIMARY KEY,
+          name text NOT NULL,
+          filename text NOT NULL,
+          created_at timestamp DEFAULT now(),
+          is_deleted boolean DEFAULT false,
+          created_by text
+        )
+      `);
+      await db.execute(sql13`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS name text`);
+      await db.execute(sql13`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS filename text`);
+      await db.execute(sql13`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+      await db.execute(sql13`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS is_deleted boolean DEFAULT false`);
+      await db.execute(sql13`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS created_by text`);
+      await db.execute(sql13`
+        UPDATE public.imports
+        SET
+          name = COALESCE(NULLIF(name, ''), NULLIF(filename, ''), 'Untitled Import'),
+          filename = COALESCE(NULLIF(filename, ''), COALESCE(NULLIF(name, ''), 'unknown.csv')),
+          created_at = COALESCE(created_at, now()),
+          is_deleted = COALESCE(is_deleted, false)
+      `);
+      await db.execute(sql13`ALTER TABLE public.imports ALTER COLUMN name SET NOT NULL`);
+      await db.execute(sql13`ALTER TABLE public.imports ALTER COLUMN filename SET NOT NULL`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_imports_created_at ON public.imports(created_at DESC)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_imports_is_deleted ON public.imports(is_deleted)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_imports_created_by ON public.imports(created_by)`);
+    } catch (err) {
+      console.error("Failed to ensure imports table:", err?.message || err);
+      throw err;
+    }
+  }
+  async ensureDataRowsTable() {
+    try {
+      await db.execute(sql13`SET search_path TO public`);
+      await db.execute(sql13`
+        CREATE TABLE IF NOT EXISTS public.data_rows (
+          id text PRIMARY KEY,
+          import_id text NOT NULL,
+          json_data jsonb NOT NULL DEFAULT '{}'::jsonb
+        )
+      `);
+      await db.execute(sql13`ALTER TABLE public.data_rows ADD COLUMN IF NOT EXISTS import_id text`);
+      await db.execute(sql13`ALTER TABLE public.data_rows ADD COLUMN IF NOT EXISTS json_data jsonb DEFAULT '{}'::jsonb`);
+      await db.execute(sql13`
+        UPDATE public.data_rows
+        SET json_data = COALESCE(json_data, '{}'::jsonb)
+      `);
+      await db.execute(sql13`ALTER TABLE public.data_rows ALTER COLUMN import_id SET NOT NULL`);
+      await db.execute(sql13`ALTER TABLE public.data_rows ALTER COLUMN json_data SET NOT NULL`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_data_rows_import_id ON public.data_rows(import_id)`);
+    } catch (err) {
+      console.error("Failed to ensure data_rows table:", err?.message || err);
+      throw err;
+    }
+  }
+  async ensureUserActivityTable() {
+    try {
+      await db.execute(sql13`SET search_path TO public`);
+      await db.execute(sql13`
+        CREATE TABLE IF NOT EXISTS public.user_activity (
+          id text PRIMARY KEY,
+          user_id text NOT NULL,
+          username text NOT NULL,
+          role text NOT NULL,
+          pc_name text,
+          browser text,
+          fingerprint text,
+          ip_address text,
+          login_time timestamp,
+          logout_time timestamp,
+          last_activity_time timestamp,
+          is_active boolean DEFAULT true,
+          logout_reason text
+        )
+      `);
+      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS user_id text`);
+      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS username text`);
+      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS role text`);
+      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS pc_name text`);
+      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS browser text`);
+      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS fingerprint text`);
+      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS ip_address text`);
+      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS login_time timestamp`);
+      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS logout_time timestamp`);
+      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS last_activity_time timestamp`);
+      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true`);
+      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS logout_reason text`);
+      await db.execute(sql13`
+        UPDATE public.user_activity
+        SET
+          is_active = COALESCE(is_active, true),
+          login_time = COALESCE(login_time, now()),
+          last_activity_time = COALESCE(last_activity_time, login_time, now())
+      `);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_user_activity_username ON public.user_activity(username)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_user_activity_is_active ON public.user_activity(is_active)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_user_activity_login_time ON public.user_activity(login_time DESC)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_user_activity_last_activity_time ON public.user_activity(last_activity_time DESC)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_user_activity_fingerprint ON public.user_activity(fingerprint)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_user_activity_ip_address ON public.user_activity(ip_address)`);
+    } catch (err) {
+      console.error("Failed to ensure user_activity table:", err?.message || err);
+      throw err;
+    }
+  }
+  async ensureAuditLogsTable() {
+    try {
+      await db.execute(sql13`SET search_path TO public`);
+      await db.execute(sql13`
+        CREATE TABLE IF NOT EXISTS public.audit_logs (
+          id text PRIMARY KEY,
+          action text NOT NULL,
+          performed_by text NOT NULL,
+          target_user text,
+          target_resource text,
+          details text,
+          timestamp timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql13`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS action text`);
+      await db.execute(sql13`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS performed_by text`);
+      await db.execute(sql13`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS target_user text`);
+      await db.execute(sql13`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS target_resource text`);
+      await db.execute(sql13`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS details text`);
+      await db.execute(sql13`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS timestamp timestamp DEFAULT now()`);
+      await db.execute(sql13`
+        UPDATE public.audit_logs
+        SET timestamp = COALESCE(timestamp, now())
+      `);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON public.audit_logs(timestamp DESC)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON public.audit_logs(action)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_audit_logs_performed_by ON public.audit_logs(performed_by)`);
+    } catch (err) {
+      console.error("Failed to ensure audit_logs table:", err?.message || err);
+      throw err;
+    }
+  }
+  async ensureCollectionRecordsTable() {
+    try {
+      await db.execute(sql13`SET search_path TO public`);
+      await db.execute(sql13`
+        CREATE TABLE IF NOT EXISTS public.collection_records (
+          id uuid PRIMARY KEY,
+          customer_name text NOT NULL,
+          ic_number text NOT NULL,
+          customer_phone text NOT NULL,
+          account_number text NOT NULL,
+          batch text NOT NULL,
+          payment_date date NOT NULL,
+          amount numeric(14,2) NOT NULL,
+          receipt_file text,
+          created_by_login text NOT NULL,
+          collection_staff_nickname text NOT NULL,
+          staff_username text NOT NULL,
+          created_at timestamp DEFAULT now() NOT NULL
+        )
+      `);
+      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name text`);
+      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number text`);
+      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_phone text`);
+      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number text`);
+      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS batch text`);
+      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS payment_date date`);
+      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS amount numeric(14,2)`);
+      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_file text`);
+      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_by_login text`);
+      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS collection_staff_nickname text`);
+      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS staff_username text`);
+      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+      await db.execute(sql13`
+        UPDATE public.collection_records
+        SET customer_phone = COALESCE(NULLIF(customer_phone, ''), '-')
+      `);
+      await db.execute(sql13`
+        UPDATE public.collection_records
+        SET created_by_login = COALESCE(NULLIF(created_by_login, ''), NULLIF(staff_username, ''), 'unknown')
+      `);
+      await db.execute(sql13`
+        UPDATE public.collection_records
+        SET collection_staff_nickname = COALESCE(NULLIF(collection_staff_nickname, ''), NULLIF(staff_username, ''), NULLIF(created_by_login, ''), 'unknown')
+      `);
+      await db.execute(sql13`
+        UPDATE public.collection_records
+        SET staff_username = COALESCE(NULLIF(staff_username, ''), NULLIF(collection_staff_nickname, ''), NULLIF(created_by_login, ''), 'unknown')
+      `);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_records_payment_date ON public.collection_records(payment_date)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_records_created_at ON public.collection_records(created_at DESC)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_username ON public.collection_records(staff_username)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_records_created_by_login ON public.collection_records(created_by_login)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`);
+    } catch (err) {
+      console.error("\u274C Failed to ensure collection_records table:", err?.message || err);
+      throw err;
+    }
+  }
+  async ensureCollectionStaffNicknamesTable() {
+    try {
+      await db.execute(sql13`SET search_path TO public`);
+      await db.execute(sql13`
+        CREATE TABLE IF NOT EXISTS public.collection_staff_nicknames (
+          id uuid PRIMARY KEY,
+          nickname text NOT NULL,
+          is_active boolean NOT NULL DEFAULT true,
+          role_scope text NOT NULL DEFAULT 'both',
+          nickname_password_hash text,
+          must_change_password boolean NOT NULL DEFAULT true,
+          password_reset_by_superuser boolean NOT NULL DEFAULT false,
+          password_updated_at timestamp,
+          created_by text,
+          created_at timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS nickname text`);
+      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true`);
+      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS role_scope text DEFAULT 'both'`);
+      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS nickname_password_hash text`);
+      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS must_change_password boolean DEFAULT true`);
+      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS password_reset_by_superuser boolean DEFAULT false`);
+      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS password_updated_at timestamp`);
+      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_by text`);
+      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+      await db.execute(sql13`
+        UPDATE public.collection_staff_nicknames
+        SET
+          nickname = trim(COALESCE(nickname, '')),
+          is_active = COALESCE(is_active, true),
+          role_scope = CASE
+            WHEN lower(trim(COALESCE(role_scope, ''))) IN ('admin', 'user', 'both')
+              THEN lower(trim(COALESCE(role_scope, '')))
+            ELSE 'both'
+          END,
+          nickname_password_hash = NULLIF(trim(COALESCE(nickname_password_hash, '')), ''),
+          must_change_password = COALESCE(
+            must_change_password,
+            CASE
+              WHEN NULLIF(trim(COALESCE(nickname_password_hash, '')), '') IS NULL THEN true
+              ELSE false
+            END
+          ),
+          password_reset_by_superuser = COALESCE(password_reset_by_superuser, false),
+          created_at = COALESCE(created_at, now())
+      `);
+      await db.execute(sql13`DELETE FROM public.collection_staff_nicknames WHERE nickname = ''`);
+      await db.execute(sql13`CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_staff_nicknames_lower_unique ON public.collection_staff_nicknames(lower(nickname))`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_active ON public.collection_staff_nicknames(is_active)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_role_scope ON public.collection_staff_nicknames(role_scope)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_must_change_password ON public.collection_staff_nicknames(must_change_password)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_password_reset ON public.collection_staff_nicknames(password_reset_by_superuser)`);
+      const seedRows = await db.execute(sql13`
+        SELECT DISTINCT trim(collection_staff_nickname) AS nickname
+        FROM public.collection_records
+        WHERE collection_staff_nickname IS NOT NULL
+          AND trim(collection_staff_nickname) <> ''
+        LIMIT 5000
+      `);
+      for (const row of seedRows.rows) {
+        const nickname = String(row.nickname || "").trim();
+        if (!nickname) continue;
+        await db.execute(sql13`
+          INSERT INTO public.collection_staff_nicknames (
+            id,
+            nickname,
+            is_active,
+            nickname_password_hash,
+            must_change_password,
+            password_reset_by_superuser,
+            password_updated_at,
+            created_by,
+            created_at
+          )
+          VALUES (
+            ${crypto6.randomUUID()}::uuid,
+            ${nickname},
+            true,
+            NULL,
+            true,
+            false,
+            NULL,
+            'system-seed',
+            now()
+          )
+          ON CONFLICT ((lower(nickname))) DO NOTHING
+        `);
+      }
+    } catch (err) {
+      console.error("\u274C Failed to ensure collection_staff_nicknames table:", err?.message || err);
+      throw err;
+    }
+  }
+  async ensureCollectionAdminGroupsTables() {
+    try {
+      await db.execute(sql13`SET search_path TO public`);
+      await db.execute(sql13`
+        CREATE TABLE IF NOT EXISTS public.admin_groups (
+          id uuid PRIMARY KEY,
+          leader_nickname text NOT NULL,
+          created_by text NOT NULL,
+          created_at timestamp NOT NULL DEFAULT now(),
+          updated_at timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql13`
+        CREATE TABLE IF NOT EXISTS public.admin_group_members (
+          id uuid PRIMARY KEY,
+          admin_group_id uuid NOT NULL,
+          member_nickname text NOT NULL,
+          created_at timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql13`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS leader_nickname text`);
+      await db.execute(sql13`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_by text`);
+      await db.execute(sql13`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+      await db.execute(sql13`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+      await db.execute(sql13`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS admin_group_id uuid`);
+      await db.execute(sql13`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS member_nickname text`);
+      await db.execute(sql13`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+      await db.execute(sql13`
+        UPDATE public.admin_groups
+        SET
+          leader_nickname = trim(COALESCE(leader_nickname, '')),
+          created_by = COALESCE(NULLIF(trim(COALESCE(created_by, '')), ''), 'system-seed'),
+          created_at = COALESCE(created_at, now()),
+          updated_at = COALESCE(updated_at, now())
+      `);
+      await db.execute(sql13`DELETE FROM public.admin_groups WHERE trim(COALESCE(leader_nickname, '')) = ''`);
+      await db.execute(sql13`
+        UPDATE public.admin_group_members
+        SET
+          member_nickname = trim(COALESCE(member_nickname, '')),
+          created_at = COALESCE(created_at, now())
+      `);
+      await db.execute(sql13`DELETE FROM public.admin_group_members WHERE trim(COALESCE(member_nickname, '')) = ''`);
+      await db.execute(sql13`
+        DELETE FROM public.admin_group_members m
+        WHERE m.admin_group_id IS NULL
+           OR NOT EXISTS (
+            SELECT 1
+            FROM public.admin_groups g
+            WHERE g.id = m.admin_group_id
+          )
+      `);
+      await db.execute(sql13`
+        DELETE FROM public.admin_group_members m
+        USING public.admin_groups g
+        WHERE g.id = m.admin_group_id
+          AND lower(g.leader_nickname) = lower(m.member_nickname)
+      `);
+      await db.execute(sql13`
+        DELETE FROM public.admin_groups a
+        USING public.admin_groups b
+        WHERE lower(a.leader_nickname) = lower(b.leader_nickname)
+          AND a.ctid > b.ctid
+      `);
+      await db.execute(sql13`
+        DELETE FROM public.admin_group_members a
+        USING public.admin_group_members b
+        WHERE a.admin_group_id = b.admin_group_id
+          AND lower(a.member_nickname) = lower(b.member_nickname)
+          AND a.ctid > b.ctid
+      `);
+      await db.execute(sql13`
+        DELETE FROM public.admin_group_members a
+        USING public.admin_group_members b
+        WHERE lower(a.member_nickname) = lower(b.member_nickname)
+          AND a.ctid > b.ctid
+      `);
+      await db.execute(sql13`
+        DELETE FROM public.admin_group_members m
+        WHERE EXISTS (
+          SELECT 1
+          FROM public.admin_groups g
+          WHERE lower(g.leader_nickname) = lower(m.member_nickname)
+            AND g.id <> m.admin_group_id
+        )
+      `);
+      await db.execute(sql13`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_groups_leader_nickname_unique
+        ON public.admin_groups (lower(leader_nickname))
+      `);
+      await db.execute(sql13`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_group_members_group_member_unique
+        ON public.admin_group_members (admin_group_id, lower(member_nickname))
+      `);
+      await db.execute(sql13`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_group_members_member_unique
+        ON public.admin_group_members (lower(member_nickname))
+      `);
+      await db.execute(sql13`
+        CREATE INDEX IF NOT EXISTS idx_admin_group_members_group
+        ON public.admin_group_members (admin_group_id)
+      `);
+    } catch (err) {
+      console.error("\u274C Failed to ensure admin group tables:", err?.message || err);
+      throw err;
+    }
+  }
+  async ensureCollectionNicknameSessionsTable() {
+    try {
+      await db.execute(sql13`SET search_path TO public`);
+      await db.execute(sql13`
+        CREATE TABLE IF NOT EXISTS public.collection_nickname_sessions (
+          activity_id text PRIMARY KEY,
+          username text NOT NULL,
+          user_role text NOT NULL,
+          nickname text NOT NULL,
+          verified_at timestamp NOT NULL DEFAULT now(),
+          updated_at timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql13`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS username text`);
+      await db.execute(sql13`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS user_role text`);
+      await db.execute(sql13`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS nickname text`);
+      await db.execute(sql13`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS verified_at timestamp DEFAULT now()`);
+      await db.execute(sql13`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+      await db.execute(sql13`
+        UPDATE public.collection_nickname_sessions
+        SET
+          username = trim(COALESCE(username, '')),
+          user_role = trim(COALESCE(user_role, '')),
+          nickname = trim(COALESCE(nickname, '')),
+          verified_at = COALESCE(verified_at, now()),
+          updated_at = COALESCE(updated_at, now())
+      `);
+      await db.execute(sql13`
+        DELETE FROM public.collection_nickname_sessions
+        WHERE trim(COALESCE(username, '')) = ''
+          OR trim(COALESCE(user_role, '')) = ''
+          OR trim(COALESCE(nickname, '')) = ''
+      `);
+      await db.execute(sql13`
+        CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_username
+        ON public.collection_nickname_sessions (username)
+      `);
+      await db.execute(sql13`
+        CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_nickname
+        ON public.collection_nickname_sessions (lower(nickname))
+      `);
+      await db.execute(sql13`
+        CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_updated_at
+        ON public.collection_nickname_sessions (updated_at DESC)
+      `);
+    } catch (err) {
+      console.error("\u274C Failed to ensure collection nickname session table:", err?.message || err);
+      throw err;
+    }
+  }
+  async ensureCollectionAdminVisibleNicknamesTable() {
+    try {
+      await db.execute(sql13`SET search_path TO public`);
+      await db.execute(sql13`
+        CREATE TABLE IF NOT EXISTS public.admin_visible_nicknames (
+          id uuid PRIMARY KEY,
+          admin_user_id text NOT NULL,
+          nickname_id uuid NOT NULL,
+          created_by_superuser text,
+          created_at timestamp NOT NULL DEFAULT now()
+        )
+      `);
+      await db.execute(sql13`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS admin_user_id text`);
+      await db.execute(sql13`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS nickname_id uuid`);
+      await db.execute(sql13`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS created_by_superuser text`);
+      await db.execute(sql13`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+      await db.execute(sql13`
+        UPDATE public.admin_visible_nicknames
+        SET created_at = COALESCE(created_at, now())
+      `);
+      await db.execute(sql13`
+        DELETE FROM public.admin_visible_nicknames avn
+        WHERE avn.admin_user_id IS NULL
+          OR avn.nickname_id IS NULL
+      `);
+      await db.execute(sql13`
+        DELETE FROM public.admin_visible_nicknames avn
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM public.users u
+          WHERE u.id = avn.admin_user_id
+            AND u.role = 'admin'
+        )
+      `);
+      await db.execute(sql13`
+        DELETE FROM public.admin_visible_nicknames avn
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM public.collection_staff_nicknames c
+          WHERE c.id = avn.nickname_id
+        )
+      `);
+      await db.execute(sql13`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_visible_nicknames_admin_nickname_unique
+        ON public.admin_visible_nicknames(admin_user_id, nickname_id)
+      `);
+      await db.execute(sql13`
+        CREATE INDEX IF NOT EXISTS idx_admin_visible_nicknames_admin
+        ON public.admin_visible_nicknames(admin_user_id)
+      `);
+      await db.execute(sql13`
+        CREATE INDEX IF NOT EXISTS idx_admin_visible_nicknames_nickname
+        ON public.admin_visible_nicknames(nickname_id)
+      `);
+      const existingCount = await db.execute(sql13`
+        SELECT COUNT(*)::int AS total
+        FROM public.admin_visible_nicknames
+        LIMIT 1
+      `);
+      const total = Number(existingCount.rows?.[0]?.total ?? 0);
+      if (total === 0) {
+        const admins = await db.execute(sql13`
+          SELECT id
+          FROM public.users
+          WHERE role = 'admin'
+          ORDER BY username ASC
+          LIMIT 5000
+        `);
+        const nicknames = await db.execute(sql13`
+          SELECT id
+          FROM public.collection_staff_nicknames
+          WHERE is_active = true
+          ORDER BY lower(nickname) ASC
+          LIMIT 5000
+        `);
+        const adminIds = (admins.rows || []).map((row) => String(row.id || "").trim()).filter(Boolean);
+        const nicknameIds = (nicknames.rows || []).map((row) => String(row.id || "").trim()).filter(Boolean);
+        for (const adminUserId of adminIds) {
+          for (const nicknameId of nicknameIds) {
+            await db.execute(sql13`
+              INSERT INTO public.admin_visible_nicknames (
+                id,
+                admin_user_id,
+                nickname_id,
+                created_by_superuser,
+                created_at
+              )
+              VALUES (
+                ${randomUUID2()}::uuid,
+                ${adminUserId},
+                ${nicknameId}::uuid,
+                'system-seed',
+                now()
+              )
+              ON CONFLICT (admin_user_id, nickname_id) DO NOTHING
+            `);
           }
-          await tx.insert(imports).values(rows).onConflictDoNothing();
-          stats.imports += rows.length;
         }
       }
-      if (backupData.dataRows.length > 0) {
-        for (const chunk of chunkArray(backupData.dataRows, BACKUP_CHUNK_SIZE)) {
-          const rowsToInsert = chunk.map((row) => ({
-            id: row.id ?? crypto.randomUUID(),
-            importId: row.importId,
-            jsonDataJsonb: row.jsonDataJsonb
-          }));
-          await tx.insert(dataRows).values(rowsToInsert).onConflictDoNothing();
-          stats.dataRows += rowsToInsert.length;
+    } catch (err) {
+      console.error("\u274C Failed to ensure admin_visible_nicknames table:", err?.message || err);
+      throw err;
+    }
+  }
+  async ensurePerformanceIndexes() {
+    try {
+      await db.execute(sql13`SET search_path TO public`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_data_rows_import_id ON data_rows(import_id)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_imports_is_deleted ON imports(is_deleted)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_user_activity_login_time ON user_activity(login_time)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_user_activity_logout_time ON user_activity(logout_time)`);
+      try {
+        await db.execute(sql13`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_json_text_trgm
+          ON data_rows
+          USING GIN ((json_data::text) gin_trgm_ops)
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_mykad_digits
+          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No. MyKad',''), '[^0-9]', '', 'g')))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_idno_digits
+          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'ID No',''), '[^0-9]', '', 'g')))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_nopengenalan_digits
+          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No Pengenalan',''), '[^0-9]', '', 'g')))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_ic_digits
+          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'IC',''), '[^0-9]', '', 'g')))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_cardno_digits
+          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Card No',''), '[^0-9]', '', 'g')))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_accountno_digits
+          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Account No',''), '[^0-9]', '', 'g')))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_accountnumber_digits
+          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Account Number',''), '[^0-9]', '', 'g')))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_akaunpemohon_digits
+          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Nombor Akaun Bank Pemohon',''), '[^0-9]', '', 'g')))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_noakaun_digits
+          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No Akaun',''), '[^0-9]', '', 'g')))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_telrumah_digits
+          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No. Telefon Rumah',''), '[^0-9]', '', 'g')))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_telbimbit_digits
+          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No. Telefon Bimbit',''), '[^0-9]', '', 'g')))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_phone_digits
+          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Phone',''), '[^0-9]', '', 'g')))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_handphone_digits
+          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Handphone',''), '[^0-9]', '', 'g')))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_officephone_digits
+          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'OfficePhone',''), '[^0-9]', '', 'g')))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_nob_trgm
+          ON data_rows
+          USING GIN (((json_data::jsonb)->>'NOB') gin_trgm_ops)
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_employer_name_trgm
+          ON data_rows
+          USING GIN (((json_data::jsonb)->>'EMPLOYER NAME') gin_trgm_ops)
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_nature_business_trgm
+          ON data_rows
+          USING GIN (((json_data::jsonb)->>'NATURE OF BUSINESS') gin_trgm_ops)
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_nama_trgm
+          ON data_rows
+          USING GIN (((json_data::jsonb)->>'Nama') gin_trgm_ops)
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_customer_name_trgm
+          ON data_rows
+          USING GIN (((json_data::jsonb)->>'Customer Name') gin_trgm_ops)
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_name_trgm
+          ON data_rows
+          USING GIN (((json_data::jsonb)->>'name') gin_trgm_ops)
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_mykad_exact
+          ON data_rows (((json_data::jsonb)->>'No. MyKad'))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_idno_exact
+          ON data_rows (((json_data::jsonb)->>'ID No'))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_nopengenalan_exact
+          ON data_rows (((json_data::jsonb)->>'No Pengenalan'))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_ic_exact
+          ON data_rows (((json_data::jsonb)->>'IC'))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_accountno_exact
+          ON data_rows (((json_data::jsonb)->>'Account No'))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_accountnumber_exact
+          ON data_rows (((json_data::jsonb)->>'Account Number'))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_cardno_exact
+          ON data_rows (((json_data::jsonb)->>'Card No'))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_noakaun_exact
+          ON data_rows (((json_data::jsonb)->>'No Akaun'))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_akaunpemohon_exact
+          ON data_rows (((json_data::jsonb)->>'Nombor Akaun Bank Pemohon'))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_telrumah_exact
+          ON data_rows (((json_data::jsonb)->>'No. Telefon Rumah'))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_telbimbit_exact
+          ON data_rows (((json_data::jsonb)->>'No. Telefon Bimbit'))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_phone_exact
+          ON data_rows (((json_data::jsonb)->>'Phone'))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_handphone_exact
+          ON data_rows (((json_data::jsonb)->>'Handphone'))
+        `);
+        await db.execute(sql13`
+          CREATE INDEX IF NOT EXISTS idx_data_rows_officephone_exact
+          ON data_rows (((json_data::jsonb)->>'OfficePhone'))
+        `);
+      } catch (err) {
+        console.warn("\u26A0\uFE0F pg_trgm not available; skipping trigram index:", err?.message || err);
+      }
+    } catch (err) {
+      console.error("\u274C Failed to ensure performance indexes:", err?.message || err);
+    }
+  }
+  async ensureBannedSessionsTable() {
+    try {
+      await db.execute(sql13`SET search_path TO public`);
+      await db.execute(sql13`
+        CREATE TABLE IF NOT EXISTS public.banned_sessions (
+          id text PRIMARY KEY,
+          username text NOT NULL,
+          role text NOT NULL,
+          activity_id text NOT NULL,
+          fingerprint text,
+          ip_address text,
+          browser text,
+          pc_name text,
+          banned_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_banned_sessions_fingerprint ON public.banned_sessions(fingerprint)`);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_banned_sessions_ip ON public.banned_sessions(ip_address)`);
+    } catch (err) {
+      console.error("\u274C Failed to ensure banned_sessions table:", err?.message || err);
+    }
+  }
+  async ensureAiTables() {
+    try {
+      await db.execute(sql13`SET search_path TO public`);
+      let vectorAvailable = true;
+      try {
+        await db.execute(sql13`CREATE EXTENSION IF NOT EXISTS vector`);
+      } catch (err) {
+        vectorAvailable = false;
+        console.warn("\u26A0\uFE0F pgvector extension not available. Embeddings disabled until installed.");
+      }
+      if (vectorAvailable) {
+        await db.execute(sql13`
+          CREATE TABLE IF NOT EXISTS public.data_embeddings (
+            id text PRIMARY KEY,
+            import_id text NOT NULL,
+            row_id text NOT NULL UNIQUE,
+            content text NOT NULL,
+            embedding vector(768) NOT NULL,
+            created_at timestamp DEFAULT now()
+          )
+        `);
+        await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_data_embeddings_import_id ON public.data_embeddings(import_id)`);
+        try {
+          await db.execute(sql13`
+            CREATE INDEX IF NOT EXISTS idx_data_embeddings_vector
+            ON public.data_embeddings
+            USING ivfflat (embedding vector_cosine_ops)
+          `);
+        } catch (err) {
+          console.warn("\u26A0\uFE0F Failed to create ivfflat index:", err?.message || err);
         }
       }
-      if (backupData.users.length > 0) {
+      await db.execute(sql13`
+        CREATE TABLE IF NOT EXISTS public.ai_conversations (
+          id text PRIMARY KEY,
+          created_by text NOT NULL,
+          created_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql13`
+        CREATE TABLE IF NOT EXISTS public.ai_messages (
+          id text PRIMARY KEY,
+          conversation_id text NOT NULL,
+          role text NOT NULL,
+          content text NOT NULL,
+          created_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation_id ON public.ai_messages(conversation_id)`);
+    } catch (err) {
+      console.error("\u274C Failed to ensure AI tables:", err?.message || err);
+    }
+  }
+  async ensureCategoryStatsTable() {
+    try {
+      await db.execute(sql13`SET search_path TO public`);
+      await db.execute(sql13`
+        CREATE TABLE IF NOT EXISTS public.ai_category_stats (
+          key text PRIMARY KEY,
+          total integer NOT NULL,
+          samples jsonb,
+          updated_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_ai_category_stats_updated_at ON public.ai_category_stats(updated_at)`);
+    } catch (err) {
+      console.error("\u274C Failed to ensure ai_category_stats table:", err?.message || err);
+    }
+  }
+  async ensureCategoryRulesTable() {
+    try {
+      await db.execute(sql13`SET search_path TO public`);
+      await db.execute(sql13`
+        CREATE TABLE IF NOT EXISTS public.ai_category_rules (
+          key text PRIMARY KEY,
+          terms text[] NOT NULL DEFAULT '{}',
+          fields text[] NOT NULL DEFAULT '{}',
+          match_mode text NOT NULL DEFAULT 'contains',
+          enabled boolean NOT NULL DEFAULT true,
+          updated_at timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_ai_category_rules_updated_at ON public.ai_category_rules(updated_at)`);
+      const defaultFields = [
+        "NOB",
+        "NATURE OF BUSINESS",
+        "Nature of Business",
+        "EMPLOYER NAME",
+        "EmployerName",
+        "Company",
+        "Nama Majikan",
+        "Majikan",
+        "Department",
+        "Agensi"
+      ];
+      const defaults = [
+        {
+          key: "kerajaan",
+          terms: [
+            "GOVERNMENT",
+            "KERAJAAN",
+            "PUBLIC SECTOR",
+            "SECTOR AWAM",
+            "KEMENTERIAN",
+            "JABATAN",
+            "AGENSI",
+            "PERSEKUTUAN",
+            "NEGERI",
+            "MAJLIS",
+            "KKM",
+            "KPM",
+            "KPT",
+            "MOE",
+            "MOH",
+            "SEKOLAH",
+            "GURU",
+            "TEACHER",
+            "CIKGU",
+            "PENDIDIKAN"
+          ],
+          fields: defaultFields,
+          matchMode: "contains",
+          enabled: true
+        },
+        {
+          key: "hospital",
+          terms: [
+            "HEALTHCARE",
+            "HOSPITAL",
+            "CLINIC",
+            "KLINIK",
+            "KESIHATAN",
+            "MEDICAL",
+            "HEALTH"
+          ],
+          fields: defaultFields,
+          matchMode: "contains",
+          enabled: true
+        },
+        {
+          key: "hotel",
+          terms: [
+            "HOTEL",
+            "HOSPITALITY",
+            "RESORT",
+            "INN",
+            "MOTEL",
+            "RESTAURANT",
+            "SERVICE LINE",
+            "HOTEL,RESTAURANT",
+            "HOTEL & RESTAURANT"
+          ],
+          fields: defaultFields,
+          matchMode: "contains",
+          enabled: true
+        },
+        {
+          key: "polis",
+          terms: ["POLIS", "POLICE", "PDRM", "IPD", "IPK", "ROYAL MALAYSIA POLICE"],
+          fields: defaultFields,
+          matchMode: "contains",
+          enabled: true
+        },
+        {
+          key: "tentera",
+          terms: [
+            "TENTERA",
+            "ARMY",
+            "MILITARY",
+            "ARMED FORCES",
+            "ATM",
+            "TUDM",
+            "TLDM",
+            "TENTERA DARAT",
+            "TENTERA LAUT",
+            "TENTERA UDARA",
+            "ANGKATAN TENTERA",
+            "ANGKATAN TENTERA MALAYSIA",
+            "MINDEF",
+            "MINISTRY OF DEFENCE",
+            "KEMENTERIAN PERTAHANAN",
+            "DEFENCE",
+            "PERTAHANAN"
+          ],
+          fields: defaultFields,
+          matchMode: "contains",
+          enabled: true
+        },
+        {
+          key: "swasta",
+          terms: ["SWASTA", "PRIVATE", "SDN BHD", "BHD", "ENTERPRISE", "TRADING", "LTD", "PLC"],
+          fields: defaultFields,
+          matchMode: "complement",
+          enabled: true
+        }
+      ];
+      const toTextArray = (values) => {
+        if (!values.length) return sql13`'{}'::text[]`;
+        const joined = sql13.join(values.map((v) => sql13`${v}`), sql13`, `);
+        return sql13`ARRAY[${joined}]::text[]`;
+      };
+      for (const rule of defaults) {
+        const termsSql = toTextArray(rule.terms || []);
+        const fieldsSql = toTextArray(rule.fields || []);
+        await db.execute(sql13`
+          INSERT INTO public.ai_category_rules (key, terms, fields, match_mode, enabled, updated_at)
+          VALUES (${rule.key}, ${termsSql}, ${fieldsSql}, ${rule.matchMode ?? "contains"}, ${rule.enabled ?? true}, now())
+          ON CONFLICT (key) DO UPDATE SET
+            terms = EXCLUDED.terms,
+            fields = EXCLUDED.fields,
+            match_mode = EXCLUDED.match_mode,
+            enabled = EXCLUDED.enabled,
+            updated_at = now()
+        `);
+      }
+    } catch (err) {
+      console.error("\u274C Failed to ensure ai_category_rules table:", err?.message || err);
+    }
+  }
+  async ensureSettingsTables() {
+    await this.settingsBootstrap.ensureTables();
+  }
+  async ensureSpatialTables() {
+    await this.spatialBootstrap.ensureTables();
+  }
+  async ensureBackupsTable() {
+    await this.backupsBootstrap.ensureTable();
+  }
+  async ensureBackupsReady() {
+    await this.ensureBackupsTable();
+  }
+  parseBackupMetadataSafe(raw) {
+    if (!raw) return null;
+    if (typeof raw === "object") return raw;
+    if (typeof raw !== "string") return null;
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    if (trimmed.length > 2e5) return null;
+    try {
+      const parsed = JSON.parse(trimmed);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  parseBackupMetadata(raw) {
+    return this.parseBackupMetadataSafe(raw);
+  }
+  async seedDefaultUsers() {
+    const shouldSeedConfiguredUsers = shouldSeedDefaultUsers();
+    const [{ value: existingUserCount }] = await db.select({ value: count2() }).from(users);
+    const isFreshLocalBootstrap = !shouldSeedConfiguredUsers && Number(existingUserCount || 0) === 0 && process.env.NODE_ENV !== "production";
+    const defaultUsers = [
+      {
+        username: process.env.SEED_SUPERUSER_USERNAME || "superuser",
+        password: process.env.SEED_SUPERUSER_PASSWORD || "",
+        role: "superuser"
+      },
+      {
+        username: process.env.SEED_ADMIN_USERNAME || "admin1",
+        password: process.env.SEED_ADMIN_PASSWORD || "",
+        role: "admin"
+      },
+      {
+        username: process.env.SEED_USER_USERNAME || "user1",
+        password: process.env.SEED_USER_PASSWORD || "",
+        role: "user"
+      }
+    ].filter((user) => user.password);
+    if (isFreshLocalBootstrap) {
+      defaultUsers.push({
+        username: process.env.SEED_SUPERUSER_USERNAME || "superuser",
+        password: process.env.SEED_SUPERUSER_PASSWORD || "0441024k",
+        role: "superuser"
+      });
+      console.warn(
+        "[AUTH] No users found. Bootstrapped local superuser account for first login."
+      );
+    } else if (!shouldSeedConfiguredUsers) {
+      return;
+    }
+    for (const user of defaultUsers) {
+      const existing = await this.getUserByUsername(user.username);
+      if (!existing) {
         const now = /* @__PURE__ */ new Date();
-        const userRows = backupData.users.filter((u) => u.passwordHash).map((u) => ({
-          id: crypto.randomUUID(),
-          username: u.username,
-          passwordHash: u.passwordHash,
-          role: u.role,
+        const hashedPassword = await bcrypt2.hash(user.password, BCRYPT_COST2);
+        await db.insert(users).values({
+          id: crypto6.randomUUID(),
+          username: user.username,
+          passwordHash: hashedPassword,
+          role: user.role,
           createdAt: now,
           updatedAt: now,
           passwordChangedAt: now,
-          isBanned: u.isBanned ?? false
-        }));
-        for (const chunk of chunkArray(userRows, BACKUP_CHUNK_SIZE)) {
-          await tx.insert(users).values(chunk).onConflictDoNothing();
-          stats.users += chunk.length;
-        }
+          isBanned: false
+        });
       }
-      if (backupData.auditLogs.length > 0) {
-        for (const chunk of chunkArray(backupData.auditLogs, BACKUP_CHUNK_SIZE)) {
-          const rows = chunk.map((log) => ({
-            id: log.id ?? crypto.randomUUID(),
-            action: log.action,
-            performedBy: log.performedBy,
-            targetUser: log.targetUser ?? null,
-            targetResource: log.targetResource ?? null,
-            details: log.details ?? null,
-            timestamp: toDate(log.timestamp) ?? /* @__PURE__ */ new Date()
-          }));
-          await tx.insert(auditLogs).values(rows).onConflictDoNothing();
-          stats.auditLogs += rows.length;
-        }
-      }
-    });
-    return { success: true, stats };
+    }
   }
-  async getDashboardSummary() {
-    const today = /* @__PURE__ */ new Date();
-    today.setHours(0, 0, 0, 0);
-    const [totalUsers] = await db.select({ value: count() }).from(users);
-    const [activeSessions] = await db.select({ value: count() }).from(userActivity).where(eq(userActivity.isActive, true));
-    const [loginsToday] = await db.select({ value: count() }).from(userActivity).where(gte(userActivity.loginTime, today));
-    const [totalDataRows] = await db.select({ value: count() }).from(dataRows);
-    const [totalImports] = await db.select({ value: count() }).from(imports).where(eq(imports.isDeleted, false));
-    const [bannedUsers] = await db.select({ value: count() }).from(users).where(eq(users.isBanned, true));
+  async getUser(id) {
+    return this.authRepository.getUser(id);
+  }
+  async getUserByUsername(username) {
+    return this.authRepository.getUserByUsername(username);
+  }
+  async createUser(user) {
+    return this.authRepository.createUser(user);
+  }
+  async updateUserCredentials(params) {
+    return this.authRepository.updateUserCredentials(params);
+  }
+  async getUsersByRoles(roles) {
+    return this.authRepository.getUsersByRoles(roles);
+  }
+  async updateActivitiesUsername(oldUsername, newUsername) {
+    return this.authRepository.updateActivitiesUsername(oldUsername, newUsername);
+  }
+  async searchGlobalDataRows(params) {
+    const { search, limit, offset } = params;
+    const rowsResult = await db.execute(sql13`
+    SELECT
+      dr.id,
+      dr.import_id,
+      dr.json_data as json_data_jsonb,
+      i.name as import_name,
+      i.filename as import_filename
+    FROM data_rows dr
+    JOIN imports i ON i.id = dr.import_id
+    WHERE i.is_deleted = false
+      AND dr.json_data::text ILIKE ${"%" + search + "%"}
+    ORDER BY dr.id
+    LIMIT ${limit} OFFSET ${offset}
+  `);
+    const totalResult = await db.execute(sql13`
+    SELECT COUNT(*)::int AS total
+    FROM data_rows dr
+    JOIN imports i ON i.id = dr.import_id
+    WHERE i.is_deleted = false
+      AND dr.json_data::text ILIKE ${"%" + search + "%"}
+  `);
+    const convertedRows = rowsResult.rows.map((row, idx) => {
+      let jsonData = row.json_data_jsonb;
+      if (idx === 0 && STORAGE_DEBUG_LOGS) {
+        console.log(`\u{1F50D} DEBUG first row keys: ${Object.keys(row).join(", ")}`);
+        console.log(`\u{1F50D} DEBUG json_data type: ${typeof jsonData}, isArray: ${Array.isArray(jsonData)}, value sample: ${JSON.stringify(jsonData).substring(0, 100)}`);
+      }
+      if (typeof jsonData === "string") {
+        try {
+          jsonData = JSON.parse(jsonData);
+        } catch (e) {
+          if (STORAGE_DEBUG_LOGS) {
+            console.log(`\u{1F50D} Failed to parse json_data as JSON, treating as string`);
+          }
+        }
+      }
+      if (Array.isArray(jsonData)) {
+        const obj = {};
+        for (let i = 0; i < jsonData.length; i++) {
+          obj[`col_${i + 1}`] = jsonData[i];
+        }
+        jsonData = obj;
+        if (idx === 0 && STORAGE_DEBUG_LOGS) {
+          console.log(`\u{1F50D} Converted array to object with keys: ${Object.keys(jsonData).join(",")}`);
+        }
+      }
+      return {
+        id: row.id,
+        importId: row.import_id,
+        importName: row.import_name,
+        importFilename: row.import_filename,
+        jsonDataJsonb: jsonData
+      };
+    });
+    const total = totalResult.rows && totalResult.rows[0] ? Number(totalResult.rows[0].total) : 0;
     return {
-      totalUsers: totalUsers.value,
-      activeSessions: activeSessions.value,
-      loginsToday: loginsToday.value,
-      totalDataRows: totalDataRows.value,
-      totalImports: totalImports.value,
-      bannedUsers: bannedUsers.value
+      rows: convertedRows,
+      total
     };
   }
-  async getLoginTrends(days = 7) {
-    const result = await db.execute(sql`
-    WITH bounds AS (
-      SELECT (NOW() AT TIME ZONE ${ANALYTICS_TZ})::date AS end_date
-    ),
-    days AS (
-      SELECT generate_series(
-        (SELECT end_date FROM bounds) - (${days} - 1) * INTERVAL '1 day',
-        (SELECT end_date FROM bounds),
-        INTERVAL '1 day'
-      )::date AS day
-    ),
-    logins AS (
-      SELECT
-        (login_time AT TIME ZONE 'UTC' AT TIME ZONE ${ANALYTICS_TZ})::date AS day,
-        COUNT(*)::int AS logins
-      FROM user_activity
-      WHERE login_time IS NOT NULL
-      GROUP BY day
-    ),
-    logouts AS (
-      SELECT
-        (logout_time AT TIME ZONE 'UTC' AT TIME ZONE ${ANALYTICS_TZ})::date AS day,
-        COUNT(*)::int AS logouts
-      FROM user_activity
-      WHERE logout_time IS NOT NULL
-      GROUP BY day
-    )
+  async searchSimpleDataRows(search) {
+    return await db.execute(sql13`
     SELECT
-      days.day AS date,
-      COALESCE(logins.logins, 0)::int AS logins,
-      COALESCE(logouts.logouts, 0)::int AS logouts
-    FROM days
-    LEFT JOIN logins ON logins.day = days.day
-    LEFT JOIN logouts ON logouts.day = days.day
-    ORDER BY days.day ASC
+      dr.import_id as "importId",
+      i.name as "importName",
+      dr.json_data_jsonb as "jsonDataJsonb"
+    FROM data_rows dr
+    JOIN imports i ON i.id = dr.import_id
+    WHERE dr.json_data_jsonb::text ILIKE ${"%" + search + "%"}
+    LIMIT 200
   `);
-    const rows = result.rows;
-    return rows.map((r) => ({
-      date: r.date,
-      logins: r.logins,
-      logouts: r.logouts
+  }
+  async updateUserBan(username, isBanned) {
+    return this.authRepository.updateUserBan(username, isBanned);
+  }
+  async createImport(data) {
+    return this.importsRepository.createImport(data);
+  }
+  async getImports() {
+    return this.importsRepository.getImports();
+  }
+  async getImportById(id) {
+    return this.importsRepository.getImportById(id);
+  }
+  async updateImportName(id, name) {
+    return this.importsRepository.updateImportName(id, name);
+  }
+  async deleteImport(id) {
+    return this.importsRepository.deleteImport(id);
+  }
+  async createDataRow(data) {
+    return this.importsRepository.createDataRow(data);
+  }
+  async getDataRowsByImport(importId) {
+    if (STORAGE_DEBUG_LOGS) {
+      console.log("\u{1F9EA} VIEWER importId received:", importId);
+    }
+    const rows = await this.importsRepository.getDataRowsByImport(importId);
+    if (STORAGE_DEBUG_LOGS) {
+      console.log("\u{1F9EA} ROW COUNT:", rows.length);
+    }
+    return rows;
+  }
+  async getDataRowCountByImport(importId) {
+    return this.importsRepository.getDataRowCountByImport(importId);
+  }
+  async searchDataRows(params) {
+    const { importId, search, limit, offset } = params;
+    const trimmedSearch = search && search.trim() ? search.trim() : null;
+    if (STORAGE_DEBUG_LOGS) {
+      console.log(`\u{1F50D} searchDataRows called: search="${search}" -> trimmed="${trimmedSearch}"`);
+    }
+    const safeLimit = Math.min(limit, MAX_SEARCH_LIMIT2);
+    const safeOffset = Math.max(offset, 0);
+    if (trimmedSearch && trimmedSearch.length < 2) {
+      return { rows: [], total: 0 };
+    }
+    if (!trimmedSearch) {
+      const rows = await db.select().from(dataRows).where(eq5(dataRows.importId, importId)).limit(safeLimit).offset(safeOffset);
+      const [{ count: count3 }] = await db.select({ count: sql13`count(*)` }).from(dataRows).where(eq5(dataRows.importId, importId));
+      if (STORAGE_DEBUG_LOGS) {
+        console.log("\u{1F50D} searchDataRows (no search) - returned:", rows.length, "rows");
+      }
+      return { rows, total: Number(count3) };
+    }
+    if (STORAGE_DEBUG_LOGS) {
+      console.log(`\u{1F50D} Executing search query for: "${trimmedSearch}"`);
+    }
+    const rowsResult = await db.execute(sql13`
+    SELECT 
+      id,
+      import_id,
+      json_data::jsonb as json_data
+    FROM data_rows
+    WHERE import_id = ${importId}
+      AND json_data::text ILIKE ${"%" + trimmedSearch + "%"}
+    ORDER BY id
+    LIMIT ${safeLimit} OFFSET ${safeOffset}
+  `);
+    const totalResult = await db.execute(sql13`
+    SELECT COUNT(*)::int AS total
+    FROM data_rows
+    WHERE import_id = ${importId}
+      AND json_data::text ILIKE ${"%" + trimmedSearch + "%"}
+  `);
+    const totalCount = totalResult.rows && totalResult.rows[0] ? Number(totalResult.rows[0].total) : 0;
+    if (STORAGE_DEBUG_LOGS) {
+      console.log(`\u{1F50D} Search results: ${rowsResult.rows.length} rows found (total: ${totalCount})`);
+    }
+    const convertedRows = rowsResult.rows.map((row) => {
+      let jsonData = row.json_data;
+      if (Array.isArray(jsonData)) {
+        const obj = {};
+        for (let i = 0; i < jsonData.length; i++) {
+          obj[`col_${i + 1}`] = jsonData[i];
+        }
+        jsonData = obj;
+        if (STORAGE_DEBUG_LOGS) {
+          console.log(`\u{1F50D} Converted array row id=${row.id} to object with keys: ${Object.keys(jsonData).join(",")}`);
+        }
+      }
+      return {
+        id: row.id,
+        importId: row.import_id,
+        jsonDataJsonb: jsonData
+      };
+    });
+    return {
+      rows: convertedRows,
+      total: totalCount
+    };
+  }
+  async getAllowedSearchColumns() {
+    const columns = await this.getAllColumnNames();
+    return new Set(columns);
+  }
+  async advancedSearchDataRows(filters, logic, limit, offset) {
+    const activeImports = await this.getImports();
+    const activeImportIds = activeImports.map((imp) => imp.id);
+    if (activeImportIds.length === 0) {
+      return { rows: [], total: 0 };
+    }
+    const allowedColumns = await this.getAllowedSearchColumns();
+    const safeFilters = filters.filter(
+      (f) => allowedColumns.has(f.field) && ALLOWED_OPERATORS2.has(f.operator)
+    );
+    if (safeFilters.length === 0) {
+      return { rows: [], total: 0 };
+    }
+    const conditions = safeFilters.map(
+      (filter) => buildSqlCondition(filter.field, filter.operator, filter.value)
+    );
+    const combinedCondition = logic === "AND" ? and3(...conditions) : or(...conditions);
+    const safeLimit = Math.min(limit, MAX_SEARCH_LIMIT2);
+    const safeOffset = Math.max(offset, 0);
+    const rows = await db.select().from(dataRows).where(
+      and3(
+        inArray2(dataRows.importId, activeImportIds),
+        combinedCondition
+      )
+    ).limit(safeLimit).offset(safeOffset);
+    const [{ count: count3 }] = await db.select({ count: sql13`count(*)` }).from(dataRows).where(
+      and3(
+        inArray2(dataRows.importId, activeImportIds),
+        combinedCondition
+      )
+    );
+    return { rows, total: Number(count3) };
+  }
+  async getAllColumnNames() {
+    const result = await db.execute(sql13`
+      SELECT DISTINCT key AS column_name
+      FROM public.data_rows dr
+      JOIN public.imports i ON i.id = dr.import_id
+      CROSS JOIN LATERAL jsonb_object_keys(dr.json_data::jsonb) AS key
+      WHERE i.is_deleted = false
+        AND jsonb_typeof(dr.json_data::jsonb) = 'object'
+      ORDER BY key
+      LIMIT ${MAX_COLUMN_KEYS2}
+    `);
+    return (result.rows || []).map((row) => String(row.column_name || "").trim()).filter((name) => name.length > 0);
+  }
+  async createActivity(data) {
+    return this.activityRepository.createActivity(data);
+  }
+  async touchActivity(activityId) {
+    return this.activityRepository.touchActivity(activityId);
+  }
+  async getActiveActivitiesByUsername(username) {
+    return this.activityRepository.getActiveActivitiesByUsername(username);
+  }
+  async updateActivity(id, data) {
+    return this.activityRepository.updateActivity(id, data);
+  }
+  async getActivityById(id) {
+    return this.activityRepository.getActivityById(id);
+  }
+  async getActiveActivities() {
+    return this.activityRepository.getActiveActivities();
+  }
+  async getAllActivities() {
+    return this.activityRepository.getAllActivities();
+  }
+  async deleteActivity(id) {
+    return this.activityRepository.deleteActivity(id);
+  }
+  async getFilteredActivities(filters) {
+    return this.activityRepository.getFilteredActivities(filters);
+  }
+  async deactivateUserActivities(username, reason) {
+    return this.activityRepository.deactivateUserActivities(username, reason);
+  }
+  async deactivateUserSessionsByFingerprint(username, fingerprint) {
+    return this.activityRepository.deactivateUserSessionsByFingerprint(username, fingerprint);
+  }
+  async getBannedUsers() {
+    return this.activityRepository.getBannedUsers();
+  }
+  async isVisitorBanned(fingerprint, ipAddress) {
+    return this.activityRepository.isVisitorBanned(fingerprint, ipAddress);
+  }
+  async banVisitor(params) {
+    return this.activityRepository.banVisitor(params);
+  }
+  async unbanVisitor(banId) {
+    return this.activityRepository.unbanVisitor(banId);
+  }
+  async getBannedSessions() {
+    return this.activityRepository.getBannedSessions();
+  }
+  async createConversation(createdBy) {
+    const id = crypto6.randomUUID();
+    await db.execute(sql13`
+      INSERT INTO public.ai_conversations (id, created_by, created_at)
+      VALUES (${id}, ${createdBy}, ${/* @__PURE__ */ new Date()})
+    `);
+    return id;
+  }
+  async saveConversationMessage(conversationId, role, content) {
+    await db.execute(sql13`
+      INSERT INTO public.ai_messages (id, conversation_id, role, content, created_at)
+      VALUES (${crypto6.randomUUID()}, ${conversationId}, ${role}, ${content}, ${/* @__PURE__ */ new Date()})
+    `);
+  }
+  async getConversationMessages(conversationId, limit = 20) {
+    const result = await db.execute(sql13`
+      SELECT role, content
+      FROM public.ai_messages
+      WHERE conversation_id = ${conversationId}
+      ORDER BY created_at ASC
+      LIMIT ${limit}
+    `);
+    return result.rows;
+  }
+  async saveEmbedding(params) {
+    const embeddingLiteral = sql13.raw(`'[${params.embedding.join(",")}]'`);
+    await db.execute(sql13`
+      INSERT INTO public.data_embeddings (id, import_id, row_id, content, embedding, created_at)
+      VALUES (${crypto6.randomUUID()}, ${params.importId}, ${params.rowId}, ${params.content}, ${embeddingLiteral}::vector, ${/* @__PURE__ */ new Date()})
+      ON CONFLICT (row_id) DO UPDATE SET
+        import_id = EXCLUDED.import_id,
+        content = EXCLUDED.content,
+        embedding = EXCLUDED.embedding
+    `);
+  }
+  async semanticSearch(params) {
+    const embeddingLiteral = sql13.raw(`'[${params.embedding.join(",")}]'`);
+    const importFilter = params.importId ? sql13`AND e.import_id = ${params.importId}` : sql13``;
+    try {
+      await db.execute(sql13`SET ivfflat.probes = 5`);
+    } catch {
+    }
+    const result = await db.execute(sql13`
+      SELECT
+        e.row_id as "rowId",
+        e.import_id as "importId",
+        e.content as "content",
+        (1 - (e.embedding <=> ${embeddingLiteral}::vector))::float as "score",
+        i.name as "importName",
+        i.filename as "importFilename",
+        dr.json_data as "jsonDataJsonb"
+      FROM public.data_embeddings e
+      JOIN data_rows dr ON dr.id = e.row_id
+      LEFT JOIN imports i ON i.id = e.import_id
+      WHERE (i.is_deleted = false OR i.is_deleted IS NULL)
+      ${importFilter}
+      ORDER BY e.embedding <=> ${embeddingLiteral}::vector
+      LIMIT ${params.limit}
+    `);
+    return result.rows.map((row) => {
+      let jsonData = row.jsonDataJsonb;
+      if (typeof jsonData === "string") {
+        try {
+          jsonData = JSON.parse(jsonData);
+        } catch {
+        }
+      }
+      return { ...row, jsonDataJsonb: jsonData };
+    });
+  }
+  async aiKeywordSearch(params) {
+    const q = String(params.query || "");
+    const digits = q.replace(/[^0-9]/g, "");
+    const limit = Math.max(1, Math.min(50, params.limit || 10));
+    if (digits.length < 6) return [];
+    const isIc = digits.length === 12;
+    const isPhone = digits.length >= 9 && digits.length <= 11;
+    const icFields = ["No. MyKad", "ID No", "No Pengenalan", "IC", "NRIC", "MyKad"];
+    const phoneFields = ["No. Telefon Rumah", "No. Telefon Bimbit", "Telefon", "Phone", "HP", "Handphone", "OfficePhone"];
+    const accountFields = ["Nombor Akaun Bank Pemohon", "Account No", "Account Number", "No Akaun", "Card No"];
+    const primaryFields = isIc ? icFields : isPhone ? phoneFields : accountFields;
+    if (primaryFields.length === 0) return [];
+    const perFieldMatch = sql13.join(
+      primaryFields.map(
+        (key) => sql13`coalesce((dr.json_data::jsonb)->>${key}, '') = ${digits}`
+      ),
+      sql13` OR `
+    );
+    const result = await db.execute(sql13`
+      SELECT
+        dr.id as "rowId",
+        dr.import_id as "importId",
+        i.name as "importName",
+        i.filename as "importFilename",
+        dr.json_data as "jsonDataJsonb"
+      FROM data_rows dr
+      JOIN imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+        AND (${perFieldMatch})
+      ORDER BY dr.id
+      LIMIT ${limit}
+    `);
+    return result.rows;
+  }
+  async aiNameSearch(params) {
+    const q = String(params.query || "").trim();
+    if (!q) return [];
+    const nameKeysMatch = sql13`
+      (
+        coalesce((dr.json_data::jsonb)->>'Nama','') ILIKE ${"%" + q + "%"} OR
+        coalesce((dr.json_data::jsonb)->>'Customer Name','') ILIKE ${"%" + q + "%"} OR
+        coalesce((dr.json_data::jsonb)->>'name','') ILIKE ${"%" + q + "%"} OR
+        coalesce((dr.json_data::jsonb)->>'MAKLUMAT PEMOHON','') ILIKE ${"%" + q + "%"}
+      )
+    `;
+    const result = await db.execute(sql13`
+      SELECT
+        dr.id as "rowId",
+        dr.import_id as "importId",
+        i.name as "importName",
+        i.filename as "importFilename",
+        dr.json_data as "jsonDataJsonb"
+      FROM data_rows dr
+      JOIN imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+        AND ${nameKeysMatch}
+      ORDER BY dr.id
+      LIMIT ${params.limit}
+    `);
+    return result.rows;
+  }
+  async aiDigitsSearch(params) {
+    const digits = params.digits;
+    const result = await db.execute(sql13`
+      SELECT
+        dr.id as "rowId",
+        dr.import_id as "importId",
+        i.name as "importName",
+        i.filename as "importFilename",
+        dr.json_data as "jsonDataJsonb"
+      FROM data_rows dr
+      JOIN imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+        AND regexp_replace(dr.json_data::text, '[^0-9]', '', 'g') LIKE ${"%" + digits + "%"}
+      ORDER BY dr.id
+      LIMIT ${params.limit}
+    `);
+    return result.rows;
+  }
+  async aiFuzzySearch(params) {
+    const raw = String(params.query || "").toLowerCase().trim();
+    const tokens = raw.split(/\s+/).map((t) => t.replace(/[^a-z0-9]/gi, "")).filter((t) => t.length >= 3);
+    if (tokens.length === 0) return [];
+    const scoreParts = tokens.map(
+      (t) => sql13`CASE WHEN dr.json_data::text ILIKE ${"%" + t + "%"} THEN 1 ELSE 0 END`
+    );
+    const whereParts = tokens.map(
+      (t) => sql13`dr.json_data::text ILIKE ${"%" + t + "%"}`
+    );
+    const scoreSql = sql13.join(scoreParts, sql13` + `);
+    const whereSql = sql13.join(whereParts, sql13` OR `);
+    const result = await db.execute(sql13`
+      SELECT
+        dr.id as "rowId",
+        dr.import_id as "importId",
+        i.name as "importName",
+        i.filename as "importFilename",
+        dr.json_data as "jsonDataJsonb",
+        (${scoreSql})::int as "score"
+      FROM data_rows dr
+      JOIN imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+        AND (${whereSql})
+      ORDER BY "score" DESC, dr.id
+      LIMIT ${params.limit}
+    `);
+    return result.rows;
+  }
+  async findBranchesByText(params) {
+    const q = String(params.query || "").trim();
+    if (!q) return [];
+    const limit = Math.max(1, Math.min(5, params.limit));
+    try {
+      const result = await db.execute(sql13`
+          SELECT
+            name,
+            branch_address,
+            phone_number,
+            fax_number,
+            business_hour,
+            day_open,
+            atm_cdm,
+            inquiry_availability,
+            application_availability,
+            aeon_lounge,
+            GREATEST(
+              similarity(coalesce(name, ''), ${q}),
+              similarity(coalesce(branch_address, ''), ${q})
+            ) AS score
+          FROM public.aeon_branches
+          WHERE
+            name ILIKE ${"%" + q + "%"}
+            OR branch_address ILIKE ${"%" + q + "%"}
+            OR GREATEST(
+              similarity(coalesce(name, ''), ${q}),
+              similarity(coalesce(branch_address, ''), ${q})
+            ) > 0.1
+          ORDER BY
+            CASE
+              WHEN name ILIKE ${"%" + q + "%"} OR branch_address ILIKE ${"%" + q + "%"} THEN 0
+              ELSE 1
+            END,
+            score DESC,
+            name
+          LIMIT ${limit}
+        `);
+      return result.rows.map((row) => ({
+        name: row.name,
+        address: row.branch_address,
+        phone: row.phone_number,
+        fax: row.fax_number,
+        businessHour: row.business_hour,
+        dayOpen: row.day_open,
+        atmCdm: row.atm_cdm,
+        inquiryAvailability: row.inquiry_availability,
+        applicationAvailability: row.application_availability,
+        aeonLounge: row.aeon_lounge
+      }));
+    } catch {
+      const result = await db.execute(sql13`
+          SELECT
+            name,
+            branch_address,
+            phone_number,
+            fax_number,
+            business_hour,
+            day_open,
+            atm_cdm,
+            inquiry_availability,
+            application_availability,
+            aeon_lounge
+          FROM public.aeon_branches
+          WHERE name ILIKE ${"%" + q + "%"}
+             OR branch_address ILIKE ${"%" + q + "%"}
+          ORDER BY name
+          LIMIT ${limit}
+        `);
+      return result.rows.map((row) => ({
+        name: row.name,
+        address: row.branch_address,
+        phone: row.phone_number,
+        fax: row.fax_number,
+        businessHour: row.business_hour,
+        dayOpen: row.day_open,
+        atmCdm: row.atm_cdm,
+        inquiryAvailability: row.inquiry_availability,
+        applicationAvailability: row.application_availability,
+        aeonLounge: row.aeon_lounge
+      }));
+    }
+  }
+  async findBranchesByPostcode(params) {
+    await this.ensureSpatialTables();
+    const rawDigits = String(params.postcode || "").replace(/\D/g, "");
+    const postcode = rawDigits.length === 4 ? `0${rawDigits}` : rawDigits.slice(0, 5);
+    if (postcode.length !== 5) return [];
+    const limit = Math.max(1, Math.min(5, params.limit));
+    let result = await db.execute(sql13`
+        (
+          SELECT DISTINCT
+            b.name,
+            b.branch_address,
+            b.phone_number,
+            b.fax_number,
+            b.business_hour,
+            b.day_open,
+            b.atm_cdm,
+            b.inquiry_availability,
+            b.application_availability,
+            b.aeon_lounge
+          FROM public.aeon_branch_postcodes p
+          JOIN public.aeon_branches b
+            ON lower(b.name) = lower(p.source_branch)
+          WHERE p.postcode = ${postcode}
+        )
+        UNION
+        (
+          SELECT
+            b.name,
+            b.branch_address,
+            b.phone_number,
+            b.fax_number,
+            b.business_hour,
+            b.day_open,
+            b.atm_cdm,
+            b.inquiry_availability,
+            b.application_availability,
+            b.aeon_lounge
+          FROM public.aeon_branches b
+          WHERE coalesce(b.branch_address, '') ~ ('(^|\\D)' || ${postcode} || '(\\D|$)')
+        )
+        ORDER BY name
+        LIMIT ${limit}
+      `);
+    if (result.rows.length === 0) {
+      result = await db.execute(sql13`
+          SELECT
+            b.name,
+            b.branch_address,
+            b.phone_number,
+            b.fax_number,
+            b.business_hour,
+            b.day_open,
+            b.atm_cdm,
+            b.inquiry_availability,
+            b.application_availability,
+            b.aeon_lounge
+          FROM public.aeon_branch_postcodes p
+          JOIN public.aeon_branches b
+            ON lower(b.name) = lower(p.source_branch)
+          WHERE p.postcode ~ '^[0-9]{5}$'
+          ORDER BY abs((p.postcode)::int - (${postcode})::int), b.name
+          LIMIT ${limit}
+        `);
+    }
+    return result.rows.map((row) => ({
+      name: row.name,
+      address: row.branch_address ?? null,
+      phone: row.phone_number ?? null,
+      fax: row.fax_number ?? null,
+      businessHour: row.business_hour ?? null,
+      dayOpen: row.day_open ?? null,
+      atmCdm: row.atm_cdm ?? null,
+      inquiryAvailability: row.inquiry_availability ?? null,
+      applicationAvailability: row.application_availability ?? null,
+      aeonLounge: row.aeon_lounge ?? null
     }));
+  }
+  async countRowsByKeywords(params) {
+    const groups = params.groups || [];
+    const countSqls = [];
+    const matchSqlByKey = /* @__PURE__ */ new Map();
+    for (const group of groups) {
+      const terms = (group.terms || []).filter((t) => t.trim().length > 0);
+      const fields = (group.fields || []).filter((f) => f.trim().length > 0);
+      const matchMode = String(group.matchMode || "contains").toLowerCase();
+      if (matchMode === "complement") {
+        continue;
+      }
+      if (terms.length === 0 || fields.length === 0) {
+        countSqls.push(sql13`0::int as "${sql13.raw(group.key)}"`);
+        continue;
+      }
+      const termSql = matchMode === "exact" ? sql13.join(
+        fields.map((f) => {
+          const list = sql13.join(
+            terms.map((v) => sql13`${v.toUpperCase()}`),
+            sql13`, `
+          );
+          return sql13`upper(trim(coalesce((dr.json_data::jsonb)->>${f}, ''))) IN (${list})`;
+        }),
+        sql13` OR `
+      ) : sql13.join(
+        terms.map((t) => {
+          const perField = sql13.join(
+            fields.map((f) => sql13`coalesce((dr.json_data::jsonb)->>${f}, '') ILIKE ${"%" + t + "%"}`),
+            sql13` OR `
+          );
+          return sql13`((${perField}) OR dr.json_data::text ILIKE ${"%" + t + "%"})`;
+        }),
+        sql13` OR `
+      );
+      matchSqlByKey.set(group.key, termSql);
+      countSqls.push(
+        sql13`COUNT(*) FILTER (WHERE (${termSql}))::int as "${sql13.raw(group.key)}"`
+      );
+    }
+    const complementGroups = groups.filter((g) => String(g.matchMode || "").toLowerCase() === "complement");
+    if (complementGroups.length > 0) {
+      if (matchSqlByKey.size > 0) {
+        const combined = sql13.join(Array.from(matchSqlByKey.values()).map((v) => sql13`(${v})`), sql13` OR `);
+        for (const group of complementGroups) {
+          countSqls.push(
+            sql13`COUNT(*) FILTER (WHERE NOT (${combined}))::int as "${sql13.raw(group.key)}"`
+          );
+        }
+      } else {
+        for (const group of complementGroups) {
+          countSqls.push(
+            sql13`COUNT(*)::int as "${sql13.raw(group.key)}"`
+          );
+        }
+      }
+    }
+    const selectParts = countSqls.length > 0 ? sql13.join(countSqls, sql13`, `) : sql13``;
+    const res = await db.execute(sql13`
+      SELECT
+        COUNT(*)::int as "total",
+        ${selectParts}
+      FROM data_rows dr
+      JOIN imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+    `);
+    const row = res.rows[0] || {};
+    const totalRows = Number(row.total ?? 0);
+    const counts = {};
+    for (const group of groups) {
+      counts[group.key] = Number(row[group.key] ?? 0);
+    }
+    return { totalRows, counts };
+  }
+  async getCategoryRules() {
+    const normalizeArray = (value) => {
+      if (Array.isArray(value)) {
+        return value.map((v) => String(v)).filter((v) => v.trim().length > 0);
+      }
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) return [];
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+          return trimmed.slice(1, -1).split(",").map((v) => v.replace(/^\"|\"$/g, "").trim()).filter((v) => v.length > 0);
+        }
+        return [trimmed];
+      }
+      return [];
+    };
+    const result = await db.execute(sql13`
+      SELECT key, terms, fields, match_mode, enabled
+      FROM public.ai_category_rules
+      ORDER BY key
+    `);
+    return result.rows.map((row) => ({
+      key: String(row.key),
+      terms: normalizeArray(row.terms),
+      fields: normalizeArray(row.fields),
+      matchMode: String(row.match_mode || "contains"),
+      enabled: row.enabled !== false
+    }));
+  }
+  async getCategoryRulesMaxUpdatedAt() {
+    const result = await db.execute(sql13`
+      SELECT MAX(updated_at) as updated_at
+      FROM public.ai_category_rules
+    `);
+    const row = result.rows[0];
+    return row?.updated_at ? new Date(row.updated_at) : null;
+  }
+  async getCategoryStats(keys) {
+    if (!keys.length) return [];
+    const quoted = keys.map((k) => `'${k.replace(/'/g, "''")}'`).join(",");
+    const result = await db.execute(sql13`
+      SELECT key, total, samples, updated_at
+      FROM public.ai_category_stats
+      WHERE key IN (${sql13.raw(quoted)})
+    `);
+    return result.rows.map((row) => ({
+      key: row.key,
+      total: Number(row.total ?? 0),
+      samples: Array.isArray(row.samples) ? row.samples : [],
+      updatedAt: row.updated_at ? new Date(row.updated_at) : null
+    }));
+  }
+  async computeCategoryStatsForKeys(keys, groups) {
+    if (!keys.length) return [];
+    const uniqueKeys = Array.from(new Set(keys));
+    const ruleMap = new Map(groups.map((g) => [g.key, g]));
+    const requestedGroups = uniqueKeys.filter((k) => k !== "__all__").map((k) => ruleMap.get(k)).filter((g) => Boolean(g && g.enabled !== false));
+    const extractName = (data) => {
+      return data?.["Nama"] || data?.["Customer Name"] || data?.["name"] || data?.["MAKLUMAT PEMOHON"] || "-";
+    };
+    const extractIc = (data) => {
+      return data?.["No. MyKad"] || data?.["ID No"] || data?.["No Pengenalan"] || data?.["IC"] || "-";
+    };
+    const buildMatchSql = (terms, fields, matchMode) => {
+      if (terms.length === 0) return null;
+      if (fields.length === 0) {
+        return sql13.join(
+          terms.map((t) => sql13`dr.json_data::text ILIKE ${"%" + t + "%"}`),
+          sql13` OR `
+        );
+      }
+      if (matchMode === "exact") {
+        return sql13.join(
+          fields.map((f) => {
+            const list = sql13.join(
+              terms.map((v) => sql13`${v.toUpperCase()}`),
+              sql13`, `
+            );
+            return sql13`upper(trim(coalesce((dr.json_data::jsonb)->>${f}, ''))) IN (${list})`;
+          }),
+          sql13` OR `
+        );
+      }
+      return sql13.join(
+        terms.map((t) => {
+          const perField = sql13.join(
+            fields.map((f) => sql13`(dr.json_data::jsonb)->>${f} ILIKE ${"%" + t + "%"}`),
+            sql13` OR `
+          );
+          return sql13`(${perField})`;
+        }),
+        sql13` OR `
+      );
+    };
+    if (uniqueKeys.includes("__all__")) {
+      const totalRes = await db.execute(sql13`
+        SELECT COUNT(*)::int as "count"
+        FROM data_rows dr
+        JOIN imports i ON i.id = dr.import_id
+        WHERE i.is_deleted = false
+      `);
+      const totalRows = Number(totalRes.rows[0]?.count ?? 0);
+      await db.execute(sql13`
+        INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
+        VALUES ('__all__', ${totalRows}, '[]'::jsonb, now())
+        ON CONFLICT (key)
+        DO UPDATE SET total = EXCLUDED.total, updated_at = now()
+      `);
+    }
+    for (const group of requestedGroups) {
+      const terms = (group.terms || []).filter((t) => t.trim().length > 0);
+      const fields = (group.fields || []).filter((f) => f.trim().length > 0);
+      const matchMode = String(group.matchMode || "contains").toLowerCase();
+      const termSql = buildMatchSql(terms, fields, matchMode);
+      if (!termSql) {
+        await db.execute(sql13`
+          INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
+          VALUES (${group.key}, 0, '[]'::jsonb, now())
+          ON CONFLICT (key)
+          DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
+        `);
+        continue;
+      }
+      const countRes = await db.execute(sql13`
+        SELECT COUNT(*)::int as "count"
+        FROM data_rows dr
+        JOIN imports i ON i.id = dr.import_id
+        WHERE i.is_deleted = false
+          AND (${termSql})
+      `);
+      const total = Number(countRes.rows[0]?.count ?? 0);
+      let samples = [];
+      if (total > 0) {
+        const sampleRes = await db.execute(sql13`
+          SELECT dr.json_data as "jsonData", i.name as "importName", i.filename as "importFilename"
+          FROM data_rows dr
+          JOIN imports i ON i.id = dr.import_id
+          WHERE i.is_deleted = false
+            AND (${termSql})
+          LIMIT 10
+        `);
+        samples = sampleRes.rows.map((row) => {
+          let data = row.jsonData;
+          if (typeof data === "string") {
+            try {
+              data = JSON.parse(data);
+            } catch {
+              data = {};
+            }
+          }
+          const name = extractName(data);
+          const ic = extractIc(data);
+          const source = row.importName || row.importFilename || null;
+          return { name: String(name || "-"), ic: String(ic || "-"), source };
+        });
+      }
+      await db.execute(sql13`
+        INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
+        VALUES (${group.key}, ${total}, ${JSON.stringify(samples)}::jsonb, now())
+        ON CONFLICT (key)
+        DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
+      `);
+    }
+    return this.getCategoryStats(uniqueKeys);
+  }
+  async rebuildCategoryStats(groups) {
+    if (!groups.length) return;
+    const totalRes = await db.execute(sql13`
+      SELECT COUNT(*)::int as "count"
+      FROM data_rows dr
+      JOIN imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+    `);
+    const totalRows = Number(totalRes.rows[0]?.count ?? 0);
+    await db.execute(sql13`
+      DELETE FROM public.ai_category_stats
+      WHERE key <> '__all__'
+    `);
+    await db.execute(sql13`
+      INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
+      VALUES ('__all__', ${totalRows}, '[]'::jsonb, now())
+      ON CONFLICT (key)
+    DO UPDATE SET total = EXCLUDED.total, updated_at = now()
+  `);
+    const extractName = (data) => {
+      return data?.["Nama"] || data?.["Customer Name"] || data?.["name"] || data?.["MAKLUMAT PEMOHON"] || "-";
+    };
+    const extractIc = (data) => {
+      return data?.["No. MyKad"] || data?.["ID No"] || data?.["No Pengenalan"] || data?.["IC"] || "-";
+    };
+    const enabledGroups = groups.filter((g) => g.enabled !== false);
+    const matchSqlByKey = /* @__PURE__ */ new Map();
+    const buildMatchSql = (terms, fields, matchMode) => {
+      if (terms.length === 0) return null;
+      if (fields.length === 0) {
+        return sql13.join(
+          terms.map((t) => sql13`dr.json_data::text ILIKE ${"%" + t + "%"}`),
+          sql13` OR `
+        );
+      }
+      if (matchMode === "exact") {
+        return sql13.join(
+          fields.map((f) => {
+            const list = sql13.join(
+              terms.map((v) => sql13`${v.toUpperCase()}`),
+              sql13`, `
+            );
+            return sql13`upper(trim(coalesce((dr.json_data::jsonb)->>${f}, ''))) IN (${list})`;
+          }),
+          sql13` OR `
+        );
+      }
+      return sql13.join(
+        terms.map((t) => {
+          const perField = sql13.join(
+            fields.map((f) => sql13`(dr.json_data::jsonb)->>${f} ILIKE ${"%" + t + "%"}`),
+            sql13` OR `
+          );
+          return sql13`(${perField})`;
+        }),
+        sql13` OR `
+      );
+    };
+    const baseGroups = enabledGroups.filter((g) => String(g.matchMode || "").toLowerCase() !== "complement");
+    const complementGroups = enabledGroups.filter((g) => String(g.matchMode || "").toLowerCase() === "complement");
+    for (const group of baseGroups) {
+      const terms = (group.terms || []).filter((t) => t.trim().length > 0);
+      const fields = (group.fields || []).filter((f) => f.trim().length > 0);
+      const matchMode = String(group.matchMode || "contains").toLowerCase();
+      const termSql = buildMatchSql(terms, fields, matchMode);
+      if (!termSql) {
+        await db.execute(sql13`
+          INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
+          VALUES (${group.key}, 0, '[]'::jsonb, now())
+          ON CONFLICT (key)
+          DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
+        `);
+        continue;
+      }
+      matchSqlByKey.set(group.key, termSql);
+      const countRes = await db.execute(sql13`
+        SELECT COUNT(*)::int as "count"
+        FROM data_rows dr
+        JOIN imports i ON i.id = dr.import_id
+        WHERE i.is_deleted = false
+          AND (${termSql})
+      `);
+      const total = Number(countRes.rows[0]?.count ?? 0);
+      const sampleRes = await db.execute(sql13`
+        SELECT dr.json_data as "jsonData", i.name as "importName", i.filename as "importFilename"
+        FROM data_rows dr
+        JOIN imports i ON i.id = dr.import_id
+        WHERE i.is_deleted = false
+          AND (${termSql})
+        LIMIT 10
+      `);
+      const samples = sampleRes.rows.map((row) => {
+        let data = row.jsonData;
+        if (typeof data === "string") {
+          try {
+            data = JSON.parse(data);
+          } catch {
+            data = {};
+          }
+        }
+        const name = extractName(data);
+        const ic = extractIc(data);
+        const source = row.importName || row.importFilename || null;
+        return { name: String(name || "-"), ic: String(ic || "-"), source };
+      });
+      await db.execute(sql13`
+        INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
+        VALUES (${group.key}, ${total}, ${JSON.stringify(samples)}::jsonb, now())
+        ON CONFLICT (key)
+        DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
+      `);
+    }
+    if (complementGroups.length > 0) {
+      const combined = matchSqlByKey.size > 0 ? sql13.join(Array.from(matchSqlByKey.values()).map((v) => sql13`(${v})`), sql13` OR `) : null;
+      for (const group of complementGroups) {
+        let total = totalRows;
+        let samples = [];
+        if (combined) {
+          const countRes = await db.execute(sql13`
+            SELECT COUNT(*)::int as "count"
+            FROM data_rows dr
+            JOIN imports i ON i.id = dr.import_id
+            WHERE i.is_deleted = false
+              AND NOT (${combined})
+          `);
+          total = Number(countRes.rows[0]?.count ?? 0);
+          const sampleRes = await db.execute(sql13`
+            SELECT dr.json_data as "jsonData", i.name as "importName", i.filename as "importFilename"
+            FROM data_rows dr
+            JOIN imports i ON i.id = dr.import_id
+            WHERE i.is_deleted = false
+              AND NOT (${combined})
+            LIMIT 10
+          `);
+          samples = sampleRes.rows.map((row) => {
+            let data = row.jsonData;
+            if (typeof data === "string") {
+              try {
+                data = JSON.parse(data);
+              } catch {
+                data = {};
+              }
+            }
+            const name = extractName(data);
+            const ic = extractIc(data);
+            const source = row.importName || row.importFilename || null;
+            return { name: String(name || "-"), ic: String(ic || "-"), source };
+          });
+        }
+        await db.execute(sql13`
+          INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
+          VALUES (${group.key}, ${total}, ${JSON.stringify(samples)}::jsonb, now())
+          ON CONFLICT (key)
+          DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
+        `);
+      }
+    }
+  }
+  async getNearestBranches(params) {
+    const limit = Math.max(1, Math.min(5, params.limit ?? 3));
+    const result = await db.execute(sql13`
+      SELECT
+        name,
+        branch_address,
+        phone_number,
+        fax_number,
+        business_hour,
+        day_open,
+        atm_cdm,
+        inquiry_availability,
+        application_availability,
+        aeon_lounge,
+        ST_DistanceSphere(
+          ST_MakePoint(${params.lng}, ${params.lat}),
+          ST_MakePoint(branch_lng, branch_lat)
+        ) / 1000 AS distance_km
+      FROM public.aeon_branches
+      ORDER BY distance_km
+      LIMIT ${limit}
+    `);
+    return result.rows.map((row) => ({
+      name: row.name,
+      address: row.branch_address ?? null,
+      phone: row.phone_number ?? null,
+      fax: row.fax_number ?? null,
+      businessHour: row.business_hour ?? null,
+      dayOpen: row.day_open ?? null,
+      atmCdm: row.atm_cdm ?? null,
+      inquiryAvailability: row.inquiry_availability ?? null,
+      applicationAvailability: row.application_availability ?? null,
+      aeonLounge: row.aeon_lounge ?? null,
+      distanceKm: Number(row.distance_km)
+    }));
+  }
+  async getPostcodeLatLng(postcode) {
+    await this.ensureSpatialTables();
+    const postcodeNorm = (() => {
+      const digits = String(postcode || "").replace(/\D/g, "");
+      if (digits.length === 4) return `0${digits}`;
+      return digits.length >= 5 ? digits.slice(0, 5) : digits;
+    })();
+    if (!postcodeNorm) return null;
+    const lookup = async () => {
+      const result = await db.execute(sql13`
+        SELECT lat, lng
+        FROM public.aeon_branch_postcodes
+        WHERE postcode = ${postcodeNorm}
+        LIMIT 1
+      `);
+      return result.rows?.[0];
+    };
+    let row = await lookup();
+    if (row) return { lat: Number(row.lat), lng: Number(row.lng) };
+    const countRes = await db.execute(sql13`
+      SELECT COUNT(*)::int as "count"
+      FROM public.aeon_branch_postcodes
+    `);
+    const count3 = Number(countRes.rows[0]?.count ?? 0);
+    if (count3 === 0) {
+      const branches = await db.execute(sql13`
+        SELECT name, branch_address, branch_lat, branch_lng
+        FROM public.aeon_branches
+      `);
+      for (const b of branches.rows) {
+        const address = String(b.branch_address || "");
+        const match5 = address.match(/\b\d{5}\b/);
+        const match4 = address.match(/\b\d{4}\b/);
+        const pc = match5 ? match5[0] : match4 ? `0${match4[0]}` : null;
+        if (!pc) continue;
+        await db.execute(sql13`
+          INSERT INTO public.aeon_branch_postcodes (postcode, lat, lng, source_branch, state)
+          VALUES (${pc}, ${Number(b.branch_lat)}, ${Number(b.branch_lng)}, ${String(b.name)}, null)
+          ON CONFLICT (postcode) DO NOTHING
+        `);
+      }
+      row = await lookup();
+      if (row) return { lat: Number(row.lat), lng: Number(row.lng) };
+    }
+    return null;
+  }
+  async importBranchesFromRows(params) {
+    await this.ensureSpatialTables();
+    const rows = await db.execute(sql13`
+      SELECT id, json_data as "jsonDataJsonb"
+      FROM data_rows
+      WHERE import_id = ${params.importId}
+    `);
+    const normalizeKey = (key) => key.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const detectKeys = (sample2) => {
+      const keys = Object.keys(sample2);
+      const normalized = keys.map((k) => ({ raw: k, norm: normalizeKey(k) }));
+      const findBy = (candidates) => {
+        const hit = normalized.find((k) => candidates.some((c) => k.norm.includes(c)));
+        return hit?.raw || null;
+      };
+      const nameKey2 = findBy(["branchnames", "branchname", "cawangan", "branch", "nama"]) || null;
+      const latKey2 = findBy(["latitude", "lat"]) || null;
+      const lngKey2 = findBy(["longitude", "lng", "long"]) || null;
+      const addressKey2 = findBy(["branchaddress", "address", "alamat"]) || null;
+      const postcodeKey2 = findBy(["postcode", "poskod", "postalcode", "zip"]) || null;
+      const phoneKey2 = findBy(["phonenumber", "phone", "telefon", "tel"]) || null;
+      const faxKey2 = findBy(["faxnumber", "fax"]) || null;
+      const businessHourKey2 = findBy(["businesshour", "operatinghour", "waktu", "jam"]) || null;
+      const dayOpenKey2 = findBy(["dayopen", "dayopen", "day", "hari"]) || null;
+      const atmKey2 = findBy(["atmcdm", "atm", "cdm"]) || null;
+      const inquiryKey2 = findBy(["inquiryavailability", "inquiry"]) || null;
+      const applicationKey2 = findBy(["applicationavailability", "application"]) || null;
+      const loungeKey2 = findBy(["aeonlounge", "lounge"]) || null;
+      const stateKey2 = findBy(["state", "negeri"]) || null;
+      return {
+        nameKey: nameKey2,
+        latKey: latKey2,
+        lngKey: lngKey2,
+        addressKey: addressKey2,
+        postcodeKey: postcodeKey2,
+        phoneKey: phoneKey2,
+        faxKey: faxKey2,
+        businessHourKey: businessHourKey2,
+        dayOpenKey: dayOpenKey2,
+        atmKey: atmKey2,
+        inquiryKey: inquiryKey2,
+        applicationKey: applicationKey2,
+        loungeKey: loungeKey2,
+        stateKey: stateKey2
+      };
+    };
+    const firstRow = rows.rows[0];
+    const sample = firstRow && firstRow.jsonDataJsonb && typeof firstRow.jsonDataJsonb === "object" ? firstRow.jsonDataJsonb : {};
+    const detected = detectKeys(sample);
+    const nameKey = params.nameKey || detected.nameKey;
+    const latKey = params.latKey || detected.latKey;
+    const lngKey = params.lngKey || detected.lngKey;
+    const addressKey = detected.addressKey;
+    const postcodeKey = detected.postcodeKey;
+    const phoneKey = detected.phoneKey;
+    const faxKey = detected.faxKey;
+    const businessHourKey = detected.businessHourKey;
+    const dayOpenKey = detected.dayOpenKey;
+    const atmKey = detected.atmKey;
+    const inquiryKey = detected.inquiryKey;
+    const applicationKey = detected.applicationKey;
+    const loungeKey = detected.loungeKey;
+    const stateKey = detected.stateKey;
+    if (!nameKey || !latKey || !lngKey) {
+      return {
+        inserted: 0,
+        skipped: rows.rows.length,
+        usedKeys: { nameKey: nameKey || "", latKey: latKey || "", lngKey: lngKey || "" }
+      };
+    }
+    let inserted = 0;
+    let skipped = 0;
+    for (const row of rows.rows) {
+      const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
+      const nameVal = data[nameKey];
+      const latVal = data[latKey];
+      const lngVal = data[lngKey];
+      const addressVal = addressKey ? data[addressKey] : null;
+      const postcodeVal = postcodeKey ? data[postcodeKey] : null;
+      const phoneVal = phoneKey ? data[phoneKey] : null;
+      const faxVal = faxKey ? data[faxKey] : null;
+      const businessHourVal = businessHourKey ? data[businessHourKey] : null;
+      const dayOpenVal = dayOpenKey ? data[dayOpenKey] : null;
+      const atmVal = atmKey ? data[atmKey] : null;
+      const inquiryVal = inquiryKey ? data[inquiryKey] : null;
+      const applicationVal = applicationKey ? data[applicationKey] : null;
+      const loungeVal = loungeKey ? data[loungeKey] : null;
+      const stateVal = stateKey ? data[stateKey] : null;
+      if (!nameVal || latVal === void 0 || lngVal === void 0) {
+        skipped += 1;
+        continue;
+      }
+      const lat = Number(String(latVal).replace(/[^0-9.\-]/g, ""));
+      const lng = Number(String(lngVal).replace(/[^0-9.\-]/g, ""));
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        skipped += 1;
+        continue;
+      }
+      const id = crypto6.randomUUID();
+      await db.execute(sql13`
+          INSERT INTO public.aeon_branches (
+            id, name, branch_address, phone_number, fax_number, business_hour, day_open,
+            atm_cdm, inquiry_availability, application_availability, aeon_lounge,
+            branch_lat, branch_lng
+        )
+        VALUES (
+          ${id},
+          ${String(nameVal)},
+          ${addressVal ? String(addressVal) : null},
+          ${phoneVal ? String(phoneVal) : null},
+          ${faxVal ? String(faxVal) : null},
+          ${businessHourVal ? String(businessHourVal) : null},
+          ${dayOpenVal ? String(dayOpenVal) : null},
+          ${atmVal ? String(atmVal) : null},
+          ${inquiryVal ? String(inquiryVal) : null},
+          ${applicationVal ? String(applicationVal) : null},
+          ${loungeVal ? String(loungeVal) : null},
+          ${lat},
+          ${lng}
+        )
+        ON CONFLICT DO NOTHING
+        `);
+      const normalizePostcode = (value) => {
+        if (value === void 0 || value === null) return null;
+        const raw = String(value);
+        const five = raw.match(/\b\d{5}\b/);
+        if (five) return five[0];
+        const four = raw.match(/\b\d{4}\b/);
+        if (four) return `0${four[0]}`;
+        return null;
+      };
+      let postcode = null;
+      if (postcodeVal) {
+        postcode = normalizePostcode(postcodeVal);
+      }
+      if (!postcode && addressVal) {
+        postcode = normalizePostcode(addressVal);
+      }
+      if (postcode) {
+        await db.execute(sql13`
+            INSERT INTO public.aeon_branch_postcodes (postcode, lat, lng, source_branch, state)
+            VALUES (${postcode}, ${lat}, ${lng}, ${String(nameVal)}, ${stateVal ? String(stateVal) : null})
+            ON CONFLICT (postcode) DO NOTHING
+          `);
+      }
+      inserted += 1;
+    }
+    return { inserted, skipped, usedKeys: { nameKey, latKey, lngKey } };
+  }
+  async getDataRowsForEmbedding(importId, limit, offset) {
+    const result = await db.execute(sql13`
+      SELECT id, json_data as "jsonDataJsonb"
+      FROM data_rows
+      WHERE import_id = ${importId}
+      ORDER BY id
+      LIMIT ${limit} OFFSET ${offset}
+    `);
+    return result.rows;
+  }
+  async getSettingsForRole(role) {
+    await this.ensureSettingsTables();
+    return this.settingsRepository.getSettingsForRole(role);
+  }
+  async getBooleanSystemSetting(key, fallback = false) {
+    await this.ensureSettingsTables();
+    return this.settingsRepository.getBooleanSystemSetting(key, fallback);
+  }
+  async getRoleTabVisibility(role) {
+    await this.ensureSettingsTables();
+    return this.settingsRepository.getRoleTabVisibility(role);
+  }
+  async updateSystemSetting(params) {
+    await this.ensureSettingsTables();
+    return this.settingsRepository.updateSystemSetting(params);
+  }
+  async getMaintenanceState(now = /* @__PURE__ */ new Date()) {
+    await this.ensureSettingsTables();
+    return this.settingsRepository.getMaintenanceState(now);
+  }
+  async getAppConfig() {
+    await this.ensureSettingsTables();
+    return this.settingsRepository.getAppConfig();
+  }
+  async getAccounts() {
+    return this.authRepository.getAccounts();
+  }
+  async getCollectionStaffNicknames(filters) {
+    return this.collectionRepository.getCollectionStaffNicknames(filters);
+  }
+  async getCollectionAdminUsers() {
+    return this.collectionRepository.getCollectionAdminUsers();
+  }
+  async getCollectionAdminUserById(adminUserId) {
+    return this.collectionRepository.getCollectionAdminUserById(adminUserId);
+  }
+  async getCollectionAdminAssignedNicknameIds(adminUserId) {
+    return this.collectionRepository.getCollectionAdminAssignedNicknameIds(adminUserId);
+  }
+  async getCollectionAdminVisibleNicknames(adminUserId, filters) {
+    return this.collectionRepository.getCollectionAdminVisibleNicknames(adminUserId, filters);
+  }
+  async setCollectionAdminAssignedNicknameIds(params) {
+    return this.collectionRepository.setCollectionAdminAssignedNicknameIds(params);
+  }
+  async getCollectionAdminGroups() {
+    return this.collectionRepository.getCollectionAdminGroups();
+  }
+  async getCollectionAdminGroupById(groupId) {
+    return this.collectionRepository.getCollectionAdminGroupById(groupId);
+  }
+  async createCollectionAdminGroup(params) {
+    return this.collectionRepository.createCollectionAdminGroup(params);
+  }
+  async updateCollectionAdminGroup(params) {
+    return this.collectionRepository.updateCollectionAdminGroup(params);
+  }
+  async deleteCollectionAdminGroup(groupId) {
+    return this.collectionRepository.deleteCollectionAdminGroup(groupId);
+  }
+  async getCollectionAdminGroupVisibleNicknameValuesByLeader(leaderNickname) {
+    return this.collectionRepository.getCollectionAdminGroupVisibleNicknameValuesByLeader(leaderNickname);
+  }
+  async setCollectionNicknameSession(params) {
+    return this.collectionRepository.setCollectionNicknameSession(params);
+  }
+  async getCollectionNicknameSessionByActivity(activityId) {
+    return this.collectionRepository.getCollectionNicknameSessionByActivity(activityId);
+  }
+  async clearCollectionNicknameSessionByActivity(activityId) {
+    return this.collectionRepository.clearCollectionNicknameSessionByActivity(activityId);
+  }
+  async getCollectionStaffNicknameById(id) {
+    return this.collectionRepository.getCollectionStaffNicknameById(id);
+  }
+  async getCollectionStaffNicknameByName(nickname) {
+    return this.collectionRepository.getCollectionStaffNicknameByName(nickname);
+  }
+  async getCollectionNicknameAuthProfileByName(nickname) {
+    return this.collectionRepository.getCollectionNicknameAuthProfileByName(nickname);
+  }
+  async setCollectionNicknamePassword(params) {
+    return this.collectionRepository.setCollectionNicknamePassword(params);
+  }
+  async createCollectionStaffNickname(data) {
+    return this.collectionRepository.createCollectionStaffNickname(data);
+  }
+  async updateCollectionStaffNickname(id, data) {
+    return this.collectionRepository.updateCollectionStaffNickname(id, data);
+  }
+  async deleteCollectionStaffNickname(id) {
+    return this.collectionRepository.deleteCollectionStaffNickname(id);
+  }
+  async isCollectionStaffNicknameActive(nickname) {
+    return this.collectionRepository.isCollectionStaffNicknameActive(nickname);
+  }
+  async createCollectionRecord(data) {
+    return this.collectionRepository.createCollectionRecord(data);
+  }
+  async listCollectionRecords(filters) {
+    return this.collectionRepository.listCollectionRecords(filters);
+  }
+  async getCollectionMonthlySummary(filters) {
+    return this.collectionRepository.getCollectionMonthlySummary(filters);
+  }
+  async getCollectionRecordById(id) {
+    return this.collectionRepository.getCollectionRecordById(id);
+  }
+  async updateCollectionRecord(id, data) {
+    return this.collectionRepository.updateCollectionRecord(id, data);
+  }
+  async deleteCollectionRecord(id) {
+    return this.collectionRepository.deleteCollectionRecord(id);
+  }
+  async createAuditLog(data) {
+    return this.auditRepository.createAuditLog(data);
+  }
+  async getAuditLogs() {
+    return this.auditRepository.getAuditLogs();
+  }
+  async createBackup(data) {
+    return this.backupsRepository.createBackup(data);
+  }
+  async getBackups() {
+    return this.backupsRepository.getBackups();
+  }
+  async getBackupById(id) {
+    return this.backupsRepository.getBackupById(id);
+  }
+  async deleteBackup(id) {
+    return this.backupsRepository.deleteBackup(id);
+  }
+  async getBackupDataForExport() {
+    return this.backupsRepository.getBackupDataForExport();
+  }
+  async restoreFromBackup(backupData) {
+    return this.backupsRepository.restoreFromBackup(backupData);
+  }
+  async getDashboardSummary() {
+    return this.analyticsRepository.getDashboardSummary();
+  }
+  async getLoginTrends(days = 7) {
+    return this.analyticsRepository.getLoginTrends(days);
   }
   async getTopActiveUsers(limit = 10) {
-    const result = await db.execute(sql`
-    SELECT
-      username,
-      role,
-      COUNT(*)::int AS "loginCount",
-      MAX(login_time) AS "lastLogin"
-    FROM user_activity
-    GROUP BY username, role
-    ORDER BY "loginCount" DESC
-    LIMIT ${limit}
-  `);
-    const rows = result.rows;
-    return rows.map((row) => ({
-      username: row.username,
-      role: row.role,
-      loginCount: row.loginCount,
-      lastLogin: row.lastLogin ? new Date(row.lastLogin).toISOString() : null
-    }));
+    return this.analyticsRepository.getTopActiveUsers(limit);
   }
   async getPeakHours() {
-    const result = await db.execute(sql`
-    SELECT
-      EXTRACT(HOUR FROM (login_time AT TIME ZONE 'UTC' AT TIME ZONE ${ANALYTICS_TZ}))::int AS hour,
-      COUNT(*)::int AS count
-    FROM user_activity
-    WHERE login_time IS NOT NULL
-    GROUP BY hour
-    ORDER BY hour ASC
-  `);
-    const rows = result.rows;
-    const hoursMap = /* @__PURE__ */ new Map();
-    for (let i = 0; i < 24; i++) {
-      hoursMap.set(i, 0);
-    }
-    for (const r of rows) {
-      hoursMap.set(r.hour, r.count);
-    }
-    return Array.from(hoursMap.entries()).map(([hour, count2]) => ({
-      hour,
-      count: count2
-    }));
+    return this.analyticsRepository.getPeakHours();
   }
   async getRoleDistribution() {
-    const result = await db.execute(sql`
-    SELECT
-      role,
-      COUNT(*)::int AS count
-    FROM users
-    GROUP BY role
-    ORDER BY role ASC
-  `);
-    const rows = result.rows;
-    return rows;
+    return this.analyticsRepository.getRoleDistribution();
   }
 };
 
@@ -5372,6 +6283,792 @@ var CircuitBreaker = class {
   }
 };
 
+// server/internal/frontend-static.ts
+import express from "express";
+import fs from "fs";
+import path from "path";
+var DEFAULT_FRONTEND_PATHS = [
+  "dist-local/public",
+  "dist-local\\public",
+  "dist/public",
+  "dist\\public"
+];
+function registerFrontendStatic(app2, options) {
+  const cwd = options?.cwd || process.cwd();
+  const possiblePaths = options?.paths || DEFAULT_FRONTEND_PATHS;
+  console.log(`  Working directory: ${cwd}`);
+  let foundPath = null;
+  let foundIndex = null;
+  for (const relPath of possiblePaths) {
+    const fullPath = path.resolve(cwd, relPath);
+    const indexFile = path.join(fullPath, "index.html");
+    console.log(`  Checking: ${fullPath}`);
+    try {
+      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
+        const files = fs.readdirSync(fullPath);
+        const preview = files.slice(0, 5).join(", ");
+        console.log(`    Found ${files.length} files: ${preview}${files.length > 5 ? "..." : ""}`);
+        if (fs.existsSync(indexFile)) {
+          foundPath = fullPath;
+          foundIndex = indexFile;
+          break;
+        }
+      }
+    } catch (error) {
+      console.log(`    Error: ${error.message}`);
+    }
+  }
+  if (foundPath && foundIndex) {
+    console.log(`  Frontend: Serving from ${foundPath}`);
+    app2.use(express.static(foundPath));
+    app2.use((req, res, next) => {
+      if (req.path.startsWith("/api") || req.path.startsWith("/ws")) {
+        return next();
+      }
+      return res.sendFile(foundIndex);
+    });
+    console.log("  Frontend: OK");
+    return;
+  }
+  console.log("");
+  console.log("  ERROR: Frontend files not found!");
+  console.log("  Please run: npm run build:local");
+  console.log(`  Expected location: ${path.resolve(cwd, "dist-local/public")}`);
+  app2.use((req, res) => {
+    if (!req.path.startsWith("/api") && !req.path.startsWith("/ws")) {
+      res.status(404).send(`
+          <html>
+            <body style="font-family: sans-serif; padding: 40px;">
+              <h1>Frontend Not Built</h1>
+              <p>Please run: <code>npm run build:local</code></p>
+              <p>Then restart the server.</p>
+            </body>
+          </html>
+        `);
+    }
+  });
+}
+
+// server/internal/idle-session-sweeper.ts
+import { WebSocket } from "ws";
+function startIdleSessionSweeper(options) {
+  const {
+    storage: storage2,
+    connectedClients: connectedClients2,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    defaultSessionTimeoutMinutes,
+    intervalMs = 6e4
+  } = options;
+  let running = false;
+  const handle = setInterval(async () => {
+    if (running) {
+      return;
+    }
+    running = true;
+    try {
+      const now = Date.now();
+      const activities = await storage2.getActiveActivities();
+      const runtimeSettings = await getRuntimeSettingsCached2();
+      const idleMinutes = Math.max(
+        1,
+        runtimeSettings.sessionTimeoutMinutes || runtimeSettings.wsIdleMinutes || defaultSessionTimeoutMinutes
+      );
+      const idleMs = idleMinutes * 60 * 1e3;
+      for (const activity of activities) {
+        if (!activity.lastActivityTime) {
+          continue;
+        }
+        const last = new Date(activity.lastActivityTime).getTime();
+        if (now - last <= idleMs) {
+          continue;
+        }
+        const freshActivity = await storage2.getActivityById(activity.id);
+        if (!freshActivity || freshActivity.isActive === false) {
+          continue;
+        }
+        const freshLast = freshActivity.lastActivityTime ? new Date(freshActivity.lastActivityTime).getTime() : 0;
+        if (!freshLast || now - freshLast <= idleMs) {
+          continue;
+        }
+        console.log(`IDLE TIMEOUT: ${activity.username} (${activity.id})`);
+        await storage2.updateActivity(activity.id, {
+          isActive: false,
+          logoutTime: /* @__PURE__ */ new Date(),
+          logoutReason: "IDLE_TIMEOUT"
+        });
+        const socket = connectedClients2.get(activity.id);
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({
+            type: "idle_timeout",
+            reason: "Session expired due to inactivity"
+          }));
+          socket.close();
+        }
+        connectedClients2.delete(activity.id);
+        await storage2.clearCollectionNicknameSessionByActivity(activity.id);
+        await storage2.createAuditLog({
+          action: "SESSION_IDLE_TIMEOUT",
+          performedBy: activity.username,
+          details: `Auto logout after ${idleMinutes} minutes idle`
+        });
+      }
+    } catch (error) {
+      console.error("Idle session checker error:", error);
+    } finally {
+      running = false;
+    }
+  }, intervalMs);
+  handle.unref();
+  return handle;
+}
+
+// server/internal/runtime-config-manager.ts
+import jwt from "jsonwebtoken";
+function createRuntimeConfigManager(options) {
+  const {
+    storage: storage2,
+    secret,
+    defaults,
+    maintenanceCacheTtlMs,
+    runtimeSettingsCacheTtlMs
+  } = options;
+  let maintenanceCache = null;
+  let runtimeSettingsCache = null;
+  const invalidateMaintenanceCache2 = () => {
+    maintenanceCache = null;
+  };
+  const invalidateRuntimeSettingsCache2 = () => {
+    runtimeSettingsCache = null;
+  };
+  const getRuntimeSettingsCached2 = async (force = false) => {
+    const now = Date.now();
+    if (!force && runtimeSettingsCache && now - runtimeSettingsCache.cachedAt < runtimeSettingsCacheTtlMs) {
+      return runtimeSettingsCache.settings;
+    }
+    const config = await storage2.getAppConfig();
+    const settings = {
+      sessionTimeoutMinutes: Number.isFinite(config.sessionTimeoutMinutes) ? Math.max(1, config.sessionTimeoutMinutes) : defaults.sessionTimeoutMinutes,
+      wsIdleMinutes: Number.isFinite(config.wsIdleMinutes) ? Math.max(1, config.wsIdleMinutes) : defaults.wsIdleMinutes,
+      aiEnabled: config.aiEnabled !== false,
+      semanticSearchEnabled: config.semanticSearchEnabled !== false,
+      aiTimeoutMs: Number.isFinite(config.aiTimeoutMs) ? Math.max(1e3, config.aiTimeoutMs) : defaults.aiTimeoutMs,
+      searchResultLimit: Number.isFinite(config.searchResultLimit) ? Math.min(5e3, Math.max(10, Math.floor(config.searchResultLimit))) : defaults.searchResultLimit,
+      viewerRowsPerPage: Number.isFinite(config.viewerRowsPerPage) ? Math.min(500, Math.max(10, Math.floor(config.viewerRowsPerPage))) : defaults.viewerRowsPerPage
+    };
+    runtimeSettingsCache = { settings, cachedAt: now };
+    return settings;
+  };
+  const getMaintenanceStateCached2 = async (force = false) => {
+    const now = Date.now();
+    if (!force && maintenanceCache && now - maintenanceCache.cachedAt < maintenanceCacheTtlMs) {
+      return maintenanceCache.state;
+    }
+    const state = await storage2.getMaintenanceState(/* @__PURE__ */ new Date());
+    maintenanceCache = { state, cachedAt: now };
+    return state;
+  };
+  const extractRoleFromToken = (req) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(" ")[1];
+    if (!token) return null;
+    try {
+      const decoded = jwt.verify(token, secret);
+      return decoded?.role || null;
+    } catch {
+      return null;
+    }
+  };
+  const isMaintenanceBypassPath = (pathname) => pathname.startsWith("/api/login") || pathname.startsWith("/api/auth/login") || pathname.startsWith("/api/health") || pathname.startsWith("/api/maintenance-status") || pathname.startsWith("/api/settings/maintenance") || pathname.startsWith("/internal/") || pathname.startsWith("/ws");
+  const maintenanceGuard2 = async (req, res, next) => {
+    try {
+      if (isMaintenanceBypassPath(req.path)) {
+        return next();
+      }
+      const state = await getMaintenanceStateCached2();
+      if (!state.maintenance) {
+        return next();
+      }
+      const role = req.user?.role || extractRoleFromToken(req);
+      if (role === "superuser" || role === "admin") {
+        return next();
+      }
+      const maintenanceResponse = {
+        maintenance: true,
+        message: state.message,
+        type: state.type,
+        startTime: state.startTime,
+        endTime: state.endTime
+      };
+      if (req.path.startsWith("/api/")) {
+        if (state.type === "soft") {
+          const blockedSoftPrefixes = ["/api/search", "/api/imports", "/api/ai"];
+          if (!blockedSoftPrefixes.some((prefix) => req.path.startsWith(prefix))) {
+            return next();
+          }
+        }
+        return res.status(503).json(maintenanceResponse);
+      }
+      if (req.path.startsWith("/assets/") || req.path.match(/\.(js|css|png|jpg|svg|ico)$/i)) {
+        return next();
+      }
+      if (state.type === "hard" && req.path !== "/maintenance") {
+        return res.redirect(302, "/maintenance");
+      }
+      return next();
+    } catch (err) {
+      console.error("Maintenance guard error:", err);
+      return next();
+    }
+  };
+  return {
+    invalidateMaintenanceCache: invalidateMaintenanceCache2,
+    invalidateRuntimeSettingsCache: invalidateRuntimeSettingsCache2,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    getMaintenanceStateCached: getMaintenanceStateCached2,
+    maintenanceGuard: maintenanceGuard2
+  };
+}
+
+// server/internal/runtime-monitor-manager.ts
+import { PerformanceObserver, monitorEventLoopDelay } from "node:perf_hooks";
+import os from "node:os";
+var LATENCY_WINDOW = 400;
+var MAX_INTELLIGENCE_HISTORY = 300;
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+function percentile(values, p) {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.floor(clamp(p, 0, 100) / 100 * (sorted.length - 1));
+  return sorted[index];
+}
+function roundMetric(value, digits = 2) {
+  if (!Number.isFinite(value)) return 0;
+  const precision = 10 ** digits;
+  return Math.round(value * precision) / precision;
+}
+function getRamPercent() {
+  const total = Number(os.totalmem() || 0);
+  const free = Number(os.freemem() || 0);
+  if (total <= 0) return 0;
+  return roundMetric((total - free) / total * 100, 2);
+}
+function createRuntimeMonitorManager(options) {
+  const defaultControlState = {
+    mode: "NORMAL",
+    healthScore: 100,
+    dbProtection: false,
+    rejectHeavyRoutes: false,
+    throttleFactor: 1,
+    predictor: {
+      requestRateMA: 0,
+      latencyMA: 0,
+      cpuMA: 0,
+      requestRateTrend: 0,
+      latencyTrend: 0,
+      cpuTrend: 0,
+      sustainedUpward: false,
+      lastUpdatedAt: null
+    },
+    workerCount: 1,
+    maxWorkers: 1,
+    queueLength: 0,
+    preAllocateMB: 0,
+    updatedAt: Date.now(),
+    workers: [],
+    circuits: {
+      aiOpenWorkers: 0,
+      dbOpenWorkers: 0,
+      exportOpenWorkers: 0
+    }
+  };
+  let controlState = defaultControlState;
+  let preAllocatedBuffer = null;
+  let activeRequests = 0;
+  const latencySamples = [];
+  let requestCounter = 0;
+  let reqRatePerSec = 0;
+  let lastCpuUsage = process.cpuUsage();
+  let lastCpuTs = Date.now();
+  let cpuPercent = 0;
+  let gcCountWindow = 0;
+  let gcPerMinute = 0;
+  let lastDbLatencyMs = 0;
+  let lastAiLatencyMs = 0;
+  let lastAiLatencyObservedAt = 0;
+  let intelligenceInFlight = false;
+  let lastPgPoolWarningAt = 0;
+  let lastPgPoolWarningSignature = "";
+  const intelligenceHistory = {
+    cpuPercent: [],
+    p95LatencyMs: [],
+    dbLatencyMs: [],
+    errorRate: [],
+    aiLatencyMs: [],
+    queueSize: [],
+    ramPercent: [],
+    requestRate: [],
+    workerCount: []
+  };
+  const eventLoopHistogram = monitorEventLoopDelay({ resolution: 20 });
+  eventLoopHistogram.enable();
+  const circuitAi = new CircuitBreaker({
+    name: "ai",
+    threshold: 0.4,
+    minRequests: 10,
+    cooldownMs: 8e3
+  });
+  const circuitDb = new CircuitBreaker({
+    name: "db",
+    threshold: 0.35,
+    minRequests: 20,
+    cooldownMs: 12e3
+  });
+  const circuitExport = new CircuitBreaker({
+    name: "export",
+    threshold: 0.4,
+    minRequests: 8,
+    cooldownMs: 15e3
+  });
+  let gcObserver = null;
+  let gcObserverAttached = false;
+  let processHandlersAttached = false;
+  let runtimeLoopHandle = null;
+  function getEventLoopLagMs() {
+    const lagMs = Number(eventLoopHistogram.mean) / 1e6;
+    return Number.isFinite(lagMs) ? lagMs : 0;
+  }
+  function recordLatency(ms) {
+    if (!Number.isFinite(ms) || ms < 0) return;
+    latencySamples.push(ms);
+    if (latencySamples.length > LATENCY_WINDOW) {
+      latencySamples.splice(0, latencySamples.length - LATENCY_WINDOW);
+    }
+  }
+  function observeDbLatency(ms) {
+    if (!Number.isFinite(ms) || ms < 0) return;
+    if (lastDbLatencyMs <= 0) {
+      lastDbLatencyMs = ms;
+    } else {
+      lastDbLatencyMs = lastDbLatencyMs * 0.75 + ms * 0.25;
+    }
+  }
+  function observeAiLatency(ms) {
+    if (!Number.isFinite(ms) || ms < 0) return;
+    if (lastAiLatencyMs <= 0) {
+      lastAiLatencyMs = ms;
+    } else {
+      lastAiLatencyMs = lastAiLatencyMs * 0.75 + ms * 0.25;
+    }
+    lastAiLatencyObservedAt = Date.now();
+  }
+  function getEffectiveAiLatencyMs(now = Date.now()) {
+    if (!Number.isFinite(lastAiLatencyMs) || lastAiLatencyMs <= 0) return 0;
+    if (lastAiLatencyObservedAt <= 0) return Math.max(0, lastAiLatencyMs);
+    const idleMs = Math.max(0, now - lastAiLatencyObservedAt);
+    if (idleMs <= options.aiLatencyStaleAfterMs) {
+      return Math.max(0, lastAiLatencyMs);
+    }
+    const decayWindowMs = idleMs - options.aiLatencyStaleAfterMs;
+    const decayFactor = Math.exp(-Math.LN2 * decayWindowMs / options.aiLatencyDecayHalfLifeMs);
+    return Math.max(0, lastAiLatencyMs * decayFactor);
+  }
+  function maybeWarnPgPoolPressure(source) {
+    const total = Number(options.pool.totalCount || 0);
+    const idle = Number(options.pool.idleCount || 0);
+    const waiting = Number(options.pool.waitingCount || 0);
+    const max = Number(options.pool?.options?.max || 0);
+    const nearMax = max > 0 ? total >= Math.max(1, max - 1) : false;
+    const hasPressure = waiting > 0 || idle === 0 || nearMax;
+    if (!hasPressure) {
+      lastPgPoolWarningSignature = "";
+      return;
+    }
+    const signature = `${total}:${idle}:${waiting}:${max}`;
+    const now = Date.now();
+    if (signature === lastPgPoolWarningSignature && now - lastPgPoolWarningAt < options.pgPoolWarnCooldownMs) {
+      return;
+    }
+    lastPgPoolWarningAt = now;
+    lastPgPoolWarningSignature = signature;
+    console.warn(
+      `[PG_POOL] total=${total} idle=${idle} waiting=${waiting} max=${max} source=${source}`
+    );
+  }
+  async function withDbCircuit2(operation) {
+    return circuitDb.execute(async () => {
+      const start = Date.now();
+      try {
+        return await operation();
+      } finally {
+        observeDbLatency(Date.now() - start);
+        maybeWarnPgPoolPressure("db-circuit");
+      }
+    });
+  }
+  async function withAiCircuit2(operation) {
+    return circuitAi.execute(async () => {
+      const start = Date.now();
+      try {
+        return await operation();
+      } finally {
+        observeAiLatency(Date.now() - start);
+      }
+    });
+  }
+  async function withExportCircuit2(operation) {
+    return circuitExport.execute(operation);
+  }
+  function getControlState2() {
+    return controlState;
+  }
+  function applyControlState(payload) {
+    controlState = {
+      ...defaultControlState,
+      ...payload
+    };
+    const preAllocateMB = clamp(controlState.preAllocateMB, 0, options.lowMemoryMode ? 8 : 32);
+    if (preAllocateMB > 0) {
+      const targetBytes = preAllocateMB * 1024 * 1024;
+      if (!preAllocatedBuffer || preAllocatedBuffer.length !== targetBytes) {
+        preAllocatedBuffer = Buffer.alloc(targetBytes);
+      }
+    } else {
+      preAllocatedBuffer = null;
+    }
+  }
+  function getDbProtection2() {
+    return controlState.dbProtection || lastDbLatencyMs > 1e3;
+  }
+  function computeInternalMonitorSnapshot2() {
+    const workerSamples = controlState.workers || [];
+    const maxWorkerP95 = workerSamples.reduce(
+      (max, worker) => Math.max(max, Number(worker.latencyP95Ms || 0)),
+      0
+    );
+    const p95LatencyMs = Math.max(percentile(latencySamples, 95), maxWorkerP95);
+    const slowQueryCount = workerSamples.filter(
+      (worker) => Number(worker.dbLatencyMs || 0) > 600
+    ).length;
+    const aiFailureRate = clamp(circuitAi.getSnapshot().failureRate * 100, 0, 100);
+    const dbFailureRate = clamp(circuitDb.getSnapshot().failureRate * 100, 0, 100);
+    const exportFailureRate = clamp(circuitExport.getSnapshot().failureRate * 100, 0, 100);
+    const errorRate = Math.max(aiFailureRate, dbFailureRate, exportFailureRate);
+    const cpu = roundMetric(cpuPercent, 2);
+    const ram = getRamPercent();
+    const dbLatency = roundMetric(lastDbLatencyMs, 2);
+    const aiLatency = roundMetric(getEffectiveAiLatencyMs(), 2);
+    const loopLag = roundMetric(getEventLoopLagMs(), 2);
+    let bottleneckType = "NONE";
+    const pressureScore = [
+      { type: "CPU", score: cpu / 100 },
+      { type: "RAM", score: ram / 100 },
+      { type: "DB", score: dbLatency / 1200 },
+      { type: "AI", score: aiLatency / 1500 },
+      { type: "EVENT_LOOP", score: loopLag / 180 },
+      { type: "ERRORS", score: errorRate / 10 }
+    ].sort((a, b) => b.score - a.score)[0];
+    if (pressureScore && pressureScore.score >= 0.5) {
+      bottleneckType = pressureScore.type;
+    }
+    return {
+      score: roundMetric(controlState.healthScore, 2),
+      mode: controlState.mode,
+      cpuPercent: cpu,
+      ramPercent: ram,
+      p95LatencyMs: roundMetric(p95LatencyMs, 2),
+      errorRate: roundMetric(errorRate, 2),
+      dbLatencyMs: dbLatency,
+      aiLatencyMs: aiLatency,
+      eventLoopLagMs: loopLag,
+      requestRate: roundMetric(reqRatePerSec, 2),
+      activeRequests,
+      queueLength: options.getSearchQueueLength(),
+      workerCount: controlState.workerCount,
+      maxWorkers: controlState.maxWorkers,
+      dbProtection: getDbProtection2(),
+      slowQueryCount,
+      dbConnections: Math.max(
+        0,
+        Number(options.pool.totalCount || 0) + Number(options.pool.waitingCount || 0)
+      ),
+      aiFailRate: roundMetric(aiFailureRate, 2),
+      bottleneckType,
+      updatedAt: controlState.updatedAt
+    };
+  }
+  function buildInternalMonitorAlerts2(snapshot) {
+    const alerts = [];
+    const timestamp2 = new Date(snapshot.updatedAt || Date.now()).toISOString();
+    const pushAlert = (severity, source, message) => {
+      alerts.push({
+        id: `${source.toLowerCase().replace(/[^a-z0-9_]/g, "_")}_${severity.toLowerCase()}`,
+        severity,
+        source,
+        message,
+        timestamp: timestamp2
+      });
+    };
+    if (snapshot.mode === "PROTECTION") {
+      pushAlert("CRITICAL", "MODE", "System is in PROTECTION mode. Heavy routes are restricted.");
+    } else if (snapshot.mode === "DEGRADED") {
+      pushAlert("WARNING", "MODE", "System is in DEGRADED mode. Throughput throttling is active.");
+    }
+    if (snapshot.cpuPercent >= 88) {
+      pushAlert("CRITICAL", "CPU", `CPU usage is critically high at ${snapshot.cpuPercent.toFixed(1)}%.`);
+    } else if (snapshot.cpuPercent >= 75) {
+      pushAlert("WARNING", "CPU", `CPU usage is elevated at ${snapshot.cpuPercent.toFixed(1)}%.`);
+    }
+    if (snapshot.ramPercent >= 92) {
+      pushAlert("CRITICAL", "RAM", `RAM usage is critically high at ${snapshot.ramPercent.toFixed(1)}%.`);
+    } else if (snapshot.ramPercent >= 80) {
+      pushAlert("WARNING", "RAM", `RAM usage is elevated at ${snapshot.ramPercent.toFixed(1)}%.`);
+    }
+    if (snapshot.dbLatencyMs >= 1e3) {
+      pushAlert("CRITICAL", "DB", `Database latency is critical (${snapshot.dbLatencyMs.toFixed(0)} ms).`);
+    } else if (snapshot.dbLatencyMs >= 400) {
+      pushAlert("WARNING", "DB", `Database latency is elevated (${snapshot.dbLatencyMs.toFixed(0)} ms).`);
+    }
+    if (snapshot.aiLatencyMs >= 1400) {
+      pushAlert("CRITICAL", "AI", `AI latency is critical (${snapshot.aiLatencyMs.toFixed(0)} ms).`);
+    } else if (snapshot.aiLatencyMs >= 700) {
+      pushAlert("WARNING", "AI", `AI latency is elevated (${snapshot.aiLatencyMs.toFixed(0)} ms).`);
+    }
+    if (snapshot.eventLoopLagMs >= 170) {
+      pushAlert("CRITICAL", "EVENT_LOOP", `Event loop lag is critical (${snapshot.eventLoopLagMs.toFixed(1)} ms).`);
+    } else if (snapshot.eventLoopLagMs >= 90) {
+      pushAlert("WARNING", "EVENT_LOOP", `Event loop lag is elevated (${snapshot.eventLoopLagMs.toFixed(1)} ms).`);
+    }
+    if (snapshot.errorRate >= 5) {
+      pushAlert("CRITICAL", "ERRORS", `Runtime failure rate is high (${snapshot.errorRate.toFixed(2)}%).`);
+    } else if (snapshot.errorRate >= 2) {
+      pushAlert("WARNING", "ERRORS", `Runtime failure rate is elevated (${snapshot.errorRate.toFixed(2)}%).`);
+    }
+    if (snapshot.queueLength >= 10) {
+      pushAlert("CRITICAL", "QUEUE", `Request queue is saturated (${snapshot.queueLength} pending).`);
+    } else if (snapshot.queueLength >= 5) {
+      pushAlert("WARNING", "QUEUE", `Request queue is growing (${snapshot.queueLength} pending).`);
+    }
+    if (snapshot.workerCount >= snapshot.maxWorkers && snapshot.maxWorkers > 0) {
+      pushAlert("WARNING", "WORKERS", `Worker capacity reached (${snapshot.workerCount}/${snapshot.maxWorkers}).`);
+    }
+    return alerts;
+  }
+  function appendIntelligenceValue(key, value) {
+    if (!Number.isFinite(value)) return;
+    const series = intelligenceHistory[key];
+    series.push(value);
+    if (series.length > MAX_INTELLIGENCE_HISTORY) {
+      series.splice(0, series.length - MAX_INTELLIGENCE_HISTORY);
+    }
+  }
+  function toIntelligenceSnapshot(snapshot) {
+    return {
+      timestamp: snapshot.updatedAt || Date.now(),
+      score: snapshot.score,
+      mode: snapshot.mode,
+      cpuPercent: snapshot.cpuPercent,
+      ramPercent: snapshot.ramPercent,
+      p95LatencyMs: snapshot.p95LatencyMs,
+      errorRate: snapshot.errorRate,
+      dbLatencyMs: snapshot.dbLatencyMs,
+      aiLatencyMs: snapshot.aiLatencyMs,
+      eventLoopLagMs: snapshot.eventLoopLagMs,
+      requestRate: snapshot.requestRate,
+      activeRequests: snapshot.activeRequests,
+      queueSize: snapshot.queueLength,
+      workerCount: snapshot.workerCount,
+      maxWorkers: snapshot.maxWorkers,
+      dbConnections: snapshot.dbConnections,
+      aiFailRate: snapshot.aiFailRate,
+      bottleneckType: snapshot.bottleneckType
+    };
+  }
+  async function runIntelligenceCycle() {
+    if (intelligenceInFlight) return;
+    intelligenceInFlight = true;
+    try {
+      const monitorSnapshot = computeInternalMonitorSnapshot2();
+      const snapshot = toIntelligenceSnapshot(monitorSnapshot);
+      appendIntelligenceValue("cpuPercent", snapshot.cpuPercent);
+      appendIntelligenceValue("p95LatencyMs", snapshot.p95LatencyMs);
+      appendIntelligenceValue("dbLatencyMs", snapshot.dbLatencyMs);
+      appendIntelligenceValue("errorRate", snapshot.errorRate);
+      appendIntelligenceValue("aiLatencyMs", snapshot.aiLatencyMs);
+      appendIntelligenceValue("queueSize", snapshot.queueSize);
+      appendIntelligenceValue("ramPercent", snapshot.ramPercent);
+      appendIntelligenceValue("requestRate", snapshot.requestRate);
+      appendIntelligenceValue("workerCount", snapshot.workerCount);
+      await options.evaluateSystem(snapshot, intelligenceHistory);
+    } catch (err) {
+      if (options.apiDebugLogs) {
+        console.warn("Intelligence cycle error:", err);
+      }
+    } finally {
+      intelligenceInFlight = false;
+    }
+  }
+  function getRequestRate2() {
+    return reqRatePerSec;
+  }
+  function getLatencyP952() {
+    return percentile(latencySamples, 95);
+  }
+  function getLocalCircuitSnapshots2() {
+    return {
+      ai: circuitAi.getSnapshot(),
+      db: circuitDb.getSnapshot(),
+      export: circuitExport.getSnapshot()
+    };
+  }
+  function recordGcEntries(entryCount) {
+    if (entryCount > 0) {
+      gcCountWindow += entryCount;
+    }
+  }
+  function recordRequestStarted2() {
+    activeRequests += 1;
+    requestCounter += 1;
+  }
+  function recordRequestFinished2(elapsedMs) {
+    activeRequests = Math.max(0, activeRequests - 1);
+    recordLatency(elapsedMs);
+  }
+  function attachGcObserver2() {
+    if (gcObserverAttached) return;
+    gcObserverAttached = true;
+    try {
+      gcObserver = new PerformanceObserver((list) => {
+        recordGcEntries(list.getEntries().length);
+      });
+      gcObserver.observe({ entryTypes: ["gc"] });
+    } catch {
+    }
+  }
+  function attachProcessMessageHandlers2({ onGracefulShutdown }) {
+    if (processHandlersAttached || typeof process.on !== "function") {
+      return;
+    }
+    processHandlersAttached = true;
+    process.on("message", (msg) => {
+      if (!msg || typeof msg !== "object") return;
+      if (msg.type !== "control-state" || !msg.payload) return;
+      applyControlState(msg.payload);
+    });
+    process.on("message", (msg) => {
+      if (!msg || typeof msg !== "object") return;
+      if (msg.type !== "graceful-shutdown") return;
+      setTimeout(() => {
+        onGracefulShutdown();
+      }, 50);
+    });
+  }
+  function startRuntimeLoops2({ clearSearchCache }) {
+    if (runtimeLoopHandle) return;
+    runtimeLoopHandle = setInterval(() => {
+      reqRatePerSec = requestCounter / 5;
+      requestCounter = 0;
+      gcPerMinute = gcCountWindow * 12;
+      gcCountWindow = 0;
+      const now = Date.now();
+      const currentCpu = process.cpuUsage();
+      const cpuDeltaMicros = currentCpu.user - lastCpuUsage.user + (currentCpu.system - lastCpuUsage.system);
+      const elapsedMs = Math.max(1, now - lastCpuTs);
+      const cpuCorePercent = cpuDeltaMicros / 1e3 / elapsedMs * 100;
+      cpuPercent = clamp(cpuCorePercent / Math.max(1, controlState.workerCount || 1), 0, 100);
+      lastCpuUsage = currentCpu;
+      lastCpuTs = now;
+      if (typeof process.send === "function") {
+        const mem2 = process.memoryUsage();
+        process.send({
+          type: "worker-metrics",
+          payload: {
+            workerId: Number(process.env.NODE_UNIQUE_ID || 0),
+            pid: process.pid,
+            cpuPercent,
+            reqRate: reqRatePerSec,
+            latencyP95Ms: percentile(latencySamples, 95),
+            eventLoopLagMs: getEventLoopLagMs(),
+            activeRequests,
+            queueLength: options.getSearchQueueLength(),
+            heapUsedMB: mem2.heapUsed / (1024 * 1024),
+            heapTotalMB: mem2.heapTotal / (1024 * 1024),
+            oldSpaceMB: mem2.heapUsed / (1024 * 1024),
+            gcPerMin: gcPerMinute,
+            dbLatencyMs: lastDbLatencyMs,
+            aiLatencyMs: getEffectiveAiLatencyMs(),
+            ts: Date.now(),
+            circuit: {
+              ai: { state: circuitAi.getState(), failureRate: circuitAi.getSnapshot().failureRate },
+              db: { state: circuitDb.getState(), failureRate: circuitDb.getSnapshot().failureRate },
+              export: { state: circuitExport.getState(), failureRate: circuitExport.getSnapshot().failureRate }
+            }
+          }
+        });
+      }
+      const mem = process.memoryUsage();
+      const heapRatio = mem.heapTotal > 0 ? mem.heapUsed / mem.heapTotal : 0;
+      if (heapRatio > 0.88) {
+        clearSearchCache();
+        if (typeof process.send === "function") {
+          process.send({ type: "worker-event", payload: { kind: "memory-pressure" } });
+        }
+        if (typeof global.gc === "function" && activeRequests === 0) {
+          try {
+            global.gc();
+          } catch {
+          }
+        }
+      }
+      void runIntelligenceCycle();
+    }, 5e3);
+    runtimeLoopHandle.unref();
+    void runIntelligenceCycle();
+  }
+  return {
+    attachGcObserver: attachGcObserver2,
+    attachProcessMessageHandlers: attachProcessMessageHandlers2,
+    buildInternalMonitorAlerts: buildInternalMonitorAlerts2,
+    computeInternalMonitorSnapshot: computeInternalMonitorSnapshot2,
+    getControlState: getControlState2,
+    getDbProtection: getDbProtection2,
+    getLatencyP95: getLatencyP952,
+    getLocalCircuitSnapshots: getLocalCircuitSnapshots2,
+    getRequestRate: getRequestRate2,
+    recordRequestFinished: recordRequestFinished2,
+    recordRequestStarted: recordRequestStarted2,
+    startRuntimeLoops: startRuntimeLoops2,
+    withAiCircuit: withAiCircuit2,
+    withDbCircuit: withDbCircuit2,
+    withExportCircuit: withExportCircuit2
+  };
+}
+
+// server/internal/wrapAsyncPrototypeMethods.ts
+function wrapAsyncPrototypeMethods(target, options) {
+  const prototype = Object.getPrototypeOf(target);
+  if (!prototype || typeof prototype !== "object") {
+    return;
+  }
+  const host = target;
+  for (const methodName of Object.getOwnPropertyNames(prototype)) {
+    if (options.exclude?.has(methodName)) {
+      continue;
+    }
+    const candidate = Reflect.get(target, methodName);
+    if (typeof candidate !== "function") {
+      continue;
+    }
+    const method = candidate;
+    if (method.constructor?.name !== "AsyncFunction") {
+      continue;
+    }
+    const original = method.bind(target);
+    host[methodName] = async (...args) => options.wrap(() => original(...args));
+  }
+}
+
 // server/intelligence/anomaly/AnomalyEngine.ts
 var WEIGHTS = {
   normalizedZScore: 0.3,
@@ -5459,7 +7156,7 @@ var AnomalyEngine = class {
 };
 
 // server/intelligence/chaos/ChaosEngine.ts
-import crypto2 from "crypto";
+import crypto7 from "crypto";
 var DEFAULT_DURATION_MS = 2e4;
 var MAX_DURATION_MS = 5 * 6e4;
 var DEFAULT_MAGNITUDE = {
@@ -5469,7 +7166,7 @@ var DEFAULT_MAGNITUDE = {
   worker_crash: 1,
   memory_pressure: 18
 };
-var clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+var clamp2 = (value, min, max) => Math.max(min, Math.min(max, value));
 var ChaosEngine = class {
   constructor() {
     this.events = /* @__PURE__ */ new Map();
@@ -5477,13 +7174,13 @@ var ChaosEngine = class {
   inject(input) {
     const now = Date.now();
     const magnitude = Number.isFinite(input.magnitude) ? Number(input.magnitude) : DEFAULT_MAGNITUDE[input.type];
-    const durationMs = clamp(
+    const durationMs = clamp2(
       Number.isFinite(input.durationMs) ? Number(input.durationMs) : DEFAULT_DURATION_MS,
       5e3,
       MAX_DURATION_MS
     );
     const event = {
-      id: crypto2.randomUUID(),
+      id: crypto7.randomUUID(),
       type: input.type,
       magnitude,
       createdAt: now,
@@ -5501,18 +7198,18 @@ var ChaosEngine = class {
     for (const event of this.events.values()) {
       switch (event.type) {
         case "cpu_spike":
-          next.cpuPercent = clamp(next.cpuPercent + event.magnitude, 0, 100);
+          next.cpuPercent = clamp2(next.cpuPercent + event.magnitude, 0, 100);
           next.p95LatencyMs += event.magnitude * 2;
           break;
         case "db_latency_spike":
           next.dbLatencyMs = Math.max(0, next.dbLatencyMs + event.magnitude);
           next.p95LatencyMs += event.magnitude * 0.4;
-          next.errorRate = clamp(next.errorRate + 1.5, 0, 100);
+          next.errorRate = clamp2(next.errorRate + 1.5, 0, 100);
           break;
         case "ai_delay":
           next.aiLatencyMs = Math.max(0, next.aiLatencyMs + event.magnitude);
           next.queueSize = Math.max(0, next.queueSize + Math.ceil(event.magnitude / 120));
-          next.aiFailRate = clamp(next.aiFailRate + 0.8, 0, 100);
+          next.aiFailRate = clamp2(next.aiFailRate + 0.8, 0, 100);
           break;
         case "worker_crash": {
           const drop = Math.max(1, Math.floor(event.magnitude));
@@ -5522,14 +7219,14 @@ var ChaosEngine = class {
           break;
         }
         case "memory_pressure":
-          next.ramPercent = clamp(next.ramPercent + event.magnitude, 0, 100);
+          next.ramPercent = clamp2(next.ramPercent + event.magnitude, 0, 100);
           next.eventLoopLagMs += event.magnitude * 1.5;
           break;
         default:
           break;
       }
     }
-    next.score = clamp(next.score - 10, 0, 100);
+    next.score = clamp2(next.score - 10, 0, 100);
     return next;
   }
   listActive(now = Date.now()) {
@@ -5880,8 +7577,8 @@ var StabilityDnaEngine = class {
         `,
         [metricSignature]
       );
-      const count2 = Number(result.rows?.[0]?.count || 0);
-      if (count2 > 5) return 0.85;
+      const count3 = Number(result.rows?.[0]?.count || 0);
+      if (count3 > 5) return 0.85;
       return 1;
     } catch {
       return 1;
@@ -6251,7 +7948,7 @@ var StrategyEngine = class {
 
 // server/intelligence/index.ts
 var MAX_HISTORY = 300;
-function clamp2(value, min, max) {
+function clamp3(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 function normalizeHistory(history, stats) {
@@ -6328,7 +8025,7 @@ var IntelligenceEcosystem = class {
       predictiveResult,
       mutationFactor
     });
-    const stabilityIndex = clamp2(100 - anomalySummary.score * 100, 0, 100);
+    const stabilityIndex = clamp3(100 - anomalySummary.score * 100, 0, 100);
     this.pushStabilitySample(stabilityIndex, chaosSnapshot.timestamp);
     this.strategy.recordAnomalyOutcome(anomalySummary.severity);
     const strategyOutcome = this.strategy.evaluate({
@@ -6457,751 +8154,262 @@ function injectChaos(input) {
   return ecosystem.injectChaos(input);
 }
 
-// server/index-local.ts
-var storage = new PostgresStorage();
-var app = express();
-var server = createServer(app);
-var wss = new WebSocketServer({ server, path: "/ws" });
-var startupFatalReason = null;
-function notifyMasterFatalStartup(reason, details) {
-  if (startupFatalReason) return;
-  startupFatalReason = reason;
-  if (typeof process.send === "function") {
-    try {
-      process.send({
-        type: "worker-fatal",
-        payload: { reason, details: details || "" }
-      });
-    } catch {
-    }
+// server/auth/guards.ts
+import jwt2 from "jsonwebtoken";
+
+// server/lib/logger.ts
+var DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
+var REDACT_KEYS = [
+  "password",
+  "passwordhash",
+  "token",
+  "authorization",
+  "sessionsecret",
+  "icnumber",
+  "accountnumber",
+  "fingerprint"
+];
+function sanitize(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitize(item));
   }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  const output = {};
+  for (const [key, nested] of Object.entries(value)) {
+    const normalizedKey = key.toLowerCase();
+    if (REDACT_KEYS.some((sensitive) => normalizedKey.includes(sensitive))) {
+      output[key] = "[REDACTED]";
+      continue;
+    }
+    output[key] = sanitize(nested);
+  }
+  return output;
 }
-wss.on("error", (err) => {
-  const code = String(err?.code || "");
-  if (code === "EADDRINUSE") {
-    notifyMasterFatalStartup("EADDRINUSE", "WebSocket server failed to bind address");
-    console.error("\u274C WebSocket startup failed: port already in use.");
-    setTimeout(() => process.exit(98), 10).unref();
+function log(level, message, meta) {
+  if (level === "debug" && !DEBUG_LOGS) return;
+  const payload = meta ? sanitize(meta) : void 0;
+  const line = payload ? `${message} ${JSON.stringify(payload)}` : message;
+  if (level === "error") {
+    console.error(line);
     return;
   }
-  console.error("\u274C WebSocket server error:", err);
-});
-var JWT_SECRET = process.env.SESSION_SECRET || "sqr-local-secret-key-2025";
-var connectedClients = /* @__PURE__ */ new Map();
-var DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
-var DEFAULT_WS_IDLE_MINUTES = 3;
-var DEFAULT_AI_TIMEOUT_MS = 6e3;
-var DEFAULT_BODY_LIMIT = "2mb";
-var IMPORT_BODY_LIMIT = process.env.IMPORT_BODY_LIMIT || "50mb";
-var COLLECTION_BODY_LIMIT = process.env.COLLECTION_BODY_LIMIT || "8mb";
-var COLLECTION_BATCHES = /* @__PURE__ */ new Set(["P10", "P25", "MDD02", "MDD10", "MDD18", "MDD25"]);
-var COLLECTION_RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
-var COLLECTION_RECEIPT_ALLOWED_EXT = /* @__PURE__ */ new Set([".jpg", ".jpeg", ".png", ".pdf"]);
-var COLLECTION_RECEIPT_ALLOWED_MIME = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "application/pdf"]);
-var COLLECTION_RECEIPT_INLINE_MIME = /* @__PURE__ */ new Set(["application/pdf", "image/png", "image/jpeg"]);
-var UPLOADS_ROOT_DIR = path.resolve(process.cwd(), "uploads");
-var COLLECTION_RECEIPT_DIR = path.resolve(UPLOADS_ROOT_DIR, "collection-receipts");
-var COLLECTION_RECEIPT_PUBLIC_PREFIX = "/uploads/collection-receipts";
-var PG_POOL_WARN_COOLDOWN_MS = 6e4;
-var AI_PRECOMPUTE_ON_START = String(process.env.AI_PRECOMPUTE_ON_START || "0") === "1";
-var API_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
-var LOW_MEMORY_MODE = String(process.env.SQR_LOW_MEMORY_MODE ?? "1") === "1";
-var AI_GATE_GLOBAL_LIMIT = Math.max(1, Number(process.env.AI_GATE_GLOBAL_LIMIT ?? "4"));
-var AI_GATE_QUEUE_LIMIT = Math.max(0, Number(process.env.AI_GATE_QUEUE_LIMIT ?? "20"));
-var AI_GATE_QUEUE_WAIT_MS = Math.max(1e3, Number(process.env.AI_GATE_QUEUE_WAIT_MS ?? "12000"));
-var AI_GATE_ROLE_LIMITS = {
-  user: Math.max(1, Number(process.env.AI_GATE_USER_LIMIT ?? "2")),
-  admin: Math.max(1, Number(process.env.AI_GATE_ADMIN_LIMIT ?? "1")),
-  superuser: Math.max(1, Number(process.env.AI_GATE_SUPERUSER_LIMIT ?? "1"))
-};
-var AI_LATENCY_STALE_AFTER_MS = Math.max(5e3, Number(process.env.AI_LATENCY_STALE_AFTER_MS ?? "20000"));
-var AI_LATENCY_DECAY_HALF_LIFE_MS = Math.max(5e3, Number(process.env.AI_LATENCY_DECAY_HALF_LIFE_MS ?? "30000"));
-var MAINTENANCE_CACHE_TTL_MS = 3e3;
-var idleSweepRunning = false;
-var maintenanceCache = null;
-var RUNTIME_SETTINGS_CACHE_TTL_MS = 3e3;
-var runtimeSettingsCache = null;
-var defaultControlState = {
-  mode: "NORMAL",
-  healthScore: 100,
-  dbProtection: false,
-  rejectHeavyRoutes: false,
-  throttleFactor: 1,
-  predictor: {
-    requestRateMA: 0,
-    latencyMA: 0,
-    cpuMA: 0,
-    requestRateTrend: 0,
-    latencyTrend: 0,
-    cpuTrend: 0,
-    sustainedUpward: false,
-    lastUpdatedAt: null
+  if (level === "warn") {
+    console.warn(line);
+    return;
+  }
+  console.log(line);
+}
+var logger = {
+  info(message, meta) {
+    log("info", message, meta);
   },
-  workerCount: 1,
-  maxWorkers: 1,
-  queueLength: 0,
-  preAllocateMB: 0,
-  updatedAt: Date.now(),
-  workers: [],
-  circuits: {
-    aiOpenWorkers: 0,
-    dbOpenWorkers: 0,
-    exportOpenWorkers: 0
+  warn(message, meta) {
+    log("warn", message, meta);
+  },
+  error(message, meta) {
+    log("error", message, meta);
+  },
+  debug(message, meta) {
+    log("debug", message, meta);
   }
 };
-var controlState = defaultControlState;
-var preAllocatedBuffer = null;
-var activeRequests = 0;
-var latencySamples = [];
-var LATENCY_WINDOW = 400;
-var requestCounter = 0;
-var reqRatePerSec = 0;
-var lastCpuUsage = process.cpuUsage();
-var lastCpuTs = Date.now();
-var cpuPercent = 0;
-var gcCountWindow = 0;
-var gcPerMinute = 0;
-var lastDbLatencyMs = 0;
-var lastAiLatencyMs = 0;
-var lastAiLatencyObservedAt = 0;
-var lastIntelligenceResult = null;
-var intelligenceInFlight = false;
-var lastPgPoolWarningAt = 0;
-var lastPgPoolWarningSignature = "";
-var MAX_INTELLIGENCE_HISTORY = 300;
-var intelligenceHistory = {
-  cpuPercent: [],
-  p95LatencyMs: [],
-  dbLatencyMs: [],
-  errorRate: [],
-  aiLatencyMs: [],
-  queueSize: [],
-  ramPercent: [],
-  requestRate: [],
-  workerCount: []
-};
-var eventLoopHistogram = monitorEventLoopDelay({ resolution: 20 });
-eventLoopHistogram.enable();
-var circuitAi = new CircuitBreaker({
-  name: "ai",
-  threshold: 0.4,
-  minRequests: 10,
-  cooldownMs: 8e3
-});
-var circuitDb = new CircuitBreaker({
-  name: "db",
-  threshold: 0.35,
-  minRequests: 20,
-  cooldownMs: 12e3
-});
-var circuitExport = new CircuitBreaker({
-  name: "export",
-  threshold: 0.4,
-  minRequests: 8,
-  cooldownMs: 15e3
-});
-var DB_METHOD_WRAP_EXCLUDE = /* @__PURE__ */ new Set([
-  "constructor"
-]);
-var storageProto = Object.getPrototypeOf(storage);
-for (const methodName of Object.getOwnPropertyNames(storageProto)) {
-  if (DB_METHOD_WRAP_EXCLUDE.has(methodName)) continue;
-  const method = storage[methodName];
-  if (typeof method !== "function") continue;
-  if (method.constructor?.name !== "AsyncFunction") continue;
-  const original = method.bind(storage);
-  storage[methodName] = async (...args) => {
-    return withDbCircuit(async () => original(...args));
-  };
-}
-try {
-  const gcObserver = new PerformanceObserver((list) => {
-    const entries = list.getEntries();
-    if (entries.length > 0) gcCountWindow += entries.length;
-  });
-  gcObserver.observe({ entryTypes: ["gc"] });
-} catch {
-}
-var buildEmbeddingText = (data) => {
-  const preferredKeys = [
-    "nama",
-    "name",
-    "full name",
-    "alamat",
-    "address",
-    "bandar",
-    "negeri",
-    "employer",
-    "majikan",
-    "company",
-    "occupation",
-    "job",
-    "department",
-    "product",
-    "model",
-    "brand",
-    "account",
-    "akaun"
-  ];
-  const entries = Object.entries(data || {});
-  const picked = [];
-  for (const [key, value] of entries) {
-    const lower = key.toLowerCase();
-    if (!preferredKeys.some((p) => lower.includes(p))) continue;
-    const v = String(value ?? "").trim();
-    if (!v) continue;
-    if (/^\d+$/.test(v)) continue;
-    picked.push(`${key}: ${v}`);
-    if (picked.length >= 20) break;
-  }
-  if (picked.length === 0) {
-    for (const [key, value] of entries) {
-      const v = String(value ?? "").trim();
-      if (!v) continue;
-      if (/^\d+$/.test(v)) continue;
-      picked.push(`${key}: ${v}`);
-      if (picked.length >= 15) break;
+
+// server/auth/guards.ts
+var TAB_VISIBILITY_CACHE_TTL_MS = 5e3;
+function createAuthGuards(options) {
+  const storage2 = options.storage;
+  const secret = options.secret || getSessionSecret();
+  const tabVisibilityCache = /* @__PURE__ */ new Map();
+  async function getRoleTabVisibilityCached(role) {
+    if (role === "superuser") return {};
+    const now = Date.now();
+    const cached = tabVisibilityCache.get(role);
+    if (cached && now - cached.cachedAt < TAB_VISIBILITY_CACHE_TTL_MS) {
+      return cached.tabs;
     }
+    const tabs = await storage2.getRoleTabVisibility(role);
+    tabVisibilityCache.set(role, { tabs, cachedAt: now });
+    return tabs;
   }
-  const text2 = picked.join("\n");
-  return text2.length > 2e3 ? text2.slice(0, 2e3) : text2;
-};
-function parseBrowser(userAgent) {
-  if (!userAgent) return "Unknown";
-  const ua = userAgent;
-  const uaLower = ua.toLowerCase();
-  const extractVersion = (pattern) => {
-    const match = ua.match(pattern);
-    if (match && match[1]) {
-      const parts = match[1].split(".");
-      return parts[0];
+  const authenticateToken = async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ message: "Token required" });
     }
-    return "";
-  };
-  if (uaLower.includes("edg/")) {
-    const ver = extractVersion(/Edg\/(\d+[\d.]*)/i);
-    return ver ? `Edge ${ver}` : "Edge";
-  }
-  if (uaLower.includes("edge/")) {
-    const ver = extractVersion(/Edge\/(\d+[\d.]*)/i);
-    return ver ? `Edge ${ver}` : "Edge";
-  }
-  if (uaLower.includes("opr/")) {
-    const ver = extractVersion(/OPR\/(\d+[\d.]*)/i);
-    return ver ? `Opera ${ver}` : "Opera";
-  }
-  if (uaLower.includes("opera/")) {
-    const ver = extractVersion(/Opera\/(\d+[\d.]*)/i);
-    return ver ? `Opera ${ver}` : "Opera";
-  }
-  if (uaLower.includes("brave")) {
-    const ver = extractVersion(/Brave\/(\d+[\d.]*)/i) || extractVersion(/Chrome\/(\d+[\d.]*)/i);
-    return ver ? `Brave ${ver}` : "Brave";
-  }
-  if (uaLower.includes("duckduckgo")) {
-    const ver = extractVersion(/DuckDuckGo\/(\d+[\d.]*)/i);
-    return ver ? `DuckDuckGo ${ver}` : "DuckDuckGo";
-  }
-  if (uaLower.includes("vivaldi")) {
-    const ver = extractVersion(/Vivaldi\/(\d+[\d.]*)/i);
-    return ver ? `Vivaldi ${ver}` : "Vivaldi";
-  }
-  if (uaLower.includes("firefox/") || uaLower.includes("fxios/")) {
-    const ver = extractVersion(/Firefox\/(\d+[\d.]*)/i) || extractVersion(/FxiOS\/(\d+[\d.]*)/i);
-    return ver ? `Firefox ${ver}` : "Firefox";
-  }
-  if (uaLower.includes("safari/") && !uaLower.includes("chrome/") && !uaLower.includes("chromium/")) {
-    const ver = extractVersion(/Version\/(\d+[\d.]*)/i);
-    return ver ? `Safari ${ver}` : "Safari";
-  }
-  if (uaLower.includes("chrome/") || uaLower.includes("crios/") || uaLower.includes("chromium/")) {
-    const ver = extractVersion(/Chrome\/(\d+[\d.]*)/i) || extractVersion(/CriOS\/(\d+[\d.]*)/i);
-    return ver ? `Chrome ${ver}` : "Chrome";
-  }
-  if (uaLower.includes("msie") || uaLower.includes("trident/")) {
-    const ver = extractVersion(/MSIE (\d+[\d.]*)/i) || extractVersion(/rv:(\d+[\d.]*)/i);
-    return ver ? `Internet Explorer ${ver}` : "Internet Explorer";
-  }
-  return "Unknown";
-}
-function clamp3(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-function percentile(values, p) {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.floor(clamp3(p, 0, 100) / 100 * (sorted.length - 1));
-  return sorted[index];
-}
-function recordLatency(ms) {
-  if (!Number.isFinite(ms) || ms < 0) return;
-  latencySamples.push(ms);
-  if (latencySamples.length > LATENCY_WINDOW) {
-    latencySamples.splice(0, latencySamples.length - LATENCY_WINDOW);
-  }
-}
-function getEventLoopLagMs() {
-  const lagMs = Number(eventLoopHistogram.mean) / 1e6;
-  return Number.isFinite(lagMs) ? lagMs : 0;
-}
-function observeDbLatency(ms) {
-  if (!Number.isFinite(ms) || ms < 0) return;
-  if (lastDbLatencyMs <= 0) {
-    lastDbLatencyMs = ms;
-  } else {
-    lastDbLatencyMs = lastDbLatencyMs * 0.75 + ms * 0.25;
-  }
-}
-function observeAiLatency(ms) {
-  if (!Number.isFinite(ms) || ms < 0) return;
-  if (lastAiLatencyMs <= 0) {
-    lastAiLatencyMs = ms;
-  } else {
-    lastAiLatencyMs = lastAiLatencyMs * 0.75 + ms * 0.25;
-  }
-  lastAiLatencyObservedAt = Date.now();
-}
-function getEffectiveAiLatencyMs(now = Date.now()) {
-  if (!Number.isFinite(lastAiLatencyMs) || lastAiLatencyMs <= 0) return 0;
-  if (lastAiLatencyObservedAt <= 0) return Math.max(0, lastAiLatencyMs);
-  const idleMs = Math.max(0, now - lastAiLatencyObservedAt);
-  if (idleMs <= AI_LATENCY_STALE_AFTER_MS) {
-    return Math.max(0, lastAiLatencyMs);
-  }
-  const decayWindowMs = idleMs - AI_LATENCY_STALE_AFTER_MS;
-  const decayFactor = Math.exp(-Math.LN2 * decayWindowMs / AI_LATENCY_DECAY_HALF_LIFE_MS);
-  const decayed = lastAiLatencyMs * decayFactor;
-  return Math.max(0, decayed);
-}
-function maybeWarnPgPoolPressure(source) {
-  const total = Number(pool.totalCount || 0);
-  const idle = Number(pool.idleCount || 0);
-  const waiting = Number(pool.waitingCount || 0);
-  const max = Number(pool?.options?.max || 0);
-  const nearMax = max > 0 ? total >= Math.max(1, max - 1) : false;
-  const hasPressure = waiting > 0 || idle === 0 || nearMax;
-  if (!hasPressure) {
-    lastPgPoolWarningSignature = "";
-    return;
-  }
-  const signature = `${total}:${idle}:${waiting}:${max}`;
-  const now = Date.now();
-  if (signature === lastPgPoolWarningSignature && now - lastPgPoolWarningAt < PG_POOL_WARN_COOLDOWN_MS) {
-    return;
-  }
-  lastPgPoolWarningAt = now;
-  lastPgPoolWarningSignature = signature;
-  console.warn(
-    `[PG_POOL] total=${total} idle=${idle} waiting=${waiting} max=${max} source=${source}`
-  );
-}
-async function withDbCircuit(operation) {
-  return circuitDb.execute(async () => {
-    const start = Date.now();
     try {
-      return await operation();
-    } finally {
-      observeDbLatency(Date.now() - start);
-      maybeWarnPgPoolPressure("db-circuit");
+      const decoded = jwt2.verify(token, secret);
+      const activity = await storage2.getActivityById(decoded.activityId);
+      if (!activity || activity.isActive === false || activity.logoutTime !== null) {
+        return res.status(401).json({
+          message: "Session expired. Please login again.",
+          forceLogout: true
+        });
+      }
+      const isVisitorBanned = await storage2.isVisitorBanned(
+        activity.fingerprint ?? null,
+        activity.ipAddress ?? null
+      );
+      if (isVisitorBanned) {
+        return res.status(401).json({
+          message: "Session banned. Please login again.",
+          forceLogout: true
+        });
+      }
+      await storage2.updateActivity(decoded.activityId, {
+        lastActivityTime: /* @__PURE__ */ new Date(),
+        isActive: true
+      });
+      req.user = {
+        userId: activity.userId || decoded.userId,
+        username: activity.username || decoded.username,
+        role: activity.role || decoded.role,
+        activityId: decoded.activityId
+      };
+      return next();
+    } catch (error) {
+      logger.debug("Token validation failed", {
+        path: req.path,
+        method: req.method,
+        error: error?.message
+      });
+      return res.status(403).json({ message: "Invalid token" });
     }
-  });
-}
-async function withAiCircuit(operation) {
-  return circuitAi.execute(async () => {
-    const start = Date.now();
-    try {
-      return await operation();
-    } finally {
-      observeAiLatency(Date.now() - start);
-    }
-  });
-}
-async function withExportCircuit(operation) {
-  return circuitExport.execute(operation);
-}
-function isHeavyRoute(pathname) {
-  return pathname.startsWith("/api/ai/") || pathname.startsWith("/api/imports") || pathname.startsWith("/api/search/advanced") || pathname.startsWith("/api/backups");
-}
-function getSearchQueueLength() {
-  const map = global.__searchInflightMap;
-  return map?.size ?? 0;
-}
-function roundMetric(value, digits = 2) {
-  if (!Number.isFinite(value)) return 0;
-  const p = 10 ** digits;
-  return Math.round(value * p) / p;
-}
-function getRamPercent() {
-  const total = Number(os.totalmem() || 0);
-  const free = Number(os.freemem() || 0);
-  if (total <= 0) return 0;
-  return roundMetric((total - free) / total * 100, 2);
-}
-function computeInternalMonitorSnapshot() {
-  const workerSamples = controlState.workers || [];
-  const maxWorkerP95 = workerSamples.reduce((max, worker) => Math.max(max, Number(worker.latencyP95Ms || 0)), 0);
-  const p95LatencyMs = Math.max(percentile(latencySamples, 95), maxWorkerP95);
-  const slowQueryCount = workerSamples.filter((worker) => Number(worker.dbLatencyMs || 0) > 600).length;
-  const aiFailureRate = clamp3(circuitAi.getSnapshot().failureRate * 100, 0, 100);
-  const dbFailureRate = clamp3(circuitDb.getSnapshot().failureRate * 100, 0, 100);
-  const exportFailureRate = clamp3(circuitExport.getSnapshot().failureRate * 100, 0, 100);
-  const errorRate = Math.max(aiFailureRate, dbFailureRate, exportFailureRate);
-  const mode = controlState.mode;
-  const cpu = roundMetric(cpuPercent, 2);
-  const ram = getRamPercent();
-  const dbLatency = roundMetric(lastDbLatencyMs, 2);
-  const aiLatency = roundMetric(getEffectiveAiLatencyMs(), 2);
-  const loopLag = roundMetric(getEventLoopLagMs(), 2);
-  let bottleneckType = "NONE";
-  const pressureScore = [
-    { type: "CPU", score: cpu / 100 },
-    { type: "RAM", score: ram / 100 },
-    { type: "DB", score: dbLatency / 1200 },
-    { type: "AI", score: aiLatency / 1500 },
-    { type: "EVENT_LOOP", score: loopLag / 180 },
-    { type: "ERRORS", score: errorRate / 10 }
-  ].sort((a, b) => b.score - a.score)[0];
-  if (pressureScore && pressureScore.score >= 0.5) {
-    bottleneckType = pressureScore.type;
-  }
-  return {
-    score: roundMetric(controlState.healthScore, 2),
-    mode,
-    cpuPercent: cpu,
-    ramPercent: ram,
-    p95LatencyMs: roundMetric(p95LatencyMs, 2),
-    errorRate: roundMetric(errorRate, 2),
-    dbLatencyMs: dbLatency,
-    aiLatencyMs: aiLatency,
-    eventLoopLagMs: loopLag,
-    requestRate: roundMetric(reqRatePerSec, 2),
-    activeRequests,
-    queueLength: getSearchQueueLength(),
-    workerCount: controlState.workerCount,
-    maxWorkers: controlState.maxWorkers,
-    dbProtection: controlState.dbProtection || lastDbLatencyMs > 1e3,
-    slowQueryCount,
-    dbConnections: Math.max(0, Number(pool.totalCount || 0) + Number(pool.waitingCount || 0)),
-    aiFailRate: roundMetric(aiFailureRate, 2),
-    bottleneckType,
-    updatedAt: controlState.updatedAt
   };
-}
-function buildInternalMonitorAlerts(snapshot) {
-  const alerts = [];
-  const timestamp2 = new Date(snapshot.updatedAt || Date.now()).toISOString();
-  const pushAlert = (severity, source, message) => {
-    alerts.push({
-      id: `${source.toLowerCase().replace(/[^a-z0-9_]/g, "_")}_${severity.toLowerCase()}`,
-      severity,
-      source,
-      message,
-      timestamp: timestamp2
-    });
-  };
-  if (snapshot.mode === "PROTECTION") {
-    pushAlert("CRITICAL", "MODE", "System is in PROTECTION mode. Heavy routes are restricted.");
-  } else if (snapshot.mode === "DEGRADED") {
-    pushAlert("WARNING", "MODE", "System is in DEGRADED mode. Throughput throttling is active.");
-  }
-  if (snapshot.cpuPercent >= 88) {
-    pushAlert("CRITICAL", "CPU", `CPU usage is critically high at ${snapshot.cpuPercent.toFixed(1)}%.`);
-  } else if (snapshot.cpuPercent >= 75) {
-    pushAlert("WARNING", "CPU", `CPU usage is elevated at ${snapshot.cpuPercent.toFixed(1)}%.`);
-  }
-  if (snapshot.ramPercent >= 92) {
-    pushAlert("CRITICAL", "RAM", `RAM usage is critically high at ${snapshot.ramPercent.toFixed(1)}%.`);
-  } else if (snapshot.ramPercent >= 80) {
-    pushAlert("WARNING", "RAM", `RAM usage is elevated at ${snapshot.ramPercent.toFixed(1)}%.`);
-  }
-  if (snapshot.dbLatencyMs >= 1e3) {
-    pushAlert("CRITICAL", "DB", `Database latency is critical (${snapshot.dbLatencyMs.toFixed(0)} ms).`);
-  } else if (snapshot.dbLatencyMs >= 400) {
-    pushAlert("WARNING", "DB", `Database latency is elevated (${snapshot.dbLatencyMs.toFixed(0)} ms).`);
-  }
-  if (snapshot.aiLatencyMs >= 1400) {
-    pushAlert("CRITICAL", "AI", `AI latency is critical (${snapshot.aiLatencyMs.toFixed(0)} ms).`);
-  } else if (snapshot.aiLatencyMs >= 700) {
-    pushAlert("WARNING", "AI", `AI latency is elevated (${snapshot.aiLatencyMs.toFixed(0)} ms).`);
-  }
-  if (snapshot.eventLoopLagMs >= 170) {
-    pushAlert("CRITICAL", "EVENT_LOOP", `Event loop lag is critical (${snapshot.eventLoopLagMs.toFixed(1)} ms).`);
-  } else if (snapshot.eventLoopLagMs >= 90) {
-    pushAlert("WARNING", "EVENT_LOOP", `Event loop lag is elevated (${snapshot.eventLoopLagMs.toFixed(1)} ms).`);
-  }
-  if (snapshot.errorRate >= 5) {
-    pushAlert("CRITICAL", "ERRORS", `Runtime failure rate is high (${snapshot.errorRate.toFixed(2)}%).`);
-  } else if (snapshot.errorRate >= 2) {
-    pushAlert("WARNING", "ERRORS", `Runtime failure rate is elevated (${snapshot.errorRate.toFixed(2)}%).`);
-  }
-  if (snapshot.queueLength >= 10) {
-    pushAlert("CRITICAL", "QUEUE", `Request queue is saturated (${snapshot.queueLength} pending).`);
-  } else if (snapshot.queueLength >= 5) {
-    pushAlert("WARNING", "QUEUE", `Request queue is growing (${snapshot.queueLength} pending).`);
-  }
-  if (snapshot.workerCount >= snapshot.maxWorkers && snapshot.maxWorkers > 0) {
-    pushAlert("WARNING", "WORKERS", `Worker capacity reached (${snapshot.workerCount}/${snapshot.maxWorkers}).`);
-  }
-  return alerts;
-}
-function appendIntelligenceValue(key, value) {
-  if (!Number.isFinite(value)) return;
-  const series = intelligenceHistory[key];
-  series.push(value);
-  if (series.length > MAX_INTELLIGENCE_HISTORY) {
-    series.splice(0, series.length - MAX_INTELLIGENCE_HISTORY);
-  }
-}
-function toIntelligenceSnapshot(snapshot) {
-  return {
-    timestamp: snapshot.updatedAt || Date.now(),
-    score: snapshot.score,
-    mode: snapshot.mode,
-    cpuPercent: snapshot.cpuPercent,
-    ramPercent: snapshot.ramPercent,
-    p95LatencyMs: snapshot.p95LatencyMs,
-    errorRate: snapshot.errorRate,
-    dbLatencyMs: snapshot.dbLatencyMs,
-    aiLatencyMs: snapshot.aiLatencyMs,
-    eventLoopLagMs: snapshot.eventLoopLagMs,
-    requestRate: snapshot.requestRate,
-    activeRequests: snapshot.activeRequests,
-    queueSize: snapshot.queueLength,
-    workerCount: snapshot.workerCount,
-    maxWorkers: snapshot.maxWorkers,
-    dbConnections: snapshot.dbConnections,
-    aiFailRate: snapshot.aiFailRate,
-    bottleneckType: snapshot.bottleneckType
-  };
-}
-async function runIntelligenceCycle() {
-  if (intelligenceInFlight) return;
-  intelligenceInFlight = true;
-  try {
-    const monitorSnapshot = computeInternalMonitorSnapshot();
-    const snapshot = toIntelligenceSnapshot(monitorSnapshot);
-    appendIntelligenceValue("cpuPercent", snapshot.cpuPercent);
-    appendIntelligenceValue("p95LatencyMs", snapshot.p95LatencyMs);
-    appendIntelligenceValue("dbLatencyMs", snapshot.dbLatencyMs);
-    appendIntelligenceValue("errorRate", snapshot.errorRate);
-    appendIntelligenceValue("aiLatencyMs", snapshot.aiLatencyMs);
-    appendIntelligenceValue("queueSize", snapshot.queueSize);
-    appendIntelligenceValue("ramPercent", snapshot.ramPercent);
-    appendIntelligenceValue("requestRate", snapshot.requestRate);
-    appendIntelligenceValue("workerCount", snapshot.workerCount);
-    lastIntelligenceResult = await evaluateSystem(snapshot, intelligenceHistory);
-  } catch (err) {
-    if (API_DEBUG_LOGS) {
-      console.warn("Intelligence cycle error:", err);
-    }
-  } finally {
-    intelligenceInFlight = false;
-  }
-}
-var adaptiveRateState = /* @__PURE__ */ new Map();
-function resolveAdaptiveRateBucket(req) {
-  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim();
-  const method = String(req.method || "GET").toUpperCase();
-  const path2 = req.path || "/";
-  let bucketScope = "api";
-  let baseLimit = 40;
-  let minLimit = 8;
-  if (path2.startsWith("/api/ai/")) {
-    bucketScope = "ai";
-    baseLimit = 14;
-    minLimit = 4;
-  } else if (path2.startsWith("/api/activity/heartbeat")) {
-    bucketScope = "heartbeat";
-    baseLimit = 120;
-    minLimit = 20;
-  } else if (method === "GET" && (path2.startsWith("/api/collection/nicknames") || path2.startsWith("/api/collection/admin-groups"))) {
-    bucketScope = "collection-meta";
-    baseLimit = 120;
-    minLimit = 24;
-  }
-  const modePenalty = controlState.mode === "PROTECTION" ? 0.5 : controlState.mode === "DEGRADED" ? 0.75 : 1;
-  const throttle = clamp3(controlState.throttleFactor || 1, 0.2, 1.2);
-  const dynamicLimit = Math.max(minLimit, Math.floor(baseLimit * modePenalty * throttle));
-  return { bucketKey: `${ip}:${bucketScope}`, dynamicLimit };
-}
-function adaptiveRateLimit(req, res, next) {
-  if (!req.path.startsWith("/api/")) return next();
-  const windowMs = 1e4;
-  const now = Date.now();
-  const { bucketKey, dynamicLimit } = resolveAdaptiveRateBucket(req);
-  const bucket = adaptiveRateState.get(bucketKey);
-  if (!bucket || now >= bucket.resetAt) {
-    adaptiveRateState.set(bucketKey, { count: 1, resetAt: now + windowMs });
-    return next();
-  }
-  bucket.count += 1;
-  if (bucket.count > dynamicLimit) {
-    return res.status(429).json({
-      message: "Too many requests under current system load.",
-      limit: dynamicLimit,
-      retryAfterMs: Math.max(0, bucket.resetAt - now),
-      mode: controlState.mode
-    });
-  }
-  return next();
-}
-function systemProtectionMiddleware(req, res, next) {
-  if (!req.path.startsWith("/api/")) return next();
-  if (req.path.startsWith("/api/health") || req.path.startsWith("/api/maintenance-status")) {
-    return next();
-  }
-  const dbProtection = controlState.dbProtection || lastDbLatencyMs > 1e3;
-  if (dbProtection && req.path.startsWith("/api/search/advanced")) {
-    return res.status(503).json({
-      message: "Advanced search is temporarily disabled to protect database stability.",
-      protection: true,
-      reason: "db_latency_high"
-    });
-  }
-  if (dbProtection && req.path.startsWith("/api/backups") && req.method !== "GET") {
-    return res.status(503).json({
-      message: "Export/backup write operations are temporarily disabled.",
-      protection: true,
-      reason: "db_latency_high"
-    });
-  }
-  if (controlState.rejectHeavyRoutes && isHeavyRoute(req.path)) {
-    return res.status(503).json({
-      message: "Route temporarily throttled by protection mode.",
-      protection: true,
-      mode: controlState.mode
-    });
-  }
-  return next();
-}
-if (typeof process.on === "function") {
-  process.on("message", (msg) => {
-    if (!msg || typeof msg !== "object") return;
-    if (msg.type !== "control-state" || !msg.payload) return;
-    controlState = {
-      ...defaultControlState,
-      ...msg.payload
+  const requireRole = (...roles) => {
+    return (req, res, next) => {
+      if (!req.user || !roles.includes(req.user.role)) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      return next();
     };
-    const preAllocateMB = clamp3(controlState.preAllocateMB, 0, LOW_MEMORY_MODE ? 8 : 32);
-    if (preAllocateMB > 0) {
-      const targetBytes = preAllocateMB * 1024 * 1024;
-      if (!preAllocatedBuffer || preAllocatedBuffer.length !== targetBytes) {
-        preAllocatedBuffer = Buffer.alloc(targetBytes);
-      }
-    } else {
-      preAllocatedBuffer = null;
-    }
-  });
-  process.on("message", (msg) => {
-    if (!msg || typeof msg !== "object") return;
-    if (msg.type !== "graceful-shutdown") return;
-    setTimeout(() => {
-      server.close(() => process.exit(0));
-      setTimeout(() => process.exit(0), 25e3).unref();
-    }, 50);
-  });
-}
-setInterval(() => {
-  reqRatePerSec = requestCounter / 5;
-  requestCounter = 0;
-  gcPerMinute = gcCountWindow * 12;
-  gcCountWindow = 0;
-  const now = Date.now();
-  const currentCpu = process.cpuUsage();
-  const cpuDeltaMicros = currentCpu.user - lastCpuUsage.user + (currentCpu.system - lastCpuUsage.system);
-  const elapsedMs = Math.max(1, now - lastCpuTs);
-  const cpuCorePercent = cpuDeltaMicros / 1e3 / elapsedMs * 100;
-  cpuPercent = clamp3(cpuCorePercent / Math.max(1, controlState.workerCount || 1), 0, 100);
-  lastCpuUsage = currentCpu;
-  lastCpuTs = now;
-  if (process.send) {
-    const mem2 = process.memoryUsage();
-    process.send({
-      type: "worker-metrics",
-      payload: {
-        workerId: Number(process.env.NODE_UNIQUE_ID || 0),
-        pid: process.pid,
-        cpuPercent,
-        reqRate: reqRatePerSec,
-        latencyP95Ms: percentile(latencySamples, 95),
-        eventLoopLagMs: getEventLoopLagMs(),
-        activeRequests,
-        queueLength: getSearchQueueLength(),
-        heapUsedMB: mem2.heapUsed / (1024 * 1024),
-        heapTotalMB: mem2.heapTotal / (1024 * 1024),
-        oldSpaceMB: mem2.heapUsed / (1024 * 1024),
-        // best-effort without v8 stats overhead
-        gcPerMin: gcPerMinute,
-        dbLatencyMs: lastDbLatencyMs,
-        aiLatencyMs: getEffectiveAiLatencyMs(),
-        ts: Date.now(),
-        circuit: {
-          ai: { state: circuitAi.getState(), failureRate: circuitAi.getSnapshot().failureRate },
-          db: { state: circuitDb.getState(), failureRate: circuitDb.getSnapshot().failureRate },
-          export: { state: circuitExport.getState(), failureRate: circuitExport.getSnapshot().failureRate }
+  };
+  const requireTabAccess = (tabId) => {
+    return async (req, res, next) => {
+      try {
+        const role = req.user?.role;
+        if (!role) {
+          return res.status(401).json({ message: "Unauthenticated" });
         }
+        if (role === "superuser") {
+          return next();
+        }
+        if (role !== "admin" && role !== "user") {
+          return res.status(403).json({ message: "Insufficient permissions" });
+        }
+        const tabs = await getRoleTabVisibilityCached(role);
+        const hasExplicit = Object.prototype.hasOwnProperty.call(tabs, tabId);
+        const enabled = hasExplicit ? tabs[tabId] !== false : false;
+        if (!enabled) {
+          return res.status(403).json({ message: `Tab '${tabId}' is disabled for role '${role}'` });
+        }
+        return next();
+      } catch (error) {
+        logger.error("Tab access guard error", {
+          tabId,
+          message: error?.message
+        });
+        return res.status(500).json({ message: "Failed to validate tab access" });
       }
+    };
+  };
+  const requireMonitorAccess = async (req, res, next) => {
+    try {
+      const role = req.user?.role;
+      if (!role) {
+        return res.status(401).json({ message: "Unauthenticated" });
+      }
+      if (role === "superuser") {
+        return next();
+      }
+      if (role !== "admin" && role !== "user") {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      const tabs = await getRoleTabVisibilityCached(role);
+      if (tabs.monitor !== true) {
+        return res.status(403).json({ message: "System Monitor access is disabled for this role." });
+      }
+      return next();
+    } catch (error) {
+      logger.error("Monitor access guard error", {
+        message: error?.message
+      });
+      return res.status(500).json({ message: "Failed to validate monitor access" });
+    }
+  };
+  return {
+    authenticateToken,
+    requireRole,
+    requireTabAccess,
+    requireMonitorAccess,
+    clearTabVisibilityCache() {
+      tabVisibilityCache.clear();
+    }
+  };
+}
+
+// server/http/errors.ts
+var HttpError = class extends Error {
+  constructor(statusCode, message, options) {
+    super(message);
+    this.name = "HttpError";
+    this.statusCode = statusCode;
+    this.code = options?.code;
+    this.expose = options?.expose ?? statusCode < 500;
+  }
+};
+function badRequest(message, code) {
+  return new HttpError(400, message, { code });
+}
+function unauthorized(message = "Authentication required.", code) {
+  return new HttpError(401, message, { code });
+}
+function forbidden(message = "Insufficient permissions.", code) {
+  return new HttpError(403, message, { code });
+}
+function notFound(message = "Resource not found.", code) {
+  return new HttpError(404, message, { code });
+}
+function conflict(message, code) {
+  return new HttpError(409, message, { code });
+}
+
+// server/middleware/error-handler.ts
+function errorHandler(err, req, res, next) {
+  if (res.headersSent) {
+    return next(err);
+  }
+  if (err instanceof HttpError) {
+    return res.status(err.statusCode).json({
+      ok: false,
+      message: err.message,
+      ...err.code ? { error: { code: err.code, message: err.message } } : {}
     });
   }
-  const mem = process.memoryUsage();
-  const heapRatio = mem.heapTotal > 0 ? mem.heapUsed / mem.heapTotal : 0;
-  if (heapRatio > 0.88) {
-    searchCache.clear();
-    if (process.send) {
-      process.send({ type: "worker-event", payload: { kind: "memory-pressure" } });
-    }
-    if (typeof global.gc === "function" && activeRequests === 0) {
-      try {
-        global.gc();
-      } catch {
-      }
-    }
-  }
-  void runIntelligenceCycle();
-}, 5e3).unref();
-void runIntelligenceCycle();
-app.use("/api/imports", express.json({ limit: IMPORT_BODY_LIMIT }));
-app.use("/api/imports", express.urlencoded({ extended: true, limit: IMPORT_BODY_LIMIT }));
-app.use("/api/collection", express.json({ limit: COLLECTION_BODY_LIMIT }));
-app.use("/api/collection", express.urlencoded({ extended: true, limit: COLLECTION_BODY_LIMIT }));
-app.use(express.json({ limit: DEFAULT_BODY_LIMIT }));
-app.use(express.urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT }));
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-  next();
-});
-app.use("/uploads/collection-receipts", (_req, res) => {
-  return res.status(404).json({ ok: false, message: "Not found." });
-});
-app.use("/uploads", express.static(UPLOADS_ROOT_DIR));
-app.use((req, res, next) => {
-  const start = process.hrtime.bigint();
-  activeRequests += 1;
-  requestCounter += 1;
-  res.on("finish", () => {
-    const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6;
-    activeRequests = Math.max(0, activeRequests - 1);
-    recordLatency(elapsedMs);
+  const error = err;
+  logger.error("Unhandled API error", {
+    path: req.path,
+    method: req.method,
+    code: error?.code,
+    message: error?.message
   });
-  next();
-});
-app.use(adaptiveRateLimit);
-app.use(systemProtectionMiddleware);
+  return res.status(500).json({
+    ok: false,
+    message: "Internal server error"
+  });
+}
+
+// server/routes/auth.routes.ts
+import bcrypt3 from "bcrypt";
+import jwt3 from "jsonwebtoken";
+import { WebSocket as WebSocket2 } from "ws";
+
+// server/auth/credentials.ts
 var CREDENTIAL_USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,32}$/;
 var CREDENTIAL_PASSWORD_MIN_LENGTH = 8;
 var CREDENTIAL_BCRYPT_COST = 12;
-var COLLECTION_NICKNAME_TEMP_PASSWORD = "12345678a";
-function ensureObject(value) {
-  if (value && typeof value === "object") {
-    return value;
-  }
-  return null;
-}
 function normalizeUsernameInput(raw) {
   return String(raw ?? "").trim().toLowerCase();
 }
@@ -7224,20 +8432,1809 @@ function buildCredentialAuditDetails(payload) {
     }
   });
 }
-function closeActivitySockets(activityIds, reason) {
-  for (const activityId of activityIds) {
-    const ws = connectedClients.get(activityId);
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: "logout",
-        reason
-      }));
-      ws.close();
-    }
-    connectedClients.delete(activityId);
-    void storage.clearCollectionNicknameSessionByActivity(activityId);
-  }
+
+// server/http/async-handler.ts
+function asyncHandler(fn) {
+  return (req, res, next) => {
+    void Promise.resolve(fn(req, res, next)).catch(next);
+  };
 }
+
+// server/http/validation.ts
+function ensureObject(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+  return null;
+}
+function readNonEmptyString(value) {
+  return String(value ?? "").trim();
+}
+function readInteger(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.trunc(parsed);
+}
+function readStringList(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => readNonEmptyString(item)).filter(Boolean);
+  }
+  const normalized = readNonEmptyString(value);
+  if (!normalized) return [];
+  return normalized.split(",").map((part) => readNonEmptyString(part)).filter(Boolean);
+}
+function readDate(value) {
+  const normalized = readNonEmptyString(value);
+  if (!normalized) return void 0;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    return void 0;
+  }
+  return parsed;
+}
+
+// server/lib/browser.ts
+function parseBrowser(userAgent) {
+  if (!userAgent) return "Unknown";
+  const ua = userAgent;
+  const uaLower = ua.toLowerCase();
+  const extractVersion = (pattern) => {
+    const match = ua.match(pattern);
+    if (match && match[1]) {
+      return match[1].split(".")[0];
+    }
+    return "";
+  };
+  if (uaLower.includes("edg/")) {
+    const version = extractVersion(/Edg\/(\d+[\d.]*)/i);
+    return version ? `Edge ${version}` : "Edge";
+  }
+  if (uaLower.includes("edge/")) {
+    const version = extractVersion(/Edge\/(\d+[\d.]*)/i);
+    return version ? `Edge ${version}` : "Edge";
+  }
+  if (uaLower.includes("opr/")) {
+    const version = extractVersion(/OPR\/(\d+[\d.]*)/i);
+    return version ? `Opera ${version}` : "Opera";
+  }
+  if (uaLower.includes("opera/")) {
+    const version = extractVersion(/Opera\/(\d+[\d.]*)/i);
+    return version ? `Opera ${version}` : "Opera";
+  }
+  if (uaLower.includes("brave")) {
+    const version = extractVersion(/Brave\/(\d+[\d.]*)/i) || extractVersion(/Chrome\/(\d+[\d.]*)/i);
+    return version ? `Brave ${version}` : "Brave";
+  }
+  if (uaLower.includes("duckduckgo")) {
+    const version = extractVersion(/DuckDuckGo\/(\d+[\d.]*)/i);
+    return version ? `DuckDuckGo ${version}` : "DuckDuckGo";
+  }
+  if (uaLower.includes("vivaldi")) {
+    const version = extractVersion(/Vivaldi\/(\d+[\d.]*)/i);
+    return version ? `Vivaldi ${version}` : "Vivaldi";
+  }
+  if (uaLower.includes("firefox/") || uaLower.includes("fxios/")) {
+    const version = extractVersion(/Firefox\/(\d+[\d.]*)/i) || extractVersion(/FxiOS\/(\d+[\d.]*)/i);
+    return version ? `Firefox ${version}` : "Firefox";
+  }
+  if (uaLower.includes("safari/") && !uaLower.includes("chrome/") && !uaLower.includes("chromium/")) {
+    const version = extractVersion(/Version\/(\d+[\d.]*)/i);
+    return version ? `Safari ${version}` : "Safari";
+  }
+  if (uaLower.includes("chrome/") || uaLower.includes("crios/") || uaLower.includes("chromium/")) {
+    const version = extractVersion(/Chrome\/(\d+[\d.]*)/i) || extractVersion(/CriOS\/(\d+[\d.]*)/i);
+    return version ? `Chrome ${version}` : "Chrome";
+  }
+  if (uaLower.includes("msie") || uaLower.includes("trident/")) {
+    const version = extractVersion(/MSIE (\d+[\d.]*)/i) || extractVersion(/rv:(\d+[\d.]*)/i);
+    return version ? `Internet Explorer ${version}` : "Internet Explorer";
+  }
+  return "Unknown";
+}
+
+// server/routes/auth.routes.ts
+function registerAuthRoutes(app2, deps) {
+  const { storage: storage2, authenticateToken, requireRole, connectedClients: connectedClients2 } = deps;
+  const jwtSecret = getSessionSecret();
+  const closeActivitySockets = (activityIds, reason) => {
+    for (const activityId of activityIds) {
+      const socket = connectedClients2.get(activityId);
+      if (socket && socket.readyState === WebSocket2.OPEN) {
+        socket.send(JSON.stringify({ type: "logout", reason }));
+        socket.close();
+      }
+      connectedClients2.delete(activityId);
+      void storage2.clearCollectionNicknameSessionByActivity(activityId);
+    }
+  };
+  const handleLogin = asyncHandler(async (req, res) => {
+    const body = ensureObject(req.body) || {};
+    const username = normalizeUsernameInput(body.username);
+    const password = String(body.password ?? "");
+    const fingerprint = typeof body.fingerprint === "string" ? body.fingerprint : null;
+    const pcName = typeof body.pcName === "string" ? body.pcName : null;
+    const browser = typeof body.browser === "string" ? body.browser : null;
+    const user = await storage2.getUserByUsername(username);
+    if (!user) {
+      await storage2.createAuditLog({
+        action: "LOGIN_FAILED",
+        performedBy: username || "unknown",
+        details: "User not found"
+      });
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+    const visitorBanned = await storage2.isVisitorBanned(
+      fingerprint,
+      req.ip || req.socket.remoteAddress || null
+    );
+    if (visitorBanned || user.isBanned) {
+      await storage2.createAuditLog({
+        action: "LOGIN_FAILED_BANNED",
+        performedBy: user.username,
+        details: visitorBanned ? "Visitor is banned" : "User is banned"
+      });
+      return res.status(403).json({ message: "Account is banned", banned: true });
+    }
+    const validPassword = await bcrypt3.compare(password, user.passwordHash);
+    if (!validPassword) {
+      await storage2.createAuditLog({
+        action: "LOGIN_FAILED",
+        performedBy: user.username,
+        details: "Invalid password"
+      });
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+    const browserName = parseBrowser(browser || req.headers["user-agent"]);
+    if (user.role === "superuser") {
+      const enforceSingleSession = await storage2.getBooleanSystemSetting(
+        "enforce_superuser_single_session",
+        false
+      );
+      if (enforceSingleSession) {
+        const activeSessions = await storage2.getActiveActivitiesByUsername(user.username);
+        if (activeSessions.length > 0) {
+          await storage2.createAuditLog({
+            action: "LOGIN_BLOCKED_SINGLE_SESSION",
+            performedBy: user.username,
+            details: `Superuser single-session policy blocked login. Active sessions: ${activeSessions.length}`
+          });
+          return res.status(409).json({
+            message: "Single superuser session is enforced. Logout from the current session first.",
+            code: "SUPERUSER_SINGLE_SESSION_ENFORCED"
+          });
+        }
+      }
+    } else if (user.role === "admin" && fingerprint) {
+      await storage2.deactivateUserSessionsByFingerprint(user.username, fingerprint);
+    }
+    const activity = await storage2.createActivity({
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+      pcName,
+      browser: browserName,
+      fingerprint,
+      ipAddress: req.ip || req.socket.remoteAddress || null
+    });
+    const token = jwt3.sign(
+      {
+        userId: user.id,
+        username: user.username,
+        role: user.role,
+        activityId: activity.id
+      },
+      jwtSecret,
+      { expiresIn: "24h" }
+    );
+    await storage2.createAuditLog({
+      action: "LOGIN_SUCCESS",
+      performedBy: user.username,
+      details: `Login from ${browserName}`
+    });
+    return res.json({
+      token,
+      username: user.username,
+      role: user.role,
+      user: { username: user.username, role: user.role },
+      activityId: activity.id
+    });
+  });
+  app2.post("/api/login", handleLogin);
+  app2.post("/api/auth/login", handleLogin);
+  app2.get("/api/auth/me", authenticateToken, (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthenticated" });
+    }
+    return res.json({
+      user: {
+        username: req.user.username,
+        role: req.user.role,
+        activityId: req.user.activityId
+      }
+    });
+  });
+  app2.get("/api/me", authenticateToken, asyncHandler(async (req, res) => {
+    if (!req.user) {
+      return sendCredentialError(res, 401, "PERMISSION_DENIED", "Authentication required.");
+    }
+    const user = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
+    if (!user) {
+      return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
+    }
+    return res.json({
+      id: user.id,
+      username: user.username,
+      role: user.role
+    });
+  }));
+  app2.patch("/api/me/credentials", authenticateToken, asyncHandler(async (req, res) => {
+    if (!req.user) {
+      return sendCredentialError(res, 401, "PERMISSION_DENIED", "Authentication required.");
+    }
+    const actor = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
+    if (!actor) {
+      return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
+    }
+    const body = ensureObject(req.body) || {};
+    const hasUsernameField = Object.prototype.hasOwnProperty.call(body, "newUsername");
+    const hasPasswordField = Object.prototype.hasOwnProperty.call(body, "newPassword");
+    let nextUsername;
+    let nextPasswordHash;
+    let usernameChanged = false;
+    let passwordChanged = false;
+    if (hasUsernameField) {
+      const normalized = normalizeUsernameInput(body.newUsername);
+      if (!normalized || !CREDENTIAL_USERNAME_REGEX.test(normalized)) {
+        return sendCredentialError(res, 400, "USERNAME_TAKEN", "Username must match ^[a-zA-Z0-9._-]{3,32}$.");
+      }
+      const existing = await storage2.getUserByUsername(normalized);
+      if (existing && existing.id !== actor.id) {
+        return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
+      }
+      if (normalized !== actor.username) {
+        nextUsername = normalized;
+        usernameChanged = true;
+      }
+    }
+    if (hasPasswordField) {
+      const nextPasswordRaw = String(body.newPassword ?? "");
+      const currentPasswordRaw = String(body.currentPassword ?? "");
+      if (!currentPasswordRaw) {
+        return sendCredentialError(res, 400, "INVALID_CURRENT_PASSWORD", "Current password is required.");
+      }
+      const currentPasswordMatch = await bcrypt3.compare(currentPasswordRaw, actor.passwordHash);
+      if (!currentPasswordMatch) {
+        return sendCredentialError(res, 400, "INVALID_CURRENT_PASSWORD", "Current password is invalid.");
+      }
+      if (!isStrongPassword(nextPasswordRaw)) {
+        return sendCredentialError(
+          res,
+          400,
+          "INVALID_PASSWORD",
+          "Password must be at least 8 characters and include at least one letter and one number."
+        );
+      }
+      const sameAsCurrent = await bcrypt3.compare(nextPasswordRaw, actor.passwordHash);
+      if (sameAsCurrent) {
+        return sendCredentialError(res, 400, "INVALID_PASSWORD", "New password must be different from current password.");
+      }
+      nextPasswordHash = await bcrypt3.hash(nextPasswordRaw, CREDENTIAL_BCRYPT_COST);
+      passwordChanged = true;
+    }
+    if (!usernameChanged && !passwordChanged) {
+      return res.json({
+        ok: true,
+        user: { id: actor.id, username: actor.username, role: actor.role }
+      });
+    }
+    const activeSessions = passwordChanged ? await storage2.getActiveActivitiesByUsername(actor.username) : [];
+    let updatedUser;
+    try {
+      updatedUser = await storage2.updateUserCredentials({
+        userId: actor.id,
+        newUsername: nextUsername,
+        newPasswordHash: nextPasswordHash,
+        passwordChangedAt: passwordChanged ? /* @__PURE__ */ new Date() : void 0
+      });
+    } catch (error) {
+      if (String(error?.code || "") === "23505") {
+        return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
+      }
+      throw error;
+    }
+    if (!updatedUser) {
+      return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
+    }
+    if (usernameChanged && !passwordChanged && nextUsername) {
+      await storage2.updateActivitiesUsername(actor.username, nextUsername);
+    }
+    if (usernameChanged) {
+      await storage2.createAuditLog({
+        action: "USER_USERNAME_CHANGED",
+        performedBy: actor.id,
+        targetUser: updatedUser.id,
+        details: buildCredentialAuditDetails({
+          actor_user_id: actor.id,
+          target_user_id: updatedUser.id,
+          changedField: "username"
+        })
+      });
+    }
+    if (passwordChanged) {
+      await storage2.createAuditLog({
+        action: "USER_PASSWORD_CHANGED",
+        performedBy: actor.id,
+        targetUser: updatedUser.id,
+        details: buildCredentialAuditDetails({
+          actor_user_id: actor.id,
+          target_user_id: updatedUser.id,
+          changedField: "password"
+        })
+      });
+      await storage2.deactivateUserActivities(actor.username, "PASSWORD_CHANGED");
+      if (updatedUser.username !== actor.username) {
+        await storage2.deactivateUserActivities(updatedUser.username, "PASSWORD_CHANGED");
+      }
+      closeActivitySockets(
+        activeSessions.map((activity) => activity.id),
+        "Password changed. Please login again."
+      );
+    }
+    return res.json({
+      ok: true,
+      forceLogout: passwordChanged,
+      user: { id: updatedUser.id, username: updatedUser.username, role: updatedUser.role }
+    });
+  }));
+  app2.get("/api/admin/users", authenticateToken, asyncHandler(async (req, res) => {
+    if (!req.user || req.user.role !== "superuser") {
+      return sendCredentialError(res, 403, "PERMISSION_DENIED", "Only superuser can access this resource.");
+    }
+    const users3 = await storage2.getUsersByRoles(["admin", "user"]);
+    return res.json({
+      ok: true,
+      users: users3.map((item) => ({
+        id: item.id,
+        username: item.username,
+        role: item.role
+      }))
+    });
+  }));
+  app2.patch("/api/admin/users/:id/credentials", authenticateToken, asyncHandler(async (req, res) => {
+    if (!req.user || req.user.role !== "superuser") {
+      return sendCredentialError(res, 403, "PERMISSION_DENIED", "Only superuser can access this resource.");
+    }
+    const actor = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
+    if (!actor) {
+      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Actor user not found.");
+    }
+    const targetUserId = String(req.params.id || "").trim();
+    if (!targetUserId) {
+      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Target user not found.");
+    }
+    const target = await storage2.getUser(targetUserId);
+    if (!target) {
+      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Target user not found.");
+    }
+    if (target.role !== "admin" && target.role !== "user") {
+      return sendCredentialError(res, 403, "PERMISSION_DENIED", "Target role is not allowed.");
+    }
+    const body = ensureObject(req.body) || {};
+    const hasUsernameField = Object.prototype.hasOwnProperty.call(body, "newUsername");
+    const hasPasswordField = Object.prototype.hasOwnProperty.call(body, "newPassword");
+    let nextUsername;
+    let nextPasswordHash;
+    let usernameChanged = false;
+    let passwordChanged = false;
+    if (hasUsernameField) {
+      const normalized = normalizeUsernameInput(body.newUsername);
+      if (!normalized || !CREDENTIAL_USERNAME_REGEX.test(normalized)) {
+        return sendCredentialError(res, 400, "USERNAME_TAKEN", "Username must match ^[a-zA-Z0-9._-]{3,32}$.");
+      }
+      const existing = await storage2.getUserByUsername(normalized);
+      if (existing && existing.id !== target.id) {
+        return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
+      }
+      if (normalized !== target.username) {
+        nextUsername = normalized;
+        usernameChanged = true;
+      }
+    }
+    if (hasPasswordField) {
+      const nextPasswordRaw = String(body.newPassword ?? "");
+      if (!isStrongPassword(nextPasswordRaw)) {
+        return sendCredentialError(
+          res,
+          400,
+          "INVALID_PASSWORD",
+          "Password must be at least 8 characters and include at least one letter and one number."
+        );
+      }
+      const sameAsCurrent = await bcrypt3.compare(nextPasswordRaw, target.passwordHash);
+      if (sameAsCurrent) {
+        return sendCredentialError(res, 400, "INVALID_PASSWORD", "New password must be different from current password.");
+      }
+      nextPasswordHash = await bcrypt3.hash(nextPasswordRaw, CREDENTIAL_BCRYPT_COST);
+      passwordChanged = true;
+    }
+    if (!usernameChanged && !passwordChanged) {
+      return res.json({ ok: true });
+    }
+    const activeSessions = passwordChanged ? await storage2.getActiveActivitiesByUsername(target.username) : [];
+    let updatedUser;
+    try {
+      updatedUser = await storage2.updateUserCredentials({
+        userId: target.id,
+        newUsername: nextUsername,
+        newPasswordHash: nextPasswordHash,
+        passwordChangedAt: passwordChanged ? /* @__PURE__ */ new Date() : void 0
+      });
+    } catch (error) {
+      if (String(error?.code || "") === "23505") {
+        return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
+      }
+      throw error;
+    }
+    if (!updatedUser) {
+      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Target user not found.");
+    }
+    if (usernameChanged && !passwordChanged && nextUsername) {
+      await storage2.updateActivitiesUsername(target.username, nextUsername);
+    }
+    if (usernameChanged) {
+      await storage2.createAuditLog({
+        action: "USER_USERNAME_CHANGED",
+        performedBy: actor.id,
+        targetUser: updatedUser.id,
+        details: buildCredentialAuditDetails({
+          actor_user_id: actor.id,
+          target_user_id: updatedUser.id,
+          changedField: "username"
+        })
+      });
+    }
+    if (passwordChanged) {
+      await storage2.createAuditLog({
+        action: "USER_PASSWORD_CHANGED",
+        performedBy: actor.id,
+        targetUser: updatedUser.id,
+        details: buildCredentialAuditDetails({
+          actor_user_id: actor.id,
+          target_user_id: updatedUser.id,
+          changedField: "password"
+        })
+      });
+      await storage2.deactivateUserActivities(target.username, "PASSWORD_RESET_BY_SUPERUSER");
+      if (updatedUser.username !== target.username) {
+        await storage2.deactivateUserActivities(updatedUser.username, "PASSWORD_RESET_BY_SUPERUSER");
+      }
+      closeActivitySockets(
+        activeSessions.map((activity) => activity.id),
+        "Password reset by superuser. Please login again."
+      );
+    }
+    return res.json({ ok: true });
+  }));
+  app2.get("/api/accounts", authenticateToken, requireRole("superuser"), asyncHandler(async (_req, res) => {
+    const accounts = await storage2.getAccounts();
+    return res.json(accounts);
+  }));
+  app2.post("/api/users", authenticateToken, requireRole("superuser"), asyncHandler(async (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Authentication required." });
+    }
+    const body = ensureObject(req.body) || {};
+    const username = normalizeUsernameInput(body.username);
+    const password = String(body.password ?? "");
+    const role = String(body.role ?? "user").trim().toLowerCase();
+    if (!CREDENTIAL_USERNAME_REGEX.test(username)) {
+      return res.status(400).json({ message: "Invalid username format." });
+    }
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({ message: "Password does not meet minimum strength requirements." });
+    }
+    if (!["superuser", "admin", "user"].includes(role)) {
+      return res.status(400).json({ message: "Invalid role." });
+    }
+    const existing = await storage2.getUserByUsername(username);
+    if (existing) {
+      return res.status(409).json({ message: "Username already exists." });
+    }
+    const user = await storage2.createUser({ username, password, role });
+    await storage2.createAuditLog({
+      action: "CREATE_USER",
+      performedBy: req.user.username,
+      targetUser: user.id,
+      details: `Created user with role: ${user.role}`
+    });
+    return res.json({
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      isBanned: user.isBanned
+    });
+  }));
+}
+
+// server/routes/activity.routes.ts
+import { WebSocket as WebSocket3 } from "ws";
+function buildActivityFilters(source) {
+  return {
+    status: readStringList(source.status),
+    username: readNonEmptyString(source.username),
+    ipAddress: readNonEmptyString(source.ipAddress),
+    browser: readNonEmptyString(source.browser),
+    dateFrom: readDate(source.dateFrom),
+    dateTo: readDate(source.dateTo)
+  };
+}
+function registerActivityRoutes(app2, deps) {
+  const { storage: storage2, authenticateToken, requireRole, requireTabAccess, connectedClients: connectedClients2 } = deps;
+  const closeSocket = async (activityId, payload) => {
+    const socket = connectedClients2.get(activityId);
+    if (socket && socket.readyState === WebSocket3.OPEN) {
+      if (payload) {
+        socket.send(JSON.stringify(payload));
+      }
+      socket.close();
+    }
+    connectedClients2.delete(activityId);
+    await storage2.clearCollectionNicknameSessionByActivity(activityId);
+  };
+  app2.post("/api/activity/logout", authenticateToken, asyncHandler(async (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ success: false });
+    }
+    const activityId = req.user.activityId;
+    const activity = await storage2.getActivityById(activityId);
+    if (!activity || activity.isActive === false) {
+      return res.json({ success: true });
+    }
+    await storage2.updateActivity(activityId, {
+      isActive: false,
+      logoutTime: /* @__PURE__ */ new Date(),
+      logoutReason: "USER_LOGOUT"
+    });
+    await closeSocket(activityId, {
+      type: "logout",
+      reason: "User logged out"
+    });
+    await storage2.createAuditLog({
+      action: "LOGOUT",
+      performedBy: req.user.username
+    });
+    return res.json({ success: true });
+  }));
+  app2.get(
+    "/api/activity/all",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (_req, res) => {
+      return res.json({ activities: await storage2.getAllActivities() });
+    })
+  );
+  app2.get(
+    "/api/activity/filter",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (req, res) => {
+      return res.json({ activities: await storage2.getFilteredActivities(buildActivityFilters(req.query)) });
+    })
+  );
+  app2.delete(
+    "/api/activity/:id",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (req, res) => {
+      const activityId = readNonEmptyString(req.params.id);
+      if (!activityId) {
+        return res.status(400).json({ success: false, message: "Invalid activityId" });
+      }
+      await storage2.deleteActivity(activityId);
+      await closeSocket(activityId);
+      return res.json({ success: true });
+    })
+  );
+  app2.post(
+    "/api/activity/kick",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (req, res) => {
+      const body = ensureObject(req.body) || {};
+      const activityId = readNonEmptyString(body.activityId);
+      if (!activityId) {
+        return res.status(400).json({ success: false, message: "Invalid activityId" });
+      }
+      const activity = await storage2.getActivityById(activityId);
+      if (!activity) {
+        return res.status(404).json({ message: "Activity not found" });
+      }
+      await storage2.updateActivity(activityId, {
+        isActive: false,
+        logoutTime: /* @__PURE__ */ new Date(),
+        logoutReason: "KICKED"
+      });
+      await closeSocket(activityId, {
+        type: "kicked",
+        reason: "You have been logged out by an administrator."
+      });
+      await storage2.createAuditLog({
+        action: "KICK_USER",
+        performedBy: req.user.username,
+        targetUser: activity.username,
+        details: `Kicked activityId=${activityId}`
+      });
+      return res.json({ success: true });
+    })
+  );
+  app2.post(
+    "/api/activity/ban",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (req, res) => {
+      const body = ensureObject(req.body) || {};
+      const activityId = readNonEmptyString(body.activityId);
+      if (!activityId) {
+        return res.status(400).json({ success: false, message: "Invalid activityId" });
+      }
+      const activity = await storage2.getActivityById(activityId);
+      if (!activity) {
+        return res.status(404).json({ message: "Activity not found" });
+      }
+      const targetUser = await storage2.getUserByUsername(activity.username);
+      if (targetUser?.role === "superuser") {
+        return res.status(403).json({ message: "Cannot ban a superuser" });
+      }
+      await storage2.banVisitor({
+        username: activity.username,
+        role: activity.role,
+        activityId: activity.id,
+        fingerprint: activity.fingerprint ?? null,
+        ipAddress: activity.ipAddress ?? null,
+        browser: activity.browser ?? null,
+        pcName: activity.pcName ?? null
+      });
+      await storage2.updateActivity(activityId, {
+        isActive: false,
+        logoutTime: /* @__PURE__ */ new Date(),
+        logoutReason: "BANNED"
+      });
+      await closeSocket(activityId, {
+        type: "banned",
+        reason: "Your account has been banned."
+      });
+      await storage2.createAuditLog({
+        action: "BAN_USER",
+        performedBy: req.user.username,
+        targetUser: activity.username,
+        details: `Banned via activityId=${activityId}`
+      });
+      return res.json({ success: true });
+    })
+  );
+  app2.post("/api/admin/ban", authenticateToken, requireRole("superuser"), asyncHandler(async (req, res) => {
+    const body = ensureObject(req.body) || {};
+    const username = readNonEmptyString(body.username);
+    if (!username) {
+      return res.status(400).json({ message: "Username required" });
+    }
+    const targetUser = await storage2.getUserByUsername(username);
+    if (!targetUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    if (targetUser.role === "superuser") {
+      return res.status(403).json({ message: "Cannot ban a superuser" });
+    }
+    const activeSessions = await storage2.getActiveActivitiesByUsername(username);
+    await storage2.updateUserBan(username, true);
+    await storage2.deactivateUserActivities(username, "BANNED");
+    for (const activity of activeSessions) {
+      await closeSocket(activity.id, {
+        type: "banned",
+        reason: "Your account has been banned."
+      });
+    }
+    await storage2.createAuditLog({
+      action: "BAN_USER",
+      performedBy: req.user.username,
+      targetUser: username,
+      details: "Admin ban (account-level)"
+    });
+    return res.json({ success: true });
+  }));
+  app2.post(
+    "/api/admin/unban",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (req, res) => {
+      const body = ensureObject(req.body) || {};
+      const banId = readNonEmptyString(body.banId);
+      if (!banId) {
+        return res.status(400).json({ message: "banId required" });
+      }
+      await storage2.unbanVisitor(banId);
+      await storage2.createAuditLog({
+        action: "UNBAN_USER",
+        performedBy: req.user.username,
+        details: `Unbanned banId=${banId}`
+      });
+      return res.json({ success: true });
+    })
+  );
+  app2.get(
+    "/api/users/banned",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (_req, res) => {
+      const bannedSessions = await storage2.getBannedSessions();
+      return res.json({
+        users: bannedSessions.map((session) => ({
+          visitorId: session.banId,
+          banId: session.banId,
+          username: session.username,
+          role: session.role,
+          banInfo: {
+            ipAddress: session.ipAddress ?? null,
+            browser: session.browser ?? null,
+            bannedAt: session.bannedAt ?? null
+          }
+        }))
+      });
+    })
+  );
+  app2.post("/api/activity/heartbeat", authenticateToken, asyncHandler(async (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ ok: false, message: "Unauthenticated" });
+    }
+    await storage2.updateActivity(req.user.activityId, {
+      lastActivityTime: /* @__PURE__ */ new Date(),
+      isActive: true
+    });
+    return res.json({
+      ok: true,
+      status: "ONLINE",
+      lastActivityTime: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  }));
+  app2.get(
+    "/api/activities",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (_req, res) => {
+      return res.json(await storage2.getAllActivities());
+    })
+  );
+  app2.get(
+    "/api/activities/active",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (_req, res) => {
+      return res.json(await storage2.getActiveActivities());
+    })
+  );
+  app2.post(
+    "/api/activities/filter",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (req, res) => {
+      const filters = buildActivityFilters(ensureObject(req.body) || {});
+      return res.json(await storage2.getFilteredActivities(filters));
+    })
+  );
+}
+
+// server/routes/imports.routes.ts
+function registerImportRoutes(app2, deps) {
+  const {
+    storage: storage2,
+    importsRepository: importsRepository2,
+    importAnalysisService: importAnalysisService2,
+    authenticateToken,
+    requireRole,
+    requireTabAccess,
+    searchRateLimiter: searchRateLimiter2,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    isDbProtected
+  } = deps;
+  app2.get("/api/data-rows", authenticateToken, asyncHandler(async (req, res) => {
+    const importId = readNonEmptyString(req.query.importId);
+    const limit = readInteger(req.query.limit, 10);
+    const offset = readInteger(req.query.offset, 0);
+    const search = String(req.query.q || "").trim();
+    if (!importId) {
+      return res.status(400).json({ error: "importId is required" });
+    }
+    const result = await storage2.searchDataRows({
+      importId,
+      search,
+      limit,
+      offset
+    });
+    return res.json(result);
+  }));
+  app2.get("/api/imports", authenticateToken, asyncHandler(async (_req, res) => {
+    const imports3 = await importsRepository2.getImportsWithRowCounts();
+    return res.json({ imports: imports3 });
+  }));
+  app2.post("/api/imports", authenticateToken, asyncHandler(async (req, res) => {
+    const body = ensureObject(req.body) || {};
+    const name = String(body.name ?? "");
+    const filename = String(body.filename ?? "");
+    const dataRows2 = Array.isArray(body.rows) ? body.rows : Array.isArray(body.data) ? body.data : [];
+    if (!Array.isArray(dataRows2) || dataRows2.length === 0) {
+      return res.status(400).json({ message: "No data rows provided" });
+    }
+    const importRecord = await storage2.createImport({
+      name,
+      filename,
+      createdBy: req.user?.username
+    });
+    const insertChunkSize = 20;
+    for (let index = 0; index < dataRows2.length; index += insertChunkSize) {
+      const chunk = dataRows2.slice(index, index + insertChunkSize);
+      await Promise.all(
+        chunk.map(
+          (row) => storage2.createDataRow({
+            importId: importRecord.id,
+            jsonDataJsonb: row
+          })
+        )
+      );
+    }
+    if (req.user?.username) {
+      await storage2.createAuditLog({
+        action: "IMPORT_DATA",
+        performedBy: req.user.username,
+        targetResource: name,
+        details: `Imported ${dataRows2.length} rows from ${filename}`
+      });
+    }
+    return res.json(importRecord);
+  }));
+  app2.get("/api/imports/:id", authenticateToken, asyncHandler(async (req, res) => {
+    const importId = readNonEmptyString(req.params.id);
+    if (!importId) {
+      return res.status(400).json({ message: "Import not found" });
+    }
+    const importRecord = await storage2.getImportById(importId);
+    if (!importRecord) {
+      return res.status(404).json({ message: "Import not found" });
+    }
+    const rows = await storage2.getDataRowsByImport(importId);
+    return res.json({ import: importRecord, rows });
+  }));
+  app2.get("/api/imports/:id/data", authenticateToken, searchRateLimiter2, asyncHandler(async (req, res) => {
+    const runtimeSettings = await getRuntimeSettingsCached2();
+    const importId = readNonEmptyString(req.params.id);
+    const page = Math.max(1, readInteger(req.query.page, 1));
+    const requestedLimit = readInteger(req.query.limit, runtimeSettings.viewerRowsPerPage);
+    const maxLimit = Math.min(isDbProtected() ? 120 : 500, runtimeSettings.viewerRowsPerPage);
+    const limit = Math.max(10, Math.min(requestedLimit, maxLimit));
+    const offset = (page - 1) * limit;
+    const search = String(req.query.search || "").trim();
+    if (!importId) {
+      return res.status(400).json({ message: "importId is required" });
+    }
+    const result = await storage2.searchDataRows({
+      importId,
+      search: search || null,
+      limit,
+      offset
+    });
+    const formattedRows = (result.rows || []).map((row) => ({
+      id: row.id,
+      importId: row.importId,
+      jsonDataJsonb: row.jsonDataJsonb
+    }));
+    return res.json({
+      rows: formattedRows,
+      total: result.total || 0,
+      page,
+      limit
+    });
+  }));
+  app2.get(
+    "/api/imports/:id/analyze",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("analysis"),
+    asyncHandler(async (req, res) => {
+      const importRecord = await storage2.getImportById(req.params.id);
+      if (!importRecord) {
+        return res.status(404).json({ message: "Import not found" });
+      }
+      return res.json(await importAnalysisService2.analyzeImport(importRecord));
+    })
+  );
+  app2.get("/api/analyze/all-summary", authenticateToken, asyncHandler(async (_req, res) => {
+    const imports3 = await importsRepository2.getImportsWithRowCounts();
+    return res.json(await importAnalysisService2.analyzeAll(imports3));
+  }));
+  app2.get(
+    "/api/analyze/all",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("analysis"),
+    asyncHandler(async (_req, res) => {
+      const imports3 = await importsRepository2.getImportsWithRowCounts();
+      return res.json(await importAnalysisService2.analyzeAll(imports3));
+    })
+  );
+  app2.patch("/api/imports/:id", authenticateToken, asyncHandler(async (req, res) => {
+    const body = ensureObject(req.body) || {};
+    const name = String(body.name ?? "");
+    const updated = await storage2.updateImportName(req.params.id, name);
+    if (!updated) {
+      return res.status(404).json({ message: "Import not found" });
+    }
+    if (req.user?.username) {
+      await storage2.createAuditLog({
+        action: "UPDATE_IMPORT",
+        performedBy: req.user.username,
+        targetResource: name
+      });
+    }
+    return res.json(updated);
+  }));
+  app2.patch("/api/imports/:id/rename", authenticateToken, asyncHandler(async (req, res) => {
+    const body = ensureObject(req.body) || {};
+    const name = String(body.name ?? "");
+    const updated = await storage2.updateImportName(req.params.id, name);
+    if (!updated) {
+      return res.status(404).json({ message: "Import not found" });
+    }
+    if (req.user?.username) {
+      await storage2.createAuditLog({
+        action: "UPDATE_IMPORT",
+        performedBy: req.user.username,
+        targetResource: name
+      });
+    }
+    return res.json(updated);
+  }));
+  app2.delete(
+    "/api/imports/:id",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    asyncHandler(async (req, res) => {
+      const importRecord = await storage2.getImportById(req.params.id);
+      const deleted = await storage2.deleteImport(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Import not found" });
+      }
+      if (req.user?.username) {
+        await storage2.createAuditLog({
+          action: "DELETE_IMPORT",
+          performedBy: req.user.username,
+          targetResource: importRecord?.name || req.params.id
+        });
+      }
+      return res.json({ success: true });
+    })
+  );
+}
+
+// server/routes/search.routes.ts
+function buildRowsWithSource(rows) {
+  return rows.map((row) => {
+    const base = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
+    return {
+      ...base,
+      "Source File": row.importFilename || row.importName || ""
+    };
+  });
+}
+function collectColumns(rows) {
+  return Array.from(
+    rows.reduce((set, row) => {
+      Object.keys(row).forEach((key) => set.add(key));
+      return set;
+    }, /* @__PURE__ */ new Set())
+  );
+}
+function registerSearchRoutes(app2, deps) {
+  const {
+    searchRepository: searchRepository2,
+    authenticateToken,
+    searchRateLimiter: searchRateLimiter2,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    isDbProtected
+  } = deps;
+  app2.get("/api/search/columns", authenticateToken, asyncHandler(async (_req, res) => {
+    return res.json(await searchRepository2.getAllColumnNames());
+  }));
+  app2.get("/api/columns", authenticateToken, asyncHandler(async (_req, res) => {
+    return res.json(await searchRepository2.getAllColumnNames());
+  }));
+  app2.get("/api/search/global", authenticateToken, searchRateLimiter2, asyncHandler(async (req, res) => {
+    const search = String(req.query.q || "").trim();
+    const runtimeSettings = await getRuntimeSettingsCached2();
+    const page = Math.max(1, readInteger(req.query.page, 1));
+    const maxTotal = runtimeSettings.searchResultLimit;
+    const maxLimit = isDbProtected() ? Math.min(maxTotal, 80) : maxTotal;
+    const requestedLimit = readInteger(req.query.limit, 50);
+    const limit = Math.max(10, Math.min(requestedLimit, maxLimit));
+    const offset = (page - 1) * limit;
+    if (offset >= maxTotal) {
+      return res.json({
+        columns: [],
+        rows: [],
+        results: [],
+        total: maxTotal,
+        page,
+        limit
+      });
+    }
+    if (search.length < 2) {
+      return res.json({
+        columns: [],
+        rows: [],
+        results: [],
+        total: 0
+      });
+    }
+    const effectiveLimit = Math.min(limit, Math.max(1, maxTotal - offset));
+    const result = await searchRepository2.searchGlobalDataRows({
+      search,
+      limit: effectiveLimit,
+      offset
+    });
+    const parsedRows = buildRowsWithSource(result.rows);
+    const columns = collectColumns(parsedRows);
+    return res.json({
+      columns,
+      rows: parsedRows,
+      results: parsedRows,
+      total: Math.min(result.total, maxTotal),
+      page,
+      limit: effectiveLimit
+    });
+  }));
+  app2.get("/api/search", authenticateToken, searchRateLimiter2, asyncHandler(async (req, res) => {
+    const search = String(req.query.q || "").trim();
+    if (search.length < 2) {
+      return res.json({ results: [], total: 0 });
+    }
+    const queryResult = await searchRepository2.searchSimpleDataRows(search);
+    const rows = queryResult.rows || [];
+    const results = rows.map((row) => ({
+      ...row.jsonDataJsonb || {},
+      _importId: row.importId,
+      _importName: row.importName
+    }));
+    return res.json({
+      results,
+      total: results.length
+    });
+  }));
+  app2.post("/api/search/advanced", authenticateToken, asyncHandler(async (req, res) => {
+    const body = ensureObject(req.body) || {};
+    const filters = Array.isArray(body.filters) ? body.filters : [];
+    const logic = body.logic === "OR" ? "OR" : "AND";
+    const runtimeSettings = await getRuntimeSettingsCached2();
+    const page = Math.max(1, readInteger(body.page, 1));
+    const maxTotal = runtimeSettings.searchResultLimit;
+    const requestedLimit = readInteger(body.limit, 50);
+    const limit = Math.max(10, Math.min(requestedLimit, maxTotal));
+    const offset = (page - 1) * limit;
+    if (offset >= maxTotal) {
+      return res.json({
+        results: [],
+        headers: [],
+        total: maxTotal,
+        page,
+        limit
+      });
+    }
+    const effectiveLimit = Math.min(limit, Math.max(1, maxTotal - offset));
+    const rawResult = await searchRepository2.advancedSearchDataRows(
+      filters,
+      logic,
+      effectiveLimit,
+      offset
+    );
+    const parsedResults = buildRowsWithSource(rawResult.rows);
+    const headers = collectColumns(parsedResults);
+    return res.json({
+      results: parsedResults,
+      headers,
+      total: Math.min(rawResult.total || 0, maxTotal),
+      page,
+      limit: effectiveLimit
+    });
+  }));
+}
+
+// server/routes/ai.routes.ts
+function registerAiRoutes(app2, deps) {
+  const {
+    storage: storage2,
+    authenticateToken,
+    requireRole,
+    withAiConcurrencyGate: withAiConcurrencyGate2,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    aiSearchService: aiSearchService2,
+    categoryStatsService: categoryStatsService2,
+    aiChatService: aiChatService2,
+    aiIndexService: aiIndexService2,
+    getOllamaConfig: getOllamaConfig2,
+    defaultAiTimeoutMs
+  } = deps;
+  app2.get(
+    "/api/ai/config",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    asyncHandler(async (_req, res) => {
+      const runtimeSettings = await getRuntimeSettingsCached2();
+      return res.json({
+        ...getOllamaConfig2(),
+        aiEnabled: runtimeSettings.aiEnabled,
+        semanticSearchEnabled: runtimeSettings.semanticSearchEnabled,
+        aiTimeoutMs: runtimeSettings.aiTimeoutMs
+      });
+    })
+  );
+  app2.post(
+    "/api/ai/search",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    withAiConcurrencyGate2("search", async (req, res) => {
+      try {
+        const body = ensureObject(req.body) || {};
+        const query = String(body.query || "").trim();
+        if (!query) {
+          return res.status(400).json({ message: "Query required" });
+        }
+        const runtimeSettings = await getRuntimeSettingsCached2();
+        if (!runtimeSettings.aiEnabled) {
+          return res.status(503).json({
+            message: "AI assistant is disabled by system settings.",
+            disabled: true
+          });
+        }
+        const countSummary = await categoryStatsService2.resolveCountSummary(
+          query,
+          runtimeSettings.aiTimeoutMs || defaultAiTimeoutMs
+        );
+        if (countSummary) {
+          return res.json({
+            person: null,
+            nearest_branch: null,
+            decision: null,
+            ai_explanation: countSummary.summary,
+            processing: countSummary.processing,
+            stats: countSummary.stats
+          });
+        }
+        const result = await aiSearchService2.resolveSearchRequest({
+          query,
+          userKey: req.user.activityId || req.user.username,
+          runtimeSettings: {
+            semanticSearchEnabled: runtimeSettings.semanticSearchEnabled,
+            aiTimeoutMs: runtimeSettings.aiTimeoutMs
+          }
+        });
+        if (result.audit) {
+          queueMicrotask(() => {
+            storage2.createAuditLog({
+              action: "AI_SEARCH",
+              performedBy: req.user.username,
+              targetResource: "ai_search",
+              details: JSON.stringify(result.audit)
+            }).catch((error) => {
+              console.error("Audit log failed:", error?.message || error);
+            });
+          });
+        }
+        return res.status(result.statusCode).json(result.body);
+      } catch (error) {
+        console.error("AI search error:", error);
+        return res.status(500).json({ message: error.message });
+      }
+    })
+  );
+  app2.post(
+    "/api/ai/index/import/:id",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    asyncHandler(async (req, res) => {
+      const runtimeSettings = await getRuntimeSettingsCached2();
+      if (!runtimeSettings.aiEnabled) {
+        return res.status(503).json({ message: "AI assistant is disabled by system settings." });
+      }
+      const body = ensureObject(req.body) || {};
+      const batchSize = Math.max(1, Math.min(20, readInteger(body.batchSize, 5)));
+      const maxRowsValue = readInteger(body.maxRows, 0);
+      const maxRows = maxRowsValue > 0 ? Math.max(1, maxRowsValue) : null;
+      const result = await aiIndexService2.indexImport({
+        importId: req.params.id,
+        username: req.user.username,
+        batchSize,
+        maxRows
+      });
+      return res.status(result.statusCode).json(result.body);
+    })
+  );
+  app2.post(
+    "/api/ai/branches/import/:id",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    asyncHandler(async (req, res) => {
+      const body = ensureObject(req.body) || {};
+      const result = await aiIndexService2.importBranches({
+        importId: req.params.id,
+        username: req.user.username,
+        nameKey: typeof body.nameKey === "string" ? body.nameKey : null,
+        latKey: typeof body.latKey === "string" ? body.latKey : null,
+        lngKey: typeof body.lngKey === "string" ? body.lngKey : null
+      });
+      return res.status(result.statusCode).json(result.body);
+    })
+  );
+  app2.post(
+    "/api/ai/chat",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    withAiConcurrencyGate2("chat", async (req, res) => {
+      try {
+        const body = ensureObject(req.body) || {};
+        const message = String(body.message || "").trim();
+        if (!message) {
+          return res.status(400).json({ message: "Message required" });
+        }
+        const runtimeSettings = await getRuntimeSettingsCached2();
+        if (!runtimeSettings.aiEnabled) {
+          return res.status(503).json({ message: "AI assistant is disabled by system settings." });
+        }
+        const result = await aiChatService2.handleChat({
+          message,
+          username: req.user.username,
+          existingConversationId: body.conversationId ? String(body.conversationId) : null,
+          aiTimeoutMs: runtimeSettings.aiTimeoutMs
+        });
+        return res.status(result.statusCode).json(result.body);
+      } catch (error) {
+        console.error("AI chat error:", error);
+        return res.status(500).json({ message: error.message });
+      }
+    })
+  );
+}
+
+// server/routes/system.routes.ts
+function registerSystemRoutes(app2, deps) {
+  const {
+    authenticateToken,
+    requireRole,
+    requireMonitorAccess,
+    getMaintenanceStateCached: getMaintenanceStateCached2,
+    computeInternalMonitorSnapshot: computeInternalMonitorSnapshot2,
+    buildInternalMonitorAlerts: buildInternalMonitorAlerts2,
+    getControlState: getControlState2,
+    getDbProtection: getDbProtection2,
+    getRequestRate: getRequestRate2,
+    getLatencyP95: getLatencyP952,
+    getLocalCircuitSnapshots: getLocalCircuitSnapshots2,
+    getIntelligenceExplainability: getIntelligenceExplainability2,
+    injectChaos: injectChaos2,
+    createAuditLog
+  } = deps;
+  app2.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", mode: "postgresql" });
+  });
+  app2.get("/api/maintenance-status", asyncHandler(async (_req, res) => {
+    return res.json(await getMaintenanceStateCached2());
+  }));
+  app2.get(
+    "/internal/system-health",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireMonitorAccess,
+    (_req, res) => {
+      const snapshot = computeInternalMonitorSnapshot2();
+      const alerts = buildInternalMonitorAlerts2(snapshot);
+      res.json({
+        ...snapshot,
+        activeAlertCount: alerts.length
+      });
+    }
+  );
+  app2.get(
+    "/internal/system-mode",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireMonitorAccess,
+    (_req, res) => {
+      const controlState = getControlState2();
+      res.json({
+        mode: controlState.mode,
+        throttleFactor: controlState.throttleFactor,
+        rejectHeavyRoutes: controlState.rejectHeavyRoutes,
+        dbProtection: getDbProtection2(),
+        preAllocatedMB: controlState.preAllocateMB,
+        updatedAt: controlState.updatedAt
+      });
+    }
+  );
+  app2.get(
+    "/internal/workers",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireMonitorAccess,
+    (_req, res) => {
+      const controlState = getControlState2();
+      res.json({
+        count: controlState.workerCount,
+        maxWorkers: controlState.maxWorkers,
+        workers: controlState.workers,
+        updatedAt: controlState.updatedAt
+      });
+    }
+  );
+  app2.get(
+    "/internal/alerts",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireMonitorAccess,
+    (_req, res) => {
+      const snapshot = computeInternalMonitorSnapshot2();
+      const alerts = buildInternalMonitorAlerts2(snapshot);
+      res.json({
+        alerts,
+        updatedAt: snapshot.updatedAt
+      });
+    }
+  );
+  app2.get(
+    "/internal/load-trend",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireMonitorAccess,
+    (_req, res) => {
+      const controlState = getControlState2();
+      res.json({
+        predictor: controlState.predictor,
+        queueLength: controlState.queueLength,
+        requestRate: getRequestRate2(),
+        p95LatencyMs: getLatencyP952(),
+        updatedAt: controlState.updatedAt
+      });
+    }
+  );
+  app2.get(
+    "/internal/circuit-status",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireMonitorAccess,
+    (_req, res) => {
+      const controlState = getControlState2();
+      res.json({
+        local: getLocalCircuitSnapshots2(),
+        cluster: controlState.circuits,
+        updatedAt: controlState.updatedAt
+      });
+    }
+  );
+  app2.get(
+    "/internal/intelligence/explain",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireMonitorAccess,
+    (_req, res) => {
+      const explain = getIntelligenceExplainability2();
+      res.json({
+        anomalyBreakdown: explain.anomalyBreakdown,
+        correlationMatrix: explain.correlationMatrix,
+        slopeValues: explain.slopeValues,
+        forecastProjection: explain.forecastProjection,
+        governanceState: explain.governanceState,
+        chosenStrategy: explain.chosenStrategy,
+        decisionReason: explain.decisionReason
+      });
+    }
+  );
+  app2.post(
+    "/internal/chaos/inject",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    asyncHandler(async (req, res) => {
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const type = body.type;
+      const magnitude = body.magnitude;
+      const durationMs = body.durationMs;
+      const allowed = /* @__PURE__ */ new Set([
+        "cpu_spike",
+        "db_latency_spike",
+        "ai_delay",
+        "worker_crash",
+        "memory_pressure"
+      ]);
+      if (!allowed.has(type)) {
+        return res.status(400).json({
+          message: "Invalid chaos type.",
+          allowed: Array.from(allowed)
+        });
+      }
+      const result = injectChaos2({
+        type,
+        magnitude: Number.isFinite(Number(magnitude)) ? Number(magnitude) : void 0,
+        durationMs: Number.isFinite(Number(durationMs)) ? Number(durationMs) : void 0
+      });
+      await createAuditLog({
+        action: "CHAOS_INJECTED",
+        performedBy: req.user?.username || "system",
+        details: `Chaos injected: ${type}`
+      });
+      return res.json({
+        success: true,
+        ...result
+      });
+    })
+  );
+}
+
+// server/routes/settings.routes.ts
+function registerSettingsRoutes(app2, deps) {
+  const {
+    storage: storage2,
+    authenticateToken,
+    requireRole,
+    clearTabVisibilityCache,
+    invalidateRuntimeSettingsCache: invalidateRuntimeSettingsCache2,
+    invalidateMaintenanceCache: invalidateMaintenanceCache2,
+    getMaintenanceStateCached: getMaintenanceStateCached2,
+    broadcastWsMessage: broadcastWsMessage2,
+    defaultAiTimeoutMs
+  } = deps;
+  app2.get("/api/app-config", authenticateToken, asyncHandler(async (_req, res) => {
+    const config = await storage2.getAppConfig();
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    return res.json(config);
+  }));
+  app2.get("/api/settings/tab-visibility", authenticateToken, asyncHandler(async (req, res) => {
+    const role = req.user?.role || "user";
+    return res.json({
+      role,
+      tabs: await storage2.getRoleTabVisibility(role)
+    });
+  }));
+  app2.get("/api/settings", authenticateToken, requireRole("admin", "superuser"), asyncHandler(async (req, res) => {
+    const role = req.user?.role || "user";
+    return res.json({
+      categories: await storage2.getSettingsForRole(role)
+    });
+  }));
+  app2.patch("/api/settings", authenticateToken, requireRole("admin", "superuser"), asyncHandler(async (req, res) => {
+    const body = ensureObject(req.body) || {};
+    const key = readNonEmptyString(body.key);
+    if (!key) {
+      return res.status(400).json({ message: "Invalid setting key" });
+    }
+    const role = req.user?.role || "user";
+    const result = await storage2.updateSystemSetting({
+      role,
+      settingKey: key,
+      value: body.value ?? null,
+      confirmCritical: Boolean(body.confirmCritical),
+      updatedBy: req.user?.username || "system"
+    });
+    if (result.status === "not_found") {
+      return res.status(404).json({ message: result.message });
+    }
+    if (result.status === "forbidden") {
+      return res.status(403).json({ message: result.message });
+    }
+    if (result.status === "requires_confirmation") {
+      return res.status(409).json({ message: result.message, requiresConfirmation: true });
+    }
+    if (result.status === "invalid") {
+      return res.status(400).json({ message: result.message });
+    }
+    if (result.status === "updated") {
+      clearTabVisibilityCache();
+      invalidateRuntimeSettingsCache2();
+      await storage2.createAuditLog({
+        action: result.setting?.isCritical ? "CRITICAL_SETTING_UPDATED" : "SETTING_UPDATED",
+        performedBy: req.user?.username || "system",
+        targetResource: key,
+        details: `Updated setting ${key} to "${String(result.setting?.value ?? "")}"`
+      });
+      if (key === "ai_timeout_ms") {
+        process.env.OLLAMA_TIMEOUT_MS = String(result.setting?.value ?? defaultAiTimeoutMs);
+      }
+      if (result.shouldBroadcast) {
+        invalidateMaintenanceCache2();
+        const maintenanceState = await getMaintenanceStateCached2(true);
+        broadcastWsMessage2({
+          type: "maintenance_update",
+          maintenance: maintenanceState.maintenance,
+          message: maintenanceState.message,
+          mode: maintenanceState.type,
+          startTime: maintenanceState.startTime,
+          endTime: maintenanceState.endTime
+        });
+      } else {
+        broadcastWsMessage2({
+          type: "settings_updated",
+          key,
+          updatedBy: req.user?.username || "system"
+        });
+      }
+    }
+    return res.json({
+      success: result.status === "updated" || result.status === "unchanged",
+      status: result.status,
+      message: result.message,
+      setting: result.setting || null
+    });
+  }));
+}
+
+// server/routes/operations.routes.ts
+function registerOperationsRoutes(app2, deps) {
+  const {
+    storage: storage2,
+    auditRepository: auditRepository2,
+    backupsRepository: backupsRepository2,
+    analyticsRepository: analyticsRepository2,
+    authenticateToken,
+    requireRole,
+    requireTabAccess,
+    withExportCircuit: withExportCircuit2,
+    isExportCircuitOpenError,
+    connectedClients: connectedClients2
+  } = deps;
+  app2.get(
+    "/api/audit-logs",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("audit-logs"),
+    asyncHandler(async (_req, res) => {
+      return res.json({ logs: await auditRepository2.getAuditLogs() });
+    })
+  );
+  app2.get(
+    "/api/audit-logs/stats",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("audit-logs"),
+    asyncHandler(async (_req, res) => {
+      return res.json(await auditRepository2.getAuditLogStats());
+    })
+  );
+  app2.delete(
+    "/api/audit-logs/cleanup",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("audit-logs"),
+    asyncHandler(async (req, res) => {
+      const body = ensureObject(req.body) || {};
+      const olderThanDays = Math.max(1, readInteger(body.olderThanDays, 30));
+      const cutoffDate = /* @__PURE__ */ new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+      const deletedCount = await auditRepository2.cleanupAuditLogsOlderThan(cutoffDate);
+      await storage2.createAuditLog({
+        action: "CLEANUP_AUDIT_LOGS",
+        performedBy: req.user?.username || "system",
+        details: `Cleanup requested for logs older than ${olderThanDays} days`
+      });
+      return res.json({
+        success: true,
+        deletedCount,
+        message: "Cleanup completed"
+      });
+    })
+  );
+  app2.get(
+    "/api/analytics/summary",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("dashboard"),
+    asyncHandler(async (_req, res) => {
+      return res.json(await analyticsRepository2.getDashboardSummary());
+    })
+  );
+  app2.get(
+    "/api/analytics/login-trends",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("dashboard"),
+    asyncHandler(async (req, res) => {
+      const days = Math.max(1, readInteger(req.query.days, 7));
+      return res.json(await analyticsRepository2.getLoginTrends(days));
+    })
+  );
+  app2.get(
+    "/api/analytics/top-users",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("dashboard"),
+    asyncHandler(async (req, res) => {
+      const limit = Math.max(1, readInteger(req.query.limit, 10));
+      return res.json(await analyticsRepository2.getTopActiveUsers(limit));
+    })
+  );
+  app2.get(
+    "/api/analytics/peak-hours",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("dashboard"),
+    asyncHandler(async (_req, res) => {
+      return res.json(await analyticsRepository2.getPeakHours());
+    })
+  );
+  app2.get(
+    "/api/analytics/role-distribution",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("dashboard"),
+    asyncHandler(async (_req, res) => {
+      return res.json(await analyticsRepository2.getRoleDistribution());
+    })
+  );
+  app2.get(
+    "/api/backups",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("backup"),
+    asyncHandler(async (_req, res) => {
+      return res.json({ backups: await backupsRepository2.getBackups() });
+    })
+  );
+  app2.post(
+    "/api/backups",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("backup"),
+    asyncHandler(async (req, res) => {
+      const body = ensureObject(req.body) || {};
+      const name = String(body.name || "");
+      let backup;
+      try {
+        backup = await withExportCircuit2(async () => {
+          const startTime = Date.now();
+          const backupData = await backupsRepository2.getBackupDataForExport();
+          const metadata = {
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            importsCount: backupData.imports.length,
+            dataRowsCount: backupData.dataRows.length,
+            usersCount: backupData.users.length,
+            auditLogsCount: backupData.auditLogs.length
+          };
+          const created = await backupsRepository2.createBackup({
+            name,
+            createdBy: req.user.username,
+            backupData: JSON.stringify(backupData),
+            metadata: JSON.stringify(metadata)
+          });
+          await storage2.createAuditLog({
+            action: "CREATE_BACKUP",
+            performedBy: req.user.username,
+            targetResource: name,
+            details: JSON.stringify({
+              ...metadata,
+              durationMs: Date.now() - startTime
+            })
+          });
+          return created;
+        });
+      } catch (error) {
+        if (isExportCircuitOpenError(error)) {
+          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
+        }
+        throw error;
+      }
+      return res.json(backup);
+    })
+  );
+  app2.get(
+    "/api/backups/:id",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("backup"),
+    asyncHandler(async (req, res) => {
+      const backup = await backupsRepository2.getBackupById(req.params.id);
+      if (!backup) {
+        return res.status(404).json({ message: "Backup not found" });
+      }
+      return res.json(backup);
+    })
+  );
+  app2.post(
+    "/api/backups/:id/restore",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("backup"),
+    asyncHandler(async (req, res) => {
+      let backup;
+      try {
+        backup = await withExportCircuit2(() => backupsRepository2.getBackupById(req.params.id));
+      } catch (error) {
+        if (isExportCircuitOpenError(error)) {
+          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
+        }
+        throw error;
+      }
+      if (!backup) {
+        return res.status(404).json({ message: "Backup not found" });
+      }
+      let result;
+      try {
+        result = await withExportCircuit2(async () => {
+          const startTime = Date.now();
+          const backupData = JSON.parse(backup.backupData);
+          const restored = await backupsRepository2.restoreFromBackup(backupData);
+          await storage2.createAuditLog({
+            action: "RESTORE_BACKUP",
+            performedBy: req.user.username,
+            targetResource: backup.name,
+            details: JSON.stringify({
+              ...restored.stats,
+              durationMs: Date.now() - startTime
+            })
+          });
+          return { restored, startTime };
+        });
+      } catch (error) {
+        if (isExportCircuitOpenError(error)) {
+          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
+        }
+        throw error;
+      }
+      return res.json({
+        ...result.restored,
+        message: `Restore completed in ${Math.round((Date.now() - result.startTime) / 1e3)}s`
+      });
+    })
+  );
+  app2.delete(
+    "/api/backups/:id",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("backup"),
+    asyncHandler(async (req, res) => {
+      let backup;
+      let deleted;
+      try {
+        backup = await withExportCircuit2(() => backupsRepository2.getBackupById(req.params.id));
+        deleted = await withExportCircuit2(() => backupsRepository2.deleteBackup(req.params.id));
+      } catch (error) {
+        if (isExportCircuitOpenError(error)) {
+          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
+        }
+        throw error;
+      }
+      if (!deleted) {
+        return res.status(404).json({ message: "Backup not found" });
+      }
+      await storage2.createAuditLog({
+        action: "DELETE_BACKUP",
+        performedBy: req.user.username,
+        targetResource: backup?.name || req.params.id
+      });
+      return res.json({ success: true });
+    })
+  );
+  app2.get("/api/debug/websocket-clients", authenticateToken, requireRole("superuser"), asyncHandler(async (_req, res) => {
+    const clients = Array.from(connectedClients2.keys());
+    return res.json({ count: clients.length, clients });
+  }));
+}
+
+// server/routes/collection.validation.ts
+var COLLECTION_BATCHES = /* @__PURE__ */ new Set(["P10", "P25", "MDD02", "MDD10", "MDD18", "MDD25"]);
 var COLLECTION_STAFF_NICKNAME_MIN_LENGTH = 2;
 var COLLECTION_SUMMARY_MONTH_NAMES = [
   "January",
@@ -7253,9 +10250,16 @@ var COLLECTION_SUMMARY_MONTH_NAMES = [
   "November",
   "December"
 ];
+var COLLECTION_NICKNAME_TEMP_PASSWORD = getCollectionNicknameTempPassword();
 var COLLECTION_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 var COLLECTION_PHONE_REGEX = /^[0-9+\-\s]{8,20}$/;
 var COLLECTION_NICKNAME_ROLE_SCOPE_SET = /* @__PURE__ */ new Set(["admin", "user", "both"]);
+function ensureLooseObject(value) {
+  if (value && typeof value === "object") {
+    return value;
+  }
+  return null;
+}
 function normalizeCollectionText(value) {
   return String(value ?? "").trim();
 }
@@ -7291,10 +10295,12 @@ function isValidCollectionPhone(value) {
   if (normalized.length < 8 || normalized.length > 20) return false;
   return COLLECTION_PHONE_REGEX.test(normalized);
 }
-async function resolveCurrentCollectionNicknameFromSession(user) {
+
+// server/routes/collection-access.ts
+async function resolveCurrentCollectionNicknameFromSession(storage2, user) {
   const activityId = normalizeCollectionText(user.activityId);
   if (!activityId) return null;
-  const session = await storage.getCollectionNicknameSessionByActivity(activityId);
+  const session = await storage2.getCollectionNicknameSessionByActivity(activityId);
   if (!session) return null;
   if (normalizeCollectionText(session.username).toLowerCase() !== normalizeCollectionText(user.username).toLowerCase()) {
     return null;
@@ -7305,13 +10311,10 @@ async function resolveCurrentCollectionNicknameFromSession(user) {
   const nickname = normalizeCollectionText(session.nickname);
   return nickname || null;
 }
-async function getAdminVisibleNicknameValues(user) {
-  return getAdminGroupNicknameValues(user);
-}
-async function getAdminGroupNicknameValues(user) {
-  const currentNickname = await resolveCurrentCollectionNicknameFromSession(user);
+async function getAdminGroupNicknameValues(storage2, user) {
+  const currentNickname = await resolveCurrentCollectionNicknameFromSession(storage2, user);
   if (!currentNickname) return [];
-  const visibleFromGroup = await storage.getCollectionAdminGroupVisibleNicknameValuesByLeader(currentNickname);
+  const visibleFromGroup = await storage2.getCollectionAdminGroupVisibleNicknameValuesByLeader(currentNickname);
   const normalized = normalizeCollectionStringList(visibleFromGroup);
   if (normalized.length > 0) {
     const leaderLower = currentNickname.toLowerCase();
@@ -7319,13 +10322,21 @@ async function getAdminGroupNicknameValues(user) {
     const others = normalized.filter((value) => value.toLowerCase() !== leaderLower).sort((a, b) => a.localeCompare(b, void 0, { sensitivity: "base" }));
     return [...own, ...others];
   }
-  const ownProfile = await storage.getCollectionStaffNicknameByName(currentNickname);
+  const ownProfile = await storage2.getCollectionStaffNicknameByName(currentNickname);
   if (ownProfile && ownProfile.isActive && isNicknameScopeAllowedForRole(ownProfile.roleScope, user.role)) {
     return [ownProfile.nickname];
   }
   return [];
 }
-async function canUserAccessCollectionRecord(user, record) {
+async function getAdminVisibleNicknameValues(storage2, user) {
+  return getAdminGroupNicknameValues(storage2, user);
+}
+function hasNicknameValue(values, target) {
+  const normalizedTarget = normalizeCollectionText(target).toLowerCase();
+  if (!normalizedTarget) return false;
+  return values.some((value) => value.toLowerCase() === normalizedTarget);
+}
+async function canUserAccessCollectionRecord(storage2, user, record) {
   if (user.role === "superuser") return true;
   if (user.role === "user") {
     const owner = normalizeCollectionText(record.createdByLogin).toLowerCase();
@@ -7333,7 +10344,7 @@ async function canUserAccessCollectionRecord(user, record) {
     return Boolean(owner) && owner === current;
   }
   if (user.role === "admin") {
-    const allowedNicknames = await getAdminVisibleNicknameValues(user);
+    const allowedNicknames = await getAdminVisibleNicknameValues(storage2, user);
     return hasNicknameValue(allowedNicknames, normalizeCollectionText(record.collectionStaffNickname));
   }
   return false;
@@ -7355,12 +10366,7 @@ function readNicknameFiltersFromQuery(query) {
   pushValue(query.nicknames);
   return normalizeCollectionStringList(candidates);
 }
-function hasNicknameValue(values, target) {
-  const normalizedTarget = normalizeCollectionText(target).toLowerCase();
-  if (!normalizedTarget) return false;
-  return values.some((value) => value.toLowerCase() === normalizedTarget);
-}
-async function resolveCollectionNicknameAccessForUser(user, nicknameRaw) {
+async function resolveCollectionNicknameAccessForUser(storage2, user, nicknameRaw) {
   const nickname = normalizeCollectionText(nicknameRaw);
   if (nickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
     return {
@@ -7369,23 +10375,13 @@ async function resolveCollectionNicknameAccessForUser(user, nicknameRaw) {
       message: "Staff nickname mesti sekurang-kurangnya 2 aksara."
     };
   }
-  const profile = await storage.getCollectionNicknameAuthProfileByName(nickname);
+  const profile = await storage2.getCollectionNicknameAuthProfileByName(nickname);
   if (!profile || !profile.isActive) {
     return {
       ok: false,
       status: 400,
       message: "Staff nickname tidak sah atau sudah inactive."
     };
-  }
-  if (user.role === "admin") {
-    if (!isNicknameScopeAllowedForRole(profile.roleScope, user.role)) {
-      return {
-        ok: false,
-        status: 403,
-        message: "Staff nickname tidak dibenarkan untuk role semasa."
-      };
-    }
-    return { ok: true, profile };
   }
   if (!isNicknameScopeAllowedForRole(profile.roleScope, user.role)) {
     return {
@@ -7396,10 +10392,545 @@ async function resolveCollectionNicknameAccessForUser(user, nicknameRaw) {
   }
   return { ok: true, profile };
 }
+
+// server/services/collection/collection-service-support.ts
+var CollectionServiceSupport = class {
+  constructor(storage2) {
+    this.storage = storage2;
+  }
+  requireUser(user) {
+    if (!user) {
+      throw unauthorized("Unauthenticated");
+    }
+    return user;
+  }
+  buildEmptySummary(year) {
+    return {
+      ok: true,
+      year,
+      summary: COLLECTION_SUMMARY_MONTH_NAMES.map((monthName, index) => ({
+        month: index + 1,
+        monthName,
+        totalRecords: 0,
+        totalAmount: 0
+      }))
+    };
+  }
+  resolveAccessError(status, message) {
+    if (status === 400) throw badRequest(message);
+    if (status === 401) throw unauthorized(message);
+    if (status === 403) throw forbidden(message);
+    if (status === 404) throw notFound(message);
+    if (status === 409) throw conflict(message);
+    throw new Error(message);
+  }
+  async requireNicknameAccess(user, nicknameRaw) {
+    const resolved = await resolveCollectionNicknameAccessForUser(this.storage, user, nicknameRaw);
+    if (!resolved.ok) {
+      this.resolveAccessError(resolved.status, resolved.message);
+    }
+    return resolved.profile;
+  }
+  throwAdminGroupError(err) {
+    const message = String(err?.message || "");
+    const lower = message.toLowerCase();
+    if (lower.includes("already assigned")) {
+      throw conflict("This nickname is already assigned to another admin group.");
+    }
+    if (lower.includes("invalid nickname ids") || lower.includes("invalid leader nickname")) {
+      throw badRequest("Invalid nickname ids.");
+    }
+    if (lower.includes("must have admin scope")) {
+      throw badRequest("Leader nickname must be admin scope.");
+    }
+    if (lower.includes("must be active")) {
+      throw badRequest("Leader nickname must be active.");
+    }
+    if (lower.includes("cannot be a member")) {
+      throw badRequest("Leader nickname cannot be included as member.");
+    }
+    throw err;
+  }
+  throwNicknameAssignmentError(err) {
+    const message = String(err?.message || "");
+    const lower = message.toLowerCase();
+    if (lower.includes("admin user not found")) {
+      throw notFound("Admin not found.");
+    }
+    if (lower.includes("invalid nickname ids")) {
+      throw badRequest("Invalid nickname ids.");
+    }
+    throw err;
+  }
+};
+
+// server/services/collection/collection-admin.service.ts
+var CollectionAdminService = class extends CollectionServiceSupport {
+  async listAdmins() {
+    const admins = await this.storage.getCollectionAdminUsers();
+    return { ok: true, admins };
+  }
+  async listAdminGroups() {
+    const groups = await this.storage.getCollectionAdminGroups();
+    return { ok: true, groups };
+  }
+  async createAdminGroup(userInput, bodyRaw) {
+    const user = this.requireUser(userInput);
+    const body = ensureLooseObject(bodyRaw) || {};
+    const leaderNicknameId = normalizeCollectionText(body.leaderNicknameId);
+    if (!leaderNicknameId) {
+      throw badRequest("leaderNicknameId is required.");
+    }
+    const memberNicknameIds = Array.isArray(body.memberNicknameIds) ? normalizeCollectionStringList(body.memberNicknameIds) : [];
+    try {
+      const group = await this.storage.createCollectionAdminGroup({
+        leaderNicknameId,
+        memberNicknameIds,
+        createdBy: user.username
+      });
+      await this.storage.createAuditLog({
+        action: "COLLECTION_ADMIN_GROUP_CREATED",
+        performedBy: user.username,
+        targetResource: group.id,
+        details: `Admin group created for leader ${group.leaderNickname}. members=${group.memberNicknames.length}`
+      });
+      return { ok: true, group };
+    } catch (err) {
+      this.throwAdminGroupError(err);
+    }
+  }
+  async updateAdminGroup(userInput, groupIdRaw, bodyRaw) {
+    const user = this.requireUser(userInput);
+    const groupId = normalizeCollectionText(groupIdRaw);
+    if (!groupId) {
+      throw badRequest("groupId is required.");
+    }
+    const body = ensureLooseObject(bodyRaw) || {};
+    const hasLeader = Object.prototype.hasOwnProperty.call(body, "leaderNicknameId");
+    const hasMembers = Object.prototype.hasOwnProperty.call(body, "memberNicknameIds");
+    if (!hasLeader && !hasMembers) {
+      throw badRequest("No admin group update payload provided.");
+    }
+    const leaderNicknameId = hasLeader ? normalizeCollectionText(body.leaderNicknameId) : void 0;
+    if (hasLeader && !leaderNicknameId) {
+      throw badRequest("leaderNicknameId is required.");
+    }
+    const memberNicknameIds = hasMembers ? Array.isArray(body.memberNicknameIds) ? normalizeCollectionStringList(body.memberNicknameIds) : [] : void 0;
+    try {
+      const group = await this.storage.updateCollectionAdminGroup({
+        groupId,
+        leaderNicknameId,
+        memberNicknameIds,
+        updatedBy: user.username
+      });
+      if (!group) {
+        throw notFound("Admin group not found.");
+      }
+      await this.storage.createAuditLog({
+        action: "COLLECTION_ADMIN_GROUP_UPDATED",
+        performedBy: user.username,
+        targetResource: group.id,
+        details: `Admin group updated for leader ${group.leaderNickname}. members=${group.memberNicknames.length}`
+      });
+      return { ok: true, group };
+    } catch (err) {
+      this.throwAdminGroupError(err);
+    }
+  }
+  async deleteAdminGroup(userInput, groupIdRaw) {
+    const user = this.requireUser(userInput);
+    const groupId = normalizeCollectionText(groupIdRaw);
+    if (!groupId) {
+      throw badRequest("groupId is required.");
+    }
+    const deleted = await this.storage.deleteCollectionAdminGroup(groupId);
+    if (!deleted) {
+      throw notFound("Admin group not found.");
+    }
+    await this.storage.createAuditLog({
+      action: "COLLECTION_ADMIN_GROUP_DELETED",
+      performedBy: user.username,
+      targetResource: groupId,
+      details: "Admin group deleted."
+    });
+    return { ok: true };
+  }
+  async getNicknameAssignments(adminIdRaw) {
+    const adminId = normalizeCollectionText(adminIdRaw);
+    if (!adminId) {
+      throw badRequest("Admin id is required.");
+    }
+    const admin = await this.storage.getCollectionAdminUserById(adminId);
+    if (!admin) {
+      throw notFound("Admin not found.");
+    }
+    const nicknameIds = await this.storage.getCollectionAdminAssignedNicknameIds(adminId);
+    return { ok: true, admin, nicknameIds };
+  }
+  async setNicknameAssignments(userInput, adminIdRaw, bodyRaw) {
+    const user = this.requireUser(userInput);
+    const adminId = normalizeCollectionText(adminIdRaw);
+    if (!adminId) {
+      throw badRequest("Admin id is required.");
+    }
+    const body = ensureLooseObject(bodyRaw) || {};
+    if (!Array.isArray(body.nicknameIds)) {
+      throw badRequest("nicknameIds must be an array.");
+    }
+    const nicknameIds = normalizeCollectionStringList(body.nicknameIds);
+    try {
+      const assignedNicknameIds = await this.storage.setCollectionAdminAssignedNicknameIds({
+        adminUserId: adminId,
+        nicknameIds,
+        createdBySuperuser: user.username
+      });
+      await this.storage.createAuditLog({
+        action: "COLLECTION_NICKNAME_ASSIGNMENTS_UPDATED",
+        performedBy: user.username,
+        targetResource: adminId,
+        details: `Updated admin nickname assignments. total=${assignedNicknameIds.length}`
+      });
+      return {
+        ok: true,
+        adminId,
+        nicknameIds: assignedNicknameIds
+      };
+    } catch (err) {
+      this.throwNicknameAssignmentError(err);
+    }
+  }
+};
+
+// server/services/collection/collection-nickname.service.ts
+import bcrypt4 from "bcrypt";
+var CollectionNicknameService = class extends CollectionServiceSupport {
+  async listNicknames(userInput, includeInactiveRaw) {
+    const user = this.requireUser(userInput);
+    const includeInactive = normalizeCollectionText(includeInactiveRaw) === "1";
+    let nicknames;
+    if (user.role === "superuser") {
+      nicknames = await this.storage.getCollectionStaffNicknames({ activeOnly: !includeInactive });
+    } else if (user.role === "admin") {
+      const allowedValues = await getAdminGroupNicknameValues(this.storage, user);
+      if (allowedValues.length === 0) {
+        nicknames = [];
+      } else {
+        const activeNicknames = await this.storage.getCollectionStaffNicknames({ activeOnly: true });
+        const byName = /* @__PURE__ */ new Map();
+        for (const item of activeNicknames) {
+          const key = normalizeCollectionText(item.nickname).toLowerCase();
+          if (key && !byName.has(key)) byName.set(key, item);
+        }
+        nicknames = allowedValues.map((value) => byName.get(value.toLowerCase())).filter(Boolean);
+      }
+    } else {
+      nicknames = await this.storage.getCollectionStaffNicknames({
+        activeOnly: true,
+        allowedRole: "user"
+      });
+    }
+    return { ok: true, nicknames };
+  }
+  async checkNicknameAuth(userInput, bodyRaw) {
+    const user = this.requireUser(userInput);
+    const body = ensureLooseObject(bodyRaw) || {};
+    const profile = await this.requireNicknameAccess(user, body.nickname);
+    const hasPassword = Boolean(normalizeCollectionText(profile.nicknamePasswordHash));
+    const mustChangePassword = Boolean(profile.mustChangePassword || !hasPassword);
+    const passwordResetBySuperuser = Boolean(profile.passwordResetBySuperuser);
+    const requiresPasswordSetup = !hasPassword;
+    const requiresPasswordLogin = hasPassword;
+    const requiresForcedPasswordChange = hasPassword && (mustChangePassword || passwordResetBySuperuser);
+    return {
+      ok: true,
+      nickname: {
+        id: profile.id,
+        nickname: profile.nickname,
+        mustChangePassword,
+        passwordResetBySuperuser,
+        requiresPasswordSetup,
+        requiresPasswordLogin,
+        requiresForcedPasswordChange
+      }
+    };
+  }
+  async setupNicknamePassword(userInput, bodyRaw) {
+    const user = this.requireUser(userInput);
+    const body = ensureLooseObject(bodyRaw) || {};
+    const profile = await this.requireNicknameAccess(user, body.nickname);
+    const currentPassword = String(body.currentPassword || "");
+    const newPassword = String(body.newPassword || "");
+    const confirmPassword = String(body.confirmPassword || "");
+    if (!newPassword || !confirmPassword) {
+      throw badRequest("New password dan confirm password diperlukan.");
+    }
+    if (newPassword !== confirmPassword) {
+      throw badRequest("Password dan confirm password tidak sepadan.");
+    }
+    if (!isStrongPassword(newPassword)) {
+      throw badRequest(
+        `Password mesti sekurang-kurangnya ${CREDENTIAL_PASSWORD_MIN_LENGTH} aksara dan mengandungi huruf serta nombor.`
+      );
+    }
+    const existingHash = normalizeCollectionText(profile.nicknamePasswordHash);
+    const hasExistingPassword = Boolean(existingHash);
+    if (hasExistingPassword) {
+      if (!currentPassword) {
+        throw badRequest("Current password diperlukan untuk tukar password nickname.");
+      }
+      const validCurrentPassword = await bcrypt4.compare(currentPassword, existingHash);
+      if (!validCurrentPassword) {
+        throw unauthorized("Current password nickname tidak sah.");
+      }
+      const sameAsCurrent = await bcrypt4.compare(newPassword, existingHash);
+      if (sameAsCurrent) {
+        throw badRequest("Password baharu mesti berbeza daripada password semasa.");
+      }
+    }
+    const passwordHash = await bcrypt4.hash(newPassword, CREDENTIAL_BCRYPT_COST);
+    await this.storage.setCollectionNicknamePassword({
+      nicknameId: profile.id,
+      passwordHash,
+      mustChangePassword: false,
+      passwordResetBySuperuser: false,
+      passwordUpdatedAt: /* @__PURE__ */ new Date()
+    });
+    await this.storage.createAuditLog({
+      action: "COLLECTION_NICKNAME_PASSWORD_SET",
+      performedBy: user.username,
+      targetResource: profile.id,
+      details: `Nickname password set for ${profile.nickname}`
+    });
+    if (user.activityId) {
+      await this.storage.setCollectionNicknameSession({
+        activityId: user.activityId,
+        username: user.username,
+        userRole: user.role,
+        nickname: profile.nickname
+      });
+    }
+    return {
+      ok: true,
+      nickname: {
+        id: profile.id,
+        nickname: profile.nickname,
+        mustChangePassword: false,
+        passwordResetBySuperuser: false
+      }
+    };
+  }
+  async loginNickname(userInput, bodyRaw) {
+    const user = this.requireUser(userInput);
+    const body = ensureLooseObject(bodyRaw) || {};
+    const profile = await this.requireNicknameAccess(user, body.nickname);
+    const password = String(body.password || "");
+    if (!password) {
+      throw badRequest("Password diperlukan.");
+    }
+    const hash = normalizeCollectionText(profile.nicknamePasswordHash);
+    if (!hash) {
+      throw badRequest("Sila tetapkan kata laluan baharu untuk nickname ini sebelum meneruskan.");
+    }
+    const valid = await bcrypt4.compare(password, hash);
+    if (!valid) {
+      throw unauthorized("Password nickname tidak sah.");
+    }
+    const requiresForcedPasswordChange = Boolean(profile.mustChangePassword) || Boolean(profile.passwordResetBySuperuser);
+    if (requiresForcedPasswordChange) {
+      return {
+        ok: true,
+        nickname: {
+          id: profile.id,
+          nickname: profile.nickname,
+          mustChangePassword: true,
+          passwordResetBySuperuser: Boolean(profile.passwordResetBySuperuser),
+          requiresForcedPasswordChange: true
+        }
+      };
+    }
+    if (user.activityId) {
+      await this.storage.setCollectionNicknameSession({
+        activityId: user.activityId,
+        username: user.username,
+        userRole: user.role,
+        nickname: profile.nickname
+      });
+    }
+    return {
+      ok: true,
+      nickname: {
+        id: profile.id,
+        nickname: profile.nickname,
+        mustChangePassword: false,
+        passwordResetBySuperuser: false,
+        requiresForcedPasswordChange: false
+      }
+    };
+  }
+  async createNickname(userInput, bodyRaw) {
+    const user = this.requireUser(userInput);
+    const body = ensureLooseObject(bodyRaw) || {};
+    const nickname = normalizeCollectionText(body.nickname);
+    const roleScope = normalizeCollectionNicknameRoleScope2(body.roleScope, "both");
+    if (nickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
+      throw badRequest("Nickname mesti sekurang-kurangnya 2 aksara.");
+    }
+    const existing = await this.storage.getCollectionStaffNicknameByName(nickname);
+    if (existing) {
+      throw conflict("Nickname already exists.");
+    }
+    try {
+      const created = await this.storage.createCollectionStaffNickname({
+        nickname,
+        createdBy: user.username,
+        roleScope
+      });
+      await this.storage.createAuditLog({
+        action: "COLLECTION_NICKNAME_CREATED",
+        performedBy: user.username,
+        targetResource: created.id,
+        details: `Collection nickname created: ${created.nickname} (scope=${created.roleScope})`
+      });
+      return { ok: true, nickname: created };
+    } catch (err) {
+      const rawMessage = String(err?.message || "").toLowerCase();
+      if (rawMessage.includes("duplicate")) {
+        throw conflict("Nickname already exists.");
+      }
+      throw err;
+    }
+  }
+  async updateNickname(userInput, idRaw, bodyRaw) {
+    const user = this.requireUser(userInput);
+    const id = normalizeCollectionText(idRaw);
+    const body = ensureLooseObject(bodyRaw) || {};
+    const nickname = normalizeCollectionText(body.nickname);
+    const roleScopeProvided = Object.prototype.hasOwnProperty.call(body, "roleScope");
+    const roleScope = normalizeCollectionNicknameRoleScope2(body.roleScope, "both");
+    if (!id) {
+      throw badRequest("Nickname id is required.");
+    }
+    if (nickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
+      throw badRequest("Nickname mesti sekurang-kurangnya 2 aksara.");
+    }
+    const existingByName = await this.storage.getCollectionStaffNicknameByName(nickname);
+    if (existingByName && existingByName.id !== id) {
+      throw conflict("Nickname already exists.");
+    }
+    try {
+      const updated = await this.storage.updateCollectionStaffNickname(id, {
+        nickname,
+        ...roleScopeProvided ? { roleScope } : {}
+      });
+      if (!updated) {
+        throw notFound("Nickname not found.");
+      }
+      await this.storage.createAuditLog({
+        action: "COLLECTION_NICKNAME_UPDATED",
+        performedBy: user.username,
+        targetResource: updated.id,
+        details: `Collection nickname updated to ${updated.nickname} (scope=${updated.roleScope})`
+      });
+      return { ok: true, nickname: updated };
+    } catch (err) {
+      const rawMessage = String(err?.message || "").toLowerCase();
+      if (rawMessage.includes("duplicate")) {
+        throw conflict("Nickname already exists.");
+      }
+      throw err;
+    }
+  }
+  async updateNicknameStatus(userInput, idRaw, bodyRaw) {
+    const user = this.requireUser(userInput);
+    const id = normalizeCollectionText(idRaw);
+    if (!id) {
+      throw badRequest("Nickname id is required.");
+    }
+    const body = ensureLooseObject(bodyRaw) || {};
+    if (!Object.prototype.hasOwnProperty.call(body, "isActive")) {
+      throw badRequest("isActive is required.");
+    }
+    const isActive = Boolean(body.isActive);
+    const updated = await this.storage.updateCollectionStaffNickname(id, { isActive });
+    if (!updated) {
+      throw notFound("Nickname not found.");
+    }
+    await this.storage.createAuditLog({
+      action: "COLLECTION_NICKNAME_STATUS_UPDATED",
+      performedBy: user.username,
+      targetResource: updated.id,
+      details: `Collection nickname ${updated.nickname} set active=${updated.isActive}`
+    });
+    return { ok: true, nickname: updated };
+  }
+  async resetNicknamePassword(userInput, idRaw) {
+    const user = this.requireUser(userInput);
+    const id = normalizeCollectionText(idRaw);
+    if (!id) {
+      throw badRequest("Nickname id is required.");
+    }
+    const nickname = await this.storage.getCollectionStaffNicknameById(id);
+    if (!nickname) {
+      throw notFound("Nickname not found.");
+    }
+    const passwordHash = await bcrypt4.hash(COLLECTION_NICKNAME_TEMP_PASSWORD, CREDENTIAL_BCRYPT_COST);
+    await this.storage.setCollectionNicknamePassword({
+      nicknameId: nickname.id,
+      passwordHash,
+      mustChangePassword: true,
+      passwordResetBySuperuser: true,
+      passwordUpdatedAt: /* @__PURE__ */ new Date()
+    });
+    await this.storage.createAuditLog({
+      action: "COLLECTION_NICKNAME_PASSWORD_RESET",
+      performedBy: user.username,
+      targetResource: nickname.id,
+      details: `Password nickname reset by superuser for ${nickname.nickname}`
+    });
+    return {
+      ok: true,
+      nickname: {
+        id: nickname.id,
+        nickname: nickname.nickname,
+        mustChangePassword: true,
+        passwordResetBySuperuser: true
+      }
+    };
+  }
+  async deleteNickname(userInput, idRaw) {
+    const user = this.requireUser(userInput);
+    const id = normalizeCollectionText(idRaw);
+    if (!id) {
+      throw badRequest("Nickname id is required.");
+    }
+    const result = await this.storage.deleteCollectionStaffNickname(id);
+    if (!result.deleted && !result.deactivated) {
+      throw notFound("Nickname not found.");
+    }
+    await this.storage.createAuditLog({
+      action: result.deleted ? "COLLECTION_NICKNAME_DELETED" : "COLLECTION_NICKNAME_DEACTIVATED",
+      performedBy: user.username,
+      targetResource: id,
+      details: result.deleted ? "Collection nickname deleted." : "Collection nickname deactivated due to existing usage."
+    });
+    return { ok: true, ...result };
+  }
+};
+
+// server/routes/collection-receipt.service.ts
+import fs2 from "fs";
+import path2 from "path";
+import { randomUUID as randomUUID3 } from "node:crypto";
+var COLLECTION_RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
+var COLLECTION_RECEIPT_ALLOWED_EXT = /* @__PURE__ */ new Set([".jpg", ".jpeg", ".png", ".pdf"]);
+var COLLECTION_RECEIPT_ALLOWED_MIME = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "application/pdf"]);
+var COLLECTION_RECEIPT_INLINE_MIME = /* @__PURE__ */ new Set(["application/pdf", "image/png", "image/jpeg"]);
+var COLLECTION_RECEIPT_DIR = path2.resolve(process.cwd(), "uploads", "collection-receipts");
+var COLLECTION_RECEIPT_PUBLIC_PREFIX = "/uploads/collection-receipts";
 function resolveReceiptExtension(receipt) {
   const originalFileName = String(receipt.fileName || "").trim();
   const mimeType = String(receipt.mimeType || "").trim().toLowerCase();
-  const extFromName = path.extname(originalFileName).toLowerCase();
+  const extFromName = path2.extname(originalFileName).toLowerCase();
   if (extFromName && COLLECTION_RECEIPT_ALLOWED_EXT.has(extFromName)) {
     return extFromName === ".jpeg" ? ".jpg" : extFromName;
   }
@@ -7437,12 +10968,12 @@ async function saveCollectionReceipt(receipt) {
   if (buffer.length > COLLECTION_RECEIPT_MAX_BYTES) {
     throw new Error("Receipt file exceeds 5MB.");
   }
-  await fs.promises.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
+  await fs2.promises.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
   const originalFileName = String(receipt.fileName || "receipt").trim();
-  const stem = path.basename(originalFileName, path.extname(originalFileName)).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40) || "receipt";
-  const storedFileName = `${Date.now()}-${randomUUID2()}-${stem}${extension}`;
-  const absolutePath = path.join(COLLECTION_RECEIPT_DIR, storedFileName);
-  await fs.promises.writeFile(absolutePath, buffer);
+  const stem = path2.basename(originalFileName, path2.extname(originalFileName)).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40) || "receipt";
+  const storedFileName = `${Date.now()}-${randomUUID3()}-${stem}${extension}`;
+  const absolutePath = path2.join(COLLECTION_RECEIPT_DIR, storedFileName);
+  await fs2.promises.writeFile(absolutePath, buffer);
   return `${COLLECTION_RECEIPT_PUBLIC_PREFIX}/${storedFileName}`.replace(/\\/g, "/");
 }
 async function removeCollectionReceiptFile(receiptPath) {
@@ -7450,15 +10981,15 @@ async function removeCollectionReceiptFile(receiptPath) {
   if (!normalized.startsWith(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`)) return;
   const fileName = normalized.slice(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`.length);
   if (!fileName || fileName.includes("..") || fileName.includes("/") || fileName.includes("\\")) return;
-  const absolutePath = path.resolve(COLLECTION_RECEIPT_DIR, fileName);
+  const absolutePath = path2.resolve(COLLECTION_RECEIPT_DIR, fileName);
   if (!absolutePath.startsWith(COLLECTION_RECEIPT_DIR)) return;
   try {
-    await fs.promises.unlink(absolutePath);
+    await fs2.promises.unlink(absolutePath);
   } catch {
   }
 }
 function resolveCollectionReceiptMimeTypeFromFileName(fileName) {
-  const extension = path.extname(fileName).toLowerCase();
+  const extension = path2.extname(fileName).toLowerCase();
   if (extension === ".pdf") return "application/pdf";
   if (extension === ".png") return "image/png";
   if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
@@ -7474,10 +11005,10 @@ function resolveCollectionReceiptFile(receiptPath) {
   const storedFileName = normalized.slice(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`.length);
   if (!storedFileName) return null;
   if (storedFileName.includes("..") || storedFileName.includes("/") || storedFileName.includes("\\")) return null;
-  if (path.basename(storedFileName) !== storedFileName) return null;
-  const absolutePath = path.resolve(COLLECTION_RECEIPT_DIR, storedFileName);
-  const relativePath = path.relative(COLLECTION_RECEIPT_DIR, absolutePath);
-  if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) return null;
+  if (path2.basename(storedFileName) !== storedFileName) return null;
+  const absolutePath = path2.resolve(COLLECTION_RECEIPT_DIR, storedFileName);
+  const relativePath = path2.relative(COLLECTION_RECEIPT_DIR, absolutePath);
+  if (!relativePath || relativePath.startsWith("..") || path2.isAbsolute(relativePath)) return null;
   const mimeType = resolveCollectionReceiptMimeTypeFromFileName(storedFileName);
   return {
     absolutePath,
@@ -7486,107 +11017,2682 @@ function resolveCollectionReceiptFile(receiptPath) {
     isInlinePreviewSupported: COLLECTION_RECEIPT_INLINE_MIME.has(mimeType)
   };
 }
-async function authenticateToken(req, res, next) {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.split(" ")[1];
-  if (!token) {
-    return res.status(401).json({ message: "Token required" });
-  }
+async function serveCollectionReceipt(storage2, req, res, mode) {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const activity = await storage.getActivityById(decoded.activityId);
-    if (!activity || activity.isActive === false || activity.logoutTime !== null) {
-      return res.status(401).json({
-        message: "Session expired. Please login again.",
-        forceLogout: true
-      });
+    if (!req.user) {
+      return res.status(401).json({ ok: false, message: "Unauthenticated" });
     }
-    const isVisitorBanned = await storage.isVisitorBanned(
-      activity.fingerprint ?? null,
-      activity.ipAddress ?? null
-    );
-    if (isVisitorBanned) {
-      return res.status(401).json({
-        message: "Session banned. Please login again.",
-        forceLogout: true
-      });
+    const id = normalizeCollectionText(req.params.id);
+    if (!id) {
+      return res.status(400).json({ ok: false, message: "Collection id is required." });
     }
-    await storage.updateActivity(decoded.activityId, {
-      lastActivityTime: /* @__PURE__ */ new Date(),
-      isActive: true
+    const record = await storage2.getCollectionRecordById(id);
+    if (!record) {
+      return res.status(404).json({ ok: false, message: "Collection record not found." });
+    }
+    const canAccessRecord = await canUserAccessCollectionRecord(storage2, req.user, {
+      createdByLogin: record.createdByLogin,
+      collectionStaffNickname: record.collectionStaffNickname
     });
-    req.user = {
-      userId: activity.userId || decoded.userId,
-      username: activity.username || decoded.username,
-      role: activity.role || decoded.role,
-      activityId: decoded.activityId
-    };
-    next();
-  } catch (err) {
-    return res.status(403).json({ message: "Invalid token" });
-  }
-}
-function requireRole(...roles) {
-  return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
-      return res.status(403).json({ message: "Insufficient permissions" });
+    if (!canAccessRecord) {
+      return res.status(403).json({ ok: false, message: "Forbidden" });
     }
-    next();
-  };
-}
-var TAB_VISIBILITY_CACHE_TTL_MS = 5e3;
-var tabVisibilityCache = /* @__PURE__ */ new Map();
-async function getRoleTabVisibilityCached(role) {
-  if (role === "superuser") return {};
-  const now = Date.now();
-  const cached = tabVisibilityCache.get(role);
-  if (cached && now - cached.cachedAt < TAB_VISIBILITY_CACHE_TTL_MS) {
-    return cached.tabs;
-  }
-  const tabs = await storage.getRoleTabVisibility(role);
-  tabVisibilityCache.set(role, { tabs, cachedAt: now });
-  return tabs;
-}
-function requireTabAccess(tabId) {
-  return async (req, res, next) => {
+    if (!record.receiptFile) {
+      return res.status(404).json({ ok: false, message: "Receipt file not found." });
+    }
+    const resolved = resolveCollectionReceiptFile(record.receiptFile);
+    if (!resolved) {
+      return res.status(404).json({ ok: false, message: "Receipt file path is invalid." });
+    }
     try {
-      const role = req.user?.role;
-      if (!role) return res.status(401).json({ message: "Unauthenticated" });
-      if (role === "superuser") return next();
-      if (role !== "admin" && role !== "user") {
-        return res.status(403).json({ message: "Insufficient permissions" });
+      await fs2.promises.access(resolved.absolutePath, fs2.constants.R_OK);
+    } catch {
+      return res.status(404).json({ ok: false, message: "Receipt file not found." });
+    }
+    if (mode === "view" && !resolved.isInlinePreviewSupported) {
+      return res.status(415).json({ ok: false, message: "Preview not available for this file type." });
+    }
+    const safeFileName = sanitizeReceiptDownloadName(resolved.storedFileName);
+    res.setHeader("Content-Type", resolved.mimeType);
+    res.setHeader(
+      "Content-Disposition",
+      `${mode === "download" ? "attachment" : "inline"}; filename="${safeFileName}"`
+    );
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.sendFile(resolved.absolutePath, (err) => {
+      if (!err || res.headersSent) return;
+      const sendErr = err;
+      const status = sendErr.code === "ENOENT" ? 404 : 500;
+      const message = status === 404 ? "Receipt file not found." : "Failed to serve receipt file.";
+      res.status(status).json({ ok: false, message });
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, message: err?.message || "Failed to load receipt file." });
+  }
+}
+
+// server/services/collection/collection-record.service.ts
+var CollectionRecordService = class extends CollectionServiceSupport {
+  async createRecord(userInput, bodyRaw) {
+    const user = this.requireUser(userInput);
+    let uploadedReceiptPath = null;
+    try {
+      const body = ensureLooseObject(bodyRaw) || {};
+      const customerName = normalizeCollectionText(body.customerName);
+      const icNumber = normalizeCollectionText(body.icNumber);
+      const customerPhone = normalizeCollectionText(body.customerPhone);
+      const accountNumber = normalizeCollectionText(body.accountNumber);
+      const batch = normalizeCollectionText(body.batch).toUpperCase();
+      const paymentDate = normalizeCollectionText(body.paymentDate);
+      const collectionStaffNickname = normalizeCollectionText(body.collectionStaffNickname);
+      const amount = parseCollectionAmount(body.amount);
+      if (!customerName) throw badRequest("Customer Name is required.");
+      if (!icNumber) throw badRequest("IC Number is required.");
+      if (!isValidCollectionPhone(customerPhone)) throw badRequest("Customer Phone Number is invalid.");
+      if (!accountNumber) throw badRequest("Account Number is required.");
+      if (!COLLECTION_BATCHES.has(batch)) throw badRequest("Invalid batch value.");
+      if (!paymentDate || !isValidCollectionDate(paymentDate)) throw badRequest("Invalid payment date.");
+      if (amount === null) throw badRequest("Amount must be a positive number.");
+      if (collectionStaffNickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
+        throw badRequest("Staff nickname must be at least 2 characters.");
       }
-      const tabs = await getRoleTabVisibilityCached(role);
-      const hasExplicit = Object.prototype.hasOwnProperty.call(tabs, tabId);
-      const enabled = hasExplicit ? tabs[tabId] !== false : false;
-      if (!enabled) {
-        return res.status(403).json({ message: `Tab '${tabId}' is disabled for role '${role}'` });
+      const staffNickname = await this.storage.getCollectionStaffNicknameByName(collectionStaffNickname);
+      if (!staffNickname?.isActive) {
+        throw badRequest("Staff nickname tidak sah atau sudah inactive.");
       }
-      return next();
+      if (user.role === "admin") {
+        const allowedNicknames = await getAdminVisibleNicknameValues(this.storage, user);
+        if (!hasNicknameValue(allowedNicknames, collectionStaffNickname)) {
+          throw forbidden("Nickname tidak dibenarkan untuk akaun admin ini.");
+        }
+      } else if (!isNicknameScopeAllowedForRole(staffNickname.roleScope, user.role)) {
+        throw forbidden("Nickname ini tidak dibenarkan untuk role semasa.");
+      }
+      const receiptPayload = ensureLooseObject(body.receipt);
+      if (receiptPayload) {
+        uploadedReceiptPath = await saveCollectionReceipt(receiptPayload);
+      }
+      const record = await this.storage.createCollectionRecord({
+        customerName,
+        icNumber,
+        customerPhone,
+        accountNumber,
+        batch,
+        paymentDate,
+        amount,
+        receiptFile: uploadedReceiptPath,
+        createdByLogin: user.username,
+        collectionStaffNickname
+      });
+      await this.storage.createAuditLog({
+        action: "COLLECTION_RECORD_CREATED",
+        performedBy: user.username,
+        targetResource: record.id,
+        details: `Collection record created by ${user.username}`
+      });
+      return { ok: true, record };
     } catch (err) {
-      console.error("Tab access guard error:", err);
-      return res.status(500).json({ message: err?.message || "Failed to validate tab access" });
+      if (uploadedReceiptPath) {
+        await removeCollectionReceiptFile(uploadedReceiptPath);
+      }
+      throw err;
+    }
+  }
+  async getSummary(userInput, query) {
+    const user = this.requireUser(userInput);
+    const yearRaw = normalizeCollectionText(query.year);
+    const requestedNicknameFilters = readNicknameFiltersFromQuery(query);
+    const parsedYear = yearRaw ? Number.parseInt(yearRaw, 10) : (/* @__PURE__ */ new Date()).getFullYear();
+    if (!Number.isInteger(parsedYear) || parsedYear < 2e3 || parsedYear > 2100) {
+      throw badRequest("Invalid year.");
+    }
+    let nicknameFilters;
+    if (user.role === "superuser") {
+      if (requestedNicknameFilters.length > 0) {
+        const activeNicknames = await this.storage.getCollectionStaffNicknames({ activeOnly: true });
+        const activeSet = new Set(
+          activeNicknames.map((item) => normalizeCollectionText(item.nickname).toLowerCase()).filter(Boolean)
+        );
+        const hasInvalid = requestedNicknameFilters.some((value) => !activeSet.has(value.toLowerCase()));
+        if (hasInvalid) {
+          throw badRequest("Invalid nickname filter.");
+        }
+        nicknameFilters = requestedNicknameFilters;
+      }
+    } else if (user.role === "admin") {
+      const allowedNicknames = await getAdminGroupNicknameValues(this.storage, user);
+      if (requestedNicknameFilters.length > 0) {
+        const hasInvalid = requestedNicknameFilters.some((value) => !hasNicknameValue(allowedNicknames, value));
+        if (hasInvalid) {
+          throw badRequest("Invalid nickname filter.");
+        }
+        nicknameFilters = requestedNicknameFilters;
+      } else if (allowedNicknames.length === 0) {
+        return this.buildEmptySummary(parsedYear);
+      } else {
+        nicknameFilters = allowedNicknames;
+      }
+    }
+    const summary = await this.storage.getCollectionMonthlySummary({
+      year: parsedYear,
+      nicknames: nicknameFilters,
+      createdByLogin: user.role === "user" ? user.username : void 0
+    });
+    return {
+      ok: true,
+      year: parsedYear,
+      summary
+    };
+  }
+  async listRecords(userInput, query) {
+    const user = this.requireUser(userInput);
+    const from = normalizeCollectionText(query.from);
+    const to = normalizeCollectionText(query.to);
+    const search = normalizeCollectionText(query.search);
+    const nickname = normalizeCollectionText(query.nickname);
+    if (from && !isValidCollectionDate(from)) throw badRequest("Invalid from date.");
+    if (to && !isValidCollectionDate(to)) throw badRequest("Invalid to date.");
+    if (from && to && from > to) throw badRequest("From date cannot be later than To date.");
+    let nicknameFilters;
+    if (user.role === "superuser") {
+      if (nickname) {
+        const isActiveNickname = await this.storage.isCollectionStaffNicknameActive(nickname);
+        if (!isActiveNickname) {
+          throw badRequest("Invalid nickname filter.");
+        }
+        nicknameFilters = [nickname];
+      }
+    } else if (user.role === "admin") {
+      const allowedNicknames = await getAdminVisibleNicknameValues(this.storage, user);
+      if (nickname) {
+        if (!hasNicknameValue(allowedNicknames, nickname)) {
+          throw badRequest("Invalid nickname filter.");
+        }
+        nicknameFilters = [nickname];
+      } else if (allowedNicknames.length === 0) {
+        return { ok: true, records: [] };
+      } else {
+        nicknameFilters = allowedNicknames;
+      }
+    }
+    const records = await this.storage.listCollectionRecords({
+      from: from || void 0,
+      to: to || void 0,
+      search: search || void 0,
+      createdByLogin: user.role === "user" ? user.username : void 0,
+      nicknames: nicknameFilters,
+      limit: 1e3
+    });
+    return { ok: true, records };
+  }
+  async updateRecord(userInput, idRaw, bodyRaw) {
+    const user = this.requireUser(userInput);
+    const id = normalizeCollectionText(idRaw);
+    if (!id) {
+      throw badRequest("Collection id is required.");
+    }
+    const existing = await this.storage.getCollectionRecordById(id);
+    if (!existing) {
+      throw notFound("Collection record not found.");
+    }
+    let uploadedReceiptPath = null;
+    try {
+      const body = ensureLooseObject(bodyRaw) || {};
+      const updatePayload = {};
+      const customerName = normalizeCollectionText(body.customerName);
+      const icNumber = normalizeCollectionText(body.icNumber);
+      const customerPhone = normalizeCollectionText(body.customerPhone);
+      const accountNumber = normalizeCollectionText(body.accountNumber);
+      const batch = normalizeCollectionText(body.batch).toUpperCase();
+      const paymentDate = normalizeCollectionText(body.paymentDate);
+      const collectionStaffNickname = normalizeCollectionText(body.collectionStaffNickname);
+      const amount = body.amount !== void 0 ? parseCollectionAmount(body.amount) : null;
+      if (body.customerName !== void 0) {
+        if (!customerName) throw badRequest("Customer Name cannot be empty.");
+        updatePayload.customerName = customerName;
+      }
+      if (body.icNumber !== void 0) {
+        if (!icNumber) throw badRequest("IC Number cannot be empty.");
+        updatePayload.icNumber = icNumber;
+      }
+      if (body.customerPhone !== void 0) {
+        if (!isValidCollectionPhone(customerPhone)) throw badRequest("Customer Phone Number is invalid.");
+        updatePayload.customerPhone = customerPhone;
+      }
+      if (body.accountNumber !== void 0) {
+        if (!accountNumber) throw badRequest("Account Number cannot be empty.");
+        updatePayload.accountNumber = accountNumber;
+      }
+      if (body.batch !== void 0) {
+        if (!COLLECTION_BATCHES.has(batch)) throw badRequest("Invalid batch value.");
+        updatePayload.batch = batch;
+      }
+      if (body.paymentDate !== void 0) {
+        if (!paymentDate || !isValidCollectionDate(paymentDate)) throw badRequest("Invalid payment date.");
+        updatePayload.paymentDate = paymentDate;
+      }
+      if (body.amount !== void 0) {
+        if (amount === null) throw badRequest("Amount must be a positive number.");
+        updatePayload.amount = amount;
+      }
+      if (body.collectionStaffNickname !== void 0) {
+        if (collectionStaffNickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
+          throw badRequest("Staff nickname must be at least 2 characters.");
+        }
+        const staffNickname = await this.storage.getCollectionStaffNicknameByName(collectionStaffNickname);
+        if (!staffNickname?.isActive) {
+          throw badRequest("Staff nickname tidak sah atau sudah inactive.");
+        }
+        if (user.role === "admin") {
+          const allowedNicknames = await getAdminVisibleNicknameValues(this.storage, user);
+          if (!hasNicknameValue(allowedNicknames, collectionStaffNickname)) {
+            throw forbidden("Nickname tidak dibenarkan untuk akaun admin ini.");
+          }
+        } else if (!isNicknameScopeAllowedForRole(staffNickname.roleScope, user.role)) {
+          throw forbidden("Nickname ini tidak dibenarkan untuk role semasa.");
+        }
+        updatePayload.collectionStaffNickname = collectionStaffNickname;
+      }
+      const shouldRemoveReceipt = body.removeReceipt === true;
+      const receiptPayload = ensureLooseObject(body.receipt);
+      if (shouldRemoveReceipt && receiptPayload) {
+        throw badRequest("Cannot remove and upload receipt at the same time.");
+      }
+      if (receiptPayload) {
+        uploadedReceiptPath = await saveCollectionReceipt(receiptPayload);
+        updatePayload.receiptFile = uploadedReceiptPath;
+      } else if (shouldRemoveReceipt) {
+        updatePayload.receiptFile = null;
+      }
+      if (Object.keys(updatePayload).length === 0) {
+        return { ok: true, record: existing };
+      }
+      const updated = await this.storage.updateCollectionRecord(id, updatePayload);
+      if (!updated) {
+        if (uploadedReceiptPath) {
+          await removeCollectionReceiptFile(uploadedReceiptPath);
+        }
+        throw notFound("Collection record not found.");
+      }
+      if ((receiptPayload || shouldRemoveReceipt) && existing.receiptFile) {
+        await removeCollectionReceiptFile(existing.receiptFile);
+      }
+      await this.storage.createAuditLog({
+        action: "COLLECTION_RECORD_UPDATED",
+        performedBy: user.username,
+        targetResource: updated.id,
+        details: `Collection record updated by ${user.username}`
+      });
+      return { ok: true, record: updated };
+    } catch (err) {
+      if (uploadedReceiptPath) {
+        await removeCollectionReceiptFile(uploadedReceiptPath);
+      }
+      throw err;
+    }
+  }
+  async deleteRecord(userInput, idRaw) {
+    const user = this.requireUser(userInput);
+    const id = normalizeCollectionText(idRaw);
+    if (!id) {
+      throw badRequest("Collection id is required.");
+    }
+    const existing = await this.storage.getCollectionRecordById(id);
+    if (!existing) {
+      throw notFound("Collection record not found.");
+    }
+    await this.storage.deleteCollectionRecord(id);
+    if (existing.receiptFile) {
+      await removeCollectionReceiptFile(existing.receiptFile);
+    }
+    await this.storage.createAuditLog({
+      action: "COLLECTION_RECORD_DELETED",
+      performedBy: user.username,
+      targetResource: existing.id,
+      details: `Collection record deleted by ${user.username}`
+    });
+    return { ok: true };
+  }
+};
+
+// server/services/collection.service.ts
+var CollectionService = class {
+  constructor(storage2) {
+    this.adminService = new CollectionAdminService(storage2);
+    this.nicknameService = new CollectionNicknameService(storage2);
+    this.recordService = new CollectionRecordService(storage2);
+  }
+  listNicknames(user, includeInactiveRaw) {
+    return this.nicknameService.listNicknames(user, includeInactiveRaw);
+  }
+  checkNicknameAuth(user, bodyRaw) {
+    return this.nicknameService.checkNicknameAuth(user, bodyRaw);
+  }
+  setupNicknamePassword(user, bodyRaw) {
+    return this.nicknameService.setupNicknamePassword(user, bodyRaw);
+  }
+  loginNickname(user, bodyRaw) {
+    return this.nicknameService.loginNickname(user, bodyRaw);
+  }
+  listAdmins() {
+    return this.adminService.listAdmins();
+  }
+  listAdminGroups() {
+    return this.adminService.listAdminGroups();
+  }
+  createAdminGroup(user, bodyRaw) {
+    return this.adminService.createAdminGroup(user, bodyRaw);
+  }
+  updateAdminGroup(user, groupIdRaw, bodyRaw) {
+    return this.adminService.updateAdminGroup(user, groupIdRaw, bodyRaw);
+  }
+  deleteAdminGroup(user, groupIdRaw) {
+    return this.adminService.deleteAdminGroup(user, groupIdRaw);
+  }
+  getNicknameAssignments(adminIdRaw) {
+    return this.adminService.getNicknameAssignments(adminIdRaw);
+  }
+  setNicknameAssignments(user, adminIdRaw, bodyRaw) {
+    return this.adminService.setNicknameAssignments(user, adminIdRaw, bodyRaw);
+  }
+  createNickname(user, bodyRaw) {
+    return this.nicknameService.createNickname(user, bodyRaw);
+  }
+  updateNickname(user, idRaw, bodyRaw) {
+    return this.nicknameService.updateNickname(user, idRaw, bodyRaw);
+  }
+  updateNicknameStatus(user, idRaw, bodyRaw) {
+    return this.nicknameService.updateNicknameStatus(user, idRaw, bodyRaw);
+  }
+  resetNicknamePassword(user, idRaw) {
+    return this.nicknameService.resetNicknamePassword(user, idRaw);
+  }
+  deleteNickname(user, idRaw) {
+    return this.nicknameService.deleteNickname(user, idRaw);
+  }
+  createRecord(user, bodyRaw) {
+    return this.recordService.createRecord(user, bodyRaw);
+  }
+  getSummary(user, query) {
+    return this.recordService.getSummary(user, query);
+  }
+  listRecords(user, query) {
+    return this.recordService.listRecords(user, query);
+  }
+  updateRecord(user, idRaw, bodyRaw) {
+    return this.recordService.updateRecord(user, idRaw, bodyRaw);
+  }
+  deleteRecord(user, idRaw) {
+    return this.recordService.deleteRecord(user, idRaw);
+  }
+};
+
+// server/routes/collection.routes.ts
+function sendCollectionError(res, err, fallbackMessage) {
+  if (err instanceof HttpError) {
+    return res.status(err.statusCode).json({
+      ok: false,
+      message: err.message,
+      ...err.code ? { error: { code: err.code, message: err.message } } : {}
+    });
+  }
+  const message = err?.message || fallbackMessage;
+  return res.status(500).json({ ok: false, message });
+}
+function jsonRoute(fallbackMessage, handler) {
+  return async (req, res) => {
+    try {
+      return res.json(await handler(req));
+    } catch (err) {
+      return sendCollectionError(res, err, fallbackMessage);
     }
   };
 }
-async function requireMonitorAccess(req, res, next) {
-  try {
-    const role = req.user?.role;
-    if (!role) return res.status(401).json({ message: "Unauthenticated" });
-    if (role === "superuser") return next();
-    if (role !== "admin" && role !== "user") {
-      return res.status(403).json({ message: "Insufficient permissions" });
+function registerCollectionRoutes(app2, deps) {
+  const { storage: storage2, authenticateToken, requireRole, requireTabAccess } = deps;
+  const collectionService = new CollectionService(storage2);
+  app2.get(
+    "/api/collection/nicknames",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to load staff nicknames.", (req) => collectionService.listNicknames(req.user, req.query.includeInactive))
+  );
+  app2.post(
+    "/api/collection/nickname-auth/check",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to validate nickname.", (req) => collectionService.checkNicknameAuth(req.user, req.body))
+  );
+  app2.post(
+    "/api/collection/nickname-auth/setup-password",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to set nickname password.", (req) => collectionService.setupNicknamePassword(req.user, req.body))
+  );
+  app2.post(
+    "/api/collection/nickname-auth/login",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to login nickname.", (req) => collectionService.loginNickname(req.user, req.body))
+  );
+  app2.get(
+    "/api/collection/admins",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to load admin list.", async () => collectionService.listAdmins())
+  );
+  app2.get(
+    "/api/collection/admin-groups",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to load admin groups.", async () => collectionService.listAdminGroups())
+  );
+  app2.post(
+    "/api/collection/admin-groups",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to create admin group.", (req) => collectionService.createAdminGroup(req.user, req.body))
+  );
+  app2.put(
+    "/api/collection/admin-groups/:groupId",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to update admin group.", (req) => collectionService.updateAdminGroup(req.user, req.params.groupId, req.body))
+  );
+  app2.delete(
+    "/api/collection/admin-groups/:groupId",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to delete admin group.", (req) => collectionService.deleteAdminGroup(req.user, req.params.groupId))
+  );
+  app2.get(
+    "/api/collection/nickname-assignments/:adminId",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to load nickname assignments.", (req) => collectionService.getNicknameAssignments(req.params.adminId))
+  );
+  app2.put(
+    "/api/collection/nickname-assignments/:adminId",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to save nickname assignments.", (req) => collectionService.setNicknameAssignments(req.user, req.params.adminId, req.body))
+  );
+  app2.post(
+    "/api/collection/nicknames",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to create nickname.", (req) => collectionService.createNickname(req.user, req.body))
+  );
+  app2.put(
+    "/api/collection/nicknames/:id",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to update nickname.", (req) => collectionService.updateNickname(req.user, req.params.id, req.body))
+  );
+  app2.patch(
+    "/api/collection/nicknames/:id",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to update nickname status.", (req) => collectionService.updateNicknameStatus(req.user, req.params.id, req.body))
+  );
+  app2.post(
+    "/api/collection/nicknames/:id/reset-password",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to reset nickname password.", (req) => collectionService.resetNicknamePassword(req.user, req.params.id))
+  );
+  app2.delete(
+    "/api/collection/nicknames/:id",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to delete nickname.", (req) => collectionService.deleteNickname(req.user, req.params.id))
+  );
+  app2.post(
+    "/api/collection",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to create collection record.", (req) => collectionService.createRecord(req.user, req.body))
+  );
+  app2.get(
+    "/api/collection/summary",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to load collection summary.", (req) => collectionService.getSummary(req.user, req.query))
+  );
+  app2.get(
+    "/api/collection/list",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to load collection records.", (req) => collectionService.listRecords(req.user, req.query))
+  );
+  app2.get(
+    "/api/collection/:id/receipt/view",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    async (req, res) => serveCollectionReceipt(storage2, req, res, "view")
+  );
+  app2.get(
+    "/api/collection/:id/receipt/download",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    async (req, res) => serveCollectionReceipt(storage2, req, res, "download")
+  );
+  app2.get(
+    "/api/receipts/:id/view",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    async (req, res) => serveCollectionReceipt(storage2, req, res, "view")
+  );
+  app2.get(
+    "/api/receipts/:id/download",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    async (req, res) => serveCollectionReceipt(storage2, req, res, "download")
+  );
+  const handleUpdateCollectionRecord = jsonRoute("Failed to update collection record.", (req) => collectionService.updateRecord(req.user, req.params.id, req.body));
+  app2.patch(
+    "/api/collection/:id",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    handleUpdateCollectionRecord
+  );
+  app2.put(
+    "/api/collection/:id",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    handleUpdateCollectionRecord
+  );
+  app2.delete(
+    "/api/collection/:id",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to delete collection record.", (req) => collectionService.deleteRecord(req.user, req.params.id))
+  );
+}
+
+// server/services/ai-chat.service.ts
+var AiChatService = class {
+  constructor(options) {
+    this.options = options;
+  }
+  async handleChat(params) {
+    const conversationId = params.existingConversationId || await this.options.storage.createConversation(params.username);
+    const history = await this.options.storage.getConversationMessages(conversationId, 3);
+    const countSummary = await this.options.categoryStatsService.resolveCountSummary(
+      params.message,
+      12e3
+    );
+    if (countSummary) {
+      const reply2 = countSummary.summary;
+      await this.persistConversation(conversationId, params.username, params.message, reply2);
+      return {
+        statusCode: 200,
+        body: {
+          conversationId,
+          reply: reply2,
+          processing: countSummary.processing,
+          stats: countSummary.stats
+        }
+      };
     }
-    const tabs = await getRoleTabVisibilityCached(role);
-    if (tabs.monitor !== true) {
-      return res.status(403).json({ message: "System Monitor access is disabled for this role." });
+    const searchTerms = this.buildSearchTerms(params.message);
+    const retrievalRows = await this.fetchRetrievalRows(searchTerms);
+    const contextBlock = this.buildContextBlock(searchTerms, retrievalRows);
+    const chatMessages = [
+      {
+        role: "system",
+        content: "Anda ialah pembantu AI offline untuk sistem SQR. Jawab dalam Bahasa Melayu. Jawapan mestilah berdasarkan DATA SISTEM di bawah. Jika tiada data yang sepadan, katakan dengan jelas bahawa tiada data dijumpai. Jangan membuat andaian atau menambah fakta yang tiada dalam data."
+      },
+      { role: "system", content: contextBlock },
+      ...history.map((entry) => ({
+        role: entry.role,
+        content: entry.content
+      })),
+      { role: "user", content: params.message }
+    ];
+    let reply = "";
+    try {
+      reply = await this.options.withAiCircuit(
+        () => this.options.ollamaChat(chatMessages, {
+          num_predict: 96,
+          temperature: 0.2,
+          top_p: 0.9,
+          timeoutMs: params.aiTimeoutMs
+        })
+      );
+    } catch (error) {
+      if (error instanceof CircuitOpenError) {
+        return {
+          statusCode: 503,
+          body: {
+            message: "AI circuit is OPEN. Please retry after cooldown.",
+            circuit: "OPEN"
+          }
+        };
+      }
+      if (error?.name === "AbortError") {
+        reply = this.buildQuickReply(retrievalRows);
+      } else {
+        throw error;
+      }
     }
-    return next();
-  } catch (err) {
-    console.error("Monitor access guard error:", err);
-    return res.status(500).json({ message: err?.message || "Failed to validate monitor access" });
+    await this.persistConversation(conversationId, params.username, params.message, reply);
+    return {
+      statusCode: 200,
+      body: {
+        conversationId,
+        reply
+      }
+    };
+  }
+  async persistConversation(conversationId, username, message, reply) {
+    await this.options.storage.saveConversationMessage(conversationId, "user", message);
+    await this.options.storage.saveConversationMessage(conversationId, "assistant", reply);
+    await this.options.storage.createAuditLog({
+      action: "AI_CHAT",
+      performedBy: username,
+      details: `Conversation=${conversationId}`
+    });
+  }
+  buildSearchTerms(message) {
+    const raw = message.toLowerCase();
+    const digitMatches = raw.match(/\d{4,}/g) || [];
+    const wordMatches = raw.match(/\b[a-z0-9]{4,}\b/gi) || [];
+    const combined = [...digitMatches, ...wordMatches].map((term) => term.replace(/[^a-z0-9]/gi, "")).filter((term) => term.length >= 4);
+    const unique = Array.from(new Set(combined));
+    unique.sort((a, b) => b.length - a.length);
+    return unique.length > 0 ? unique.slice(0, 4) : [message];
+  }
+  async fetchRetrievalRows(searchTerms) {
+    const resultMap = /* @__PURE__ */ new Map();
+    for (const term of searchTerms) {
+      const retrieval = await this.options.storage.searchGlobalDataRows({
+        search: term,
+        limit: 30,
+        offset: 0
+      });
+      for (const row of retrieval.rows || []) {
+        if (!resultMap.has(row.id)) {
+          resultMap.set(row.id, row);
+        }
+      }
+      if (resultMap.size >= 60) {
+        break;
+      }
+    }
+    const allRows = Array.from(resultMap.values());
+    const matchedRows = allRows.filter(
+      (row) => searchTerms.some((term) => this.rowMatchesTerm(row, term))
+    );
+    return (matchedRows.length > 0 ? matchedRows : allRows).map((row) => ({
+      row,
+      score: Math.max(...searchTerms.map((term) => this.scoreRowForTerm(row, term)))
+    })).sort((left, right) => right.score - left.score).map((entry) => entry.row).slice(0, 5);
+  }
+  buildContextBlock(searchTerms, retrievalRows) {
+    const contextRows = retrievalRows.map((row, index) => {
+      const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
+      const entries = Object.entries(data).slice(0, 20);
+      const lines = entries.map(([key, value]) => `${key}: ${String(value ?? "")}`);
+      const source = row.importFilename || row.importName || "Unknown";
+      return `# Rekod ${index + 1} (Source: ${source}, RowId: ${row.id || row.rowId || "unknown"})
+${lines.join("\n")}`;
+    });
+    if (contextRows.length === 0) {
+      return "DATA SISTEM: TIADA REKOD DIJUMPAI UNTUK KATA KUNCI INI.";
+    }
+    return `DATA SISTEM (HASIL CARIAN KATA KUNCI: ${searchTerms.join(", ")}):
+${contextRows.join("\n\n")}`;
+  }
+  buildQuickReply(retrievalRows) {
+    if (retrievalRows.length === 0) {
+      return "Tiada data dijumpai untuk kata kunci tersebut.";
+    }
+    const priorityKeys = [
+      "nama",
+      "name",
+      "no. mykad",
+      "mykad",
+      "ic",
+      "no. ic",
+      "nric",
+      "no. kp",
+      "akaun",
+      "account",
+      "telefon",
+      "phone",
+      "hp",
+      "alamat",
+      "address",
+      "umur",
+      "age"
+    ];
+    const summaries = retrievalRows.slice(0, 3).map((row, index) => {
+      const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
+      const pairs = [];
+      for (const key of Object.keys(data)) {
+        const lower = key.toLowerCase();
+        if (priorityKeys.some((term) => lower.includes(term))) {
+          pairs.push(`${key}: ${String(data[key] ?? "")}`);
+        }
+        if (pairs.length >= 8) {
+          break;
+        }
+      }
+      if (pairs.length === 0) {
+        pairs.push(
+          ...Object.entries(data).slice(0, 6).map(([key, value]) => `${key}: ${String(value ?? "")}`)
+        );
+      }
+      const source = row.importFilename || row.importName || "Unknown";
+      return `Rekod ${index + 1} (Source: ${source})
+${pairs.join("\n")}`;
+    });
+    return `Rekod dijumpai:
+${summaries.join("\n\n")}`;
+  }
+  rowMatchesTerm(row, term) {
+    const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
+    return Object.values(data).some((value) => this.valueMatchesTerm(value, term));
+  }
+  valueMatchesTerm(value, term) {
+    if (value === null || value === void 0) {
+      return false;
+    }
+    const termLower = term.toLowerCase();
+    const termDigits = term.replace(/\D/g, "");
+    const asString = String(value);
+    if (termDigits.length >= 6) {
+      const valueDigits = asString.replace(/\D/g, "");
+      if (valueDigits.includes(termDigits)) {
+        return true;
+      }
+    }
+    return asString.toLowerCase().includes(termLower);
+  }
+  scoreRowForTerm(row, term) {
+    const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
+    const termDigits = term.replace(/\D/g, "");
+    let score = 0;
+    for (const [key, value] of Object.entries(data)) {
+      const keyLower = key.toLowerCase();
+      const valueString = String(value ?? "");
+      const valueDigits = valueString.replace(/\D/g, "");
+      if (!termDigits) {
+        if (valueString.toLowerCase().includes(term.toLowerCase())) {
+          score += 2;
+        }
+        continue;
+      }
+      if (valueDigits === termDigits) {
+        if (keyLower.includes("ic") || keyLower.includes("mykad") || keyLower.includes("nric") || keyLower.includes("kp")) {
+          score += 10;
+        } else {
+          score += 6;
+        }
+      } else if (valueDigits.includes(termDigits)) {
+        score += 3;
+      }
+    }
+    return score;
+  }
+};
+
+// server/services/ai-index.service.ts
+var AiIndexService = class {
+  constructor(options) {
+    this.options = options;
+  }
+  async indexImport(params) {
+    const importRecord = await this.options.storage.getImportById(params.importId);
+    if (!importRecord) {
+      return {
+        statusCode: 404,
+        body: { message: "Import not found" }
+      };
+    }
+    const totalRows = await this.options.storage.getDataRowCountByImport(params.importId);
+    const targetTotal = params.maxRows ? Math.min(params.maxRows, totalRows) : totalRows;
+    let processed = 0;
+    let offset = 0;
+    while (processed < targetTotal) {
+      const rows = await this.options.storage.getDataRowsForEmbedding(
+        params.importId,
+        params.batchSize,
+        offset
+      );
+      if (rows.length === 0) {
+        break;
+      }
+      for (const row of rows) {
+        if (processed >= targetTotal) {
+          break;
+        }
+        const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
+        const content = this.buildEmbeddingText(data);
+        if (!content) {
+          processed += 1;
+          continue;
+        }
+        const embedding = await this.options.ollamaEmbed(content);
+        if (embedding.length === 0) {
+          processed += 1;
+          continue;
+        }
+        await this.options.storage.saveEmbedding({
+          importId: params.importId,
+          rowId: row.id,
+          content,
+          embedding
+        });
+        processed += 1;
+      }
+      offset += rows.length;
+    }
+    await this.options.storage.createAuditLog({
+      action: "AI_INDEX_IMPORT",
+      performedBy: params.username,
+      targetResource: importRecord.name,
+      details: `Indexed ${processed}/${targetTotal} rows`
+    });
+    return {
+      statusCode: 200,
+      body: {
+        success: true,
+        processed,
+        total: targetTotal
+      }
+    };
+  }
+  async importBranches(params) {
+    const importRecord = await this.options.storage.getImportById(params.importId);
+    if (!importRecord) {
+      return {
+        statusCode: 404,
+        body: { message: "Import not found" }
+      };
+    }
+    const result = await this.options.storage.importBranchesFromRows({
+      importId: params.importId,
+      nameKey: params.nameKey || null,
+      latKey: params.latKey || null,
+      lngKey: params.lngKey || null
+    });
+    await this.options.storage.createAuditLog({
+      action: "IMPORT_BRANCHES",
+      performedBy: params.username,
+      targetResource: importRecord.name,
+      details: JSON.stringify({
+        inserted: result.inserted,
+        skipped: result.skipped,
+        usedKeys: result.usedKeys
+      })
+    });
+    return {
+      statusCode: 200,
+      body: {
+        success: true,
+        inserted: result.inserted,
+        skipped: result.skipped,
+        usedKeys: result.usedKeys
+      }
+    };
+  }
+  buildEmbeddingText(data) {
+    const preferredKeys = [
+      "nama",
+      "name",
+      "full name",
+      "alamat",
+      "address",
+      "bandar",
+      "negeri",
+      "employer",
+      "majikan",
+      "company",
+      "occupation",
+      "job",
+      "department",
+      "product",
+      "model",
+      "brand",
+      "account",
+      "akaun"
+    ];
+    const entries = Object.entries(data || {});
+    const picked = [];
+    for (const [key, value] of entries) {
+      const lower = key.toLowerCase();
+      if (!preferredKeys.some((term) => lower.includes(term))) {
+        continue;
+      }
+      const normalizedValue = String(value ?? "").trim();
+      if (!normalizedValue || /^\d+$/.test(normalizedValue)) {
+        continue;
+      }
+      picked.push(`${key}: ${normalizedValue}`);
+      if (picked.length >= 20) {
+        break;
+      }
+    }
+    if (picked.length === 0) {
+      for (const [key, value] of entries) {
+        const normalizedValue = String(value ?? "").trim();
+        if (!normalizedValue || /^\d+$/.test(normalizedValue)) {
+          continue;
+        }
+        picked.push(`${key}: ${normalizedValue}`);
+        if (picked.length >= 15) {
+          break;
+        }
+      }
+    }
+    const text2 = picked.join("\n");
+    return text2.length > 2e3 ? text2.slice(0, 2e3) : text2;
+  }
+};
+
+// server/services/ai-search.service.ts
+var AiSearchService = class {
+  constructor(options) {
+    this.options = options;
+    this.searchCache = /* @__PURE__ */ new Map();
+    this.searchInflight = /* @__PURE__ */ new Map();
+    this.lastAiPerson = /* @__PURE__ */ new Map();
+    this.searchCacheMs = 6e4;
+    this.searchFastTimeoutMs = 5500;
+    this.maxSearchCacheEntries = Number(
+      process.env.SQR_MAX_SEARCH_CACHE_ENTRIES ?? (options.lowMemoryMode ? "60" : "180")
+    );
+    this.maxLastAiPersonEntries = Number(
+      process.env.SQR_MAX_AI_LAST_PERSON_ENTRIES ?? (options.lowMemoryMode ? "40" : "120")
+    );
+    this.lastAiPersonTtlMs = Number(process.env.SQR_AI_LAST_PERSON_TTL_MS ?? "1800000");
+    global.__searchInflightMap = this.searchInflight;
+  }
+  sweepCaches(now = Date.now()) {
+    for (const [key, entry] of this.searchCache.entries()) {
+      if (now - entry.ts >= this.searchCacheMs) {
+        this.searchCache.delete(key);
+      }
+    }
+    this.trimCacheEntries(this.searchCache, Math.max(10, this.maxSearchCacheEntries));
+    for (const [key, entry] of this.lastAiPerson.entries()) {
+      if (now - entry.ts >= this.lastAiPersonTtlMs) {
+        this.lastAiPerson.delete(key);
+      }
+    }
+    this.trimCacheEntries(this.lastAiPerson, Math.max(10, this.maxLastAiPersonEntries));
+  }
+  clearSearchCache() {
+    this.searchCache.clear();
+  }
+  async resolveSearchRequest(params) {
+    const { query, userKey, runtimeSettings } = params;
+    const cacheKey = `search:${query.toLowerCase()}`;
+    const cached = this.searchCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < this.searchCacheMs) {
+      return {
+        statusCode: 200,
+        body: cached.payload,
+        audit: cached.audit
+      };
+    }
+    if (cached) {
+      this.searchCache.delete(cacheKey);
+    }
+    let inflight = this.searchInflight.get(cacheKey);
+    if (!inflight) {
+      inflight = this.options.withAiCircuit(
+        () => this.computeAiSearch(
+          query,
+          userKey,
+          runtimeSettings.semanticSearchEnabled,
+          runtimeSettings.aiTimeoutMs
+        )
+      ).then((result) => {
+        this.searchCache.set(cacheKey, {
+          ts: Date.now(),
+          payload: result.payload,
+          audit: result.audit
+        });
+        this.trimCacheEntries(this.searchCache, Math.max(10, this.maxSearchCacheEntries));
+        this.searchInflight.delete(cacheKey);
+        return result;
+      }).catch((error) => {
+        this.searchInflight.delete(cacheKey);
+        throw error;
+      });
+      this.searchInflight.set(cacheKey, inflight);
+    }
+    try {
+      const configuredTimeout = runtimeSettings.aiTimeoutMs || this.searchFastTimeoutMs;
+      const timeoutMs = Math.max(1e3, Math.min(configuredTimeout, configuredTimeout - 1200));
+      const result = await this.withTimeout(inflight, timeoutMs);
+      return {
+        statusCode: 200,
+        body: result.payload,
+        audit: result.audit
+      };
+    } catch (error) {
+      if (error instanceof CircuitOpenError) {
+        return {
+          statusCode: 503,
+          body: {
+            person: null,
+            nearest_branch: null,
+            decision: null,
+            ai_explanation: "AI service is temporarily throttled for system stability. Please retry in a few seconds.",
+            processing: false,
+            circuit: "OPEN"
+          }
+        };
+      }
+      if (error?.message && error.message !== "timeout") {
+        console.error("AI search compute failed:", error?.message || error);
+      }
+      return {
+        statusCode: 200,
+        body: {
+          person: null,
+          nearest_branch: null,
+          decision: null,
+          ai_explanation: "Sedang proses carian. Sila tunggu beberapa saat dan cuba semula.",
+          processing: true
+        }
+      };
+    }
+  }
+  async computeAiSearch(query, userKey, semanticSearchEnabled, aiTimeoutMs) {
+    const intent = await this.parseIntent(query, aiTimeoutMs);
+    const entities = intent.entities || {};
+    const keywordTerms = [
+      entities.ic,
+      entities.account_no,
+      entities.phone,
+      entities.name
+    ].filter(Boolean);
+    const keywordQuery = keywordTerms.length > 0 ? keywordTerms[0] : query;
+    const digitsOnly = keywordQuery.replace(/[^0-9]/g, "");
+    const hasDigitsQuery = digitsOnly.length >= 6;
+    const keywordResults = hasDigitsQuery ? await this.options.storage.aiKeywordSearch({ query: keywordQuery, limit: 10 }) : await this.options.storage.aiNameSearch({ query: keywordQuery, limit: 10 });
+    const queryDigits = keywordQuery.replace(/[^0-9]/g, "");
+    let fallbackDigitsResults = [];
+    if (!hasDigitsQuery && keywordResults.length === 0 && queryDigits.length >= 6) {
+      fallbackDigitsResults = await this.options.storage.aiDigitsSearch({
+        digits: queryDigits,
+        limit: 25
+      });
+    }
+    if (process.env.AI_DEBUG === "1") {
+      console.log("AI_SEARCH DEBUG", {
+        query,
+        keywordQuery,
+        queryDigits,
+        keywordCount: keywordResults.length,
+        fallbackDigitsCount: fallbackDigitsResults.length
+      });
+    }
+    let vectorResults = [];
+    if (semanticSearchEnabled && !hasDigitsQuery) {
+      try {
+        const embedding = await this.options.withAiCircuit(() => this.options.ollamaEmbed(query));
+        if (embedding.length > 0) {
+          vectorResults = await this.options.storage.semanticSearch({ embedding, limit: 10 });
+        }
+      } catch {
+        vectorResults = [];
+      }
+    }
+    let best = null;
+    let bestScore = 0;
+    if (hasDigitsQuery) {
+      const candidates = [...keywordResults, ...fallbackDigitsResults];
+      for (const row of candidates) {
+        const scored = this.scoreRowDigits(row, queryDigits);
+        if (scored.score > bestScore) {
+          bestScore = scored.score;
+          row.jsonDataJsonb = scored.parsed;
+          best = row;
+        }
+      }
+    } else {
+      const resultMap = /* @__PURE__ */ new Map();
+      for (const row of keywordResults) {
+        resultMap.set(row.rowId, row);
+      }
+      for (const row of fallbackDigitsResults) {
+        resultMap.set(row.rowId, row);
+      }
+      for (const row of vectorResults) {
+        resultMap.set(row.rowId, row);
+      }
+      const scored = Array.from(resultMap.values()).map((row) => {
+        const normalized = this.ensureJson(row);
+        return {
+          row: normalized,
+          score: this.rowScore(
+            normalized,
+            entities.ic,
+            entities.name,
+            entities.account_no,
+            entities.phone
+          )
+        };
+      }).sort((a, b) => b.score - a.score);
+      best = scored.length > 0 ? scored[0].row : null;
+      bestScore = scored.length > 0 ? scored[0].score : 0;
+    }
+    if (process.env.AI_DEBUG === "1" && best) {
+      const keys = best.jsonDataJsonb && typeof best.jsonDataJsonb === "object" ? Object.keys(best.jsonDataJsonb) : [];
+      console.log("AI_SEARCH BEST ROW", {
+        rowId: best.rowId,
+        jsonType: typeof best.jsonDataJsonb,
+        sampleKeys: keys.slice(0, 10)
+      });
+    }
+    if (best) {
+      this.lastAiPerson.set(userKey, { ts: Date.now(), row: best });
+      this.trimCacheEntries(this.lastAiPerson, Math.max(10, this.maxLastAiPersonEntries));
+    }
+    const fallbackPerson = this.getLastAiPerson(userKey);
+    const hasPersonId = Boolean(entities.ic || entities.account_no || entities.phone);
+    const shouldFindBranch = intent.need_nearest_branch || hasPersonId;
+    const branchTextPreferred = shouldFindBranch && !hasPersonId;
+    const personForBranch = branchTextPreferred ? null : best || (!hasPersonId ? fallbackPerson : null) || null;
+    const branchTimeoutMs = Math.max(700, Math.min(2200, Math.floor(aiTimeoutMs * 0.35)));
+    let nearestBranch = null;
+    let missingCoords = false;
+    let branchTextSearch = false;
+    try {
+      if (branchTextPreferred) {
+        const locationHint = this.normalizeLocationHint(
+          query.replace(/cawangan|branch|terdekat|nearest|lokasi|alamat|di|yang|paling|dekat/gi, " ")
+        );
+        if (locationHint.length >= 3) {
+          branchTextSearch = true;
+          const branches = await this.safeFindBranchesByText(locationHint, 3, branchTimeoutMs);
+          nearestBranch = branches[0] || null;
+        } else {
+          branchTextSearch = true;
+        }
+      } else if (personForBranch && shouldFindBranch) {
+        const coords = this.extractLatLng(personForBranch.jsonDataJsonb || {});
+        if (this.isLatLng(coords)) {
+          const branches = await this.safeNearestBranches(coords.lat, coords.lng, 1, branchTimeoutMs);
+          nearestBranch = branches[0] || null;
+        } else {
+          let data = this.toObjectJson(personForBranch.jsonDataJsonb) || {};
+          const basePostcode = this.extractCustomerPostcode(data);
+          const baseHint = this.normalizeLocationHint(this.extractCustomerLocationHint(data));
+          if (!basePostcode && baseHint.length < 3) {
+            const locationCandidateRows = [best, ...keywordResults, ...fallbackDigitsResults];
+            for (const candidate of locationCandidateRows) {
+              const candidateData = this.toObjectJson(candidate?.jsonDataJsonb);
+              if (!candidateData) continue;
+              const candidatePostcode = this.extractCustomerPostcode(candidateData);
+              const candidateHint = this.normalizeLocationHint(
+                this.extractCustomerLocationHint(candidateData)
+              );
+              if (candidatePostcode || candidateHint.length >= 3) {
+                data = candidateData;
+                break;
+              }
+            }
+          }
+          let postcodeWasProvided = false;
+          const postcode = this.extractCustomerPostcode(data);
+          if (postcode) {
+            postcodeWasProvided = true;
+            if (this.isNonEmptyString(postcode)) {
+              const pc = await this.safePostcodeLatLng(postcode, branchTimeoutMs);
+              if (this.hasPostcodeCoord(pc)) {
+                const branches = await this.safeNearestBranches(pc.lat, pc.lng, 1, branchTimeoutMs);
+                nearestBranch = branches[0] || null;
+                if (process.env.AI_DEBUG === "1") {
+                  console.log("AI_SEARCH POSTCODE_COORD", {
+                    postcode,
+                    lat: pc.lat,
+                    lng: pc.lng,
+                    branchCount: branches.length
+                  });
+                }
+              } else {
+                let branches = await this.safeFindBranchesByPostcode(postcode, 1, branchTimeoutMs);
+                if (!branches.length) {
+                  try {
+                    branches = await this.options.storage.findBranchesByPostcode({
+                      postcode,
+                      limit: 1
+                    });
+                  } catch {
+                    branches = [];
+                  }
+                }
+                nearestBranch = branches[0] || null;
+                if (process.env.AI_DEBUG === "1") {
+                  console.log("AI_SEARCH POSTCODE_TEXT", {
+                    postcode,
+                    branchCount: branches.length,
+                    branch: branches[0]?.name || null
+                  });
+                }
+                if (!nearestBranch) missingCoords = false;
+              }
+            } else {
+              missingCoords = true;
+            }
+          } else {
+            missingCoords = true;
+          }
+          if (!nearestBranch && missingCoords && !postcodeWasProvided) {
+            const hint = this.normalizeLocationHint(this.extractCustomerLocationHint(data));
+            if (hint.length >= 3) {
+              branchTextSearch = true;
+              const branches = await this.safeFindBranchesByText(hint, 1, branchTimeoutMs);
+              nearestBranch = branches[0] ? { ...branches[0], distanceKm: void 0 } : null;
+            }
+          }
+        }
+      }
+    } catch {
+      missingCoords = true;
+      nearestBranch = null;
+    }
+    let decision = null;
+    let travelMode = null;
+    let estimatedMinutes = null;
+    if (nearestBranch?.distanceKm !== void 0) {
+      if (nearestBranch.distanceKm < 5) {
+        decision = "WALK-IN";
+        travelMode = "WALK";
+        estimatedMinutes = Math.max(1, Math.round(nearestBranch.distanceKm / 5 * 60));
+      } else if (nearestBranch.distanceKm < 20) {
+        decision = "DRIVE";
+        travelMode = "DRIVE";
+        estimatedMinutes = Math.max(1, Math.round(nearestBranch.distanceKm / 40 * 60));
+      } else {
+        decision = "CALL";
+      }
+      if (decision === "CALL") {
+        travelMode = "CALL";
+        estimatedMinutes = null;
+      }
+    }
+    const person = best ? {
+      id: best.rowId,
+      ...best.jsonDataJsonb
+    } : null;
+    let suggestions = [];
+    if ((!person || bestScore < 6) && !hasDigitsQuery) {
+      const fuzzyResults = await this.options.storage.aiFuzzySearch({ query, limit: 5 });
+      const tokens = this.tokenizeQuery(query);
+      const maxScore = Math.max(1, tokens.length);
+      suggestions = fuzzyResults.map((row) => {
+        let data = row.jsonDataJsonb;
+        if (typeof data === "string") {
+          try {
+            data = JSON.parse(data);
+          } catch {
+            data = {};
+          }
+        }
+        if (!data || typeof data !== "object") data = {};
+        const name = data["Nama"] || data["Customer Name"] || data["name"] || "-";
+        const ic = data["No. MyKad"] || data["ID No"] || data["No Pengenalan"] || data["IC"] || "-";
+        const addr = data["Alamat Surat Menyurat"] || data["HomeAddress1"] || data["Address"] || data["Alamat"] || "-";
+        const confidence = Math.min(100, Math.round(Number(row.score || 0) / maxScore * 100));
+        const hasAny = [name, ic, addr].some((value) => value && value !== "-" && String(value).trim() !== "");
+        return hasAny ? `- ${name} | IC: ${ic} | Alamat: ${addr} | Keyakinan: ${confidence}%` : "";
+      }).filter(Boolean);
+    }
+    const personSummary = this.buildPersonSummary(person);
+    const branchSummary = this.buildBranchSummary(nearestBranch);
+    const explanation = this.buildExplanation({
+      decision,
+      distanceKm: nearestBranch?.distanceKm ?? null,
+      branch: nearestBranch?.name ?? null,
+      personSummary,
+      branchSummary,
+      estimatedMinutes,
+      travelMode,
+      missingCoords,
+      suggestions,
+      matchFields: !hasDigitsQuery && person && typeof person === "object" ? this.buildFieldMatchSummary(person, query) : [],
+      branchTextSearch
+    });
+    return {
+      payload: {
+        person,
+        nearest_branch: nearestBranch ? {
+          name: nearestBranch.name,
+          address: nearestBranch.address,
+          phone: nearestBranch.phone,
+          fax: nearestBranch.fax,
+          business_hour: nearestBranch.businessHour,
+          day_open: nearestBranch.dayOpen,
+          atm_cdm: nearestBranch.atmCdm,
+          inquiry_availability: nearestBranch.inquiryAvailability,
+          application_availability: nearestBranch.applicationAvailability,
+          aeon_lounge: nearestBranch.aeonLounge,
+          distance_km: nearestBranch.distanceKm,
+          travel_mode: travelMode,
+          estimated_minutes: estimatedMinutes
+        } : null,
+        decision,
+        ai_explanation: explanation
+      },
+      audit: {
+        query,
+        intent,
+        matched_profile_id: person?.id || null,
+        branch: nearestBranch?.name || null,
+        distance_km: nearestBranch?.distanceKm || null,
+        decision,
+        travel_mode: travelMode,
+        estimated_minutes: estimatedMinutes,
+        used_last_person: !best && !!fallbackPerson
+      }
+    };
+  }
+  getLastAiPerson(userKey) {
+    const entry = this.lastAiPerson.get(userKey);
+    if (!entry) return null;
+    if (Date.now() - entry.ts >= this.lastAiPersonTtlMs) {
+      this.lastAiPerson.delete(userKey);
+      return null;
+    }
+    return entry.row;
+  }
+  buildPersonSummary(person) {
+    const summary = [];
+    if (person && typeof person === "object") {
+      const pushIf = (label, key) => {
+        const value = person[key];
+        if (value !== void 0 && value !== null && String(value).trim() !== "") {
+          summary.push({ label, value: String(value) });
+        }
+      };
+      pushIf("Nama", "Nama");
+      pushIf("Nama", "Customer Name");
+      pushIf("Nama", "name");
+      pushIf("No. MyKad", "No. MyKad");
+      pushIf("ID No", "ID No");
+      pushIf("No Pengenalan", "No Pengenalan");
+      pushIf("IC", "ic");
+      pushIf("Account No", "Account No");
+      pushIf("Card No", "Card No");
+      pushIf("No. Telefon Rumah", "No. Telefon Rumah");
+      pushIf("No. Telefon Bimbit", "No. Telefon Bimbit");
+      pushIf("Handphone", "Handphone");
+      pushIf("OfficePhone", "OfficePhone");
+      pushIf("Alamat Surat Menyurat", "Alamat Surat Menyurat");
+      pushIf("HomeAddress1", "HomeAddress1");
+      pushIf("HomeAddress2", "HomeAddress2");
+      pushIf("HomeAddress3", "HomeAddress3");
+      pushIf("HomePostcode", "HomePostcode");
+      pushIf("Home Post Code", "Home Post Code");
+      pushIf("Home Postal Code", "Home Postal Code");
+      pushIf("Bandar", "Bandar");
+      pushIf("Negeri", "Negeri");
+      pushIf("Poskod", "Poskod");
+    }
+    if (summary.length === 0 && person && typeof person === "object") {
+      const entries = Object.entries(person).filter(([key]) => key !== "id").slice(0, 8);
+      for (const [key, value] of entries) {
+        if (value !== void 0 && value !== null && String(value).trim() !== "") {
+          summary.push({ label: key, value: String(value) });
+        }
+      }
+    }
+    return summary;
+  }
+  buildBranchSummary(nearestBranch) {
+    const summary = [];
+    if (!nearestBranch) {
+      return summary;
+    }
+    const push = (label, value) => {
+      if (value !== void 0 && value !== null && String(value).trim() !== "") {
+        summary.push({ label, value: String(value) });
+      }
+    };
+    push("Nama Cawangan", nearestBranch.name);
+    push("Alamat", nearestBranch.address);
+    push("Telefon", nearestBranch.phone);
+    push("Fax", nearestBranch.fax);
+    push("Business Hour", nearestBranch.businessHour);
+    push("Day Open", nearestBranch.dayOpen);
+    push("ATM & CDM", nearestBranch.atmCdm);
+    push("Inquiry Availability", nearestBranch.inquiryAvailability);
+    push("Application Availability", nearestBranch.applicationAvailability);
+    push("AEON Lounge", nearestBranch.aeonLounge);
+    push("Jarak (KM)", nearestBranch.distanceKm);
+    return summary;
+  }
+  buildExplanation(payload) {
+    const personLines = payload.personSummary.length > 0 ? payload.personSummary.map((item) => `${item.label}: ${item.value}`).join("\n") : "Tiada maklumat pelanggan dijumpai.";
+    const branchLines = payload.branchSummary.length > 0 ? payload.branchSummary.map((item) => `${item.label}: ${item.value}`).join("\n") : payload.missingCoords ? "Lokasi pelanggan tidak lengkap (tiada LAT/LNG atau Postcode)." : payload.branchTextSearch ? "Tiada padanan cawangan ditemui berdasarkan lokasi/teks." : "Tiada maklumat cawangan dijumpai.";
+    let decisionLine = "Tiada cadangan dibuat.";
+    if (payload.decision) {
+      const timeInfo = payload.estimatedMinutes ? ` Anggaran masa ${payload.estimatedMinutes} minit.` : "";
+      const modeInfo = payload.travelMode ? ` Mod: ${payload.travelMode}.` : "";
+      if (payload.distanceKm && payload.branch) {
+        decisionLine = `Cadangan: ${payload.decision}. Jarak ke ${payload.branch} adalah ${payload.distanceKm.toFixed(1)}KM.${timeInfo}${modeInfo}`;
+      } else {
+        decisionLine = `Cadangan: ${payload.decision}.${timeInfo}${modeInfo}`;
+      }
+    } else if (payload.branchSummary.length > 0) {
+      decisionLine = "Cadangan: Sila hubungi/kunjungi cawangan di atas.";
+    }
+    const base = [
+      "Maklumat Pelanggan:",
+      personLines,
+      "",
+      "Cadangan Cawangan Terdekat:",
+      branchLines,
+      "",
+      decisionLine
+    ];
+    if (payload.matchFields && payload.matchFields.length > 0) {
+      base.push("", "Padanan Medan (Top):", payload.matchFields.join("\n"));
+    }
+    if (payload.suggestions && payload.suggestions.length > 0) {
+      base.push("", "Cadangan Rekod (fuzzy):", payload.suggestions.join("\n"));
+    }
+    return base.join("\n");
+  }
+  async parseIntent(query, timeoutMs = this.options.defaultAiTimeoutMs) {
+    const intentMode = String(process.env.AI_INTENT_MODE || "fast").toLowerCase();
+    if (intentMode === "fast") {
+      return this.parseIntentFallback(query);
+    }
+    const system = 'Anda hanya keluarkan JSON SAHAJA. Tugas: kenalpasti intent carian dan entiti.\nFormat WAJIB:\n{"intent":"search_person","entities":{"name":null,"ic":null,"account_no":null,"phone":null,"address":null},"need_nearest_branch":false}\nJika IC/MyKad ada, isi "ic". Jika akaun, isi "account_no". Jika nombor telefon, isi "phone".';
+    const messages = [
+      { role: "system", content: system },
+      { role: "user", content: query }
+    ];
+    try {
+      const raw = await this.options.withAiCircuit(
+        () => this.options.ollamaChat(messages, {
+          num_predict: 160,
+          temperature: 0.1,
+          top_p: 0.9,
+          timeoutMs
+        })
+      );
+      const parsed = this.extractJsonObject(raw);
+      if (parsed && parsed.intent && parsed.entities) {
+        return {
+          intent: String(parsed.intent || "search_person"),
+          entities: {
+            name: parsed.entities?.name ?? null,
+            ic: parsed.entities?.ic ?? null,
+            account_no: parsed.entities?.account_no ?? null,
+            phone: parsed.entities?.phone ?? null,
+            address: parsed.entities?.address ?? null
+          },
+          need_nearest_branch: Boolean(parsed.need_nearest_branch)
+        };
+      }
+    } catch {
+    }
+    return this.parseIntentFallback(query);
+  }
+  parseIntentFallback(query) {
+    const digits = query.match(/\d{6,}/g) || [];
+    const ic = digits.find((value) => value.length === 12) || null;
+    const account = digits.find((value) => value.length >= 10 && value.length <= 16) || null;
+    const phone = digits.find((value) => value.length >= 9 && value.length <= 11) || null;
+    const needBranch = /cawangan|branch|terdekat|nearest|lokasi|alamat/i.test(query);
+    const name = needBranch ? null : ic ? null : query.trim();
+    return {
+      intent: "search_person",
+      entities: {
+        name,
+        ic,
+        account_no: account,
+        phone,
+        address: null,
+        count_groups: null
+      },
+      need_nearest_branch: needBranch
+    };
+  }
+  extractJsonObject(text2) {
+    const first = text2.indexOf("{");
+    const last = text2.lastIndexOf("}");
+    if (first === -1 || last === -1 || last <= first) {
+      return null;
+    }
+    try {
+      return JSON.parse(text2.slice(first, last + 1));
+    } catch {
+      return null;
+    }
+  }
+  tokenizeQuery(text2) {
+    return text2.toLowerCase().split(/\s+/).map((token) => token.replace(/[^a-z0-9]/gi, "")).filter((token) => token.length >= 3);
+  }
+  buildFieldMatchSummary(data, query) {
+    const tokens = this.tokenizeQuery(query);
+    if (tokens.length === 0) {
+      return [];
+    }
+    const matches = [];
+    for (const [key, value] of Object.entries(data || {}).slice(0, 80)) {
+      if (key === "id") continue;
+      const valueStr = String(value ?? "");
+      const valueLower = valueStr.toLowerCase();
+      let score = 0;
+      for (const token of tokens) {
+        if (valueLower.includes(token)) score += 1;
+      }
+      if (score > 0) {
+        matches.push({ key, value: valueStr, score });
+      }
+    }
+    return matches.sort((a, b) => b.score - a.score).slice(0, 6).map((match) => `${match.key}: ${match.value}`);
+  }
+  rowScore(row, ic, name, account, phone) {
+    const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
+    let score = 0;
+    const icDigits = ic ? ic.replace(/\D/g, "") : "";
+    const accountDigits = account ? account.replace(/\D/g, "") : "";
+    const phoneDigits = phone ? phone.replace(/\D/g, "") : "";
+    for (const [key, value] of Object.entries(data).slice(0, 80)) {
+      const keyLower = key.toLowerCase();
+      const valueStr = String(value ?? "");
+      const valueDigits = valueStr.replace(/\D/g, "");
+      if (icDigits && valueDigits === icDigits) {
+        score += keyLower.includes("ic") || keyLower.includes("mykad") || keyLower.includes("nric") || keyLower.includes("kp") || keyLower.includes("id no") || keyLower.includes("idno") ? 20 : 10;
+      }
+      if (accountDigits && valueDigits === accountDigits) {
+        score += keyLower.includes("akaun") || keyLower.includes("account") ? 12 : 6;
+      }
+      if (phoneDigits && valueDigits === phoneDigits) {
+        score += keyLower.includes("telefon") || keyLower.includes("phone") || keyLower.includes("hp") ? 8 : 4;
+      }
+      if (name && valueStr.toLowerCase().includes(name.toLowerCase())) {
+        score += keyLower.includes("nama") || keyLower.includes("name") ? 6 : 2;
+      }
+    }
+    return score;
+  }
+  scoreRowDigits(row, digits) {
+    let data = row?.jsonDataJsonb;
+    if (typeof data === "string") {
+      try {
+        data = JSON.parse(data);
+      } catch {
+        data = {};
+      }
+    }
+    if (!data || typeof data !== "object") {
+      data = {};
+    }
+    const keyGroups = [
+      { keys: ["No. MyKad", "ID No", "No Pengenalan", "IC", "NRIC", "MyKad"], score: 20 },
+      {
+        keys: [
+          "Account No",
+          "Account Number",
+          "Card No",
+          "No Akaun",
+          "Nombor Akaun Bank Pemohon"
+        ],
+        score: 12
+      },
+      {
+        keys: ["No. Telefon Rumah", "No. Telefon Bimbit", "Phone", "Handphone", "OfficePhone"],
+        score: 8
+      }
+    ];
+    let best = 0;
+    for (const group of keyGroups) {
+      for (const key of group.keys) {
+        const value = data[key];
+        if (!value) continue;
+        if (String(value).replace(/\D/g, "") === digits) {
+          best = Math.max(best, group.score);
+        }
+      }
+    }
+    return { score: best, parsed: data };
+  }
+  ensureJson(row) {
+    if (row?.jsonDataJsonb && typeof row.jsonDataJsonb === "string") {
+      try {
+        row.jsonDataJsonb = JSON.parse(row.jsonDataJsonb);
+      } catch {
+      }
+    }
+    return row;
+  }
+  extractLatLng(data) {
+    const keys = Object.keys(data);
+    const findValue = (names) => {
+      const key = keys.find((candidate) => names.includes(candidate.toLowerCase()));
+      if (!key) return null;
+      const value = Number(String(data[key]).replace(/[^0-9.\-]/g, ""));
+      return Number.isFinite(value) ? value : null;
+    };
+    const lat = findValue(["lat", "latitude", "latitud"]);
+    const lng = findValue(["lng", "long", "longitude", "longitud"]);
+    if (lat === null || lng === null) {
+      return null;
+    }
+    return { lat, lng };
+  }
+  isLatLng(value) {
+    if (!value || typeof value !== "object") return false;
+    const candidate = value;
+    return typeof candidate.lat === "number" && Number.isFinite(candidate.lat) && typeof candidate.lng === "number" && Number.isFinite(candidate.lng);
+  }
+  isNonEmptyString(value) {
+    return typeof value === "string" && value.trim().length > 0;
+  }
+  hasPostcodeCoord(value) {
+    return this.isLatLng(value);
+  }
+  extractCustomerPostcode(data) {
+    if (!data || typeof data !== "object") return null;
+    const entries = Object.entries(data);
+    const normalize = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const relationWords = [
+      "pasangan",
+      "wakil",
+      "hubungan",
+      "spouse",
+      "guardian",
+      "emergency",
+      "waris",
+      "ibu",
+      "bapa",
+      "suami",
+      "isteri"
+    ];
+    const relationWordsNorm = relationWords.map(normalize);
+    const extractDigits = (value) => {
+      if (value === void 0 || value === null) return null;
+      const raw = String(value);
+      const five = raw.match(/\b\d{5}\b/);
+      if (five) return five[0];
+      const four = raw.match(/\b\d{4}\b/);
+      if (four) return `0${four[0]}`;
+      return null;
+    };
+    const isRelationKey = (normalizedKey) => {
+      return relationWordsNorm.some((word) => normalizedKey.includes(word));
+    };
+    const pickByKey = (matcher, valueMatcher) => {
+      for (const [rawKey, rawValue] of entries) {
+        const keyNorm = normalize(rawKey);
+        if (!matcher(keyNorm, rawKey)) continue;
+        if (valueMatcher && !valueMatcher(keyNorm, rawValue)) continue;
+        const postcode = extractDigits(rawValue);
+        if (postcode) return postcode;
+      }
+      return null;
+    };
+    const homePostcode = pickByKey(
+      (key) => !isRelationKey(key) && key.includes("home") && (key.includes("postcode") || key.includes("postalcode") || key.includes("poskod"))
+    );
+    if (homePostcode) return homePostcode;
+    const genericPostcode = pickByKey((key) => {
+      const isGenericPostcode = key === "poskod" || key === "postcode" || key === "postalcode" || key.endsWith("postcode") || key.endsWith("poskod");
+      if (!isGenericPostcode) return false;
+      if (/[23]$/.test(key)) return false;
+      if (key.includes("office")) return false;
+      if (isRelationKey(key)) return false;
+      return true;
+    });
+    if (genericPostcode) return genericPostcode;
+    return pickByKey(
+      (key) => {
+        if (isRelationKey(key)) return false;
+        if (key.includes("office")) return false;
+        return key.includes("homeaddress") || key.includes("alamatsuratmenyurat") || key === "address" || key.includes("alamat");
+      },
+      (_key, rawValue) => this.isNonEmptyString(rawValue)
+    );
+  }
+  extractCustomerLocationHint(data) {
+    if (!data || typeof data !== "object") return "";
+    const normalizeKey = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const relationWords = [
+      "pasangan",
+      "wakil",
+      "hubungan",
+      "spouse",
+      "guardian",
+      "waris",
+      "ibu",
+      "bapa",
+      "suami",
+      "isteri"
+    ];
+    const relationWordsNorm = relationWords.map(normalizeKey);
+    const isRelationKey = (key) => relationWordsNorm.some((word) => key.includes(word));
+    const parts = [];
+    for (const [rawKey, rawValue] of Object.entries(data)) {
+      if (!this.isNonEmptyString(rawValue)) continue;
+      const key = normalizeKey(rawKey);
+      if (isRelationKey(key)) continue;
+      if (key.includes("office")) continue;
+      const isLocationField = key.includes("homeaddress") || key.includes("alamatsuratmenyurat") || key === "address" || key.includes("alamat") || key === "bandar" || key === "city" || key.includes("citytown") || key === "negeri" || key === "state" || key.includes("postcode") || key.includes("poskod");
+      if (!isLocationField) continue;
+      const value = String(rawValue).trim();
+      if (value) {
+        parts.push(value);
+      }
+    }
+    return Array.from(new Set(parts)).join(" ");
+  }
+  normalizeLocationHint(value) {
+    return value.replace(/[^a-z0-9\s]/gi, " ").replace(/\s+/g, " ").trim();
+  }
+  toObjectJson(value) {
+    if (!value) return null;
+    if (typeof value === "object") return value;
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === "object" ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+  async safeFindBranchesByText(text2, limit, timeoutMs) {
+    try {
+      return await this.withTimeout(
+        this.options.storage.findBranchesByText({ query: text2, limit }),
+        timeoutMs
+      );
+    } catch {
+      return [];
+    }
+  }
+  async safeFindBranchesByPostcode(postcode, limit, timeoutMs) {
+    try {
+      return await this.withTimeout(
+        this.options.storage.findBranchesByPostcode({ postcode, limit }),
+        timeoutMs
+      );
+    } catch {
+      return [];
+    }
+  }
+  async safeNearestBranches(lat, lng, limit, timeoutMs) {
+    try {
+      return await this.withTimeout(
+        this.options.storage.getNearestBranches({ lat, lng, limit }),
+        timeoutMs
+      );
+    } catch {
+      return [];
+    }
+  }
+  async safePostcodeLatLng(postcode, timeoutMs) {
+    try {
+      return await this.withTimeout(this.options.storage.getPostcodeLatLng(postcode), timeoutMs);
+    } catch {
+      return null;
+    }
+  }
+  withTimeout(promise, ms) {
+    return new Promise((resolve, reject) => {
+      const id = setTimeout(() => reject(new Error("timeout")), ms);
+      promise.then((value) => {
+        clearTimeout(id);
+        resolve(value);
+      }).catch((error) => {
+        clearTimeout(id);
+        reject(error);
+      });
+    });
+  }
+  trimCacheEntries(cache, maxEntries) {
+    if (cache.size <= maxEntries) return;
+    const excess = cache.size - maxEntries;
+    const keysByAge = Array.from(cache.entries()).sort((a, b) => a[1].ts - b[1].ts).slice(0, excess).map(([key]) => key);
+    for (const key of keysByAge) {
+      cache.delete(key);
+    }
+  }
+};
+
+// server/services/category-stats.service.ts
+var CATEGORY_RULES_CACHE_MS = 6e4;
+var DEFAULT_COUNT_GROUPS = [
+  {
+    key: "kerajaan",
+    terms: [
+      "kerajaan",
+      "government",
+      "gov",
+      "gomen",
+      "sector awam",
+      "public sector",
+      "kementerian",
+      "jabatan",
+      "agensi",
+      "persekutuan",
+      "negeri",
+      "majlis",
+      "kkm",
+      "kpm",
+      "kpt",
+      "moe",
+      "moh",
+      "state government",
+      "federal",
+      "sekolah",
+      "guru",
+      "teacher",
+      "cikgu",
+      "pendidikan",
+      "government"
+    ],
+    fields: [
+      "EMPLOYER NAME",
+      "NATURE OF BUSINESS",
+      "NOB",
+      "EmployerName",
+      "Nature of Business",
+      "Company",
+      "Nama Majikan",
+      "Majikan",
+      "Department",
+      "Agensi"
+    ],
+    matchMode: "contains"
+  },
+  {
+    key: "polis",
+    terms: ["polis", "police", "pdrm", "polis diraja malaysia", "ipd", "ipk"],
+    fields: [
+      "EMPLOYER NAME",
+      "NATURE OF BUSINESS",
+      "NOB",
+      "EmployerName",
+      "Nature of Business",
+      "Company",
+      "Nama Majikan",
+      "Majikan",
+      "Department",
+      "Agensi"
+    ],
+    matchMode: "contains"
+  },
+  {
+    key: "tentera",
+    terms: ["tentera", "army", "military", "atm", "angkatan tentera", "tldm", "tudm", "tentera darat", "tentera laut", "tentera udara"],
+    fields: [
+      "EMPLOYER NAME",
+      "NATURE OF BUSINESS",
+      "NOB",
+      "EmployerName",
+      "Nature of Business",
+      "Company",
+      "Nama Majikan",
+      "Majikan",
+      "Department",
+      "Agensi"
+    ],
+    matchMode: "contains"
+  },
+  {
+    key: "hospital",
+    terms: ["hospital", "klinik", "clinic", "medical", "kesihatan", "health", "klin ik", "medical center", "healthcare"],
+    fields: [
+      "EMPLOYER NAME",
+      "NATURE OF BUSINESS",
+      "NOB",
+      "EmployerName",
+      "Nature of Business",
+      "Company",
+      "Nama Majikan",
+      "Majikan",
+      "Department",
+      "Agensi"
+    ],
+    matchMode: "contains"
+  },
+  {
+    key: "hotel",
+    terms: ["hotel", "hospitality", "resort", "inn", "motel", "restaurant"],
+    fields: [
+      "EMPLOYER NAME",
+      "NATURE OF BUSINESS",
+      "NOB",
+      "EmployerName",
+      "Nature of Business",
+      "Company",
+      "Nama Majikan",
+      "Majikan",
+      "Department",
+      "Agensi"
+    ],
+    matchMode: "contains"
+  },
+  {
+    key: "swasta",
+    terms: ["swasta", "private", "sdn bhd", "bhd", "enterprise", "trading", "ltd", "plc"],
+    fields: [
+      "EMPLOYER NAME",
+      "NATURE OF BUSINESS",
+      "NOB",
+      "EmployerName",
+      "Nature of Business",
+      "Company",
+      "Nama Majikan",
+      "Majikan",
+      "Department",
+      "Agensi"
+    ],
+    matchMode: "complement"
+  }
+];
+var CategoryStatsService = class {
+  constructor(storage2) {
+    this.storage = storage2;
+    this.categoryRulesCache = null;
+    this.categoryStatsInflight = /* @__PURE__ */ new Map();
+  }
+  async resolveCountSummary(query, timeoutMs) {
+    const rules = await this.loadCategoryRules();
+    const countGroups = this.detectCountRequest(query, rules);
+    if (!countGroups) {
+      return null;
+    }
+    const keys = [...countGroups.map((group) => group.key), "__all__"];
+    const rulesUpdatedAt = await this.storage.getCategoryRulesMaxUpdatedAt();
+    let statsRows = await this.storage.getCategoryStats(keys);
+    let statsMap = new Map(statsRows.map((row) => [row.key, row]));
+    let totalRow = statsMap.get("__all__");
+    const statsUpdatedAt = totalRow?.updatedAt ?? null;
+    const missingKeys = keys.filter((key) => !statsMap.get(key));
+    const staleStats = Boolean(rulesUpdatedAt && statsUpdatedAt && rulesUpdatedAt > statsUpdatedAt);
+    if (!totalRow || missingKeys.length > 0 || staleStats) {
+      const computeKeys = staleStats ? keys : Array.from(/* @__PURE__ */ new Set([...missingKeys, "__all__"]));
+      let readyNow = false;
+      try {
+        await this.withTimeout(
+          this.storage.computeCategoryStatsForKeys(computeKeys, rules),
+          Math.max(3e3, timeoutMs)
+        );
+        statsRows = await this.storage.getCategoryStats(keys);
+        statsMap = new Map(statsRows.map((row) => [row.key, row]));
+        totalRow = statsMap.get("__all__");
+        readyNow = Boolean(totalRow && keys.every((key) => statsMap.has(key)));
+      } catch {
+        readyNow = false;
+      }
+      if (!readyNow) {
+        this.enqueueCategoryStatsCompute(computeKeys, rules);
+        return {
+          processing: true,
+          summary: "Statistik sedang disediakan. Sila cuba semula dalam 10-20 saat.",
+          stats: []
+        };
+      }
+    }
+    return {
+      processing: false,
+      summary: this.buildSummary(countGroups, statsMap, totalRow?.total ?? 0),
+      stats: statsRows
+    };
+  }
+  async warmCategoryStats() {
+    const rules = await this.loadCategoryRules();
+    const enabledRuleKeys = rules.filter((rule) => rule.enabled !== false).map((rule) => rule.key);
+    const targetKeys = Array.from(/* @__PURE__ */ new Set(["__all__", ...enabledRuleKeys]));
+    const rulesUpdatedAt = await this.storage.getCategoryRulesMaxUpdatedAt();
+    const existing = await this.storage.getCategoryStats(targetKeys);
+    const byKey = new Map(existing.map((row) => [row.key, row]));
+    const statsUpdatedAt = byKey.get("__all__")?.updatedAt ?? null;
+    const hasAllKeys = targetKeys.every((key) => byKey.has(key));
+    const isStale = Boolean(rulesUpdatedAt && statsUpdatedAt && rulesUpdatedAt > statsUpdatedAt);
+    if (hasAllKeys && !isStale) {
+      return { skipped: true, computeKeys: 0 };
+    }
+    const missingKeys = targetKeys.filter((key) => !byKey.has(key));
+    const computeKeys = isStale ? targetKeys : Array.from(/* @__PURE__ */ new Set([...missingKeys, "__all__"]));
+    await this.storage.computeCategoryStatsForKeys(computeKeys, rules);
+    return { skipped: false, computeKeys: computeKeys.length };
+  }
+  async loadCategoryRules() {
+    if (this.categoryRulesCache && Date.now() - this.categoryRulesCache.ts < CATEGORY_RULES_CACHE_MS) {
+      return this.categoryRulesCache.rules;
+    }
+    try {
+      const rules = await this.storage.getCategoryRules();
+      if (rules.length > 0) {
+        this.categoryRulesCache = { ts: Date.now(), rules };
+        return rules;
+      }
+    } catch {
+    }
+    return DEFAULT_COUNT_GROUPS;
+  }
+  detectCountRequest(query, rules) {
+    const lower = query.toLowerCase();
+    const trigger = /(berapa|jumlah|bilangan|ramai|count|how many|berapa orang)/i.test(lower);
+    if (!trigger) {
+      return null;
+    }
+    const enabledRules = rules.filter((rule) => rule.enabled !== false);
+    const matched = enabledRules.filter(
+      (group) => group.terms.some((term) => lower.includes(term.toLowerCase())) || lower.includes(group.key)
+    );
+    return matched.length > 0 ? matched : enabledRules;
+  }
+  enqueueCategoryStatsCompute(keys, rules) {
+    const normalized = Array.from(new Set(keys)).filter(Boolean).sort();
+    if (!normalized.length) {
+      return;
+    }
+    const queueKey = normalized.join("|");
+    if (this.categoryStatsInflight.has(queueKey)) {
+      return;
+    }
+    const task = this.storage.computeCategoryStatsForKeys(normalized, rules).then(() => void 0).catch((error) => {
+      console.error("Category stats compute failed:", error?.message || error);
+    }).finally(() => {
+      this.categoryStatsInflight.delete(queueKey);
+    });
+    this.categoryStatsInflight.set(queueKey, task);
+  }
+  buildSummary(countGroups, statsMap, total) {
+    const summaryLines = [
+      "Ringkasan Statistik (berdasarkan data import):",
+      `Jumlah rekod dianalisis: ${total}`
+    ];
+    for (const group of countGroups) {
+      const row = statsMap.get(group.key);
+      const count3 = row?.total ?? 0;
+      summaryLines.push(`- ${group.key}: ${count3}`);
+      if (row?.samples?.length) {
+        summaryLines.push("  Contoh rekod:");
+        for (const sample of row.samples.slice(0, 10)) {
+          const source = sample.source ? ` (${sample.source})` : "";
+          summaryLines.push(`  - ${sample.name} | IC: ${sample.ic}${source}`);
+        }
+      }
+    }
+    return summaryLines.join("\n");
+  }
+  withTimeout(promise, ms) {
+    return new Promise((resolve, reject) => {
+      const id = setTimeout(() => reject(new Error("timeout")), ms);
+      promise.then((value) => {
+        clearTimeout(id);
+        resolve(value);
+      }).catch((error) => {
+        clearTimeout(id);
+        reject(error);
+      });
+    });
+  }
+};
+
+// server/services/import-analysis.service.ts
+var ANALYSIS_BATCH_SIZE = 500;
+var EXCLUDE_COLUMNS_FROM_IC = [
+  "AGREEMENT",
+  "LOAN",
+  "ACCOUNT",
+  "AKAUN",
+  "PINJAMAN",
+  "CONTRACT",
+  "KONTRAK",
+  "REFERENCE",
+  "TRANSACTION",
+  "TRANSAKSI",
+  "PHONE",
+  "TELEFON",
+  "MOBILE",
+  "HANDPHONE",
+  "FAX",
+  "FAKS",
+  "E-MONEY"
+];
+var EXCLUDE_COLUMNS_FROM_POLICE = [
+  "VEHICLE",
+  "KENDERAAN",
+  "REGISTRATION",
+  "PLATE",
+  "RSTG",
+  "CAR",
+  "KERETA",
+  "MOTOR",
+  "MOTOSIKAL",
+  "VEH",
+  "PENDAFTARAN"
+];
+function isValidMalaysianIC(ic) {
+  if (!/^\d{12}$/.test(ic)) return false;
+  if (ic.startsWith("01")) return false;
+  const month = Number.parseInt(ic.substring(2, 4), 10);
+  const day = Number.parseInt(ic.substring(4, 6), 10);
+  if (month < 1 || month > 12) return false;
+  if (day < 1 || day > 31) return false;
+  const daysInMonth = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= daysInMonth[month - 1];
+}
+function splitCellValue(value) {
+  const withoutLabels = value.replace(/\b(IC\d*|NRIC|NO\.?\s*IC|KAD PENGENALAN|KP)\s*[:=]/gi, " ");
+  return withoutLabels.split(/[\/,;|\n\r\s]+/).map((item) => item.trim()).filter(Boolean);
+}
+function createAccumulator() {
+  return {
+    icLelakiSet: /* @__PURE__ */ new Set(),
+    icPerempuanSet: /* @__PURE__ */ new Set(),
+    noPolisSet: /* @__PURE__ */ new Set(),
+    noTenteraSet: /* @__PURE__ */ new Set(),
+    passportMYSet: /* @__PURE__ */ new Set(),
+    passportLuarNegaraSet: /* @__PURE__ */ new Set(),
+    valueCounts: {},
+    processedValues: /* @__PURE__ */ new Set()
+  };
+}
+function consumeRows(accumulator, rows) {
+  const passportPattern = /^[A-Z]{1,2}\d{6,9}$/i;
+  const malaysiaPassportPrefixes = ["A", "H", "K", "Q"];
+  const excludePrefixes = ["LOT", "NO", "PT", "KM", "JLN", "BLK", "TMN", "KG", "SG", "BTU", "RM"];
+  const isValidPolisNo = (value) => {
+    if (/^P\d{3,}$/i.test(value)) return false;
+    if (/^G\d{5,10}$/i.test(value)) return true;
+    if (/^(RF|SW)\d{4,10}$/i.test(value)) return true;
+    if (/^(RFT|PDRM|POLIS|POL)\d{3,10}$/i.test(value)) return true;
+    return false;
+  };
+  const isValidTenteraNo = (value) => {
+    if (/^M\d{3,}$/i.test(value)) return false;
+    if (/^T\d{5,10}$/i.test(value)) return true;
+    if (/^(TD|TA|TT)\d{4,10}$/i.test(value)) return true;
+    if (/^(TLDM|TUDM|ARMY|ATM|MAF|TEN|MIL)\d{3,10}$/i.test(value)) return true;
+    return false;
+  };
+  for (const row of rows) {
+    const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
+    for (const [key, rawValue] of Object.entries(data)) {
+      if (typeof rawValue !== "string") continue;
+      const keyUpper = key.toUpperCase();
+      const isExcludedFromIC = EXCLUDE_COLUMNS_FROM_IC.some((value) => keyUpper.includes(value));
+      const isExcludedFromPolice = EXCLUDE_COLUMNS_FROM_POLICE.some((value) => keyUpper.includes(value));
+      for (const fragment of splitCellValue(rawValue)) {
+        const cleaned = fragment.toUpperCase().replace(/[^A-Z0-9]/g, "");
+        if (!cleaned) continue;
+        accumulator.valueCounts[cleaned] = (accumulator.valueCounts[cleaned] || 0) + 1;
+        if (accumulator.processedValues.has(cleaned)) continue;
+        accumulator.processedValues.add(cleaned);
+        if (!isExcludedFromIC && isValidMalaysianIC(cleaned)) {
+          const lastDigit = Number.parseInt(cleaned.charAt(11), 10);
+          if (lastDigit % 2 === 1) accumulator.icLelakiSet.add(cleaned);
+          else accumulator.icPerempuanSet.add(cleaned);
+          continue;
+        }
+        if (!isExcludedFromPolice && isValidPolisNo(cleaned)) {
+          accumulator.noPolisSet.add(cleaned);
+          continue;
+        }
+        if (isValidTenteraNo(cleaned)) {
+          accumulator.noTenteraSet.add(cleaned);
+          continue;
+        }
+        if (!passportPattern.test(cleaned)) continue;
+        if (excludePrefixes.some((prefix) => cleaned.startsWith(prefix))) continue;
+        const firstChar = cleaned.charAt(0);
+        if (malaysiaPassportPrefixes.includes(firstChar)) {
+          accumulator.passportMYSet.add(cleaned);
+        } else {
+          accumulator.passportLuarNegaraSet.add(cleaned);
+        }
+      }
+    }
   }
 }
+function finalizeAccumulator(accumulator) {
+  const duplicateItems = Object.entries(accumulator.valueCounts).filter(([, count3]) => count3 > 1).map(([value, count3]) => ({ value, count: count3 })).sort((left, right) => right.count - left.count);
+  const icLelaki = Array.from(accumulator.icLelakiSet);
+  const icPerempuan = Array.from(accumulator.icPerempuanSet);
+  const noPolis = Array.from(accumulator.noPolisSet);
+  const noTentera = Array.from(accumulator.noTenteraSet);
+  const passportMY = Array.from(accumulator.passportMYSet);
+  const passportLuarNegara = Array.from(accumulator.passportLuarNegaraSet);
+  return {
+    icLelaki: { count: icLelaki.length, samples: icLelaki.slice(0, 50) },
+    icPerempuan: { count: icPerempuan.length, samples: icPerempuan.slice(0, 50) },
+    noPolis: { count: noPolis.length, samples: noPolis.slice(0, 50) },
+    noTentera: { count: noTentera.length, samples: noTentera.slice(0, 50) },
+    passportMY: { count: passportMY.length, samples: passportMY.slice(0, 50) },
+    passportLuarNegara: { count: passportLuarNegara.length, samples: passportLuarNegara.slice(0, 50) },
+    duplicates: { count: duplicateItems.length, items: duplicateItems.slice(0, 50) }
+  };
+}
+var ImportAnalysisService = class {
+  constructor(importsRepository2) {
+    this.importsRepository = importsRepository2;
+  }
+  async analyzeImport(importRecord) {
+    const accumulator = createAccumulator();
+    const totalRows = await this.importsRepository.getDataRowCountByImport(importRecord.id);
+    for (let offset = 0; offset < totalRows; offset += ANALYSIS_BATCH_SIZE) {
+      const rows = await this.importsRepository.getDataRowsByImportPage(
+        importRecord.id,
+        ANALYSIS_BATCH_SIZE,
+        offset
+      );
+      consumeRows(accumulator, rows);
+    }
+    return {
+      import: {
+        id: importRecord.id,
+        name: importRecord.name,
+        filename: importRecord.filename
+      },
+      totalRows,
+      analysis: finalizeAccumulator(accumulator)
+    };
+  }
+  async analyzeAll(importsWithCounts) {
+    if (importsWithCounts.length === 0) {
+      return {
+        totalImports: 0,
+        totalRows: 0,
+        imports: [],
+        analysis: finalizeAccumulator(createAccumulator())
+      };
+    }
+    const accumulator = createAccumulator();
+    let totalRows = 0;
+    for (const importRecord of importsWithCounts) {
+      totalRows += Number(importRecord.rowCount || 0);
+      for (let offset = 0; offset < Number(importRecord.rowCount || 0); offset += ANALYSIS_BATCH_SIZE) {
+        const rows = await this.importsRepository.getDataRowsByImportPage(
+          importRecord.id,
+          ANALYSIS_BATCH_SIZE,
+          offset
+        );
+        consumeRows(accumulator, rows);
+      }
+    }
+    return {
+      totalImports: importsWithCounts.length,
+      totalRows,
+      imports: importsWithCounts.map((importRecord) => ({
+        id: importRecord.id,
+        name: importRecord.name,
+        filename: importRecord.filename,
+        rowCount: importRecord.rowCount
+      })),
+      analysis: finalizeAccumulator(accumulator)
+    };
+  }
+};
+
+// server/ws/runtime-manager.ts
+import jwt4 from "jsonwebtoken";
+import { WebSocket as WebSocket4 } from "ws";
+function createRuntimeWebSocketManager(options) {
+  const { wss: wss2, storage: storage2, secret } = options;
+  const connectedClients2 = /* @__PURE__ */ new Map();
+  const broadcastWsMessage2 = (payload) => {
+    const message = JSON.stringify(payload);
+    for (const [activityId, ws] of connectedClients2.entries()) {
+      if (!ws || ws.readyState !== WebSocket4.OPEN) {
+        connectedClients2.delete(activityId);
+        void storage2.clearCollectionNicknameSessionByActivity(activityId);
+        continue;
+      }
+      try {
+        ws.send(message);
+      } catch {
+        connectedClients2.delete(activityId);
+        void storage2.clearCollectionNicknameSessionByActivity(activityId);
+      }
+    }
+  };
+  setInterval(() => {
+    for (const [activityId, ws] of connectedClients2.entries()) {
+      if (!ws || ws.readyState !== WebSocket4.OPEN && ws.readyState !== WebSocket4.CONNECTING) {
+        connectedClients2.delete(activityId);
+      }
+    }
+  }, 3e4).unref();
+  wss2.on("connection", async (ws, req) => {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const token = url.searchParams.get("token");
+    if (!token) {
+      ws.close();
+      return;
+    }
+    try {
+      const decoded = jwt4.verify(token, secret);
+      const activityId = String(decoded.activityId || "");
+      if (!activityId) {
+        ws.close();
+        return;
+      }
+      const activity = await storage2.getActivityById(activityId);
+      if (!activity || activity.isActive === false || activity.logoutTime !== null) {
+        console.log("WS rejected: invalid or expired session");
+        ws.close();
+        return;
+      }
+      const existingWs = connectedClients2.get(activityId);
+      if (existingWs && existingWs.readyState === WebSocket4.OPEN) {
+        existingWs.close();
+      }
+      connectedClients2.set(activityId, ws);
+      console.log(`WS connected for activityId=${activityId}`);
+      const cleanupSocket = () => {
+        if (connectedClients2.get(activityId) === ws) {
+          connectedClients2.delete(activityId);
+        }
+      };
+      ws.on("close", () => {
+        cleanupSocket();
+        console.log(`WS closed for activityId=${activityId}`);
+      });
+      ws.on("error", cleanupSocket);
+    } catch {
+      console.log("WS handshake failed");
+      ws.close();
+    }
+  });
+  return {
+    connectedClients: connectedClients2,
+    broadcastWsMessage: broadcastWsMessage2
+  };
+}
+
+// server/index-local.ts
+var storage = new PostgresStorage();
+var importsRepository = new ImportsRepository();
+var searchRepository = new SearchRepository();
+var auditRepository = new AuditRepository();
+var analyticsRepository = new AnalyticsRepository();
+var backupsRepository = new BackupsRepository({
+  ensureBackupsTable: () => storage.ensureBackupsReady(),
+  parseBackupMetadataSafe: (raw) => storage.parseBackupMetadata(raw)
+});
+var importAnalysisService = new ImportAnalysisService(importsRepository);
+var app = express2();
+var server = createServer(app);
+var wss = new WebSocketServer({ server, path: "/ws" });
+var startupFatalReason = null;
+function notifyMasterFatalStartup(reason, details) {
+  if (startupFatalReason) return;
+  startupFatalReason = reason;
+  if (typeof process.send === "function") {
+    try {
+      process.send({
+        type: "worker-fatal",
+        payload: { reason, details: details || "" }
+      });
+    } catch {
+    }
+  }
+}
+wss.on("error", (err) => {
+  const code = String(err?.code || "");
+  if (code === "EADDRINUSE") {
+    notifyMasterFatalStartup("EADDRINUSE", "WebSocket server failed to bind address");
+    console.error("\xE2\x9D\u0152 WebSocket startup failed: port already in use.");
+    setTimeout(() => process.exit(98), 10).unref();
+    return;
+  }
+  console.error("\xE2\x9D\u0152 WebSocket server error:", err);
+});
+var JWT_SECRET = getSessionSecret();
+var websocketManager = createRuntimeWebSocketManager({
+  wss,
+  storage,
+  secret: JWT_SECRET
+});
+var { connectedClients, broadcastWsMessage } = websocketManager;
+var modularAuthGuards = createAuthGuards({ storage, secret: JWT_SECRET });
+var modularAuthenticateToken = modularAuthGuards.authenticateToken;
+var modularRequireRole = modularAuthGuards.requireRole;
+var modularRequireTabAccess = modularAuthGuards.requireTabAccess;
+var modularRequireMonitorAccess = modularAuthGuards.requireMonitorAccess;
+var clearModularTabVisibilityCache = modularAuthGuards.clearTabVisibilityCache;
+var DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
+var DEFAULT_WS_IDLE_MINUTES = 3;
+var DEFAULT_AI_TIMEOUT_MS = 6e3;
+var DEFAULT_BODY_LIMIT = "2mb";
+var IMPORT_BODY_LIMIT = process.env.IMPORT_BODY_LIMIT || "50mb";
+var COLLECTION_BODY_LIMIT = process.env.COLLECTION_BODY_LIMIT || "8mb";
+var UPLOADS_ROOT_DIR = path3.resolve(process.cwd(), "uploads");
+var PG_POOL_WARN_COOLDOWN_MS = 6e4;
+var AI_PRECOMPUTE_ON_START = String(process.env.AI_PRECOMPUTE_ON_START || "0") === "1";
+var API_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
+var LOW_MEMORY_MODE = String(process.env.SQR_LOW_MEMORY_MODE ?? "1") === "1";
+var AI_GATE_GLOBAL_LIMIT = Math.max(1, Number(process.env.AI_GATE_GLOBAL_LIMIT ?? "4"));
+var AI_GATE_QUEUE_LIMIT = Math.max(0, Number(process.env.AI_GATE_QUEUE_LIMIT ?? "20"));
+var AI_GATE_QUEUE_WAIT_MS = Math.max(1e3, Number(process.env.AI_GATE_QUEUE_WAIT_MS ?? "12000"));
+var AI_GATE_ROLE_LIMITS = {
+  user: Math.max(1, Number(process.env.AI_GATE_USER_LIMIT ?? "2")),
+  admin: Math.max(1, Number(process.env.AI_GATE_ADMIN_LIMIT ?? "1")),
+  superuser: Math.max(1, Number(process.env.AI_GATE_SUPERUSER_LIMIT ?? "1"))
+};
+var AI_LATENCY_STALE_AFTER_MS = Math.max(5e3, Number(process.env.AI_LATENCY_STALE_AFTER_MS ?? "20000"));
+var AI_LATENCY_DECAY_HALF_LIFE_MS = Math.max(5e3, Number(process.env.AI_LATENCY_DECAY_HALF_LIFE_MS ?? "30000"));
+var MAINTENANCE_CACHE_TTL_MS = 3e3;
+var RUNTIME_SETTINGS_CACHE_TTL_MS = 3e3;
+var runtimeMonitorManager = createRuntimeMonitorManager({
+  pool,
+  apiDebugLogs: API_DEBUG_LOGS,
+  lowMemoryMode: LOW_MEMORY_MODE,
+  pgPoolWarnCooldownMs: PG_POOL_WARN_COOLDOWN_MS,
+  aiLatencyStaleAfterMs: AI_LATENCY_STALE_AFTER_MS,
+  aiLatencyDecayHalfLifeMs: AI_LATENCY_DECAY_HALF_LIFE_MS,
+  getSearchQueueLength: () => getSearchQueueLength(),
+  evaluateSystem
+});
+var {
+  attachGcObserver,
+  attachProcessMessageHandlers,
+  buildInternalMonitorAlerts,
+  computeInternalMonitorSnapshot,
+  getControlState,
+  getDbProtection,
+  getLatencyP95,
+  getLocalCircuitSnapshots,
+  getRequestRate,
+  recordRequestFinished,
+  recordRequestStarted,
+  startRuntimeLoops,
+  withAiCircuit,
+  withDbCircuit,
+  withExportCircuit
+} = runtimeMonitorManager;
+var DB_METHOD_WRAP_EXCLUDE = /* @__PURE__ */ new Set([
+  "constructor"
+]);
+wrapAsyncPrototypeMethods(storage, {
+  exclude: DB_METHOD_WRAP_EXCLUDE,
+  wrap: withDbCircuit
+});
+var aiSearchService = new AiSearchService({
+  storage,
+  withAiCircuit,
+  ollamaChat,
+  ollamaEmbed,
+  defaultAiTimeoutMs: DEFAULT_AI_TIMEOUT_MS,
+  lowMemoryMode: LOW_MEMORY_MODE
+});
+var categoryStatsService = new CategoryStatsService(storage);
+var aiChatService = new AiChatService({
+  storage,
+  categoryStatsService,
+  withAiCircuit,
+  ollamaChat
+});
+var aiIndexService = new AiIndexService({
+  storage,
+  ollamaEmbed
+});
+attachGcObserver();
+function clamp4(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+function isHeavyRoute(pathname) {
+  return pathname.startsWith("/api/ai/") || pathname.startsWith("/api/imports") || pathname.startsWith("/api/search/advanced") || pathname.startsWith("/api/backups");
+}
+function getSearchQueueLength() {
+  const map = global.__searchInflightMap;
+  return map?.size ?? 0;
+}
+var adaptiveRateState = /* @__PURE__ */ new Map();
+function resolveAdaptiveRateBucket(req) {
+  const controlState = getControlState();
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+  const method = String(req.method || "GET").toUpperCase();
+  const path4 = req.path || "/";
+  let bucketScope = "api";
+  let baseLimit = 40;
+  let minLimit = 8;
+  if (path4.startsWith("/api/ai/")) {
+    bucketScope = "ai";
+    baseLimit = 14;
+    minLimit = 4;
+  } else if (path4.startsWith("/api/activity/heartbeat")) {
+    bucketScope = "heartbeat";
+    baseLimit = 120;
+    minLimit = 20;
+  } else if (method === "GET" && (path4.startsWith("/api/collection/nicknames") || path4.startsWith("/api/collection/admin-groups"))) {
+    bucketScope = "collection-meta";
+    baseLimit = 120;
+    minLimit = 24;
+  }
+  const modePenalty = controlState.mode === "PROTECTION" ? 0.5 : controlState.mode === "DEGRADED" ? 0.75 : 1;
+  const throttle = clamp4(controlState.throttleFactor || 1, 0.2, 1.2);
+  const dynamicLimit = Math.max(minLimit, Math.floor(baseLimit * modePenalty * throttle));
+  return { bucketKey: `${ip}:${bucketScope}`, dynamicLimit };
+}
+function adaptiveRateLimit(req, res, next) {
+  const controlState = getControlState();
+  if (!req.path.startsWith("/api/")) return next();
+  const windowMs = 1e4;
+  const now = Date.now();
+  const { bucketKey, dynamicLimit } = resolveAdaptiveRateBucket(req);
+  const bucket = adaptiveRateState.get(bucketKey);
+  if (!bucket || now >= bucket.resetAt) {
+    adaptiveRateState.set(bucketKey, { count: 1, resetAt: now + windowMs });
+    return next();
+  }
+  bucket.count += 1;
+  if (bucket.count > dynamicLimit) {
+    return res.status(429).json({
+      message: "Too many requests under current system load.",
+      limit: dynamicLimit,
+      retryAfterMs: Math.max(0, bucket.resetAt - now),
+      mode: controlState.mode
+    });
+  }
+  return next();
+}
+function systemProtectionMiddleware(req, res, next) {
+  const controlState = getControlState();
+  if (!req.path.startsWith("/api/")) return next();
+  if (req.path.startsWith("/api/health") || req.path.startsWith("/api/maintenance-status")) {
+    return next();
+  }
+  const dbProtection = getDbProtection();
+  if (dbProtection && req.path.startsWith("/api/search/advanced")) {
+    return res.status(503).json({
+      message: "Advanced search is temporarily disabled to protect database stability.",
+      protection: true,
+      reason: "db_latency_high"
+    });
+  }
+  if (dbProtection && req.path.startsWith("/api/backups") && req.method !== "GET") {
+    return res.status(503).json({
+      message: "Export/backup write operations are temporarily disabled.",
+      protection: true,
+      reason: "db_latency_high"
+    });
+  }
+  if (controlState.rejectHeavyRoutes && isHeavyRoute(req.path)) {
+    return res.status(503).json({
+      message: "Route temporarily throttled by protection mode.",
+      protection: true,
+      mode: controlState.mode
+    });
+  }
+  return next();
+}
+attachProcessMessageHandlers({
+  onGracefulShutdown: () => {
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 25e3).unref();
+  }
+});
+startRuntimeLoops({
+  clearSearchCache: () => aiSearchService.clearSearchCache()
+});
+app.use("/api/imports", express2.json({ limit: IMPORT_BODY_LIMIT }));
+app.use("/api/imports", express2.urlencoded({ extended: true, limit: IMPORT_BODY_LIMIT }));
+app.use("/api/collection", express2.json({ limit: COLLECTION_BODY_LIMIT }));
+app.use("/api/collection", express2.urlencoded({ extended: true, limit: COLLECTION_BODY_LIMIT }));
+app.use(express2.json({ limit: DEFAULT_BODY_LIMIT }));
+app.use(express2.urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT }));
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+app.use("/uploads/collection-receipts", (_req, res) => {
+  return res.status(404).json({ ok: false, message: "Not found." });
+});
+app.use("/uploads", express2.static(UPLOADS_ROOT_DIR));
+app.use((req, res, next) => {
+  const start = process.hrtime.bigint();
+  recordRequestStarted();
+  res.on("finish", () => {
+    const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6;
+    recordRequestFinished(elapsedMs);
+  });
+  next();
+});
+app.use(adaptiveRateLimit);
+app.use(systemProtectionMiddleware);
 var aiGateSeq = 0;
 var aiGateInflightGlobal = 0;
 var aiGateInflightByRole = {
@@ -7739,3181 +13845,117 @@ function withAiConcurrencyGate(route, handler) {
     }
   };
 }
-function broadcastWsMessage(payload) {
-  const msg = JSON.stringify(payload);
-  for (const [activityId, ws] of connectedClients.entries()) {
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      connectedClients.delete(activityId);
-      void storage.clearCollectionNicknameSessionByActivity(activityId);
-      continue;
-    }
-    try {
-      ws.send(msg);
-    } catch {
-      connectedClients.delete(activityId);
-      void storage.clearCollectionNicknameSessionByActivity(activityId);
-    }
-  }
-}
-setInterval(() => {
-  for (const [activityId, ws] of connectedClients.entries()) {
-    if (!ws || ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING) {
-      connectedClients.delete(activityId);
-    }
-  }
-}, 3e4).unref();
-function invalidateMaintenanceCache() {
-  maintenanceCache = null;
-}
-function invalidateRuntimeSettingsCache() {
-  runtimeSettingsCache = null;
-}
-async function getRuntimeSettingsCached(force = false) {
-  const now = Date.now();
-  if (!force && runtimeSettingsCache && now - runtimeSettingsCache.cachedAt < RUNTIME_SETTINGS_CACHE_TTL_MS) {
-    return runtimeSettingsCache.settings;
-  }
-  const config = await storage.getAppConfig();
-  const settings = {
-    sessionTimeoutMinutes: Number.isFinite(config.sessionTimeoutMinutes) ? Math.max(1, config.sessionTimeoutMinutes) : DEFAULT_SESSION_TIMEOUT_MINUTES,
-    wsIdleMinutes: Number.isFinite(config.wsIdleMinutes) ? Math.max(1, config.wsIdleMinutes) : DEFAULT_WS_IDLE_MINUTES,
-    aiEnabled: config.aiEnabled !== false,
-    semanticSearchEnabled: config.semanticSearchEnabled !== false,
-    aiTimeoutMs: Number.isFinite(config.aiTimeoutMs) ? Math.max(1e3, config.aiTimeoutMs) : DEFAULT_AI_TIMEOUT_MS,
-    searchResultLimit: Number.isFinite(config.searchResultLimit) ? Math.min(5e3, Math.max(10, Math.floor(config.searchResultLimit))) : 200,
-    viewerRowsPerPage: Number.isFinite(config.viewerRowsPerPage) ? Math.min(500, Math.max(10, Math.floor(config.viewerRowsPerPage))) : 100
-  };
-  runtimeSettingsCache = { settings, cachedAt: now };
-  return settings;
-}
-async function getMaintenanceStateCached(force = false) {
-  const now = Date.now();
-  if (!force && maintenanceCache && now - maintenanceCache.cachedAt < MAINTENANCE_CACHE_TTL_MS) {
-    return maintenanceCache.state;
-  }
-  const state = await storage.getMaintenanceState(/* @__PURE__ */ new Date());
-  maintenanceCache = { state, cachedAt: now };
-  return state;
-}
-function extractRoleFromToken(req) {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.split(" ")[1];
-  if (!token) return null;
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    return decoded?.role || null;
-  } catch {
-    return null;
-  }
-}
-function isMaintenanceBypassPath(pathname) {
-  return pathname.startsWith("/api/login") || pathname.startsWith("/api/auth/login") || pathname.startsWith("/api/health") || pathname.startsWith("/api/maintenance-status") || pathname.startsWith("/api/settings/maintenance") || pathname.startsWith("/internal/") || pathname.startsWith("/ws");
-}
-async function maintenanceGuard(req, res, next) {
-  try {
-    if (isMaintenanceBypassPath(req.path)) {
-      return next();
-    }
-    const state = await getMaintenanceStateCached();
-    if (!state.maintenance) {
-      return next();
-    }
-    const role = req.user?.role || extractRoleFromToken(req);
-    if (role === "superuser" || role === "admin") {
-      return next();
-    }
-    const maintenanceResponse = {
-      maintenance: true,
-      message: state.message,
-      type: state.type,
-      startTime: state.startTime,
-      endTime: state.endTime
-    };
-    if (req.path.startsWith("/api/")) {
-      if (state.type === "soft") {
-        const blockedSoftPrefixes = ["/api/search", "/api/imports", "/api/ai"];
-        if (!blockedSoftPrefixes.some((p) => req.path.startsWith(p))) {
-          return next();
-        }
-      }
-      return res.status(503).json(maintenanceResponse);
-    }
-    if (req.path.startsWith("/assets/") || req.path.match(/\.(js|css|png|jpg|svg|ico)$/i)) {
-      return next();
-    }
-    if (state.type === "hard" && req.path !== "/maintenance") {
-      return res.redirect(302, "/maintenance");
-    }
-    return next();
-  } catch (err) {
-    console.error("Maintenance guard error:", err);
-    return next();
-  }
-}
+var runtimeConfigManager = createRuntimeConfigManager({
+  storage,
+  secret: JWT_SECRET,
+  defaults: {
+    sessionTimeoutMinutes: DEFAULT_SESSION_TIMEOUT_MINUTES,
+    wsIdleMinutes: DEFAULT_WS_IDLE_MINUTES,
+    aiTimeoutMs: DEFAULT_AI_TIMEOUT_MS,
+    searchResultLimit: 200,
+    viewerRowsPerPage: 100
+  },
+  maintenanceCacheTtlMs: MAINTENANCE_CACHE_TTL_MS,
+  runtimeSettingsCacheTtlMs: RUNTIME_SETTINGS_CACHE_TTL_MS
+});
+var {
+  invalidateMaintenanceCache,
+  invalidateRuntimeSettingsCache,
+  getRuntimeSettingsCached,
+  getMaintenanceStateCached,
+  maintenanceGuard
+} = runtimeConfigManager;
 app.use(maintenanceGuard);
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", mode: "postgresql" });
+registerSystemRoutes(app, {
+  authenticateToken: modularAuthenticateToken,
+  requireRole: modularRequireRole,
+  requireMonitorAccess: modularRequireMonitorAccess,
+  getMaintenanceStateCached,
+  computeInternalMonitorSnapshot,
+  buildInternalMonitorAlerts,
+  getControlState,
+  getDbProtection,
+  getRequestRate,
+  getLatencyP95,
+  getLocalCircuitSnapshots,
+  getIntelligenceExplainability,
+  injectChaos,
+  createAuditLog: (data) => storage.createAuditLog(data)
 });
-app.get("/api/maintenance-status", async (req, res) => {
-  try {
-    const state = await getMaintenanceStateCached();
-    res.json(state);
-  } catch (err) {
-    res.status(500).json({ message: err?.message || "Failed to load maintenance status" });
-  }
+registerAuthRoutes(app, {
+  storage,
+  authenticateToken: modularAuthenticateToken,
+  requireRole: modularRequireRole,
+  connectedClients
 });
-app.get(
-  "/internal/system-health",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireMonitorAccess,
-  (req, res) => {
-    const snapshot = computeInternalMonitorSnapshot();
-    const alerts = buildInternalMonitorAlerts(snapshot);
-    res.json({
-      ...snapshot,
-      activeAlertCount: alerts.length
-    });
-  }
-);
-app.get(
-  "/internal/system-mode",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireMonitorAccess,
-  (req, res) => {
-    res.json({
-      mode: controlState.mode,
-      throttleFactor: controlState.throttleFactor,
-      rejectHeavyRoutes: controlState.rejectHeavyRoutes,
-      dbProtection: controlState.dbProtection || lastDbLatencyMs > 1e3,
-      preAllocatedMB: controlState.preAllocateMB,
-      updatedAt: controlState.updatedAt
-    });
-  }
-);
-app.get(
-  "/internal/workers",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireMonitorAccess,
-  (req, res) => {
-    res.json({
-      count: controlState.workerCount,
-      maxWorkers: controlState.maxWorkers,
-      workers: controlState.workers,
-      updatedAt: controlState.updatedAt
-    });
-  }
-);
-app.get(
-  "/internal/alerts",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireMonitorAccess,
-  (req, res) => {
-    const snapshot = computeInternalMonitorSnapshot();
-    const alerts = buildInternalMonitorAlerts(snapshot);
-    res.json({
-      alerts,
-      updatedAt: snapshot.updatedAt
-    });
-  }
-);
-app.get(
-  "/internal/load-trend",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireMonitorAccess,
-  (req, res) => {
-    res.json({
-      predictor: controlState.predictor,
-      queueLength: controlState.queueLength,
-      requestRate: reqRatePerSec,
-      p95LatencyMs: percentile(latencySamples, 95),
-      updatedAt: controlState.updatedAt
-    });
-  }
-);
-app.get(
-  "/internal/circuit-status",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireMonitorAccess,
-  (req, res) => {
-    res.json({
-      local: {
-        ai: circuitAi.getSnapshot(),
-        db: circuitDb.getSnapshot(),
-        export: circuitExport.getSnapshot()
-      },
-      cluster: controlState.circuits,
-      updatedAt: controlState.updatedAt
-    });
-  }
-);
-app.get(
-  "/internal/intelligence/explain",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireMonitorAccess,
-  (req, res) => {
-    const explain = getIntelligenceExplainability();
-    res.json({
-      anomalyBreakdown: explain.anomalyBreakdown,
-      correlationMatrix: explain.correlationMatrix,
-      slopeValues: explain.slopeValues,
-      forecastProjection: explain.forecastProjection,
-      governanceState: explain.governanceState,
-      chosenStrategy: explain.chosenStrategy,
-      decisionReason: explain.decisionReason
-    });
-  }
-);
-app.post(
-  "/internal/chaos/inject",
-  authenticateToken,
-  requireRole("admin", "superuser"),
-  async (req, res) => {
-    try {
-      const { type, magnitude, durationMs } = req.body || {};
-      const allowed = /* @__PURE__ */ new Set([
-        "cpu_spike",
-        "db_latency_spike",
-        "ai_delay",
-        "worker_crash",
-        "memory_pressure"
-      ]);
-      if (!allowed.has(type)) {
-        return res.status(400).json({
-          message: "Invalid chaos type.",
-          allowed: Array.from(allowed)
-        });
-      }
-      const result = injectChaos({
-        type,
-        magnitude: Number.isFinite(Number(magnitude)) ? Number(magnitude) : void 0,
-        durationMs: Number.isFinite(Number(durationMs)) ? Number(durationMs) : void 0
-      });
-      await storage.createAuditLog({
-        action: "CHAOS_INJECTED",
-        performedBy: req.user?.username || "system",
-        details: `Chaos injected: ${type}`
-      });
-      return res.json({
-        success: true,
-        ...result
-      });
-    } catch (err) {
-      return res.status(500).json({ message: err?.message || "Failed to inject chaos event." });
-    }
-  }
-);
-app.get("/api/data-rows", authenticateToken, async (req, res) => {
-  try {
-    const importId = req.query.importId;
-    const limit = Number(req.query.limit ?? 10);
-    const offset = Number(req.query.offset ?? 0);
-    if (!importId) {
-      return res.status(400).json({ error: "importId is required" });
-    }
-    const search = String(req.query.q || "").trim();
-    const result = await storage.searchDataRows({
-      importId,
-      search,
-      limit,
-      offset
-    });
-    res.json(result);
-  } catch (err) {
-    console.error("API /api/data-rows error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+registerActivityRoutes(app, {
+  storage,
+  authenticateToken: modularAuthenticateToken,
+  requireRole: modularRequireRole,
+  requireTabAccess: modularRequireTabAccess,
+  connectedClients
 });
-async function handleLogin(req, res) {
-  try {
-    const { username, password, fingerprint, pcName, browser } = req.body;
-    const normalizedUsername = normalizeUsernameInput(username);
-    const user = await storage.getUserByUsername(normalizedUsername);
-    if (!user) {
-      await storage.createAuditLog({
-        action: "LOGIN_FAILED",
-        performedBy: normalizedUsername || "unknown",
-        details: "User not found"
-      });
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-    const isVisitorBanned = await storage.isVisitorBanned(fingerprint || null, req.ip || req.socket.remoteAddress || null);
-    if (isVisitorBanned) {
-      await storage.createAuditLog({
-        action: "LOGIN_FAILED_BANNED",
-        performedBy: user.username,
-        details: "Visitor is banned"
-      });
-      return res.status(403).json({ message: "Account is banned", banned: true });
-    }
-    if (user.isBanned) {
-      await storage.createAuditLog({
-        action: "LOGIN_FAILED_BANNED",
-        performedBy: user.username,
-        details: "User is banned"
-      });
-      return res.status(403).json({ message: "Account is banned", banned: true });
-    }
-    const validPassword = await bcrypt2.compare(String(password ?? ""), user.passwordHash);
-    if (!validPassword) {
-      await storage.createAuditLog({
-        action: "LOGIN_FAILED",
-        performedBy: user.username,
-        details: "Invalid password"
-      });
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-    const browserName = parseBrowser(browser || req.headers["user-agent"]);
-    if (user.role === "superuser") {
-      const enforceSingleSuperuserSession = await storage.getBooleanSystemSetting(
-        "enforce_superuser_single_session",
-        false
-      );
-      if (enforceSingleSuperuserSession) {
-        const activeSessions = await storage.getActiveActivitiesByUsername(user.username);
-        if (activeSessions.length > 0) {
-          await storage.createAuditLog({
-            action: "LOGIN_BLOCKED_SINGLE_SESSION",
-            performedBy: user.username,
-            details: `Superuser single-session policy blocked login. Active sessions: ${activeSessions.length}`
-          });
-          return res.status(409).json({
-            message: "Single superuser session is enforced. Logout from the current session first.",
-            code: "SUPERUSER_SINGLE_SESSION_ENFORCED"
-          });
-        }
-      }
-    } else if (user.role === "admin" && fingerprint) {
-      await storage.deactivateUserSessionsByFingerprint(
-        user.username,
-        fingerprint
-      );
-    }
-    const activity = await storage.createActivity({
-      userId: user.id,
-      username: user.username,
-      role: user.role,
-      pcName: pcName || null,
-      browser: browserName,
-      fingerprint: fingerprint || null,
-      ipAddress: req.ip || req.socket.remoteAddress || null
-    });
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        username: user.username,
-        role: user.role,
-        activityId: activity.id
-      },
-      JWT_SECRET,
-      { expiresIn: "24h" }
-    );
-    await storage.createAuditLog({
-      action: "LOGIN_SUCCESS",
-      performedBy: user.username,
-      details: `Login from ${browserName}`
-    });
-    res.json({
-      token,
-      username: user.username,
-      role: user.role,
-      user: { username: user.username, role: user.role },
-      activityId: activity.id
-    });
-  } catch (error) {
-    console.error("Login error:", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-}
-app.post("/api/login", handleLogin);
-app.post("/api/auth/login", handleLogin);
-app.post("/api/activity/logout", authenticateToken, async (req, res) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ success: false });
-    }
-    const activityId = req.user.activityId;
-    const activity = await storage.getActivityById(activityId);
-    if (!activity || activity.isActive === false) {
-      return res.json({ success: true });
-    }
-    await storage.updateActivity(activityId, {
-      isActive: false,
-      logoutTime: /* @__PURE__ */ new Date(),
-      logoutReason: "USER_LOGOUT"
-    });
-    const ws = connectedClients.get(activityId);
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: "logout",
-        reason: "User logged out"
-      }));
-      ws.close();
-    }
-    connectedClients.delete(activityId);
-    await storage.clearCollectionNicknameSessionByActivity(activityId);
-    await storage.createAuditLog({
-      action: "LOGOUT",
-      performedBy: req.user.username
-    });
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get("/api/activity/all", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
-  try {
-    const activities = await storage.getAllActivities();
-    res.json({ activities });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get("/api/activity/filter", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
-  try {
-    const filters = {};
-    if (req.query.status) {
-      filters.status = req.query.status.split(",");
-    }
-    if (req.query.username) filters.username = req.query.username;
-    if (req.query.ipAddress) filters.ipAddress = req.query.ipAddress;
-    if (req.query.browser) filters.browser = req.query.browser;
-    if (req.query.dateFrom) filters.dateFrom = new Date(req.query.dateFrom);
-    if (req.query.dateTo) filters.dateTo = new Date(req.query.dateTo);
-    const activities = await storage.getFilteredActivities(filters);
-    res.json({ activities });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.delete(
-  "/api/activity/:id",
-  authenticateToken,
-  requireRole("admin", "superuser"),
-  requireTabAccess("activity"),
-  async (req, res) => {
-    try {
-      const activityId = String(req.params.id);
-      if (!activityId) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid activityId"
-        });
-      }
-      await storage.deleteActivity(activityId);
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Delete activity error:", error);
-      res.status(500).json({ message: error.message });
-    }
-  }
-);
-app.post(
-  "/api/activity/kick",
-  authenticateToken,
-  requireRole("admin", "superuser"),
-  requireTabAccess("activity"),
-  async (req, res) => {
-    try {
-      const activityId = String(req.body.activityId);
-      if (!activityId) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid activityId"
-        });
-      }
-      const activity = await storage.getActivityById(activityId);
-      if (!activity) {
-        return res.status(404).json({ message: "Activity not found" });
-      }
-      await storage.updateActivity(activityId, {
-        isActive: false,
-        logoutTime: /* @__PURE__ */ new Date(),
-        logoutReason: "KICKED"
-      });
-      const ws = connectedClients.get(activityId);
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: "kicked",
-          reason: "You have been logged out by an administrator."
-        }));
-        ws.close();
-      }
-      connectedClients.delete(activityId);
-      await storage.createAuditLog({
-        action: "KICK_USER",
-        performedBy: req.user.username,
-        targetUser: activity.username,
-        details: `Kicked activityId=${activityId}`
-      });
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Activity kick error:", error);
-      res.status(500).json({ message: error.message });
-    }
-  }
-);
-app.post(
-  "/api/activity/ban",
-  authenticateToken,
-  requireRole("superuser"),
-  requireTabAccess("activity"),
-  async (req, res) => {
-    try {
-      const activityId = String(req.body.activityId);
-      if (!activityId) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid activityId"
-        });
-      }
-      const activity = await storage.getActivityById(activityId);
-      if (!activity) {
-        return res.status(404).json({ message: "Activity not found" });
-      }
-      const targetUser = await storage.getUserByUsername(activity.username);
-      if (targetUser?.role === "superuser") {
-        return res.status(403).json({ message: "Cannot ban a superuser" });
-      }
-      await storage.banVisitor({
-        username: activity.username,
-        role: activity.role,
-        activityId: activity.id,
-        fingerprint: activity.fingerprint ?? null,
-        ipAddress: activity.ipAddress ?? null,
-        browser: activity.browser ?? null,
-        pcName: activity.pcName ?? null
-      });
-      await storage.updateActivity(activityId, {
-        isActive: false,
-        logoutTime: /* @__PURE__ */ new Date(),
-        logoutReason: "BANNED"
-      });
-      const ws = connectedClients.get(activityId);
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: "banned",
-          reason: "Your account has been banned."
-        }));
-        ws.close();
-      }
-      connectedClients.delete(activityId);
-      await storage.createAuditLog({
-        action: "BAN_USER",
-        performedBy: req.user.username,
-        targetUser: activity.username,
-        details: `Banned via activityId=${activityId}`
-      });
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Activity ban error:", error);
-      res.status(500).json({ message: error.message });
-    }
-  }
-);
-app.get("/api/users/banned", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
-  try {
-    const bannedSessions = await storage.getBannedSessions();
-    const usersWithVisitorId = bannedSessions.map((s) => ({
-      visitorId: s.banId,
-      banId: s.banId,
-      username: s.username,
-      role: s.role,
-      banInfo: {
-        ipAddress: s.ipAddress ?? null,
-        browser: s.browser ?? null,
-        bannedAt: s.bannedAt ?? null
-      }
-    }));
-    res.json({ users: usersWithVisitorId });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get("/api/search/columns", authenticateToken, async (req, res) => {
-  try {
-    const columns = await storage.getAllColumnNames();
-    res.json(columns);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get(
-  "/api/collection/nicknames",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const includeInactive = normalizeCollectionText(req.query.includeInactive) === "1";
-      let nicknames;
-      if (req.user.role === "superuser") {
-        const activeOnly = !includeInactive;
-        nicknames = await storage.getCollectionStaffNicknames({ activeOnly });
-      } else if (req.user.role === "admin") {
-        const allowedValues = await getAdminGroupNicknameValues(req.user);
-        if (allowedValues.length === 0) {
-          nicknames = [];
-        } else {
-          const activeNicknames = await storage.getCollectionStaffNicknames({ activeOnly: true });
-          const byName = /* @__PURE__ */ new Map();
-          for (const item of activeNicknames) {
-            const key = normalizeCollectionText(item.nickname).toLowerCase();
-            if (key && !byName.has(key)) byName.set(key, item);
-          }
-          nicknames = allowedValues.map((value) => byName.get(value.toLowerCase())).filter(Boolean);
-        }
-      } else {
-        nicknames = await storage.getCollectionStaffNicknames({
-          activeOnly: true,
-          allowedRole: "user"
-        });
-      }
-      return res.json({ ok: true, nicknames });
-    } catch (err) {
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to load staff nicknames." });
-    }
-  }
-);
-app.post(
-  "/api/collection/nickname-auth/check",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const body = ensureObject(req.body) || {};
-      const resolved = await resolveCollectionNicknameAccessForUser(req.user, body.nickname);
-      if (!resolved.ok) {
-        return res.status(resolved.status).json({ ok: false, message: resolved.message });
-      }
-      const hasPassword = Boolean(normalizeCollectionText(resolved.profile.nicknamePasswordHash));
-      const mustChangePassword = Boolean(resolved.profile.mustChangePassword || !hasPassword);
-      const passwordResetBySuperuser = Boolean(resolved.profile.passwordResetBySuperuser);
-      const requiresPasswordSetup = !hasPassword;
-      const requiresPasswordLogin = hasPassword;
-      const requiresForcedPasswordChange = hasPassword && (mustChangePassword || passwordResetBySuperuser);
-      return res.json({
-        ok: true,
-        nickname: {
-          id: resolved.profile.id,
-          nickname: resolved.profile.nickname,
-          mustChangePassword,
-          passwordResetBySuperuser,
-          requiresPasswordSetup,
-          requiresPasswordLogin,
-          requiresForcedPasswordChange
-        }
-      });
-    } catch (err) {
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to validate nickname." });
-    }
-  }
-);
-app.post(
-  "/api/collection/nickname-auth/setup-password",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const body = ensureObject(req.body) || {};
-      const resolved = await resolveCollectionNicknameAccessForUser(req.user, body.nickname);
-      if (!resolved.ok) {
-        return res.status(resolved.status).json({ ok: false, message: resolved.message });
-      }
-      const currentPassword = String(body.currentPassword || "");
-      const newPassword = String(body.newPassword || "");
-      const confirmPassword = String(body.confirmPassword || "");
-      if (!newPassword || !confirmPassword) {
-        return res.status(400).json({ ok: false, message: "New password dan confirm password diperlukan." });
-      }
-      if (newPassword !== confirmPassword) {
-        return res.status(400).json({ ok: false, message: "Password dan confirm password tidak sepadan." });
-      }
-      if (!isStrongPassword(newPassword)) {
-        return res.status(400).json({
-          ok: false,
-          message: `Password mesti sekurang-kurangnya ${CREDENTIAL_PASSWORD_MIN_LENGTH} aksara dan mengandungi huruf serta nombor.`
-        });
-      }
-      const existingHash = normalizeCollectionText(resolved.profile.nicknamePasswordHash);
-      const hasExistingPassword = Boolean(existingHash);
-      if (hasExistingPassword) {
-        if (!currentPassword) {
-          return res.status(400).json({ ok: false, message: "Current password diperlukan untuk tukar password nickname." });
-        }
-        const validCurrentPassword = await bcrypt2.compare(currentPassword, existingHash);
-        if (!validCurrentPassword) {
-          return res.status(401).json({ ok: false, message: "Current password nickname tidak sah." });
-        }
-        const sameAsCurrent = await bcrypt2.compare(newPassword, existingHash);
-        if (sameAsCurrent) {
-          return res.status(400).json({ ok: false, message: "Password baharu mesti berbeza daripada password semasa." });
-        }
-      }
-      const passwordHash = await bcrypt2.hash(newPassword, CREDENTIAL_BCRYPT_COST);
-      await storage.setCollectionNicknamePassword({
-        nicknameId: resolved.profile.id,
-        passwordHash,
-        mustChangePassword: false,
-        passwordResetBySuperuser: false,
-        passwordUpdatedAt: /* @__PURE__ */ new Date()
-      });
-      await storage.createAuditLog({
-        action: "COLLECTION_NICKNAME_PASSWORD_SET",
-        performedBy: req.user.username,
-        targetResource: resolved.profile.id,
-        details: `Nickname password set for ${resolved.profile.nickname}`
-      });
-      if (req.user.activityId) {
-        await storage.setCollectionNicknameSession({
-          activityId: req.user.activityId,
-          username: req.user.username,
-          userRole: req.user.role,
-          nickname: resolved.profile.nickname
-        });
-      }
-      return res.json({
-        ok: true,
-        nickname: {
-          id: resolved.profile.id,
-          nickname: resolved.profile.nickname,
-          mustChangePassword: false,
-          passwordResetBySuperuser: false
-        }
-      });
-    } catch (err) {
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to set nickname password." });
-    }
-  }
-);
-app.post(
-  "/api/collection/nickname-auth/login",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const body = ensureObject(req.body) || {};
-      const resolved = await resolveCollectionNicknameAccessForUser(req.user, body.nickname);
-      if (!resolved.ok) {
-        return res.status(resolved.status).json({ ok: false, message: resolved.message });
-      }
-      const password = String(body.password || "");
-      if (!password) {
-        return res.status(400).json({ ok: false, message: "Password diperlukan." });
-      }
-      const hash = normalizeCollectionText(resolved.profile.nicknamePasswordHash);
-      if (!hash) {
-        return res.status(400).json({
-          ok: false,
-          message: "Sila tetapkan kata laluan baharu untuk nickname ini sebelum meneruskan."
-        });
-      }
-      const valid = await bcrypt2.compare(password, hash);
-      if (!valid) {
-        return res.status(401).json({ ok: false, message: "Password nickname tidak sah." });
-      }
-      const requiresForcedPasswordChange = Boolean(resolved.profile.mustChangePassword) || Boolean(resolved.profile.passwordResetBySuperuser);
-      if (requiresForcedPasswordChange) {
-        return res.json({
-          ok: true,
-          nickname: {
-            id: resolved.profile.id,
-            nickname: resolved.profile.nickname,
-            mustChangePassword: true,
-            passwordResetBySuperuser: Boolean(resolved.profile.passwordResetBySuperuser),
-            requiresForcedPasswordChange: true
-          }
-        });
-      }
-      if (req.user.activityId) {
-        await storage.setCollectionNicknameSession({
-          activityId: req.user.activityId,
-          username: req.user.username,
-          userRole: req.user.role,
-          nickname: resolved.profile.nickname
-        });
-      }
-      return res.json({
-        ok: true,
-        nickname: {
-          id: resolved.profile.id,
-          nickname: resolved.profile.nickname,
-          mustChangePassword: false,
-          passwordResetBySuperuser: false,
-          requiresForcedPasswordChange: false
-        }
-      });
-    } catch (err) {
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to login nickname." });
-    }
-  }
-);
-app.get(
-  "/api/collection/admins",
-  authenticateToken,
-  requireRole("superuser"),
-  requireTabAccess("collection-report"),
-  async (_req, res) => {
-    try {
-      const admins = await storage.getCollectionAdminUsers();
-      return res.json({ ok: true, admins });
-    } catch (err) {
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to load admin list." });
-    }
-  }
-);
-app.get(
-  "/api/collection/admin-groups",
-  authenticateToken,
-  requireRole("superuser"),
-  requireTabAccess("collection-report"),
-  async (_req, res) => {
-    try {
-      const groups = await storage.getCollectionAdminGroups();
-      return res.json({ ok: true, groups });
-    } catch (err) {
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to load admin groups." });
-    }
-  }
-);
-app.post(
-  "/api/collection/admin-groups",
-  authenticateToken,
-  requireRole("superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const body = ensureObject(req.body) || {};
-      const leaderNicknameId = normalizeCollectionText(body.leaderNicknameId);
-      if (!leaderNicknameId) {
-        return res.status(400).json({ ok: false, message: "leaderNicknameId is required." });
-      }
-      const memberNicknameIds = Array.isArray(body.memberNicknameIds) ? normalizeCollectionStringList(body.memberNicknameIds) : [];
-      const group = await storage.createCollectionAdminGroup({
-        leaderNicknameId,
-        memberNicknameIds,
-        createdBy: req.user.username
-      });
-      await storage.createAuditLog({
-        action: "COLLECTION_ADMIN_GROUP_CREATED",
-        performedBy: req.user.username,
-        targetResource: group.id,
-        details: `Admin group created for leader ${group.leaderNickname}. members=${group.memberNicknames.length}`
-      });
-      return res.json({ ok: true, group });
-    } catch (err) {
-      const message = String(err?.message || "");
-      const lower = message.toLowerCase();
-      if (lower.includes("already assigned")) {
-        return res.status(409).json({ ok: false, message: "This nickname is already assigned to another admin group." });
-      }
-      if (lower.includes("invalid nickname ids") || lower.includes("invalid leader nickname")) {
-        return res.status(400).json({ ok: false, message: "Invalid nickname ids." });
-      }
-      if (lower.includes("must have admin scope")) {
-        return res.status(400).json({ ok: false, message: "Leader nickname must be admin scope." });
-      }
-      if (lower.includes("must be active")) {
-        return res.status(400).json({ ok: false, message: "Leader nickname must be active." });
-      }
-      if (lower.includes("cannot be a member")) {
-        return res.status(400).json({ ok: false, message: "Leader nickname cannot be included as member." });
-      }
-      return res.status(500).json({ ok: false, message: message || "Failed to create admin group." });
-    }
-  }
-);
-app.put(
-  "/api/collection/admin-groups/:groupId",
-  authenticateToken,
-  requireRole("superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const groupId = normalizeCollectionText(req.params.groupId);
-      if (!groupId) {
-        return res.status(400).json({ ok: false, message: "groupId is required." });
-      }
-      const body = ensureObject(req.body) || {};
-      const hasLeader = Object.prototype.hasOwnProperty.call(body, "leaderNicknameId");
-      const hasMembers = Object.prototype.hasOwnProperty.call(body, "memberNicknameIds");
-      if (!hasLeader && !hasMembers) {
-        return res.status(400).json({ ok: false, message: "No admin group update payload provided." });
-      }
-      const leaderNicknameId = hasLeader ? normalizeCollectionText(body.leaderNicknameId) : void 0;
-      if (hasLeader && !leaderNicknameId) {
-        return res.status(400).json({ ok: false, message: "leaderNicknameId is required." });
-      }
-      const memberNicknameIds = hasMembers ? Array.isArray(body.memberNicknameIds) ? normalizeCollectionStringList(body.memberNicknameIds) : [] : void 0;
-      const group = await storage.updateCollectionAdminGroup({
-        groupId,
-        leaderNicknameId,
-        memberNicknameIds,
-        updatedBy: req.user.username
-      });
-      if (!group) {
-        return res.status(404).json({ ok: false, message: "Admin group not found." });
-      }
-      await storage.createAuditLog({
-        action: "COLLECTION_ADMIN_GROUP_UPDATED",
-        performedBy: req.user.username,
-        targetResource: group.id,
-        details: `Admin group updated for leader ${group.leaderNickname}. members=${group.memberNicknames.length}`
-      });
-      return res.json({ ok: true, group });
-    } catch (err) {
-      const message = String(err?.message || "");
-      const lower = message.toLowerCase();
-      if (lower.includes("already assigned")) {
-        return res.status(409).json({ ok: false, message: "This nickname is already assigned to another admin group." });
-      }
-      if (lower.includes("invalid nickname ids") || lower.includes("invalid leader nickname")) {
-        return res.status(400).json({ ok: false, message: "Invalid nickname ids." });
-      }
-      if (lower.includes("must have admin scope")) {
-        return res.status(400).json({ ok: false, message: "Leader nickname must be admin scope." });
-      }
-      if (lower.includes("must be active")) {
-        return res.status(400).json({ ok: false, message: "Leader nickname must be active." });
-      }
-      if (lower.includes("cannot be a member")) {
-        return res.status(400).json({ ok: false, message: "Leader nickname cannot be included as member." });
-      }
-      return res.status(500).json({ ok: false, message: message || "Failed to update admin group." });
-    }
-  }
-);
-app.delete(
-  "/api/collection/admin-groups/:groupId",
-  authenticateToken,
-  requireRole("superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const groupId = normalizeCollectionText(req.params.groupId);
-      if (!groupId) {
-        return res.status(400).json({ ok: false, message: "groupId is required." });
-      }
-      const deleted = await storage.deleteCollectionAdminGroup(groupId);
-      if (!deleted) {
-        return res.status(404).json({ ok: false, message: "Admin group not found." });
-      }
-      await storage.createAuditLog({
-        action: "COLLECTION_ADMIN_GROUP_DELETED",
-        performedBy: req.user.username,
-        targetResource: groupId,
-        details: "Admin group deleted."
-      });
-      return res.json({ ok: true });
-    } catch (err) {
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to delete admin group." });
-    }
-  }
-);
-app.get(
-  "/api/collection/nickname-assignments/:adminId",
-  authenticateToken,
-  requireRole("superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      const adminId = normalizeCollectionText(req.params.adminId);
-      if (!adminId) {
-        return res.status(400).json({ ok: false, message: "Admin id is required." });
-      }
-      const admin = await storage.getCollectionAdminUserById(adminId);
-      if (!admin) {
-        return res.status(404).json({ ok: false, message: "Admin not found." });
-      }
-      const nicknameIds = await storage.getCollectionAdminAssignedNicknameIds(adminId);
-      return res.json({ ok: true, admin, nicknameIds });
-    } catch (err) {
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to load nickname assignments." });
-    }
-  }
-);
-app.put(
-  "/api/collection/nickname-assignments/:adminId",
-  authenticateToken,
-  requireRole("superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const adminId = normalizeCollectionText(req.params.adminId);
-      if (!adminId) {
-        return res.status(400).json({ ok: false, message: "Admin id is required." });
-      }
-      const body = ensureObject(req.body) || {};
-      if (!Array.isArray(body.nicknameIds)) {
-        return res.status(400).json({ ok: false, message: "nicknameIds must be an array." });
-      }
-      const nicknameIds = normalizeCollectionStringList(body.nicknameIds);
-      const assignedNicknameIds = await storage.setCollectionAdminAssignedNicknameIds({
-        adminUserId: adminId,
-        nicknameIds,
-        createdBySuperuser: req.user.username
-      });
-      await storage.createAuditLog({
-        action: "COLLECTION_NICKNAME_ASSIGNMENTS_UPDATED",
-        performedBy: req.user.username,
-        targetResource: adminId,
-        details: `Updated admin nickname assignments. total=${assignedNicknameIds.length}`
-      });
-      return res.json({
-        ok: true,
-        adminId,
-        nicknameIds: assignedNicknameIds
-      });
-    } catch (err) {
-      const message = String(err?.message || "");
-      if (message.toLowerCase().includes("admin user not found")) {
-        return res.status(404).json({ ok: false, message: "Admin not found." });
-      }
-      if (message.toLowerCase().includes("invalid nickname ids")) {
-        return res.status(400).json({ ok: false, message: "Invalid nickname ids." });
-      }
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to save nickname assignments." });
-    }
-  }
-);
-app.post(
-  "/api/collection/nicknames",
-  authenticateToken,
-  requireRole("superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const body = ensureObject(req.body) || {};
-      const nickname = normalizeCollectionText(body.nickname);
-      const roleScope = normalizeCollectionNicknameRoleScope2(body.roleScope, "both");
-      if (nickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
-        return res.status(400).json({ ok: false, message: "Nickname mesti sekurang-kurangnya 2 aksara." });
-      }
-      const existing = await storage.getCollectionStaffNicknameByName(nickname);
-      if (existing) {
-        return res.status(409).json({ ok: false, message: "Nickname already exists." });
-      }
-      const created = await storage.createCollectionStaffNickname({
-        nickname,
-        createdBy: req.user.username,
-        roleScope
-      });
-      await storage.createAuditLog({
-        action: "COLLECTION_NICKNAME_CREATED",
-        performedBy: req.user.username,
-        targetResource: created.id,
-        details: `Collection nickname created: ${created.nickname} (scope=${created.roleScope})`
-      });
-      return res.json({ ok: true, nickname: created });
-    } catch (err) {
-      const rawMessage = String(err?.message || "").toLowerCase();
-      if (rawMessage.includes("duplicate")) {
-        return res.status(409).json({ ok: false, message: "Nickname already exists." });
-      }
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to create nickname." });
-    }
-  }
-);
-app.put(
-  "/api/collection/nicknames/:id",
-  authenticateToken,
-  requireRole("superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const id = normalizeCollectionText(req.params.id);
-      const body = ensureObject(req.body) || {};
-      const nickname = normalizeCollectionText(body.nickname);
-      const roleScopeProvided = Object.prototype.hasOwnProperty.call(body, "roleScope");
-      const roleScope = normalizeCollectionNicknameRoleScope2(body.roleScope, "both");
-      if (!id) {
-        return res.status(400).json({ ok: false, message: "Nickname id is required." });
-      }
-      if (nickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
-        return res.status(400).json({ ok: false, message: "Nickname mesti sekurang-kurangnya 2 aksara." });
-      }
-      const existingByName = await storage.getCollectionStaffNicknameByName(nickname);
-      if (existingByName && existingByName.id !== id) {
-        return res.status(409).json({ ok: false, message: "Nickname already exists." });
-      }
-      const updated = await storage.updateCollectionStaffNickname(id, {
-        nickname,
-        ...roleScopeProvided ? { roleScope } : {}
-      });
-      if (!updated) {
-        return res.status(404).json({ ok: false, message: "Nickname not found." });
-      }
-      await storage.createAuditLog({
-        action: "COLLECTION_NICKNAME_UPDATED",
-        performedBy: req.user.username,
-        targetResource: updated.id,
-        details: `Collection nickname updated to ${updated.nickname} (scope=${updated.roleScope})`
-      });
-      return res.json({ ok: true, nickname: updated });
-    } catch (err) {
-      const rawMessage = String(err?.message || "").toLowerCase();
-      if (rawMessage.includes("duplicate")) {
-        return res.status(409).json({ ok: false, message: "Nickname already exists." });
-      }
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to update nickname." });
-    }
-  }
-);
-app.patch(
-  "/api/collection/nicknames/:id",
-  authenticateToken,
-  requireRole("superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const id = normalizeCollectionText(req.params.id);
-      if (!id) {
-        return res.status(400).json({ ok: false, message: "Nickname id is required." });
-      }
-      const body = ensureObject(req.body) || {};
-      if (!Object.prototype.hasOwnProperty.call(body, "isActive")) {
-        return res.status(400).json({ ok: false, message: "isActive is required." });
-      }
-      const isActive = Boolean(body.isActive);
-      const updated = await storage.updateCollectionStaffNickname(id, { isActive });
-      if (!updated) {
-        return res.status(404).json({ ok: false, message: "Nickname not found." });
-      }
-      await storage.createAuditLog({
-        action: "COLLECTION_NICKNAME_STATUS_UPDATED",
-        performedBy: req.user.username,
-        targetResource: updated.id,
-        details: `Collection nickname ${updated.nickname} set active=${updated.isActive}`
-      });
-      return res.json({ ok: true, nickname: updated });
-    } catch (err) {
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to update nickname status." });
-    }
-  }
-);
-app.post(
-  "/api/collection/nicknames/:id/reset-password",
-  authenticateToken,
-  requireRole("superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const id = normalizeCollectionText(req.params.id);
-      if (!id) {
-        return res.status(400).json({ ok: false, message: "Nickname id is required." });
-      }
-      const nickname = await storage.getCollectionStaffNicknameById(id);
-      if (!nickname) {
-        return res.status(404).json({ ok: false, message: "Nickname not found." });
-      }
-      const passwordHash = await bcrypt2.hash(COLLECTION_NICKNAME_TEMP_PASSWORD, CREDENTIAL_BCRYPT_COST);
-      await storage.setCollectionNicknamePassword({
-        nicknameId: nickname.id,
-        passwordHash,
-        mustChangePassword: true,
-        passwordResetBySuperuser: true,
-        passwordUpdatedAt: /* @__PURE__ */ new Date()
-      });
-      await storage.createAuditLog({
-        action: "COLLECTION_NICKNAME_PASSWORD_RESET",
-        performedBy: req.user.username,
-        targetResource: nickname.id,
-        details: `Password nickname reset by superuser for ${nickname.nickname}`
-      });
-      return res.json({
-        ok: true,
-        nickname: {
-          id: nickname.id,
-          nickname: nickname.nickname,
-          mustChangePassword: true,
-          passwordResetBySuperuser: true
-        }
-      });
-    } catch (err) {
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to reset nickname password." });
-    }
-  }
-);
-app.delete(
-  "/api/collection/nicknames/:id",
-  authenticateToken,
-  requireRole("superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const id = normalizeCollectionText(req.params.id);
-      if (!id) {
-        return res.status(400).json({ ok: false, message: "Nickname id is required." });
-      }
-      const result = await storage.deleteCollectionStaffNickname(id);
-      if (!result.deleted && !result.deactivated) {
-        return res.status(404).json({ ok: false, message: "Nickname not found." });
-      }
-      await storage.createAuditLog({
-        action: result.deleted ? "COLLECTION_NICKNAME_DELETED" : "COLLECTION_NICKNAME_DEACTIVATED",
-        performedBy: req.user.username,
-        targetResource: id,
-        details: result.deleted ? "Collection nickname deleted." : "Collection nickname deactivated due to existing usage."
-      });
-      return res.json({ ok: true, ...result });
-    } catch (err) {
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to delete nickname." });
-    }
-  }
-);
-app.post(
-  "/api/collection",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    let uploadedReceiptPath = null;
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const body = ensureObject(req.body) || {};
-      const customerName = normalizeCollectionText(body.customerName);
-      const icNumber = normalizeCollectionText(body.icNumber);
-      const customerPhone = normalizeCollectionText(body.customerPhone);
-      const accountNumber = normalizeCollectionText(body.accountNumber);
-      const batch = normalizeCollectionText(body.batch).toUpperCase();
-      const paymentDate = normalizeCollectionText(body.paymentDate);
-      const collectionStaffNickname = normalizeCollectionText(body.collectionStaffNickname);
-      const amount = parseCollectionAmount(body.amount);
-      if (!customerName) {
-        return res.status(400).json({ ok: false, message: "Customer Name is required." });
-      }
-      if (!icNumber) {
-        return res.status(400).json({ ok: false, message: "IC Number is required." });
-      }
-      if (!isValidCollectionPhone(customerPhone)) {
-        return res.status(400).json({ ok: false, message: "Customer Phone Number is invalid." });
-      }
-      if (!accountNumber) {
-        return res.status(400).json({ ok: false, message: "Account Number is required." });
-      }
-      if (!COLLECTION_BATCHES.has(batch)) {
-        return res.status(400).json({ ok: false, message: "Invalid batch value." });
-      }
-      if (!paymentDate || !isValidCollectionDate(paymentDate)) {
-        return res.status(400).json({ ok: false, message: "Invalid payment date." });
-      }
-      if (amount === null) {
-        return res.status(400).json({ ok: false, message: "Amount must be a positive number." });
-      }
-      if (collectionStaffNickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
-        return res.status(400).json({ ok: false, message: "Staff nickname must be at least 2 characters." });
-      }
-      const staffNickname = await storage.getCollectionStaffNicknameByName(collectionStaffNickname);
-      if (!staffNickname?.isActive) {
-        return res.status(400).json({ ok: false, message: "Staff nickname tidak sah atau sudah inactive." });
-      }
-      if (req.user.role === "admin") {
-        const allowedNicknames = await getAdminVisibleNicknameValues(req.user);
-        if (!hasNicknameValue(allowedNicknames, collectionStaffNickname)) {
-          return res.status(403).json({ ok: false, message: "Nickname tidak dibenarkan untuk akaun admin ini." });
-        }
-      } else if (!isNicknameScopeAllowedForRole(staffNickname.roleScope, req.user.role)) {
-        return res.status(403).json({ ok: false, message: "Nickname ini tidak dibenarkan untuk role semasa." });
-      }
-      const receiptPayload = ensureObject(body.receipt);
-      if (receiptPayload) {
-        uploadedReceiptPath = await saveCollectionReceipt(receiptPayload);
-      }
-      const record = await storage.createCollectionRecord({
-        customerName,
-        icNumber,
-        customerPhone,
-        accountNumber,
-        batch,
-        paymentDate,
-        amount,
-        receiptFile: uploadedReceiptPath,
-        createdByLogin: req.user.username,
-        collectionStaffNickname
-      });
-      await storage.createAuditLog({
-        action: "COLLECTION_RECORD_CREATED",
-        performedBy: req.user.username,
-        targetResource: record.id,
-        details: `Collection record created by ${req.user.username}`
-      });
-      return res.json({ ok: true, record });
-    } catch (err) {
-      if (uploadedReceiptPath) {
-        await removeCollectionReceiptFile(uploadedReceiptPath);
-      }
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to create collection record." });
-    }
-  }
-);
-app.get(
-  "/api/collection/summary",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const yearRaw = normalizeCollectionText(req.query.year);
-      const requestedNicknameFilters = readNicknameFiltersFromQuery(req.query);
-      const parsedYear = yearRaw ? Number.parseInt(yearRaw, 10) : (/* @__PURE__ */ new Date()).getFullYear();
-      if (!Number.isInteger(parsedYear) || parsedYear < 2e3 || parsedYear > 2100) {
-        return res.status(400).json({ ok: false, message: "Invalid year." });
-      }
-      let nicknameFilters;
-      if (req.user.role === "superuser") {
-        if (requestedNicknameFilters.length > 0) {
-          const activeNicknames = await storage.getCollectionStaffNicknames({ activeOnly: true });
-          const activeSet = new Set(
-            activeNicknames.map((item) => normalizeCollectionText(item.nickname).toLowerCase()).filter(Boolean)
-          );
-          const hasInvalid = requestedNicknameFilters.some((value) => !activeSet.has(value.toLowerCase()));
-          if (hasInvalid) {
-            return res.status(400).json({ ok: false, message: "Invalid nickname filter." });
-          }
-          nicknameFilters = requestedNicknameFilters;
-        }
-      } else if (req.user.role === "admin") {
-        const allowedNicknames = await getAdminGroupNicknameValues(req.user);
-        if (requestedNicknameFilters.length > 0) {
-          const hasInvalid = requestedNicknameFilters.some((value) => !hasNicknameValue(allowedNicknames, value));
-          if (hasInvalid) {
-            return res.status(400).json({ ok: false, message: "Invalid nickname filter." });
-          }
-          nicknameFilters = requestedNicknameFilters;
-        } else if (allowedNicknames.length === 0) {
-          return res.json({
-            ok: true,
-            year: parsedYear,
-            summary: COLLECTION_SUMMARY_MONTH_NAMES.map((monthName, index) => ({
-              month: index + 1,
-              monthName,
-              totalRecords: 0,
-              totalAmount: 0
-            }))
-          });
-        } else {
-          nicknameFilters = allowedNicknames;
-        }
-      }
-      const summary = await storage.getCollectionMonthlySummary({
-        year: parsedYear,
-        nicknames: nicknameFilters,
-        createdByLogin: req.user.role === "user" ? req.user.username : void 0
-      });
-      return res.json({
-        ok: true,
-        year: parsedYear,
-        summary
-      });
-    } catch (err) {
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to load collection summary." });
-    }
-  }
-);
-app.get(
-  "/api/collection/list",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const from = normalizeCollectionText(req.query.from);
-      const to = normalizeCollectionText(req.query.to);
-      const search = normalizeCollectionText(req.query.search);
-      const nickname = normalizeCollectionText(req.query.nickname);
-      if (from && !isValidCollectionDate(from)) {
-        return res.status(400).json({ ok: false, message: "Invalid from date." });
-      }
-      if (to && !isValidCollectionDate(to)) {
-        return res.status(400).json({ ok: false, message: "Invalid to date." });
-      }
-      if (from && to && from > to) {
-        return res.status(400).json({ ok: false, message: "From date cannot be later than To date." });
-      }
-      let nicknameFilters;
-      if (req.user.role === "superuser") {
-        if (nickname) {
-          const isActiveNickname = await storage.isCollectionStaffNicknameActive(nickname);
-          if (!isActiveNickname) {
-            return res.status(400).json({ ok: false, message: "Invalid nickname filter." });
-          }
-          nicknameFilters = [nickname];
-        }
-      } else if (req.user.role === "admin") {
-        const allowedNicknames = await getAdminVisibleNicknameValues(req.user);
-        if (nickname) {
-          if (!hasNicknameValue(allowedNicknames, nickname)) {
-            return res.status(400).json({ ok: false, message: "Invalid nickname filter." });
-          }
-          nicknameFilters = [nickname];
-        } else if (allowedNicknames.length === 0) {
-          return res.json({ ok: true, records: [] });
-        } else {
-          nicknameFilters = allowedNicknames;
-        }
-      }
-      const records = await storage.listCollectionRecords({
-        from: from || void 0,
-        to: to || void 0,
-        search: search || void 0,
-        createdByLogin: req.user.role === "user" ? req.user.username : void 0,
-        nicknames: nicknameFilters,
-        limit: 1e3
-      });
-      return res.json({ ok: true, records });
-    } catch (err) {
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to load collection records." });
-    }
-  }
-);
-async function serveCollectionReceipt(req, res, mode) {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ ok: false, message: "Unauthenticated" });
-    }
-    const id = normalizeCollectionText(req.params.id);
-    if (!id) {
-      return res.status(400).json({ ok: false, message: "Collection id is required." });
-    }
-    const record = await storage.getCollectionRecordById(id);
-    if (!record) {
-      return res.status(404).json({ ok: false, message: "Collection record not found." });
-    }
-    const canAccessRecord = await canUserAccessCollectionRecord(req.user, {
-      createdByLogin: record.createdByLogin,
-      collectionStaffNickname: record.collectionStaffNickname
-    });
-    if (!canAccessRecord) {
-      return res.status(403).json({ ok: false, message: "Forbidden" });
-    }
-    if (!record.receiptFile) {
-      return res.status(404).json({ ok: false, message: "Receipt file not found." });
-    }
-    const resolved = resolveCollectionReceiptFile(record.receiptFile);
-    if (!resolved) {
-      return res.status(404).json({ ok: false, message: "Receipt file path is invalid." });
-    }
-    try {
-      await fs.promises.access(resolved.absolutePath, fs.constants.R_OK);
-    } catch {
-      return res.status(404).json({ ok: false, message: "Receipt file not found." });
-    }
-    if (mode === "view" && !resolved.isInlinePreviewSupported) {
-      return res.status(415).json({ ok: false, message: "Preview not available for this file type." });
-    }
-    const safeFileName = sanitizeReceiptDownloadName(resolved.storedFileName);
-    res.setHeader("Content-Type", resolved.mimeType);
-    res.setHeader(
-      "Content-Disposition",
-      `${mode === "download" ? "attachment" : "inline"}; filename="${safeFileName}"`
-    );
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    return res.sendFile(resolved.absolutePath, (err) => {
-      if (!err || res.headersSent) return;
-      const sendErr = err;
-      const status = sendErr.code === "ENOENT" ? 404 : 500;
-      const message = status === 404 ? "Receipt file not found." : "Failed to serve receipt file.";
-      res.status(status).json({ ok: false, message });
-    });
-  } catch (err) {
-    return res.status(500).json({ ok: false, message: err?.message || "Failed to load receipt file." });
-  }
-}
-app.get(
-  "/api/collection/:id/receipt/view",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    return serveCollectionReceipt(req, res, "view");
-  }
-);
-app.get(
-  "/api/collection/:id/receipt/download",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    return serveCollectionReceipt(req, res, "download");
-  }
-);
-app.get(
-  "/api/receipts/:id/view",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    return serveCollectionReceipt(req, res, "view");
-  }
-);
-app.get(
-  "/api/receipts/:id/download",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    return serveCollectionReceipt(req, res, "download");
-  }
-);
-var handleUpdateCollectionRecord = async (req, res) => {
-  let uploadedReceiptPath = null;
-  try {
-    if (!req.user) {
-      return res.status(401).json({ ok: false, message: "Unauthenticated" });
-    }
-    const id = normalizeCollectionText(req.params.id);
-    if (!id) {
-      return res.status(400).json({ ok: false, message: "Collection id is required." });
-    }
-    const existing = await storage.getCollectionRecordById(id);
-    if (!existing) {
-      return res.status(404).json({ ok: false, message: "Collection record not found." });
-    }
-    const body = ensureObject(req.body) || {};
-    const updatePayload = {};
-    const customerName = normalizeCollectionText(body.customerName);
-    const icNumber = normalizeCollectionText(body.icNumber);
-    const customerPhone = normalizeCollectionText(body.customerPhone);
-    const accountNumber = normalizeCollectionText(body.accountNumber);
-    const batch = normalizeCollectionText(body.batch).toUpperCase();
-    const paymentDate = normalizeCollectionText(body.paymentDate);
-    const collectionStaffNickname = normalizeCollectionText(body.collectionStaffNickname);
-    const amount = body.amount !== void 0 ? parseCollectionAmount(body.amount) : null;
-    if (body.customerName !== void 0) {
-      if (!customerName) return res.status(400).json({ ok: false, message: "Customer Name cannot be empty." });
-      updatePayload.customerName = customerName;
-    }
-    if (body.icNumber !== void 0) {
-      if (!icNumber) return res.status(400).json({ ok: false, message: "IC Number cannot be empty." });
-      updatePayload.icNumber = icNumber;
-    }
-    if (body.customerPhone !== void 0) {
-      if (!isValidCollectionPhone(customerPhone)) {
-        return res.status(400).json({ ok: false, message: "Customer Phone Number is invalid." });
-      }
-      updatePayload.customerPhone = customerPhone;
-    }
-    if (body.accountNumber !== void 0) {
-      if (!accountNumber) return res.status(400).json({ ok: false, message: "Account Number cannot be empty." });
-      updatePayload.accountNumber = accountNumber;
-    }
-    if (body.batch !== void 0) {
-      if (!COLLECTION_BATCHES.has(batch)) {
-        return res.status(400).json({ ok: false, message: "Invalid batch value." });
-      }
-      updatePayload.batch = batch;
-    }
-    if (body.paymentDate !== void 0) {
-      if (!paymentDate || !isValidCollectionDate(paymentDate)) {
-        return res.status(400).json({ ok: false, message: "Invalid payment date." });
-      }
-      updatePayload.paymentDate = paymentDate;
-    }
-    if (body.amount !== void 0) {
-      if (amount === null) {
-        return res.status(400).json({ ok: false, message: "Amount must be a positive number." });
-      }
-      updatePayload.amount = amount;
-    }
-    if (body.collectionStaffNickname !== void 0) {
-      if (collectionStaffNickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
-        return res.status(400).json({ ok: false, message: "Staff nickname must be at least 2 characters." });
-      }
-      const staffNickname = await storage.getCollectionStaffNicknameByName(collectionStaffNickname);
-      if (!staffNickname?.isActive) {
-        return res.status(400).json({ ok: false, message: "Staff nickname tidak sah atau sudah inactive." });
-      }
-      if (req.user.role === "admin") {
-        const allowedNicknames = await getAdminVisibleNicknameValues(req.user);
-        if (!hasNicknameValue(allowedNicknames, collectionStaffNickname)) {
-          return res.status(403).json({ ok: false, message: "Nickname tidak dibenarkan untuk akaun admin ini." });
-        }
-      } else if (!isNicknameScopeAllowedForRole(staffNickname.roleScope, req.user.role)) {
-        return res.status(403).json({ ok: false, message: "Nickname ini tidak dibenarkan untuk role semasa." });
-      }
-      updatePayload.collectionStaffNickname = collectionStaffNickname;
-    }
-    const shouldRemoveReceipt = body.removeReceipt === true;
-    const receiptPayload = ensureObject(body.receipt);
-    if (shouldRemoveReceipt && receiptPayload) {
-      return res.status(400).json({ ok: false, message: "Cannot remove and upload receipt at the same time." });
-    }
-    if (receiptPayload) {
-      uploadedReceiptPath = await saveCollectionReceipt(receiptPayload);
-      updatePayload.receiptFile = uploadedReceiptPath;
-    } else if (shouldRemoveReceipt) {
-      updatePayload.receiptFile = null;
-    }
-    if (Object.keys(updatePayload).length === 0) {
-      return res.json({ ok: true, record: existing });
-    }
-    const updated = await storage.updateCollectionRecord(id, updatePayload);
-    if (!updated) {
-      if (uploadedReceiptPath) {
-        await removeCollectionReceiptFile(uploadedReceiptPath);
-      }
-      return res.status(404).json({ ok: false, message: "Collection record not found." });
-    }
-    if ((receiptPayload || shouldRemoveReceipt) && existing.receiptFile) {
-      await removeCollectionReceiptFile(existing.receiptFile);
-    }
-    await storage.createAuditLog({
-      action: "COLLECTION_RECORD_UPDATED",
-      performedBy: req.user.username,
-      targetResource: updated.id,
-      details: `Collection record updated by ${req.user.username}`
-    });
-    return res.json({ ok: true, record: updated });
-  } catch (err) {
-    if (uploadedReceiptPath) {
-      await removeCollectionReceiptFile(uploadedReceiptPath);
-    }
-    return res.status(500).json({ ok: false, message: err?.message || "Failed to update collection record." });
-  }
-};
-app.patch(
-  "/api/collection/:id",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("collection-report"),
-  handleUpdateCollectionRecord
-);
-app.put(
-  "/api/collection/:id",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("collection-report"),
-  handleUpdateCollectionRecord
-);
-app.delete(
-  "/api/collection/:id",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("collection-report"),
-  async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ ok: false, message: "Unauthenticated" });
-      }
-      const id = normalizeCollectionText(req.params.id);
-      if (!id) {
-        return res.status(400).json({ ok: false, message: "Collection id is required." });
-      }
-      const existing = await storage.getCollectionRecordById(id);
-      if (!existing) {
-        return res.status(404).json({ ok: false, message: "Collection record not found." });
-      }
-      await storage.deleteCollectionRecord(id);
-      if (existing.receiptFile) {
-        await removeCollectionReceiptFile(existing.receiptFile);
-      }
-      await storage.createAuditLog({
-        action: "COLLECTION_RECORD_DELETED",
-        performedBy: req.user.username,
-        targetResource: existing.id,
-        details: `Collection record deleted by ${req.user.username}`
-      });
-      return res.json({ ok: true });
-    } catch (err) {
-      return res.status(500).json({ ok: false, message: err?.message || "Failed to delete collection record." });
-    }
-  }
-);
-app.get("/api/auth/me", authenticateToken, (req, res) => {
-  if (!req.user) {
-    return res.status(401).json({ message: "Unauthenticated" });
-  }
-  res.json({
-    user: {
-      username: req.user.username,
-      role: req.user.role,
-      activityId: req.user.activityId
-    }
-  });
-});
-app.get("/api/me", authenticateToken, async (req, res) => {
-  try {
-    if (!req.user) {
-      return sendCredentialError(res, 401, "PERMISSION_DENIED", "Authentication required.");
-    }
-    const user = req.user.userId ? await storage.getUser(req.user.userId) : await storage.getUserByUsername(req.user.username);
-    if (!user) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
-    }
-    return res.json({
-      id: user.id,
-      username: user.username,
-      role: user.role
-    });
-  } catch (err) {
-    return sendCredentialError(res, 500, "PERMISSION_DENIED", err?.message || "Failed to load user profile.");
-  }
-});
-app.patch("/api/me/credentials", authenticateToken, async (req, res) => {
-  try {
-    if (!req.user) {
-      return sendCredentialError(res, 401, "PERMISSION_DENIED", "Authentication required.");
-    }
-    const actor = req.user.userId ? await storage.getUser(req.user.userId) : await storage.getUserByUsername(req.user.username);
-    if (!actor) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
-    }
-    const body = ensureObject(req.body) || {};
-    const hasUsernameField = Object.prototype.hasOwnProperty.call(body, "newUsername");
-    const hasPasswordField = Object.prototype.hasOwnProperty.call(body, "newPassword");
-    let nextUsername;
-    let nextPasswordHash;
-    let usernameChanged = false;
-    let passwordChanged = false;
-    if (hasUsernameField) {
-      const normalized = normalizeUsernameInput(body.newUsername);
-      if (!normalized || !CREDENTIAL_USERNAME_REGEX.test(normalized)) {
-        return sendCredentialError(
-          res,
-          400,
-          "USERNAME_TAKEN",
-          "Username must match ^[a-zA-Z0-9._-]{3,32}$."
-        );
-      }
-      const existing = await storage.getUserByUsername(normalized);
-      if (existing && existing.id !== actor.id) {
-        return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
-      }
-      if (normalized !== actor.username) {
-        nextUsername = normalized;
-        usernameChanged = true;
-      }
-    }
-    if (hasPasswordField) {
-      const nextPasswordRaw = String(body.newPassword ?? "");
-      const currentPasswordRaw = String(body.currentPassword ?? "");
-      if (!currentPasswordRaw) {
-        return sendCredentialError(res, 400, "INVALID_CURRENT_PASSWORD", "Current password is required.");
-      }
-      const currentPasswordMatch = await bcrypt2.compare(currentPasswordRaw, actor.passwordHash);
-      if (!currentPasswordMatch) {
-        return sendCredentialError(res, 400, "INVALID_CURRENT_PASSWORD", "Current password is invalid.");
-      }
-      if (!isStrongPassword(nextPasswordRaw)) {
-        return sendCredentialError(
-          res,
-          400,
-          "INVALID_PASSWORD",
-          "Password must be at least 8 characters and include at least one letter and one number."
-        );
-      }
-      const sameAsCurrent = await bcrypt2.compare(nextPasswordRaw, actor.passwordHash);
-      if (sameAsCurrent) {
-        return sendCredentialError(res, 400, "INVALID_PASSWORD", "New password must be different from current password.");
-      }
-      nextPasswordHash = await bcrypt2.hash(nextPasswordRaw, CREDENTIAL_BCRYPT_COST);
-      passwordChanged = true;
-    }
-    if (!usernameChanged && !passwordChanged) {
-      return res.json({
-        ok: true,
-        user: {
-          id: actor.id,
-          username: actor.username,
-          role: actor.role
-        }
-      });
-    }
-    const activeSessions = passwordChanged ? await storage.getActiveActivitiesByUsername(actor.username) : [];
-    const updatedUser = await storage.updateUserCredentials({
-      userId: actor.id,
-      newUsername: nextUsername,
-      newPasswordHash: nextPasswordHash,
-      passwordChangedAt: passwordChanged ? /* @__PURE__ */ new Date() : void 0
-    });
-    if (!updatedUser) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
-    }
-    if (usernameChanged && !passwordChanged && nextUsername) {
-      await storage.updateActivitiesUsername(actor.username, nextUsername);
-    }
-    if (usernameChanged) {
-      await storage.createAuditLog({
-        action: "USER_USERNAME_CHANGED",
-        performedBy: actor.id,
-        targetUser: updatedUser.id,
-        details: buildCredentialAuditDetails({
-          actor_user_id: actor.id,
-          target_user_id: updatedUser.id,
-          changedField: "username"
-        })
-      });
-    }
-    if (passwordChanged) {
-      await storage.createAuditLog({
-        action: "USER_PASSWORD_CHANGED",
-        performedBy: actor.id,
-        targetUser: updatedUser.id,
-        details: buildCredentialAuditDetails({
-          actor_user_id: actor.id,
-          target_user_id: updatedUser.id,
-          changedField: "password"
-        })
-      });
-      await storage.deactivateUserActivities(actor.username, "PASSWORD_CHANGED");
-      if (updatedUser.username !== actor.username) {
-        await storage.deactivateUserActivities(updatedUser.username, "PASSWORD_CHANGED");
-      }
-      closeActivitySockets(
-        activeSessions.map((activity) => activity.id),
-        "Password changed. Please login again."
-      );
-    }
-    return res.json({
-      ok: true,
-      forceLogout: passwordChanged,
-      user: {
-        id: updatedUser.id,
-        username: updatedUser.username,
-        role: updatedUser.role
-      }
-    });
-  } catch (err) {
-    if (String(err?.code || "") === "23505") {
-      return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
-    }
-    return sendCredentialError(res, 500, "PERMISSION_DENIED", err?.message || "Failed to update credentials.");
-  }
-});
-app.get("/api/admin/users", authenticateToken, async (req, res) => {
-  try {
-    if (!req.user || req.user.role !== "superuser") {
-      return sendCredentialError(res, 403, "PERMISSION_DENIED", "Only superuser can access this resource.");
-    }
-    const users2 = await storage.getUsersByRoles(["admin", "user"]);
-    return res.json({
-      ok: true,
-      users: users2.map((item) => ({
-        id: item.id,
-        username: item.username,
-        role: item.role
-      }))
-    });
-  } catch (err) {
-    return sendCredentialError(res, 500, "PERMISSION_DENIED", err?.message || "Failed to load users.");
-  }
-});
-app.patch("/api/admin/users/:id/credentials", authenticateToken, async (req, res) => {
-  try {
-    if (!req.user || req.user.role !== "superuser") {
-      return sendCredentialError(res, 403, "PERMISSION_DENIED", "Only superuser can access this resource.");
-    }
-    const actor = req.user.userId ? await storage.getUser(req.user.userId) : await storage.getUserByUsername(req.user.username);
-    if (!actor) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Actor user not found.");
-    }
-    const targetUserId = String(req.params.id || "").trim();
-    if (!targetUserId) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Target user not found.");
-    }
-    const target = await storage.getUser(targetUserId);
-    if (!target) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Target user not found.");
-    }
-    if (target.role !== "admin" && target.role !== "user") {
-      return sendCredentialError(res, 403, "PERMISSION_DENIED", "Target role is not allowed.");
-    }
-    const body = ensureObject(req.body) || {};
-    const hasUsernameField = Object.prototype.hasOwnProperty.call(body, "newUsername");
-    const hasPasswordField = Object.prototype.hasOwnProperty.call(body, "newPassword");
-    let nextUsername;
-    let nextPasswordHash;
-    let usernameChanged = false;
-    let passwordChanged = false;
-    if (hasUsernameField) {
-      const normalized = normalizeUsernameInput(body.newUsername);
-      if (!normalized || !CREDENTIAL_USERNAME_REGEX.test(normalized)) {
-        return sendCredentialError(
-          res,
-          400,
-          "USERNAME_TAKEN",
-          "Username must match ^[a-zA-Z0-9._-]{3,32}$."
-        );
-      }
-      const existing = await storage.getUserByUsername(normalized);
-      if (existing && existing.id !== target.id) {
-        return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
-      }
-      if (normalized !== target.username) {
-        nextUsername = normalized;
-        usernameChanged = true;
-      }
-    }
-    if (hasPasswordField) {
-      const nextPasswordRaw = String(body.newPassword ?? "");
-      if (!isStrongPassword(nextPasswordRaw)) {
-        return sendCredentialError(
-          res,
-          400,
-          "INVALID_PASSWORD",
-          "Password must be at least 8 characters and include at least one letter and one number."
-        );
-      }
-      const sameAsCurrent = await bcrypt2.compare(nextPasswordRaw, target.passwordHash);
-      if (sameAsCurrent) {
-        return sendCredentialError(res, 400, "INVALID_PASSWORD", "New password must be different from current password.");
-      }
-      nextPasswordHash = await bcrypt2.hash(nextPasswordRaw, CREDENTIAL_BCRYPT_COST);
-      passwordChanged = true;
-    }
-    if (!usernameChanged && !passwordChanged) {
-      return res.json({ ok: true });
-    }
-    const activeSessions = passwordChanged ? await storage.getActiveActivitiesByUsername(target.username) : [];
-    const updatedUser = await storage.updateUserCredentials({
-      userId: target.id,
-      newUsername: nextUsername,
-      newPasswordHash: nextPasswordHash,
-      passwordChangedAt: passwordChanged ? /* @__PURE__ */ new Date() : void 0
-    });
-    if (!updatedUser) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Target user not found.");
-    }
-    if (usernameChanged && !passwordChanged && nextUsername) {
-      await storage.updateActivitiesUsername(target.username, nextUsername);
-    }
-    if (usernameChanged) {
-      await storage.createAuditLog({
-        action: "USER_USERNAME_CHANGED",
-        performedBy: actor.id,
-        targetUser: updatedUser.id,
-        details: buildCredentialAuditDetails({
-          actor_user_id: actor.id,
-          target_user_id: updatedUser.id,
-          changedField: "username"
-        })
-      });
-    }
-    if (passwordChanged) {
-      await storage.createAuditLog({
-        action: "USER_PASSWORD_CHANGED",
-        performedBy: actor.id,
-        targetUser: updatedUser.id,
-        details: buildCredentialAuditDetails({
-          actor_user_id: actor.id,
-          target_user_id: updatedUser.id,
-          changedField: "password"
-        })
-      });
-      await storage.deactivateUserActivities(target.username, "PASSWORD_RESET_BY_SUPERUSER");
-      if (updatedUser.username !== target.username) {
-        await storage.deactivateUserActivities(updatedUser.username, "PASSWORD_RESET_BY_SUPERUSER");
-      }
-      closeActivitySockets(
-        activeSessions.map((activity) => activity.id),
-        "Password reset by superuser. Please login again."
-      );
-    }
-    return res.json({ ok: true });
-  } catch (err) {
-    if (String(err?.code || "") === "23505") {
-      return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
-    }
-    return sendCredentialError(res, 500, "PERMISSION_DENIED", err?.message || "Failed to update credentials.");
-  }
-});
-app.get("/api/app-config", authenticateToken, async (req, res) => {
-  try {
-    const config = await storage.getAppConfig();
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
-    res.json(config);
-  } catch (err) {
-    console.error("App config GET error:", err);
-    res.status(500).json({ message: err?.message || "Failed to load app config" });
-  }
-});
-app.get("/api/settings/tab-visibility", authenticateToken, async (req, res) => {
-  try {
-    const role = req.user?.role || "user";
-    const tabs = await storage.getRoleTabVisibility(role);
-    res.json({ role, tabs });
-  } catch (err) {
-    console.error("Tab visibility GET error:", err);
-    res.status(500).json({ message: err?.message || "Failed to load tab visibility" });
-  }
-});
-app.get("/api/settings", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
-  try {
-    const role = req.user?.role || "user";
-    const categories = await storage.getSettingsForRole(role);
-    res.json({ categories });
-  } catch (err) {
-    console.error("Settings GET error:", err);
-    res.status(500).json({ message: err?.message || "Failed to load settings" });
-  }
-});
-app.patch("/api/settings", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
-  try {
-    const { key, value, confirmCritical } = req.body || {};
-    if (!key || typeof key !== "string") {
-      return res.status(400).json({ message: "Invalid setting key" });
-    }
-    const role = req.user?.role || "user";
-    const result = await storage.updateSystemSetting({
-      role,
-      settingKey: key,
-      value: value ?? null,
-      confirmCritical: Boolean(confirmCritical),
-      updatedBy: req.user?.username || "system"
-    });
-    if (result.status === "not_found") {
-      return res.status(404).json({ message: result.message });
-    }
-    if (result.status === "forbidden") {
-      return res.status(403).json({ message: result.message });
-    }
-    if (result.status === "requires_confirmation") {
-      return res.status(409).json({ message: result.message, requiresConfirmation: true });
-    }
-    if (result.status === "invalid") {
-      return res.status(400).json({ message: result.message });
-    }
-    if (result.status === "updated") {
-      tabVisibilityCache.clear();
-      invalidateRuntimeSettingsCache();
-      await storage.createAuditLog({
-        action: result.setting?.isCritical ? "CRITICAL_SETTING_UPDATED" : "SETTING_UPDATED",
-        performedBy: req.user?.username || "system",
-        targetResource: key,
-        details: `Updated setting ${key} to "${String(result.setting?.value ?? "")}"`
-      });
-      if (key === "ai_timeout_ms") {
-        process.env.OLLAMA_TIMEOUT_MS = String(result.setting?.value ?? DEFAULT_AI_TIMEOUT_MS);
-      }
-      if (result.shouldBroadcast) {
-        invalidateMaintenanceCache();
-        const maintenanceState = await getMaintenanceStateCached(true);
-        broadcastWsMessage({
-          type: "maintenance_update",
-          maintenance: maintenanceState.maintenance,
-          message: maintenanceState.message,
-          mode: maintenanceState.type,
-          startTime: maintenanceState.startTime,
-          endTime: maintenanceState.endTime
-        });
-      } else {
-        broadcastWsMessage({
-          type: "settings_updated",
-          key,
-          updatedBy: req.user?.username || "system"
-        });
-      }
-    }
-    return res.json({
-      success: result.status === "updated" || result.status === "unchanged",
-      status: result.status,
-      message: result.message,
-      setting: result.setting || null
-    });
-  } catch (err) {
-    console.error("Settings PATCH error:", err);
-    res.status(500).json({ message: err?.message || "Failed to update setting" });
-  }
-});
-app.post("/api/activity/heartbeat", authenticateToken, async (req, res) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ ok: false, message: "Unauthenticated" });
-    }
-    const activityId = req.user.activityId;
-    if (API_DEBUG_LOGS) {
-      console.log("================================");
-      console.log("HEARTBEAT MASUK");
-      console.log("Username:", req.user.username);
-      console.log("ActivityId:", activityId);
-      console.log("Time:", (/* @__PURE__ */ new Date()).toISOString());
-      console.log("================================");
-    }
-    await storage.updateActivity(activityId, {
-      lastActivityTime: /* @__PURE__ */ new Date(),
-      isActive: true
-    });
-    res.json({
-      ok: true,
-      status: "ONLINE",
-      lastActivityTime: (/* @__PURE__ */ new Date()).toISOString()
-    });
-  } catch (err) {
-    console.error("Heartbeat error:", err);
-    res.status(500).json({ ok: false });
-  }
-});
-app.get("/api/imports", authenticateToken, async (req, res) => {
-  try {
-    const allImports = await storage.getImports();
-    const importsWithRowCount = await Promise.all(
-      allImports.map(async (imp) => {
-        const rowCount = await storage.getDataRowCountByImport(imp.id);
-        return { ...imp, rowCount };
-      })
-    );
-    res.json({ imports: importsWithRowCount });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.post("/api/imports", authenticateToken, async (req, res) => {
-  try {
-    const { name, filename, rows, data } = req.body;
-    const dataRows2 = rows || data || [];
-    if (!Array.isArray(dataRows2) || dataRows2.length === 0) {
-      return res.status(400).json({ message: "No data rows provided" });
-    }
-    const importRecord = await storage.createImport({
-      name,
-      filename,
-      createdBy: req.user?.username
-    });
-    const INSERT_CHUNK_SIZE = 20;
-    for (let i = 0; i < dataRows2.length; i += INSERT_CHUNK_SIZE) {
-      const chunk = dataRows2.slice(i, i + INSERT_CHUNK_SIZE);
-      await Promise.all(
-        chunk.map(
-          (row) => storage.createDataRow({
-            importId: importRecord.id,
-            jsonDataJsonb: row
-          })
-        )
-      );
-    }
-    await storage.createAuditLog({
-      action: "IMPORT_DATA",
-      performedBy: req.user.username,
-      targetResource: name,
-      details: `Imported ${dataRows2.length} rows from ${filename}`
-    });
-    res.json(importRecord);
-  } catch (error) {
-    console.error("Import error:", error);
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get("/api/imports/:id", authenticateToken, async (req, res) => {
-  try {
-    const importRecord = await storage.getImportById(req.params.id);
-    if (!importRecord) {
-      return res.status(404).json({ message: "Import not found" });
-    }
-    const rows = await storage.getDataRowsByImport(req.params.id);
-    res.json({ import: importRecord, rows });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get(
-  "/api/imports/:id/data",
-  authenticateToken,
+registerImportRoutes(app, {
+  storage,
+  importsRepository,
+  importAnalysisService,
+  authenticateToken: modularAuthenticateToken,
+  requireRole: modularRequireRole,
+  requireTabAccess: modularRequireTabAccess,
   searchRateLimiter,
-  async (req, res) => {
-    try {
-      const runtimeSettings = await getRuntimeSettingsCached();
-      const importId = req.params.id;
-      const rawPage = Number(req.query.page ?? 1);
-      const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
-      const dbProtected = controlState.dbProtection || lastDbLatencyMs > 1e3;
-      const maxLimit = Math.min(dbProtected ? 120 : 500, runtimeSettings.viewerRowsPerPage);
-      const rawLimit = Number(req.query.limit ?? runtimeSettings.viewerRowsPerPage);
-      const requestedLimit = Number.isFinite(rawLimit) ? Math.floor(rawLimit) : runtimeSettings.viewerRowsPerPage;
-      const limit = Math.max(10, Math.min(requestedLimit, maxLimit));
-      const offset = (page - 1) * limit;
-      const search = String(req.query.search || "").trim();
-      if (API_DEBUG_LOGS) {
-        console.log(`\u{1F4E5} /api/imports/:id/data called: importId=${importId}, page=${page}, search="${search}"`);
-      }
-      if (!importId) {
-        return res.status(400).json({ message: "importId is required" });
-      }
-      const result = await storage.searchDataRows({
-        importId,
-        search: search || null,
-        limit,
-        offset
-      });
-      const safeRows = result.rows || [];
-      const formattedRows = safeRows.map((row) => ({
-        id: row.id,
-        importId: row.importId,
-        jsonDataJsonb: row.jsonDataJsonb
-      }));
-      if (API_DEBUG_LOGS) {
-        console.log(`\u{1F4E4} Returning ${formattedRows.length} rows, total: ${result.total}`);
-      }
-      return res.json({
-        rows: formattedRows,
-        total: result.total || 0,
-        page,
-        limit
-      });
-    } catch (error) {
-      console.error("GET /api/imports/:id/data error:", error);
-      return res.status(500).json({ message: error.message });
-    }
-  }
-);
-app.get(
-  "/api/search/global",
-  authenticateToken,
+  getRuntimeSettingsCached,
+  isDbProtected: getDbProtection
+});
+registerSearchRoutes(app, {
+  storage,
+  searchRepository,
+  authenticateToken: modularAuthenticateToken,
   searchRateLimiter,
-  async (req, res) => {
-    try {
-      const search = String(req.query.q || "").trim();
-      if (API_DEBUG_LOGS) {
-        console.log(`\u{1F50E} /api/search/global called: search="${search}"`);
-      }
-      const runtimeSettings = await getRuntimeSettingsCached();
-      const rawPage = Number(req.query.page ?? 1);
-      const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
-      const dbProtected = controlState.dbProtection || lastDbLatencyMs > 1e3;
-      const maxTotal = runtimeSettings.searchResultLimit;
-      const maxLimit = dbProtected ? Math.min(maxTotal, 80) : maxTotal;
-      const requestedLimit = Number(req.query.limit ?? 50);
-      const safeRequestedLimit = Number.isFinite(requestedLimit) ? Math.floor(requestedLimit) : 50;
-      const limit = Math.max(10, Math.min(safeRequestedLimit, maxLimit));
-      const offset = (page - 1) * limit;
-      if (offset >= maxTotal) {
-        return res.json({
-          columns: [],
-          rows: [],
-          results: [],
-          total: maxTotal,
-          page,
-          limit
-        });
-      }
-      const remainingBudget = Math.max(1, maxTotal - offset);
-      const effectiveLimit = Math.min(limit, remainingBudget);
-      if (search.length < 2) {
-        if (API_DEBUG_LOGS) {
-          console.log(`\u{1F50E} Search too short (${search.length} chars), returning empty`);
-        }
-        return res.json({
-          columns: [],
-          rows: [],
-          results: [],
-          total: 0
-        });
-      }
-      const result = await storage.searchGlobalDataRows({
-        search,
-        limit: effectiveLimit,
-        offset
-      });
-      if (API_DEBUG_LOGS) {
-        console.log(`\u{1F50E} Global search found: ${result.rows.length} rows (total: ${result.total})`);
-      }
-      const parsedRows = result.rows.map((r) => {
-        const base = r.jsonDataJsonb && typeof r.jsonDataJsonb === "object" ? r.jsonDataJsonb : {};
-        const sourceFile = r.importFilename || r.importName || "";
-        return {
-          ...base,
-          "Source File": sourceFile
-        };
-      });
-      const columnSet = /* @__PURE__ */ new Set();
-      for (const row of parsedRows) {
-        Object.keys(row).forEach((key) => columnSet.add(key));
-      }
-      if (API_DEBUG_LOGS) {
-        if (parsedRows.length > 0) {
-          console.log(`\u{1F50E} Sample parsed row keys: ${Object.keys(parsedRows[0]).slice(0, 20).join(",")}`);
-        } else {
-          console.log("\u{1F50E} No parsed rows to sample");
-        }
-      }
-      return res.json({
-        columns: Array.from(columnSet),
-        rows: parsedRows,
-        results: parsedRows,
-        total: Math.min(result.total, maxTotal),
-        page,
-        limit: effectiveLimit
-      });
-    } catch (error) {
-      console.error("GET /api/search/global error:", error);
-      return res.status(500).json({ message: error.message });
-    }
-  }
-);
-app.get(
-  "/api/search",
-  authenticateToken,
-  searchRateLimiter,
-  async (req, res) => {
-    try {
-      const search = String(req.query.q || "").trim();
-      if (search.length < 2) {
-        return res.json({ results: [], total: 0 });
-      }
-      const queryResult = await storage.searchSimpleDataRows(search);
-      const rows = queryResult.rows || [];
-      const results = rows.map((r) => ({
-        ...r.jsonDataJsonb,
-        _importId: r.importId,
-        _importName: r.importName
-      }));
-      return res.json({
-        results,
-        total: results.length
-      });
-    } catch (err) {
-      console.error("GET /api/search error:", err);
-      res.status(500).json({ message: err.message });
-    }
-  }
-);
-function isValidMalaysianIC(ic) {
-  if (!/^\d{12}$/.test(ic)) return false;
-  if (ic.startsWith("01")) return false;
-  const mm = parseInt(ic.substring(2, 4), 10);
-  const dd = parseInt(ic.substring(4, 6), 10);
-  if (mm < 1 || mm > 12) return false;
-  if (dd < 1 || dd > 31) return false;
-  const daysInMonth = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  if (dd > daysInMonth[mm - 1]) return false;
-  return true;
-}
-var excludeColumnsFromIC = [
-  "AGREEMENT",
-  "LOAN",
-  "ACCOUNT",
-  "AKAUN",
-  "PINJAMAN",
-  "CONTRACT",
-  "KONTRAK",
-  "REFERENCE",
-  "TRANSACTION",
-  "TRANSAKSI",
-  "PHONE",
-  "TELEFON",
-  "MOBILE",
-  "HANDPHONE",
-  "FAX",
-  "FAKS",
-  "E-MONEY"
-];
-var excludeColumnsFromPolice = [
-  "VEHICLE",
-  "KENDERAAN",
-  "REGISTRATION",
-  "PLATE",
-  "RSTG",
-  "CAR",
-  "KERETA",
-  "MOTOR",
-  "MOTOSIKAL",
-  "VEH",
-  "PENDAFTARAN"
-];
-function splitCellValue(val) {
-  const withoutLabels = val.replace(/\b(IC\d*|NRIC|NO\.?\s*IC|KAD PENGENALAN|KP)\s*[:=]/gi, " ");
-  return withoutLabels.split(/[\/,;|\n\r\s]+/).map((s) => s.trim()).filter((s) => s.length > 0);
-}
-function analyzeDataRows(rows) {
-  const icLelakiSet = /* @__PURE__ */ new Set();
-  const icPerempuanSet = /* @__PURE__ */ new Set();
-  const noPolisSet = /* @__PURE__ */ new Set();
-  const noTenteraSet = /* @__PURE__ */ new Set();
-  const passportMYSet = /* @__PURE__ */ new Set();
-  const passportLuarNegaraSet = /* @__PURE__ */ new Set();
-  const valueCounts = {};
-  const processedValues = /* @__PURE__ */ new Set();
-  const passportPattern = /^[A-Z]{1,2}\d{6,9}$/i;
-  const malaysiaPassportPrefixes = ["A", "H", "K", "Q"];
-  const excludePrefixes = ["LOT", "NO", "PT", "KM", "JLN", "BLK", "TMN", "KG", "SG", "BTU", "RM"];
-  const isValidPolisNo = (val) => {
-    if (/^P\d{3,}$/i.test(val)) return false;
-    if (/^G\d{5,10}$/i.test(val)) return true;
-    if (/^(RF|SW)\d{4,10}$/i.test(val)) return true;
-    if (/^(RFT|PDRM|POLIS|POL)\d{3,10}$/i.test(val)) return true;
-    return false;
-  };
-  const isValidTenteraNo = (val) => {
-    if (/^M\d{3,}$/i.test(val)) return false;
-    if (/^T\d{5,10}$/i.test(val)) return true;
-    if (/^(TD|TA|TT)\d{4,10}$/i.test(val)) return true;
-    if (/^(TLDM|TUDM|ARMY|ATM|MAF|TEN|MIL)\d{3,10}$/i.test(val)) return true;
-    return false;
-  };
-  rows.forEach((row) => {
-    try {
-      const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
-      Object.entries(data).forEach(([key, val]) => {
-        if (val && typeof val === "string") {
-          const keyUpper = key.toUpperCase();
-          const isExcludedFromIC = excludeColumnsFromIC.some((excl) => keyUpper.includes(excl));
-          const isExcludedFromPolice = excludeColumnsFromPolice.some((excl) => keyUpper.includes(excl));
-          const fragments = splitCellValue(val.toString());
-          for (const fragment of fragments) {
-            const cleaned = fragment.toUpperCase().replace(/[^A-Z0-9]/g, "");
-            if (cleaned.length === 0) continue;
-            valueCounts[cleaned] = (valueCounts[cleaned] || 0) + 1;
-            if (processedValues.has(cleaned)) continue;
-            processedValues.add(cleaned);
-            if (!isExcludedFromIC && isValidMalaysianIC(cleaned)) {
-              const lastDigit = parseInt(cleaned.charAt(11), 10);
-              if (lastDigit % 2 === 1) {
-                icLelakiSet.add(cleaned);
-              } else {
-                icPerempuanSet.add(cleaned);
-              }
-            } else if (!isExcludedFromPolice && isValidPolisNo(cleaned)) {
-              noPolisSet.add(cleaned);
-            } else if (isValidTenteraNo(cleaned)) {
-              noTenteraSet.add(cleaned);
-            } else if (passportPattern.test(cleaned)) {
-              const isExcluded = excludePrefixes.some((prefix) => cleaned.startsWith(prefix));
-              if (!isExcluded) {
-                const firstChar = cleaned.charAt(0);
-                if (malaysiaPassportPrefixes.includes(firstChar)) {
-                  passportMYSet.add(cleaned);
-                } else {
-                  passportLuarNegaraSet.add(cleaned);
-                }
-              }
-            }
-          }
-        }
-      });
-    } catch {
-    }
-  });
-  const icLelaki = Array.from(icLelakiSet);
-  const icPerempuan = Array.from(icPerempuanSet);
-  const noPolis = Array.from(noPolisSet);
-  const noTentera = Array.from(noTenteraSet);
-  const passportMY = Array.from(passportMYSet);
-  const passportLuarNegara = Array.from(passportLuarNegaraSet);
-  const duplicateItems = Object.entries(valueCounts).filter(([_, count2]) => count2 > 1).map(([value, count2]) => ({ value, count: count2 })).sort((a, b) => b.count - a.count);
-  return {
-    icLelaki: { count: icLelaki.length, samples: icLelaki.slice(0, 50) },
-    icPerempuan: { count: icPerempuan.length, samples: icPerempuan.slice(0, 50) },
-    noPolis: { count: noPolis.length, samples: noPolis.slice(0, 50) },
-    noTentera: { count: noTentera.length, samples: noTentera.slice(0, 50) },
-    passportMY: { count: passportMY.length, samples: passportMY.slice(0, 50) },
-    passportLuarNegara: { count: passportLuarNegara.length, samples: passportLuarNegara.slice(0, 50) },
-    duplicates: { count: duplicateItems.length, items: duplicateItems.slice(0, 50) }
-  };
-}
-app.get(
-  "/api/imports/:id/analyze",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("analysis"),
-  async (req, res) => {
-    try {
-      const importRecord = await storage.getImportById(req.params.id);
-      if (!importRecord) {
-        return res.status(404).json({ message: "Import not found" });
-      }
-      const rows = await storage.getDataRowsByImport(req.params.id);
-      const analysis = analyzeDataRows(rows);
-      res.json({
-        import: { id: importRecord.id, name: importRecord.name, filename: importRecord.filename },
-        totalRows: rows.length,
-        analysis
-      });
-    } catch (error) {
-      res.status(500).json({ message: error.message });
-    }
-  }
-);
-app.get("/api/analyze/all-summary", authenticateToken, async (req, res) => {
-  try {
-    const imports2 = await storage.getImports();
-    if (imports2.length === 0) {
-      return res.json({
-        totalImports: 0,
-        totalRows: 0,
-        imports: [],
-        analysis: {
-          icLelaki: { count: 0, samples: [] },
-          icPerempuan: { count: 0, samples: [] },
-          noPolis: { count: 0, samples: [] },
-          noTentera: { count: 0, samples: [] },
-          passportMY: { count: 0, samples: [] },
-          passportLuarNegara: { count: 0, samples: [] },
-          duplicates: { count: 0, items: [] }
-        }
-      });
-    }
-    let allRows = [];
-    const importsWithCounts = await Promise.all(
-      imports2.map(async (imp) => {
-        const rows = await storage.getDataRowsByImport(imp.id);
-        allRows = allRows.concat(rows);
-        return { id: imp.id, name: imp.name, filename: imp.filename, rowCount: rows.length };
-      })
-    );
-    const analysis = analyzeDataRows(allRows);
-    res.json({
-      totalImports: imports2.length,
-      totalRows: allRows.length,
-      imports: importsWithCounts,
-      analysis
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+  getRuntimeSettingsCached,
+  isDbProtected: getDbProtection
 });
-app.patch("/api/imports/:id", authenticateToken, async (req, res) => {
-  try {
-    const { name } = req.body;
-    const updated = await storage.updateImportName(req.params.id, name);
-    if (!updated) {
-      return res.status(404).json({ message: "Import not found" });
-    }
-    await storage.createAuditLog({
-      action: "UPDATE_IMPORT",
-      performedBy: req.user.username,
-      targetResource: name
-    });
-    res.json(updated);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+registerAiRoutes(app, {
+  storage,
+  authenticateToken: modularAuthenticateToken,
+  requireRole: modularRequireRole,
+  withAiConcurrencyGate,
+  getRuntimeSettingsCached,
+  aiSearchService,
+  categoryStatsService,
+  aiChatService,
+  aiIndexService,
+  getOllamaConfig,
+  defaultAiTimeoutMs: DEFAULT_AI_TIMEOUT_MS
 });
-app.patch("/api/imports/:id/rename", authenticateToken, async (req, res) => {
-  try {
-    const { name } = req.body;
-    const updated = await storage.updateImportName(req.params.id, name);
-    if (!updated) {
-      return res.status(404).json({ message: "Import not found" });
-    }
-    await storage.createAuditLog({
-      action: "UPDATE_IMPORT",
-      performedBy: req.user.username,
-      targetResource: name
-    });
-    res.json(updated);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+registerSettingsRoutes(app, {
+  storage,
+  authenticateToken: modularAuthenticateToken,
+  requireRole: modularRequireRole,
+  clearTabVisibilityCache: clearModularTabVisibilityCache,
+  invalidateRuntimeSettingsCache,
+  invalidateMaintenanceCache,
+  getMaintenanceStateCached,
+  broadcastWsMessage,
+  defaultAiTimeoutMs: DEFAULT_AI_TIMEOUT_MS
 });
-app.delete("/api/imports/:id", authenticateToken, requireRole("admin", "superuser"), async (req, res) => {
-  try {
-    const importRecord = await storage.getImportById(req.params.id);
-    const deleted = await storage.deleteImport(req.params.id);
-    if (!deleted) {
-      return res.status(404).json({ message: "Import not found" });
-    }
-    await storage.createAuditLog({
-      action: "DELETE_IMPORT",
-      performedBy: req.user.username,
-      targetResource: importRecord?.name || req.params.id
-    });
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+registerOperationsRoutes(app, {
+  storage,
+  auditRepository,
+  backupsRepository,
+  analyticsRepository,
+  authenticateToken: modularAuthenticateToken,
+  requireRole: modularRequireRole,
+  requireTabAccess: modularRequireTabAccess,
+  withExportCircuit,
+  isExportCircuitOpenError: (error) => error instanceof CircuitOpenError,
+  connectedClients
 });
-app.post("/api/search/advanced", authenticateToken, async (req, res) => {
-  try {
-    const { filters, logic, page = 1, limit = 50 } = req.body;
-    const runtimeSettings = await getRuntimeSettingsCached();
-    const parsedPage = Number(page);
-    const safePage = Number.isFinite(parsedPage) ? Math.max(1, Math.floor(parsedPage)) : 1;
-    const maxTotal = runtimeSettings.searchResultLimit;
-    const maxLimit = maxTotal;
-    const parsedLimit = Number(limit);
-    const safeRequestedLimit = Number.isFinite(parsedLimit) ? Math.floor(parsedLimit) : 50;
-    const safeLimit = Math.max(10, Math.min(safeRequestedLimit, maxLimit));
-    const offset = (safePage - 1) * safeLimit;
-    if (offset >= maxTotal) {
-      return res.json({
-        results: [],
-        headers: [],
-        total: maxTotal,
-        page: safePage,
-        limit: safeLimit
-      });
-    }
-    const remainingBudget = Math.max(1, maxTotal - offset);
-    const effectiveLimit = Math.min(safeLimit, remainingBudget);
-    const rawResult = await storage.advancedSearchDataRows(filters, logic || "AND", effectiveLimit, offset);
-    const importsList = await storage.getImports();
-    const importMap = new Map(importsList.map((imp) => [imp.id, imp]));
-    const parsedResults = rawResult.rows.map((row) => {
-      const base = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
-      const imp = importMap.get(row.importId);
-      const sourceFile = imp?.filename || imp?.name || "";
-      return { ...base, "Source File": sourceFile };
-    });
-    const columnSet = /* @__PURE__ */ new Set();
-    for (const row of parsedResults) {
-      Object.keys(row).forEach((key) => columnSet.add(key));
-    }
-    const headers = Array.from(columnSet);
-    res.json({
-      results: parsedResults,
-      headers,
-      total: Math.min(rawResult.total || 0, maxTotal),
-      page: safePage,
-      limit: effectiveLimit
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+registerCollectionRoutes(app, {
+  storage,
+  authenticateToken: modularAuthenticateToken,
+  requireRole: modularRequireRole,
+  requireTabAccess: modularRequireTabAccess
 });
-app.get("/api/ai/config", authenticateToken, requireRole("user", "admin", "superuser"), async (req, res) => {
-  const runtimeSettings = await getRuntimeSettingsCached();
-  res.json({
-    ...getOllamaConfig(),
-    aiEnabled: runtimeSettings.aiEnabled,
-    semanticSearchEnabled: runtimeSettings.semanticSearchEnabled,
-    aiTimeoutMs: runtimeSettings.aiTimeoutMs
-  });
-});
-var extractJsonObject = (text2) => {
-  const first = text2.indexOf("{");
-  const last = text2.lastIndexOf("}");
-  if (first === -1 || last === -1 || last <= first) return null;
-  const jsonText = text2.slice(first, last + 1);
-  try {
-    return JSON.parse(jsonText);
-  } catch {
-    return null;
-  }
-};
-var parseIntentFallback = (query) => {
-  const lower = query.toLowerCase();
-  const digits = query.match(/\d{6,}/g) || [];
-  const ic = digits.find((d) => d.length === 12) || null;
-  const account = digits.find((d) => d.length >= 10 && d.length <= 16) || null;
-  const phone = digits.find((d) => d.length >= 9 && d.length <= 11) || null;
-  const needBranch = /cawangan|branch|terdekat|nearest|lokasi|alamat/i.test(query);
-  const name = needBranch ? null : ic ? null : query.trim();
-  return {
-    intent: "search_person",
-    entities: {
-      name,
-      ic,
-      account_no: account,
-      phone,
-      address: null,
-      count_groups: null
-    },
-    need_nearest_branch: needBranch
-  };
-};
-var DEFAULT_COUNT_GROUPS = [
-  {
-    key: "kerajaan",
-    terms: [
-      "kerajaan",
-      "government",
-      "gov",
-      "gomen",
-      "sector awam",
-      "public sector",
-      "kementerian",
-      "jabatan",
-      "agensi",
-      "persekutuan",
-      "negeri",
-      "majlis",
-      "kkm",
-      "kpm",
-      "kpt",
-      "moe",
-      "moh",
-      "state government",
-      "federal",
-      "sekolah",
-      "guru",
-      "teacher",
-      "cikgu",
-      "pendidikan",
-      "government"
-    ],
-    fields: [
-      "EMPLOYER NAME",
-      "NATURE OF BUSINESS",
-      "NOB",
-      "EmployerName",
-      "Nature of Business",
-      "Company",
-      "Nama Majikan",
-      "Majikan",
-      "Department",
-      "Agensi"
-    ],
-    matchMode: "contains"
-  },
-  {
-    key: "polis",
-    terms: ["polis", "police", "pdrm", "polis diraja malaysia", "ipd", "ipk"],
-    fields: [
-      "EMPLOYER NAME",
-      "NATURE OF BUSINESS",
-      "NOB",
-      "EmployerName",
-      "Nature of Business",
-      "Company",
-      "Nama Majikan",
-      "Majikan",
-      "Department",
-      "Agensi"
-    ],
-    matchMode: "contains"
-  },
-  {
-    key: "tentera",
-    terms: ["tentera", "army", "military", "atm", "angkatan tentera", "tldm", "tudm", "tentera darat", "tentera laut", "tentera udara"],
-    fields: [
-      "EMPLOYER NAME",
-      "NATURE OF BUSINESS",
-      "NOB",
-      "EmployerName",
-      "Nature of Business",
-      "Company",
-      "Nama Majikan",
-      "Majikan",
-      "Department",
-      "Agensi"
-    ],
-    matchMode: "contains"
-  },
-  {
-    key: "hospital",
-    terms: ["hospital", "klinik", "clinic", "medical", "kesihatan", "health", "klin ik", "medical center", "healthcare"],
-    fields: [
-      "EMPLOYER NAME",
-      "NATURE OF BUSINESS",
-      "NOB",
-      "EmployerName",
-      "Nature of Business",
-      "Company",
-      "Nama Majikan",
-      "Majikan",
-      "Department",
-      "Agensi"
-    ],
-    matchMode: "contains"
-  },
-  {
-    key: "hotel",
-    terms: ["hotel", "hospitality", "resort", "inn", "motel", "restaurant"],
-    fields: [
-      "EMPLOYER NAME",
-      "NATURE OF BUSINESS",
-      "NOB",
-      "EmployerName",
-      "Nature of Business",
-      "Company",
-      "Nama Majikan",
-      "Majikan",
-      "Department",
-      "Agensi"
-    ],
-    matchMode: "contains"
-  },
-  {
-    key: "swasta",
-    terms: ["swasta", "private", "sdn bhd", "bhd", "enterprise", "trading", "ltd", "plc"],
-    fields: [
-      "EMPLOYER NAME",
-      "NATURE OF BUSINESS",
-      "NOB",
-      "EmployerName",
-      "Nature of Business",
-      "Company",
-      "Nama Majikan",
-      "Majikan",
-      "Department",
-      "Agensi"
-    ],
-    matchMode: "complement"
-  }
-];
-var CATEGORY_RULES_CACHE_MS = 6e4;
-var categoryRulesCache = null;
-var loadCategoryRules = async () => {
-  if (categoryRulesCache && Date.now() - categoryRulesCache.ts < CATEGORY_RULES_CACHE_MS) {
-    return categoryRulesCache.rules;
-  }
-  try {
-    const rules = await storage.getCategoryRules();
-    if (rules.length > 0) {
-      categoryRulesCache = { ts: Date.now(), rules };
-      return rules;
-    }
-  } catch {
-  }
-  return DEFAULT_COUNT_GROUPS;
-};
-var detectCountRequest = (query, rules) => {
-  const lower = query.toLowerCase();
-  const trigger = /(berapa|jumlah|bilangan|ramai|count|how many|berapa orang)/i.test(lower);
-  if (!trigger) return null;
-  const enabledRules = rules.filter((rule) => rule.enabled !== false);
-  const matched = enabledRules.filter(
-    (group) => group.terms.some((term) => lower.includes(term.toLowerCase())) || lower.includes(group.key)
-  );
-  return matched.length > 0 ? matched : enabledRules;
-};
-var statsCache = /* @__PURE__ */ new Map();
-var STATS_CACHE_MS = 6e4;
-var categoryStatsInflight = /* @__PURE__ */ new Map();
-var MAX_STATS_CACHE_ENTRIES = Number(process.env.SQR_MAX_STATS_CACHE_ENTRIES ?? (LOW_MEMORY_MODE ? "40" : "120"));
-var enqueueCategoryStatsCompute = (keys, rules) => {
-  const normalized = Array.from(new Set(keys)).filter(Boolean).sort();
-  if (!normalized.length) return;
-  const queueKey = normalized.join("|");
-  if (categoryStatsInflight.has(queueKey)) return;
-  const task = storage.computeCategoryStatsForKeys(normalized, rules).then(() => void 0).catch((err) => {
-    console.error("Category stats compute failed:", err?.message || err);
-  }).finally(() => {
-    categoryStatsInflight.delete(queueKey);
-  });
-  categoryStatsInflight.set(queueKey, task);
-};
-var tokenizeQuery = (text2) => {
-  return text2.toLowerCase().split(/\s+/).map((t) => t.replace(/[^a-z0-9]/gi, "")).filter((t) => t.length >= 3);
-};
-var buildFieldMatchSummary = (data, query) => {
-  const tokens = tokenizeQuery(query);
-  if (tokens.length === 0) return [];
-  const matches = [];
-  const entries = Object.entries(data || {}).slice(0, 80);
-  for (const [key, val] of entries) {
-    if (key === "id") continue;
-    const valueStr = String(val ?? "");
-    const valueLower = valueStr.toLowerCase();
-    let score = 0;
-    for (const t of tokens) {
-      if (valueLower.includes(t)) score += 1;
-    }
-    if (score > 0) {
-      matches.push({ key, value: valueStr, score });
-    }
-  }
-  return matches.sort((a, b) => b.score - a.score).slice(0, 6).map((m) => `${m.key}: ${m.value}`);
-};
-var parseIntent = async (query, timeoutMs = DEFAULT_AI_TIMEOUT_MS) => {
-  const intentMode = String(process.env.AI_INTENT_MODE || "fast").toLowerCase();
-  if (intentMode === "fast") {
-    return parseIntentFallback(query);
-  }
-  const system = `Anda hanya keluarkan JSON SAHAJA. Tugas: kenalpasti intent carian dan entiti.
-Format WAJIB:
-{"intent":"search_person","entities":{"name":null,"ic":null,"account_no":null,"phone":null,"address":null},"need_nearest_branch":false}
-Jika IC/MyKad ada, isi "ic". Jika akaun, isi "account_no". Jika nombor telefon, isi "phone".`;
-  const messages = [
-    { role: "system", content: system },
-    { role: "user", content: query }
-  ];
-  try {
-    const raw = await withAiCircuit(() => ollamaChat(messages, {
-      num_predict: 160,
-      temperature: 0.1,
-      top_p: 0.9,
-      timeoutMs
-    }));
-    const parsed = extractJsonObject(raw);
-    if (parsed && parsed.intent && parsed.entities) {
-      return {
-        intent: String(parsed.intent || "search_person"),
-        entities: {
-          name: parsed.entities?.name ?? null,
-          ic: parsed.entities?.ic ?? null,
-          account_no: parsed.entities?.account_no ?? null,
-          phone: parsed.entities?.phone ?? null,
-          address: parsed.entities?.address ?? null
-        },
-        need_nearest_branch: Boolean(parsed.need_nearest_branch)
-      };
-    }
-  } catch {
-  }
-  return parseIntentFallback(query);
-};
-var rowScore = (row, ic, name, account, phone) => {
-  const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
-  let score = 0;
-  const icDigits = ic ? ic.replace(/\D/g, "") : "";
-  const accountDigits = account ? account.replace(/\D/g, "") : "";
-  const phoneDigits = phone ? phone.replace(/\D/g, "") : "";
-  const entries = Object.entries(data).slice(0, 80);
-  for (const [key, val] of entries) {
-    const keyLower = key.toLowerCase();
-    const valueStr = String(val ?? "");
-    const valueDigits = valueStr.replace(/\D/g, "");
-    if (icDigits && valueDigits === icDigits) {
-      score += keyLower.includes("ic") || keyLower.includes("mykad") || keyLower.includes("nric") || keyLower.includes("kp") || keyLower.includes("id no") || keyLower.includes("idno") ? 20 : 10;
-    }
-    if (accountDigits && valueDigits === accountDigits) {
-      score += keyLower.includes("akaun") || keyLower.includes("account") ? 12 : 6;
-    }
-    if (phoneDigits && valueDigits === phoneDigits) {
-      score += keyLower.includes("telefon") || keyLower.includes("phone") || keyLower.includes("hp") ? 8 : 4;
-    }
-    if (name && valueStr.toLowerCase().includes(name.toLowerCase())) {
-      score += keyLower.includes("nama") || keyLower.includes("name") ? 6 : 2;
-    }
-  }
-  return score;
-};
-var scoreRowDigits = (row, digits) => {
-  let data = row?.jsonDataJsonb;
-  if (typeof data === "string") {
-    try {
-      data = JSON.parse(data);
-    } catch {
-      data = {};
-    }
-  }
-  if (!data || typeof data !== "object") data = {};
-  const keyGroups = [
-    { keys: ["No. MyKad", "ID No", "No Pengenalan", "IC", "NRIC", "MyKad"], score: 20 },
-    { keys: ["Account No", "Account Number", "Card No", "No Akaun", "Nombor Akaun Bank Pemohon"], score: 12 },
-    { keys: ["No. Telefon Rumah", "No. Telefon Bimbit", "Phone", "Handphone", "OfficePhone"], score: 8 }
-  ];
-  let best = 0;
-  for (const group of keyGroups) {
-    for (const key of group.keys) {
-      const val = data[key];
-      if (!val) continue;
-      const valueDigits = String(val).replace(/\D/g, "");
-      if (valueDigits === digits) {
-        best = Math.max(best, group.score);
-      }
-    }
-  }
-  return { score: best, parsed: data };
-};
-var extractLatLng = (data) => {
-  const keys = Object.keys(data);
-  const findValue = (names) => {
-    const key = keys.find((k) => names.includes(k.toLowerCase()));
-    if (!key) return null;
-    const val = Number(String(data[key]).replace(/[^0-9.\-]/g, ""));
-    return Number.isFinite(val) ? val : null;
-  };
-  const lat = findValue(["lat", "latitude", "latitud"]);
-  const lng = findValue(["lng", "long", "longitude", "longitud"]);
-  if (lat === null || lng === null) return null;
-  return { lat, lng };
-};
-var isLatLng = (value) => {
-  if (!value || typeof value !== "object") return false;
-  const v = value;
-  return typeof v.lat === "number" && Number.isFinite(v.lat) && typeof v.lng === "number" && Number.isFinite(v.lng);
-};
-var isNonEmptyString = (value) => {
-  return typeof value === "string" && value.trim().length > 0;
-};
-var hasPostcodeCoord = (value) => {
-  return isLatLng(value);
-};
-var extractCustomerPostcode = (data) => {
-  if (!data || typeof data !== "object") return null;
-  const entries = Object.entries(data);
-  const normalize = (v) => v.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const relationWords = [
-    "pasangan",
-    "wakil",
-    "hubungan",
-    "spouse",
-    "guardian",
-    "emergency",
-    "waris",
-    "ibu",
-    "bapa",
-    "suami",
-    "isteri"
-  ];
-  const relationWordsNorm = relationWords.map(normalize);
-  const extractDigits = (value) => {
-    if (value === void 0 || value === null) return null;
-    const raw = String(value);
-    const five = raw.match(/\b\d{5}\b/);
-    if (five) return five[0];
-    const four = raw.match(/\b\d{4}\b/);
-    if (four) return `0${four[0]}`;
-    return null;
-  };
-  const isRelationKey = (normalizedKey) => {
-    return relationWordsNorm.some((w) => normalizedKey.includes(w));
-  };
-  const pickByKey = (matcher, valueMatcher) => {
-    for (const [rawKey, rawValue] of entries) {
-      const keyNorm = normalize(rawKey);
-      if (!matcher(keyNorm, rawKey)) continue;
-      if (valueMatcher && !valueMatcher(keyNorm, rawValue)) continue;
-      const pc = extractDigits(rawValue);
-      if (pc) return pc;
-    }
-    return null;
-  };
-  const homePostcode = pickByKey(
-    (k) => !isRelationKey(k) && k.includes("home") && (k.includes("postcode") || k.includes("postalcode") || k.includes("poskod"))
-  );
-  if (homePostcode) return homePostcode;
-  const genericPostcode = pickByKey((k) => {
-    const isGenericPostcode = k === "poskod" || k === "postcode" || k === "postalcode" || k.endsWith("postcode") || k.endsWith("poskod");
-    if (!isGenericPostcode) return false;
-    if (/[23]$/.test(k)) return false;
-    if (k.includes("office")) return false;
-    if (isRelationKey(k)) return false;
-    return true;
-  });
-  if (genericPostcode) return genericPostcode;
-  return pickByKey(
-    (k) => {
-      if (isRelationKey(k)) return false;
-      if (k.includes("office")) return false;
-      return k.includes("homeaddress") || k.includes("alamatsuratmenyurat") || k === "address" || k.includes("alamat");
-    },
-    (_k, rawValue) => isNonEmptyString(rawValue)
-  );
-};
-var extractCustomerLocationHint = (data) => {
-  if (!data || typeof data !== "object") return "";
-  const normalizeKey = (v) => v.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const relationWords = ["pasangan", "wakil", "hubungan", "spouse", "guardian", "waris", "ibu", "bapa", "suami", "isteri"];
-  const relationWordsNorm = relationWords.map(normalizeKey);
-  const isRelationKey = (normalizedKey) => relationWordsNorm.some((w) => normalizedKey.includes(w));
-  const parts = [];
-  for (const [rawKey, rawValue] of Object.entries(data)) {
-    if (!isNonEmptyString(rawValue)) continue;
-    const key = normalizeKey(rawKey);
-    if (isRelationKey(key)) continue;
-    if (key.includes("office")) continue;
-    const isLocationField = key.includes("homeaddress") || key.includes("alamatsuratmenyurat") || key === "address" || key.includes("alamat") || key === "bandar" || key === "city" || key.includes("citytown") || key === "negeri" || key === "state" || key.includes("postcode") || key.includes("poskod");
-    if (!isLocationField) continue;
-    const val = String(rawValue).trim();
-    if (val) parts.push(val);
-  }
-  return Array.from(new Set(parts)).join(" ");
-};
-var toObjectJson = (value) => {
-  if (!value) return null;
-  if (typeof value === "object") return value;
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      return parsed && typeof parsed === "object" ? parsed : null;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-};
-var buildExplanation = async (payload) => {
-  const template = () => {
-    if (payload.countSummary && payload.countSummary.length > 0) {
-      return payload.countSummary.join("\n");
-    }
-    const personLines = payload.personSummary.length > 0 ? payload.personSummary.map((i) => `${i.label}: ${i.value}`).join("\n") : "Tiada maklumat pelanggan dijumpai.";
-    const branchLines = payload.branchSummary.length > 0 ? payload.branchSummary.map((i) => `${i.label}: ${i.value}`).join("\n") : payload.missingCoords ? "Lokasi pelanggan tidak lengkap (tiada LAT/LNG atau Postcode)." : payload.branchTextSearch ? "Tiada padanan cawangan ditemui berdasarkan lokasi/teks." : "Tiada maklumat cawangan dijumpai.";
-    let decisionLine = "Tiada cadangan dibuat.";
-    if (payload.decision) {
-      const timeInfo = payload.estimatedMinutes ? ` Anggaran masa ${payload.estimatedMinutes} minit.` : "";
-      const modeInfo = payload.travelMode ? ` Mod: ${payload.travelMode}.` : "";
-      if (payload.distanceKm && payload.branch) {
-        decisionLine = `Cadangan: ${payload.decision}. Jarak ke ${payload.branch} adalah ${payload.distanceKm.toFixed(1)}KM.${timeInfo}${modeInfo}`;
-      } else {
-        decisionLine = `Cadangan: ${payload.decision}.${timeInfo}${modeInfo}`;
-      }
-    } else if (payload.branchSummary.length > 0) {
-      decisionLine = "Cadangan: Sila hubungi/kunjungi cawangan di atas.";
-    }
-    const base = [
-      "Maklumat Pelanggan:",
-      personLines,
-      "",
-      "Cadangan Cawangan Terdekat:",
-      branchLines,
-      "",
-      decisionLine
-    ];
-    if (payload.matchFields && payload.matchFields.length > 0) {
-      base.push("", "Padanan Medan (Top):", payload.matchFields.join("\n"));
-    }
-    if (payload.suggestions && payload.suggestions.length > 0) {
-      base.push("", "Cadangan Rekod (fuzzy):", payload.suggestions.join("\n"));
-    }
-    return base.join("\n");
-  };
-  return template();
-};
-var searchCache = /* @__PURE__ */ new Map();
-var searchInflight = /* @__PURE__ */ new Map();
-global.__searchInflightMap = searchInflight;
-var SEARCH_CACHE_MS = 6e4;
-var MAX_SEARCH_CACHE_ENTRIES = Number(process.env.SQR_MAX_SEARCH_CACHE_ENTRIES ?? (LOW_MEMORY_MODE ? "60" : "180"));
-var SEARCH_FAST_TIMEOUT_MS = 5500;
-function trimCacheEntries(cache, maxEntries) {
-  if (cache.size <= maxEntries) return;
-  const excess = cache.size - maxEntries;
-  const keysByAge = Array.from(cache.entries()).sort((a, b) => a[1].ts - b[1].ts).slice(0, excess).map(([key]) => key);
-  for (const key of keysByAge) {
-    cache.delete(key);
-  }
-}
 setInterval(() => {
   const now = Date.now();
   for (const [ip, bucket] of adaptiveRateState.entries()) {
@@ -10921,1788 +13963,9 @@ setInterval(() => {
       adaptiveRateState.delete(ip);
     }
   }
-  for (const [key, entry] of searchCache.entries()) {
-    if (now - entry.ts >= SEARCH_CACHE_MS) {
-      searchCache.delete(key);
-    }
-  }
-  trimCacheEntries(searchCache, Math.max(10, MAX_SEARCH_CACHE_ENTRIES));
-  for (const [key, entry] of statsCache.entries()) {
-    if (now - entry.ts >= STATS_CACHE_MS) {
-      statsCache.delete(key);
-    }
-  }
-  trimCacheEntries(statsCache, Math.max(10, MAX_STATS_CACHE_ENTRIES));
+  aiSearchService.sweepCaches(now);
 }, 3e4).unref();
-var withTimeout = (promise, ms) => {
-  return new Promise((resolve, reject) => {
-    const id = setTimeout(() => reject(new Error("timeout")), ms);
-    promise.then((val) => {
-      clearTimeout(id);
-      resolve(val);
-    }).catch((err) => {
-      clearTimeout(id);
-      reject(err);
-    });
-  });
-};
-var computeAiSearch = async (query, userKey, semanticSearchEnabled, aiTimeoutMs) => {
-  const intent = await parseIntent(query, aiTimeoutMs);
-  const entities = intent.entities || {};
-  const keywordTerms = [
-    entities.ic,
-    entities.account_no,
-    entities.phone,
-    entities.name
-  ].filter(Boolean);
-  const keywordQuery = keywordTerms.length > 0 ? keywordTerms[0] : query;
-  const digitsOnly = keywordQuery.replace(/[^0-9]/g, "");
-  const hasDigitsQuery = digitsOnly.length >= 6;
-  const keywordResults = hasDigitsQuery ? await storage.aiKeywordSearch({ query: keywordQuery, limit: 10 }) : await storage.aiNameSearch({ query: keywordQuery, limit: 10 });
-  const queryDigits = keywordQuery.replace(/[^0-9]/g, "");
-  let fallbackDigitsResults = [];
-  if (!hasDigitsQuery && keywordResults.length === 0 && queryDigits.length >= 6) {
-    fallbackDigitsResults = await storage.aiDigitsSearch({ digits: queryDigits, limit: 25 });
-  }
-  if (process.env.AI_DEBUG === "1") {
-    console.log("\u{1F9E0} AI_SEARCH DEBUG", {
-      query,
-      keywordQuery,
-      queryDigits,
-      keywordCount: keywordResults.length,
-      fallbackDigitsCount: fallbackDigitsResults.length
-    });
-  }
-  let vectorResults = [];
-  if (semanticSearchEnabled && !hasDigitsQuery) {
-    try {
-      const embedding = await withAiCircuit(() => ollamaEmbed(query));
-      if (embedding.length > 0) {
-        vectorResults = await storage.semanticSearch({ embedding, limit: 10 });
-      }
-    } catch (err) {
-      vectorResults = [];
-    }
-  }
-  let best = null;
-  let bestScore = 0;
-  if (hasDigitsQuery) {
-    const candidates = [...keywordResults, ...fallbackDigitsResults];
-    for (const row of candidates) {
-      const scored = scoreRowDigits(row, queryDigits);
-      if (scored.score > bestScore) {
-        bestScore = scored.score;
-        row.jsonDataJsonb = scored.parsed;
-        best = row;
-      }
-    }
-  } else {
-    const resultMap = /* @__PURE__ */ new Map();
-    for (const row of keywordResults) {
-      resultMap.set(row.rowId, row);
-    }
-    for (const row of fallbackDigitsResults) {
-      resultMap.set(row.rowId, row);
-    }
-    for (const row of vectorResults) {
-      resultMap.set(row.rowId, row);
-    }
-    const combined = Array.from(resultMap.values());
-    const ensureJson = (row) => {
-      if (row?.jsonDataJsonb && typeof row.jsonDataJsonb === "string") {
-        try {
-          row.jsonDataJsonb = JSON.parse(row.jsonDataJsonb);
-        } catch {
-        }
-      }
-      return row;
-    };
-    const scored = combined.map((row) => {
-      const normalized = ensureJson(row);
-      return {
-        row: normalized,
-        score: rowScore(normalized, entities.ic, entities.name, entities.account_no, entities.phone)
-      };
-    }).sort((a, b) => b.score - a.score);
-    best = scored.length > 0 ? scored[0].row : null;
-    bestScore = scored.length > 0 ? scored[0].score : 0;
-  }
-  if (process.env.AI_DEBUG === "1" && best) {
-    const keys = best.jsonDataJsonb && typeof best.jsonDataJsonb === "object" ? Object.keys(best.jsonDataJsonb) : [];
-    console.log("\u{1F9E0} AI_SEARCH BEST ROW", {
-      rowId: best.rowId,
-      jsonType: typeof best.jsonDataJsonb,
-      sampleKeys: keys.slice(0, 10)
-    });
-  }
-  if (best) {
-    global.__lastAiPerson = global.__lastAiPerson || /* @__PURE__ */ new Map();
-    global.__lastAiPerson.set(userKey, best);
-  }
-  const lastPersonMap = global.__lastAiPerson;
-  const fallbackPerson = lastPersonMap?.get(userKey);
-  const hasPersonId = Boolean(entities.ic || entities.account_no || entities.phone);
-  const shouldFindBranch = intent.need_nearest_branch || hasPersonId;
-  const branchTextPreferred = shouldFindBranch && !hasPersonId;
-  const personForBranch = branchTextPreferred ? null : best || (!hasPersonId ? fallbackPerson : null) || null;
-  const normalizeLocationHint = (value) => value.replace(/[^a-z0-9\s]/gi, " ").replace(/\s+/g, " ").trim();
-  const branchTimeoutMs = Math.max(700, Math.min(2200, Math.floor(aiTimeoutMs * 0.35)));
-  const safeFindBranchesByText = async (text2, limit) => {
-    try {
-      return await withTimeout(storage.findBranchesByText({ query: text2, limit }), branchTimeoutMs);
-    } catch {
-      return [];
-    }
-  };
-  const safeFindBranchesByPostcode = async (postcode, limit) => {
-    try {
-      return await withTimeout(storage.findBranchesByPostcode({ postcode, limit }), branchTimeoutMs);
-    } catch {
-      return [];
-    }
-  };
-  const safeNearestBranches = async (lat, lng, limit) => {
-    try {
-      return await withTimeout(storage.getNearestBranches({ lat, lng, limit }), branchTimeoutMs);
-    } catch {
-      return [];
-    }
-  };
-  const safePostcodeLatLng = async (postcode) => {
-    try {
-      return await withTimeout(storage.getPostcodeLatLng(postcode), branchTimeoutMs);
-    } catch {
-      return null;
-    }
-  };
-  let nearestBranch = null;
-  let missingCoords = false;
-  let branchTextSearch = false;
-  try {
-    if (branchTextPreferred) {
-      const locationHint = normalizeLocationHint(
-        query.replace(/cawangan|branch|terdekat|nearest|lokasi|alamat|di|yang|paling|dekat/gi, " ")
-      );
-      if (locationHint.length >= 3) {
-        branchTextSearch = true;
-        const branches = await safeFindBranchesByText(locationHint, 3);
-        nearestBranch = branches[0] || null;
-      } else {
-        branchTextSearch = true;
-      }
-    } else if (personForBranch && shouldFindBranch) {
-      const coords = extractLatLng(personForBranch.jsonDataJsonb || {});
-      if (isLatLng(coords)) {
-        const safeCoords = coords;
-        const branches = await safeNearestBranches(safeCoords.lat, safeCoords.lng, 1);
-        nearestBranch = branches[0] || null;
-      } else {
-        let data = toObjectJson(personForBranch.jsonDataJsonb) || {};
-        const basePostcode = extractCustomerPostcode(data);
-        const baseHint = normalizeLocationHint(extractCustomerLocationHint(data));
-        if (!basePostcode && baseHint.length < 3) {
-          const locationCandidateRows = [best, ...keywordResults, ...fallbackDigitsResults];
-          for (const candidate of locationCandidateRows) {
-            const candidateData = toObjectJson(candidate?.jsonDataJsonb);
-            if (!candidateData) continue;
-            const candidatePostcode = extractCustomerPostcode(candidateData);
-            const candidateHint = normalizeLocationHint(extractCustomerLocationHint(candidateData));
-            if (candidatePostcode || candidateHint.length >= 3) {
-              data = candidateData;
-              break;
-            }
-          }
-        }
-        let postcodeWasProvided = false;
-        const postcode = extractCustomerPostcode(data);
-        if (postcode) {
-          postcodeWasProvided = true;
-          if (isNonEmptyString(postcode)) {
-            const postcodeDigitsSafe = postcode;
-            const pc = await safePostcodeLatLng(postcodeDigitsSafe);
-            if (hasPostcodeCoord(pc)) {
-              const pcSafe = pc;
-              const branches = await safeNearestBranches(pcSafe.lat, pcSafe.lng, 1);
-              nearestBranch = branches[0] || null;
-              if (process.env.AI_DEBUG === "1") {
-                console.log("\u{1F9E0} AI_SEARCH POSTCODE_COORD", { postcode: postcodeDigitsSafe, lat: pcSafe.lat, lng: pcSafe.lng, branchCount: branches.length });
-              }
-            } else {
-              let branches = await safeFindBranchesByPostcode(postcodeDigitsSafe, 1);
-              if (!branches.length) {
-                try {
-                  branches = await storage.findBranchesByPostcode({ postcode: postcodeDigitsSafe, limit: 1 });
-                } catch {
-                  branches = [];
-                }
-              }
-              nearestBranch = branches[0] || null;
-              if (process.env.AI_DEBUG === "1") {
-                console.log("\u{1F9E0} AI_SEARCH POSTCODE_TEXT", { postcode: postcodeDigitsSafe, branchCount: branches.length, branch: branches[0]?.name || null });
-              }
-              if (!nearestBranch) missingCoords = false;
-            }
-          } else {
-            missingCoords = true;
-          }
-        } else {
-          missingCoords = true;
-        }
-        if (!nearestBranch && missingCoords && !postcodeWasProvided) {
-          const hint = normalizeLocationHint(extractCustomerLocationHint(data));
-          if (hint.length >= 3) {
-            branchTextSearch = true;
-            const branches = await safeFindBranchesByText(hint, 1);
-            nearestBranch = branches[0] ? { ...branches[0], distanceKm: void 0 } : null;
-          }
-        }
-      }
-    }
-  } catch {
-    missingCoords = true;
-    nearestBranch = null;
-  }
-  let decision = null;
-  let travelMode = null;
-  let estimatedMinutes = null;
-  if (nearestBranch?.distanceKm !== void 0) {
-    if (nearestBranch.distanceKm < 5) {
-      decision = "WALK-IN";
-      travelMode = "WALK";
-      estimatedMinutes = Math.max(1, Math.round(nearestBranch.distanceKm / 5 * 60));
-    } else if (nearestBranch.distanceKm < 20) {
-      decision = "DRIVE";
-      travelMode = "DRIVE";
-      estimatedMinutes = Math.max(1, Math.round(nearestBranch.distanceKm / 40 * 60));
-    } else decision = "CALL";
-    if (decision === "CALL") {
-      travelMode = "CALL";
-      estimatedMinutes = null;
-    }
-  }
-  const person = best ? {
-    id: best.rowId,
-    ...best.jsonDataJsonb
-  } : null;
-  let suggestions = [];
-  if ((!person || bestScore < 6) && !hasDigitsQuery) {
-    const fuzzyResults = await storage.aiFuzzySearch({ query, limit: 5 });
-    const tokens = tokenizeQuery(query);
-    const maxScore = Math.max(1, tokens.length);
-    suggestions = fuzzyResults.map((row) => {
-      let data = row.jsonDataJsonb;
-      if (typeof data === "string") {
-        try {
-          data = JSON.parse(data);
-        } catch {
-          data = {};
-        }
-      }
-      if (!data || typeof data !== "object") data = {};
-      const name = data["Nama"] || data["Customer Name"] || data["name"] || "-";
-      const ic = data["No. MyKad"] || data["ID No"] || data["No Pengenalan"] || data["IC"] || "-";
-      const addr = data["Alamat Surat Menyurat"] || data["HomeAddress1"] || data["Address"] || data["Alamat"] || "-";
-      const confidence = Math.min(100, Math.round(Number(row.score || 0) / maxScore * 100));
-      const hasAny = [name, ic, addr].some((v) => v && v !== "-" && String(v).trim() !== "");
-      return hasAny ? `\u2022 ${name} | IC: ${ic} | Alamat: ${addr} | Keyakinan: ${confidence}%` : "";
-    }).filter(Boolean);
-  }
-  const personSummary = [];
-  if (person && typeof person === "object") {
-    const pushIf = (label, key) => {
-      const val = person[key];
-      if (val !== void 0 && val !== null && String(val).trim() !== "") {
-        personSummary.push({ label, value: String(val) });
-      }
-    };
-    pushIf("Nama", "Nama");
-    pushIf("Nama", "Customer Name");
-    pushIf("Nama", "name");
-    pushIf("No. MyKad", "No. MyKad");
-    pushIf("ID No", "ID No");
-    pushIf("No Pengenalan", "No Pengenalan");
-    pushIf("IC", "ic");
-    pushIf("Account No", "Account No");
-    pushIf("Card No", "Card No");
-    pushIf("No. Telefon Rumah", "No. Telefon Rumah");
-    pushIf("No. Telefon Bimbit", "No. Telefon Bimbit");
-    pushIf("Handphone", "Handphone");
-    pushIf("OfficePhone", "OfficePhone");
-    pushIf("Alamat Surat Menyurat", "Alamat Surat Menyurat");
-    pushIf("HomeAddress1", "HomeAddress1");
-    pushIf("HomeAddress2", "HomeAddress2");
-    pushIf("HomeAddress3", "HomeAddress3");
-    pushIf("HomePostcode", "HomePostcode");
-    pushIf("Home Post Code", "Home Post Code");
-    pushIf("Home Postal Code", "Home Postal Code");
-    pushIf("Bandar", "Bandar");
-    pushIf("Negeri", "Negeri");
-    pushIf("Poskod", "Poskod");
-  }
-  if (personSummary.length === 0 && person && typeof person === "object") {
-    const entries = Object.entries(person).filter(([k]) => k !== "id").slice(0, 8);
-    for (const [k, v] of entries) {
-      if (v !== void 0 && v !== null && String(v).trim() !== "") {
-        personSummary.push({ label: k, value: String(v) });
-      }
-    }
-  }
-  const branchSummary = [];
-  if (nearestBranch) {
-    const push = (label, value) => {
-      if (value !== void 0 && value !== null && String(value).trim() !== "") {
-        branchSummary.push({ label, value: String(value) });
-      }
-    };
-    push("Nama Cawangan", nearestBranch.name);
-    push("Alamat", nearestBranch.address);
-    push("Telefon", nearestBranch.phone);
-    push("Fax", nearestBranch.fax);
-    push("Business Hour", nearestBranch.businessHour);
-    push("Day Open", nearestBranch.dayOpen);
-    push("ATM & CDM", nearestBranch.atmCdm);
-    push("Inquiry Availability", nearestBranch.inquiryAvailability);
-    push("Application Availability", nearestBranch.applicationAvailability);
-    push("AEON Lounge", nearestBranch.aeonLounge);
-    push("Jarak (KM)", nearestBranch.distanceKm);
-  }
-  const explanation = await buildExplanation({
-    decision,
-    distanceKm: nearestBranch?.distanceKm ?? null,
-    branch: nearestBranch?.name ?? null,
-    personName: person?.Nama || person?.name || null,
-    personSummary,
-    branchSummary,
-    estimatedMinutes,
-    travelMode,
-    missingCoords,
-    suggestions,
-    countSummary: null,
-    matchFields: !hasDigitsQuery && person && typeof person === "object" ? buildFieldMatchSummary(person, query) : [],
-    branchTextSearch
-  });
-  const responsePayload = {
-    person,
-    nearest_branch: nearestBranch ? {
-      name: nearestBranch.name,
-      address: nearestBranch.address,
-      phone: nearestBranch.phone,
-      fax: nearestBranch.fax,
-      business_hour: nearestBranch.businessHour,
-      day_open: nearestBranch.dayOpen,
-      atm_cdm: nearestBranch.atmCdm,
-      inquiry_availability: nearestBranch.inquiryAvailability,
-      application_availability: nearestBranch.applicationAvailability,
-      aeon_lounge: nearestBranch.aeonLounge,
-      distance_km: nearestBranch.distanceKm,
-      travel_mode: travelMode,
-      estimated_minutes: estimatedMinutes
-    } : null,
-    decision,
-    ai_explanation: explanation
-  };
-  const audit = {
-    query,
-    intent,
-    matched_profile_id: person?.id || null,
-    branch: nearestBranch?.name || null,
-    distance_km: nearestBranch?.distanceKm || null,
-    decision,
-    travel_mode: travelMode,
-    estimated_minutes: estimatedMinutes,
-    used_last_person: !best && !!fallbackPerson
-  };
-  return { payload: responsePayload, audit };
-};
-app.post(
-  "/api/ai/search",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  withAiConcurrencyGate("search", async (req, res) => {
-    try {
-      const query = String(req.body?.query || "").trim();
-      if (!query) {
-        return res.status(400).json({ message: "Query required" });
-      }
-      const runtimeSettings = await getRuntimeSettingsCached();
-      if (!runtimeSettings.aiEnabled) {
-        return res.status(503).json({
-          message: "AI assistant is disabled by system settings.",
-          disabled: true
-        });
-      }
-      const rules = await loadCategoryRules();
-      const countGroups = detectCountRequest(query, rules);
-      if (countGroups) {
-        const keys = [...countGroups.map((g) => g.key), "__all__"];
-        const rulesUpdatedAt = await storage.getCategoryRulesMaxUpdatedAt();
-        let statsRows = await storage.getCategoryStats(keys);
-        let statsMap = new Map(statsRows.map((row) => [row.key, row]));
-        let totalRow = statsMap.get("__all__");
-        const statsUpdatedAt = totalRow?.updatedAt ?? null;
-        const missingKeys = keys.filter((k) => !statsMap.get(k));
-        const staleStats = Boolean(rulesUpdatedAt && statsUpdatedAt && rulesUpdatedAt > statsUpdatedAt);
-        if (!totalRow || missingKeys.length > 0 || staleStats) {
-          const computeKeys = staleStats ? keys : Array.from(/* @__PURE__ */ new Set([...missingKeys, "__all__"]));
-          let readyNow = false;
-          try {
-            const statsTimeoutMs = Math.max(3e3, runtimeSettings.aiTimeoutMs || DEFAULT_AI_TIMEOUT_MS);
-            await withTimeout(storage.computeCategoryStatsForKeys(computeKeys, rules), statsTimeoutMs);
-            statsRows = await storage.getCategoryStats(keys);
-            statsMap = new Map(statsRows.map((row) => [row.key, row]));
-            totalRow = statsMap.get("__all__");
-            readyNow = Boolean(totalRow && keys.every((k) => statsMap.has(k)));
-          } catch {
-            readyNow = false;
-          }
-          if (!readyNow) {
-            enqueueCategoryStatsCompute(computeKeys, rules);
-            return res.json({
-              person: null,
-              nearest_branch: null,
-              decision: null,
-              ai_explanation: "Statistik sedang disediakan. Sila cuba semula dalam 10-20 saat.",
-              processing: true
-            });
-          }
-        }
-        const summaryLines = [
-          "Ringkasan Statistik (berdasarkan data import):",
-          `Jumlah rekod dianalisis: ${totalRow?.total ?? 0}`
-        ];
-        for (const group of countGroups) {
-          const row = statsMap.get(group.key);
-          const count2 = row?.total ?? 0;
-          summaryLines.push(`- ${group.key}: ${count2}`);
-          if (row?.samples?.length) {
-            summaryLines.push("  Contoh rekod:");
-            for (const sample of row.samples.slice(0, 10)) {
-              const source = sample.source ? ` (${sample.source})` : "";
-              summaryLines.push(`  \u2022 ${sample.name} | IC: ${sample.ic}${source}`);
-            }
-          }
-        }
-        const explanation2 = summaryLines.join("\n");
-        return res.json({
-          person: null,
-          nearest_branch: null,
-          decision: null,
-          ai_explanation: explanation2,
-          stats: statsRows
-        });
-      }
-      const cacheKey = `search:${query.toLowerCase()}`;
-      const cached = searchCache.get(cacheKey);
-      if (cached && Date.now() - cached.ts < SEARCH_CACHE_MS) {
-        setTimeout(() => {
-          storage.createAuditLog({
-            action: "AI_SEARCH",
-            performedBy: req.user.username,
-            targetResource: "ai_search",
-            details: JSON.stringify(cached.audit)
-          }).catch((err) => {
-            console.error("Audit log failed:", err?.message || err);
-          });
-        }, 0);
-        return res.json(cached.payload);
-      }
-      if (cached) {
-        searchCache.delete(cacheKey);
-      }
-      let inflight = searchInflight.get(cacheKey);
-      if (!inflight) {
-        inflight = withAiCircuit(() => computeAiSearch(
-          query,
-          req.user.activityId || req.user.username,
-          runtimeSettings.semanticSearchEnabled,
-          runtimeSettings.aiTimeoutMs
-        )).then((result) => {
-          searchCache.set(cacheKey, { ts: Date.now(), payload: result.payload, audit: result.audit });
-          trimCacheEntries(searchCache, Math.max(10, MAX_SEARCH_CACHE_ENTRIES));
-          searchInflight.delete(cacheKey);
-          return result;
-        }).catch((err) => {
-          searchInflight.delete(cacheKey);
-          throw err;
-        });
-        searchInflight.set(cacheKey, inflight);
-      }
-      try {
-        const timeoutMs = Math.max(
-          1e3,
-          Math.min(
-            runtimeSettings.aiTimeoutMs || SEARCH_FAST_TIMEOUT_MS,
-            (runtimeSettings.aiTimeoutMs || SEARCH_FAST_TIMEOUT_MS) - 1200
-          )
-        );
-        const result = await withTimeout(inflight, timeoutMs);
-        setTimeout(() => {
-          storage.createAuditLog({
-            action: "AI_SEARCH",
-            performedBy: req.user.username,
-            targetResource: "ai_search",
-            details: JSON.stringify(result.audit)
-          }).catch((err) => {
-            console.error("Audit log failed:", err?.message || err);
-          });
-        }, 0);
-        return res.json(result.payload);
-      } catch (err) {
-        if (err instanceof CircuitOpenError) {
-          return res.status(503).json({
-            person: null,
-            nearest_branch: null,
-            decision: null,
-            ai_explanation: "AI service is temporarily throttled for system stability. Please retry in a few seconds.",
-            processing: false,
-            circuit: "OPEN"
-          });
-        }
-        if (err?.message && err.message !== "timeout") {
-          console.error("AI search compute failed:", err?.message || err);
-        }
-        return res.json({
-          person: null,
-          nearest_branch: null,
-          decision: null,
-          ai_explanation: "Sedang proses carian. Sila tunggu beberapa saat dan cuba semula.",
-          processing: true
-        });
-      }
-      const intent = await parseIntent(query);
-      const entities = intent.entities || {};
-      const keywordTerms = [
-        entities.ic,
-        entities.account_no,
-        entities.phone,
-        entities.name
-      ].filter(Boolean);
-      const keywordQuery = keywordTerms.length > 0 ? keywordTerms[0] : query;
-      const digitsOnly = keywordQuery.replace(/[^0-9]/g, "");
-      const hasDigitsQuery = digitsOnly.length >= 6;
-      const keywordResults = hasDigitsQuery ? await storage.aiKeywordSearch({ query: keywordQuery, limit: 10 }) : await storage.aiNameSearch({ query: keywordQuery, limit: 10 });
-      const queryDigits = keywordQuery.replace(/[^0-9]/g, "");
-      let fallbackDigitsResults = [];
-      if (keywordResults.length === 0 && queryDigits.length >= 6) {
-        fallbackDigitsResults = await storage.aiDigitsSearch({ digits: queryDigits, limit: 25 });
-      }
-      if (process.env.AI_DEBUG === "1") {
-        console.log("\u{1F9E0} AI_SEARCH DEBUG", {
-          query,
-          keywordQuery,
-          queryDigits,
-          keywordCount: keywordResults.length,
-          fallbackDigitsCount: fallbackDigitsResults.length
-        });
-      }
-      let vectorResults = [];
-      const vectorMode = String(process.env.AI_VECTOR_MODE || "off").toLowerCase();
-      if (vectorMode === "on" && !hasDigitsQuery) {
-        try {
-          const embedding = await ollamaEmbed(query);
-          if (embedding.length > 0) {
-            vectorResults = await storage.semanticSearch({ embedding, limit: 10 });
-          }
-        } catch (err) {
-          vectorResults = [];
-        }
-      }
-      let best = null;
-      let bestScore = 0;
-      if (hasDigitsQuery) {
-        const candidates = [...keywordResults, ...fallbackDigitsResults];
-        for (const row of candidates) {
-          const scored = scoreRowDigits(row, queryDigits);
-          if (scored.score > bestScore) {
-            bestScore = scored.score;
-            row.jsonDataJsonb = scored.parsed;
-            best = row;
-          }
-        }
-      } else {
-        const resultMap = /* @__PURE__ */ new Map();
-        for (const row of keywordResults) {
-          resultMap.set(row.rowId, row);
-        }
-        for (const row of fallbackDigitsResults) {
-          resultMap.set(row.rowId, row);
-        }
-        for (const row of vectorResults) {
-          resultMap.set(row.rowId, row);
-        }
-        const combined = Array.from(resultMap.values());
-        const ensureJson = (row) => {
-          if (row?.jsonDataJsonb && typeof row.jsonDataJsonb === "string") {
-            try {
-              row.jsonDataJsonb = JSON.parse(row.jsonDataJsonb);
-            } catch {
-            }
-          }
-          return row;
-        };
-        const scored = combined.map((row) => {
-          const normalized = ensureJson(row);
-          return {
-            row: normalized,
-            score: rowScore(normalized, entities.ic, entities.name, entities.account_no, entities.phone)
-          };
-        }).sort((a, b) => b.score - a.score);
-        best = scored.length > 0 ? scored[0].row : null;
-        bestScore = scored.length > 0 ? scored[0].score : 0;
-      }
-      if (process.env.AI_DEBUG === "1" && best) {
-        const keys = best.jsonDataJsonb && typeof best.jsonDataJsonb === "object" ? Object.keys(best.jsonDataJsonb) : [];
-        console.log("\u{1F9E0} AI_SEARCH BEST ROW", {
-          rowId: best.rowId,
-          jsonType: typeof best.jsonDataJsonb,
-          sampleKeys: keys.slice(0, 10)
-        });
-      }
-      const userKey = req.user?.activityId || req.user?.username || "unknown";
-      if (best) {
-        global.__lastAiPerson = global.__lastAiPerson || /* @__PURE__ */ new Map();
-        global.__lastAiPerson.set(userKey, best);
-      }
-      const lastPersonMap = global.__lastAiPerson;
-      const fallbackPerson = lastPersonMap?.get(userKey);
-      const hasPersonId = Boolean(entities.ic || entities.account_no || entities.phone);
-      const shouldFindBranch = intent.need_nearest_branch || hasPersonId;
-      const branchTextPreferred = shouldFindBranch && !hasPersonId;
-      const personForBranch = branchTextPreferred ? null : best || fallbackPerson || null;
-      const normalizeLocationHint = (value) => value.replace(/[^a-z0-9\s]/gi, " ").replace(/\s+/g, " ").trim();
-      let nearestBranch = null;
-      let missingCoords = false;
-      let branchTextSearch = false;
-      if (branchTextPreferred) {
-        const locationHint = normalizeLocationHint(
-          query.replace(/cawangan|branch|terdekat|nearest|lokasi|alamat|di|yang|paling|dekat/gi, " ")
-        );
-        if (locationHint.length >= 3) {
-          branchTextSearch = true;
-          const branches = await storage.findBranchesByText({ query: locationHint, limit: 3 });
-          nearestBranch = branches[0] || null;
-        } else {
-          branchTextSearch = true;
-        }
-      } else if (personForBranch && shouldFindBranch) {
-        const coords = extractLatLng(personForBranch.jsonDataJsonb || {});
-        if (isLatLng(coords)) {
-          const safeCoords = coords;
-          const branches = await storage.getNearestBranches({ lat: safeCoords.lat, lng: safeCoords.lng, limit: 1 });
-          nearestBranch = branches[0] || null;
-        } else {
-          const initialData = toObjectJson(personForBranch.jsonDataJsonb);
-          let data = initialData ?? {};
-          const basePostcode = extractCustomerPostcode(data);
-          const baseHint = normalizeLocationHint(extractCustomerLocationHint(data));
-          if (!basePostcode && baseHint.length < 3) {
-            const locationCandidateRows = [best, ...keywordResults, ...fallbackDigitsResults];
-            for (const candidate of locationCandidateRows) {
-              const candidateDataRaw = toObjectJson(candidate?.jsonDataJsonb);
-              if (!candidateDataRaw || typeof candidateDataRaw !== "object") continue;
-              const candidateData = candidateDataRaw;
-              const candidatePostcode = extractCustomerPostcode(candidateData);
-              const candidateHint = normalizeLocationHint(extractCustomerLocationHint(candidateData));
-              if (candidatePostcode || candidateHint.length >= 3) {
-                data = candidateData;
-                break;
-              }
-            }
-          }
-          let postcodeWasProvided = false;
-          const postcodeRaw = extractCustomerPostcode(data);
-          const trimmedPostcode = (postcodeRaw ?? "").trim();
-          const postcodeDigitsSafe = trimmedPostcode.length > 0 ? trimmedPostcode : "";
-          if (postcodeDigitsSafe) {
-            postcodeWasProvided = true;
-            const pc = await storage.getPostcodeLatLng(postcodeDigitsSafe);
-            if (pc === null) {
-              const branches = await storage.findBranchesByPostcode({ postcode: postcodeDigitsSafe, limit: 1 });
-              nearestBranch = branches[0] || null;
-              if (!nearestBranch) missingCoords = false;
-            } else if (hasPostcodeCoord(pc)) {
-              const branches = await storage.getNearestBranches({ lat: pc.lat, lng: pc.lng, limit: 1 });
-              nearestBranch = branches[0] || null;
-            } else {
-              const branches = await storage.findBranchesByPostcode({ postcode: postcodeDigitsSafe, limit: 1 });
-              nearestBranch = branches[0] || null;
-              if (!nearestBranch) missingCoords = false;
-            }
-          } else {
-            missingCoords = true;
-          }
-          if (!nearestBranch && missingCoords && !postcodeWasProvided) {
-            const hint = normalizeLocationHint(extractCustomerLocationHint(data));
-            if (hint.length >= 3) {
-              branchTextSearch = true;
-              const branches = await storage.findBranchesByText({ query: hint, limit: 1 });
-              nearestBranch = branches[0] ? { ...branches[0], distanceKm: void 0 } : null;
-            }
-          }
-        }
-      }
-      let decision = null;
-      let travelMode = null;
-      let estimatedMinutes = null;
-      if (nearestBranch?.distanceKm !== void 0) {
-        if (nearestBranch.distanceKm < 5) {
-          decision = "WALK-IN";
-          travelMode = "WALK";
-          estimatedMinutes = Math.max(1, Math.round(nearestBranch.distanceKm / 5 * 60));
-        } else if (nearestBranch.distanceKm < 20) {
-          decision = "DRIVE";
-          travelMode = "DRIVE";
-          estimatedMinutes = Math.max(1, Math.round(nearestBranch.distanceKm / 40 * 60));
-        } else decision = "CALL";
-        if (decision === "CALL") {
-          travelMode = "CALL";
-          estimatedMinutes = null;
-        }
-      }
-      const person = best ? {
-        id: best.rowId,
-        ...best.jsonDataJsonb
-      } : null;
-      let suggestions = [];
-      if ((!person || bestScore < 6) && !hasDigitsQuery) {
-        const fuzzyResults = await storage.aiFuzzySearch({ query, limit: 5 });
-        const tokens = tokenizeQuery(query);
-        const maxScore = Math.max(1, tokens.length);
-        suggestions = fuzzyResults.map((row) => {
-          let data = row.jsonDataJsonb;
-          if (typeof data === "string") {
-            try {
-              data = JSON.parse(data);
-            } catch {
-              data = {};
-            }
-          }
-          if (!data || typeof data !== "object") data = {};
-          const name = data["Nama"] || data["Customer Name"] || data["name"] || "-";
-          const ic = data["No. MyKad"] || data["ID No"] || data["No Pengenalan"] || data["IC"] || "-";
-          const addr = data["Alamat Surat Menyurat"] || data["HomeAddress1"] || data["Address"] || data["Alamat"] || "-";
-          const confidence = Math.min(100, Math.round(Number(row.score || 0) / maxScore * 100));
-          const hasAny = [name, ic, addr].some((v) => v && v !== "-" && String(v).trim() !== "");
-          return hasAny ? `\u2022 ${name} | IC: ${ic} | Alamat: ${addr} | Keyakinan: ${confidence}%` : "";
-        }).filter(Boolean);
-      }
-      const personSummary = [];
-      if (person && typeof person === "object") {
-        const pushIf = (label, key) => {
-          const val = person[key];
-          if (val !== void 0 && val !== null && String(val).trim() !== "") {
-            personSummary.push({ label, value: String(val) });
-          }
-        };
-        pushIf("Nama", "Nama");
-        pushIf("Nama", "Customer Name");
-        pushIf("Nama", "name");
-        pushIf("No. MyKad", "No. MyKad");
-        pushIf("ID No", "ID No");
-        pushIf("No Pengenalan", "No Pengenalan");
-        pushIf("IC", "ic");
-        pushIf("Account No", "Account No");
-        pushIf("Card No", "Card No");
-        pushIf("No. Telefon Rumah", "No. Telefon Rumah");
-        pushIf("No. Telefon Bimbit", "No. Telefon Bimbit");
-        pushIf("Handphone", "Handphone");
-        pushIf("OfficePhone", "OfficePhone");
-        pushIf("Alamat Surat Menyurat", "Alamat Surat Menyurat");
-        pushIf("HomeAddress1", "HomeAddress1");
-        pushIf("HomeAddress2", "HomeAddress2");
-        pushIf("HomeAddress3", "HomeAddress3");
-        pushIf("HomePostcode", "HomePostcode");
-        pushIf("Home Post Code", "Home Post Code");
-        pushIf("Home Postal Code", "Home Postal Code");
-        pushIf("Bandar", "Bandar");
-        pushIf("Negeri", "Negeri");
-        pushIf("Poskod", "Poskod");
-      }
-      if (personSummary.length === 0 && person && typeof person === "object") {
-        const entries = Object.entries(person).filter(([k]) => k !== "id").slice(0, 8);
-        for (const [k, v] of entries) {
-          if (v !== void 0 && v !== null && String(v).trim() !== "") {
-            personSummary.push({ label: k, value: String(v) });
-          }
-        }
-      }
-      const branchSummary = [];
-      if (nearestBranch) {
-        const push = (label, value) => {
-          if (value !== void 0 && value !== null && String(value).trim() !== "") {
-            branchSummary.push({ label, value: String(value) });
-          }
-        };
-        push("Nama Cawangan", nearestBranch.name);
-        push("Alamat", nearestBranch.address);
-        push("Telefon", nearestBranch.phone);
-        push("Fax", nearestBranch.fax);
-        push("Business Hour", nearestBranch.businessHour);
-        push("Day Open", nearestBranch.dayOpen);
-        push("ATM & CDM", nearestBranch.atmCdm);
-        push("Inquiry Availability", nearestBranch.inquiryAvailability);
-        push("Application Availability", nearestBranch.applicationAvailability);
-        push("AEON Lounge", nearestBranch.aeonLounge);
-        push("Jarak (KM)", nearestBranch.distanceKm);
-      }
-      const explanation = await buildExplanation({
-        decision,
-        distanceKm: nearestBranch?.distanceKm ?? null,
-        branch: nearestBranch?.name ?? null,
-        personName: person?.Nama || person?.name || null,
-        personSummary,
-        branchSummary,
-        estimatedMinutes,
-        travelMode,
-        missingCoords,
-        suggestions,
-        countSummary: null,
-        matchFields: !hasDigitsQuery && person && typeof person === "object" ? buildFieldMatchSummary(person, query) : [],
-        branchTextSearch
-      });
-      const responsePayload = {
-        person,
-        nearest_branch: nearestBranch ? {
-          name: nearestBranch.name,
-          address: nearestBranch.address,
-          phone: nearestBranch.phone,
-          fax: nearestBranch.fax,
-          business_hour: nearestBranch.businessHour,
-          day_open: nearestBranch.dayOpen,
-          atm_cdm: nearestBranch.atmCdm,
-          inquiry_availability: nearestBranch.inquiryAvailability,
-          application_availability: nearestBranch.applicationAvailability,
-          aeon_lounge: nearestBranch.aeonLounge,
-          distance_km: nearestBranch.distanceKm,
-          travel_mode: travelMode,
-          estimated_minutes: estimatedMinutes
-        } : null,
-        decision,
-        ai_explanation: explanation
-      };
-      setTimeout(() => {
-        storage.createAuditLog({
-          action: "AI_SEARCH",
-          performedBy: req.user.username,
-          targetResource: "ai_search",
-          details: JSON.stringify({
-            query,
-            intent,
-            matched_profile_id: person?.id || null,
-            branch: nearestBranch?.name || null,
-            distance_km: nearestBranch?.distanceKm || null,
-            decision,
-            travel_mode: travelMode,
-            estimated_minutes: estimatedMinutes,
-            used_last_person: !best && !!fallbackPerson
-          })
-        }).catch((err) => {
-          console.error("Audit log failed:", err?.message || err);
-        });
-      }, 0);
-      return res.json(responsePayload);
-    } catch (error) {
-      console.error("AI search error:", error);
-      return res.status(500).json({ message: error.message });
-    }
-  })
-);
-app.post(
-  "/api/ai/index/import/:id",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  async (req, res) => {
-    try {
-      const runtimeSettings = await getRuntimeSettingsCached();
-      if (!runtimeSettings.aiEnabled) {
-        return res.status(503).json({ message: "AI assistant is disabled by system settings." });
-      }
-      const importId = req.params.id;
-      const importRecord = await storage.getImportById(importId);
-      if (!importRecord) {
-        return res.status(404).json({ message: "Import not found" });
-      }
-      const batchSize = Math.max(1, Math.min(20, Number(req.body?.batchSize ?? 5)));
-      const maxRows = req.body?.maxRows ? Math.max(1, Number(req.body.maxRows)) : null;
-      const totalRows = await storage.getDataRowCountByImport(importId);
-      const targetTotal = maxRows ? Math.min(maxRows, totalRows) : totalRows;
-      let processed = 0;
-      let offset = 0;
-      while (processed < targetTotal) {
-        const rows = await storage.getDataRowsForEmbedding(importId, batchSize, offset);
-        if (!rows.length) break;
-        for (const row of rows) {
-          if (processed >= targetTotal) break;
-          const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
-          const content = buildEmbeddingText(data);
-          if (!content) {
-            processed += 1;
-            continue;
-          }
-          const embedding = await ollamaEmbed(content);
-          if (!embedding.length) {
-            processed += 1;
-            continue;
-          }
-          await storage.saveEmbedding({
-            importId,
-            rowId: row.id,
-            content,
-            embedding
-          });
-          processed += 1;
-        }
-        offset += rows.length;
-      }
-      await storage.createAuditLog({
-        action: "AI_INDEX_IMPORT",
-        performedBy: req.user.username,
-        targetResource: importRecord.name,
-        details: `Indexed ${processed}/${targetTotal} rows`
-      });
-      return res.json({ success: true, processed, total: targetTotal });
-    } catch (error) {
-      console.error("AI index error:", error);
-      return res.status(500).json({ message: error.message });
-    }
-  }
-);
-app.post(
-  "/api/ai/branches/import/:id",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  async (req, res) => {
-    try {
-      const importId = req.params.id;
-      const importRecord = await storage.getImportById(importId);
-      if (!importRecord) {
-        return res.status(404).json({ message: "Import not found" });
-      }
-      const result = await storage.importBranchesFromRows({
-        importId,
-        nameKey: req.body?.nameKey || null,
-        latKey: req.body?.latKey || null,
-        lngKey: req.body?.lngKey || null
-      });
-      await storage.createAuditLog({
-        action: "IMPORT_BRANCHES",
-        performedBy: req.user.username,
-        targetResource: importRecord.name,
-        details: JSON.stringify({ inserted: result.inserted, skipped: result.skipped, usedKeys: result.usedKeys })
-      });
-      return res.json({ success: true, ...result });
-    } catch (error) {
-      console.error("Branch import error:", error);
-      return res.status(500).json({ message: error.message });
-    }
-  }
-);
-app.post(
-  "/api/ai/chat",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  withAiConcurrencyGate("chat", async (req, res) => {
-    try {
-      const message = String(req.body?.message || "").trim();
-      if (!message) {
-        return res.status(400).json({ message: "Message required" });
-      }
-      const runtimeSettings = await getRuntimeSettingsCached();
-      if (!runtimeSettings.aiEnabled) {
-        return res.status(503).json({ message: "AI assistant is disabled by system settings." });
-      }
-      const extractKeywords = (text2) => {
-        const raw = text2.toLowerCase();
-        const digitMatches = raw.match(/\d{4,}/g) || [];
-        const wordMatches = raw.match(/\b[a-z0-9]{4,}\b/gi) || [];
-        const combined = [...digitMatches, ...wordMatches].map((t) => t.replace(/[^a-z0-9]/gi, "")).filter((t) => t.length >= 4);
-        const unique = Array.from(new Set(combined));
-        unique.sort((a, b) => b.length - a.length);
-        return unique.slice(0, 4);
-      };
-      const valueMatchesTerm = (value, term) => {
-        if (value === null || value === void 0) return false;
-        const termLower = term.toLowerCase();
-        const termDigits = term.replace(/\D/g, "");
-        const asString = String(value);
-        if (termDigits.length >= 6) {
-          const valueDigits = asString.replace(/\D/g, "");
-          if (valueDigits.includes(termDigits)) return true;
-        }
-        return asString.toLowerCase().includes(termLower);
-      };
-      const rowMatchesTerm = (row, term) => {
-        const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
-        for (const val of Object.values(data)) {
-          if (valueMatchesTerm(val, term)) return true;
-        }
-        return false;
-      };
-      const scoreRowForTerm = (row, term) => {
-        const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
-        const termDigits = term.replace(/\D/g, "");
-        let score = 0;
-        for (const [key, val] of Object.entries(data)) {
-          const keyLower = key.toLowerCase();
-          const valueStr = String(val ?? "");
-          const valueDigits = valueStr.replace(/\D/g, "");
-          if (!termDigits) {
-            if (valueStr.toLowerCase().includes(term.toLowerCase())) {
-              score += 2;
-            }
-            continue;
-          }
-          if (valueDigits === termDigits) {
-            if (keyLower.includes("ic") || keyLower.includes("mykad") || keyLower.includes("nric") || keyLower.includes("kp")) {
-              score += 10;
-            } else {
-              score += 6;
-            }
-          } else if (valueDigits.includes(termDigits)) {
-            score += 3;
-          }
-        }
-        return score;
-      };
-      const existingConversationId = req.body?.conversationId ? String(req.body.conversationId) : null;
-      const conversationId = existingConversationId || await storage.createConversation(req.user.username);
-      const history = await storage.getConversationMessages(conversationId, 3);
-      const countRules = await loadCategoryRules();
-      const countGroups = detectCountRequest(message, countRules);
-      if (countGroups) {
-        const keys = [...countGroups.map((g) => g.key), "__all__"];
-        const rulesUpdatedAt = await storage.getCategoryRulesMaxUpdatedAt();
-        let statsRows = await storage.getCategoryStats(keys);
-        let statsMap = new Map(statsRows.map((row) => [row.key, row]));
-        let totalRow = statsMap.get("__all__");
-        const statsUpdatedAt = totalRow?.updatedAt ?? null;
-        const missingKeys = keys.filter((k) => !statsMap.get(k));
-        const staleStats = Boolean(rulesUpdatedAt && statsUpdatedAt && rulesUpdatedAt > statsUpdatedAt);
-        if (!totalRow || missingKeys.length > 0 || staleStats) {
-          const computeKeys = staleStats ? keys : Array.from(/* @__PURE__ */ new Set([...missingKeys, "__all__"]));
-          let readyNow = false;
-          try {
-            await withTimeout(storage.computeCategoryStatsForKeys(computeKeys, countRules), 12e3);
-            statsRows = await storage.getCategoryStats(keys);
-            statsMap = new Map(statsRows.map((row) => [row.key, row]));
-            totalRow = statsMap.get("__all__");
-            readyNow = Boolean(totalRow && keys.every((k) => statsMap.has(k)));
-          } catch {
-            readyNow = false;
-          }
-          if (!readyNow) {
-            enqueueCategoryStatsCompute(computeKeys, countRules);
-            const pendingReply = "Statistik sedang disediakan. Sila cuba semula dalam 10-20 saat.";
-            await storage.saveConversationMessage(conversationId, "user", message);
-            await storage.saveConversationMessage(conversationId, "assistant", pendingReply);
-            return res.json({ conversationId, reply: pendingReply, processing: true });
-          }
-        }
-        const summaryLines = [
-          "Ringkasan Statistik (berdasarkan data import):",
-          `Jumlah rekod dianalisis: ${totalRow?.total ?? 0}`
-        ];
-        for (const group of countGroups) {
-          const row = statsMap.get(group.key);
-          const count2 = row?.total ?? 0;
-          summaryLines.push(`- ${group.key}: ${count2}`);
-          if (row?.samples?.length) {
-            summaryLines.push("  Contoh rekod:");
-            for (const sample of row.samples.slice(0, 10)) {
-              const source = sample.source ? ` (${sample.source})` : "";
-              summaryLines.push(`  \u2022 ${sample.name} | IC: ${sample.ic}${source}`);
-            }
-          }
-        }
-        const reply2 = summaryLines.join("\n");
-        await storage.saveConversationMessage(conversationId, "user", message);
-        await storage.saveConversationMessage(conversationId, "assistant", reply2);
-        await storage.createAuditLog({
-          action: "AI_CHAT",
-          performedBy: req.user.username,
-          details: `Conversation=${conversationId}`
-        });
-        return res.json({ conversationId, reply: reply2, stats: statsRows });
-      }
-      const keywords = extractKeywords(message);
-      const searchTerms = keywords.length ? keywords : [message];
-      const resultMap = /* @__PURE__ */ new Map();
-      for (const term of searchTerms) {
-        const retrieval = await storage.searchGlobalDataRows({
-          search: term,
-          limit: 30,
-          offset: 0
-        });
-        for (const row of retrieval.rows || []) {
-          if (!resultMap.has(row.id)) {
-            resultMap.set(row.id, row);
-          }
-        }
-        if (resultMap.size >= 60) break;
-      }
-      const allRows = Array.from(resultMap.values());
-      const matchedRows = allRows.filter((row) => searchTerms.some((term) => rowMatchesTerm(row, term)));
-      const scored = (matchedRows.length > 0 ? matchedRows : allRows).map((row) => ({
-        row,
-        score: Math.max(...searchTerms.map((term) => scoreRowForTerm(row, term)))
-      })).sort((a, b) => b.score - a.score);
-      const retrievalRows = scored.map((s) => s.row).slice(0, 5);
-      const contextRows = (retrievalRows || []).map((row, idx) => {
-        const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
-        const entries = Object.entries(data).slice(0, 20);
-        const lines = entries.map(([key, val]) => `${key}: ${String(val ?? "")}`);
-        const source = row.importFilename || row.importName || "Unknown";
-        return `# Rekod ${idx + 1} (Source: ${source}, RowId: ${row.id || row.rowId || "unknown"})
-${lines.join("\n")}`;
-      });
-      const buildQuickReply = () => {
-        if (retrievalRows.length === 0) {
-          return "Tiada data dijumpai untuk kata kunci tersebut.";
-        }
-        const priorityKeys = [
-          "nama",
-          "name",
-          "no. mykad",
-          "mykad",
-          "ic",
-          "no. ic",
-          "nric",
-          "no. kp",
-          "akaun",
-          "account",
-          "telefon",
-          "phone",
-          "hp",
-          "alamat",
-          "address",
-          "umur",
-          "age"
-        ];
-        const summaries = retrievalRows.slice(0, 3).map((row, idx) => {
-          const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
-          const pairs = [];
-          for (const key of Object.keys(data)) {
-            const lower = key.toLowerCase();
-            if (priorityKeys.some((p) => lower.includes(p))) {
-              pairs.push(`${key}: ${String(data[key] ?? "")}`);
-            }
-            if (pairs.length >= 8) break;
-          }
-          if (pairs.length === 0) {
-            const fallbackPairs = Object.entries(data).slice(0, 6).map(([k, v]) => `${k}: ${String(v ?? "")}`);
-            pairs.push(...fallbackPairs);
-          }
-          const source = row.importFilename || row.importName || "Unknown";
-          return `Rekod ${idx + 1} (Source: ${source})
-${pairs.join("\n")}`;
-        });
-        return `Rekod dijumpai:
-${summaries.join("\n\n")}`;
-      };
-      const contextBlock = contextRows.length > 0 ? `DATA SISTEM (HASIL CARIAN KATA KUNCI: ${searchTerms.join(", ")}):
-${contextRows.join("\n\n")}` : "DATA SISTEM: TIADA REKOD DIJUMPAI UNTUK KATA KUNCI INI.";
-      const chatMessages = [
-        {
-          role: "system",
-          content: "Anda ialah pembantu AI offline untuk sistem SQR. Jawab dalam Bahasa Melayu. Jawapan mestilah berdasarkan DATA SISTEM di bawah. Jika tiada data yang sepadan, katakan dengan jelas bahawa tiada data dijumpai. Jangan membuat andaian atau menambah fakta yang tiada dalam data."
-        },
-        { role: "system", content: contextBlock },
-        ...history.map((m) => ({ role: m.role, content: m.content })),
-        { role: "user", content: message }
-      ];
-      let reply = "";
-      try {
-        reply = await withAiCircuit(() => ollamaChat(chatMessages, {
-          num_predict: 96,
-          temperature: 0.2,
-          top_p: 0.9,
-          timeoutMs: runtimeSettings.aiTimeoutMs
-        }));
-      } catch (err) {
-        if (err instanceof CircuitOpenError) {
-          return res.status(503).json({
-            message: "AI circuit is OPEN. Please retry after cooldown.",
-            circuit: "OPEN"
-          });
-        }
-        if (err?.name === "AbortError") {
-          reply = buildQuickReply();
-        } else {
-          throw err;
-        }
-      }
-      await storage.saveConversationMessage(conversationId, "user", message);
-      await storage.saveConversationMessage(conversationId, "assistant", reply);
-      await storage.createAuditLog({
-        action: "AI_CHAT",
-        performedBy: req.user.username,
-        details: `Conversation=${conversationId}`
-      });
-      res.json({ conversationId, reply });
-    } catch (error) {
-      console.error("AI chat error:", error);
-      res.status(500).json({ message: error.message });
-    }
-  })
-);
-app.get("/api/columns", authenticateToken, async (req, res) => {
-  try {
-    const columns = await storage.getAllColumnNames();
-    res.json(columns);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get("/api/activities", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
-  try {
-    const activities = await storage.getAllActivities();
-    res.json(activities);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get("/api/activities/active", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
-  try {
-    const activities = await storage.getActiveActivities();
-    res.json(activities);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.post("/api/activities/filter", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("activity"), async (req, res) => {
-  try {
-    const filters = req.body;
-    const activities = await storage.getFilteredActivities(filters);
-    res.json(activities);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.post(
-  "/api/admin/ban",
-  authenticateToken,
-  requireRole("superuser"),
-  async (req, res) => {
-    try {
-      const { username } = req.body;
-      if (!username) {
-        return res.status(400).json({ message: "Username required" });
-      }
-      const targetUser = await storage.getUserByUsername(username);
-      if (!targetUser) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      if (targetUser.role === "superuser") {
-        return res.status(403).json({ message: "Cannot ban a superuser" });
-      }
-      await storage.updateUserBan(username, true);
-      await storage.deactivateUserActivities(username, "BANNED");
-      const activities = await storage.getAllActivities();
-      for (const activity of activities) {
-        if (activity.username !== username) continue;
-        const ws = connectedClients.get(activity.id);
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: "banned",
-            reason: "Your account has been banned."
-          }));
-          ws.close();
-        }
-        connectedClients.delete(activity.id);
-      }
-      await storage.createAuditLog({
-        action: "BAN_USER",
-        performedBy: req.user.username,
-        targetUser: username,
-        details: "Admin ban (account-level)"
-      });
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Admin ban error:", error);
-      res.status(500).json({ message: error.message });
-    }
-  }
-);
-app.post(
-  "/api/admin/unban",
-  authenticateToken,
-  requireRole("superuser"),
-  requireTabAccess("activity"),
-  async (req, res) => {
-    try {
-      const { banId } = req.body;
-      if (!banId) {
-        return res.status(400).json({ message: "banId required" });
-      }
-      await storage.unbanVisitor(banId);
-      await storage.createAuditLog({
-        action: "UNBAN_USER",
-        performedBy: req.user.username,
-        details: `Unbanned banId=${banId}`
-      });
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Admin unban error:", error);
-      res.status(500).json({ message: error.message });
-    }
-  }
-);
-app.get("/api/accounts", authenticateToken, requireRole("superuser"), async (req, res) => {
-  try {
-    const allUsers = [];
-    const usernames = ["superuser", "admin1", "user1"];
-    for (const username of usernames) {
-      const user = await storage.getUserByUsername(username);
-      if (user) {
-        allUsers.push({ id: user.id, username: user.username, role: user.role, isBanned: user.isBanned });
-      }
-    }
-    res.json(allUsers);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.post("/api/users", authenticateToken, requireRole("superuser"), async (req, res) => {
-  try {
-    const { username, password, role } = req.body;
-    const normalizedUsername = normalizeUsernameInput(username);
-    const passwordRaw = String(password ?? "");
-    const roleRaw = String(role ?? "user").trim().toLowerCase();
-    if (!CREDENTIAL_USERNAME_REGEX.test(normalizedUsername)) {
-      return res.status(400).json({ message: "Invalid username format." });
-    }
-    if (!isStrongPassword(passwordRaw)) {
-      return res.status(400).json({ message: "Password does not meet minimum strength requirements." });
-    }
-    if (!["superuser", "admin", "user"].includes(roleRaw)) {
-      return res.status(400).json({ message: "Invalid role." });
-    }
-    const existing = await storage.getUserByUsername(normalizedUsername);
-    if (existing) {
-      return res.status(409).json({ message: "Username already exists." });
-    }
-    const user = await storage.createUser({ username: normalizedUsername, password: passwordRaw, role: roleRaw });
-    await storage.createAuditLog({
-      action: "CREATE_USER",
-      performedBy: req.user.username,
-      targetUser: user.id,
-      details: `Created user with role: ${user.role}`
-    });
-    res.json({ id: user.id, username: user.username, role: user.role, isBanned: user.isBanned });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get("/api/audit-logs", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("audit-logs"), async (req, res) => {
-  try {
-    const logs = await storage.getAuditLogs();
-    res.json({ logs });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get("/api/audit-logs/stats", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("audit-logs"), async (req, res) => {
-  try {
-    const logs = await storage.getAuditLogs();
-    const stats = {
-      totalLogs: logs.length,
-      todayLogs: logs.filter((l) => {
-        const logDate = new Date(l.timestamp || l.createdAt);
-        const today = /* @__PURE__ */ new Date();
-        return logDate.toDateString() === today.toDateString();
-      }).length,
-      actionBreakdown: {}
-    };
-    logs.forEach((log) => {
-      const action = log.action || "UNKNOWN";
-      stats.actionBreakdown[action] = (stats.actionBreakdown[action] || 0) + 1;
-    });
-    res.json(stats);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get(
-  "/api/analyze/all",
-  authenticateToken,
-  requireRole("user", "admin", "superuser"),
-  requireTabAccess("analysis"),
-  async (req, res) => {
-    try {
-      const imports2 = await storage.getImports();
-      if (imports2.length === 0) {
-        return res.json({
-          totalImports: 0,
-          totalRows: 0,
-          imports: [],
-          analysis: {
-            icLelaki: { count: 0, samples: [] },
-            icPerempuan: { count: 0, samples: [] },
-            noPolis: { count: 0, samples: [] },
-            noTentera: { count: 0, samples: [] },
-            passportMY: { count: 0, samples: [] },
-            passportLuarNegara: { count: 0, samples: [] },
-            duplicates: { count: 0, items: [] }
-          }
-        });
-      }
-      let allRows = [];
-      const importsWithCounts = await Promise.all(
-        imports2.map(async (imp) => {
-          const rows = await storage.getDataRowsByImport(imp.id);
-          allRows = allRows.concat(rows);
-          return { id: imp.id, name: imp.name, filename: imp.filename, rowCount: rows.length };
-        })
-      );
-      const analysis = analyzeDataRows(allRows);
-      return res.json({
-        totalImports: imports2.length,
-        totalRows: allRows.length,
-        imports: importsWithCounts,
-        analysis
-      });
-    } catch (error) {
-      return res.status(500).json({ message: error.message });
-    }
-  }
-);
-app.get("/api/debug/websocket-clients", authenticateToken, requireRole("superuser"), async (req, res) => {
-  try {
-    const clients = Array.from(connectedClients.keys());
-    res.json({ count: clients.length, clients });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.delete("/api/audit-logs/cleanup", authenticateToken, requireRole("superuser"), requireTabAccess("audit-logs"), async (req, res) => {
-  try {
-    const { olderThanDays } = req.body;
-    const cutoffDate = /* @__PURE__ */ new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - (olderThanDays || 30));
-    const logs = await storage.getAuditLogs();
-    let deletedCount = 0;
-    for (const log of logs) {
-      if (log.timestamp) {
-        const logDate = new Date(log.timestamp);
-        if (logDate < cutoffDate) {
-          deletedCount++;
-        }
-      }
-    }
-    await storage.createAuditLog({
-      action: "CLEANUP_AUDIT_LOGS",
-      performedBy: req.user.username,
-      details: `Cleanup requested for logs older than ${olderThanDays} days`
-    });
-    res.json({ success: true, deletedCount, message: `Cleanup completed` });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get("/api/analytics/summary", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
-  try {
-    const summary = await storage.getDashboardSummary();
-    res.json(summary);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get("/api/analytics/login-trends", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
-  try {
-    const days = parseInt(req.query.days) || 7;
-    const trends = await storage.getLoginTrends(days);
-    res.json(trends);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get("/api/analytics/top-users", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 10;
-    const topUsers = await storage.getTopActiveUsers(limit);
-    res.json(topUsers);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get("/api/analytics/peak-hours", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
-  try {
-    const peakHours = await storage.getPeakHours();
-    res.json(peakHours);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get("/api/analytics/role-distribution", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("dashboard"), async (req, res) => {
-  try {
-    const distribution = await storage.getRoleDistribution();
-    res.json(distribution);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get("/api/backups", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("backup"), async (req, res) => {
-  try {
-    const backups3 = await storage.getBackups();
-    res.json({ backups: backups3 });
-  } catch (error) {
-    console.error("Get backups error:", error);
-    res.status(500).json({ message: error.message });
-  }
-});
-app.post("/api/backups", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("backup"), async (req, res) => {
-  try {
-    const { name } = req.body;
-    const backup = await withExportCircuit(async () => {
-      const startTime = Date.now();
-      const backupData = await storage.getBackupDataForExport();
-      const metadata = {
-        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-        importsCount: backupData.imports.length,
-        dataRowsCount: backupData.dataRows.length,
-        usersCount: backupData.users.length,
-        auditLogsCount: backupData.auditLogs.length
-      };
-      const created = await storage.createBackup({
-        name,
-        createdBy: req.user.username,
-        backupData: JSON.stringify(backupData),
-        metadata: JSON.stringify(metadata)
-      });
-      await storage.createAuditLog({
-        action: "CREATE_BACKUP",
-        performedBy: req.user.username,
-        targetResource: name,
-        details: JSON.stringify({
-          ...metadata,
-          durationMs: Date.now() - startTime
-        })
-      });
-      return created;
-    });
-    res.json(backup);
-  } catch (error) {
-    if (error instanceof CircuitOpenError) {
-      return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
-    }
-    res.status(500).json({ message: error.message });
-  }
-});
-app.get("/api/backups/:id", authenticateToken, requireRole("user", "admin", "superuser"), requireTabAccess("backup"), async (req, res) => {
-  try {
-    const backup = await storage.getBackupById(req.params.id);
-    if (!backup) {
-      return res.status(404).json({ message: "Backup not found" });
-    }
-    res.json(backup);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-app.post("/api/backups/:id/restore", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("backup"), async (req, res) => {
-  try {
-    const backup = await withExportCircuit(() => storage.getBackupById(req.params.id));
-    if (!backup) {
-      return res.status(404).json({ message: "Backup not found" });
-    }
-    const result = await withExportCircuit(async () => {
-      const startTime = Date.now();
-      const backupData = JSON.parse(backup.backupData);
-      const restored = await storage.restoreFromBackup(backupData);
-      await storage.createAuditLog({
-        action: "RESTORE_BACKUP",
-        performedBy: req.user.username,
-        targetResource: backup.name,
-        details: JSON.stringify({
-          ...restored.stats,
-          durationMs: Date.now() - startTime
-        })
-      });
-      return { restored, startTime };
-    });
-    res.json({
-      ...result.restored,
-      message: `Restore completed in ${Math.round((Date.now() - result.startTime) / 1e3)}s`
-    });
-  } catch (error) {
-    if (error instanceof CircuitOpenError) {
-      return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
-    }
-    res.status(500).json({ message: error.message });
-  }
-});
-app.delete("/api/backups/:id", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("backup"), async (req, res) => {
-  try {
-    const backup = await withExportCircuit(() => storage.getBackupById(req.params.id));
-    const deleted = await withExportCircuit(() => storage.deleteBackup(req.params.id));
-    if (!deleted) {
-      return res.status(404).json({ message: "Backup not found" });
-    }
-    await storage.createAuditLog({
-      action: "DELETE_BACKUP",
-      performedBy: req.user.username,
-      targetResource: backup?.name || req.params.id
-    });
-    res.json({ success: true });
-  } catch (error) {
-    if (error instanceof CircuitOpenError) {
-      return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
-    }
-    res.status(500).json({ message: error.message });
-  }
-});
-wss.on("connection", async (ws, req) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const token = url.searchParams.get("token");
-  if (!token) {
-    ws.close();
-    return;
-  }
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const activityId = decoded.activityId;
-    const activity = await storage.getActivityById(activityId);
-    if (!activity || activity.isActive === false || activity.logoutTime !== null) {
-      console.log("\u274C WS rejected: invalid / expired session");
-      ws.close();
-      return;
-    }
-    const existingWs = connectedClients.get(activityId);
-    if (existingWs && existingWs.readyState === WebSocket.OPEN) {
-      existingWs.close();
-    }
-    connectedClients.set(activityId, ws);
-    console.log(`\u2705 WebSocket connected for activityId=${activityId}`);
-    const cleanupSocket = () => {
-      if (connectedClients.get(activityId) === ws) {
-        connectedClients.delete(activityId);
-      }
-    };
-    ws.on("close", () => {
-      cleanupSocket();
-      console.log(`WebSocket closed for activityId=${activityId}`);
-    });
-    ws.on("error", cleanupSocket);
-  } catch (err) {
-    console.log("\u274C WS handshake failed");
-    ws.close();
-  }
-});
-function serveStatic() {
-  const cwd = process.cwd();
-  const possiblePaths = [
-    "dist-local/public",
-    "dist-local\\public",
-    "dist/public",
-    "dist\\public"
-  ];
-  console.log(`  Working directory: ${cwd}`);
-  let foundPath = null;
-  let foundIndex = null;
-  for (const relPath of possiblePaths) {
-    const fullPath = path.resolve(cwd, relPath);
-    const indexFile = path.join(fullPath, "index.html");
-    console.log(`  Checking: ${fullPath}`);
-    try {
-      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
-        const files = fs.readdirSync(fullPath);
-        console.log(`    Found ${files.length} files: ${files.slice(0, 5).join(", ")}${files.length > 5 ? "..." : ""}`);
-        if (fs.existsSync(indexFile)) {
-          foundPath = fullPath;
-          foundIndex = indexFile;
-          break;
-        }
-      }
-    } catch (err) {
-      console.log(`    Error: ${err.message}`);
-    }
-  }
-  if (foundPath && foundIndex) {
-    console.log(`  Frontend: Serving from ${foundPath}`);
-    app.use(express.static(foundPath));
-    app.use((req, res, next) => {
-      if (req.path.startsWith("/api") || req.path.startsWith("/ws")) {
-        return next();
-      }
-      res.sendFile(foundIndex);
-    });
-    console.log(`  Frontend: OK`);
-  } else {
-    console.log("");
-    console.log("  ERROR: Frontend files not found!");
-    console.log("  Please run: npm run build:local");
-    console.log(`  Expected location: ${path.resolve(cwd, "dist-local/public")}`);
-    app.use((req, res) => {
-      if (!req.path.startsWith("/api")) {
-        res.status(404).send(`
-          <html>
-            <body style="font-family: sans-serif; padding: 40px;">
-              <h1>Frontend Not Built</h1>
-              <p>Please run: <code>npm run build:local</code></p>
-              <p>Then restart the server.</p>
-            </body>
-          </html>
-        `);
-      }
-    });
-  }
-}
-setInterval(async () => {
-  if (idleSweepRunning) return;
-  idleSweepRunning = true;
-  try {
-    const now = Date.now();
-    const activities = await storage.getActiveActivities();
-    const runtimeSettings = await getRuntimeSettingsCached();
-    const idleMinutes = Math.max(
-      1,
-      runtimeSettings.sessionTimeoutMinutes || runtimeSettings.wsIdleMinutes || DEFAULT_SESSION_TIMEOUT_MINUTES
-    );
-    const idleMs = idleMinutes * 60 * 1e3;
-    for (const activity of activities) {
-      if (!activity.lastActivityTime) continue;
-      const last = new Date(activity.lastActivityTime).getTime();
-      const diff = now - last;
-      if (diff > idleMs) {
-        const freshActivity = await storage.getActivityById(activity.id);
-        if (!freshActivity || freshActivity.isActive === false) {
-          continue;
-        }
-        const freshLast = freshActivity.lastActivityTime ? new Date(freshActivity.lastActivityTime).getTime() : 0;
-        const freshDiff = now - freshLast;
-        if (!freshLast || freshDiff <= idleMs) {
-          continue;
-        }
-        console.log(
-          `\u23F1\uFE0F IDLE TIMEOUT: ${activity.username} (${activity.id})`
-        );
-        await storage.updateActivity(activity.id, {
-          isActive: false,
-          logoutTime: /* @__PURE__ */ new Date(),
-          logoutReason: "IDLE_TIMEOUT"
-        });
-        const ws = connectedClients.get(activity.id);
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: "idle_timeout",
-            reason: "Session expired due to inactivity"
-          }));
-          ws.close();
-        }
-        connectedClients.delete(activity.id);
-        await storage.createAuditLog({
-          action: "SESSION_IDLE_TIMEOUT",
-          performedBy: activity.username,
-          details: `Auto logout after ${idleMinutes} minutes idle`
-        });
-      }
-    }
-  } catch (err) {
-    console.error("Idle session checker error:", err);
-  } finally {
-    idleSweepRunning = false;
-  }
-}, 60 * 1e3);
+app.use(errorHandler);
 async function startServer() {
   console.log("");
   console.log("=========================================");
@@ -12714,19 +13977,25 @@ async function startServer() {
   await storage.init();
   if (AI_PRECOMPUTE_ON_START) {
   }
-  serveStatic();
+  registerFrontendStatic(app);
+  startIdleSessionSweeper({
+    storage,
+    connectedClients,
+    getRuntimeSettingsCached,
+    defaultSessionTimeoutMinutes: DEFAULT_SESSION_TIMEOUT_MINUTES
+  });
   const PORT = parseInt(process.env.PORT || "5000", 10);
   const HOST = "0.0.0.0";
   server.on("error", (err) => {
     if (err.code === "EADDRINUSE") {
       notifyMasterFatalStartup("EADDRINUSE", `Port ${PORT} is already in use`);
-      console.error(`\u274C Port ${PORT} is already in use.`);
+      console.error(`\xE2\x9D\u0152 Port ${PORT} is already in use.`);
       console.error(`   This usually means a previous server process hasn't fully released the port yet.`);
       console.error(`   Please wait a few seconds and try again, or use: lsof -i :${PORT} (or netstat -ano | findstr :${PORT} on Windows)`);
       setTimeout(() => process.exit(98), 10).unref();
     } else {
       notifyMasterFatalStartup("SERVER_STARTUP_ERROR", String(err?.message || err));
-      console.error(`\u274C Server error:`, err);
+      console.error(`\xE2\x9D\u0152 Server error:`, err);
       setTimeout(() => process.exit(1), 10).unref();
     }
   });
@@ -12746,26 +14015,15 @@ async function startServer() {
   if (AI_PRECOMPUTE_ON_START) {
     setTimeout(async () => {
       try {
-        const rules = await loadCategoryRules();
-        const enabledRuleKeys = rules.filter((r) => r.enabled !== false).map((r) => r.key);
-        const targetKeys = Array.from(/* @__PURE__ */ new Set(["__all__", ...enabledRuleKeys]));
-        const rulesUpdatedAt = await storage.getCategoryRulesMaxUpdatedAt();
-        const existing = await storage.getCategoryStats(targetKeys);
-        const byKey = new Map(existing.map((row) => [row.key, row]));
-        const statsUpdatedAt = byKey.get("__all__")?.updatedAt ?? null;
-        const hasAllKeys = targetKeys.every((k) => byKey.has(k));
-        const isStale = Boolean(rulesUpdatedAt && statsUpdatedAt && rulesUpdatedAt > statsUpdatedAt);
-        if (hasAllKeys && !isStale) {
-          console.log("\u2705 Category stats already present. Skipping precompute.");
+        const result = await categoryStatsService.warmCategoryStats();
+        if (result.skipped) {
+          console.log("\xE2\u0153\u2026 Category stats already present. Skipping precompute.");
           return;
         }
-        const missingKeys = targetKeys.filter((k) => !byKey.has(k));
-        const computeKeys = isStale ? targetKeys : Array.from(/* @__PURE__ */ new Set([...missingKeys, "__all__"]));
-        console.log(`\u23F1\uFE0F Precomputing category stats (${computeKeys.length} key(s))...`);
-        await storage.computeCategoryStatsForKeys(computeKeys, rules);
-        console.log("\u2705 Precomputed category stats.");
+        console.log(`\xE2\x8F\xB1\xEF\xB8\x8F Precomputing category stats (${result.computeKeys} key(s))...`);
+        console.log("\xE2\u0153\u2026 Precomputed category stats.");
       } catch (err) {
-        console.error("\u274C Precompute stats failed:", err?.message || err);
+        console.error("\xE2\x9D\u0152 Precompute stats failed:", err?.message || err);
       }
     }, 0);
   }

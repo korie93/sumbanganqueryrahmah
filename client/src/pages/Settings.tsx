@@ -323,6 +323,7 @@ export default function SettingsPage() {
   const canEditSystemSettings = currentUser?.role === "admin" || currentUser?.role === "superuser";
   const isSuperuser = currentUser?.role === "superuser";
   const canAccessAccountSecurity = currentUser?.role === "superuser";
+  const currentUserRole = currentUser?.role ?? "";
 
   const syncLocalUser = useCallback((nextUser: CurrentUser) => {
     localStorage.setItem("username", nextUser.username);
@@ -801,7 +802,7 @@ export default function SettingsPage() {
 
               <div className="space-y-2">
                 <p className="text-sm font-medium">Role (read only)</p>
-                <Input value={currentUser.role} disabled />
+                <Input value={currentUserRole} disabled />
               </div>
 
               <div className="border-t border-border/60 pt-6 space-y-4">

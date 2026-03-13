@@ -23,7 +23,15 @@ import bcrypt from "bcrypt";
 import { db } from "./db-postgres";
 import { eq, desc, and, or, gte, lte, count, sql, inArray } from "drizzle-orm";
 import crypto from "crypto";
+import {
+  type MaintenanceState,
+  type SystemSettingCategory,
+  type SystemSettingItem,
+} from "./config/system-settings";
 import { shouldSeedDefaultUsers } from "./config/security";
+import { BackupsBootstrap } from "./internal/backupsBootstrap";
+import { SettingsBootstrap } from "./internal/settingsBootstrap";
+import { SpatialBootstrap } from "./internal/spatialBootstrap";
 import { AuthRepository } from "./repositories/auth.repository";
 import { ImportsRepository } from "./repositories/imports.repository";
 import { SearchRepository } from "./repositories/search.repository";
@@ -31,10 +39,11 @@ import { ActivityRepository } from "./repositories/activity.repository";
 import { AuditRepository } from "./repositories/audit.repository";
 import { BackupsRepository } from "./repositories/backups.repository";
 import { AnalyticsRepository } from "./repositories/analytics.repository";
+import { CollectionRepository } from "./repositories/collection.repository";
+import { SettingsRepository } from "./repositories/settings.repository";
 const MAX_SEARCH_LIMIT = 200;
 const QUERY_PAGE_LIMIT = 1000;
 const MAX_COLUMN_KEYS = 500;
-const ANALYTICS_TZ = process.env.ANALYTICS_TZ || "Asia/Kuala_Lumpur";
 const STORAGE_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
 const BCRYPT_COST = 12;
 const ALLOWED_OPERATORS = new Set([
@@ -50,24 +59,7 @@ const ALLOWED_OPERATORS = new Set([
   "isEmpty",
   "isNotEmpty",
 ]);
-const BACKUP_CHUNK_SIZE = 500;
-const COLLECTION_BATCH_VALUES = ["P10", "P25", "MDD02", "MDD10", "MDD18", "MDD25"] as const;
-const COLLECTION_MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-] as const;
-
-type CollectionBatch = typeof COLLECTION_BATCH_VALUES[number];
+type CollectionBatch = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
 
 export type CollectionRecord = {
   id: string;
@@ -179,14 +171,6 @@ export type UpdateCollectionStaffNicknameInput = {
   roleScope?: "admin" | "user" | "both";
 };
 
-function normalizeCollectionNicknameRoleScope(value: unknown): "admin" | "user" | "both" {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  if (normalized === "admin" || normalized === "user" || normalized === "both") {
-    return normalized;
-  }
-  return "both";
-}
-
 function detectValueType(value: string): "number" | "date" | "string" {
   if (!value) return "string";
 
@@ -274,89 +258,6 @@ type CategoryRule = {
   matchMode?: string;
   enabled?: boolean;
 };
-
-type SettingInputType = "text" | "number" | "boolean" | "select" | "timestamp";
-
-type SettingsPermission = {
-  canView: boolean;
-  canEdit: boolean;
-};
-
-type SettingsOption = {
-  value: string;
-  label: string;
-};
-
-type SystemSettingItem = {
-  key: string;
-  label: string;
-  description: string | null;
-  type: SettingInputType;
-  value: string;
-  defaultValue: string | null;
-  isCritical: boolean;
-  updatedAt: Date | null;
-  permission: SettingsPermission;
-  options: SettingsOption[];
-};
-
-type SystemSettingCategory = {
-  id: string;
-  name: string;
-  description: string | null;
-  settings: SystemSettingItem[];
-};
-
-type MaintenanceState = {
-  maintenance: boolean;
-  message: string;
-  type: "soft" | "hard";
-  startTime: string | null;
-  endTime: string | null;
-};
-
-type RoleTabSetting = {
-  pageId: string;
-  suffix: string;
-  label: string;
-  description: string;
-  defaultEnabled: boolean;
-};
-
-const ROLE_TAB_SETTINGS: Record<"admin" | "user", RoleTabSetting[]> = {
-  admin: [
-    { pageId: "home", suffix: "home", label: "Admin Tab: Home", description: "Allow admin to open Home tab.", defaultEnabled: true },
-    { pageId: "import", suffix: "import", label: "Admin Tab: Import", description: "Allow admin to open Import tab.", defaultEnabled: true },
-    { pageId: "saved", suffix: "saved", label: "Admin Tab: Saved", description: "Allow admin to open Saved tab.", defaultEnabled: true },
-    { pageId: "viewer", suffix: "viewer", label: "Admin Tab: Viewer", description: "Allow admin to open Viewer tab.", defaultEnabled: true },
-    { pageId: "general-search", suffix: "general_search", label: "Admin Tab: Search", description: "Allow admin to open Search tab.", defaultEnabled: true },
-    { pageId: "collection-report", suffix: "collection_report", label: "Admin Tab: Collection Report", description: "Allow admin to open Collection Report tab.", defaultEnabled: true },
-    { pageId: "analysis", suffix: "analysis", label: "Admin Tab: Analysis", description: "Allow admin to open Analysis tab.", defaultEnabled: true },
-    { pageId: "dashboard", suffix: "dashboard", label: "Admin Tab: Dashboard", description: "Allow admin to open Dashboard tab.", defaultEnabled: false },
-    { pageId: "monitor", suffix: "monitor", label: "Admin Tab: System Monitor", description: "Allow admin to open System Monitor tab.", defaultEnabled: true },
-    { pageId: "activity", suffix: "activity", label: "Admin Tab: Activity", description: "Allow admin to open Activity tab.", defaultEnabled: false },
-    { pageId: "audit-logs", suffix: "audit_logs", label: "Admin Tab: Audit", description: "Allow admin to open Audit tab.", defaultEnabled: false },
-    { pageId: "backup", suffix: "backup", label: "Admin Tab: Backup", description: "Allow admin to open Backup tab.", defaultEnabled: false },
-    { pageId: "settings", suffix: "settings", label: "Admin Tab: Settings", description: "Allow admin to open Settings tab.", defaultEnabled: true },
-  ],
-  user: [
-    { pageId: "home", suffix: "home", label: "User Tab: Home", description: "Allow user to open Home tab.", defaultEnabled: false },
-    { pageId: "import", suffix: "import", label: "User Tab: Import", description: "Allow user to open Import tab.", defaultEnabled: false },
-    { pageId: "saved", suffix: "saved", label: "User Tab: Saved", description: "Allow user to open Saved tab.", defaultEnabled: false },
-    { pageId: "viewer", suffix: "viewer", label: "User Tab: Viewer", description: "Allow user to open Viewer tab.", defaultEnabled: false },
-    { pageId: "general-search", suffix: "general_search", label: "User Tab: Search", description: "Allow user to open Search tab.", defaultEnabled: true },
-    { pageId: "collection-report", suffix: "collection_report", label: "User Tab: Collection Report", description: "Allow user to open Collection Report tab.", defaultEnabled: true },
-    { pageId: "analysis", suffix: "analysis", label: "User Tab: Analysis", description: "Allow user to open Analysis tab.", defaultEnabled: false },
-    { pageId: "dashboard", suffix: "dashboard", label: "User Tab: Dashboard", description: "Allow user to open Dashboard tab.", defaultEnabled: false },
-    { pageId: "monitor", suffix: "monitor", label: "User Tab: System Monitor", description: "Allow user to open System Monitor tab.", defaultEnabled: false },
-    { pageId: "activity", suffix: "activity", label: "User Tab: Activity", description: "Allow user to open Activity tab.", defaultEnabled: false },
-    { pageId: "audit-logs", suffix: "audit_logs", label: "User Tab: Audit", description: "Allow user to open Audit tab.", defaultEnabled: false },
-    { pageId: "backup", suffix: "backup", label: "User Tab: Backup", description: "Allow user to open Backup tab.", defaultEnabled: false },
-  ],
-};
-
-const roleTabSettingKey = (role: "admin" | "user", suffix: string): string =>
-  `tab_${role}_${suffix}_enabled`;
 
 function ensureObject(value: unknown): Record<string, any> | null {
   if (value && typeof value === "object") {
@@ -664,16 +565,7 @@ function ensureObject(value: unknown): Record<string, any> | null {
   }): Promise<{ success: boolean; stats: { imports: number; dataRows: number; users: number; auditLogs: number } }>;
 }
 
-type TopActiveUserRow = {
-  username: string;
-  role: string;
-  loginCount: number;
-  lastLogin: Date | null;
-};
-
 export class PostgresStorage implements IStorage {
-  private settingsTablesReady = false;
-  private settingsTablesInitPromise: Promise<void> | null = null;
   private readonly authRepository = new AuthRepository();
   private readonly importsRepository = new ImportsRepository();
   private readonly searchRepository = new SearchRepository();
@@ -681,16 +573,25 @@ export class PostgresStorage implements IStorage {
     ensureBannedSessionsTable: () => this.ensureBannedSessionsTable(),
   });
   private readonly auditRepository = new AuditRepository();
+  private readonly backupsBootstrap = new BackupsBootstrap();
   private readonly backupsRepository = new BackupsRepository({
-    ensureBackupsTable: () => this.ensureBackupsTable(),
+    ensureBackupsTable: () => this.backupsBootstrap.ensureTable(),
     parseBackupMetadataSafe: (raw) => this.parseBackupMetadataSafe(raw),
   });
   private readonly analyticsRepository = new AnalyticsRepository();
+  private readonly collectionRepository = new CollectionRepository();
+  private readonly settingsRepository = new SettingsRepository();
+  private readonly settingsBootstrap = new SettingsBootstrap();
+  private readonly spatialBootstrap = new SpatialBootstrap();
 
   constructor() {}
 
   public async init() {
     await this.ensureUsersTable();
+    await this.ensureImportsTable();
+    await this.ensureDataRowsTable();
+    await this.ensureUserActivityTable();
+    await this.ensureAuditLogsTable();
     await this.ensureCollectionRecordsTable();
     await this.ensureCollectionStaffNicknamesTable();
     await this.ensureCollectionAdminGroupsTables();
@@ -773,6 +674,152 @@ export class PostgresStorage implements IStorage {
       await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_role ON public.users (role)`);
     } catch (err: any) {
       console.error("❌ Failed to ensure users table:", err?.message || err);
+      throw err;
+    }
+  }
+
+  private async ensureImportsTable() {
+    try {
+      await db.execute(sql`SET search_path TO public`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.imports (
+          id text PRIMARY KEY,
+          name text NOT NULL,
+          filename text NOT NULL,
+          created_at timestamp DEFAULT now(),
+          is_deleted boolean DEFAULT false,
+          created_by text
+        )
+      `);
+      await db.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS name text`);
+      await db.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS filename text`);
+      await db.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+      await db.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS is_deleted boolean DEFAULT false`);
+      await db.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS created_by text`);
+      await db.execute(sql`
+        UPDATE public.imports
+        SET
+          name = COALESCE(NULLIF(name, ''), NULLIF(filename, ''), 'Untitled Import'),
+          filename = COALESCE(NULLIF(filename, ''), COALESCE(NULLIF(name, ''), 'unknown.csv')),
+          created_at = COALESCE(created_at, now()),
+          is_deleted = COALESCE(is_deleted, false)
+      `);
+      await db.execute(sql`ALTER TABLE public.imports ALTER COLUMN name SET NOT NULL`);
+      await db.execute(sql`ALTER TABLE public.imports ALTER COLUMN filename SET NOT NULL`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_created_at ON public.imports(created_at DESC)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_is_deleted ON public.imports(is_deleted)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_created_by ON public.imports(created_by)`);
+    } catch (err: any) {
+      console.error("Failed to ensure imports table:", err?.message || err);
+      throw err;
+    }
+  }
+
+  private async ensureDataRowsTable() {
+    try {
+      await db.execute(sql`SET search_path TO public`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.data_rows (
+          id text PRIMARY KEY,
+          import_id text NOT NULL,
+          json_data jsonb NOT NULL DEFAULT '{}'::jsonb
+        )
+      `);
+      await db.execute(sql`ALTER TABLE public.data_rows ADD COLUMN IF NOT EXISTS import_id text`);
+      await db.execute(sql`ALTER TABLE public.data_rows ADD COLUMN IF NOT EXISTS json_data jsonb DEFAULT '{}'::jsonb`);
+      await db.execute(sql`
+        UPDATE public.data_rows
+        SET json_data = COALESCE(json_data, '{}'::jsonb)
+      `);
+      await db.execute(sql`ALTER TABLE public.data_rows ALTER COLUMN import_id SET NOT NULL`);
+      await db.execute(sql`ALTER TABLE public.data_rows ALTER COLUMN json_data SET NOT NULL`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_data_rows_import_id ON public.data_rows(import_id)`);
+    } catch (err: any) {
+      console.error("Failed to ensure data_rows table:", err?.message || err);
+      throw err;
+    }
+  }
+
+  private async ensureUserActivityTable() {
+    try {
+      await db.execute(sql`SET search_path TO public`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.user_activity (
+          id text PRIMARY KEY,
+          user_id text NOT NULL,
+          username text NOT NULL,
+          role text NOT NULL,
+          pc_name text,
+          browser text,
+          fingerprint text,
+          ip_address text,
+          login_time timestamp,
+          logout_time timestamp,
+          last_activity_time timestamp,
+          is_active boolean DEFAULT true,
+          logout_reason text
+        )
+      `);
+      await db.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS user_id text`);
+      await db.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS username text`);
+      await db.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS role text`);
+      await db.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS pc_name text`);
+      await db.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS browser text`);
+      await db.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS fingerprint text`);
+      await db.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS ip_address text`);
+      await db.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS login_time timestamp`);
+      await db.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS logout_time timestamp`);
+      await db.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS last_activity_time timestamp`);
+      await db.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true`);
+      await db.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS logout_reason text`);
+      await db.execute(sql`
+        UPDATE public.user_activity
+        SET
+          is_active = COALESCE(is_active, true),
+          login_time = COALESCE(login_time, now()),
+          last_activity_time = COALESCE(last_activity_time, login_time, now())
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_username ON public.user_activity(username)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_is_active ON public.user_activity(is_active)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_login_time ON public.user_activity(login_time DESC)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_last_activity_time ON public.user_activity(last_activity_time DESC)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_fingerprint ON public.user_activity(fingerprint)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_ip_address ON public.user_activity(ip_address)`);
+    } catch (err: any) {
+      console.error("Failed to ensure user_activity table:", err?.message || err);
+      throw err;
+    }
+  }
+
+  private async ensureAuditLogsTable() {
+    try {
+      await db.execute(sql`SET search_path TO public`);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.audit_logs (
+          id text PRIMARY KEY,
+          action text NOT NULL,
+          performed_by text NOT NULL,
+          target_user text,
+          target_resource text,
+          details text,
+          timestamp timestamp DEFAULT now()
+        )
+      `);
+      await db.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS action text`);
+      await db.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS performed_by text`);
+      await db.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS target_user text`);
+      await db.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS target_resource text`);
+      await db.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS details text`);
+      await db.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS timestamp timestamp DEFAULT now()`);
+      await db.execute(sql`
+        UPDATE public.audit_logs
+        SET timestamp = COALESCE(timestamp, now())
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON public.audit_logs(timestamp DESC)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON public.audit_logs(action)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_performed_by ON public.audit_logs(performed_by)`);
+    } catch (err: any) {
+      console.error("Failed to ensure audit_logs table:", err?.message || err);
       throw err;
     }
   }
@@ -1634,578 +1681,19 @@ export class PostgresStorage implements IStorage {
   }
 
   private async ensureSettingsTables() {
-    if (this.settingsTablesReady) return;
-    if (this.settingsTablesInitPromise) {
-      await this.settingsTablesInitPromise;
-      return;
-    }
-
-    this.settingsTablesInitPromise = (async () => {
-      try {
-        await db.execute(sql`SET search_path TO public`);
-        await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
-
-        await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.setting_categories (
-          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-          name text UNIQUE NOT NULL,
-          description text,
-          created_at timestamp DEFAULT now()
-        )
-        `);
-
-        await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.system_settings (
-          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-          category_id uuid REFERENCES public.setting_categories(id) ON DELETE CASCADE,
-          key text UNIQUE NOT NULL,
-          label text NOT NULL,
-          description text,
-          type text NOT NULL,
-          value text NOT NULL,
-          default_value text,
-          is_critical boolean DEFAULT false,
-          updated_at timestamp DEFAULT now()
-        )
-        `);
-
-        await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.setting_options (
-          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-          setting_id uuid REFERENCES public.system_settings(id) ON DELETE CASCADE,
-          value text NOT NULL,
-          label text NOT NULL
-        )
-        `);
-        // Cleanup legacy duplicate options, then enforce uniqueness per setting/value.
-        try {
-          await db.execute(sql`
-          WITH ranked AS (
-            SELECT
-              ctid,
-              row_number() OVER (PARTITION BY setting_id, value ORDER BY id) AS rn
-            FROM public.setting_options
-          )
-          DELETE FROM public.setting_options so
-          USING ranked r
-          WHERE so.ctid = r.ctid
-            AND r.rn > 1
-        `);
-        } catch (dupCleanupErr: any) {
-          console.warn("⚠️ setting_options duplicate cleanup skipped:", dupCleanupErr?.message || dupCleanupErr);
-        }
-
-        try {
-          await db.execute(sql`
-          CREATE UNIQUE INDEX IF NOT EXISTS idx_setting_options_unique_value
-          ON public.setting_options (setting_id, value)
-        `);
-        } catch (idxErr: any) {
-          console.warn("⚠️ setting_options unique index not created:", idxErr?.message || idxErr);
-        }
-
-        await db.execute(sql`
-        CREATE INDEX IF NOT EXISTS idx_setting_options_setting_id
-        ON public.setting_options (setting_id)
-        `);
-
-        await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.role_setting_permissions (
-          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-          role text NOT NULL,
-          setting_key text NOT NULL,
-          can_view boolean DEFAULT false,
-          can_edit boolean DEFAULT false
-        )
-        `);
-        await db.execute(sql`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_role_setting_permissions_unique
-        ON public.role_setting_permissions (role, setting_key)
-        `);
-
-        // Optional enterprise-ready tables
-        await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.setting_versions (
-          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-          setting_key text NOT NULL,
-          old_value text,
-          new_value text NOT NULL,
-          changed_by text NOT NULL,
-          changed_at timestamp DEFAULT now()
-        )
-        `);
-        await db.execute(sql`
-        CREATE INDEX IF NOT EXISTS idx_setting_versions_key_time
-        ON public.setting_versions (setting_key, changed_at DESC)
-        `);
-        await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.feature_flags (
-          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-          key text UNIQUE NOT NULL,
-          enabled boolean NOT NULL DEFAULT false,
-          description text,
-          updated_at timestamp DEFAULT now()
-        )
-        `);
-
-      const categories = [
-        { name: "General", description: "Global platform behavior and identity settings." },
-        { name: "Security", description: "Authentication, session, and security policy controls." },
-        { name: "AI & Search", description: "AI assistant and search tuning configuration." },
-        { name: "Data Management", description: "Data processing, viewer, and indexing limits." },
-        { name: "Backup & Restore", description: "Backup lifecycle and recovery controls." },
-        { name: "Roles & Permissions", description: "Role behavior and privilege defaults." },
-        { name: "System Monitoring", description: "WebSocket and runtime diagnostics settings." },
-      ];
-
-        for (const category of categories) {
-          await db.execute(sql`
-          INSERT INTO public.setting_categories (name, description)
-          VALUES (${category.name}, ${category.description})
-          ON CONFLICT (name) DO UPDATE SET
-            description = EXCLUDED.description
-        `);
-        }
-
-      const settingsSeed: Array<{
-        categoryName: string;
-        key: string;
-        label: string;
-        description: string;
-        type: SettingInputType;
-        value: string;
-        defaultValue: string;
-        isCritical: boolean;
-      }> = [
-        {
-          categoryName: "General",
-          key: "system_name",
-          label: "System Name",
-          description: "Display name shown in application header.",
-          type: "text",
-          value: "SQR System",
-          defaultValue: "SQR System",
-          isCritical: false,
-        },
-        {
-          categoryName: "General",
-          key: "session_timeout_minutes",
-          label: "Session Timeout (Minutes)",
-          description: "Default idle timeout duration for authenticated sessions.",
-          type: "number",
-          value: "30",
-          defaultValue: "30",
-          isCritical: true,
-        },
-        {
-          categoryName: "Security",
-          key: "jwt_expiry_hours",
-          label: "JWT Expiry (Hours)",
-          description: "Token validity period used during login.",
-          type: "number",
-          value: "24",
-          defaultValue: "24",
-          isCritical: true,
-        },
-        {
-          categoryName: "Security",
-          key: "enforce_superuser_single_session",
-          label: "Enforce Single Superuser Session",
-          description: "Force single active session for superuser accounts.",
-          type: "boolean",
-          value: "true",
-          defaultValue: "true",
-          isCritical: false,
-        },
-        {
-          categoryName: "AI & Search",
-          key: "ai_enabled",
-          label: "Enable AI Assistant",
-          description: "Controls AI endpoints and chat behavior.",
-          type: "boolean",
-          value: "true",
-          defaultValue: "true",
-          isCritical: false,
-        },
-        {
-          categoryName: "AI & Search",
-          key: "semantic_search_enabled",
-          label: "Enable Semantic Search",
-          description: "Allow pgvector semantic retrieval for AI workflows.",
-          type: "boolean",
-          value: "true",
-          defaultValue: "true",
-          isCritical: false,
-        },
-        {
-          categoryName: "AI & Search",
-          key: "ai_timeout_ms",
-          label: "AI Timeout (ms)",
-          description: "Server timeout for AI requests before fallback response.",
-          type: "number",
-          value: "6000",
-          defaultValue: "6000",
-          isCritical: false,
-        },
-        {
-          categoryName: "Data Management",
-          key: "search_result_limit",
-          label: "Search Result Limit",
-          description: "Maximum records returned in search APIs.",
-          type: "number",
-          value: "200",
-          defaultValue: "200",
-          isCritical: false,
-        },
-        {
-          categoryName: "Data Management",
-          key: "viewer_rows_per_page",
-          label: "Viewer Rows Per Page",
-          description: "Default row count per viewer page.",
-          type: "number",
-          value: "100",
-          defaultValue: "100",
-          isCritical: false,
-        },
-        {
-          categoryName: "Backup & Restore",
-          key: "backup_retention_days",
-          label: "Backup Retention (Days)",
-          description: "Retention target for automated backup lifecycle policies.",
-          type: "number",
-          value: "30",
-          defaultValue: "30",
-          isCritical: false,
-        },
-        {
-          categoryName: "Backup & Restore",
-          key: "backup_auto_cleanup_enabled",
-          label: "Enable Backup Auto Cleanup",
-          description: "Automatically remove backups older than retention policy.",
-          type: "boolean",
-          value: "false",
-          defaultValue: "false",
-          isCritical: false,
-        },
-        {
-          categoryName: "Roles & Permissions",
-          key: "admin_can_edit_maintenance_message",
-          label: "Admin Can Edit Maintenance Message",
-          description: "Allow admin role to edit maintenance message and window only.",
-          type: "boolean",
-          value: "true",
-          defaultValue: "true",
-          isCritical: false,
-        },
-        {
-          categoryName: "Roles & Permissions",
-          key: "canViewSystemPerformance",
-          label: "View System Performance",
-          description: "Allow admin role to view System Performance in System Monitor.",
-          type: "boolean",
-          value: "false",
-          defaultValue: "false",
-          isCritical: false,
-        },
-        {
-          categoryName: "System Monitoring",
-          key: "ws_idle_minutes",
-          label: "WebSocket Idle Timeout (Minutes)",
-          description: "Idle timeout before websocket session termination.",
-          type: "number",
-          value: "3",
-          defaultValue: "3",
-          isCritical: false,
-        },
-        {
-          categoryName: "System Monitoring",
-          key: "debug_logs_enabled",
-          label: "Enable Debug Logs",
-          description: "Enable verbose API debug logging.",
-          type: "boolean",
-          value: "false",
-          defaultValue: "false",
-          isCritical: false,
-        },
-        {
-          categoryName: "System Monitoring",
-          key: "maintenance_mode",
-          label: "Maintenance Mode",
-          description: "Master switch for maintenance mode activation.",
-          type: "boolean",
-          value: "false",
-          defaultValue: "false",
-          isCritical: true,
-        },
-        {
-          categoryName: "System Monitoring",
-          key: "maintenance_message",
-          label: "Maintenance Message",
-          description: "Message shown to end users while maintenance is active.",
-          type: "text",
-          value: "Sistem sedang diselenggara. Sila cuba semula sebentar lagi.",
-          defaultValue: "Sistem sedang diselenggara. Sila cuba semula sebentar lagi.",
-          isCritical: false,
-        },
-        {
-          categoryName: "System Monitoring",
-          key: "maintenance_type",
-          label: "Maintenance Type",
-          description: "Soft mode limits selected modules. Hard mode blocks all protected routes.",
-          type: "select",
-          value: "soft",
-          defaultValue: "soft",
-          isCritical: true,
-        },
-        {
-          categoryName: "System Monitoring",
-          key: "maintenance_start_time",
-          label: "Maintenance Start Time",
-          description: "Optional ISO timestamp to schedule maintenance start.",
-          type: "timestamp",
-          value: "",
-          defaultValue: "",
-          isCritical: false,
-        },
-        {
-          categoryName: "System Monitoring",
-          key: "maintenance_end_time",
-          label: "Maintenance End Time",
-          description: "Optional ISO timestamp to auto-end maintenance.",
-          type: "timestamp",
-          value: "",
-          defaultValue: "",
-          isCritical: false,
-        },
-      ];
-
-        for (const [role, tabSettings] of Object.entries(ROLE_TAB_SETTINGS) as Array<[("admin" | "user"), RoleTabSetting[]]>) {
-          for (const tabSetting of tabSettings) {
-            const key = roleTabSettingKey(role, tabSetting.suffix);
-            settingsSeed.push({
-              categoryName: "Roles & Permissions",
-              key,
-              label: tabSetting.label,
-              description: tabSetting.description,
-              type: "boolean",
-              value: tabSetting.defaultEnabled ? "true" : "false",
-              defaultValue: tabSetting.defaultEnabled ? "true" : "false",
-              isCritical: false,
-            });
-          }
-        }
-
-        for (const setting of settingsSeed) {
-          await db.execute(sql`
-          INSERT INTO public.system_settings (
-            category_id, key, label, description, type, value, default_value, is_critical, updated_at
-          )
-          VALUES (
-            (SELECT id FROM public.setting_categories WHERE name = ${setting.categoryName}),
-            ${setting.key},
-            ${setting.label},
-            ${setting.description},
-            ${setting.type},
-            ${setting.value},
-            ${setting.defaultValue},
-            ${setting.isCritical},
-            now()
-          )
-          ON CONFLICT (key) DO UPDATE SET
-            category_id = EXCLUDED.category_id,
-            label = EXCLUDED.label,
-            description = EXCLUDED.description,
-            type = EXCLUDED.type,
-            default_value = EXCLUDED.default_value,
-            is_critical = EXCLUDED.is_critical
-        `);
-        }
-
-        // Normalize maintenance_type options to exactly 2 values (legacy databases may contain thousands).
-        const maintenanceTypeRes = await db.execute(sql`
-          SELECT id
-          FROM public.system_settings
-          WHERE key = 'maintenance_type'
-          LIMIT 1
-        `);
-        const maintenanceTypeId = String((maintenanceTypeRes.rows as any[])[0]?.id || "").trim();
-        if (maintenanceTypeId) {
-          await db.execute(sql`
-            DELETE FROM public.setting_options
-            WHERE setting_id = ${maintenanceTypeId}
-          `);
-          await db.execute(sql`
-            INSERT INTO public.setting_options (setting_id, value, label)
-            VALUES
-              (${maintenanceTypeId}, 'soft', 'Soft Maintenance'),
-              (${maintenanceTypeId}, 'hard', 'Hard Maintenance')
-          `);
-        }
-
-        const adminEditable = new Set([
-          "system_name",
-          "ai_enabled",
-          "semantic_search_enabled",
-          "ai_timeout_ms",
-          "search_result_limit",
-          "viewer_rows_per_page",
-          "maintenance_message",
-          "maintenance_start_time",
-          "maintenance_end_time",
-        ]);
-
-        for (const setting of settingsSeed) {
-          await db.execute(sql`
-          INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
-          VALUES ('superuser', ${setting.key}, true, true)
-          ON CONFLICT (role, setting_key) DO UPDATE SET
-            can_view = EXCLUDED.can_view,
-            can_edit = EXCLUDED.can_edit
-        `);
-          await db.execute(sql`
-          INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
-          VALUES ('admin', ${setting.key}, true, ${adminEditable.has(setting.key)})
-          ON CONFLICT (role, setting_key) DO UPDATE SET
-            can_view = EXCLUDED.can_view,
-            can_edit = EXCLUDED.can_edit
-        `);
-          await db.execute(sql`
-          INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
-          VALUES ('user', ${setting.key}, false, false)
-          ON CONFLICT (role, setting_key) DO UPDATE SET
-            can_view = EXCLUDED.can_view,
-            can_edit = EXCLUDED.can_edit
-        `);
-        }
-        this.settingsTablesReady = true;
-      } catch (err: any) {
-        console.error("❌ Failed to ensure enterprise settings tables:", err?.message || err);
-      }
-    })();
-
-    try {
-      await this.settingsTablesInitPromise;
-    } finally {
-      this.settingsTablesInitPromise = null;
-    }
+    await this.settingsBootstrap.ensureTables();
   }
 
   private async ensureSpatialTables() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      await db.execute(sql`CREATE EXTENSION IF NOT EXISTS postgis`);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.aeon_branches (
-          id text PRIMARY KEY,
-          name text NOT NULL,
-          branch_address text,
-          phone_number text,
-          fax_number text,
-          business_hour text,
-          day_open text,
-          atm_cdm text,
-          inquiry_availability text,
-          application_availability text,
-          aeon_lounge text,
-          branch_lat double precision NOT NULL,
-          branch_lng double precision NOT NULL
-        )
-      `);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.aeon_branch_postcodes (
-          postcode text PRIMARY KEY,
-          lat double precision NOT NULL,
-          lng double precision NOT NULL,
-          source_branch text,
-          state text
-        )
-      `);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS branch_address text`);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS phone_number text`);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS fax_number text`);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS business_hour text`);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS day_open text`);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS atm_cdm text`);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS inquiry_availability text`);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS application_availability text`);
-      await db.execute(sql`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS aeon_lounge text`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_aeon_branches_lat_lng ON public.aeon_branches (branch_lat, branch_lng)`);
-      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_aeon_branches_name_unique ON public.aeon_branches (lower(name))`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_aeon_postcodes ON public.aeon_branch_postcodes (postcode)`);
-    } catch (err: any) {
-      console.warn("⚠️ Failed to ensure PostGIS tables:", err?.message || err);
-    }
+    await this.spatialBootstrap.ensureTables();
   }
 
   private async ensureBackupsTable() {
-    try {
-      await db.execute(sql`SET search_path TO public`);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS public.backups (
-          id text PRIMARY KEY,
-          name text NOT NULL,
-          created_at timestamp DEFAULT now(),
-          created_by text NOT NULL,
-          backup_data text NOT NULL,
-          metadata text
-        )
-      `);
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS backups (
-          id text PRIMARY KEY,
-          name text NOT NULL,
-          created_at timestamp DEFAULT now(),
-          created_by text NOT NULL,
-          backup_data text NOT NULL,
-          metadata text
-        )
-      `);
-      await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS name text`);
-      await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS created_at timestamp`);
-      await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS created_by text`);
-      await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS backup_data text`);
-      await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS metadata text`);
-      const idTypeResult = await db.execute(sql`
-        SELECT data_type
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'backups'
-          AND column_name = 'id'
-        LIMIT 1
-      `);
-      const idType = (idTypeResult.rows?.[0] as { data_type?: string } | undefined)?.data_type;
-      if (idType && idType !== "text") {
-        await db.execute(sql`
-          CREATE TABLE IF NOT EXISTS public.backups_new (
-            id text PRIMARY KEY,
-            name text NOT NULL,
-            created_at timestamp DEFAULT now(),
-            created_by text NOT NULL,
-            backup_data text NOT NULL,
-            metadata text
-          )
-        `);
-        await db.execute(sql`
-          INSERT INTO public.backups_new (id, name, created_at, created_by, backup_data, metadata)
-          SELECT
-            id::text,
-            COALESCE(name, 'backup')::text,
-            COALESCE(created_at, now()),
-            COALESCE(created_by, 'system')::text,
-            COALESCE(backup_data, '{}')::text,
-            metadata
-          FROM public.backups
-          ON CONFLICT (id) DO NOTHING
-        `);
-        await db.execute(sql`DROP TABLE public.backups`);
-        await db.execute(sql`ALTER TABLE public.backups_new RENAME TO backups`);
-      }
-      const info = await db.execute(sql`SELECT current_database() AS db, current_schema() AS schema`);
-      const row = info.rows?.[0] as { db?: string; schema?: string } | undefined;
-      console.log(`🧾 DB info: database=${row?.db ?? "unknown"}, schema=${row?.schema ?? "unknown"}`);
-    } catch (err: any) {
-      console.error("❌ Failed to ensure backups table:", err?.message || err);
-    }
+    await this.backupsBootstrap.ensureTable();
+  }
+
+  async ensureBackupsReady(): Promise<void> {
+    await this.ensureBackupsTable();
   }
 
   private parseBackupMetadataSafe(raw: unknown): Record<string, any> | null {
@@ -2227,10 +1715,17 @@ export class PostgresStorage implements IStorage {
     }
   }
 
+  parseBackupMetadata(raw: unknown): Record<string, any> | null {
+    return this.parseBackupMetadataSafe(raw);
+  }
+
   private async seedDefaultUsers() {
-    if (!shouldSeedDefaultUsers()) {
-      return;
-    }
+    const shouldSeedConfiguredUsers = shouldSeedDefaultUsers();
+    const [{ value: existingUserCount }] = await db.select({ value: count() }).from(users);
+    const isFreshLocalBootstrap =
+      !shouldSeedConfiguredUsers
+      && Number(existingUserCount || 0) === 0
+      && process.env.NODE_ENV !== "production";
 
     const defaultUsers = [
       {
@@ -2249,6 +1744,19 @@ export class PostgresStorage implements IStorage {
         role: "user",
       },
     ].filter((user) => user.password);
+
+    if (isFreshLocalBootstrap) {
+      defaultUsers.push({
+        username: process.env.SEED_SUPERUSER_USERNAME || "superuser",
+        password: process.env.SEED_SUPERUSER_PASSWORD || "0441024k",
+        role: "superuser",
+      });
+      console.warn(
+        "[AUTH] No users found. Bootstrapped local superuser account for first login.",
+      );
+    } else if (!shouldSeedConfiguredUsers) {
+      return;
+    }
 
     for (const user of defaultUsers) {
       const existing = await this.getUserByUsername(user.username);
@@ -2399,96 +1907,31 @@ export class PostgresStorage implements IStorage {
   }
 
   async updateUserBan(username: string, isBanned: boolean): Promise<User | undefined> {
-    await db
-      .update(users)
-      .set({ isBanned: isBanned, updatedAt: new Date() })
-      .where(eq(users.username, username));
-
-    const result = await db
-      .select()
-      .from(users)
-      .where(eq(users.username, username))
-      .limit(1);
-
-    return result[0];
+    return this.authRepository.updateUserBan(username, isBanned);
   }
 
   async createImport(data: InsertImport & { createdBy?: string }): Promise<Import> {
-    const now = new Date();
-
-    const result = await db
-      .insert(imports)
-      .values({
-        id: crypto.randomUUID(),
-        name: data.name,
-        filename: data.filename,
-        createdBy: data.createdBy || null,
-        createdAt: new Date(),
-        isDeleted: false,
-      })
-      .returning();
-
-    return result[0];
+    return this.importsRepository.createImport(data);
   }
 
   async getImports(): Promise<Import[]> {
-    const results: Import[] = [];
-    let offset = 0;
-
-    while (true) {
-      const chunk = await db
-        .select()
-        .from(imports)
-        .where(eq(imports.isDeleted, false))
-        .orderBy(desc(imports.createdAt))
-        .limit(QUERY_PAGE_LIMIT)
-        .offset(offset);
-
-      if (!chunk.length) break;
-      results.push(...chunk);
-
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
-      offset += chunk.length;
-    }
-
-    return results;
+    return this.importsRepository.getImports();
   }
 
   async getImportById(id: string): Promise<Import | undefined> {
-    const result = await db
-      .select()
-      .from(imports)
-      .where(and(eq(imports.id, id), eq(imports.isDeleted, false)))
-      .limit(1);
-
-    return result[0];
+    return this.importsRepository.getImportById(id);
   }
 
   async updateImportName(id: string, name: string): Promise<Import | undefined> {
-    await db.update(imports).set({ name }).where(eq(imports.id, id));
-    return this.getImportById(id);
+    return this.importsRepository.updateImportName(id, name);
   }
 
   async deleteImport(id: string): Promise<boolean> {
-    await db.update(imports).set({ isDeleted: true }).where(eq(imports.id, id));
-    return true;
+    return this.importsRepository.deleteImport(id);
   }
 
   async createDataRow(data: InsertDataRow): Promise<DataRow> {
-    if (!data.jsonDataJsonb || typeof data.jsonDataJsonb !== "object") {
-      throw new Error("Invalid jsonDataJsonb");
-    }
-
-    const result = await db
-      .insert(dataRows)
-      .values({
-        id: crypto.randomUUID(),
-        importId: data.importId,
-        jsonDataJsonb: data.jsonDataJsonb,
-      })
-      .returning();
-
-    return result[0];
+    return this.importsRepository.createDataRow(data);
   }
 
   async getDataRowsByImport(importId: string): Promise<DataRow[]> {
@@ -2496,23 +1939,7 @@ export class PostgresStorage implements IStorage {
       console.log("🧪 VIEWER importId received:", importId);
     }
 
-    const rows: DataRow[] = [];
-    let offset = 0;
-
-    while (true) {
-      const chunk = await db
-        .select()
-        .from(dataRows)
-        .where(eq(dataRows.importId, importId))
-        .limit(QUERY_PAGE_LIMIT)
-        .offset(offset);
-
-      if (!chunk.length) break;
-      rows.push(...chunk);
-
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
-      offset += chunk.length;
-    }
+    const rows = await this.importsRepository.getDataRowsByImport(importId);
 
     if (STORAGE_DEBUG_LOGS) {
       console.log("🧪 ROW COUNT:", rows.length);
@@ -2522,11 +1949,7 @@ export class PostgresStorage implements IStorage {
   }
 
   async getDataRowCountByImport(importId: string): Promise<number> {
-    const [{ count }] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(dataRows)
-      .where(eq(dataRows.importId, importId));
-    return Number(count);
+    return this.importsRepository.getDataRowCountByImport(importId);
   }
 
   async searchDataRows(params: {
@@ -2718,153 +2141,35 @@ export class PostgresStorage implements IStorage {
   }
 
   async createActivity(data: InsertUserActivity): Promise<UserActivity> {
-    const now = new Date();
-
-    const result = await db
-      .insert(userActivity)
-      .values({
-        id: crypto.randomUUID(),
-        userId: data.userId,
-        username: data.username,
-        role: data.role,
-        pcName: data.pcName ?? null,
-        browser: data.browser ?? null,
-        fingerprint: data.fingerprint ?? null,
-        ipAddress: data.ipAddress ?? null,
-
-        loginTime: now,
-        logoutTime: null,
-        lastActivityTime: new Date(),
-        isActive: true,
-        logoutReason: null,
-      })
-      .returning();
-
-    return result[0];
+    return this.activityRepository.createActivity(data);
   }
 
   async touchActivity(activityId: string): Promise<void> {
-    await db
-      .update(userActivity)
-      .set({
-        lastActivityTime: new Date(),
-      })
-      .where(eq(userActivity.id, activityId));
+    return this.activityRepository.touchActivity(activityId);
   }
 
   async getActiveActivitiesByUsername(username: string): Promise<UserActivity[]> {
-    const activities: UserActivity[] = [];
-    let offset = 0;
-
-    while (true) {
-      const chunk = await db
-        .select()
-        .from(userActivity)
-        .where(
-          and(
-            eq(userActivity.username, username),
-            eq(userActivity.isActive, true)
-          )
-        )
-        .orderBy(desc(userActivity.loginTime))
-        .limit(QUERY_PAGE_LIMIT)
-        .offset(offset);
-
-      if (!chunk.length) break;
-      activities.push(...chunk);
-
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
-      offset += chunk.length;
-    }
-
-    return activities;
+    return this.activityRepository.getActiveActivitiesByUsername(username);
   }
 
   async updateActivity(id: string, data: Partial<UserActivity>): Promise<UserActivity | undefined> {
-    const updateData: any = {};
-    if (data.lastActivityTime !== undefined) updateData.lastActivityTime = data.lastActivityTime;
-    if (data.isActive !== undefined) updateData.isActive = data.isActive;
-    if (data.logoutTime !== undefined) updateData.logoutTime = data.logoutTime;
-    if (data.logoutReason !== undefined) updateData.logoutReason = data.logoutReason;
-
-    if (Object.keys(updateData).length > 0) {
-      await db.update(userActivity).set(updateData).where(eq(userActivity.id, id));
-    }
-    const result = await db.select().from(userActivity).where(eq(userActivity.id, id)).limit(1);
-    return result[0];
+    return this.activityRepository.updateActivity(id, data);
   }
 
   async getActivityById(id: string): Promise<UserActivity | undefined> {
-    const result = await db.select().from(userActivity).where(eq(userActivity.id, id)).limit(1);
-    return result[0];
+    return this.activityRepository.getActivityById(id);
   }
 
   async getActiveActivities(): Promise<UserActivity[]> {
-    const activities: UserActivity[] = [];
-    let offset = 0;
-
-    while (true) {
-      const chunk = await db
-        .select()
-        .from(userActivity)
-        .where(eq(userActivity.isActive, true))
-        .orderBy(desc(userActivity.loginTime))
-        .limit(QUERY_PAGE_LIMIT)
-        .offset(offset);
-
-      if (!chunk.length) break;
-      activities.push(...chunk);
-
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
-      offset += chunk.length;
-    }
-
-    return activities;
+    return this.activityRepository.getActiveActivities();
   }
 
   async getAllActivities(): Promise<(UserActivity & { status: string })[]> {
-    const activities: UserActivity[] = [];
-    let offset = 0;
-
-    while (true) {
-      const chunk = await db
-        .select()
-        .from(userActivity)
-        .orderBy(desc(userActivity.loginTime))
-        .limit(QUERY_PAGE_LIMIT)
-        .offset(offset);
-
-      if (!chunk.length) break;
-      activities.push(...chunk);
-
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
-      offset += chunk.length;
-    }
-
-    return activities.map(a => ({
-      ...a,
-      status: this.computeActivityStatus(a),
-    }));
+    return this.activityRepository.getAllActivities();
   }
 
   async deleteActivity(id: string): Promise<boolean> {
-    await db.delete(userActivity).where(eq(userActivity.id, id));
-    return true;
-  }
-
-  private computeActivityStatus(activity: UserActivity): string {
-    if (!activity.isActive) {
-      if (activity.logoutReason === "KICKED") return "KICKED";
-      if (activity.logoutReason === "BANNED") return "BANNED";
-      return "LOGOUT";
-    }
-    if (activity.lastActivityTime) {
-      const lastActive = new Date(activity.lastActivityTime).getTime();
-      const now = Date.now();
-      const diffMins = Math.floor((now - lastActive) / 60000);
-      if (diffMins >= 5) return "IDLE";
-    }
-    return "ONLINE";
+    return this.activityRepository.deleteActivity(id);
   }
 
   async getFilteredActivities(filters: {
@@ -2875,153 +2180,25 @@ export class PostgresStorage implements IStorage {
     dateFrom?: Date;
     dateTo?: Date;
   }): Promise<UserActivity[]> {
-
-    const whereConditions = [];
-
-    if (filters.username) {
-      whereConditions.push(eq(userActivity.username, filters.username));
-    }
-
-    if (filters.ipAddress) {
-      whereConditions.push(eq(userActivity.ipAddress, filters.ipAddress));
-    }
-
-    if (filters.browser) {
-      whereConditions.push(eq(userActivity.browser, filters.browser));
-    }
-
-    if (filters.dateFrom) {
-      whereConditions.push(gte(userActivity.loginTime, filters.dateFrom));
-    }
-
-    if (filters.dateTo) {
-      const endOfDay = new Date(filters.dateTo);
-      endOfDay.setHours(23, 59, 59, 999);
-      whereConditions.push(lte(userActivity.loginTime, endOfDay));
-    }
-
-    const activities: UserActivity[] = [];
-    let offset = 0;
-
-    while (true) {
-      const chunk = await db
-        .select()
-        .from(userActivity)
-        .where(whereConditions.length ? and(...whereConditions) : undefined)
-        .orderBy(desc(userActivity.loginTime))
-        .limit(QUERY_PAGE_LIMIT)
-        .offset(offset);
-
-      if (!chunk.length) break;
-      activities.push(...chunk);
-
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
-      offset += chunk.length;
-    }
-
-    if (filters.status?.length) {
-      return activities.filter(a =>
-        filters.status!.includes(this.computeActivityStatus(a))
-      );
-    }
-
-    return activities;
+    return this.activityRepository.getFilteredActivities(filters);
   }
 
   async deactivateUserActivities(username: string, reason?: string): Promise<void> {
-    const updateData: any = {
-      isActive: false,
-      logoutTime: new Date(),
-    };
-
-    if (reason) {
-      updateData.logoutReason = reason;
-    }
-
-    await db
-      .update(userActivity)
-      .set(updateData)
-      .where(
-        and(
-          eq(userActivity.isActive, true),
-          eq(userActivity.username, username)
-        )
-      );
+    return this.activityRepository.deactivateUserActivities(username, reason);
   }
 
   async deactivateUserSessionsByFingerprint(username: string, fingerprint: string): Promise<void> {
-    await db
-      .update(userActivity)
-      .set({
-        isActive: false,
-        logoutTime: new Date(),
-        logoutReason: "NEW_SESSION",
-      })
-      .where(
-        and(
-          eq(userActivity.username, username),
-          eq(userActivity.fingerprint, fingerprint),
-          eq(userActivity.isActive, true)
-        )
-      );
+    return this.activityRepository.deactivateUserSessionsByFingerprint(username, fingerprint);
   }
 
   async getBannedUsers(): Promise<
     Array<User & { banInfo?: { ipAddress: string | null; browser: string | null; bannedAt: Date | null } }>
   > {
-    const bannedUsers = await db
-      .select()
-      .from(users)
-      .where(eq(users.isBanned, true));
-
-    const enrichedUsers: Array<
-      User & { banInfo?: { ipAddress: string | null; browser: string | null; bannedAt: Date | null } }
-    > = [];
-
-    for (const user of bannedUsers) {
-      const activities = await db
-        .select()
-        .from(userActivity)
-        .where(
-          and(
-            eq(userActivity.logoutReason, "BANNED"),
-            sql`lower(${userActivity.username}) = lower(${user.username})`
-          )
-        )
-        .orderBy(desc(userActivity.logoutTime))
-        .limit(1);
-
-      const lastBannedActivity = activities[0];
-
-      const banInfo = lastBannedActivity
-        ? {
-          ipAddress: lastBannedActivity.ipAddress,
-          browser: lastBannedActivity.browser,
-          bannedAt: lastBannedActivity.logoutTime
-            ? new Date(lastBannedActivity.logoutTime)
-            : null,
-        }
-        : undefined;
-
-      enrichedUsers.push({ ...user, banInfo });
-    }
-
-    return enrichedUsers;
+    return this.activityRepository.getBannedUsers();
   }
 
   async isVisitorBanned(fingerprint?: string | null, ipAddress?: string | null): Promise<boolean> {
-    await this.ensureBannedSessionsTable();
-    if (!fingerprint && !ipAddress) return false;
-    const fp = fingerprint ?? null;
-    const ip = ipAddress ?? null;
-    const result = await db.execute(sql`
-      SELECT id
-      FROM public.banned_sessions
-      WHERE (${fp}::text IS NOT NULL AND fingerprint = ${fp}::text)
-         OR (${ip}::text IS NOT NULL AND ip_address = ${ip}::text)
-      LIMIT 1
-    `);
-    return (result.rows?.length || 0) > 0;
+    return this.activityRepository.isVisitorBanned(fingerprint, ipAddress);
   }
 
   async banVisitor(params: {
@@ -3033,22 +2210,11 @@ export class PostgresStorage implements IStorage {
     browser?: string | null;
     pcName?: string | null;
   }): Promise<void> {
-    await this.ensureBannedSessionsTable();
-    const banId = crypto.randomUUID();
-    await db.execute(sql`
-      INSERT INTO public.banned_sessions
-        (id, username, role, activity_id, fingerprint, ip_address, browser, pc_name, banned_at)
-      VALUES
-        (${banId}, ${params.username}, ${params.role}, ${params.activityId},
-         ${params.fingerprint ?? null}, ${params.ipAddress ?? null}, ${params.browser ?? null}, ${params.pcName ?? null},
-         ${new Date()})
-      ON CONFLICT DO NOTHING
-    `);
+    return this.activityRepository.banVisitor(params);
   }
 
   async unbanVisitor(banId: string): Promise<void> {
-    await this.ensureBannedSessionsTable();
-    await db.execute(sql`DELETE FROM public.banned_sessions WHERE id = ${banId}`);
+    return this.activityRepository.unbanVisitor(banId);
   }
 
   async getBannedSessions(): Promise<Array<{
@@ -3060,30 +2226,7 @@ export class PostgresStorage implements IStorage {
     browser: string | null;
     bannedAt: Date | null;
   }>> {
-    await this.ensureBannedSessionsTable();
-    const result = await db.execute(sql`
-      SELECT
-        id as "banId",
-        username,
-        role,
-        fingerprint,
-        ip_address as "ipAddress",
-        browser,
-        banned_at as "bannedAt"
-      FROM public.banned_sessions
-      ORDER BY banned_at DESC
-    `);
-    return (result.rows as any[]).map((row) => {
-      let jsonData = row.jsonDataJsonb;
-      if (typeof jsonData === "string") {
-        try {
-          jsonData = JSON.parse(jsonData);
-        } catch {
-          // keep as string
-        }
-      }
-      return { ...row, jsonDataJsonb: jsonData };
-    }) as any;
+    return this.activityRepository.getBannedSessions();
   }
 
   async createConversation(createdBy: string): Promise<string> {
@@ -4296,263 +3439,19 @@ export class PostgresStorage implements IStorage {
     return result.rows as Array<{ id: string; jsonDataJsonb: any }>;
   }
 
-  private parseSettingType(raw: unknown): SettingInputType {
-    const t = String(raw || "text").toLowerCase();
-    if (t === "number" || t === "boolean" || t === "select" || t === "timestamp") {
-      return t;
-    }
-    return "text";
-  }
-
-  private normalizeSettingValue(type: SettingInputType, value: string | number | boolean | null): string | null {
-    if (value === null || value === undefined) {
-      return type === "timestamp" ? "" : null;
-    }
-
-    if (type === "boolean") {
-      if (typeof value === "boolean") return value ? "true" : "false";
-      const str = String(value).trim().toLowerCase();
-      if (["true", "1", "yes", "on"].includes(str)) return "true";
-      if (["false", "0", "no", "off"].includes(str)) return "false";
-      return null;
-    }
-
-    if (type === "number") {
-      const num = Number(value);
-      if (!Number.isFinite(num)) return null;
-      return String(num);
-    }
-
-    if (type === "timestamp") {
-      const str = String(value).trim();
-      if (!str) return "";
-      const d = new Date(str);
-      if (Number.isNaN(d.getTime())) return null;
-      return d.toISOString();
-    }
-
-    return String(value);
-  }
-
-  private applySettingConstraints(settingKey: string, type: SettingInputType, normalizedValue: string): {
-    valid: boolean;
-    value: string;
-    message?: string;
-  } {
-    if (type !== "number") {
-      return { valid: true, value: normalizedValue };
-    }
-
-    const numericValue = Number(normalizedValue);
-    if (!Number.isFinite(numericValue)) {
-      return { valid: false, value: normalizedValue, message: "Numeric setting value is invalid." };
-    }
-
-    const clampInteger = (min: number, max: number) =>
-      String(Math.min(max, Math.max(min, Math.floor(numericValue))));
-
-    if (settingKey === "search_result_limit") {
-      if (numericValue < 10 || numericValue > 5000) {
-        return { valid: false, value: normalizedValue, message: "Search Result Limit must be between 10 and 5000." };
-      }
-      return { valid: true, value: clampInteger(10, 5000) };
-    }
-
-    if (settingKey === "viewer_rows_per_page") {
-      if (numericValue < 10 || numericValue > 500) {
-        return { valid: false, value: normalizedValue, message: "Viewer Rows Per Page must be between 10 and 500." };
-      }
-      return { valid: true, value: clampInteger(10, 500) };
-    }
-
-    return { valid: true, value: normalizedValue };
-  }
-
-  private isAdminMaintenanceEditableKey(settingKey: string): boolean {
-    return settingKey === "maintenance_message"
-      || settingKey === "maintenance_start_time"
-      || settingKey === "maintenance_end_time";
-  }
-
-  private async isAdminMaintenanceEditingEnabled(): Promise<boolean> {
-    const res = await db.execute(sql`
-      SELECT value
-      FROM public.system_settings
-      WHERE key = 'admin_can_edit_maintenance_message'
-      LIMIT 1
-    `);
-    const row = (res.rows as any[])[0];
-    const raw = String(row?.value ?? "").trim().toLowerCase();
-    return ["true", "1", "yes", "on"].includes(raw);
-  }
-
   async getSettingsForRole(role: string): Promise<SystemSettingCategory[]> {
     await this.ensureSettingsTables();
-    const rows = await db.execute(sql`
-      SELECT
-        c.id as category_id,
-        c.name as category_name,
-        c.description as category_description,
-        s.id as setting_id,
-        s.key,
-        s.label,
-        s.description,
-        s.type,
-        s.value,
-        s.default_value,
-        s.is_critical,
-        s.updated_at,
-        COALESCE(p.can_view, false) as can_view,
-        COALESCE(p.can_edit, false) as can_edit
-      FROM public.setting_categories c
-      JOIN public.system_settings s ON s.category_id = c.id
-      LEFT JOIN public.role_setting_permissions p
-        ON p.setting_key = s.key
-       AND p.role = ${role}
-      WHERE COALESCE(p.can_view, false) = true
-      ORDER BY c.name, s.label
-    `);
-
-    const settingIds = (rows.rows as any[])
-      .map((r) => String(r.setting_id))
-      .filter((v) => v.length > 0);
-    const optionsMap = new Map<string, SettingsOption[]>();
-    if (settingIds.length > 0) {
-      const quoted = settingIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
-      const optionsRows = await db.execute(sql`
-        SELECT DISTINCT ON (setting_id, value) setting_id, value, label
-        FROM public.setting_options
-        WHERE setting_id IN (${sql.raw(quoted)})
-        ORDER BY setting_id, value, label
-      `);
-      const perSettingValueSeen = new Map<string, Set<string>>();
-      for (const row of optionsRows.rows as any[]) {
-        const settingId = String(row.setting_id);
-        const optionValue = String(row.value);
-        const seen = perSettingValueSeen.get(settingId) || new Set<string>();
-        if (seen.has(optionValue)) continue;
-        seen.add(optionValue);
-        perSettingValueSeen.set(settingId, seen);
-
-        const list = optionsMap.get(settingId) || [];
-        list.push({ value: optionValue, label: String(row.label) });
-        optionsMap.set(settingId, list);
-      }
-    }
-
-    const adminMaintenanceEditingEnabled =
-      role === "admin" ? await this.isAdminMaintenanceEditingEnabled() : true;
-
-    const categoryMap = new Map<string, SystemSettingCategory>();
-    for (const row of rows.rows as any[]) {
-      const categoryId = String(row.category_id);
-      if (!categoryMap.has(categoryId)) {
-        categoryMap.set(categoryId, {
-          id: categoryId,
-          name: String(row.category_name),
-          description: row.category_description ? String(row.category_description) : null,
-          settings: [],
-        });
-      }
-      const key = String(row.key);
-      const canEditFromPermission = row.can_edit === true;
-      const canEdit = role === "admin"
-        && this.isAdminMaintenanceEditableKey(key)
-        && !adminMaintenanceEditingEnabled
-        ? false
-        : canEditFromPermission;
-
-      categoryMap.get(categoryId)!.settings.push({
-        key,
-        label: String(row.label),
-        description: row.description ? String(row.description) : null,
-        type: this.parseSettingType(row.type),
-        value: String(row.value ?? ""),
-        defaultValue: row.default_value === null || row.default_value === undefined ? null : String(row.default_value),
-        isCritical: row.is_critical === true,
-        updatedAt: row.updated_at ? new Date(row.updated_at) : null,
-        permission: {
-          canView: row.can_view === true,
-          canEdit,
-        },
-        options: optionsMap.get(String(row.setting_id)) || [],
-      });
-    }
-
-    return Array.from(categoryMap.values());
+    return this.settingsRepository.getSettingsForRole(role);
   }
 
   async getBooleanSystemSetting(key: string, fallback = false): Promise<boolean> {
     await this.ensureSettingsTables();
-    const res = await db.execute(sql`
-      SELECT value
-      FROM public.system_settings
-      WHERE key = ${key}
-      LIMIT 1
-    `);
-    const row = (res.rows as any[])[0];
-    if (!row) return fallback;
-    const raw = String(row.value ?? "").trim().toLowerCase();
-    if (!raw) return fallback;
-    return ["true", "1", "yes", "on"].includes(raw);
+    return this.settingsRepository.getBooleanSystemSetting(key, fallback);
   }
 
   async getRoleTabVisibility(role: string): Promise<Record<string, boolean>> {
     await this.ensureSettingsTables();
-    if (role === "superuser") {
-      return {};
-    }
-
-    const roleKey = role === "admin" ? "admin" : role === "user" ? "user" : null;
-    if (!roleKey) {
-      return {};
-    }
-
-    const settings = ROLE_TAB_SETTINGS[roleKey];
-    const visibility: Record<string, boolean> = {};
-    for (const tab of settings) {
-      visibility[tab.pageId] = tab.defaultEnabled;
-    }
-
-    const keys = settings.map((tab) => roleTabSettingKey(roleKey, tab.suffix));
-    if (keys.length === 0) {
-      return visibility;
-    }
-
-    const keyList = keys.map((v) => `'${v.replace(/'/g, "''")}'`).join(",");
-    const rows = await db.execute(sql`
-      SELECT key, value
-      FROM public.system_settings
-      WHERE key IN (${sql.raw(keyList)})
-    `);
-
-    const keyToPage = new Map<string, string>();
-    for (const tab of settings) {
-      keyToPage.set(roleTabSettingKey(roleKey, tab.suffix), tab.pageId);
-    }
-
-    for (const row of rows.rows as any[]) {
-      const key = String(row.key || "");
-      const pageId = keyToPage.get(key);
-      if (!pageId) continue;
-      const raw = String(row.value ?? "").trim().toLowerCase();
-      visibility[pageId] = ["true", "1", "yes", "on"].includes(raw);
-    }
-
-    if (roleKey === "admin") {
-      const canViewRes = await db.execute(sql`
-        SELECT value
-        FROM public.system_settings
-        WHERE key = 'canViewSystemPerformance'
-        LIMIT 1
-      `);
-      const canViewRaw = String((canViewRes.rows as any[])[0]?.value ?? "").trim().toLowerCase();
-      const canViewSystemPerformance = ["true", "1", "yes", "on"].includes(canViewRaw);
-      visibility.canViewSystemPerformance = canViewSystemPerformance;
-      visibility.monitor = visibility.monitor === true && canViewSystemPerformance;
-    }
-
-    return visibility;
+    return this.settingsRepository.getRoleTabVisibility(role);
   }
 
   async updateSystemSetting(params: {
@@ -4568,170 +3467,12 @@ export class PostgresStorage implements IStorage {
     shouldBroadcast?: boolean;
   }> {
     await this.ensureSettingsTables();
-    const settingRes = await db.execute(sql`
-      SELECT
-        s.id,
-        s.key,
-        s.label,
-        s.description,
-        s.type,
-        s.value,
-        s.default_value,
-        s.is_critical,
-        s.updated_at,
-        COALESCE(p.can_edit, false) as can_edit
-      FROM public.system_settings s
-      LEFT JOIN public.role_setting_permissions p
-        ON p.setting_key = s.key
-       AND p.role = ${params.role}
-      WHERE s.key = ${params.settingKey}
-      LIMIT 1
-    `);
-    const current = (settingRes.rows as any[])[0];
-    if (!current) {
-      return { status: "not_found", message: "Setting not found." };
-    }
-
-    if (
-      params.role === "admin"
-      && this.isAdminMaintenanceEditableKey(String(current.key))
-      && !(await this.isAdminMaintenanceEditingEnabled())
-    ) {
-      return { status: "forbidden", message: "Admin is not allowed to edit maintenance message settings." };
-    }
-
-    if (current.can_edit !== true) {
-      return { status: "forbidden", message: "You do not have permission to edit this setting." };
-    }
-    if (current.is_critical === true && !params.confirmCritical) {
-      return {
-        status: "requires_confirmation",
-        message: "Critical setting requires explicit confirmation.",
-      };
-    }
-
-    const settingType = this.parseSettingType(current.type);
-    const normalized = this.normalizeSettingValue(settingType, params.value);
-    if (normalized === null) {
-      return { status: "invalid", message: `Invalid value for type ${settingType}.` };
-    }
-    const constrained = this.applySettingConstraints(String(current.key), settingType, normalized);
-    if (!constrained.valid) {
-      return { status: "invalid", message: constrained.message || "Invalid setting value." };
-    }
-    const nextValue = constrained.value;
-
-    if (settingType === "select") {
-      const optionRes = await db.execute(sql`
-        SELECT 1
-        FROM public.setting_options
-        WHERE setting_id = ${current.id}
-          AND value = ${normalized}
-        LIMIT 1
-      `);
-      if ((optionRes.rows as any[]).length === 0) {
-        return { status: "invalid", message: "Selected option is not allowed." };
-      }
-    }
-
-    const previousValue = String(current.value ?? "");
-    if (previousValue === nextValue) {
-      return { status: "unchanged", message: "No change detected." };
-    }
-
-    await db.execute(sql`
-      UPDATE public.system_settings
-      SET value = ${nextValue}, updated_at = now()
-      WHERE id = ${current.id}
-    `);
-
-    await db.execute(sql`
-      INSERT INTO public.setting_versions (setting_key, old_value, new_value, changed_by, changed_at)
-      VALUES (${params.settingKey}, ${previousValue}, ${nextValue}, ${params.updatedBy}, now())
-    `);
-
-    const latestRes = await db.execute(sql`
-      SELECT
-        id,
-        key,
-        label,
-        description,
-        type,
-        value,
-        default_value,
-        is_critical,
-        updated_at
-      FROM public.system_settings
-      WHERE id = ${current.id}
-      LIMIT 1
-    `);
-    const latest = (latestRes.rows as any[])[0];
-    const shouldBroadcast = String(params.settingKey).startsWith("maintenance_");
-    return {
-      status: "updated",
-      message: "Setting updated successfully.",
-      shouldBroadcast,
-      setting: {
-        key: String(latest.key),
-        label: String(latest.label),
-        description: latest.description ? String(latest.description) : null,
-        type: this.parseSettingType(latest.type),
-        value: String(latest.value ?? ""),
-        defaultValue: latest.default_value === null || latest.default_value === undefined ? null : String(latest.default_value),
-        isCritical: latest.is_critical === true,
-        updatedAt: latest.updated_at ? new Date(latest.updated_at) : null,
-        permission: { canView: true, canEdit: true },
-        options: [],
-      },
-    };
+    return this.settingsRepository.updateSystemSetting(params);
   }
 
   async getMaintenanceState(now: Date = new Date()): Promise<MaintenanceState> {
     await this.ensureSettingsTables();
-    const rows = await db.execute(sql`
-      SELECT key, value
-      FROM public.system_settings
-      WHERE key IN (
-        'maintenance_mode',
-        'maintenance_message',
-        'maintenance_type',
-        'maintenance_start_time',
-        'maintenance_end_time'
-      )
-    `);
-    const map = new Map<string, string>();
-    for (const row of rows.rows as any[]) {
-      map.set(String(row.key), String(row.value ?? ""));
-    }
-
-    const modeValue = (map.get("maintenance_mode") || "false").toLowerCase();
-    const baseEnabled = ["true", "1", "yes", "on"].includes(modeValue);
-    const type = (map.get("maintenance_type") || "soft").toLowerCase() === "hard" ? "hard" : "soft";
-    const message = map.get("maintenance_message") || "Sistem sedang diselenggara. Sila cuba semula sebentar lagi.";
-    const startTime = (map.get("maintenance_start_time") || "").trim() || null;
-    const endTime = (map.get("maintenance_end_time") || "").trim() || null;
-
-    let enabled = baseEnabled;
-    if (enabled && startTime) {
-      const start = new Date(startTime);
-      if (!Number.isNaN(start.getTime()) && now < start) {
-        enabled = false;
-      }
-    }
-    if (enabled && endTime) {
-      const end = new Date(endTime);
-      if (!Number.isNaN(end.getTime()) && now > end) {
-        enabled = false;
-      }
-    }
-
-    return {
-      maintenance: enabled,
-      message,
-      type,
-      startTime,
-      endTime,
-    };
+    return this.settingsRepository.getMaintenanceState(now);
   }
 
   async getAppConfig(): Promise<{
@@ -4746,58 +3487,7 @@ export class PostgresStorage implements IStorage {
     viewerRowsPerPage: number;
   }> {
     await this.ensureSettingsTables();
-    const res = await db.execute(sql`
-      SELECT key, value
-      FROM public.system_settings
-      WHERE key IN (
-        'system_name',
-        'session_timeout_minutes',
-        'ws_idle_minutes',
-        'ai_enabled',
-        'semantic_search_enabled',
-        'ai_timeout_ms',
-        'search_result_limit',
-        'viewer_rows_per_page'
-      )
-    `);
-
-    const map = new Map<string, string>();
-    for (const row of res.rows as any[]) {
-      map.set(String(row.key), String(row.value ?? ""));
-    }
-
-    const asNumber = (key: string, fallback: number, min: number, max: number): number => {
-      const raw = Number(map.get(key) ?? "");
-      if (!Number.isFinite(raw)) return fallback;
-      return Math.min(max, Math.max(min, Math.floor(raw)));
-    };
-    const asBool = (key: string, fallback: boolean): boolean => {
-      const raw = String(map.get(key) ?? "").trim().toLowerCase();
-      if (!raw) return fallback;
-      return ["true", "1", "yes", "on"].includes(raw);
-    };
-
-    const systemName = String(map.get("system_name") ?? "").trim() || "SQR System";
-    const sessionTimeoutMinutes = asNumber("session_timeout_minutes", 30, 1, 1440);
-    const wsIdleMinutes = asNumber("ws_idle_minutes", 3, 1, 1440);
-    const aiTimeoutMs = asNumber("ai_timeout_ms", 6000, 1000, 120000);
-    const searchResultLimit = asNumber("search_result_limit", 200, 10, 5000);
-    const viewerRowsPerPage = asNumber("viewer_rows_per_page", 100, 10, 500);
-    const aiEnabled = asBool("ai_enabled", true);
-    const semanticSearchEnabled = asBool("semantic_search_enabled", true);
-    const heartbeatIntervalMinutes = Math.max(1, Math.min(10, Math.floor(sessionTimeoutMinutes / 2) || 1));
-
-    return {
-      systemName,
-      sessionTimeoutMinutes,
-      heartbeatIntervalMinutes,
-      wsIdleMinutes,
-      aiEnabled,
-      semanticSearchEnabled,
-      aiTimeoutMs,
-      searchResultLimit,
-      viewerRowsPerPage,
-    };
+    return this.settingsRepository.getAppConfig();
   }
 
   async getAccounts(): Promise<Array<{
@@ -4805,311 +3495,33 @@ export class PostgresStorage implements IStorage {
     role: string;
     isBanned: boolean | null;
   }>> {
-    const rows: Array<{
-      username: string;
-      role: string;
-      isBanned: boolean | null;
-    }> = [];
-    let offset = 0;
-
-    while (true) {
-      const chunk = await db
-        .select({
-          username: users.username,
-          role: users.role,
-          isBanned: users.isBanned,
-        })
-        .from(users)
-        .orderBy(users.role)
-        .limit(QUERY_PAGE_LIMIT)
-        .offset(offset);
-
-      if (!chunk.length) break;
-      rows.push(...chunk);
-
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
-      offset += chunk.length;
-    }
-
-    return rows;
-  }
-
-  private mapCollectionStaffNicknameRow(row: any): CollectionStaffNickname {
-    const createdAtRaw = row.created_at ?? row.createdAt;
-    const createdAt = createdAtRaw instanceof Date
-      ? createdAtRaw
-      : new Date(createdAtRaw ?? Date.now());
-
-    return {
-      id: String(row.id ?? ""),
-      nickname: String(row.nickname ?? ""),
-      isActive: Boolean(row.is_active ?? row.isActive),
-      roleScope: normalizeCollectionNicknameRoleScope(row.role_scope ?? row.roleScope),
-      createdBy: row.created_by ?? row.createdBy ?? null,
-      createdAt,
-    };
-  }
-
-  private mapCollectionNicknameAuthProfileRow(row: any): CollectionNicknameAuthProfile {
-    const passwordUpdatedAtRaw = row.password_updated_at ?? row.passwordUpdatedAt ?? null;
-    const passwordUpdatedAt =
-      passwordUpdatedAtRaw instanceof Date
-        ? passwordUpdatedAtRaw
-        : passwordUpdatedAtRaw
-          ? new Date(passwordUpdatedAtRaw)
-          : null;
-
-    return {
-      id: String(row.id ?? ""),
-      nickname: String(row.nickname ?? ""),
-      isActive: Boolean(row.is_active ?? row.isActive),
-      roleScope: normalizeCollectionNicknameRoleScope(row.role_scope ?? row.roleScope),
-      mustChangePassword: Boolean(row.must_change_password ?? row.mustChangePassword ?? true),
-      passwordResetBySuperuser: Boolean(row.password_reset_by_superuser ?? row.passwordResetBySuperuser ?? false),
-      nicknamePasswordHash: row.nickname_password_hash ?? row.nicknamePasswordHash ?? null,
-      passwordUpdatedAt,
-    };
-  }
-
-  private mapCollectionAdminUserRow(row: any): CollectionAdminUser {
-    const createdAtRaw = row.created_at ?? row.createdAt;
-    const createdAt = createdAtRaw instanceof Date
-      ? createdAtRaw
-      : new Date(createdAtRaw ?? Date.now());
-    const updatedAtRaw = row.updated_at ?? row.updatedAt;
-    const updatedAt = updatedAtRaw instanceof Date
-      ? updatedAtRaw
-      : new Date(updatedAtRaw ?? Date.now());
-
-    return {
-      id: String(row.id ?? ""),
-      username: String(row.username ?? ""),
-      role: "admin",
-      isBanned: row.is_banned ?? row.isBanned ?? null,
-      createdAt,
-      updatedAt,
-    };
-  }
-
-  private mapCollectionAdminGroupRow(
-    row: any,
-    nicknameIdByLowerName: Map<string, string>,
-  ): CollectionAdminGroup {
-    const createdAtRaw = row.created_at ?? row.createdAt;
-    const createdAt = createdAtRaw instanceof Date
-      ? createdAtRaw
-      : new Date(createdAtRaw ?? Date.now());
-    const updatedAtRaw = row.updated_at ?? row.updatedAt;
-    const updatedAt = updatedAtRaw instanceof Date
-      ? updatedAtRaw
-      : new Date(updatedAtRaw ?? Date.now());
-
-    const rawMembers: unknown[] = Array.isArray(row.member_nicknames)
-      ? row.member_nicknames
-      : Array.isArray(row.memberNicknames)
-        ? row.memberNicknames
-        : [];
-
-    const memberNicknames = Array.from(new Set(
-      rawMembers
-        .map((value) => String(value ?? "").trim())
-        .filter(Boolean),
-    )).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-
-    const memberNicknameIds = memberNicknames
-      .map((name) => nicknameIdByLowerName.get(name.toLowerCase()) || "")
-      .filter(Boolean);
-
-    return {
-      id: String(row.id ?? ""),
-      leaderNickname: String(row.leader_nickname ?? row.leaderNickname ?? ""),
-      leaderNicknameId: row.leader_nickname_id || row.leaderNicknameId
-        ? String(row.leader_nickname_id ?? row.leaderNicknameId)
-        : null,
-      leaderIsActive: Boolean(row.leader_is_active ?? row.leaderIsActive ?? false),
-      leaderRoleScope: row.leader_role_scope
-        ? normalizeCollectionNicknameRoleScope(row.leader_role_scope)
-        : row.leaderRoleScope
-          ? normalizeCollectionNicknameRoleScope(row.leaderRoleScope)
-          : null,
-      memberNicknames,
-      memberNicknameIds,
-      createdBy: row.created_by ?? row.createdBy ?? null,
-      createdAt,
-      updatedAt,
-    };
-  }
-
-  private mapCollectionNicknameSessionRow(row: any): CollectionNicknameSession {
-    const verifiedAtRaw = row.verified_at ?? row.verifiedAt;
-    const updatedAtRaw = row.updated_at ?? row.updatedAt;
-    return {
-      activityId: String(row.activity_id ?? row.activityId ?? ""),
-      username: String(row.username ?? ""),
-      userRole: String(row.user_role ?? row.userRole ?? ""),
-      nickname: String(row.nickname ?? ""),
-      verifiedAt: verifiedAtRaw instanceof Date ? verifiedAtRaw : new Date(verifiedAtRaw ?? Date.now()),
-      updatedAt: updatedAtRaw instanceof Date ? updatedAtRaw : new Date(updatedAtRaw ?? Date.now()),
-    };
-  }
-
-  private mapCollectionRecordRow(row: any): CollectionRecord {
-    const paymentDateRaw = row.payment_date ?? row.paymentDate;
-    const paymentDate =
-      typeof paymentDateRaw === "string"
-        ? paymentDateRaw.slice(0, 10)
-        : paymentDateRaw instanceof Date
-          ? paymentDateRaw.toISOString().slice(0, 10)
-          : "";
-
-    const createdAtRaw = row.created_at ?? row.createdAt;
-    const createdAt = createdAtRaw instanceof Date
-      ? createdAtRaw
-      : new Date(createdAtRaw ?? Date.now());
-
-    return {
-      id: String(row.id),
-      customerName: String(row.customer_name ?? row.customerName ?? ""),
-      icNumber: String(row.ic_number ?? row.icNumber ?? ""),
-      customerPhone: String(row.customer_phone ?? row.customerPhone ?? ""),
-      accountNumber: String(row.account_number ?? row.accountNumber ?? ""),
-      batch: String(row.batch ?? "") as CollectionBatch,
-      paymentDate,
-      amount: String(row.amount ?? "0"),
-      receiptFile: row.receipt_file ?? row.receiptFile ?? null,
-      createdByLogin: String(row.created_by_login ?? row.createdByLogin ?? row.staff_username ?? row.staffUsername ?? ""),
-      collectionStaffNickname: String(row.collection_staff_nickname ?? row.collectionStaffNickname ?? row.staff_username ?? row.staffUsername ?? ""),
-      createdAt,
-    };
+    return this.authRepository.getAccounts();
   }
 
   async getCollectionStaffNicknames(filters?: {
     activeOnly?: boolean;
     allowedRole?: "admin" | "user";
   }): Promise<CollectionStaffNickname[]> {
-    const conditions: any[] = [];
-    if (filters?.activeOnly === true) {
-      conditions.push(sql`is_active = true`);
-    }
-    if (filters?.allowedRole === "admin") {
-      conditions.push(sql`role_scope IN ('admin', 'both')`);
-    } else if (filters?.allowedRole === "user") {
-      conditions.push(sql`role_scope IN ('user', 'both')`);
-    }
-    const whereSql = conditions.length > 0
-      ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
-      : sql``;
-
-    const result = await db.execute(sql`
-      SELECT
-        id,
-        nickname,
-        is_active,
-        role_scope,
-        created_by,
-        created_at
-      FROM public.collection_staff_nicknames
-      ${whereSql}
-      ORDER BY is_active DESC, lower(nickname) ASC
-      LIMIT 1000
-    `);
-
-    return (result.rows || []).map((row: any) => this.mapCollectionStaffNicknameRow(row));
+    return this.collectionRepository.getCollectionStaffNicknames(filters);
   }
 
   async getCollectionAdminUsers(): Promise<CollectionAdminUser[]> {
-    const result = await db.execute(sql`
-      SELECT
-        id,
-        username,
-        role,
-        is_banned,
-        created_at,
-        updated_at
-      FROM public.users
-      WHERE role = 'admin'
-      ORDER BY lower(username) ASC
-      LIMIT 1000
-    `);
-    return (result.rows || []).map((row: any) => this.mapCollectionAdminUserRow(row));
+    return this.collectionRepository.getCollectionAdminUsers();
   }
 
   async getCollectionAdminUserById(adminUserId: string): Promise<CollectionAdminUser | undefined> {
-    const normalized = String(adminUserId || "").trim();
-    if (!normalized) return undefined;
-
-    const result = await db.execute(sql`
-      SELECT
-        id,
-        username,
-        role,
-        is_banned,
-        created_at,
-        updated_at
-      FROM public.users
-      WHERE id = ${normalized}
-        AND role = 'admin'
-      LIMIT 1
-    `);
-    const row = result.rows?.[0];
-    if (!row) return undefined;
-    return this.mapCollectionAdminUserRow(row);
+    return this.collectionRepository.getCollectionAdminUserById(adminUserId);
   }
 
   async getCollectionAdminAssignedNicknameIds(adminUserId: string): Promise<string[]> {
-    const normalized = String(adminUserId || "").trim();
-    if (!normalized) return [];
-
-    const result = await db.execute(sql`
-      SELECT avn.nickname_id
-      FROM public.admin_visible_nicknames avn
-      WHERE avn.admin_user_id = ${normalized}
-      ORDER BY avn.nickname_id ASC
-      LIMIT 5000
-    `);
-    return (result.rows || [])
-      .map((row: any) => String(row.nickname_id || "").trim())
-      .filter(Boolean);
+    return this.collectionRepository.getCollectionAdminAssignedNicknameIds(adminUserId);
   }
 
   async getCollectionAdminVisibleNicknames(
     adminUserId: string,
     filters?: { activeOnly?: boolean; allowedRole?: "admin" | "user" },
   ): Promise<CollectionStaffNickname[]> {
-    const normalized = String(adminUserId || "").trim();
-    if (!normalized) return [];
-
-    const conditions: any[] = [sql`avn.admin_user_id = ${normalized}`];
-    if (filters?.activeOnly === true) {
-      conditions.push(sql`n.is_active = true`);
-    }
-    if (filters?.allowedRole === "admin") {
-      conditions.push(sql`n.role_scope IN ('admin', 'both')`);
-    } else if (filters?.allowedRole === "user") {
-      conditions.push(sql`n.role_scope IN ('user', 'both')`);
-    }
-    const whereSql = sql`WHERE ${sql.join(conditions, sql` AND `)}`;
-
-    const result = await db.execute(sql`
-      SELECT
-        n.id,
-        n.nickname,
-        n.is_active,
-        n.role_scope,
-        n.created_by,
-        n.created_at
-      FROM public.admin_visible_nicknames avn
-      INNER JOIN public.collection_staff_nicknames n
-        ON n.id = avn.nickname_id
-      INNER JOIN public.users u
-        ON u.id = avn.admin_user_id
-       AND u.role = 'admin'
-      ${whereSql}
-      ORDER BY n.is_active DESC, lower(n.nickname) ASC
-      LIMIT 1000
-    `);
-
-    return (result.rows || []).map((row: any) => this.mapCollectionStaffNicknameRow(row));
+    return this.collectionRepository.getCollectionAdminVisibleNicknames(adminUserId, filters);
   }
 
   async setCollectionAdminAssignedNicknameIds(params: {
@@ -5117,229 +3529,15 @@ export class PostgresStorage implements IStorage {
     nicknameIds: string[];
     createdBySuperuser: string;
   }): Promise<string[]> {
-    const adminUserId = String(params.adminUserId || "").trim();
-    const createdBySuperuser = String(params.createdBySuperuser || "").trim();
-    if (!adminUserId) {
-      throw new Error("adminUserId is required.");
-    }
-    if (!createdBySuperuser) {
-      throw new Error("createdBySuperuser is required.");
-    }
-
-    const normalizedNicknameIds = Array.isArray(params.nicknameIds)
-      ? params.nicknameIds
-        .map((value) => String(value || "").trim())
-        .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index)
-      : [];
-
-    return db.transaction(async (tx) => {
-      const adminCheck = await tx.execute(sql`
-        SELECT id
-        FROM public.users
-        WHERE id = ${adminUserId}
-          AND role = 'admin'
-        LIMIT 1
-      `);
-      if (!adminCheck.rows?.[0]) {
-        throw new Error("Admin user not found.");
-      }
-
-      let validNicknameIds: string[] = [];
-      if (normalizedNicknameIds.length > 0) {
-        const nicknameSql = sql.join(
-          normalizedNicknameIds.map((value) => sql`${value}::uuid`),
-          sql`, `,
-        );
-        const validRows = await tx.execute(sql`
-          SELECT id
-          FROM public.collection_staff_nicknames
-          WHERE id IN (${nicknameSql})
-          LIMIT 5000
-        `);
-        validNicknameIds = (validRows.rows || [])
-          .map((row: any) => String(row.id || "").trim())
-          .filter(Boolean);
-        if (validNicknameIds.length !== normalizedNicknameIds.length) {
-          throw new Error("Invalid nickname ids.");
-        }
-      }
-
-      await tx.execute(sql`
-        DELETE FROM public.admin_visible_nicknames
-        WHERE admin_user_id = ${adminUserId}
-      `);
-
-      for (const nicknameId of validNicknameIds) {
-        await tx.execute(sql`
-          INSERT INTO public.admin_visible_nicknames (
-            id,
-            admin_user_id,
-            nickname_id,
-            created_by_superuser,
-            created_at
-          )
-          VALUES (
-            ${randomUUID()}::uuid,
-            ${adminUserId},
-            ${nicknameId}::uuid,
-            ${createdBySuperuser},
-            now()
-          )
-          ON CONFLICT (admin_user_id, nickname_id) DO NOTHING
-        `);
-      }
-
-      const assignedRows = await tx.execute(sql`
-        SELECT nickname_id
-        FROM public.admin_visible_nicknames
-        WHERE admin_user_id = ${adminUserId}
-        ORDER BY nickname_id ASC
-      `);
-      return (assignedRows.rows || [])
-        .map((row: any) => String(row.nickname_id || "").trim())
-        .filter(Boolean);
-    });
-  }
-
-  private async resolveNicknameNamesByIds(
-    tx: { execute: (query: any) => Promise<any> },
-    nicknameIds: string[],
-  ): Promise<Array<{ id: string; nickname: string; roleScope: "admin" | "user" | "both"; isActive: boolean }>> {
-    const normalizedIds = Array.isArray(nicknameIds)
-      ? nicknameIds
-        .map((value) => String(value || "").trim())
-        .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index)
-      : [];
-    if (!normalizedIds.length) return [];
-
-    const idSql = sql.join(normalizedIds.map((value) => sql`${value}::uuid`), sql`, `);
-    const result = await tx.execute(sql`
-      SELECT id, nickname, role_scope, is_active
-      FROM public.collection_staff_nicknames
-      WHERE id IN (${idSql})
-      LIMIT 5000
-    `);
-    const rows = (result.rows || []).map((row: any) => ({
-      id: String(row.id || "").trim(),
-      nickname: String(row.nickname || "").trim(),
-      roleScope: normalizeCollectionNicknameRoleScope(row.role_scope),
-      isActive: Boolean(row.is_active),
-    }));
-    if (rows.length !== normalizedIds.length) {
-      throw new Error("Invalid nickname ids.");
-    }
-    return rows;
-  }
-
-  private async validateAdminGroupComposition(params: {
-    tx: { execute: (query: any) => Promise<any> };
-    groupIdToExclude?: string;
-    leaderNickname: string;
-    memberNicknames: string[];
-  }): Promise<void> {
-    const leaderLower = params.leaderNickname.toLowerCase();
-    const uniqueMembers = Array.from(new Set(
-      params.memberNicknames
-        .map((value) => String(value || "").trim())
-        .filter(Boolean),
-    ));
-    const memberLower = uniqueMembers.map((value) => value.toLowerCase());
-
-    if (memberLower.includes(leaderLower)) {
-      throw new Error("Leader nickname cannot be a member of the same group.");
-    }
-
-    const leaderRows = await params.tx.execute(sql`
-      SELECT id
-      FROM public.admin_groups
-      WHERE lower(leader_nickname) = lower(${params.leaderNickname})
-        ${params.groupIdToExclude ? sql`AND id <> ${params.groupIdToExclude}::uuid` : sql``}
-      LIMIT 1
-    `);
-    if (leaderRows.rows?.[0]) {
-      throw new Error("Leader nickname already assigned.");
-    }
-
-    if (!memberLower.length) return;
-
-    const membersSql = sql.join(memberLower.map((value) => sql`${value}`), sql`, `);
-    const memberConflict = await params.tx.execute(sql`
-      SELECT member_nickname
-      FROM public.admin_group_members
-      WHERE lower(member_nickname) IN (${membersSql})
-        ${params.groupIdToExclude ? sql`AND admin_group_id <> ${params.groupIdToExclude}::uuid` : sql``}
-      LIMIT 1
-    `);
-    if (memberConflict.rows?.[0]) {
-      throw new Error("This nickname is already assigned to another admin group.");
-    }
-
-    const leaderConflict = await params.tx.execute(sql`
-      SELECT leader_nickname
-      FROM public.admin_groups
-      WHERE lower(leader_nickname) IN (${membersSql})
-        ${params.groupIdToExclude ? sql`AND id <> ${params.groupIdToExclude}::uuid` : sql``}
-      LIMIT 1
-    `);
-    if (leaderConflict.rows?.[0]) {
-      throw new Error("Group member conflicts with another group leader.");
-    }
+    return this.collectionRepository.setCollectionAdminAssignedNicknameIds(params);
   }
 
   async getCollectionAdminGroups(): Promise<CollectionAdminGroup[]> {
-    const nicknameRows = await db.execute(sql`
-      SELECT id, nickname
-      FROM public.collection_staff_nicknames
-      LIMIT 5000
-    `);
-    const nicknameIdByLowerName = new Map<string, string>();
-    for (const row of nicknameRows.rows || []) {
-      const nickname = String((row as any).nickname || "").trim().toLowerCase();
-      const id = String((row as any).id || "").trim();
-      if (!nickname || !id || nicknameIdByLowerName.has(nickname)) continue;
-      nicknameIdByLowerName.set(nickname, id);
-    }
-
-    const result = await db.execute(sql`
-      SELECT
-        g.id,
-        g.leader_nickname,
-        g.created_by,
-        g.created_at,
-        g.updated_at,
-        leader.id AS leader_nickname_id,
-        leader.is_active AS leader_is_active,
-        leader.role_scope AS leader_role_scope,
-        COALESCE(
-          array_agg(DISTINCT gm.member_nickname) FILTER (WHERE gm.member_nickname IS NOT NULL),
-          ARRAY[]::text[]
-        ) AS member_nicknames
-      FROM public.admin_groups g
-      LEFT JOIN public.collection_staff_nicknames leader
-        ON lower(leader.nickname) = lower(g.leader_nickname)
-      LEFT JOIN public.admin_group_members gm
-        ON gm.admin_group_id = g.id
-      GROUP BY
-        g.id,
-        g.leader_nickname,
-        g.created_by,
-        g.created_at,
-        g.updated_at,
-        leader.id,
-        leader.is_active,
-        leader.role_scope
-      ORDER BY lower(g.leader_nickname) ASC
-      LIMIT 5000
-    `);
-
-    return (result.rows || []).map((row: any) => this.mapCollectionAdminGroupRow(row, nicknameIdByLowerName));
+    return this.collectionRepository.getCollectionAdminGroups();
   }
 
   async getCollectionAdminGroupById(groupId: string): Promise<CollectionAdminGroup | undefined> {
-    const normalizedGroupId = String(groupId || "").trim();
-    if (!normalizedGroupId) return undefined;
-    const groups = await this.getCollectionAdminGroups();
-    return groups.find((item) => item.id === normalizedGroupId);
+    return this.collectionRepository.getCollectionAdminGroupById(groupId);
   }
 
   async createCollectionAdminGroup(params: {
@@ -5347,75 +3545,7 @@ export class PostgresStorage implements IStorage {
     memberNicknameIds: string[];
     createdBy: string;
   }): Promise<CollectionAdminGroup> {
-    const createdBy = String(params.createdBy || "").trim();
-    if (!createdBy) {
-      throw new Error("createdBy is required.");
-    }
-    const createdGroupId = await db.transaction(async (tx) => {
-      const leaderRows = await this.resolveNicknameNamesByIds(tx, [params.leaderNicknameId]);
-      const leader = leaderRows[0];
-      if (!leader || !leader.nickname) {
-        throw new Error("Invalid leader nickname.");
-      }
-      if (!(leader.roleScope === "admin" || leader.roleScope === "both")) {
-        throw new Error("Leader nickname must have admin scope.");
-      }
-      if (!leader.isActive) {
-        throw new Error("Leader nickname must be active.");
-      }
-
-      const memberRows = await this.resolveNicknameNamesByIds(tx, params.memberNicknameIds || []);
-      const memberNicknames = memberRows.map((item) => item.nickname).filter(Boolean);
-
-      await this.validateAdminGroupComposition({
-        tx,
-        leaderNickname: leader.nickname,
-        memberNicknames,
-      });
-
-      const groupId = randomUUID();
-      await tx.execute(sql`
-        INSERT INTO public.admin_groups (
-          id,
-          leader_nickname,
-          created_by,
-          created_at,
-          updated_at
-        )
-        VALUES (
-          ${groupId}::uuid,
-          ${leader.nickname},
-          ${createdBy},
-          now(),
-          now()
-        )
-      `);
-
-      for (const memberNickname of memberNicknames) {
-        if (!memberNickname || memberNickname.toLowerCase() === leader.nickname.toLowerCase()) continue;
-        await tx.execute(sql`
-          INSERT INTO public.admin_group_members (
-            id,
-            admin_group_id,
-            member_nickname,
-            created_at
-          )
-          VALUES (
-            ${randomUUID()}::uuid,
-            ${groupId}::uuid,
-            ${memberNickname},
-            now()
-          )
-          ON CONFLICT DO NOTHING
-        `);
-      }
-      return groupId;
-    });
-    const created = await this.getCollectionAdminGroupById(createdGroupId);
-    if (!created) {
-      throw new Error("Failed to create admin group.");
-    }
-    return created;
+    return this.collectionRepository.createCollectionAdminGroup(params);
   }
 
   async updateCollectionAdminGroup(params: {
@@ -5424,151 +3554,15 @@ export class PostgresStorage implements IStorage {
     memberNicknameIds?: string[];
     updatedBy: string;
   }): Promise<CollectionAdminGroup | undefined> {
-    const groupId = String(params.groupId || "").trim();
-    const updatedBy = String(params.updatedBy || "").trim();
-    if (!groupId) {
-      throw new Error("groupId is required.");
-    }
-    if (!updatedBy) {
-      throw new Error("updatedBy is required.");
-    }
-
-    const updatedGroupId = await db.transaction(async (tx) => {
-      const existingRow = await tx.execute(sql`
-        SELECT id, leader_nickname
-        FROM public.admin_groups
-        WHERE id = ${groupId}::uuid
-        LIMIT 1
-      `);
-      const existing = existingRow.rows?.[0];
-      if (!existing) {
-        return null;
-      }
-
-      let leaderNickname = String(existing.leader_nickname || "").trim();
-      if (params.leaderNicknameId) {
-        const leaderRows = await this.resolveNicknameNamesByIds(tx, [params.leaderNicknameId]);
-        const leader = leaderRows[0];
-        if (!leader || !leader.nickname) {
-          throw new Error("Invalid leader nickname.");
-        }
-        if (!(leader.roleScope === "admin" || leader.roleScope === "both")) {
-          throw new Error("Leader nickname must have admin scope.");
-        }
-        if (!leader.isActive) {
-          throw new Error("Leader nickname must be active.");
-        }
-        leaderNickname = leader.nickname;
-      }
-
-      let memberNicknames: string[] = [];
-      if (params.memberNicknameIds !== undefined) {
-        const memberRows = await this.resolveNicknameNamesByIds(tx, params.memberNicknameIds || []);
-        memberNicknames = memberRows.map((item) => item.nickname).filter(Boolean);
-      } else {
-        const existingMembers = await tx.execute(sql`
-          SELECT member_nickname
-          FROM public.admin_group_members
-          WHERE admin_group_id = ${groupId}::uuid
-          LIMIT 5000
-        `);
-        memberNicknames = (existingMembers.rows || [])
-          .map((row: any) => String(row.member_nickname || "").trim())
-          .filter(Boolean);
-      }
-
-      await this.validateAdminGroupComposition({
-        tx,
-        groupIdToExclude: groupId,
-        leaderNickname,
-        memberNicknames,
-      });
-
-      await tx.execute(sql`
-        UPDATE public.admin_groups
-        SET
-          leader_nickname = ${leaderNickname},
-          created_by = COALESCE(NULLIF(trim(COALESCE(created_by, '')), ''), ${updatedBy}),
-          updated_at = now()
-        WHERE id = ${groupId}::uuid
-      `);
-
-      await tx.execute(sql`
-        DELETE FROM public.admin_group_members
-        WHERE admin_group_id = ${groupId}::uuid
-      `);
-      for (const memberNickname of memberNicknames) {
-        if (!memberNickname || memberNickname.toLowerCase() === leaderNickname.toLowerCase()) continue;
-        await tx.execute(sql`
-          INSERT INTO public.admin_group_members (
-            id,
-            admin_group_id,
-            member_nickname,
-            created_at
-          )
-          VALUES (
-            ${randomUUID()}::uuid,
-            ${groupId}::uuid,
-            ${memberNickname},
-            now()
-          )
-          ON CONFLICT DO NOTHING
-        `);
-      }
-      return groupId;
-    });
-    if (!updatedGroupId) return undefined;
-    return this.getCollectionAdminGroupById(updatedGroupId);
+    return this.collectionRepository.updateCollectionAdminGroup(params);
   }
 
   async deleteCollectionAdminGroup(groupId: string): Promise<boolean> {
-    const normalizedGroupId = String(groupId || "").trim();
-    if (!normalizedGroupId) return false;
-
-    return db.transaction(async (tx) => {
-      await tx.execute(sql`
-        DELETE FROM public.admin_group_members
-        WHERE admin_group_id = ${normalizedGroupId}::uuid
-      `);
-      const result = await tx.execute(sql`
-        DELETE FROM public.admin_groups
-        WHERE id = ${normalizedGroupId}::uuid
-        RETURNING id
-      `);
-      return Boolean(result.rows?.[0]);
-    });
+    return this.collectionRepository.deleteCollectionAdminGroup(groupId);
   }
 
   async getCollectionAdminGroupVisibleNicknameValuesByLeader(leaderNickname: string): Promise<string[]> {
-    const normalizedLeader = String(leaderNickname || "").trim();
-    if (!normalizedLeader) return [];
-
-    const rows = await db.execute(sql`
-      SELECT
-        g.leader_nickname,
-        COALESCE(
-          array_agg(DISTINCT gm.member_nickname) FILTER (WHERE gm.member_nickname IS NOT NULL),
-          ARRAY[]::text[]
-        ) AS member_nicknames
-      FROM public.admin_groups g
-      LEFT JOIN public.admin_group_members gm
-        ON gm.admin_group_id = g.id
-      WHERE lower(g.leader_nickname) = lower(${normalizedLeader})
-      GROUP BY g.id, g.leader_nickname
-      LIMIT 1
-    `);
-
-    const row = rows.rows?.[0];
-    if (!row) {
-      return [normalizedLeader];
-    }
-
-    const members: string[] = Array.isArray((row as any).member_nicknames)
-      ? (row as any).member_nicknames.map((value: unknown) => String(value || "").trim()).filter(Boolean)
-      : [];
-    const uniqueMembers = Array.from(new Set(members.filter((value) => value.toLowerCase() !== normalizedLeader.toLowerCase())))
-      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-    return [String((row as any).leader_nickname || normalizedLeader).trim(), ...uniqueMembers];
+    return this.collectionRepository.getCollectionAdminGroupVisibleNicknameValuesByLeader(leaderNickname);
   }
 
   async setCollectionNicknameSession(params: {
@@ -5577,128 +3571,27 @@ export class PostgresStorage implements IStorage {
     userRole: string;
     nickname: string;
   }): Promise<void> {
-    const activityId = String(params.activityId || "").trim();
-    const username = String(params.username || "").trim();
-    const userRole = String(params.userRole || "").trim();
-    const nickname = String(params.nickname || "").trim();
-    if (!activityId || !username || !userRole || !nickname) {
-      throw new Error("Invalid collection nickname session payload.");
-    }
-    await db.execute(sql`
-      INSERT INTO public.collection_nickname_sessions (
-        activity_id,
-        username,
-        user_role,
-        nickname,
-        verified_at,
-        updated_at
-      )
-      VALUES (
-        ${activityId},
-        ${username},
-        ${userRole},
-        ${nickname},
-        now(),
-        now()
-      )
-      ON CONFLICT (activity_id) DO UPDATE
-      SET
-        username = EXCLUDED.username,
-        user_role = EXCLUDED.user_role,
-        nickname = EXCLUDED.nickname,
-        updated_at = now()
-    `);
+    return this.collectionRepository.setCollectionNicknameSession(params);
   }
 
   async getCollectionNicknameSessionByActivity(activityId: string): Promise<CollectionNicknameSession | undefined> {
-    const normalizedActivityId = String(activityId || "").trim();
-    if (!normalizedActivityId) return undefined;
-    const result = await db.execute(sql`
-      SELECT
-        activity_id,
-        username,
-        user_role,
-        nickname,
-        verified_at,
-        updated_at
-      FROM public.collection_nickname_sessions
-      WHERE activity_id = ${normalizedActivityId}
-      LIMIT 1
-    `);
-    const row = result.rows?.[0];
-    if (!row) return undefined;
-    return this.mapCollectionNicknameSessionRow(row);
+    return this.collectionRepository.getCollectionNicknameSessionByActivity(activityId);
   }
 
   async clearCollectionNicknameSessionByActivity(activityId: string): Promise<void> {
-    const normalizedActivityId = String(activityId || "").trim();
-    if (!normalizedActivityId) return;
-    await db.execute(sql`
-      DELETE FROM public.collection_nickname_sessions
-      WHERE activity_id = ${normalizedActivityId}
-    `);
+    return this.collectionRepository.clearCollectionNicknameSessionByActivity(activityId);
   }
 
   async getCollectionStaffNicknameById(id: string): Promise<CollectionStaffNickname | undefined> {
-    const result = await db.execute(sql`
-      SELECT
-        id,
-        nickname,
-        is_active,
-        role_scope,
-        created_by,
-        created_at
-      FROM public.collection_staff_nicknames
-      WHERE id = ${id}::uuid
-      LIMIT 1
-    `);
-    const row = result.rows?.[0];
-    if (!row) return undefined;
-    return this.mapCollectionStaffNicknameRow(row);
+    return this.collectionRepository.getCollectionStaffNicknameById(id);
   }
 
   async getCollectionStaffNicknameByName(nickname: string): Promise<CollectionStaffNickname | undefined> {
-    const normalized = String(nickname || "").trim();
-    if (!normalized) return undefined;
-
-    const result = await db.execute(sql`
-      SELECT
-        id,
-        nickname,
-        is_active,
-        role_scope,
-        created_by,
-        created_at
-      FROM public.collection_staff_nicknames
-      WHERE lower(nickname) = lower(${normalized})
-      LIMIT 1
-    `);
-    const row = result.rows?.[0];
-    if (!row) return undefined;
-    return this.mapCollectionStaffNicknameRow(row);
+    return this.collectionRepository.getCollectionStaffNicknameByName(nickname);
   }
 
   async getCollectionNicknameAuthProfileByName(nickname: string): Promise<CollectionNicknameAuthProfile | undefined> {
-    const normalized = String(nickname || "").trim();
-    if (!normalized) return undefined;
-
-    const result = await db.execute(sql`
-      SELECT
-        id,
-        nickname,
-        is_active,
-        role_scope,
-        nickname_password_hash,
-        must_change_password,
-        password_reset_by_superuser,
-        password_updated_at
-      FROM public.collection_staff_nicknames
-      WHERE lower(nickname) = lower(${normalized})
-      LIMIT 1
-    `);
-    const row = result.rows?.[0];
-    if (!row) return undefined;
-    return this.mapCollectionNicknameAuthProfileRow(row);
+    return this.collectionRepository.getCollectionNicknameAuthProfileByName(nickname);
   }
 
   async setCollectionNicknamePassword(params: {
@@ -5708,241 +3601,30 @@ export class PostgresStorage implements IStorage {
     passwordResetBySuperuser?: boolean;
     passwordUpdatedAt?: Date | null;
   }): Promise<void> {
-    const nicknameId = String(params.nicknameId || "").trim();
-    const passwordHash = String(params.passwordHash || "").trim();
-    const mustChangePassword = params.mustChangePassword ?? false;
-    const passwordResetBySuperuser = params.passwordResetBySuperuser ?? false;
-    const passwordUpdatedAt = params.passwordUpdatedAt ?? new Date();
-
-    if (!nicknameId) {
-      throw new Error("nicknameId is required.");
-    }
-    if (!passwordHash) {
-      throw new Error("passwordHash is required.");
-    }
-
-    await db.execute(sql`
-      UPDATE public.collection_staff_nicknames
-      SET
-        nickname_password_hash = ${passwordHash},
-        must_change_password = ${mustChangePassword},
-        password_reset_by_superuser = ${passwordResetBySuperuser},
-        password_updated_at = ${passwordUpdatedAt}
-      WHERE id = ${nicknameId}::uuid
-    `);
+    return this.collectionRepository.setCollectionNicknamePassword(params);
   }
 
   async createCollectionStaffNickname(data: CreateCollectionStaffNicknameInput): Promise<CollectionStaffNickname> {
-    const result = await db.execute(sql`
-      INSERT INTO public.collection_staff_nicknames (
-        id,
-        nickname,
-        is_active,
-        role_scope,
-        nickname_password_hash,
-        must_change_password,
-        password_reset_by_superuser,
-        password_updated_at,
-        created_by,
-        created_at
-      )
-      VALUES (
-        ${crypto.randomUUID()}::uuid,
-        ${data.nickname},
-        true,
-        ${normalizeCollectionNicknameRoleScope(data.roleScope)},
-        NULL,
-        true,
-        false,
-        NULL,
-        ${data.createdBy},
-        now()
-      )
-      RETURNING
-        id,
-        nickname,
-        is_active,
-        role_scope,
-        created_by,
-        created_at
-    `);
-    return this.mapCollectionStaffNicknameRow(result.rows[0]);
+    return this.collectionRepository.createCollectionStaffNickname(data);
   }
 
   async updateCollectionStaffNickname(
     id: string,
     data: UpdateCollectionStaffNicknameInput,
   ): Promise<CollectionStaffNickname | undefined> {
-    const existing = await this.getCollectionStaffNicknameById(id);
-    if (!existing) return undefined;
-
-    const updates: any[] = [];
-    if (data.nickname !== undefined) {
-      updates.push(sql`nickname = ${data.nickname}`);
-    }
-    if (data.isActive !== undefined) {
-      updates.push(sql`is_active = ${data.isActive}`);
-    }
-    if (data.roleScope !== undefined) {
-      updates.push(sql`role_scope = ${normalizeCollectionNicknameRoleScope(data.roleScope)}`);
-    }
-    if (!updates.length) {
-      return existing;
-    }
-
-    return db.transaction(async (tx) => {
-      const result = await tx.execute(sql`
-        UPDATE public.collection_staff_nicknames
-        SET ${sql.join(updates, sql`, `)}
-        WHERE id = ${id}::uuid
-        RETURNING
-          id,
-          nickname,
-          is_active,
-          role_scope,
-          created_by,
-          created_at
-      `);
-      const row = result.rows?.[0];
-      if (!row) return undefined;
-
-      const updated = this.mapCollectionStaffNicknameRow(row);
-      const oldNickname = String(existing.nickname || "").trim();
-      const newNickname = String(updated.nickname || "").trim();
-      if (oldNickname && newNickname && oldNickname.toLowerCase() !== newNickname.toLowerCase()) {
-        await tx.execute(sql`
-          UPDATE public.admin_groups
-          SET
-            leader_nickname = ${newNickname},
-            updated_at = now()
-          WHERE lower(leader_nickname) = lower(${oldNickname})
-        `);
-        await tx.execute(sql`
-          UPDATE public.admin_group_members
-          SET member_nickname = ${newNickname}
-          WHERE lower(member_nickname) = lower(${oldNickname})
-        `);
-        await tx.execute(sql`
-          UPDATE public.collection_nickname_sessions
-          SET
-            nickname = ${newNickname},
-            updated_at = now()
-          WHERE lower(nickname) = lower(${oldNickname})
-        `);
-      }
-      return updated;
-    });
+    return this.collectionRepository.updateCollectionStaffNickname(id, data);
   }
 
   async deleteCollectionStaffNickname(id: string): Promise<{ deleted: boolean; deactivated: boolean }> {
-    const existing = await this.getCollectionStaffNicknameById(id);
-    if (!existing) {
-      return { deleted: false, deactivated: false };
-    }
-
-    const usage = await db.execute(sql`
-      SELECT COUNT(*)::int AS total
-      FROM public.collection_records
-      WHERE lower(collection_staff_nickname) = lower(${existing.nickname})
-      LIMIT 1
-    `);
-    const total = Number(usage.rows?.[0]?.total ?? 0);
-    if (total > 0) {
-      await db.execute(sql`
-        UPDATE public.collection_staff_nicknames
-        SET is_active = false
-        WHERE id = ${id}::uuid
-      `);
-      return { deleted: false, deactivated: true };
-    }
-
-    await db.execute(sql`
-      DELETE FROM public.admin_visible_nicknames
-      WHERE nickname_id = ${id}::uuid
-    `);
-    await db.execute(sql`
-      DELETE FROM public.admin_group_members
-      WHERE lower(member_nickname) = lower(${existing.nickname})
-    `);
-    await db.execute(sql`
-      DELETE FROM public.admin_groups
-      WHERE lower(leader_nickname) = lower(${existing.nickname})
-    `);
-    await db.execute(sql`
-      DELETE FROM public.collection_nickname_sessions
-      WHERE lower(nickname) = lower(${existing.nickname})
-    `);
-    await db.execute(sql`
-      DELETE FROM public.collection_staff_nicknames
-      WHERE id = ${id}::uuid
-    `);
-    return { deleted: true, deactivated: false };
+    return this.collectionRepository.deleteCollectionStaffNickname(id);
   }
 
   async isCollectionStaffNicknameActive(nickname: string): Promise<boolean> {
-    const normalized = String(nickname || "").trim();
-    if (!normalized) return false;
-
-    const result = await db.execute(sql`
-      SELECT id
-      FROM public.collection_staff_nicknames
-      WHERE lower(nickname) = lower(${normalized})
-        AND is_active = true
-      LIMIT 1
-    `);
-    return Boolean(result.rows?.[0]);
+    return this.collectionRepository.isCollectionStaffNicknameActive(nickname);
   }
 
   async createCollectionRecord(data: CreateCollectionRecordInput): Promise<CollectionRecord> {
-    const id = crypto.randomUUID();
-    const result = await db.execute(sql`
-      INSERT INTO public.collection_records (
-        id,
-        customer_name,
-        ic_number,
-        customer_phone,
-        account_number,
-        batch,
-        payment_date,
-        amount,
-        receipt_file,
-        created_by_login,
-        collection_staff_nickname,
-        staff_username,
-        created_at
-      )
-      VALUES (
-        ${id}::uuid,
-        ${data.customerName},
-        ${data.icNumber},
-        ${data.customerPhone},
-        ${data.accountNumber},
-        ${data.batch},
-        ${data.paymentDate}::date,
-        ${data.amount},
-        ${data.receiptFile ?? null},
-        ${data.createdByLogin},
-        ${data.collectionStaffNickname},
-        ${data.collectionStaffNickname},
-        now()
-      )
-      RETURNING
-        id,
-        customer_name,
-        ic_number,
-        customer_phone,
-        account_number,
-        batch,
-        payment_date,
-        amount,
-        receipt_file,
-        created_by_login,
-        collection_staff_nickname,
-        staff_username,
-        created_at
-    `);
-
-    return this.mapCollectionRecordRow(result.rows[0]);
+    return this.collectionRepository.createCollectionRecord(data);
   }
 
   async listCollectionRecords(filters?: {
@@ -5953,69 +3635,7 @@ export class PostgresStorage implements IStorage {
     nicknames?: string[];
     limit?: number;
   }): Promise<CollectionRecord[]> {
-    const conditions: any[] = [];
-    if (filters?.from) {
-      conditions.push(sql`payment_date >= ${filters.from}::date`);
-    }
-    if (filters?.to) {
-      conditions.push(sql`payment_date <= ${filters.to}::date`);
-    }
-    const search = String(filters?.search || "").trim();
-    if (search) {
-      const like = `%${search}%`;
-      conditions.push(sql`(
-        customer_name ILIKE ${like}
-        OR ic_number ILIKE ${like}
-        OR account_number ILIKE ${like}
-        OR customer_phone ILIKE ${like}
-        OR amount::text ILIKE ${like}
-      )`);
-    }
-    const createdByLogin = String(filters?.createdByLogin || "").trim();
-    if (createdByLogin) {
-      conditions.push(sql`created_by_login = ${createdByLogin}`);
-    }
-    const nicknameSource = filters?.nicknames;
-    const nicknames = Array.isArray(nicknameSource)
-      ? nicknameSource
-        .map((value) => String(value || "").trim().toLowerCase())
-        .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index)
-      : [];
-    if (nicknames.length > 0) {
-      const nicknameSql = sql.join(nicknames.map((value) => sql`${value}`), sql`, `);
-      conditions.push(sql`lower(collection_staff_nickname) IN (${nicknameSql})`);
-    }
-
-    const whereSql = conditions.length
-      ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
-      : sql``;
-    const parsedLimit = Number(filters?.limit);
-    const safeLimit = Number.isFinite(parsedLimit)
-      ? Math.min(2000, Math.max(1, Math.floor(parsedLimit)))
-      : 500;
-
-    const result = await db.execute(sql`
-      SELECT
-        id,
-        customer_name,
-        ic_number,
-        customer_phone,
-        account_number,
-        batch,
-        payment_date,
-        amount,
-        receipt_file,
-        created_by_login,
-        collection_staff_nickname,
-        staff_username,
-        created_at
-      FROM public.collection_records
-      ${whereSql}
-      ORDER BY payment_date DESC, created_at DESC
-      LIMIT ${safeLimit}
-    `);
-
-    return (result.rows || []).map((row: any) => this.mapCollectionRecordRow(row));
+    return this.collectionRepository.listCollectionRecords(filters);
   }
 
   async getCollectionMonthlySummary(filters: {
@@ -6023,279 +3643,43 @@ export class PostgresStorage implements IStorage {
     nicknames?: string[];
     createdByLogin?: string;
   }): Promise<CollectionMonthlySummary[]> {
-    const safeYear = Number.isFinite(filters.year)
-      ? Math.min(2100, Math.max(2000, Math.floor(filters.year)))
-      : new Date().getFullYear();
-    const yearStart = `${safeYear}-01-01`;
-    const yearEnd = `${safeYear}-12-31`;
-    const createdByLogin = String(filters.createdByLogin || "").trim();
-    const nicknameSource = filters.nicknames;
-    const nicknames = Array.isArray(nicknameSource)
-      ? nicknameSource
-        .map((value) => String(value || "").trim().toLowerCase())
-        .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index)
-      : [];
-
-    const conditions: any[] = [
-      sql`payment_date >= ${yearStart}::date`,
-      sql`payment_date <= ${yearEnd}::date`,
-    ];
-    if (nicknames.length > 0) {
-      const nicknameSql = sql.join(nicknames.map((value) => sql`${value}`), sql`, `);
-      conditions.push(sql`lower(collection_staff_nickname) IN (${nicknameSql})`);
-    }
-    if (createdByLogin) {
-      conditions.push(sql`created_by_login = ${createdByLogin}`);
-    }
-
-    const whereSql = sql`WHERE ${sql.join(conditions, sql` AND `)}`;
-    const result = await db.execute(sql`
-      SELECT
-        EXTRACT(MONTH FROM payment_date)::int AS month,
-        COUNT(*)::int AS total_records,
-        COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
-      FROM public.collection_records
-      ${whereSql}
-      GROUP BY 1
-      ORDER BY 1
-      LIMIT 12
-    `);
-
-    const byMonth = new Map<number, { totalRecords: number; totalAmount: number }>();
-    for (const row of result.rows || []) {
-      const month = Number(row.month ?? 0);
-      if (!Number.isFinite(month) || month < 1 || month > 12) continue;
-      byMonth.set(month, {
-        totalRecords: Number(row.total_records ?? 0),
-        totalAmount: Number(row.total_amount ?? 0),
-      });
-    }
-
-    return COLLECTION_MONTH_NAMES.map((monthName, index) => {
-      const month = index + 1;
-      const data = byMonth.get(month);
-      return {
-        month,
-        monthName,
-        totalRecords: data?.totalRecords ?? 0,
-        totalAmount: data?.totalAmount ?? 0,
-      };
-    });
+    return this.collectionRepository.getCollectionMonthlySummary(filters);
   }
 
   async getCollectionRecordById(id: string): Promise<CollectionRecord | undefined> {
-    const result = await db.execute(sql`
-      SELECT
-        id,
-        customer_name,
-        ic_number,
-        customer_phone,
-        account_number,
-        batch,
-        payment_date,
-        amount,
-        receipt_file,
-        created_by_login,
-        collection_staff_nickname,
-        staff_username,
-        created_at
-      FROM public.collection_records
-      WHERE id = ${id}::uuid
-      LIMIT 1
-    `);
-
-    const row = result.rows?.[0];
-    if (!row) return undefined;
-    return this.mapCollectionRecordRow(row);
+    return this.collectionRepository.getCollectionRecordById(id);
   }
 
   async updateCollectionRecord(id: string, data: UpdateCollectionRecordInput): Promise<CollectionRecord | undefined> {
-    const updateChunks: any[] = [];
-
-    if (data.customerName !== undefined) {
-      updateChunks.push(sql`customer_name = ${data.customerName}`);
-    }
-    if (data.icNumber !== undefined) {
-      updateChunks.push(sql`ic_number = ${data.icNumber}`);
-    }
-    if (data.customerPhone !== undefined) {
-      updateChunks.push(sql`customer_phone = ${data.customerPhone}`);
-    }
-    if (data.accountNumber !== undefined) {
-      updateChunks.push(sql`account_number = ${data.accountNumber}`);
-    }
-    if (data.batch !== undefined) {
-      updateChunks.push(sql`batch = ${data.batch}`);
-    }
-    if (data.paymentDate !== undefined) {
-      updateChunks.push(sql`payment_date = ${data.paymentDate}::date`);
-    }
-    if (data.amount !== undefined) {
-      updateChunks.push(sql`amount = ${data.amount}`);
-    }
-    if (Object.prototype.hasOwnProperty.call(data, "receiptFile")) {
-      updateChunks.push(sql`receipt_file = ${data.receiptFile ?? null}`);
-    }
-    if (data.collectionStaffNickname !== undefined) {
-      updateChunks.push(sql`collection_staff_nickname = ${data.collectionStaffNickname}`);
-      updateChunks.push(sql`staff_username = ${data.collectionStaffNickname}`);
-    }
-
-    if (!updateChunks.length) {
-      return this.getCollectionRecordById(id);
-    }
-
-    const result = await db.execute(sql`
-      UPDATE public.collection_records
-      SET ${sql.join(updateChunks, sql`, `)}
-      WHERE id = ${id}::uuid
-      RETURNING
-        id,
-        customer_name,
-        ic_number,
-        customer_phone,
-        account_number,
-        batch,
-        payment_date,
-        amount,
-        receipt_file,
-        created_by_login,
-        collection_staff_nickname,
-        staff_username,
-        created_at
-    `);
-
-    const row = result.rows?.[0];
-    if (!row) return undefined;
-    return this.mapCollectionRecordRow(row);
+    return this.collectionRepository.updateCollectionRecord(id, data);
   }
 
   async deleteCollectionRecord(id: string): Promise<boolean> {
-    await db.execute(sql`DELETE FROM public.collection_records WHERE id = ${id}::uuid`);
-    return true;
+    return this.collectionRepository.deleteCollectionRecord(id);
   }
 
   async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {
-    const result = await db
-      .insert(auditLogs)
-      .values({
-        id: crypto.randomUUID(),
-        action: data.action,
-        performedBy: data.performedBy,
-        targetUser: data.targetUser ?? null,
-        targetResource: data.targetResource ?? null,
-        details: data.details ?? null,
-        timestamp: new Date(),
-      })
-      .returning();
-
-    return result[0];
+    return this.auditRepository.createAuditLog(data);
   }
 
   async getAuditLogs(): Promise<AuditLog[]> {
-    const logs: AuditLog[] = [];
-    let offset = 0;
-
-    while (true) {
-      const chunk = await db
-        .select()
-        .from(auditLogs)
-        .orderBy(desc(auditLogs.timestamp))
-        .limit(QUERY_PAGE_LIMIT)
-        .offset(offset);
-
-      if (!chunk.length) break;
-      logs.push(...chunk);
-
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
-      offset += chunk.length;
-    }
-
-    return logs;
+    return this.auditRepository.getAuditLogs();
   }
 
   async createBackup(data: InsertBackup): Promise<Backup> {
-    await this.ensureBackupsTable();
-    const id = crypto.randomUUID();
-    const result = await db.execute(sql`
-      INSERT INTO public.backups (id, name, created_at, created_by, backup_data, metadata)
-      VALUES (${id}, ${data.name}, ${new Date()}, ${data.createdBy}, ${data.backupData}, ${data.metadata ?? null})
-      RETURNING
-        id,
-        name,
-        created_at as "createdAt",
-        created_by as "createdBy",
-        ''::text as "backupData",
-        metadata
-    `);
-
-    return result.rows[0] as Backup;
+    return this.backupsRepository.createBackup(data);
   }
 
   async getBackups(): Promise<Backup[]> {
-    await this.ensureBackupsTable();
-    const rows: any[] = [];
-    let offset = 0;
-
-    while (true) {
-      const result = await db.execute(sql`
-        SELECT
-          id,
-          name,
-          created_at as "createdAt",
-          created_by as "createdBy",
-          ''::text as "backupData",
-          CASE
-            WHEN metadata IS NULL THEN NULL
-            WHEN length(metadata) > 200000 THEN NULL
-            ELSE metadata
-          END as metadata
-        FROM public.backups
-        ORDER BY created_at DESC
-        LIMIT ${QUERY_PAGE_LIMIT}
-        OFFSET ${offset}
-      `);
-
-      const chunk = result.rows || [];
-      if (!chunk.length) break;
-      rows.push(...chunk);
-
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
-      offset += chunk.length;
-    }
-
-    return (rows as Backup[]).map((row: any) => {
-      return { ...row, metadata: this.parseBackupMetadataSafe(row.metadata) };
-    });
+    return this.backupsRepository.getBackups();
   }
 
   async getBackupById(id: string): Promise<Backup | undefined> {
-    await this.ensureBackupsTable();
-    const result = await db.execute(sql`
-      SELECT
-        id,
-        name,
-        created_at as "createdAt",
-        created_by as "createdBy",
-        backup_data as "backupData",
-        CASE
-          WHEN metadata IS NULL THEN NULL
-          WHEN length(metadata) > 200000 THEN NULL
-          ELSE metadata
-        END as metadata
-      FROM public.backups
-      WHERE id = ${id}
-      LIMIT 1
-    `);
-    const row = result.rows[0] as any;
-    if (!row) return undefined;
-    return { ...row, metadata: this.parseBackupMetadataSafe(row.metadata) } as Backup;
+    return this.backupsRepository.getBackupById(id);
   }
 
   async deleteBackup(id: string): Promise<boolean> {
-    await this.ensureBackupsTable();
-    await db.execute(sql`DELETE FROM public.backups WHERE id = ${id}`);
-    return true;
+    return this.backupsRepository.deleteBackup(id);
   }
 
   async getBackupDataForExport(): Promise<{
@@ -6304,24 +3688,7 @@ export class PostgresStorage implements IStorage {
     users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash: string }>;
     auditLogs: AuditLog[];
   }> {
-    const allImports = await db.select().from(imports).where(eq(imports.isDeleted, false));
-    const allDataRows = await db.select().from(dataRows);
-    const allUsersFromDb = await db.select().from(users);
-    const allUsers = allUsersFromDb.map((u) => ({
-      username: u.username,
-      role: u.role,
-      isBanned: u.isBanned,
-      passwordHash: u.passwordHash,
-    }));
-
-    const allAuditLogs = await db.select().from(auditLogs);
-
-    return {
-      imports: allImports,
-      dataRows: allDataRows,
-      users: allUsers,
-      auditLogs: allAuditLogs,
-    };
+    return this.backupsRepository.getBackupDataForExport();
   }
 
   async restoreFromBackup(backupData: {
@@ -6330,101 +3697,7 @@ export class PostgresStorage implements IStorage {
     users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash?: string }>;
     auditLogs: AuditLog[];
   }): Promise<{ success: boolean; stats: { imports: number; dataRows: number; users: number; auditLogs: number } }> {
-    const stats = {
-      imports: 0,
-      dataRows: 0,
-      users: 0,
-      auditLogs: 0,
-    };
-
-    const toDate = (value: unknown): Date | null => {
-      if (!value) return null;
-      if (value instanceof Date) return value;
-      const d = new Date(value as any);
-      return isNaN(d.getTime()) ? null : d;
-    };
-
-    const chunkArray = <T>(arr: T[], size: number): T[][] => {
-      const chunks: T[][] = [];
-      for (let i = 0; i < arr.length; i += size) {
-        chunks.push(arr.slice(i, i + size));
-      }
-      return chunks;
-    };
-
-    await db.transaction(async (tx) => {
-      if (backupData.imports.length > 0) {
-        for (const chunk of chunkArray(backupData.imports, BACKUP_CHUNK_SIZE)) {
-          const rows = chunk.map((imp) => ({
-            id: imp.id,
-            name: imp.name,
-            filename: imp.filename,
-            createdAt: toDate((imp as any).createdAt) ?? new Date(),
-            isDeleted: (imp as any).isDeleted ?? false,
-            createdBy: (imp as any).createdBy ?? null,
-          }));
-          // Revive deleted imports (if they already exist)
-          for (const row of rows) {
-            await tx
-              .update(imports)
-              .set({ isDeleted: false })
-              .where(eq(imports.id, row.id));
-          }
-          await tx.insert(imports).values(rows).onConflictDoNothing();
-          stats.imports += rows.length;
-        }
-      }
-
-      if (backupData.dataRows.length > 0) {
-        for (const chunk of chunkArray(backupData.dataRows, BACKUP_CHUNK_SIZE)) {
-          const rowsToInsert = chunk.map((row) => ({
-            id: row.id ?? crypto.randomUUID(),
-            importId: row.importId,
-            jsonDataJsonb: row.jsonDataJsonb,
-          }));
-          await tx.insert(dataRows).values(rowsToInsert).onConflictDoNothing();
-          stats.dataRows += rowsToInsert.length;
-        }
-      }
-
-      if (backupData.users.length > 0) {
-        const now = new Date();
-        const userRows = backupData.users
-          .filter((u) => u.passwordHash)
-          .map((u) => ({
-            id: crypto.randomUUID(),
-            username: u.username,
-            passwordHash: u.passwordHash!,
-            role: u.role,
-            createdAt: now,
-            updatedAt: now,
-            passwordChangedAt: now,
-            isBanned: u.isBanned ?? false,
-          }));
-        for (const chunk of chunkArray(userRows, BACKUP_CHUNK_SIZE)) {
-          await tx.insert(users).values(chunk).onConflictDoNothing();
-          stats.users += chunk.length;
-        }
-      }
-
-      if (backupData.auditLogs.length > 0) {
-        for (const chunk of chunkArray(backupData.auditLogs, BACKUP_CHUNK_SIZE)) {
-          const rows = chunk.map((log) => ({
-            id: (log as any).id ?? crypto.randomUUID(),
-            action: log.action,
-            performedBy: log.performedBy,
-            targetUser: log.targetUser ?? null,
-            targetResource: log.targetResource ?? null,
-            details: log.details ?? null,
-            timestamp: toDate((log as any).timestamp) ?? new Date(),
-          }));
-          await tx.insert(auditLogs).values(rows).onConflictDoNothing();
-          stats.auditLogs += rows.length;
-        }
-      }
-    });
-
-    return { success: true, stats };
+    return this.backupsRepository.restoreFromBackup(backupData);
   }
 
   async getDashboardSummary(): Promise<{
@@ -6435,99 +3708,13 @@ export class PostgresStorage implements IStorage {
     totalImports: number;
     bannedUsers: number;
   }> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const [totalUsers] = await db
-      .select({ value: count() })
-      .from(users);
-
-    const [activeSessions] = await db
-      .select({ value: count() })
-      .from(userActivity)
-      .where(eq(userActivity.isActive, true));
-
-    const [loginsToday] = await db
-      .select({ value: count() })
-      .from(userActivity)
-      .where(gte(userActivity.loginTime, today));
-
-    const [totalDataRows] = await db
-      .select({ value: count() })
-      .from(dataRows);
-
-    const [totalImports] = await db
-      .select({ value: count() })
-      .from(imports)
-      .where(eq(imports.isDeleted, false));
-
-    const [bannedUsers] = await db
-      .select({ value: count() })
-      .from(users)
-      .where(eq(users.isBanned, true));
-
-    return {
-      totalUsers: totalUsers.value,
-      activeSessions: activeSessions.value,
-      loginsToday: loginsToday.value,
-      totalDataRows: totalDataRows.value,
-      totalImports: totalImports.value,
-      bannedUsers: bannedUsers.value,
-    };
+    return this.analyticsRepository.getDashboardSummary();
   }
 
   async getLoginTrends(
     days: number = 7
   ): Promise<Array<{ date: string; logins: number; logouts: number }>> {
-
-    const result = await db.execute(sql`
-    WITH bounds AS (
-      SELECT (NOW() AT TIME ZONE ${ANALYTICS_TZ})::date AS end_date
-    ),
-    days AS (
-      SELECT generate_series(
-        (SELECT end_date FROM bounds) - (${days} - 1) * INTERVAL '1 day',
-        (SELECT end_date FROM bounds),
-        INTERVAL '1 day'
-      )::date AS day
-    ),
-    logins AS (
-      SELECT
-        (login_time AT TIME ZONE 'UTC' AT TIME ZONE ${ANALYTICS_TZ})::date AS day,
-        COUNT(*)::int AS logins
-      FROM user_activity
-      WHERE login_time IS NOT NULL
-      GROUP BY day
-    ),
-    logouts AS (
-      SELECT
-        (logout_time AT TIME ZONE 'UTC' AT TIME ZONE ${ANALYTICS_TZ})::date AS day,
-        COUNT(*)::int AS logouts
-      FROM user_activity
-      WHERE logout_time IS NOT NULL
-      GROUP BY day
-    )
-    SELECT
-      days.day AS date,
-      COALESCE(logins.logins, 0)::int AS logins,
-      COALESCE(logouts.logouts, 0)::int AS logouts
-    FROM days
-    LEFT JOIN logins ON logins.day = days.day
-    LEFT JOIN logouts ON logouts.day = days.day
-    ORDER BY days.day ASC
-  `);
-
-    const rows = result.rows as Array<{
-      date: string;
-      logins: number;
-      logouts: number;
-    }>;
-
-    return rows.map(r => ({
-      date: r.date,
-      logins: r.logins,
-      logouts: r.logouts,
-    }));
+    return this.analyticsRepository.getLoginTrends(days);
   }
 
   async getTopActiveUsers(
@@ -6538,80 +3725,18 @@ export class PostgresStorage implements IStorage {
     loginCount: number;
     lastLogin: string | null;
   }>> {
-
-    const result = await db.execute(sql`
-    SELECT
-      username,
-      role,
-      COUNT(*)::int AS "loginCount",
-      MAX(login_time) AS "lastLogin"
-    FROM user_activity
-    GROUP BY username, role
-    ORDER BY "loginCount" DESC
-    LIMIT ${limit}
-  `);
-
-    const rows = result.rows as TopActiveUserRow[];
-
-    return rows.map((row) => ({
-      username: row.username,
-      role: row.role,
-      loginCount: row.loginCount,
-      lastLogin: row.lastLogin
-        ? new Date(row.lastLogin).toISOString()
-        : null,
-    }));
+    return this.analyticsRepository.getTopActiveUsers(limit);
   }
 
   async getPeakHours(): Promise<Array<{ hour: number; count: number }>> {
 
-    const result = await db.execute(sql`
-    SELECT
-      EXTRACT(HOUR FROM (login_time AT TIME ZONE 'UTC' AT TIME ZONE ${ANALYTICS_TZ}))::int AS hour,
-      COUNT(*)::int AS count
-    FROM user_activity
-    WHERE login_time IS NOT NULL
-    GROUP BY hour
-    ORDER BY hour ASC
-  `);
+    return this.analyticsRepository.getPeakHours();
 
-    const rows = result.rows as Array<{
-      hour: number;
-      count: number;
-    }>;
 
     // Pastikan 0–23 lengkap (untuk chart cantik)
-    const hoursMap = new Map<number, number>();
-    for (let i = 0; i < 24; i++) {
-      hoursMap.set(i, 0);
-    }
-
-    for (const r of rows) {
-      hoursMap.set(r.hour, r.count);
-    }
-
-    return Array.from(hoursMap.entries()).map(([hour, count]) => ({
-      hour,
-      count,
-    }));
   }
 
   async getRoleDistribution(): Promise<Array<{ role: string; count: number }>> {
-
-    const result = await db.execute(sql`
-    SELECT
-      role,
-      COUNT(*)::int AS count
-    FROM users
-    GROUP BY role
-    ORDER BY role ASC
-  `);
-
-    const rows = result.rows as Array<{
-      role: string;
-      count: number;
-    }>;
-
-    return rows;
+    return this.analyticsRepository.getRoleDistribution();
   }
 }

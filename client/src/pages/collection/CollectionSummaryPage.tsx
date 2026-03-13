@@ -211,12 +211,15 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
         nickname: normalizedFilters.length === 1 ? normalizedFilters[0] : undefined,
       });
       if (!isMountedRef.current || requestId !== monthRecordsRequestIdRef.current) return;
-      const records = Array.isArray(response?.records) ? response.records : [];
+      const records: CollectionRecord[] = Array.isArray(response?.records)
+        ? response.records as CollectionRecord[]
+        : [];
       const normalizedFiltersSet = normalizedFilters.length > 1
         ? new Set(normalizedFilters.map((value) => value.toLowerCase()))
         : null;
       const filteredRecords = normalizedFiltersSet
-        ? records.filter((item) => normalizedFiltersSet.has(String(item.collectionStaffNickname || "").trim().toLowerCase()))
+        ? records.filter((item: CollectionRecord) =>
+            normalizedFiltersSet.has(String(item.collectionStaffNickname || "").trim().toLowerCase()))
         : records;
       setMonthRecords(filteredRecords);
     } catch (error: unknown) {
