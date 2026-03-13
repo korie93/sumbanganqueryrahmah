@@ -1,125 +1,12 @@
 // server/index-local.ts
 import "dotenv/config";
-import express2 from "express";
+import express3 from "express";
 import { createServer } from "http";
 import path3 from "path";
 import { WebSocketServer } from "ws";
 
-// shared/schema-postgres.ts
-import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
-import { relations } from "drizzle-orm";
-import { jsonb } from "drizzle-orm/pg-core";
-var users = pgTable("users", {
-  id: text("id").primaryKey(),
-  username: text("username").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
-  role: text("role").notNull().default("user"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  passwordChangedAt: timestamp("password_changed_at"),
-  isBanned: boolean("is_banned").default(false)
-});
-var imports = pgTable("imports", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  filename: text("filename").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-  isDeleted: boolean("is_deleted").default(false),
-  createdBy: text("created_by")
-});
-var dataRows = pgTable("data_rows", {
-  id: text("id").primaryKey(),
-  importId: text("import_id").notNull(),
-  jsonDataJsonb: jsonb("json_data").notNull()
-  // guna satu column sahaja
-});
-var userActivity = pgTable("user_activity", {
-  id: text("id").primaryKey(),
-  userId: text("user_id").notNull(),
-  username: text("username").notNull(),
-  role: text("role").notNull(),
-  pcName: text("pc_name"),
-  browser: text("browser"),
-  fingerprint: text("fingerprint"),
-  ipAddress: text("ip_address"),
-  loginTime: timestamp("login_time"),
-  logoutTime: timestamp("logout_time"),
-  lastActivityTime: timestamp("last_activity_time"),
-  isActive: boolean("is_active").default(true),
-  logoutReason: text("logout_reason")
-});
-var auditLogs = pgTable("audit_logs", {
-  id: text("id").primaryKey(),
-  action: text("action").notNull(),
-  performedBy: text("performed_by").notNull(),
-  targetUser: text("target_user"),
-  targetResource: text("target_resource"),
-  details: text("details"),
-  timestamp: timestamp("timestamp").defaultNow()
-});
-var backups = pgTable("backups", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-  createdBy: text("created_by").notNull(),
-  backupData: text("backup_data").notNull(),
-  metadata: text("metadata")
-});
-var insertUserSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required"),
-  role: z.string().optional()
-});
-var insertImportSchema = createInsertSchema(imports).pick({
-  name: true,
-  filename: true
-});
-var insertDataRowSchema = z.object({
-  importId: z.string(),
-  jsonDataJsonb: z.record(z.any())
-});
-var insertUserActivitySchema = createInsertSchema(userActivity).pick({
-  userId: true,
-  username: true,
-  role: true,
-  pcName: true,
-  browser: true,
-  fingerprint: true,
-  ipAddress: true
-});
-var insertAuditLogSchema = createInsertSchema(auditLogs).pick({
-  action: true,
-  performedBy: true,
-  targetUser: true,
-  targetResource: true,
-  details: true
-});
-var insertBackupSchema = createInsertSchema(backups).pick({
-  name: true,
-  createdBy: true,
-  backupData: true,
-  metadata: true
-});
-var loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required"),
-  fingerprint: z.string().optional()
-});
-var importRelations = relations(imports, ({ many }) => ({
-  rows: many(dataRows)
-}));
-var dataRowRelations = relations(dataRows, ({ one }) => ({
-  import: one(imports, {
-    fields: [dataRows.importId],
-    references: [imports.id]
-  })
-}));
-
-// server/storage-postgres.ts
-import { randomUUID as randomUUID2 } from "crypto";
-import bcrypt2 from "bcrypt";
+// server/internal/aiBootstrap.ts
+import { sql } from "drizzle-orm";
 
 // server/db-postgres.ts
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -194,12 +81,294 @@ var pool = new Pool({
 });
 var db = drizzle(pool);
 
-// server/storage-postgres.ts
-import { eq as eq5, and as and3, or, count as count2, sql as sql13, inArray as inArray2 } from "drizzle-orm";
-import crypto6 from "crypto";
+// server/internal/aiBootstrap.ts
+var AiBootstrap = class {
+  constructor() {
+    this.aiReady = false;
+    this.aiInitPromise = null;
+    this.categoryStatsReady = false;
+    this.categoryStatsInitPromise = null;
+    this.categoryRulesReady = false;
+    this.categoryRulesInitPromise = null;
+  }
+  async ensureAiTables() {
+    if (this.aiReady) return;
+    if (this.aiInitPromise) {
+      await this.aiInitPromise;
+      return;
+    }
+    this.aiInitPromise = (async () => {
+      try {
+        await db.execute(sql`SET search_path TO public`);
+        let vectorAvailable = true;
+        try {
+          await db.execute(sql`CREATE EXTENSION IF NOT EXISTS vector`);
+        } catch {
+          vectorAvailable = false;
+          console.warn("WARN pgvector extension not available. Embeddings disabled until installed.");
+        }
+        if (vectorAvailable) {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS public.data_embeddings (
+              id text PRIMARY KEY,
+              import_id text NOT NULL,
+              row_id text NOT NULL UNIQUE,
+              content text NOT NULL,
+              embedding vector(768) NOT NULL,
+              created_at timestamp DEFAULT now()
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_data_embeddings_import_id ON public.data_embeddings(import_id)`);
+          try {
+            await db.execute(sql`
+              CREATE INDEX IF NOT EXISTS idx_data_embeddings_vector
+              ON public.data_embeddings
+              USING ivfflat (embedding vector_cosine_ops)
+            `);
+          } catch (err) {
+            console.warn("WARN Failed to create ivfflat index:", err?.message || err);
+          }
+        }
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS public.ai_conversations (
+            id text PRIMARY KEY,
+            created_by text NOT NULL,
+            created_at timestamp DEFAULT now()
+          )
+        `);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS public.ai_messages (
+            id text PRIMARY KEY,
+            conversation_id text NOT NULL,
+            role text NOT NULL,
+            content text NOT NULL,
+            created_at timestamp DEFAULT now()
+          )
+        `);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation_id ON public.ai_messages(conversation_id)`);
+        this.aiReady = true;
+      } catch (err) {
+        console.error("ERROR Failed to ensure AI tables:", err?.message || err);
+      }
+    })();
+    try {
+      await this.aiInitPromise;
+    } finally {
+      this.aiInitPromise = null;
+    }
+  }
+  async ensureCategoryStatsTable() {
+    if (this.categoryStatsReady) return;
+    if (this.categoryStatsInitPromise) {
+      await this.categoryStatsInitPromise;
+      return;
+    }
+    this.categoryStatsInitPromise = (async () => {
+      try {
+        await db.execute(sql`SET search_path TO public`);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS public.ai_category_stats (
+            key text PRIMARY KEY,
+            total integer NOT NULL,
+            samples jsonb,
+            updated_at timestamp DEFAULT now()
+          )
+        `);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ai_category_stats_updated_at ON public.ai_category_stats(updated_at)`);
+        this.categoryStatsReady = true;
+      } catch (err) {
+        console.error("ERROR Failed to ensure ai_category_stats table:", err?.message || err);
+      }
+    })();
+    try {
+      await this.categoryStatsInitPromise;
+    } finally {
+      this.categoryStatsInitPromise = null;
+    }
+  }
+  async ensureCategoryRulesTable() {
+    if (this.categoryRulesReady) return;
+    if (this.categoryRulesInitPromise) {
+      await this.categoryRulesInitPromise;
+      return;
+    }
+    this.categoryRulesInitPromise = (async () => {
+      try {
+        await db.execute(sql`SET search_path TO public`);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS public.ai_category_rules (
+            key text PRIMARY KEY,
+            terms text[] NOT NULL DEFAULT '{}',
+            fields text[] NOT NULL DEFAULT '{}',
+            match_mode text NOT NULL DEFAULT 'contains',
+            enabled boolean NOT NULL DEFAULT true,
+            updated_at timestamp DEFAULT now()
+          )
+        `);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ai_category_rules_updated_at ON public.ai_category_rules(updated_at)`);
+        const defaultFields = [
+          "NOB",
+          "NATURE OF BUSINESS",
+          "Nature of Business",
+          "EMPLOYER NAME",
+          "EmployerName",
+          "Company",
+          "Nama Majikan",
+          "Majikan",
+          "Department",
+          "Agensi"
+        ];
+        const defaults = [
+          {
+            key: "kerajaan",
+            terms: [
+              "GOVERNMENT",
+              "KERAJAAN",
+              "PUBLIC SECTOR",
+              "SECTOR AWAM",
+              "KEMENTERIAN",
+              "JABATAN",
+              "AGENSI",
+              "PERSEKUTUAN",
+              "NEGERI",
+              "MAJLIS",
+              "KKM",
+              "KPM",
+              "KPT",
+              "MOE",
+              "MOH",
+              "SEKOLAH",
+              "GURU",
+              "TEACHER",
+              "CIKGU",
+              "PENDIDIKAN"
+            ],
+            fields: defaultFields,
+            matchMode: "contains",
+            enabled: true
+          },
+          {
+            key: "hospital",
+            terms: [
+              "HEALTHCARE",
+              "HOSPITAL",
+              "CLINIC",
+              "KLINIK",
+              "KESIHATAN",
+              "MEDICAL",
+              "HEALTH"
+            ],
+            fields: defaultFields,
+            matchMode: "contains",
+            enabled: true
+          },
+          {
+            key: "hotel",
+            terms: [
+              "HOTEL",
+              "HOSPITALITY",
+              "RESORT",
+              "INN",
+              "MOTEL",
+              "RESTAURANT",
+              "SERVICE LINE",
+              "HOTEL,RESTAURANT",
+              "HOTEL & RESTAURANT"
+            ],
+            fields: defaultFields,
+            matchMode: "contains",
+            enabled: true
+          },
+          {
+            key: "polis",
+            terms: ["POLIS", "POLICE", "PDRM", "IPD", "IPK", "ROYAL MALAYSIA POLICE"],
+            fields: defaultFields,
+            matchMode: "contains",
+            enabled: true
+          },
+          {
+            key: "tentera",
+            terms: [
+              "TENTERA",
+              "ARMY",
+              "MILITARY",
+              "ARMED FORCES",
+              "ATM",
+              "TUDM",
+              "TLDM",
+              "TENTERA DARAT",
+              "TENTERA LAUT",
+              "TENTERA UDARA",
+              "ANGKATAN TENTERA",
+              "ANGKATAN TENTERA MALAYSIA",
+              "MINDEF",
+              "MINISTRY OF DEFENCE",
+              "KEMENTERIAN PERTAHANAN",
+              "DEFENCE",
+              "PERTAHANAN"
+            ],
+            fields: defaultFields,
+            matchMode: "contains",
+            enabled: true
+          },
+          {
+            key: "swasta",
+            terms: ["SWASTA", "PRIVATE", "SDN BHD", "BHD", "ENTERPRISE", "TRADING", "LTD", "PLC"],
+            fields: defaultFields,
+            matchMode: "complement",
+            enabled: true
+          }
+        ];
+        const toTextArray = (values) => {
+          if (!values.length) return sql`'{}'::text[]`;
+          const joined = sql.join(values.map((value) => sql`${value}`), sql`, `);
+          return sql`ARRAY[${joined}]::text[]`;
+        };
+        for (const rule of defaults) {
+          const termsSql = toTextArray(rule.terms || []);
+          const fieldsSql = toTextArray(rule.fields || []);
+          await db.execute(sql`
+            INSERT INTO public.ai_category_rules (key, terms, fields, match_mode, enabled, updated_at)
+            VALUES (${rule.key}, ${termsSql}, ${fieldsSql}, ${rule.matchMode ?? "contains"}, ${rule.enabled ?? true}, now())
+            ON CONFLICT (key) DO UPDATE SET
+              terms = EXCLUDED.terms,
+              fields = EXCLUDED.fields,
+              match_mode = EXCLUDED.match_mode,
+              enabled = EXCLUDED.enabled,
+              updated_at = now()
+          `);
+        }
+        this.categoryRulesReady = true;
+      } catch (err) {
+        console.error("ERROR Failed to ensure ai_category_rules table:", err?.message || err);
+      }
+    })();
+    try {
+      await this.categoryRulesInitPromise;
+    } finally {
+      this.categoryRulesInitPromise = null;
+    }
+  }
+};
+
+// server/internal/backupMetadata.ts
+function parseBackupMetadataSafe(raw) {
+  if (!raw) return null;
+  if (typeof raw === "object") return raw;
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > 2e5) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 // server/internal/backupsBootstrap.ts
-import { sql } from "drizzle-orm";
+import { sql as sql2 } from "drizzle-orm";
 var BackupsBootstrap = class {
   constructor() {
     this.ready = false;
@@ -213,8 +382,8 @@ var BackupsBootstrap = class {
     }
     this.initPromise = (async () => {
       try {
-        await db.execute(sql`SET search_path TO public`);
-        await db.execute(sql`
+        await db.execute(sql2`SET search_path TO public`);
+        await db.execute(sql2`
           CREATE TABLE IF NOT EXISTS public.backups (
             id text PRIMARY KEY,
             name text NOT NULL,
@@ -224,7 +393,7 @@ var BackupsBootstrap = class {
             metadata text
           )
         `);
-        await db.execute(sql`
+        await db.execute(sql2`
           CREATE TABLE IF NOT EXISTS backups (
             id text PRIMARY KEY,
             name text NOT NULL,
@@ -234,12 +403,12 @@ var BackupsBootstrap = class {
             metadata text
           )
         `);
-        await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS name text`);
-        await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS created_at timestamp`);
-        await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS created_by text`);
-        await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS backup_data text`);
-        await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS metadata text`);
-        const idTypeResult = await db.execute(sql`
+        await db.execute(sql2`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS name text`);
+        await db.execute(sql2`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS created_at timestamp`);
+        await db.execute(sql2`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS created_by text`);
+        await db.execute(sql2`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS backup_data text`);
+        await db.execute(sql2`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS metadata text`);
+        const idTypeResult = await db.execute(sql2`
           SELECT data_type
           FROM information_schema.columns
           WHERE table_schema = 'public'
@@ -249,7 +418,7 @@ var BackupsBootstrap = class {
         `);
         const idType = idTypeResult.rows?.[0]?.data_type;
         if (idType && idType !== "text") {
-          await db.execute(sql`
+          await db.execute(sql2`
             CREATE TABLE IF NOT EXISTS public.backups_new (
               id text PRIMARY KEY,
               name text NOT NULL,
@@ -259,7 +428,7 @@ var BackupsBootstrap = class {
               metadata text
             )
           `);
-          await db.execute(sql`
+          await db.execute(sql2`
             INSERT INTO public.backups_new (id, name, created_at, created_by, backup_data, metadata)
             SELECT
               id::text,
@@ -271,10 +440,10 @@ var BackupsBootstrap = class {
             FROM public.backups
             ON CONFLICT (id) DO NOTHING
           `);
-          await db.execute(sql`DROP TABLE public.backups`);
-          await db.execute(sql`ALTER TABLE public.backups_new RENAME TO backups`);
+          await db.execute(sql2`DROP TABLE public.backups`);
+          await db.execute(sql2`ALTER TABLE public.backups_new RENAME TO backups`);
         }
-        const info = await db.execute(sql`SELECT current_database() AS db, current_schema() AS schema`);
+        const info = await db.execute(sql2`SELECT current_database() AS db, current_schema() AS schema`);
         const row = info.rows?.[0];
         console.log(`\u{1F9FE} DB info: database=${row?.db ?? "unknown"}, schema=${row?.schema ?? "unknown"}`);
         this.ready = true;
@@ -290,8 +459,929 @@ var BackupsBootstrap = class {
   }
 };
 
+// server/internal/collectionBootstrap.ts
+import { randomUUID } from "crypto";
+import { sql as sql3 } from "drizzle-orm";
+var CollectionBootstrap = class {
+  constructor() {
+    this.recordsReady = false;
+    this.recordsInitPromise = null;
+    this.staffNicknamesReady = false;
+    this.staffNicknamesInitPromise = null;
+    this.adminGroupsReady = false;
+    this.adminGroupsInitPromise = null;
+    this.nicknameSessionsReady = false;
+    this.nicknameSessionsInitPromise = null;
+    this.adminVisibleNicknamesReady = false;
+    this.adminVisibleNicknamesInitPromise = null;
+  }
+  async ensureRecordsTable() {
+    if (this.recordsReady) return;
+    if (this.recordsInitPromise) {
+      await this.recordsInitPromise;
+      return;
+    }
+    this.recordsInitPromise = (async () => {
+      try {
+        await db.execute(sql3`SET search_path TO public`);
+        await db.execute(sql3`
+          CREATE TABLE IF NOT EXISTS public.collection_records (
+            id uuid PRIMARY KEY,
+            customer_name text NOT NULL,
+            ic_number text NOT NULL,
+            customer_phone text NOT NULL,
+            account_number text NOT NULL,
+            batch text NOT NULL,
+            payment_date date NOT NULL,
+            amount numeric(14,2) NOT NULL,
+            receipt_file text,
+            created_by_login text NOT NULL,
+            collection_staff_nickname text NOT NULL,
+            staff_username text NOT NULL,
+            created_at timestamp DEFAULT now() NOT NULL
+          )
+        `);
+        await db.execute(sql3`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name text`);
+        await db.execute(sql3`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number text`);
+        await db.execute(sql3`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_phone text`);
+        await db.execute(sql3`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number text`);
+        await db.execute(sql3`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS batch text`);
+        await db.execute(sql3`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS payment_date date`);
+        await db.execute(sql3`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS amount numeric(14,2)`);
+        await db.execute(sql3`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_file text`);
+        await db.execute(sql3`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_by_login text`);
+        await db.execute(sql3`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS collection_staff_nickname text`);
+        await db.execute(sql3`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS staff_username text`);
+        await db.execute(sql3`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+        await db.execute(sql3`
+          UPDATE public.collection_records
+          SET customer_phone = COALESCE(NULLIF(customer_phone, ''), '-')
+        `);
+        await db.execute(sql3`
+          UPDATE public.collection_records
+          SET created_by_login = COALESCE(NULLIF(created_by_login, ''), NULLIF(staff_username, ''), 'unknown')
+        `);
+        await db.execute(sql3`
+          UPDATE public.collection_records
+          SET collection_staff_nickname = COALESCE(NULLIF(collection_staff_nickname, ''), NULLIF(staff_username, ''), NULLIF(created_by_login, ''), 'unknown')
+        `);
+        await db.execute(sql3`
+          UPDATE public.collection_records
+          SET staff_username = COALESCE(NULLIF(staff_username, ''), NULLIF(collection_staff_nickname, ''), NULLIF(created_by_login, ''), 'unknown')
+        `);
+        await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_collection_records_payment_date ON public.collection_records(payment_date)`);
+        await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_collection_records_created_at ON public.collection_records(created_at DESC)`);
+        await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_username ON public.collection_records(staff_username)`);
+        await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_collection_records_created_by_login ON public.collection_records(created_by_login)`);
+        await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`);
+        await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`);
+        this.recordsReady = true;
+      } catch (err) {
+        console.error("ERROR Failed to ensure collection_records table:", err?.message || err);
+        throw err;
+      }
+    })();
+    try {
+      await this.recordsInitPromise;
+    } finally {
+      this.recordsInitPromise = null;
+    }
+  }
+  async ensureStaffNicknamesTable() {
+    if (this.staffNicknamesReady) return;
+    if (this.staffNicknamesInitPromise) {
+      await this.staffNicknamesInitPromise;
+      return;
+    }
+    this.staffNicknamesInitPromise = (async () => {
+      try {
+        await db.execute(sql3`SET search_path TO public`);
+        await db.execute(sql3`
+          CREATE TABLE IF NOT EXISTS public.collection_staff_nicknames (
+            id uuid PRIMARY KEY,
+            nickname text NOT NULL,
+            is_active boolean NOT NULL DEFAULT true,
+            role_scope text NOT NULL DEFAULT 'both',
+            nickname_password_hash text,
+            must_change_password boolean NOT NULL DEFAULT true,
+            password_reset_by_superuser boolean NOT NULL DEFAULT false,
+            password_updated_at timestamp,
+            created_by text,
+            created_at timestamp NOT NULL DEFAULT now()
+          )
+        `);
+        await db.execute(sql3`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS nickname text`);
+        await db.execute(sql3`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true`);
+        await db.execute(sql3`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS role_scope text DEFAULT 'both'`);
+        await db.execute(sql3`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS nickname_password_hash text`);
+        await db.execute(sql3`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS must_change_password boolean DEFAULT true`);
+        await db.execute(sql3`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS password_reset_by_superuser boolean DEFAULT false`);
+        await db.execute(sql3`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS password_updated_at timestamp`);
+        await db.execute(sql3`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_by text`);
+        await db.execute(sql3`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+        await db.execute(sql3`
+          UPDATE public.collection_staff_nicknames
+          SET
+            nickname = trim(COALESCE(nickname, '')),
+            is_active = COALESCE(is_active, true),
+            role_scope = CASE
+              WHEN lower(trim(COALESCE(role_scope, ''))) IN ('admin', 'user', 'both')
+                THEN lower(trim(COALESCE(role_scope, '')))
+              ELSE 'both'
+            END,
+            nickname_password_hash = NULLIF(trim(COALESCE(nickname_password_hash, '')), ''),
+            must_change_password = COALESCE(
+              must_change_password,
+              CASE
+                WHEN NULLIF(trim(COALESCE(nickname_password_hash, '')), '') IS NULL THEN true
+                ELSE false
+              END
+            ),
+            password_reset_by_superuser = COALESCE(password_reset_by_superuser, false),
+            created_at = COALESCE(created_at, now())
+        `);
+        await db.execute(sql3`DELETE FROM public.collection_staff_nicknames WHERE nickname = ''`);
+        await db.execute(sql3`CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_staff_nicknames_lower_unique ON public.collection_staff_nicknames(lower(nickname))`);
+        await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_active ON public.collection_staff_nicknames(is_active)`);
+        await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_role_scope ON public.collection_staff_nicknames(role_scope)`);
+        await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_must_change_password ON public.collection_staff_nicknames(must_change_password)`);
+        await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_password_reset ON public.collection_staff_nicknames(password_reset_by_superuser)`);
+        const seedRows = await db.execute(sql3`
+          SELECT DISTINCT trim(collection_staff_nickname) AS nickname
+          FROM public.collection_records
+          WHERE collection_staff_nickname IS NOT NULL
+            AND trim(collection_staff_nickname) <> ''
+          LIMIT 5000
+        `);
+        for (const row of seedRows.rows) {
+          const nickname = String(row.nickname || "").trim();
+          if (!nickname) continue;
+          await db.execute(sql3`
+            INSERT INTO public.collection_staff_nicknames (
+              id,
+              nickname,
+              is_active,
+              nickname_password_hash,
+              must_change_password,
+              password_reset_by_superuser,
+              password_updated_at,
+              created_by,
+              created_at
+            )
+            VALUES (
+              ${randomUUID()}::uuid,
+              ${nickname},
+              true,
+              NULL,
+              true,
+              false,
+              NULL,
+              'system-seed',
+              now()
+            )
+            ON CONFLICT ((lower(nickname))) DO NOTHING
+          `);
+        }
+        this.staffNicknamesReady = true;
+      } catch (err) {
+        console.error("ERROR Failed to ensure collection_staff_nicknames table:", err?.message || err);
+        throw err;
+      }
+    })();
+    try {
+      await this.staffNicknamesInitPromise;
+    } finally {
+      this.staffNicknamesInitPromise = null;
+    }
+  }
+  async ensureAdminGroupsTables() {
+    if (this.adminGroupsReady) return;
+    if (this.adminGroupsInitPromise) {
+      await this.adminGroupsInitPromise;
+      return;
+    }
+    this.adminGroupsInitPromise = (async () => {
+      try {
+        await db.execute(sql3`SET search_path TO public`);
+        await db.execute(sql3`
+          CREATE TABLE IF NOT EXISTS public.admin_groups (
+            id uuid PRIMARY KEY,
+            leader_nickname text NOT NULL,
+            created_by text NOT NULL,
+            created_at timestamp NOT NULL DEFAULT now(),
+            updated_at timestamp NOT NULL DEFAULT now()
+          )
+        `);
+        await db.execute(sql3`
+          CREATE TABLE IF NOT EXISTS public.admin_group_members (
+            id uuid PRIMARY KEY,
+            admin_group_id uuid NOT NULL,
+            member_nickname text NOT NULL,
+            created_at timestamp NOT NULL DEFAULT now()
+          )
+        `);
+        await db.execute(sql3`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS leader_nickname text`);
+        await db.execute(sql3`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_by text`);
+        await db.execute(sql3`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+        await db.execute(sql3`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+        await db.execute(sql3`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS admin_group_id uuid`);
+        await db.execute(sql3`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS member_nickname text`);
+        await db.execute(sql3`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+        await db.execute(sql3`
+          UPDATE public.admin_groups
+          SET
+            leader_nickname = trim(COALESCE(leader_nickname, '')),
+            created_by = COALESCE(NULLIF(trim(COALESCE(created_by, '')), ''), 'system-seed'),
+            created_at = COALESCE(created_at, now()),
+            updated_at = COALESCE(updated_at, now())
+        `);
+        await db.execute(sql3`DELETE FROM public.admin_groups WHERE trim(COALESCE(leader_nickname, '')) = ''`);
+        await db.execute(sql3`
+          UPDATE public.admin_group_members
+          SET
+            member_nickname = trim(COALESCE(member_nickname, '')),
+            created_at = COALESCE(created_at, now())
+        `);
+        await db.execute(sql3`DELETE FROM public.admin_group_members WHERE trim(COALESCE(member_nickname, '')) = ''`);
+        await db.execute(sql3`
+          DELETE FROM public.admin_group_members m
+          WHERE m.admin_group_id IS NULL
+             OR NOT EXISTS (
+              SELECT 1
+              FROM public.admin_groups g
+              WHERE g.id = m.admin_group_id
+            )
+        `);
+        await db.execute(sql3`
+          DELETE FROM public.admin_group_members m
+          USING public.admin_groups g
+          WHERE g.id = m.admin_group_id
+            AND lower(g.leader_nickname) = lower(m.member_nickname)
+        `);
+        await db.execute(sql3`
+          DELETE FROM public.admin_groups a
+          USING public.admin_groups b
+          WHERE lower(a.leader_nickname) = lower(b.leader_nickname)
+            AND a.ctid > b.ctid
+        `);
+        await db.execute(sql3`
+          DELETE FROM public.admin_group_members a
+          USING public.admin_group_members b
+          WHERE a.admin_group_id = b.admin_group_id
+            AND lower(a.member_nickname) = lower(b.member_nickname)
+            AND a.ctid > b.ctid
+        `);
+        await db.execute(sql3`
+          DELETE FROM public.admin_group_members a
+          USING public.admin_group_members b
+          WHERE lower(a.member_nickname) = lower(b.member_nickname)
+            AND a.ctid > b.ctid
+        `);
+        await db.execute(sql3`
+          DELETE FROM public.admin_group_members m
+          WHERE EXISTS (
+            SELECT 1
+            FROM public.admin_groups g
+            WHERE lower(g.leader_nickname) = lower(m.member_nickname)
+              AND g.id <> m.admin_group_id
+          )
+        `);
+        await db.execute(sql3`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_groups_leader_nickname_unique
+          ON public.admin_groups (lower(leader_nickname))
+        `);
+        await db.execute(sql3`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_group_members_group_member_unique
+          ON public.admin_group_members (admin_group_id, lower(member_nickname))
+        `);
+        await db.execute(sql3`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_group_members_member_unique
+          ON public.admin_group_members (lower(member_nickname))
+        `);
+        await db.execute(sql3`
+          CREATE INDEX IF NOT EXISTS idx_admin_group_members_group
+          ON public.admin_group_members (admin_group_id)
+        `);
+        this.adminGroupsReady = true;
+      } catch (err) {
+        console.error("ERROR Failed to ensure admin group tables:", err?.message || err);
+        throw err;
+      }
+    })();
+    try {
+      await this.adminGroupsInitPromise;
+    } finally {
+      this.adminGroupsInitPromise = null;
+    }
+  }
+  async ensureNicknameSessionsTable() {
+    if (this.nicknameSessionsReady) return;
+    if (this.nicknameSessionsInitPromise) {
+      await this.nicknameSessionsInitPromise;
+      return;
+    }
+    this.nicknameSessionsInitPromise = (async () => {
+      try {
+        await db.execute(sql3`SET search_path TO public`);
+        await db.execute(sql3`
+          CREATE TABLE IF NOT EXISTS public.collection_nickname_sessions (
+            activity_id text PRIMARY KEY,
+            username text NOT NULL,
+            user_role text NOT NULL,
+            nickname text NOT NULL,
+            verified_at timestamp NOT NULL DEFAULT now(),
+            updated_at timestamp NOT NULL DEFAULT now()
+          )
+        `);
+        await db.execute(sql3`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS username text`);
+        await db.execute(sql3`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS user_role text`);
+        await db.execute(sql3`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS nickname text`);
+        await db.execute(sql3`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS verified_at timestamp DEFAULT now()`);
+        await db.execute(sql3`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+        await db.execute(sql3`
+          UPDATE public.collection_nickname_sessions
+          SET
+            username = trim(COALESCE(username, '')),
+            user_role = trim(COALESCE(user_role, '')),
+            nickname = trim(COALESCE(nickname, '')),
+            verified_at = COALESCE(verified_at, now()),
+            updated_at = COALESCE(updated_at, now())
+        `);
+        await db.execute(sql3`
+          DELETE FROM public.collection_nickname_sessions
+          WHERE trim(COALESCE(username, '')) = ''
+            OR trim(COALESCE(user_role, '')) = ''
+            OR trim(COALESCE(nickname, '')) = ''
+        `);
+        await db.execute(sql3`
+          CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_username
+          ON public.collection_nickname_sessions (username)
+        `);
+        await db.execute(sql3`
+          CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_nickname
+          ON public.collection_nickname_sessions (lower(nickname))
+        `);
+        await db.execute(sql3`
+          CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_updated_at
+          ON public.collection_nickname_sessions (updated_at DESC)
+        `);
+        this.nicknameSessionsReady = true;
+      } catch (err) {
+        console.error("ERROR Failed to ensure collection nickname session table:", err?.message || err);
+        throw err;
+      }
+    })();
+    try {
+      await this.nicknameSessionsInitPromise;
+    } finally {
+      this.nicknameSessionsInitPromise = null;
+    }
+  }
+  async ensureAdminVisibleNicknamesTable() {
+    if (this.adminVisibleNicknamesReady) return;
+    if (this.adminVisibleNicknamesInitPromise) {
+      await this.adminVisibleNicknamesInitPromise;
+      return;
+    }
+    this.adminVisibleNicknamesInitPromise = (async () => {
+      try {
+        await db.execute(sql3`SET search_path TO public`);
+        await db.execute(sql3`
+          CREATE TABLE IF NOT EXISTS public.admin_visible_nicknames (
+            id uuid PRIMARY KEY,
+            admin_user_id text NOT NULL,
+            nickname_id uuid NOT NULL,
+            created_by_superuser text,
+            created_at timestamp NOT NULL DEFAULT now()
+          )
+        `);
+        await db.execute(sql3`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS admin_user_id text`);
+        await db.execute(sql3`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS nickname_id uuid`);
+        await db.execute(sql3`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS created_by_superuser text`);
+        await db.execute(sql3`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+        await db.execute(sql3`
+          UPDATE public.admin_visible_nicknames
+          SET created_at = COALESCE(created_at, now())
+        `);
+        await db.execute(sql3`
+          DELETE FROM public.admin_visible_nicknames avn
+          WHERE avn.admin_user_id IS NULL
+            OR avn.nickname_id IS NULL
+        `);
+        await db.execute(sql3`
+          DELETE FROM public.admin_visible_nicknames avn
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM public.users u
+            WHERE u.id = avn.admin_user_id
+              AND u.role = 'admin'
+          )
+        `);
+        await db.execute(sql3`
+          DELETE FROM public.admin_visible_nicknames avn
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM public.collection_staff_nicknames c
+            WHERE c.id = avn.nickname_id
+          )
+        `);
+        await db.execute(sql3`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_visible_nicknames_admin_nickname_unique
+          ON public.admin_visible_nicknames(admin_user_id, nickname_id)
+        `);
+        await db.execute(sql3`
+          CREATE INDEX IF NOT EXISTS idx_admin_visible_nicknames_admin
+          ON public.admin_visible_nicknames(admin_user_id)
+        `);
+        await db.execute(sql3`
+          CREATE INDEX IF NOT EXISTS idx_admin_visible_nicknames_nickname
+          ON public.admin_visible_nicknames(nickname_id)
+        `);
+        const existingCount = await db.execute(sql3`
+          SELECT COUNT(*)::int AS total
+          FROM public.admin_visible_nicknames
+          LIMIT 1
+        `);
+        const total = Number(existingCount.rows?.[0]?.total ?? 0);
+        if (total === 0) {
+          const admins = await db.execute(sql3`
+            SELECT id
+            FROM public.users
+            WHERE role = 'admin'
+            ORDER BY username ASC
+            LIMIT 5000
+          `);
+          const nicknames = await db.execute(sql3`
+            SELECT id
+            FROM public.collection_staff_nicknames
+            WHERE is_active = true
+            ORDER BY lower(nickname) ASC
+            LIMIT 5000
+          `);
+          const adminIds = (admins.rows || []).map((row) => String(row.id || "").trim()).filter(Boolean);
+          const nicknameIds = (nicknames.rows || []).map((row) => String(row.id || "").trim()).filter(Boolean);
+          for (const adminUserId of adminIds) {
+            for (const nicknameId of nicknameIds) {
+              await db.execute(sql3`
+                INSERT INTO public.admin_visible_nicknames (
+                  id,
+                  admin_user_id,
+                  nickname_id,
+                  created_by_superuser,
+                  created_at
+                )
+                VALUES (
+                  ${randomUUID()}::uuid,
+                  ${adminUserId},
+                  ${nicknameId}::uuid,
+                  'system-seed',
+                  now()
+                )
+                ON CONFLICT (admin_user_id, nickname_id) DO NOTHING
+              `);
+            }
+          }
+        }
+        this.adminVisibleNicknamesReady = true;
+      } catch (err) {
+        console.error("ERROR Failed to ensure admin_visible_nicknames table:", err?.message || err);
+        throw err;
+      }
+    })();
+    try {
+      await this.adminVisibleNicknamesInitPromise;
+    } finally {
+      this.adminVisibleNicknamesInitPromise = null;
+    }
+  }
+};
+
+// server/internal/coreSchemaBootstrap.ts
+import { sql as sql4 } from "drizzle-orm";
+var CoreSchemaBootstrap = class {
+  constructor() {
+    this.importsReady = false;
+    this.importsInitPromise = null;
+    this.dataRowsReady = false;
+    this.dataRowsInitPromise = null;
+    this.userActivityReady = false;
+    this.userActivityInitPromise = null;
+    this.auditLogsReady = false;
+    this.auditLogsInitPromise = null;
+    this.performanceIndexesReady = false;
+    this.performanceIndexesInitPromise = null;
+    this.bannedSessionsReady = false;
+    this.bannedSessionsInitPromise = null;
+  }
+  async ensureImportsTable() {
+    if (this.importsReady) return;
+    if (this.importsInitPromise) {
+      await this.importsInitPromise;
+      return;
+    }
+    this.importsInitPromise = (async () => {
+      try {
+        await db.execute(sql4`SET search_path TO public`);
+        await db.execute(sql4`
+          CREATE TABLE IF NOT EXISTS public.imports (
+            id text PRIMARY KEY,
+            name text NOT NULL,
+            filename text NOT NULL,
+            created_at timestamp DEFAULT now(),
+            is_deleted boolean DEFAULT false,
+            created_by text
+          )
+        `);
+        await db.execute(sql4`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS name text`);
+        await db.execute(sql4`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS filename text`);
+        await db.execute(sql4`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+        await db.execute(sql4`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS is_deleted boolean DEFAULT false`);
+        await db.execute(sql4`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS created_by text`);
+        await db.execute(sql4`
+          UPDATE public.imports
+          SET
+            name = COALESCE(NULLIF(name, ''), NULLIF(filename, ''), 'Untitled Import'),
+            filename = COALESCE(NULLIF(filename, ''), COALESCE(NULLIF(name, ''), 'unknown.csv')),
+            created_at = COALESCE(created_at, now()),
+            is_deleted = COALESCE(is_deleted, false)
+        `);
+        await db.execute(sql4`ALTER TABLE public.imports ALTER COLUMN name SET NOT NULL`);
+        await db.execute(sql4`ALTER TABLE public.imports ALTER COLUMN filename SET NOT NULL`);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_imports_created_at ON public.imports(created_at DESC)`);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_imports_is_deleted ON public.imports(is_deleted)`);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_imports_created_by ON public.imports(created_by)`);
+        this.importsReady = true;
+      } catch (err) {
+        console.error("Failed to ensure imports table:", err?.message || err);
+        throw err;
+      }
+    })();
+    try {
+      await this.importsInitPromise;
+    } finally {
+      this.importsInitPromise = null;
+    }
+  }
+  async ensureDataRowsTable() {
+    if (this.dataRowsReady) return;
+    if (this.dataRowsInitPromise) {
+      await this.dataRowsInitPromise;
+      return;
+    }
+    this.dataRowsInitPromise = (async () => {
+      try {
+        await db.execute(sql4`SET search_path TO public`);
+        await db.execute(sql4`
+          CREATE TABLE IF NOT EXISTS public.data_rows (
+            id text PRIMARY KEY,
+            import_id text NOT NULL,
+            json_data jsonb NOT NULL DEFAULT '{}'::jsonb
+          )
+        `);
+        await db.execute(sql4`ALTER TABLE public.data_rows ADD COLUMN IF NOT EXISTS import_id text`);
+        await db.execute(sql4`ALTER TABLE public.data_rows ADD COLUMN IF NOT EXISTS json_data jsonb DEFAULT '{}'::jsonb`);
+        await db.execute(sql4`
+          UPDATE public.data_rows
+          SET json_data = COALESCE(json_data, '{}'::jsonb)
+        `);
+        await db.execute(sql4`ALTER TABLE public.data_rows ALTER COLUMN import_id SET NOT NULL`);
+        await db.execute(sql4`ALTER TABLE public.data_rows ALTER COLUMN json_data SET NOT NULL`);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_data_rows_import_id ON public.data_rows(import_id)`);
+        this.dataRowsReady = true;
+      } catch (err) {
+        console.error("Failed to ensure data_rows table:", err?.message || err);
+        throw err;
+      }
+    })();
+    try {
+      await this.dataRowsInitPromise;
+    } finally {
+      this.dataRowsInitPromise = null;
+    }
+  }
+  async ensureUserActivityTable() {
+    if (this.userActivityReady) return;
+    if (this.userActivityInitPromise) {
+      await this.userActivityInitPromise;
+      return;
+    }
+    this.userActivityInitPromise = (async () => {
+      try {
+        await db.execute(sql4`SET search_path TO public`);
+        await db.execute(sql4`
+          CREATE TABLE IF NOT EXISTS public.user_activity (
+            id text PRIMARY KEY,
+            user_id text NOT NULL,
+            username text NOT NULL,
+            role text NOT NULL,
+            pc_name text,
+            browser text,
+            fingerprint text,
+            ip_address text,
+            login_time timestamp,
+            logout_time timestamp,
+            last_activity_time timestamp,
+            is_active boolean DEFAULT true,
+            logout_reason text
+          )
+        `);
+        await db.execute(sql4`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS user_id text`);
+        await db.execute(sql4`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS username text`);
+        await db.execute(sql4`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS role text`);
+        await db.execute(sql4`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS pc_name text`);
+        await db.execute(sql4`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS browser text`);
+        await db.execute(sql4`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS fingerprint text`);
+        await db.execute(sql4`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS ip_address text`);
+        await db.execute(sql4`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS login_time timestamp`);
+        await db.execute(sql4`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS logout_time timestamp`);
+        await db.execute(sql4`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS last_activity_time timestamp`);
+        await db.execute(sql4`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true`);
+        await db.execute(sql4`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS logout_reason text`);
+        await db.execute(sql4`
+          UPDATE public.user_activity
+          SET
+            is_active = COALESCE(is_active, true),
+            login_time = COALESCE(login_time, now()),
+            last_activity_time = COALESCE(last_activity_time, login_time, now())
+        `);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_user_activity_username ON public.user_activity(username)`);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_user_activity_is_active ON public.user_activity(is_active)`);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_user_activity_login_time ON public.user_activity(login_time DESC)`);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_user_activity_last_activity_time ON public.user_activity(last_activity_time DESC)`);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_user_activity_fingerprint ON public.user_activity(fingerprint)`);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_user_activity_ip_address ON public.user_activity(ip_address)`);
+        this.userActivityReady = true;
+      } catch (err) {
+        console.error("Failed to ensure user_activity table:", err?.message || err);
+        throw err;
+      }
+    })();
+    try {
+      await this.userActivityInitPromise;
+    } finally {
+      this.userActivityInitPromise = null;
+    }
+  }
+  async ensureAuditLogsTable() {
+    if (this.auditLogsReady) return;
+    if (this.auditLogsInitPromise) {
+      await this.auditLogsInitPromise;
+      return;
+    }
+    this.auditLogsInitPromise = (async () => {
+      try {
+        await db.execute(sql4`SET search_path TO public`);
+        await db.execute(sql4`
+          CREATE TABLE IF NOT EXISTS public.audit_logs (
+            id text PRIMARY KEY,
+            action text NOT NULL,
+            performed_by text NOT NULL,
+            target_user text,
+            target_resource text,
+            details text,
+            timestamp timestamp DEFAULT now()
+          )
+        `);
+        await db.execute(sql4`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS action text`);
+        await db.execute(sql4`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS performed_by text`);
+        await db.execute(sql4`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS target_user text`);
+        await db.execute(sql4`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS target_resource text`);
+        await db.execute(sql4`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS details text`);
+        await db.execute(sql4`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS timestamp timestamp DEFAULT now()`);
+        await db.execute(sql4`
+          UPDATE public.audit_logs
+          SET timestamp = COALESCE(timestamp, now())
+        `);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON public.audit_logs(timestamp DESC)`);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON public.audit_logs(action)`);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_audit_logs_performed_by ON public.audit_logs(performed_by)`);
+        this.auditLogsReady = true;
+      } catch (err) {
+        console.error("Failed to ensure audit_logs table:", err?.message || err);
+        throw err;
+      }
+    })();
+    try {
+      await this.auditLogsInitPromise;
+    } finally {
+      this.auditLogsInitPromise = null;
+    }
+  }
+  async ensurePerformanceIndexes() {
+    if (this.performanceIndexesReady) return;
+    if (this.performanceIndexesInitPromise) {
+      await this.performanceIndexesInitPromise;
+      return;
+    }
+    this.performanceIndexesInitPromise = (async () => {
+      try {
+        await db.execute(sql4`SET search_path TO public`);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_data_rows_import_id ON data_rows(import_id)`);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_imports_is_deleted ON imports(is_deleted)`);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_user_activity_login_time ON user_activity(login_time)`);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_user_activity_logout_time ON user_activity(logout_time)`);
+        try {
+          await db.execute(sql4`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_json_text_trgm
+            ON data_rows
+            USING GIN ((json_data::text) gin_trgm_ops)
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_mykad_digits
+            ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No. MyKad',''), '[^0-9]', '', 'g')))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_idno_digits
+            ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'ID No',''), '[^0-9]', '', 'g')))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_nopengenalan_digits
+            ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No Pengenalan',''), '[^0-9]', '', 'g')))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_ic_digits
+            ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'IC',''), '[^0-9]', '', 'g')))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_cardno_digits
+            ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Card No',''), '[^0-9]', '', 'g')))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_accountno_digits
+            ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Account No',''), '[^0-9]', '', 'g')))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_accountnumber_digits
+            ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Account Number',''), '[^0-9]', '', 'g')))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_akaunpemohon_digits
+            ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Nombor Akaun Bank Pemohon',''), '[^0-9]', '', 'g')))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_noakaun_digits
+            ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No Akaun',''), '[^0-9]', '', 'g')))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_telrumah_digits
+            ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No. Telefon Rumah',''), '[^0-9]', '', 'g')))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_telbimbit_digits
+            ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No. Telefon Bimbit',''), '[^0-9]', '', 'g')))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_phone_digits
+            ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Phone',''), '[^0-9]', '', 'g')))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_handphone_digits
+            ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Handphone',''), '[^0-9]', '', 'g')))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_officephone_digits
+            ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'OfficePhone',''), '[^0-9]', '', 'g')))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_nob_trgm
+            ON data_rows
+            USING GIN (((json_data::jsonb)->>'NOB') gin_trgm_ops)
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_employer_name_trgm
+            ON data_rows
+            USING GIN (((json_data::jsonb)->>'EMPLOYER NAME') gin_trgm_ops)
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_nature_business_trgm
+            ON data_rows
+            USING GIN (((json_data::jsonb)->>'NATURE OF BUSINESS') gin_trgm_ops)
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_nama_trgm
+            ON data_rows
+            USING GIN (((json_data::jsonb)->>'Nama') gin_trgm_ops)
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_customer_name_trgm
+            ON data_rows
+            USING GIN (((json_data::jsonb)->>'Customer Name') gin_trgm_ops)
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_name_trgm
+            ON data_rows
+            USING GIN (((json_data::jsonb)->>'name') gin_trgm_ops)
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_mykad_exact
+            ON data_rows (((json_data::jsonb)->>'No. MyKad'))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_idno_exact
+            ON data_rows (((json_data::jsonb)->>'ID No'))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_nopengenalan_exact
+            ON data_rows (((json_data::jsonb)->>'No Pengenalan'))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_ic_exact
+            ON data_rows (((json_data::jsonb)->>'IC'))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_accountno_exact
+            ON data_rows (((json_data::jsonb)->>'Account No'))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_accountnumber_exact
+            ON data_rows (((json_data::jsonb)->>'Account Number'))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_cardno_exact
+            ON data_rows (((json_data::jsonb)->>'Card No'))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_noakaun_exact
+            ON data_rows (((json_data::jsonb)->>'No Akaun'))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_akaunpemohon_exact
+            ON data_rows (((json_data::jsonb)->>'Nombor Akaun Bank Pemohon'))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_telrumah_exact
+            ON data_rows (((json_data::jsonb)->>'No. Telefon Rumah'))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_telbimbit_exact
+            ON data_rows (((json_data::jsonb)->>'No. Telefon Bimbit'))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_phone_exact
+            ON data_rows (((json_data::jsonb)->>'Phone'))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_handphone_exact
+            ON data_rows (((json_data::jsonb)->>'Handphone'))
+          `);
+          await db.execute(sql4`
+            CREATE INDEX IF NOT EXISTS idx_data_rows_officephone_exact
+            ON data_rows (((json_data::jsonb)->>'OfficePhone'))
+          `);
+        } catch (err) {
+          console.warn("WARN pg_trgm not available; skipping trigram index:", err?.message || err);
+        }
+        this.performanceIndexesReady = true;
+      } catch (err) {
+        console.error("ERROR Failed to ensure performance indexes:", err?.message || err);
+      }
+    })();
+    try {
+      await this.performanceIndexesInitPromise;
+    } finally {
+      this.performanceIndexesInitPromise = null;
+    }
+  }
+  async ensureBannedSessionsTable() {
+    if (this.bannedSessionsReady) return;
+    if (this.bannedSessionsInitPromise) {
+      await this.bannedSessionsInitPromise;
+      return;
+    }
+    this.bannedSessionsInitPromise = (async () => {
+      try {
+        await db.execute(sql4`SET search_path TO public`);
+        await db.execute(sql4`
+          CREATE TABLE IF NOT EXISTS public.banned_sessions (
+            id text PRIMARY KEY,
+            username text NOT NULL,
+            role text NOT NULL,
+            activity_id text NOT NULL,
+            fingerprint text,
+            ip_address text,
+            browser text,
+            pc_name text,
+            banned_at timestamp DEFAULT now()
+          )
+        `);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_banned_sessions_fingerprint ON public.banned_sessions(fingerprint)`);
+        await db.execute(sql4`CREATE INDEX IF NOT EXISTS idx_banned_sessions_ip ON public.banned_sessions(ip_address)`);
+        this.bannedSessionsReady = true;
+      } catch (err) {
+        console.error("ERROR Failed to ensure banned_sessions table:", err?.message || err);
+      }
+    })();
+    try {
+      await this.bannedSessionsInitPromise;
+    } finally {
+      this.bannedSessionsInitPromise = null;
+    }
+  }
+};
+
 // server/internal/settingsBootstrap.ts
-import { sql as sql2 } from "drizzle-orm";
+import { sql as sql5 } from "drizzle-orm";
 
 // server/config/system-settings.ts
 var ROLE_TAB_SETTINGS = {
@@ -341,9 +1431,9 @@ var SettingsBootstrap = class {
     }
     this.initPromise = (async () => {
       try {
-        await db.execute(sql2`SET search_path TO public`);
-        await db.execute(sql2`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
-        await db.execute(sql2`
+        await db.execute(sql5`SET search_path TO public`);
+        await db.execute(sql5`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
+        await db.execute(sql5`
           CREATE TABLE IF NOT EXISTS public.setting_categories (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             name text UNIQUE NOT NULL,
@@ -351,7 +1441,7 @@ var SettingsBootstrap = class {
             created_at timestamp DEFAULT now()
           )
         `);
-        await db.execute(sql2`
+        await db.execute(sql5`
           CREATE TABLE IF NOT EXISTS public.system_settings (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             category_id uuid REFERENCES public.setting_categories(id) ON DELETE CASCADE,
@@ -365,7 +1455,7 @@ var SettingsBootstrap = class {
             updated_at timestamp DEFAULT now()
           )
         `);
-        await db.execute(sql2`
+        await db.execute(sql5`
           CREATE TABLE IF NOT EXISTS public.setting_options (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             setting_id uuid REFERENCES public.system_settings(id) ON DELETE CASCADE,
@@ -374,7 +1464,7 @@ var SettingsBootstrap = class {
           )
         `);
         try {
-          await db.execute(sql2`
+          await db.execute(sql5`
             WITH ranked AS (
               SELECT
                 ctid,
@@ -390,18 +1480,18 @@ var SettingsBootstrap = class {
           console.warn("\u26A0\uFE0F setting_options duplicate cleanup skipped:", dupCleanupErr?.message || dupCleanupErr);
         }
         try {
-          await db.execute(sql2`
+          await db.execute(sql5`
             CREATE UNIQUE INDEX IF NOT EXISTS idx_setting_options_unique_value
             ON public.setting_options (setting_id, value)
           `);
         } catch (idxErr) {
           console.warn("\u26A0\uFE0F setting_options unique index not created:", idxErr?.message || idxErr);
         }
-        await db.execute(sql2`
+        await db.execute(sql5`
           CREATE INDEX IF NOT EXISTS idx_setting_options_setting_id
           ON public.setting_options (setting_id)
         `);
-        await db.execute(sql2`
+        await db.execute(sql5`
           CREATE TABLE IF NOT EXISTS public.role_setting_permissions (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             role text NOT NULL,
@@ -410,11 +1500,11 @@ var SettingsBootstrap = class {
             can_edit boolean DEFAULT false
           )
         `);
-        await db.execute(sql2`
+        await db.execute(sql5`
           CREATE UNIQUE INDEX IF NOT EXISTS idx_role_setting_permissions_unique
           ON public.role_setting_permissions (role, setting_key)
         `);
-        await db.execute(sql2`
+        await db.execute(sql5`
           CREATE TABLE IF NOT EXISTS public.setting_versions (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             setting_key text NOT NULL,
@@ -424,11 +1514,11 @@ var SettingsBootstrap = class {
             changed_at timestamp DEFAULT now()
           )
         `);
-        await db.execute(sql2`
+        await db.execute(sql5`
           CREATE INDEX IF NOT EXISTS idx_setting_versions_key_time
           ON public.setting_versions (setting_key, changed_at DESC)
         `);
-        await db.execute(sql2`
+        await db.execute(sql5`
           CREATE TABLE IF NOT EXISTS public.feature_flags (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             key text UNIQUE NOT NULL,
@@ -447,7 +1537,7 @@ var SettingsBootstrap = class {
           { name: "System Monitoring", description: "WebSocket and runtime diagnostics settings." }
         ];
         for (const category of categories) {
-          await db.execute(sql2`
+          await db.execute(sql5`
             INSERT INTO public.setting_categories (name, description)
             VALUES (${category.name}, ${category.description})
             ON CONFLICT (name) DO UPDATE SET
@@ -671,7 +1761,7 @@ var SettingsBootstrap = class {
           }
         }
         for (const setting of settingsSeed) {
-          await db.execute(sql2`
+          await db.execute(sql5`
             INSERT INTO public.system_settings (
               category_id, key, label, description, type, value, default_value, is_critical, updated_at
             )
@@ -695,7 +1785,7 @@ var SettingsBootstrap = class {
               is_critical = EXCLUDED.is_critical
           `);
         }
-        const maintenanceTypeRes = await db.execute(sql2`
+        const maintenanceTypeRes = await db.execute(sql5`
           SELECT id
           FROM public.system_settings
           WHERE key = 'maintenance_type'
@@ -703,11 +1793,11 @@ var SettingsBootstrap = class {
         `);
         const maintenanceTypeId = String(maintenanceTypeRes.rows[0]?.id || "").trim();
         if (maintenanceTypeId) {
-          await db.execute(sql2`
+          await db.execute(sql5`
             DELETE FROM public.setting_options
             WHERE setting_id = ${maintenanceTypeId}
           `);
-          await db.execute(sql2`
+          await db.execute(sql5`
             INSERT INTO public.setting_options (setting_id, value, label)
             VALUES
               (${maintenanceTypeId}, 'soft', 'Soft Maintenance'),
@@ -726,21 +1816,21 @@ var SettingsBootstrap = class {
           "maintenance_end_time"
         ]);
         for (const setting of settingsSeed) {
-          await db.execute(sql2`
+          await db.execute(sql5`
             INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
             VALUES ('superuser', ${setting.key}, true, true)
             ON CONFLICT (role, setting_key) DO UPDATE SET
               can_view = EXCLUDED.can_view,
               can_edit = EXCLUDED.can_edit
           `);
-          await db.execute(sql2`
+          await db.execute(sql5`
             INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
             VALUES ('admin', ${setting.key}, true, ${adminEditable.has(setting.key)})
             ON CONFLICT (role, setting_key) DO UPDATE SET
               can_view = EXCLUDED.can_view,
               can_edit = EXCLUDED.can_edit
           `);
-          await db.execute(sql2`
+          await db.execute(sql5`
             INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
             VALUES ('user', ${setting.key}, false, false)
             ON CONFLICT (role, setting_key) DO UPDATE SET
@@ -762,7 +1852,7 @@ var SettingsBootstrap = class {
 };
 
 // server/internal/spatialBootstrap.ts
-import { sql as sql3 } from "drizzle-orm";
+import { sql as sql6 } from "drizzle-orm";
 var SpatialBootstrap = class {
   constructor() {
     this.ready = false;
@@ -776,9 +1866,9 @@ var SpatialBootstrap = class {
     }
     this.initPromise = (async () => {
       try {
-        await db.execute(sql3`SET search_path TO public`);
-        await db.execute(sql3`CREATE EXTENSION IF NOT EXISTS postgis`);
-        await db.execute(sql3`
+        await db.execute(sql6`SET search_path TO public`);
+        await db.execute(sql6`CREATE EXTENSION IF NOT EXISTS postgis`);
+        await db.execute(sql6`
           CREATE TABLE IF NOT EXISTS public.aeon_branches (
             id text PRIMARY KEY,
             name text NOT NULL,
@@ -795,7 +1885,7 @@ var SpatialBootstrap = class {
             branch_lng double precision NOT NULL
           )
         `);
-        await db.execute(sql3`
+        await db.execute(sql6`
           CREATE TABLE IF NOT EXISTS public.aeon_branch_postcodes (
             postcode text PRIMARY KEY,
             lat double precision NOT NULL,
@@ -804,18 +1894,18 @@ var SpatialBootstrap = class {
             state text
           )
         `);
-        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS branch_address text`);
-        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS phone_number text`);
-        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS fax_number text`);
-        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS business_hour text`);
-        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS day_open text`);
-        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS atm_cdm text`);
-        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS inquiry_availability text`);
-        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS application_availability text`);
-        await db.execute(sql3`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS aeon_lounge text`);
-        await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_aeon_branches_lat_lng ON public.aeon_branches (branch_lat, branch_lng)`);
-        await db.execute(sql3`CREATE UNIQUE INDEX IF NOT EXISTS idx_aeon_branches_name_unique ON public.aeon_branches (lower(name))`);
-        await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_aeon_postcodes ON public.aeon_branch_postcodes (postcode)`);
+        await db.execute(sql6`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS branch_address text`);
+        await db.execute(sql6`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS phone_number text`);
+        await db.execute(sql6`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS fax_number text`);
+        await db.execute(sql6`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS business_hour text`);
+        await db.execute(sql6`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS day_open text`);
+        await db.execute(sql6`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS atm_cdm text`);
+        await db.execute(sql6`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS inquiry_availability text`);
+        await db.execute(sql6`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS application_availability text`);
+        await db.execute(sql6`ALTER TABLE public.aeon_branches ADD COLUMN IF NOT EXISTS aeon_lounge text`);
+        await db.execute(sql6`CREATE INDEX IF NOT EXISTS idx_aeon_branches_lat_lng ON public.aeon_branches (branch_lat, branch_lng)`);
+        await db.execute(sql6`CREATE UNIQUE INDEX IF NOT EXISTS idx_aeon_branches_name_unique ON public.aeon_branches (lower(name))`);
+        await db.execute(sql6`CREATE INDEX IF NOT EXISTS idx_aeon_postcodes ON public.aeon_branch_postcodes (postcode)`);
         this.ready = true;
       } catch (err) {
         console.warn("\u26A0\uFE0F Failed to ensure PostGIS tables:", err?.message || err);
@@ -829,27 +1919,295 @@ var SpatialBootstrap = class {
   }
 };
 
-// server/repositories/auth.repository.ts
+// server/internal/usersBootstrap.ts
 import bcrypt from "bcrypt";
-import crypto from "crypto";
-import { inArray, sql as sql4 } from "drizzle-orm";
+import { randomUUID as randomUUID2 } from "crypto";
+import { count, sql as sql7 } from "drizzle-orm";
+
+// shared/schema-postgres.ts
+import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
+import { relations } from "drizzle-orm";
+import { jsonb } from "drizzle-orm/pg-core";
+var users = pgTable("users", {
+  id: text("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  role: text("role").notNull().default("user"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  passwordChangedAt: timestamp("password_changed_at"),
+  isBanned: boolean("is_banned").default(false)
+});
+var imports = pgTable("imports", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  filename: text("filename").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  isDeleted: boolean("is_deleted").default(false),
+  createdBy: text("created_by")
+});
+var dataRows = pgTable("data_rows", {
+  id: text("id").primaryKey(),
+  importId: text("import_id").notNull(),
+  jsonDataJsonb: jsonb("json_data").notNull()
+  // guna satu column sahaja
+});
+var userActivity = pgTable("user_activity", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  username: text("username").notNull(),
+  role: text("role").notNull(),
+  pcName: text("pc_name"),
+  browser: text("browser"),
+  fingerprint: text("fingerprint"),
+  ipAddress: text("ip_address"),
+  loginTime: timestamp("login_time"),
+  logoutTime: timestamp("logout_time"),
+  lastActivityTime: timestamp("last_activity_time"),
+  isActive: boolean("is_active").default(true),
+  logoutReason: text("logout_reason")
+});
+var auditLogs = pgTable("audit_logs", {
+  id: text("id").primaryKey(),
+  action: text("action").notNull(),
+  performedBy: text("performed_by").notNull(),
+  targetUser: text("target_user"),
+  targetResource: text("target_resource"),
+  details: text("details"),
+  timestamp: timestamp("timestamp").defaultNow()
+});
+var backups = pgTable("backups", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  createdBy: text("created_by").notNull(),
+  backupData: text("backup_data").notNull(),
+  metadata: text("metadata")
+});
+var insertUserSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+  role: z.string().optional()
+});
+var insertImportSchema = createInsertSchema(imports).pick({
+  name: true,
+  filename: true
+});
+var insertDataRowSchema = z.object({
+  importId: z.string(),
+  jsonDataJsonb: z.record(z.any())
+});
+var insertUserActivitySchema = createInsertSchema(userActivity).pick({
+  userId: true,
+  username: true,
+  role: true,
+  pcName: true,
+  browser: true,
+  fingerprint: true,
+  ipAddress: true
+});
+var insertAuditLogSchema = createInsertSchema(auditLogs).pick({
+  action: true,
+  performedBy: true,
+  targetUser: true,
+  targetResource: true,
+  details: true
+});
+var insertBackupSchema = createInsertSchema(backups).pick({
+  name: true,
+  createdBy: true,
+  backupData: true,
+  metadata: true
+});
+var loginSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+  fingerprint: z.string().optional()
+});
+var importRelations = relations(imports, ({ many }) => ({
+  rows: many(dataRows)
+}));
+var dataRowRelations = relations(dataRows, ({ one }) => ({
+  import: one(imports, {
+    fields: [dataRows.importId],
+    references: [imports.id]
+  })
+}));
+
+// server/internal/usersBootstrap.ts
 var BCRYPT_COST = 12;
+var UsersBootstrap = class {
+  constructor() {
+    this.ready = false;
+    this.initPromise = null;
+    this.seedCompleted = false;
+    this.seedPromise = null;
+  }
+  async ensureTable() {
+    if (this.ready) return;
+    if (this.initPromise) {
+      await this.initPromise;
+      return;
+    }
+    this.initPromise = (async () => {
+      try {
+        await db.execute(sql7`SET search_path TO public`);
+        await db.execute(sql7`
+          CREATE TABLE IF NOT EXISTS public.users (
+            id text PRIMARY KEY,
+            username text NOT NULL,
+            role text NOT NULL DEFAULT 'user',
+            password_hash text,
+            password text,
+            is_banned boolean DEFAULT false,
+            created_at timestamp DEFAULT now(),
+            updated_at timestamp DEFAULT now(),
+            password_changed_at timestamp
+          )
+        `);
+        await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role text`);
+        await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_hash text`);
+        await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password text`);
+        await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_banned boolean DEFAULT false`);
+        await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+        await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+        await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_changed_at timestamp`);
+        await db.execute(sql7`
+          UPDATE public.users
+          SET password_hash = password
+          WHERE password_hash IS NULL
+            AND password IS NOT NULL
+        `);
+        const missingHashRows = await db.execute(sql7`
+          SELECT id
+          FROM public.users
+          WHERE password_hash IS NULL
+        `);
+        for (const row of missingHashRows.rows) {
+          const userId = String(row.id || "").trim();
+          if (!userId) continue;
+          const fallbackHash = await bcrypt.hash(randomUUID2(), BCRYPT_COST);
+          await db.execute(sql7`
+            UPDATE public.users
+            SET password_hash = ${fallbackHash}
+            WHERE id = ${userId}
+          `);
+        }
+        await db.execute(sql7`
+          UPDATE public.users
+          SET
+            role = COALESCE(NULLIF(role, ''), 'user'),
+            created_at = COALESCE(created_at, now()),
+            updated_at = COALESCE(updated_at, now()),
+            is_banned = COALESCE(is_banned, false)
+        `);
+        await db.execute(sql7`ALTER TABLE public.users ALTER COLUMN username SET NOT NULL`);
+        await db.execute(sql7`ALTER TABLE public.users ALTER COLUMN role SET NOT NULL`);
+        await db.execute(sql7`ALTER TABLE public.users ALTER COLUMN password_hash SET NOT NULL`);
+        await db.execute(sql7`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower_unique ON public.users (lower(username))`);
+        await db.execute(sql7`CREATE INDEX IF NOT EXISTS idx_users_username_lower ON public.users (lower(username))`);
+        await db.execute(sql7`CREATE INDEX IF NOT EXISTS idx_users_role ON public.users (role)`);
+        this.ready = true;
+      } catch (err) {
+        console.error("ERROR Failed to ensure users table:", err?.message || err);
+        throw err;
+      }
+    })();
+    try {
+      await this.initPromise;
+    } finally {
+      this.initPromise = null;
+    }
+  }
+  async seedDefaultUsers() {
+    if (this.seedCompleted) return;
+    if (this.seedPromise) {
+      await this.seedPromise;
+      return;
+    }
+    this.seedPromise = (async () => {
+      const shouldSeedConfiguredUsers = shouldSeedDefaultUsers();
+      const [{ value: existingUserCount }] = await db.select({ value: count() }).from(users);
+      const isFreshLocalBootstrap = !shouldSeedConfiguredUsers && Number(existingUserCount || 0) === 0 && process.env.NODE_ENV !== "production";
+      const defaultUsers = [
+        {
+          username: process.env.SEED_SUPERUSER_USERNAME || "superuser",
+          password: process.env.SEED_SUPERUSER_PASSWORD || "",
+          role: "superuser"
+        },
+        {
+          username: process.env.SEED_ADMIN_USERNAME || "admin1",
+          password: process.env.SEED_ADMIN_PASSWORD || "",
+          role: "admin"
+        },
+        {
+          username: process.env.SEED_USER_USERNAME || "user1",
+          password: process.env.SEED_USER_PASSWORD || "",
+          role: "user"
+        }
+      ].filter((user) => user.password);
+      if (isFreshLocalBootstrap) {
+        defaultUsers.push({
+          username: process.env.SEED_SUPERUSER_USERNAME || "superuser",
+          password: process.env.SEED_SUPERUSER_PASSWORD || "0441024k",
+          role: "superuser"
+        });
+        console.warn("[AUTH] No users found. Bootstrapped local superuser account for first login.");
+      } else if (!shouldSeedConfiguredUsers) {
+        this.seedCompleted = true;
+        return;
+      }
+      for (const user of defaultUsers) {
+        const existing = await db.select({ id: users.id }).from(users).where(sql7`lower(${users.username}) = lower(${user.username})`).limit(1);
+        if (existing[0]) {
+          continue;
+        }
+        const now = /* @__PURE__ */ new Date();
+        const hashedPassword = await bcrypt.hash(user.password, BCRYPT_COST);
+        await db.insert(users).values({
+          id: randomUUID2(),
+          username: user.username,
+          passwordHash: hashedPassword,
+          role: user.role,
+          createdAt: now,
+          updatedAt: now,
+          passwordChangedAt: now,
+          isBanned: false
+        });
+      }
+      this.seedCompleted = true;
+    })();
+    try {
+      await this.seedPromise;
+    } finally {
+      this.seedPromise = null;
+    }
+  }
+};
+
+// server/repositories/auth.repository.ts
+import bcrypt2 from "bcrypt";
+import crypto from "crypto";
+import { inArray, sql as sql8 } from "drizzle-orm";
+var BCRYPT_COST2 = 12;
 var QUERY_PAGE_LIMIT = 1e3;
 var AuthRepository = class {
   async getUser(id) {
-    const result = await db.select().from(users).where(sql4`${users.id} = ${id}`).limit(1);
+    const result = await db.select().from(users).where(sql8`${users.id} = ${id}`).limit(1);
     return result[0];
   }
   async getUserByUsername(username) {
     const normalized = String(username || "").trim();
     if (!normalized) return void 0;
-    const result = await db.select().from(users).where(sql4`lower(${users.username}) = lower(${normalized})`).limit(1);
+    const result = await db.select().from(users).where(sql8`lower(${users.username}) = lower(${normalized})`).limit(1);
     return result[0];
   }
   async createUser(user) {
     const id = crypto.randomUUID();
     const now = /* @__PURE__ */ new Date();
-    const hashedPassword = await bcrypt.hash(user.password, BCRYPT_COST);
+    const hashedPassword = await bcrypt2.hash(user.password, BCRYPT_COST2);
     await db.insert(users).values({
       id,
       username: user.username,
@@ -875,7 +2233,7 @@ var AuthRepository = class {
     } else if (params.passwordChangedAt !== void 0) {
       next.passwordChangedAt = params.passwordChangedAt;
     }
-    await db.update(users).set(next).where(sql4`${users.id} = ${params.userId}`);
+    await db.update(users).set(next).where(sql8`${users.id} = ${params.userId}`);
     return this.getUser(params.userId);
   }
   async getUsersByRoles(roles) {
@@ -900,11 +2258,11 @@ var AuthRepository = class {
     return results;
   }
   async updateActivitiesUsername(oldUsername, newUsername) {
-    await db.update(userActivity).set({ username: newUsername }).where(sql4`${userActivity.username} = ${oldUsername}`);
+    await db.update(userActivity).set({ username: newUsername }).where(sql8`${userActivity.username} = ${oldUsername}`);
   }
   async updateUserBan(username, isBanned) {
-    await db.update(users).set({ isBanned, updatedAt: /* @__PURE__ */ new Date() }).where(sql4`${users.username} = ${username}`);
-    const result = await db.select().from(users).where(sql4`${users.username} = ${username}`).limit(1);
+    await db.update(users).set({ isBanned, updatedAt: /* @__PURE__ */ new Date() }).where(sql8`${users.username} = ${username}`);
+    const result = await db.select().from(users).where(sql8`${users.username} = ${username}`).limit(1);
     return result[0];
   }
   async getAccounts() {
@@ -927,7 +2285,7 @@ var AuthRepository = class {
 
 // server/repositories/imports.repository.ts
 import crypto2 from "crypto";
-import { and, desc, eq, sql as sql5 } from "drizzle-orm";
+import { and, desc, eq, sql as sql9 } from "drizzle-orm";
 var QUERY_PAGE_LIMIT2 = 1e3;
 var ImportsRepository = class {
   async createImport(data) {
@@ -954,7 +2312,7 @@ var ImportsRepository = class {
     return results;
   }
   async getImportsWithRowCounts() {
-    const result = await db.execute(sql5`
+    const result = await db.execute(sql9`
       SELECT
         i.id,
         i.name,
@@ -1010,14 +2368,14 @@ var ImportsRepository = class {
     return db.select().from(dataRows).where(eq(dataRows.importId, importId)).limit(Math.max(1, limit)).offset(Math.max(0, offset));
   }
   async getDataRowCountByImport(importId) {
-    const [{ count: count3 }] = await db.select({ count: sql5`count(*)` }).from(dataRows).where(eq(dataRows.importId, importId));
+    const [{ count: count3 }] = await db.select({ count: sql9`count(*)` }).from(dataRows).where(eq(dataRows.importId, importId));
     return Number(count3);
   }
   async getDataRowCountsByImportIds(importIds) {
     if (!importIds.length) {
       return /* @__PURE__ */ new Map();
     }
-    const result = await db.execute(sql5`
+    const result = await db.execute(sql9`
       SELECT
         dr.import_id as "importId",
         COUNT(dr.id)::int as "rowCount"
@@ -1032,7 +2390,7 @@ var ImportsRepository = class {
 };
 
 // server/repositories/search.repository.ts
-import { sql as sql6 } from "drizzle-orm";
+import { sql as sql10 } from "drizzle-orm";
 var MAX_SEARCH_LIMIT = 200;
 var MAX_COLUMN_KEYS = 500;
 var ALLOWED_OPERATORS = /* @__PURE__ */ new Set([
@@ -1074,47 +2432,47 @@ function normalizeJsonPayload(raw) {
   return value;
 }
 function buildFieldCondition(field, operator, value) {
-  const column = sql6`dr.json_data::jsonb ->> ${field}`;
+  const column = sql10`dr.json_data::jsonb ->> ${field}`;
   const valueType = detectValueType(value);
   switch (operator) {
     case "contains":
-      return sql6`${column} ILIKE ${`%${value}%`}`;
+      return sql10`${column} ILIKE ${`%${value}%`}`;
     case "equals":
-      return sql6`${column} = ${value}`;
+      return sql10`${column} = ${value}`;
     case "notEquals":
-      return sql6`${column} <> ${value}`;
+      return sql10`${column} <> ${value}`;
     case "startsWith":
-      return sql6`${column} ILIKE ${`${value}%`}`;
+      return sql10`${column} ILIKE ${`${value}%`}`;
     case "endsWith":
-      return sql6`${column} ILIKE ${`%${value}`}`;
+      return sql10`${column} ILIKE ${`%${value}`}`;
     case "greaterThan":
-      if (valueType === "number") return sql6`NULLIF(${column}, '')::numeric > ${Number(value)}`;
-      if (valueType === "date") return sql6`NULLIF(${column}, '')::date > ${value}`;
-      return sql6`false`;
+      if (valueType === "number") return sql10`NULLIF(${column}, '')::numeric > ${Number(value)}`;
+      if (valueType === "date") return sql10`NULLIF(${column}, '')::date > ${value}`;
+      return sql10`false`;
     case "lessThan":
-      if (valueType === "number") return sql6`NULLIF(${column}, '')::numeric < ${Number(value)}`;
-      if (valueType === "date") return sql6`NULLIF(${column}, '')::date < ${value}`;
-      return sql6`false`;
+      if (valueType === "number") return sql10`NULLIF(${column}, '')::numeric < ${Number(value)}`;
+      if (valueType === "date") return sql10`NULLIF(${column}, '')::date < ${value}`;
+      return sql10`false`;
     case "greaterThanOrEqual":
-      if (valueType === "number") return sql6`NULLIF(${column}, '')::numeric >= ${Number(value)}`;
-      if (valueType === "date") return sql6`NULLIF(${column}, '')::date >= ${value}`;
-      return sql6`false`;
+      if (valueType === "number") return sql10`NULLIF(${column}, '')::numeric >= ${Number(value)}`;
+      if (valueType === "date") return sql10`NULLIF(${column}, '')::date >= ${value}`;
+      return sql10`false`;
     case "lessThanOrEqual":
-      if (valueType === "number") return sql6`NULLIF(${column}, '')::numeric <= ${Number(value)}`;
-      if (valueType === "date") return sql6`NULLIF(${column}, '')::date <= ${value}`;
-      return sql6`false`;
+      if (valueType === "number") return sql10`NULLIF(${column}, '')::numeric <= ${Number(value)}`;
+      if (valueType === "date") return sql10`NULLIF(${column}, '')::date <= ${value}`;
+      return sql10`false`;
     case "isEmpty":
-      return sql6`COALESCE(${column}, '') = ''`;
+      return sql10`COALESCE(${column}, '') = ''`;
     case "isNotEmpty":
-      return sql6`COALESCE(${column}, '') <> ''`;
+      return sql10`COALESCE(${column}, '') <> ''`;
     default:
-      return sql6`false`;
+      return sql10`false`;
   }
 }
 var SearchRepository = class {
   async searchGlobalDataRows(params) {
     const { search, limit, offset } = params;
-    const rowsResult = await db.execute(sql6`
+    const rowsResult = await db.execute(sql10`
       SELECT
         dr.id,
         dr.import_id,
@@ -1129,7 +2487,7 @@ var SearchRepository = class {
       LIMIT ${Math.max(1, Math.min(limit, MAX_SEARCH_LIMIT))}
       OFFSET ${Math.max(0, offset)}
     `);
-    const totalResult = await db.execute(sql6`
+    const totalResult = await db.execute(sql10`
       SELECT COUNT(*)::int AS total
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id
@@ -1147,7 +2505,7 @@ var SearchRepository = class {
     return { rows, total };
   }
   async searchSimpleDataRows(search) {
-    return db.execute(sql6`
+    return db.execute(sql10`
       SELECT
         dr.import_id as "importId",
         i.name as "importName",
@@ -1168,7 +2526,7 @@ var SearchRepository = class {
       return { rows: [], total: 0 };
     }
     if (!trimmedSearch) {
-      const rowsResult2 = await db.execute(sql6`
+      const rowsResult2 = await db.execute(sql10`
         SELECT
           dr.id,
           dr.import_id as "importId",
@@ -1179,7 +2537,7 @@ var SearchRepository = class {
         LIMIT ${safeLimit}
         OFFSET ${safeOffset}
       `);
-      const totalResult2 = await db.execute(sql6`
+      const totalResult2 = await db.execute(sql10`
         SELECT COUNT(*)::int AS total
         FROM public.data_rows dr
         WHERE dr.import_id = ${importId}
@@ -1193,7 +2551,7 @@ var SearchRepository = class {
         total: totalResult2.rows?.[0] ? Number(totalResult2.rows[0].total) : 0
       };
     }
-    const rowsResult = await db.execute(sql6`
+    const rowsResult = await db.execute(sql10`
       SELECT
         dr.id,
         dr.import_id as "importId",
@@ -1205,7 +2563,7 @@ var SearchRepository = class {
       LIMIT ${safeLimit}
       OFFSET ${safeOffset}
     `);
-    const totalResult = await db.execute(sql6`
+    const totalResult = await db.execute(sql10`
       SELECT COUNT(*)::int AS total
       FROM public.data_rows dr
       WHERE dr.import_id = ${importId}
@@ -1231,10 +2589,10 @@ var SearchRepository = class {
     const conditions = safeFilters.map(
       (filter) => buildFieldCondition(filter.field, filter.operator, String(filter.value ?? ""))
     );
-    const conditionSql = conditions.length === 1 ? conditions[0] : sql6.join(conditions, logic === "AND" ? sql6` AND ` : sql6` OR `);
+    const conditionSql = conditions.length === 1 ? conditions[0] : sql10.join(conditions, logic === "AND" ? sql10` AND ` : sql10` OR `);
     const safeLimit = Math.min(Math.max(1, limit), MAX_SEARCH_LIMIT);
     const safeOffset = Math.max(offset, 0);
-    const rowsResult = await db.execute(sql6`
+    const rowsResult = await db.execute(sql10`
       SELECT
         dr.id,
         dr.import_id as "importId",
@@ -1249,7 +2607,7 @@ var SearchRepository = class {
       LIMIT ${safeLimit}
       OFFSET ${safeOffset}
     `);
-    const totalResult = await db.execute(sql6`
+    const totalResult = await db.execute(sql10`
       SELECT COUNT(*)::int AS total
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id
@@ -1268,7 +2626,7 @@ var SearchRepository = class {
     };
   }
   async getAllColumnNames() {
-    const result = await db.execute(sql6`
+    const result = await db.execute(sql10`
       SELECT DISTINCT key AS column_name
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id
@@ -1284,7 +2642,7 @@ var SearchRepository = class {
 
 // server/repositories/activity.repository.ts
 import crypto3 from "crypto";
-import { and as and2, desc as desc2, eq as eq2, gte, lte, sql as sql7 } from "drizzle-orm";
+import { and as and2, desc as desc2, eq as eq2, gte, lte, sql as sql11 } from "drizzle-orm";
 var QUERY_PAGE_LIMIT3 = 1e3;
 var ActivityRepository = class {
   constructor(options) {
@@ -1437,7 +2795,7 @@ var ActivityRepository = class {
     );
   }
   async getBannedUsers() {
-    const result = await db.execute(sql7`
+    const result = await db.execute(sql11`
       SELECT
         u.*,
         ban.ip_address as "banIpAddress",
@@ -1477,7 +2835,7 @@ var ActivityRepository = class {
   async isVisitorBanned(fingerprint, ipAddress) {
     await this.options.ensureBannedSessionsTable();
     if (!fingerprint && !ipAddress) return false;
-    const result = await db.execute(sql7`
+    const result = await db.execute(sql11`
       SELECT id
       FROM public.banned_sessions
       WHERE (${fingerprint ?? null}::text IS NOT NULL AND fingerprint = ${fingerprint ?? null}::text)
@@ -1489,7 +2847,7 @@ var ActivityRepository = class {
   async banVisitor(params) {
     await this.options.ensureBannedSessionsTable();
     const banId = crypto3.randomUUID();
-    await db.execute(sql7`
+    await db.execute(sql11`
       INSERT INTO public.banned_sessions
         (id, username, role, activity_id, fingerprint, ip_address, browser, pc_name, banned_at)
       VALUES
@@ -1501,11 +2859,11 @@ var ActivityRepository = class {
   }
   async unbanVisitor(banId) {
     await this.options.ensureBannedSessionsTable();
-    await db.execute(sql7`DELETE FROM public.banned_sessions WHERE id = ${banId}`);
+    await db.execute(sql11`DELETE FROM public.banned_sessions WHERE id = ${banId}`);
   }
   async getBannedSessions() {
     await this.options.ensureBannedSessionsTable();
-    const result = await db.execute(sql7`
+    const result = await db.execute(sql11`
       SELECT
         id as "banId",
         username,
@@ -1523,7 +2881,7 @@ var ActivityRepository = class {
 
 // server/repositories/audit.repository.ts
 import crypto4 from "crypto";
-import { desc as desc3, gte as gte2, sql as sql8 } from "drizzle-orm";
+import { desc as desc3, gte as gte2, sql as sql12 } from "drizzle-orm";
 var QUERY_PAGE_LIMIT4 = 1e3;
 var AuditRepository = class {
   async createAuditLog(data) {
@@ -1554,10 +2912,10 @@ var AuditRepository = class {
     const today = /* @__PURE__ */ new Date();
     today.setHours(0, 0, 0, 0);
     const [totalLogs, todayLogs] = await Promise.all([
-      db.select({ value: sql8`count(*)` }).from(auditLogs),
-      db.select({ value: sql8`count(*)` }).from(auditLogs).where(gte2(auditLogs.timestamp, today))
+      db.select({ value: sql12`count(*)` }).from(auditLogs),
+      db.select({ value: sql12`count(*)` }).from(auditLogs).where(gte2(auditLogs.timestamp, today))
     ]);
-    const actionRows = await db.execute(sql8`
+    const actionRows = await db.execute(sql12`
       SELECT action, COUNT(*)::int AS count
       FROM public.audit_logs
       GROUP BY action
@@ -1573,7 +2931,7 @@ var AuditRepository = class {
     };
   }
   async cleanupAuditLogsOlderThan(cutoffDate) {
-    const result = await db.execute(sql8`
+    const result = await db.execute(sql12`
       DELETE FROM public.audit_logs
       WHERE timestamp IS NOT NULL
         AND timestamp < ${cutoffDate}
@@ -1583,9 +2941,925 @@ var AuditRepository = class {
   }
 };
 
-// server/repositories/backups.repository.ts
+// server/repositories/ai.repository.ts
 import crypto5 from "crypto";
-import { eq as eq3, sql as sql9 } from "drizzle-orm";
+import { sql as sql13 } from "drizzle-orm";
+function normalizeJsonPayload2(value) {
+  let next = value;
+  if (typeof next === "string") {
+    try {
+      next = JSON.parse(next);
+    } catch {
+      return next;
+    }
+  }
+  return next;
+}
+function mapBranchRow(row) {
+  return {
+    name: row.name,
+    address: row.branch_address ?? null,
+    phone: row.phone_number ?? null,
+    fax: row.fax_number ?? null,
+    businessHour: row.business_hour ?? null,
+    dayOpen: row.day_open ?? null,
+    atmCdm: row.atm_cdm ?? null,
+    inquiryAvailability: row.inquiry_availability ?? null,
+    applicationAvailability: row.application_availability ?? null,
+    aeonLounge: row.aeon_lounge ?? null
+  };
+}
+var AiRepository = class {
+  constructor(options) {
+    this.options = options;
+  }
+  async createConversation(createdBy) {
+    const id = crypto5.randomUUID();
+    await db.execute(sql13`
+      INSERT INTO public.ai_conversations (id, created_by, created_at)
+      VALUES (${id}, ${createdBy}, ${/* @__PURE__ */ new Date()})
+    `);
+    return id;
+  }
+  async saveConversationMessage(conversationId, role, content) {
+    await db.execute(sql13`
+      INSERT INTO public.ai_messages (id, conversation_id, role, content, created_at)
+      VALUES (${crypto5.randomUUID()}, ${conversationId}, ${role}, ${content}, ${/* @__PURE__ */ new Date()})
+    `);
+  }
+  async getConversationMessages(conversationId, limit = 20) {
+    const result = await db.execute(sql13`
+      SELECT role, content
+      FROM public.ai_messages
+      WHERE conversation_id = ${conversationId}
+      ORDER BY created_at ASC
+      LIMIT ${limit}
+    `);
+    return result.rows;
+  }
+  async saveEmbedding(params) {
+    const embeddingLiteral = sql13.raw(`'[${params.embedding.join(",")}]'`);
+    await db.execute(sql13`
+      INSERT INTO public.data_embeddings (id, import_id, row_id, content, embedding, created_at)
+      VALUES (${crypto5.randomUUID()}, ${params.importId}, ${params.rowId}, ${params.content}, ${embeddingLiteral}::vector, ${/* @__PURE__ */ new Date()})
+      ON CONFLICT (row_id) DO UPDATE SET
+        import_id = EXCLUDED.import_id,
+        content = EXCLUDED.content,
+        embedding = EXCLUDED.embedding
+    `);
+  }
+  async semanticSearch(params) {
+    const embeddingLiteral = sql13.raw(`'[${params.embedding.join(",")}]'`);
+    const importFilter = params.importId ? sql13`AND e.import_id = ${params.importId}` : sql13``;
+    try {
+      await db.execute(sql13`SET ivfflat.probes = 5`);
+    } catch {
+    }
+    const result = await db.execute(sql13`
+      SELECT
+        e.row_id as "rowId",
+        e.import_id as "importId",
+        e.content as "content",
+        (1 - (e.embedding <=> ${embeddingLiteral}::vector))::float as "score",
+        i.name as "importName",
+        i.filename as "importFilename",
+        dr.json_data as "jsonDataJsonb"
+      FROM public.data_embeddings e
+      JOIN public.data_rows dr ON dr.id = e.row_id
+      LEFT JOIN public.imports i ON i.id = e.import_id
+      WHERE (i.is_deleted = false OR i.is_deleted IS NULL)
+      ${importFilter}
+      ORDER BY e.embedding <=> ${embeddingLiteral}::vector
+      LIMIT ${params.limit}
+    `);
+    return result.rows.map((row) => ({
+      ...row,
+      jsonDataJsonb: normalizeJsonPayload2(row.jsonDataJsonb)
+    }));
+  }
+  async aiKeywordSearch(params) {
+    const digits = String(params.query || "").replace(/[^0-9]/g, "");
+    const limit = Math.max(1, Math.min(50, params.limit || 10));
+    if (digits.length < 6) return [];
+    const isIc = digits.length === 12;
+    const isPhone = digits.length >= 9 && digits.length <= 11;
+    const icFields = ["No. MyKad", "ID No", "No Pengenalan", "IC", "NRIC", "MyKad"];
+    const phoneFields = ["No. Telefon Rumah", "No. Telefon Bimbit", "Telefon", "Phone", "HP", "Handphone", "OfficePhone"];
+    const accountFields = ["Nombor Akaun Bank Pemohon", "Account No", "Account Number", "No Akaun", "Card No"];
+    const primaryFields = isIc ? icFields : isPhone ? phoneFields : accountFields;
+    if (primaryFields.length === 0) return [];
+    const perFieldMatch = sql13.join(
+      primaryFields.map((key) => sql13`coalesce((dr.json_data::jsonb)->>${key}, '') = ${digits}`),
+      sql13` OR `
+    );
+    const result = await db.execute(sql13`
+      SELECT
+        dr.id as "rowId",
+        dr.import_id as "importId",
+        i.name as "importName",
+        i.filename as "importFilename",
+        dr.json_data as "jsonDataJsonb"
+      FROM public.data_rows dr
+      JOIN public.imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+        AND (${perFieldMatch})
+      ORDER BY dr.id
+      LIMIT ${limit}
+    `);
+    return result.rows.map((row) => ({
+      ...row,
+      jsonDataJsonb: normalizeJsonPayload2(row.jsonDataJsonb)
+    }));
+  }
+  async aiNameSearch(params) {
+    const q = String(params.query || "").trim();
+    if (!q) return [];
+    const nameKeysMatch = sql13`
+      (
+        coalesce((dr.json_data::jsonb)->>'Nama','') ILIKE ${`%${q}%`} OR
+        coalesce((dr.json_data::jsonb)->>'Customer Name','') ILIKE ${`%${q}%`} OR
+        coalesce((dr.json_data::jsonb)->>'name','') ILIKE ${`%${q}%`} OR
+        coalesce((dr.json_data::jsonb)->>'MAKLUMAT PEMOHON','') ILIKE ${`%${q}%`}
+      )
+    `;
+    const result = await db.execute(sql13`
+      SELECT
+        dr.id as "rowId",
+        dr.import_id as "importId",
+        i.name as "importName",
+        i.filename as "importFilename",
+        dr.json_data as "jsonDataJsonb"
+      FROM public.data_rows dr
+      JOIN public.imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+        AND ${nameKeysMatch}
+      ORDER BY dr.id
+      LIMIT ${params.limit}
+    `);
+    return result.rows.map((row) => ({
+      ...row,
+      jsonDataJsonb: normalizeJsonPayload2(row.jsonDataJsonb)
+    }));
+  }
+  async aiDigitsSearch(params) {
+    const result = await db.execute(sql13`
+      SELECT
+        dr.id as "rowId",
+        dr.import_id as "importId",
+        i.name as "importName",
+        i.filename as "importFilename",
+        dr.json_data as "jsonDataJsonb"
+      FROM public.data_rows dr
+      JOIN public.imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+        AND regexp_replace(dr.json_data::text, '[^0-9]', '', 'g') LIKE ${`%${params.digits}%`}
+      ORDER BY dr.id
+      LIMIT ${params.limit}
+    `);
+    return result.rows.map((row) => ({
+      ...row,
+      jsonDataJsonb: normalizeJsonPayload2(row.jsonDataJsonb)
+    }));
+  }
+  async aiFuzzySearch(params) {
+    const raw = String(params.query || "").toLowerCase().trim();
+    const tokens = raw.split(/\s+/).map((token) => token.replace(/[^a-z0-9]/gi, "")).filter((token) => token.length >= 3);
+    if (tokens.length === 0) return [];
+    const scoreSql = sql13.join(
+      tokens.map((token) => sql13`CASE WHEN dr.json_data::text ILIKE ${`%${token}%`} THEN 1 ELSE 0 END`),
+      sql13` + `
+    );
+    const whereSql = sql13.join(
+      tokens.map((token) => sql13`dr.json_data::text ILIKE ${`%${token}%`}`),
+      sql13` OR `
+    );
+    const result = await db.execute(sql13`
+      SELECT
+        dr.id as "rowId",
+        dr.import_id as "importId",
+        i.name as "importName",
+        i.filename as "importFilename",
+        dr.json_data as "jsonDataJsonb",
+        (${scoreSql})::int as "score"
+      FROM public.data_rows dr
+      JOIN public.imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+        AND (${whereSql})
+      ORDER BY "score" DESC, dr.id
+      LIMIT ${params.limit}
+    `);
+    return result.rows.map((row) => ({
+      ...row,
+      jsonDataJsonb: normalizeJsonPayload2(row.jsonDataJsonb)
+    }));
+  }
+  async findBranchesByText(params) {
+    const q = String(params.query || "").trim();
+    if (!q) return [];
+    const limit = Math.max(1, Math.min(5, params.limit));
+    try {
+      const result = await db.execute(sql13`
+        SELECT
+          name,
+          branch_address,
+          phone_number,
+          fax_number,
+          business_hour,
+          day_open,
+          atm_cdm,
+          inquiry_availability,
+          application_availability,
+          aeon_lounge,
+          GREATEST(
+            similarity(coalesce(name, ''), ${q}),
+            similarity(coalesce(branch_address, ''), ${q})
+          ) AS score
+        FROM public.aeon_branches
+        WHERE
+          name ILIKE ${`%${q}%`}
+          OR branch_address ILIKE ${`%${q}%`}
+          OR GREATEST(
+            similarity(coalesce(name, ''), ${q}),
+            similarity(coalesce(branch_address, ''), ${q})
+          ) > 0.1
+        ORDER BY
+          CASE
+            WHEN name ILIKE ${`%${q}%`} OR branch_address ILIKE ${`%${q}%`} THEN 0
+            ELSE 1
+          END,
+          score DESC,
+          name
+        LIMIT ${limit}
+      `);
+      return result.rows.map(mapBranchRow);
+    } catch {
+      const result = await db.execute(sql13`
+        SELECT
+          name,
+          branch_address,
+          phone_number,
+          fax_number,
+          business_hour,
+          day_open,
+          atm_cdm,
+          inquiry_availability,
+          application_availability,
+          aeon_lounge
+        FROM public.aeon_branches
+        WHERE name ILIKE ${`%${q}%`}
+           OR branch_address ILIKE ${`%${q}%`}
+        ORDER BY name
+        LIMIT ${limit}
+      `);
+      return result.rows.map(mapBranchRow);
+    }
+  }
+  async findBranchesByPostcode(params) {
+    await this.options.ensureSpatialTables();
+    const rawDigits = String(params.postcode || "").replace(/\D/g, "");
+    const postcode = rawDigits.length === 4 ? `0${rawDigits}` : rawDigits.slice(0, 5);
+    if (postcode.length !== 5) return [];
+    const limit = Math.max(1, Math.min(5, params.limit));
+    let result = await db.execute(sql13`
+      (
+        SELECT DISTINCT
+          b.name,
+          b.branch_address,
+          b.phone_number,
+          b.fax_number,
+          b.business_hour,
+          b.day_open,
+          b.atm_cdm,
+          b.inquiry_availability,
+          b.application_availability,
+          b.aeon_lounge
+        FROM public.aeon_branch_postcodes p
+        JOIN public.aeon_branches b
+          ON lower(b.name) = lower(p.source_branch)
+        WHERE p.postcode = ${postcode}
+      )
+      UNION
+      (
+        SELECT
+          b.name,
+          b.branch_address,
+          b.phone_number,
+          b.fax_number,
+          b.business_hour,
+          b.day_open,
+          b.atm_cdm,
+          b.inquiry_availability,
+          b.application_availability,
+          b.aeon_lounge
+        FROM public.aeon_branches b
+        WHERE coalesce(b.branch_address, '') ~ ('(^|\\D)' || ${postcode} || '(\\D|$)')
+      )
+      ORDER BY name
+      LIMIT ${limit}
+    `);
+    if (result.rows.length === 0) {
+      result = await db.execute(sql13`
+        SELECT
+          b.name,
+          b.branch_address,
+          b.phone_number,
+          b.fax_number,
+          b.business_hour,
+          b.day_open,
+          b.atm_cdm,
+          b.inquiry_availability,
+          b.application_availability,
+          b.aeon_lounge
+        FROM public.aeon_branch_postcodes p
+        JOIN public.aeon_branches b
+          ON lower(b.name) = lower(p.source_branch)
+        WHERE p.postcode ~ '^[0-9]{5}$'
+        ORDER BY abs((p.postcode)::int - (${postcode})::int), b.name
+        LIMIT ${limit}
+      `);
+    }
+    return result.rows.map(mapBranchRow);
+  }
+  async getNearestBranches(params) {
+    const limit = Math.max(1, Math.min(5, params.limit ?? 3));
+    const result = await db.execute(sql13`
+      SELECT
+        name,
+        branch_address,
+        phone_number,
+        fax_number,
+        business_hour,
+        day_open,
+        atm_cdm,
+        inquiry_availability,
+        application_availability,
+        aeon_lounge,
+        ST_DistanceSphere(
+          ST_MakePoint(${params.lng}, ${params.lat}),
+          ST_MakePoint(branch_lng, branch_lat)
+        ) / 1000 AS distance_km
+      FROM public.aeon_branches
+      ORDER BY distance_km
+      LIMIT ${limit}
+    `);
+    return result.rows.map((row) => ({
+      ...mapBranchRow(row),
+      distanceKm: Number(row.distance_km)
+    }));
+  }
+  async getPostcodeLatLng(postcode) {
+    await this.options.ensureSpatialTables();
+    const postcodeNorm = (() => {
+      const digits = String(postcode || "").replace(/\D/g, "");
+      if (digits.length === 4) return `0${digits}`;
+      return digits.length >= 5 ? digits.slice(0, 5) : digits;
+    })();
+    if (!postcodeNorm) return null;
+    const lookup = async () => {
+      const result = await db.execute(sql13`
+        SELECT lat, lng
+        FROM public.aeon_branch_postcodes
+        WHERE postcode = ${postcodeNorm}
+        LIMIT 1
+      `);
+      return result.rows?.[0];
+    };
+    let row = await lookup();
+    if (row) return { lat: Number(row.lat), lng: Number(row.lng) };
+    const countRes = await db.execute(sql13`
+      SELECT COUNT(*)::int as "count"
+      FROM public.aeon_branch_postcodes
+    `);
+    const count3 = Number(countRes.rows[0]?.count ?? 0);
+    if (count3 === 0) {
+      const branches = await db.execute(sql13`
+        SELECT name, branch_address, branch_lat, branch_lng
+        FROM public.aeon_branches
+      `);
+      for (const branch of branches.rows) {
+        const address = String(branch.branch_address || "");
+        const match5 = address.match(/\b\d{5}\b/);
+        const match4 = address.match(/\b\d{4}\b/);
+        const normalized = match5 ? match5[0] : match4 ? `0${match4[0]}` : null;
+        if (!normalized) continue;
+        await db.execute(sql13`
+          INSERT INTO public.aeon_branch_postcodes (postcode, lat, lng, source_branch, state)
+          VALUES (${normalized}, ${Number(branch.branch_lat)}, ${Number(branch.branch_lng)}, ${String(branch.name)}, null)
+          ON CONFLICT (postcode) DO NOTHING
+        `);
+      }
+      row = await lookup();
+      if (row) return { lat: Number(row.lat), lng: Number(row.lng) };
+    }
+    return null;
+  }
+  async importBranchesFromRows(params) {
+    await this.options.ensureSpatialTables();
+    const rows = await db.execute(sql13`
+      SELECT id, json_data as "jsonDataJsonb"
+      FROM public.data_rows
+      WHERE import_id = ${params.importId}
+    `);
+    const normalizeKey = (key) => key.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const detectKeys = (sample2) => {
+      const keys = Object.keys(sample2);
+      const normalized = keys.map((key) => ({ raw: key, norm: normalizeKey(key) }));
+      const findBy = (candidates) => {
+        const hit = normalized.find((key) => candidates.some((candidate) => key.norm.includes(candidate)));
+        return hit?.raw || null;
+      };
+      return {
+        nameKey: findBy(["branchnames", "branchname", "cawangan", "branch", "nama"]),
+        latKey: findBy(["latitude", "lat"]),
+        lngKey: findBy(["longitude", "lng", "long"]),
+        addressKey: findBy(["branchaddress", "address", "alamat"]),
+        postcodeKey: findBy(["postcode", "poskod", "postalcode", "zip"]),
+        phoneKey: findBy(["phonenumber", "phone", "telefon", "tel"]),
+        faxKey: findBy(["faxnumber", "fax"]),
+        businessHourKey: findBy(["businesshour", "operatinghour", "waktu", "jam"]),
+        dayOpenKey: findBy(["dayopen", "day", "hari"]),
+        atmKey: findBy(["atmcdm", "atm", "cdm"]),
+        inquiryKey: findBy(["inquiryavailability", "inquiry"]),
+        applicationKey: findBy(["applicationavailability", "application"]),
+        loungeKey: findBy(["aeonlounge", "lounge"]),
+        stateKey: findBy(["state", "negeri"])
+      };
+    };
+    const firstRow = rows.rows[0];
+    const sample = firstRow && firstRow.jsonDataJsonb && typeof firstRow.jsonDataJsonb === "object" ? firstRow.jsonDataJsonb : {};
+    const detected = detectKeys(sample);
+    const nameKey = params.nameKey || detected.nameKey;
+    const latKey = params.latKey || detected.latKey;
+    const lngKey = params.lngKey || detected.lngKey;
+    const addressKey = detected.addressKey;
+    const postcodeKey = detected.postcodeKey;
+    const phoneKey = detected.phoneKey;
+    const faxKey = detected.faxKey;
+    const businessHourKey = detected.businessHourKey;
+    const dayOpenKey = detected.dayOpenKey;
+    const atmKey = detected.atmKey;
+    const inquiryKey = detected.inquiryKey;
+    const applicationKey = detected.applicationKey;
+    const loungeKey = detected.loungeKey;
+    const stateKey = detected.stateKey;
+    if (!nameKey || !latKey || !lngKey) {
+      return {
+        inserted: 0,
+        skipped: rows.rows.length,
+        usedKeys: { nameKey: nameKey || "", latKey: latKey || "", lngKey: lngKey || "" }
+      };
+    }
+    const normalizePostcode = (value) => {
+      if (value === void 0 || value === null) return null;
+      const raw = String(value);
+      const fiveDigits = raw.match(/\b\d{5}\b/);
+      if (fiveDigits) return fiveDigits[0];
+      const fourDigits = raw.match(/\b\d{4}\b/);
+      if (fourDigits) return `0${fourDigits[0]}`;
+      return null;
+    };
+    let inserted = 0;
+    let skipped = 0;
+    for (const row of rows.rows) {
+      const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
+      const nameVal = data[nameKey];
+      const latVal = data[latKey];
+      const lngVal = data[lngKey];
+      const addressVal = addressKey ? data[addressKey] : null;
+      const postcodeVal = postcodeKey ? data[postcodeKey] : null;
+      const phoneVal = phoneKey ? data[phoneKey] : null;
+      const faxVal = faxKey ? data[faxKey] : null;
+      const businessHourVal = businessHourKey ? data[businessHourKey] : null;
+      const dayOpenVal = dayOpenKey ? data[dayOpenKey] : null;
+      const atmVal = atmKey ? data[atmKey] : null;
+      const inquiryVal = inquiryKey ? data[inquiryKey] : null;
+      const applicationVal = applicationKey ? data[applicationKey] : null;
+      const loungeVal = loungeKey ? data[loungeKey] : null;
+      const stateVal = stateKey ? data[stateKey] : null;
+      if (!nameVal || latVal === void 0 || lngVal === void 0) {
+        skipped += 1;
+        continue;
+      }
+      const lat = Number(String(latVal).replace(/[^0-9.\-]/g, ""));
+      const lng = Number(String(lngVal).replace(/[^0-9.\-]/g, ""));
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        skipped += 1;
+        continue;
+      }
+      await db.execute(sql13`
+        INSERT INTO public.aeon_branches (
+          id, name, branch_address, phone_number, fax_number, business_hour, day_open,
+          atm_cdm, inquiry_availability, application_availability, aeon_lounge,
+          branch_lat, branch_lng
+        )
+        VALUES (
+          ${crypto5.randomUUID()},
+          ${String(nameVal)},
+          ${addressVal ? String(addressVal) : null},
+          ${phoneVal ? String(phoneVal) : null},
+          ${faxVal ? String(faxVal) : null},
+          ${businessHourVal ? String(businessHourVal) : null},
+          ${dayOpenVal ? String(dayOpenVal) : null},
+          ${atmVal ? String(atmVal) : null},
+          ${inquiryVal ? String(inquiryVal) : null},
+          ${applicationVal ? String(applicationVal) : null},
+          ${loungeVal ? String(loungeVal) : null},
+          ${lat},
+          ${lng}
+        )
+        ON CONFLICT DO NOTHING
+      `);
+      let postcode = null;
+      if (postcodeVal) {
+        postcode = normalizePostcode(postcodeVal);
+      }
+      if (!postcode && addressVal) {
+        postcode = normalizePostcode(addressVal);
+      }
+      if (postcode) {
+        await db.execute(sql13`
+          INSERT INTO public.aeon_branch_postcodes (postcode, lat, lng, source_branch, state)
+          VALUES (${postcode}, ${lat}, ${lng}, ${String(nameVal)}, ${stateVal ? String(stateVal) : null})
+          ON CONFLICT (postcode) DO NOTHING
+        `);
+      }
+      inserted += 1;
+    }
+    return { inserted, skipped, usedKeys: { nameKey, latKey, lngKey } };
+  }
+  async getDataRowsForEmbedding(importId, limit, offset) {
+    const result = await db.execute(sql13`
+      SELECT id, json_data as "jsonDataJsonb"
+      FROM public.data_rows
+      WHERE import_id = ${importId}
+      ORDER BY id
+      LIMIT ${limit} OFFSET ${offset}
+    `);
+    return result.rows.map((row) => ({
+      id: row.id,
+      jsonDataJsonb: normalizeJsonPayload2(row.jsonDataJsonb)
+    }));
+  }
+};
+
+// server/repositories/ai-category.repository.ts
+import { sql as sql14 } from "drizzle-orm";
+function normalizeRuleArray(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry)).filter((entry) => entry.trim().length > 0);
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      return trimmed.slice(1, -1).split(",").map((entry) => entry.replace(/^\"|\"$/g, "").trim()).filter((entry) => entry.length > 0);
+    }
+    return [trimmed];
+  }
+  return [];
+}
+function parseJsonData(value) {
+  if (value && typeof value === "object") {
+    return value;
+  }
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+function extractName(data) {
+  return data["Nama"] || data["Customer Name"] || data["name"] || data["MAKLUMAT PEMOHON"] || "-";
+}
+function extractIc(data) {
+  return data["No. MyKad"] || data["ID No"] || data["No Pengenalan"] || data["IC"] || "-";
+}
+function buildMatchSql(terms, fields, matchMode) {
+  if (terms.length === 0) return null;
+  if (fields.length === 0) {
+    return sql14.join(
+      terms.map((term) => sql14`dr.json_data::text ILIKE ${`%${term}%`}`),
+      sql14` OR `
+    );
+  }
+  if (matchMode === "exact") {
+    return sql14.join(
+      fields.map((field) => {
+        const list = sql14.join(
+          terms.map((value) => sql14`${value.toUpperCase()}`),
+          sql14`, `
+        );
+        return sql14`upper(trim(coalesce((dr.json_data::jsonb)->>${field}, ''))) IN (${list})`;
+      }),
+      sql14` OR `
+    );
+  }
+  return sql14.join(
+    terms.map((term) => {
+      const perField = sql14.join(
+        fields.map((field) => sql14`(dr.json_data::jsonb)->>${field} ILIKE ${`%${term}%`}`),
+        sql14` OR `
+      );
+      return sql14`(${perField})`;
+    }),
+    sql14` OR `
+  );
+}
+var AiCategoryRepository = class {
+  async countRowsByKeywords(params) {
+    const groups = params.groups || [];
+    const countSqls = [];
+    const matchSqlByKey = /* @__PURE__ */ new Map();
+    for (const group of groups) {
+      const terms = (group.terms || []).filter((term) => term.trim().length > 0);
+      const fields = (group.fields || []).filter((field) => field.trim().length > 0);
+      const matchMode = String(group.matchMode || "contains").toLowerCase();
+      if (matchMode === "complement") continue;
+      if (terms.length === 0 || fields.length === 0) {
+        countSqls.push(sql14`0::int as "${sql14.raw(group.key)}"`);
+        continue;
+      }
+      const termSql = matchMode === "exact" ? sql14.join(
+        fields.map((field) => {
+          const list = sql14.join(
+            terms.map((value) => sql14`${value.toUpperCase()}`),
+            sql14`, `
+          );
+          return sql14`upper(trim(coalesce((dr.json_data::jsonb)->>${field}, ''))) IN (${list})`;
+        }),
+        sql14` OR `
+      ) : sql14.join(
+        terms.map((term) => {
+          const perField = sql14.join(
+            fields.map((field) => sql14`coalesce((dr.json_data::jsonb)->>${field}, '') ILIKE ${`%${term}%`}`),
+            sql14` OR `
+          );
+          return sql14`((${perField}) OR dr.json_data::text ILIKE ${`%${term}%`})`;
+        }),
+        sql14` OR `
+      );
+      matchSqlByKey.set(group.key, termSql);
+      countSqls.push(sql14`COUNT(*) FILTER (WHERE (${termSql}))::int as "${sql14.raw(group.key)}"`);
+    }
+    const complementGroups = groups.filter((group) => String(group.matchMode || "").toLowerCase() === "complement");
+    if (complementGroups.length > 0) {
+      if (matchSqlByKey.size > 0) {
+        const combined = sql14.join(Array.from(matchSqlByKey.values()).map((value) => sql14`(${value})`), sql14` OR `);
+        for (const group of complementGroups) {
+          countSqls.push(sql14`COUNT(*) FILTER (WHERE NOT (${combined}))::int as "${sql14.raw(group.key)}"`);
+        }
+      } else {
+        for (const group of complementGroups) {
+          countSqls.push(sql14`COUNT(*)::int as "${sql14.raw(group.key)}"`);
+        }
+      }
+    }
+    const selectParts = countSqls.length > 0 ? sql14.join(countSqls, sql14`, `) : sql14``;
+    const result = await db.execute(sql14`
+      SELECT
+        COUNT(*)::int as "total",
+        ${selectParts}
+      FROM public.data_rows dr
+      JOIN public.imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+    `);
+    const row = result.rows[0] || {};
+    const totalRows = Number(row.total ?? 0);
+    const counts = {};
+    for (const group of groups) {
+      counts[group.key] = Number(row[group.key] ?? 0);
+    }
+    return { totalRows, counts };
+  }
+  async getCategoryRules() {
+    const result = await db.execute(sql14`
+      SELECT key, terms, fields, match_mode, enabled
+      FROM public.ai_category_rules
+      ORDER BY key
+    `);
+    return result.rows.map((row) => ({
+      key: String(row.key),
+      terms: normalizeRuleArray(row.terms),
+      fields: normalizeRuleArray(row.fields),
+      matchMode: String(row.match_mode || "contains"),
+      enabled: row.enabled !== false
+    }));
+  }
+  async getCategoryRulesMaxUpdatedAt() {
+    const result = await db.execute(sql14`
+      SELECT MAX(updated_at) as updated_at
+      FROM public.ai_category_rules
+    `);
+    const row = result.rows[0];
+    return row?.updated_at ? new Date(row.updated_at) : null;
+  }
+  async getCategoryStats(keys) {
+    if (!keys.length) return [];
+    const quoted = keys.map((key) => `'${key.replace(/'/g, "''")}'`).join(",");
+    const result = await db.execute(sql14`
+      SELECT key, total, samples, updated_at
+      FROM public.ai_category_stats
+      WHERE key IN (${sql14.raw(quoted)})
+    `);
+    return result.rows.map((row) => ({
+      key: row.key,
+      total: Number(row.total ?? 0),
+      samples: Array.isArray(row.samples) ? row.samples : [],
+      updatedAt: row.updated_at ? new Date(row.updated_at) : null
+    }));
+  }
+  async computeCategoryStatsForKeys(keys, groups) {
+    if (!keys.length) return [];
+    const uniqueKeys = Array.from(new Set(keys));
+    const ruleMap = new Map(groups.map((group) => [group.key, group]));
+    const requestedGroups = uniqueKeys.filter((key) => key !== "__all__").map((key) => ruleMap.get(key)).filter((group) => Boolean(group && group.enabled !== false));
+    if (uniqueKeys.includes("__all__")) {
+      const totalRes = await db.execute(sql14`
+        SELECT COUNT(*)::int as "count"
+        FROM public.data_rows dr
+        JOIN public.imports i ON i.id = dr.import_id
+        WHERE i.is_deleted = false
+      `);
+      const totalRows = Number(totalRes.rows[0]?.count ?? 0);
+      await db.execute(sql14`
+        INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
+        VALUES ('__all__', ${totalRows}, '[]'::jsonb, now())
+        ON CONFLICT (key)
+        DO UPDATE SET total = EXCLUDED.total, updated_at = now()
+      `);
+    }
+    for (const group of requestedGroups) {
+      const terms = (group.terms || []).filter((term) => term.trim().length > 0);
+      const fields = (group.fields || []).filter((field) => field.trim().length > 0);
+      const matchMode = String(group.matchMode || "contains").toLowerCase();
+      const termSql = buildMatchSql(terms, fields, matchMode);
+      if (!termSql) {
+        await db.execute(sql14`
+          INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
+          VALUES (${group.key}, 0, '[]'::jsonb, now())
+          ON CONFLICT (key)
+          DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
+        `);
+        continue;
+      }
+      const countRes = await db.execute(sql14`
+        SELECT COUNT(*)::int as "count"
+        FROM public.data_rows dr
+        JOIN public.imports i ON i.id = dr.import_id
+        WHERE i.is_deleted = false
+          AND (${termSql})
+      `);
+      const total = Number(countRes.rows[0]?.count ?? 0);
+      let samples = [];
+      if (total > 0) {
+        const sampleRes = await db.execute(sql14`
+          SELECT dr.json_data as "jsonData", i.name as "importName", i.filename as "importFilename"
+          FROM public.data_rows dr
+          JOIN public.imports i ON i.id = dr.import_id
+          WHERE i.is_deleted = false
+            AND (${termSql})
+          LIMIT 10
+        `);
+        samples = sampleRes.rows.map((row) => {
+          const data = parseJsonData(row.jsonData);
+          const source = row.importName || row.importFilename || null;
+          return {
+            name: String(extractName(data) || "-"),
+            ic: String(extractIc(data) || "-"),
+            source
+          };
+        });
+      }
+      await db.execute(sql14`
+        INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
+        VALUES (${group.key}, ${total}, ${JSON.stringify(samples)}::jsonb, now())
+        ON CONFLICT (key)
+        DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
+      `);
+    }
+    return this.getCategoryStats(uniqueKeys);
+  }
+  async rebuildCategoryStats(groups) {
+    if (!groups.length) return;
+    const totalRes = await db.execute(sql14`
+      SELECT COUNT(*)::int as "count"
+      FROM public.data_rows dr
+      JOIN public.imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+    `);
+    const totalRows = Number(totalRes.rows[0]?.count ?? 0);
+    await db.execute(sql14`
+      DELETE FROM public.ai_category_stats
+      WHERE key <> '__all__'
+    `);
+    await db.execute(sql14`
+      INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
+      VALUES ('__all__', ${totalRows}, '[]'::jsonb, now())
+      ON CONFLICT (key)
+      DO UPDATE SET total = EXCLUDED.total, updated_at = now()
+    `);
+    const enabledGroups = groups.filter((group) => group.enabled !== false);
+    const baseGroups = enabledGroups.filter((group) => String(group.matchMode || "").toLowerCase() !== "complement");
+    const complementGroups = enabledGroups.filter((group) => String(group.matchMode || "").toLowerCase() === "complement");
+    const matchSqlByKey = /* @__PURE__ */ new Map();
+    for (const group of baseGroups) {
+      const terms = (group.terms || []).filter((term) => term.trim().length > 0);
+      const fields = (group.fields || []).filter((field) => field.trim().length > 0);
+      const matchMode = String(group.matchMode || "contains").toLowerCase();
+      const termSql = buildMatchSql(terms, fields, matchMode);
+      if (!termSql) {
+        await db.execute(sql14`
+          INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
+          VALUES (${group.key}, 0, '[]'::jsonb, now())
+          ON CONFLICT (key)
+          DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
+        `);
+        continue;
+      }
+      matchSqlByKey.set(group.key, termSql);
+      const countRes = await db.execute(sql14`
+        SELECT COUNT(*)::int as "count"
+        FROM public.data_rows dr
+        JOIN public.imports i ON i.id = dr.import_id
+        WHERE i.is_deleted = false
+          AND (${termSql})
+      `);
+      const total = Number(countRes.rows[0]?.count ?? 0);
+      const sampleRes = await db.execute(sql14`
+        SELECT dr.json_data as "jsonData", i.name as "importName", i.filename as "importFilename"
+        FROM public.data_rows dr
+        JOIN public.imports i ON i.id = dr.import_id
+        WHERE i.is_deleted = false
+          AND (${termSql})
+        LIMIT 10
+      `);
+      const samples = sampleRes.rows.map((row) => {
+        const data = parseJsonData(row.jsonData);
+        const source = row.importName || row.importFilename || null;
+        return {
+          name: String(extractName(data) || "-"),
+          ic: String(extractIc(data) || "-"),
+          source
+        };
+      });
+      await db.execute(sql14`
+        INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
+        VALUES (${group.key}, ${total}, ${JSON.stringify(samples)}::jsonb, now())
+        ON CONFLICT (key)
+        DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
+      `);
+    }
+    if (complementGroups.length === 0) {
+      return;
+    }
+    const combined = matchSqlByKey.size > 0 ? sql14.join(Array.from(matchSqlByKey.values()).map((value) => sql14`(${value})`), sql14` OR `) : null;
+    for (const group of complementGroups) {
+      let total = totalRows;
+      let samples = [];
+      if (combined) {
+        const countRes = await db.execute(sql14`
+          SELECT COUNT(*)::int as "count"
+          FROM public.data_rows dr
+          JOIN public.imports i ON i.id = dr.import_id
+          WHERE i.is_deleted = false
+            AND NOT (${combined})
+        `);
+        total = Number(countRes.rows[0]?.count ?? 0);
+        const sampleRes = await db.execute(sql14`
+          SELECT dr.json_data as "jsonData", i.name as "importName", i.filename as "importFilename"
+          FROM public.data_rows dr
+          JOIN public.imports i ON i.id = dr.import_id
+          WHERE i.is_deleted = false
+            AND NOT (${combined})
+          LIMIT 10
+        `);
+        samples = sampleRes.rows.map((row) => {
+          const data = parseJsonData(row.jsonData);
+          const source = row.importName || row.importFilename || null;
+          return {
+            name: String(extractName(data) || "-"),
+            ic: String(extractIc(data) || "-"),
+            source
+          };
+        });
+      }
+      await db.execute(sql14`
+        INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
+        VALUES (${group.key}, ${total}, ${JSON.stringify(samples)}::jsonb, now())
+        ON CONFLICT (key)
+        DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
+      `);
+    }
+  }
+};
+
+// server/repositories/backups.repository.ts
+import crypto6 from "crypto";
+import { eq as eq3, sql as sql15 } from "drizzle-orm";
 var BACKUP_CHUNK_SIZE = 500;
 var QUERY_PAGE_LIMIT5 = 1e3;
 var BackupsRepository = class {
@@ -1594,8 +3868,8 @@ var BackupsRepository = class {
   }
   async createBackup(data) {
     await this.options.ensureBackupsTable();
-    const id = crypto5.randomUUID();
-    const result = await db.execute(sql9`
+    const id = crypto6.randomUUID();
+    const result = await db.execute(sql15`
       INSERT INTO public.backups (id, name, created_at, created_by, backup_data, metadata)
       VALUES (${id}, ${data.name}, ${/* @__PURE__ */ new Date()}, ${data.createdBy}, ${data.backupData}, ${data.metadata ?? null})
       RETURNING
@@ -1613,7 +3887,7 @@ var BackupsRepository = class {
     const rows = [];
     let offset = 0;
     while (true) {
-      const result = await db.execute(sql9`
+      const result = await db.execute(sql15`
         SELECT
           id,
           name,
@@ -1643,7 +3917,7 @@ var BackupsRepository = class {
   }
   async getBackupById(id) {
     await this.options.ensureBackupsTable();
-    const result = await db.execute(sql9`
+    const result = await db.execute(sql15`
       SELECT
         id,
         name,
@@ -1668,7 +3942,7 @@ var BackupsRepository = class {
   }
   async deleteBackup(id) {
     await this.options.ensureBackupsTable();
-    await db.execute(sql9`DELETE FROM public.backups WHERE id = ${id}`);
+    await db.execute(sql15`DELETE FROM public.backups WHERE id = ${id}`);
     return true;
   }
   async getBackupDataForExport() {
@@ -1731,7 +4005,7 @@ var BackupsRepository = class {
       if (backupData.dataRows.length > 0) {
         for (const chunk of chunkArray(backupData.dataRows, BACKUP_CHUNK_SIZE)) {
           const rows = chunk.map((row) => ({
-            id: row.id ?? crypto5.randomUUID(),
+            id: row.id ?? crypto6.randomUUID(),
             importId: row.importId,
             jsonDataJsonb: row.jsonDataJsonb
           }));
@@ -1742,7 +4016,7 @@ var BackupsRepository = class {
       if (backupData.users.length > 0) {
         const now = /* @__PURE__ */ new Date();
         const rows = backupData.users.filter((user) => user.passwordHash).map((user) => ({
-          id: crypto5.randomUUID(),
+          id: crypto6.randomUUID(),
           username: user.username,
           passwordHash: user.passwordHash,
           role: user.role,
@@ -1759,7 +4033,7 @@ var BackupsRepository = class {
       if (backupData.auditLogs.length > 0) {
         for (const chunk of chunkArray(backupData.auditLogs, BACKUP_CHUNK_SIZE)) {
           const rows = chunk.map((log2) => ({
-            id: log2.id ?? crypto5.randomUUID(),
+            id: log2.id ?? crypto6.randomUUID(),
             action: log2.action,
             performedBy: log2.performedBy,
             targetUser: log2.targetUser ?? null,
@@ -1777,19 +4051,19 @@ var BackupsRepository = class {
 };
 
 // server/repositories/analytics.repository.ts
-import { count, eq as eq4, gte as gte3, sql as sql10 } from "drizzle-orm";
+import { count as count2, eq as eq4, gte as gte3, sql as sql16 } from "drizzle-orm";
 var ANALYTICS_TZ = process.env.ANALYTICS_TZ || "Asia/Kuala_Lumpur";
 var AnalyticsRepository = class {
   async getDashboardSummary() {
     const today = /* @__PURE__ */ new Date();
     today.setHours(0, 0, 0, 0);
     const [totalUsers, activeSessions, loginsToday, totalDataRows, totalImports, bannedUsers] = await Promise.all([
-      db.select({ value: count() }).from(users),
-      db.select({ value: count() }).from(userActivity).where(eq4(userActivity.isActive, true)),
-      db.select({ value: count() }).from(userActivity).where(gte3(userActivity.loginTime, today)),
-      db.select({ value: count() }).from(dataRows),
-      db.select({ value: count() }).from(imports).where(eq4(imports.isDeleted, false)),
-      db.select({ value: count() }).from(users).where(eq4(users.isBanned, true))
+      db.select({ value: count2() }).from(users),
+      db.select({ value: count2() }).from(userActivity).where(eq4(userActivity.isActive, true)),
+      db.select({ value: count2() }).from(userActivity).where(gte3(userActivity.loginTime, today)),
+      db.select({ value: count2() }).from(dataRows),
+      db.select({ value: count2() }).from(imports).where(eq4(imports.isDeleted, false)),
+      db.select({ value: count2() }).from(users).where(eq4(users.isBanned, true))
     ]);
     return {
       totalUsers: totalUsers[0]?.value || 0,
@@ -1801,7 +4075,7 @@ var AnalyticsRepository = class {
     };
   }
   async getLoginTrends(days = 7) {
-    const result = await db.execute(sql10`
+    const result = await db.execute(sql16`
       WITH bounds AS (
         SELECT (NOW() AT TIME ZONE ${ANALYTICS_TZ})::date AS end_date
       ),
@@ -1840,7 +4114,7 @@ var AnalyticsRepository = class {
     return result.rows || [];
   }
   async getTopActiveUsers(limit = 10) {
-    const result = await db.execute(sql10`
+    const result = await db.execute(sql16`
       SELECT
         username,
         role,
@@ -1859,7 +4133,7 @@ var AnalyticsRepository = class {
     }));
   }
   async getPeakHours() {
-    const result = await db.execute(sql10`
+    const result = await db.execute(sql16`
       SELECT
         EXTRACT(HOUR FROM (login_time AT TIME ZONE 'UTC' AT TIME ZONE ${ANALYTICS_TZ}))::int AS hour,
         COUNT(*)::int AS count
@@ -1881,7 +4155,7 @@ var AnalyticsRepository = class {
     }));
   }
   async getRoleDistribution() {
-    const result = await db.execute(sql10`
+    const result = await db.execute(sql16`
       SELECT role, COUNT(*)::int AS count
       FROM public.users
       GROUP BY role
@@ -1892,8 +4166,8 @@ var AnalyticsRepository = class {
 };
 
 // server/repositories/collection.repository.ts
-import { randomUUID } from "crypto";
-import { sql as sql11 } from "drizzle-orm";
+import { randomUUID as randomUUID3 } from "crypto";
+import { sql as sql17 } from "drizzle-orm";
 var COLLECTION_MONTH_NAMES = [
   "January",
   "February",
@@ -2014,15 +4288,15 @@ var CollectionRepository = class {
   async getCollectionStaffNicknames(filters) {
     const conditions = [];
     if (filters?.activeOnly === true) {
-      conditions.push(sql11`is_active = true`);
+      conditions.push(sql17`is_active = true`);
     }
     if (filters?.allowedRole === "admin") {
-      conditions.push(sql11`role_scope IN ('admin', 'both')`);
+      conditions.push(sql17`role_scope IN ('admin', 'both')`);
     } else if (filters?.allowedRole === "user") {
-      conditions.push(sql11`role_scope IN ('user', 'both')`);
+      conditions.push(sql17`role_scope IN ('user', 'both')`);
     }
-    const whereSql = conditions.length > 0 ? sql11`WHERE ${sql11.join(conditions, sql11` AND `)}` : sql11``;
-    const result = await db.execute(sql11`
+    const whereSql = conditions.length > 0 ? sql17`WHERE ${sql17.join(conditions, sql17` AND `)}` : sql17``;
+    const result = await db.execute(sql17`
       SELECT
         id,
         nickname,
@@ -2038,7 +4312,7 @@ var CollectionRepository = class {
     return (result.rows || []).map((row) => this.mapCollectionStaffNicknameRow(row));
   }
   async getCollectionAdminUsers() {
-    const result = await db.execute(sql11`
+    const result = await db.execute(sql17`
       SELECT
         id,
         username,
@@ -2056,7 +4330,7 @@ var CollectionRepository = class {
   async getCollectionAdminUserById(adminUserId) {
     const normalized = String(adminUserId || "").trim();
     if (!normalized) return void 0;
-    const result = await db.execute(sql11`
+    const result = await db.execute(sql17`
       SELECT
         id,
         username,
@@ -2076,7 +4350,7 @@ var CollectionRepository = class {
   async getCollectionAdminAssignedNicknameIds(adminUserId) {
     const normalized = String(adminUserId || "").trim();
     if (!normalized) return [];
-    const result = await db.execute(sql11`
+    const result = await db.execute(sql17`
       SELECT avn.nickname_id
       FROM public.admin_visible_nicknames avn
       WHERE avn.admin_user_id = ${normalized}
@@ -2088,17 +4362,17 @@ var CollectionRepository = class {
   async getCollectionAdminVisibleNicknames(adminUserId, filters) {
     const normalized = String(adminUserId || "").trim();
     if (!normalized) return [];
-    const conditions = [sql11`avn.admin_user_id = ${normalized}`];
+    const conditions = [sql17`avn.admin_user_id = ${normalized}`];
     if (filters?.activeOnly === true) {
-      conditions.push(sql11`n.is_active = true`);
+      conditions.push(sql17`n.is_active = true`);
     }
     if (filters?.allowedRole === "admin") {
-      conditions.push(sql11`n.role_scope IN ('admin', 'both')`);
+      conditions.push(sql17`n.role_scope IN ('admin', 'both')`);
     } else if (filters?.allowedRole === "user") {
-      conditions.push(sql11`n.role_scope IN ('user', 'both')`);
+      conditions.push(sql17`n.role_scope IN ('user', 'both')`);
     }
-    const whereSql = sql11`WHERE ${sql11.join(conditions, sql11` AND `)}`;
-    const result = await db.execute(sql11`
+    const whereSql = sql17`WHERE ${sql17.join(conditions, sql17` AND `)}`;
+    const result = await db.execute(sql17`
       SELECT
         n.id,
         n.nickname,
@@ -2129,7 +4403,7 @@ var CollectionRepository = class {
     }
     const normalizedNicknameIds = Array.isArray(params.nicknameIds) ? params.nicknameIds.map((value) => String(value || "").trim()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
     return db.transaction(async (tx) => {
-      const adminCheck = await tx.execute(sql11`
+      const adminCheck = await tx.execute(sql17`
         SELECT id
         FROM public.users
         WHERE id = ${adminUserId}
@@ -2141,11 +4415,11 @@ var CollectionRepository = class {
       }
       let validNicknameIds = [];
       if (normalizedNicknameIds.length > 0) {
-        const nicknameSql = sql11.join(
-          normalizedNicknameIds.map((value) => sql11`${value}::uuid`),
-          sql11`, `
+        const nicknameSql = sql17.join(
+          normalizedNicknameIds.map((value) => sql17`${value}::uuid`),
+          sql17`, `
         );
-        const validRows = await tx.execute(sql11`
+        const validRows = await tx.execute(sql17`
           SELECT id
           FROM public.collection_staff_nicknames
           WHERE id IN (${nicknameSql})
@@ -2156,12 +4430,12 @@ var CollectionRepository = class {
           throw new Error("Invalid nickname ids.");
         }
       }
-      await tx.execute(sql11`
+      await tx.execute(sql17`
         DELETE FROM public.admin_visible_nicknames
         WHERE admin_user_id = ${adminUserId}
       `);
       for (const nicknameId of validNicknameIds) {
-        await tx.execute(sql11`
+        await tx.execute(sql17`
           INSERT INTO public.admin_visible_nicknames (
             id,
             admin_user_id,
@@ -2170,7 +4444,7 @@ var CollectionRepository = class {
             created_at
           )
           VALUES (
-            ${randomUUID()}::uuid,
+            ${randomUUID3()}::uuid,
             ${adminUserId},
             ${nicknameId}::uuid,
             ${createdBySuperuser},
@@ -2179,7 +4453,7 @@ var CollectionRepository = class {
           ON CONFLICT (admin_user_id, nickname_id) DO NOTHING
         `);
       }
-      const assignedRows = await tx.execute(sql11`
+      const assignedRows = await tx.execute(sql17`
         SELECT nickname_id
         FROM public.admin_visible_nicknames
         WHERE admin_user_id = ${adminUserId}
@@ -2191,8 +4465,8 @@ var CollectionRepository = class {
   async resolveNicknameNamesByIds(tx, nicknameIds) {
     const normalizedIds = Array.isArray(nicknameIds) ? nicknameIds.map((value) => String(value || "").trim()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
     if (!normalizedIds.length) return [];
-    const idSql = sql11.join(normalizedIds.map((value) => sql11`${value}::uuid`), sql11`, `);
-    const result = await tx.execute(sql11`
+    const idSql = sql17.join(normalizedIds.map((value) => sql17`${value}::uuid`), sql17`, `);
+    const result = await tx.execute(sql17`
       SELECT id, nickname, role_scope, is_active
       FROM public.collection_staff_nicknames
       WHERE id IN (${idSql})
@@ -2218,33 +4492,33 @@ var CollectionRepository = class {
     if (memberLower.includes(leaderLower)) {
       throw new Error("Leader nickname cannot be a member of the same group.");
     }
-    const leaderRows = await params.tx.execute(sql11`
+    const leaderRows = await params.tx.execute(sql17`
       SELECT id
       FROM public.admin_groups
       WHERE lower(leader_nickname) = lower(${params.leaderNickname})
-        ${params.groupIdToExclude ? sql11`AND id <> ${params.groupIdToExclude}::uuid` : sql11``}
+        ${params.groupIdToExclude ? sql17`AND id <> ${params.groupIdToExclude}::uuid` : sql17``}
       LIMIT 1
     `);
     if (leaderRows.rows?.[0]) {
       throw new Error("Leader nickname already assigned.");
     }
     if (!memberLower.length) return;
-    const membersSql = sql11.join(memberLower.map((value) => sql11`${value}`), sql11`, `);
-    const memberConflict = await params.tx.execute(sql11`
+    const membersSql = sql17.join(memberLower.map((value) => sql17`${value}`), sql17`, `);
+    const memberConflict = await params.tx.execute(sql17`
       SELECT member_nickname
       FROM public.admin_group_members
       WHERE lower(member_nickname) IN (${membersSql})
-        ${params.groupIdToExclude ? sql11`AND admin_group_id <> ${params.groupIdToExclude}::uuid` : sql11``}
+        ${params.groupIdToExclude ? sql17`AND admin_group_id <> ${params.groupIdToExclude}::uuid` : sql17``}
       LIMIT 1
     `);
     if (memberConflict.rows?.[0]) {
       throw new Error("This nickname is already assigned to another admin group.");
     }
-    const leaderConflict = await params.tx.execute(sql11`
+    const leaderConflict = await params.tx.execute(sql17`
       SELECT leader_nickname
       FROM public.admin_groups
       WHERE lower(leader_nickname) IN (${membersSql})
-        ${params.groupIdToExclude ? sql11`AND id <> ${params.groupIdToExclude}::uuid` : sql11``}
+        ${params.groupIdToExclude ? sql17`AND id <> ${params.groupIdToExclude}::uuid` : sql17``}
       LIMIT 1
     `);
     if (leaderConflict.rows?.[0]) {
@@ -2252,7 +4526,7 @@ var CollectionRepository = class {
     }
   }
   async getCollectionAdminGroups() {
-    const nicknameRows = await db.execute(sql11`
+    const nicknameRows = await db.execute(sql17`
       SELECT id, nickname
       FROM public.collection_staff_nicknames
       LIMIT 5000
@@ -2264,7 +4538,7 @@ var CollectionRepository = class {
       if (!nickname || !id || nicknameIdByLowerName.has(nickname)) continue;
       nicknameIdByLowerName.set(nickname, id);
     }
-    const result = await db.execute(sql11`
+    const result = await db.execute(sql17`
       SELECT
         g.id,
         g.leader_nickname,
@@ -2327,8 +4601,8 @@ var CollectionRepository = class {
         leaderNickname: leader.nickname,
         memberNicknames
       });
-      const groupId = randomUUID();
-      await tx.execute(sql11`
+      const groupId = randomUUID3();
+      await tx.execute(sql17`
         INSERT INTO public.admin_groups (
           id,
           leader_nickname,
@@ -2346,7 +4620,7 @@ var CollectionRepository = class {
       `);
       for (const memberNickname of memberNicknames) {
         if (!memberNickname || memberNickname.toLowerCase() === leader.nickname.toLowerCase()) continue;
-        await tx.execute(sql11`
+        await tx.execute(sql17`
           INSERT INTO public.admin_group_members (
             id,
             admin_group_id,
@@ -2354,7 +4628,7 @@ var CollectionRepository = class {
             created_at
           )
           VALUES (
-            ${randomUUID()}::uuid,
+            ${randomUUID3()}::uuid,
             ${groupId}::uuid,
             ${memberNickname},
             now()
@@ -2380,7 +4654,7 @@ var CollectionRepository = class {
       throw new Error("updatedBy is required.");
     }
     const updatedGroupId = await db.transaction(async (tx) => {
-      const existingRow = await tx.execute(sql11`
+      const existingRow = await tx.execute(sql17`
         SELECT id, leader_nickname
         FROM public.admin_groups
         WHERE id = ${groupId}::uuid
@@ -2410,7 +4684,7 @@ var CollectionRepository = class {
         const memberRows = await this.resolveNicknameNamesByIds(tx, params.memberNicknameIds || []);
         memberNicknames = memberRows.map((item) => item.nickname).filter(Boolean);
       } else {
-        const existingMembers = await tx.execute(sql11`
+        const existingMembers = await tx.execute(sql17`
           SELECT member_nickname
           FROM public.admin_group_members
           WHERE admin_group_id = ${groupId}::uuid
@@ -2424,7 +4698,7 @@ var CollectionRepository = class {
         leaderNickname,
         memberNicknames
       });
-      await tx.execute(sql11`
+      await tx.execute(sql17`
         UPDATE public.admin_groups
         SET
           leader_nickname = ${leaderNickname},
@@ -2432,13 +4706,13 @@ var CollectionRepository = class {
           updated_at = now()
         WHERE id = ${groupId}::uuid
       `);
-      await tx.execute(sql11`
+      await tx.execute(sql17`
         DELETE FROM public.admin_group_members
         WHERE admin_group_id = ${groupId}::uuid
       `);
       for (const memberNickname of memberNicknames) {
         if (!memberNickname || memberNickname.toLowerCase() === leaderNickname.toLowerCase()) continue;
-        await tx.execute(sql11`
+        await tx.execute(sql17`
           INSERT INTO public.admin_group_members (
             id,
             admin_group_id,
@@ -2446,7 +4720,7 @@ var CollectionRepository = class {
             created_at
           )
           VALUES (
-            ${randomUUID()}::uuid,
+            ${randomUUID3()}::uuid,
             ${groupId}::uuid,
             ${memberNickname},
             now()
@@ -2463,11 +4737,11 @@ var CollectionRepository = class {
     const normalizedGroupId = String(groupId || "").trim();
     if (!normalizedGroupId) return false;
     return db.transaction(async (tx) => {
-      await tx.execute(sql11`
+      await tx.execute(sql17`
         DELETE FROM public.admin_group_members
         WHERE admin_group_id = ${normalizedGroupId}::uuid
       `);
-      const result = await tx.execute(sql11`
+      const result = await tx.execute(sql17`
         DELETE FROM public.admin_groups
         WHERE id = ${normalizedGroupId}::uuid
         RETURNING id
@@ -2478,7 +4752,7 @@ var CollectionRepository = class {
   async getCollectionAdminGroupVisibleNicknameValuesByLeader(leaderNickname) {
     const normalizedLeader = String(leaderNickname || "").trim();
     if (!normalizedLeader) return [];
-    const rows = await db.execute(sql11`
+    const rows = await db.execute(sql17`
       SELECT
         g.leader_nickname,
         COALESCE(
@@ -2508,7 +4782,7 @@ var CollectionRepository = class {
     if (!activityId || !username || !userRole || !nickname) {
       throw new Error("Invalid collection nickname session payload.");
     }
-    await db.execute(sql11`
+    await db.execute(sql17`
       INSERT INTO public.collection_nickname_sessions (
         activity_id,
         username,
@@ -2536,7 +4810,7 @@ var CollectionRepository = class {
   async getCollectionNicknameSessionByActivity(activityId) {
     const normalizedActivityId = String(activityId || "").trim();
     if (!normalizedActivityId) return void 0;
-    const result = await db.execute(sql11`
+    const result = await db.execute(sql17`
       SELECT
         activity_id,
         username,
@@ -2555,13 +4829,13 @@ var CollectionRepository = class {
   async clearCollectionNicknameSessionByActivity(activityId) {
     const normalizedActivityId = String(activityId || "").trim();
     if (!normalizedActivityId) return;
-    await db.execute(sql11`
+    await db.execute(sql17`
       DELETE FROM public.collection_nickname_sessions
       WHERE activity_id = ${normalizedActivityId}
     `);
   }
   async getCollectionStaffNicknameById(id) {
-    const result = await db.execute(sql11`
+    const result = await db.execute(sql17`
       SELECT
         id,
         nickname,
@@ -2580,7 +4854,7 @@ var CollectionRepository = class {
   async getCollectionStaffNicknameByName(nickname) {
     const normalized = String(nickname || "").trim();
     if (!normalized) return void 0;
-    const result = await db.execute(sql11`
+    const result = await db.execute(sql17`
       SELECT
         id,
         nickname,
@@ -2599,7 +4873,7 @@ var CollectionRepository = class {
   async getCollectionNicknameAuthProfileByName(nickname) {
     const normalized = String(nickname || "").trim();
     if (!normalized) return void 0;
-    const result = await db.execute(sql11`
+    const result = await db.execute(sql17`
       SELECT
         id,
         nickname,
@@ -2629,7 +4903,7 @@ var CollectionRepository = class {
     if (!passwordHash) {
       throw new Error("passwordHash is required.");
     }
-    await db.execute(sql11`
+    await db.execute(sql17`
       UPDATE public.collection_staff_nicknames
       SET
         nickname_password_hash = ${passwordHash},
@@ -2640,7 +4914,7 @@ var CollectionRepository = class {
     `);
   }
   async createCollectionStaffNickname(data) {
-    const result = await db.execute(sql11`
+    const result = await db.execute(sql17`
       INSERT INTO public.collection_staff_nicknames (
         id,
         nickname,
@@ -2654,7 +4928,7 @@ var CollectionRepository = class {
         created_at
       )
       VALUES (
-        ${randomUUID()}::uuid,
+        ${randomUUID3()}::uuid,
         ${data.nickname},
         true,
         ${normalizeCollectionNicknameRoleScope(data.roleScope)},
@@ -2680,21 +4954,21 @@ var CollectionRepository = class {
     if (!existing) return void 0;
     const updates = [];
     if (data.nickname !== void 0) {
-      updates.push(sql11`nickname = ${data.nickname}`);
+      updates.push(sql17`nickname = ${data.nickname}`);
     }
     if (data.isActive !== void 0) {
-      updates.push(sql11`is_active = ${data.isActive}`);
+      updates.push(sql17`is_active = ${data.isActive}`);
     }
     if (data.roleScope !== void 0) {
-      updates.push(sql11`role_scope = ${normalizeCollectionNicknameRoleScope(data.roleScope)}`);
+      updates.push(sql17`role_scope = ${normalizeCollectionNicknameRoleScope(data.roleScope)}`);
     }
     if (!updates.length) {
       return existing;
     }
     return db.transaction(async (tx) => {
-      const result = await tx.execute(sql11`
+      const result = await tx.execute(sql17`
         UPDATE public.collection_staff_nicknames
-        SET ${sql11.join(updates, sql11`, `)}
+        SET ${sql17.join(updates, sql17`, `)}
         WHERE id = ${id}::uuid
         RETURNING
           id,
@@ -2710,19 +4984,19 @@ var CollectionRepository = class {
       const oldNickname = String(existing.nickname || "").trim();
       const newNickname = String(updated.nickname || "").trim();
       if (oldNickname && newNickname && oldNickname.toLowerCase() !== newNickname.toLowerCase()) {
-        await tx.execute(sql11`
+        await tx.execute(sql17`
           UPDATE public.admin_groups
           SET
             leader_nickname = ${newNickname},
             updated_at = now()
           WHERE lower(leader_nickname) = lower(${oldNickname})
         `);
-        await tx.execute(sql11`
+        await tx.execute(sql17`
           UPDATE public.admin_group_members
           SET member_nickname = ${newNickname}
           WHERE lower(member_nickname) = lower(${oldNickname})
         `);
-        await tx.execute(sql11`
+        await tx.execute(sql17`
           UPDATE public.collection_nickname_sessions
           SET
             nickname = ${newNickname},
@@ -2738,7 +5012,7 @@ var CollectionRepository = class {
     if (!existing) {
       return { deleted: false, deactivated: false };
     }
-    const usage = await db.execute(sql11`
+    const usage = await db.execute(sql17`
       SELECT COUNT(*)::int AS total
       FROM public.collection_records
       WHERE lower(collection_staff_nickname) = lower(${existing.nickname})
@@ -2746,30 +5020,30 @@ var CollectionRepository = class {
     `);
     const total = Number(usage.rows?.[0]?.total ?? 0);
     if (total > 0) {
-      await db.execute(sql11`
+      await db.execute(sql17`
         UPDATE public.collection_staff_nicknames
         SET is_active = false
         WHERE id = ${id}::uuid
       `);
       return { deleted: false, deactivated: true };
     }
-    await db.execute(sql11`
+    await db.execute(sql17`
       DELETE FROM public.admin_visible_nicknames
       WHERE nickname_id = ${id}::uuid
     `);
-    await db.execute(sql11`
+    await db.execute(sql17`
       DELETE FROM public.admin_group_members
       WHERE lower(member_nickname) = lower(${existing.nickname})
     `);
-    await db.execute(sql11`
+    await db.execute(sql17`
       DELETE FROM public.admin_groups
       WHERE lower(leader_nickname) = lower(${existing.nickname})
     `);
-    await db.execute(sql11`
+    await db.execute(sql17`
       DELETE FROM public.collection_nickname_sessions
       WHERE lower(nickname) = lower(${existing.nickname})
     `);
-    await db.execute(sql11`
+    await db.execute(sql17`
       DELETE FROM public.collection_staff_nicknames
       WHERE id = ${id}::uuid
     `);
@@ -2778,7 +5052,7 @@ var CollectionRepository = class {
   async isCollectionStaffNicknameActive(nickname) {
     const normalized = String(nickname || "").trim();
     if (!normalized) return false;
-    const result = await db.execute(sql11`
+    const result = await db.execute(sql17`
       SELECT id
       FROM public.collection_staff_nicknames
       WHERE lower(nickname) = lower(${normalized})
@@ -2788,8 +5062,8 @@ var CollectionRepository = class {
     return Boolean(result.rows?.[0]);
   }
   async createCollectionRecord(data) {
-    const id = randomUUID();
-    const result = await db.execute(sql11`
+    const id = randomUUID3();
+    const result = await db.execute(sql17`
       INSERT INTO public.collection_records (
         id,
         customer_name,
@@ -2840,15 +5114,15 @@ var CollectionRepository = class {
   async listCollectionRecords(filters) {
     const conditions = [];
     if (filters?.from) {
-      conditions.push(sql11`payment_date >= ${filters.from}::date`);
+      conditions.push(sql17`payment_date >= ${filters.from}::date`);
     }
     if (filters?.to) {
-      conditions.push(sql11`payment_date <= ${filters.to}::date`);
+      conditions.push(sql17`payment_date <= ${filters.to}::date`);
     }
     const search = String(filters?.search || "").trim();
     if (search) {
       const like = `%${search}%`;
-      conditions.push(sql11`(
+      conditions.push(sql17`(
         customer_name ILIKE ${like}
         OR ic_number ILIKE ${like}
         OR account_number ILIKE ${like}
@@ -2858,18 +5132,18 @@ var CollectionRepository = class {
     }
     const createdByLogin = String(filters?.createdByLogin || "").trim();
     if (createdByLogin) {
-      conditions.push(sql11`created_by_login = ${createdByLogin}`);
+      conditions.push(sql17`created_by_login = ${createdByLogin}`);
     }
     const nicknameSource = filters?.nicknames;
     const nicknames = Array.isArray(nicknameSource) ? nicknameSource.map((value) => String(value || "").trim().toLowerCase()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
     if (nicknames.length > 0) {
-      const nicknameSql = sql11.join(nicknames.map((value) => sql11`${value}`), sql11`, `);
-      conditions.push(sql11`lower(collection_staff_nickname) IN (${nicknameSql})`);
+      const nicknameSql = sql17.join(nicknames.map((value) => sql17`${value}`), sql17`, `);
+      conditions.push(sql17`lower(collection_staff_nickname) IN (${nicknameSql})`);
     }
-    const whereSql = conditions.length ? sql11`WHERE ${sql11.join(conditions, sql11` AND `)}` : sql11``;
+    const whereSql = conditions.length ? sql17`WHERE ${sql17.join(conditions, sql17` AND `)}` : sql17``;
     const parsedLimit = Number(filters?.limit);
     const safeLimit = Number.isFinite(parsedLimit) ? Math.min(2e3, Math.max(1, Math.floor(parsedLimit))) : 500;
-    const result = await db.execute(sql11`
+    const result = await db.execute(sql17`
       SELECT
         id,
         customer_name,
@@ -2899,18 +5173,18 @@ var CollectionRepository = class {
     const nicknameSource = filters.nicknames;
     const nicknames = Array.isArray(nicknameSource) ? nicknameSource.map((value) => String(value || "").trim().toLowerCase()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
     const conditions = [
-      sql11`payment_date >= ${yearStart}::date`,
-      sql11`payment_date <= ${yearEnd}::date`
+      sql17`payment_date >= ${yearStart}::date`,
+      sql17`payment_date <= ${yearEnd}::date`
     ];
     if (nicknames.length > 0) {
-      const nicknameSql = sql11.join(nicknames.map((value) => sql11`${value}`), sql11`, `);
-      conditions.push(sql11`lower(collection_staff_nickname) IN (${nicknameSql})`);
+      const nicknameSql = sql17.join(nicknames.map((value) => sql17`${value}`), sql17`, `);
+      conditions.push(sql17`lower(collection_staff_nickname) IN (${nicknameSql})`);
     }
     if (createdByLogin) {
-      conditions.push(sql11`created_by_login = ${createdByLogin}`);
+      conditions.push(sql17`created_by_login = ${createdByLogin}`);
     }
-    const whereSql = sql11`WHERE ${sql11.join(conditions, sql11` AND `)}`;
-    const result = await db.execute(sql11`
+    const whereSql = sql17`WHERE ${sql17.join(conditions, sql17` AND `)}`;
+    const result = await db.execute(sql17`
       SELECT
         EXTRACT(MONTH FROM payment_date)::int AS month,
         COUNT(*)::int AS total_records,
@@ -2942,7 +5216,7 @@ var CollectionRepository = class {
     });
   }
   async getCollectionRecordById(id) {
-    const result = await db.execute(sql11`
+    const result = await db.execute(sql17`
       SELECT
         id,
         customer_name,
@@ -2968,39 +5242,39 @@ var CollectionRepository = class {
   async updateCollectionRecord(id, data) {
     const updateChunks = [];
     if (data.customerName !== void 0) {
-      updateChunks.push(sql11`customer_name = ${data.customerName}`);
+      updateChunks.push(sql17`customer_name = ${data.customerName}`);
     }
     if (data.icNumber !== void 0) {
-      updateChunks.push(sql11`ic_number = ${data.icNumber}`);
+      updateChunks.push(sql17`ic_number = ${data.icNumber}`);
     }
     if (data.customerPhone !== void 0) {
-      updateChunks.push(sql11`customer_phone = ${data.customerPhone}`);
+      updateChunks.push(sql17`customer_phone = ${data.customerPhone}`);
     }
     if (data.accountNumber !== void 0) {
-      updateChunks.push(sql11`account_number = ${data.accountNumber}`);
+      updateChunks.push(sql17`account_number = ${data.accountNumber}`);
     }
     if (data.batch !== void 0) {
-      updateChunks.push(sql11`batch = ${data.batch}`);
+      updateChunks.push(sql17`batch = ${data.batch}`);
     }
     if (data.paymentDate !== void 0) {
-      updateChunks.push(sql11`payment_date = ${data.paymentDate}::date`);
+      updateChunks.push(sql17`payment_date = ${data.paymentDate}::date`);
     }
     if (data.amount !== void 0) {
-      updateChunks.push(sql11`amount = ${data.amount}`);
+      updateChunks.push(sql17`amount = ${data.amount}`);
     }
     if (Object.prototype.hasOwnProperty.call(data, "receiptFile")) {
-      updateChunks.push(sql11`receipt_file = ${data.receiptFile ?? null}`);
+      updateChunks.push(sql17`receipt_file = ${data.receiptFile ?? null}`);
     }
     if (data.collectionStaffNickname !== void 0) {
-      updateChunks.push(sql11`collection_staff_nickname = ${data.collectionStaffNickname}`);
-      updateChunks.push(sql11`staff_username = ${data.collectionStaffNickname}`);
+      updateChunks.push(sql17`collection_staff_nickname = ${data.collectionStaffNickname}`);
+      updateChunks.push(sql17`staff_username = ${data.collectionStaffNickname}`);
     }
     if (!updateChunks.length) {
       return this.getCollectionRecordById(id);
     }
-    const result = await db.execute(sql11`
+    const result = await db.execute(sql17`
       UPDATE public.collection_records
-      SET ${sql11.join(updateChunks, sql11`, `)}
+      SET ${sql17.join(updateChunks, sql17`, `)}
       WHERE id = ${id}::uuid
       RETURNING
         id,
@@ -3022,13 +5296,13 @@ var CollectionRepository = class {
     return this.mapCollectionRecordRow(row);
   }
   async deleteCollectionRecord(id) {
-    await db.execute(sql11`DELETE FROM public.collection_records WHERE id = ${id}::uuid`);
+    await db.execute(sql17`DELETE FROM public.collection_records WHERE id = ${id}::uuid`);
     return true;
   }
 };
 
 // server/repositories/settings.repository.ts
-import { sql as sql12 } from "drizzle-orm";
+import { sql as sql18 } from "drizzle-orm";
 var TRUTHY_SETTING_VALUES = /* @__PURE__ */ new Set(["true", "1", "yes", "on"]);
 var SettingsRepository = class {
   parseSettingType(raw) {
@@ -3090,7 +5364,7 @@ var SettingsRepository = class {
     return settingKey === "maintenance_message" || settingKey === "maintenance_start_time" || settingKey === "maintenance_end_time";
   }
   async isAdminMaintenanceEditingEnabled() {
-    const result = await db.execute(sql12`
+    const result = await db.execute(sql18`
       SELECT value
       FROM public.system_settings
       WHERE key = 'admin_can_edit_maintenance_message'
@@ -3100,7 +5374,7 @@ var SettingsRepository = class {
     return TRUTHY_SETTING_VALUES.has(String(row?.value ?? "").trim().toLowerCase());
   }
   async getSettingsForRole(role) {
-    const rows = await db.execute(sql12`
+    const rows = await db.execute(sql18`
       SELECT
         c.id as category_id,
         c.name as category_name,
@@ -3128,10 +5402,10 @@ var SettingsRepository = class {
     const optionsMap = /* @__PURE__ */ new Map();
     if (settingIds.length > 0) {
       const quoted = settingIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
-      const optionsRows = await db.execute(sql12`
+      const optionsRows = await db.execute(sql18`
         SELECT DISTINCT ON (setting_id, value) setting_id, value, label
         FROM public.setting_options
-        WHERE setting_id IN (${sql12.raw(quoted)})
+        WHERE setting_id IN (${sql18.raw(quoted)})
         ORDER BY setting_id, value, label
       `);
       const seenOptionsBySetting = /* @__PURE__ */ new Map();
@@ -3181,7 +5455,7 @@ var SettingsRepository = class {
     return Array.from(categories.values());
   }
   async getBooleanSystemSetting(key, fallback = false) {
-    const result = await db.execute(sql12`
+    const result = await db.execute(sql18`
       SELECT value
       FROM public.system_settings
       WHERE key = ${key}
@@ -3211,10 +5485,10 @@ var SettingsRepository = class {
       return visibility;
     }
     const keyList = keys.map((key) => `'${key.replace(/'/g, "''")}'`).join(",");
-    const rows = await db.execute(sql12`
+    const rows = await db.execute(sql18`
       SELECT key, value
       FROM public.system_settings
-      WHERE key IN (${sql12.raw(keyList)})
+      WHERE key IN (${sql18.raw(keyList)})
     `);
     const pageIdByKey = /* @__PURE__ */ new Map();
     for (const tab of tabs) {
@@ -3227,7 +5501,7 @@ var SettingsRepository = class {
       visibility[pageId] = TRUTHY_SETTING_VALUES.has(String(row.value ?? "").trim().toLowerCase());
     }
     if (roleKey === "admin") {
-      const result = await db.execute(sql12`
+      const result = await db.execute(sql18`
         SELECT value
         FROM public.system_settings
         WHERE key = 'canViewSystemPerformance'
@@ -3242,7 +5516,7 @@ var SettingsRepository = class {
     return visibility;
   }
   async updateSystemSetting(params) {
-    const settingRes = await db.execute(sql12`
+    const settingRes = await db.execute(sql18`
       SELECT
         s.id,
         s.key,
@@ -3288,7 +5562,7 @@ var SettingsRepository = class {
     }
     const nextValue = constrained.value;
     if (settingType === "select") {
-      const optionRes = await db.execute(sql12`
+      const optionRes = await db.execute(sql18`
         SELECT 1
         FROM public.setting_options
         WHERE setting_id = ${current.id}
@@ -3303,16 +5577,16 @@ var SettingsRepository = class {
     if (previousValue === nextValue) {
       return { status: "unchanged", message: "No change detected." };
     }
-    await db.execute(sql12`
+    await db.execute(sql18`
       UPDATE public.system_settings
       SET value = ${nextValue}, updated_at = now()
       WHERE id = ${current.id}
     `);
-    await db.execute(sql12`
+    await db.execute(sql18`
       INSERT INTO public.setting_versions (setting_key, old_value, new_value, changed_by, changed_at)
       VALUES (${params.settingKey}, ${previousValue}, ${nextValue}, ${params.updatedBy}, now())
     `);
-    const latestRes = await db.execute(sql12`
+    const latestRes = await db.execute(sql18`
       SELECT
         id,
         key,
@@ -3347,7 +5621,7 @@ var SettingsRepository = class {
     };
   }
   async getMaintenanceState(now = /* @__PURE__ */ new Date()) {
-    const rows = await db.execute(sql12`
+    const rows = await db.execute(sql18`
       SELECT key, value
       FROM public.system_settings
       WHERE key IN (
@@ -3389,7 +5663,7 @@ var SettingsRepository = class {
     };
   }
   async getAppConfig() {
-    const result = await db.execute(sql12`
+    const result = await db.execute(sql18`
       SELECT key, value
       FROM public.system_settings
       WHERE key IN (
@@ -3441,82 +5715,7 @@ var SettingsRepository = class {
 };
 
 // server/storage-postgres.ts
-var MAX_SEARCH_LIMIT2 = 200;
-var MAX_COLUMN_KEYS2 = 500;
 var STORAGE_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
-var BCRYPT_COST2 = 12;
-var ALLOWED_OPERATORS2 = /* @__PURE__ */ new Set([
-  "contains",
-  "equals",
-  "notEquals",
-  "startsWith",
-  "endsWith",
-  "greaterThan",
-  "lessThan",
-  "greaterThanOrEqual",
-  "lessThanOrEqual",
-  "isEmpty",
-  "isNotEmpty"
-]);
-function detectValueType2(value) {
-  if (!value) return "string";
-  if (!isNaN(Number(value))) {
-    return "number";
-  }
-  const date = new Date(value);
-  if (!isNaN(date.getTime())) {
-    return "date";
-  }
-  return "string";
-}
-function buildSqlCondition(field, operator, value) {
-  const column = sql13`json_data_jsonb ->> ${field}`;
-  const valueType = detectValueType2(value);
-  switch (operator) {
-    case "contains":
-      return sql13`${column} ILIKE ${"%" + value + "%"}`;
-    case "equals":
-      return sql13`${column} = ${value}`;
-    case "notEquals":
-      return sql13`${column} <> ${value}`;
-    case "startsWith":
-      return sql13`${column} ILIKE ${value + "%"}`;
-    case "endsWith":
-      return sql13`${column} ILIKE ${"%" + value}`;
-    case "greaterThan":
-      if (valueType === "number") {
-        return sql13`(${column})::numeric > ${Number(value)}`;
-      }
-      if (valueType === "date") {
-        return sql13`(${column})::date > ${value}`;
-      }
-      return sql13`false`;
-    case "lessThan":
-      if (valueType === "number") {
-        return sql13`(${column})::numeric < ${Number(value)}`;
-      }
-      if (valueType === "date") {
-        return sql13`(${column})::date < ${value}`;
-      }
-      return sql13`false`;
-    case "greaterThanOrEqual":
-      if (valueType === "number") {
-        return sql13`(${column})::numeric >= ${Number(value)}`;
-      }
-      if (valueType === "date") {
-        return sql13`(${column})::date >= ${value}`;
-      }
-      return sql13`false`;
-    case "lessThanOrEqual":
-      if (valueType === "number") {
-        return sql13`(${column})::numeric <= ${Number(value)}`;
-      }
-      if (valueType === "date") {
-        return sql13`(${column})::date <= ${value}`;
-      }
-      return sql13`false`;
-  }
-}
 var PostgresStorage = class {
   constructor() {
     this.authRepository = new AuthRepository();
@@ -3525,11 +5724,19 @@ var PostgresStorage = class {
     this.activityRepository = new ActivityRepository({
       ensureBannedSessionsTable: () => this.ensureBannedSessionsTable()
     });
+    this.aiRepository = new AiRepository({
+      ensureSpatialTables: () => this.ensureSpatialTables()
+    });
+    this.aiCategoryRepository = new AiCategoryRepository();
+    this.aiBootstrap = new AiBootstrap();
     this.auditRepository = new AuditRepository();
     this.backupsBootstrap = new BackupsBootstrap();
+    this.collectionBootstrap = new CollectionBootstrap();
+    this.coreSchemaBootstrap = new CoreSchemaBootstrap();
+    this.usersBootstrap = new UsersBootstrap();
     this.backupsRepository = new BackupsRepository({
       ensureBackupsTable: () => this.backupsBootstrap.ensureTable(),
-      parseBackupMetadataSafe: (raw) => this.parseBackupMetadataSafe(raw)
+      parseBackupMetadataSafe
     });
     this.analyticsRepository = new AnalyticsRepository();
     this.collectionRepository = new CollectionRepository();
@@ -3559,1027 +5766,49 @@ var PostgresStorage = class {
     await this.ensureSettingsTables();
   }
   async ensureUsersTable() {
-    try {
-      await db.execute(sql13`SET search_path TO public`);
-      await db.execute(sql13`
-        CREATE TABLE IF NOT EXISTS public.users (
-          id text PRIMARY KEY,
-          username text NOT NULL,
-          role text NOT NULL DEFAULT 'user',
-          password_hash text,
-          password text,
-          is_banned boolean DEFAULT false,
-          created_at timestamp DEFAULT now(),
-          updated_at timestamp DEFAULT now(),
-          password_changed_at timestamp
-        )
-      `);
-      await db.execute(sql13`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role text`);
-      await db.execute(sql13`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_hash text`);
-      await db.execute(sql13`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password text`);
-      await db.execute(sql13`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_banned boolean DEFAULT false`);
-      await db.execute(sql13`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-      await db.execute(sql13`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
-      await db.execute(sql13`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_changed_at timestamp`);
-      await db.execute(sql13`
-        UPDATE public.users
-        SET password_hash = password
-        WHERE password_hash IS NULL
-          AND password IS NOT NULL
-      `);
-      const missingHashRows = await db.execute(sql13`
-        SELECT id
-        FROM public.users
-        WHERE password_hash IS NULL
-      `);
-      for (const row of missingHashRows.rows) {
-        const userId = String(row.id || "").trim();
-        if (!userId) continue;
-        const fallbackHash = await bcrypt2.hash(randomUUID2(), BCRYPT_COST2);
-        await db.execute(sql13`
-          UPDATE public.users
-          SET password_hash = ${fallbackHash}
-          WHERE id = ${userId}
-        `);
-      }
-      await db.execute(sql13`
-        UPDATE public.users
-        SET
-          role = COALESCE(NULLIF(role, ''), 'user'),
-          created_at = COALESCE(created_at, now()),
-          updated_at = COALESCE(updated_at, now()),
-          is_banned = COALESCE(is_banned, false)
-      `);
-      await db.execute(sql13`ALTER TABLE public.users ALTER COLUMN username SET NOT NULL`);
-      await db.execute(sql13`ALTER TABLE public.users ALTER COLUMN role SET NOT NULL`);
-      await db.execute(sql13`ALTER TABLE public.users ALTER COLUMN password_hash SET NOT NULL`);
-      await db.execute(sql13`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower_unique ON public.users (lower(username))`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_users_username_lower ON public.users (lower(username))`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_users_role ON public.users (role)`);
-    } catch (err) {
-      console.error("\u274C Failed to ensure users table:", err?.message || err);
-      throw err;
-    }
+    await this.usersBootstrap.ensureTable();
   }
   async ensureImportsTable() {
-    try {
-      await db.execute(sql13`SET search_path TO public`);
-      await db.execute(sql13`
-        CREATE TABLE IF NOT EXISTS public.imports (
-          id text PRIMARY KEY,
-          name text NOT NULL,
-          filename text NOT NULL,
-          created_at timestamp DEFAULT now(),
-          is_deleted boolean DEFAULT false,
-          created_by text
-        )
-      `);
-      await db.execute(sql13`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS name text`);
-      await db.execute(sql13`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS filename text`);
-      await db.execute(sql13`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-      await db.execute(sql13`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS is_deleted boolean DEFAULT false`);
-      await db.execute(sql13`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS created_by text`);
-      await db.execute(sql13`
-        UPDATE public.imports
-        SET
-          name = COALESCE(NULLIF(name, ''), NULLIF(filename, ''), 'Untitled Import'),
-          filename = COALESCE(NULLIF(filename, ''), COALESCE(NULLIF(name, ''), 'unknown.csv')),
-          created_at = COALESCE(created_at, now()),
-          is_deleted = COALESCE(is_deleted, false)
-      `);
-      await db.execute(sql13`ALTER TABLE public.imports ALTER COLUMN name SET NOT NULL`);
-      await db.execute(sql13`ALTER TABLE public.imports ALTER COLUMN filename SET NOT NULL`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_imports_created_at ON public.imports(created_at DESC)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_imports_is_deleted ON public.imports(is_deleted)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_imports_created_by ON public.imports(created_by)`);
-    } catch (err) {
-      console.error("Failed to ensure imports table:", err?.message || err);
-      throw err;
-    }
+    await this.coreSchemaBootstrap.ensureImportsTable();
   }
   async ensureDataRowsTable() {
-    try {
-      await db.execute(sql13`SET search_path TO public`);
-      await db.execute(sql13`
-        CREATE TABLE IF NOT EXISTS public.data_rows (
-          id text PRIMARY KEY,
-          import_id text NOT NULL,
-          json_data jsonb NOT NULL DEFAULT '{}'::jsonb
-        )
-      `);
-      await db.execute(sql13`ALTER TABLE public.data_rows ADD COLUMN IF NOT EXISTS import_id text`);
-      await db.execute(sql13`ALTER TABLE public.data_rows ADD COLUMN IF NOT EXISTS json_data jsonb DEFAULT '{}'::jsonb`);
-      await db.execute(sql13`
-        UPDATE public.data_rows
-        SET json_data = COALESCE(json_data, '{}'::jsonb)
-      `);
-      await db.execute(sql13`ALTER TABLE public.data_rows ALTER COLUMN import_id SET NOT NULL`);
-      await db.execute(sql13`ALTER TABLE public.data_rows ALTER COLUMN json_data SET NOT NULL`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_data_rows_import_id ON public.data_rows(import_id)`);
-    } catch (err) {
-      console.error("Failed to ensure data_rows table:", err?.message || err);
-      throw err;
-    }
+    await this.coreSchemaBootstrap.ensureDataRowsTable();
   }
   async ensureUserActivityTable() {
-    try {
-      await db.execute(sql13`SET search_path TO public`);
-      await db.execute(sql13`
-        CREATE TABLE IF NOT EXISTS public.user_activity (
-          id text PRIMARY KEY,
-          user_id text NOT NULL,
-          username text NOT NULL,
-          role text NOT NULL,
-          pc_name text,
-          browser text,
-          fingerprint text,
-          ip_address text,
-          login_time timestamp,
-          logout_time timestamp,
-          last_activity_time timestamp,
-          is_active boolean DEFAULT true,
-          logout_reason text
-        )
-      `);
-      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS user_id text`);
-      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS username text`);
-      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS role text`);
-      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS pc_name text`);
-      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS browser text`);
-      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS fingerprint text`);
-      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS ip_address text`);
-      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS login_time timestamp`);
-      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS logout_time timestamp`);
-      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS last_activity_time timestamp`);
-      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true`);
-      await db.execute(sql13`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS logout_reason text`);
-      await db.execute(sql13`
-        UPDATE public.user_activity
-        SET
-          is_active = COALESCE(is_active, true),
-          login_time = COALESCE(login_time, now()),
-          last_activity_time = COALESCE(last_activity_time, login_time, now())
-      `);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_user_activity_username ON public.user_activity(username)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_user_activity_is_active ON public.user_activity(is_active)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_user_activity_login_time ON public.user_activity(login_time DESC)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_user_activity_last_activity_time ON public.user_activity(last_activity_time DESC)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_user_activity_fingerprint ON public.user_activity(fingerprint)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_user_activity_ip_address ON public.user_activity(ip_address)`);
-    } catch (err) {
-      console.error("Failed to ensure user_activity table:", err?.message || err);
-      throw err;
-    }
+    await this.coreSchemaBootstrap.ensureUserActivityTable();
   }
   async ensureAuditLogsTable() {
-    try {
-      await db.execute(sql13`SET search_path TO public`);
-      await db.execute(sql13`
-        CREATE TABLE IF NOT EXISTS public.audit_logs (
-          id text PRIMARY KEY,
-          action text NOT NULL,
-          performed_by text NOT NULL,
-          target_user text,
-          target_resource text,
-          details text,
-          timestamp timestamp DEFAULT now()
-        )
-      `);
-      await db.execute(sql13`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS action text`);
-      await db.execute(sql13`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS performed_by text`);
-      await db.execute(sql13`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS target_user text`);
-      await db.execute(sql13`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS target_resource text`);
-      await db.execute(sql13`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS details text`);
-      await db.execute(sql13`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS timestamp timestamp DEFAULT now()`);
-      await db.execute(sql13`
-        UPDATE public.audit_logs
-        SET timestamp = COALESCE(timestamp, now())
-      `);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON public.audit_logs(timestamp DESC)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON public.audit_logs(action)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_audit_logs_performed_by ON public.audit_logs(performed_by)`);
-    } catch (err) {
-      console.error("Failed to ensure audit_logs table:", err?.message || err);
-      throw err;
-    }
+    await this.coreSchemaBootstrap.ensureAuditLogsTable();
   }
   async ensureCollectionRecordsTable() {
-    try {
-      await db.execute(sql13`SET search_path TO public`);
-      await db.execute(sql13`
-        CREATE TABLE IF NOT EXISTS public.collection_records (
-          id uuid PRIMARY KEY,
-          customer_name text NOT NULL,
-          ic_number text NOT NULL,
-          customer_phone text NOT NULL,
-          account_number text NOT NULL,
-          batch text NOT NULL,
-          payment_date date NOT NULL,
-          amount numeric(14,2) NOT NULL,
-          receipt_file text,
-          created_by_login text NOT NULL,
-          collection_staff_nickname text NOT NULL,
-          staff_username text NOT NULL,
-          created_at timestamp DEFAULT now() NOT NULL
-        )
-      `);
-      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name text`);
-      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number text`);
-      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_phone text`);
-      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number text`);
-      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS batch text`);
-      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS payment_date date`);
-      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS amount numeric(14,2)`);
-      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_file text`);
-      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_by_login text`);
-      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS collection_staff_nickname text`);
-      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS staff_username text`);
-      await db.execute(sql13`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-      await db.execute(sql13`
-        UPDATE public.collection_records
-        SET customer_phone = COALESCE(NULLIF(customer_phone, ''), '-')
-      `);
-      await db.execute(sql13`
-        UPDATE public.collection_records
-        SET created_by_login = COALESCE(NULLIF(created_by_login, ''), NULLIF(staff_username, ''), 'unknown')
-      `);
-      await db.execute(sql13`
-        UPDATE public.collection_records
-        SET collection_staff_nickname = COALESCE(NULLIF(collection_staff_nickname, ''), NULLIF(staff_username, ''), NULLIF(created_by_login, ''), 'unknown')
-      `);
-      await db.execute(sql13`
-        UPDATE public.collection_records
-        SET staff_username = COALESCE(NULLIF(staff_username, ''), NULLIF(collection_staff_nickname, ''), NULLIF(created_by_login, ''), 'unknown')
-      `);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_records_payment_date ON public.collection_records(payment_date)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_records_created_at ON public.collection_records(created_at DESC)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_username ON public.collection_records(staff_username)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_records_created_by_login ON public.collection_records(created_by_login)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`);
-    } catch (err) {
-      console.error("\u274C Failed to ensure collection_records table:", err?.message || err);
-      throw err;
-    }
+    await this.collectionBootstrap.ensureRecordsTable();
   }
   async ensureCollectionStaffNicknamesTable() {
-    try {
-      await db.execute(sql13`SET search_path TO public`);
-      await db.execute(sql13`
-        CREATE TABLE IF NOT EXISTS public.collection_staff_nicknames (
-          id uuid PRIMARY KEY,
-          nickname text NOT NULL,
-          is_active boolean NOT NULL DEFAULT true,
-          role_scope text NOT NULL DEFAULT 'both',
-          nickname_password_hash text,
-          must_change_password boolean NOT NULL DEFAULT true,
-          password_reset_by_superuser boolean NOT NULL DEFAULT false,
-          password_updated_at timestamp,
-          created_by text,
-          created_at timestamp NOT NULL DEFAULT now()
-        )
-      `);
-      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS nickname text`);
-      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true`);
-      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS role_scope text DEFAULT 'both'`);
-      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS nickname_password_hash text`);
-      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS must_change_password boolean DEFAULT true`);
-      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS password_reset_by_superuser boolean DEFAULT false`);
-      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS password_updated_at timestamp`);
-      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_by text`);
-      await db.execute(sql13`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-      await db.execute(sql13`
-        UPDATE public.collection_staff_nicknames
-        SET
-          nickname = trim(COALESCE(nickname, '')),
-          is_active = COALESCE(is_active, true),
-          role_scope = CASE
-            WHEN lower(trim(COALESCE(role_scope, ''))) IN ('admin', 'user', 'both')
-              THEN lower(trim(COALESCE(role_scope, '')))
-            ELSE 'both'
-          END,
-          nickname_password_hash = NULLIF(trim(COALESCE(nickname_password_hash, '')), ''),
-          must_change_password = COALESCE(
-            must_change_password,
-            CASE
-              WHEN NULLIF(trim(COALESCE(nickname_password_hash, '')), '') IS NULL THEN true
-              ELSE false
-            END
-          ),
-          password_reset_by_superuser = COALESCE(password_reset_by_superuser, false),
-          created_at = COALESCE(created_at, now())
-      `);
-      await db.execute(sql13`DELETE FROM public.collection_staff_nicknames WHERE nickname = ''`);
-      await db.execute(sql13`CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_staff_nicknames_lower_unique ON public.collection_staff_nicknames(lower(nickname))`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_active ON public.collection_staff_nicknames(is_active)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_role_scope ON public.collection_staff_nicknames(role_scope)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_must_change_password ON public.collection_staff_nicknames(must_change_password)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_password_reset ON public.collection_staff_nicknames(password_reset_by_superuser)`);
-      const seedRows = await db.execute(sql13`
-        SELECT DISTINCT trim(collection_staff_nickname) AS nickname
-        FROM public.collection_records
-        WHERE collection_staff_nickname IS NOT NULL
-          AND trim(collection_staff_nickname) <> ''
-        LIMIT 5000
-      `);
-      for (const row of seedRows.rows) {
-        const nickname = String(row.nickname || "").trim();
-        if (!nickname) continue;
-        await db.execute(sql13`
-          INSERT INTO public.collection_staff_nicknames (
-            id,
-            nickname,
-            is_active,
-            nickname_password_hash,
-            must_change_password,
-            password_reset_by_superuser,
-            password_updated_at,
-            created_by,
-            created_at
-          )
-          VALUES (
-            ${crypto6.randomUUID()}::uuid,
-            ${nickname},
-            true,
-            NULL,
-            true,
-            false,
-            NULL,
-            'system-seed',
-            now()
-          )
-          ON CONFLICT ((lower(nickname))) DO NOTHING
-        `);
-      }
-    } catch (err) {
-      console.error("\u274C Failed to ensure collection_staff_nicknames table:", err?.message || err);
-      throw err;
-    }
+    await this.collectionBootstrap.ensureStaffNicknamesTable();
   }
   async ensureCollectionAdminGroupsTables() {
-    try {
-      await db.execute(sql13`SET search_path TO public`);
-      await db.execute(sql13`
-        CREATE TABLE IF NOT EXISTS public.admin_groups (
-          id uuid PRIMARY KEY,
-          leader_nickname text NOT NULL,
-          created_by text NOT NULL,
-          created_at timestamp NOT NULL DEFAULT now(),
-          updated_at timestamp NOT NULL DEFAULT now()
-        )
-      `);
-      await db.execute(sql13`
-        CREATE TABLE IF NOT EXISTS public.admin_group_members (
-          id uuid PRIMARY KEY,
-          admin_group_id uuid NOT NULL,
-          member_nickname text NOT NULL,
-          created_at timestamp NOT NULL DEFAULT now()
-        )
-      `);
-      await db.execute(sql13`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS leader_nickname text`);
-      await db.execute(sql13`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_by text`);
-      await db.execute(sql13`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-      await db.execute(sql13`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
-      await db.execute(sql13`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS admin_group_id uuid`);
-      await db.execute(sql13`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS member_nickname text`);
-      await db.execute(sql13`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-      await db.execute(sql13`
-        UPDATE public.admin_groups
-        SET
-          leader_nickname = trim(COALESCE(leader_nickname, '')),
-          created_by = COALESCE(NULLIF(trim(COALESCE(created_by, '')), ''), 'system-seed'),
-          created_at = COALESCE(created_at, now()),
-          updated_at = COALESCE(updated_at, now())
-      `);
-      await db.execute(sql13`DELETE FROM public.admin_groups WHERE trim(COALESCE(leader_nickname, '')) = ''`);
-      await db.execute(sql13`
-        UPDATE public.admin_group_members
-        SET
-          member_nickname = trim(COALESCE(member_nickname, '')),
-          created_at = COALESCE(created_at, now())
-      `);
-      await db.execute(sql13`DELETE FROM public.admin_group_members WHERE trim(COALESCE(member_nickname, '')) = ''`);
-      await db.execute(sql13`
-        DELETE FROM public.admin_group_members m
-        WHERE m.admin_group_id IS NULL
-           OR NOT EXISTS (
-            SELECT 1
-            FROM public.admin_groups g
-            WHERE g.id = m.admin_group_id
-          )
-      `);
-      await db.execute(sql13`
-        DELETE FROM public.admin_group_members m
-        USING public.admin_groups g
-        WHERE g.id = m.admin_group_id
-          AND lower(g.leader_nickname) = lower(m.member_nickname)
-      `);
-      await db.execute(sql13`
-        DELETE FROM public.admin_groups a
-        USING public.admin_groups b
-        WHERE lower(a.leader_nickname) = lower(b.leader_nickname)
-          AND a.ctid > b.ctid
-      `);
-      await db.execute(sql13`
-        DELETE FROM public.admin_group_members a
-        USING public.admin_group_members b
-        WHERE a.admin_group_id = b.admin_group_id
-          AND lower(a.member_nickname) = lower(b.member_nickname)
-          AND a.ctid > b.ctid
-      `);
-      await db.execute(sql13`
-        DELETE FROM public.admin_group_members a
-        USING public.admin_group_members b
-        WHERE lower(a.member_nickname) = lower(b.member_nickname)
-          AND a.ctid > b.ctid
-      `);
-      await db.execute(sql13`
-        DELETE FROM public.admin_group_members m
-        WHERE EXISTS (
-          SELECT 1
-          FROM public.admin_groups g
-          WHERE lower(g.leader_nickname) = lower(m.member_nickname)
-            AND g.id <> m.admin_group_id
-        )
-      `);
-      await db.execute(sql13`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_groups_leader_nickname_unique
-        ON public.admin_groups (lower(leader_nickname))
-      `);
-      await db.execute(sql13`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_group_members_group_member_unique
-        ON public.admin_group_members (admin_group_id, lower(member_nickname))
-      `);
-      await db.execute(sql13`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_group_members_member_unique
-        ON public.admin_group_members (lower(member_nickname))
-      `);
-      await db.execute(sql13`
-        CREATE INDEX IF NOT EXISTS idx_admin_group_members_group
-        ON public.admin_group_members (admin_group_id)
-      `);
-    } catch (err) {
-      console.error("\u274C Failed to ensure admin group tables:", err?.message || err);
-      throw err;
-    }
+    await this.collectionBootstrap.ensureAdminGroupsTables();
   }
   async ensureCollectionNicknameSessionsTable() {
-    try {
-      await db.execute(sql13`SET search_path TO public`);
-      await db.execute(sql13`
-        CREATE TABLE IF NOT EXISTS public.collection_nickname_sessions (
-          activity_id text PRIMARY KEY,
-          username text NOT NULL,
-          user_role text NOT NULL,
-          nickname text NOT NULL,
-          verified_at timestamp NOT NULL DEFAULT now(),
-          updated_at timestamp NOT NULL DEFAULT now()
-        )
-      `);
-      await db.execute(sql13`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS username text`);
-      await db.execute(sql13`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS user_role text`);
-      await db.execute(sql13`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS nickname text`);
-      await db.execute(sql13`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS verified_at timestamp DEFAULT now()`);
-      await db.execute(sql13`ALTER TABLE public.collection_nickname_sessions ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
-      await db.execute(sql13`
-        UPDATE public.collection_nickname_sessions
-        SET
-          username = trim(COALESCE(username, '')),
-          user_role = trim(COALESCE(user_role, '')),
-          nickname = trim(COALESCE(nickname, '')),
-          verified_at = COALESCE(verified_at, now()),
-          updated_at = COALESCE(updated_at, now())
-      `);
-      await db.execute(sql13`
-        DELETE FROM public.collection_nickname_sessions
-        WHERE trim(COALESCE(username, '')) = ''
-          OR trim(COALESCE(user_role, '')) = ''
-          OR trim(COALESCE(nickname, '')) = ''
-      `);
-      await db.execute(sql13`
-        CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_username
-        ON public.collection_nickname_sessions (username)
-      `);
-      await db.execute(sql13`
-        CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_nickname
-        ON public.collection_nickname_sessions (lower(nickname))
-      `);
-      await db.execute(sql13`
-        CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_updated_at
-        ON public.collection_nickname_sessions (updated_at DESC)
-      `);
-    } catch (err) {
-      console.error("\u274C Failed to ensure collection nickname session table:", err?.message || err);
-      throw err;
-    }
+    await this.collectionBootstrap.ensureNicknameSessionsTable();
   }
   async ensureCollectionAdminVisibleNicknamesTable() {
-    try {
-      await db.execute(sql13`SET search_path TO public`);
-      await db.execute(sql13`
-        CREATE TABLE IF NOT EXISTS public.admin_visible_nicknames (
-          id uuid PRIMARY KEY,
-          admin_user_id text NOT NULL,
-          nickname_id uuid NOT NULL,
-          created_by_superuser text,
-          created_at timestamp NOT NULL DEFAULT now()
-        )
-      `);
-      await db.execute(sql13`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS admin_user_id text`);
-      await db.execute(sql13`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS nickname_id uuid`);
-      await db.execute(sql13`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS created_by_superuser text`);
-      await db.execute(sql13`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-      await db.execute(sql13`
-        UPDATE public.admin_visible_nicknames
-        SET created_at = COALESCE(created_at, now())
-      `);
-      await db.execute(sql13`
-        DELETE FROM public.admin_visible_nicknames avn
-        WHERE avn.admin_user_id IS NULL
-          OR avn.nickname_id IS NULL
-      `);
-      await db.execute(sql13`
-        DELETE FROM public.admin_visible_nicknames avn
-        WHERE NOT EXISTS (
-          SELECT 1
-          FROM public.users u
-          WHERE u.id = avn.admin_user_id
-            AND u.role = 'admin'
-        )
-      `);
-      await db.execute(sql13`
-        DELETE FROM public.admin_visible_nicknames avn
-        WHERE NOT EXISTS (
-          SELECT 1
-          FROM public.collection_staff_nicknames c
-          WHERE c.id = avn.nickname_id
-        )
-      `);
-      await db.execute(sql13`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_visible_nicknames_admin_nickname_unique
-        ON public.admin_visible_nicknames(admin_user_id, nickname_id)
-      `);
-      await db.execute(sql13`
-        CREATE INDEX IF NOT EXISTS idx_admin_visible_nicknames_admin
-        ON public.admin_visible_nicknames(admin_user_id)
-      `);
-      await db.execute(sql13`
-        CREATE INDEX IF NOT EXISTS idx_admin_visible_nicknames_nickname
-        ON public.admin_visible_nicknames(nickname_id)
-      `);
-      const existingCount = await db.execute(sql13`
-        SELECT COUNT(*)::int AS total
-        FROM public.admin_visible_nicknames
-        LIMIT 1
-      `);
-      const total = Number(existingCount.rows?.[0]?.total ?? 0);
-      if (total === 0) {
-        const admins = await db.execute(sql13`
-          SELECT id
-          FROM public.users
-          WHERE role = 'admin'
-          ORDER BY username ASC
-          LIMIT 5000
-        `);
-        const nicknames = await db.execute(sql13`
-          SELECT id
-          FROM public.collection_staff_nicknames
-          WHERE is_active = true
-          ORDER BY lower(nickname) ASC
-          LIMIT 5000
-        `);
-        const adminIds = (admins.rows || []).map((row) => String(row.id || "").trim()).filter(Boolean);
-        const nicknameIds = (nicknames.rows || []).map((row) => String(row.id || "").trim()).filter(Boolean);
-        for (const adminUserId of adminIds) {
-          for (const nicknameId of nicknameIds) {
-            await db.execute(sql13`
-              INSERT INTO public.admin_visible_nicknames (
-                id,
-                admin_user_id,
-                nickname_id,
-                created_by_superuser,
-                created_at
-              )
-              VALUES (
-                ${randomUUID2()}::uuid,
-                ${adminUserId},
-                ${nicknameId}::uuid,
-                'system-seed',
-                now()
-              )
-              ON CONFLICT (admin_user_id, nickname_id) DO NOTHING
-            `);
-          }
-        }
-      }
-    } catch (err) {
-      console.error("\u274C Failed to ensure admin_visible_nicknames table:", err?.message || err);
-      throw err;
-    }
+    await this.collectionBootstrap.ensureAdminVisibleNicknamesTable();
   }
   async ensurePerformanceIndexes() {
-    try {
-      await db.execute(sql13`SET search_path TO public`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_data_rows_import_id ON data_rows(import_id)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_imports_is_deleted ON imports(is_deleted)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_user_activity_login_time ON user_activity(login_time)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_user_activity_logout_time ON user_activity(logout_time)`);
-      try {
-        await db.execute(sql13`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_json_text_trgm
-          ON data_rows
-          USING GIN ((json_data::text) gin_trgm_ops)
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_mykad_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No. MyKad',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_idno_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'ID No',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_nopengenalan_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No Pengenalan',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_ic_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'IC',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_cardno_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Card No',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_accountno_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Account No',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_accountnumber_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Account Number',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_akaunpemohon_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Nombor Akaun Bank Pemohon',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_noakaun_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No Akaun',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_telrumah_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No. Telefon Rumah',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_telbimbit_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No. Telefon Bimbit',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_phone_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Phone',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_handphone_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'Handphone',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_officephone_digits
-          ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'OfficePhone',''), '[^0-9]', '', 'g')))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_nob_trgm
-          ON data_rows
-          USING GIN (((json_data::jsonb)->>'NOB') gin_trgm_ops)
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_employer_name_trgm
-          ON data_rows
-          USING GIN (((json_data::jsonb)->>'EMPLOYER NAME') gin_trgm_ops)
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_nature_business_trgm
-          ON data_rows
-          USING GIN (((json_data::jsonb)->>'NATURE OF BUSINESS') gin_trgm_ops)
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_nama_trgm
-          ON data_rows
-          USING GIN (((json_data::jsonb)->>'Nama') gin_trgm_ops)
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_customer_name_trgm
-          ON data_rows
-          USING GIN (((json_data::jsonb)->>'Customer Name') gin_trgm_ops)
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_name_trgm
-          ON data_rows
-          USING GIN (((json_data::jsonb)->>'name') gin_trgm_ops)
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_mykad_exact
-          ON data_rows (((json_data::jsonb)->>'No. MyKad'))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_idno_exact
-          ON data_rows (((json_data::jsonb)->>'ID No'))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_nopengenalan_exact
-          ON data_rows (((json_data::jsonb)->>'No Pengenalan'))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_ic_exact
-          ON data_rows (((json_data::jsonb)->>'IC'))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_accountno_exact
-          ON data_rows (((json_data::jsonb)->>'Account No'))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_accountnumber_exact
-          ON data_rows (((json_data::jsonb)->>'Account Number'))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_cardno_exact
-          ON data_rows (((json_data::jsonb)->>'Card No'))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_noakaun_exact
-          ON data_rows (((json_data::jsonb)->>'No Akaun'))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_akaunpemohon_exact
-          ON data_rows (((json_data::jsonb)->>'Nombor Akaun Bank Pemohon'))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_telrumah_exact
-          ON data_rows (((json_data::jsonb)->>'No. Telefon Rumah'))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_telbimbit_exact
-          ON data_rows (((json_data::jsonb)->>'No. Telefon Bimbit'))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_phone_exact
-          ON data_rows (((json_data::jsonb)->>'Phone'))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_handphone_exact
-          ON data_rows (((json_data::jsonb)->>'Handphone'))
-        `);
-        await db.execute(sql13`
-          CREATE INDEX IF NOT EXISTS idx_data_rows_officephone_exact
-          ON data_rows (((json_data::jsonb)->>'OfficePhone'))
-        `);
-      } catch (err) {
-        console.warn("\u26A0\uFE0F pg_trgm not available; skipping trigram index:", err?.message || err);
-      }
-    } catch (err) {
-      console.error("\u274C Failed to ensure performance indexes:", err?.message || err);
-    }
+    await this.coreSchemaBootstrap.ensurePerformanceIndexes();
   }
   async ensureBannedSessionsTable() {
-    try {
-      await db.execute(sql13`SET search_path TO public`);
-      await db.execute(sql13`
-        CREATE TABLE IF NOT EXISTS public.banned_sessions (
-          id text PRIMARY KEY,
-          username text NOT NULL,
-          role text NOT NULL,
-          activity_id text NOT NULL,
-          fingerprint text,
-          ip_address text,
-          browser text,
-          pc_name text,
-          banned_at timestamp DEFAULT now()
-        )
-      `);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_banned_sessions_fingerprint ON public.banned_sessions(fingerprint)`);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_banned_sessions_ip ON public.banned_sessions(ip_address)`);
-    } catch (err) {
-      console.error("\u274C Failed to ensure banned_sessions table:", err?.message || err);
-    }
+    await this.coreSchemaBootstrap.ensureBannedSessionsTable();
   }
   async ensureAiTables() {
-    try {
-      await db.execute(sql13`SET search_path TO public`);
-      let vectorAvailable = true;
-      try {
-        await db.execute(sql13`CREATE EXTENSION IF NOT EXISTS vector`);
-      } catch (err) {
-        vectorAvailable = false;
-        console.warn("\u26A0\uFE0F pgvector extension not available. Embeddings disabled until installed.");
-      }
-      if (vectorAvailable) {
-        await db.execute(sql13`
-          CREATE TABLE IF NOT EXISTS public.data_embeddings (
-            id text PRIMARY KEY,
-            import_id text NOT NULL,
-            row_id text NOT NULL UNIQUE,
-            content text NOT NULL,
-            embedding vector(768) NOT NULL,
-            created_at timestamp DEFAULT now()
-          )
-        `);
-        await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_data_embeddings_import_id ON public.data_embeddings(import_id)`);
-        try {
-          await db.execute(sql13`
-            CREATE INDEX IF NOT EXISTS idx_data_embeddings_vector
-            ON public.data_embeddings
-            USING ivfflat (embedding vector_cosine_ops)
-          `);
-        } catch (err) {
-          console.warn("\u26A0\uFE0F Failed to create ivfflat index:", err?.message || err);
-        }
-      }
-      await db.execute(sql13`
-        CREATE TABLE IF NOT EXISTS public.ai_conversations (
-          id text PRIMARY KEY,
-          created_by text NOT NULL,
-          created_at timestamp DEFAULT now()
-        )
-      `);
-      await db.execute(sql13`
-        CREATE TABLE IF NOT EXISTS public.ai_messages (
-          id text PRIMARY KEY,
-          conversation_id text NOT NULL,
-          role text NOT NULL,
-          content text NOT NULL,
-          created_at timestamp DEFAULT now()
-        )
-      `);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation_id ON public.ai_messages(conversation_id)`);
-    } catch (err) {
-      console.error("\u274C Failed to ensure AI tables:", err?.message || err);
-    }
+    await this.aiBootstrap.ensureAiTables();
   }
   async ensureCategoryStatsTable() {
-    try {
-      await db.execute(sql13`SET search_path TO public`);
-      await db.execute(sql13`
-        CREATE TABLE IF NOT EXISTS public.ai_category_stats (
-          key text PRIMARY KEY,
-          total integer NOT NULL,
-          samples jsonb,
-          updated_at timestamp DEFAULT now()
-        )
-      `);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_ai_category_stats_updated_at ON public.ai_category_stats(updated_at)`);
-    } catch (err) {
-      console.error("\u274C Failed to ensure ai_category_stats table:", err?.message || err);
-    }
+    await this.aiBootstrap.ensureCategoryStatsTable();
   }
   async ensureCategoryRulesTable() {
-    try {
-      await db.execute(sql13`SET search_path TO public`);
-      await db.execute(sql13`
-        CREATE TABLE IF NOT EXISTS public.ai_category_rules (
-          key text PRIMARY KEY,
-          terms text[] NOT NULL DEFAULT '{}',
-          fields text[] NOT NULL DEFAULT '{}',
-          match_mode text NOT NULL DEFAULT 'contains',
-          enabled boolean NOT NULL DEFAULT true,
-          updated_at timestamp DEFAULT now()
-        )
-      `);
-      await db.execute(sql13`CREATE INDEX IF NOT EXISTS idx_ai_category_rules_updated_at ON public.ai_category_rules(updated_at)`);
-      const defaultFields = [
-        "NOB",
-        "NATURE OF BUSINESS",
-        "Nature of Business",
-        "EMPLOYER NAME",
-        "EmployerName",
-        "Company",
-        "Nama Majikan",
-        "Majikan",
-        "Department",
-        "Agensi"
-      ];
-      const defaults = [
-        {
-          key: "kerajaan",
-          terms: [
-            "GOVERNMENT",
-            "KERAJAAN",
-            "PUBLIC SECTOR",
-            "SECTOR AWAM",
-            "KEMENTERIAN",
-            "JABATAN",
-            "AGENSI",
-            "PERSEKUTUAN",
-            "NEGERI",
-            "MAJLIS",
-            "KKM",
-            "KPM",
-            "KPT",
-            "MOE",
-            "MOH",
-            "SEKOLAH",
-            "GURU",
-            "TEACHER",
-            "CIKGU",
-            "PENDIDIKAN"
-          ],
-          fields: defaultFields,
-          matchMode: "contains",
-          enabled: true
-        },
-        {
-          key: "hospital",
-          terms: [
-            "HEALTHCARE",
-            "HOSPITAL",
-            "CLINIC",
-            "KLINIK",
-            "KESIHATAN",
-            "MEDICAL",
-            "HEALTH"
-          ],
-          fields: defaultFields,
-          matchMode: "contains",
-          enabled: true
-        },
-        {
-          key: "hotel",
-          terms: [
-            "HOTEL",
-            "HOSPITALITY",
-            "RESORT",
-            "INN",
-            "MOTEL",
-            "RESTAURANT",
-            "SERVICE LINE",
-            "HOTEL,RESTAURANT",
-            "HOTEL & RESTAURANT"
-          ],
-          fields: defaultFields,
-          matchMode: "contains",
-          enabled: true
-        },
-        {
-          key: "polis",
-          terms: ["POLIS", "POLICE", "PDRM", "IPD", "IPK", "ROYAL MALAYSIA POLICE"],
-          fields: defaultFields,
-          matchMode: "contains",
-          enabled: true
-        },
-        {
-          key: "tentera",
-          terms: [
-            "TENTERA",
-            "ARMY",
-            "MILITARY",
-            "ARMED FORCES",
-            "ATM",
-            "TUDM",
-            "TLDM",
-            "TENTERA DARAT",
-            "TENTERA LAUT",
-            "TENTERA UDARA",
-            "ANGKATAN TENTERA",
-            "ANGKATAN TENTERA MALAYSIA",
-            "MINDEF",
-            "MINISTRY OF DEFENCE",
-            "KEMENTERIAN PERTAHANAN",
-            "DEFENCE",
-            "PERTAHANAN"
-          ],
-          fields: defaultFields,
-          matchMode: "contains",
-          enabled: true
-        },
-        {
-          key: "swasta",
-          terms: ["SWASTA", "PRIVATE", "SDN BHD", "BHD", "ENTERPRISE", "TRADING", "LTD", "PLC"],
-          fields: defaultFields,
-          matchMode: "complement",
-          enabled: true
-        }
-      ];
-      const toTextArray = (values) => {
-        if (!values.length) return sql13`'{}'::text[]`;
-        const joined = sql13.join(values.map((v) => sql13`${v}`), sql13`, `);
-        return sql13`ARRAY[${joined}]::text[]`;
-      };
-      for (const rule of defaults) {
-        const termsSql = toTextArray(rule.terms || []);
-        const fieldsSql = toTextArray(rule.fields || []);
-        await db.execute(sql13`
-          INSERT INTO public.ai_category_rules (key, terms, fields, match_mode, enabled, updated_at)
-          VALUES (${rule.key}, ${termsSql}, ${fieldsSql}, ${rule.matchMode ?? "contains"}, ${rule.enabled ?? true}, now())
-          ON CONFLICT (key) DO UPDATE SET
-            terms = EXCLUDED.terms,
-            fields = EXCLUDED.fields,
-            match_mode = EXCLUDED.match_mode,
-            enabled = EXCLUDED.enabled,
-            updated_at = now()
-        `);
-      }
-    } catch (err) {
-      console.error("\u274C Failed to ensure ai_category_rules table:", err?.message || err);
-    }
+    await this.aiBootstrap.ensureCategoryRulesTable();
   }
   async ensureSettingsTables() {
     await this.settingsBootstrap.ensureTables();
@@ -4593,73 +5822,8 @@ var PostgresStorage = class {
   async ensureBackupsReady() {
     await this.ensureBackupsTable();
   }
-  parseBackupMetadataSafe(raw) {
-    if (!raw) return null;
-    if (typeof raw === "object") return raw;
-    if (typeof raw !== "string") return null;
-    const trimmed = raw.trim();
-    if (!trimmed) return null;
-    if (trimmed.length > 2e5) return null;
-    try {
-      const parsed = JSON.parse(trimmed);
-      return parsed && typeof parsed === "object" ? parsed : null;
-    } catch {
-      return null;
-    }
-  }
-  parseBackupMetadata(raw) {
-    return this.parseBackupMetadataSafe(raw);
-  }
   async seedDefaultUsers() {
-    const shouldSeedConfiguredUsers = shouldSeedDefaultUsers();
-    const [{ value: existingUserCount }] = await db.select({ value: count2() }).from(users);
-    const isFreshLocalBootstrap = !shouldSeedConfiguredUsers && Number(existingUserCount || 0) === 0 && process.env.NODE_ENV !== "production";
-    const defaultUsers = [
-      {
-        username: process.env.SEED_SUPERUSER_USERNAME || "superuser",
-        password: process.env.SEED_SUPERUSER_PASSWORD || "",
-        role: "superuser"
-      },
-      {
-        username: process.env.SEED_ADMIN_USERNAME || "admin1",
-        password: process.env.SEED_ADMIN_PASSWORD || "",
-        role: "admin"
-      },
-      {
-        username: process.env.SEED_USER_USERNAME || "user1",
-        password: process.env.SEED_USER_PASSWORD || "",
-        role: "user"
-      }
-    ].filter((user) => user.password);
-    if (isFreshLocalBootstrap) {
-      defaultUsers.push({
-        username: process.env.SEED_SUPERUSER_USERNAME || "superuser",
-        password: process.env.SEED_SUPERUSER_PASSWORD || "0441024k",
-        role: "superuser"
-      });
-      console.warn(
-        "[AUTH] No users found. Bootstrapped local superuser account for first login."
-      );
-    } else if (!shouldSeedConfiguredUsers) {
-      return;
-    }
-    for (const user of defaultUsers) {
-      const existing = await this.getUserByUsername(user.username);
-      if (!existing) {
-        const now = /* @__PURE__ */ new Date();
-        const hashedPassword = await bcrypt2.hash(user.password, BCRYPT_COST2);
-        await db.insert(users).values({
-          id: crypto6.randomUUID(),
-          username: user.username,
-          passwordHash: hashedPassword,
-          role: user.role,
-          createdAt: now,
-          updatedAt: now,
-          passwordChangedAt: now,
-          isBanned: false
-        });
-      }
-    }
+    await this.usersBootstrap.seedDefaultUsers();
   }
   async getUser(id) {
     return this.authRepository.getUser(id);
@@ -4680,78 +5844,10 @@ var PostgresStorage = class {
     return this.authRepository.updateActivitiesUsername(oldUsername, newUsername);
   }
   async searchGlobalDataRows(params) {
-    const { search, limit, offset } = params;
-    const rowsResult = await db.execute(sql13`
-    SELECT
-      dr.id,
-      dr.import_id,
-      dr.json_data as json_data_jsonb,
-      i.name as import_name,
-      i.filename as import_filename
-    FROM data_rows dr
-    JOIN imports i ON i.id = dr.import_id
-    WHERE i.is_deleted = false
-      AND dr.json_data::text ILIKE ${"%" + search + "%"}
-    ORDER BY dr.id
-    LIMIT ${limit} OFFSET ${offset}
-  `);
-    const totalResult = await db.execute(sql13`
-    SELECT COUNT(*)::int AS total
-    FROM data_rows dr
-    JOIN imports i ON i.id = dr.import_id
-    WHERE i.is_deleted = false
-      AND dr.json_data::text ILIKE ${"%" + search + "%"}
-  `);
-    const convertedRows = rowsResult.rows.map((row, idx) => {
-      let jsonData = row.json_data_jsonb;
-      if (idx === 0 && STORAGE_DEBUG_LOGS) {
-        console.log(`\u{1F50D} DEBUG first row keys: ${Object.keys(row).join(", ")}`);
-        console.log(`\u{1F50D} DEBUG json_data type: ${typeof jsonData}, isArray: ${Array.isArray(jsonData)}, value sample: ${JSON.stringify(jsonData).substring(0, 100)}`);
-      }
-      if (typeof jsonData === "string") {
-        try {
-          jsonData = JSON.parse(jsonData);
-        } catch (e) {
-          if (STORAGE_DEBUG_LOGS) {
-            console.log(`\u{1F50D} Failed to parse json_data as JSON, treating as string`);
-          }
-        }
-      }
-      if (Array.isArray(jsonData)) {
-        const obj = {};
-        for (let i = 0; i < jsonData.length; i++) {
-          obj[`col_${i + 1}`] = jsonData[i];
-        }
-        jsonData = obj;
-        if (idx === 0 && STORAGE_DEBUG_LOGS) {
-          console.log(`\u{1F50D} Converted array to object with keys: ${Object.keys(jsonData).join(",")}`);
-        }
-      }
-      return {
-        id: row.id,
-        importId: row.import_id,
-        importName: row.import_name,
-        importFilename: row.import_filename,
-        jsonDataJsonb: jsonData
-      };
-    });
-    const total = totalResult.rows && totalResult.rows[0] ? Number(totalResult.rows[0].total) : 0;
-    return {
-      rows: convertedRows,
-      total
-    };
+    return this.searchRepository.searchGlobalDataRows(params);
   }
   async searchSimpleDataRows(search) {
-    return await db.execute(sql13`
-    SELECT
-      dr.import_id as "importId",
-      i.name as "importName",
-      dr.json_data_jsonb as "jsonDataJsonb"
-    FROM data_rows dr
-    JOIN imports i ON i.id = dr.import_id
-    WHERE dr.json_data_jsonb::text ILIKE ${"%" + search + "%"}
-    LIMIT 200
-  `);
+    return this.searchRepository.searchSimpleDataRows(search);
   }
   async updateUserBan(username, isBanned) {
     return this.authRepository.updateUserBan(username, isBanned);
@@ -4776,11 +5872,11 @@ var PostgresStorage = class {
   }
   async getDataRowsByImport(importId) {
     if (STORAGE_DEBUG_LOGS) {
-      console.log("\u{1F9EA} VIEWER importId received:", importId);
+      console.log("DEBUG VIEWER importId received:", importId);
     }
     const rows = await this.importsRepository.getDataRowsByImport(importId);
     if (STORAGE_DEBUG_LOGS) {
-      console.log("\u{1F9EA} ROW COUNT:", rows.length);
+      console.log("DEBUG ROW COUNT:", rows.length);
     }
     return rows;
   }
@@ -4788,120 +5884,21 @@ var PostgresStorage = class {
     return this.importsRepository.getDataRowCountByImport(importId);
   }
   async searchDataRows(params) {
-    const { importId, search, limit, offset } = params;
-    const trimmedSearch = search && search.trim() ? search.trim() : null;
+    const trimmedSearch = params.search && params.search.trim() ? params.search.trim() : null;
     if (STORAGE_DEBUG_LOGS) {
-      console.log(`\u{1F50D} searchDataRows called: search="${search}" -> trimmed="${trimmedSearch}"`);
+      console.log(`DEBUG searchDataRows called: search="${params.search}" -> trimmed="${trimmedSearch}"`);
     }
-    const safeLimit = Math.min(limit, MAX_SEARCH_LIMIT2);
-    const safeOffset = Math.max(offset, 0);
-    if (trimmedSearch && trimmedSearch.length < 2) {
-      return { rows: [], total: 0 };
-    }
-    if (!trimmedSearch) {
-      const rows = await db.select().from(dataRows).where(eq5(dataRows.importId, importId)).limit(safeLimit).offset(safeOffset);
-      const [{ count: count3 }] = await db.select({ count: sql13`count(*)` }).from(dataRows).where(eq5(dataRows.importId, importId));
-      if (STORAGE_DEBUG_LOGS) {
-        console.log("\u{1F50D} searchDataRows (no search) - returned:", rows.length, "rows");
-      }
-      return { rows, total: Number(count3) };
-    }
+    const result = await this.searchRepository.searchDataRows(params);
     if (STORAGE_DEBUG_LOGS) {
-      console.log(`\u{1F50D} Executing search query for: "${trimmedSearch}"`);
+      console.log(`DEBUG searchDataRows results: ${result.rows.length} rows found (total: ${result.total})`);
     }
-    const rowsResult = await db.execute(sql13`
-    SELECT 
-      id,
-      import_id,
-      json_data::jsonb as json_data
-    FROM data_rows
-    WHERE import_id = ${importId}
-      AND json_data::text ILIKE ${"%" + trimmedSearch + "%"}
-    ORDER BY id
-    LIMIT ${safeLimit} OFFSET ${safeOffset}
-  `);
-    const totalResult = await db.execute(sql13`
-    SELECT COUNT(*)::int AS total
-    FROM data_rows
-    WHERE import_id = ${importId}
-      AND json_data::text ILIKE ${"%" + trimmedSearch + "%"}
-  `);
-    const totalCount = totalResult.rows && totalResult.rows[0] ? Number(totalResult.rows[0].total) : 0;
-    if (STORAGE_DEBUG_LOGS) {
-      console.log(`\u{1F50D} Search results: ${rowsResult.rows.length} rows found (total: ${totalCount})`);
-    }
-    const convertedRows = rowsResult.rows.map((row) => {
-      let jsonData = row.json_data;
-      if (Array.isArray(jsonData)) {
-        const obj = {};
-        for (let i = 0; i < jsonData.length; i++) {
-          obj[`col_${i + 1}`] = jsonData[i];
-        }
-        jsonData = obj;
-        if (STORAGE_DEBUG_LOGS) {
-          console.log(`\u{1F50D} Converted array row id=${row.id} to object with keys: ${Object.keys(jsonData).join(",")}`);
-        }
-      }
-      return {
-        id: row.id,
-        importId: row.import_id,
-        jsonDataJsonb: jsonData
-      };
-    });
-    return {
-      rows: convertedRows,
-      total: totalCount
-    };
-  }
-  async getAllowedSearchColumns() {
-    const columns = await this.getAllColumnNames();
-    return new Set(columns);
+    return result;
   }
   async advancedSearchDataRows(filters, logic, limit, offset) {
-    const activeImports = await this.getImports();
-    const activeImportIds = activeImports.map((imp) => imp.id);
-    if (activeImportIds.length === 0) {
-      return { rows: [], total: 0 };
-    }
-    const allowedColumns = await this.getAllowedSearchColumns();
-    const safeFilters = filters.filter(
-      (f) => allowedColumns.has(f.field) && ALLOWED_OPERATORS2.has(f.operator)
-    );
-    if (safeFilters.length === 0) {
-      return { rows: [], total: 0 };
-    }
-    const conditions = safeFilters.map(
-      (filter) => buildSqlCondition(filter.field, filter.operator, filter.value)
-    );
-    const combinedCondition = logic === "AND" ? and3(...conditions) : or(...conditions);
-    const safeLimit = Math.min(limit, MAX_SEARCH_LIMIT2);
-    const safeOffset = Math.max(offset, 0);
-    const rows = await db.select().from(dataRows).where(
-      and3(
-        inArray2(dataRows.importId, activeImportIds),
-        combinedCondition
-      )
-    ).limit(safeLimit).offset(safeOffset);
-    const [{ count: count3 }] = await db.select({ count: sql13`count(*)` }).from(dataRows).where(
-      and3(
-        inArray2(dataRows.importId, activeImportIds),
-        combinedCondition
-      )
-    );
-    return { rows, total: Number(count3) };
+    return this.searchRepository.advancedSearchDataRows(filters, logic, limit, offset);
   }
   async getAllColumnNames() {
-    const result = await db.execute(sql13`
-      SELECT DISTINCT key AS column_name
-      FROM public.data_rows dr
-      JOIN public.imports i ON i.id = dr.import_id
-      CROSS JOIN LATERAL jsonb_object_keys(dr.json_data::jsonb) AS key
-      WHERE i.is_deleted = false
-        AND jsonb_typeof(dr.json_data::jsonb) = 'object'
-      ORDER BY key
-      LIMIT ${MAX_COLUMN_KEYS2}
-    `);
-    return (result.rows || []).map((row) => String(row.column_name || "").trim()).filter((name) => name.length > 0);
+    return this.searchRepository.getAllColumnNames();
   }
   async createActivity(data) {
     return this.activityRepository.createActivity(data);
@@ -4952,978 +5949,67 @@ var PostgresStorage = class {
     return this.activityRepository.getBannedSessions();
   }
   async createConversation(createdBy) {
-    const id = crypto6.randomUUID();
-    await db.execute(sql13`
-      INSERT INTO public.ai_conversations (id, created_by, created_at)
-      VALUES (${id}, ${createdBy}, ${/* @__PURE__ */ new Date()})
-    `);
-    return id;
+    return this.aiRepository.createConversation(createdBy);
   }
   async saveConversationMessage(conversationId, role, content) {
-    await db.execute(sql13`
-      INSERT INTO public.ai_messages (id, conversation_id, role, content, created_at)
-      VALUES (${crypto6.randomUUID()}, ${conversationId}, ${role}, ${content}, ${/* @__PURE__ */ new Date()})
-    `);
+    return this.aiRepository.saveConversationMessage(conversationId, role, content);
   }
   async getConversationMessages(conversationId, limit = 20) {
-    const result = await db.execute(sql13`
-      SELECT role, content
-      FROM public.ai_messages
-      WHERE conversation_id = ${conversationId}
-      ORDER BY created_at ASC
-      LIMIT ${limit}
-    `);
-    return result.rows;
+    return this.aiRepository.getConversationMessages(conversationId, limit);
   }
   async saveEmbedding(params) {
-    const embeddingLiteral = sql13.raw(`'[${params.embedding.join(",")}]'`);
-    await db.execute(sql13`
-      INSERT INTO public.data_embeddings (id, import_id, row_id, content, embedding, created_at)
-      VALUES (${crypto6.randomUUID()}, ${params.importId}, ${params.rowId}, ${params.content}, ${embeddingLiteral}::vector, ${/* @__PURE__ */ new Date()})
-      ON CONFLICT (row_id) DO UPDATE SET
-        import_id = EXCLUDED.import_id,
-        content = EXCLUDED.content,
-        embedding = EXCLUDED.embedding
-    `);
+    return this.aiRepository.saveEmbedding(params);
   }
   async semanticSearch(params) {
-    const embeddingLiteral = sql13.raw(`'[${params.embedding.join(",")}]'`);
-    const importFilter = params.importId ? sql13`AND e.import_id = ${params.importId}` : sql13``;
-    try {
-      await db.execute(sql13`SET ivfflat.probes = 5`);
-    } catch {
-    }
-    const result = await db.execute(sql13`
-      SELECT
-        e.row_id as "rowId",
-        e.import_id as "importId",
-        e.content as "content",
-        (1 - (e.embedding <=> ${embeddingLiteral}::vector))::float as "score",
-        i.name as "importName",
-        i.filename as "importFilename",
-        dr.json_data as "jsonDataJsonb"
-      FROM public.data_embeddings e
-      JOIN data_rows dr ON dr.id = e.row_id
-      LEFT JOIN imports i ON i.id = e.import_id
-      WHERE (i.is_deleted = false OR i.is_deleted IS NULL)
-      ${importFilter}
-      ORDER BY e.embedding <=> ${embeddingLiteral}::vector
-      LIMIT ${params.limit}
-    `);
-    return result.rows.map((row) => {
-      let jsonData = row.jsonDataJsonb;
-      if (typeof jsonData === "string") {
-        try {
-          jsonData = JSON.parse(jsonData);
-        } catch {
-        }
-      }
-      return { ...row, jsonDataJsonb: jsonData };
-    });
+    return this.aiRepository.semanticSearch(params);
   }
   async aiKeywordSearch(params) {
-    const q = String(params.query || "");
-    const digits = q.replace(/[^0-9]/g, "");
-    const limit = Math.max(1, Math.min(50, params.limit || 10));
-    if (digits.length < 6) return [];
-    const isIc = digits.length === 12;
-    const isPhone = digits.length >= 9 && digits.length <= 11;
-    const icFields = ["No. MyKad", "ID No", "No Pengenalan", "IC", "NRIC", "MyKad"];
-    const phoneFields = ["No. Telefon Rumah", "No. Telefon Bimbit", "Telefon", "Phone", "HP", "Handphone", "OfficePhone"];
-    const accountFields = ["Nombor Akaun Bank Pemohon", "Account No", "Account Number", "No Akaun", "Card No"];
-    const primaryFields = isIc ? icFields : isPhone ? phoneFields : accountFields;
-    if (primaryFields.length === 0) return [];
-    const perFieldMatch = sql13.join(
-      primaryFields.map(
-        (key) => sql13`coalesce((dr.json_data::jsonb)->>${key}, '') = ${digits}`
-      ),
-      sql13` OR `
-    );
-    const result = await db.execute(sql13`
-      SELECT
-        dr.id as "rowId",
-        dr.import_id as "importId",
-        i.name as "importName",
-        i.filename as "importFilename",
-        dr.json_data as "jsonDataJsonb"
-      FROM data_rows dr
-      JOIN imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-        AND (${perFieldMatch})
-      ORDER BY dr.id
-      LIMIT ${limit}
-    `);
-    return result.rows;
+    return this.aiRepository.aiKeywordSearch(params);
   }
   async aiNameSearch(params) {
-    const q = String(params.query || "").trim();
-    if (!q) return [];
-    const nameKeysMatch = sql13`
-      (
-        coalesce((dr.json_data::jsonb)->>'Nama','') ILIKE ${"%" + q + "%"} OR
-        coalesce((dr.json_data::jsonb)->>'Customer Name','') ILIKE ${"%" + q + "%"} OR
-        coalesce((dr.json_data::jsonb)->>'name','') ILIKE ${"%" + q + "%"} OR
-        coalesce((dr.json_data::jsonb)->>'MAKLUMAT PEMOHON','') ILIKE ${"%" + q + "%"}
-      )
-    `;
-    const result = await db.execute(sql13`
-      SELECT
-        dr.id as "rowId",
-        dr.import_id as "importId",
-        i.name as "importName",
-        i.filename as "importFilename",
-        dr.json_data as "jsonDataJsonb"
-      FROM data_rows dr
-      JOIN imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-        AND ${nameKeysMatch}
-      ORDER BY dr.id
-      LIMIT ${params.limit}
-    `);
-    return result.rows;
+    return this.aiRepository.aiNameSearch(params);
   }
   async aiDigitsSearch(params) {
-    const digits = params.digits;
-    const result = await db.execute(sql13`
-      SELECT
-        dr.id as "rowId",
-        dr.import_id as "importId",
-        i.name as "importName",
-        i.filename as "importFilename",
-        dr.json_data as "jsonDataJsonb"
-      FROM data_rows dr
-      JOIN imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-        AND regexp_replace(dr.json_data::text, '[^0-9]', '', 'g') LIKE ${"%" + digits + "%"}
-      ORDER BY dr.id
-      LIMIT ${params.limit}
-    `);
-    return result.rows;
+    return this.aiRepository.aiDigitsSearch(params);
   }
   async aiFuzzySearch(params) {
-    const raw = String(params.query || "").toLowerCase().trim();
-    const tokens = raw.split(/\s+/).map((t) => t.replace(/[^a-z0-9]/gi, "")).filter((t) => t.length >= 3);
-    if (tokens.length === 0) return [];
-    const scoreParts = tokens.map(
-      (t) => sql13`CASE WHEN dr.json_data::text ILIKE ${"%" + t + "%"} THEN 1 ELSE 0 END`
-    );
-    const whereParts = tokens.map(
-      (t) => sql13`dr.json_data::text ILIKE ${"%" + t + "%"}`
-    );
-    const scoreSql = sql13.join(scoreParts, sql13` + `);
-    const whereSql = sql13.join(whereParts, sql13` OR `);
-    const result = await db.execute(sql13`
-      SELECT
-        dr.id as "rowId",
-        dr.import_id as "importId",
-        i.name as "importName",
-        i.filename as "importFilename",
-        dr.json_data as "jsonDataJsonb",
-        (${scoreSql})::int as "score"
-      FROM data_rows dr
-      JOIN imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-        AND (${whereSql})
-      ORDER BY "score" DESC, dr.id
-      LIMIT ${params.limit}
-    `);
-    return result.rows;
+    return this.aiRepository.aiFuzzySearch(params);
   }
   async findBranchesByText(params) {
-    const q = String(params.query || "").trim();
-    if (!q) return [];
-    const limit = Math.max(1, Math.min(5, params.limit));
-    try {
-      const result = await db.execute(sql13`
-          SELECT
-            name,
-            branch_address,
-            phone_number,
-            fax_number,
-            business_hour,
-            day_open,
-            atm_cdm,
-            inquiry_availability,
-            application_availability,
-            aeon_lounge,
-            GREATEST(
-              similarity(coalesce(name, ''), ${q}),
-              similarity(coalesce(branch_address, ''), ${q})
-            ) AS score
-          FROM public.aeon_branches
-          WHERE
-            name ILIKE ${"%" + q + "%"}
-            OR branch_address ILIKE ${"%" + q + "%"}
-            OR GREATEST(
-              similarity(coalesce(name, ''), ${q}),
-              similarity(coalesce(branch_address, ''), ${q})
-            ) > 0.1
-          ORDER BY
-            CASE
-              WHEN name ILIKE ${"%" + q + "%"} OR branch_address ILIKE ${"%" + q + "%"} THEN 0
-              ELSE 1
-            END,
-            score DESC,
-            name
-          LIMIT ${limit}
-        `);
-      return result.rows.map((row) => ({
-        name: row.name,
-        address: row.branch_address,
-        phone: row.phone_number,
-        fax: row.fax_number,
-        businessHour: row.business_hour,
-        dayOpen: row.day_open,
-        atmCdm: row.atm_cdm,
-        inquiryAvailability: row.inquiry_availability,
-        applicationAvailability: row.application_availability,
-        aeonLounge: row.aeon_lounge
-      }));
-    } catch {
-      const result = await db.execute(sql13`
-          SELECT
-            name,
-            branch_address,
-            phone_number,
-            fax_number,
-            business_hour,
-            day_open,
-            atm_cdm,
-            inquiry_availability,
-            application_availability,
-            aeon_lounge
-          FROM public.aeon_branches
-          WHERE name ILIKE ${"%" + q + "%"}
-             OR branch_address ILIKE ${"%" + q + "%"}
-          ORDER BY name
-          LIMIT ${limit}
-        `);
-      return result.rows.map((row) => ({
-        name: row.name,
-        address: row.branch_address,
-        phone: row.phone_number,
-        fax: row.fax_number,
-        businessHour: row.business_hour,
-        dayOpen: row.day_open,
-        atmCdm: row.atm_cdm,
-        inquiryAvailability: row.inquiry_availability,
-        applicationAvailability: row.application_availability,
-        aeonLounge: row.aeon_lounge
-      }));
-    }
+    return this.aiRepository.findBranchesByText(params);
   }
   async findBranchesByPostcode(params) {
-    await this.ensureSpatialTables();
-    const rawDigits = String(params.postcode || "").replace(/\D/g, "");
-    const postcode = rawDigits.length === 4 ? `0${rawDigits}` : rawDigits.slice(0, 5);
-    if (postcode.length !== 5) return [];
-    const limit = Math.max(1, Math.min(5, params.limit));
-    let result = await db.execute(sql13`
-        (
-          SELECT DISTINCT
-            b.name,
-            b.branch_address,
-            b.phone_number,
-            b.fax_number,
-            b.business_hour,
-            b.day_open,
-            b.atm_cdm,
-            b.inquiry_availability,
-            b.application_availability,
-            b.aeon_lounge
-          FROM public.aeon_branch_postcodes p
-          JOIN public.aeon_branches b
-            ON lower(b.name) = lower(p.source_branch)
-          WHERE p.postcode = ${postcode}
-        )
-        UNION
-        (
-          SELECT
-            b.name,
-            b.branch_address,
-            b.phone_number,
-            b.fax_number,
-            b.business_hour,
-            b.day_open,
-            b.atm_cdm,
-            b.inquiry_availability,
-            b.application_availability,
-            b.aeon_lounge
-          FROM public.aeon_branches b
-          WHERE coalesce(b.branch_address, '') ~ ('(^|\\D)' || ${postcode} || '(\\D|$)')
-        )
-        ORDER BY name
-        LIMIT ${limit}
-      `);
-    if (result.rows.length === 0) {
-      result = await db.execute(sql13`
-          SELECT
-            b.name,
-            b.branch_address,
-            b.phone_number,
-            b.fax_number,
-            b.business_hour,
-            b.day_open,
-            b.atm_cdm,
-            b.inquiry_availability,
-            b.application_availability,
-            b.aeon_lounge
-          FROM public.aeon_branch_postcodes p
-          JOIN public.aeon_branches b
-            ON lower(b.name) = lower(p.source_branch)
-          WHERE p.postcode ~ '^[0-9]{5}$'
-          ORDER BY abs((p.postcode)::int - (${postcode})::int), b.name
-          LIMIT ${limit}
-        `);
-    }
-    return result.rows.map((row) => ({
-      name: row.name,
-      address: row.branch_address ?? null,
-      phone: row.phone_number ?? null,
-      fax: row.fax_number ?? null,
-      businessHour: row.business_hour ?? null,
-      dayOpen: row.day_open ?? null,
-      atmCdm: row.atm_cdm ?? null,
-      inquiryAvailability: row.inquiry_availability ?? null,
-      applicationAvailability: row.application_availability ?? null,
-      aeonLounge: row.aeon_lounge ?? null
-    }));
+    return this.aiRepository.findBranchesByPostcode(params);
   }
   async countRowsByKeywords(params) {
-    const groups = params.groups || [];
-    const countSqls = [];
-    const matchSqlByKey = /* @__PURE__ */ new Map();
-    for (const group of groups) {
-      const terms = (group.terms || []).filter((t) => t.trim().length > 0);
-      const fields = (group.fields || []).filter((f) => f.trim().length > 0);
-      const matchMode = String(group.matchMode || "contains").toLowerCase();
-      if (matchMode === "complement") {
-        continue;
-      }
-      if (terms.length === 0 || fields.length === 0) {
-        countSqls.push(sql13`0::int as "${sql13.raw(group.key)}"`);
-        continue;
-      }
-      const termSql = matchMode === "exact" ? sql13.join(
-        fields.map((f) => {
-          const list = sql13.join(
-            terms.map((v) => sql13`${v.toUpperCase()}`),
-            sql13`, `
-          );
-          return sql13`upper(trim(coalesce((dr.json_data::jsonb)->>${f}, ''))) IN (${list})`;
-        }),
-        sql13` OR `
-      ) : sql13.join(
-        terms.map((t) => {
-          const perField = sql13.join(
-            fields.map((f) => sql13`coalesce((dr.json_data::jsonb)->>${f}, '') ILIKE ${"%" + t + "%"}`),
-            sql13` OR `
-          );
-          return sql13`((${perField}) OR dr.json_data::text ILIKE ${"%" + t + "%"})`;
-        }),
-        sql13` OR `
-      );
-      matchSqlByKey.set(group.key, termSql);
-      countSqls.push(
-        sql13`COUNT(*) FILTER (WHERE (${termSql}))::int as "${sql13.raw(group.key)}"`
-      );
-    }
-    const complementGroups = groups.filter((g) => String(g.matchMode || "").toLowerCase() === "complement");
-    if (complementGroups.length > 0) {
-      if (matchSqlByKey.size > 0) {
-        const combined = sql13.join(Array.from(matchSqlByKey.values()).map((v) => sql13`(${v})`), sql13` OR `);
-        for (const group of complementGroups) {
-          countSqls.push(
-            sql13`COUNT(*) FILTER (WHERE NOT (${combined}))::int as "${sql13.raw(group.key)}"`
-          );
-        }
-      } else {
-        for (const group of complementGroups) {
-          countSqls.push(
-            sql13`COUNT(*)::int as "${sql13.raw(group.key)}"`
-          );
-        }
-      }
-    }
-    const selectParts = countSqls.length > 0 ? sql13.join(countSqls, sql13`, `) : sql13``;
-    const res = await db.execute(sql13`
-      SELECT
-        COUNT(*)::int as "total",
-        ${selectParts}
-      FROM data_rows dr
-      JOIN imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-    `);
-    const row = res.rows[0] || {};
-    const totalRows = Number(row.total ?? 0);
-    const counts = {};
-    for (const group of groups) {
-      counts[group.key] = Number(row[group.key] ?? 0);
-    }
-    return { totalRows, counts };
+    return this.aiCategoryRepository.countRowsByKeywords(params);
   }
   async getCategoryRules() {
-    const normalizeArray = (value) => {
-      if (Array.isArray(value)) {
-        return value.map((v) => String(v)).filter((v) => v.trim().length > 0);
-      }
-      if (typeof value === "string") {
-        const trimmed = value.trim();
-        if (!trimmed) return [];
-        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-          return trimmed.slice(1, -1).split(",").map((v) => v.replace(/^\"|\"$/g, "").trim()).filter((v) => v.length > 0);
-        }
-        return [trimmed];
-      }
-      return [];
-    };
-    const result = await db.execute(sql13`
-      SELECT key, terms, fields, match_mode, enabled
-      FROM public.ai_category_rules
-      ORDER BY key
-    `);
-    return result.rows.map((row) => ({
-      key: String(row.key),
-      terms: normalizeArray(row.terms),
-      fields: normalizeArray(row.fields),
-      matchMode: String(row.match_mode || "contains"),
-      enabled: row.enabled !== false
-    }));
+    return this.aiCategoryRepository.getCategoryRules();
   }
   async getCategoryRulesMaxUpdatedAt() {
-    const result = await db.execute(sql13`
-      SELECT MAX(updated_at) as updated_at
-      FROM public.ai_category_rules
-    `);
-    const row = result.rows[0];
-    return row?.updated_at ? new Date(row.updated_at) : null;
+    return this.aiCategoryRepository.getCategoryRulesMaxUpdatedAt();
   }
   async getCategoryStats(keys) {
-    if (!keys.length) return [];
-    const quoted = keys.map((k) => `'${k.replace(/'/g, "''")}'`).join(",");
-    const result = await db.execute(sql13`
-      SELECT key, total, samples, updated_at
-      FROM public.ai_category_stats
-      WHERE key IN (${sql13.raw(quoted)})
-    `);
-    return result.rows.map((row) => ({
-      key: row.key,
-      total: Number(row.total ?? 0),
-      samples: Array.isArray(row.samples) ? row.samples : [],
-      updatedAt: row.updated_at ? new Date(row.updated_at) : null
-    }));
+    return this.aiCategoryRepository.getCategoryStats(keys);
   }
   async computeCategoryStatsForKeys(keys, groups) {
-    if (!keys.length) return [];
-    const uniqueKeys = Array.from(new Set(keys));
-    const ruleMap = new Map(groups.map((g) => [g.key, g]));
-    const requestedGroups = uniqueKeys.filter((k) => k !== "__all__").map((k) => ruleMap.get(k)).filter((g) => Boolean(g && g.enabled !== false));
-    const extractName = (data) => {
-      return data?.["Nama"] || data?.["Customer Name"] || data?.["name"] || data?.["MAKLUMAT PEMOHON"] || "-";
-    };
-    const extractIc = (data) => {
-      return data?.["No. MyKad"] || data?.["ID No"] || data?.["No Pengenalan"] || data?.["IC"] || "-";
-    };
-    const buildMatchSql = (terms, fields, matchMode) => {
-      if (terms.length === 0) return null;
-      if (fields.length === 0) {
-        return sql13.join(
-          terms.map((t) => sql13`dr.json_data::text ILIKE ${"%" + t + "%"}`),
-          sql13` OR `
-        );
-      }
-      if (matchMode === "exact") {
-        return sql13.join(
-          fields.map((f) => {
-            const list = sql13.join(
-              terms.map((v) => sql13`${v.toUpperCase()}`),
-              sql13`, `
-            );
-            return sql13`upper(trim(coalesce((dr.json_data::jsonb)->>${f}, ''))) IN (${list})`;
-          }),
-          sql13` OR `
-        );
-      }
-      return sql13.join(
-        terms.map((t) => {
-          const perField = sql13.join(
-            fields.map((f) => sql13`(dr.json_data::jsonb)->>${f} ILIKE ${"%" + t + "%"}`),
-            sql13` OR `
-          );
-          return sql13`(${perField})`;
-        }),
-        sql13` OR `
-      );
-    };
-    if (uniqueKeys.includes("__all__")) {
-      const totalRes = await db.execute(sql13`
-        SELECT COUNT(*)::int as "count"
-        FROM data_rows dr
-        JOIN imports i ON i.id = dr.import_id
-        WHERE i.is_deleted = false
-      `);
-      const totalRows = Number(totalRes.rows[0]?.count ?? 0);
-      await db.execute(sql13`
-        INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
-        VALUES ('__all__', ${totalRows}, '[]'::jsonb, now())
-        ON CONFLICT (key)
-        DO UPDATE SET total = EXCLUDED.total, updated_at = now()
-      `);
-    }
-    for (const group of requestedGroups) {
-      const terms = (group.terms || []).filter((t) => t.trim().length > 0);
-      const fields = (group.fields || []).filter((f) => f.trim().length > 0);
-      const matchMode = String(group.matchMode || "contains").toLowerCase();
-      const termSql = buildMatchSql(terms, fields, matchMode);
-      if (!termSql) {
-        await db.execute(sql13`
-          INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
-          VALUES (${group.key}, 0, '[]'::jsonb, now())
-          ON CONFLICT (key)
-          DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
-        `);
-        continue;
-      }
-      const countRes = await db.execute(sql13`
-        SELECT COUNT(*)::int as "count"
-        FROM data_rows dr
-        JOIN imports i ON i.id = dr.import_id
-        WHERE i.is_deleted = false
-          AND (${termSql})
-      `);
-      const total = Number(countRes.rows[0]?.count ?? 0);
-      let samples = [];
-      if (total > 0) {
-        const sampleRes = await db.execute(sql13`
-          SELECT dr.json_data as "jsonData", i.name as "importName", i.filename as "importFilename"
-          FROM data_rows dr
-          JOIN imports i ON i.id = dr.import_id
-          WHERE i.is_deleted = false
-            AND (${termSql})
-          LIMIT 10
-        `);
-        samples = sampleRes.rows.map((row) => {
-          let data = row.jsonData;
-          if (typeof data === "string") {
-            try {
-              data = JSON.parse(data);
-            } catch {
-              data = {};
-            }
-          }
-          const name = extractName(data);
-          const ic = extractIc(data);
-          const source = row.importName || row.importFilename || null;
-          return { name: String(name || "-"), ic: String(ic || "-"), source };
-        });
-      }
-      await db.execute(sql13`
-        INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
-        VALUES (${group.key}, ${total}, ${JSON.stringify(samples)}::jsonb, now())
-        ON CONFLICT (key)
-        DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
-      `);
-    }
-    return this.getCategoryStats(uniqueKeys);
+    return this.aiCategoryRepository.computeCategoryStatsForKeys(keys, groups);
   }
   async rebuildCategoryStats(groups) {
-    if (!groups.length) return;
-    const totalRes = await db.execute(sql13`
-      SELECT COUNT(*)::int as "count"
-      FROM data_rows dr
-      JOIN imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-    `);
-    const totalRows = Number(totalRes.rows[0]?.count ?? 0);
-    await db.execute(sql13`
-      DELETE FROM public.ai_category_stats
-      WHERE key <> '__all__'
-    `);
-    await db.execute(sql13`
-      INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
-      VALUES ('__all__', ${totalRows}, '[]'::jsonb, now())
-      ON CONFLICT (key)
-    DO UPDATE SET total = EXCLUDED.total, updated_at = now()
-  `);
-    const extractName = (data) => {
-      return data?.["Nama"] || data?.["Customer Name"] || data?.["name"] || data?.["MAKLUMAT PEMOHON"] || "-";
-    };
-    const extractIc = (data) => {
-      return data?.["No. MyKad"] || data?.["ID No"] || data?.["No Pengenalan"] || data?.["IC"] || "-";
-    };
-    const enabledGroups = groups.filter((g) => g.enabled !== false);
-    const matchSqlByKey = /* @__PURE__ */ new Map();
-    const buildMatchSql = (terms, fields, matchMode) => {
-      if (terms.length === 0) return null;
-      if (fields.length === 0) {
-        return sql13.join(
-          terms.map((t) => sql13`dr.json_data::text ILIKE ${"%" + t + "%"}`),
-          sql13` OR `
-        );
-      }
-      if (matchMode === "exact") {
-        return sql13.join(
-          fields.map((f) => {
-            const list = sql13.join(
-              terms.map((v) => sql13`${v.toUpperCase()}`),
-              sql13`, `
-            );
-            return sql13`upper(trim(coalesce((dr.json_data::jsonb)->>${f}, ''))) IN (${list})`;
-          }),
-          sql13` OR `
-        );
-      }
-      return sql13.join(
-        terms.map((t) => {
-          const perField = sql13.join(
-            fields.map((f) => sql13`(dr.json_data::jsonb)->>${f} ILIKE ${"%" + t + "%"}`),
-            sql13` OR `
-          );
-          return sql13`(${perField})`;
-        }),
-        sql13` OR `
-      );
-    };
-    const baseGroups = enabledGroups.filter((g) => String(g.matchMode || "").toLowerCase() !== "complement");
-    const complementGroups = enabledGroups.filter((g) => String(g.matchMode || "").toLowerCase() === "complement");
-    for (const group of baseGroups) {
-      const terms = (group.terms || []).filter((t) => t.trim().length > 0);
-      const fields = (group.fields || []).filter((f) => f.trim().length > 0);
-      const matchMode = String(group.matchMode || "contains").toLowerCase();
-      const termSql = buildMatchSql(terms, fields, matchMode);
-      if (!termSql) {
-        await db.execute(sql13`
-          INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
-          VALUES (${group.key}, 0, '[]'::jsonb, now())
-          ON CONFLICT (key)
-          DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
-        `);
-        continue;
-      }
-      matchSqlByKey.set(group.key, termSql);
-      const countRes = await db.execute(sql13`
-        SELECT COUNT(*)::int as "count"
-        FROM data_rows dr
-        JOIN imports i ON i.id = dr.import_id
-        WHERE i.is_deleted = false
-          AND (${termSql})
-      `);
-      const total = Number(countRes.rows[0]?.count ?? 0);
-      const sampleRes = await db.execute(sql13`
-        SELECT dr.json_data as "jsonData", i.name as "importName", i.filename as "importFilename"
-        FROM data_rows dr
-        JOIN imports i ON i.id = dr.import_id
-        WHERE i.is_deleted = false
-          AND (${termSql})
-        LIMIT 10
-      `);
-      const samples = sampleRes.rows.map((row) => {
-        let data = row.jsonData;
-        if (typeof data === "string") {
-          try {
-            data = JSON.parse(data);
-          } catch {
-            data = {};
-          }
-        }
-        const name = extractName(data);
-        const ic = extractIc(data);
-        const source = row.importName || row.importFilename || null;
-        return { name: String(name || "-"), ic: String(ic || "-"), source };
-      });
-      await db.execute(sql13`
-        INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
-        VALUES (${group.key}, ${total}, ${JSON.stringify(samples)}::jsonb, now())
-        ON CONFLICT (key)
-        DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
-      `);
-    }
-    if (complementGroups.length > 0) {
-      const combined = matchSqlByKey.size > 0 ? sql13.join(Array.from(matchSqlByKey.values()).map((v) => sql13`(${v})`), sql13` OR `) : null;
-      for (const group of complementGroups) {
-        let total = totalRows;
-        let samples = [];
-        if (combined) {
-          const countRes = await db.execute(sql13`
-            SELECT COUNT(*)::int as "count"
-            FROM data_rows dr
-            JOIN imports i ON i.id = dr.import_id
-            WHERE i.is_deleted = false
-              AND NOT (${combined})
-          `);
-          total = Number(countRes.rows[0]?.count ?? 0);
-          const sampleRes = await db.execute(sql13`
-            SELECT dr.json_data as "jsonData", i.name as "importName", i.filename as "importFilename"
-            FROM data_rows dr
-            JOIN imports i ON i.id = dr.import_id
-            WHERE i.is_deleted = false
-              AND NOT (${combined})
-            LIMIT 10
-          `);
-          samples = sampleRes.rows.map((row) => {
-            let data = row.jsonData;
-            if (typeof data === "string") {
-              try {
-                data = JSON.parse(data);
-              } catch {
-                data = {};
-              }
-            }
-            const name = extractName(data);
-            const ic = extractIc(data);
-            const source = row.importName || row.importFilename || null;
-            return { name: String(name || "-"), ic: String(ic || "-"), source };
-          });
-        }
-        await db.execute(sql13`
-          INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
-          VALUES (${group.key}, ${total}, ${JSON.stringify(samples)}::jsonb, now())
-          ON CONFLICT (key)
-          DO UPDATE SET total = EXCLUDED.total, samples = EXCLUDED.samples, updated_at = now()
-        `);
-      }
-    }
+    return this.aiCategoryRepository.rebuildCategoryStats(groups);
   }
   async getNearestBranches(params) {
-    const limit = Math.max(1, Math.min(5, params.limit ?? 3));
-    const result = await db.execute(sql13`
-      SELECT
-        name,
-        branch_address,
-        phone_number,
-        fax_number,
-        business_hour,
-        day_open,
-        atm_cdm,
-        inquiry_availability,
-        application_availability,
-        aeon_lounge,
-        ST_DistanceSphere(
-          ST_MakePoint(${params.lng}, ${params.lat}),
-          ST_MakePoint(branch_lng, branch_lat)
-        ) / 1000 AS distance_km
-      FROM public.aeon_branches
-      ORDER BY distance_km
-      LIMIT ${limit}
-    `);
-    return result.rows.map((row) => ({
-      name: row.name,
-      address: row.branch_address ?? null,
-      phone: row.phone_number ?? null,
-      fax: row.fax_number ?? null,
-      businessHour: row.business_hour ?? null,
-      dayOpen: row.day_open ?? null,
-      atmCdm: row.atm_cdm ?? null,
-      inquiryAvailability: row.inquiry_availability ?? null,
-      applicationAvailability: row.application_availability ?? null,
-      aeonLounge: row.aeon_lounge ?? null,
-      distanceKm: Number(row.distance_km)
-    }));
+    return this.aiRepository.getNearestBranches(params);
   }
   async getPostcodeLatLng(postcode) {
-    await this.ensureSpatialTables();
-    const postcodeNorm = (() => {
-      const digits = String(postcode || "").replace(/\D/g, "");
-      if (digits.length === 4) return `0${digits}`;
-      return digits.length >= 5 ? digits.slice(0, 5) : digits;
-    })();
-    if (!postcodeNorm) return null;
-    const lookup = async () => {
-      const result = await db.execute(sql13`
-        SELECT lat, lng
-        FROM public.aeon_branch_postcodes
-        WHERE postcode = ${postcodeNorm}
-        LIMIT 1
-      `);
-      return result.rows?.[0];
-    };
-    let row = await lookup();
-    if (row) return { lat: Number(row.lat), lng: Number(row.lng) };
-    const countRes = await db.execute(sql13`
-      SELECT COUNT(*)::int as "count"
-      FROM public.aeon_branch_postcodes
-    `);
-    const count3 = Number(countRes.rows[0]?.count ?? 0);
-    if (count3 === 0) {
-      const branches = await db.execute(sql13`
-        SELECT name, branch_address, branch_lat, branch_lng
-        FROM public.aeon_branches
-      `);
-      for (const b of branches.rows) {
-        const address = String(b.branch_address || "");
-        const match5 = address.match(/\b\d{5}\b/);
-        const match4 = address.match(/\b\d{4}\b/);
-        const pc = match5 ? match5[0] : match4 ? `0${match4[0]}` : null;
-        if (!pc) continue;
-        await db.execute(sql13`
-          INSERT INTO public.aeon_branch_postcodes (postcode, lat, lng, source_branch, state)
-          VALUES (${pc}, ${Number(b.branch_lat)}, ${Number(b.branch_lng)}, ${String(b.name)}, null)
-          ON CONFLICT (postcode) DO NOTHING
-        `);
-      }
-      row = await lookup();
-      if (row) return { lat: Number(row.lat), lng: Number(row.lng) };
-    }
-    return null;
+    return this.aiRepository.getPostcodeLatLng(postcode);
   }
   async importBranchesFromRows(params) {
-    await this.ensureSpatialTables();
-    const rows = await db.execute(sql13`
-      SELECT id, json_data as "jsonDataJsonb"
-      FROM data_rows
-      WHERE import_id = ${params.importId}
-    `);
-    const normalizeKey = (key) => key.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const detectKeys = (sample2) => {
-      const keys = Object.keys(sample2);
-      const normalized = keys.map((k) => ({ raw: k, norm: normalizeKey(k) }));
-      const findBy = (candidates) => {
-        const hit = normalized.find((k) => candidates.some((c) => k.norm.includes(c)));
-        return hit?.raw || null;
-      };
-      const nameKey2 = findBy(["branchnames", "branchname", "cawangan", "branch", "nama"]) || null;
-      const latKey2 = findBy(["latitude", "lat"]) || null;
-      const lngKey2 = findBy(["longitude", "lng", "long"]) || null;
-      const addressKey2 = findBy(["branchaddress", "address", "alamat"]) || null;
-      const postcodeKey2 = findBy(["postcode", "poskod", "postalcode", "zip"]) || null;
-      const phoneKey2 = findBy(["phonenumber", "phone", "telefon", "tel"]) || null;
-      const faxKey2 = findBy(["faxnumber", "fax"]) || null;
-      const businessHourKey2 = findBy(["businesshour", "operatinghour", "waktu", "jam"]) || null;
-      const dayOpenKey2 = findBy(["dayopen", "dayopen", "day", "hari"]) || null;
-      const atmKey2 = findBy(["atmcdm", "atm", "cdm"]) || null;
-      const inquiryKey2 = findBy(["inquiryavailability", "inquiry"]) || null;
-      const applicationKey2 = findBy(["applicationavailability", "application"]) || null;
-      const loungeKey2 = findBy(["aeonlounge", "lounge"]) || null;
-      const stateKey2 = findBy(["state", "negeri"]) || null;
-      return {
-        nameKey: nameKey2,
-        latKey: latKey2,
-        lngKey: lngKey2,
-        addressKey: addressKey2,
-        postcodeKey: postcodeKey2,
-        phoneKey: phoneKey2,
-        faxKey: faxKey2,
-        businessHourKey: businessHourKey2,
-        dayOpenKey: dayOpenKey2,
-        atmKey: atmKey2,
-        inquiryKey: inquiryKey2,
-        applicationKey: applicationKey2,
-        loungeKey: loungeKey2,
-        stateKey: stateKey2
-      };
-    };
-    const firstRow = rows.rows[0];
-    const sample = firstRow && firstRow.jsonDataJsonb && typeof firstRow.jsonDataJsonb === "object" ? firstRow.jsonDataJsonb : {};
-    const detected = detectKeys(sample);
-    const nameKey = params.nameKey || detected.nameKey;
-    const latKey = params.latKey || detected.latKey;
-    const lngKey = params.lngKey || detected.lngKey;
-    const addressKey = detected.addressKey;
-    const postcodeKey = detected.postcodeKey;
-    const phoneKey = detected.phoneKey;
-    const faxKey = detected.faxKey;
-    const businessHourKey = detected.businessHourKey;
-    const dayOpenKey = detected.dayOpenKey;
-    const atmKey = detected.atmKey;
-    const inquiryKey = detected.inquiryKey;
-    const applicationKey = detected.applicationKey;
-    const loungeKey = detected.loungeKey;
-    const stateKey = detected.stateKey;
-    if (!nameKey || !latKey || !lngKey) {
-      return {
-        inserted: 0,
-        skipped: rows.rows.length,
-        usedKeys: { nameKey: nameKey || "", latKey: latKey || "", lngKey: lngKey || "" }
-      };
-    }
-    let inserted = 0;
-    let skipped = 0;
-    for (const row of rows.rows) {
-      const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
-      const nameVal = data[nameKey];
-      const latVal = data[latKey];
-      const lngVal = data[lngKey];
-      const addressVal = addressKey ? data[addressKey] : null;
-      const postcodeVal = postcodeKey ? data[postcodeKey] : null;
-      const phoneVal = phoneKey ? data[phoneKey] : null;
-      const faxVal = faxKey ? data[faxKey] : null;
-      const businessHourVal = businessHourKey ? data[businessHourKey] : null;
-      const dayOpenVal = dayOpenKey ? data[dayOpenKey] : null;
-      const atmVal = atmKey ? data[atmKey] : null;
-      const inquiryVal = inquiryKey ? data[inquiryKey] : null;
-      const applicationVal = applicationKey ? data[applicationKey] : null;
-      const loungeVal = loungeKey ? data[loungeKey] : null;
-      const stateVal = stateKey ? data[stateKey] : null;
-      if (!nameVal || latVal === void 0 || lngVal === void 0) {
-        skipped += 1;
-        continue;
-      }
-      const lat = Number(String(latVal).replace(/[^0-9.\-]/g, ""));
-      const lng = Number(String(lngVal).replace(/[^0-9.\-]/g, ""));
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-        skipped += 1;
-        continue;
-      }
-      const id = crypto6.randomUUID();
-      await db.execute(sql13`
-          INSERT INTO public.aeon_branches (
-            id, name, branch_address, phone_number, fax_number, business_hour, day_open,
-            atm_cdm, inquiry_availability, application_availability, aeon_lounge,
-            branch_lat, branch_lng
-        )
-        VALUES (
-          ${id},
-          ${String(nameVal)},
-          ${addressVal ? String(addressVal) : null},
-          ${phoneVal ? String(phoneVal) : null},
-          ${faxVal ? String(faxVal) : null},
-          ${businessHourVal ? String(businessHourVal) : null},
-          ${dayOpenVal ? String(dayOpenVal) : null},
-          ${atmVal ? String(atmVal) : null},
-          ${inquiryVal ? String(inquiryVal) : null},
-          ${applicationVal ? String(applicationVal) : null},
-          ${loungeVal ? String(loungeVal) : null},
-          ${lat},
-          ${lng}
-        )
-        ON CONFLICT DO NOTHING
-        `);
-      const normalizePostcode = (value) => {
-        if (value === void 0 || value === null) return null;
-        const raw = String(value);
-        const five = raw.match(/\b\d{5}\b/);
-        if (five) return five[0];
-        const four = raw.match(/\b\d{4}\b/);
-        if (four) return `0${four[0]}`;
-        return null;
-      };
-      let postcode = null;
-      if (postcodeVal) {
-        postcode = normalizePostcode(postcodeVal);
-      }
-      if (!postcode && addressVal) {
-        postcode = normalizePostcode(addressVal);
-      }
-      if (postcode) {
-        await db.execute(sql13`
-            INSERT INTO public.aeon_branch_postcodes (postcode, lat, lng, source_branch, state)
-            VALUES (${postcode}, ${lat}, ${lng}, ${String(nameVal)}, ${stateVal ? String(stateVal) : null})
-            ON CONFLICT (postcode) DO NOTHING
-          `);
-      }
-      inserted += 1;
-    }
-    return { inserted, skipped, usedKeys: { nameKey, latKey, lngKey } };
+    return this.aiRepository.importBranchesFromRows(params);
   }
   async getDataRowsForEmbedding(importId, limit, offset) {
-    const result = await db.execute(sql13`
-      SELECT id, json_data as "jsonDataJsonb"
-      FROM data_rows
-      WHERE import_id = ${importId}
-      ORDER BY id
-      LIMIT ${limit} OFFSET ${offset}
-    `);
-    return result.rows;
+    return this.aiRepository.getDataRowsForEmbedding(importId, limit, offset);
   }
   async getSettingsForRole(role) {
     await this.ensureSettingsTables();
@@ -6080,20 +6166,6 @@ var PostgresStorage = class {
   }
 };
 
-// server/middleware/rate-limit.ts
-import rateLimit from "express-rate-limit";
-var searchRateLimiter = rateLimit({
-  windowMs: 10 * 1e3,
-  // ⏱️ 10 saat
-  max: 10,
-  // ❌ max 10 request
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    error: "Too many search requests. Please slow down."
-  }
-});
-
 // server/ai-ollama.ts
 var OLLAMA_HOST = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
 var OLLAMA_CHAT_MODEL = process.env.OLLAMA_CHAT_MODEL || "llama3:8b";
@@ -6160,913 +6232,348 @@ function getOllamaConfig() {
   };
 }
 
-// server/internal/circuitBreaker.ts
-var CircuitOpenError = class extends Error {
-  constructor(name) {
-    super(`Circuit '${name}' is OPEN`);
-    this.name = "CircuitOpenError";
-  }
-};
-var CircuitBreaker = class {
-  constructor(options) {
-    this.state = "CLOSED";
-    this.failures = 0;
-    this.successes = 0;
-    this.rejections = 0;
-    this.totalRequests = 0;
-    this.nextRetryAt = null;
-    this.halfOpenInFlight = 0;
-    this.name = options.name;
-    this.threshold = Math.max(0.01, Math.min(1, options.threshold ?? 0.5));
-    this.minRequests = Math.max(5, options.minRequests ?? 20);
-    this.cooldownMs = Math.max(1e3, options.cooldownMs ?? 2e4);
-    this.halfOpenMaxInFlight = Math.max(1, options.halfOpenMaxInFlight ?? 1);
-  }
-  getState() {
-    this.evaluateCooldown();
-    return this.state;
-  }
-  getSnapshot() {
-    this.evaluateCooldown();
-    return {
-      name: this.name,
-      state: this.state,
-      failures: this.failures,
-      successes: this.successes,
-      rejections: this.rejections,
-      totalRequests: this.totalRequests,
-      failureRate: this.totalRequests > 0 ? this.failures / this.totalRequests : 0,
-      nextRetryAt: this.nextRetryAt,
-      cooldownMs: this.cooldownMs,
-      threshold: this.threshold
-    };
-  }
-  async execute(operation) {
-    this.evaluateCooldown();
-    if (this.state === "OPEN") {
-      this.rejections += 1;
-      throw new CircuitOpenError(this.name);
-    }
-    if (this.state === "HALF_OPEN" && this.halfOpenInFlight >= this.halfOpenMaxInFlight) {
-      this.rejections += 1;
-      throw new CircuitOpenError(this.name);
-    }
-    this.totalRequests += 1;
-    if (this.state === "HALF_OPEN") {
-      this.halfOpenInFlight += 1;
-    }
-    try {
-      const result = await operation();
-      this.onSuccess();
-      return result;
-    } catch (err) {
-      this.onFailure();
-      throw err;
-    } finally {
-      if (this.state === "HALF_OPEN" && this.halfOpenInFlight > 0) {
-        this.halfOpenInFlight -= 1;
-      }
-    }
-  }
-  onSuccess() {
-    this.successes += 1;
-    if (this.state === "HALF_OPEN") {
-      this.close();
-      return;
-    }
-    this.trimCounters();
-  }
-  onFailure() {
-    this.failures += 1;
-    if (this.state === "HALF_OPEN") {
-      this.open();
-      return;
-    }
-    if (this.totalRequests >= this.minRequests) {
-      const failureRate = this.failures / this.totalRequests;
-      if (failureRate >= this.threshold) {
-        this.open();
-        return;
-      }
-    }
-    this.trimCounters();
-  }
-  open() {
-    this.state = "OPEN";
-    this.nextRetryAt = Date.now() + this.cooldownMs;
-    this.halfOpenInFlight = 0;
-  }
-  close() {
-    this.state = "CLOSED";
-    this.nextRetryAt = null;
-    this.halfOpenInFlight = 0;
-    this.failures = 0;
-    this.successes = 0;
-    this.totalRequests = 0;
-  }
-  evaluateCooldown() {
-    if (this.state !== "OPEN") return;
-    if (this.nextRetryAt === null) return;
-    if (Date.now() >= this.nextRetryAt) {
-      this.state = "HALF_OPEN";
-      this.nextRetryAt = null;
-      this.halfOpenInFlight = 0;
-    }
-  }
-  trimCounters() {
-    const maxWindow = 2e3;
-    if (this.totalRequests <= maxWindow) return;
-    const keepRatio = 0.5;
-    this.totalRequests = Math.max(this.minRequests, Math.floor(this.totalRequests * keepRatio));
-    this.failures = Math.floor(this.failures * keepRatio);
-    this.successes = Math.floor(this.successes * keepRatio);
-  }
-};
-
-// server/internal/frontend-static.ts
-import express from "express";
-import fs from "fs";
-import path from "path";
-var DEFAULT_FRONTEND_PATHS = [
-  "dist-local/public",
-  "dist-local\\public",
-  "dist/public",
-  "dist\\public"
-];
-function registerFrontendStatic(app2, options) {
-  const cwd = options?.cwd || process.cwd();
-  const possiblePaths = options?.paths || DEFAULT_FRONTEND_PATHS;
-  console.log(`  Working directory: ${cwd}`);
-  let foundPath = null;
-  let foundIndex = null;
-  for (const relPath of possiblePaths) {
-    const fullPath = path.resolve(cwd, relPath);
-    const indexFile = path.join(fullPath, "index.html");
-    console.log(`  Checking: ${fullPath}`);
-    try {
-      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
-        const files = fs.readdirSync(fullPath);
-        const preview = files.slice(0, 5).join(", ");
-        console.log(`    Found ${files.length} files: ${preview}${files.length > 5 ? "..." : ""}`);
-        if (fs.existsSync(indexFile)) {
-          foundPath = fullPath;
-          foundIndex = indexFile;
-          break;
-        }
-      }
-    } catch (error) {
-      console.log(`    Error: ${error.message}`);
-    }
-  }
-  if (foundPath && foundIndex) {
-    console.log(`  Frontend: Serving from ${foundPath}`);
-    app2.use(express.static(foundPath));
-    app2.use((req, res, next) => {
-      if (req.path.startsWith("/api") || req.path.startsWith("/ws")) {
-        return next();
-      }
-      return res.sendFile(foundIndex);
-    });
-    console.log("  Frontend: OK");
-    return;
-  }
-  console.log("");
-  console.log("  ERROR: Frontend files not found!");
-  console.log("  Please run: npm run build:local");
-  console.log(`  Expected location: ${path.resolve(cwd, "dist-local/public")}`);
-  app2.use((req, res) => {
-    if (!req.path.startsWith("/api") && !req.path.startsWith("/ws")) {
-      res.status(404).send(`
-          <html>
-            <body style="font-family: sans-serif; padding: 40px;">
-              <h1>Frontend Not Built</h1>
-              <p>Please run: <code>npm run build:local</code></p>
-              <p>Then restart the server.</p>
-            </body>
-          </html>
-        `);
-    }
-  });
-}
-
-// server/internal/idle-session-sweeper.ts
-import { WebSocket } from "ws";
-function startIdleSessionSweeper(options) {
-  const {
-    storage: storage2,
-    connectedClients: connectedClients2,
-    getRuntimeSettingsCached: getRuntimeSettingsCached2,
-    defaultSessionTimeoutMinutes,
-    intervalMs = 6e4
-  } = options;
-  let running = false;
-  const handle = setInterval(async () => {
-    if (running) {
-      return;
-    }
-    running = true;
-    try {
-      const now = Date.now();
-      const activities = await storage2.getActiveActivities();
-      const runtimeSettings = await getRuntimeSettingsCached2();
-      const idleMinutes = Math.max(
-        1,
-        runtimeSettings.sessionTimeoutMinutes || runtimeSettings.wsIdleMinutes || defaultSessionTimeoutMinutes
-      );
-      const idleMs = idleMinutes * 60 * 1e3;
-      for (const activity of activities) {
-        if (!activity.lastActivityTime) {
-          continue;
-        }
-        const last = new Date(activity.lastActivityTime).getTime();
-        if (now - last <= idleMs) {
-          continue;
-        }
-        const freshActivity = await storage2.getActivityById(activity.id);
-        if (!freshActivity || freshActivity.isActive === false) {
-          continue;
-        }
-        const freshLast = freshActivity.lastActivityTime ? new Date(freshActivity.lastActivityTime).getTime() : 0;
-        if (!freshLast || now - freshLast <= idleMs) {
-          continue;
-        }
-        console.log(`IDLE TIMEOUT: ${activity.username} (${activity.id})`);
-        await storage2.updateActivity(activity.id, {
-          isActive: false,
-          logoutTime: /* @__PURE__ */ new Date(),
-          logoutReason: "IDLE_TIMEOUT"
-        });
-        const socket = connectedClients2.get(activity.id);
-        if (socket && socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({
-            type: "idle_timeout",
-            reason: "Session expired due to inactivity"
-          }));
-          socket.close();
-        }
-        connectedClients2.delete(activity.id);
-        await storage2.clearCollectionNicknameSessionByActivity(activity.id);
-        await storage2.createAuditLog({
-          action: "SESSION_IDLE_TIMEOUT",
-          performedBy: activity.username,
-          details: `Auto logout after ${idleMinutes} minutes idle`
-        });
-      }
-    } catch (error) {
-      console.error("Idle session checker error:", error);
-    } finally {
-      running = false;
-    }
-  }, intervalMs);
-  handle.unref();
-  return handle;
-}
-
-// server/internal/runtime-config-manager.ts
-import jwt from "jsonwebtoken";
-function createRuntimeConfigManager(options) {
-  const {
-    storage: storage2,
-    secret,
-    defaults,
-    maintenanceCacheTtlMs,
-    runtimeSettingsCacheTtlMs
-  } = options;
-  let maintenanceCache = null;
-  let runtimeSettingsCache = null;
-  const invalidateMaintenanceCache2 = () => {
-    maintenanceCache = null;
-  };
-  const invalidateRuntimeSettingsCache2 = () => {
-    runtimeSettingsCache = null;
-  };
-  const getRuntimeSettingsCached2 = async (force = false) => {
-    const now = Date.now();
-    if (!force && runtimeSettingsCache && now - runtimeSettingsCache.cachedAt < runtimeSettingsCacheTtlMs) {
-      return runtimeSettingsCache.settings;
-    }
-    const config = await storage2.getAppConfig();
-    const settings = {
-      sessionTimeoutMinutes: Number.isFinite(config.sessionTimeoutMinutes) ? Math.max(1, config.sessionTimeoutMinutes) : defaults.sessionTimeoutMinutes,
-      wsIdleMinutes: Number.isFinite(config.wsIdleMinutes) ? Math.max(1, config.wsIdleMinutes) : defaults.wsIdleMinutes,
-      aiEnabled: config.aiEnabled !== false,
-      semanticSearchEnabled: config.semanticSearchEnabled !== false,
-      aiTimeoutMs: Number.isFinite(config.aiTimeoutMs) ? Math.max(1e3, config.aiTimeoutMs) : defaults.aiTimeoutMs,
-      searchResultLimit: Number.isFinite(config.searchResultLimit) ? Math.min(5e3, Math.max(10, Math.floor(config.searchResultLimit))) : defaults.searchResultLimit,
-      viewerRowsPerPage: Number.isFinite(config.viewerRowsPerPage) ? Math.min(500, Math.max(10, Math.floor(config.viewerRowsPerPage))) : defaults.viewerRowsPerPage
-    };
-    runtimeSettingsCache = { settings, cachedAt: now };
-    return settings;
-  };
-  const getMaintenanceStateCached2 = async (force = false) => {
-    const now = Date.now();
-    if (!force && maintenanceCache && now - maintenanceCache.cachedAt < maintenanceCacheTtlMs) {
-      return maintenanceCache.state;
-    }
-    const state = await storage2.getMaintenanceState(/* @__PURE__ */ new Date());
-    maintenanceCache = { state, cachedAt: now };
-    return state;
-  };
-  const extractRoleFromToken = (req) => {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.split(" ")[1];
-    if (!token) return null;
-    try {
-      const decoded = jwt.verify(token, secret);
-      return decoded?.role || null;
-    } catch {
-      return null;
-    }
-  };
-  const isMaintenanceBypassPath = (pathname) => pathname.startsWith("/api/login") || pathname.startsWith("/api/auth/login") || pathname.startsWith("/api/health") || pathname.startsWith("/api/maintenance-status") || pathname.startsWith("/api/settings/maintenance") || pathname.startsWith("/internal/") || pathname.startsWith("/ws");
-  const maintenanceGuard2 = async (req, res, next) => {
-    try {
-      if (isMaintenanceBypassPath(req.path)) {
-        return next();
-      }
-      const state = await getMaintenanceStateCached2();
-      if (!state.maintenance) {
-        return next();
-      }
-      const role = req.user?.role || extractRoleFromToken(req);
-      if (role === "superuser" || role === "admin") {
-        return next();
-      }
-      const maintenanceResponse = {
-        maintenance: true,
-        message: state.message,
-        type: state.type,
-        startTime: state.startTime,
-        endTime: state.endTime
-      };
-      if (req.path.startsWith("/api/")) {
-        if (state.type === "soft") {
-          const blockedSoftPrefixes = ["/api/search", "/api/imports", "/api/ai"];
-          if (!blockedSoftPrefixes.some((prefix) => req.path.startsWith(prefix))) {
-            return next();
-          }
-        }
-        return res.status(503).json(maintenanceResponse);
-      }
-      if (req.path.startsWith("/assets/") || req.path.match(/\.(js|css|png|jpg|svg|ico)$/i)) {
-        return next();
-      }
-      if (state.type === "hard" && req.path !== "/maintenance") {
-        return res.redirect(302, "/maintenance");
-      }
-      return next();
-    } catch (err) {
-      console.error("Maintenance guard error:", err);
-      return next();
-    }
-  };
-  return {
-    invalidateMaintenanceCache: invalidateMaintenanceCache2,
-    invalidateRuntimeSettingsCache: invalidateRuntimeSettingsCache2,
-    getRuntimeSettingsCached: getRuntimeSettingsCached2,
-    getMaintenanceStateCached: getMaintenanceStateCached2,
-    maintenanceGuard: maintenanceGuard2
-  };
-}
-
-// server/internal/runtime-monitor-manager.ts
-import { PerformanceObserver, monitorEventLoopDelay } from "node:perf_hooks";
-import os from "node:os";
-var LATENCY_WINDOW = 400;
-var MAX_INTELLIGENCE_HISTORY = 300;
+// server/internal/apiProtection.ts
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
-function percentile(values, p) {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.floor(clamp(p, 0, 100) / 100 * (sorted.length - 1));
-  return sorted[index];
+function isHeavyRoute(pathname) {
+  return pathname.startsWith("/api/ai/") || pathname.startsWith("/api/imports") || pathname.startsWith("/api/search/advanced") || pathname.startsWith("/api/backups");
 }
-function roundMetric(value, digits = 2) {
-  if (!Number.isFinite(value)) return 0;
-  const precision = 10 ** digits;
-  return Math.round(value * precision) / precision;
-}
-function getRamPercent() {
-  const total = Number(os.totalmem() || 0);
-  const free = Number(os.freemem() || 0);
-  if (total <= 0) return 0;
-  return roundMetric((total - free) / total * 100, 2);
-}
-function createRuntimeMonitorManager(options) {
-  const defaultControlState = {
-    mode: "NORMAL",
-    healthScore: 100,
-    dbProtection: false,
-    rejectHeavyRoutes: false,
-    throttleFactor: 1,
-    predictor: {
-      requestRateMA: 0,
-      latencyMA: 0,
-      cpuMA: 0,
-      requestRateTrend: 0,
-      latencyTrend: 0,
-      cpuTrend: 0,
-      sustainedUpward: false,
-      lastUpdatedAt: null
-    },
-    workerCount: 1,
-    maxWorkers: 1,
-    queueLength: 0,
-    preAllocateMB: 0,
-    updatedAt: Date.now(),
-    workers: [],
-    circuits: {
-      aiOpenWorkers: 0,
-      dbOpenWorkers: 0,
-      exportOpenWorkers: 0
+function createApiProtectionMiddleware(options) {
+  const adaptiveRateState = /* @__PURE__ */ new Map();
+  function resolveAdaptiveRateBucket(req) {
+    const controlState = options.getControlState();
+    const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+    const method = String(req.method || "GET").toUpperCase();
+    const path4 = req.path || "/";
+    let bucketScope = "api";
+    let baseLimit = 40;
+    let minLimit = 8;
+    if (path4.startsWith("/api/ai/")) {
+      bucketScope = "ai";
+      baseLimit = 14;
+      minLimit = 4;
+    } else if (path4.startsWith("/api/activity/heartbeat")) {
+      bucketScope = "heartbeat";
+      baseLimit = 120;
+      minLimit = 20;
+    } else if (method === "GET" && (path4.startsWith("/api/collection/nicknames") || path4.startsWith("/api/collection/admin-groups"))) {
+      bucketScope = "collection-meta";
+      baseLimit = 120;
+      minLimit = 24;
     }
-  };
-  let controlState = defaultControlState;
-  let preAllocatedBuffer = null;
-  let activeRequests = 0;
-  const latencySamples = [];
-  let requestCounter = 0;
-  let reqRatePerSec = 0;
-  let lastCpuUsage = process.cpuUsage();
-  let lastCpuTs = Date.now();
-  let cpuPercent = 0;
-  let gcCountWindow = 0;
-  let gcPerMinute = 0;
-  let lastDbLatencyMs = 0;
-  let lastAiLatencyMs = 0;
-  let lastAiLatencyObservedAt = 0;
-  let intelligenceInFlight = false;
-  let lastPgPoolWarningAt = 0;
-  let lastPgPoolWarningSignature = "";
-  const intelligenceHistory = {
-    cpuPercent: [],
-    p95LatencyMs: [],
-    dbLatencyMs: [],
-    errorRate: [],
-    aiLatencyMs: [],
-    queueSize: [],
-    ramPercent: [],
-    requestRate: [],
-    workerCount: []
-  };
-  const eventLoopHistogram = monitorEventLoopDelay({ resolution: 20 });
-  eventLoopHistogram.enable();
-  const circuitAi = new CircuitBreaker({
-    name: "ai",
-    threshold: 0.4,
-    minRequests: 10,
-    cooldownMs: 8e3
-  });
-  const circuitDb = new CircuitBreaker({
-    name: "db",
-    threshold: 0.35,
-    minRequests: 20,
-    cooldownMs: 12e3
-  });
-  const circuitExport = new CircuitBreaker({
-    name: "export",
-    threshold: 0.4,
-    minRequests: 8,
-    cooldownMs: 15e3
-  });
-  let gcObserver = null;
-  let gcObserverAttached = false;
-  let processHandlersAttached = false;
-  let runtimeLoopHandle = null;
-  function getEventLoopLagMs() {
-    const lagMs = Number(eventLoopHistogram.mean) / 1e6;
-    return Number.isFinite(lagMs) ? lagMs : 0;
+    const modePenalty = controlState.mode === "PROTECTION" ? 0.5 : controlState.mode === "DEGRADED" ? 0.75 : 1;
+    const throttle = clamp(controlState.throttleFactor || 1, 0.2, 1.2);
+    const dynamicLimit = Math.max(minLimit, Math.floor(baseLimit * modePenalty * throttle));
+    return { bucketKey: `${ip}:${bucketScope}`, dynamicLimit };
   }
-  function recordLatency(ms) {
-    if (!Number.isFinite(ms) || ms < 0) return;
-    latencySamples.push(ms);
-    if (latencySamples.length > LATENCY_WINDOW) {
-      latencySamples.splice(0, latencySamples.length - LATENCY_WINDOW);
-    }
-  }
-  function observeDbLatency(ms) {
-    if (!Number.isFinite(ms) || ms < 0) return;
-    if (lastDbLatencyMs <= 0) {
-      lastDbLatencyMs = ms;
-    } else {
-      lastDbLatencyMs = lastDbLatencyMs * 0.75 + ms * 0.25;
-    }
-  }
-  function observeAiLatency(ms) {
-    if (!Number.isFinite(ms) || ms < 0) return;
-    if (lastAiLatencyMs <= 0) {
-      lastAiLatencyMs = ms;
-    } else {
-      lastAiLatencyMs = lastAiLatencyMs * 0.75 + ms * 0.25;
-    }
-    lastAiLatencyObservedAt = Date.now();
-  }
-  function getEffectiveAiLatencyMs(now = Date.now()) {
-    if (!Number.isFinite(lastAiLatencyMs) || lastAiLatencyMs <= 0) return 0;
-    if (lastAiLatencyObservedAt <= 0) return Math.max(0, lastAiLatencyMs);
-    const idleMs = Math.max(0, now - lastAiLatencyObservedAt);
-    if (idleMs <= options.aiLatencyStaleAfterMs) {
-      return Math.max(0, lastAiLatencyMs);
-    }
-    const decayWindowMs = idleMs - options.aiLatencyStaleAfterMs;
-    const decayFactor = Math.exp(-Math.LN2 * decayWindowMs / options.aiLatencyDecayHalfLifeMs);
-    return Math.max(0, lastAiLatencyMs * decayFactor);
-  }
-  function maybeWarnPgPoolPressure(source) {
-    const total = Number(options.pool.totalCount || 0);
-    const idle = Number(options.pool.idleCount || 0);
-    const waiting = Number(options.pool.waitingCount || 0);
-    const max = Number(options.pool?.options?.max || 0);
-    const nearMax = max > 0 ? total >= Math.max(1, max - 1) : false;
-    const hasPressure = waiting > 0 || idle === 0 || nearMax;
-    if (!hasPressure) {
-      lastPgPoolWarningSignature = "";
-      return;
-    }
-    const signature = `${total}:${idle}:${waiting}:${max}`;
+  const adaptiveRateLimit2 = (req, res, next) => {
+    const controlState = options.getControlState();
+    if (!req.path.startsWith("/api/")) return next();
+    const windowMs = 1e4;
     const now = Date.now();
-    if (signature === lastPgPoolWarningSignature && now - lastPgPoolWarningAt < options.pgPoolWarnCooldownMs) {
-      return;
+    const { bucketKey, dynamicLimit } = resolveAdaptiveRateBucket(req);
+    const bucket = adaptiveRateState.get(bucketKey);
+    if (!bucket || now >= bucket.resetAt) {
+      adaptiveRateState.set(bucketKey, { count: 1, resetAt: now + windowMs });
+      return next();
     }
-    lastPgPoolWarningAt = now;
-    lastPgPoolWarningSignature = signature;
-    console.warn(
-      `[PG_POOL] total=${total} idle=${idle} waiting=${waiting} max=${max} source=${source}`
-    );
-  }
-  async function withDbCircuit2(operation) {
-    return circuitDb.execute(async () => {
-      const start = Date.now();
-      try {
-        return await operation();
-      } finally {
-        observeDbLatency(Date.now() - start);
-        maybeWarnPgPoolPressure("db-circuit");
-      }
-    });
-  }
-  async function withAiCircuit2(operation) {
-    return circuitAi.execute(async () => {
-      const start = Date.now();
-      try {
-        return await operation();
-      } finally {
-        observeAiLatency(Date.now() - start);
-      }
-    });
-  }
-  async function withExportCircuit2(operation) {
-    return circuitExport.execute(operation);
-  }
-  function getControlState2() {
-    return controlState;
-  }
-  function applyControlState(payload) {
-    controlState = {
-      ...defaultControlState,
-      ...payload
-    };
-    const preAllocateMB = clamp(controlState.preAllocateMB, 0, options.lowMemoryMode ? 8 : 32);
-    if (preAllocateMB > 0) {
-      const targetBytes = preAllocateMB * 1024 * 1024;
-      if (!preAllocatedBuffer || preAllocatedBuffer.length !== targetBytes) {
-        preAllocatedBuffer = Buffer.alloc(targetBytes);
-      }
-    } else {
-      preAllocatedBuffer = null;
-    }
-  }
-  function getDbProtection2() {
-    return controlState.dbProtection || lastDbLatencyMs > 1e3;
-  }
-  function computeInternalMonitorSnapshot2() {
-    const workerSamples = controlState.workers || [];
-    const maxWorkerP95 = workerSamples.reduce(
-      (max, worker) => Math.max(max, Number(worker.latencyP95Ms || 0)),
-      0
-    );
-    const p95LatencyMs = Math.max(percentile(latencySamples, 95), maxWorkerP95);
-    const slowQueryCount = workerSamples.filter(
-      (worker) => Number(worker.dbLatencyMs || 0) > 600
-    ).length;
-    const aiFailureRate = clamp(circuitAi.getSnapshot().failureRate * 100, 0, 100);
-    const dbFailureRate = clamp(circuitDb.getSnapshot().failureRate * 100, 0, 100);
-    const exportFailureRate = clamp(circuitExport.getSnapshot().failureRate * 100, 0, 100);
-    const errorRate = Math.max(aiFailureRate, dbFailureRate, exportFailureRate);
-    const cpu = roundMetric(cpuPercent, 2);
-    const ram = getRamPercent();
-    const dbLatency = roundMetric(lastDbLatencyMs, 2);
-    const aiLatency = roundMetric(getEffectiveAiLatencyMs(), 2);
-    const loopLag = roundMetric(getEventLoopLagMs(), 2);
-    let bottleneckType = "NONE";
-    const pressureScore = [
-      { type: "CPU", score: cpu / 100 },
-      { type: "RAM", score: ram / 100 },
-      { type: "DB", score: dbLatency / 1200 },
-      { type: "AI", score: aiLatency / 1500 },
-      { type: "EVENT_LOOP", score: loopLag / 180 },
-      { type: "ERRORS", score: errorRate / 10 }
-    ].sort((a, b) => b.score - a.score)[0];
-    if (pressureScore && pressureScore.score >= 0.5) {
-      bottleneckType = pressureScore.type;
-    }
-    return {
-      score: roundMetric(controlState.healthScore, 2),
-      mode: controlState.mode,
-      cpuPercent: cpu,
-      ramPercent: ram,
-      p95LatencyMs: roundMetric(p95LatencyMs, 2),
-      errorRate: roundMetric(errorRate, 2),
-      dbLatencyMs: dbLatency,
-      aiLatencyMs: aiLatency,
-      eventLoopLagMs: loopLag,
-      requestRate: roundMetric(reqRatePerSec, 2),
-      activeRequests,
-      queueLength: options.getSearchQueueLength(),
-      workerCount: controlState.workerCount,
-      maxWorkers: controlState.maxWorkers,
-      dbProtection: getDbProtection2(),
-      slowQueryCount,
-      dbConnections: Math.max(
-        0,
-        Number(options.pool.totalCount || 0) + Number(options.pool.waitingCount || 0)
-      ),
-      aiFailRate: roundMetric(aiFailureRate, 2),
-      bottleneckType,
-      updatedAt: controlState.updatedAt
-    };
-  }
-  function buildInternalMonitorAlerts2(snapshot) {
-    const alerts = [];
-    const timestamp2 = new Date(snapshot.updatedAt || Date.now()).toISOString();
-    const pushAlert = (severity, source, message) => {
-      alerts.push({
-        id: `${source.toLowerCase().replace(/[^a-z0-9_]/g, "_")}_${severity.toLowerCase()}`,
-        severity,
-        source,
-        message,
-        timestamp: timestamp2
+    bucket.count += 1;
+    if (bucket.count > dynamicLimit) {
+      return res.status(429).json({
+        message: "Too many requests under current system load.",
+        limit: dynamicLimit,
+        retryAfterMs: Math.max(0, bucket.resetAt - now),
+        mode: controlState.mode
       });
-    };
-    if (snapshot.mode === "PROTECTION") {
-      pushAlert("CRITICAL", "MODE", "System is in PROTECTION mode. Heavy routes are restricted.");
-    } else if (snapshot.mode === "DEGRADED") {
-      pushAlert("WARNING", "MODE", "System is in DEGRADED mode. Throughput throttling is active.");
     }
-    if (snapshot.cpuPercent >= 88) {
-      pushAlert("CRITICAL", "CPU", `CPU usage is critically high at ${snapshot.cpuPercent.toFixed(1)}%.`);
-    } else if (snapshot.cpuPercent >= 75) {
-      pushAlert("WARNING", "CPU", `CPU usage is elevated at ${snapshot.cpuPercent.toFixed(1)}%.`);
+    return next();
+  };
+  const systemProtectionMiddleware2 = (req, res, next) => {
+    const controlState = options.getControlState();
+    if (!req.path.startsWith("/api/")) return next();
+    if (req.path.startsWith("/api/health") || req.path.startsWith("/api/maintenance-status")) {
+      return next();
     }
-    if (snapshot.ramPercent >= 92) {
-      pushAlert("CRITICAL", "RAM", `RAM usage is critically high at ${snapshot.ramPercent.toFixed(1)}%.`);
-    } else if (snapshot.ramPercent >= 80) {
-      pushAlert("WARNING", "RAM", `RAM usage is elevated at ${snapshot.ramPercent.toFixed(1)}%.`);
-    }
-    if (snapshot.dbLatencyMs >= 1e3) {
-      pushAlert("CRITICAL", "DB", `Database latency is critical (${snapshot.dbLatencyMs.toFixed(0)} ms).`);
-    } else if (snapshot.dbLatencyMs >= 400) {
-      pushAlert("WARNING", "DB", `Database latency is elevated (${snapshot.dbLatencyMs.toFixed(0)} ms).`);
-    }
-    if (snapshot.aiLatencyMs >= 1400) {
-      pushAlert("CRITICAL", "AI", `AI latency is critical (${snapshot.aiLatencyMs.toFixed(0)} ms).`);
-    } else if (snapshot.aiLatencyMs >= 700) {
-      pushAlert("WARNING", "AI", `AI latency is elevated (${snapshot.aiLatencyMs.toFixed(0)} ms).`);
-    }
-    if (snapshot.eventLoopLagMs >= 170) {
-      pushAlert("CRITICAL", "EVENT_LOOP", `Event loop lag is critical (${snapshot.eventLoopLagMs.toFixed(1)} ms).`);
-    } else if (snapshot.eventLoopLagMs >= 90) {
-      pushAlert("WARNING", "EVENT_LOOP", `Event loop lag is elevated (${snapshot.eventLoopLagMs.toFixed(1)} ms).`);
-    }
-    if (snapshot.errorRate >= 5) {
-      pushAlert("CRITICAL", "ERRORS", `Runtime failure rate is high (${snapshot.errorRate.toFixed(2)}%).`);
-    } else if (snapshot.errorRate >= 2) {
-      pushAlert("WARNING", "ERRORS", `Runtime failure rate is elevated (${snapshot.errorRate.toFixed(2)}%).`);
-    }
-    if (snapshot.queueLength >= 10) {
-      pushAlert("CRITICAL", "QUEUE", `Request queue is saturated (${snapshot.queueLength} pending).`);
-    } else if (snapshot.queueLength >= 5) {
-      pushAlert("WARNING", "QUEUE", `Request queue is growing (${snapshot.queueLength} pending).`);
-    }
-    if (snapshot.workerCount >= snapshot.maxWorkers && snapshot.maxWorkers > 0) {
-      pushAlert("WARNING", "WORKERS", `Worker capacity reached (${snapshot.workerCount}/${snapshot.maxWorkers}).`);
-    }
-    return alerts;
-  }
-  function appendIntelligenceValue(key, value) {
-    if (!Number.isFinite(value)) return;
-    const series = intelligenceHistory[key];
-    series.push(value);
-    if (series.length > MAX_INTELLIGENCE_HISTORY) {
-      series.splice(0, series.length - MAX_INTELLIGENCE_HISTORY);
-    }
-  }
-  function toIntelligenceSnapshot(snapshot) {
-    return {
-      timestamp: snapshot.updatedAt || Date.now(),
-      score: snapshot.score,
-      mode: snapshot.mode,
-      cpuPercent: snapshot.cpuPercent,
-      ramPercent: snapshot.ramPercent,
-      p95LatencyMs: snapshot.p95LatencyMs,
-      errorRate: snapshot.errorRate,
-      dbLatencyMs: snapshot.dbLatencyMs,
-      aiLatencyMs: snapshot.aiLatencyMs,
-      eventLoopLagMs: snapshot.eventLoopLagMs,
-      requestRate: snapshot.requestRate,
-      activeRequests: snapshot.activeRequests,
-      queueSize: snapshot.queueLength,
-      workerCount: snapshot.workerCount,
-      maxWorkers: snapshot.maxWorkers,
-      dbConnections: snapshot.dbConnections,
-      aiFailRate: snapshot.aiFailRate,
-      bottleneckType: snapshot.bottleneckType
-    };
-  }
-  async function runIntelligenceCycle() {
-    if (intelligenceInFlight) return;
-    intelligenceInFlight = true;
-    try {
-      const monitorSnapshot = computeInternalMonitorSnapshot2();
-      const snapshot = toIntelligenceSnapshot(monitorSnapshot);
-      appendIntelligenceValue("cpuPercent", snapshot.cpuPercent);
-      appendIntelligenceValue("p95LatencyMs", snapshot.p95LatencyMs);
-      appendIntelligenceValue("dbLatencyMs", snapshot.dbLatencyMs);
-      appendIntelligenceValue("errorRate", snapshot.errorRate);
-      appendIntelligenceValue("aiLatencyMs", snapshot.aiLatencyMs);
-      appendIntelligenceValue("queueSize", snapshot.queueSize);
-      appendIntelligenceValue("ramPercent", snapshot.ramPercent);
-      appendIntelligenceValue("requestRate", snapshot.requestRate);
-      appendIntelligenceValue("workerCount", snapshot.workerCount);
-      await options.evaluateSystem(snapshot, intelligenceHistory);
-    } catch (err) {
-      if (options.apiDebugLogs) {
-        console.warn("Intelligence cycle error:", err);
-      }
-    } finally {
-      intelligenceInFlight = false;
-    }
-  }
-  function getRequestRate2() {
-    return reqRatePerSec;
-  }
-  function getLatencyP952() {
-    return percentile(latencySamples, 95);
-  }
-  function getLocalCircuitSnapshots2() {
-    return {
-      ai: circuitAi.getSnapshot(),
-      db: circuitDb.getSnapshot(),
-      export: circuitExport.getSnapshot()
-    };
-  }
-  function recordGcEntries(entryCount) {
-    if (entryCount > 0) {
-      gcCountWindow += entryCount;
-    }
-  }
-  function recordRequestStarted2() {
-    activeRequests += 1;
-    requestCounter += 1;
-  }
-  function recordRequestFinished2(elapsedMs) {
-    activeRequests = Math.max(0, activeRequests - 1);
-    recordLatency(elapsedMs);
-  }
-  function attachGcObserver2() {
-    if (gcObserverAttached) return;
-    gcObserverAttached = true;
-    try {
-      gcObserver = new PerformanceObserver((list) => {
-        recordGcEntries(list.getEntries().length);
+    const dbProtection = options.getDbProtection();
+    if (dbProtection && req.path.startsWith("/api/search/advanced")) {
+      return res.status(503).json({
+        message: "Advanced search is temporarily disabled to protect database stability.",
+        protection: true,
+        reason: "db_latency_high"
       });
-      gcObserver.observe({ entryTypes: ["gc"] });
-    } catch {
     }
-  }
-  function attachProcessMessageHandlers2({ onGracefulShutdown }) {
-    if (processHandlersAttached || typeof process.on !== "function") {
-      return;
+    if (dbProtection && req.path.startsWith("/api/backups") && req.method !== "GET") {
+      return res.status(503).json({
+        message: "Export/backup write operations are temporarily disabled.",
+        protection: true,
+        reason: "db_latency_high"
+      });
     }
-    processHandlersAttached = true;
-    process.on("message", (msg) => {
-      if (!msg || typeof msg !== "object") return;
-      if (msg.type !== "control-state" || !msg.payload) return;
-      applyControlState(msg.payload);
-    });
-    process.on("message", (msg) => {
-      if (!msg || typeof msg !== "object") return;
-      if (msg.type !== "graceful-shutdown") return;
-      setTimeout(() => {
-        onGracefulShutdown();
-      }, 50);
-    });
-  }
-  function startRuntimeLoops2({ clearSearchCache }) {
-    if (runtimeLoopHandle) return;
-    runtimeLoopHandle = setInterval(() => {
-      reqRatePerSec = requestCounter / 5;
-      requestCounter = 0;
-      gcPerMinute = gcCountWindow * 12;
-      gcCountWindow = 0;
-      const now = Date.now();
-      const currentCpu = process.cpuUsage();
-      const cpuDeltaMicros = currentCpu.user - lastCpuUsage.user + (currentCpu.system - lastCpuUsage.system);
-      const elapsedMs = Math.max(1, now - lastCpuTs);
-      const cpuCorePercent = cpuDeltaMicros / 1e3 / elapsedMs * 100;
-      cpuPercent = clamp(cpuCorePercent / Math.max(1, controlState.workerCount || 1), 0, 100);
-      lastCpuUsage = currentCpu;
-      lastCpuTs = now;
-      if (typeof process.send === "function") {
-        const mem2 = process.memoryUsage();
-        process.send({
-          type: "worker-metrics",
-          payload: {
-            workerId: Number(process.env.NODE_UNIQUE_ID || 0),
-            pid: process.pid,
-            cpuPercent,
-            reqRate: reqRatePerSec,
-            latencyP95Ms: percentile(latencySamples, 95),
-            eventLoopLagMs: getEventLoopLagMs(),
-            activeRequests,
-            queueLength: options.getSearchQueueLength(),
-            heapUsedMB: mem2.heapUsed / (1024 * 1024),
-            heapTotalMB: mem2.heapTotal / (1024 * 1024),
-            oldSpaceMB: mem2.heapUsed / (1024 * 1024),
-            gcPerMin: gcPerMinute,
-            dbLatencyMs: lastDbLatencyMs,
-            aiLatencyMs: getEffectiveAiLatencyMs(),
-            ts: Date.now(),
-            circuit: {
-              ai: { state: circuitAi.getState(), failureRate: circuitAi.getSnapshot().failureRate },
-              db: { state: circuitDb.getState(), failureRate: circuitDb.getSnapshot().failureRate },
-              export: { state: circuitExport.getState(), failureRate: circuitExport.getSnapshot().failureRate }
-            }
-          }
-        });
+    if (controlState.rejectHeavyRoutes && isHeavyRoute(req.path)) {
+      return res.status(503).json({
+        message: "Route temporarily throttled by protection mode.",
+        protection: true,
+        mode: controlState.mode
+      });
+    }
+    return next();
+  };
+  const sweepAdaptiveRateState2 = (now = Date.now()) => {
+    for (const [bucketKey, bucket] of adaptiveRateState.entries()) {
+      if (now >= bucket.resetAt + 6e4) {
+        adaptiveRateState.delete(bucketKey);
       }
-      const mem = process.memoryUsage();
-      const heapRatio = mem.heapTotal > 0 ? mem.heapUsed / mem.heapTotal : 0;
-      if (heapRatio > 0.88) {
-        clearSearchCache();
-        if (typeof process.send === "function") {
-          process.send({ type: "worker-event", payload: { kind: "memory-pressure" } });
-        }
-        if (typeof global.gc === "function" && activeRequests === 0) {
-          try {
-            global.gc();
-          } catch {
-          }
-        }
-      }
-      void runIntelligenceCycle();
-    }, 5e3);
-    runtimeLoopHandle.unref();
-    void runIntelligenceCycle();
-  }
+    }
+  };
   return {
-    attachGcObserver: attachGcObserver2,
-    attachProcessMessageHandlers: attachProcessMessageHandlers2,
-    buildInternalMonitorAlerts: buildInternalMonitorAlerts2,
-    computeInternalMonitorSnapshot: computeInternalMonitorSnapshot2,
-    getControlState: getControlState2,
-    getDbProtection: getDbProtection2,
-    getLatencyP95: getLatencyP952,
-    getLocalCircuitSnapshots: getLocalCircuitSnapshots2,
-    getRequestRate: getRequestRate2,
-    recordRequestFinished: recordRequestFinished2,
-    recordRequestStarted: recordRequestStarted2,
-    startRuntimeLoops: startRuntimeLoops2,
-    withAiCircuit: withAiCircuit2,
-    withDbCircuit: withDbCircuit2,
-    withExportCircuit: withExportCircuit2
+    adaptiveRateLimit: adaptiveRateLimit2,
+    systemProtectionMiddleware: systemProtectionMiddleware2,
+    sweepAdaptiveRateState: sweepAdaptiveRateState2
   };
 }
 
-// server/internal/wrapAsyncPrototypeMethods.ts
-function wrapAsyncPrototypeMethods(target, options) {
-  const prototype = Object.getPrototypeOf(target);
-  if (!prototype || typeof prototype !== "object") {
+// server/internal/local-http-pipeline.ts
+import express from "express";
+function registerLocalHttpPipeline(app2, options) {
+  const {
+    importBodyLimit,
+    collectionBodyLimit,
+    defaultBodyLimit,
+    uploadsRootDir,
+    recordRequestStarted: recordRequestStarted2,
+    recordRequestFinished: recordRequestFinished2,
+    adaptiveRateLimit: adaptiveRateLimit2,
+    systemProtectionMiddleware: systemProtectionMiddleware2,
+    maintenanceGuard: maintenanceGuard2
+  } = options;
+  app2.use("/api/imports", express.json({ limit: importBodyLimit }));
+  app2.use("/api/imports", express.urlencoded({ extended: true, limit: importBodyLimit }));
+  app2.use("/api/collection", express.json({ limit: collectionBodyLimit }));
+  app2.use("/api/collection", express.urlencoded({ extended: true, limit: collectionBodyLimit }));
+  app2.use(express.json({ limit: defaultBodyLimit }));
+  app2.use(express.urlencoded({ extended: true, limit: defaultBodyLimit }));
+  app2.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+  app2.use("/uploads/collection-receipts", (_req, res) => {
+    return res.status(404).json({ ok: false, message: "Not found." });
+  });
+  app2.use("/uploads", express.static(uploadsRootDir));
+  app2.use((req, res, next) => {
+    const start = process.hrtime.bigint();
+    recordRequestStarted2();
+    res.on("finish", () => {
+      const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6;
+      recordRequestFinished2(elapsedMs);
+    });
+    next();
+  });
+  app2.use(adaptiveRateLimit2);
+  app2.use(systemProtectionMiddleware2);
+  app2.use(maintenanceGuard2);
+}
+
+// server/auth/guards.ts
+import jwt from "jsonwebtoken";
+
+// server/lib/logger.ts
+var DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
+var REDACT_KEYS = [
+  "password",
+  "passwordhash",
+  "token",
+  "authorization",
+  "sessionsecret",
+  "icnumber",
+  "accountnumber",
+  "fingerprint"
+];
+function sanitize(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitize(item));
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  const output = {};
+  for (const [key, nested] of Object.entries(value)) {
+    const normalizedKey = key.toLowerCase();
+    if (REDACT_KEYS.some((sensitive) => normalizedKey.includes(sensitive))) {
+      output[key] = "[REDACTED]";
+      continue;
+    }
+    output[key] = sanitize(nested);
+  }
+  return output;
+}
+function log(level, message, meta) {
+  if (level === "debug" && !DEBUG_LOGS) return;
+  const payload = meta ? sanitize(meta) : void 0;
+  const line = payload ? `${message} ${JSON.stringify(payload)}` : message;
+  if (level === "error") {
+    console.error(line);
     return;
   }
-  const host = target;
-  for (const methodName of Object.getOwnPropertyNames(prototype)) {
-    if (options.exclude?.has(methodName)) {
-      continue;
-    }
-    const candidate = Reflect.get(target, methodName);
-    if (typeof candidate !== "function") {
-      continue;
-    }
-    const method = candidate;
-    if (method.constructor?.name !== "AsyncFunction") {
-      continue;
-    }
-    const original = method.bind(target);
-    host[methodName] = async (...args) => options.wrap(() => original(...args));
+  if (level === "warn") {
+    console.warn(line);
+    return;
   }
+  console.log(line);
+}
+var logger = {
+  info(message, meta) {
+    log("info", message, meta);
+  },
+  warn(message, meta) {
+    log("warn", message, meta);
+  },
+  error(message, meta) {
+    log("error", message, meta);
+  },
+  debug(message, meta) {
+    log("debug", message, meta);
+  }
+};
+
+// server/auth/guards.ts
+var TAB_VISIBILITY_CACHE_TTL_MS = 5e3;
+function createAuthGuards(options) {
+  const storage2 = options.storage;
+  const secret = options.secret || getSessionSecret();
+  const tabVisibilityCache = /* @__PURE__ */ new Map();
+  async function getRoleTabVisibilityCached(role) {
+    if (role === "superuser") return {};
+    const now = Date.now();
+    const cached = tabVisibilityCache.get(role);
+    if (cached && now - cached.cachedAt < TAB_VISIBILITY_CACHE_TTL_MS) {
+      return cached.tabs;
+    }
+    const tabs = await storage2.getRoleTabVisibility(role);
+    tabVisibilityCache.set(role, { tabs, cachedAt: now });
+    return tabs;
+  }
+  const authenticateToken = async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ message: "Token required" });
+    }
+    try {
+      const decoded = jwt.verify(token, secret);
+      const activity = await storage2.getActivityById(decoded.activityId);
+      if (!activity || activity.isActive === false || activity.logoutTime !== null) {
+        return res.status(401).json({
+          message: "Session expired. Please login again.",
+          forceLogout: true
+        });
+      }
+      const isVisitorBanned = await storage2.isVisitorBanned(
+        activity.fingerprint ?? null,
+        activity.ipAddress ?? null
+      );
+      if (isVisitorBanned) {
+        return res.status(401).json({
+          message: "Session banned. Please login again.",
+          forceLogout: true
+        });
+      }
+      await storage2.updateActivity(decoded.activityId, {
+        lastActivityTime: /* @__PURE__ */ new Date(),
+        isActive: true
+      });
+      req.user = {
+        userId: activity.userId || decoded.userId,
+        username: activity.username || decoded.username,
+        role: activity.role || decoded.role,
+        activityId: decoded.activityId
+      };
+      return next();
+    } catch (error) {
+      logger.debug("Token validation failed", {
+        path: req.path,
+        method: req.method,
+        error: error?.message
+      });
+      return res.status(403).json({ message: "Invalid token" });
+    }
+  };
+  const requireRole = (...roles) => {
+    return (req, res, next) => {
+      if (!req.user || !roles.includes(req.user.role)) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      return next();
+    };
+  };
+  const requireTabAccess = (tabId) => {
+    return async (req, res, next) => {
+      try {
+        const role = req.user?.role;
+        if (!role) {
+          return res.status(401).json({ message: "Unauthenticated" });
+        }
+        if (role === "superuser") {
+          return next();
+        }
+        if (role !== "admin" && role !== "user") {
+          return res.status(403).json({ message: "Insufficient permissions" });
+        }
+        const tabs = await getRoleTabVisibilityCached(role);
+        const hasExplicit = Object.prototype.hasOwnProperty.call(tabs, tabId);
+        const enabled = hasExplicit ? tabs[tabId] !== false : false;
+        if (!enabled) {
+          return res.status(403).json({ message: `Tab '${tabId}' is disabled for role '${role}'` });
+        }
+        return next();
+      } catch (error) {
+        logger.error("Tab access guard error", {
+          tabId,
+          message: error?.message
+        });
+        return res.status(500).json({ message: "Failed to validate tab access" });
+      }
+    };
+  };
+  const requireMonitorAccess = async (req, res, next) => {
+    try {
+      const role = req.user?.role;
+      if (!role) {
+        return res.status(401).json({ message: "Unauthenticated" });
+      }
+      if (role === "superuser") {
+        return next();
+      }
+      if (role !== "admin" && role !== "user") {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      const tabs = await getRoleTabVisibilityCached(role);
+      if (tabs.monitor !== true) {
+        return res.status(403).json({ message: "System Monitor access is disabled for this role." });
+      }
+      return next();
+    } catch (error) {
+      logger.error("Monitor access guard error", {
+        message: error?.message
+      });
+      return res.status(500).json({ message: "Failed to validate monitor access" });
+    }
+  };
+  return {
+    authenticateToken,
+    requireRole,
+    requireTabAccess,
+    requireMonitorAccess,
+    clearTabVisibilityCache() {
+      tabVisibilityCache.clear();
+    }
+  };
 }
 
 // server/intelligence/anomaly/AnomalyEngine.ts
@@ -8154,202 +7661,6 @@ function injectChaos(input) {
   return ecosystem.injectChaos(input);
 }
 
-// server/auth/guards.ts
-import jwt2 from "jsonwebtoken";
-
-// server/lib/logger.ts
-var DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
-var REDACT_KEYS = [
-  "password",
-  "passwordhash",
-  "token",
-  "authorization",
-  "sessionsecret",
-  "icnumber",
-  "accountnumber",
-  "fingerprint"
-];
-function sanitize(value) {
-  if (Array.isArray(value)) {
-    return value.map((item) => sanitize(item));
-  }
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-  const output = {};
-  for (const [key, nested] of Object.entries(value)) {
-    const normalizedKey = key.toLowerCase();
-    if (REDACT_KEYS.some((sensitive) => normalizedKey.includes(sensitive))) {
-      output[key] = "[REDACTED]";
-      continue;
-    }
-    output[key] = sanitize(nested);
-  }
-  return output;
-}
-function log(level, message, meta) {
-  if (level === "debug" && !DEBUG_LOGS) return;
-  const payload = meta ? sanitize(meta) : void 0;
-  const line = payload ? `${message} ${JSON.stringify(payload)}` : message;
-  if (level === "error") {
-    console.error(line);
-    return;
-  }
-  if (level === "warn") {
-    console.warn(line);
-    return;
-  }
-  console.log(line);
-}
-var logger = {
-  info(message, meta) {
-    log("info", message, meta);
-  },
-  warn(message, meta) {
-    log("warn", message, meta);
-  },
-  error(message, meta) {
-    log("error", message, meta);
-  },
-  debug(message, meta) {
-    log("debug", message, meta);
-  }
-};
-
-// server/auth/guards.ts
-var TAB_VISIBILITY_CACHE_TTL_MS = 5e3;
-function createAuthGuards(options) {
-  const storage2 = options.storage;
-  const secret = options.secret || getSessionSecret();
-  const tabVisibilityCache = /* @__PURE__ */ new Map();
-  async function getRoleTabVisibilityCached(role) {
-    if (role === "superuser") return {};
-    const now = Date.now();
-    const cached = tabVisibilityCache.get(role);
-    if (cached && now - cached.cachedAt < TAB_VISIBILITY_CACHE_TTL_MS) {
-      return cached.tabs;
-    }
-    const tabs = await storage2.getRoleTabVisibility(role);
-    tabVisibilityCache.set(role, { tabs, cachedAt: now });
-    return tabs;
-  }
-  const authenticateToken = async (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.split(" ")[1];
-    if (!token) {
-      return res.status(401).json({ message: "Token required" });
-    }
-    try {
-      const decoded = jwt2.verify(token, secret);
-      const activity = await storage2.getActivityById(decoded.activityId);
-      if (!activity || activity.isActive === false || activity.logoutTime !== null) {
-        return res.status(401).json({
-          message: "Session expired. Please login again.",
-          forceLogout: true
-        });
-      }
-      const isVisitorBanned = await storage2.isVisitorBanned(
-        activity.fingerprint ?? null,
-        activity.ipAddress ?? null
-      );
-      if (isVisitorBanned) {
-        return res.status(401).json({
-          message: "Session banned. Please login again.",
-          forceLogout: true
-        });
-      }
-      await storage2.updateActivity(decoded.activityId, {
-        lastActivityTime: /* @__PURE__ */ new Date(),
-        isActive: true
-      });
-      req.user = {
-        userId: activity.userId || decoded.userId,
-        username: activity.username || decoded.username,
-        role: activity.role || decoded.role,
-        activityId: decoded.activityId
-      };
-      return next();
-    } catch (error) {
-      logger.debug("Token validation failed", {
-        path: req.path,
-        method: req.method,
-        error: error?.message
-      });
-      return res.status(403).json({ message: "Invalid token" });
-    }
-  };
-  const requireRole = (...roles) => {
-    return (req, res, next) => {
-      if (!req.user || !roles.includes(req.user.role)) {
-        return res.status(403).json({ message: "Insufficient permissions" });
-      }
-      return next();
-    };
-  };
-  const requireTabAccess = (tabId) => {
-    return async (req, res, next) => {
-      try {
-        const role = req.user?.role;
-        if (!role) {
-          return res.status(401).json({ message: "Unauthenticated" });
-        }
-        if (role === "superuser") {
-          return next();
-        }
-        if (role !== "admin" && role !== "user") {
-          return res.status(403).json({ message: "Insufficient permissions" });
-        }
-        const tabs = await getRoleTabVisibilityCached(role);
-        const hasExplicit = Object.prototype.hasOwnProperty.call(tabs, tabId);
-        const enabled = hasExplicit ? tabs[tabId] !== false : false;
-        if (!enabled) {
-          return res.status(403).json({ message: `Tab '${tabId}' is disabled for role '${role}'` });
-        }
-        return next();
-      } catch (error) {
-        logger.error("Tab access guard error", {
-          tabId,
-          message: error?.message
-        });
-        return res.status(500).json({ message: "Failed to validate tab access" });
-      }
-    };
-  };
-  const requireMonitorAccess = async (req, res, next) => {
-    try {
-      const role = req.user?.role;
-      if (!role) {
-        return res.status(401).json({ message: "Unauthenticated" });
-      }
-      if (role === "superuser") {
-        return next();
-      }
-      if (role !== "admin" && role !== "user") {
-        return res.status(403).json({ message: "Insufficient permissions" });
-      }
-      const tabs = await getRoleTabVisibilityCached(role);
-      if (tabs.monitor !== true) {
-        return res.status(403).json({ message: "System Monitor access is disabled for this role." });
-      }
-      return next();
-    } catch (error) {
-      logger.error("Monitor access guard error", {
-        message: error?.message
-      });
-      return res.status(500).json({ message: "Failed to validate monitor access" });
-    }
-  };
-  return {
-    authenticateToken,
-    requireRole,
-    requireTabAccess,
-    requireMonitorAccess,
-    clearTabVisibilityCache() {
-      tabVisibilityCache.clear();
-    }
-  };
-}
-
 // server/http/errors.ts
 var HttpError = class extends Error {
   constructor(statusCode, message, options) {
@@ -8401,37 +7712,22 @@ function errorHandler(err, req, res, next) {
   });
 }
 
-// server/routes/auth.routes.ts
-import bcrypt3 from "bcrypt";
-import jwt3 from "jsonwebtoken";
-import { WebSocket as WebSocket2 } from "ws";
+// server/middleware/rate-limit.ts
+import rateLimit from "express-rate-limit";
+var searchRateLimiter = rateLimit({
+  windowMs: 10 * 1e3,
+  // ⏱️ 10 saat
+  max: 10,
+  // ❌ max 10 request
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: "Too many search requests. Please slow down."
+  }
+});
 
-// server/auth/credentials.ts
-var CREDENTIAL_USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,32}$/;
-var CREDENTIAL_PASSWORD_MIN_LENGTH = 8;
-var CREDENTIAL_BCRYPT_COST = 12;
-function normalizeUsernameInput(raw) {
-  return String(raw ?? "").trim().toLowerCase();
-}
-function isStrongPassword(raw) {
-  if (raw.length < CREDENTIAL_PASSWORD_MIN_LENGTH) return false;
-  return /[A-Za-z]/.test(raw) && /\d/.test(raw);
-}
-function sendCredentialError(res, status, code, message) {
-  return res.status(status).json({
-    ok: false,
-    error: { code, message }
-  });
-}
-function buildCredentialAuditDetails(payload) {
-  return JSON.stringify({
-    actor_user_id: payload.actor_user_id,
-    target_user_id: payload.target_user_id,
-    metadata: {
-      changedField: payload.changedField
-    }
-  });
-}
+// server/routes/activity.routes.ts
+import { WebSocket } from "ws";
 
 // server/http/async-handler.ts
 function asyncHandler(fn) {
@@ -8471,6 +7767,470 @@ function readDate(value) {
     return void 0;
   }
   return parsed;
+}
+
+// server/routes/activity.routes.ts
+function buildActivityFilters(source) {
+  return {
+    status: readStringList(source.status),
+    username: readNonEmptyString(source.username),
+    ipAddress: readNonEmptyString(source.ipAddress),
+    browser: readNonEmptyString(source.browser),
+    dateFrom: readDate(source.dateFrom),
+    dateTo: readDate(source.dateTo)
+  };
+}
+function registerActivityRoutes(app2, deps) {
+  const { storage: storage2, authenticateToken, requireRole, requireTabAccess, connectedClients: connectedClients2 } = deps;
+  const closeSocket = async (activityId, payload) => {
+    const socket = connectedClients2.get(activityId);
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      if (payload) {
+        socket.send(JSON.stringify(payload));
+      }
+      socket.close();
+    }
+    connectedClients2.delete(activityId);
+    await storage2.clearCollectionNicknameSessionByActivity(activityId);
+  };
+  app2.post("/api/activity/logout", authenticateToken, asyncHandler(async (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ success: false });
+    }
+    const activityId = req.user.activityId;
+    const activity = await storage2.getActivityById(activityId);
+    if (!activity || activity.isActive === false) {
+      return res.json({ success: true });
+    }
+    await storage2.updateActivity(activityId, {
+      isActive: false,
+      logoutTime: /* @__PURE__ */ new Date(),
+      logoutReason: "USER_LOGOUT"
+    });
+    await closeSocket(activityId, {
+      type: "logout",
+      reason: "User logged out"
+    });
+    await storage2.createAuditLog({
+      action: "LOGOUT",
+      performedBy: req.user.username
+    });
+    return res.json({ success: true });
+  }));
+  app2.get(
+    "/api/activity/all",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (_req, res) => {
+      return res.json({ activities: await storage2.getAllActivities() });
+    })
+  );
+  app2.get(
+    "/api/activity/filter",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (req, res) => {
+      return res.json({ activities: await storage2.getFilteredActivities(buildActivityFilters(req.query)) });
+    })
+  );
+  app2.delete(
+    "/api/activity/:id",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (req, res) => {
+      const activityId = readNonEmptyString(req.params.id);
+      if (!activityId) {
+        return res.status(400).json({ success: false, message: "Invalid activityId" });
+      }
+      await storage2.deleteActivity(activityId);
+      await closeSocket(activityId);
+      return res.json({ success: true });
+    })
+  );
+  app2.post(
+    "/api/activity/kick",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (req, res) => {
+      const body = ensureObject(req.body) || {};
+      const activityId = readNonEmptyString(body.activityId);
+      if (!activityId) {
+        return res.status(400).json({ success: false, message: "Invalid activityId" });
+      }
+      const activity = await storage2.getActivityById(activityId);
+      if (!activity) {
+        return res.status(404).json({ message: "Activity not found" });
+      }
+      await storage2.updateActivity(activityId, {
+        isActive: false,
+        logoutTime: /* @__PURE__ */ new Date(),
+        logoutReason: "KICKED"
+      });
+      await closeSocket(activityId, {
+        type: "kicked",
+        reason: "You have been logged out by an administrator."
+      });
+      await storage2.createAuditLog({
+        action: "KICK_USER",
+        performedBy: req.user.username,
+        targetUser: activity.username,
+        details: `Kicked activityId=${activityId}`
+      });
+      return res.json({ success: true });
+    })
+  );
+  app2.post(
+    "/api/activity/ban",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (req, res) => {
+      const body = ensureObject(req.body) || {};
+      const activityId = readNonEmptyString(body.activityId);
+      if (!activityId) {
+        return res.status(400).json({ success: false, message: "Invalid activityId" });
+      }
+      const activity = await storage2.getActivityById(activityId);
+      if (!activity) {
+        return res.status(404).json({ message: "Activity not found" });
+      }
+      const targetUser = await storage2.getUserByUsername(activity.username);
+      if (targetUser?.role === "superuser") {
+        return res.status(403).json({ message: "Cannot ban a superuser" });
+      }
+      await storage2.banVisitor({
+        username: activity.username,
+        role: activity.role,
+        activityId: activity.id,
+        fingerprint: activity.fingerprint ?? null,
+        ipAddress: activity.ipAddress ?? null,
+        browser: activity.browser ?? null,
+        pcName: activity.pcName ?? null
+      });
+      await storage2.updateActivity(activityId, {
+        isActive: false,
+        logoutTime: /* @__PURE__ */ new Date(),
+        logoutReason: "BANNED"
+      });
+      await closeSocket(activityId, {
+        type: "banned",
+        reason: "Your account has been banned."
+      });
+      await storage2.createAuditLog({
+        action: "BAN_USER",
+        performedBy: req.user.username,
+        targetUser: activity.username,
+        details: `Banned via activityId=${activityId}`
+      });
+      return res.json({ success: true });
+    })
+  );
+  app2.post("/api/admin/ban", authenticateToken, requireRole("superuser"), asyncHandler(async (req, res) => {
+    const body = ensureObject(req.body) || {};
+    const username = readNonEmptyString(body.username);
+    if (!username) {
+      return res.status(400).json({ message: "Username required" });
+    }
+    const targetUser = await storage2.getUserByUsername(username);
+    if (!targetUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    if (targetUser.role === "superuser") {
+      return res.status(403).json({ message: "Cannot ban a superuser" });
+    }
+    const activeSessions = await storage2.getActiveActivitiesByUsername(username);
+    await storage2.updateUserBan(username, true);
+    await storage2.deactivateUserActivities(username, "BANNED");
+    for (const activity of activeSessions) {
+      await closeSocket(activity.id, {
+        type: "banned",
+        reason: "Your account has been banned."
+      });
+    }
+    await storage2.createAuditLog({
+      action: "BAN_USER",
+      performedBy: req.user.username,
+      targetUser: username,
+      details: "Admin ban (account-level)"
+    });
+    return res.json({ success: true });
+  }));
+  app2.post(
+    "/api/admin/unban",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (req, res) => {
+      const body = ensureObject(req.body) || {};
+      const banId = readNonEmptyString(body.banId);
+      if (!banId) {
+        return res.status(400).json({ message: "banId required" });
+      }
+      await storage2.unbanVisitor(banId);
+      await storage2.createAuditLog({
+        action: "UNBAN_USER",
+        performedBy: req.user.username,
+        details: `Unbanned banId=${banId}`
+      });
+      return res.json({ success: true });
+    })
+  );
+  app2.get(
+    "/api/users/banned",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (_req, res) => {
+      const bannedSessions = await storage2.getBannedSessions();
+      return res.json({
+        users: bannedSessions.map((session) => ({
+          visitorId: session.banId,
+          banId: session.banId,
+          username: session.username,
+          role: session.role,
+          banInfo: {
+            ipAddress: session.ipAddress ?? null,
+            browser: session.browser ?? null,
+            bannedAt: session.bannedAt ?? null
+          }
+        }))
+      });
+    })
+  );
+  app2.post("/api/activity/heartbeat", authenticateToken, asyncHandler(async (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ ok: false, message: "Unauthenticated" });
+    }
+    await storage2.updateActivity(req.user.activityId, {
+      lastActivityTime: /* @__PURE__ */ new Date(),
+      isActive: true
+    });
+    return res.json({
+      ok: true,
+      status: "ONLINE",
+      lastActivityTime: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  }));
+  app2.get(
+    "/api/activities",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (_req, res) => {
+      return res.json(await storage2.getAllActivities());
+    })
+  );
+  app2.get(
+    "/api/activities/active",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (_req, res) => {
+      return res.json(await storage2.getActiveActivities());
+    })
+  );
+  app2.post(
+    "/api/activities/filter",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (req, res) => {
+      const filters = buildActivityFilters(ensureObject(req.body) || {});
+      return res.json(await storage2.getFilteredActivities(filters));
+    })
+  );
+}
+
+// server/routes/ai.routes.ts
+function registerAiRoutes(app2, deps) {
+  const {
+    storage: storage2,
+    authenticateToken,
+    requireRole,
+    withAiConcurrencyGate: withAiConcurrencyGate2,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    aiSearchService: aiSearchService2,
+    categoryStatsService: categoryStatsService2,
+    aiChatService,
+    aiIndexService,
+    getOllamaConfig: getOllamaConfig2,
+    defaultAiTimeoutMs
+  } = deps;
+  app2.get(
+    "/api/ai/config",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    asyncHandler(async (_req, res) => {
+      const runtimeSettings = await getRuntimeSettingsCached2();
+      return res.json({
+        ...getOllamaConfig2(),
+        aiEnabled: runtimeSettings.aiEnabled,
+        semanticSearchEnabled: runtimeSettings.semanticSearchEnabled,
+        aiTimeoutMs: runtimeSettings.aiTimeoutMs
+      });
+    })
+  );
+  app2.post(
+    "/api/ai/search",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    withAiConcurrencyGate2("search", async (req, res) => {
+      try {
+        const body = ensureObject(req.body) || {};
+        const query = String(body.query || "").trim();
+        if (!query) {
+          return res.status(400).json({ message: "Query required" });
+        }
+        const runtimeSettings = await getRuntimeSettingsCached2();
+        if (!runtimeSettings.aiEnabled) {
+          return res.status(503).json({
+            message: "AI assistant is disabled by system settings.",
+            disabled: true
+          });
+        }
+        const countSummary = await categoryStatsService2.resolveCountSummary(
+          query,
+          runtimeSettings.aiTimeoutMs || defaultAiTimeoutMs
+        );
+        if (countSummary) {
+          return res.json({
+            person: null,
+            nearest_branch: null,
+            decision: null,
+            ai_explanation: countSummary.summary,
+            processing: countSummary.processing,
+            stats: countSummary.stats
+          });
+        }
+        const result = await aiSearchService2.resolveSearchRequest({
+          query,
+          userKey: req.user.activityId || req.user.username,
+          runtimeSettings: {
+            semanticSearchEnabled: runtimeSettings.semanticSearchEnabled,
+            aiTimeoutMs: runtimeSettings.aiTimeoutMs
+          }
+        });
+        if (result.audit) {
+          queueMicrotask(() => {
+            storage2.createAuditLog({
+              action: "AI_SEARCH",
+              performedBy: req.user.username,
+              targetResource: "ai_search",
+              details: JSON.stringify(result.audit)
+            }).catch((error) => {
+              console.error("Audit log failed:", error?.message || error);
+            });
+          });
+        }
+        return res.status(result.statusCode).json(result.body);
+      } catch (error) {
+        console.error("AI search error:", error);
+        return res.status(500).json({ message: error.message });
+      }
+    })
+  );
+  app2.post(
+    "/api/ai/index/import/:id",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    asyncHandler(async (req, res) => {
+      const runtimeSettings = await getRuntimeSettingsCached2();
+      if (!runtimeSettings.aiEnabled) {
+        return res.status(503).json({ message: "AI assistant is disabled by system settings." });
+      }
+      const body = ensureObject(req.body) || {};
+      const batchSize = Math.max(1, Math.min(20, readInteger(body.batchSize, 5)));
+      const maxRowsValue = readInteger(body.maxRows, 0);
+      const maxRows = maxRowsValue > 0 ? Math.max(1, maxRowsValue) : null;
+      const result = await aiIndexService.indexImport({
+        importId: req.params.id,
+        username: req.user.username,
+        batchSize,
+        maxRows
+      });
+      return res.status(result.statusCode).json(result.body);
+    })
+  );
+  app2.post(
+    "/api/ai/branches/import/:id",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    asyncHandler(async (req, res) => {
+      const body = ensureObject(req.body) || {};
+      const result = await aiIndexService.importBranches({
+        importId: req.params.id,
+        username: req.user.username,
+        nameKey: typeof body.nameKey === "string" ? body.nameKey : null,
+        latKey: typeof body.latKey === "string" ? body.latKey : null,
+        lngKey: typeof body.lngKey === "string" ? body.lngKey : null
+      });
+      return res.status(result.statusCode).json(result.body);
+    })
+  );
+  app2.post(
+    "/api/ai/chat",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    withAiConcurrencyGate2("chat", async (req, res) => {
+      try {
+        const body = ensureObject(req.body) || {};
+        const message = String(body.message || "").trim();
+        if (!message) {
+          return res.status(400).json({ message: "Message required" });
+        }
+        const runtimeSettings = await getRuntimeSettingsCached2();
+        if (!runtimeSettings.aiEnabled) {
+          return res.status(503).json({ message: "AI assistant is disabled by system settings." });
+        }
+        const result = await aiChatService.handleChat({
+          message,
+          username: req.user.username,
+          existingConversationId: body.conversationId ? String(body.conversationId) : null,
+          aiTimeoutMs: runtimeSettings.aiTimeoutMs
+        });
+        return res.status(result.statusCode).json(result.body);
+      } catch (error) {
+        console.error("AI chat error:", error);
+        return res.status(500).json({ message: error.message });
+      }
+    })
+  );
+}
+
+// server/routes/auth.routes.ts
+import bcrypt3 from "bcrypt";
+import jwt2 from "jsonwebtoken";
+import { WebSocket as WebSocket2 } from "ws";
+
+// server/auth/credentials.ts
+var CREDENTIAL_USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,32}$/;
+var CREDENTIAL_PASSWORD_MIN_LENGTH = 8;
+var CREDENTIAL_BCRYPT_COST = 12;
+function normalizeUsernameInput(raw) {
+  return String(raw ?? "").trim().toLowerCase();
+}
+function isStrongPassword(raw) {
+  if (raw.length < CREDENTIAL_PASSWORD_MIN_LENGTH) return false;
+  return /[A-Za-z]/.test(raw) && /\d/.test(raw);
+}
+function sendCredentialError(res, status, code, message) {
+  return res.status(status).json({
+    ok: false,
+    error: { code, message }
+  });
+}
+function buildCredentialAuditDetails(payload) {
+  return JSON.stringify({
+    actor_user_id: payload.actor_user_id,
+    target_user_id: payload.target_user_id,
+    metadata: {
+      changedField: payload.changedField
+    }
+  });
 }
 
 // server/lib/browser.ts
@@ -8616,7 +8376,7 @@ function registerAuthRoutes(app2, deps) {
       fingerprint,
       ipAddress: req.ip || req.socket.remoteAddress || null
     });
-    const token = jwt3.sign(
+    const token = jwt2.sign(
       {
         userId: user.id,
         username: user.username,
@@ -8953,1283 +8713,6 @@ function registerAuthRoutes(app2, deps) {
       role: user.role,
       isBanned: user.isBanned
     });
-  }));
-}
-
-// server/routes/activity.routes.ts
-import { WebSocket as WebSocket3 } from "ws";
-function buildActivityFilters(source) {
-  return {
-    status: readStringList(source.status),
-    username: readNonEmptyString(source.username),
-    ipAddress: readNonEmptyString(source.ipAddress),
-    browser: readNonEmptyString(source.browser),
-    dateFrom: readDate(source.dateFrom),
-    dateTo: readDate(source.dateTo)
-  };
-}
-function registerActivityRoutes(app2, deps) {
-  const { storage: storage2, authenticateToken, requireRole, requireTabAccess, connectedClients: connectedClients2 } = deps;
-  const closeSocket = async (activityId, payload) => {
-    const socket = connectedClients2.get(activityId);
-    if (socket && socket.readyState === WebSocket3.OPEN) {
-      if (payload) {
-        socket.send(JSON.stringify(payload));
-      }
-      socket.close();
-    }
-    connectedClients2.delete(activityId);
-    await storage2.clearCollectionNicknameSessionByActivity(activityId);
-  };
-  app2.post("/api/activity/logout", authenticateToken, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      return res.status(401).json({ success: false });
-    }
-    const activityId = req.user.activityId;
-    const activity = await storage2.getActivityById(activityId);
-    if (!activity || activity.isActive === false) {
-      return res.json({ success: true });
-    }
-    await storage2.updateActivity(activityId, {
-      isActive: false,
-      logoutTime: /* @__PURE__ */ new Date(),
-      logoutReason: "USER_LOGOUT"
-    });
-    await closeSocket(activityId, {
-      type: "logout",
-      reason: "User logged out"
-    });
-    await storage2.createAuditLog({
-      action: "LOGOUT",
-      performedBy: req.user.username
-    });
-    return res.json({ success: true });
-  }));
-  app2.get(
-    "/api/activity/all",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("activity"),
-    asyncHandler(async (_req, res) => {
-      return res.json({ activities: await storage2.getAllActivities() });
-    })
-  );
-  app2.get(
-    "/api/activity/filter",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("activity"),
-    asyncHandler(async (req, res) => {
-      return res.json({ activities: await storage2.getFilteredActivities(buildActivityFilters(req.query)) });
-    })
-  );
-  app2.delete(
-    "/api/activity/:id",
-    authenticateToken,
-    requireRole("admin", "superuser"),
-    requireTabAccess("activity"),
-    asyncHandler(async (req, res) => {
-      const activityId = readNonEmptyString(req.params.id);
-      if (!activityId) {
-        return res.status(400).json({ success: false, message: "Invalid activityId" });
-      }
-      await storage2.deleteActivity(activityId);
-      await closeSocket(activityId);
-      return res.json({ success: true });
-    })
-  );
-  app2.post(
-    "/api/activity/kick",
-    authenticateToken,
-    requireRole("admin", "superuser"),
-    requireTabAccess("activity"),
-    asyncHandler(async (req, res) => {
-      const body = ensureObject(req.body) || {};
-      const activityId = readNonEmptyString(body.activityId);
-      if (!activityId) {
-        return res.status(400).json({ success: false, message: "Invalid activityId" });
-      }
-      const activity = await storage2.getActivityById(activityId);
-      if (!activity) {
-        return res.status(404).json({ message: "Activity not found" });
-      }
-      await storage2.updateActivity(activityId, {
-        isActive: false,
-        logoutTime: /* @__PURE__ */ new Date(),
-        logoutReason: "KICKED"
-      });
-      await closeSocket(activityId, {
-        type: "kicked",
-        reason: "You have been logged out by an administrator."
-      });
-      await storage2.createAuditLog({
-        action: "KICK_USER",
-        performedBy: req.user.username,
-        targetUser: activity.username,
-        details: `Kicked activityId=${activityId}`
-      });
-      return res.json({ success: true });
-    })
-  );
-  app2.post(
-    "/api/activity/ban",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("activity"),
-    asyncHandler(async (req, res) => {
-      const body = ensureObject(req.body) || {};
-      const activityId = readNonEmptyString(body.activityId);
-      if (!activityId) {
-        return res.status(400).json({ success: false, message: "Invalid activityId" });
-      }
-      const activity = await storage2.getActivityById(activityId);
-      if (!activity) {
-        return res.status(404).json({ message: "Activity not found" });
-      }
-      const targetUser = await storage2.getUserByUsername(activity.username);
-      if (targetUser?.role === "superuser") {
-        return res.status(403).json({ message: "Cannot ban a superuser" });
-      }
-      await storage2.banVisitor({
-        username: activity.username,
-        role: activity.role,
-        activityId: activity.id,
-        fingerprint: activity.fingerprint ?? null,
-        ipAddress: activity.ipAddress ?? null,
-        browser: activity.browser ?? null,
-        pcName: activity.pcName ?? null
-      });
-      await storage2.updateActivity(activityId, {
-        isActive: false,
-        logoutTime: /* @__PURE__ */ new Date(),
-        logoutReason: "BANNED"
-      });
-      await closeSocket(activityId, {
-        type: "banned",
-        reason: "Your account has been banned."
-      });
-      await storage2.createAuditLog({
-        action: "BAN_USER",
-        performedBy: req.user.username,
-        targetUser: activity.username,
-        details: `Banned via activityId=${activityId}`
-      });
-      return res.json({ success: true });
-    })
-  );
-  app2.post("/api/admin/ban", authenticateToken, requireRole("superuser"), asyncHandler(async (req, res) => {
-    const body = ensureObject(req.body) || {};
-    const username = readNonEmptyString(body.username);
-    if (!username) {
-      return res.status(400).json({ message: "Username required" });
-    }
-    const targetUser = await storage2.getUserByUsername(username);
-    if (!targetUser) {
-      return res.status(404).json({ message: "User not found" });
-    }
-    if (targetUser.role === "superuser") {
-      return res.status(403).json({ message: "Cannot ban a superuser" });
-    }
-    const activeSessions = await storage2.getActiveActivitiesByUsername(username);
-    await storage2.updateUserBan(username, true);
-    await storage2.deactivateUserActivities(username, "BANNED");
-    for (const activity of activeSessions) {
-      await closeSocket(activity.id, {
-        type: "banned",
-        reason: "Your account has been banned."
-      });
-    }
-    await storage2.createAuditLog({
-      action: "BAN_USER",
-      performedBy: req.user.username,
-      targetUser: username,
-      details: "Admin ban (account-level)"
-    });
-    return res.json({ success: true });
-  }));
-  app2.post(
-    "/api/admin/unban",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("activity"),
-    asyncHandler(async (req, res) => {
-      const body = ensureObject(req.body) || {};
-      const banId = readNonEmptyString(body.banId);
-      if (!banId) {
-        return res.status(400).json({ message: "banId required" });
-      }
-      await storage2.unbanVisitor(banId);
-      await storage2.createAuditLog({
-        action: "UNBAN_USER",
-        performedBy: req.user.username,
-        details: `Unbanned banId=${banId}`
-      });
-      return res.json({ success: true });
-    })
-  );
-  app2.get(
-    "/api/users/banned",
-    authenticateToken,
-    requireRole("admin", "superuser"),
-    requireTabAccess("activity"),
-    asyncHandler(async (_req, res) => {
-      const bannedSessions = await storage2.getBannedSessions();
-      return res.json({
-        users: bannedSessions.map((session) => ({
-          visitorId: session.banId,
-          banId: session.banId,
-          username: session.username,
-          role: session.role,
-          banInfo: {
-            ipAddress: session.ipAddress ?? null,
-            browser: session.browser ?? null,
-            bannedAt: session.bannedAt ?? null
-          }
-        }))
-      });
-    })
-  );
-  app2.post("/api/activity/heartbeat", authenticateToken, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      return res.status(401).json({ ok: false, message: "Unauthenticated" });
-    }
-    await storage2.updateActivity(req.user.activityId, {
-      lastActivityTime: /* @__PURE__ */ new Date(),
-      isActive: true
-    });
-    return res.json({
-      ok: true,
-      status: "ONLINE",
-      lastActivityTime: (/* @__PURE__ */ new Date()).toISOString()
-    });
-  }));
-  app2.get(
-    "/api/activities",
-    authenticateToken,
-    requireRole("admin", "superuser"),
-    requireTabAccess("activity"),
-    asyncHandler(async (_req, res) => {
-      return res.json(await storage2.getAllActivities());
-    })
-  );
-  app2.get(
-    "/api/activities/active",
-    authenticateToken,
-    requireRole("admin", "superuser"),
-    requireTabAccess("activity"),
-    asyncHandler(async (_req, res) => {
-      return res.json(await storage2.getActiveActivities());
-    })
-  );
-  app2.post(
-    "/api/activities/filter",
-    authenticateToken,
-    requireRole("admin", "superuser"),
-    requireTabAccess("activity"),
-    asyncHandler(async (req, res) => {
-      const filters = buildActivityFilters(ensureObject(req.body) || {});
-      return res.json(await storage2.getFilteredActivities(filters));
-    })
-  );
-}
-
-// server/routes/imports.routes.ts
-function registerImportRoutes(app2, deps) {
-  const {
-    storage: storage2,
-    importsRepository: importsRepository2,
-    importAnalysisService: importAnalysisService2,
-    authenticateToken,
-    requireRole,
-    requireTabAccess,
-    searchRateLimiter: searchRateLimiter2,
-    getRuntimeSettingsCached: getRuntimeSettingsCached2,
-    isDbProtected
-  } = deps;
-  app2.get("/api/data-rows", authenticateToken, asyncHandler(async (req, res) => {
-    const importId = readNonEmptyString(req.query.importId);
-    const limit = readInteger(req.query.limit, 10);
-    const offset = readInteger(req.query.offset, 0);
-    const search = String(req.query.q || "").trim();
-    if (!importId) {
-      return res.status(400).json({ error: "importId is required" });
-    }
-    const result = await storage2.searchDataRows({
-      importId,
-      search,
-      limit,
-      offset
-    });
-    return res.json(result);
-  }));
-  app2.get("/api/imports", authenticateToken, asyncHandler(async (_req, res) => {
-    const imports3 = await importsRepository2.getImportsWithRowCounts();
-    return res.json({ imports: imports3 });
-  }));
-  app2.post("/api/imports", authenticateToken, asyncHandler(async (req, res) => {
-    const body = ensureObject(req.body) || {};
-    const name = String(body.name ?? "");
-    const filename = String(body.filename ?? "");
-    const dataRows2 = Array.isArray(body.rows) ? body.rows : Array.isArray(body.data) ? body.data : [];
-    if (!Array.isArray(dataRows2) || dataRows2.length === 0) {
-      return res.status(400).json({ message: "No data rows provided" });
-    }
-    const importRecord = await storage2.createImport({
-      name,
-      filename,
-      createdBy: req.user?.username
-    });
-    const insertChunkSize = 20;
-    for (let index = 0; index < dataRows2.length; index += insertChunkSize) {
-      const chunk = dataRows2.slice(index, index + insertChunkSize);
-      await Promise.all(
-        chunk.map(
-          (row) => storage2.createDataRow({
-            importId: importRecord.id,
-            jsonDataJsonb: row
-          })
-        )
-      );
-    }
-    if (req.user?.username) {
-      await storage2.createAuditLog({
-        action: "IMPORT_DATA",
-        performedBy: req.user.username,
-        targetResource: name,
-        details: `Imported ${dataRows2.length} rows from ${filename}`
-      });
-    }
-    return res.json(importRecord);
-  }));
-  app2.get("/api/imports/:id", authenticateToken, asyncHandler(async (req, res) => {
-    const importId = readNonEmptyString(req.params.id);
-    if (!importId) {
-      return res.status(400).json({ message: "Import not found" });
-    }
-    const importRecord = await storage2.getImportById(importId);
-    if (!importRecord) {
-      return res.status(404).json({ message: "Import not found" });
-    }
-    const rows = await storage2.getDataRowsByImport(importId);
-    return res.json({ import: importRecord, rows });
-  }));
-  app2.get("/api/imports/:id/data", authenticateToken, searchRateLimiter2, asyncHandler(async (req, res) => {
-    const runtimeSettings = await getRuntimeSettingsCached2();
-    const importId = readNonEmptyString(req.params.id);
-    const page = Math.max(1, readInteger(req.query.page, 1));
-    const requestedLimit = readInteger(req.query.limit, runtimeSettings.viewerRowsPerPage);
-    const maxLimit = Math.min(isDbProtected() ? 120 : 500, runtimeSettings.viewerRowsPerPage);
-    const limit = Math.max(10, Math.min(requestedLimit, maxLimit));
-    const offset = (page - 1) * limit;
-    const search = String(req.query.search || "").trim();
-    if (!importId) {
-      return res.status(400).json({ message: "importId is required" });
-    }
-    const result = await storage2.searchDataRows({
-      importId,
-      search: search || null,
-      limit,
-      offset
-    });
-    const formattedRows = (result.rows || []).map((row) => ({
-      id: row.id,
-      importId: row.importId,
-      jsonDataJsonb: row.jsonDataJsonb
-    }));
-    return res.json({
-      rows: formattedRows,
-      total: result.total || 0,
-      page,
-      limit
-    });
-  }));
-  app2.get(
-    "/api/imports/:id/analyze",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("analysis"),
-    asyncHandler(async (req, res) => {
-      const importRecord = await storage2.getImportById(req.params.id);
-      if (!importRecord) {
-        return res.status(404).json({ message: "Import not found" });
-      }
-      return res.json(await importAnalysisService2.analyzeImport(importRecord));
-    })
-  );
-  app2.get("/api/analyze/all-summary", authenticateToken, asyncHandler(async (_req, res) => {
-    const imports3 = await importsRepository2.getImportsWithRowCounts();
-    return res.json(await importAnalysisService2.analyzeAll(imports3));
-  }));
-  app2.get(
-    "/api/analyze/all",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("analysis"),
-    asyncHandler(async (_req, res) => {
-      const imports3 = await importsRepository2.getImportsWithRowCounts();
-      return res.json(await importAnalysisService2.analyzeAll(imports3));
-    })
-  );
-  app2.patch("/api/imports/:id", authenticateToken, asyncHandler(async (req, res) => {
-    const body = ensureObject(req.body) || {};
-    const name = String(body.name ?? "");
-    const updated = await storage2.updateImportName(req.params.id, name);
-    if (!updated) {
-      return res.status(404).json({ message: "Import not found" });
-    }
-    if (req.user?.username) {
-      await storage2.createAuditLog({
-        action: "UPDATE_IMPORT",
-        performedBy: req.user.username,
-        targetResource: name
-      });
-    }
-    return res.json(updated);
-  }));
-  app2.patch("/api/imports/:id/rename", authenticateToken, asyncHandler(async (req, res) => {
-    const body = ensureObject(req.body) || {};
-    const name = String(body.name ?? "");
-    const updated = await storage2.updateImportName(req.params.id, name);
-    if (!updated) {
-      return res.status(404).json({ message: "Import not found" });
-    }
-    if (req.user?.username) {
-      await storage2.createAuditLog({
-        action: "UPDATE_IMPORT",
-        performedBy: req.user.username,
-        targetResource: name
-      });
-    }
-    return res.json(updated);
-  }));
-  app2.delete(
-    "/api/imports/:id",
-    authenticateToken,
-    requireRole("admin", "superuser"),
-    asyncHandler(async (req, res) => {
-      const importRecord = await storage2.getImportById(req.params.id);
-      const deleted = await storage2.deleteImport(req.params.id);
-      if (!deleted) {
-        return res.status(404).json({ message: "Import not found" });
-      }
-      if (req.user?.username) {
-        await storage2.createAuditLog({
-          action: "DELETE_IMPORT",
-          performedBy: req.user.username,
-          targetResource: importRecord?.name || req.params.id
-        });
-      }
-      return res.json({ success: true });
-    })
-  );
-}
-
-// server/routes/search.routes.ts
-function buildRowsWithSource(rows) {
-  return rows.map((row) => {
-    const base = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
-    return {
-      ...base,
-      "Source File": row.importFilename || row.importName || ""
-    };
-  });
-}
-function collectColumns(rows) {
-  return Array.from(
-    rows.reduce((set, row) => {
-      Object.keys(row).forEach((key) => set.add(key));
-      return set;
-    }, /* @__PURE__ */ new Set())
-  );
-}
-function registerSearchRoutes(app2, deps) {
-  const {
-    searchRepository: searchRepository2,
-    authenticateToken,
-    searchRateLimiter: searchRateLimiter2,
-    getRuntimeSettingsCached: getRuntimeSettingsCached2,
-    isDbProtected
-  } = deps;
-  app2.get("/api/search/columns", authenticateToken, asyncHandler(async (_req, res) => {
-    return res.json(await searchRepository2.getAllColumnNames());
-  }));
-  app2.get("/api/columns", authenticateToken, asyncHandler(async (_req, res) => {
-    return res.json(await searchRepository2.getAllColumnNames());
-  }));
-  app2.get("/api/search/global", authenticateToken, searchRateLimiter2, asyncHandler(async (req, res) => {
-    const search = String(req.query.q || "").trim();
-    const runtimeSettings = await getRuntimeSettingsCached2();
-    const page = Math.max(1, readInteger(req.query.page, 1));
-    const maxTotal = runtimeSettings.searchResultLimit;
-    const maxLimit = isDbProtected() ? Math.min(maxTotal, 80) : maxTotal;
-    const requestedLimit = readInteger(req.query.limit, 50);
-    const limit = Math.max(10, Math.min(requestedLimit, maxLimit));
-    const offset = (page - 1) * limit;
-    if (offset >= maxTotal) {
-      return res.json({
-        columns: [],
-        rows: [],
-        results: [],
-        total: maxTotal,
-        page,
-        limit
-      });
-    }
-    if (search.length < 2) {
-      return res.json({
-        columns: [],
-        rows: [],
-        results: [],
-        total: 0
-      });
-    }
-    const effectiveLimit = Math.min(limit, Math.max(1, maxTotal - offset));
-    const result = await searchRepository2.searchGlobalDataRows({
-      search,
-      limit: effectiveLimit,
-      offset
-    });
-    const parsedRows = buildRowsWithSource(result.rows);
-    const columns = collectColumns(parsedRows);
-    return res.json({
-      columns,
-      rows: parsedRows,
-      results: parsedRows,
-      total: Math.min(result.total, maxTotal),
-      page,
-      limit: effectiveLimit
-    });
-  }));
-  app2.get("/api/search", authenticateToken, searchRateLimiter2, asyncHandler(async (req, res) => {
-    const search = String(req.query.q || "").trim();
-    if (search.length < 2) {
-      return res.json({ results: [], total: 0 });
-    }
-    const queryResult = await searchRepository2.searchSimpleDataRows(search);
-    const rows = queryResult.rows || [];
-    const results = rows.map((row) => ({
-      ...row.jsonDataJsonb || {},
-      _importId: row.importId,
-      _importName: row.importName
-    }));
-    return res.json({
-      results,
-      total: results.length
-    });
-  }));
-  app2.post("/api/search/advanced", authenticateToken, asyncHandler(async (req, res) => {
-    const body = ensureObject(req.body) || {};
-    const filters = Array.isArray(body.filters) ? body.filters : [];
-    const logic = body.logic === "OR" ? "OR" : "AND";
-    const runtimeSettings = await getRuntimeSettingsCached2();
-    const page = Math.max(1, readInteger(body.page, 1));
-    const maxTotal = runtimeSettings.searchResultLimit;
-    const requestedLimit = readInteger(body.limit, 50);
-    const limit = Math.max(10, Math.min(requestedLimit, maxTotal));
-    const offset = (page - 1) * limit;
-    if (offset >= maxTotal) {
-      return res.json({
-        results: [],
-        headers: [],
-        total: maxTotal,
-        page,
-        limit
-      });
-    }
-    const effectiveLimit = Math.min(limit, Math.max(1, maxTotal - offset));
-    const rawResult = await searchRepository2.advancedSearchDataRows(
-      filters,
-      logic,
-      effectiveLimit,
-      offset
-    );
-    const parsedResults = buildRowsWithSource(rawResult.rows);
-    const headers = collectColumns(parsedResults);
-    return res.json({
-      results: parsedResults,
-      headers,
-      total: Math.min(rawResult.total || 0, maxTotal),
-      page,
-      limit: effectiveLimit
-    });
-  }));
-}
-
-// server/routes/ai.routes.ts
-function registerAiRoutes(app2, deps) {
-  const {
-    storage: storage2,
-    authenticateToken,
-    requireRole,
-    withAiConcurrencyGate: withAiConcurrencyGate2,
-    getRuntimeSettingsCached: getRuntimeSettingsCached2,
-    aiSearchService: aiSearchService2,
-    categoryStatsService: categoryStatsService2,
-    aiChatService: aiChatService2,
-    aiIndexService: aiIndexService2,
-    getOllamaConfig: getOllamaConfig2,
-    defaultAiTimeoutMs
-  } = deps;
-  app2.get(
-    "/api/ai/config",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    asyncHandler(async (_req, res) => {
-      const runtimeSettings = await getRuntimeSettingsCached2();
-      return res.json({
-        ...getOllamaConfig2(),
-        aiEnabled: runtimeSettings.aiEnabled,
-        semanticSearchEnabled: runtimeSettings.semanticSearchEnabled,
-        aiTimeoutMs: runtimeSettings.aiTimeoutMs
-      });
-    })
-  );
-  app2.post(
-    "/api/ai/search",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    withAiConcurrencyGate2("search", async (req, res) => {
-      try {
-        const body = ensureObject(req.body) || {};
-        const query = String(body.query || "").trim();
-        if (!query) {
-          return res.status(400).json({ message: "Query required" });
-        }
-        const runtimeSettings = await getRuntimeSettingsCached2();
-        if (!runtimeSettings.aiEnabled) {
-          return res.status(503).json({
-            message: "AI assistant is disabled by system settings.",
-            disabled: true
-          });
-        }
-        const countSummary = await categoryStatsService2.resolveCountSummary(
-          query,
-          runtimeSettings.aiTimeoutMs || defaultAiTimeoutMs
-        );
-        if (countSummary) {
-          return res.json({
-            person: null,
-            nearest_branch: null,
-            decision: null,
-            ai_explanation: countSummary.summary,
-            processing: countSummary.processing,
-            stats: countSummary.stats
-          });
-        }
-        const result = await aiSearchService2.resolveSearchRequest({
-          query,
-          userKey: req.user.activityId || req.user.username,
-          runtimeSettings: {
-            semanticSearchEnabled: runtimeSettings.semanticSearchEnabled,
-            aiTimeoutMs: runtimeSettings.aiTimeoutMs
-          }
-        });
-        if (result.audit) {
-          queueMicrotask(() => {
-            storage2.createAuditLog({
-              action: "AI_SEARCH",
-              performedBy: req.user.username,
-              targetResource: "ai_search",
-              details: JSON.stringify(result.audit)
-            }).catch((error) => {
-              console.error("Audit log failed:", error?.message || error);
-            });
-          });
-        }
-        return res.status(result.statusCode).json(result.body);
-      } catch (error) {
-        console.error("AI search error:", error);
-        return res.status(500).json({ message: error.message });
-      }
-    })
-  );
-  app2.post(
-    "/api/ai/index/import/:id",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    asyncHandler(async (req, res) => {
-      const runtimeSettings = await getRuntimeSettingsCached2();
-      if (!runtimeSettings.aiEnabled) {
-        return res.status(503).json({ message: "AI assistant is disabled by system settings." });
-      }
-      const body = ensureObject(req.body) || {};
-      const batchSize = Math.max(1, Math.min(20, readInteger(body.batchSize, 5)));
-      const maxRowsValue = readInteger(body.maxRows, 0);
-      const maxRows = maxRowsValue > 0 ? Math.max(1, maxRowsValue) : null;
-      const result = await aiIndexService2.indexImport({
-        importId: req.params.id,
-        username: req.user.username,
-        batchSize,
-        maxRows
-      });
-      return res.status(result.statusCode).json(result.body);
-    })
-  );
-  app2.post(
-    "/api/ai/branches/import/:id",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    asyncHandler(async (req, res) => {
-      const body = ensureObject(req.body) || {};
-      const result = await aiIndexService2.importBranches({
-        importId: req.params.id,
-        username: req.user.username,
-        nameKey: typeof body.nameKey === "string" ? body.nameKey : null,
-        latKey: typeof body.latKey === "string" ? body.latKey : null,
-        lngKey: typeof body.lngKey === "string" ? body.lngKey : null
-      });
-      return res.status(result.statusCode).json(result.body);
-    })
-  );
-  app2.post(
-    "/api/ai/chat",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    withAiConcurrencyGate2("chat", async (req, res) => {
-      try {
-        const body = ensureObject(req.body) || {};
-        const message = String(body.message || "").trim();
-        if (!message) {
-          return res.status(400).json({ message: "Message required" });
-        }
-        const runtimeSettings = await getRuntimeSettingsCached2();
-        if (!runtimeSettings.aiEnabled) {
-          return res.status(503).json({ message: "AI assistant is disabled by system settings." });
-        }
-        const result = await aiChatService2.handleChat({
-          message,
-          username: req.user.username,
-          existingConversationId: body.conversationId ? String(body.conversationId) : null,
-          aiTimeoutMs: runtimeSettings.aiTimeoutMs
-        });
-        return res.status(result.statusCode).json(result.body);
-      } catch (error) {
-        console.error("AI chat error:", error);
-        return res.status(500).json({ message: error.message });
-      }
-    })
-  );
-}
-
-// server/routes/system.routes.ts
-function registerSystemRoutes(app2, deps) {
-  const {
-    authenticateToken,
-    requireRole,
-    requireMonitorAccess,
-    getMaintenanceStateCached: getMaintenanceStateCached2,
-    computeInternalMonitorSnapshot: computeInternalMonitorSnapshot2,
-    buildInternalMonitorAlerts: buildInternalMonitorAlerts2,
-    getControlState: getControlState2,
-    getDbProtection: getDbProtection2,
-    getRequestRate: getRequestRate2,
-    getLatencyP95: getLatencyP952,
-    getLocalCircuitSnapshots: getLocalCircuitSnapshots2,
-    getIntelligenceExplainability: getIntelligenceExplainability2,
-    injectChaos: injectChaos2,
-    createAuditLog
-  } = deps;
-  app2.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", mode: "postgresql" });
-  });
-  app2.get("/api/maintenance-status", asyncHandler(async (_req, res) => {
-    return res.json(await getMaintenanceStateCached2());
-  }));
-  app2.get(
-    "/internal/system-health",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireMonitorAccess,
-    (_req, res) => {
-      const snapshot = computeInternalMonitorSnapshot2();
-      const alerts = buildInternalMonitorAlerts2(snapshot);
-      res.json({
-        ...snapshot,
-        activeAlertCount: alerts.length
-      });
-    }
-  );
-  app2.get(
-    "/internal/system-mode",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireMonitorAccess,
-    (_req, res) => {
-      const controlState = getControlState2();
-      res.json({
-        mode: controlState.mode,
-        throttleFactor: controlState.throttleFactor,
-        rejectHeavyRoutes: controlState.rejectHeavyRoutes,
-        dbProtection: getDbProtection2(),
-        preAllocatedMB: controlState.preAllocateMB,
-        updatedAt: controlState.updatedAt
-      });
-    }
-  );
-  app2.get(
-    "/internal/workers",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireMonitorAccess,
-    (_req, res) => {
-      const controlState = getControlState2();
-      res.json({
-        count: controlState.workerCount,
-        maxWorkers: controlState.maxWorkers,
-        workers: controlState.workers,
-        updatedAt: controlState.updatedAt
-      });
-    }
-  );
-  app2.get(
-    "/internal/alerts",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireMonitorAccess,
-    (_req, res) => {
-      const snapshot = computeInternalMonitorSnapshot2();
-      const alerts = buildInternalMonitorAlerts2(snapshot);
-      res.json({
-        alerts,
-        updatedAt: snapshot.updatedAt
-      });
-    }
-  );
-  app2.get(
-    "/internal/load-trend",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireMonitorAccess,
-    (_req, res) => {
-      const controlState = getControlState2();
-      res.json({
-        predictor: controlState.predictor,
-        queueLength: controlState.queueLength,
-        requestRate: getRequestRate2(),
-        p95LatencyMs: getLatencyP952(),
-        updatedAt: controlState.updatedAt
-      });
-    }
-  );
-  app2.get(
-    "/internal/circuit-status",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireMonitorAccess,
-    (_req, res) => {
-      const controlState = getControlState2();
-      res.json({
-        local: getLocalCircuitSnapshots2(),
-        cluster: controlState.circuits,
-        updatedAt: controlState.updatedAt
-      });
-    }
-  );
-  app2.get(
-    "/internal/intelligence/explain",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireMonitorAccess,
-    (_req, res) => {
-      const explain = getIntelligenceExplainability2();
-      res.json({
-        anomalyBreakdown: explain.anomalyBreakdown,
-        correlationMatrix: explain.correlationMatrix,
-        slopeValues: explain.slopeValues,
-        forecastProjection: explain.forecastProjection,
-        governanceState: explain.governanceState,
-        chosenStrategy: explain.chosenStrategy,
-        decisionReason: explain.decisionReason
-      });
-    }
-  );
-  app2.post(
-    "/internal/chaos/inject",
-    authenticateToken,
-    requireRole("admin", "superuser"),
-    asyncHandler(async (req, res) => {
-      const body = req.body && typeof req.body === "object" ? req.body : {};
-      const type = body.type;
-      const magnitude = body.magnitude;
-      const durationMs = body.durationMs;
-      const allowed = /* @__PURE__ */ new Set([
-        "cpu_spike",
-        "db_latency_spike",
-        "ai_delay",
-        "worker_crash",
-        "memory_pressure"
-      ]);
-      if (!allowed.has(type)) {
-        return res.status(400).json({
-          message: "Invalid chaos type.",
-          allowed: Array.from(allowed)
-        });
-      }
-      const result = injectChaos2({
-        type,
-        magnitude: Number.isFinite(Number(magnitude)) ? Number(magnitude) : void 0,
-        durationMs: Number.isFinite(Number(durationMs)) ? Number(durationMs) : void 0
-      });
-      await createAuditLog({
-        action: "CHAOS_INJECTED",
-        performedBy: req.user?.username || "system",
-        details: `Chaos injected: ${type}`
-      });
-      return res.json({
-        success: true,
-        ...result
-      });
-    })
-  );
-}
-
-// server/routes/settings.routes.ts
-function registerSettingsRoutes(app2, deps) {
-  const {
-    storage: storage2,
-    authenticateToken,
-    requireRole,
-    clearTabVisibilityCache,
-    invalidateRuntimeSettingsCache: invalidateRuntimeSettingsCache2,
-    invalidateMaintenanceCache: invalidateMaintenanceCache2,
-    getMaintenanceStateCached: getMaintenanceStateCached2,
-    broadcastWsMessage: broadcastWsMessage2,
-    defaultAiTimeoutMs
-  } = deps;
-  app2.get("/api/app-config", authenticateToken, asyncHandler(async (_req, res) => {
-    const config = await storage2.getAppConfig();
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
-    return res.json(config);
-  }));
-  app2.get("/api/settings/tab-visibility", authenticateToken, asyncHandler(async (req, res) => {
-    const role = req.user?.role || "user";
-    return res.json({
-      role,
-      tabs: await storage2.getRoleTabVisibility(role)
-    });
-  }));
-  app2.get("/api/settings", authenticateToken, requireRole("admin", "superuser"), asyncHandler(async (req, res) => {
-    const role = req.user?.role || "user";
-    return res.json({
-      categories: await storage2.getSettingsForRole(role)
-    });
-  }));
-  app2.patch("/api/settings", authenticateToken, requireRole("admin", "superuser"), asyncHandler(async (req, res) => {
-    const body = ensureObject(req.body) || {};
-    const key = readNonEmptyString(body.key);
-    if (!key) {
-      return res.status(400).json({ message: "Invalid setting key" });
-    }
-    const role = req.user?.role || "user";
-    const result = await storage2.updateSystemSetting({
-      role,
-      settingKey: key,
-      value: body.value ?? null,
-      confirmCritical: Boolean(body.confirmCritical),
-      updatedBy: req.user?.username || "system"
-    });
-    if (result.status === "not_found") {
-      return res.status(404).json({ message: result.message });
-    }
-    if (result.status === "forbidden") {
-      return res.status(403).json({ message: result.message });
-    }
-    if (result.status === "requires_confirmation") {
-      return res.status(409).json({ message: result.message, requiresConfirmation: true });
-    }
-    if (result.status === "invalid") {
-      return res.status(400).json({ message: result.message });
-    }
-    if (result.status === "updated") {
-      clearTabVisibilityCache();
-      invalidateRuntimeSettingsCache2();
-      await storage2.createAuditLog({
-        action: result.setting?.isCritical ? "CRITICAL_SETTING_UPDATED" : "SETTING_UPDATED",
-        performedBy: req.user?.username || "system",
-        targetResource: key,
-        details: `Updated setting ${key} to "${String(result.setting?.value ?? "")}"`
-      });
-      if (key === "ai_timeout_ms") {
-        process.env.OLLAMA_TIMEOUT_MS = String(result.setting?.value ?? defaultAiTimeoutMs);
-      }
-      if (result.shouldBroadcast) {
-        invalidateMaintenanceCache2();
-        const maintenanceState = await getMaintenanceStateCached2(true);
-        broadcastWsMessage2({
-          type: "maintenance_update",
-          maintenance: maintenanceState.maintenance,
-          message: maintenanceState.message,
-          mode: maintenanceState.type,
-          startTime: maintenanceState.startTime,
-          endTime: maintenanceState.endTime
-        });
-      } else {
-        broadcastWsMessage2({
-          type: "settings_updated",
-          key,
-          updatedBy: req.user?.username || "system"
-        });
-      }
-    }
-    return res.json({
-      success: result.status === "updated" || result.status === "unchanged",
-      status: result.status,
-      message: result.message,
-      setting: result.setting || null
-    });
-  }));
-}
-
-// server/routes/operations.routes.ts
-function registerOperationsRoutes(app2, deps) {
-  const {
-    storage: storage2,
-    auditRepository: auditRepository2,
-    backupsRepository: backupsRepository2,
-    analyticsRepository: analyticsRepository2,
-    authenticateToken,
-    requireRole,
-    requireTabAccess,
-    withExportCircuit: withExportCircuit2,
-    isExportCircuitOpenError,
-    connectedClients: connectedClients2
-  } = deps;
-  app2.get(
-    "/api/audit-logs",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("audit-logs"),
-    asyncHandler(async (_req, res) => {
-      return res.json({ logs: await auditRepository2.getAuditLogs() });
-    })
-  );
-  app2.get(
-    "/api/audit-logs/stats",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("audit-logs"),
-    asyncHandler(async (_req, res) => {
-      return res.json(await auditRepository2.getAuditLogStats());
-    })
-  );
-  app2.delete(
-    "/api/audit-logs/cleanup",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("audit-logs"),
-    asyncHandler(async (req, res) => {
-      const body = ensureObject(req.body) || {};
-      const olderThanDays = Math.max(1, readInteger(body.olderThanDays, 30));
-      const cutoffDate = /* @__PURE__ */ new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
-      const deletedCount = await auditRepository2.cleanupAuditLogsOlderThan(cutoffDate);
-      await storage2.createAuditLog({
-        action: "CLEANUP_AUDIT_LOGS",
-        performedBy: req.user?.username || "system",
-        details: `Cleanup requested for logs older than ${olderThanDays} days`
-      });
-      return res.json({
-        success: true,
-        deletedCount,
-        message: "Cleanup completed"
-      });
-    })
-  );
-  app2.get(
-    "/api/analytics/summary",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("dashboard"),
-    asyncHandler(async (_req, res) => {
-      return res.json(await analyticsRepository2.getDashboardSummary());
-    })
-  );
-  app2.get(
-    "/api/analytics/login-trends",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("dashboard"),
-    asyncHandler(async (req, res) => {
-      const days = Math.max(1, readInteger(req.query.days, 7));
-      return res.json(await analyticsRepository2.getLoginTrends(days));
-    })
-  );
-  app2.get(
-    "/api/analytics/top-users",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("dashboard"),
-    asyncHandler(async (req, res) => {
-      const limit = Math.max(1, readInteger(req.query.limit, 10));
-      return res.json(await analyticsRepository2.getTopActiveUsers(limit));
-    })
-  );
-  app2.get(
-    "/api/analytics/peak-hours",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("dashboard"),
-    asyncHandler(async (_req, res) => {
-      return res.json(await analyticsRepository2.getPeakHours());
-    })
-  );
-  app2.get(
-    "/api/analytics/role-distribution",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("dashboard"),
-    asyncHandler(async (_req, res) => {
-      return res.json(await analyticsRepository2.getRoleDistribution());
-    })
-  );
-  app2.get(
-    "/api/backups",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("backup"),
-    asyncHandler(async (_req, res) => {
-      return res.json({ backups: await backupsRepository2.getBackups() });
-    })
-  );
-  app2.post(
-    "/api/backups",
-    authenticateToken,
-    requireRole("admin", "superuser"),
-    requireTabAccess("backup"),
-    asyncHandler(async (req, res) => {
-      const body = ensureObject(req.body) || {};
-      const name = String(body.name || "");
-      let backup;
-      try {
-        backup = await withExportCircuit2(async () => {
-          const startTime = Date.now();
-          const backupData = await backupsRepository2.getBackupDataForExport();
-          const metadata = {
-            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-            importsCount: backupData.imports.length,
-            dataRowsCount: backupData.dataRows.length,
-            usersCount: backupData.users.length,
-            auditLogsCount: backupData.auditLogs.length
-          };
-          const created = await backupsRepository2.createBackup({
-            name,
-            createdBy: req.user.username,
-            backupData: JSON.stringify(backupData),
-            metadata: JSON.stringify(metadata)
-          });
-          await storage2.createAuditLog({
-            action: "CREATE_BACKUP",
-            performedBy: req.user.username,
-            targetResource: name,
-            details: JSON.stringify({
-              ...metadata,
-              durationMs: Date.now() - startTime
-            })
-          });
-          return created;
-        });
-      } catch (error) {
-        if (isExportCircuitOpenError(error)) {
-          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
-        }
-        throw error;
-      }
-      return res.json(backup);
-    })
-  );
-  app2.get(
-    "/api/backups/:id",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("backup"),
-    asyncHandler(async (req, res) => {
-      const backup = await backupsRepository2.getBackupById(req.params.id);
-      if (!backup) {
-        return res.status(404).json({ message: "Backup not found" });
-      }
-      return res.json(backup);
-    })
-  );
-  app2.post(
-    "/api/backups/:id/restore",
-    authenticateToken,
-    requireRole("admin", "superuser"),
-    requireTabAccess("backup"),
-    asyncHandler(async (req, res) => {
-      let backup;
-      try {
-        backup = await withExportCircuit2(() => backupsRepository2.getBackupById(req.params.id));
-      } catch (error) {
-        if (isExportCircuitOpenError(error)) {
-          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
-        }
-        throw error;
-      }
-      if (!backup) {
-        return res.status(404).json({ message: "Backup not found" });
-      }
-      let result;
-      try {
-        result = await withExportCircuit2(async () => {
-          const startTime = Date.now();
-          const backupData = JSON.parse(backup.backupData);
-          const restored = await backupsRepository2.restoreFromBackup(backupData);
-          await storage2.createAuditLog({
-            action: "RESTORE_BACKUP",
-            performedBy: req.user.username,
-            targetResource: backup.name,
-            details: JSON.stringify({
-              ...restored.stats,
-              durationMs: Date.now() - startTime
-            })
-          });
-          return { restored, startTime };
-        });
-      } catch (error) {
-        if (isExportCircuitOpenError(error)) {
-          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
-        }
-        throw error;
-      }
-      return res.json({
-        ...result.restored,
-        message: `Restore completed in ${Math.round((Date.now() - result.startTime) / 1e3)}s`
-      });
-    })
-  );
-  app2.delete(
-    "/api/backups/:id",
-    authenticateToken,
-    requireRole("admin", "superuser"),
-    requireTabAccess("backup"),
-    asyncHandler(async (req, res) => {
-      let backup;
-      let deleted;
-      try {
-        backup = await withExportCircuit2(() => backupsRepository2.getBackupById(req.params.id));
-        deleted = await withExportCircuit2(() => backupsRepository2.deleteBackup(req.params.id));
-      } catch (error) {
-        if (isExportCircuitOpenError(error)) {
-          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
-        }
-        throw error;
-      }
-      if (!deleted) {
-        return res.status(404).json({ message: "Backup not found" });
-      }
-      await storage2.createAuditLog({
-        action: "DELETE_BACKUP",
-        performedBy: req.user.username,
-        targetResource: backup?.name || req.params.id
-      });
-      return res.json({ success: true });
-    })
-  );
-  app2.get("/api/debug/websocket-clients", authenticateToken, requireRole("superuser"), asyncHandler(async (_req, res) => {
-    const clients = Array.from(connectedClients2.keys());
-    return res.json({ count: clients.length, clients });
   }));
 }
 
@@ -10918,19 +9401,19 @@ var CollectionNicknameService = class extends CollectionServiceSupport {
 };
 
 // server/routes/collection-receipt.service.ts
-import fs2 from "fs";
-import path2 from "path";
-import { randomUUID as randomUUID3 } from "node:crypto";
+import fs from "fs";
+import path from "path";
+import { randomUUID as randomUUID4 } from "node:crypto";
 var COLLECTION_RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
 var COLLECTION_RECEIPT_ALLOWED_EXT = /* @__PURE__ */ new Set([".jpg", ".jpeg", ".png", ".pdf"]);
 var COLLECTION_RECEIPT_ALLOWED_MIME = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "application/pdf"]);
 var COLLECTION_RECEIPT_INLINE_MIME = /* @__PURE__ */ new Set(["application/pdf", "image/png", "image/jpeg"]);
-var COLLECTION_RECEIPT_DIR = path2.resolve(process.cwd(), "uploads", "collection-receipts");
+var COLLECTION_RECEIPT_DIR = path.resolve(process.cwd(), "uploads", "collection-receipts");
 var COLLECTION_RECEIPT_PUBLIC_PREFIX = "/uploads/collection-receipts";
 function resolveReceiptExtension(receipt) {
   const originalFileName = String(receipt.fileName || "").trim();
   const mimeType = String(receipt.mimeType || "").trim().toLowerCase();
-  const extFromName = path2.extname(originalFileName).toLowerCase();
+  const extFromName = path.extname(originalFileName).toLowerCase();
   if (extFromName && COLLECTION_RECEIPT_ALLOWED_EXT.has(extFromName)) {
     return extFromName === ".jpeg" ? ".jpg" : extFromName;
   }
@@ -10968,12 +9451,12 @@ async function saveCollectionReceipt(receipt) {
   if (buffer.length > COLLECTION_RECEIPT_MAX_BYTES) {
     throw new Error("Receipt file exceeds 5MB.");
   }
-  await fs2.promises.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
+  await fs.promises.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
   const originalFileName = String(receipt.fileName || "receipt").trim();
-  const stem = path2.basename(originalFileName, path2.extname(originalFileName)).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40) || "receipt";
-  const storedFileName = `${Date.now()}-${randomUUID3()}-${stem}${extension}`;
-  const absolutePath = path2.join(COLLECTION_RECEIPT_DIR, storedFileName);
-  await fs2.promises.writeFile(absolutePath, buffer);
+  const stem = path.basename(originalFileName, path.extname(originalFileName)).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40) || "receipt";
+  const storedFileName = `${Date.now()}-${randomUUID4()}-${stem}${extension}`;
+  const absolutePath = path.join(COLLECTION_RECEIPT_DIR, storedFileName);
+  await fs.promises.writeFile(absolutePath, buffer);
   return `${COLLECTION_RECEIPT_PUBLIC_PREFIX}/${storedFileName}`.replace(/\\/g, "/");
 }
 async function removeCollectionReceiptFile(receiptPath) {
@@ -10981,15 +9464,15 @@ async function removeCollectionReceiptFile(receiptPath) {
   if (!normalized.startsWith(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`)) return;
   const fileName = normalized.slice(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`.length);
   if (!fileName || fileName.includes("..") || fileName.includes("/") || fileName.includes("\\")) return;
-  const absolutePath = path2.resolve(COLLECTION_RECEIPT_DIR, fileName);
+  const absolutePath = path.resolve(COLLECTION_RECEIPT_DIR, fileName);
   if (!absolutePath.startsWith(COLLECTION_RECEIPT_DIR)) return;
   try {
-    await fs2.promises.unlink(absolutePath);
+    await fs.promises.unlink(absolutePath);
   } catch {
   }
 }
 function resolveCollectionReceiptMimeTypeFromFileName(fileName) {
-  const extension = path2.extname(fileName).toLowerCase();
+  const extension = path.extname(fileName).toLowerCase();
   if (extension === ".pdf") return "application/pdf";
   if (extension === ".png") return "image/png";
   if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
@@ -11005,10 +9488,10 @@ function resolveCollectionReceiptFile(receiptPath) {
   const storedFileName = normalized.slice(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`.length);
   if (!storedFileName) return null;
   if (storedFileName.includes("..") || storedFileName.includes("/") || storedFileName.includes("\\")) return null;
-  if (path2.basename(storedFileName) !== storedFileName) return null;
-  const absolutePath = path2.resolve(COLLECTION_RECEIPT_DIR, storedFileName);
-  const relativePath = path2.relative(COLLECTION_RECEIPT_DIR, absolutePath);
-  if (!relativePath || relativePath.startsWith("..") || path2.isAbsolute(relativePath)) return null;
+  if (path.basename(storedFileName) !== storedFileName) return null;
+  const absolutePath = path.resolve(COLLECTION_RECEIPT_DIR, storedFileName);
+  const relativePath = path.relative(COLLECTION_RECEIPT_DIR, absolutePath);
+  if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) return null;
   const mimeType = resolveCollectionReceiptMimeTypeFromFileName(storedFileName);
   return {
     absolutePath,
@@ -11045,7 +9528,7 @@ async function serveCollectionReceipt(storage2, req, res, mode) {
       return res.status(404).json({ ok: false, message: "Receipt file path is invalid." });
     }
     try {
-      await fs2.promises.access(resolved.absolutePath, fs2.constants.R_OK);
+      await fs.promises.access(resolved.absolutePath, fs.constants.R_OK);
     } catch {
       return res.status(404).json({ ok: false, message: "Receipt file not found." });
     }
@@ -11635,6 +10118,973 @@ function registerCollectionRoutes(app2, deps) {
     jsonRoute("Failed to delete collection record.", (req) => collectionService.deleteRecord(req.user, req.params.id))
   );
 }
+
+// server/routes/imports.routes.ts
+function registerImportRoutes(app2, deps) {
+  const {
+    storage: storage2,
+    importsRepository,
+    importAnalysisService,
+    authenticateToken,
+    requireRole,
+    requireTabAccess,
+    searchRateLimiter: searchRateLimiter2,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    isDbProtected
+  } = deps;
+  app2.get("/api/data-rows", authenticateToken, asyncHandler(async (req, res) => {
+    const importId = readNonEmptyString(req.query.importId);
+    const limit = readInteger(req.query.limit, 10);
+    const offset = readInteger(req.query.offset, 0);
+    const search = String(req.query.q || "").trim();
+    if (!importId) {
+      return res.status(400).json({ error: "importId is required" });
+    }
+    const result = await storage2.searchDataRows({
+      importId,
+      search,
+      limit,
+      offset
+    });
+    return res.json(result);
+  }));
+  app2.get("/api/imports", authenticateToken, asyncHandler(async (_req, res) => {
+    const imports2 = await importsRepository.getImportsWithRowCounts();
+    return res.json({ imports: imports2 });
+  }));
+  app2.post("/api/imports", authenticateToken, asyncHandler(async (req, res) => {
+    const body = ensureObject(req.body) || {};
+    const name = String(body.name ?? "");
+    const filename = String(body.filename ?? "");
+    const dataRows2 = Array.isArray(body.rows) ? body.rows : Array.isArray(body.data) ? body.data : [];
+    if (!Array.isArray(dataRows2) || dataRows2.length === 0) {
+      return res.status(400).json({ message: "No data rows provided" });
+    }
+    const importRecord = await storage2.createImport({
+      name,
+      filename,
+      createdBy: req.user?.username
+    });
+    const insertChunkSize = 20;
+    for (let index = 0; index < dataRows2.length; index += insertChunkSize) {
+      const chunk = dataRows2.slice(index, index + insertChunkSize);
+      await Promise.all(
+        chunk.map(
+          (row) => storage2.createDataRow({
+            importId: importRecord.id,
+            jsonDataJsonb: row
+          })
+        )
+      );
+    }
+    if (req.user?.username) {
+      await storage2.createAuditLog({
+        action: "IMPORT_DATA",
+        performedBy: req.user.username,
+        targetResource: name,
+        details: `Imported ${dataRows2.length} rows from ${filename}`
+      });
+    }
+    return res.json(importRecord);
+  }));
+  app2.get("/api/imports/:id", authenticateToken, asyncHandler(async (req, res) => {
+    const importId = readNonEmptyString(req.params.id);
+    if (!importId) {
+      return res.status(400).json({ message: "Import not found" });
+    }
+    const importRecord = await storage2.getImportById(importId);
+    if (!importRecord) {
+      return res.status(404).json({ message: "Import not found" });
+    }
+    const rows = await storage2.getDataRowsByImport(importId);
+    return res.json({ import: importRecord, rows });
+  }));
+  app2.get("/api/imports/:id/data", authenticateToken, searchRateLimiter2, asyncHandler(async (req, res) => {
+    const runtimeSettings = await getRuntimeSettingsCached2();
+    const importId = readNonEmptyString(req.params.id);
+    const page = Math.max(1, readInteger(req.query.page, 1));
+    const requestedLimit = readInteger(req.query.limit, runtimeSettings.viewerRowsPerPage);
+    const maxLimit = Math.min(isDbProtected() ? 120 : 500, runtimeSettings.viewerRowsPerPage);
+    const limit = Math.max(10, Math.min(requestedLimit, maxLimit));
+    const offset = (page - 1) * limit;
+    const search = String(req.query.search || "").trim();
+    if (!importId) {
+      return res.status(400).json({ message: "importId is required" });
+    }
+    const result = await storage2.searchDataRows({
+      importId,
+      search: search || null,
+      limit,
+      offset
+    });
+    const formattedRows = (result.rows || []).map((row) => ({
+      id: row.id,
+      importId: row.importId,
+      jsonDataJsonb: row.jsonDataJsonb
+    }));
+    return res.json({
+      rows: formattedRows,
+      total: result.total || 0,
+      page,
+      limit
+    });
+  }));
+  app2.get(
+    "/api/imports/:id/analyze",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("analysis"),
+    asyncHandler(async (req, res) => {
+      const importRecord = await storage2.getImportById(req.params.id);
+      if (!importRecord) {
+        return res.status(404).json({ message: "Import not found" });
+      }
+      return res.json(await importAnalysisService.analyzeImport(importRecord));
+    })
+  );
+  app2.get("/api/analyze/all-summary", authenticateToken, asyncHandler(async (_req, res) => {
+    const imports2 = await importsRepository.getImportsWithRowCounts();
+    return res.json(await importAnalysisService.analyzeAll(imports2));
+  }));
+  app2.get(
+    "/api/analyze/all",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("analysis"),
+    asyncHandler(async (_req, res) => {
+      const imports2 = await importsRepository.getImportsWithRowCounts();
+      return res.json(await importAnalysisService.analyzeAll(imports2));
+    })
+  );
+  app2.patch("/api/imports/:id", authenticateToken, asyncHandler(async (req, res) => {
+    const body = ensureObject(req.body) || {};
+    const name = String(body.name ?? "");
+    const updated = await storage2.updateImportName(req.params.id, name);
+    if (!updated) {
+      return res.status(404).json({ message: "Import not found" });
+    }
+    if (req.user?.username) {
+      await storage2.createAuditLog({
+        action: "UPDATE_IMPORT",
+        performedBy: req.user.username,
+        targetResource: name
+      });
+    }
+    return res.json(updated);
+  }));
+  app2.patch("/api/imports/:id/rename", authenticateToken, asyncHandler(async (req, res) => {
+    const body = ensureObject(req.body) || {};
+    const name = String(body.name ?? "");
+    const updated = await storage2.updateImportName(req.params.id, name);
+    if (!updated) {
+      return res.status(404).json({ message: "Import not found" });
+    }
+    if (req.user?.username) {
+      await storage2.createAuditLog({
+        action: "UPDATE_IMPORT",
+        performedBy: req.user.username,
+        targetResource: name
+      });
+    }
+    return res.json(updated);
+  }));
+  app2.delete(
+    "/api/imports/:id",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    asyncHandler(async (req, res) => {
+      const importRecord = await storage2.getImportById(req.params.id);
+      const deleted = await storage2.deleteImport(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Import not found" });
+      }
+      if (req.user?.username) {
+        await storage2.createAuditLog({
+          action: "DELETE_IMPORT",
+          performedBy: req.user.username,
+          targetResource: importRecord?.name || req.params.id
+        });
+      }
+      return res.json({ success: true });
+    })
+  );
+}
+
+// server/routes/operations.routes.ts
+function registerOperationsRoutes(app2, deps) {
+  const {
+    storage: storage2,
+    auditRepository,
+    backupsRepository,
+    analyticsRepository,
+    authenticateToken,
+    requireRole,
+    requireTabAccess,
+    withExportCircuit: withExportCircuit2,
+    isExportCircuitOpenError,
+    connectedClients: connectedClients2
+  } = deps;
+  app2.get(
+    "/api/audit-logs",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("audit-logs"),
+    asyncHandler(async (_req, res) => {
+      return res.json({ logs: await auditRepository.getAuditLogs() });
+    })
+  );
+  app2.get(
+    "/api/audit-logs/stats",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("audit-logs"),
+    asyncHandler(async (_req, res) => {
+      return res.json(await auditRepository.getAuditLogStats());
+    })
+  );
+  app2.delete(
+    "/api/audit-logs/cleanup",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("audit-logs"),
+    asyncHandler(async (req, res) => {
+      const body = ensureObject(req.body) || {};
+      const olderThanDays = Math.max(1, readInteger(body.olderThanDays, 30));
+      const cutoffDate = /* @__PURE__ */ new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+      const deletedCount = await auditRepository.cleanupAuditLogsOlderThan(cutoffDate);
+      await storage2.createAuditLog({
+        action: "CLEANUP_AUDIT_LOGS",
+        performedBy: req.user?.username || "system",
+        details: `Cleanup requested for logs older than ${olderThanDays} days`
+      });
+      return res.json({
+        success: true,
+        deletedCount,
+        message: "Cleanup completed"
+      });
+    })
+  );
+  app2.get(
+    "/api/analytics/summary",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("dashboard"),
+    asyncHandler(async (_req, res) => {
+      return res.json(await analyticsRepository.getDashboardSummary());
+    })
+  );
+  app2.get(
+    "/api/analytics/login-trends",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("dashboard"),
+    asyncHandler(async (req, res) => {
+      const days = Math.max(1, readInteger(req.query.days, 7));
+      return res.json(await analyticsRepository.getLoginTrends(days));
+    })
+  );
+  app2.get(
+    "/api/analytics/top-users",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("dashboard"),
+    asyncHandler(async (req, res) => {
+      const limit = Math.max(1, readInteger(req.query.limit, 10));
+      return res.json(await analyticsRepository.getTopActiveUsers(limit));
+    })
+  );
+  app2.get(
+    "/api/analytics/peak-hours",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("dashboard"),
+    asyncHandler(async (_req, res) => {
+      return res.json(await analyticsRepository.getPeakHours());
+    })
+  );
+  app2.get(
+    "/api/analytics/role-distribution",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("dashboard"),
+    asyncHandler(async (_req, res) => {
+      return res.json(await analyticsRepository.getRoleDistribution());
+    })
+  );
+  app2.get(
+    "/api/backups",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("backup"),
+    asyncHandler(async (_req, res) => {
+      return res.json({ backups: await backupsRepository.getBackups() });
+    })
+  );
+  app2.post(
+    "/api/backups",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("backup"),
+    asyncHandler(async (req, res) => {
+      const body = ensureObject(req.body) || {};
+      const name = String(body.name || "");
+      let backup;
+      try {
+        backup = await withExportCircuit2(async () => {
+          const startTime = Date.now();
+          const backupData = await backupsRepository.getBackupDataForExport();
+          const metadata = {
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            importsCount: backupData.imports.length,
+            dataRowsCount: backupData.dataRows.length,
+            usersCount: backupData.users.length,
+            auditLogsCount: backupData.auditLogs.length
+          };
+          const created = await backupsRepository.createBackup({
+            name,
+            createdBy: req.user.username,
+            backupData: JSON.stringify(backupData),
+            metadata: JSON.stringify(metadata)
+          });
+          await storage2.createAuditLog({
+            action: "CREATE_BACKUP",
+            performedBy: req.user.username,
+            targetResource: name,
+            details: JSON.stringify({
+              ...metadata,
+              durationMs: Date.now() - startTime
+            })
+          });
+          return created;
+        });
+      } catch (error) {
+        if (isExportCircuitOpenError(error)) {
+          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
+        }
+        throw error;
+      }
+      return res.json(backup);
+    })
+  );
+  app2.get(
+    "/api/backups/:id",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("backup"),
+    asyncHandler(async (req, res) => {
+      const backup = await backupsRepository.getBackupById(req.params.id);
+      if (!backup) {
+        return res.status(404).json({ message: "Backup not found" });
+      }
+      return res.json(backup);
+    })
+  );
+  app2.post(
+    "/api/backups/:id/restore",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("backup"),
+    asyncHandler(async (req, res) => {
+      let backup;
+      try {
+        backup = await withExportCircuit2(() => backupsRepository.getBackupById(req.params.id));
+      } catch (error) {
+        if (isExportCircuitOpenError(error)) {
+          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
+        }
+        throw error;
+      }
+      if (!backup) {
+        return res.status(404).json({ message: "Backup not found" });
+      }
+      let result;
+      try {
+        result = await withExportCircuit2(async () => {
+          const startTime = Date.now();
+          const backupData = JSON.parse(backup.backupData);
+          const restored = await backupsRepository.restoreFromBackup(backupData);
+          await storage2.createAuditLog({
+            action: "RESTORE_BACKUP",
+            performedBy: req.user.username,
+            targetResource: backup.name,
+            details: JSON.stringify({
+              ...restored.stats,
+              durationMs: Date.now() - startTime
+            })
+          });
+          return { restored, startTime };
+        });
+      } catch (error) {
+        if (isExportCircuitOpenError(error)) {
+          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
+        }
+        throw error;
+      }
+      return res.json({
+        ...result.restored,
+        message: `Restore completed in ${Math.round((Date.now() - result.startTime) / 1e3)}s`
+      });
+    })
+  );
+  app2.delete(
+    "/api/backups/:id",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("backup"),
+    asyncHandler(async (req, res) => {
+      let backup;
+      let deleted;
+      try {
+        backup = await withExportCircuit2(() => backupsRepository.getBackupById(req.params.id));
+        deleted = await withExportCircuit2(() => backupsRepository.deleteBackup(req.params.id));
+      } catch (error) {
+        if (isExportCircuitOpenError(error)) {
+          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
+        }
+        throw error;
+      }
+      if (!deleted) {
+        return res.status(404).json({ message: "Backup not found" });
+      }
+      await storage2.createAuditLog({
+        action: "DELETE_BACKUP",
+        performedBy: req.user.username,
+        targetResource: backup?.name || req.params.id
+      });
+      return res.json({ success: true });
+    })
+  );
+  app2.get("/api/debug/websocket-clients", authenticateToken, requireRole("superuser"), asyncHandler(async (_req, res) => {
+    const clients = Array.from(connectedClients2.keys());
+    return res.json({ count: clients.length, clients });
+  }));
+}
+
+// server/routes/search.routes.ts
+function buildRowsWithSource(rows) {
+  return rows.map((row) => {
+    const base = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
+    return {
+      ...base,
+      "Source File": row.importFilename || row.importName || ""
+    };
+  });
+}
+function collectColumns(rows) {
+  return Array.from(
+    rows.reduce((set, row) => {
+      Object.keys(row).forEach((key) => set.add(key));
+      return set;
+    }, /* @__PURE__ */ new Set())
+  );
+}
+function registerSearchRoutes(app2, deps) {
+  const {
+    searchRepository,
+    authenticateToken,
+    searchRateLimiter: searchRateLimiter2,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    isDbProtected
+  } = deps;
+  app2.get("/api/search/columns", authenticateToken, asyncHandler(async (_req, res) => {
+    return res.json(await searchRepository.getAllColumnNames());
+  }));
+  app2.get("/api/columns", authenticateToken, asyncHandler(async (_req, res) => {
+    return res.json(await searchRepository.getAllColumnNames());
+  }));
+  app2.get("/api/search/global", authenticateToken, searchRateLimiter2, asyncHandler(async (req, res) => {
+    const search = String(req.query.q || "").trim();
+    const runtimeSettings = await getRuntimeSettingsCached2();
+    const page = Math.max(1, readInteger(req.query.page, 1));
+    const maxTotal = runtimeSettings.searchResultLimit;
+    const maxLimit = isDbProtected() ? Math.min(maxTotal, 80) : maxTotal;
+    const requestedLimit = readInteger(req.query.limit, 50);
+    const limit = Math.max(10, Math.min(requestedLimit, maxLimit));
+    const offset = (page - 1) * limit;
+    if (offset >= maxTotal) {
+      return res.json({
+        columns: [],
+        rows: [],
+        results: [],
+        total: maxTotal,
+        page,
+        limit
+      });
+    }
+    if (search.length < 2) {
+      return res.json({
+        columns: [],
+        rows: [],
+        results: [],
+        total: 0
+      });
+    }
+    const effectiveLimit = Math.min(limit, Math.max(1, maxTotal - offset));
+    const result = await searchRepository.searchGlobalDataRows({
+      search,
+      limit: effectiveLimit,
+      offset
+    });
+    const parsedRows = buildRowsWithSource(result.rows);
+    const columns = collectColumns(parsedRows);
+    return res.json({
+      columns,
+      rows: parsedRows,
+      results: parsedRows,
+      total: Math.min(result.total, maxTotal),
+      page,
+      limit: effectiveLimit
+    });
+  }));
+  app2.get("/api/search", authenticateToken, searchRateLimiter2, asyncHandler(async (req, res) => {
+    const search = String(req.query.q || "").trim();
+    if (search.length < 2) {
+      return res.json({ results: [], total: 0 });
+    }
+    const queryResult = await searchRepository.searchSimpleDataRows(search);
+    const rows = queryResult.rows || [];
+    const results = rows.map((row) => ({
+      ...row.jsonDataJsonb || {},
+      _importId: row.importId,
+      _importName: row.importName
+    }));
+    return res.json({
+      results,
+      total: results.length
+    });
+  }));
+  app2.post("/api/search/advanced", authenticateToken, asyncHandler(async (req, res) => {
+    const body = ensureObject(req.body) || {};
+    const filters = Array.isArray(body.filters) ? body.filters : [];
+    const logic = body.logic === "OR" ? "OR" : "AND";
+    const runtimeSettings = await getRuntimeSettingsCached2();
+    const page = Math.max(1, readInteger(body.page, 1));
+    const maxTotal = runtimeSettings.searchResultLimit;
+    const requestedLimit = readInteger(body.limit, 50);
+    const limit = Math.max(10, Math.min(requestedLimit, maxTotal));
+    const offset = (page - 1) * limit;
+    if (offset >= maxTotal) {
+      return res.json({
+        results: [],
+        headers: [],
+        total: maxTotal,
+        page,
+        limit
+      });
+    }
+    const effectiveLimit = Math.min(limit, Math.max(1, maxTotal - offset));
+    const rawResult = await searchRepository.advancedSearchDataRows(
+      filters,
+      logic,
+      effectiveLimit,
+      offset
+    );
+    const parsedResults = buildRowsWithSource(rawResult.rows);
+    const headers = collectColumns(parsedResults);
+    return res.json({
+      results: parsedResults,
+      headers,
+      total: Math.min(rawResult.total || 0, maxTotal),
+      page,
+      limit: effectiveLimit
+    });
+  }));
+}
+
+// server/routes/settings.routes.ts
+function registerSettingsRoutes(app2, deps) {
+  const {
+    storage: storage2,
+    authenticateToken,
+    requireRole,
+    clearTabVisibilityCache,
+    invalidateRuntimeSettingsCache: invalidateRuntimeSettingsCache2,
+    invalidateMaintenanceCache: invalidateMaintenanceCache2,
+    getMaintenanceStateCached: getMaintenanceStateCached2,
+    broadcastWsMessage,
+    defaultAiTimeoutMs
+  } = deps;
+  app2.get("/api/app-config", authenticateToken, asyncHandler(async (_req, res) => {
+    const config = await storage2.getAppConfig();
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    return res.json(config);
+  }));
+  app2.get("/api/settings/tab-visibility", authenticateToken, asyncHandler(async (req, res) => {
+    const role = req.user?.role || "user";
+    return res.json({
+      role,
+      tabs: await storage2.getRoleTabVisibility(role)
+    });
+  }));
+  app2.get("/api/settings", authenticateToken, requireRole("admin", "superuser"), asyncHandler(async (req, res) => {
+    const role = req.user?.role || "user";
+    return res.json({
+      categories: await storage2.getSettingsForRole(role)
+    });
+  }));
+  app2.patch("/api/settings", authenticateToken, requireRole("admin", "superuser"), asyncHandler(async (req, res) => {
+    const body = ensureObject(req.body) || {};
+    const key = readNonEmptyString(body.key);
+    if (!key) {
+      return res.status(400).json({ message: "Invalid setting key" });
+    }
+    const role = req.user?.role || "user";
+    const result = await storage2.updateSystemSetting({
+      role,
+      settingKey: key,
+      value: body.value ?? null,
+      confirmCritical: Boolean(body.confirmCritical),
+      updatedBy: req.user?.username || "system"
+    });
+    if (result.status === "not_found") {
+      return res.status(404).json({ message: result.message });
+    }
+    if (result.status === "forbidden") {
+      return res.status(403).json({ message: result.message });
+    }
+    if (result.status === "requires_confirmation") {
+      return res.status(409).json({ message: result.message, requiresConfirmation: true });
+    }
+    if (result.status === "invalid") {
+      return res.status(400).json({ message: result.message });
+    }
+    if (result.status === "updated") {
+      clearTabVisibilityCache();
+      invalidateRuntimeSettingsCache2();
+      await storage2.createAuditLog({
+        action: result.setting?.isCritical ? "CRITICAL_SETTING_UPDATED" : "SETTING_UPDATED",
+        performedBy: req.user?.username || "system",
+        targetResource: key,
+        details: `Updated setting ${key} to "${String(result.setting?.value ?? "")}"`
+      });
+      if (key === "ai_timeout_ms") {
+        process.env.OLLAMA_TIMEOUT_MS = String(result.setting?.value ?? defaultAiTimeoutMs);
+      }
+      if (result.shouldBroadcast) {
+        invalidateMaintenanceCache2();
+        const maintenanceState = await getMaintenanceStateCached2(true);
+        broadcastWsMessage({
+          type: "maintenance_update",
+          maintenance: maintenanceState.maintenance,
+          message: maintenanceState.message,
+          mode: maintenanceState.type,
+          startTime: maintenanceState.startTime,
+          endTime: maintenanceState.endTime
+        });
+      } else {
+        broadcastWsMessage({
+          type: "settings_updated",
+          key,
+          updatedBy: req.user?.username || "system"
+        });
+      }
+    }
+    return res.json({
+      success: result.status === "updated" || result.status === "unchanged",
+      status: result.status,
+      message: result.message,
+      setting: result.setting || null
+    });
+  }));
+}
+
+// server/routes/system.routes.ts
+function registerSystemRoutes(app2, deps) {
+  const {
+    authenticateToken,
+    requireRole,
+    requireMonitorAccess,
+    getMaintenanceStateCached: getMaintenanceStateCached2,
+    computeInternalMonitorSnapshot: computeInternalMonitorSnapshot2,
+    buildInternalMonitorAlerts: buildInternalMonitorAlerts2,
+    getControlState: getControlState2,
+    getDbProtection: getDbProtection2,
+    getRequestRate: getRequestRate2,
+    getLatencyP95: getLatencyP952,
+    getLocalCircuitSnapshots: getLocalCircuitSnapshots2,
+    getIntelligenceExplainability: getIntelligenceExplainability2,
+    injectChaos: injectChaos2,
+    createAuditLog
+  } = deps;
+  app2.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", mode: "postgresql" });
+  });
+  app2.get("/api/maintenance-status", asyncHandler(async (_req, res) => {
+    return res.json(await getMaintenanceStateCached2());
+  }));
+  app2.get(
+    "/internal/system-health",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireMonitorAccess,
+    (_req, res) => {
+      const snapshot = computeInternalMonitorSnapshot2();
+      const alerts = buildInternalMonitorAlerts2(snapshot);
+      res.json({
+        ...snapshot,
+        activeAlertCount: alerts.length
+      });
+    }
+  );
+  app2.get(
+    "/internal/system-mode",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireMonitorAccess,
+    (_req, res) => {
+      const controlState = getControlState2();
+      res.json({
+        mode: controlState.mode,
+        throttleFactor: controlState.throttleFactor,
+        rejectHeavyRoutes: controlState.rejectHeavyRoutes,
+        dbProtection: getDbProtection2(),
+        preAllocatedMB: controlState.preAllocateMB,
+        updatedAt: controlState.updatedAt
+      });
+    }
+  );
+  app2.get(
+    "/internal/workers",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireMonitorAccess,
+    (_req, res) => {
+      const controlState = getControlState2();
+      res.json({
+        count: controlState.workerCount,
+        maxWorkers: controlState.maxWorkers,
+        workers: controlState.workers,
+        updatedAt: controlState.updatedAt
+      });
+    }
+  );
+  app2.get(
+    "/internal/alerts",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireMonitorAccess,
+    (_req, res) => {
+      const snapshot = computeInternalMonitorSnapshot2();
+      const alerts = buildInternalMonitorAlerts2(snapshot);
+      res.json({
+        alerts,
+        updatedAt: snapshot.updatedAt
+      });
+    }
+  );
+  app2.get(
+    "/internal/load-trend",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireMonitorAccess,
+    (_req, res) => {
+      const controlState = getControlState2();
+      res.json({
+        predictor: controlState.predictor,
+        queueLength: controlState.queueLength,
+        requestRate: getRequestRate2(),
+        p95LatencyMs: getLatencyP952(),
+        updatedAt: controlState.updatedAt
+      });
+    }
+  );
+  app2.get(
+    "/internal/circuit-status",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireMonitorAccess,
+    (_req, res) => {
+      const controlState = getControlState2();
+      res.json({
+        local: getLocalCircuitSnapshots2(),
+        cluster: controlState.circuits,
+        updatedAt: controlState.updatedAt
+      });
+    }
+  );
+  app2.get(
+    "/internal/intelligence/explain",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireMonitorAccess,
+    (_req, res) => {
+      const explain = getIntelligenceExplainability2();
+      res.json({
+        anomalyBreakdown: explain.anomalyBreakdown,
+        correlationMatrix: explain.correlationMatrix,
+        slopeValues: explain.slopeValues,
+        forecastProjection: explain.forecastProjection,
+        governanceState: explain.governanceState,
+        chosenStrategy: explain.chosenStrategy,
+        decisionReason: explain.decisionReason
+      });
+    }
+  );
+  app2.post(
+    "/internal/chaos/inject",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    asyncHandler(async (req, res) => {
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const type = body.type;
+      const magnitude = body.magnitude;
+      const durationMs = body.durationMs;
+      const allowed = /* @__PURE__ */ new Set([
+        "cpu_spike",
+        "db_latency_spike",
+        "ai_delay",
+        "worker_crash",
+        "memory_pressure"
+      ]);
+      if (!allowed.has(type)) {
+        return res.status(400).json({
+          message: "Invalid chaos type.",
+          allowed: Array.from(allowed)
+        });
+      }
+      const result = injectChaos2({
+        type,
+        magnitude: Number.isFinite(Number(magnitude)) ? Number(magnitude) : void 0,
+        durationMs: Number.isFinite(Number(durationMs)) ? Number(durationMs) : void 0
+      });
+      await createAuditLog({
+        action: "CHAOS_INJECTED",
+        performedBy: req.user?.username || "system",
+        details: `Chaos injected: ${type}`
+      });
+      return res.json({
+        success: true,
+        ...result
+      });
+    })
+  );
+}
+
+// server/internal/circuitBreaker.ts
+var CircuitOpenError = class extends Error {
+  constructor(name) {
+    super(`Circuit '${name}' is OPEN`);
+    this.name = "CircuitOpenError";
+  }
+};
+var CircuitBreaker = class {
+  constructor(options) {
+    this.state = "CLOSED";
+    this.failures = 0;
+    this.successes = 0;
+    this.rejections = 0;
+    this.totalRequests = 0;
+    this.nextRetryAt = null;
+    this.halfOpenInFlight = 0;
+    this.name = options.name;
+    this.threshold = Math.max(0.01, Math.min(1, options.threshold ?? 0.5));
+    this.minRequests = Math.max(5, options.minRequests ?? 20);
+    this.cooldownMs = Math.max(1e3, options.cooldownMs ?? 2e4);
+    this.halfOpenMaxInFlight = Math.max(1, options.halfOpenMaxInFlight ?? 1);
+  }
+  getState() {
+    this.evaluateCooldown();
+    return this.state;
+  }
+  getSnapshot() {
+    this.evaluateCooldown();
+    return {
+      name: this.name,
+      state: this.state,
+      failures: this.failures,
+      successes: this.successes,
+      rejections: this.rejections,
+      totalRequests: this.totalRequests,
+      failureRate: this.totalRequests > 0 ? this.failures / this.totalRequests : 0,
+      nextRetryAt: this.nextRetryAt,
+      cooldownMs: this.cooldownMs,
+      threshold: this.threshold
+    };
+  }
+  async execute(operation) {
+    this.evaluateCooldown();
+    if (this.state === "OPEN") {
+      this.rejections += 1;
+      throw new CircuitOpenError(this.name);
+    }
+    if (this.state === "HALF_OPEN" && this.halfOpenInFlight >= this.halfOpenMaxInFlight) {
+      this.rejections += 1;
+      throw new CircuitOpenError(this.name);
+    }
+    this.totalRequests += 1;
+    if (this.state === "HALF_OPEN") {
+      this.halfOpenInFlight += 1;
+    }
+    try {
+      const result = await operation();
+      this.onSuccess();
+      return result;
+    } catch (err) {
+      this.onFailure();
+      throw err;
+    } finally {
+      if (this.state === "HALF_OPEN" && this.halfOpenInFlight > 0) {
+        this.halfOpenInFlight -= 1;
+      }
+    }
+  }
+  onSuccess() {
+    this.successes += 1;
+    if (this.state === "HALF_OPEN") {
+      this.close();
+      return;
+    }
+    this.trimCounters();
+  }
+  onFailure() {
+    this.failures += 1;
+    if (this.state === "HALF_OPEN") {
+      this.open();
+      return;
+    }
+    if (this.totalRequests >= this.minRequests) {
+      const failureRate = this.failures / this.totalRequests;
+      if (failureRate >= this.threshold) {
+        this.open();
+        return;
+      }
+    }
+    this.trimCounters();
+  }
+  open() {
+    this.state = "OPEN";
+    this.nextRetryAt = Date.now() + this.cooldownMs;
+    this.halfOpenInFlight = 0;
+  }
+  close() {
+    this.state = "CLOSED";
+    this.nextRetryAt = null;
+    this.halfOpenInFlight = 0;
+    this.failures = 0;
+    this.successes = 0;
+    this.totalRequests = 0;
+  }
+  evaluateCooldown() {
+    if (this.state !== "OPEN") return;
+    if (this.nextRetryAt === null) return;
+    if (Date.now() >= this.nextRetryAt) {
+      this.state = "HALF_OPEN";
+      this.nextRetryAt = null;
+      this.halfOpenInFlight = 0;
+    }
+  }
+  trimCounters() {
+    const maxWindow = 2e3;
+    if (this.totalRequests <= maxWindow) return;
+    const keepRatio = 0.5;
+    this.totalRequests = Math.max(this.minRequests, Math.floor(this.totalRequests * keepRatio));
+    this.failures = Math.floor(this.failures * keepRatio);
+    this.successes = Math.floor(this.successes * keepRatio);
+  }
+};
 
 // server/services/ai-chat.service.ts
 var AiChatService = class {
@@ -13301,8 +12751,8 @@ function finalizeAccumulator(accumulator) {
   };
 }
 var ImportAnalysisService = class {
-  constructor(importsRepository2) {
-    this.importsRepository = importsRepository2;
+  constructor(importsRepository) {
+    this.importsRepository = importsRepository;
   }
   async analyzeImport(importRecord) {
     const accumulator = createAccumulator();
@@ -13362,15 +12812,15 @@ var ImportAnalysisService = class {
 };
 
 // server/ws/runtime-manager.ts
-import jwt4 from "jsonwebtoken";
-import { WebSocket as WebSocket4 } from "ws";
+import jwt3 from "jsonwebtoken";
+import { WebSocket as WebSocket3 } from "ws";
 function createRuntimeWebSocketManager(options) {
   const { wss: wss2, storage: storage2, secret } = options;
   const connectedClients2 = /* @__PURE__ */ new Map();
-  const broadcastWsMessage2 = (payload) => {
+  const broadcastWsMessage = (payload) => {
     const message = JSON.stringify(payload);
     for (const [activityId, ws] of connectedClients2.entries()) {
-      if (!ws || ws.readyState !== WebSocket4.OPEN) {
+      if (!ws || ws.readyState !== WebSocket3.OPEN) {
         connectedClients2.delete(activityId);
         void storage2.clearCollectionNicknameSessionByActivity(activityId);
         continue;
@@ -13383,13 +12833,17 @@ function createRuntimeWebSocketManager(options) {
       }
     }
   };
-  setInterval(() => {
+  const staleSocketSweepHandle = setInterval(() => {
     for (const [activityId, ws] of connectedClients2.entries()) {
-      if (!ws || ws.readyState !== WebSocket4.OPEN && ws.readyState !== WebSocket4.CONNECTING) {
+      if (!ws || ws.readyState !== WebSocket3.OPEN && ws.readyState !== WebSocket3.CONNECTING) {
         connectedClients2.delete(activityId);
       }
     }
-  }, 3e4).unref();
+  }, 3e4);
+  staleSocketSweepHandle.unref();
+  wss2.once("close", () => {
+    clearInterval(staleSocketSweepHandle);
+  });
   wss2.on("connection", async (ws, req) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const token = url.searchParams.get("token");
@@ -13398,7 +12852,7 @@ function createRuntimeWebSocketManager(options) {
       return;
     }
     try {
-      const decoded = jwt4.verify(token, secret);
+      const decoded = jwt3.verify(token, secret);
       const activityId = String(decoded.activityId || "");
       if (!activityId) {
         ws.close();
@@ -13411,7 +12865,7 @@ function createRuntimeWebSocketManager(options) {
         return;
       }
       const existingWs = connectedClients2.get(activityId);
-      if (existingWs && existingWs.readyState === WebSocket4.OPEN) {
+      if (existingWs && existingWs.readyState === WebSocket3.OPEN) {
         existingWs.close();
       }
       connectedClients2.set(activityId, ws);
@@ -13433,33 +12887,1298 @@ function createRuntimeWebSocketManager(options) {
   });
   return {
     connectedClients: connectedClients2,
-    broadcastWsMessage: broadcastWsMessage2
+    broadcastWsMessage
   };
+}
+
+// server/internal/local-server-composition.ts
+function createLocalServerComposition(options) {
+  const {
+    storage: storage2,
+    wss: wss2,
+    secret,
+    withAiCircuit: withAiCircuit2,
+    lowMemoryMode,
+    defaultAiTimeoutMs,
+    ollamaChat: ollamaChat2,
+    ollamaEmbed: ollamaEmbed2
+  } = options;
+  const importsRepository = new ImportsRepository();
+  const searchRepository = new SearchRepository();
+  const auditRepository = new AuditRepository();
+  const analyticsRepository = new AnalyticsRepository();
+  const backupsRepository = new BackupsRepository({
+    ensureBackupsTable: () => storage2.ensureBackupsReady(),
+    parseBackupMetadataSafe
+  });
+  const importAnalysisService = new ImportAnalysisService(importsRepository);
+  const websocketManager = createRuntimeWebSocketManager({
+    wss: wss2,
+    storage: storage2,
+    secret
+  });
+  const authGuards = createAuthGuards({ storage: storage2, secret });
+  const categoryStatsService2 = new CategoryStatsService(storage2);
+  const aiSearchService2 = new AiSearchService({
+    storage: storage2,
+    withAiCircuit: withAiCircuit2,
+    ollamaChat: ollamaChat2,
+    ollamaEmbed: ollamaEmbed2,
+    defaultAiTimeoutMs,
+    lowMemoryMode
+  });
+  const aiChatService = new AiChatService({
+    storage: storage2,
+    categoryStatsService: categoryStatsService2,
+    withAiCircuit: withAiCircuit2,
+    ollamaChat: ollamaChat2
+  });
+  const aiIndexService = new AiIndexService({
+    storage: storage2,
+    ollamaEmbed: ollamaEmbed2
+  });
+  return {
+    storage: storage2,
+    importsRepository,
+    searchRepository,
+    auditRepository,
+    analyticsRepository,
+    backupsRepository,
+    importAnalysisService,
+    aiSearchService: aiSearchService2,
+    categoryStatsService: categoryStatsService2,
+    aiChatService,
+    aiIndexService,
+    connectedClients: websocketManager.connectedClients,
+    broadcastWsMessage: websocketManager.broadcastWsMessage,
+    authenticateToken: authGuards.authenticateToken,
+    requireRole: authGuards.requireRole,
+    requireTabAccess: authGuards.requireTabAccess,
+    requireMonitorAccess: authGuards.requireMonitorAccess,
+    clearTabVisibilityCache: authGuards.clearTabVisibilityCache
+  };
+}
+function registerLocalServerRoutes(options) {
+  const {
+    app: app2,
+    composition: composition2,
+    runtimeConfig,
+    runtimeMonitor,
+    withAiConcurrencyGate: withAiConcurrencyGate2,
+    withExportCircuit: withExportCircuit2,
+    defaultAiTimeoutMs
+  } = options;
+  const {
+    storage: storage2,
+    importsRepository,
+    searchRepository,
+    auditRepository,
+    analyticsRepository,
+    backupsRepository,
+    importAnalysisService,
+    aiSearchService: aiSearchService2,
+    categoryStatsService: categoryStatsService2,
+    aiChatService,
+    aiIndexService,
+    connectedClients: connectedClients2,
+    broadcastWsMessage,
+    authenticateToken,
+    requireRole,
+    requireTabAccess,
+    requireMonitorAccess,
+    clearTabVisibilityCache
+  } = composition2;
+  const {
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    getMaintenanceStateCached: getMaintenanceStateCached2,
+    invalidateRuntimeSettingsCache: invalidateRuntimeSettingsCache2,
+    invalidateMaintenanceCache: invalidateMaintenanceCache2
+  } = runtimeConfig;
+  const {
+    computeInternalMonitorSnapshot: computeInternalMonitorSnapshot2,
+    buildInternalMonitorAlerts: buildInternalMonitorAlerts2,
+    getControlState: getControlState2,
+    getDbProtection: getDbProtection2,
+    getRequestRate: getRequestRate2,
+    getLatencyP95: getLatencyP952,
+    getLocalCircuitSnapshots: getLocalCircuitSnapshots2
+  } = runtimeMonitor;
+  registerSystemRoutes(app2, {
+    authenticateToken,
+    requireRole,
+    requireMonitorAccess,
+    getMaintenanceStateCached: getMaintenanceStateCached2,
+    computeInternalMonitorSnapshot: computeInternalMonitorSnapshot2,
+    buildInternalMonitorAlerts: buildInternalMonitorAlerts2,
+    getControlState: getControlState2,
+    getDbProtection: getDbProtection2,
+    getRequestRate: getRequestRate2,
+    getLatencyP95: getLatencyP952,
+    getLocalCircuitSnapshots: getLocalCircuitSnapshots2,
+    getIntelligenceExplainability,
+    injectChaos,
+    createAuditLog: (data) => storage2.createAuditLog(data)
+  });
+  registerAuthRoutes(app2, {
+    storage: storage2,
+    authenticateToken,
+    requireRole,
+    connectedClients: connectedClients2
+  });
+  registerActivityRoutes(app2, {
+    storage: storage2,
+    authenticateToken,
+    requireRole,
+    requireTabAccess,
+    connectedClients: connectedClients2
+  });
+  registerImportRoutes(app2, {
+    storage: storage2,
+    importsRepository,
+    importAnalysisService,
+    authenticateToken,
+    requireRole,
+    requireTabAccess,
+    searchRateLimiter,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    isDbProtected: getDbProtection2
+  });
+  registerSearchRoutes(app2, {
+    storage: storage2,
+    searchRepository,
+    authenticateToken,
+    searchRateLimiter,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    isDbProtected: getDbProtection2
+  });
+  registerAiRoutes(app2, {
+    storage: storage2,
+    authenticateToken,
+    requireRole,
+    withAiConcurrencyGate: withAiConcurrencyGate2,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    aiSearchService: aiSearchService2,
+    categoryStatsService: categoryStatsService2,
+    aiChatService,
+    aiIndexService,
+    getOllamaConfig,
+    defaultAiTimeoutMs
+  });
+  registerSettingsRoutes(app2, {
+    storage: storage2,
+    authenticateToken,
+    requireRole,
+    clearTabVisibilityCache,
+    invalidateRuntimeSettingsCache: invalidateRuntimeSettingsCache2,
+    invalidateMaintenanceCache: invalidateMaintenanceCache2,
+    getMaintenanceStateCached: getMaintenanceStateCached2,
+    broadcastWsMessage,
+    defaultAiTimeoutMs
+  });
+  registerOperationsRoutes(app2, {
+    storage: storage2,
+    auditRepository,
+    backupsRepository,
+    analyticsRepository,
+    authenticateToken,
+    requireRole,
+    requireTabAccess,
+    withExportCircuit: withExportCircuit2,
+    isExportCircuitOpenError: (error) => error instanceof CircuitOpenError,
+    connectedClients: connectedClients2
+  });
+  registerCollectionRoutes(app2, {
+    storage: storage2,
+    authenticateToken,
+    requireRole,
+    requireTabAccess
+  });
+  app2.use(errorHandler);
+}
+
+// server/internal/local-runtime-glue.ts
+function getSearchQueueLength() {
+  return globalThis.__searchInflightMap?.size ?? 0;
+}
+function attachLocalRuntimeGlue(options) {
+  const {
+    server: server2,
+    aiSearchService: aiSearchService2,
+    attachGcObserver: attachGcObserver2,
+    attachProcessMessageHandlers: attachProcessMessageHandlers2,
+    startRuntimeLoops: startRuntimeLoops2,
+    sweepAdaptiveRateState: sweepAdaptiveRateState2
+  } = options;
+  attachGcObserver2();
+  attachProcessMessageHandlers2({
+    onGracefulShutdown: () => {
+      server2.close(() => process.exit(0));
+      setTimeout(() => process.exit(0), 25e3).unref();
+    }
+  });
+  startRuntimeLoops2({
+    clearSearchCache: () => aiSearchService2.clearSearchCache()
+  });
+  const cacheSweepHandle = setInterval(() => {
+    const now = Date.now();
+    sweepAdaptiveRateState2(now);
+    aiSearchService2.sweepCaches(now);
+  }, 3e4);
+  cacheSweepHandle.unref();
+  server2.once("close", () => {
+    clearInterval(cacheSweepHandle);
+  });
+}
+
+// server/internal/runtime-config-manager.ts
+import jwt4 from "jsonwebtoken";
+function createRuntimeConfigManager(options) {
+  const {
+    storage: storage2,
+    secret,
+    defaults,
+    maintenanceCacheTtlMs,
+    runtimeSettingsCacheTtlMs
+  } = options;
+  let maintenanceCache = null;
+  let runtimeSettingsCache = null;
+  const invalidateMaintenanceCache2 = () => {
+    maintenanceCache = null;
+  };
+  const invalidateRuntimeSettingsCache2 = () => {
+    runtimeSettingsCache = null;
+  };
+  const getRuntimeSettingsCached2 = async (force = false) => {
+    const now = Date.now();
+    if (!force && runtimeSettingsCache && now - runtimeSettingsCache.cachedAt < runtimeSettingsCacheTtlMs) {
+      return runtimeSettingsCache.settings;
+    }
+    const config = await storage2.getAppConfig();
+    const settings = {
+      sessionTimeoutMinutes: Number.isFinite(config.sessionTimeoutMinutes) ? Math.max(1, config.sessionTimeoutMinutes) : defaults.sessionTimeoutMinutes,
+      wsIdleMinutes: Number.isFinite(config.wsIdleMinutes) ? Math.max(1, config.wsIdleMinutes) : defaults.wsIdleMinutes,
+      aiEnabled: config.aiEnabled !== false,
+      semanticSearchEnabled: config.semanticSearchEnabled !== false,
+      aiTimeoutMs: Number.isFinite(config.aiTimeoutMs) ? Math.max(1e3, config.aiTimeoutMs) : defaults.aiTimeoutMs,
+      searchResultLimit: Number.isFinite(config.searchResultLimit) ? Math.min(5e3, Math.max(10, Math.floor(config.searchResultLimit))) : defaults.searchResultLimit,
+      viewerRowsPerPage: Number.isFinite(config.viewerRowsPerPage) ? Math.min(500, Math.max(10, Math.floor(config.viewerRowsPerPage))) : defaults.viewerRowsPerPage
+    };
+    runtimeSettingsCache = { settings, cachedAt: now };
+    return settings;
+  };
+  const getMaintenanceStateCached2 = async (force = false) => {
+    const now = Date.now();
+    if (!force && maintenanceCache && now - maintenanceCache.cachedAt < maintenanceCacheTtlMs) {
+      return maintenanceCache.state;
+    }
+    const state = await storage2.getMaintenanceState(/* @__PURE__ */ new Date());
+    maintenanceCache = { state, cachedAt: now };
+    return state;
+  };
+  const extractRoleFromToken = (req) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(" ")[1];
+    if (!token) return null;
+    try {
+      const decoded = jwt4.verify(token, secret);
+      return decoded?.role || null;
+    } catch {
+      return null;
+    }
+  };
+  const isMaintenanceBypassPath = (pathname) => pathname.startsWith("/api/login") || pathname.startsWith("/api/auth/login") || pathname.startsWith("/api/health") || pathname.startsWith("/api/maintenance-status") || pathname.startsWith("/api/settings/maintenance") || pathname.startsWith("/internal/") || pathname.startsWith("/ws");
+  const maintenanceGuard2 = async (req, res, next) => {
+    try {
+      if (isMaintenanceBypassPath(req.path)) {
+        return next();
+      }
+      const state = await getMaintenanceStateCached2();
+      if (!state.maintenance) {
+        return next();
+      }
+      const role = req.user?.role || extractRoleFromToken(req);
+      if (role === "superuser" || role === "admin") {
+        return next();
+      }
+      const maintenanceResponse = {
+        maintenance: true,
+        message: state.message,
+        type: state.type,
+        startTime: state.startTime,
+        endTime: state.endTime
+      };
+      if (req.path.startsWith("/api/")) {
+        if (state.type === "soft") {
+          const blockedSoftPrefixes = ["/api/search", "/api/imports", "/api/ai"];
+          if (!blockedSoftPrefixes.some((prefix) => req.path.startsWith(prefix))) {
+            return next();
+          }
+        }
+        return res.status(503).json(maintenanceResponse);
+      }
+      if (req.path.startsWith("/assets/") || req.path.match(/\.(js|css|png|jpg|svg|ico)$/i)) {
+        return next();
+      }
+      if (state.type === "hard" && req.path !== "/maintenance") {
+        return res.redirect(302, "/maintenance");
+      }
+      return next();
+    } catch (err) {
+      console.error("Maintenance guard error:", err);
+      return next();
+    }
+  };
+  return {
+    invalidateMaintenanceCache: invalidateMaintenanceCache2,
+    invalidateRuntimeSettingsCache: invalidateRuntimeSettingsCache2,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    getMaintenanceStateCached: getMaintenanceStateCached2,
+    maintenanceGuard: maintenanceGuard2
+  };
+}
+
+// server/internal/aiConcurrencyGate.ts
+function createAiConcurrencyGate(options) {
+  const { globalLimit, queueLimit, queueWaitMs, roleLimits } = options;
+  let sequence = 0;
+  let inflightGlobal = 0;
+  const inflightByRole = {
+    user: 0,
+    admin: 0,
+    superuser: 0
+  };
+  const queue = [];
+  const normalizeAiRole = (role) => {
+    if (role === "superuser") return "superuser";
+    if (role === "admin") return "admin";
+    return "user";
+  };
+  const getAiGateSnapshot = (role) => {
+    const safeRole = role ? normalizeAiRole(role) : "user";
+    return {
+      globalInFlight: inflightGlobal,
+      globalLimit,
+      queueSize: queue.length,
+      queueLimit,
+      role: safeRole,
+      roleInFlight: inflightByRole[safeRole],
+      roleLimit: roleLimits[safeRole]
+    };
+  };
+  const canAcquire = (role) => inflightGlobal < globalLimit && inflightByRole[role] < roleLimits[role];
+  const acquire = (role, route) => {
+    inflightGlobal += 1;
+    inflightByRole[role] += 1;
+    return {
+      role,
+      route,
+      released: false
+    };
+  };
+  const drainQueue = () => {
+    if (queue.length === 0) return;
+    let progressed = true;
+    while (progressed && queue.length > 0) {
+      progressed = false;
+      for (let index = 0; index < queue.length; index += 1) {
+        const item = queue[index];
+        if (!canAcquire(item.role)) continue;
+        queue.splice(index, 1);
+        clearTimeout(item.timeout);
+        progressed = true;
+        item.resolve({
+          lease: acquire(item.role, item.route),
+          waitedMs: Math.max(0, Date.now() - item.enqueuedAt)
+        });
+        break;
+      }
+    }
+  };
+  const release = (lease) => {
+    if (lease.released) return;
+    lease.released = true;
+    inflightGlobal = Math.max(0, inflightGlobal - 1);
+    inflightByRole[lease.role] = Math.max(0, inflightByRole[lease.role] - 1);
+    queueMicrotask(() => {
+      drainQueue();
+    });
+  };
+  const createGateError = (message, code, status = 429) => {
+    const error = new Error(message);
+    error.code = code;
+    error.status = status;
+    return error;
+  };
+  const waitForSlot = (role, route) => {
+    if (canAcquire(role)) {
+      return Promise.resolve({
+        lease: acquire(role, route),
+        waitedMs: 0
+      });
+    }
+    if (queue.length >= queueLimit) {
+      return Promise.reject(
+        createGateError(
+          "AI queue is full. Please retry in a few seconds.",
+          "AI_GATE_QUEUE_FULL",
+          429
+        )
+      );
+    }
+    return new Promise((resolve, reject) => {
+      const id = ++sequence;
+      const timeout = setTimeout(() => {
+        const index = queue.findIndex((item) => item.id === id);
+        if (index >= 0) {
+          queue.splice(index, 1);
+        }
+        reject(
+          createGateError(
+            "AI queue wait timed out. Please retry.",
+            "AI_GATE_WAIT_TIMEOUT",
+            429
+          )
+        );
+      }, queueWaitMs).unref();
+      queue.push({
+        id,
+        role,
+        route,
+        enqueuedAt: Date.now(),
+        resolve,
+        reject,
+        timeout
+      });
+      drainQueue();
+    });
+  };
+  const withAiConcurrencyGate2 = (route, handler) => {
+    return async (req, res) => {
+      const role = normalizeAiRole(req.user?.role);
+      let acquired = null;
+      try {
+        acquired = await waitForSlot(role, route);
+      } catch (error) {
+        const status = Number.isFinite(error?.status) ? Number(error.status) : 429;
+        const snapshot = getAiGateSnapshot(role);
+        return res.status(status).json({
+          message: error?.message || "AI queue is currently busy. Please retry shortly.",
+          gate: {
+            ...snapshot,
+            queueWaitMs,
+            code: error?.code || "AI_GATE_BUSY"
+          }
+        });
+      }
+      const releaseOnce = () => {
+        if (!acquired) return;
+        release(acquired.lease);
+        acquired = null;
+      };
+      res.once("finish", releaseOnce);
+      res.once("close", releaseOnce);
+      res.setHeader("x-ai-gate-global-limit", String(globalLimit));
+      res.setHeader("x-ai-gate-inflight", String(inflightGlobal));
+      res.setHeader("x-ai-gate-queue-size", String(queue.length));
+      if (acquired.waitedMs > 0) {
+        res.setHeader("x-ai-gate-wait-ms", String(Math.round(acquired.waitedMs)));
+      }
+      try {
+        await handler(req, res);
+      } finally {
+        releaseOnce();
+      }
+    };
+  };
+  return { withAiConcurrencyGate: withAiConcurrencyGate2 };
+}
+
+// server/internal/runtime-monitor-manager.ts
+import { PerformanceObserver, monitorEventLoopDelay } from "node:perf_hooks";
+import os from "node:os";
+
+// server/internal/worker-ipc.ts
+function isMessageRecord(value) {
+  return Boolean(value) && typeof value === "object";
+}
+function isControlStateMessage(message) {
+  return isMessageRecord(message) && message.type === "control-state" && isMessageRecord(message.payload);
+}
+function isGracefulShutdownMessage(message) {
+  return isMessageRecord(message) && message.type === "graceful-shutdown";
+}
+
+// server/internal/runtime-monitor-manager.ts
+var LATENCY_WINDOW = 400;
+var MAX_INTELLIGENCE_HISTORY = 300;
+var ipcProcess = process;
+var runtimeGlobal = globalThis;
+function clamp4(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+function percentile(values, p) {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.floor(clamp4(p, 0, 100) / 100 * (sorted.length - 1));
+  return sorted[index];
+}
+function roundMetric(value, digits = 2) {
+  if (!Number.isFinite(value)) return 0;
+  const precision = 10 ** digits;
+  return Math.round(value * precision) / precision;
+}
+function getRamPercent() {
+  const total = Number(os.totalmem() || 0);
+  const free = Number(os.freemem() || 0);
+  if (total <= 0) return 0;
+  return roundMetric((total - free) / total * 100, 2);
+}
+function sendWorkerMessage(message) {
+  if (typeof ipcProcess.send !== "function") return;
+  ipcProcess.send(message);
+}
+function createRuntimeMonitorManager(options) {
+  const defaultControlState = {
+    mode: "NORMAL",
+    healthScore: 100,
+    dbProtection: false,
+    rejectHeavyRoutes: false,
+    throttleFactor: 1,
+    predictor: {
+      requestRateMA: 0,
+      latencyMA: 0,
+      cpuMA: 0,
+      requestRateTrend: 0,
+      latencyTrend: 0,
+      cpuTrend: 0,
+      sustainedUpward: false,
+      lastUpdatedAt: null
+    },
+    workerCount: 1,
+    maxWorkers: 1,
+    queueLength: 0,
+    preAllocateMB: 0,
+    updatedAt: Date.now(),
+    workers: [],
+    circuits: {
+      aiOpenWorkers: 0,
+      dbOpenWorkers: 0,
+      exportOpenWorkers: 0
+    }
+  };
+  let controlState = defaultControlState;
+  let preAllocatedBuffer = null;
+  let activeRequests = 0;
+  const latencySamples = [];
+  let requestCounter = 0;
+  let reqRatePerSec = 0;
+  let lastCpuUsage = process.cpuUsage();
+  let lastCpuTs = Date.now();
+  let cpuPercent = 0;
+  let gcCountWindow = 0;
+  let gcPerMinute = 0;
+  let lastDbLatencyMs = 0;
+  let lastAiLatencyMs = 0;
+  let lastAiLatencyObservedAt = 0;
+  let intelligenceInFlight = false;
+  let lastPgPoolWarningAt = 0;
+  let lastPgPoolWarningSignature = "";
+  const intelligenceHistory = {
+    cpuPercent: [],
+    p95LatencyMs: [],
+    dbLatencyMs: [],
+    errorRate: [],
+    aiLatencyMs: [],
+    queueSize: [],
+    ramPercent: [],
+    requestRate: [],
+    workerCount: []
+  };
+  const eventLoopHistogram = monitorEventLoopDelay({ resolution: 20 });
+  eventLoopHistogram.enable();
+  const circuitAi = new CircuitBreaker({
+    name: "ai",
+    threshold: 0.4,
+    minRequests: 10,
+    cooldownMs: 8e3
+  });
+  const circuitDb = new CircuitBreaker({
+    name: "db",
+    threshold: 0.35,
+    minRequests: 20,
+    cooldownMs: 12e3
+  });
+  const circuitExport = new CircuitBreaker({
+    name: "export",
+    threshold: 0.4,
+    minRequests: 8,
+    cooldownMs: 15e3
+  });
+  let gcObserver = null;
+  let gcObserverAttached = false;
+  let processHandlersAttached = false;
+  let runtimeLoopHandle = null;
+  function getEventLoopLagMs() {
+    const lagMs = Number(eventLoopHistogram.mean) / 1e6;
+    return Number.isFinite(lagMs) ? lagMs : 0;
+  }
+  function recordLatency(ms) {
+    if (!Number.isFinite(ms) || ms < 0) return;
+    latencySamples.push(ms);
+    if (latencySamples.length > LATENCY_WINDOW) {
+      latencySamples.splice(0, latencySamples.length - LATENCY_WINDOW);
+    }
+  }
+  function observeDbLatency(ms) {
+    if (!Number.isFinite(ms) || ms < 0) return;
+    if (lastDbLatencyMs <= 0) {
+      lastDbLatencyMs = ms;
+    } else {
+      lastDbLatencyMs = lastDbLatencyMs * 0.75 + ms * 0.25;
+    }
+  }
+  function observeAiLatency(ms) {
+    if (!Number.isFinite(ms) || ms < 0) return;
+    if (lastAiLatencyMs <= 0) {
+      lastAiLatencyMs = ms;
+    } else {
+      lastAiLatencyMs = lastAiLatencyMs * 0.75 + ms * 0.25;
+    }
+    lastAiLatencyObservedAt = Date.now();
+  }
+  function getEffectiveAiLatencyMs(now = Date.now()) {
+    if (!Number.isFinite(lastAiLatencyMs) || lastAiLatencyMs <= 0) return 0;
+    if (lastAiLatencyObservedAt <= 0) return Math.max(0, lastAiLatencyMs);
+    const idleMs = Math.max(0, now - lastAiLatencyObservedAt);
+    if (idleMs <= options.aiLatencyStaleAfterMs) {
+      return Math.max(0, lastAiLatencyMs);
+    }
+    const decayWindowMs = idleMs - options.aiLatencyStaleAfterMs;
+    const decayFactor = Math.exp(-Math.LN2 * decayWindowMs / options.aiLatencyDecayHalfLifeMs);
+    return Math.max(0, lastAiLatencyMs * decayFactor);
+  }
+  function maybeWarnPgPoolPressure(source) {
+    const total = Number(options.pool.totalCount || 0);
+    const idle = Number(options.pool.idleCount || 0);
+    const waiting = Number(options.pool.waitingCount || 0);
+    const max = Number(options.pool.options?.max || 0);
+    const nearMax = max > 0 ? total >= Math.max(1, max - 1) : false;
+    const hasPressure = waiting > 0 || idle === 0 || nearMax;
+    if (!hasPressure) {
+      lastPgPoolWarningSignature = "";
+      return;
+    }
+    const signature = `${total}:${idle}:${waiting}:${max}`;
+    const now = Date.now();
+    if (signature === lastPgPoolWarningSignature && now - lastPgPoolWarningAt < options.pgPoolWarnCooldownMs) {
+      return;
+    }
+    lastPgPoolWarningAt = now;
+    lastPgPoolWarningSignature = signature;
+    console.warn(
+      `[PG_POOL] total=${total} idle=${idle} waiting=${waiting} max=${max} source=${source}`
+    );
+  }
+  async function withDbCircuit2(operation) {
+    return circuitDb.execute(async () => {
+      const start = Date.now();
+      try {
+        return await operation();
+      } finally {
+        observeDbLatency(Date.now() - start);
+        maybeWarnPgPoolPressure("db-circuit");
+      }
+    });
+  }
+  async function withAiCircuit2(operation) {
+    return circuitAi.execute(async () => {
+      const start = Date.now();
+      try {
+        return await operation();
+      } finally {
+        observeAiLatency(Date.now() - start);
+      }
+    });
+  }
+  async function withExportCircuit2(operation) {
+    return circuitExport.execute(operation);
+  }
+  function getControlState2() {
+    return controlState;
+  }
+  function applyControlState(payload) {
+    controlState = {
+      ...defaultControlState,
+      ...payload
+    };
+    const preAllocateMB = clamp4(controlState.preAllocateMB, 0, options.lowMemoryMode ? 8 : 32);
+    if (preAllocateMB > 0) {
+      const targetBytes = preAllocateMB * 1024 * 1024;
+      if (!preAllocatedBuffer || preAllocatedBuffer.length !== targetBytes) {
+        preAllocatedBuffer = Buffer.alloc(targetBytes);
+      }
+    } else {
+      preAllocatedBuffer = null;
+    }
+  }
+  function getDbProtection2() {
+    return controlState.dbProtection || lastDbLatencyMs > 1e3;
+  }
+  function computeInternalMonitorSnapshot2() {
+    const workerSamples = controlState.workers || [];
+    const maxWorkerP95 = workerSamples.reduce(
+      (max, worker) => Math.max(max, Number(worker.latencyP95Ms || 0)),
+      0
+    );
+    const p95LatencyMs = Math.max(percentile(latencySamples, 95), maxWorkerP95);
+    const slowQueryCount = workerSamples.filter(
+      (worker) => Number(worker.dbLatencyMs || 0) > 600
+    ).length;
+    const aiFailureRate = clamp4(circuitAi.getSnapshot().failureRate * 100, 0, 100);
+    const dbFailureRate = clamp4(circuitDb.getSnapshot().failureRate * 100, 0, 100);
+    const exportFailureRate = clamp4(circuitExport.getSnapshot().failureRate * 100, 0, 100);
+    const errorRate = Math.max(aiFailureRate, dbFailureRate, exportFailureRate);
+    const cpu = roundMetric(cpuPercent, 2);
+    const ram = getRamPercent();
+    const dbLatency = roundMetric(lastDbLatencyMs, 2);
+    const aiLatency = roundMetric(getEffectiveAiLatencyMs(), 2);
+    const loopLag = roundMetric(getEventLoopLagMs(), 2);
+    let bottleneckType = "NONE";
+    const pressureScore = [
+      { type: "CPU", score: cpu / 100 },
+      { type: "RAM", score: ram / 100 },
+      { type: "DB", score: dbLatency / 1200 },
+      { type: "AI", score: aiLatency / 1500 },
+      { type: "EVENT_LOOP", score: loopLag / 180 },
+      { type: "ERRORS", score: errorRate / 10 }
+    ].sort((a, b) => b.score - a.score)[0];
+    if (pressureScore && pressureScore.score >= 0.5) {
+      bottleneckType = pressureScore.type;
+    }
+    return {
+      score: roundMetric(controlState.healthScore, 2),
+      mode: controlState.mode,
+      cpuPercent: cpu,
+      ramPercent: ram,
+      p95LatencyMs: roundMetric(p95LatencyMs, 2),
+      errorRate: roundMetric(errorRate, 2),
+      dbLatencyMs: dbLatency,
+      aiLatencyMs: aiLatency,
+      eventLoopLagMs: loopLag,
+      requestRate: roundMetric(reqRatePerSec, 2),
+      activeRequests,
+      queueLength: options.getSearchQueueLength(),
+      workerCount: controlState.workerCount,
+      maxWorkers: controlState.maxWorkers,
+      dbProtection: getDbProtection2(),
+      slowQueryCount,
+      dbConnections: Math.max(
+        0,
+        Number(options.pool.totalCount || 0) + Number(options.pool.waitingCount || 0)
+      ),
+      aiFailRate: roundMetric(aiFailureRate, 2),
+      bottleneckType,
+      updatedAt: controlState.updatedAt
+    };
+  }
+  function buildInternalMonitorAlerts2(snapshot) {
+    const alerts = [];
+    const timestamp2 = new Date(snapshot.updatedAt || Date.now()).toISOString();
+    const pushAlert = (severity, source, message) => {
+      alerts.push({
+        id: `${source.toLowerCase().replace(/[^a-z0-9_]/g, "_")}_${severity.toLowerCase()}`,
+        severity,
+        source,
+        message,
+        timestamp: timestamp2
+      });
+    };
+    if (snapshot.mode === "PROTECTION") {
+      pushAlert("CRITICAL", "MODE", "System is in PROTECTION mode. Heavy routes are restricted.");
+    } else if (snapshot.mode === "DEGRADED") {
+      pushAlert("WARNING", "MODE", "System is in DEGRADED mode. Throughput throttling is active.");
+    }
+    if (snapshot.cpuPercent >= 88) {
+      pushAlert("CRITICAL", "CPU", `CPU usage is critically high at ${snapshot.cpuPercent.toFixed(1)}%.`);
+    } else if (snapshot.cpuPercent >= 75) {
+      pushAlert("WARNING", "CPU", `CPU usage is elevated at ${snapshot.cpuPercent.toFixed(1)}%.`);
+    }
+    if (snapshot.ramPercent >= 92) {
+      pushAlert("CRITICAL", "RAM", `RAM usage is critically high at ${snapshot.ramPercent.toFixed(1)}%.`);
+    } else if (snapshot.ramPercent >= 80) {
+      pushAlert("WARNING", "RAM", `RAM usage is elevated at ${snapshot.ramPercent.toFixed(1)}%.`);
+    }
+    if (snapshot.dbLatencyMs >= 1e3) {
+      pushAlert("CRITICAL", "DB", `Database latency is critical (${snapshot.dbLatencyMs.toFixed(0)} ms).`);
+    } else if (snapshot.dbLatencyMs >= 400) {
+      pushAlert("WARNING", "DB", `Database latency is elevated (${snapshot.dbLatencyMs.toFixed(0)} ms).`);
+    }
+    if (snapshot.aiLatencyMs >= 1400) {
+      pushAlert("CRITICAL", "AI", `AI latency is critical (${snapshot.aiLatencyMs.toFixed(0)} ms).`);
+    } else if (snapshot.aiLatencyMs >= 700) {
+      pushAlert("WARNING", "AI", `AI latency is elevated (${snapshot.aiLatencyMs.toFixed(0)} ms).`);
+    }
+    if (snapshot.eventLoopLagMs >= 170) {
+      pushAlert("CRITICAL", "EVENT_LOOP", `Event loop lag is critical (${snapshot.eventLoopLagMs.toFixed(1)} ms).`);
+    } else if (snapshot.eventLoopLagMs >= 90) {
+      pushAlert("WARNING", "EVENT_LOOP", `Event loop lag is elevated (${snapshot.eventLoopLagMs.toFixed(1)} ms).`);
+    }
+    if (snapshot.errorRate >= 5) {
+      pushAlert("CRITICAL", "ERRORS", `Runtime failure rate is high (${snapshot.errorRate.toFixed(2)}%).`);
+    } else if (snapshot.errorRate >= 2) {
+      pushAlert("WARNING", "ERRORS", `Runtime failure rate is elevated (${snapshot.errorRate.toFixed(2)}%).`);
+    }
+    if (snapshot.queueLength >= 10) {
+      pushAlert("CRITICAL", "QUEUE", `Request queue is saturated (${snapshot.queueLength} pending).`);
+    } else if (snapshot.queueLength >= 5) {
+      pushAlert("WARNING", "QUEUE", `Request queue is growing (${snapshot.queueLength} pending).`);
+    }
+    if (snapshot.workerCount >= snapshot.maxWorkers && snapshot.maxWorkers > 0) {
+      pushAlert("WARNING", "WORKERS", `Worker capacity reached (${snapshot.workerCount}/${snapshot.maxWorkers}).`);
+    }
+    return alerts;
+  }
+  function appendIntelligenceValue(key, value) {
+    if (!Number.isFinite(value)) return;
+    const series = intelligenceHistory[key];
+    series.push(value);
+    if (series.length > MAX_INTELLIGENCE_HISTORY) {
+      series.splice(0, series.length - MAX_INTELLIGENCE_HISTORY);
+    }
+  }
+  function toIntelligenceSnapshot(snapshot) {
+    return {
+      timestamp: snapshot.updatedAt || Date.now(),
+      score: snapshot.score,
+      mode: snapshot.mode,
+      cpuPercent: snapshot.cpuPercent,
+      ramPercent: snapshot.ramPercent,
+      p95LatencyMs: snapshot.p95LatencyMs,
+      errorRate: snapshot.errorRate,
+      dbLatencyMs: snapshot.dbLatencyMs,
+      aiLatencyMs: snapshot.aiLatencyMs,
+      eventLoopLagMs: snapshot.eventLoopLagMs,
+      requestRate: snapshot.requestRate,
+      activeRequests: snapshot.activeRequests,
+      queueSize: snapshot.queueLength,
+      workerCount: snapshot.workerCount,
+      maxWorkers: snapshot.maxWorkers,
+      dbConnections: snapshot.dbConnections,
+      aiFailRate: snapshot.aiFailRate,
+      bottleneckType: snapshot.bottleneckType
+    };
+  }
+  async function runIntelligenceCycle() {
+    if (intelligenceInFlight) return;
+    intelligenceInFlight = true;
+    try {
+      const monitorSnapshot = computeInternalMonitorSnapshot2();
+      const snapshot = toIntelligenceSnapshot(monitorSnapshot);
+      appendIntelligenceValue("cpuPercent", snapshot.cpuPercent);
+      appendIntelligenceValue("p95LatencyMs", snapshot.p95LatencyMs);
+      appendIntelligenceValue("dbLatencyMs", snapshot.dbLatencyMs);
+      appendIntelligenceValue("errorRate", snapshot.errorRate);
+      appendIntelligenceValue("aiLatencyMs", snapshot.aiLatencyMs);
+      appendIntelligenceValue("queueSize", snapshot.queueSize);
+      appendIntelligenceValue("ramPercent", snapshot.ramPercent);
+      appendIntelligenceValue("requestRate", snapshot.requestRate);
+      appendIntelligenceValue("workerCount", snapshot.workerCount);
+      await options.evaluateSystem(snapshot, intelligenceHistory);
+    } catch (err) {
+      if (options.apiDebugLogs) {
+        console.warn("Intelligence cycle error:", err);
+      }
+    } finally {
+      intelligenceInFlight = false;
+    }
+  }
+  function getRequestRate2() {
+    return reqRatePerSec;
+  }
+  function getLatencyP952() {
+    return percentile(latencySamples, 95);
+  }
+  function getLocalCircuitSnapshots2() {
+    return {
+      ai: circuitAi.getSnapshot(),
+      db: circuitDb.getSnapshot(),
+      export: circuitExport.getSnapshot()
+    };
+  }
+  function recordGcEntries(entryCount) {
+    if (entryCount > 0) {
+      gcCountWindow += entryCount;
+    }
+  }
+  function recordRequestStarted2() {
+    activeRequests += 1;
+    requestCounter += 1;
+  }
+  function recordRequestFinished2(elapsedMs) {
+    activeRequests = Math.max(0, activeRequests - 1);
+    recordLatency(elapsedMs);
+  }
+  function attachGcObserver2() {
+    if (gcObserverAttached) return;
+    gcObserverAttached = true;
+    try {
+      gcObserver = new PerformanceObserver((list) => {
+        recordGcEntries(list.getEntries().length);
+      });
+      gcObserver.observe({ entryTypes: ["gc"] });
+    } catch {
+    }
+  }
+  function attachProcessMessageHandlers2({ onGracefulShutdown }) {
+    if (processHandlersAttached || typeof process.on !== "function") {
+      return;
+    }
+    processHandlersAttached = true;
+    process.on("message", (message) => {
+      if (!isControlStateMessage(message)) return;
+      applyControlState(message.payload);
+    });
+    process.on("message", (message) => {
+      if (!isGracefulShutdownMessage(message)) return;
+      setTimeout(() => {
+        onGracefulShutdown();
+      }, 50);
+    });
+  }
+  function startRuntimeLoops2({ clearSearchCache }) {
+    if (runtimeLoopHandle) return;
+    runtimeLoopHandle = setInterval(() => {
+      reqRatePerSec = requestCounter / 5;
+      requestCounter = 0;
+      gcPerMinute = gcCountWindow * 12;
+      gcCountWindow = 0;
+      const now = Date.now();
+      const currentCpu = process.cpuUsage();
+      const cpuDeltaMicros = currentCpu.user - lastCpuUsage.user + (currentCpu.system - lastCpuUsage.system);
+      const elapsedMs = Math.max(1, now - lastCpuTs);
+      const cpuCorePercent = cpuDeltaMicros / 1e3 / elapsedMs * 100;
+      cpuPercent = clamp4(cpuCorePercent / Math.max(1, controlState.workerCount || 1), 0, 100);
+      lastCpuUsage = currentCpu;
+      lastCpuTs = now;
+      if (typeof ipcProcess.send === "function") {
+        const mem2 = process.memoryUsage();
+        sendWorkerMessage({
+          type: "worker-metrics",
+          payload: {
+            workerId: Number(process.env.NODE_UNIQUE_ID || 0),
+            pid: process.pid,
+            cpuPercent,
+            reqRate: reqRatePerSec,
+            latencyP95Ms: percentile(latencySamples, 95),
+            eventLoopLagMs: getEventLoopLagMs(),
+            activeRequests,
+            queueLength: options.getSearchQueueLength(),
+            heapUsedMB: mem2.heapUsed / (1024 * 1024),
+            heapTotalMB: mem2.heapTotal / (1024 * 1024),
+            oldSpaceMB: mem2.heapUsed / (1024 * 1024),
+            gcPerMin: gcPerMinute,
+            dbLatencyMs: lastDbLatencyMs,
+            aiLatencyMs: getEffectiveAiLatencyMs(),
+            ts: Date.now(),
+            circuit: {
+              ai: { state: circuitAi.getState(), failureRate: circuitAi.getSnapshot().failureRate },
+              db: { state: circuitDb.getState(), failureRate: circuitDb.getSnapshot().failureRate },
+              export: { state: circuitExport.getState(), failureRate: circuitExport.getSnapshot().failureRate }
+            }
+          }
+        });
+      }
+      const mem = process.memoryUsage();
+      const heapRatio = mem.heapTotal > 0 ? mem.heapUsed / mem.heapTotal : 0;
+      if (heapRatio > 0.88) {
+        clearSearchCache();
+        sendWorkerMessage({ type: "worker-event", payload: { kind: "memory-pressure" } });
+        if (typeof runtimeGlobal.gc === "function" && activeRequests === 0) {
+          try {
+            runtimeGlobal.gc();
+          } catch {
+          }
+        }
+      }
+      void runIntelligenceCycle();
+    }, 5e3);
+    runtimeLoopHandle.unref();
+    void runIntelligenceCycle();
+  }
+  return {
+    attachGcObserver: attachGcObserver2,
+    attachProcessMessageHandlers: attachProcessMessageHandlers2,
+    buildInternalMonitorAlerts: buildInternalMonitorAlerts2,
+    computeInternalMonitorSnapshot: computeInternalMonitorSnapshot2,
+    getControlState: getControlState2,
+    getDbProtection: getDbProtection2,
+    getLatencyP95: getLatencyP952,
+    getLocalCircuitSnapshots: getLocalCircuitSnapshots2,
+    getRequestRate: getRequestRate2,
+    recordRequestFinished: recordRequestFinished2,
+    recordRequestStarted: recordRequestStarted2,
+    startRuntimeLoops: startRuntimeLoops2,
+    withAiCircuit: withAiCircuit2,
+    withDbCircuit: withDbCircuit2,
+    withExportCircuit: withExportCircuit2
+  };
+}
+
+// server/internal/wrapAsyncPrototypeMethods.ts
+function wrapAsyncPrototypeMethods(target, options) {
+  const prototype = Object.getPrototypeOf(target);
+  if (!prototype || typeof prototype !== "object") {
+    return;
+  }
+  const host = target;
+  for (const methodName of Object.getOwnPropertyNames(prototype)) {
+    if (options.exclude?.has(methodName)) {
+      continue;
+    }
+    const candidate = Reflect.get(target, methodName);
+    if (typeof candidate !== "function") {
+      continue;
+    }
+    const method = candidate;
+    if (method.constructor?.name !== "AsyncFunction") {
+      continue;
+    }
+    const original = method.bind(target);
+    host[methodName] = async (...args) => options.wrap(() => original(...args));
+  }
+}
+
+// server/internal/frontend-static.ts
+import express2 from "express";
+import fs2 from "fs";
+import path2 from "path";
+var DEFAULT_FRONTEND_PATHS = [
+  "dist-local/public",
+  "dist-local\\public",
+  "dist/public",
+  "dist\\public"
+];
+function registerFrontendStatic(app2, options) {
+  const cwd = options?.cwd || process.cwd();
+  const possiblePaths = options?.paths || DEFAULT_FRONTEND_PATHS;
+  console.log(`  Working directory: ${cwd}`);
+  let foundPath = null;
+  let foundIndex = null;
+  for (const relPath of possiblePaths) {
+    const fullPath = path2.resolve(cwd, relPath);
+    const indexFile = path2.join(fullPath, "index.html");
+    console.log(`  Checking: ${fullPath}`);
+    try {
+      if (fs2.existsSync(fullPath) && fs2.statSync(fullPath).isDirectory()) {
+        const files = fs2.readdirSync(fullPath);
+        const preview = files.slice(0, 5).join(", ");
+        console.log(`    Found ${files.length} files: ${preview}${files.length > 5 ? "..." : ""}`);
+        if (fs2.existsSync(indexFile)) {
+          foundPath = fullPath;
+          foundIndex = indexFile;
+          break;
+        }
+      }
+    } catch (error) {
+      console.log(`    Error: ${error.message}`);
+    }
+  }
+  if (foundPath && foundIndex) {
+    console.log(`  Frontend: Serving from ${foundPath}`);
+    app2.use(express2.static(foundPath));
+    app2.use((req, res, next) => {
+      if (req.path.startsWith("/api") || req.path.startsWith("/ws")) {
+        return next();
+      }
+      return res.sendFile(foundIndex);
+    });
+    console.log("  Frontend: OK");
+    return;
+  }
+  console.log("");
+  console.log("  ERROR: Frontend files not found!");
+  console.log("  Please run: npm run build:local");
+  console.log(`  Expected location: ${path2.resolve(cwd, "dist-local/public")}`);
+  app2.use((req, res) => {
+    if (!req.path.startsWith("/api") && !req.path.startsWith("/ws")) {
+      res.status(404).send(`
+          <html>
+            <body style="font-family: sans-serif; padding: 40px;">
+              <h1>Frontend Not Built</h1>
+              <p>Please run: <code>npm run build:local</code></p>
+              <p>Then restart the server.</p>
+            </body>
+          </html>
+        `);
+    }
+  });
+}
+
+// server/internal/idle-session-sweeper.ts
+import { WebSocket as WebSocket4 } from "ws";
+function startIdleSessionSweeper(options) {
+  const {
+    storage: storage2,
+    connectedClients: connectedClients2,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    defaultSessionTimeoutMinutes,
+    intervalMs = 6e4
+  } = options;
+  let running = false;
+  const handle = setInterval(async () => {
+    if (running) {
+      return;
+    }
+    running = true;
+    try {
+      const now = Date.now();
+      const activities = await storage2.getActiveActivities();
+      const runtimeSettings = await getRuntimeSettingsCached2();
+      const idleMinutes = Math.max(
+        1,
+        runtimeSettings.sessionTimeoutMinutes || runtimeSettings.wsIdleMinutes || defaultSessionTimeoutMinutes
+      );
+      const idleMs = idleMinutes * 60 * 1e3;
+      for (const activity of activities) {
+        if (!activity.lastActivityTime) {
+          continue;
+        }
+        const last = new Date(activity.lastActivityTime).getTime();
+        if (now - last <= idleMs) {
+          continue;
+        }
+        const freshActivity = await storage2.getActivityById(activity.id);
+        if (!freshActivity || freshActivity.isActive === false) {
+          continue;
+        }
+        const freshLast = freshActivity.lastActivityTime ? new Date(freshActivity.lastActivityTime).getTime() : 0;
+        if (!freshLast || now - freshLast <= idleMs) {
+          continue;
+        }
+        console.log(`IDLE TIMEOUT: ${activity.username} (${activity.id})`);
+        await storage2.updateActivity(activity.id, {
+          isActive: false,
+          logoutTime: /* @__PURE__ */ new Date(),
+          logoutReason: "IDLE_TIMEOUT"
+        });
+        const socket = connectedClients2.get(activity.id);
+        if (socket && socket.readyState === WebSocket4.OPEN) {
+          socket.send(JSON.stringify({
+            type: "idle_timeout",
+            reason: "Session expired due to inactivity"
+          }));
+          socket.close();
+        }
+        connectedClients2.delete(activity.id);
+        await storage2.clearCollectionNicknameSessionByActivity(activity.id);
+        await storage2.createAuditLog({
+          action: "SESSION_IDLE_TIMEOUT",
+          performedBy: activity.username,
+          details: `Auto logout after ${idleMinutes} minutes idle`
+        });
+      }
+    } catch (error) {
+      console.error("Idle session checker error:", error);
+    } finally {
+      running = false;
+    }
+  }, intervalMs);
+  handle.unref();
+  return handle;
+}
+
+// server/internal/server-startup.ts
+async function startLocalServer(options) {
+  const {
+    app: app2,
+    server: server2,
+    storage: storage2,
+    connectedClients: connectedClients2,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    defaultSessionTimeoutMinutes,
+    aiPrecomputeOnStart,
+    categoryStatsService: categoryStatsService2,
+    notifyFatalStartup,
+    port = parseInt(process.env.PORT || "5000", 10),
+    host = "0.0.0.0"
+  } = options;
+  console.log("");
+  console.log("=========================================");
+  console.log("  SQR - SUMBANGAN QUERY RAHMAH");
+  console.log("  Mode: Local (PostgreSQL Database)");
+  console.log("=========================================");
+  console.log("");
+  console.log("  Database: PostgreSQL - OK");
+  await storage2.init();
+  registerFrontendStatic(app2);
+  const idleSweeperHandle = startIdleSessionSweeper({
+    storage: storage2,
+    connectedClients: connectedClients2,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    defaultSessionTimeoutMinutes
+  });
+  server2.once("close", () => {
+    clearInterval(idleSweeperHandle);
+  });
+  server2.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      notifyFatalStartup("EADDRINUSE", `Port ${port} is already in use`);
+      console.error(`ERROR Port ${port} is already in use.`);
+      console.error("   This usually means a previous server process hasn't fully released the port yet.");
+      console.error(`   Please wait a few seconds and try again, or use: lsof -i :${port} (or netstat -ano | findstr :${port} on Windows)`);
+      setTimeout(() => process.exit(98), 10).unref();
+      return;
+    }
+    notifyFatalStartup("SERVER_STARTUP_ERROR", String(err?.message || err));
+    console.error("ERROR Server error:", err);
+    setTimeout(() => process.exit(1), 10).unref();
+  });
+  server2.listen(port, host, () => {
+    console.log("");
+    console.log("=========================================");
+    console.log(`  Server berjalan di port ${port}`);
+    console.log("");
+    console.log("  Buka browser:");
+    console.log(`    http://localhost:${port}`);
+    console.log("");
+    console.log("  Untuk akses dari PC lain (LAN):");
+    console.log(`    http://[IP-KOMPUTER]:${port}`);
+    console.log("=========================================");
+    console.log("");
+  });
+  if (!aiPrecomputeOnStart) {
+    return;
+  }
+  setTimeout(async () => {
+    try {
+      const result = await categoryStatsService2.warmCategoryStats();
+      if (result.skipped) {
+        console.log("OK Category stats already present. Skipping precompute.");
+        return;
+      }
+      console.log(`INFO Precomputing category stats (${result.computeKeys} key(s))...`);
+      console.log("OK Precomputed category stats.");
+    } catch (err) {
+      console.error("ERROR Precompute stats failed:", err?.message || err);
+    }
+  }, 0);
 }
 
 // server/index-local.ts
 var storage = new PostgresStorage();
-var importsRepository = new ImportsRepository();
-var searchRepository = new SearchRepository();
-var auditRepository = new AuditRepository();
-var analyticsRepository = new AnalyticsRepository();
-var backupsRepository = new BackupsRepository({
-  ensureBackupsTable: () => storage.ensureBackupsReady(),
-  parseBackupMetadataSafe: (raw) => storage.parseBackupMetadata(raw)
-});
-var importAnalysisService = new ImportAnalysisService(importsRepository);
-var app = express2();
+var app = express3();
 var server = createServer(app);
 var wss = new WebSocketServer({ server, path: "/ws" });
 var startupFatalReason = null;
+var workerIpcProcess = process;
 function notifyMasterFatalStartup(reason, details) {
   if (startupFatalReason) return;
   startupFatalReason = reason;
-  if (typeof process.send === "function") {
+  if (typeof workerIpcProcess.send === "function") {
     try {
-      process.send({
+      workerIpcProcess.send({
         type: "worker-fatal",
-        payload: { reason, details: details || "" }
+        payload: { reason, details: details ?? "" }
       });
     } catch {
     }
@@ -13469,25 +14188,13 @@ wss.on("error", (err) => {
   const code = String(err?.code || "");
   if (code === "EADDRINUSE") {
     notifyMasterFatalStartup("EADDRINUSE", "WebSocket server failed to bind address");
-    console.error("\xE2\x9D\u0152 WebSocket startup failed: port already in use.");
+    console.error("ERROR WebSocket startup failed: port already in use.");
     setTimeout(() => process.exit(98), 10).unref();
     return;
   }
-  console.error("\xE2\x9D\u0152 WebSocket server error:", err);
+  console.error("ERROR WebSocket server error:", err);
 });
 var JWT_SECRET = getSessionSecret();
-var websocketManager = createRuntimeWebSocketManager({
-  wss,
-  storage,
-  secret: JWT_SECRET
-});
-var { connectedClients, broadcastWsMessage } = websocketManager;
-var modularAuthGuards = createAuthGuards({ storage, secret: JWT_SECRET });
-var modularAuthenticateToken = modularAuthGuards.authenticateToken;
-var modularRequireRole = modularAuthGuards.requireRole;
-var modularRequireTabAccess = modularAuthGuards.requireTabAccess;
-var modularRequireMonitorAccess = modularAuthGuards.requireMonitorAccess;
-var clearModularTabVisibilityCache = modularAuthGuards.clearTabVisibilityCache;
 var DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
 var DEFAULT_WS_IDLE_MINUTES = 3;
 var DEFAULT_AI_TIMEOUT_MS = 6e3;
@@ -13545,306 +14252,31 @@ wrapAsyncPrototypeMethods(storage, {
   exclude: DB_METHOD_WRAP_EXCLUDE,
   wrap: withDbCircuit
 });
-var aiSearchService = new AiSearchService({
+var composition = createLocalServerComposition({
   storage,
+  wss,
+  secret: JWT_SECRET,
   withAiCircuit,
   ollamaChat,
   ollamaEmbed,
   defaultAiTimeoutMs: DEFAULT_AI_TIMEOUT_MS,
   lowMemoryMode: LOW_MEMORY_MODE
 });
-var categoryStatsService = new CategoryStatsService(storage);
-var aiChatService = new AiChatService({
-  storage,
+var {
+  aiSearchService,
   categoryStatsService,
-  withAiCircuit,
-  ollamaChat
+  connectedClients
+} = composition;
+var { adaptiveRateLimit, systemProtectionMiddleware, sweepAdaptiveRateState } = createApiProtectionMiddleware({
+  getControlState,
+  getDbProtection
 });
-var aiIndexService = new AiIndexService({
-  storage,
-  ollamaEmbed
+var { withAiConcurrencyGate } = createAiConcurrencyGate({
+  globalLimit: AI_GATE_GLOBAL_LIMIT,
+  queueLimit: AI_GATE_QUEUE_LIMIT,
+  queueWaitMs: AI_GATE_QUEUE_WAIT_MS,
+  roleLimits: AI_GATE_ROLE_LIMITS
 });
-attachGcObserver();
-function clamp4(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-function isHeavyRoute(pathname) {
-  return pathname.startsWith("/api/ai/") || pathname.startsWith("/api/imports") || pathname.startsWith("/api/search/advanced") || pathname.startsWith("/api/backups");
-}
-function getSearchQueueLength() {
-  const map = global.__searchInflightMap;
-  return map?.size ?? 0;
-}
-var adaptiveRateState = /* @__PURE__ */ new Map();
-function resolveAdaptiveRateBucket(req) {
-  const controlState = getControlState();
-  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim();
-  const method = String(req.method || "GET").toUpperCase();
-  const path4 = req.path || "/";
-  let bucketScope = "api";
-  let baseLimit = 40;
-  let minLimit = 8;
-  if (path4.startsWith("/api/ai/")) {
-    bucketScope = "ai";
-    baseLimit = 14;
-    minLimit = 4;
-  } else if (path4.startsWith("/api/activity/heartbeat")) {
-    bucketScope = "heartbeat";
-    baseLimit = 120;
-    minLimit = 20;
-  } else if (method === "GET" && (path4.startsWith("/api/collection/nicknames") || path4.startsWith("/api/collection/admin-groups"))) {
-    bucketScope = "collection-meta";
-    baseLimit = 120;
-    minLimit = 24;
-  }
-  const modePenalty = controlState.mode === "PROTECTION" ? 0.5 : controlState.mode === "DEGRADED" ? 0.75 : 1;
-  const throttle = clamp4(controlState.throttleFactor || 1, 0.2, 1.2);
-  const dynamicLimit = Math.max(minLimit, Math.floor(baseLimit * modePenalty * throttle));
-  return { bucketKey: `${ip}:${bucketScope}`, dynamicLimit };
-}
-function adaptiveRateLimit(req, res, next) {
-  const controlState = getControlState();
-  if (!req.path.startsWith("/api/")) return next();
-  const windowMs = 1e4;
-  const now = Date.now();
-  const { bucketKey, dynamicLimit } = resolveAdaptiveRateBucket(req);
-  const bucket = adaptiveRateState.get(bucketKey);
-  if (!bucket || now >= bucket.resetAt) {
-    adaptiveRateState.set(bucketKey, { count: 1, resetAt: now + windowMs });
-    return next();
-  }
-  bucket.count += 1;
-  if (bucket.count > dynamicLimit) {
-    return res.status(429).json({
-      message: "Too many requests under current system load.",
-      limit: dynamicLimit,
-      retryAfterMs: Math.max(0, bucket.resetAt - now),
-      mode: controlState.mode
-    });
-  }
-  return next();
-}
-function systemProtectionMiddleware(req, res, next) {
-  const controlState = getControlState();
-  if (!req.path.startsWith("/api/")) return next();
-  if (req.path.startsWith("/api/health") || req.path.startsWith("/api/maintenance-status")) {
-    return next();
-  }
-  const dbProtection = getDbProtection();
-  if (dbProtection && req.path.startsWith("/api/search/advanced")) {
-    return res.status(503).json({
-      message: "Advanced search is temporarily disabled to protect database stability.",
-      protection: true,
-      reason: "db_latency_high"
-    });
-  }
-  if (dbProtection && req.path.startsWith("/api/backups") && req.method !== "GET") {
-    return res.status(503).json({
-      message: "Export/backup write operations are temporarily disabled.",
-      protection: true,
-      reason: "db_latency_high"
-    });
-  }
-  if (controlState.rejectHeavyRoutes && isHeavyRoute(req.path)) {
-    return res.status(503).json({
-      message: "Route temporarily throttled by protection mode.",
-      protection: true,
-      mode: controlState.mode
-    });
-  }
-  return next();
-}
-attachProcessMessageHandlers({
-  onGracefulShutdown: () => {
-    server.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 25e3).unref();
-  }
-});
-startRuntimeLoops({
-  clearSearchCache: () => aiSearchService.clearSearchCache()
-});
-app.use("/api/imports", express2.json({ limit: IMPORT_BODY_LIMIT }));
-app.use("/api/imports", express2.urlencoded({ extended: true, limit: IMPORT_BODY_LIMIT }));
-app.use("/api/collection", express2.json({ limit: COLLECTION_BODY_LIMIT }));
-app.use("/api/collection", express2.urlencoded({ extended: true, limit: COLLECTION_BODY_LIMIT }));
-app.use(express2.json({ limit: DEFAULT_BODY_LIMIT }));
-app.use(express2.urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT }));
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-  next();
-});
-app.use("/uploads/collection-receipts", (_req, res) => {
-  return res.status(404).json({ ok: false, message: "Not found." });
-});
-app.use("/uploads", express2.static(UPLOADS_ROOT_DIR));
-app.use((req, res, next) => {
-  const start = process.hrtime.bigint();
-  recordRequestStarted();
-  res.on("finish", () => {
-    const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6;
-    recordRequestFinished(elapsedMs);
-  });
-  next();
-});
-app.use(adaptiveRateLimit);
-app.use(systemProtectionMiddleware);
-var aiGateSeq = 0;
-var aiGateInflightGlobal = 0;
-var aiGateInflightByRole = {
-  user: 0,
-  admin: 0,
-  superuser: 0
-};
-var aiGateQueue = [];
-function normalizeAiRole(role) {
-  if (role === "superuser") return "superuser";
-  if (role === "admin") return "admin";
-  return "user";
-}
-function getAiGateSnapshot(role) {
-  const safeRole = role ? normalizeAiRole(role) : "user";
-  return {
-    globalInFlight: aiGateInflightGlobal,
-    globalLimit: AI_GATE_GLOBAL_LIMIT,
-    queueSize: aiGateQueue.length,
-    queueLimit: AI_GATE_QUEUE_LIMIT,
-    role: safeRole,
-    roleInFlight: aiGateInflightByRole[safeRole],
-    roleLimit: AI_GATE_ROLE_LIMITS[safeRole]
-  };
-}
-function aiGateCanAcquire(role) {
-  return aiGateInflightGlobal < AI_GATE_GLOBAL_LIMIT && aiGateInflightByRole[role] < AI_GATE_ROLE_LIMITS[role];
-}
-function aiGateAcquire(role, route) {
-  aiGateInflightGlobal += 1;
-  aiGateInflightByRole[role] += 1;
-  return {
-    role,
-    route,
-    released: false
-  };
-}
-function aiGateRelease(lease) {
-  if (lease.released) return;
-  lease.released = true;
-  aiGateInflightGlobal = Math.max(0, aiGateInflightGlobal - 1);
-  aiGateInflightByRole[lease.role] = Math.max(0, aiGateInflightByRole[lease.role] - 1);
-  queueMicrotask(() => {
-    drainAiGateQueue();
-  });
-}
-function drainAiGateQueue() {
-  if (aiGateQueue.length === 0) return;
-  let progressed = true;
-  while (progressed && aiGateQueue.length > 0) {
-    progressed = false;
-    for (let i = 0; i < aiGateQueue.length; i += 1) {
-      const item = aiGateQueue[i];
-      if (!aiGateCanAcquire(item.role)) continue;
-      aiGateQueue.splice(i, 1);
-      clearTimeout(item.timeout);
-      progressed = true;
-      item.resolve({
-        lease: aiGateAcquire(item.role, item.route),
-        waitedMs: Math.max(0, Date.now() - item.enqueuedAt)
-      });
-      break;
-    }
-  }
-}
-function createAiGateError(message, code, status = 429) {
-  const err = new Error(message);
-  err.code = code;
-  err.status = status;
-  return err;
-}
-function acquireAiGate(role, route) {
-  if (aiGateCanAcquire(role)) {
-    return Promise.resolve({
-      lease: aiGateAcquire(role, route),
-      waitedMs: 0
-    });
-  }
-  if (aiGateQueue.length >= AI_GATE_QUEUE_LIMIT) {
-    return Promise.reject(
-      createAiGateError(
-        "AI queue is full. Please retry in a few seconds.",
-        "AI_GATE_QUEUE_FULL",
-        429
-      )
-    );
-  }
-  return new Promise((resolve, reject) => {
-    const id = ++aiGateSeq;
-    const timeout = setTimeout(() => {
-      const index = aiGateQueue.findIndex((item) => item.id === id);
-      if (index >= 0) {
-        aiGateQueue.splice(index, 1);
-      }
-      reject(
-        createAiGateError(
-          "AI queue wait timed out. Please retry.",
-          "AI_GATE_WAIT_TIMEOUT",
-          429
-        )
-      );
-    }, AI_GATE_QUEUE_WAIT_MS).unref();
-    aiGateQueue.push({
-      id,
-      role,
-      route,
-      enqueuedAt: Date.now(),
-      resolve,
-      reject,
-      timeout
-    });
-    drainAiGateQueue();
-  });
-}
-function withAiConcurrencyGate(route, handler) {
-  return async (req, res) => {
-    const role = normalizeAiRole(req.user?.role);
-    let acquired = null;
-    try {
-      acquired = await acquireAiGate(role, route);
-    } catch (error) {
-      const status = Number.isFinite(error?.status) ? Number(error.status) : 429;
-      const snapshot = getAiGateSnapshot(role);
-      return res.status(status).json({
-        message: error?.message || "AI queue is currently busy. Please retry shortly.",
-        gate: {
-          ...snapshot,
-          queueWaitMs: AI_GATE_QUEUE_WAIT_MS,
-          code: error?.code || "AI_GATE_BUSY"
-        }
-      });
-    }
-    const releaseOnce = () => {
-      if (!acquired) return;
-      aiGateRelease(acquired.lease);
-      acquired = null;
-    };
-    res.once("finish", releaseOnce);
-    res.once("close", releaseOnce);
-    res.setHeader("x-ai-gate-global-limit", String(AI_GATE_GLOBAL_LIMIT));
-    res.setHeader("x-ai-gate-inflight", String(aiGateInflightGlobal));
-    res.setHeader("x-ai-gate-queue-size", String(aiGateQueue.length));
-    if (acquired.waitedMs > 0) {
-      res.setHeader("x-ai-gate-wait-ms", String(Math.round(acquired.waitedMs)));
-    }
-    try {
-      await handler(req, res);
-    } finally {
-      releaseOnce();
-    }
-  };
-}
 var runtimeConfigManager = createRuntimeConfigManager({
   storage,
   secret: JWT_SECRET,
@@ -13865,167 +14297,58 @@ var {
   getMaintenanceStateCached,
   maintenanceGuard
 } = runtimeConfigManager;
-app.use(maintenanceGuard);
-registerSystemRoutes(app, {
-  authenticateToken: modularAuthenticateToken,
-  requireRole: modularRequireRole,
-  requireMonitorAccess: modularRequireMonitorAccess,
-  getMaintenanceStateCached,
-  computeInternalMonitorSnapshot,
-  buildInternalMonitorAlerts,
-  getControlState,
-  getDbProtection,
-  getRequestRate,
-  getLatencyP95,
-  getLocalCircuitSnapshots,
-  getIntelligenceExplainability,
-  injectChaos,
-  createAuditLog: (data) => storage.createAuditLog(data)
-});
-registerAuthRoutes(app, {
-  storage,
-  authenticateToken: modularAuthenticateToken,
-  requireRole: modularRequireRole,
-  connectedClients
-});
-registerActivityRoutes(app, {
-  storage,
-  authenticateToken: modularAuthenticateToken,
-  requireRole: modularRequireRole,
-  requireTabAccess: modularRequireTabAccess,
-  connectedClients
-});
-registerImportRoutes(app, {
-  storage,
-  importsRepository,
-  importAnalysisService,
-  authenticateToken: modularAuthenticateToken,
-  requireRole: modularRequireRole,
-  requireTabAccess: modularRequireTabAccess,
-  searchRateLimiter,
-  getRuntimeSettingsCached,
-  isDbProtected: getDbProtection
-});
-registerSearchRoutes(app, {
-  storage,
-  searchRepository,
-  authenticateToken: modularAuthenticateToken,
-  searchRateLimiter,
-  getRuntimeSettingsCached,
-  isDbProtected: getDbProtection
-});
-registerAiRoutes(app, {
-  storage,
-  authenticateToken: modularAuthenticateToken,
-  requireRole: modularRequireRole,
-  withAiConcurrencyGate,
-  getRuntimeSettingsCached,
+attachLocalRuntimeGlue({
+  server,
   aiSearchService,
-  categoryStatsService,
-  aiChatService,
-  aiIndexService,
-  getOllamaConfig,
-  defaultAiTimeoutMs: DEFAULT_AI_TIMEOUT_MS
+  attachGcObserver,
+  attachProcessMessageHandlers,
+  startRuntimeLoops,
+  sweepAdaptiveRateState
 });
-registerSettingsRoutes(app, {
-  storage,
-  authenticateToken: modularAuthenticateToken,
-  requireRole: modularRequireRole,
-  clearTabVisibilityCache: clearModularTabVisibilityCache,
-  invalidateRuntimeSettingsCache,
-  invalidateMaintenanceCache,
-  getMaintenanceStateCached,
-  broadcastWsMessage,
-  defaultAiTimeoutMs: DEFAULT_AI_TIMEOUT_MS
+registerLocalHttpPipeline(app, {
+  importBodyLimit: IMPORT_BODY_LIMIT,
+  collectionBodyLimit: COLLECTION_BODY_LIMIT,
+  defaultBodyLimit: DEFAULT_BODY_LIMIT,
+  uploadsRootDir: UPLOADS_ROOT_DIR,
+  recordRequestStarted,
+  recordRequestFinished,
+  adaptiveRateLimit,
+  systemProtectionMiddleware,
+  maintenanceGuard
 });
-registerOperationsRoutes(app, {
-  storage,
-  auditRepository,
-  backupsRepository,
-  analyticsRepository,
-  authenticateToken: modularAuthenticateToken,
-  requireRole: modularRequireRole,
-  requireTabAccess: modularRequireTabAccess,
+registerLocalServerRoutes({
+  app,
+  composition,
+  runtimeConfig: {
+    getRuntimeSettingsCached,
+    getMaintenanceStateCached,
+    invalidateRuntimeSettingsCache,
+    invalidateMaintenanceCache
+  },
+  runtimeMonitor: {
+    computeInternalMonitorSnapshot,
+    buildInternalMonitorAlerts,
+    getControlState,
+    getDbProtection,
+    getRequestRate,
+    getLatencyP95,
+    getLocalCircuitSnapshots
+  },
+  withAiConcurrencyGate,
   withExportCircuit,
-  isExportCircuitOpenError: (error) => error instanceof CircuitOpenError,
-  connectedClients
+  defaultAiTimeoutMs: DEFAULT_AI_TIMEOUT_MS
 });
-registerCollectionRoutes(app, {
-  storage,
-  authenticateToken: modularAuthenticateToken,
-  requireRole: modularRequireRole,
-  requireTabAccess: modularRequireTabAccess
-});
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, bucket] of adaptiveRateState.entries()) {
-    if (now >= bucket.resetAt + 6e4) {
-      adaptiveRateState.delete(ip);
-    }
-  }
-  aiSearchService.sweepCaches(now);
-}, 3e4).unref();
-app.use(errorHandler);
 async function startServer() {
-  console.log("");
-  console.log("=========================================");
-  console.log("  SQR - SUMBANGAN QUERY RAHMAH");
-  console.log("  Mode: Local (PostgreSQL Database)");
-  console.log("=========================================");
-  console.log("");
-  console.log("  Database: PostgreSQL - OK");
-  await storage.init();
-  if (AI_PRECOMPUTE_ON_START) {
-  }
-  registerFrontendStatic(app);
-  startIdleSessionSweeper({
+  await startLocalServer({
+    app,
+    server,
     storage,
     connectedClients,
     getRuntimeSettingsCached,
-    defaultSessionTimeoutMinutes: DEFAULT_SESSION_TIMEOUT_MINUTES
+    defaultSessionTimeoutMinutes: DEFAULT_SESSION_TIMEOUT_MINUTES,
+    aiPrecomputeOnStart: AI_PRECOMPUTE_ON_START,
+    categoryStatsService,
+    notifyFatalStartup: notifyMasterFatalStartup
   });
-  const PORT = parseInt(process.env.PORT || "5000", 10);
-  const HOST = "0.0.0.0";
-  server.on("error", (err) => {
-    if (err.code === "EADDRINUSE") {
-      notifyMasterFatalStartup("EADDRINUSE", `Port ${PORT} is already in use`);
-      console.error(`\xE2\x9D\u0152 Port ${PORT} is already in use.`);
-      console.error(`   This usually means a previous server process hasn't fully released the port yet.`);
-      console.error(`   Please wait a few seconds and try again, or use: lsof -i :${PORT} (or netstat -ano | findstr :${PORT} on Windows)`);
-      setTimeout(() => process.exit(98), 10).unref();
-    } else {
-      notifyMasterFatalStartup("SERVER_STARTUP_ERROR", String(err?.message || err));
-      console.error(`\xE2\x9D\u0152 Server error:`, err);
-      setTimeout(() => process.exit(1), 10).unref();
-    }
-  });
-  server.listen(PORT, HOST, () => {
-    console.log("");
-    console.log("=========================================");
-    console.log(`  Server berjalan di port ${PORT}`);
-    console.log("");
-    console.log("  Buka browser:");
-    console.log(`    http://localhost:${PORT}`);
-    console.log("");
-    console.log("  Untuk akses dari PC lain (LAN):");
-    console.log(`    http://[IP-KOMPUTER]:${PORT}`);
-    console.log("=========================================");
-    console.log("");
-  });
-  if (AI_PRECOMPUTE_ON_START) {
-    setTimeout(async () => {
-      try {
-        const result = await categoryStatsService.warmCategoryStats();
-        if (result.skipped) {
-          console.log("\xE2\u0153\u2026 Category stats already present. Skipping precompute.");
-          return;
-        }
-        console.log(`\xE2\x8F\xB1\xEF\xB8\x8F Precomputing category stats (${result.computeKeys} key(s))...`);
-        console.log("\xE2\u0153\u2026 Precomputed category stats.");
-      } catch (err) {
-        console.error("\xE2\x9D\u0152 Precompute stats failed:", err?.message || err);
-      }
-    }, 0);
-  }
 }
 startServer();

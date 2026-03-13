@@ -3,62 +3,15 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { LoadPredictor, type LoadTrendSnapshot } from "./internal/loadPredictor";
-
-type WorkerMetrics = {
-  workerId: number;
-  pid: number;
-  cpuPercent: number;
-  reqRate: number;
-  latencyP95Ms: number;
-  eventLoopLagMs: number;
-  activeRequests: number;
-  queueLength: number;
-  heapUsedMB: number;
-  heapTotalMB: number;
-  oldSpaceMB: number;
-  gcPerMin: number;
-  dbLatencyMs: number;
-  aiLatencyMs: number;
-  ts: number;
-  circuit: {
-    ai: { state: string; failureRate: number };
-    db: { state: string; failureRate: number };
-    export: { state: string; failureRate: number };
-  };
-};
-
-type WorkerControlState = {
-  mode: "NORMAL" | "DEGRADED" | "PROTECTION";
-  healthScore: number;
-  dbProtection: boolean;
-  rejectHeavyRoutes: boolean;
-  throttleFactor: number;
-  predictor: LoadTrendSnapshot;
-  workerCount: number;
-  maxWorkers: number;
-  queueLength: number;
-  preAllocateMB: number;
-  updatedAt: number;
-  workers: Array<{
-    workerId: number;
-    pid: number;
-    cpuPercent: number;
-    reqRate: number;
-    latencyP95Ms: number;
-    eventLoopLagMs: number;
-    activeRequests: number;
-    heapUsedMB: number;
-    oldSpaceMB: number;
-    dbLatencyMs: number;
-    aiLatencyMs: number;
-    ts: number;
-  }>;
-  circuits: {
-    aiOpenWorkers: number;
-    dbOpenWorkers: number;
-    exportOpenWorkers: number;
-  };
-};
+import {
+  isWorkerFatalMessage,
+  isWorkerMemoryPressureMessage,
+  isWorkerMetricsMessage,
+  type ControlStateMessage,
+  type GracefulShutdownMessage,
+  type WorkerControlState,
+  type WorkerMetricsPayload,
+} from "./internal/worker-ipc";
 
 type Aggregate = {
   cpuPercent: number;
@@ -81,7 +34,7 @@ const LOW_MEMORY_MODE = String(process.env.SQR_LOW_MEMORY_MODE ?? "1") === "1";
 const PREALLOCATE_MB = Number(process.env.SQR_PREALLOCATE_MB ?? (LOW_MEMORY_MODE ? "0" : "32"));
 const MAX_SPAWN_PER_CYCLE = 1;
 
-// 🔒 HARD CAP: Prevent uncontrolled worker spawning
+// HARD CAP: Prevent uncontrolled worker spawning
 const MAX_WORKERS = Math.min(4, os.cpus().length);
 const requestedMaxWorkers = Number(process.env.SQR_MAX_WORKERS ?? (LOW_MEMORY_MODE ? "1" : String(MAX_WORKERS)));
 const normalizedMaxWorkers = Number.isFinite(requestedMaxWorkers) ? Math.floor(requestedMaxWorkers) : 1;
@@ -100,7 +53,7 @@ const predictor = new LoadPredictor({
   sustainedMs: 30_000,
 });
 
-const workerMetrics = new Map<number, WorkerMetrics>();
+const workerMetrics = new Map<number, WorkerMetricsPayload>();
 const workerFatalReasons = new Map<number, string>();
 const wiredWorkers = new Set<number>();
 const intentionalExits = new Set<number>();
@@ -125,7 +78,7 @@ function round(value: number, digits = 2): number {
   return Math.round(value * p) / p;
 }
 
-// 🔒 Hard-capped max workers (production safety)
+// Hard-capped max workers (production safety)
 function getMaxWorkers() {
   return MAX_WORKERS_HARD_CAP;
 }
@@ -141,7 +94,7 @@ function getWorkers(): Worker[] {
 function shutdownMasterDueToFatalStartup(reason: string) {
   if (fatalShutdownScheduled) return;
   fatalShutdownScheduled = true;
-  console.error(`🛑 Cluster master shutting down due to unrecoverable startup error: ${reason}`);
+  console.error(`FATAL Cluster master shutting down due to unrecoverable startup error: ${reason}`);
   setTimeout(() => process.exit(1), 50).unref();
 }
 
@@ -264,29 +217,43 @@ function buildControlState(agg: Aggregate, trend: LoadTrendSnapshot): WorkerCont
   };
 }
 
+function toControlStateMessage(control: WorkerControlState): ControlStateMessage {
+  return {
+    type: "control-state",
+    payload: control,
+  };
+}
+
+function toGracefulShutdownMessage(reason: string): GracefulShutdownMessage {
+  return {
+    type: "graceful-shutdown",
+    reason,
+  };
+}
+
 function broadcastControl(control: WorkerControlState) {
   lastBroadcast = control;
   const workers = getWorkers();
 
   for (const worker of workers) {
-    // 🔒 SAFE SEND: Check worker is alive before sending IPC
+    // SAFE SEND: Check worker is alive before sending IPC
     if (!worker || !worker.isConnected() || worker.isDead()) {
       continue;
     }
 
     try {
-      worker.send({ type: "control-state", payload: control });
+      worker.send(toControlStateMessage(control));
     } catch (err) {
       // Silently skip if send fails (worker may have disconnected)
-      console.warn(`⚠ Failed to send control-state to worker#${worker.id}`);
+      console.warn(`WARN Failed to send control-state to worker#${worker.id}`);
     }
   }
 }
 
-// 🔒 SAFE FORK: Prevents uncontrolled spawn + adds error handling
+// SAFE FORK: Prevents uncontrolled spawn + adds error handling
 function safeFork(reason: string): Worker | null {
   if (fatalStartupLockReason) {
-    console.error(`⛔ Spawn blocked due to fatal startup condition: ${fatalStartupLockReason}`);
+    console.error(`BLOCKED Spawn blocked due to fatal startup condition: ${fatalStartupLockReason}`);
     return null;
   }
 
@@ -295,7 +262,7 @@ function safeFork(reason: string): Worker | null {
     if (now - lastRestartBlockLogAt > 5_000) {
       const remainingMs = Math.max(0, restartBlockedUntil - now);
       console.error(
-        `⛔ Restart temporarily blocked (${Math.ceil(remainingMs / 1000)}s left). Skipping spawn for: ${reason}`,
+        `BLOCKED Restart temporarily blocked (${Math.ceil(remainingMs / 1000)}s left). Skipping spawn for: ${reason}`,
       );
       lastRestartBlockLogAt = now;
     }
@@ -307,13 +274,13 @@ function safeFork(reason: string): Worker | null {
   const maxWorkers = getMaxWorkers();
 
   if (aliveWorkers.length >= maxWorkers) {
-    console.log(`⚠ Max workers (${maxWorkers}) reached. Skipping spawn for: ${reason}`);
+    console.log(`WARN Max workers (${maxWorkers}) reached. Skipping spawn for: ${reason}`);
     return null;
   }
 
   try {
     const worker = cluster.fork({ ...process.env, SQR_CLUSTER_WORKER: "1" });
-    console.log(`🧩 Spawn worker#${worker.id} (${reason})`);
+    console.log(`Spawn worker#${worker.id} (${reason})`);
 
     // Prevent IPC crash on worker errors
     worker.on("error", (err) => {
@@ -341,7 +308,7 @@ async function drainAndRestartWorker(worker: Worker, reason: string) {
   intentionalExits.add(worker.id);
   if (worker.isConnected() && !worker.isDead()) {
     try {
-      worker.send({ type: "graceful-shutdown", reason });
+      worker.send(toGracefulShutdownMessage(reason));
     } catch {
       // Ignore IPC send failure; timeout/kill fallback below will still apply.
     }
@@ -396,18 +363,18 @@ function evaluateScale() {
     cpuPercent: agg.cpuPercent,
   });
 
-  // 🔒 SCALE COOLDOWN: Prevent rapid spawn loops
+  // SCALE COOLDOWN: Prevent rapid spawn loops
   const now = Date.now();
   const timeSinceLastScale = now - lastScaleTime;
   const canScale = timeSinceLastScale >= SCALE_COOLDOWN_MS;
 
-  // 🔒 MEMORY PROTECTION: Skip scaling on high memory usage
+  // MEMORY PROTECTION: Skip scaling on high memory usage
   const memUsageMB = process.memoryUsage().rss / 1024 / 1024;
   const memoryScaleUpBlockMB = LOW_MEMORY_MODE ? 220 : 1200;
   const memoryPressureHigh = memUsageMB > memoryScaleUpBlockMB;
 
   if (memoryPressureHigh) {
-    console.log(`⚠ High memory (${Math.round(memUsageMB)}MB). Skipping scale up.`);
+    console.log(`WARN High memory (${Math.round(memUsageMB)}MB). Skipping scale up.`);
   }
 
   // Predictive actions before overload.
@@ -468,10 +435,9 @@ function wireWorker(worker: Worker) {
   if (wiredWorkers.has(worker.id)) return;
   wiredWorkers.add(worker.id);
 
-  worker.on("message", (msg: any) => {
-    if (!msg || typeof msg !== "object") return;
-    if (msg.type === "worker-fatal") {
-      const reason = String(msg.payload?.reason || "UNKNOWN_FATAL");
+  worker.on("message", (message: unknown) => {
+    if (isWorkerFatalMessage(message)) {
+      const reason = message.payload.reason || "UNKNOWN_FATAL";
       workerFatalReasons.set(worker.id, reason);
 
       if (reason === "EADDRINUSE") {
@@ -479,21 +445,21 @@ function wireWorker(worker: Worker) {
         restartBlockedUntil = Date.now() + RESTART_BLOCK_MS;
         lastRestartBlockLogAt = Date.now();
         console.error(
-          "🛑 Worker reported fatal startup error: EADDRINUSE. " +
+          "FATAL Worker reported fatal startup error: EADDRINUSE. " +
           "Auto-restart is disabled until process restart to prevent respawn loop."
         );
       } else {
-        console.error(`🛑 Worker reported fatal startup error: ${reason}`);
+        console.error(`FATAL Worker reported fatal startup error: ${reason}`);
       }
       return;
     }
 
-    if (msg.type === "worker-metrics" && msg.payload) {
-      const payload = msg.payload as WorkerMetrics;
+    if (isWorkerMetricsMessage(message)) {
+      const payload = message.payload;
       workerMetrics.set(worker.id, { ...payload, workerId: worker.id, pid: worker.process.pid ?? payload.pid });
       return;
     }
-    if (msg.type === "worker-event" && msg.payload?.kind === "memory-pressure") {
+    if (isWorkerMemoryPressureMessage(message)) {
       rollingRestartOne("worker-memory-pressure").catch(() => undefined);
     }
   });
@@ -522,7 +488,7 @@ function bootCluster() {
       // Safe send with connection check
       if (worker.isConnected() && !worker.isDead()) {
         try {
-          worker.send({ type: "control-state", payload: lastBroadcast });
+          worker.send(toControlStateMessage(lastBroadcast));
         } catch {
           // Ignore if send fails
         }
@@ -540,7 +506,7 @@ function bootCluster() {
     if (fatalReason === "EADDRINUSE") {
       fatalStartupLockReason = "EADDRINUSE";
       console.error(
-        `🛑 Worker#${worker.id} exited due to EADDRINUSE (port already in use). ` +
+        `FATAL Worker#${worker.id} exited due to EADDRINUSE (port already in use). ` +
         "Skipping automatic restart to prevent infinite respawn."
       );
       if (getWorkers().length === 0) {
@@ -554,7 +520,7 @@ function bootCluster() {
       intentionalExits.delete(worker.id);
       restartAttempts.delete(worker.id);
     } else {
-      // 🔒 Restart Throttling & Circuit Breaker: Prevent infinite loops
+      // Restart Throttling & Circuit Breaker: Prevent infinite loops
       const now = Date.now();
       const timeSinceLastSpawn = now - lastSpawnAttemptTime;
 
@@ -568,30 +534,30 @@ function bootCluster() {
         restartBlockedUntil = now + RESTART_BLOCK_MS;
         lastRestartBlockLogAt = now;
         console.error(
-          `❌ CRASH LOOP DETECTED: Worker#${worker.id} failed (code=${code}). ` +
+          `ERROR CRASH LOOP DETECTED: Worker#${worker.id} failed (code=${code}). ` +
           `Exceeded max restart attempts (${MAX_RESTART_ATTEMPTS}) within ${Math.round(RESTART_FAILURE_WINDOW_MS / 1000)}s. ` +
           `Pausing restarts for ${Math.round(RESTART_BLOCK_MS / 1000)}s. Check root cause (for example, EADDRINUSE).`
         );
         return;
       }
       
-      console.error(`❌ Worker#${worker.id} exited unexpectedly (code=${code}, signal=${signal}). Restarting...`);
+      console.error(`ERROR Worker#${worker.id} exited unexpectedly (code=${code}, signal=${signal}). Restarting...`);
       
-      // 🔒 Only allow ONE spawn attempt per RESTART_THROTTLE_MS period
+      // Only allow ONE spawn attempt per RESTART_THROTTLE_MS period
       // This prevents rapid respawning when multiple workers fail in succession
       if (timeSinceLastSpawn >= RESTART_THROTTLE_MS) {
         lastSpawnAttemptTime = now; // Mark spawn attempt NOW (before actual fork)
         const w = safeFork("unexpected-exit-restart");
         if (w) {
           wireWorker(w);
-          console.log(`  ✓ Spawned replacement worker in response to failure`);
+          console.log(`  OK Spawned replacement worker in response to failure`);
         } else {
-          console.log(`  ⚠ Failed to spawn replacement (hard cap or resource limit)`);
+          console.log(`  WARN Failed to spawn replacement (hard cap or resource limit)`);
         }
       } else {
         // We just spawned within the throttle window - don't spawn again yet
         const remainingDelay = RESTART_THROTTLE_MS - timeSinceLastSpawn;
-        console.log(`⏱  Throttling restart (${remainingDelay}ms) - spawn already attempted recently`);
+        console.log(`WAIT Throttling restart (${remainingDelay}ms) - spawn already attempted recently`);
       }
     }
 
@@ -615,17 +581,17 @@ function bootCluster() {
   });
 
   setInterval(evaluateScale, SCALE_INTERVAL_MS);
-  console.log(`🧠 Cluster master online. workers=${initialWorkers}/${getMaxWorkers()} (min=${getMinWorkers()})`);
+  console.log(`Cluster master online. workers=${initialWorkers}/${getMaxWorkers()} (min=${getMinWorkers()})`);
 }
 
-// 🔒 GLOBAL ERROR PROTECTION: Master must NEVER crash
+// GLOBAL ERROR PROTECTION: Master must NEVER crash
 process.on("uncaughtException", (err) => {
-  console.error("❌ Uncaught Exception in master:", err);
+  console.error("ERROR Uncaught Exception in master:", err);
   // Log but don't exit - cluster must survive
 });
 
 process.on("unhandledRejection", (reason, promise) => {
-  console.error("❌ Unhandled Rejection in master:", reason);
+  console.error("ERROR Unhandled Rejection in master:", reason);
   // Log but don't exit - cluster must survive
 });
 
