@@ -889,6 +889,44 @@ export class AuthAccountService {
     return this.storage.getManagedUsers();
   }
 
+  async deleteManagedUser(authUser: AuthenticatedUser | undefined, targetUserId: string) {
+    const actor = await this.requireSuperuser(authUser);
+    const target = await this.requireManageableTarget(targetUserId);
+
+    if (actor.id === target.id) {
+      throw new AuthAccountError(
+        403,
+        "PERMISSION_DENIED",
+        "Superuser cannot delete the current account from this action.",
+      );
+    }
+
+    const closedSessionIds = await this.invalidateUserSessions(target.username, "ACCOUNT_DELETED");
+    const deleted = await this.storage.deleteManagedUserAccount(target.id);
+
+    if (!deleted) {
+      throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
+    }
+
+    await this.storage.createAuditLog({
+      action: "ACCOUNT_DELETED",
+      performedBy: actor.username,
+      targetUser: target.id,
+      details: JSON.stringify({
+        metadata: {
+          deleted_role: target.role,
+          deleted_status: target.status,
+          was_banned: Boolean(target.isBanned),
+        },
+      }),
+    });
+
+    return {
+      user: target,
+      closedSessionIds,
+    };
+  }
+
   async createManagedUser(authUser: AuthenticatedUser | undefined, input: CreateManagedUserInput) {
     const actor = await this.requireSuperuser(authUser);
     const username = normalizeUsernameInput(input.username);

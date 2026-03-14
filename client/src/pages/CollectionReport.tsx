@@ -7,7 +7,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { BarChart3, FolderPlus, ListChecks, Settings2 } from "lucide-react";
+import { BarChart3, FolderPlus, ListChecks, Settings2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -34,6 +34,9 @@ const CollectionRecordsPage = lazy(
 const CollectionSummaryPage = lazy(
   () => import("@/pages/collection/CollectionSummaryPage"),
 );
+const CollectionNicknameSummaryPage = lazy(
+  () => import("@/pages/collection/CollectionNicknameSummaryPage"),
+);
 const ManageCollectionNicknamesPage = lazy(
   () => import("@/pages/collection/ManageCollectionNicknamesPage"),
 );
@@ -52,6 +55,7 @@ export default function CollectionReport() {
   const role = useMemo(() => getCurrentRole(), []);
   const currentUsername = useMemo(() => getCurrentUsername(), []);
   const isSuperuser = role === "superuser";
+  const canAccessNicknameSummary = role === "admin" || role === "superuser";
   const requiresNicknamePassword = role === "admin" || role === "user";
 
   const [subPage, setSubPage] = useState<CollectionSubPage>(() => {
@@ -74,6 +78,13 @@ export default function CollectionReport() {
       { key: "records", label: "View Rekod Collection", icon: ListChecks },
       { key: "summary", label: "Collection Summary", icon: BarChart3 },
     ];
+    if (canAccessNicknameSummary) {
+      items.push({
+        key: "nickname-summary",
+        label: "Nickname Summary",
+        icon: Users,
+      });
+    }
     if (isSuperuser) {
       items.push({
         key: "manage-nicknames",
@@ -82,7 +93,7 @@ export default function CollectionReport() {
       });
     }
     return items;
-  }, [isSuperuser]);
+  }, [canAccessNicknameSummary, isSuperuser]);
 
   const activeSidebarItem = useMemo(
     () => sidebarItems.find((item) => item.key === subPage) || sidebarItems[0],
@@ -95,12 +106,16 @@ export default function CollectionReport() {
       setSubPage("save");
       return;
     }
+    if (subPage === "nickname-summary" && !canAccessNicknameSummary) {
+      setSubPage("save");
+      return;
+    }
 
     const targetPath = getPathForSubPage(subPage);
     if (window.location.pathname.toLowerCase() !== targetPath.toLowerCase()) {
       window.history.replaceState({}, "", targetPath);
     }
-  }, [isSuperuser, subPage]);
+  }, [canAccessNicknameSummary, isSuperuser, subPage]);
 
   useEffect(() => {
     setMobileSidebarOpen(false);
@@ -183,6 +198,13 @@ export default function CollectionReport() {
       return (
         <Suspense fallback={<CollectionSectionFallback />}>
           <CollectionSummaryPage role={role} />
+        </Suspense>
+      );
+    }
+    if (subPage === "nickname-summary") {
+      return (
+        <Suspense fallback={<CollectionSectionFallback />}>
+          <CollectionNicknameSummaryPage role={role} />
         </Suspense>
       );
     }

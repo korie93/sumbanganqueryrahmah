@@ -8,6 +8,7 @@ interface CollectionRecordsTableProps {
   loadingRecords: boolean;
   visibleRecords: CollectionRecord[];
   paginatedRecords: CollectionRecord[];
+  pageOffset: number;
   canEdit: boolean;
   onViewReceipt: (record: CollectionRecord) => void;
   onEdit: (record: CollectionRecord) => void;
@@ -19,6 +20,7 @@ export function CollectionRecordsTable({
   loadingRecords,
   visibleRecords,
   paginatedRecords,
+  pageOffset,
   canEdit,
   onViewReceipt,
   onEdit,
@@ -27,13 +29,15 @@ export function CollectionRecordsTable({
 }: CollectionRecordsTableProps) {
   return (
     <div className="rounded-md border border-border/60 min-h-[420px] max-h-[64vh] overflow-auto">
-      <Table className="min-w-[1140px] text-sm">
+      <Table className="min-w-[1220px] text-sm">
         <TableHeader>
           <TableRow>
+            <TableHead className="sticky top-0 bg-background z-10 w-[72px]">No.</TableHead>
             <TableHead className="sticky top-0 bg-background z-10">Customer Name</TableHead>
             <TableHead className="sticky top-0 bg-background z-10">IC Number</TableHead>
             <TableHead className="sticky top-0 bg-background z-10">Account Number</TableHead>
             <TableHead className="sticky top-0 bg-background z-10">Customer Phone Number</TableHead>
+            <TableHead className="sticky top-0 bg-background z-10">Batch</TableHead>
             <TableHead className="sticky top-0 bg-background z-10">Amount</TableHead>
             <TableHead className="sticky top-0 bg-background z-10">Payment Date</TableHead>
             <TableHead className="sticky top-0 bg-background z-10">Receipt</TableHead>
@@ -44,27 +48,31 @@ export function CollectionRecordsTable({
         <TableBody>
           {loadingRecords ? (
             <TableRow>
-              <TableCell colSpan={9} className="text-center text-muted-foreground py-6">
+              <TableCell colSpan={11} className="text-center text-muted-foreground py-6">
                 Loading records...
               </TableCell>
             </TableRow>
           ) : visibleRecords.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={9} className="text-center text-muted-foreground py-6">
+              <TableCell colSpan={11} className="text-center text-muted-foreground py-6">
                 No collection records found.
               </TableCell>
             </TableRow>
           ) : (
-            paginatedRecords.map((record) => (
+            paginatedRecords.map((record, index) => (
               <TableRow key={record.id}>
+                <TableCell className="py-1.5 text-muted-foreground">
+                  {pageOffset + index + 1}
+                </TableCell>
                 <TableCell className="py-1.5">{record.customerName}</TableCell>
                 <TableCell className="py-1.5 whitespace-nowrap">{record.icNumber}</TableCell>
                 <TableCell className="py-1.5 whitespace-nowrap">{record.accountNumber}</TableCell>
                 <TableCell className="py-1.5 whitespace-nowrap">{record.customerPhone}</TableCell>
+                <TableCell className="py-1.5 whitespace-nowrap">{record.batch}</TableCell>
                 <TableCell className="py-1.5 whitespace-nowrap">{formatAmountRM(record.amount)}</TableCell>
                 <TableCell className="py-1.5 whitespace-nowrap">{record.paymentDate}</TableCell>
                 <TableCell className="py-1.5 whitespace-nowrap">
-                  {record.receiptFile ? (
+                  {(record.receipts?.length || 0) > 0 || record.receiptFile ? (
                     <Button
                       type="button"
                       variant="link"
@@ -73,7 +81,7 @@ export function CollectionRecordsTable({
                       onClick={() => onViewReceipt(record)}
                     >
                       <Eye className="w-3.5 h-3.5" />
-                      View
+                      {(record.receipts?.length || 0) > 1 ? `View (${record.receipts.length})` : "View"}
                     </Button>
                   ) : (
                     <span className="text-muted-foreground">-</span>

@@ -31,3 +31,20 @@ CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname
 
 CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone
   ON public.collection_records(customer_phone);
+
+CREATE TABLE IF NOT EXISTS public.collection_record_receipts (
+  id uuid PRIMARY KEY,
+  collection_record_id uuid NOT NULL,
+  storage_path text NOT NULL,
+  original_file_name text NOT NULL,
+  original_mime_type text NOT NULL,
+  original_extension text NOT NULL DEFAULT '',
+  file_size bigint NOT NULL DEFAULT 0,
+  created_at timestamp NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_record_receipts_record_storage_unique
+  ON public.collection_record_receipts(collection_record_id, storage_path);
+
+CREATE INDEX IF NOT EXISTS idx_collection_record_receipts_record_created_at
+  ON public.collection_record_receipts(collection_record_id, created_at ASC);

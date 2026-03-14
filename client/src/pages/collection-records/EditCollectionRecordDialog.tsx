@@ -1,11 +1,16 @@
 import type { ChangeEvent, MutableRefObject } from "react";
-import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { CollectionBatch, CollectionRecord, CollectionStaffNickname } from "@/lib/api";
+import type {
+  CollectionBatch,
+  CollectionRecord,
+  CollectionRecordReceipt,
+  CollectionStaffNickname,
+} from "@/lib/api";
+import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
 
 interface EditCollectionRecordDialogProps {
   open: boolean;
@@ -22,8 +27,8 @@ interface EditCollectionRecordDialogProps {
   editPaymentDate: string;
   editAmount: string;
   editStaffNickname: string;
-  editReceiptFile: File | null;
-  editRemoveReceipt: boolean;
+  editNewReceiptFiles: File[];
+  editRemovedReceiptIds: string[];
   editReceiptInputRef: MutableRefObject<HTMLInputElement | null>;
   onOpenChange: (open: boolean) => void;
   onCustomerNameChange: (value: string) => void;
@@ -35,8 +40,10 @@ interface EditCollectionRecordDialogProps {
   onAmountChange: (value: string) => void;
   onStaffNicknameChange: (value: string) => void;
   onReceiptChange: (event: ChangeEvent<HTMLInputElement>) => void;
-  onClearReceipt: () => void;
-  onToggleRemoveReceipt: () => void;
+  onRemovePendingReceipt: (index: number) => void;
+  onClearPendingReceipts: () => void;
+  onToggleRemoveExistingReceipt: (receiptId: string) => void;
+  onViewExistingReceipt: (receipt: CollectionRecordReceipt) => void;
   onSave: () => void;
 }
 
@@ -55,8 +62,8 @@ export function EditCollectionRecordDialog({
   editPaymentDate,
   editAmount,
   editStaffNickname,
-  editReceiptFile,
-  editRemoveReceipt,
+  editNewReceiptFiles,
+  editRemovedReceiptIds,
   editReceiptInputRef,
   onOpenChange,
   onCustomerNameChange,
@@ -68,13 +75,15 @@ export function EditCollectionRecordDialog({
   onAmountChange,
   onStaffNicknameChange,
   onReceiptChange,
-  onClearReceipt,
-  onToggleRemoveReceipt,
+  onRemovePendingReceipt,
+  onClearPendingReceipts,
+  onToggleRemoveExistingReceipt,
+  onViewExistingReceipt,
   onSave,
 }: EditCollectionRecordDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-auto">
         <DialogHeader>
           <DialogTitle>Edit Collection Record</DialogTitle>
         </DialogHeader>
@@ -177,47 +186,20 @@ export function EditCollectionRecordDialog({
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label>Receipt Upload</Label>
-            <input
-              ref={editReceiptInputRef}
-              type="file"
-              accept=".jpg,.jpeg,.png,.pdf"
-              className="hidden"
-              onChange={onReceiptChange}
-              disabled={savingEdit || editRemoveReceipt}
+            <CollectionReceiptPanel
+              pendingFiles={editNewReceiptFiles}
+              inputRef={editReceiptInputRef}
+              existingReceipts={editingRecord?.receipts || []}
+              removedReceiptIds={editRemovedReceiptIds}
+              disabled={savingEdit}
+              onFileChange={onReceiptChange}
+              onRemovePending={onRemovePendingReceipt}
+              onClearPending={onClearPendingReceipts}
+              onViewExisting={onViewExistingReceipt}
+              onToggleRemoveExisting={onToggleRemoveExistingReceipt}
+              uploadLabel="Add Receipt One by One"
+              helperText="Receipt sedia ada kekal dipautkan sehingga anda pilih untuk membuangnya. Receipt baru akan ditambah pada rekod yang sama."
             />
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => editReceiptInputRef.current?.click()}
-                disabled={savingEdit || editRemoveReceipt}
-              >
-                Upload Resit Bayaran
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={onClearReceipt}
-                disabled={savingEdit || !editReceiptFile}
-              >
-                <RotateCcw className="w-4 h-4 mr-2" />
-                Clear
-              </Button>
-              {editingRecord?.receiptFile ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={editRemoveReceipt ? "secondary" : "outline"}
-                  onClick={onToggleRemoveReceipt}
-                  disabled={savingEdit}
-                >
-                  {editRemoveReceipt ? "Receipt will be removed" : "Remove existing receipt"}
-                </Button>
-              ) : null}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Sila upload resit bayaran daripada customer (optional). Format: JPG, PNG, PDF
-            </p>
           </div>
         </div>
         <DialogFooter>

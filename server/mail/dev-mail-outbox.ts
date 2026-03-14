@@ -195,6 +195,46 @@ export async function listDevMailPreviews(limit = 25): Promise<DevMailOutboxPrev
   }
 }
 
+export async function deleteDevMailPreview(previewId: string): Promise<boolean> {
+  if (!isDevMailOutboxEnabled()) {
+    return false;
+  }
+
+  const normalizedId = String(previewId || "").trim();
+  if (!DEV_OUTBOX_ID_PATTERN.test(normalizedId)) {
+    return false;
+  }
+
+  try {
+    await rm(buildPreviewFilePath(normalizedId));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function clearDevMailOutbox(): Promise<number> {
+  if (!isDevMailOutboxEnabled()) {
+    return 0;
+  }
+
+  try {
+    const outboxDir = getDevMailOutboxDir();
+    const entries = (await readdir(outboxDir)).filter((name) => DEV_OUTBOX_FILE_PATTERN.test(name));
+    if (entries.length === 0) {
+      return 0;
+    }
+
+    const results = await Promise.allSettled(
+      entries.map((entry) => rm(path.join(outboxDir, entry), { force: true })),
+    );
+
+    return results.filter((result) => result.status === "fulfilled").length;
+  } catch {
+    return 0;
+  }
+}
+
 export function renderDevMailPreviewHtml(record: {
   createdAt: string;
   html: string;

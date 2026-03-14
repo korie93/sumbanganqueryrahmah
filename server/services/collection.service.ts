@@ -92,6 +92,18 @@ export class CollectionService {
     return this.recordService.listRecords(user, query);
   }
 
+  getPurgeSummary(user: AuthenticatedUser | undefined) {
+    return this.recordService.getPurgeSummary(user);
+  }
+
+  getNicknameSummary(user: AuthenticatedUser | undefined, query: ListQuery) {
+    return this.recordService.getNicknameSummary(user, query);
+  }
+
+  purgeOldRecords(user: AuthenticatedUser | undefined, bodyRaw?: unknown) {
+    return this.recordService.purgeOldRecords(user, bodyRaw);
+  }
+
   updateRecord(user: AuthenticatedUser | undefined, idRaw: unknown, bodyRaw: unknown) {
     return this.recordService.updateRecord(user, idRaw, bodyRaw);
   }

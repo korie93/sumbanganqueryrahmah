@@ -38,10 +38,12 @@ export type CollectionCreatePayload = {
   amount?: number | string;
   collectionStaffNickname?: string;
   receipt?: CollectionReceiptPayload | null;
+  receipts?: CollectionReceiptPayload[] | null;
 };
 
 export type CollectionUpdatePayload = Partial<CollectionCreatePayload> & {
   removeReceipt?: boolean;
+  removeReceiptIds?: unknown;
 };
 
 export type CollectionNicknamePayload = {

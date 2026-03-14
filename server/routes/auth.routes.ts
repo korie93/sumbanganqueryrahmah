@@ -8,6 +8,8 @@ import { asyncHandler } from "../http/async-handler";
 import { ensureObject } from "../http/validation";
 import { parseBrowser } from "../lib/browser";
 import {
+  clearDevMailOutbox,
+  deleteDevMailPreview,
   isDevMailOutboxEnabled,
   listDevMailPreviews,
   readDevMailPreview,
@@ -431,6 +433,25 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     }),
   );
 
+  app.delete(
+    "/api/admin/users/:id",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute(async (req) => {
+      const result = await authAccountService.deleteManagedUser(req.user, req.params.id);
+      closeActivitySockets(
+        result.closedSessionIds,
+        "Account deleted by superuser.",
+      );
+
+      return {
+        ok: true,
+        deleted: true,
+        user: buildUserPayload(result.user),
+      };
+    }),
+  );
+
   app.patch(
     "/api/admin/users/:id/role",
     authenticateToken,
@@ -538,6 +559,58 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
         ok: true,
         enabled: isDevMailOutboxEnabled(),
         previews: await listDevMailPreviews(25),
+      };
+    }),
+  );
+
+  app.delete(
+    "/api/admin/dev-mail-outbox/:previewId",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute(async (req) => {
+      const deleted = await deleteDevMailPreview(req.params.previewId);
+      if (!deleted) {
+        throw new AuthAccountError(404, "MAIL_PREVIEW_NOT_FOUND", "Mail preview not found.");
+      }
+
+      if (req.user) {
+        await storage.createAuditLog({
+          action: "DEV_MAIL_OUTBOX_ENTRY_DELETED",
+          performedBy: req.user.username,
+          targetResource: req.params.previewId,
+          details: "Local mail outbox preview deleted.",
+        });
+      }
+
+      return {
+        ok: true,
+        deleted: true,
+      };
+    }),
+  );
+
+  app.delete(
+    "/api/admin/dev-mail-outbox",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute(async (req) => {
+      const deletedCount = await clearDevMailOutbox();
+
+      if (req.user) {
+        await storage.createAuditLog({
+          action: "DEV_MAIL_OUTBOX_CLEARED",
+          performedBy: req.user.username,
+          details: JSON.stringify({
+            metadata: {
+              deleted_count: deletedCount,
+            },
+          }),
+        });
+      }
+
+      return {
+        ok: true,
+        deletedCount,
       };
     }),
   );

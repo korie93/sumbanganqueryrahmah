@@ -1,4 +1,4 @@
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import type { CollectionMonthlySummary } from "@/lib/api";
 import { formatAmountRM } from "@/pages/collection/utils";
 
@@ -15,38 +15,45 @@ export function CollectionSummaryTable({
   selectedMonth,
   onSelectMonth,
 }: CollectionSummaryTableProps) {
+  if (loading) {
+    return (
+      <div className="rounded-md border border-border/60 px-4 py-10 text-center text-sm text-muted-foreground">
+        Loading summary...
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-md border border-border/60 overflow-hidden">
-      <Table className="text-sm">
-        <TableHeader>
-          <TableRow>
-            <TableHead>Month</TableHead>
-            <TableHead>Total Records</TableHead>
-            <TableHead>Total Amount</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {loading ? (
-            <TableRow>
-              <TableCell colSpan={3} className="text-center text-muted-foreground py-6">
-                Loading summary...
-              </TableCell>
-            </TableRow>
-          ) : (
-            summaryRows.map((row) => (
-              <TableRow
-                key={row.month}
-                className={`cursor-pointer ${selectedMonth === row.month ? "bg-primary/10" : ""}`}
-                onClick={() => onSelectMonth(row.month)}
-              >
-                <TableCell className="font-medium">{row.monthName}</TableCell>
-                <TableCell>{row.totalRecords}</TableCell>
-                <TableCell>{formatAmountRM(row.totalAmount)}</TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+    <div className="rounded-md border border-border/60 p-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold">Monthly Navigation</p>
+          <p className="text-xs text-muted-foreground">
+            Klik nama bulan untuk buka popup senarai collection bagi bulan tersebut.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {summaryRows.map((row) => {
+          const active = selectedMonth === row.month;
+          return (
+            <Button
+              key={row.month}
+              type="button"
+              variant={active ? "default" : "outline"}
+              className="h-auto items-start justify-between gap-3 px-3 py-3 text-left"
+              onClick={() => onSelectMonth(row.month)}
+            >
+              <div className="space-y-1">
+                <p className="text-sm font-semibold">{row.monthName}</p>
+                <p className="text-xs opacity-80">{row.totalRecords} record(s)</p>
+              </div>
+              <span className="text-xs font-medium">{formatAmountRM(row.totalAmount)}</span>
+            </Button>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -13,12 +13,17 @@ import {
   deleteCollectionRecord,
   fetchCollectionReceiptBlob,
   getCollectionNicknames,
+  getCollectionPurgeSummary,
   getCollectionRecords,
+  purgeOldCollectionRecords,
   updateCollectionRecord,
   type CollectionBatch,
+  type CollectionPurgeSummaryResponse,
   type CollectionRecord,
+  type CollectionRecordReceipt,
   type CollectionStaffNickname,
 } from "@/lib/api";
+import { optimizeImageBlobForPreview } from "@/pages/collection-records/preview";
 import type { ReceiptPreviewKind } from "@/pages/collection-records/types";
 import {
   inferReceiptMimeTypeFromName,
@@ -44,7 +49,13 @@ type RecordFilters = {
   to?: string;
   search?: string;
   nickname?: string;
+  limit?: number;
+  offset?: number;
 };
+
+function cloneReceiptIds(receiptIds: string[]) {
+  return Array.from(new Set(receiptIds.map((value) => String(value || "").trim()).filter(Boolean)));
+}
 
 export function useCollectionRecordsController({
   role,
@@ -55,6 +66,8 @@ export function useCollectionRecordsController({
   const isMountedRef = useRef(true);
   const recordsRequestIdRef = useRef(0);
   const nicknamesRequestIdRef = useRef(0);
+  const purgeSummaryRequestIdRef = useRef(0);
+  const viewAllRequestIdRef = useRef(0);
   const receiptPreviewRequestIdRef = useRef(0);
   const skipInitialAutoFetchRef = useRef(true);
   const skipNextAutoFetchRef = useRef(false);
@@ -62,6 +75,7 @@ export function useCollectionRecordsController({
   const canEdit = role === "user" || role === "admin" || role === "superuser";
   const canDeleteGlobal = role === "admin" || role === "superuser" || role === "user";
   const canUseNicknameFilter = role === "admin" || role === "superuser";
+  const canPurgeOldRecords = role === "superuser";
 
   const [records, setRecords] = useState<CollectionRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
@@ -84,8 +98,8 @@ export function useCollectionRecordsController({
   const [editPaymentDate, setEditPaymentDate] = useState("");
   const [editAmount, setEditAmount] = useState("");
   const [editStaffNickname, setEditStaffNickname] = useState("");
-  const [editReceiptFile, setEditReceiptFile] = useState<File | null>(null);
-  const [editRemoveReceipt, setEditRemoveReceipt] = useState(false);
+  const [editNewReceiptFiles, setEditNewReceiptFiles] = useState<File[]>([]);
+  const [editRemovedReceiptIds, setEditRemovedReceiptIds] = useState<string[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
 
   const [pendingDeleteRecord, setPendingDeleteRecord] =
@@ -94,11 +108,23 @@ export function useCollectionRecordsController({
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [viewAllLoading, setViewAllLoading] = useState(false);
   const [viewAllRecords, setViewAllRecords] = useState<CollectionRecord[]>([]);
+  const [viewAllFiltersSnapshot, setViewAllFiltersSnapshot] = useState<RecordFilters | null>(null);
+  const [viewAllPage, setViewAllPage] = useState(1);
+  const [viewAllPageSize, setViewAllPageSize] = useState(10);
+  const [viewAllTotalRecords, setViewAllTotalRecords] = useState(0);
+  const [viewAllTotalAmount, setViewAllTotalAmount] = useState(0);
   const [tablePage, setTablePage] = useState(1);
   const [tablePageSize, setTablePageSize] = useState(50);
+  const [purgeDialogOpen, setPurgeDialogOpen] = useState(false);
+  const [purgeSummaryLoading, setPurgeSummaryLoading] = useState(false);
+  const [purgingOldRecords, setPurgingOldRecords] = useState(false);
+  const [purgeSummary, setPurgeSummary] = useState<CollectionPurgeSummaryResponse | null>(null);
+  const [purgePasswordInput, setPurgePasswordInput] = useState("");
+
   const [receiptPreviewOpen, setReceiptPreviewOpen] = useState(false);
   const [receiptPreviewRecord, setReceiptPreviewRecord] =
     useState<CollectionRecord | null>(null);
+  const [receiptPreviewReceiptId, setReceiptPreviewReceiptId] = useState<string | null>(null);
   const [receiptPreviewLoading, setReceiptPreviewLoading] = useState(false);
   const [receiptPreviewDownloading, setReceiptPreviewDownloading] = useState(false);
   const [receiptPreviewSource, setReceiptPreviewSource] = useState("");
@@ -108,25 +134,41 @@ export function useCollectionRecordsController({
 
   const deferredSearchInput = useDeferredValue(searchInput);
 
+  const selectedPreviewReceipt = useMemo(() => {
+    if (!receiptPreviewRecord) return null;
+    if (!receiptPreviewReceiptId) return receiptPreviewRecord.receipts?.[0] || null;
+    return (
+      receiptPreviewRecord.receipts?.find((receipt) => receipt.id === receiptPreviewReceiptId) ||
+      receiptPreviewRecord.receipts?.[0] ||
+      null
+    );
+  }, [receiptPreviewReceiptId, receiptPreviewRecord]);
+
   const receiptPreviewKind = useMemo<ReceiptPreviewKind>(
     () =>
       resolveReceiptPreviewKind({
-        mimeType: receiptPreviewMimeType,
-        fileName: receiptPreviewFileName,
+        mimeType: receiptPreviewMimeType || selectedPreviewReceipt?.originalMimeType || "",
+        fileName: receiptPreviewFileName || selectedPreviewReceipt?.originalFileName || "",
         receiptPath: receiptPreviewRecord?.receiptFile || "",
       }),
-    [receiptPreviewFileName, receiptPreviewMimeType, receiptPreviewRecord?.receiptFile],
+    [
+      receiptPreviewFileName,
+      receiptPreviewMimeType,
+      receiptPreviewRecord?.receiptFile,
+      selectedPreviewReceipt?.originalFileName,
+      selectedPreviewReceipt?.originalMimeType,
+    ],
   );
 
   const visibleRecords = records;
   const summary = useMemo(() => computeSummary(records), [records]);
-  const viewAllSummary = useMemo(
-    () => computeSummary(viewAllRecords),
-    [viewAllRecords],
-  );
   const totalPages = useMemo(
     () => Math.max(1, Math.ceil(visibleRecords.length / tablePageSize)),
     [tablePageSize, visibleRecords.length],
+  );
+  const viewAllTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(viewAllTotalRecords / viewAllPageSize)),
+    [viewAllPageSize, viewAllTotalRecords],
   );
   const paginatedRecords = useMemo(() => {
     const start = (tablePage - 1) * tablePageSize;
@@ -136,7 +178,7 @@ export function useCollectionRecordsController({
   const pagedEnd = Math.min(visibleRecords.length, tablePage * tablePageSize);
 
   const buildCurrentFilters = useCallback(
-    (searchValue = searchInput.trim()): RecordFilters => ({
+    (searchValue = searchInput.trim(), limit = 1000, offset = 0): RecordFilters => ({
       from: fromDate || undefined,
       to: toDate || undefined,
       search: searchValue || undefined,
@@ -144,6 +186,8 @@ export function useCollectionRecordsController({
         canUseNicknameFilter && nicknameFilter !== "all"
           ? nicknameFilter
           : undefined,
+      limit,
+      offset,
     }),
     [canUseNicknameFilter, fromDate, nicknameFilter, searchInput, toDate],
   );
@@ -160,6 +204,7 @@ export function useCollectionRecordsController({
     clearReceiptPreviewObjectUrl();
     setReceiptPreviewOpen(false);
     setReceiptPreviewRecord(null);
+    setReceiptPreviewReceiptId(null);
     setReceiptPreviewLoading(false);
     setReceiptPreviewDownloading(false);
     setReceiptPreviewSource("");
@@ -211,6 +256,28 @@ export function useCollectionRecordsController({
     }
   }, [toast]);
 
+  const loadPurgeSummary = useCallback(async () => {
+    if (!canPurgeOldRecords) return;
+
+    const requestId = ++purgeSummaryRequestIdRef.current;
+    setPurgeSummaryLoading(true);
+    try {
+      const response = await getCollectionPurgeSummary();
+      if (!isMountedRef.current || requestId !== purgeSummaryRequestIdRef.current) return;
+      setPurgeSummary(response);
+    } catch (error: unknown) {
+      if (!isMountedRef.current || requestId !== purgeSummaryRequestIdRef.current) return;
+      toast({
+        title: "Failed to Load Purge Summary",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
+    } finally {
+      if (!isMountedRef.current || requestId !== purgeSummaryRequestIdRef.current) return;
+      setPurgeSummaryLoading(false);
+    }
+  }, [canPurgeOldRecords, toast]);
+
   const loadRecords = useCallback(
     async (filters?: RecordFilters) => {
       const requestId = ++recordsRequestIdRef.current;
@@ -242,6 +309,11 @@ export function useCollectionRecordsController({
   useEffect(() => {
     void loadNicknames();
   }, [loadNicknames]);
+
+  useEffect(() => {
+    if (!canPurgeOldRecords) return;
+    void loadPurgeSummary();
+  }, [canPurgeOldRecords, loadPurgeSummary]);
 
   useEffect(() => {
     const trimmedSearch = deferredSearchInput.trim();
@@ -289,169 +361,18 @@ export function useCollectionRecordsController({
       });
       return;
     }
+
     await loadRecords(buildCurrentFilters());
   }, [buildCurrentFilters, fromDate, loadRecords, toDate, toast]);
 
-  const handleResetFilter = useCallback(async () => {
+  const handleResetFilter = useCallback(() => {
     skipNextAutoFetchRef.current = true;
     setFromDate("");
     setToDate("");
     setSearchInput("");
     setNicknameFilter("all");
-    await loadRecords();
+    void loadRecords();
   }, [loadRecords]);
-
-  const handleOpenViewAll = useCallback(async () => {
-    if (!fromDate || !toDate) {
-      toast({
-        title: "Tarikh Diperlukan",
-        description: "Sila pilih From Date dan To Date terlebih dahulu.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!isValidDate(fromDate) || !isValidDate(toDate) || fromDate > toDate) {
-      toast({
-        title: "Validation Error",
-        description: "Date range tidak sah.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setViewAllLoading(true);
-    try {
-      const response = await getCollectionRecords({ from: fromDate, to: toDate });
-      if (!isMountedRef.current) return;
-      setViewAllRecords(Array.isArray(response?.records) ? response.records : []);
-      setViewAllOpen(true);
-    } catch (error: unknown) {
-      if (!isMountedRef.current) return;
-      toast({
-        title: "Failed to Load Full Listing",
-        description: parseApiError(error),
-        variant: "destructive",
-      });
-    } finally {
-      if (!isMountedRef.current) return;
-      setViewAllLoading(false);
-    }
-  }, [fromDate, toDate, toast]);
-
-  const handleReceiptPreviewOpenChange = useCallback(
-    (open: boolean) => {
-      if (open) {
-        setReceiptPreviewOpen(true);
-        return;
-      }
-      closeReceiptPreview();
-    },
-    [closeReceiptPreview],
-  );
-
-  const handleViewReceipt = useCallback(
-    async (record: CollectionRecord) => {
-      if (!record.receiptFile) return;
-
-      const requestId = ++receiptPreviewRequestIdRef.current;
-      clearReceiptPreviewObjectUrl();
-      setReceiptPreviewRecord(record);
-      setReceiptPreviewOpen(true);
-      setReceiptPreviewLoading(true);
-      setReceiptPreviewDownloading(false);
-      setReceiptPreviewSource("");
-      setReceiptPreviewMimeType("");
-      setReceiptPreviewFileName("");
-      setReceiptPreviewError("");
-
-      try {
-        const { blob, mimeType, fileName } = await fetchCollectionReceiptBlob(
-          record.id,
-          "view",
-        );
-        const normalizedFileName = fileName || `receipt-${record.id}`;
-        const normalizedMimeType =
-          String(mimeType || "").toLowerCase() ||
-          inferReceiptMimeTypeFromName(normalizedFileName) ||
-          inferReceiptMimeTypeFromName(record.receiptFile || "");
-
-        const previewBlob =
-          normalizedMimeType && blob.type !== normalizedMimeType
-            ? new Blob([blob], { type: normalizedMimeType })
-            : blob;
-
-        const objectUrl = URL.createObjectURL(previewBlob);
-        if (
-          !isMountedRef.current ||
-          requestId !== receiptPreviewRequestIdRef.current
-        ) {
-          URL.revokeObjectURL(objectUrl);
-          return;
-        }
-
-        receiptPreviewUrlRef.current = objectUrl;
-        setReceiptPreviewSource(objectUrl);
-        setReceiptPreviewMimeType(normalizedMimeType || previewBlob.type || "");
-        setReceiptPreviewFileName(normalizedFileName);
-      } catch (error: unknown) {
-        if (
-          !isMountedRef.current ||
-          requestId !== receiptPreviewRequestIdRef.current
-        ) {
-          return;
-        }
-
-        const message = parseApiError(error);
-        const expectedKind = resolveReceiptPreviewKind({
-          fileName: record.receiptFile || "",
-          receiptPath: record.receiptFile || "",
-        });
-        if (expectedKind === "pdf") {
-          setReceiptPreviewError(
-            "PDF preview is unavailable. You can still download the file.",
-          );
-        } else if (message.toLowerCase().includes("preview not available")) {
-          setReceiptPreviewError("Preview not available for this file type.");
-        } else {
-          setReceiptPreviewError(message);
-        }
-      } finally {
-        if (
-          !isMountedRef.current ||
-          requestId !== receiptPreviewRequestIdRef.current
-        ) {
-          return;
-        }
-        setReceiptPreviewLoading(false);
-      }
-    },
-    [clearReceiptPreviewObjectUrl],
-  );
-
-  const handleDownloadReceipt = useCallback(async () => {
-    if (!receiptPreviewRecord || receiptPreviewDownloading) return;
-
-    setReceiptPreviewDownloading(true);
-    try {
-      const { blob, fileName } = await fetchCollectionReceiptBlob(
-        receiptPreviewRecord.id,
-        "download",
-      );
-      downloadBlob(
-        blob,
-        fileName || receiptPreviewFileName || `receipt-${receiptPreviewRecord.id}`,
-      );
-    } catch (error: unknown) {
-      toast({
-        title: "Download Failed",
-        description: parseApiError(error),
-        variant: "destructive",
-      });
-    } finally {
-      if (!isMountedRef.current) return;
-      setReceiptPreviewDownloading(false);
-    }
-  }, [receiptPreviewDownloading, receiptPreviewFileName, receiptPreviewRecord, toast]);
 
   const openEditDialog = useCallback((record: CollectionRecord) => {
     setEditingRecord(record);
@@ -463,39 +384,221 @@ export function useCollectionRecordsController({
     setEditPaymentDate(record.paymentDate);
     setEditAmount(String(record.amount));
     setEditStaffNickname(record.collectionStaffNickname);
-    setEditReceiptFile(null);
-    setEditRemoveReceipt(false);
-    setEditOpen(true);
-  }, []);
-
-  const handleEditReceiptChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0] || null;
-      if (!file) {
-        setEditReceiptFile(null);
-        return;
-      }
-      const error = validateReceiptFile(file);
-      if (error) {
-        toast({
-          title: "Validation Error",
-          description: error,
-          variant: "destructive",
-        });
-        event.target.value = "";
-        return;
-      }
-      setEditReceiptFile(file);
-    },
-    [toast],
-  );
-
-  const handleClearEditReceipt = useCallback(() => {
-    setEditReceiptFile(null);
+    setEditNewReceiptFiles([]);
+    setEditRemovedReceiptIds([]);
     if (editReceiptInputRef.current) {
       editReceiptInputRef.current.value = "";
     }
+    setEditOpen(true);
   }, []);
+
+  const handleEditReceiptChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    event.target.value = "";
+    if (!file) return;
+
+    const error = validateReceiptFile(file);
+    if (error) {
+      toast({
+        title: "Validation Error",
+        description: error,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setEditNewReceiptFiles((previous) => [...previous, file]);
+  }, [toast]);
+
+  const closeViewAll = useCallback(() => {
+    viewAllRequestIdRef.current += 1;
+    setViewAllOpen(false);
+    setViewAllLoading(false);
+    setViewAllRecords([]);
+    setViewAllFiltersSnapshot(null);
+    setViewAllPage(1);
+    setViewAllPageSize(10);
+    setViewAllTotalRecords(0);
+    setViewAllTotalAmount(0);
+  }, []);
+
+  const handleOpenViewAll = useCallback(() => {
+    if (viewAllLoading) return;
+    setViewAllPage(1);
+    setViewAllFiltersSnapshot(buildCurrentFilters(searchInput.trim(), viewAllPageSize, 0));
+    setViewAllOpen(true);
+  }, [buildCurrentFilters, searchInput, viewAllLoading, viewAllPageSize]);
+
+  const handleOpenPurgeDialog = useCallback(() => {
+    if (!canPurgeOldRecords || purgingOldRecords) return;
+    void loadPurgeSummary();
+    setPurgePasswordInput("");
+    setPurgeDialogOpen(true);
+  }, [canPurgeOldRecords, loadPurgeSummary, purgingOldRecords]);
+
+  const handlePurgeDialogOpenChange = useCallback((open: boolean) => {
+    setPurgeDialogOpen(open);
+    if (!open) {
+      setPurgePasswordInput("");
+    }
+  }, []);
+
+  const handleViewReceipt = useCallback((record: CollectionRecord, receiptId?: string) => {
+    const nextReceiptId = receiptId || record.receipts?.[0]?.id || null;
+    setReceiptPreviewRecord(record);
+    setReceiptPreviewReceiptId(nextReceiptId);
+    setReceiptPreviewOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (!receiptPreviewOpen || !receiptPreviewRecord) return;
+
+    const activeRequestId = ++receiptPreviewRequestIdRef.current;
+    const selectedReceiptId = selectedPreviewReceipt?.id || null;
+
+    const loadPreview = async () => {
+      setReceiptPreviewLoading(true);
+      setReceiptPreviewError("");
+      clearReceiptPreviewObjectUrl();
+
+      try {
+        const { blob, mimeType, fileName } = await fetchCollectionReceiptBlob(
+          receiptPreviewRecord.id,
+          "view",
+          selectedReceiptId,
+        );
+        if (!isMountedRef.current || activeRequestId !== receiptPreviewRequestIdRef.current) {
+          return;
+        }
+
+        const effectiveMimeType =
+          mimeType ||
+          selectedPreviewReceipt?.originalMimeType ||
+          inferReceiptMimeTypeFromName(fileName || "");
+        const previewBlob =
+          effectiveMimeType.startsWith("image/")
+            ? await optimizeImageBlobForPreview(blob)
+            : blob;
+        if (!isMountedRef.current || activeRequestId !== receiptPreviewRequestIdRef.current) {
+          return;
+        }
+
+        const objectUrl = URL.createObjectURL(previewBlob);
+        if (!isMountedRef.current || activeRequestId !== receiptPreviewRequestIdRef.current) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+        receiptPreviewUrlRef.current = objectUrl;
+        setReceiptPreviewSource(objectUrl);
+        setReceiptPreviewMimeType(
+          previewBlob.type || effectiveMimeType || "application/octet-stream",
+        );
+        setReceiptPreviewFileName(
+          fileName ||
+            selectedPreviewReceipt?.originalFileName ||
+            receiptPreviewRecord.receiptFile ||
+            "",
+        );
+      } catch (error: unknown) {
+        if (!isMountedRef.current || activeRequestId !== receiptPreviewRequestIdRef.current) {
+          return;
+        }
+        setReceiptPreviewSource("");
+        setReceiptPreviewMimeType(
+          selectedPreviewReceipt?.originalMimeType ||
+            inferReceiptMimeTypeFromName(selectedPreviewReceipt?.originalFileName || ""),
+        );
+        setReceiptPreviewFileName(
+          selectedPreviewReceipt?.originalFileName || receiptPreviewRecord.receiptFile || "",
+        );
+        setReceiptPreviewError(parseApiError(error));
+      } finally {
+        if (!isMountedRef.current || activeRequestId !== receiptPreviewRequestIdRef.current) {
+          return;
+        }
+        setReceiptPreviewLoading(false);
+      }
+    };
+
+    void loadPreview();
+  }, [
+    clearReceiptPreviewObjectUrl,
+    receiptPreviewOpen,
+    receiptPreviewRecord,
+    selectedPreviewReceipt,
+  ]);
+
+  useEffect(() => {
+    if (!viewAllOpen || !viewAllFiltersSnapshot) return;
+
+    const requestId = ++viewAllRequestIdRef.current;
+    setViewAllLoading(true);
+
+    const loadViewAllPage = async () => {
+      try {
+        const response = await getCollectionRecords({
+          ...viewAllFiltersSnapshot,
+          limit: viewAllPageSize,
+          offset: (viewAllPage - 1) * viewAllPageSize,
+        });
+        if (!isMountedRef.current || requestId !== viewAllRequestIdRef.current) return;
+        setViewAllRecords(Array.isArray(response?.records) ? response.records : []);
+        setViewAllTotalRecords(Number(response?.total || 0));
+        setViewAllTotalAmount(Number(response?.totalAmount || 0));
+      } catch (error: unknown) {
+        if (!isMountedRef.current || requestId !== viewAllRequestIdRef.current) return;
+        setViewAllRecords([]);
+        setViewAllTotalRecords(0);
+        setViewAllTotalAmount(0);
+        toast({
+          title: "Failed to Load Full Records",
+          description: parseApiError(error),
+          variant: "destructive",
+        });
+      } finally {
+        if (!isMountedRef.current || requestId !== viewAllRequestIdRef.current) return;
+        setViewAllLoading(false);
+      }
+    };
+
+    void loadViewAllPage();
+  }, [toast, viewAllFiltersSnapshot, viewAllOpen, viewAllPage, viewAllPageSize]);
+
+  const handleDownloadReceipt = useCallback(async () => {
+    if (!receiptPreviewRecord || receiptPreviewDownloading) return;
+    setReceiptPreviewDownloading(true);
+    try {
+      const { blob, fileName } = await fetchCollectionReceiptBlob(
+        receiptPreviewRecord.id,
+        "download",
+        selectedPreviewReceipt?.id,
+      );
+      downloadBlob(
+        blob,
+        fileName ||
+          selectedPreviewReceipt?.originalFileName ||
+          receiptPreviewRecord.receiptFile ||
+          "receipt",
+      );
+    } catch (error: unknown) {
+      toast({
+        title: "Download Failed",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
+    } finally {
+      if (!isMountedRef.current) return;
+      setReceiptPreviewDownloading(false);
+    }
+  }, [receiptPreviewDownloading, receiptPreviewRecord, selectedPreviewReceipt, toast]);
+
+  const handleReceiptPreviewOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      closeReceiptPreview();
+    } else {
+      setReceiptPreviewOpen(true);
+    }
+  }, [closeReceiptPreview]);
 
   const handleSaveEdit = useCallback(async () => {
     if (!editingRecord || savingEdit) return;
@@ -573,14 +676,6 @@ export function useCollectionRecordsController({
         return;
       }
     }
-    if (editReceiptFile && editRemoveReceipt) {
-      toast({
-        title: "Validation Error",
-        description: "Pilih sama ada upload resit baru atau remove resit lama.",
-        variant: "destructive",
-      });
-      return;
-    }
 
     setSavingEdit(true);
     try {
@@ -598,9 +693,20 @@ export function useCollectionRecordsController({
         payload.collectionStaffNickname = normalizedEditNickname;
       }
 
-      if (editRemoveReceipt) payload.removeReceipt = true;
-      if (!editRemoveReceipt && editReceiptFile) {
-        payload.receipt = await toReceiptPayload(editReceiptFile);
+      const removeReceiptIds = cloneReceiptIds(editRemovedReceiptIds);
+      if (removeReceiptIds.length > 0) {
+        payload.removeReceiptIds = removeReceiptIds;
+      }
+      if (
+        (editingRecord.receipts?.length || 0) > 0 &&
+        removeReceiptIds.length === (editingRecord.receipts?.length || 0)
+      ) {
+        payload.removeReceipt = true;
+      }
+      if (editNewReceiptFiles.length > 0) {
+        payload.receipts = await Promise.all(
+          editNewReceiptFiles.map((file) => toReceiptPayload(file)),
+        );
       }
 
       await updateCollectionRecord(editingRecord.id, payload);
@@ -611,7 +717,12 @@ export function useCollectionRecordsController({
       if (!isMountedRef.current) return;
       setEditOpen(false);
       setEditingRecord(null);
-      await loadRecords(buildCurrentFilters());
+      setEditNewReceiptFiles([]);
+      setEditRemovedReceiptIds([]);
+      await Promise.all([
+        loadRecords(buildCurrentFilters()),
+        canPurgeOldRecords ? loadPurgeSummary() : Promise.resolve(),
+      ]);
     } catch (error: unknown) {
       if (!isMountedRef.current) return;
       toast({
@@ -631,11 +742,13 @@ export function useCollectionRecordsController({
     editCustomerName,
     editCustomerPhone,
     editIcNumber,
+    editNewReceiptFiles,
     editPaymentDate,
-    editReceiptFile,
-    editRemoveReceipt,
+    editRemovedReceiptIds,
     editStaffNickname,
     editingRecord,
+    canPurgeOldRecords,
+    loadPurgeSummary,
     loadRecords,
     nicknameOptions,
     savingEdit,
@@ -653,7 +766,10 @@ export function useCollectionRecordsController({
       });
       if (!isMountedRef.current) return;
       setPendingDeleteRecord(null);
-      await loadRecords(buildCurrentFilters());
+      await Promise.all([
+        loadRecords(buildCurrentFilters()),
+        canPurgeOldRecords ? loadPurgeSummary() : Promise.resolve(),
+      ]);
     } catch (error: unknown) {
       if (!isMountedRef.current) return;
       toast({
@@ -665,7 +781,48 @@ export function useCollectionRecordsController({
       if (!isMountedRef.current) return;
       setDeletingId(null);
     }
-  }, [buildCurrentFilters, deletingId, loadRecords, pendingDeleteRecord, toast]);
+  }, [buildCurrentFilters, canPurgeOldRecords, deletingId, loadPurgeSummary, loadRecords, pendingDeleteRecord, toast]);
+
+  const handleConfirmPurgeOldRecords = useCallback(async () => {
+    if (!canPurgeOldRecords || purgingOldRecords) return;
+    if (!purgePasswordInput) {
+      toast({
+        title: "Password Required",
+        description: "Masukkan password login superuser untuk teruskan purge.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setPurgingOldRecords(true);
+    try {
+      const response = await purgeOldCollectionRecords(purgePasswordInput);
+      toast({
+        title: response.deletedRecords > 0 ? "Purge Completed" : "No Old Records Found",
+        description:
+          response.deletedRecords > 0
+            ? `${response.deletedRecords} rekod collection lama berjaya dipadam.`
+            : "Tiada rekod collection melebihi enam bulan untuk dipurge.",
+      });
+      if (!isMountedRef.current) return;
+      setPurgeDialogOpen(false);
+      setPurgePasswordInput("");
+      await Promise.all([
+        loadRecords(buildCurrentFilters()),
+        loadPurgeSummary(),
+      ]);
+    } catch (error: unknown) {
+      if (!isMountedRef.current) return;
+      toast({
+        title: "Failed to Purge Old Records",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
+    } finally {
+      if (!isMountedRef.current) return;
+      setPurgingOldRecords(false);
+    }
+  }, [buildCurrentFilters, canPurgeOldRecords, loadPurgeSummary, loadRecords, purgePasswordInput, purgingOldRecords, toast]);
 
   const handleExportExcel = useCallback(async () => {
     if (visibleRecords.length === 0 || exportingExcel) {
@@ -759,6 +916,7 @@ export function useCollectionRecordsController({
     canEdit,
     canDeleteGlobal,
     canUseNicknameFilter,
+    canPurgeOldRecords,
     filters: {
       fromDate,
       toDate,
@@ -777,6 +935,7 @@ export function useCollectionRecordsController({
     table: {
       visibleRecords,
       paginatedRecords,
+      pageOffset: Math.max(0, (tablePage - 1) * tablePageSize),
       summary,
       loadingRecords,
       pagedStart,
@@ -799,6 +958,16 @@ export function useCollectionRecordsController({
       viewAllLoading,
       exportingExcel,
       exportingPdf,
+      canPurgeOldRecords,
+      purgeSummaryLoading,
+      purgingOldRecords,
+      purgeSummary: purgeSummary
+        ? {
+            cutoffDate: purgeSummary.cutoffDate,
+            eligibleRecords: purgeSummary.eligibleRecords,
+            totalAmount: purgeSummary.totalAmount,
+          }
+        : null,
       pagedStart,
       pagedEnd,
       visibleRecordsLength: visibleRecords.length,
@@ -806,6 +975,7 @@ export function useCollectionRecordsController({
       totalPages,
       tablePageSize,
       onOpenViewAll: () => void handleOpenViewAll(),
+      onOpenPurgeDialog: () => void handleOpenPurgeDialog(),
       onExportExcel: () => void handleExportExcel(),
       onExportPdf: () => void handleExportPdf(),
       onTablePageSizeChange: setTablePageSize,
@@ -816,6 +986,8 @@ export function useCollectionRecordsController({
     receiptPreview: {
       open: receiptPreviewOpen,
       record: receiptPreviewRecord,
+      receipts: receiptPreviewRecord?.receipts || [],
+      selectedReceiptId: selectedPreviewReceipt?.id || null,
       loading: receiptPreviewLoading,
       downloading: receiptPreviewDownloading,
       source: receiptPreviewSource,
@@ -823,6 +995,7 @@ export function useCollectionRecordsController({
       error: receiptPreviewError,
       kind: receiptPreviewKind,
       onOpenChange: handleReceiptPreviewOpenChange,
+      onSelectReceipt: setReceiptPreviewReceiptId,
       onDownload: () => void handleDownloadReceipt(),
       onClose: closeReceiptPreview,
     },
@@ -841,8 +1014,8 @@ export function useCollectionRecordsController({
       editPaymentDate,
       editAmount,
       editStaffNickname,
-      editReceiptFile,
-      editRemoveReceipt,
+      editNewReceiptFiles,
+      editRemovedReceiptIds,
       editReceiptInputRef,
       onOpenChange: setEditOpen,
       onCustomerNameChange: setEditCustomerName,
@@ -854,8 +1027,23 @@ export function useCollectionRecordsController({
       onAmountChange: setEditAmount,
       onStaffNicknameChange: setEditStaffNickname,
       onReceiptChange: handleEditReceiptChange,
-      onClearReceipt: handleClearEditReceipt,
-      onToggleRemoveReceipt: () => setEditRemoveReceipt((previous) => !previous),
+      onRemovePendingReceipt: (index: number) =>
+        setEditNewReceiptFiles((previous) => previous.filter((_, itemIndex) => itemIndex !== index)),
+      onClearPendingReceipts: () => {
+        setEditNewReceiptFiles([]);
+        if (editReceiptInputRef.current) {
+          editReceiptInputRef.current.value = "";
+        }
+      },
+      onToggleRemoveExistingReceipt: (receiptId: string) =>
+        setEditRemovedReceiptIds((previous) => {
+          const normalized = cloneReceiptIds(previous);
+          return normalized.includes(receiptId)
+            ? normalized.filter((value) => value !== receiptId)
+            : [...normalized, receiptId];
+        }),
+      onViewExistingReceipt: (receipt: CollectionRecordReceipt) =>
+        editingRecord ? handleViewReceipt(editingRecord, receipt.id) : undefined,
       onSave: () => void handleSaveEdit(),
     },
     deleteDialog: {
@@ -866,13 +1054,47 @@ export function useCollectionRecordsController({
       },
       onConfirm: () => void handleConfirmDelete(),
     },
+    purgeDialog: {
+      open: purgeDialogOpen,
+      loading: purgeSummaryLoading,
+      purging: purgingOldRecords,
+      passwordInput: purgePasswordInput,
+      summary: purgeSummary
+        ? {
+            cutoffDate: purgeSummary.cutoffDate,
+            eligibleRecords: purgeSummary.eligibleRecords,
+            totalAmount: purgeSummary.totalAmount,
+          }
+        : null,
+      onOpenChange: handlePurgeDialogOpenChange,
+      onPasswordInputChange: setPurgePasswordInput,
+      onConfirm: () => void handleConfirmPurgeOldRecords(),
+    },
     viewAll: {
       open: viewAllOpen,
+      loading: viewAllLoading,
       fromDate,
       toDate,
       records: viewAllRecords,
-      summary: viewAllSummary,
-      onOpenChange: setViewAllOpen,
+      summary: {
+        totalRecords: viewAllTotalRecords,
+        totalAmount: viewAllTotalAmount,
+      },
+      page: viewAllPage,
+      pageSize: viewAllPageSize,
+      totalPages: viewAllTotalPages,
+      onOpenChange: (open: boolean) => {
+        if (!open) {
+          closeViewAll();
+        } else {
+          setViewAllOpen(true);
+        }
+      },
+      onPageChange: setViewAllPage,
+      onPageSizeChange: (nextPageSize: number) => {
+        setViewAllPageSize(nextPageSize);
+        setViewAllPage(1);
+      },
       onViewReceipt: (record: CollectionRecord) => void handleViewReceipt(record),
     },
   };

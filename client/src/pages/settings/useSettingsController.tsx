@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
   type ActivationDeliveryPayload,
+  clearDevMailOutboxPreviews,
   createManagedUserAccount,
+  deleteDevMailOutboxPreview,
+  deleteManagedUserAccount,
   getDevMailOutboxPreviews,
   getMe,
   getPendingPasswordResetRequests,
@@ -58,6 +61,8 @@ export function useSettingsController() {
   const createManagedUserLockRef = useRef(false);
   const resendActivationLocksRef = useRef<Set<string>>(new Set());
   const resetPasswordLocksRef = useRef<Set<string>>(new Set());
+  const deleteManagedUserLocksRef = useRef<Set<string>>(new Set());
+  const deleteDevMailPreviewLocksRef = useRef<Set<string>>(new Set());
 
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -92,6 +97,9 @@ export function useSettingsController() {
   const [createEmailInput, setCreateEmailInput] = useState("");
   const [createRoleInput, setCreateRoleInput] = useState<"admin" | "user">("user");
   const [creatingManagedUser, setCreatingManagedUser] = useState(false);
+  const [deletingManagedUserId, setDeletingManagedUserId] = useState<string | null>(null);
+  const [deletingDevMailOutboxId, setDeletingDevMailOutboxId] = useState<string | null>(null);
+  const [clearingDevMailOutbox, setClearingDevMailOutbox] = useState(false);
   const [managedSecretDialogOpen, setManagedSecretDialogOpen] = useState(false);
   const [managedSecretDialogTitle, setManagedSecretDialogTitle] = useState("");
   const [managedSecretDialogDescription, setManagedSecretDialogDescription] = useState("");
@@ -665,9 +673,17 @@ export function useSettingsController() {
     setManagedSecretDialogOpen(true);
   }, []);
 
-  const refreshManagedSecurityData = useCallback(async () => {
-    await Promise.all([loadManagedUsers(), loadPendingResetRequests(), loadDevMailOutbox()]);
-  }, [loadDevMailOutbox, loadManagedUsers, loadPendingResetRequests]);
+  const refreshManagedUsersSection = useCallback(async () => {
+    await loadManagedUsers();
+  }, [loadManagedUsers]);
+
+  const refreshPendingResetRequestsSection = useCallback(async () => {
+    await loadPendingResetRequests();
+  }, [loadPendingResetRequests]);
+
+  const refreshDevMailOutboxSection = useCallback(async () => {
+    await loadDevMailOutbox();
+  }, [loadDevMailOutbox]);
 
   const handleSaveManagedUser = useCallback(async () => {
     if (!managedSelectedUser || managedSaving) return;
@@ -726,7 +742,7 @@ export function useSettingsController() {
       });
       if (!isMountedRef.current) return;
       handleManagedDialogChange(false);
-      await refreshManagedSecurityData();
+      await Promise.all([loadManagedUsers(), loadPendingResetRequests()]);
     } catch (error: unknown) {
       const parsed = normalizeSettingsErrorPayload(error);
       toast({
@@ -748,7 +764,8 @@ export function useSettingsController() {
     managedSelectedUser,
     managedStatusInput,
     managedUsernameInput,
-    refreshManagedSecurityData,
+    loadManagedUsers,
+    loadPendingResetRequests,
     toast,
   ]);
 
@@ -834,11 +851,11 @@ export function useSettingsController() {
       setCreateUsernameInput("");
       setCreateEmailInput("");
       setCreateRoleInput("user");
-      await refreshManagedSecurityData();
+      await Promise.all([loadManagedUsers(), loadDevMailOutbox()]);
     } catch (error: unknown) {
       const parsed = normalizeSettingsErrorPayload(error);
       if (parsed.code === "USERNAME_TAKEN" || parsed.code === "INVALID_EMAIL") {
-        await refreshManagedSecurityData();
+        await loadManagedUsers();
 
         const duplicate = managedUsers.find((user) => {
           const sameUsername = user.username.toLowerCase() === normalizedUsername;
@@ -876,9 +893,10 @@ export function useSettingsController() {
     createRoleInput,
     createUsernameInput,
     creatingManagedUser,
+    loadDevMailOutbox,
+    loadManagedUsers,
     managedUsers,
     openManagedSecretDialog,
-    refreshManagedSecurityData,
     toast,
   ]);
 
@@ -933,7 +951,7 @@ export function useSettingsController() {
         });
       }
 
-      await refreshManagedSecurityData();
+      await Promise.all([loadManagedUsers(), loadPendingResetRequests(), loadDevMailOutbox()]);
     } catch (error: unknown) {
       const parsed = normalizeSettingsErrorPayload(error);
       toast({
@@ -944,7 +962,7 @@ export function useSettingsController() {
     } finally {
       resetPasswordLocksRef.current.delete(user.id);
     }
-  }, [openManagedSecretDialog, refreshManagedSecurityData, toast]);
+  }, [loadDevMailOutbox, loadManagedUsers, loadPendingResetRequests, openManagedSecretDialog, toast]);
 
   const handleResendManagedUserActivation = useCallback(async (user: ManagedUser) => {
     if (resendActivationLocksRef.current.has(user.id)) return;
@@ -996,7 +1014,7 @@ export function useSettingsController() {
         });
       }
 
-      await refreshManagedSecurityData();
+      await Promise.all([loadManagedUsers(), loadDevMailOutbox()]);
     } catch (error: unknown) {
       const parsed = normalizeSettingsErrorPayload(error);
       toast({
@@ -1007,7 +1025,7 @@ export function useSettingsController() {
     } finally {
       resendActivationLocksRef.current.delete(user.id);
     }
-  }, [openManagedSecretDialog, refreshManagedSecurityData, toast]);
+  }, [loadDevMailOutbox, loadManagedUsers, openManagedSecretDialog, toast]);
 
   const handleManagedBanToggle = useCallback(async (user: ManagedUser) => {
     const nextIsBanned = !Boolean(user.isBanned);
@@ -1021,7 +1039,7 @@ export function useSettingsController() {
         title: nextIsBanned ? "Account Banned" : "Account Unbanned",
         description: `${user.username} has been ${nextIsBanned ? "banned" : "unbanned"}.`,
       });
-      await refreshManagedSecurityData();
+      await Promise.all([loadManagedUsers(), loadPendingResetRequests()]);
     } catch (error: unknown) {
       const parsed = normalizeSettingsErrorPayload(error);
       toast({
@@ -1030,7 +1048,90 @@ export function useSettingsController() {
         variant: "destructive",
       });
     }
-  }, [refreshManagedSecurityData, toast]);
+  }, [loadManagedUsers, loadPendingResetRequests, toast]);
+
+  const handleDeleteManagedUser = useCallback(async (user: ManagedUser) => {
+    if (deleteManagedUserLocksRef.current.has(user.id)) return;
+
+    deleteManagedUserLocksRef.current.add(user.id);
+    setDeletingManagedUserId(user.id);
+    try {
+      await deleteManagedUserAccount(user.id);
+      if (managedSelectedUser?.id === user.id) {
+        handleManagedDialogChange(false);
+      }
+      toast({
+        title: "Account Deleted",
+        description: `${user.username} has been deleted safely.`,
+      });
+      await Promise.all([loadManagedUsers(), loadPendingResetRequests()]);
+    } catch (error: unknown) {
+      const parsed = normalizeSettingsErrorPayload(error);
+      toast({
+        title: parsed.code || "Delete Failed",
+        description: parsed.message,
+        variant: "destructive",
+      });
+    } finally {
+      deleteManagedUserLocksRef.current.delete(user.id);
+      if (isMountedRef.current) {
+        setDeletingManagedUserId((current) => (current === user.id ? null : current));
+      }
+    }
+  }, [handleManagedDialogChange, loadManagedUsers, loadPendingResetRequests, managedSelectedUser, toast]);
+
+  const handleDeleteDevMailOutboxEntry = useCallback(async (previewId: string) => {
+    const normalizedId = String(previewId || "").trim();
+    if (!normalizedId || deleteDevMailPreviewLocksRef.current.has(normalizedId)) return;
+
+    deleteDevMailPreviewLocksRef.current.add(normalizedId);
+    setDeletingDevMailOutboxId(normalizedId);
+    try {
+      await deleteDevMailOutboxPreview(normalizedId);
+      toast({
+        title: "Email Preview Deleted",
+        description: "The local mail preview has been removed.",
+      });
+      await loadDevMailOutbox();
+    } catch (error: unknown) {
+      const parsed = normalizeSettingsErrorPayload(error);
+      toast({
+        title: parsed.code || "Delete Failed",
+        description: parsed.message,
+        variant: "destructive",
+      });
+    } finally {
+      deleteDevMailPreviewLocksRef.current.delete(normalizedId);
+      if (isMountedRef.current) {
+        setDeletingDevMailOutboxId((current) => (current === normalizedId ? null : current));
+      }
+    }
+  }, [loadDevMailOutbox, toast]);
+
+  const handleClearDevMailOutbox = useCallback(async () => {
+    if (clearingDevMailOutbox) return;
+
+    setClearingDevMailOutbox(true);
+    try {
+      const response = await clearDevMailOutboxPreviews();
+      toast({
+        title: "Mail Outbox Cleared",
+        description: `${response?.deletedCount ?? 0} email preview(s) removed.`,
+      });
+      await loadDevMailOutbox();
+    } catch (error: unknown) {
+      const parsed = normalizeSettingsErrorPayload(error);
+      toast({
+        title: parsed.code || "Clear Failed",
+        description: parsed.message,
+        variant: "destructive",
+      });
+    } finally {
+      if (isMountedRef.current) {
+        setClearingDevMailOutbox(false);
+      }
+    }
+  }, [clearingDevMailOutbox, loadDevMailOutbox, toast]);
 
   return {
     currentUser,
@@ -1066,9 +1167,12 @@ export function useSettingsController() {
       currentUserRole,
       devMailOutboxEnabled,
       devMailOutboxEntries,
+      deletingDevMailOutboxId,
+      clearingDevMailOutbox,
       devMailOutboxLoading,
       isSuperuser,
       managedUsers,
+      deletingManagedUserId,
       managedUsersLoading,
       newPasswordInput,
       onChangePassword: () => void handleChangePassword(),
@@ -1080,12 +1184,17 @@ export function useSettingsController() {
       onCreateRoleInputChange: setCreateRoleInput,
       onCreateUsernameInputChange: setCreateUsernameInput,
       onCurrentPasswordInputChange: setCurrentPasswordInput,
-      onDevMailOutboxRefresh: () => void loadDevMailOutbox(),
+      onClearDevMailOutbox: () => void handleClearDevMailOutbox(),
+      onDeleteDevMailOutboxEntry: (previewId: string) => void handleDeleteDevMailOutboxEntry(previewId),
+      onDeleteManagedUser: (user: ManagedUser) => void handleDeleteManagedUser(user),
+      onDevMailOutboxRefresh: () => void refreshDevMailOutboxSection(),
       onEditManagedUser: openManagedEditor,
       onManagedBanToggle: (user: ManagedUser) => void handleManagedBanToggle(user),
+      onManagedUsersRefresh: () => void refreshManagedUsersSection(),
       onManagedResetPassword: (user: ManagedUser) => void handleResetManagedUserPassword(user),
       onManagedResendActivation: (user: ManagedUser) => void handleResendManagedUserActivation(user),
       onNewPasswordInputChange: setNewPasswordInput,
+      onPendingResetRequestsRefresh: () => void refreshPendingResetRequestsSection(),
       onUsernameInputChange: setUsernameInput,
       passwordSaving,
       pendingResetRequests,

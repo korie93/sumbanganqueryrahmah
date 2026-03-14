@@ -381,6 +381,23 @@ export class AuthRepository {
     return rows;
   }
 
+  async deleteManagedUserAccount(userId: string): Promise<boolean> {
+    const normalizedId = String(userId || "").trim();
+    if (!normalizedId) {
+      return false;
+    }
+
+    await db.delete(accountActivationTokens).where(eq(accountActivationTokens.userId, normalizedId));
+    await db.delete(passwordResetRequests).where(eq(passwordResetRequests.userId, normalizedId));
+
+    const deleted = await db
+      .delete(users)
+      .where(and(eq(users.id, normalizedId), inArray(users.role, ["admin", "user"])))
+      .returning({ id: users.id });
+
+    return deleted.length > 0;
+  }
+
   async updateActivitiesUsername(oldUsername: string, newUsername: string): Promise<void> {
     await db
       .update(userActivity)

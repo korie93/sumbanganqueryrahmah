@@ -83,6 +83,12 @@ export type DevMailOutboxPreview = {
   to: string;
 };
 
+export type UserAccountManagementTabId =
+  | "create-closed-account"
+  | "local-mail-outbox"
+  | "managed-account"
+  | "pending-password-reset-requests";
+
 export type NormalizedSettingsError = {
   message: string;
   requiresConfirmation?: boolean;

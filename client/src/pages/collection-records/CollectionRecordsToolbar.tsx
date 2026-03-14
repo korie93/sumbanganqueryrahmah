@@ -10,6 +10,14 @@ interface CollectionRecordsToolbarProps {
   viewAllLoading: boolean;
   exportingExcel: boolean;
   exportingPdf: boolean;
+  canPurgeOldRecords: boolean;
+  purgeSummaryLoading: boolean;
+  purgingOldRecords: boolean;
+  purgeSummary: {
+    cutoffDate: string;
+    eligibleRecords: number;
+    totalAmount: number;
+  } | null;
   pagedStart: number;
   pagedEnd: number;
   visibleRecordsLength: number;
@@ -17,6 +25,7 @@ interface CollectionRecordsToolbarProps {
   totalPages: number;
   tablePageSize: number;
   onOpenViewAll: () => void;
+  onOpenPurgeDialog: () => void;
   onExportExcel: () => void;
   onExportPdf: () => void;
   onTablePageSizeChange: (value: number) => void;
@@ -30,6 +39,10 @@ export function CollectionRecordsToolbar({
   viewAllLoading,
   exportingExcel,
   exportingPdf,
+  canPurgeOldRecords,
+  purgeSummaryLoading,
+  purgingOldRecords,
+  purgeSummary,
   pagedStart,
   pagedEnd,
   visibleRecordsLength,
@@ -37,6 +50,7 @@ export function CollectionRecordsToolbar({
   totalPages,
   tablePageSize,
   onOpenViewAll,
+  onOpenPurgeDialog,
   onExportExcel,
   onExportPdf,
   onTablePageSizeChange,
@@ -59,6 +73,43 @@ export function CollectionRecordsToolbar({
           </CardContent>
         </Card>
       </div>
+
+      {canPurgeOldRecords ? (
+        <Card className="border-amber-500/40 bg-amber-500/5">
+          <CardContent className="flex flex-col gap-3 px-3 py-3 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">Manual Purge Data Lama</p>
+              <p className="text-xs text-muted-foreground">
+                Rekod collection sebelum {purgeSummary?.cutoffDate || "-"} hanya boleh dipurge oleh superuser.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Eligible:{" "}
+                <span className="font-medium text-foreground">
+                  {purgeSummaryLoading ? "Checking..." : purgeSummary?.eligibleRecords ?? 0}
+                </span>
+                {" | "}
+                Total:{" "}
+                <span className="font-medium text-foreground">
+                  {formatAmountRM(purgeSummary?.totalAmount ?? 0)}
+                </span>
+              </p>
+            </div>
+            <Button
+              variant="destructive"
+              onClick={onOpenPurgeDialog}
+              disabled={
+                loadingRecords ||
+                purgeSummaryLoading ||
+                purgingOldRecords ||
+                !purgeSummary ||
+                purgeSummary.eligibleRecords <= 0
+              }
+            >
+              {purgingOldRecords ? "Purging..." : "Purge > 6 Months"}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Button variant="secondary" onClick={onOpenViewAll} disabled={loadingRecords || viewAllLoading}>
