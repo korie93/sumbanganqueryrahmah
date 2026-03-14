@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import AIMessage from "@/components/AIMessage";
 import { type AIChatMessage, useAIContext } from "@/context/AIContext";
+import {
+  AI_CANCEL_EVENT,
+  AI_RESET_EVENT,
+  type AIChatStatus as SharedAIChatStatus,
+} from "@/lib/ai-chat";
 import "@/styles/ai.css";
-
-const AI_RESET_EVENT = "ai-chat-reset";
-const AI_CANCEL_EVENT = "ai-chat-cancel";
 
 type AIChatProps = {
   timeoutMs: number;
@@ -16,7 +18,7 @@ type AIChatProps = {
   onStatusChange?: (status: AIChatStatus) => void;
 };
 
-export type AIChatStatus = "IDLE" | "SEARCHING" | "PROCESSING" | "TYPING";
+export type AIChatStatus = SharedAIChatStatus;
 
 const MAX_RETRIES = 6;
 const RETRY_MS = 2500;
