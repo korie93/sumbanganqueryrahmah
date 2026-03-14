@@ -1,6 +1,13 @@
 export interface User {
+  id?: string;
   username: string;
   role: string;
+  fullName?: string | null;
+  email?: string | null;
+  status?: string;
+  mustChangePassword?: boolean;
+  passwordResetBySuperuser?: boolean;
+  isBanned?: boolean | null;
 }
 
 export type MonitorSection = "dashboard" | "activity" | "monitor" | "analysis" | "audit";

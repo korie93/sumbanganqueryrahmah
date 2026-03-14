@@ -1,23 +1,45 @@
-
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, EyeOff, LogIn, Lock } from "lucide-react";
+import type { User } from "@/app/types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { login, generateFingerprint } from "@/lib/api";
+import { persistAuthenticatedUser } from "@/lib/auth-session";
 
 interface LoginProps {
-  onLoginSuccess: (user: { username: string; role: string }) => void;
+  onLoginSuccess: (user: User) => void;
 }
+
+const AUTH_NOTICE_STORAGE_KEY = "auth_notice";
 
 export default function Login({ onLoginSuccess }: LoginProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  useEffect(() => {
+    const rawNotice = sessionStorage.getItem(AUTH_NOTICE_STORAGE_KEY);
+    if (!rawNotice) return;
+
+    try {
+      const parsed = JSON.parse(rawNotice) as { message?: string };
+      const message = String(parsed?.message || "").trim();
+      if (message) {
+        setNotice(message);
+      }
+    } catch {
+      // Ignore malformed notice payloads and continue with normal login.
+    } finally {
+      sessionStorage.removeItem(AUTH_NOTICE_STORAGE_KEY);
+    }
+  }, []);
+
   const handleLogin = async () => {
     setError("");
+    setNotice("");
     setLoading(true);
 
     try {
@@ -42,25 +64,40 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         throw new Error("Incomplete login information from server.");
       }
 
+      const authenticatedUser: User = {
+        id: response?.user?.id,
+        username: String(response?.user?.username || responseUsername).toLowerCase(),
+        fullName: response?.user?.fullName ?? null,
+        email: response?.user?.email ?? null,
+        role: String(response?.user?.role || role),
+        status: String(response?.user?.status || response?.status || "active"),
+        mustChangePassword: Boolean(
+          response?.user?.mustChangePassword ?? response?.mustChangePassword ?? false,
+        ),
+        passwordResetBySuperuser: Boolean(
+          response?.user?.passwordResetBySuperuser ?? false,
+        ),
+        isBanned: response?.user?.isBanned ?? null,
+      };
+
       localStorage.removeItem("banned");
       localStorage.setItem("token", token);
-      localStorage.setItem("username", responseUsername.toLowerCase());
-      localStorage.setItem("role", role);
       localStorage.setItem("fingerprint", fingerprint);
-      localStorage.setItem("user", JSON.stringify({
-        username: responseUsername.toLowerCase(),
-        role,
-      }));
+      persistAuthenticatedUser(authenticatedUser);
 
       if (activityId) {
         localStorage.setItem("activityId", String(activityId));
       }
 
-      const defaultTab = role === "admin" || role === "superuser" ? "home" : "general-search";
+      const defaultTab = authenticatedUser.mustChangePassword
+        ? "change-password"
+        : role === "admin" || role === "superuser"
+          ? "home"
+          : "general-search";
       localStorage.setItem("activeTab", defaultTab);
       localStorage.setItem("lastPage", defaultTab);
 
-      onLoginSuccess({ username: responseUsername.toLowerCase(), role });
+      onLoginSuccess(authenticatedUser);
     } catch (err: any) {
       console.error("Login failed:", err);
       let msg = err?.message || "Login failed. Please try again.";
@@ -157,9 +194,25 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               )}
             </Button>
 
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = "/forgot-password";
+              }}
+              className="mt-4 w-full text-center text-sm text-white/75 transition-colors hover:text-white"
+            >
+              Forgot password?
+            </button>
+
             {error && (
               <div className="mt-4 p-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-200 text-center text-sm">
                 {error}
+              </div>
+            )}
+
+            {notice && (
+              <div className="mt-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-100 text-center text-sm">
+                {notice}
               </div>
             )}
 

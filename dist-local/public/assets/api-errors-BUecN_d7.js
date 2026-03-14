@@ -1,0 +1,1 @@
+function o(t,n="Something went wrong. Please try again."){var s;if(!t||typeof t!="object")return n;const r=String(t.message||"").trim();if(!r)return n;const g=r.replace(/^\d+:\s*/,"");try{const e=JSON.parse(g);return String(((s=e==null?void 0:e.error)==null?void 0:s.message)||(e==null?void 0:e.message)||n)}catch{return r}}export{o as g};

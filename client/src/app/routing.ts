@@ -56,6 +56,18 @@ export function resolveRouteFromLocation(pathname: string, search: string): Reso
   if (normalizedPath === "/maintenance") {
     return { page: "maintenance" };
   }
+  if (normalizedPath === "/forgot-password") {
+    return { page: "forgot-password" };
+  }
+  if (normalizedPath === "/activate-account") {
+    return { page: "activate-account" };
+  }
+  if (normalizedPath === "/reset-password") {
+    return { page: "reset-password" };
+  }
+  if (normalizedPath === "/change-password") {
+    return { page: "change-password" };
+  }
   if (normalizedPath === "/settings") {
     return { page: "settings" };
   }
@@ -86,6 +98,10 @@ export function buildPathForPage(page: string, monitorSection: MonitorSection = 
   if (page === "settings") return "/settings";
   if (page === "collection-report") return "/collection/save";
   if (page === "maintenance") return "/maintenance";
+  if (page === "forgot-password") return "/forgot-password";
+  if (page === "activate-account") return "/activate-account";
+  if (page === "reset-password") return "/reset-password";
+  if (page === "change-password") return "/change-password";
   if (page === "forbidden") return "/403";
   if (page === "monitor") return `/monitor?section=${monitorSection}`;
   return "/";

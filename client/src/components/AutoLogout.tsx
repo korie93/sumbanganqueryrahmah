@@ -171,9 +171,16 @@ export default function AutoLogout({
       }
     };
 
+    const handleForceLogout = () => {
+      localStorage.removeItem("forceLogout");
+      void runLogout();
+    };
+
     window.addEventListener("storage", handleStorage);
+    window.addEventListener("force-logout", handleForceLogout);
     return () => {
       window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("force-logout", handleForceLogout);
     };
   }, [runLogout]);
 
@@ -217,6 +224,13 @@ export default function AutoLogout({
 
             if (message.type === "kicked") {
               alert(message.reason || "Anda telah dilogout oleh pentadbir.");
+              void runLogout();
+            }
+
+            if (message.type === "logout") {
+              if (message.reason) {
+                alert(String(message.reason));
+              }
               void runLogout();
             }
 

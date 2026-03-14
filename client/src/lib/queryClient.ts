@@ -20,9 +20,41 @@ const QUERY_GC_TIME = isLowSpecClient ? 45_000 : 2 * 60_000;
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = null;
+    }
+
+    if (parsed?.banned) {
+      localStorage.setItem("banned", "1");
+    }
+
+    if (parsed?.forcePasswordChange) {
+      localStorage.setItem("forcePasswordChange", "1");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("force-password-change", {
+            detail: parsed,
+          }),
+        );
+      }
+    }
+
+    if (parsed?.forceLogout) {
+      localStorage.setItem("forceLogout", "true");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("force-logout", {
+            detail: parsed,
+          }),
+        );
+      }
+    }
+
     if (res.status === 503) {
       try {
-        const parsed = JSON.parse(text);
         if (parsed?.maintenance) {
           localStorage.setItem("maintenanceState", JSON.stringify(parsed));
           if (typeof window !== "undefined") {
@@ -33,7 +65,11 @@ async function throwIfResNotOk(res: Response) {
         // ignore JSON parse failure, keep default error path
       }
     }
-    throw new Error(`${res.status}: ${text}`);
+
+    const errorMessage = parsed?.error?.message || parsed?.message || text;
+    throw new Error(
+      `${res.status}: ${JSON.stringify(parsed || { message: errorMessage })}`,
+    );
   }
 }
 

@@ -1,17 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
+  type ActivationDeliveryPayload,
+  createManagedUserAccount,
+  getDevMailOutboxPreviews,
   getMe,
+  getPendingPasswordResetRequests,
   getSettings,
   getSuperuserManagedUsers,
+  resendManagedUserActivation,
+  resetManagedUserPassword,
   updateMyCredentials,
+  updateManagedUserAccount,
+  updateManagedUserRole,
+  updateManagedUserStatus,
   updateSetting,
-  updateSuperuserManagedUserCredentials,
 } from "@/lib/api";
+import { clearAuthenticatedUserStorage, persistAuthenticatedUser } from "@/lib/auth-session";
 import { SettingCard } from "@/pages/settings/SettingCard";
 import type {
   CurrentUser,
+  DevMailOutboxPreview,
   ManagedUser,
+  PendingPasswordResetRequest,
   SettingCategory,
   SettingItem,
 } from "@/pages/settings/types";
@@ -23,12 +34,30 @@ import {
   settingsCategoryOrder,
 } from "@/pages/settings/utils";
 
+function formatActivationExpiry(value: string | null | undefined) {
+  if (!value) return "the configured expiry window";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString();
+}
+
+function isDevOutboxActivation(
+  activation: ActivationDeliveryPayload | undefined,
+): activation is ActivationDeliveryPayload & { deliveryMode: "dev_outbox" } {
+  return activation?.deliveryMode === "dev_outbox" && Boolean(String(activation.previewUrl || "").trim());
+}
+
 export function useSettingsController() {
   const { toast } = useToast();
   const isMountedRef = useRef(true);
   const settingsRequestIdRef = useRef(0);
   const managedUsersRequestIdRef = useRef(0);
+  const pendingResetRequestsRequestIdRef = useRef(0);
+  const devMailOutboxRequestIdRef = useRef(0);
   const bootstrapRequestIdRef = useRef(0);
+  const createManagedUserLockRef = useRef(false);
+  const resendActivationLocksRef = useRef<Set<string>>(new Set());
+  const resetPasswordLocksRef = useRef<Set<string>>(new Set());
 
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -40,14 +69,33 @@ export function useSettingsController() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
   const [managedUsersLoading, setManagedUsersLoading] = useState(false);
+  const [pendingResetRequests, setPendingResetRequests] = useState<PendingPasswordResetRequest[]>([]);
+  const [pendingResetRequestsLoading, setPendingResetRequestsLoading] = useState(false);
+  const [devMailOutboxEntries, setDevMailOutboxEntries] = useState<DevMailOutboxPreview[]>([]);
+  const [devMailOutboxEnabled, setDevMailOutboxEnabled] = useState(false);
+  const [devMailOutboxLoading, setDevMailOutboxLoading] = useState(false);
   const [managedDialogOpen, setManagedDialogOpen] = useState(false);
   const [managedSelectedUser, setManagedSelectedUser] = useState<ManagedUser | null>(
     null,
   );
+  const [managedFullNameInput, setManagedFullNameInput] = useState("");
+  const [managedEmailInput, setManagedEmailInput] = useState("");
   const [managedUsernameInput, setManagedUsernameInput] = useState("");
-  const [managedPasswordInput, setManagedPasswordInput] = useState("");
-  const [managedConfirmPasswordInput, setManagedConfirmPasswordInput] = useState("");
+  const [managedRoleInput, setManagedRoleInput] = useState<"admin" | "user">("user");
+  const [managedStatusInput, setManagedStatusInput] = useState<
+    "pending_activation" | "active" | "suspended" | "disabled"
+  >("active");
+  const [managedIsBanned, setManagedIsBanned] = useState(false);
   const [managedSaving, setManagedSaving] = useState(false);
+  const [createFullNameInput, setCreateFullNameInput] = useState("");
+  const [createUsernameInput, setCreateUsernameInput] = useState("");
+  const [createEmailInput, setCreateEmailInput] = useState("");
+  const [createRoleInput, setCreateRoleInput] = useState<"admin" | "user">("user");
+  const [creatingManagedUser, setCreatingManagedUser] = useState(false);
+  const [managedSecretDialogOpen, setManagedSecretDialogOpen] = useState(false);
+  const [managedSecretDialogTitle, setManagedSecretDialogTitle] = useState("");
+  const [managedSecretDialogDescription, setManagedSecretDialogDescription] = useState("");
+  const [managedSecretDialogValue, setManagedSecretDialogValue] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState<SettingCategory[]>([]);
@@ -63,6 +111,8 @@ export function useSettingsController() {
       isMountedRef.current = false;
       settingsRequestIdRef.current += 1;
       managedUsersRequestIdRef.current += 1;
+      pendingResetRequestsRequestIdRef.current += 1;
+      devMailOutboxRequestIdRef.current += 1;
       bootstrapRequestIdRef.current += 1;
     };
   }, []);
@@ -74,32 +124,14 @@ export function useSettingsController() {
   const currentUserRole = currentUser?.role ?? "";
 
   const syncLocalUser = useCallback((nextUser: CurrentUser) => {
-    localStorage.setItem("username", nextUser.username);
-    localStorage.setItem("role", nextUser.role);
-    localStorage.setItem(
-      "user",
-      JSON.stringify({
-        username: nextUser.username,
-        role: nextUser.role,
-      }),
-    );
+    persistAuthenticatedUser(nextUser);
     window.dispatchEvent(new CustomEvent("profile-updated", { detail: nextUser }));
   }, []);
 
   const forceLogoutAfterPasswordChange = useCallback(() => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("username");
-    localStorage.removeItem("role");
-    localStorage.removeItem("activityId");
-    localStorage.removeItem("activeTab");
-    localStorage.removeItem("lastPage");
-    localStorage.removeItem("selectedImportId");
-    localStorage.removeItem("selectedImportName");
-    localStorage.removeItem("fingerprint");
-    sessionStorage.removeItem("collection_staff_nickname");
-    sessionStorage.removeItem("collection_staff_nickname_auth");
+    clearAuthenticatedUserStorage();
     localStorage.setItem("forceLogout", "true");
+    window.dispatchEvent(new CustomEvent("force-logout"));
     window.location.href = "/";
   }, []);
 
@@ -169,6 +201,49 @@ export function useSettingsController() {
     }
   }, [toast]);
 
+  const loadPendingResetRequests = useCallback(async () => {
+    const requestId = ++pendingResetRequestsRequestIdRef.current;
+    setPendingResetRequestsLoading(true);
+    try {
+      const response = await getPendingPasswordResetRequests();
+      if (!isMountedRef.current || requestId !== pendingResetRequestsRequestIdRef.current) return;
+      setPendingResetRequests(Array.isArray(response?.requests) ? response.requests : []);
+    } catch (error: unknown) {
+      if (!isMountedRef.current || requestId !== pendingResetRequestsRequestIdRef.current) return;
+      const parsed = normalizeSettingsErrorPayload(error);
+      toast({
+        title: "Failed to Load Reset Requests",
+        description: parsed.message,
+        variant: "destructive",
+      });
+    } finally {
+      if (!isMountedRef.current || requestId !== pendingResetRequestsRequestIdRef.current) return;
+      setPendingResetRequestsLoading(false);
+    }
+  }, [toast]);
+
+  const loadDevMailOutbox = useCallback(async () => {
+    const requestId = ++devMailOutboxRequestIdRef.current;
+    setDevMailOutboxLoading(true);
+    try {
+      const response = await getDevMailOutboxPreviews();
+      if (!isMountedRef.current || requestId !== devMailOutboxRequestIdRef.current) return;
+      setDevMailOutboxEnabled(Boolean(response?.enabled));
+      setDevMailOutboxEntries(Array.isArray(response?.previews) ? response.previews : []);
+    } catch (error: unknown) {
+      if (!isMountedRef.current || requestId !== devMailOutboxRequestIdRef.current) return;
+      const parsed = normalizeSettingsErrorPayload(error);
+      toast({
+        title: "Failed to Load Mail Outbox",
+        description: parsed.message,
+        variant: "destructive",
+      });
+    } finally {
+      if (!isMountedRef.current || requestId !== devMailOutboxRequestIdRef.current) return;
+      setDevMailOutboxLoading(false);
+    }
+  }, [toast]);
+
   useEffect(() => {
     const requestId = ++bootstrapRequestIdRef.current;
 
@@ -195,6 +270,18 @@ export function useSettingsController() {
           requestId === bootstrapRequestIdRef.current
         ) {
           await loadManagedUsers();
+          if (
+            isMountedRef.current &&
+            requestId === bootstrapRequestIdRef.current
+          ) {
+            await loadPendingResetRequests();
+            if (
+              isMountedRef.current &&
+              requestId === bootstrapRequestIdRef.current
+            ) {
+              await loadDevMailOutbox();
+            }
+          }
         }
       } catch (error: unknown) {
         if (!isMountedRef.current || requestId !== bootstrapRequestIdRef.current) return;
@@ -211,7 +298,7 @@ export function useSettingsController() {
     };
 
     void bootstrap();
-  }, [loadManagedUsers, loadSettings, toast]);
+  }, [loadDevMailOutbox, loadManagedUsers, loadPendingResetRequests, loadSettings, toast]);
 
   const settingMap = useMemo(() => {
     const map = new Map<string, SettingItem>();
@@ -434,7 +521,17 @@ export function useSettingsController() {
       const nextUser: CurrentUser = {
         id: String(response?.user?.id || currentUser.id),
         username: String(response?.user?.username || normalized),
+        fullName: response?.user?.fullName ?? currentUser.fullName ?? null,
+        email: response?.user?.email ?? currentUser.email ?? null,
         role: String(response?.user?.role || currentUser.role),
+        status: String(response?.user?.status || currentUser.status || "active"),
+        mustChangePassword: Boolean(
+          response?.user?.mustChangePassword ?? currentUser.mustChangePassword,
+        ),
+        passwordResetBySuperuser: Boolean(
+          response?.user?.passwordResetBySuperuser ?? currentUser.passwordResetBySuperuser,
+        ),
+        isBanned: response?.user?.isBanned ?? currentUser.isBanned ?? null,
       };
 
       if (!isMountedRef.current) return;
@@ -533,9 +630,14 @@ export function useSettingsController() {
 
   const openManagedEditor = useCallback((user: ManagedUser) => {
     setManagedSelectedUser(user);
+    setManagedFullNameInput(user.fullName || "");
+    setManagedEmailInput(user.email || "");
     setManagedUsernameInput(user.username);
-    setManagedPasswordInput("");
-    setManagedConfirmPasswordInput("");
+    setManagedRoleInput(user.role === "admin" ? "admin" : "user");
+    setManagedStatusInput(
+      (user.status as "pending_activation" | "active" | "suspended" | "disabled") || "active",
+    );
+    setManagedIsBanned(Boolean(user.isBanned));
     setManagedDialogOpen(true);
   }, []);
 
@@ -543,17 +645,40 @@ export function useSettingsController() {
     setManagedDialogOpen(open);
     if (!open) {
       setManagedSelectedUser(null);
+      setManagedFullNameInput("");
+      setManagedEmailInput("");
       setManagedUsernameInput("");
-      setManagedPasswordInput("");
-      setManagedConfirmPasswordInput("");
+      setManagedRoleInput("user");
+      setManagedStatusInput("active");
+      setManagedIsBanned(false);
     }
   }, []);
+
+  const openManagedSecretDialog = useCallback((params: {
+    title: string;
+    description: string;
+    value?: string;
+  }) => {
+    setManagedSecretDialogTitle(params.title);
+    setManagedSecretDialogDescription(params.description);
+    setManagedSecretDialogValue(params.value || "");
+    setManagedSecretDialogOpen(true);
+  }, []);
+
+  const refreshManagedSecurityData = useCallback(async () => {
+    await Promise.all([loadManagedUsers(), loadPendingResetRequests(), loadDevMailOutbox()]);
+  }, [loadDevMailOutbox, loadManagedUsers, loadPendingResetRequests]);
 
   const handleSaveManagedUser = useCallback(async () => {
     if (!managedSelectedUser || managedSaving) return;
 
-    const payload: { newUsername?: string; newPassword?: string } = {};
     const normalizedUsername = managedUsernameInput.trim().toLowerCase();
+    const normalizedEmail = managedEmailInput.trim().toLowerCase();
+    const payload: { username?: string; fullName?: string | null; email?: string | null } = {};
+
+    if (managedFullNameInput.trim() !== (managedSelectedUser.fullName || "")) {
+      payload.fullName = managedFullNameInput.trim() || null;
+    }
 
     if (normalizedUsername !== managedSelectedUser.username) {
       if (!CREDENTIAL_USERNAME_REGEX.test(normalizedUsername)) {
@@ -564,50 +689,44 @@ export function useSettingsController() {
         });
         return;
       }
-      payload.newUsername = normalizedUsername;
+      payload.username = normalizedUsername;
     }
 
-    if (managedPasswordInput) {
-      if (!isStrongPassword(managedPasswordInput)) {
-        toast({
-          title: "Validation Error",
-          description:
-            "New password must be at least 8 characters and include at least one letter and one number.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (managedPasswordInput !== managedConfirmPasswordInput) {
-        toast({
-          title: "Validation Error",
-          description: "Confirm password does not match.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      payload.newPassword = managedPasswordInput;
-    }
-
-    if (!payload.newUsername && !payload.newPassword) {
-      toast({
-        title: "No Changes",
-        description: "No credential changes to save.",
-      });
-      return;
+    if (normalizedEmail !== (managedSelectedUser.email || "").toLowerCase()) {
+      payload.email = normalizedEmail || null;
     }
 
     setManagedSaving(true);
     try {
-      await updateSuperuserManagedUserCredentials(managedSelectedUser.id, payload);
+      if (
+        payload.username !== undefined
+        || payload.fullName !== undefined
+        || payload.email !== undefined
+      ) {
+        await updateManagedUserAccount(managedSelectedUser.id, payload);
+      }
+
+      if (managedRoleInput !== managedSelectedUser.role) {
+        await updateManagedUserRole(managedSelectedUser.id, managedRoleInput);
+      }
+
+      if (
+        managedStatusInput !== managedSelectedUser.status
+        || managedIsBanned !== Boolean(managedSelectedUser.isBanned)
+      ) {
+        await updateManagedUserStatus(managedSelectedUser.id, {
+          status: managedStatusInput,
+          isBanned: managedIsBanned,
+        });
+      }
+
       toast({
-        title: "Credentials Updated",
-        description: `Updated credentials for ${managedSelectedUser.username}.`,
+        title: "Account Updated",
+        description: `Updated account settings for ${managedSelectedUser.username}.`,
       });
       if (!isMountedRef.current) return;
       handleManagedDialogChange(false);
-      await loadManagedUsers();
+      await refreshManagedSecurityData();
     } catch (error: unknown) {
       const parsed = normalizeSettingsErrorPayload(error);
       toast({
@@ -621,14 +740,297 @@ export function useSettingsController() {
     }
   }, [
     handleManagedDialogChange,
-    loadManagedUsers,
-    managedConfirmPasswordInput,
-    managedPasswordInput,
+    managedEmailInput,
+    managedFullNameInput,
+    managedIsBanned,
+    managedRoleInput,
     managedSaving,
     managedSelectedUser,
+    managedStatusInput,
     managedUsernameInput,
+    refreshManagedSecurityData,
     toast,
   ]);
+
+  const handleCreateManagedUser = useCallback(async () => {
+    if (creatingManagedUser || createManagedUserLockRef.current) return;
+
+    const normalizedUsername = createUsernameInput.trim().toLowerCase();
+    const normalizedEmail = createEmailInput.trim().toLowerCase();
+
+    if (!CREDENTIAL_USERNAME_REGEX.test(normalizedUsername)) {
+      toast({
+        title: "Validation Error",
+        description: "Username must match ^[a-zA-Z0-9._-]{3,32}$.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!normalizedEmail) {
+      toast({
+        title: "Validation Error",
+        description: "Email is required for account activation.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createManagedUserLockRef.current = true;
+    setCreatingManagedUser(true);
+    try {
+      const response = await createManagedUserAccount({
+        username: normalizedUsername,
+        fullName: createFullNameInput.trim() || null,
+        email: normalizedEmail || null,
+        role: createRoleInput,
+      });
+      const activation = response?.activation as ActivationDeliveryPayload | undefined;
+      const recipientEmail = String(activation?.recipientEmail || normalizedEmail);
+      const expiresAt = formatActivationExpiry(activation?.expiresAt);
+      const previewUrl = String(activation?.previewUrl || "");
+
+      if (isDevOutboxActivation(activation)) {
+        toast({
+          title: "Account Created",
+          description: `Created ${createRoleInput} account for ${normalizedUsername}. Activation email was captured in the local development outbox.`,
+        });
+        openManagedSecretDialog({
+          title: "Local Activation Email Preview",
+          description: `SMTP is not configured, so the activation email was written to the local development outbox instead. Open this preview URL and follow the activation link before ${expiresAt}.`,
+          value: previewUrl,
+        });
+      } else if (activation?.sent) {
+        toast({
+          title: "Account Created",
+          description: `Created ${createRoleInput} account for ${normalizedUsername}. Activation email sent to ${recipientEmail}.`,
+        });
+      } else {
+        openManagedSecretDialog({
+          title: "Activation Email Not Sent",
+          description:
+            activation?.errorMessage
+              ? `The account was created and remains pending activation, but email delivery failed: ${activation.errorMessage}. Configure SMTP and use Resend Activation.`
+              : "The account was created and remains pending activation, but the activation email could not be sent. Configure SMTP and use Resend Activation.",
+          value: previewUrl || undefined,
+        });
+        toast({
+          title: "Account Created",
+          description: `${normalizedUsername} remains pending activation until the email is delivered.`,
+        });
+      }
+
+      if (previewUrl && activation?.sent && activation?.deliveryMode === "smtp") {
+        openManagedSecretDialog({
+          title: "Activation Email Preview",
+          description: `Email delivery is configured with a preview URL. The activation link expires on ${expiresAt}.`,
+          value: previewUrl,
+        });
+      }
+
+
+      if (!isMountedRef.current) return;
+      setCreateFullNameInput("");
+      setCreateUsernameInput("");
+      setCreateEmailInput("");
+      setCreateRoleInput("user");
+      await refreshManagedSecurityData();
+    } catch (error: unknown) {
+      const parsed = normalizeSettingsErrorPayload(error);
+      if (parsed.code === "USERNAME_TAKEN" || parsed.code === "INVALID_EMAIL") {
+        await refreshManagedSecurityData();
+
+        const duplicate = managedUsers.find((user) => {
+          const sameUsername = user.username.toLowerCase() === normalizedUsername;
+          const sameEmail =
+            normalizedEmail !== ""
+              && String(user.email || "").trim().toLowerCase() === normalizedEmail;
+          return sameUsername || sameEmail;
+        });
+
+        if (duplicate) {
+          openManagedSecretDialog({
+            title: "Account Already Exists",
+            description:
+              duplicate.status === "pending_activation"
+                ? `${duplicate.username} already exists and is still pending activation. Use Resend Activation after SMTP is configured.`
+                : `${duplicate.username} already exists in the system.`,
+          });
+          return;
+        }
+      }
+
+      toast({
+        title: parsed.code || "Create Failed",
+        description: parsed.message,
+        variant: "destructive",
+      });
+    } finally {
+      createManagedUserLockRef.current = false;
+      if (!isMountedRef.current) return;
+      setCreatingManagedUser(false);
+    }
+  }, [
+    createEmailInput,
+    createFullNameInput,
+    createRoleInput,
+    createUsernameInput,
+    creatingManagedUser,
+    managedUsers,
+    openManagedSecretDialog,
+    refreshManagedSecurityData,
+    toast,
+  ]);
+
+  const handleResetManagedUserPassword = useCallback(async (user: ManagedUser) => {
+    if (resetPasswordLocksRef.current.has(user.id)) return;
+    if (!window.confirm(`Send password reset email to ${user.username}?`)) return;
+
+    resetPasswordLocksRef.current.add(user.id);
+    try {
+      const response = await resetManagedUserPassword(user.id);
+      const reset = response?.reset as ActivationDeliveryPayload | undefined;
+      const recipientEmail = String(reset?.recipientEmail || user.email || user.username);
+      const expiresAt = formatActivationExpiry(reset?.expiresAt);
+      const previewUrl = String(reset?.previewUrl || "");
+
+      if (isDevOutboxActivation(reset)) {
+        toast({
+          title: "Password Reset Email Sent",
+          description: `Password reset email for ${user.username} was captured in the local development outbox.`,
+        });
+        openManagedSecretDialog({
+          title: "Local Password Reset Email Preview",
+          description: `SMTP is not configured, so the password reset email was written to the local development outbox instead. Open this preview URL and follow the reset link before ${expiresAt}.`,
+          value: previewUrl,
+        });
+      } else if (reset?.sent) {
+        toast({
+          title: "Password Reset Email Sent",
+          description: `Password reset email sent to ${recipientEmail}.`,
+        });
+      } else {
+        openManagedSecretDialog({
+          title: "Password Reset Email Not Sent",
+          description:
+            reset?.errorMessage
+              ? `The password reset email could not be sent: ${reset.errorMessage}. No account login state was changed, so you can retry after fixing delivery.`
+              : "The password reset email could not be sent. No account login state was changed, so you can retry after fixing delivery.",
+          value: previewUrl || undefined,
+        });
+        toast({
+          title: "Password Reset Pending",
+          description: `${user.username} will need a delivered reset email before choosing a new password.`,
+          variant: "destructive",
+        });
+      }
+
+      if (previewUrl && reset?.sent && reset?.deliveryMode === "smtp") {
+        openManagedSecretDialog({
+          title: "Password Reset Email Preview",
+          description: `Email delivery is configured with a preview URL. The password reset link expires on ${expiresAt}.`,
+          value: previewUrl,
+        });
+      }
+
+      await refreshManagedSecurityData();
+    } catch (error: unknown) {
+      const parsed = normalizeSettingsErrorPayload(error);
+      toast({
+        title: parsed.code || "Reset Failed",
+        description: parsed.message,
+        variant: "destructive",
+      });
+    } finally {
+      resetPasswordLocksRef.current.delete(user.id);
+    }
+  }, [openManagedSecretDialog, refreshManagedSecurityData, toast]);
+
+  const handleResendManagedUserActivation = useCallback(async (user: ManagedUser) => {
+    if (resendActivationLocksRef.current.has(user.id)) return;
+
+    resendActivationLocksRef.current.add(user.id);
+    try {
+      const response = await resendManagedUserActivation(user.id);
+      const activation = response?.activation as ActivationDeliveryPayload | undefined;
+      const recipientEmail = String(activation?.recipientEmail || user.email || "");
+      const expiresAt = formatActivationExpiry(activation?.expiresAt);
+      const previewUrl = String(activation?.previewUrl || "");
+
+      if (isDevOutboxActivation(activation)) {
+        toast({
+          title: "Activation Reissued",
+          description: `Activation email for ${user.username} was captured in the local development outbox.`,
+        });
+        openManagedSecretDialog({
+          title: "Local Activation Email Preview",
+          description: `SMTP is not configured, so the reissued activation email was written to the local development outbox instead. Open this preview URL and follow the activation link before ${expiresAt}.`,
+          value: previewUrl,
+        });
+      } else if (activation?.sent) {
+        toast({
+          title: "Activation Reissued",
+          description: `Activation email resent to ${recipientEmail || user.username}.`,
+        });
+      } else {
+        openManagedSecretDialog({
+          title: "Activation Email Not Sent",
+          description:
+            activation?.errorMessage
+              ? `The activation email could not be resent: ${activation.errorMessage}. The account remains pending activation until delivery succeeds.`
+              : "The activation email could not be resent. The account remains pending activation until delivery succeeds.",
+          value: previewUrl || undefined,
+        });
+        toast({
+          title: "Activation Still Pending",
+          description: `${user.username} remains pending activation until the email is delivered.`,
+          variant: "destructive",
+        });
+      }
+
+      if (previewUrl && activation?.sent && activation?.deliveryMode === "smtp") {
+        openManagedSecretDialog({
+          title: "Activation Email Preview",
+          description: `Email delivery is configured with a preview URL. The activation link expires on ${expiresAt}.`,
+          value: previewUrl,
+        });
+      }
+
+      await refreshManagedSecurityData();
+    } catch (error: unknown) {
+      const parsed = normalizeSettingsErrorPayload(error);
+      toast({
+        title: parsed.code || "Activation Failed",
+        description: parsed.message,
+        variant: "destructive",
+      });
+    } finally {
+      resendActivationLocksRef.current.delete(user.id);
+    }
+  }, [openManagedSecretDialog, refreshManagedSecurityData, toast]);
+
+  const handleManagedBanToggle = useCallback(async (user: ManagedUser) => {
+    const nextIsBanned = !Boolean(user.isBanned);
+    if (!window.confirm(`${nextIsBanned ? "Ban" : "Unban"} ${user.username}?`)) return;
+
+    try {
+      await updateManagedUserStatus(user.id, {
+        isBanned: nextIsBanned,
+      });
+      toast({
+        title: nextIsBanned ? "Account Banned" : "Account Unbanned",
+        description: `${user.username} has been ${nextIsBanned ? "banned" : "unbanned"}.`,
+      });
+      await refreshManagedSecurityData();
+    } catch (error: unknown) {
+      const parsed = normalizeSettingsErrorPayload(error);
+      toast({
+        title: parsed.code || "Status Update Failed",
+        description: parsed.message,
+        variant: "destructive",
+      });
+    }
+  }, [refreshManagedSecurityData, toast]);
 
   return {
     currentUser,
@@ -655,8 +1057,16 @@ export function useSettingsController() {
     },
     security: {
       confirmPasswordInput,
+      createEmailInput,
+      createFullNameInput,
+      createRoleInput,
+      createUsernameInput,
+      creatingManagedUser,
       currentPasswordInput,
       currentUserRole,
+      devMailOutboxEnabled,
+      devMailOutboxEntries,
+      devMailOutboxLoading,
       isSuperuser,
       managedUsers,
       managedUsersLoading,
@@ -664,33 +1074,57 @@ export function useSettingsController() {
       onChangePassword: () => void handleChangePassword(),
       onChangeUsername: () => void handleChangeUsername(),
       onConfirmPasswordInputChange: setConfirmPasswordInput,
+      onCreateEmailInputChange: setCreateEmailInput,
+      onCreateFullNameInputChange: setCreateFullNameInput,
+      onCreateManagedUser: () => void handleCreateManagedUser(),
+      onCreateRoleInputChange: setCreateRoleInput,
+      onCreateUsernameInputChange: setCreateUsernameInput,
       onCurrentPasswordInputChange: setCurrentPasswordInput,
+      onDevMailOutboxRefresh: () => void loadDevMailOutbox(),
       onEditManagedUser: openManagedEditor,
+      onManagedBanToggle: (user: ManagedUser) => void handleManagedBanToggle(user),
+      onManagedResetPassword: (user: ManagedUser) => void handleResetManagedUserPassword(user),
+      onManagedResendActivation: (user: ManagedUser) => void handleResendManagedUserActivation(user),
       onNewPasswordInputChange: setNewPasswordInput,
       onUsernameInputChange: setUsernameInput,
       passwordSaving,
+      pendingResetRequests,
+      pendingResetRequestsLoading,
       usernameInput,
       usernameSaving,
     },
     managedDialog: {
       confirmCriticalOpen,
-      managedConfirmPasswordInput,
       managedDialogOpen,
-      managedPasswordInput,
+      managedEmailInput,
+      managedFullNameInput,
+      managedIsBanned,
+      managedRoleInput,
       managedSaving,
       managedSelectedUser,
+      managedStatusInput,
       managedUsernameInput,
       onCloseManagedDialog: () => handleManagedDialogChange(false),
       onConfirmCriticalOpenChange: setConfirmCriticalOpen,
       onConfirmManagedSave: () => void handleSaveManagedUser(),
-      onManagedConfirmPasswordInputChange: setManagedConfirmPasswordInput,
       onManagedDialogOpenChange: handleManagedDialogChange,
-      onManagedPasswordInputChange: setManagedPasswordInput,
+      onManagedEmailInputChange: setManagedEmailInput,
+      onManagedFullNameInputChange: setManagedFullNameInput,
+      onManagedIsBannedChange: setManagedIsBanned,
+      onManagedRoleInputChange: setManagedRoleInput,
+      onManagedStatusInputChange: setManagedStatusInput,
       onManagedUsernameInputChange: setManagedUsernameInput,
       onSaveCriticalSettings: async () => {
         await persistChanges(true);
       },
       saving,
+    },
+    managedSecretDialog: {
+      description: managedSecretDialogDescription,
+      onOpenChange: setManagedSecretDialogOpen,
+      open: managedSecretDialogOpen,
+      title: managedSecretDialogTitle,
+      value: managedSecretDialogValue,
     },
     loadingState: {
       loading,

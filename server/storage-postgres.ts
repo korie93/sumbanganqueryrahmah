@@ -1,4 +1,5 @@
 import {
+  type AccountActivationToken,
   type User,
   type InsertUser,
   type Import,
@@ -11,6 +12,7 @@ import {
   type InsertAuditLog,
   type Backup,
   type InsertBackup,
+  type PasswordResetRequest,
   imports,
   dataRows,
   userActivity,
@@ -32,7 +34,13 @@ import { CoreSchemaBootstrap } from "./internal/coreSchemaBootstrap";
 import { SettingsBootstrap } from "./internal/settingsBootstrap";
 import { SpatialBootstrap } from "./internal/spatialBootstrap";
 import { UsersBootstrap } from "./internal/usersBootstrap";
-import { AuthRepository } from "./repositories/auth.repository";
+import {
+  AuthRepository,
+  type ActivationTokenRecord,
+  type ManagedUserRecord,
+  type PendingPasswordResetRequestRecord,
+  type PasswordResetTokenRecord,
+} from "./repositories/auth.repository";
 import { ImportsRepository } from "./repositories/imports.repository";
 import { SearchRepository } from "./repositories/search.repository";
 import { ActivityRepository } from "./repositories/activity.repository";
@@ -120,6 +128,11 @@ export type CollectionNicknameSession = {
   updatedAt: Date;
 };
 
+export type ManagedUserAccount = ManagedUserRecord;
+export type PendingPasswordResetRequestSummary = PendingPasswordResetRequestRecord;
+export type AccountActivationTokenSummary = ActivationTokenRecord;
+export type PasswordResetTokenSummary = PasswordResetTokenRecord;
+
 export type CreateCollectionRecordInput = {
   customerName: string;
   icNumber: string;
@@ -168,12 +181,43 @@ type CategoryRule = {
   export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  createManagedUserAccount(params: {
+    username: string;
+    fullName?: string | null;
+    email?: string | null;
+    role: "admin" | "user";
+    passwordHash: string;
+    status?: "pending_activation" | "active" | "suspended" | "disabled";
+    mustChangePassword?: boolean;
+    passwordResetBySuperuser?: boolean;
+    createdBy: string;
+    activatedAt?: Date | null;
+    passwordChangedAt?: Date | null;
+  }): Promise<User>;
   updateUserCredentials(params: {
     userId: string;
     newUsername?: string;
     newPasswordHash?: string;
     passwordChangedAt?: Date | null;
+    mustChangePassword?: boolean;
+    passwordResetBySuperuser?: boolean;
+  }): Promise<User | undefined>;
+  updateUserAccount(params: {
+    userId: string;
+    username?: string;
+    fullName?: string | null;
+    email?: string | null;
+    role?: "admin" | "user";
+    status?: "pending_activation" | "active" | "suspended" | "disabled";
+    isBanned?: boolean;
+    mustChangePassword?: boolean;
+    passwordResetBySuperuser?: boolean;
+    passwordHash?: string;
+    passwordChangedAt?: Date | null;
+    activatedAt?: Date | null;
+    lastLoginAt?: Date | null;
   }): Promise<User | undefined>;
   getUsersByRoles(roles: string[]): Promise<Array<{
     id: string;
@@ -184,8 +228,52 @@ type CategoryRule = {
     passwordChangedAt: Date | null;
     isBanned: boolean | null;
   }>>;
+  getManagedUsers(): Promise<ManagedUserAccount[]>;
   updateActivitiesUsername(oldUsername: string, newUsername: string): Promise<void>;
   updateUserBan(username: string, isBanned: boolean): Promise<User | undefined>;
+  touchLastLogin(userId: string, timestamp?: Date): Promise<void>;
+  createActivationToken(params: {
+    userId: string;
+    tokenHash: string;
+    expiresAt: Date;
+    createdBy: string;
+  }): Promise<AccountActivationToken>;
+  invalidateUnusedActivationTokens(userId: string): Promise<void>;
+  getActivationTokenRecordByHash(tokenHash: string): Promise<AccountActivationTokenSummary | undefined>;
+  consumeActivationTokenById(params: {
+    tokenId: string;
+    now?: Date;
+  }): Promise<boolean>;
+  createPasswordResetRequest(params: {
+    userId: string;
+    requestedByUser: string | null;
+    approvedBy?: string | null;
+    resetType?: string;
+    tokenHash?: string | null;
+    expiresAt?: Date | null;
+    usedAt?: Date | null;
+  }): Promise<PasswordResetRequest>;
+  updatePasswordResetRequest(params: {
+    requestId: string;
+    approvedBy?: string | null;
+    resetType?: string;
+    usedAt?: Date | null;
+    tokenHash?: string | null;
+    expiresAt?: Date | null;
+  }): Promise<void>;
+  resolvePendingPasswordResetRequestsForUser(params: {
+    userId: string;
+    approvedBy: string;
+    resetType: string;
+    usedAt?: Date | null;
+  }): Promise<void>;
+  invalidateUnusedPasswordResetTokens(userId: string, now?: Date): Promise<void>;
+  getPasswordResetTokenRecordByHash(tokenHash: string): Promise<PasswordResetTokenSummary | undefined>;
+  consumePasswordResetRequestById(params: {
+    requestId: string;
+    now?: Date;
+  }): Promise<boolean>;
+  listPendingPasswordResetRequests(): Promise<PendingPasswordResetRequestSummary[]>;
   getAccounts(): Promise<Array<{
     username: string;
     role: string;
@@ -603,8 +691,28 @@ export class PostgresStorage implements IStorage {
     return this.authRepository.getUserByUsername(username);
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return this.authRepository.getUserByEmail(email);
+  }
+
   async createUser(user: InsertUser): Promise<User> {
     return this.authRepository.createUser(user);
+  }
+
+  async createManagedUserAccount(params: {
+    username: string;
+    fullName?: string | null;
+    email?: string | null;
+    role: "admin" | "user";
+    passwordHash: string;
+    status?: "pending_activation" | "active" | "suspended" | "disabled";
+    mustChangePassword?: boolean;
+    passwordResetBySuperuser?: boolean;
+    createdBy: string;
+    activatedAt?: Date | null;
+    passwordChangedAt?: Date | null;
+  }): Promise<User> {
+    return this.authRepository.createManagedUserAccount(params);
   }
 
   async updateUserCredentials(params: {
@@ -612,8 +720,28 @@ export class PostgresStorage implements IStorage {
     newUsername?: string;
     newPasswordHash?: string;
     passwordChangedAt?: Date | null;
+    mustChangePassword?: boolean;
+    passwordResetBySuperuser?: boolean;
   }): Promise<User | undefined> {
     return this.authRepository.updateUserCredentials(params);
+  }
+
+  async updateUserAccount(params: {
+    userId: string;
+    username?: string;
+    fullName?: string | null;
+    email?: string | null;
+    role?: "admin" | "user";
+    status?: "pending_activation" | "active" | "suspended" | "disabled";
+    isBanned?: boolean;
+    mustChangePassword?: boolean;
+    passwordResetBySuperuser?: boolean;
+    passwordHash?: string;
+    passwordChangedAt?: Date | null;
+    activatedAt?: Date | null;
+    lastLoginAt?: Date | null;
+  }): Promise<User | undefined> {
+    return this.authRepository.updateUserAccount(params);
   }
 
   async getUsersByRoles(roles: string[]): Promise<Array<{
@@ -626,6 +754,10 @@ export class PostgresStorage implements IStorage {
     isBanned: boolean | null;
   }>> {
     return this.authRepository.getUsersByRoles(roles);
+  }
+
+  async getManagedUsers(): Promise<ManagedUserAccount[]> {
+    return this.authRepository.getManagedUsers();
   }
 
   async updateActivitiesUsername(oldUsername: string, newUsername: string): Promise<void> {
@@ -646,6 +778,89 @@ export class PostgresStorage implements IStorage {
 
   async updateUserBan(username: string, isBanned: boolean): Promise<User | undefined> {
     return this.authRepository.updateUserBan(username, isBanned);
+  }
+
+  async touchLastLogin(userId: string, timestamp: Date = new Date()): Promise<void> {
+    return this.authRepository.touchLastLogin(userId, timestamp);
+  }
+
+  async createActivationToken(params: {
+    userId: string;
+    tokenHash: string;
+    expiresAt: Date;
+    createdBy: string;
+  }): Promise<AccountActivationToken> {
+    return this.authRepository.createActivationToken(params);
+  }
+
+  async invalidateUnusedActivationTokens(userId: string): Promise<void> {
+    return this.authRepository.invalidateUnusedActivationTokens(userId);
+  }
+
+  async getActivationTokenRecordByHash(
+    tokenHash: string,
+  ): Promise<AccountActivationTokenSummary | undefined> {
+    return this.authRepository.getActivationTokenRecordByHash(tokenHash);
+  }
+
+  async consumeActivationTokenById(params: {
+    tokenId: string;
+    now?: Date;
+  }): Promise<boolean> {
+    return this.authRepository.consumeActivationTokenById(params);
+  }
+
+  async createPasswordResetRequest(params: {
+    userId: string;
+    requestedByUser: string | null;
+    approvedBy?: string | null;
+    resetType?: string;
+    tokenHash?: string | null;
+    expiresAt?: Date | null;
+    usedAt?: Date | null;
+  }): Promise<PasswordResetRequest> {
+    return this.authRepository.createPasswordResetRequest(params);
+  }
+
+  async updatePasswordResetRequest(params: {
+    requestId: string;
+    approvedBy?: string | null;
+    resetType?: string;
+    usedAt?: Date | null;
+    tokenHash?: string | null;
+    expiresAt?: Date | null;
+  }): Promise<void> {
+    return this.authRepository.updatePasswordResetRequest(params);
+  }
+
+  async resolvePendingPasswordResetRequestsForUser(params: {
+    userId: string;
+    approvedBy: string;
+    resetType: string;
+    usedAt?: Date | null;
+  }): Promise<void> {
+    return this.authRepository.resolvePendingPasswordResetRequestsForUser(params);
+  }
+
+  async invalidateUnusedPasswordResetTokens(userId: string, now?: Date): Promise<void> {
+    return this.authRepository.invalidateUnusedPasswordResetTokens(userId, now);
+  }
+
+  async getPasswordResetTokenRecordByHash(
+    tokenHash: string,
+  ): Promise<PasswordResetTokenSummary | undefined> {
+    return this.authRepository.getPasswordResetTokenRecordByHash(tokenHash);
+  }
+
+  async consumePasswordResetRequestById(params: {
+    requestId: string;
+    now?: Date;
+  }): Promise<boolean> {
+    return this.authRepository.consumePasswordResetRequestById(params);
+  }
+
+  async listPendingPasswordResetRequests(): Promise<PendingPasswordResetRequestSummary[]> {
+    return this.authRepository.listPendingPasswordResetRequests();
   }
 
   async createImport(data: InsertImport & { createdBy?: string }): Promise<Import> {

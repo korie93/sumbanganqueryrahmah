@@ -2,7 +2,7 @@
 import "dotenv/config";
 import express3 from "express";
 import { createServer } from "http";
-import path3 from "path";
+import path4 from "path";
 import { WebSocketServer } from "ws";
 
 // server/internal/aiBootstrap.ts
@@ -1920,7 +1920,7 @@ var SpatialBootstrap = class {
 };
 
 // server/internal/usersBootstrap.ts
-import bcrypt from "bcrypt";
+import bcrypt2 from "bcrypt";
 import { randomUUID as randomUUID2 } from "crypto";
 import { count, sql as sql7 } from "drizzle-orm";
 
@@ -1934,11 +1934,39 @@ var users = pgTable("users", {
   id: text("id").primaryKey(),
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
+  fullName: text("full_name"),
+  email: text("email"),
   role: text("role").notNull().default("user"),
+  status: text("status").notNull().default("active"),
+  mustChangePassword: boolean("must_change_password").default(false).notNull(),
+  passwordResetBySuperuser: boolean("password_reset_by_superuser").default(false).notNull(),
+  createdBy: text("created_by"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   passwordChangedAt: timestamp("password_changed_at"),
+  activatedAt: timestamp("activated_at"),
+  lastLoginAt: timestamp("last_login_at"),
   isBanned: boolean("is_banned").default(false)
+});
+var accountActivationTokens = pgTable("account_activation_tokens", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull()
+});
+var passwordResetRequests = pgTable("password_reset_requests", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  requestedByUser: text("requested_by_user"),
+  approvedBy: text("approved_by"),
+  resetType: text("reset_type").notNull().default("email_link"),
+  tokenHash: text("token_hash"),
+  expiresAt: timestamp("expires_at"),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull()
 });
 var imports = pgTable("imports", {
   id: text("id").primaryKey(),
@@ -1989,6 +2017,8 @@ var backups = pgTable("backups", {
 var insertUserSchema = z.object({
   username: z.string().min(1, "Username is required"),
   password: z.string().min(1, "Password is required"),
+  fullName: z.string().optional(),
+  email: z.string().email().optional(),
   role: z.string().optional()
 });
 var insertImportSchema = createInsertSchema(imports).pick({
@@ -2036,6 +2066,123 @@ var dataRowRelations = relations(dataRows, ({ one }) => ({
   })
 }));
 
+// server/auth/account-lifecycle.ts
+function normalizeUserRole(value, fallback = "user") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "superuser") return "superuser";
+  if (normalized === "admin") return "admin";
+  if (normalized === "user") return "user";
+  return fallback;
+}
+function normalizeManageableUserRole(value, fallback = "user") {
+  const normalized = normalizeUserRole(value, fallback);
+  return normalized === "admin" ? "admin" : "user";
+}
+function normalizeAccountStatus(value, fallback = "pending_activation") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "active") return "active";
+  if (normalized === "suspended") return "suspended";
+  if (normalized === "disabled") return "disabled";
+  if (normalized === "pending_activation") return "pending_activation";
+  return fallback;
+}
+function isManageableUserRole(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "user" || normalized === "admin";
+}
+function isValidUserRole(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "user" || normalized === "admin" || normalized === "superuser";
+}
+function isBcryptHash(value) {
+  const normalized = String(value || "").trim();
+  return /^\$2[aby]\$\d{2}\$/.test(normalized);
+}
+function getAccountAccessBlockReason(state) {
+  if (!isValidUserRole(state.role)) return "invalid_role";
+  if (state.isBanned === true) return "banned";
+  const status = normalizeAccountStatus(
+    state.status,
+    isBcryptHash(state.passwordHash) ? "active" : "pending_activation"
+  );
+  if (status === "active") return null;
+  return status;
+}
+function canUserBypassForcedPasswordChange(role) {
+  void role;
+  return false;
+}
+
+// server/auth/passwords.ts
+import bcrypt from "bcrypt";
+import { createHash, randomBytes as randomBytes2 } from "node:crypto";
+
+// server/auth/credentials.ts
+var CREDENTIAL_USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,32}$/;
+var CREDENTIAL_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+var CREDENTIAL_PASSWORD_MIN_LENGTH = 8;
+var CREDENTIAL_BCRYPT_COST = 12;
+function normalizeUsernameInput(raw) {
+  return String(raw ?? "").trim().toLowerCase();
+}
+function normalizeEmailInput(raw) {
+  return String(raw ?? "").trim().toLowerCase();
+}
+function isStrongPassword(raw) {
+  if (raw.length < CREDENTIAL_PASSWORD_MIN_LENGTH) return false;
+  return /[A-Za-z]/.test(raw) && /\d/.test(raw);
+}
+function sendCredentialError(res, status, code, message) {
+  return res.status(status).json({
+    ok: false,
+    error: { code, message }
+  });
+}
+function buildCredentialAuditDetails(payload) {
+  return JSON.stringify({
+    actor_user_id: payload.actor_user_id,
+    target_user_id: payload.target_user_id,
+    metadata: {
+      changedField: payload.changedField
+    }
+  });
+}
+
+// server/auth/passwords.ts
+var TEMP_PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()-_=+";
+function pickRandomCharacter() {
+  const index = randomBytes2(1)[0] % TEMP_PASSWORD_ALPHABET.length;
+  return TEMP_PASSWORD_ALPHABET[index];
+}
+async function hashPassword(raw) {
+  return bcrypt.hash(raw, CREDENTIAL_BCRYPT_COST);
+}
+async function verifyPassword(raw, hash) {
+  const normalizedHash = String(hash || "").trim();
+  if (!normalizedHash || !isBcryptHash(normalizedHash)) {
+    return false;
+  }
+  return bcrypt.compare(raw, normalizedHash);
+}
+function generateOneTimeToken(bytes = 32) {
+  return randomBytes2(bytes).toString("hex");
+}
+function hashOpaqueToken(raw) {
+  return createHash("sha256").update(raw).digest("hex");
+}
+function generateTemporaryPassword(length = 18) {
+  const safeLength = Math.max(16, length);
+  let next = "";
+  while (next.length < safeLength) {
+    next += pickRandomCharacter();
+  }
+  if (!/[A-Z]/.test(next)) next = `A${next.slice(1)}`;
+  if (!/[a-z]/.test(next)) next = `${next.slice(0, 1)}a${next.slice(2)}`;
+  if (!/\d/.test(next)) next = `${next.slice(0, 2)}7${next.slice(3)}`;
+  if (!/[!@#$%^&*()\-_=+]/.test(next)) next = `${next.slice(0, 3)}!${next.slice(4)}`;
+  return next;
+}
+
 // server/internal/usersBootstrap.ts
 var BCRYPT_COST = 12;
 var UsersBootstrap = class {
@@ -2058,57 +2205,182 @@ var UsersBootstrap = class {
           CREATE TABLE IF NOT EXISTS public.users (
             id text PRIMARY KEY,
             username text NOT NULL,
+            full_name text,
+            email text,
             role text NOT NULL DEFAULT 'user',
             password_hash text,
-            password text,
+            status text NOT NULL DEFAULT 'active',
+            must_change_password boolean NOT NULL DEFAULT false,
+            password_reset_by_superuser boolean NOT NULL DEFAULT false,
+            created_by text,
             is_banned boolean DEFAULT false,
             created_at timestamp DEFAULT now(),
             updated_at timestamp DEFAULT now(),
-            password_changed_at timestamp
+            password_changed_at timestamp,
+            activated_at timestamp,
+            last_login_at timestamp
           )
         `);
+        await db.execute(sql7`
+          CREATE TABLE IF NOT EXISTS public.account_activation_tokens (
+            id text PRIMARY KEY,
+            user_id text NOT NULL,
+            token_hash text NOT NULL,
+            expires_at timestamp NOT NULL,
+            used_at timestamp,
+            created_by text,
+            created_at timestamp DEFAULT now()
+          )
+        `);
+        await db.execute(sql7`
+          CREATE TABLE IF NOT EXISTS public.password_reset_requests (
+            id text PRIMARY KEY,
+            user_id text NOT NULL,
+            requested_by_user text,
+            approved_by text,
+            reset_type text NOT NULL DEFAULT 'temporary_password',
+            token_hash text,
+            expires_at timestamp,
+            used_at timestamp,
+            created_at timestamp DEFAULT now()
+          )
+        `);
+        await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS full_name text`);
+        await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS email text`);
         await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role text`);
         await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_hash text`);
-        await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password text`);
+        await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS status text DEFAULT 'active'`);
+        await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS must_change_password boolean DEFAULT false`);
+        await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_reset_by_superuser boolean DEFAULT false`);
+        await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_by text`);
         await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_banned boolean DEFAULT false`);
         await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
         await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
         await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_changed_at timestamp`);
-        await db.execute(sql7`
-          UPDATE public.users
-          SET password_hash = password
-          WHERE password_hash IS NULL
-            AND password IS NOT NULL
+        await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS activated_at timestamp`);
+        await db.execute(sql7`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS last_login_at timestamp`);
+        await db.execute(sql7`ALTER TABLE public.account_activation_tokens ADD COLUMN IF NOT EXISTS created_by text`);
+        await db.execute(sql7`ALTER TABLE public.account_activation_tokens ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+        await db.execute(sql7`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS requested_by_user text`);
+        await db.execute(sql7`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS approved_by text`);
+        await db.execute(sql7`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS reset_type text DEFAULT 'temporary_password'`);
+        await db.execute(sql7`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS token_hash text`);
+        await db.execute(sql7`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS expires_at timestamp`);
+        await db.execute(sql7`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS used_at timestamp`);
+        await db.execute(sql7`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+        const legacyPasswordColumn = await db.execute(sql7`
+          SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'users'
+              AND column_name = 'password'
+          ) AS present
         `);
-        const missingHashRows = await db.execute(sql7`
-          SELECT id
-          FROM public.users
-          WHERE password_hash IS NULL
-        `);
-        for (const row of missingHashRows.rows) {
-          const userId = String(row.id || "").trim();
-          if (!userId) continue;
-          const fallbackHash = await bcrypt.hash(randomUUID2(), BCRYPT_COST);
+        const hasLegacyPasswordColumn = Boolean(
+          legacyPasswordColumn.rows[0]?.present
+        );
+        if (hasLegacyPasswordColumn) {
           await db.execute(sql7`
             UPDATE public.users
-            SET password_hash = ${fallbackHash}
-            WHERE id = ${userId}
+            SET password_hash = password
+            WHERE password_hash IS NULL
+              AND password IS NOT NULL
           `);
+          await db.execute(sql7`
+            UPDATE public.users
+            SET password = NULL
+            WHERE password IS NOT NULL
+          `);
+        }
+        const credentialRows = await db.execute(sql7`
+          SELECT id, password_hash, status
+          FROM public.users
+        `);
+        for (const row of credentialRows.rows) {
+          const userId = String(row.id || "").trim();
+          if (!userId) continue;
+          const currentHash = String(row.password_hash || "").trim();
+          const currentStatus = normalizeAccountStatus(
+            row.status,
+            isBcryptHash(currentHash) ? "active" : "pending_activation"
+          );
+          if (!isBcryptHash(currentHash)) {
+            const fallbackHash = await bcrypt2.hash(randomUUID2(), BCRYPT_COST);
+            await db.execute(sql7`
+              UPDATE public.users
+              SET
+                password_hash = ${fallbackHash},
+                status = ${currentStatus === "active" ? "pending_activation" : currentStatus},
+                must_change_password = false,
+                password_reset_by_superuser = false
+              WHERE id = ${userId}
+            `);
+          }
         }
         await db.execute(sql7`
           UPDATE public.users
           SET
-            role = COALESCE(NULLIF(role, ''), 'user'),
+            role = CASE
+              WHEN lower(trim(COALESCE(role, ''))) IN ('user', 'admin', 'superuser')
+                THEN lower(trim(COALESCE(role, '')))
+              ELSE 'user'
+            END,
+            status = CASE
+              WHEN lower(trim(COALESCE(status, ''))) IN ('pending_activation', 'active', 'suspended', 'disabled')
+                THEN lower(trim(COALESCE(status, '')))
+              WHEN password_hash ~ '^\\$2[aby]\\$'
+                THEN 'active'
+              ELSE 'pending_activation'
+            END,
+            must_change_password = COALESCE(must_change_password, false),
+            password_reset_by_superuser = COALESCE(password_reset_by_superuser, false),
             created_at = COALESCE(created_at, now()),
             updated_at = COALESCE(updated_at, now()),
+            activated_at = CASE
+              WHEN activated_at IS NOT NULL THEN activated_at
+              WHEN status = 'active' AND password_changed_at IS NOT NULL THEN password_changed_at
+              WHEN status = 'active' THEN created_at
+              ELSE activated_at
+            END,
             is_banned = COALESCE(is_banned, false)
         `);
         await db.execute(sql7`ALTER TABLE public.users ALTER COLUMN username SET NOT NULL`);
         await db.execute(sql7`ALTER TABLE public.users ALTER COLUMN role SET NOT NULL`);
+        await db.execute(sql7`ALTER TABLE public.users ALTER COLUMN status SET NOT NULL`);
         await db.execute(sql7`ALTER TABLE public.users ALTER COLUMN password_hash SET NOT NULL`);
         await db.execute(sql7`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower_unique ON public.users (lower(username))`);
         await db.execute(sql7`CREATE INDEX IF NOT EXISTS idx_users_username_lower ON public.users (lower(username))`);
         await db.execute(sql7`CREATE INDEX IF NOT EXISTS idx_users_role ON public.users (role)`);
+        await db.execute(sql7`CREATE INDEX IF NOT EXISTS idx_users_status ON public.users (status)`);
+        await db.execute(sql7`CREATE INDEX IF NOT EXISTS idx_users_must_change_password ON public.users (must_change_password)`);
+        await db.execute(sql7`CREATE INDEX IF NOT EXISTS idx_users_created_by ON public.users (created_by)`);
+        await db.execute(sql7`CREATE INDEX IF NOT EXISTS idx_users_password_reset_by_superuser ON public.users (password_reset_by_superuser)`);
+        await db.execute(sql7`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower_unique
+          ON public.users (lower(email))
+          WHERE email IS NOT NULL AND trim(email) <> ''
+        `);
+        await db.execute(sql7`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_account_activation_tokens_hash_unique
+          ON public.account_activation_tokens (token_hash)
+        `);
+        await db.execute(sql7`
+          CREATE INDEX IF NOT EXISTS idx_account_activation_tokens_user_id
+          ON public.account_activation_tokens (user_id)
+        `);
+        await db.execute(sql7`
+          CREATE INDEX IF NOT EXISTS idx_account_activation_tokens_expires_at
+          ON public.account_activation_tokens (expires_at)
+        `);
+        await db.execute(sql7`
+          CREATE INDEX IF NOT EXISTS idx_password_reset_requests_user_id
+          ON public.password_reset_requests (user_id)
+        `);
+        await db.execute(sql7`
+          CREATE INDEX IF NOT EXISTS idx_password_reset_requests_created_at
+          ON public.password_reset_requests (created_at DESC)
+        `);
         this.ready = true;
       } catch (err) {
         console.error("ERROR Failed to ensure users table:", err?.message || err);
@@ -2131,30 +2403,35 @@ var UsersBootstrap = class {
       const shouldSeedConfiguredUsers = shouldSeedDefaultUsers();
       const [{ value: existingUserCount }] = await db.select({ value: count() }).from(users);
       const isFreshLocalBootstrap = !shouldSeedConfiguredUsers && Number(existingUserCount || 0) === 0 && process.env.NODE_ENV !== "production";
+      let generatedLocalSuperuserPassword = null;
       const defaultUsers = [
         {
           username: process.env.SEED_SUPERUSER_USERNAME || "superuser",
           password: process.env.SEED_SUPERUSER_PASSWORD || "",
+          fullName: process.env.SEED_SUPERUSER_FULL_NAME || "Superuser",
           role: "superuser"
         },
         {
           username: process.env.SEED_ADMIN_USERNAME || "admin1",
           password: process.env.SEED_ADMIN_PASSWORD || "",
+          fullName: process.env.SEED_ADMIN_FULL_NAME || "Admin",
           role: "admin"
         },
         {
           username: process.env.SEED_USER_USERNAME || "user1",
           password: process.env.SEED_USER_PASSWORD || "",
+          fullName: process.env.SEED_USER_FULL_NAME || "User",
           role: "user"
         }
       ].filter((user) => user.password);
       if (isFreshLocalBootstrap) {
+        generatedLocalSuperuserPassword = generateTemporaryPassword();
         defaultUsers.push({
           username: process.env.SEED_SUPERUSER_USERNAME || "superuser",
-          password: process.env.SEED_SUPERUSER_PASSWORD || "0441024k",
+          password: process.env.SEED_SUPERUSER_PASSWORD || generatedLocalSuperuserPassword,
+          fullName: process.env.SEED_SUPERUSER_FULL_NAME || "Local Superuser",
           role: "superuser"
         });
-        console.warn("[AUTH] No users found. Bootstrapped local superuser account for first login.");
       } else if (!shouldSeedConfiguredUsers) {
         this.seedCompleted = true;
         return;
@@ -2165,17 +2442,29 @@ var UsersBootstrap = class {
           continue;
         }
         const now = /* @__PURE__ */ new Date();
-        const hashedPassword = await bcrypt.hash(user.password, BCRYPT_COST);
+        const hashedPassword = await bcrypt2.hash(user.password, BCRYPT_COST);
         await db.insert(users).values({
           id: randomUUID2(),
           username: user.username,
+          fullName: user.fullName,
           passwordHash: hashedPassword,
-          role: user.role,
+          role: normalizeUserRole(user.role),
+          status: "active",
+          mustChangePassword: isFreshLocalBootstrap && user.role === "superuser",
+          passwordResetBySuperuser: isFreshLocalBootstrap && user.role === "superuser",
+          createdBy: "system-bootstrap",
           createdAt: now,
           updatedAt: now,
           passwordChangedAt: now,
+          activatedAt: now,
           isBanned: false
         });
+      }
+      if (generatedLocalSuperuserPassword) {
+        console.warn("[AUTH] No users found. Bootstrapped a local superuser account with a random temporary password.");
+        console.warn(`[AUTH] Local superuser username: ${process.env.SEED_SUPERUSER_USERNAME || "superuser"}`);
+        console.warn(`[AUTH] Local superuser temporary password: ${generatedLocalSuperuserPassword}`);
+        console.warn("[AUTH] Change the password immediately after first login.");
       }
       this.seedCompleted = true;
     })();
@@ -2188,10 +2477,8 @@ var UsersBootstrap = class {
 };
 
 // server/repositories/auth.repository.ts
-import bcrypt2 from "bcrypt";
 import crypto from "crypto";
-import { inArray, sql as sql8 } from "drizzle-orm";
-var BCRYPT_COST2 = 12;
+import { and, eq, inArray, isNull, sql as sql8 } from "drizzle-orm";
 var QUERY_PAGE_LIMIT = 1e3;
 var AuthRepository = class {
   async getUser(id) {
@@ -2204,18 +2491,53 @@ var AuthRepository = class {
     const result = await db.select().from(users).where(sql8`lower(${users.username}) = lower(${normalized})`).limit(1);
     return result[0];
   }
+  async getUserByEmail(email) {
+    const normalized = String(email || "").trim().toLowerCase();
+    if (!normalized) return void 0;
+    const result = await db.select().from(users).where(sql8`lower(${users.email}) = lower(${normalized})`).limit(1);
+    return result[0];
+  }
   async createUser(user) {
     const id = crypto.randomUUID();
     const now = /* @__PURE__ */ new Date();
-    const hashedPassword = await bcrypt2.hash(user.password, BCRYPT_COST2);
+    const hashedPassword = await hashPassword(user.password);
     await db.insert(users).values({
       id,
       username: user.username,
+      fullName: user.fullName?.trim() || null,
+      email: user.email?.trim().toLowerCase() || null,
       passwordHash: hashedPassword,
-      role: user.role ?? "user",
+      role: normalizeUserRole(user.role),
+      status: "active",
+      mustChangePassword: false,
+      passwordResetBySuperuser: false,
+      createdBy: "legacy-create-user",
       createdAt: now,
       updatedAt: now,
       passwordChangedAt: now,
+      activatedAt: now,
+      isBanned: false
+    });
+    return await this.getUser(id);
+  }
+  async createManagedUserAccount(params) {
+    const id = crypto.randomUUID();
+    const now = /* @__PURE__ */ new Date();
+    await db.insert(users).values({
+      id,
+      username: params.username.trim().toLowerCase(),
+      fullName: String(params.fullName || "").trim() || null,
+      email: String(params.email || "").trim().toLowerCase() || null,
+      passwordHash: params.passwordHash,
+      role: normalizeManageableUserRole(params.role),
+      status: normalizeAccountStatus(params.status, "pending_activation"),
+      mustChangePassword: params.mustChangePassword === true,
+      passwordResetBySuperuser: params.passwordResetBySuperuser === true,
+      createdBy: params.createdBy,
+      createdAt: now,
+      updatedAt: now,
+      passwordChangedAt: params.passwordChangedAt ?? null,
+      activatedAt: params.activatedAt ?? null,
       isBanned: false
     });
     return await this.getUser(id);
@@ -2225,7 +2547,7 @@ var AuthRepository = class {
       updatedAt: /* @__PURE__ */ new Date()
     };
     if (typeof params.newUsername === "string" && params.newUsername.trim()) {
-      next.username = params.newUsername.trim();
+      next.username = params.newUsername.trim().toLowerCase();
     }
     if (typeof params.newPasswordHash === "string" && params.newPasswordHash.trim()) {
       next.passwordHash = params.newPasswordHash.trim();
@@ -2233,7 +2555,56 @@ var AuthRepository = class {
     } else if (params.passwordChangedAt !== void 0) {
       next.passwordChangedAt = params.passwordChangedAt;
     }
+    if (params.mustChangePassword !== void 0) {
+      next.mustChangePassword = params.mustChangePassword;
+    }
+    if (params.passwordResetBySuperuser !== void 0) {
+      next.passwordResetBySuperuser = params.passwordResetBySuperuser;
+    }
     await db.update(users).set(next).where(sql8`${users.id} = ${params.userId}`);
+    return this.getUser(params.userId);
+  }
+  async updateUserAccount(params) {
+    const next = {
+      updatedAt: /* @__PURE__ */ new Date()
+    };
+    if (typeof params.username === "string" && params.username.trim()) {
+      next.username = params.username.trim().toLowerCase();
+    }
+    if (params.fullName !== void 0) {
+      next.fullName = String(params.fullName || "").trim() || null;
+    }
+    if (params.email !== void 0) {
+      next.email = String(params.email || "").trim().toLowerCase() || null;
+    }
+    if (params.role !== void 0) {
+      next.role = normalizeManageableUserRole(params.role);
+    }
+    if (params.status !== void 0) {
+      next.status = normalizeAccountStatus(params.status);
+    }
+    if (params.isBanned !== void 0) {
+      next.isBanned = params.isBanned;
+    }
+    if (params.mustChangePassword !== void 0) {
+      next.mustChangePassword = params.mustChangePassword;
+    }
+    if (params.passwordResetBySuperuser !== void 0) {
+      next.passwordResetBySuperuser = params.passwordResetBySuperuser;
+    }
+    if (params.passwordHash !== void 0) {
+      next.passwordHash = params.passwordHash;
+    }
+    if (params.passwordChangedAt !== void 0) {
+      next.passwordChangedAt = params.passwordChangedAt;
+    }
+    if (params.activatedAt !== void 0) {
+      next.activatedAt = params.activatedAt;
+    }
+    if (params.lastLoginAt !== void 0) {
+      next.lastLoginAt = params.lastLoginAt;
+    }
+    await db.update(users).set(next).where(eq(users.id, params.userId));
     return this.getUser(params.userId);
   }
   async getUsersByRoles(roles) {
@@ -2257,13 +2628,224 @@ var AuthRepository = class {
     }
     return results;
   }
+  async getManagedUsers() {
+    const rows = [];
+    let offset = 0;
+    while (true) {
+      const chunk = await db.select({
+        id: users.id,
+        username: users.username,
+        fullName: users.fullName,
+        email: users.email,
+        role: users.role,
+        status: users.status,
+        mustChangePassword: users.mustChangePassword,
+        passwordResetBySuperuser: users.passwordResetBySuperuser,
+        createdBy: users.createdBy,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        activatedAt: users.activatedAt,
+        lastLoginAt: users.lastLoginAt,
+        passwordChangedAt: users.passwordChangedAt,
+        isBanned: users.isBanned
+      }).from(users).where(inArray(users.role, ["admin", "user"])).orderBy(users.role, users.username).limit(QUERY_PAGE_LIMIT).offset(offset);
+      if (!chunk.length) break;
+      rows.push(...chunk);
+      if (chunk.length < QUERY_PAGE_LIMIT) break;
+      offset += chunk.length;
+    }
+    return rows;
+  }
   async updateActivitiesUsername(oldUsername, newUsername) {
     await db.update(userActivity).set({ username: newUsername }).where(sql8`${userActivity.username} = ${oldUsername}`);
   }
   async updateUserBan(username, isBanned) {
     await db.update(users).set({ isBanned, updatedAt: /* @__PURE__ */ new Date() }).where(sql8`${users.username} = ${username}`);
-    const result = await db.select().from(users).where(sql8`${users.username} = ${username}`).limit(1);
-    return result[0];
+    return this.getUserByUsername(username);
+  }
+  async touchLastLogin(userId, timestamp2 = /* @__PURE__ */ new Date()) {
+    await db.update(users).set({
+      lastLoginAt: timestamp2,
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where(eq(users.id, userId));
+  }
+  async createActivationToken(params) {
+    const record = {
+      id: crypto.randomUUID(),
+      userId: params.userId,
+      tokenHash: params.tokenHash,
+      expiresAt: params.expiresAt,
+      usedAt: null,
+      createdBy: params.createdBy,
+      createdAt: /* @__PURE__ */ new Date()
+    };
+    await db.insert(accountActivationTokens).values(record);
+    return record;
+  }
+  async invalidateUnusedActivationTokens(userId) {
+    await db.update(accountActivationTokens).set({ usedAt: /* @__PURE__ */ new Date() }).where(
+      and(
+        eq(accountActivationTokens.userId, userId),
+        isNull(accountActivationTokens.usedAt)
+      )
+    );
+  }
+  async getActivationTokenRecordByHash(tokenHash) {
+    const normalizedHash = String(tokenHash || "").trim();
+    if (!normalizedHash) {
+      return void 0;
+    }
+    const result = await db.execute(sql8`
+      SELECT
+        t.id as "tokenId",
+        t.expires_at as "expiresAt",
+        t.used_at as "usedAt",
+        t.created_at as "createdAt",
+        u.id as "userId",
+        u.username,
+        u.full_name as "fullName",
+        u.email,
+        u.role,
+        u.status,
+        u.is_banned as "isBanned",
+        u.activated_at as "activatedAt"
+      FROM public.account_activation_tokens t
+      INNER JOIN public.users u ON u.id = t.user_id
+      WHERE t.token_hash = ${normalizedHash}
+      ORDER BY t.created_at DESC
+      LIMIT 1
+    `);
+    return result.rows[0];
+  }
+  async consumeActivationTokenById(params) {
+    const tokenId = String(params.tokenId || "").trim();
+    if (!tokenId) {
+      return false;
+    }
+    const now = params.now ?? /* @__PURE__ */ new Date();
+    const result = await db.execute(sql8`
+      UPDATE public.account_activation_tokens
+      SET used_at = ${now}
+      WHERE id = ${tokenId}
+        AND used_at IS NULL
+        AND expires_at > ${now}
+      RETURNING id
+    `);
+    return (result.rows || []).length > 0;
+  }
+  async createPasswordResetRequest(params) {
+    const record = {
+      id: crypto.randomUUID(),
+      userId: params.userId,
+      requestedByUser: params.requestedByUser,
+      approvedBy: params.approvedBy ?? null,
+      resetType: params.resetType ?? "email_link",
+      tokenHash: params.tokenHash ?? null,
+      expiresAt: params.expiresAt ?? null,
+      usedAt: params.usedAt ?? null,
+      createdAt: /* @__PURE__ */ new Date()
+    };
+    await db.insert(passwordResetRequests).values(record);
+    return record;
+  }
+  async updatePasswordResetRequest(params) {
+    await db.update(passwordResetRequests).set({
+      approvedBy: params.approvedBy,
+      resetType: params.resetType,
+      tokenHash: params.tokenHash ?? null,
+      expiresAt: params.expiresAt ?? null,
+      usedAt: params.usedAt ?? null
+    }).where(eq(passwordResetRequests.id, params.requestId));
+  }
+  async resolvePendingPasswordResetRequestsForUser(params) {
+    await db.update(passwordResetRequests).set({
+      approvedBy: params.approvedBy,
+      resetType: params.resetType,
+      usedAt: params.usedAt ?? /* @__PURE__ */ new Date()
+    }).where(
+      and(
+        eq(passwordResetRequests.userId, params.userId),
+        isNull(passwordResetRequests.approvedBy),
+        isNull(passwordResetRequests.usedAt)
+      )
+    );
+  }
+  async invalidateUnusedPasswordResetTokens(userId, now = /* @__PURE__ */ new Date()) {
+    await db.update(passwordResetRequests).set({ usedAt: now }).where(
+      and(
+        eq(passwordResetRequests.userId, userId),
+        isNull(passwordResetRequests.usedAt),
+        sql8`${passwordResetRequests.tokenHash} IS NOT NULL`
+      )
+    );
+  }
+  async getPasswordResetTokenRecordByHash(tokenHash) {
+    const normalizedHash = String(tokenHash || "").trim();
+    if (!normalizedHash) {
+      return void 0;
+    }
+    const result = await db.execute(sql8`
+      SELECT
+        r.id as "requestId",
+        r.user_id as "userId",
+        r.expires_at as "expiresAt",
+        r.used_at as "usedAt",
+        r.created_at as "createdAt",
+        u.username,
+        u.full_name as "fullName",
+        u.email,
+        u.role,
+        u.status,
+        u.is_banned as "isBanned",
+        u.activated_at as "activatedAt"
+      FROM public.password_reset_requests r
+      INNER JOIN public.users u ON u.id = r.user_id
+      WHERE r.token_hash = ${normalizedHash}
+      ORDER BY r.created_at DESC
+      LIMIT 1
+    `);
+    return result.rows?.[0] || void 0;
+  }
+  async consumePasswordResetRequestById(params) {
+    const requestId = String(params.requestId || "").trim();
+    if (!requestId) {
+      return false;
+    }
+    const now = params.now ?? /* @__PURE__ */ new Date();
+    const result = await db.execute(sql8`
+      UPDATE public.password_reset_requests
+      SET used_at = ${now}
+      WHERE id = ${requestId}
+        AND used_at IS NULL
+        AND expires_at > ${now}
+      RETURNING id
+    `);
+    return (result.rows || []).length > 0;
+  }
+  async listPendingPasswordResetRequests() {
+    const result = await db.execute(sql8`
+      SELECT
+        r.id,
+        r.user_id as "userId",
+        r.requested_by_user as "requestedByUser",
+        r.approved_by as "approvedBy",
+        r.reset_type as "resetType",
+        r.created_at as "createdAt",
+        r.expires_at as "expiresAt",
+        r.used_at as "usedAt",
+        u.username,
+        u.full_name as "fullName",
+        u.email,
+        u.role,
+        u.status,
+        u.is_banned as "isBanned"
+      FROM public.password_reset_requests r
+      INNER JOIN public.users u ON u.id = r.user_id
+      WHERE r.approved_by IS NULL
+        AND r.used_at IS NULL
+      ORDER BY r.created_at DESC
+    `);
+    return result.rows || [];
   }
   async getAccounts() {
     const rows = [];
@@ -2285,7 +2867,7 @@ var AuthRepository = class {
 
 // server/repositories/imports.repository.ts
 import crypto2 from "crypto";
-import { and, desc, eq, sql as sql9 } from "drizzle-orm";
+import { and as and2, desc as desc2, eq as eq2, sql as sql9 } from "drizzle-orm";
 var QUERY_PAGE_LIMIT2 = 1e3;
 var ImportsRepository = class {
   async createImport(data) {
@@ -2303,7 +2885,7 @@ var ImportsRepository = class {
     const results = [];
     let offset = 0;
     while (true) {
-      const chunk = await db.select().from(imports).where(eq(imports.isDeleted, false)).orderBy(desc(imports.createdAt)).limit(QUERY_PAGE_LIMIT2).offset(offset);
+      const chunk = await db.select().from(imports).where(eq2(imports.isDeleted, false)).orderBy(desc2(imports.createdAt)).limit(QUERY_PAGE_LIMIT2).offset(offset);
       if (!chunk.length) break;
       results.push(...chunk);
       if (chunk.length < QUERY_PAGE_LIMIT2) break;
@@ -2330,15 +2912,15 @@ var ImportsRepository = class {
     return result.rows || [];
   }
   async getImportById(id) {
-    const result = await db.select().from(imports).where(and(eq(imports.id, id), eq(imports.isDeleted, false))).limit(1);
+    const result = await db.select().from(imports).where(and2(eq2(imports.id, id), eq2(imports.isDeleted, false))).limit(1);
     return result[0];
   }
   async updateImportName(id, name) {
-    await db.update(imports).set({ name }).where(eq(imports.id, id));
+    await db.update(imports).set({ name }).where(eq2(imports.id, id));
     return this.getImportById(id);
   }
   async deleteImport(id) {
-    await db.update(imports).set({ isDeleted: true }).where(eq(imports.id, id));
+    await db.update(imports).set({ isDeleted: true }).where(eq2(imports.id, id));
     return true;
   }
   async createDataRow(data) {
@@ -2356,7 +2938,7 @@ var ImportsRepository = class {
     const rows = [];
     let offset = 0;
     while (true) {
-      const chunk = await db.select().from(dataRows).where(eq(dataRows.importId, importId)).limit(QUERY_PAGE_LIMIT2).offset(offset);
+      const chunk = await db.select().from(dataRows).where(eq2(dataRows.importId, importId)).limit(QUERY_PAGE_LIMIT2).offset(offset);
       if (!chunk.length) break;
       rows.push(...chunk);
       if (chunk.length < QUERY_PAGE_LIMIT2) break;
@@ -2365,10 +2947,10 @@ var ImportsRepository = class {
     return rows;
   }
   async getDataRowsByImportPage(importId, limit, offset) {
-    return db.select().from(dataRows).where(eq(dataRows.importId, importId)).limit(Math.max(1, limit)).offset(Math.max(0, offset));
+    return db.select().from(dataRows).where(eq2(dataRows.importId, importId)).limit(Math.max(1, limit)).offset(Math.max(0, offset));
   }
   async getDataRowCountByImport(importId) {
-    const [{ count: count3 }] = await db.select({ count: sql9`count(*)` }).from(dataRows).where(eq(dataRows.importId, importId));
+    const [{ count: count3 }] = await db.select({ count: sql9`count(*)` }).from(dataRows).where(eq2(dataRows.importId, importId));
     return Number(count3);
   }
   async getDataRowCountsByImportIds(importIds) {
@@ -2642,7 +3224,7 @@ var SearchRepository = class {
 
 // server/repositories/activity.repository.ts
 import crypto3 from "crypto";
-import { and as and2, desc as desc2, eq as eq2, gte, lte, sql as sql11 } from "drizzle-orm";
+import { and as and3, desc as desc3, eq as eq3, gte, lte, sql as sql11 } from "drizzle-orm";
 var QUERY_PAGE_LIMIT3 = 1e3;
 var ActivityRepository = class {
   constructor(options) {
@@ -2681,13 +3263,13 @@ var ActivityRepository = class {
     return result[0];
   }
   async touchActivity(activityId) {
-    await db.update(userActivity).set({ lastActivityTime: /* @__PURE__ */ new Date() }).where(eq2(userActivity.id, activityId));
+    await db.update(userActivity).set({ lastActivityTime: /* @__PURE__ */ new Date() }).where(eq3(userActivity.id, activityId));
   }
   async getActiveActivitiesByUsername(username) {
     const activities = [];
     let offset = 0;
     while (true) {
-      const chunk = await db.select().from(userActivity).where(and2(eq2(userActivity.username, username), eq2(userActivity.isActive, true))).orderBy(desc2(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT3).offset(offset);
+      const chunk = await db.select().from(userActivity).where(and3(eq3(userActivity.username, username), eq3(userActivity.isActive, true))).orderBy(desc3(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT3).offset(offset);
       if (!chunk.length) break;
       activities.push(...chunk);
       if (chunk.length < QUERY_PAGE_LIMIT3) break;
@@ -2702,20 +3284,20 @@ var ActivityRepository = class {
     if (data.logoutTime !== void 0) updateData.logoutTime = data.logoutTime;
     if (data.logoutReason !== void 0) updateData.logoutReason = data.logoutReason;
     if (Object.keys(updateData).length > 0) {
-      await db.update(userActivity).set(updateData).where(eq2(userActivity.id, id));
+      await db.update(userActivity).set(updateData).where(eq3(userActivity.id, id));
     }
-    const result = await db.select().from(userActivity).where(eq2(userActivity.id, id)).limit(1);
+    const result = await db.select().from(userActivity).where(eq3(userActivity.id, id)).limit(1);
     return result[0];
   }
   async getActivityById(id) {
-    const result = await db.select().from(userActivity).where(eq2(userActivity.id, id)).limit(1);
+    const result = await db.select().from(userActivity).where(eq3(userActivity.id, id)).limit(1);
     return result[0];
   }
   async getActiveActivities() {
     const activities = [];
     let offset = 0;
     while (true) {
-      const chunk = await db.select().from(userActivity).where(eq2(userActivity.isActive, true)).orderBy(desc2(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT3).offset(offset);
+      const chunk = await db.select().from(userActivity).where(eq3(userActivity.isActive, true)).orderBy(desc3(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT3).offset(offset);
       if (!chunk.length) break;
       activities.push(...chunk);
       if (chunk.length < QUERY_PAGE_LIMIT3) break;
@@ -2727,7 +3309,7 @@ var ActivityRepository = class {
     const activities = [];
     let offset = 0;
     while (true) {
-      const chunk = await db.select().from(userActivity).orderBy(desc2(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT3).offset(offset);
+      const chunk = await db.select().from(userActivity).orderBy(desc3(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT3).offset(offset);
       if (!chunk.length) break;
       activities.push(...chunk);
       if (chunk.length < QUERY_PAGE_LIMIT3) break;
@@ -2739,14 +3321,14 @@ var ActivityRepository = class {
     }));
   }
   async deleteActivity(id) {
-    await db.delete(userActivity).where(eq2(userActivity.id, id));
+    await db.delete(userActivity).where(eq3(userActivity.id, id));
     return true;
   }
   async getFilteredActivities(filters) {
     const whereConditions = [];
-    if (filters.username) whereConditions.push(eq2(userActivity.username, filters.username));
-    if (filters.ipAddress) whereConditions.push(eq2(userActivity.ipAddress, filters.ipAddress));
-    if (filters.browser) whereConditions.push(eq2(userActivity.browser, filters.browser));
+    if (filters.username) whereConditions.push(eq3(userActivity.username, filters.username));
+    if (filters.ipAddress) whereConditions.push(eq3(userActivity.ipAddress, filters.ipAddress));
+    if (filters.browser) whereConditions.push(eq3(userActivity.browser, filters.browser));
     if (filters.dateFrom) whereConditions.push(gte(userActivity.loginTime, filters.dateFrom));
     if (filters.dateTo) {
       const endOfDay = new Date(filters.dateTo);
@@ -2756,7 +3338,7 @@ var ActivityRepository = class {
     const activities = [];
     let offset = 0;
     while (true) {
-      const chunk = await db.select().from(userActivity).where(whereConditions.length ? and2(...whereConditions) : void 0).orderBy(desc2(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT3).offset(offset);
+      const chunk = await db.select().from(userActivity).where(whereConditions.length ? and3(...whereConditions) : void 0).orderBy(desc3(userActivity.loginTime)).limit(QUERY_PAGE_LIMIT3).offset(offset);
       if (!chunk.length) break;
       activities.push(...chunk);
       if (chunk.length < QUERY_PAGE_LIMIT3) break;
@@ -2779,7 +3361,7 @@ var ActivityRepository = class {
     if (reason) {
       updateData.logoutReason = reason;
     }
-    await db.update(userActivity).set(updateData).where(and2(eq2(userActivity.isActive, true), eq2(userActivity.username, username)));
+    await db.update(userActivity).set(updateData).where(and3(eq3(userActivity.isActive, true), eq3(userActivity.username, username)));
   }
   async deactivateUserSessionsByFingerprint(username, fingerprint) {
     await db.update(userActivity).set({
@@ -2787,10 +3369,10 @@ var ActivityRepository = class {
       logoutTime: /* @__PURE__ */ new Date(),
       logoutReason: "NEW_SESSION"
     }).where(
-      and2(
-        eq2(userActivity.username, username),
-        eq2(userActivity.fingerprint, fingerprint),
-        eq2(userActivity.isActive, true)
+      and3(
+        eq3(userActivity.username, username),
+        eq3(userActivity.fingerprint, fingerprint),
+        eq3(userActivity.isActive, true)
       )
     );
   }
@@ -2820,10 +3402,18 @@ var ActivityRepository = class {
       id: row.id,
       username: row.username,
       passwordHash: row.password_hash,
+      fullName: row.full_name ?? null,
+      email: row.email ?? null,
       role: row.role,
+      status: row.status ?? "active",
+      mustChangePassword: Boolean(row.must_change_password ?? false),
+      passwordResetBySuperuser: Boolean(row.password_reset_by_superuser ?? false),
+      createdBy: row.created_by ?? null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       passwordChangedAt: row.password_changed_at,
+      activatedAt: row.activated_at ?? null,
+      lastLoginAt: row.last_login_at ?? null,
       isBanned: row.is_banned,
       banInfo: row.banLogoutTime ? {
         ipAddress: row.banIpAddress ?? null,
@@ -2881,7 +3471,7 @@ var ActivityRepository = class {
 
 // server/repositories/audit.repository.ts
 import crypto4 from "crypto";
-import { desc as desc3, gte as gte2, sql as sql12 } from "drizzle-orm";
+import { desc as desc4, gte as gte2, sql as sql12 } from "drizzle-orm";
 var QUERY_PAGE_LIMIT4 = 1e3;
 var AuditRepository = class {
   async createAuditLog(data) {
@@ -2900,7 +3490,7 @@ var AuditRepository = class {
     const logs = [];
     let offset = 0;
     while (true) {
-      const chunk = await db.select().from(auditLogs).orderBy(desc3(auditLogs.timestamp)).limit(QUERY_PAGE_LIMIT4).offset(offset);
+      const chunk = await db.select().from(auditLogs).orderBy(desc4(auditLogs.timestamp)).limit(QUERY_PAGE_LIMIT4).offset(offset);
       if (!chunk.length) break;
       logs.push(...chunk);
       if (chunk.length < QUERY_PAGE_LIMIT4) break;
@@ -3859,7 +4449,7 @@ var AiCategoryRepository = class {
 
 // server/repositories/backups.repository.ts
 import crypto6 from "crypto";
-import { eq as eq3, sql as sql15 } from "drizzle-orm";
+import { eq as eq4, sql as sql15 } from "drizzle-orm";
 var BACKUP_CHUNK_SIZE = 500;
 var QUERY_PAGE_LIMIT5 = 1e3;
 var BackupsRepository = class {
@@ -3947,7 +4537,7 @@ var BackupsRepository = class {
   }
   async getBackupDataForExport() {
     const [allImports, allDataRows, allUsersFromDb, allAuditLogs] = await Promise.all([
-      db.select().from(imports).where(eq3(imports.isDeleted, false)),
+      db.select().from(imports).where(eq4(imports.isDeleted, false)),
       db.select().from(dataRows),
       db.select().from(users),
       db.select().from(auditLogs)
@@ -3996,7 +4586,7 @@ var BackupsRepository = class {
             createdBy: record.createdBy ?? null
           }));
           for (const row of rows) {
-            await tx.update(imports).set({ isDeleted: false }).where(eq3(imports.id, row.id));
+            await tx.update(imports).set({ isDeleted: false }).where(eq4(imports.id, row.id));
           }
           await tx.insert(imports).values(rows).onConflictDoNothing();
           stats.imports += rows.length;
@@ -4051,7 +4641,7 @@ var BackupsRepository = class {
 };
 
 // server/repositories/analytics.repository.ts
-import { count as count2, eq as eq4, gte as gte3, sql as sql16 } from "drizzle-orm";
+import { count as count2, eq as eq5, gte as gte3, sql as sql16 } from "drizzle-orm";
 var ANALYTICS_TZ = process.env.ANALYTICS_TZ || "Asia/Kuala_Lumpur";
 var AnalyticsRepository = class {
   async getDashboardSummary() {
@@ -4059,11 +4649,11 @@ var AnalyticsRepository = class {
     today.setHours(0, 0, 0, 0);
     const [totalUsers, activeSessions, loginsToday, totalDataRows, totalImports, bannedUsers] = await Promise.all([
       db.select({ value: count2() }).from(users),
-      db.select({ value: count2() }).from(userActivity).where(eq4(userActivity.isActive, true)),
+      db.select({ value: count2() }).from(userActivity).where(eq5(userActivity.isActive, true)),
       db.select({ value: count2() }).from(userActivity).where(gte3(userActivity.loginTime, today)),
       db.select({ value: count2() }).from(dataRows),
-      db.select({ value: count2() }).from(imports).where(eq4(imports.isDeleted, false)),
-      db.select({ value: count2() }).from(users).where(eq4(users.isBanned, true))
+      db.select({ value: count2() }).from(imports).where(eq5(imports.isDeleted, false)),
+      db.select({ value: count2() }).from(users).where(eq5(users.isBanned, true))
     ]);
     return {
       totalUsers: totalUsers[0]?.value || 0,
@@ -5831,14 +6421,26 @@ var PostgresStorage = class {
   async getUserByUsername(username) {
     return this.authRepository.getUserByUsername(username);
   }
+  async getUserByEmail(email) {
+    return this.authRepository.getUserByEmail(email);
+  }
   async createUser(user) {
     return this.authRepository.createUser(user);
+  }
+  async createManagedUserAccount(params) {
+    return this.authRepository.createManagedUserAccount(params);
   }
   async updateUserCredentials(params) {
     return this.authRepository.updateUserCredentials(params);
   }
+  async updateUserAccount(params) {
+    return this.authRepository.updateUserAccount(params);
+  }
   async getUsersByRoles(roles) {
     return this.authRepository.getUsersByRoles(roles);
+  }
+  async getManagedUsers() {
+    return this.authRepository.getManagedUsers();
   }
   async updateActivitiesUsername(oldUsername, newUsername) {
     return this.authRepository.updateActivitiesUsername(oldUsername, newUsername);
@@ -5851,6 +6453,42 @@ var PostgresStorage = class {
   }
   async updateUserBan(username, isBanned) {
     return this.authRepository.updateUserBan(username, isBanned);
+  }
+  async touchLastLogin(userId, timestamp2 = /* @__PURE__ */ new Date()) {
+    return this.authRepository.touchLastLogin(userId, timestamp2);
+  }
+  async createActivationToken(params) {
+    return this.authRepository.createActivationToken(params);
+  }
+  async invalidateUnusedActivationTokens(userId) {
+    return this.authRepository.invalidateUnusedActivationTokens(userId);
+  }
+  async getActivationTokenRecordByHash(tokenHash) {
+    return this.authRepository.getActivationTokenRecordByHash(tokenHash);
+  }
+  async consumeActivationTokenById(params) {
+    return this.authRepository.consumeActivationTokenById(params);
+  }
+  async createPasswordResetRequest(params) {
+    return this.authRepository.createPasswordResetRequest(params);
+  }
+  async updatePasswordResetRequest(params) {
+    return this.authRepository.updatePasswordResetRequest(params);
+  }
+  async resolvePendingPasswordResetRequestsForUser(params) {
+    return this.authRepository.resolvePendingPasswordResetRequestsForUser(params);
+  }
+  async invalidateUnusedPasswordResetTokens(userId, now) {
+    return this.authRepository.invalidateUnusedPasswordResetTokens(userId, now);
+  }
+  async getPasswordResetTokenRecordByHash(tokenHash) {
+    return this.authRepository.getPasswordResetTokenRecordByHash(tokenHash);
+  }
+  async consumePasswordResetRequestById(params) {
+    return this.authRepository.consumePasswordResetRequestById(params);
+  }
+  async listPendingPasswordResetRequests() {
+    return this.authRepository.listPendingPasswordResetRequests();
   }
   async createImport(data) {
     return this.importsRepository.createImport(data);
@@ -6245,19 +6883,19 @@ function createApiProtectionMiddleware(options) {
     const controlState = options.getControlState();
     const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim();
     const method = String(req.method || "GET").toUpperCase();
-    const path4 = req.path || "/";
+    const path5 = req.path || "/";
     let bucketScope = "api";
     let baseLimit = 40;
     let minLimit = 8;
-    if (path4.startsWith("/api/ai/")) {
+    if (path5.startsWith("/api/ai/")) {
       bucketScope = "ai";
       baseLimit = 14;
       minLimit = 4;
-    } else if (path4.startsWith("/api/activity/heartbeat")) {
+    } else if (path5.startsWith("/api/activity/heartbeat")) {
       bucketScope = "heartbeat";
       baseLimit = 120;
       minLimit = 20;
-    } else if (method === "GET" && (path4.startsWith("/api/collection/nicknames") || path4.startsWith("/api/collection/admin-groups"))) {
+    } else if (method === "GET" && (path5.startsWith("/api/collection/nicknames") || path5.startsWith("/api/collection/admin-groups"))) {
       bucketScope = "collection-meta";
       baseLimit = 120;
       minLimit = 24;
@@ -6444,6 +7082,17 @@ var logger = {
 
 // server/auth/guards.ts
 var TAB_VISIBILITY_CACHE_TTL_MS = 5e3;
+var FORCED_PASSWORD_CHANGE_ALLOWLIST = /* @__PURE__ */ new Set([
+  "GET:/api/auth/me",
+  "GET:/api/me",
+  "POST:/api/auth/change-password",
+  "PATCH:/api/me/credentials",
+  "POST:/api/activity/logout",
+  "POST:/api/activity/heartbeat"
+]);
+function canAccessDuringForcedPasswordChange(method, path5) {
+  return FORCED_PASSWORD_CHANGE_ALLOWLIST.has(`${method.toUpperCase()}:${path5}`);
+}
 function createAuthGuards(options) {
   const storage2 = options.storage;
   const secret = options.secret || getSessionSecret();
@@ -6484,15 +7133,53 @@ function createAuthGuards(options) {
           forceLogout: true
         });
       }
+      const user = activity.userId ? await storage2.getUser(activity.userId) : await storage2.getUserByUsername(activity.username || decoded.username);
+      if (!user) {
+        await storage2.updateActivity(decoded.activityId, {
+          isActive: false,
+          logoutTime: /* @__PURE__ */ new Date(),
+          logoutReason: "USER_NOT_FOUND"
+        });
+        return res.status(401).json({
+          message: "Session expired. Please login again.",
+          forceLogout: true
+        });
+      }
+      const blockReason = getAccountAccessBlockReason(user);
+      if (blockReason) {
+        await storage2.updateActivity(decoded.activityId, {
+          isActive: false,
+          logoutTime: /* @__PURE__ */ new Date(),
+          logoutReason: blockReason.toUpperCase()
+        });
+        return res.status(blockReason === "banned" ? 403 : 401).json({
+          message: blockReason === "banned" ? "Account is banned" : "Session expired. Please login again.",
+          banned: blockReason === "banned",
+          forceLogout: true,
+          code: blockReason === "banned" ? "ACCOUNT_BANNED" : "ACCOUNT_UNAVAILABLE"
+        });
+      }
+      const forcePasswordChange = user.mustChangePassword === true && !canUserBypassForcedPasswordChange(user.role);
+      if (forcePasswordChange && !canAccessDuringForcedPasswordChange(req.method, req.path)) {
+        return res.status(403).json({
+          message: "Password change required before accessing the application.",
+          code: "PASSWORD_CHANGE_REQUIRED",
+          forcePasswordChange: true
+        });
+      }
       await storage2.updateActivity(decoded.activityId, {
         lastActivityTime: /* @__PURE__ */ new Date(),
         isActive: true
       });
       req.user = {
-        userId: activity.userId || decoded.userId,
-        username: activity.username || decoded.username,
-        role: activity.role || decoded.role,
-        activityId: decoded.activityId
+        userId: user.id || activity.userId || decoded.userId,
+        username: user.username || activity.username || decoded.username,
+        role: user.role || activity.role || decoded.role,
+        activityId: decoded.activityId,
+        status: user.status,
+        mustChangePassword: user.mustChangePassword,
+        passwordResetBySuperuser: user.passwordResetBySuperuser,
+        isBanned: user.isBanned
       };
       return next();
     } catch (error) {
@@ -8202,36 +8889,8 @@ function registerAiRoutes(app2, deps) {
 }
 
 // server/routes/auth.routes.ts
-import bcrypt3 from "bcrypt";
 import jwt2 from "jsonwebtoken";
 import { WebSocket as WebSocket2 } from "ws";
-
-// server/auth/credentials.ts
-var CREDENTIAL_USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,32}$/;
-var CREDENTIAL_PASSWORD_MIN_LENGTH = 8;
-var CREDENTIAL_BCRYPT_COST = 12;
-function normalizeUsernameInput(raw) {
-  return String(raw ?? "").trim().toLowerCase();
-}
-function isStrongPassword(raw) {
-  if (raw.length < CREDENTIAL_PASSWORD_MIN_LENGTH) return false;
-  return /[A-Za-z]/.test(raw) && /\d/.test(raw);
-}
-function sendCredentialError(res, status, code, message) {
-  return res.status(status).json({
-    ok: false,
-    error: { code, message }
-  });
-}
-function buildCredentialAuditDetails(payload) {
-  return JSON.stringify({
-    actor_user_id: payload.actor_user_id,
-    target_user_id: payload.target_user_id,
-    metadata: {
-      changedField: payload.changedField
-    }
-  });
-}
 
 // server/lib/browser.ts
 function parseBrowser(userAgent) {
@@ -8292,88 +8951,1509 @@ function parseBrowser(userAgent) {
   return "Unknown";
 }
 
+// server/mail/dev-mail-outbox.ts
+import { randomBytes as randomBytes3 } from "node:crypto";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+
+// server/auth/activation-links.ts
+function readBaseUrlEnv(name) {
+  const raw = String(process.env[name] || "").trim();
+  return raw ? raw : null;
+}
+function getPublicAppBaseUrl() {
+  const configured = readBaseUrlEnv("PUBLIC_APP_URL") || readBaseUrlEnv("APP_BASE_URL") || readBaseUrlEnv("CLIENT_APP_URL");
+  if (configured) {
+    try {
+      return new URL(configured).toString().replace(/\/+$/, "");
+    } catch {
+    }
+  }
+  return "http://127.0.0.1:5000";
+}
+function buildActivationUrl(token) {
+  const baseUrl = getPublicAppBaseUrl();
+  const url = new URL("/activate-account", baseUrl);
+  url.searchParams.set("token", token);
+  return url.toString();
+}
+function buildPasswordResetUrl(token) {
+  const baseUrl = getPublicAppBaseUrl();
+  const url = new URL("/reset-password", baseUrl);
+  url.searchParams.set("token", token);
+  return url.toString();
+}
+
+// server/mail/dev-mail-outbox.ts
+var DEFAULT_OUTBOX_MAX_FILES = 50;
+var DEV_OUTBOX_FILE_PATTERN = /^\d{13}-[a-f0-9]{16}\.json$/i;
+var DEV_OUTBOX_ID_PATTERN = /^\d{13}-[a-f0-9]{16}$/i;
+function readFlag(name, fallback) {
+  const raw = String(process.env[name] || "").trim().toLowerCase();
+  if (!raw) return fallback;
+  if (["1", "true", "yes", "on"].includes(raw)) return true;
+  if (["0", "false", "no", "off"].includes(raw)) return false;
+  return fallback;
+}
+function getDevMailOutboxDir() {
+  const configured = String(process.env.MAIL_DEV_OUTBOX_DIR || "").trim();
+  return configured ? path.resolve(configured) : path.resolve(process.cwd(), "var", "dev-mail-outbox");
+}
+function getOutboxRetentionLimit() {
+  const parsed = Number(process.env.MAIL_DEV_OUTBOX_MAX_FILES || DEFAULT_OUTBOX_MAX_FILES);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return DEFAULT_OUTBOX_MAX_FILES;
+  }
+  return Math.floor(parsed);
+}
+function escapeHtml(value) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function isDevMailOutboxEnabled() {
+  if (process.env.NODE_ENV === "production") {
+    return false;
+  }
+  return readFlag("MAIL_DEV_OUTBOX_ENABLED", true);
+}
+function buildPreviewId() {
+  return `${Date.now()}-${randomBytes3(8).toString("hex")}`;
+}
+function buildPreviewFilePath(previewId) {
+  return path.join(getDevMailOutboxDir(), `${previewId}.json`);
+}
+function buildPreviewUrl(previewId) {
+  const url = new URL(`/dev/mail-preview/${previewId}`, getPublicAppBaseUrl());
+  return url.toString();
+}
+async function trimOutboxIfNeeded() {
+  const outboxDir = getDevMailOutboxDir();
+  const entries = (await readdir(outboxDir)).filter((name) => DEV_OUTBOX_FILE_PATTERN.test(name));
+  const maxFiles = getOutboxRetentionLimit();
+  if (entries.length <= maxFiles) return;
+  const staleEntries = entries.sort().slice(0, Math.max(0, entries.length - maxFiles));
+  await Promise.all(
+    staleEntries.map(
+      (entry) => rm(path.join(outboxDir, entry), { force: true })
+    )
+  );
+}
+async function writeDevMailPreview(input) {
+  const outboxDir = getDevMailOutboxDir();
+  await mkdir(outboxDir, { recursive: true });
+  await trimOutboxIfNeeded();
+  const previewId = buildPreviewId();
+  const record = {
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    html: input.html,
+    id: previewId,
+    subject: input.subject,
+    text: input.text,
+    to: input.to
+  };
+  await writeFile(
+    buildPreviewFilePath(previewId),
+    JSON.stringify(record, null, 2),
+    "utf8"
+  );
+  await trimOutboxIfNeeded();
+  return {
+    messageId: previewId,
+    previewUrl: buildPreviewUrl(previewId)
+  };
+}
+async function readDevMailPreview(previewId) {
+  const normalizedId = String(previewId || "").trim();
+  if (!DEV_OUTBOX_ID_PATTERN.test(normalizedId)) {
+    return null;
+  }
+  try {
+    const raw = await readFile(buildPreviewFilePath(normalizedId), "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed.id !== normalizedId || typeof parsed.to !== "string" || typeof parsed.subject !== "string" || typeof parsed.text !== "string" || typeof parsed.html !== "string" || typeof parsed.createdAt !== "string") {
+      return null;
+    }
+    return {
+      createdAt: parsed.createdAt,
+      html: parsed.html,
+      id: parsed.id,
+      subject: parsed.subject,
+      text: parsed.text,
+      to: parsed.to
+    };
+  } catch {
+    return null;
+  }
+}
+async function listDevMailPreviews(limit = 25) {
+  if (!isDevMailOutboxEnabled()) {
+    return [];
+  }
+  const normalizedLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 25;
+  try {
+    const outboxDir = getDevMailOutboxDir();
+    const entries = (await readdir(outboxDir)).filter((name) => DEV_OUTBOX_FILE_PATTERN.test(name)).sort((left, right) => right.localeCompare(left)).slice(0, normalizedLimit);
+    const previews = await Promise.all(
+      entries.map(async (entry) => {
+        const previewId = entry.replace(/\.json$/i, "");
+        const record = await readDevMailPreview(previewId);
+        if (!record) return null;
+        return {
+          createdAt: record.createdAt,
+          id: record.id,
+          previewUrl: buildPreviewUrl(record.id),
+          subject: record.subject,
+          to: record.to
+        };
+      })
+    );
+    return previews.filter((preview) => preview !== null);
+  } catch {
+    return [];
+  }
+}
+function renderDevMailPreviewHtml(record) {
+  const createdAt = escapeHtml(record.createdAt);
+  const subject = escapeHtml(record.subject);
+  const to = escapeHtml(record.to);
+  const text2 = escapeHtml(record.text);
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${subject}</title>
+    <style>
+      body { font-family: Segoe UI, Arial, sans-serif; margin: 0; background: #f8fafc; color: #0f172a; }
+      .page { max-width: 900px; margin: 0 auto; padding: 32px 20px 48px; }
+      .meta, .plain, .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); }
+      .meta { padding: 20px; margin-bottom: 20px; }
+      .card { padding: 24px; margin-bottom: 20px; }
+      .plain { padding: 20px; }
+      .label { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: #64748b; margin-bottom: 4px; }
+      .value { font-size: 14px; margin-bottom: 16px; word-break: break-word; }
+      .plain pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-family: Consolas, monospace; font-size: 13px; }
+      .hint { color: #475569; font-size: 14px; margin: 0 0 16px; }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="meta">
+        <p class="hint">This message was captured in the local development mail outbox.</p>
+        <div class="label">To</div>
+        <div class="value">${to}</div>
+        <div class="label">Subject</div>
+        <div class="value">${subject}</div>
+        <div class="label">Created At</div>
+        <div class="value">${createdAt}</div>
+      </section>
+      <section class="card">
+        ${record.html}
+      </section>
+      <section class="plain">
+        <div class="label">Plain Text</div>
+        <pre>${text2}</pre>
+      </section>
+    </main>
+  </body>
+</html>`;
+}
+
+// server/services/auth-account.service.ts
+import { addHours } from "date-fns";
+
+// server/mail/account-activation-email.ts
+function formatExpiry(expiresAt) {
+  return expiresAt.toUTCString();
+}
+function buildAccountActivationEmail(input) {
+  const systemName = String(input.systemName || "SQR System").trim() || "SQR System";
+  const expiresAtText = formatExpiry(input.expiresAt);
+  const subject = `Activate Your ${systemName} Account`;
+  const intro = `A new account has been created for you in ${systemName}.`;
+  const usernameLine = `Username: ${input.username}`;
+  const expiryLine = `This activation link expires on ${expiresAtText}.`;
+  const text2 = [
+    intro,
+    "",
+    usernameLine,
+    "",
+    "Activate your account by opening the link below and creating your password:",
+    input.activationUrl,
+    "",
+    expiryLine,
+    "",
+    "If you did not expect this account, please contact the system administrator."
+  ].join("\n");
+  const html = `
+    <div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.6;color:#0f172a;">
+      <p>${intro}</p>
+      <p><strong>${usernameLine}</strong></p>
+      <p>Click the button below to activate your account and create your password.</p>
+      <p>
+        <a
+          href="${input.activationUrl}"
+          style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;"
+        >
+          Activate Account
+        </a>
+      </p>
+      <p>If the button does not work, copy and paste this link into your browser:</p>
+      <p><a href="${input.activationUrl}">${input.activationUrl}</a></p>
+      <p>${expiryLine}</p>
+      <p>If you did not expect this account, please contact the system administrator.</p>
+    </div>
+  `.trim();
+  return {
+    subject,
+    text: text2,
+    html
+  };
+}
+
+// server/mail/password-reset-email.ts
+function formatExpiry2(expiresAt) {
+  return expiresAt.toUTCString();
+}
+function buildPasswordResetEmail(input) {
+  const systemName = String(input.systemName || "SQR System").trim() || "SQR System";
+  const expiresAtText = formatExpiry2(input.expiresAt);
+  const subject = `Reset Your ${systemName} Password`;
+  const intro = `A password reset has been approved for your ${systemName} account.`;
+  const usernameLine = `Username: ${input.username}`;
+  const expiryLine = `This reset link expires on ${expiresAtText}.`;
+  const text2 = [
+    intro,
+    "",
+    usernameLine,
+    "",
+    "Create your new password by opening the link below:",
+    input.resetUrl,
+    "",
+    expiryLine,
+    "",
+    "If you did not request this reset, contact the system administrator immediately."
+  ].join("\n");
+  const html = `
+    <div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.6;color:#0f172a;">
+      <p>${intro}</p>
+      <p><strong>${usernameLine}</strong></p>
+      <p>Click the button below to create your new password.</p>
+      <p>
+        <a
+          href="${input.resetUrl}"
+          style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;"
+        >
+          Reset Password
+        </a>
+      </p>
+      <p>If the button does not work, copy and paste this link into your browser:</p>
+      <p><a href="${input.resetUrl}">${input.resetUrl}</a></p>
+      <p>${expiryLine}</p>
+      <p>If you did not request this reset, contact the system administrator immediately.</p>
+    </div>
+  `.trim();
+  return {
+    subject,
+    text: text2,
+    html
+  };
+}
+
+// server/mail/mailer.ts
+import nodemailer from "nodemailer";
+var cachedTransportConfig = null;
+var cachedTransporter = null;
+function readMailEnv(name) {
+  const raw = String(process.env[name] || "").trim();
+  return raw ? raw : null;
+}
+function parseBooleanFlag(value, fallback) {
+  if (value == null) return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
+}
+function readTransportConfig() {
+  if (cachedTransportConfig) return cachedTransportConfig;
+  const service = readMailEnv("SMTP_SERVICE");
+  const host = readMailEnv("SMTP_HOST");
+  const portRaw = readMailEnv("SMTP_PORT");
+  const user = readMailEnv("SMTP_USER") || void 0;
+  const password = readMailEnv("SMTP_PASSWORD") || void 0;
+  const from = readMailEnv("MAIL_FROM") || user || null;
+  if (!from) {
+    return null;
+  }
+  if (service) {
+    if (!user || !password) {
+      return null;
+    }
+    cachedTransportConfig = {
+      from,
+      password,
+      requireTls: parseBooleanFlag(readMailEnv("SMTP_REQUIRE_TLS"), false),
+      secure: parseBooleanFlag(readMailEnv("SMTP_SECURE"), false),
+      service: service.trim(),
+      user
+    };
+    return cachedTransportConfig;
+  }
+  if (!host) {
+    return null;
+  }
+  if (user && !password) {
+    return null;
+  }
+  const port = Number(portRaw || "587");
+  if (!Number.isFinite(port) || port <= 0) {
+    return null;
+  }
+  const secure = parseBooleanFlag(readMailEnv("SMTP_SECURE"), port === 465);
+  const requireTls = parseBooleanFlag(readMailEnv("SMTP_REQUIRE_TLS"), false);
+  cachedTransportConfig = {
+    from,
+    host,
+    password,
+    port,
+    requireTls,
+    secure,
+    user
+  };
+  return cachedTransportConfig;
+}
+function getTransporter(config) {
+  if (cachedTransporter) return cachedTransporter;
+  cachedTransporter = nodemailer.createTransport({
+    service: config.service,
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    requireTLS: config.requireTls,
+    auth: config.user ? {
+      user: config.user,
+      pass: config.password || ""
+    } : void 0
+  });
+  return cachedTransporter;
+}
+async function sendMail(input) {
+  const config = readTransportConfig();
+  if (!config) {
+    if (isDevMailOutboxEnabled()) {
+      const preview = await writeDevMailPreview(input);
+      return {
+        deliveryMode: "dev_outbox",
+        errorCode: null,
+        errorMessage: null,
+        messageId: preview.messageId,
+        previewUrl: preview.previewUrl,
+        sent: true
+      };
+    }
+    return {
+      deliveryMode: "none",
+      errorCode: "MAILER_NOT_CONFIGURED",
+      errorMessage: "SMTP transport is not configured.",
+      messageId: null,
+      previewUrl: null,
+      sent: false
+    };
+  }
+  try {
+    const transporter = getTransporter(config);
+    const info = await transporter.sendMail({
+      from: config.from,
+      to: input.to,
+      subject: input.subject,
+      text: input.text,
+      html: input.html
+    });
+    return {
+      deliveryMode: "smtp",
+      errorCode: null,
+      errorMessage: null,
+      messageId: String(info.messageId || "") || null,
+      previewUrl: nodemailer.getTestMessageUrl(info) || null,
+      sent: true
+    };
+  } catch (error) {
+    if (isDevMailOutboxEnabled()) {
+      const preview = await writeDevMailPreview(input);
+      return {
+        deliveryMode: "dev_outbox",
+        errorCode: null,
+        errorMessage: null,
+        messageId: preview.messageId,
+        previewUrl: preview.previewUrl,
+        sent: true
+      };
+    }
+    return {
+      deliveryMode: "none",
+      errorCode: "MAIL_SEND_FAILED",
+      errorMessage: error instanceof Error ? error.message : "Failed to send email.",
+      messageId: null,
+      previewUrl: null,
+      sent: false
+    };
+  }
+}
+
+// server/services/auth-account.service.ts
+var ACTIVATION_TOKEN_TTL_HOURS = 24;
+var PASSWORD_RESET_TOKEN_TTL_HOURS = 4;
+var AuthAccountError = class extends Error {
+  constructor(statusCode, code, message, extra) {
+    super(message);
+    this.statusCode = statusCode;
+    this.code = code;
+    this.extra = extra;
+    this.name = "AuthAccountError";
+  }
+};
+var AuthAccountService = class {
+  constructor(storage2) {
+    this.storage = storage2;
+  }
+  requireManagedEmail(email, message) {
+    const normalizedEmail = normalizeEmailInput(email);
+    if (!normalizedEmail) {
+      throw new AuthAccountError(400, "INVALID_EMAIL", message);
+    }
+    this.validateEmail(normalizedEmail);
+    return normalizedEmail;
+  }
+  async requireActor(authUser) {
+    if (!authUser) {
+      throw new AuthAccountError(401, "PERMISSION_DENIED", "Authentication required.");
+    }
+    const actor = authUser.userId ? await this.storage.getUser(authUser.userId) : await this.storage.getUserByUsername(authUser.username);
+    if (!actor) {
+      throw new AuthAccountError(404, "USER_NOT_FOUND", "User not found.");
+    }
+    return actor;
+  }
+  async requireSuperuser(authUser) {
+    const actor = await this.requireActor(authUser);
+    if (actor.role !== "superuser") {
+      throw new AuthAccountError(403, "PERMISSION_DENIED", "Only superuser can access this resource.");
+    }
+    return actor;
+  }
+  async requireManageableTarget(userId) {
+    const normalizedId = String(userId || "").trim();
+    if (!normalizedId) {
+      throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
+    }
+    const target = await this.storage.getUser(normalizedId);
+    if (!target) {
+      throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
+    }
+    if (!isManageableUserRole(target.role)) {
+      throw new AuthAccountError(403, "PERMISSION_DENIED", "Target role is not allowed.");
+    }
+    return target;
+  }
+  validateUsername(username) {
+    if (!CREDENTIAL_USERNAME_REGEX.test(username)) {
+      throw new AuthAccountError(
+        400,
+        "USERNAME_TAKEN",
+        "Username must match ^[a-zA-Z0-9._-]{3,32}$."
+      );
+    }
+  }
+  validateEmail(email) {
+    if (!email) return;
+    if (!CREDENTIAL_EMAIL_REGEX.test(email)) {
+      throw new AuthAccountError(400, "INVALID_EMAIL", "Email address is invalid.");
+    }
+  }
+  async ensureUniqueIdentity(params) {
+    if (params.username) {
+      const existingByUsername = await this.storage.getUserByUsername(params.username);
+      if (existingByUsername && existingByUsername.id !== params.ignoreUserId) {
+        throw new AuthAccountError(409, "USERNAME_TAKEN", "Username already exists.");
+      }
+    }
+    if (params.email) {
+      const existingByEmail = await this.storage.getUserByEmail(params.email);
+      if (existingByEmail && existingByEmail.id !== params.ignoreUserId) {
+        throw new AuthAccountError(409, "INVALID_EMAIL", "Email already exists.");
+      }
+    }
+  }
+  async issueActivationToken(params) {
+    const rawToken = generateOneTimeToken();
+    const tokenHash = hashOpaqueToken(rawToken);
+    const expiresAt = addHours(/* @__PURE__ */ new Date(), ACTIVATION_TOKEN_TTL_HOURS);
+    await this.storage.invalidateUnusedActivationTokens(params.userId);
+    await this.storage.createActivationToken({
+      userId: params.userId,
+      tokenHash,
+      expiresAt,
+      createdBy: params.createdBy
+    });
+    return {
+      token: rawToken,
+      expiresAt
+    };
+  }
+  buildPasswordResetToken() {
+    const rawToken = generateOneTimeToken();
+    const tokenHash = hashOpaqueToken(rawToken);
+    const expiresAt = addHours(/* @__PURE__ */ new Date(), PASSWORD_RESET_TOKEN_TTL_HOURS);
+    return {
+      token: rawToken,
+      tokenHash,
+      expiresAt
+    };
+  }
+  assertActivationRecordUsable(record, now) {
+    if (!record) {
+      throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
+    }
+    const expiresAt = new Date(record.expiresAt);
+    const usedAt = record.usedAt ? new Date(record.usedAt) : null;
+    const normalizedRecord = {
+      ...record,
+      expiresAt,
+      usedAt
+    };
+    if (usedAt) {
+      throw new AuthAccountError(410, "TOKEN_USED", "Activation link has already been used.");
+    }
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= now.getTime()) {
+      throw new AuthAccountError(410, "TOKEN_EXPIRED", "Activation link has expired.");
+    }
+    if (normalizedRecord.isBanned) {
+      throw new AuthAccountError(
+        409,
+        "ACCOUNT_UNAVAILABLE",
+        "Account activation is not available for this account."
+      );
+    }
+    if (normalizeAccountStatus(normalizedRecord.status, "pending_activation") !== "pending_activation") {
+      throw new AuthAccountError(
+        409,
+        "ACCOUNT_UNAVAILABLE",
+        "Account activation is no longer available."
+      );
+    }
+    if (!isManageableUserRole(normalizedRecord.role)) {
+      throw new AuthAccountError(
+        409,
+        "ACCOUNT_UNAVAILABLE",
+        "Account activation is not available for this account."
+      );
+    }
+    return normalizedRecord;
+  }
+  assertPasswordResetRecordUsable(record, now) {
+    if (!record) {
+      throw new AuthAccountError(400, "INVALID_TOKEN", "Password reset token is invalid.");
+    }
+    const expiresAt = new Date(record.expiresAt);
+    const usedAt = record.usedAt ? new Date(record.usedAt) : null;
+    const normalizedRecord = {
+      ...record,
+      expiresAt,
+      usedAt
+    };
+    if (usedAt) {
+      throw new AuthAccountError(410, "TOKEN_USED", "Password reset link has already been used.");
+    }
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= now.getTime()) {
+      throw new AuthAccountError(410, "TOKEN_EXPIRED", "Password reset link has expired.");
+    }
+    if (!isManageableUserRole(normalizedRecord.role)) {
+      throw new AuthAccountError(
+        409,
+        "ACCOUNT_UNAVAILABLE",
+        "Password reset is not available for this account."
+      );
+    }
+    if (normalizeAccountStatus(normalizedRecord.status, "active") === "pending_activation") {
+      throw new AuthAccountError(
+        409,
+        "ACCOUNT_UNAVAILABLE",
+        "Pending accounts must complete activation before password reset."
+      );
+    }
+    return normalizedRecord;
+  }
+  async sendActivationEmail(params) {
+    if (!params.user) {
+      throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
+    }
+    if (normalizeAccountStatus(params.user.status, "pending_activation") !== "pending_activation") {
+      throw new AuthAccountError(
+        409,
+        "ACCOUNT_UNAVAILABLE",
+        "Activation can only be sent to pending accounts."
+      );
+    }
+    if (params.user.isBanned) {
+      throw new AuthAccountError(
+        409,
+        "ACCOUNT_UNAVAILABLE",
+        "Activation can only be sent to non-banned accounts."
+      );
+    }
+    const recipientEmail = this.requireManagedEmail(
+      params.user.email,
+      "Email is required to send account activation."
+    );
+    const activation = await this.issueActivationToken({
+      userId: params.user.id,
+      createdBy: params.actorUsername
+    });
+    const activationUrl = buildActivationUrl(activation.token);
+    const email = buildAccountActivationEmail({
+      activationUrl,
+      expiresAt: activation.expiresAt,
+      username: params.user.username
+    });
+    const mailResult = await sendMail({
+      to: recipientEmail,
+      subject: email.subject,
+      text: email.text,
+      html: email.html
+    });
+    await this.storage.createAuditLog({
+      action: mailResult.sent ? "ACCOUNT_ACTIVATION_SENT" : "ACCOUNT_ACTIVATION_SEND_FAILED",
+      performedBy: params.actorUsername,
+      targetUser: params.user.id,
+      details: JSON.stringify({
+        metadata: {
+          delivery: "email",
+          delivery_mode: mailResult.deliveryMode,
+          resent: params.resent === true,
+          expires_at: activation.expiresAt.toISOString(),
+          recipient_email: recipientEmail,
+          mail_error_code: mailResult.errorCode
+        }
+      })
+    });
+    return {
+      activation,
+      delivery: {
+        deliveryMode: mailResult.deliveryMode,
+        errorCode: mailResult.errorCode,
+        errorMessage: mailResult.errorMessage,
+        expiresAt: activation.expiresAt,
+        previewUrl: mailResult.previewUrl,
+        recipientEmail,
+        sent: mailResult.sent
+      }
+    };
+  }
+  async sendPasswordResetEmail(params) {
+    if (!params.user) {
+      throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
+    }
+    const recipientEmail = this.requireManagedEmail(
+      params.user.email,
+      "Email is required to send password reset."
+    );
+    const email = buildPasswordResetEmail({
+      resetUrl: params.resetUrl,
+      expiresAt: params.expiresAt,
+      username: params.user.username
+    });
+    const mailResult = await sendMail({
+      to: recipientEmail,
+      subject: email.subject,
+      text: email.text,
+      html: email.html
+    });
+    return {
+      deliveryMode: mailResult.deliveryMode,
+      errorCode: mailResult.errorCode,
+      errorMessage: mailResult.errorMessage,
+      expiresAt: params.expiresAt,
+      previewUrl: mailResult.previewUrl,
+      recipientEmail,
+      sent: mailResult.sent
+    };
+  }
+  async invalidateUserSessions(username, reason) {
+    const activeSessions = await this.storage.getActiveActivitiesByUsername(username);
+    await this.storage.deactivateUserActivities(username, reason);
+    return activeSessions.map((activity) => activity.id);
+  }
+  async login(input) {
+    const username = normalizeUsernameInput(input.username);
+    const password = String(input.password ?? "");
+    const user = await this.storage.getUserByUsername(username);
+    if (!user) {
+      await this.storage.createAuditLog({
+        action: "LOGIN_FAILED",
+        performedBy: username || "unknown",
+        details: "User not found"
+      });
+      throw new AuthAccountError(401, "INVALID_CREDENTIALS", "Invalid credentials");
+    }
+    const visitorBanned = await this.storage.isVisitorBanned(
+      input.fingerprint ?? null,
+      input.ipAddress ?? null
+    );
+    if (visitorBanned || user.isBanned) {
+      await this.storage.createAuditLog({
+        action: "LOGIN_FAILED_BANNED",
+        performedBy: user.username,
+        details: visitorBanned ? "Visitor is banned" : "User is banned"
+      });
+      throw new AuthAccountError(403, "ACCOUNT_BANNED", "Account is banned", {
+        banned: true
+      });
+    }
+    const blockReason = getAccountAccessBlockReason(user);
+    if (blockReason && blockReason !== "banned") {
+      await this.storage.createAuditLog({
+        action: "LOGIN_FAILED_ACCOUNT_STATE",
+        performedBy: user.username,
+        targetUser: user.id,
+        details: `Login blocked due to account state: ${blockReason}`
+      });
+      throw new AuthAccountError(401, "INVALID_CREDENTIALS", "Invalid credentials");
+    }
+    const validPassword = await verifyPassword(password, user.passwordHash);
+    if (!validPassword) {
+      await this.storage.createAuditLog({
+        action: "LOGIN_FAILED",
+        performedBy: user.username,
+        details: "Invalid password"
+      });
+      throw new AuthAccountError(401, "INVALID_CREDENTIALS", "Invalid credentials");
+    }
+    if (user.role === "superuser") {
+      const enforceSingleSession = await this.storage.getBooleanSystemSetting(
+        "enforce_superuser_single_session",
+        false
+      );
+      if (enforceSingleSession) {
+        const activeSessions = await this.storage.getActiveActivitiesByUsername(user.username);
+        if (activeSessions.length > 0) {
+          await this.storage.createAuditLog({
+            action: "LOGIN_BLOCKED_SINGLE_SESSION",
+            performedBy: user.username,
+            details: `Superuser single-session policy blocked login. Active sessions: ${activeSessions.length}`
+          });
+          throw new AuthAccountError(
+            409,
+            "SUPERUSER_SINGLE_SESSION_ENFORCED",
+            "Single superuser session is enforced. Logout from the current session first."
+          );
+        }
+      }
+    } else if (user.role === "admin" && input.fingerprint) {
+      await this.storage.deactivateUserSessionsByFingerprint(user.username, input.fingerprint);
+    }
+    const activity = await this.storage.createActivity({
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+      pcName: input.pcName ?? null,
+      browser: input.browserName,
+      fingerprint: input.fingerprint ?? null,
+      ipAddress: input.ipAddress ?? null
+    });
+    await this.storage.touchLastLogin(user.id, /* @__PURE__ */ new Date());
+    await this.storage.createAuditLog({
+      action: "LOGIN_SUCCESS",
+      performedBy: user.username,
+      targetUser: user.id,
+      details: `Login from ${input.browserName}`
+    });
+    return {
+      user,
+      activity
+    };
+  }
+  async validateActivationToken(rawTokenInput) {
+    const rawToken = String(rawTokenInput || "").trim();
+    if (!rawToken) {
+      throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
+    }
+    const tokenHash = hashOpaqueToken(rawToken);
+    const now = /* @__PURE__ */ new Date();
+    const record = this.assertActivationRecordUsable(
+      await this.storage.getActivationTokenRecordByHash(tokenHash),
+      now
+    );
+    return {
+      email: record.email,
+      expiresAt: record.expiresAt,
+      fullName: record.fullName,
+      role: record.role,
+      username: record.username
+    };
+  }
+  async activateAccount(params) {
+    const rawToken = String(params.token || "").trim();
+    const newPassword = String(params.newPassword || "");
+    const confirmPassword = String(params.confirmPassword || "");
+    if (!rawToken) {
+      throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
+    }
+    if (!isStrongPassword(newPassword)) {
+      throw new AuthAccountError(
+        400,
+        "INVALID_PASSWORD",
+        "Password must be at least 8 characters and include at least one letter and one number."
+      );
+    }
+    if (newPassword !== confirmPassword) {
+      throw new AuthAccountError(400, "INVALID_PASSWORD", "Confirm password does not match.");
+    }
+    const tokenHash = hashOpaqueToken(rawToken);
+    const now = /* @__PURE__ */ new Date();
+    const record = this.assertActivationRecordUsable(
+      await this.storage.getActivationTokenRecordByHash(tokenHash),
+      now
+    );
+    const requestedUsername = normalizeUsernameInput(params.username);
+    if (requestedUsername && requestedUsername !== record.username) {
+      throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
+    }
+    const consumed = await this.storage.consumeActivationTokenById({
+      tokenId: record.tokenId,
+      now
+    });
+    if (!consumed) {
+      const latest = await this.storage.getActivationTokenRecordByHash(tokenHash);
+      this.assertActivationRecordUsable(latest, now);
+      throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
+    }
+    const target = await this.storage.getUser(record.userId);
+    if (!target) {
+      throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
+    }
+    if (target.isBanned || normalizeAccountStatus(target.status, "pending_activation") !== "pending_activation") {
+      throw new AuthAccountError(
+        409,
+        "ACCOUNT_UNAVAILABLE",
+        "Account activation is no longer available."
+      );
+    }
+    const passwordHash = await hashPassword(newPassword);
+    const updatedUser = await this.storage.updateUserAccount({
+      userId: target.id,
+      passwordHash,
+      passwordChangedAt: now,
+      activatedAt: now,
+      status: "active",
+      mustChangePassword: false,
+      passwordResetBySuperuser: false
+    });
+    await this.storage.invalidateUnusedActivationTokens(target.id);
+    await this.storage.createAuditLog({
+      action: "ACCOUNT_ACTIVATION_COMPLETED",
+      performedBy: target.username,
+      targetUser: target.id,
+      details: "Account activation completed."
+    });
+    return updatedUser ?? target;
+  }
+  async requestPasswordReset(identifier) {
+    const normalized = String(identifier || "").trim().toLowerCase();
+    if (!normalized) {
+      throw new AuthAccountError(400, "INVALID_IDENTIFIER", "Username or email is required.");
+    }
+    const user = CREDENTIAL_EMAIL_REGEX.test(normalized) ? await this.storage.getUserByEmail(normalized) : await this.storage.getUserByUsername(normalized) || await this.storage.getUserByEmail(normalized);
+    if (!user || user.role === "superuser") {
+      return { accepted: true };
+    }
+    await this.storage.createPasswordResetRequest({
+      userId: user.id,
+      requestedByUser: normalized
+    });
+    await this.storage.createAuditLog({
+      action: "PASSWORD_RESET_REQUESTED",
+      performedBy: user.username,
+      targetUser: user.id,
+      details: "Password reset request submitted."
+    });
+    return { accepted: true };
+  }
+  async validatePasswordResetToken(rawTokenInput) {
+    const rawToken = String(rawTokenInput || "").trim();
+    if (!rawToken) {
+      throw new AuthAccountError(400, "INVALID_TOKEN", "Password reset token is invalid.");
+    }
+    const tokenHash = hashOpaqueToken(rawToken);
+    const now = /* @__PURE__ */ new Date();
+    const record = this.assertPasswordResetRecordUsable(
+      await this.storage.getPasswordResetTokenRecordByHash(tokenHash),
+      now
+    );
+    return {
+      email: record.email,
+      expiresAt: record.expiresAt,
+      fullName: record.fullName,
+      role: record.role,
+      username: record.username
+    };
+  }
+  async resetPasswordWithToken(params) {
+    const rawToken = String(params.token || "").trim();
+    const newPassword = String(params.newPassword || "");
+    const confirmPassword = String(params.confirmPassword || "");
+    if (!rawToken) {
+      throw new AuthAccountError(400, "INVALID_TOKEN", "Password reset token is invalid.");
+    }
+    if (!isStrongPassword(newPassword)) {
+      throw new AuthAccountError(
+        400,
+        "INVALID_PASSWORD",
+        "Password must be at least 8 characters and include at least one letter and one number."
+      );
+    }
+    if (newPassword !== confirmPassword) {
+      throw new AuthAccountError(400, "INVALID_PASSWORD", "Confirm password does not match.");
+    }
+    const tokenHash = hashOpaqueToken(rawToken);
+    const now = /* @__PURE__ */ new Date();
+    const record = this.assertPasswordResetRecordUsable(
+      await this.storage.getPasswordResetTokenRecordByHash(tokenHash),
+      now
+    );
+    const consumed = await this.storage.consumePasswordResetRequestById({
+      requestId: record.requestId,
+      now
+    });
+    if (!consumed) {
+      const latest = await this.storage.getPasswordResetTokenRecordByHash(tokenHash);
+      this.assertPasswordResetRecordUsable(latest, now);
+      throw new AuthAccountError(400, "INVALID_TOKEN", "Password reset token is invalid.");
+    }
+    const target = await this.storage.getUser(record.userId);
+    if (!target) {
+      throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
+    }
+    if (!isManageableUserRole(target.role)) {
+      throw new AuthAccountError(
+        409,
+        "ACCOUNT_UNAVAILABLE",
+        "Password reset is not available for this account."
+      );
+    }
+    if (normalizeAccountStatus(target.status, "active") === "pending_activation") {
+      throw new AuthAccountError(
+        409,
+        "ACCOUNT_UNAVAILABLE",
+        "Pending accounts must complete activation before password reset."
+      );
+    }
+    const passwordHash = await hashPassword(newPassword);
+    const updatedUser = await this.storage.updateUserAccount({
+      userId: target.id,
+      passwordHash,
+      passwordChangedAt: now,
+      mustChangePassword: false,
+      passwordResetBySuperuser: false,
+      activatedAt: target.activatedAt ?? now
+    });
+    await this.storage.invalidateUnusedPasswordResetTokens(target.id, now);
+    await this.invalidateUserSessions(target.username, "PASSWORD_RESET_COMPLETED");
+    await this.storage.createAuditLog({
+      action: "PASSWORD_RESET_COMPLETED",
+      performedBy: target.username,
+      targetUser: target.id,
+      details: JSON.stringify({
+        metadata: {
+          reset_type: "email_link"
+        }
+      })
+    });
+    return updatedUser ?? target;
+  }
+  async changeOwnPassword(authUser, input) {
+    const actor = await this.requireActor(authUser);
+    const currentPassword = String(input.currentPassword || "");
+    const newPassword = String(input.newPassword || "");
+    if (!currentPassword) {
+      throw new AuthAccountError(400, "INVALID_CURRENT_PASSWORD", "Current password is required.");
+    }
+    const currentPasswordMatch = await verifyPassword(currentPassword, actor.passwordHash);
+    if (!currentPasswordMatch) {
+      throw new AuthAccountError(400, "INVALID_CURRENT_PASSWORD", "Current password is invalid.");
+    }
+    if (!isStrongPassword(newPassword)) {
+      throw new AuthAccountError(
+        400,
+        "INVALID_PASSWORD",
+        "Password must be at least 8 characters and include at least one letter and one number."
+      );
+    }
+    const sameAsCurrent = await verifyPassword(newPassword, actor.passwordHash);
+    if (sameAsCurrent) {
+      throw new AuthAccountError(
+        400,
+        "INVALID_PASSWORD",
+        "New password must be different from current password."
+      );
+    }
+    const nextPasswordHash = await hashPassword(newPassword);
+    const updatedUser = await this.storage.updateUserCredentials({
+      userId: actor.id,
+      newPasswordHash: nextPasswordHash,
+      passwordChangedAt: /* @__PURE__ */ new Date(),
+      mustChangePassword: false,
+      passwordResetBySuperuser: false
+    });
+    const closedSessionIds = await this.invalidateUserSessions(actor.username, "PASSWORD_CHANGED");
+    await this.storage.createAuditLog({
+      action: "USER_PASSWORD_CHANGED",
+      performedBy: actor.id,
+      targetUser: actor.id,
+      details: buildCredentialAuditDetails({
+        actor_user_id: actor.id,
+        target_user_id: actor.id,
+        changedField: "password"
+      })
+    });
+    return {
+      user: updatedUser ?? actor,
+      closedSessionIds
+    };
+  }
+  async changeOwnUsername(authUser, newUsernameRaw) {
+    const actor = await this.requireActor(authUser);
+    const newUsername = normalizeUsernameInput(newUsernameRaw);
+    this.validateUsername(newUsername);
+    await this.ensureUniqueIdentity({ username: newUsername, ignoreUserId: actor.id });
+    if (newUsername === actor.username) {
+      return actor;
+    }
+    const updatedUser = await this.storage.updateUserCredentials({
+      userId: actor.id,
+      newUsername
+    });
+    await this.storage.updateActivitiesUsername(actor.username, newUsername);
+    await this.storage.createAuditLog({
+      action: "USER_USERNAME_CHANGED",
+      performedBy: actor.id,
+      targetUser: actor.id,
+      details: buildCredentialAuditDetails({
+        actor_user_id: actor.id,
+        target_user_id: actor.id,
+        changedField: "username"
+      })
+    });
+    return updatedUser ?? actor;
+  }
+  async getManagedUsers(authUser) {
+    await this.requireSuperuser(authUser);
+    return this.storage.getManagedUsers();
+  }
+  async createManagedUser(authUser, input) {
+    const actor = await this.requireSuperuser(authUser);
+    const username = normalizeUsernameInput(input.username);
+    const email = normalizeEmailInput(input.email);
+    const fullName = String(input.fullName || "").trim() || null;
+    const role = normalizeManageableUserRole(input.role, "user");
+    this.validateUsername(username);
+    const requiredEmail = this.requireManagedEmail(
+      email || null,
+      "Email is required to create a managed account."
+    );
+    await this.ensureUniqueIdentity({ username, email: requiredEmail });
+    const placeholderPasswordHash = await hashPassword(generateTemporaryPassword());
+    const user = await this.storage.createManagedUserAccount({
+      username,
+      fullName,
+      email: requiredEmail,
+      role,
+      passwordHash: placeholderPasswordHash,
+      status: "pending_activation",
+      mustChangePassword: false,
+      passwordResetBySuperuser: false,
+      createdBy: actor.username
+    });
+    const activation = await this.sendActivationEmail({
+      actorUsername: actor.username,
+      user
+    });
+    await this.storage.createAuditLog({
+      action: "ACCOUNT_CREATED",
+      performedBy: actor.username,
+      targetUser: user.id,
+      details: JSON.stringify({
+        metadata: {
+          role: user.role,
+          status: user.status,
+          created_by: actor.username
+        }
+      })
+    });
+    return {
+      user,
+      activation: {
+        deliveryMode: activation.delivery.deliveryMode,
+        errorCode: activation.delivery.errorCode,
+        errorMessage: activation.delivery.errorMessage,
+        expiresAt: activation.delivery.expiresAt,
+        previewUrl: activation.delivery.previewUrl,
+        recipientEmail: activation.delivery.recipientEmail,
+        sent: activation.delivery.sent
+      }
+    };
+  }
+  async updateManagedUser(authUser, targetUserId, input) {
+    const actor = await this.requireSuperuser(authUser);
+    const target = await this.requireManageableTarget(targetUserId);
+    const nextUsername = input.username !== void 0 ? normalizeUsernameInput(input.username) : void 0;
+    const nextEmail = input.email !== void 0 ? normalizeEmailInput(input.email) : void 0;
+    const nextFullName = input.fullName !== void 0 ? String(input.fullName || "").trim() || null : void 0;
+    if (nextUsername !== void 0) {
+      this.validateUsername(nextUsername);
+    }
+    this.validateEmail(nextEmail || null);
+    if (normalizeAccountStatus(target.status, "active") === "pending_activation" && nextEmail !== void 0 && !nextEmail) {
+      throw new AuthAccountError(
+        400,
+        "INVALID_EMAIL",
+        "Pending accounts require an email address for activation."
+      );
+    }
+    await this.ensureUniqueIdentity({
+      username: nextUsername,
+      email: nextEmail,
+      ignoreUserId: target.id
+    });
+    const updatedUser = await this.storage.updateUserAccount({
+      userId: target.id,
+      username: nextUsername,
+      email: nextEmail,
+      fullName: nextFullName
+    });
+    if (nextUsername && nextUsername !== target.username) {
+      await this.storage.updateActivitiesUsername(target.username, nextUsername);
+    }
+    await this.storage.createAuditLog({
+      action: "ACCOUNT_UPDATED",
+      performedBy: actor.username,
+      targetUser: target.id,
+      details: JSON.stringify({
+        metadata: {
+          username_changed: Boolean(nextUsername && nextUsername !== target.username),
+          email_changed: nextEmail !== void 0,
+          full_name_changed: nextFullName !== void 0
+        }
+      })
+    });
+    return updatedUser ?? target;
+  }
+  async updateManagedUserRole(authUser, targetUserId, nextRoleRaw) {
+    const actor = await this.requireSuperuser(authUser);
+    const target = await this.requireManageableTarget(targetUserId);
+    const nextRole = normalizeManageableUserRole(nextRoleRaw, "user");
+    if (nextRole === target.role) {
+      return { user: target, closedSessionIds: [] };
+    }
+    const updatedUser = await this.storage.updateUserAccount({
+      userId: target.id,
+      role: nextRole
+    });
+    const closedSessionIds = await this.invalidateUserSessions(target.username, "ROLE_CHANGED");
+    await this.storage.createAuditLog({
+      action: "ROLE_CHANGED",
+      performedBy: actor.username,
+      targetUser: target.id,
+      details: JSON.stringify({
+        metadata: {
+          previous_role: target.role,
+          next_role: nextRole
+        }
+      })
+    });
+    return {
+      user: updatedUser ?? target,
+      closedSessionIds
+    };
+  }
+  async updateManagedUserStatus(authUser, targetUserId, input) {
+    const actor = await this.requireSuperuser(authUser);
+    const target = await this.requireManageableTarget(targetUserId);
+    const nextStatus = input.status !== void 0 ? normalizeAccountStatus(input.status, normalizeAccountStatus(target.status, "active")) : void 0;
+    const nextIsBanned = input.isBanned;
+    if (normalizeAccountStatus(target.status, "active") === "pending_activation" && nextStatus === "active") {
+      throw new AuthAccountError(
+        409,
+        "ACCOUNT_UNAVAILABLE",
+        "Pending accounts must complete activation before becoming active."
+      );
+    }
+    const updatedUser = await this.storage.updateUserAccount({
+      userId: target.id,
+      status: nextStatus,
+      isBanned: nextIsBanned
+    });
+    const shouldInvalidateSessions = nextStatus !== void 0 && nextStatus !== "active" || nextIsBanned === true;
+    const closedSessionIds = shouldInvalidateSessions ? await this.invalidateUserSessions(
+      target.username,
+      nextIsBanned ? "BANNED" : `STATUS_${String(nextStatus || target.status).toUpperCase()}`
+    ) : [];
+    if (nextStatus !== void 0 && nextStatus !== target.status) {
+      await this.storage.createAuditLog({
+        action: "ACCOUNT_STATUS_CHANGED",
+        performedBy: actor.username,
+        targetUser: target.id,
+        details: JSON.stringify({
+          metadata: {
+            previous_status: target.status,
+            next_status: nextStatus
+          }
+        })
+      });
+    }
+    if (nextIsBanned !== void 0 && Boolean(nextIsBanned) !== Boolean(target.isBanned)) {
+      await this.storage.createAuditLog({
+        action: nextIsBanned ? "ACCOUNT_BANNED" : "ACCOUNT_UNBANNED",
+        performedBy: actor.username,
+        targetUser: target.id,
+        details: "Account ban flag updated via account management."
+      });
+    }
+    return {
+      user: updatedUser ?? target,
+      closedSessionIds
+    };
+  }
+  async resendActivation(authUser, targetUserId) {
+    const actor = await this.requireSuperuser(authUser);
+    const target = await this.requireManageableTarget(targetUserId);
+    if (normalizeAccountStatus(target.status, "active") !== "pending_activation") {
+      throw new AuthAccountError(
+        409,
+        "ACCOUNT_UNAVAILABLE",
+        "Activation can only be resent for pending accounts."
+      );
+    }
+    const activation = await this.sendActivationEmail({
+      actorUsername: actor.username,
+      user: target,
+      resent: true
+    });
+    return {
+      user: target,
+      activation: {
+        deliveryMode: activation.delivery.deliveryMode,
+        errorCode: activation.delivery.errorCode,
+        errorMessage: activation.delivery.errorMessage,
+        expiresAt: activation.delivery.expiresAt,
+        previewUrl: activation.delivery.previewUrl,
+        recipientEmail: activation.delivery.recipientEmail,
+        sent: activation.delivery.sent
+      }
+    };
+  }
+  async listPendingPasswordResetRequests(authUser) {
+    await this.requireSuperuser(authUser);
+    return this.storage.listPendingPasswordResetRequests();
+  }
+  async resetManagedUserPassword(authUser, targetUserId) {
+    const actor = await this.requireSuperuser(authUser);
+    const target = await this.requireManageableTarget(targetUserId);
+    if (normalizeAccountStatus(target.status, "active") === "pending_activation") {
+      throw new AuthAccountError(
+        409,
+        "ACCOUNT_UNAVAILABLE",
+        "Pending accounts must complete activation instead of password reset."
+      );
+    }
+    const recipientEmail = this.requireManagedEmail(
+      target.email,
+      "Email is required to send password reset."
+    );
+    const now = /* @__PURE__ */ new Date();
+    await this.storage.invalidateUnusedPasswordResetTokens(target.id, now);
+    const reset = this.buildPasswordResetToken();
+    const resetUrl = buildPasswordResetUrl(reset.token);
+    const resetRequest = await this.storage.createPasswordResetRequest({
+      userId: target.id,
+      requestedByUser: null,
+      approvedBy: actor.username,
+      resetType: "email_link",
+      tokenHash: reset.tokenHash,
+      expiresAt: reset.expiresAt,
+      usedAt: null
+    });
+    const delivery = await this.sendPasswordResetEmail({
+      expiresAt: reset.expiresAt,
+      resetUrl,
+      user: target
+    });
+    if (!delivery.sent) {
+      await this.storage.consumePasswordResetRequestById({
+        requestId: resetRequest.id,
+        now
+      });
+      await this.storage.createAuditLog({
+        action: "PASSWORD_RESET_SEND_FAILED",
+        performedBy: actor.username,
+        targetUser: target.id,
+        details: JSON.stringify({
+          metadata: {
+            reset_type: "email_link",
+            delivery: "email",
+            delivery_mode: delivery.deliveryMode,
+            recipient_email: recipientEmail,
+            expires_at: reset.expiresAt.toISOString(),
+            mail_error_code: delivery.errorCode
+          }
+        })
+      });
+      return {
+        user: target,
+        closedSessionIds: [],
+        reset: delivery
+      };
+    }
+    await this.storage.resolvePendingPasswordResetRequestsForUser({
+      userId: target.id,
+      approvedBy: actor.username,
+      resetType: "email_link",
+      usedAt: now
+    });
+    const placeholderPasswordHash = await hashPassword(generateOneTimeToken());
+    const updatedUser = await this.storage.updateUserAccount({
+      userId: target.id,
+      passwordHash: placeholderPasswordHash,
+      passwordChangedAt: now,
+      mustChangePassword: true,
+      passwordResetBySuperuser: true,
+      activatedAt: target.activatedAt ?? now
+    });
+    const closedSessionIds = await this.invalidateUserSessions(target.username, "PASSWORD_RESET_BY_SUPERUSER");
+    await this.storage.createAuditLog({
+      action: "PASSWORD_RESET_APPROVED",
+      performedBy: actor.username,
+      targetUser: target.id,
+      details: JSON.stringify({
+        metadata: {
+          reset_type: "email_link",
+          delivery: "email",
+          delivery_mode: delivery.deliveryMode,
+          recipient_email: recipientEmail,
+          expires_at: reset.expiresAt.toISOString(),
+          must_change_password: true
+        }
+      })
+    });
+    return {
+      user: updatedUser ?? target,
+      closedSessionIds,
+      reset: delivery
+    };
+  }
+};
+
 // server/routes/auth.routes.ts
+function buildManagedUserPayload(user) {
+  return {
+    id: user.id,
+    username: user.username,
+    fullName: user.fullName,
+    email: user.email,
+    role: user.role,
+    status: user.status,
+    mustChangePassword: user.mustChangePassword,
+    passwordResetBySuperuser: user.passwordResetBySuperuser,
+    createdBy: user.createdBy,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    activatedAt: user.activatedAt,
+    lastLoginAt: user.lastLoginAt,
+    passwordChangedAt: user.passwordChangedAt,
+    isBanned: user.isBanned
+  };
+}
+function buildUserPayload(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    username: user.username,
+    fullName: user.fullName,
+    email: user.email,
+    role: user.role,
+    status: user.status,
+    mustChangePassword: user.mustChangePassword,
+    passwordResetBySuperuser: user.passwordResetBySuperuser,
+    isBanned: user.isBanned,
+    activatedAt: user.activatedAt,
+    passwordChangedAt: user.passwordChangedAt,
+    lastLoginAt: user.lastLoginAt
+  };
+}
+function buildDeliveryPayload(activation) {
+  return {
+    deliveryMode: activation.deliveryMode,
+    errorCode: activation.errorCode,
+    errorMessage: activation.errorMessage,
+    expiresAt: activation.expiresAt,
+    previewUrl: activation.previewUrl,
+    recipientEmail: activation.recipientEmail,
+    sent: activation.sent
+  };
+}
 function registerAuthRoutes(app2, deps) {
   const { storage: storage2, authenticateToken, requireRole, connectedClients: connectedClients2 } = deps;
+  const authAccountService = new AuthAccountService(storage2);
   const jwtSecret = getSessionSecret();
-  const closeActivitySockets = (activityIds, reason) => {
+  const sendAuthError = (res, error) => {
+    if (!(error instanceof AuthAccountError)) {
+      return false;
+    }
+    res.status(error.statusCode).json({
+      ok: false,
+      message: error.message,
+      error: {
+        code: error.code,
+        message: error.message
+      },
+      ...error.extra || {}
+    });
+    return true;
+  };
+  const jsonRoute2 = (handler) => asyncHandler(async (req, res) => {
+    try {
+      const payload = await handler(req, res);
+      if (!res.headersSent && payload !== void 0) {
+        res.json(payload);
+      }
+    } catch (error) {
+      if (sendAuthError(res, error)) {
+        return;
+      }
+      throw error;
+    }
+  });
+  const closeActivitySockets = (activityIds, reason, messageType = "logout") => {
     for (const activityId of activityIds) {
       const socket = connectedClients2.get(activityId);
       if (socket && socket.readyState === WebSocket2.OPEN) {
-        socket.send(JSON.stringify({ type: "logout", reason }));
+        socket.send(JSON.stringify({ type: messageType, reason }));
         socket.close();
       }
       connectedClients2.delete(activityId);
       void storage2.clearCollectionNicknameSessionByActivity(activityId);
     }
   };
-  const handleLogin = asyncHandler(async (req, res) => {
+  const handleLogin = jsonRoute2(async (req) => {
     const body = ensureObject(req.body) || {};
-    const username = normalizeUsernameInput(body.username);
-    const password = String(body.password ?? "");
     const fingerprint = typeof body.fingerprint === "string" ? body.fingerprint : null;
     const pcName = typeof body.pcName === "string" ? body.pcName : null;
     const browser = typeof body.browser === "string" ? body.browser : null;
-    const user = await storage2.getUserByUsername(username);
-    if (!user) {
-      await storage2.createAuditLog({
-        action: "LOGIN_FAILED",
-        performedBy: username || "unknown",
-        details: "User not found"
-      });
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-    const visitorBanned = await storage2.isVisitorBanned(
+    const { user, activity } = await authAccountService.login({
+      username: String(body.username ?? ""),
+      password: String(body.password ?? ""),
       fingerprint,
-      req.ip || req.socket.remoteAddress || null
-    );
-    if (visitorBanned || user.isBanned) {
-      await storage2.createAuditLog({
-        action: "LOGIN_FAILED_BANNED",
-        performedBy: user.username,
-        details: visitorBanned ? "Visitor is banned" : "User is banned"
-      });
-      return res.status(403).json({ message: "Account is banned", banned: true });
-    }
-    const validPassword = await bcrypt3.compare(password, user.passwordHash);
-    if (!validPassword) {
-      await storage2.createAuditLog({
-        action: "LOGIN_FAILED",
-        performedBy: user.username,
-        details: "Invalid password"
-      });
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-    const browserName = parseBrowser(browser || req.headers["user-agent"]);
-    if (user.role === "superuser") {
-      const enforceSingleSession = await storage2.getBooleanSystemSetting(
-        "enforce_superuser_single_session",
-        false
-      );
-      if (enforceSingleSession) {
-        const activeSessions = await storage2.getActiveActivitiesByUsername(user.username);
-        if (activeSessions.length > 0) {
-          await storage2.createAuditLog({
-            action: "LOGIN_BLOCKED_SINGLE_SESSION",
-            performedBy: user.username,
-            details: `Superuser single-session policy blocked login. Active sessions: ${activeSessions.length}`
-          });
-          return res.status(409).json({
-            message: "Single superuser session is enforced. Logout from the current session first.",
-            code: "SUPERUSER_SINGLE_SESSION_ENFORCED"
-          });
-        }
-      }
-    } else if (user.role === "admin" && fingerprint) {
-      await storage2.deactivateUserSessionsByFingerprint(user.username, fingerprint);
-    }
-    const activity = await storage2.createActivity({
-      userId: user.id,
-      username: user.username,
-      role: user.role,
       pcName,
-      browser: browserName,
-      fingerprint,
+      browserName: parseBrowser(browser || req.headers["user-agent"]),
       ipAddress: req.ip || req.socket.remoteAddress || null
     });
     const token = jwt2.sign(
@@ -8386,334 +10466,375 @@ function registerAuthRoutes(app2, deps) {
       jwtSecret,
       { expiresIn: "24h" }
     );
-    await storage2.createAuditLog({
-      action: "LOGIN_SUCCESS",
-      performedBy: user.username,
-      details: `Login from ${browserName}`
-    });
-    return res.json({
+    return {
+      ok: true,
       token,
       username: user.username,
       role: user.role,
-      user: { username: user.username, role: user.role },
-      activityId: activity.id
-    });
+      activityId: activity.id,
+      mustChangePassword: user.mustChangePassword,
+      status: user.status,
+      user: buildUserPayload(user)
+    };
   });
   app2.post("/api/login", handleLogin);
   app2.post("/api/auth/login", handleLogin);
-  app2.get("/api/auth/me", authenticateToken, (req, res) => {
-    if (!req.user) {
-      return res.status(401).json({ message: "Unauthenticated" });
-    }
-    return res.json({
-      user: {
-        username: req.user.username,
-        role: req.user.role,
-        activityId: req.user.activityId
+  app2.get(
+    "/dev/mail-preview/:previewId",
+    asyncHandler(async (req, res) => {
+      if (!isDevMailOutboxEnabled()) {
+        return res.status(404).type("text/plain").send("Not found.");
       }
-    });
-  });
-  app2.get("/api/me", authenticateToken, asyncHandler(async (req, res) => {
+      const preview = await readDevMailPreview(req.params.previewId);
+      if (!preview) {
+        return res.status(404).type("text/plain").send("Not found.");
+      }
+      res.setHeader("Cache-Control", "no-store");
+      return res.status(200).type("html").send(renderDevMailPreviewHtml(preview));
+    })
+  );
+  const handleMe = jsonRoute2(async (req) => {
     if (!req.user) {
-      return sendCredentialError(res, 401, "PERMISSION_DENIED", "Authentication required.");
+      return sendCredentialError(
+        req.res,
+        401,
+        "PERMISSION_DENIED",
+        "Authentication required."
+      );
     }
     const user = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
     if (!user) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
+      return sendCredentialError(req.res, 404, "USER_NOT_FOUND", "User not found.");
     }
-    return res.json({
-      id: user.id,
-      username: user.username,
-      role: user.role
-    });
+    return buildUserPayload(user);
+  });
+  app2.get("/api/me", authenticateToken, handleMe);
+  app2.get("/api/auth/me", authenticateToken, jsonRoute2(async (req, res) => {
+    const payload = await (async () => {
+      if (!req.user) {
+        return sendCredentialError(res, 401, "PERMISSION_DENIED", "Authentication required.");
+      }
+      const user = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
+      if (!user) {
+        return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
+      }
+      return { user: buildUserPayload(user) };
+    })();
+    return payload;
   }));
-  app2.patch("/api/me/credentials", authenticateToken, asyncHandler(async (req, res) => {
+  app2.post("/api/auth/activate-account", jsonRoute2(async (req) => {
+    const body = ensureObject(req.body) || {};
+    const user = await authAccountService.activateAccount({
+      username: body.username == null ? void 0 : String(body.username),
+      token: String(body.token ?? ""),
+      newPassword: String(body.newPassword ?? ""),
+      confirmPassword: String(body.confirmPassword ?? "")
+    });
+    return {
+      ok: true,
+      user: buildUserPayload(user)
+    };
+  }));
+  app2.post("/api/auth/validate-activation-token", jsonRoute2(async (req) => {
+    const body = ensureObject(req.body) || {};
+    const activation = await authAccountService.validateActivationToken(String(body.token ?? ""));
+    return {
+      ok: true,
+      activation
+    };
+  }));
+  app2.post("/api/auth/request-password-reset", jsonRoute2(async (req) => {
+    const body = ensureObject(req.body) || {};
+    const identifier = String(body.identifier ?? body.username ?? body.email ?? "");
+    await authAccountService.requestPasswordReset(identifier);
+    return {
+      ok: true,
+      message: "If the account exists, the request has been submitted for superuser review."
+    };
+  }));
+  app2.post("/api/auth/validate-password-reset-token", jsonRoute2(async (req) => {
+    const body = ensureObject(req.body) || {};
+    const reset = await authAccountService.validatePasswordResetToken(String(body.token ?? ""));
+    return {
+      ok: true,
+      reset
+    };
+  }));
+  app2.post("/api/auth/reset-password-with-token", jsonRoute2(async (req) => {
+    const body = ensureObject(req.body) || {};
+    const user = await authAccountService.resetPasswordWithToken({
+      token: String(body.token ?? ""),
+      newPassword: String(body.newPassword ?? ""),
+      confirmPassword: String(body.confirmPassword ?? "")
+    });
+    return {
+      ok: true,
+      user: buildUserPayload(user)
+    };
+  }));
+  app2.post("/api/auth/change-password", authenticateToken, jsonRoute2(async (req) => {
+    const body = ensureObject(req.body) || {};
+    const result = await authAccountService.changeOwnPassword(req.user, {
+      currentPassword: String(body.currentPassword ?? ""),
+      newPassword: String(body.newPassword ?? "")
+    });
+    closeActivitySockets(
+      result.closedSessionIds,
+      "Password changed. Please login again."
+    );
+    return {
+      ok: true,
+      forceLogout: true,
+      user: buildUserPayload(result.user)
+    };
+  }));
+  app2.patch("/api/me/credentials", authenticateToken, jsonRoute2(async (req) => {
     if (!req.user) {
-      return sendCredentialError(res, 401, "PERMISSION_DENIED", "Authentication required.");
-    }
-    const actor = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
-    if (!actor) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
+      throw new AuthAccountError(401, "PERMISSION_DENIED", "Authentication required.");
     }
     const body = ensureObject(req.body) || {};
     const hasUsernameField = Object.prototype.hasOwnProperty.call(body, "newUsername");
-    const hasPasswordField = Object.prototype.hasOwnProperty.call(body, "newPassword");
-    let nextUsername;
-    let nextPasswordHash;
-    let usernameChanged = false;
-    let passwordChanged = false;
+    const hasPasswordField = Object.prototype.hasOwnProperty.call(body, "newPassword") || Object.prototype.hasOwnProperty.call(body, "currentPassword");
+    if (!hasUsernameField && !hasPasswordField) {
+      const user = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
+      return {
+        ok: true,
+        forceLogout: false,
+        user: buildUserPayload(user)
+      };
+    }
+    if (req.user.mustChangePassword && !hasPasswordField) {
+      throw new AuthAccountError(
+        403,
+        "PASSWORD_CHANGE_REQUIRED",
+        "Password change is required before other account updates."
+      );
+    }
+    let updatedUser = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
+    let forceLogout = false;
     if (hasUsernameField) {
-      const normalized = normalizeUsernameInput(body.newUsername);
-      if (!normalized || !CREDENTIAL_USERNAME_REGEX.test(normalized)) {
-        return sendCredentialError(res, 400, "USERNAME_TAKEN", "Username must match ^[a-zA-Z0-9._-]{3,32}$.");
-      }
-      const existing = await storage2.getUserByUsername(normalized);
-      if (existing && existing.id !== actor.id) {
-        return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
-      }
-      if (normalized !== actor.username) {
-        nextUsername = normalized;
-        usernameChanged = true;
-      }
+      updatedUser = await authAccountService.changeOwnUsername(
+        req.user,
+        String(body.newUsername ?? "")
+      );
     }
     if (hasPasswordField) {
-      const nextPasswordRaw = String(body.newPassword ?? "");
-      const currentPasswordRaw = String(body.currentPassword ?? "");
-      if (!currentPasswordRaw) {
-        return sendCredentialError(res, 400, "INVALID_CURRENT_PASSWORD", "Current password is required.");
-      }
-      const currentPasswordMatch = await bcrypt3.compare(currentPasswordRaw, actor.passwordHash);
-      if (!currentPasswordMatch) {
-        return sendCredentialError(res, 400, "INVALID_CURRENT_PASSWORD", "Current password is invalid.");
-      }
-      if (!isStrongPassword(nextPasswordRaw)) {
-        return sendCredentialError(
-          res,
-          400,
-          "INVALID_PASSWORD",
-          "Password must be at least 8 characters and include at least one letter and one number."
-        );
-      }
-      const sameAsCurrent = await bcrypt3.compare(nextPasswordRaw, actor.passwordHash);
-      if (sameAsCurrent) {
-        return sendCredentialError(res, 400, "INVALID_PASSWORD", "New password must be different from current password.");
-      }
-      nextPasswordHash = await bcrypt3.hash(nextPasswordRaw, CREDENTIAL_BCRYPT_COST);
-      passwordChanged = true;
-    }
-    if (!usernameChanged && !passwordChanged) {
-      return res.json({
-        ok: true,
-        user: { id: actor.id, username: actor.username, role: actor.role }
+      const result = await authAccountService.changeOwnPassword(req.user, {
+        currentPassword: String(body.currentPassword ?? ""),
+        newPassword: String(body.newPassword ?? "")
       });
-    }
-    const activeSessions = passwordChanged ? await storage2.getActiveActivitiesByUsername(actor.username) : [];
-    let updatedUser;
-    try {
-      updatedUser = await storage2.updateUserCredentials({
-        userId: actor.id,
-        newUsername: nextUsername,
-        newPasswordHash: nextPasswordHash,
-        passwordChangedAt: passwordChanged ? /* @__PURE__ */ new Date() : void 0
-      });
-    } catch (error) {
-      if (String(error?.code || "") === "23505") {
-        return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
-      }
-      throw error;
-    }
-    if (!updatedUser) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
-    }
-    if (usernameChanged && !passwordChanged && nextUsername) {
-      await storage2.updateActivitiesUsername(actor.username, nextUsername);
-    }
-    if (usernameChanged) {
-      await storage2.createAuditLog({
-        action: "USER_USERNAME_CHANGED",
-        performedBy: actor.id,
-        targetUser: updatedUser.id,
-        details: buildCredentialAuditDetails({
-          actor_user_id: actor.id,
-          target_user_id: updatedUser.id,
-          changedField: "username"
-        })
-      });
-    }
-    if (passwordChanged) {
-      await storage2.createAuditLog({
-        action: "USER_PASSWORD_CHANGED",
-        performedBy: actor.id,
-        targetUser: updatedUser.id,
-        details: buildCredentialAuditDetails({
-          actor_user_id: actor.id,
-          target_user_id: updatedUser.id,
-          changedField: "password"
-        })
-      });
-      await storage2.deactivateUserActivities(actor.username, "PASSWORD_CHANGED");
-      if (updatedUser.username !== actor.username) {
-        await storage2.deactivateUserActivities(updatedUser.username, "PASSWORD_CHANGED");
-      }
       closeActivitySockets(
-        activeSessions.map((activity) => activity.id),
+        result.closedSessionIds,
         "Password changed. Please login again."
       );
+      updatedUser = result.user;
+      forceLogout = true;
     }
-    return res.json({
+    return {
       ok: true,
-      forceLogout: passwordChanged,
-      user: { id: updatedUser.id, username: updatedUser.username, role: updatedUser.role }
-    });
+      forceLogout,
+      user: buildUserPayload(updatedUser)
+    };
   }));
-  app2.get("/api/admin/users", authenticateToken, asyncHandler(async (req, res) => {
-    if (!req.user || req.user.role !== "superuser") {
-      return sendCredentialError(res, 403, "PERMISSION_DENIED", "Only superuser can access this resource.");
-    }
-    const users3 = await storage2.getUsersByRoles(["admin", "user"]);
-    return res.json({
-      ok: true,
-      users: users3.map((item) => ({
-        id: item.id,
-        username: item.username,
-        role: item.role
-      }))
-    });
-  }));
-  app2.patch("/api/admin/users/:id/credentials", authenticateToken, asyncHandler(async (req, res) => {
-    if (!req.user || req.user.role !== "superuser") {
-      return sendCredentialError(res, 403, "PERMISSION_DENIED", "Only superuser can access this resource.");
-    }
-    const actor = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
-    if (!actor) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Actor user not found.");
-    }
-    const targetUserId = String(req.params.id || "").trim();
-    if (!targetUserId) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Target user not found.");
-    }
-    const target = await storage2.getUser(targetUserId);
-    if (!target) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Target user not found.");
-    }
-    if (target.role !== "admin" && target.role !== "user") {
-      return sendCredentialError(res, 403, "PERMISSION_DENIED", "Target role is not allowed.");
-    }
-    const body = ensureObject(req.body) || {};
-    const hasUsernameField = Object.prototype.hasOwnProperty.call(body, "newUsername");
-    const hasPasswordField = Object.prototype.hasOwnProperty.call(body, "newPassword");
-    let nextUsername;
-    let nextPasswordHash;
-    let usernameChanged = false;
-    let passwordChanged = false;
-    if (hasUsernameField) {
-      const normalized = normalizeUsernameInput(body.newUsername);
-      if (!normalized || !CREDENTIAL_USERNAME_REGEX.test(normalized)) {
-        return sendCredentialError(res, 400, "USERNAME_TAKEN", "Username must match ^[a-zA-Z0-9._-]{3,32}$.");
-      }
-      const existing = await storage2.getUserByUsername(normalized);
-      if (existing && existing.id !== target.id) {
-        return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
-      }
-      if (normalized !== target.username) {
-        nextUsername = normalized;
-        usernameChanged = true;
-      }
-    }
-    if (hasPasswordField) {
-      const nextPasswordRaw = String(body.newPassword ?? "");
-      if (!isStrongPassword(nextPasswordRaw)) {
-        return sendCredentialError(
-          res,
-          400,
-          "INVALID_PASSWORD",
-          "Password must be at least 8 characters and include at least one letter and one number."
-        );
-      }
-      const sameAsCurrent = await bcrypt3.compare(nextPasswordRaw, target.passwordHash);
-      if (sameAsCurrent) {
-        return sendCredentialError(res, 400, "INVALID_PASSWORD", "New password must be different from current password.");
-      }
-      nextPasswordHash = await bcrypt3.hash(nextPasswordRaw, CREDENTIAL_BCRYPT_COST);
-      passwordChanged = true;
-    }
-    if (!usernameChanged && !passwordChanged) {
-      return res.json({ ok: true });
-    }
-    const activeSessions = passwordChanged ? await storage2.getActiveActivitiesByUsername(target.username) : [];
-    let updatedUser;
-    try {
-      updatedUser = await storage2.updateUserCredentials({
-        userId: target.id,
-        newUsername: nextUsername,
-        newPasswordHash: nextPasswordHash,
-        passwordChangedAt: passwordChanged ? /* @__PURE__ */ new Date() : void 0
+  app2.get(
+    "/api/admin/users",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute2(async (req) => {
+      const users3 = await authAccountService.getManagedUsers(req.user);
+      return {
+        ok: true,
+        users: users3.map((user) => buildManagedUserPayload(user))
+      };
+    })
+  );
+  app2.post(
+    "/api/admin/users",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute2(async (req) => {
+      const body = ensureObject(req.body) || {};
+      const result = await authAccountService.createManagedUser(req.user, {
+        username: String(body.username ?? ""),
+        fullName: body.fullName == null ? null : String(body.fullName),
+        email: body.email == null ? null : String(body.email),
+        role: String(body.role ?? "user")
       });
-    } catch (error) {
-      if (String(error?.code || "") === "23505") {
-        return sendCredentialError(res, 409, "USERNAME_TAKEN", "Username already exists.");
-      }
-      throw error;
-    }
-    if (!updatedUser) {
-      return sendCredentialError(res, 404, "USER_NOT_FOUND", "Target user not found.");
-    }
-    if (usernameChanged && !passwordChanged && nextUsername) {
-      await storage2.updateActivitiesUsername(target.username, nextUsername);
-    }
-    if (usernameChanged) {
-      await storage2.createAuditLog({
-        action: "USER_USERNAME_CHANGED",
-        performedBy: actor.id,
-        targetUser: updatedUser.id,
-        details: buildCredentialAuditDetails({
-          actor_user_id: actor.id,
-          target_user_id: updatedUser.id,
-          changedField: "username"
-        })
+      return {
+        ok: true,
+        user: buildUserPayload(result.user),
+        activation: buildDeliveryPayload(result.activation)
+      };
+    })
+  );
+  app2.patch(
+    "/api/admin/users/:id",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute2(async (req) => {
+      const body = ensureObject(req.body) || {};
+      const user = await authAccountService.updateManagedUser(req.user, req.params.id, {
+        username: body.username !== void 0 ? String(body.username) : void 0,
+        fullName: body.fullName !== void 0 ? String(body.fullName ?? "") : void 0,
+        email: body.email !== void 0 ? String(body.email ?? "") : void 0
       });
-    }
-    if (passwordChanged) {
-      await storage2.createAuditLog({
-        action: "USER_PASSWORD_CHANGED",
-        performedBy: actor.id,
-        targetUser: updatedUser.id,
-        details: buildCredentialAuditDetails({
-          actor_user_id: actor.id,
-          target_user_id: updatedUser.id,
-          changedField: "password"
-        })
-      });
-      await storage2.deactivateUserActivities(target.username, "PASSWORD_RESET_BY_SUPERUSER");
-      if (updatedUser.username !== target.username) {
-        await storage2.deactivateUserActivities(updatedUser.username, "PASSWORD_RESET_BY_SUPERUSER");
-      }
+      return {
+        ok: true,
+        user: buildUserPayload(user)
+      };
+    })
+  );
+  app2.patch(
+    "/api/admin/users/:id/role",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute2(async (req) => {
+      const body = ensureObject(req.body) || {};
+      const result = await authAccountService.updateManagedUserRole(
+        req.user,
+        req.params.id,
+        String(body.role ?? "")
+      );
       closeActivitySockets(
-        activeSessions.map((activity) => activity.id),
+        result.closedSessionIds,
+        "Account role changed. Please login again."
+      );
+      return {
+        ok: true,
+        forceLogout: result.closedSessionIds.length > 0,
+        user: buildUserPayload(result.user)
+      };
+    })
+  );
+  app2.patch(
+    "/api/admin/users/:id/status",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute2(async (req) => {
+      const body = ensureObject(req.body) || {};
+      const isBanned = body.isBanned === void 0 ? void 0 : Boolean(body.isBanned);
+      const result = await authAccountService.updateManagedUserStatus(req.user, req.params.id, {
+        status: body.status !== void 0 ? String(body.status) : void 0,
+        isBanned
+      });
+      closeActivitySockets(
+        result.closedSessionIds,
+        isBanned ? "Account has been banned." : "Account status changed. Please login again.",
+        isBanned ? "banned" : "logout"
+      );
+      return {
+        ok: true,
+        forceLogout: result.closedSessionIds.length > 0,
+        user: buildUserPayload(result.user)
+      };
+    })
+  );
+  app2.post(
+    "/api/admin/users/:id/reset-password",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute2(async (req) => {
+      const result = await authAccountService.resetManagedUserPassword(req.user, req.params.id);
+      closeActivitySockets(
+        result.closedSessionIds,
         "Password reset by superuser. Please login again."
       );
-    }
-    return res.json({ ok: true });
-  }));
-  app2.get("/api/accounts", authenticateToken, requireRole("superuser"), asyncHandler(async (_req, res) => {
-    const accounts = await storage2.getAccounts();
-    return res.json(accounts);
-  }));
-  app2.post("/api/users", authenticateToken, requireRole("superuser"), asyncHandler(async (req, res) => {
-    if (!req.user) {
-      return res.status(401).json({ message: "Authentication required." });
-    }
-    const body = ensureObject(req.body) || {};
-    const username = normalizeUsernameInput(body.username);
-    const password = String(body.password ?? "");
-    const role = String(body.role ?? "user").trim().toLowerCase();
-    if (!CREDENTIAL_USERNAME_REGEX.test(username)) {
-      return res.status(400).json({ message: "Invalid username format." });
-    }
-    if (!isStrongPassword(password)) {
-      return res.status(400).json({ message: "Password does not meet minimum strength requirements." });
-    }
-    if (!["superuser", "admin", "user"].includes(role)) {
-      return res.status(400).json({ message: "Invalid role." });
-    }
-    const existing = await storage2.getUserByUsername(username);
-    if (existing) {
-      return res.status(409).json({ message: "Username already exists." });
-    }
-    const user = await storage2.createUser({ username, password, role });
-    await storage2.createAuditLog({
-      action: "CREATE_USER",
-      performedBy: req.user.username,
-      targetUser: user.id,
-      details: `Created user with role: ${user.role}`
-    });
-    return res.json({
-      id: user.id,
-      username: user.username,
-      role: user.role,
-      isBanned: user.isBanned
-    });
-  }));
+      return {
+        ok: true,
+        forceLogout: result.closedSessionIds.length > 0,
+        user: buildUserPayload(result.user),
+        reset: buildDeliveryPayload(result.reset)
+      };
+    })
+  );
+  app2.post(
+    "/api/admin/users/:id/resend-activation",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute2(async (req) => {
+      const result = await authAccountService.resendActivation(req.user, req.params.id);
+      return {
+        ok: true,
+        user: buildUserPayload(result.user),
+        activation: buildDeliveryPayload(result.activation)
+      };
+    })
+  );
+  app2.get(
+    "/api/admin/password-reset-requests",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute2(async (req) => {
+      const requests = await authAccountService.listPendingPasswordResetRequests(req.user);
+      return {
+        ok: true,
+        requests
+      };
+    })
+  );
+  app2.get(
+    "/api/admin/dev-mail-outbox",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute2(async () => {
+      return {
+        ok: true,
+        enabled: isDevMailOutboxEnabled(),
+        previews: await listDevMailPreviews(25)
+      };
+    })
+  );
+  app2.patch(
+    "/api/admin/users/:id/credentials",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute2(async (req) => {
+      const body = ensureObject(req.body) || {};
+      const newPassword = String(body.newPassword ?? "");
+      if (newPassword) {
+        throw new AuthAccountError(
+          409,
+          "ACCOUNT_UNAVAILABLE",
+          "Direct password assignment is disabled. Use the reset-password action instead."
+        );
+      }
+      const user = await authAccountService.updateManagedUser(req.user, req.params.id, {
+        username: body.newUsername !== void 0 ? String(body.newUsername) : void 0
+      });
+      return {
+        ok: true,
+        user: buildUserPayload(user)
+      };
+    })
+  );
+  app2.get(
+    "/api/accounts",
+    authenticateToken,
+    requireRole("superuser"),
+    asyncHandler(async (_req, res) => {
+      const accounts = await storage2.getAccounts();
+      res.json(accounts);
+    })
+  );
+  app2.post(
+    "/api/users",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute2(async (req) => {
+      const body = ensureObject(req.body) || {};
+      const result = await authAccountService.createManagedUser(req.user, {
+        username: String(body.username ?? ""),
+        fullName: body.fullName == null ? null : String(body.fullName),
+        email: body.email == null ? null : String(body.email),
+        role: String(body.role ?? "user")
+      });
+      return {
+        ok: true,
+        user: buildUserPayload(result.user),
+        activation: buildDeliveryPayload(result.activation)
+      };
+    })
+  );
 }
 
 // server/routes/collection.validation.ts
@@ -9085,7 +11206,7 @@ var CollectionAdminService = class extends CollectionServiceSupport {
 };
 
 // server/services/collection/collection-nickname.service.ts
-import bcrypt4 from "bcrypt";
+import bcrypt3 from "bcrypt";
 var CollectionNicknameService = class extends CollectionServiceSupport {
   async listNicknames(userInput, includeInactiveRaw) {
     const user = this.requireUser(userInput);
@@ -9161,16 +11282,16 @@ var CollectionNicknameService = class extends CollectionServiceSupport {
       if (!currentPassword) {
         throw badRequest("Current password diperlukan untuk tukar password nickname.");
       }
-      const validCurrentPassword = await bcrypt4.compare(currentPassword, existingHash);
+      const validCurrentPassword = await bcrypt3.compare(currentPassword, existingHash);
       if (!validCurrentPassword) {
         throw unauthorized("Current password nickname tidak sah.");
       }
-      const sameAsCurrent = await bcrypt4.compare(newPassword, existingHash);
+      const sameAsCurrent = await bcrypt3.compare(newPassword, existingHash);
       if (sameAsCurrent) {
         throw badRequest("Password baharu mesti berbeza daripada password semasa.");
       }
     }
-    const passwordHash = await bcrypt4.hash(newPassword, CREDENTIAL_BCRYPT_COST);
+    const passwordHash = await bcrypt3.hash(newPassword, CREDENTIAL_BCRYPT_COST);
     await this.storage.setCollectionNicknamePassword({
       nicknameId: profile.id,
       passwordHash,
@@ -9214,7 +11335,7 @@ var CollectionNicknameService = class extends CollectionServiceSupport {
     if (!hash) {
       throw badRequest("Sila tetapkan kata laluan baharu untuk nickname ini sebelum meneruskan.");
     }
-    const valid = await bcrypt4.compare(password, hash);
+    const valid = await bcrypt3.compare(password, hash);
     if (!valid) {
       throw unauthorized("Password nickname tidak sah.");
     }
@@ -9356,7 +11477,7 @@ var CollectionNicknameService = class extends CollectionServiceSupport {
     if (!nickname) {
       throw notFound("Nickname not found.");
     }
-    const passwordHash = await bcrypt4.hash(COLLECTION_NICKNAME_TEMP_PASSWORD, CREDENTIAL_BCRYPT_COST);
+    const passwordHash = await bcrypt3.hash(COLLECTION_NICKNAME_TEMP_PASSWORD, CREDENTIAL_BCRYPT_COST);
     await this.storage.setCollectionNicknamePassword({
       nicknameId: nickname.id,
       passwordHash,
@@ -9402,18 +11523,18 @@ var CollectionNicknameService = class extends CollectionServiceSupport {
 
 // server/routes/collection-receipt.service.ts
 import fs from "fs";
-import path from "path";
+import path2 from "path";
 import { randomUUID as randomUUID4 } from "node:crypto";
 var COLLECTION_RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
 var COLLECTION_RECEIPT_ALLOWED_EXT = /* @__PURE__ */ new Set([".jpg", ".jpeg", ".png", ".pdf"]);
 var COLLECTION_RECEIPT_ALLOWED_MIME = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "application/pdf"]);
 var COLLECTION_RECEIPT_INLINE_MIME = /* @__PURE__ */ new Set(["application/pdf", "image/png", "image/jpeg"]);
-var COLLECTION_RECEIPT_DIR = path.resolve(process.cwd(), "uploads", "collection-receipts");
+var COLLECTION_RECEIPT_DIR = path2.resolve(process.cwd(), "uploads", "collection-receipts");
 var COLLECTION_RECEIPT_PUBLIC_PREFIX = "/uploads/collection-receipts";
 function resolveReceiptExtension(receipt) {
   const originalFileName = String(receipt.fileName || "").trim();
   const mimeType = String(receipt.mimeType || "").trim().toLowerCase();
-  const extFromName = path.extname(originalFileName).toLowerCase();
+  const extFromName = path2.extname(originalFileName).toLowerCase();
   if (extFromName && COLLECTION_RECEIPT_ALLOWED_EXT.has(extFromName)) {
     return extFromName === ".jpeg" ? ".jpg" : extFromName;
   }
@@ -9453,9 +11574,9 @@ async function saveCollectionReceipt(receipt) {
   }
   await fs.promises.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
   const originalFileName = String(receipt.fileName || "receipt").trim();
-  const stem = path.basename(originalFileName, path.extname(originalFileName)).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40) || "receipt";
+  const stem = path2.basename(originalFileName, path2.extname(originalFileName)).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40) || "receipt";
   const storedFileName = `${Date.now()}-${randomUUID4()}-${stem}${extension}`;
-  const absolutePath = path.join(COLLECTION_RECEIPT_DIR, storedFileName);
+  const absolutePath = path2.join(COLLECTION_RECEIPT_DIR, storedFileName);
   await fs.promises.writeFile(absolutePath, buffer);
   return `${COLLECTION_RECEIPT_PUBLIC_PREFIX}/${storedFileName}`.replace(/\\/g, "/");
 }
@@ -9464,7 +11585,7 @@ async function removeCollectionReceiptFile(receiptPath) {
   if (!normalized.startsWith(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`)) return;
   const fileName = normalized.slice(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`.length);
   if (!fileName || fileName.includes("..") || fileName.includes("/") || fileName.includes("\\")) return;
-  const absolutePath = path.resolve(COLLECTION_RECEIPT_DIR, fileName);
+  const absolutePath = path2.resolve(COLLECTION_RECEIPT_DIR, fileName);
   if (!absolutePath.startsWith(COLLECTION_RECEIPT_DIR)) return;
   try {
     await fs.promises.unlink(absolutePath);
@@ -9472,7 +11593,7 @@ async function removeCollectionReceiptFile(receiptPath) {
   }
 }
 function resolveCollectionReceiptMimeTypeFromFileName(fileName) {
-  const extension = path.extname(fileName).toLowerCase();
+  const extension = path2.extname(fileName).toLowerCase();
   if (extension === ".pdf") return "application/pdf";
   if (extension === ".png") return "image/png";
   if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
@@ -9488,10 +11609,10 @@ function resolveCollectionReceiptFile(receiptPath) {
   const storedFileName = normalized.slice(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`.length);
   if (!storedFileName) return null;
   if (storedFileName.includes("..") || storedFileName.includes("/") || storedFileName.includes("\\")) return null;
-  if (path.basename(storedFileName) !== storedFileName) return null;
-  const absolutePath = path.resolve(COLLECTION_RECEIPT_DIR, storedFileName);
-  const relativePath = path.relative(COLLECTION_RECEIPT_DIR, absolutePath);
-  if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) return null;
+  if (path2.basename(storedFileName) !== storedFileName) return null;
+  const absolutePath = path2.resolve(COLLECTION_RECEIPT_DIR, storedFileName);
+  const relativePath = path2.relative(COLLECTION_RECEIPT_DIR, absolutePath);
+  if (!relativePath || relativePath.startsWith("..") || path2.isAbsolute(relativePath)) return null;
   const mimeType = resolveCollectionReceiptMimeTypeFromFileName(storedFileName);
   return {
     absolutePath,
@@ -13951,7 +16072,7 @@ function wrapAsyncPrototypeMethods(target, options) {
 // server/internal/frontend-static.ts
 import express2 from "express";
 import fs2 from "fs";
-import path2 from "path";
+import path3 from "path";
 var DEFAULT_FRONTEND_PATHS = [
   "dist-local/public",
   "dist-local\\public",
@@ -13965,8 +16086,8 @@ function registerFrontendStatic(app2, options) {
   let foundPath = null;
   let foundIndex = null;
   for (const relPath of possiblePaths) {
-    const fullPath = path2.resolve(cwd, relPath);
-    const indexFile = path2.join(fullPath, "index.html");
+    const fullPath = path3.resolve(cwd, relPath);
+    const indexFile = path3.join(fullPath, "index.html");
     console.log(`  Checking: ${fullPath}`);
     try {
       if (fs2.existsSync(fullPath) && fs2.statSync(fullPath).isDirectory()) {
@@ -13998,7 +16119,7 @@ function registerFrontendStatic(app2, options) {
   console.log("");
   console.log("  ERROR: Frontend files not found!");
   console.log("  Please run: npm run build:local");
-  console.log(`  Expected location: ${path2.resolve(cwd, "dist-local/public")}`);
+  console.log(`  Expected location: ${path3.resolve(cwd, "dist-local/public")}`);
   app2.use((req, res) => {
     if (!req.path.startsWith("/api") && !req.path.startsWith("/ws")) {
       res.status(404).send(`
@@ -14201,7 +16322,7 @@ var DEFAULT_AI_TIMEOUT_MS = 6e3;
 var DEFAULT_BODY_LIMIT = "2mb";
 var IMPORT_BODY_LIMIT = process.env.IMPORT_BODY_LIMIT || "50mb";
 var COLLECTION_BODY_LIMIT = process.env.COLLECTION_BODY_LIMIT || "8mb";
-var UPLOADS_ROOT_DIR = path3.resolve(process.cwd(), "uploads");
+var UPLOADS_ROOT_DIR = path4.resolve(process.cwd(), "uploads");
 var PG_POOL_WARN_COOLDOWN_MS = 6e4;
 var AI_PRECOMPUTE_ON_START = String(process.env.AI_PRECOMPUTE_ON_START || "0") === "1";
 var API_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";

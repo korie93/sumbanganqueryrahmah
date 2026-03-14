@@ -22,18 +22,26 @@ import type { ManagedUser } from "@/pages/settings/types";
 
 interface ManagedUserDialogProps {
   confirmCriticalOpen: boolean;
-  managedConfirmPasswordInput: string;
   managedDialogOpen: boolean;
-  managedPasswordInput: string;
+  managedEmailInput: string;
+  managedFullNameInput: string;
+  managedIsBanned: boolean;
+  managedRoleInput: "admin" | "user";
   managedSaving: boolean;
   managedSelectedUser: ManagedUser | null;
+  managedStatusInput: "pending_activation" | "active" | "suspended" | "disabled";
   managedUsernameInput: string;
   onCloseManagedDialog: () => void;
   onConfirmCriticalOpenChange: (open: boolean) => void;
   onConfirmManagedSave: () => void;
-  onManagedConfirmPasswordInputChange: (value: string) => void;
   onManagedDialogOpenChange: (open: boolean) => void;
-  onManagedPasswordInputChange: (value: string) => void;
+  onManagedEmailInputChange: (value: string) => void;
+  onManagedFullNameInputChange: (value: string) => void;
+  onManagedIsBannedChange: (value: boolean) => void;
+  onManagedRoleInputChange: (value: "admin" | "user") => void;
+  onManagedStatusInputChange: (
+    value: "pending_activation" | "active" | "suspended" | "disabled",
+  ) => void;
   onManagedUsernameInputChange: (value: string) => void;
   onSaveCriticalSettings: () => Promise<void>;
   saving: boolean;
@@ -41,18 +49,24 @@ interface ManagedUserDialogProps {
 
 export function ManagedUserDialog({
   confirmCriticalOpen,
-  managedConfirmPasswordInput,
   managedDialogOpen,
-  managedPasswordInput,
+  managedEmailInput,
+  managedFullNameInput,
+  managedIsBanned,
+  managedRoleInput,
   managedSaving,
   managedSelectedUser,
+  managedStatusInput,
   managedUsernameInput,
   onCloseManagedDialog,
   onConfirmCriticalOpenChange,
   onConfirmManagedSave,
-  onManagedConfirmPasswordInputChange,
   onManagedDialogOpenChange,
-  onManagedPasswordInputChange,
+  onManagedEmailInputChange,
+  onManagedFullNameInputChange,
+  onManagedIsBannedChange,
+  onManagedRoleInputChange,
+  onManagedStatusInputChange,
   onManagedUsernameInputChange,
   onSaveCriticalSettings,
   saving,
@@ -62,12 +76,20 @@ export function ManagedUserDialog({
       <Dialog open={managedDialogOpen} onOpenChange={onManagedDialogOpenChange}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit credentials</DialogTitle>
+            <DialogTitle>Edit Managed Account</DialogTitle>
             <DialogDescription>
-              Update username and/or password for {managedSelectedUser?.username || "selected user"}.
+              Update account details for {managedSelectedUser?.username || "selected user"}.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Full Name</p>
+              <Input
+                value={managedFullNameInput}
+                onChange={(event) => onManagedFullNameInputChange(event.target.value)}
+                disabled={managedSaving}
+              />
+            </div>
             <div className="space-y-2">
               <p className="text-sm font-medium">Username</p>
               <Input
@@ -77,22 +99,62 @@ export function ManagedUserDialog({
               />
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-medium">New Password</p>
+              <p className="text-sm font-medium">Email</p>
               <Input
-                type="password"
-                value={managedPasswordInput}
-                onChange={(event) => onManagedPasswordInputChange(event.target.value)}
+                value={managedEmailInput}
+                onChange={(event) => onManagedEmailInputChange(event.target.value)}
                 disabled={managedSaving}
               />
             </div>
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Confirm Password</p>
-              <Input
-                type="password"
-                value={managedConfirmPasswordInput}
-                onChange={(event) => onManagedConfirmPasswordInputChange(event.target.value)}
-                disabled={managedSaving}
-              />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Role</p>
+                <select
+                  value={managedRoleInput}
+                  onChange={(event) =>
+                    onManagedRoleInputChange(event.target.value === "admin" ? "admin" : "user")
+                  }
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  disabled={managedSaving}
+                >
+                  <option value="user">user</option>
+                  <option value="admin">admin</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Status</p>
+                <select
+                  value={managedStatusInput}
+                  onChange={(event) =>
+                    onManagedStatusInputChange(
+                      event.target.value as
+                        | "pending_activation"
+                        | "active"
+                        | "suspended"
+                        | "disabled",
+                    )
+                  }
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  disabled={managedSaving}
+                >
+                  <option value="pending_activation">pending_activation</option>
+                  <option value="active">active</option>
+                  <option value="suspended">suspended</option>
+                  <option value="disabled">disabled</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Banned</p>
+                <select
+                  value={managedIsBanned ? "true" : "false"}
+                  onChange={(event) => onManagedIsBannedChange(event.target.value === "true")}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  disabled={managedSaving}
+                >
+                  <option value="false">not banned</option>
+                  <option value="true">banned</option>
+                </select>
+              </div>
             </div>
           </div>
           <DialogFooter>

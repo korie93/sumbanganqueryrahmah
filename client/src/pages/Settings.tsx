@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AccountSecuritySection } from "@/pages/settings/AccountSecuritySection";
 import { ManagedUserDialog } from "@/pages/settings/ManagedUserDialog";
+import { ManagedSecretDialog } from "@/pages/settings/ManagedSecretDialog";
 import { SettingsRoleSections } from "@/pages/settings/SettingsRoleSections";
 import { SettingsSaveBar } from "@/pages/settings/SettingsSaveBar";
 import { SettingsSidebar } from "@/pages/settings/SettingsSidebar";
@@ -96,6 +97,7 @@ export default function SettingsPage() {
       </div>
 
       <ManagedUserDialog {...controller.managedDialog} />
+      <ManagedSecretDialog {...controller.managedSecretDialog} />
     </div>
   );
 }
