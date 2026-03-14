@@ -47,6 +47,19 @@ function buildCollectionPurgeCutoffDate(referenceDate = new Date()): string {
 }
 
 export class CollectionRecordService extends CollectionServiceSupport {
+  private async logRejectedPurgeAttempt(username: string, details: string) {
+    try {
+      await this.storage.createAuditLog({
+        action: "COLLECTION_RECORDS_PURGE_REJECTED",
+        performedBy: username,
+        targetResource: "collection-records",
+        details,
+      });
+    } catch {
+      // best effort audit only
+    }
+  }
+
   async createRecord(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], bodyRaw: unknown) {
     const user = this.requireUser(userInput);
     const uploadedReceipts: Array<Awaited<ReturnType<typeof saveCollectionReceipt>>> = [];
@@ -374,6 +387,10 @@ export class CollectionRecordService extends CollectionServiceSupport {
 
     const isValidPassword = await verifyPassword(currentPassword, actor.passwordHash);
     if (!isValidPassword) {
+      await this.logRejectedPurgeAttempt(
+        user.username,
+        `Rejected collection purge attempt due to invalid superuser password by ${user.username}`,
+      );
       throw forbidden("Password login superuser tidak sah.");
     }
 
