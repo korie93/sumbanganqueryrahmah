@@ -8,8 +8,10 @@ import type {
   CollectionNicknameAuthProfile,
   CollectionNicknameSession,
   CollectionRecord,
+  CollectionRecordReceipt,
   CollectionStaffNickname,
   CreateCollectionRecordInput,
+  CreateCollectionRecordReceiptInput,
   CreateCollectionStaffNicknameInput,
   UpdateCollectionRecordInput,
   UpdateCollectionStaffNicknameInput,
@@ -184,10 +186,81 @@ export class CollectionRepository {
       paymentDate,
       amount: String(row.amount ?? "0"),
       receiptFile: row.receipt_file ?? row.receiptFile ?? null,
+      receipts: [],
       createdByLogin: String(row.created_by_login ?? row.createdByLogin ?? row.staff_username ?? row.staffUsername ?? ""),
       collectionStaffNickname: String(row.collection_staff_nickname ?? row.collectionStaffNickname ?? row.staff_username ?? row.staffUsername ?? ""),
       createdAt,
     };
+  }
+
+  private mapCollectionRecordReceiptRow(row: any): CollectionRecordReceipt {
+    const createdAtRaw = row.created_at ?? row.createdAt;
+    const createdAt = createdAtRaw instanceof Date
+      ? createdAtRaw
+      : new Date(createdAtRaw ?? Date.now());
+
+    return {
+      id: String(row.id ?? ""),
+      collectionRecordId: String(row.collection_record_id ?? row.collectionRecordId ?? ""),
+      storagePath: String(row.storage_path ?? row.storagePath ?? ""),
+      originalFileName: String(row.original_file_name ?? row.originalFileName ?? ""),
+      originalMimeType: String(row.original_mime_type ?? row.originalMimeType ?? "application/octet-stream"),
+      originalExtension: String(row.original_extension ?? row.originalExtension ?? ""),
+      fileSize: Number(row.file_size ?? row.fileSize ?? 0),
+      createdAt,
+    };
+  }
+
+  private async loadReceiptMapByRecordIds(recordIds: string[]): Promise<Map<string, CollectionRecordReceipt[]>> {
+    const normalizedIds = Array.from(
+      new Set(
+        recordIds
+          .map((value) => String(value || "").trim())
+          .filter(Boolean),
+      ),
+    );
+    const receiptMap = new Map<string, CollectionRecordReceipt[]>();
+    if (!normalizedIds.length) return receiptMap;
+
+    const idSql = sql.join(normalizedIds.map((value) => sql`${value}::uuid`), sql`, `);
+    const result = await db.execute(sql`
+      SELECT
+        id,
+        collection_record_id,
+        storage_path,
+        original_file_name,
+        original_mime_type,
+        original_extension,
+        file_size,
+        created_at
+      FROM public.collection_record_receipts
+      WHERE collection_record_id IN (${idSql})
+      ORDER BY created_at ASC, id ASC
+    `);
+
+    for (const row of result.rows || []) {
+      const receipt = this.mapCollectionRecordReceiptRow(row);
+      const current = receiptMap.get(receipt.collectionRecordId) || [];
+      current.push(receipt);
+      receiptMap.set(receipt.collectionRecordId, current);
+    }
+
+    return receiptMap;
+  }
+
+  private async attachReceipts(records: CollectionRecord[]): Promise<CollectionRecord[]> {
+    if (!records.length) return records;
+    const receiptMap = await this.loadReceiptMapByRecordIds(records.map((record) => record.id));
+
+    return records.map((record) => {
+      const receipts = receiptMap.get(record.id) || [];
+      const firstReceiptPath = receipts[0]?.storagePath || record.receiptFile || null;
+      return {
+        ...record,
+        receiptFile: firstReceiptPath,
+        receipts,
+      };
+    });
   }
 
   async getCollectionStaffNicknames(filters?: {
@@ -1100,9 +1173,56 @@ export class CollectionRepository {
     return Boolean(result.rows?.[0]);
   }
 
+  private buildCollectionRecordConditions(filters?: {
+    from?: string;
+    to?: string;
+    search?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+  }) {
+    const conditions: any[] = [];
+    if (filters?.from) {
+      conditions.push(sql`payment_date >= ${filters.from}::date`);
+    }
+    if (filters?.to) {
+      conditions.push(sql`payment_date <= ${filters.to}::date`);
+    }
+
+    const search = String(filters?.search || "").trim();
+    if (search) {
+      const like = `%${search}%`;
+      conditions.push(sql`(
+        customer_name ILIKE ${like}
+        OR ic_number ILIKE ${like}
+        OR account_number ILIKE ${like}
+        OR batch ILIKE ${like}
+        OR customer_phone ILIKE ${like}
+        OR amount::text ILIKE ${like}
+      )`);
+    }
+
+    const createdByLogin = String(filters?.createdByLogin || "").trim();
+    if (createdByLogin) {
+      conditions.push(sql`created_by_login = ${createdByLogin}`);
+    }
+
+    const nicknameSource = filters?.nicknames;
+    const nicknames = Array.isArray(nicknameSource)
+      ? nicknameSource
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index)
+      : [];
+    if (nicknames.length > 0) {
+      const nicknameSql = sql.join(nicknames.map((value) => sql`${value}`), sql`, `);
+      conditions.push(sql`lower(collection_staff_nickname) IN (${nicknameSql})`);
+    }
+
+    return conditions;
+  }
+
   async createCollectionRecord(data: CreateCollectionRecordInput): Promise<CollectionRecord> {
     const id = randomUUID();
-    const result = await db.execute(sql`
+    await db.execute(sql`
       INSERT INTO public.collection_records (
         id,
         customer_name,
@@ -1133,23 +1253,12 @@ export class CollectionRepository {
         ${data.collectionStaffNickname},
         now()
       )
-      RETURNING
-        id,
-        customer_name,
-        ic_number,
-        customer_phone,
-        account_number,
-        batch,
-        payment_date,
-        amount,
-        receipt_file,
-        created_by_login,
-        collection_staff_nickname,
-        staff_username,
-        created_at
     `);
-
-    return this.mapCollectionRecordRow(result.rows[0]);
+    const created = await this.getCollectionRecordById(id);
+    if (!created) {
+      throw new Error("Failed to load created collection record.");
+    }
+    return created;
   }
 
   async listCollectionRecords(filters?: {
@@ -1159,40 +1268,9 @@ export class CollectionRepository {
     createdByLogin?: string;
     nicknames?: string[];
     limit?: number;
+    offset?: number;
   }): Promise<CollectionRecord[]> {
-    const conditions: any[] = [];
-    if (filters?.from) {
-      conditions.push(sql`payment_date >= ${filters.from}::date`);
-    }
-    if (filters?.to) {
-      conditions.push(sql`payment_date <= ${filters.to}::date`);
-    }
-    const search = String(filters?.search || "").trim();
-    if (search) {
-      const like = `%${search}%`;
-      conditions.push(sql`(
-        customer_name ILIKE ${like}
-        OR ic_number ILIKE ${like}
-        OR account_number ILIKE ${like}
-        OR customer_phone ILIKE ${like}
-        OR amount::text ILIKE ${like}
-      )`);
-    }
-    const createdByLogin = String(filters?.createdByLogin || "").trim();
-    if (createdByLogin) {
-      conditions.push(sql`created_by_login = ${createdByLogin}`);
-    }
-    const nicknameSource = filters?.nicknames;
-    const nicknames = Array.isArray(nicknameSource)
-      ? nicknameSource
-        .map((value) => String(value || "").trim().toLowerCase())
-        .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index)
-      : [];
-    if (nicknames.length > 0) {
-      const nicknameSql = sql.join(nicknames.map((value) => sql`${value}`), sql`, `);
-      conditions.push(sql`lower(collection_staff_nickname) IN (${nicknameSql})`);
-    }
-
+    const conditions = this.buildCollectionRecordConditions(filters);
     const whereSql = conditions.length
       ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
       : sql``;
@@ -1200,6 +1278,10 @@ export class CollectionRepository {
     const safeLimit = Number.isFinite(parsedLimit)
       ? Math.min(2000, Math.max(1, Math.floor(parsedLimit)))
       : 500;
+    const parsedOffset = Number(filters?.offset);
+    const safeOffset = Number.isFinite(parsedOffset)
+      ? Math.max(0, Math.floor(parsedOffset))
+      : 0;
 
     const result = await db.execute(sql`
       SELECT
@@ -1218,11 +1300,148 @@ export class CollectionRepository {
         created_at
       FROM public.collection_records
       ${whereSql}
-      ORDER BY payment_date DESC, created_at DESC
+      ORDER BY payment_date ASC, created_at ASC, id ASC
       LIMIT ${safeLimit}
+      OFFSET ${safeOffset}
     `);
 
-    return (result.rows || []).map((row: any) => this.mapCollectionRecordRow(row));
+    const records = (result.rows || []).map((row: any) => this.mapCollectionRecordRow(row));
+    return this.attachReceipts(records);
+  }
+
+  async summarizeCollectionRecords(filters?: {
+    from?: string;
+    to?: string;
+    search?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+  }): Promise<{ totalRecords: number; totalAmount: number }> {
+    const conditions = this.buildCollectionRecordConditions(filters);
+    const whereSql = conditions.length
+      ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
+      : sql``;
+
+    const result = await db.execute(sql`
+      SELECT
+        COUNT(*)::int AS total_records,
+        COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
+      FROM public.collection_records
+      ${whereSql}
+    `);
+
+    const row = result.rows?.[0] as any;
+    return {
+      totalRecords: Number(row?.total_records ?? 0),
+      totalAmount: Number(row?.total_amount ?? 0),
+    };
+  }
+
+  async summarizeCollectionRecordsOlderThan(beforeDate: string): Promise<{ totalRecords: number; totalAmount: number }> {
+    const normalizedBeforeDate = String(beforeDate || "").trim();
+    if (!normalizedBeforeDate) {
+      return {
+        totalRecords: 0,
+        totalAmount: 0,
+      };
+    }
+
+    const result = await db.execute(sql`
+      SELECT
+        COUNT(*)::int AS total_records,
+        COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
+      FROM public.collection_records
+      WHERE payment_date < ${normalizedBeforeDate}::date
+    `);
+
+    const row = result.rows?.[0] as any;
+    return {
+      totalRecords: Number(row?.total_records ?? 0),
+      totalAmount: Number(row?.total_amount ?? 0),
+    };
+  }
+
+  async purgeCollectionRecordsOlderThan(beforeDate: string): Promise<{
+    totalRecords: number;
+    totalAmount: number;
+    receiptPaths: string[];
+  }> {
+    const normalizedBeforeDate = String(beforeDate || "").trim();
+    if (!normalizedBeforeDate) {
+      return {
+        totalRecords: 0,
+        totalAmount: 0,
+        receiptPaths: [],
+      };
+    }
+
+    return db.transaction(async (tx) => {
+      const oldRecordsResult = await tx.execute(sql`
+        SELECT
+          id,
+          amount,
+          receipt_file
+        FROM public.collection_records
+        WHERE payment_date < ${normalizedBeforeDate}::date
+        ORDER BY payment_date ASC, created_at ASC, id ASC
+      `);
+
+      const oldRecordRows = Array.isArray(oldRecordsResult.rows) ? oldRecordsResult.rows : [];
+      if (!oldRecordRows.length) {
+        return {
+          totalRecords: 0,
+          totalAmount: 0,
+          receiptPaths: [],
+        };
+      }
+
+      const recordIds = oldRecordRows
+        .map((row: any) => String(row.id || "").trim())
+        .filter(Boolean);
+      if (!recordIds.length) {
+        return {
+          totalRecords: 0,
+          totalAmount: 0,
+          receiptPaths: [],
+        };
+      }
+
+      const recordIdSql = sql.join(recordIds.map((value) => sql`${value}::uuid`), sql`, `);
+      const receiptRowsResult = await tx.execute(sql`
+        SELECT storage_path
+        FROM public.collection_record_receipts
+        WHERE collection_record_id IN (${recordIdSql})
+      `);
+
+      await tx.execute(sql`
+        DELETE FROM public.collection_record_receipts
+        WHERE collection_record_id IN (${recordIdSql})
+      `);
+
+      await tx.execute(sql`
+        DELETE FROM public.collection_records
+        WHERE id IN (${recordIdSql})
+      `);
+
+      const receiptPaths = Array.from(
+        new Set(
+          [
+            ...oldRecordRows.map((row: any) => String(row.receipt_file || "").trim()),
+            ...(Array.isArray(receiptRowsResult.rows)
+              ? receiptRowsResult.rows.map((row: any) => String(row.storage_path || "").trim())
+              : []),
+          ].filter(Boolean),
+        ),
+      );
+
+      return {
+        totalRecords: oldRecordRows.length,
+        totalAmount: oldRecordRows.reduce(
+          (sum: number, row: any) => sum + Number(row.amount ?? 0),
+          0,
+        ),
+        receiptPaths,
+      };
+    });
   }
 
   async getCollectionMonthlySummary(filters: {
@@ -1313,7 +1532,170 @@ export class CollectionRepository {
 
     const row = result.rows?.[0];
     if (!row) return undefined;
-    return this.mapCollectionRecordRow(row);
+    const [record] = await this.attachReceipts([this.mapCollectionRecordRow(row)]);
+    return record;
+  }
+
+  async listCollectionRecordReceipts(recordId: string): Promise<CollectionRecordReceipt[]> {
+    const normalizedRecordId = String(recordId || "").trim();
+    if (!normalizedRecordId) return [];
+
+    const result = await db.execute(sql`
+      SELECT
+        id,
+        collection_record_id,
+        storage_path,
+        original_file_name,
+        original_mime_type,
+        original_extension,
+        file_size,
+        created_at
+      FROM public.collection_record_receipts
+      WHERE collection_record_id = ${normalizedRecordId}::uuid
+      ORDER BY created_at ASC, id ASC
+    `);
+
+    return (result.rows || []).map((row: any) => this.mapCollectionRecordReceiptRow(row));
+  }
+
+  async getCollectionRecordReceiptById(
+    recordId: string,
+    receiptId: string,
+  ): Promise<CollectionRecordReceipt | undefined> {
+    const normalizedRecordId = String(recordId || "").trim();
+    const normalizedReceiptId = String(receiptId || "").trim();
+    if (!normalizedRecordId || !normalizedReceiptId) return undefined;
+
+    const result = await db.execute(sql`
+      SELECT
+        id,
+        collection_record_id,
+        storage_path,
+        original_file_name,
+        original_mime_type,
+        original_extension,
+        file_size,
+        created_at
+      FROM public.collection_record_receipts
+      WHERE collection_record_id = ${normalizedRecordId}::uuid
+        AND id = ${normalizedReceiptId}::uuid
+      LIMIT 1
+    `);
+    const row = result.rows?.[0];
+    if (!row) return undefined;
+    return this.mapCollectionRecordReceiptRow(row);
+  }
+
+  async createCollectionRecordReceipts(
+    recordId: string,
+    receipts: CreateCollectionRecordReceiptInput[],
+  ): Promise<CollectionRecordReceipt[]> {
+    const normalizedRecordId = String(recordId || "").trim();
+    if (!normalizedRecordId || !Array.isArray(receipts) || !receipts.length) {
+      return [];
+    }
+
+    const insertedIds: string[] = [];
+    for (const receipt of receipts) {
+      const id = randomUUID();
+      insertedIds.push(id);
+      await db.execute(sql`
+        INSERT INTO public.collection_record_receipts (
+          id,
+          collection_record_id,
+          storage_path,
+          original_file_name,
+          original_mime_type,
+          original_extension,
+          file_size,
+          created_at
+        )
+        VALUES (
+          ${id}::uuid,
+          ${normalizedRecordId}::uuid,
+          ${receipt.storagePath},
+          ${receipt.originalFileName},
+          ${receipt.originalMimeType},
+          ${receipt.originalExtension},
+          ${receipt.fileSize},
+          now()
+        )
+      `);
+    }
+
+    const idSql = sql.join(insertedIds.map((value) => sql`${value}::uuid`), sql`, `);
+    const result = await db.execute(sql`
+      SELECT
+        id,
+        collection_record_id,
+        storage_path,
+        original_file_name,
+        original_mime_type,
+        original_extension,
+        file_size,
+        created_at
+      FROM public.collection_record_receipts
+      WHERE id IN (${idSql})
+      ORDER BY created_at ASC, id ASC
+    `);
+    return (result.rows || []).map((row: any) => this.mapCollectionRecordReceiptRow(row));
+  }
+
+  async deleteCollectionRecordReceipts(
+    recordId: string,
+    receiptIds: string[],
+  ): Promise<CollectionRecordReceipt[]> {
+    const normalizedRecordId = String(recordId || "").trim();
+    const normalizedReceiptIds = Array.from(
+      new Set(
+        (Array.isArray(receiptIds) ? receiptIds : [])
+          .map((value) => String(value || "").trim())
+          .filter(Boolean),
+      ),
+    );
+    if (!normalizedRecordId || !normalizedReceiptIds.length) {
+      return [];
+    }
+
+    const idSql = sql.join(normalizedReceiptIds.map((value) => sql`${value}::uuid`), sql`, `);
+    const existing = await db.execute(sql`
+      SELECT
+        id,
+        collection_record_id,
+        storage_path,
+        original_file_name,
+        original_mime_type,
+        original_extension,
+        file_size,
+        created_at
+      FROM public.collection_record_receipts
+      WHERE collection_record_id = ${normalizedRecordId}::uuid
+        AND id IN (${idSql})
+    `);
+    const receipts = (existing.rows || []).map((row: any) => this.mapCollectionRecordReceiptRow(row));
+    if (!receipts.length) {
+      return [];
+    }
+
+    await db.execute(sql`
+      DELETE FROM public.collection_record_receipts
+      WHERE collection_record_id = ${normalizedRecordId}::uuid
+        AND id IN (${idSql})
+    `);
+    return receipts;
+  }
+
+  async deleteAllCollectionRecordReceipts(recordId: string): Promise<CollectionRecordReceipt[]> {
+    const receipts = await this.listCollectionRecordReceipts(recordId);
+    if (!receipts.length) {
+      return [];
+    }
+    const idSql = sql.join(receipts.map((receipt) => sql`${receipt.id}::uuid`), sql`, `);
+    await db.execute(sql`
+      DELETE FROM public.collection_record_receipts
+      WHERE id IN (${idSql})
+    `);
+    return receipts;
   }
 
   async updateCollectionRecord(id: string, data: UpdateCollectionRecordInput): Promise<CollectionRecord | undefined> {
@@ -1374,10 +1756,11 @@ export class CollectionRepository {
 
     const row = result.rows?.[0];
     if (!row) return undefined;
-    return this.mapCollectionRecordRow(row);
+    return this.getCollectionRecordById(id);
   }
 
   async deleteCollectionRecord(id: string): Promise<boolean> {
+    await db.execute(sql`DELETE FROM public.collection_record_receipts WHERE collection_record_id = ${id}::uuid`);
     await db.execute(sql`DELETE FROM public.collection_records WHERE id = ${id}::uuid`);
     return true;
   }

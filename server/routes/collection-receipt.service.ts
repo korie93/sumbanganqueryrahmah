@@ -3,7 +3,11 @@ import path from "path";
 import { randomUUID } from "node:crypto";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
-import type { PostgresStorage } from "../storage-postgres";
+import type {
+  CollectionRecordReceipt,
+  CreateCollectionRecordReceiptInput,
+  PostgresStorage,
+} from "../storage-postgres";
 import { canUserAccessCollectionRecord } from "./collection-access";
 import { normalizeCollectionText, type CollectionReceiptPayload } from "./collection.validation";
 
@@ -13,6 +17,8 @@ const COLLECTION_RECEIPT_ALLOWED_MIME = new Set(["image/jpeg", "image/png", "app
 const COLLECTION_RECEIPT_INLINE_MIME = new Set(["application/pdf", "image/png", "image/jpeg"]);
 const COLLECTION_RECEIPT_DIR = path.resolve(process.cwd(), "uploads", "collection-receipts");
 const COLLECTION_RECEIPT_PUBLIC_PREFIX = "/uploads/collection-receipts";
+
+export type StoredCollectionReceiptFile = CreateCollectionRecordReceiptInput;
 
 function resolveReceiptExtension(receipt: CollectionReceiptPayload): string | null {
   const originalFileName = String(receipt.fileName || "").trim();
@@ -44,7 +50,21 @@ function extractReceiptBuffer(receipt: CollectionReceiptPayload): Buffer | null 
   }
 }
 
-export async function saveCollectionReceipt(receipt: CollectionReceiptPayload): Promise<string> {
+function sanitizeOriginalFileName(fileName: string, fallbackExtension: string): string {
+  const raw = String(fileName || "").trim();
+  const ext = path.extname(raw).toLowerCase();
+  const stem = path
+    .basename(raw, ext)
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/_+/g, "_")
+    .slice(0, 80) || "receipt";
+  const safeExtension = ext || fallbackExtension || "";
+  return `${stem}${safeExtension}`.slice(0, 140);
+}
+
+export async function saveCollectionReceipt(
+  receipt: CollectionReceiptPayload,
+): Promise<StoredCollectionReceiptFile> {
   const mimeType = String(receipt.mimeType || "").trim().toLowerCase();
   if (mimeType && !COLLECTION_RECEIPT_ALLOWED_MIME.has(mimeType)) {
     throw new Error("Receipt file type is not allowed.");
@@ -65,7 +85,11 @@ export async function saveCollectionReceipt(receipt: CollectionReceiptPayload): 
   }
 
   await fs.promises.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
-  const originalFileName = String(receipt.fileName || "receipt").trim();
+
+  const originalFileName = sanitizeOriginalFileName(
+    String(receipt.fileName || "receipt"),
+    extension,
+  );
   const stem = path
     .basename(originalFileName, path.extname(originalFileName))
     .replace(/[^a-zA-Z0-9._-]/g, "_")
@@ -74,10 +98,18 @@ export async function saveCollectionReceipt(receipt: CollectionReceiptPayload): 
   const absolutePath = path.join(COLLECTION_RECEIPT_DIR, storedFileName);
   await fs.promises.writeFile(absolutePath, buffer);
 
-  return `${COLLECTION_RECEIPT_PUBLIC_PREFIX}/${storedFileName}`.replace(/\\/g, "/");
+  return {
+    storagePath: `${COLLECTION_RECEIPT_PUBLIC_PREFIX}/${storedFileName}`.replace(/\\/g, "/"),
+    originalFileName,
+    originalMimeType: mimeType || "application/octet-stream",
+    originalExtension: extension,
+    fileSize: buffer.length,
+  };
 }
 
-export async function removeCollectionReceiptFile(receiptPath: string | null | undefined): Promise<void> {
+export async function removeCollectionReceiptFile(
+  receiptPath: string | null | undefined,
+): Promise<void> {
   const normalized = String(receiptPath || "").trim().replace(/\\/g, "/");
   if (!normalized.startsWith(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`)) return;
 
@@ -110,7 +142,9 @@ function sanitizeReceiptDownloadName(fileName: string): string {
   return sanitized || "receipt";
 }
 
-function resolveCollectionReceiptFile(receiptPath: string | null | undefined): {
+function resolveCollectionReceiptFile(
+  receiptPath: string | null | undefined,
+): {
   absolutePath: string;
   storedFileName: string;
   mimeType: string;
@@ -137,11 +171,26 @@ function resolveCollectionReceiptFile(receiptPath: string | null | undefined): {
   };
 }
 
+async function resolveSelectedReceipt(
+  storage: PostgresStorage,
+  recordId: string,
+  receiptIdRaw?: string | null,
+): Promise<CollectionRecordReceipt | null> {
+  const receiptId = normalizeCollectionText(receiptIdRaw);
+  if (receiptId) {
+    return (await storage.getCollectionRecordReceiptById(recordId, receiptId)) || null;
+  }
+
+  const receipts = await storage.listCollectionRecordReceipts(recordId);
+  return receipts[0] || null;
+}
+
 export async function serveCollectionReceipt(
   storage: PostgresStorage,
   req: AuthenticatedRequest,
   res: Response,
   mode: "view" | "download",
+  receiptIdRaw?: string | null,
 ) {
   try {
     if (!req.user) {
@@ -166,13 +215,19 @@ export async function serveCollectionReceipt(
       return res.status(403).json({ ok: false, message: "Forbidden" });
     }
 
-    if (!record.receiptFile) {
-      return res.status(404).json({ ok: false, message: "Receipt file not found." });
-    }
+    const selectedReceipt = await resolveSelectedReceipt(
+      storage,
+      id,
+      receiptIdRaw ?? req.params.receiptId ?? null,
+    );
+    const legacyReceiptPath =
+      !selectedReceipt && record.receiptFile ? record.receiptFile : null;
+    const resolved = resolveCollectionReceiptFile(
+      selectedReceipt?.storagePath ?? legacyReceiptPath,
+    );
 
-    const resolved = resolveCollectionReceiptFile(record.receiptFile);
     if (!resolved) {
-      return res.status(404).json({ ok: false, message: "Receipt file path is invalid." });
+      return res.status(404).json({ ok: false, message: "Receipt file not found." });
     }
 
     try {
@@ -181,12 +236,15 @@ export async function serveCollectionReceipt(
       return res.status(404).json({ ok: false, message: "Receipt file not found." });
     }
 
-    if (mode === "view" && !resolved.isInlinePreviewSupported) {
+    const responseMimeType = selectedReceipt?.originalMimeType || resolved.mimeType;
+    if (mode === "view" && !COLLECTION_RECEIPT_INLINE_MIME.has(responseMimeType)) {
       return res.status(415).json({ ok: false, message: "Preview not available for this file type." });
     }
 
-    const safeFileName = sanitizeReceiptDownloadName(resolved.storedFileName);
-    res.setHeader("Content-Type", resolved.mimeType);
+    const safeFileName = sanitizeReceiptDownloadName(
+      selectedReceipt?.originalFileName || resolved.storedFileName,
+    );
+    res.setHeader("Content-Type", responseMimeType);
     res.setHeader(
       "Content-Disposition",
       `${mode === "download" ? "attachment" : "inline"}; filename="${safeFileName}"`,

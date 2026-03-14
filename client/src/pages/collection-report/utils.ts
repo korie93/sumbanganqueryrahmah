@@ -11,6 +11,7 @@ export function hasLetterAndNumber(value: string) {
 export function getSubPageFromPath(pathname: string): CollectionSubPage {
   const normalized = pathname.toLowerCase();
   if (normalized.startsWith("/collection/nicknames")) return "manage-nicknames";
+  if (normalized.startsWith("/collection/nickname-summary")) return "nickname-summary";
   if (normalized.startsWith("/collection/summary")) return "summary";
   if (normalized.startsWith("/collection/records")) return "records";
   return "save";
@@ -18,6 +19,7 @@ export function getSubPageFromPath(pathname: string): CollectionSubPage {
 
 export function getPathForSubPage(subPage: CollectionSubPage) {
   if (subPage === "manage-nicknames") return "/collection/nicknames";
+  if (subPage === "nickname-summary") return "/collection/nickname-summary";
   if (subPage === "summary") return "/collection/summary";
   return subPage === "records" ? "/collection/records" : "/collection/save";
 }

@@ -460,6 +460,15 @@ export async function updateManagedUserAccount(
   return response.json();
 }
 
+export async function deleteManagedUserAccount(userId: string) {
+  const response = await apiRequest("DELETE", `/api/admin/users/${encodeURIComponent(userId)}`);
+  return response.json() as Promise<{
+    ok: boolean;
+    deleted: boolean;
+    user: CurrentUser | null;
+  }>;
+}
+
 export async function updateManagedUserRole(
   userId: string,
   role: "admin" | "user",
@@ -530,7 +539,34 @@ export async function getDevMailOutboxPreviews(): Promise<{
   return response.json();
 }
 
+export async function deleteDevMailOutboxPreview(previewId: string) {
+  const response = await apiRequest("DELETE", `/api/admin/dev-mail-outbox/${encodeURIComponent(previewId)}`);
+  return response.json() as Promise<{
+    ok: boolean;
+    deleted: boolean;
+  }>;
+}
+
+export async function clearDevMailOutboxPreviews() {
+  const response = await apiRequest("DELETE", "/api/admin/dev-mail-outbox");
+  return response.json() as Promise<{
+    ok: boolean;
+    deletedCount: number;
+  }>;
+}
+
 export type CollectionBatch = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
+
+export type CollectionRecordReceipt = {
+  id: string;
+  collectionRecordId: string;
+  storagePath: string;
+  originalFileName: string;
+  originalMimeType: string;
+  originalExtension: string;
+  fileSize: number;
+  createdAt: string;
+};
 
 export type CollectionRecord = {
   id: string;
@@ -542,6 +578,7 @@ export type CollectionRecord = {
   paymentDate: string;
   amount: string;
   receiptFile: string | null;
+  receipts: CollectionRecordReceipt[];
   createdByLogin: string;
   collectionStaffNickname: string;
   createdAt: string;
@@ -594,10 +631,37 @@ export type CreateCollectionPayload = {
   amount: number;
   collectionStaffNickname: string;
   receipt?: CollectionReceiptPayload | null;
+  receipts?: CollectionReceiptPayload[] | null;
 };
 
 export type UpdateCollectionPayload = Partial<CreateCollectionPayload> & {
   removeReceipt?: boolean;
+  removeReceiptIds?: string[];
+};
+
+export type CollectionRecordListResponse = {
+  ok: boolean;
+  records: CollectionRecord[];
+  total: number;
+  totalAmount: number;
+  limit: number;
+  offset: number;
+};
+
+export type CollectionPurgeSummaryResponse = {
+  ok: boolean;
+  retentionMonths: number;
+  cutoffDate: string;
+  eligibleRecords: number;
+  totalAmount: number;
+};
+
+export type CollectionPurgeResponse = {
+  ok: boolean;
+  retentionMonths: number;
+  cutoffDate: string;
+  deletedRecords: number;
+  totalAmount: number;
 };
 
 export async function createCollectionRecord(payload: CreateCollectionPayload) {
@@ -605,15 +669,47 @@ export async function createCollectionRecord(payload: CreateCollectionPayload) {
   return response.json();
 }
 
-export async function getCollectionRecords(filters?: { from?: string; to?: string; search?: string; nickname?: string }) {
+export async function getCollectionRecords(filters?: {
+  from?: string;
+  to?: string;
+  search?: string;
+  nickname?: string;
+  nicknames?: string[];
+  limit?: number;
+  offset?: number;
+}) {
   const params = new URLSearchParams();
   if (filters?.from) params.set("from", filters.from);
   if (filters?.to) params.set("to", filters.to);
   if (filters?.search) params.set("search", filters.search);
   if (filters?.nickname) params.set("nickname", filters.nickname);
+  if (Array.isArray(filters?.nicknames) && filters.nicknames.length > 0) {
+    params.set(
+      "nicknames",
+      filters.nicknames.map((value) => String(value || "").trim()).filter(Boolean).join(","),
+    );
+  }
+  if (typeof filters?.limit === "number" && Number.isFinite(filters.limit)) {
+    params.set("limit", String(filters.limit));
+  }
+  if (typeof filters?.offset === "number" && Number.isFinite(filters.offset)) {
+    params.set("offset", String(filters.offset));
+  }
   const query = params.toString();
   const response = await apiRequest("GET", query ? `/api/collection/list?${query}` : "/api/collection/list");
-  return response.json();
+  return response.json() as Promise<CollectionRecordListResponse>;
+}
+
+export async function getCollectionPurgeSummary() {
+  const response = await apiRequest("GET", "/api/collection/purge-summary");
+  return response.json() as Promise<CollectionPurgeSummaryResponse>;
+}
+
+export async function purgeOldCollectionRecords(currentPassword: string) {
+  const response = await apiRequest("DELETE", "/api/collection/purge-old", {
+    currentPassword,
+  });
+  return response.json() as Promise<CollectionPurgeResponse>;
 }
 
 function parseFilenameFromContentDisposition(contentDisposition: string | null): string | null {
@@ -635,10 +731,17 @@ function parseFilenameFromContentDisposition(contentDisposition: string | null):
   return normalized || null;
 }
 
-export async function fetchCollectionReceiptBlob(recordId: string, mode: "view" | "download") {
+export async function fetchCollectionReceiptBlob(
+  recordId: string,
+  mode: "view" | "download",
+  receiptId?: string | null,
+) {
+  const receiptSegment = receiptId
+    ? `/receipts/${encodeURIComponent(receiptId)}`
+    : "/receipt";
   const response = await apiRequest(
     "GET",
-    `/api/collection/${encodeURIComponent(recordId)}/receipt/${mode}`,
+    `/api/collection/${encodeURIComponent(recordId)}${receiptSegment}/${mode}`,
   );
   const blob = await response.blob();
   const mimeType = String(response.headers.get("Content-Type") || blob.type || "").toLowerCase();
@@ -667,6 +770,32 @@ export async function getCollectionMonthlySummary(filters: { year: number; nickn
   }
   const response = await apiRequest("GET", `/api/collection/summary?${params.toString()}`);
   return response.json() as Promise<{ ok: boolean; year: number; summary: CollectionMonthlySummary[] }>;
+}
+
+export async function getCollectionNicknameSummary(filters: {
+  from?: string;
+  to?: string;
+  nicknames: string[];
+  summaryOnly?: boolean;
+}) {
+  const params = new URLSearchParams();
+  if (filters.from) params.set("from", filters.from);
+  if (filters.to) params.set("to", filters.to);
+  params.set(
+    "nicknames",
+    filters.nicknames.map((value) => String(value || "").trim()).filter(Boolean).join(","),
+  );
+  if (filters.summaryOnly) {
+    params.set("summaryOnly", "1");
+  }
+  const response = await apiRequest("GET", `/api/collection/nickname-summary?${params.toString()}`);
+  return response.json() as Promise<{
+    ok: boolean;
+    nicknames: string[];
+    totalRecords: number;
+    totalAmount: number;
+    records: CollectionRecord[];
+  }>;
 }
 
 export async function getCollectionNicknames(filters?: { includeInactive?: boolean }) {

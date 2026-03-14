@@ -205,6 +205,23 @@ export function registerCollectionRoutes(app: Express, deps: CollectionRouteDeps
   );
 
   app.get(
+    "/api/collection/purge-summary",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to load purge summary.", (req) => collectionService.getPurgeSummary(req.user)),
+  );
+
+  app.get(
+    "/api/collection/nickname-summary",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to load nickname summary.", (req) =>
+      collectionService.getNicknameSummary(req.user, req.query as Record<string, unknown>)),
+  );
+
+  app.get(
     "/api/collection/:id/receipt/view",
     authenticateToken,
     requireRole("user", "admin", "superuser"),
@@ -218,6 +235,24 @@ export function registerCollectionRoutes(app: Express, deps: CollectionRouteDeps
     requireRole("user", "admin", "superuser"),
     requireTabAccess("collection-report"),
     async (req: AuthenticatedRequest, res) => serveCollectionReceipt(storage, req, res, "download"),
+  );
+
+  app.get(
+    "/api/collection/:id/receipts/:receiptId/view",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    async (req: AuthenticatedRequest, res) =>
+      serveCollectionReceipt(storage, req, res, "view", req.params.receiptId),
+  );
+
+  app.get(
+    "/api/collection/:id/receipts/:receiptId/download",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    async (req: AuthenticatedRequest, res) =>
+      serveCollectionReceipt(storage, req, res, "download", req.params.receiptId),
   );
 
   app.get(
@@ -253,6 +288,15 @@ export function registerCollectionRoutes(app: Express, deps: CollectionRouteDeps
     requireRole("user", "admin", "superuser"),
     requireTabAccess("collection-report"),
     handleUpdateCollectionRecord,
+  );
+
+  app.delete(
+    "/api/collection/purge-old",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to purge old collection records.", (req) =>
+      collectionService.purgeOldRecords(req.user, req.body)),
   );
 
   app.delete(

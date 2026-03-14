@@ -55,6 +55,17 @@ const QUERY_PAGE_LIMIT = 1000;
 const STORAGE_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
 type CollectionBatch = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
 
+export type CollectionRecordReceipt = {
+  id: string;
+  collectionRecordId: string;
+  storagePath: string;
+  originalFileName: string;
+  originalMimeType: string;
+  originalExtension: string;
+  fileSize: number;
+  createdAt: Date;
+};
+
 export type CollectionRecord = {
   id: string;
   customerName: string;
@@ -65,9 +76,15 @@ export type CollectionRecord = {
   paymentDate: string;
   amount: string;
   receiptFile: string | null;
+  receipts: CollectionRecordReceipt[];
   createdByLogin: string;
   collectionStaffNickname: string;
   createdAt: Date;
+};
+
+export type CollectionRecordAggregate = {
+  totalRecords: number;
+  totalAmount: number;
 };
 
 export type CollectionMonthlySummary = {
@@ -144,6 +161,14 @@ export type CreateCollectionRecordInput = {
   receiptFile?: string | null;
   createdByLogin: string;
   collectionStaffNickname: string;
+};
+
+export type CreateCollectionRecordReceiptInput = {
+  storagePath: string;
+  originalFileName: string;
+  originalMimeType: string;
+  originalExtension: string;
+  fileSize: number;
 };
 
 export type UpdateCollectionRecordInput = {
@@ -229,6 +254,7 @@ type CategoryRule = {
     isBanned: boolean | null;
   }>>;
   getManagedUsers(): Promise<ManagedUserAccount[]>;
+  deleteManagedUserAccount(userId: string): Promise<boolean>;
   updateActivitiesUsername(oldUsername: string, newUsername: string): Promise<void>;
   updateUserBan(username: string, isBanned: boolean): Promise<User | undefined>;
   touchLastLogin(userId: string, timestamp?: Date): Promise<void>;
@@ -287,7 +313,21 @@ type CategoryRule = {
     createdByLogin?: string;
     nicknames?: string[];
     limit?: number;
+    offset?: number;
   }): Promise<CollectionRecord[]>;
+  summarizeCollectionRecords(filters?: {
+    from?: string;
+    to?: string;
+    search?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+  }): Promise<CollectionRecordAggregate>;
+  summarizeCollectionRecordsOlderThan(beforeDate: string): Promise<CollectionRecordAggregate>;
+  purgeCollectionRecordsOlderThan(beforeDate: string): Promise<{
+    totalRecords: number;
+    totalAmount: number;
+    receiptPaths: string[];
+  }>;
   getCollectionMonthlySummary(filters: {
     year: number;
     nicknames?: string[];
@@ -347,6 +387,14 @@ type CategoryRule = {
   deleteCollectionStaffNickname(id: string): Promise<{ deleted: boolean; deactivated: boolean }>;
   isCollectionStaffNicknameActive(nickname: string): Promise<boolean>;
   getCollectionRecordById(id: string): Promise<CollectionRecord | undefined>;
+  listCollectionRecordReceipts(recordId: string): Promise<CollectionRecordReceipt[]>;
+  getCollectionRecordReceiptById(recordId: string, receiptId: string): Promise<CollectionRecordReceipt | undefined>;
+  createCollectionRecordReceipts(
+    recordId: string,
+    receipts: CreateCollectionRecordReceiptInput[],
+  ): Promise<CollectionRecordReceipt[]>;
+  deleteCollectionRecordReceipts(recordId: string, receiptIds: string[]): Promise<CollectionRecordReceipt[]>;
+  deleteAllCollectionRecordReceipts(recordId: string): Promise<CollectionRecordReceipt[]>;
   updateCollectionRecord(id: string, data: UpdateCollectionRecordInput): Promise<CollectionRecord | undefined>;
   deleteCollectionRecord(id: string): Promise<boolean>;
 
@@ -758,6 +806,10 @@ export class PostgresStorage implements IStorage {
 
   async getManagedUsers(): Promise<ManagedUserAccount[]> {
     return this.authRepository.getManagedUsers();
+  }
+
+  async deleteManagedUserAccount(userId: string): Promise<boolean> {
+    return this.authRepository.deleteManagedUserAccount(userId);
   }
 
   async updateActivitiesUsername(oldUsername: string, newUsername: string): Promise<void> {
@@ -1418,8 +1470,31 @@ export class PostgresStorage implements IStorage {
     createdByLogin?: string;
     nicknames?: string[];
     limit?: number;
+    offset?: number;
   }): Promise<CollectionRecord[]> {
     return this.collectionRepository.listCollectionRecords(filters);
+  }
+
+  async summarizeCollectionRecords(filters?: {
+    from?: string;
+    to?: string;
+    search?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+  }): Promise<CollectionRecordAggregate> {
+    return this.collectionRepository.summarizeCollectionRecords(filters);
+  }
+
+  async summarizeCollectionRecordsOlderThan(beforeDate: string): Promise<CollectionRecordAggregate> {
+    return this.collectionRepository.summarizeCollectionRecordsOlderThan(beforeDate);
+  }
+
+  async purgeCollectionRecordsOlderThan(beforeDate: string): Promise<{
+    totalRecords: number;
+    totalAmount: number;
+    receiptPaths: string[];
+  }> {
+    return this.collectionRepository.purgeCollectionRecordsOlderThan(beforeDate);
   }
 
   async getCollectionMonthlySummary(filters: {
@@ -1432,6 +1507,35 @@ export class PostgresStorage implements IStorage {
 
   async getCollectionRecordById(id: string): Promise<CollectionRecord | undefined> {
     return this.collectionRepository.getCollectionRecordById(id);
+  }
+
+  async listCollectionRecordReceipts(recordId: string): Promise<CollectionRecordReceipt[]> {
+    return this.collectionRepository.listCollectionRecordReceipts(recordId);
+  }
+
+  async getCollectionRecordReceiptById(
+    recordId: string,
+    receiptId: string,
+  ): Promise<CollectionRecordReceipt | undefined> {
+    return this.collectionRepository.getCollectionRecordReceiptById(recordId, receiptId);
+  }
+
+  async createCollectionRecordReceipts(
+    recordId: string,
+    receipts: CreateCollectionRecordReceiptInput[],
+  ): Promise<CollectionRecordReceipt[]> {
+    return this.collectionRepository.createCollectionRecordReceipts(recordId, receipts);
+  }
+
+  async deleteCollectionRecordReceipts(
+    recordId: string,
+    receiptIds: string[],
+  ): Promise<CollectionRecordReceipt[]> {
+    return this.collectionRepository.deleteCollectionRecordReceipts(recordId, receiptIds);
+  }
+
+  async deleteAllCollectionRecordReceipts(recordId: string): Promise<CollectionRecordReceipt[]> {
+    return this.collectionRepository.deleteAllCollectionRecordReceipts(recordId);
   }
 
   async updateCollectionRecord(id: string, data: UpdateCollectionRecordInput): Promise<CollectionRecord | undefined> {

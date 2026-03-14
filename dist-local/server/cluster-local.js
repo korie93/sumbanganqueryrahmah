@@ -512,7 +512,15 @@ var init_backupsBootstrap = __esm({
 
 // server/internal/collectionBootstrap.ts
 import { randomUUID } from "crypto";
+import path from "path";
 import { sql as sql3 } from "drizzle-orm";
+function inferMimeTypeFromReceiptPath(receiptPath) {
+  const extension = path.extname(String(receiptPath || "").trim()).toLowerCase();
+  if (extension === ".pdf") return "application/pdf";
+  if (extension === ".png") return "image/png";
+  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  return "application/octet-stream";
+}
 var CollectionBootstrap;
 var init_collectionBootstrap = __esm({
   "server/internal/collectionBootstrap.ts"() {
@@ -591,6 +599,89 @@ var init_collectionBootstrap = __esm({
             await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_collection_records_created_by_login ON public.collection_records(created_by_login)`);
             await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`);
             await db.execute(sql3`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`);
+            await db.execute(sql3`
+          CREATE TABLE IF NOT EXISTS public.collection_record_receipts (
+            id uuid PRIMARY KEY,
+            collection_record_id uuid NOT NULL,
+            storage_path text NOT NULL,
+            original_file_name text NOT NULL,
+            original_mime_type text NOT NULL,
+            original_extension text NOT NULL DEFAULT '',
+            file_size bigint NOT NULL DEFAULT 0,
+            created_at timestamp NOT NULL DEFAULT now()
+          )
+        `);
+            await db.execute(sql3`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS collection_record_id uuid`);
+            await db.execute(sql3`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS storage_path text`);
+            await db.execute(sql3`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS original_file_name text`);
+            await db.execute(sql3`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS original_mime_type text`);
+            await db.execute(sql3`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS original_extension text DEFAULT ''`);
+            await db.execute(sql3`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS file_size bigint DEFAULT 0`);
+            await db.execute(sql3`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+            await db.execute(sql3`
+          UPDATE public.collection_record_receipts
+          SET
+            original_file_name = COALESCE(NULLIF(trim(COALESCE(original_file_name, '')), ''), 'receipt'),
+            original_mime_type = COALESCE(NULLIF(trim(COALESCE(original_mime_type, '')), ''), 'application/octet-stream'),
+            original_extension = COALESCE(NULLIF(trim(COALESCE(original_extension, '')), ''), ''),
+            file_size = COALESCE(file_size, 0),
+            created_at = COALESCE(created_at, now())
+        `);
+            await db.execute(sql3`DELETE FROM public.collection_record_receipts WHERE collection_record_id IS NULL OR trim(COALESCE(storage_path, '')) = ''`);
+            await db.execute(sql3`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_record_receipts_record_storage_unique
+          ON public.collection_record_receipts (collection_record_id, storage_path)
+        `);
+            await db.execute(sql3`
+          CREATE INDEX IF NOT EXISTS idx_collection_record_receipts_record_created_at
+          ON public.collection_record_receipts (collection_record_id, created_at ASC)
+        `);
+            const legacyReceiptRows = await db.execute(sql3`
+          SELECT
+            id,
+            receipt_file,
+            created_at
+          FROM public.collection_records cr
+          WHERE trim(COALESCE(cr.receipt_file, '')) <> ''
+            AND NOT EXISTS (
+              SELECT 1
+              FROM public.collection_record_receipts crr
+              WHERE crr.collection_record_id = cr.id
+                AND crr.storage_path = cr.receipt_file
+            )
+          LIMIT 10000
+        `);
+            for (const row of legacyReceiptRows.rows) {
+              const collectionRecordId = String(row.id || "").trim();
+              const storagePath = String(row.receipt_file || "").trim();
+              if (!collectionRecordId || !storagePath) continue;
+              const fileName = path.basename(storagePath);
+              const createdAt = row.created_at ? new Date(row.created_at) : /* @__PURE__ */ new Date();
+              const extension = path.extname(fileName).toLowerCase();
+              await db.execute(sql3`
+            INSERT INTO public.collection_record_receipts (
+              id,
+              collection_record_id,
+              storage_path,
+              original_file_name,
+              original_mime_type,
+              original_extension,
+              file_size,
+              created_at
+            )
+            VALUES (
+              ${randomUUID()}::uuid,
+              ${collectionRecordId}::uuid,
+              ${storagePath},
+              ${fileName || "receipt"},
+              ${inferMimeTypeFromReceiptPath(storagePath)},
+              ${extension},
+              0,
+              ${createdAt}
+            )
+            ON CONFLICT (collection_record_id, storage_path) DO NOTHING
+          `);
+            }
             this.recordsReady = true;
           } catch (err) {
             console.error("ERROR Failed to ensure collection_records table:", err?.message || err);
@@ -2779,6 +2870,16 @@ var init_auth_repository = __esm({
           offset += chunk.length;
         }
         return rows;
+      }
+      async deleteManagedUserAccount(userId) {
+        const normalizedId = String(userId || "").trim();
+        if (!normalizedId) {
+          return false;
+        }
+        await db.delete(accountActivationTokens).where(eq(accountActivationTokens.userId, normalizedId));
+        await db.delete(passwordResetRequests).where(eq(passwordResetRequests.userId, normalizedId));
+        const deleted = await db.delete(users).where(and(eq(users.id, normalizedId), inArray(users.role, ["admin", "user"]))).returning({ id: users.id });
+        return deleted.length > 0;
       }
       async updateActivitiesUsername(oldUsername, newUsername) {
         await db.update(userActivity).set({ username: newUsername }).where(sql8`${userActivity.username} = ${oldUsername}`);
@@ -5062,10 +5163,69 @@ var init_collection_repository = __esm({
           paymentDate,
           amount: String(row.amount ?? "0"),
           receiptFile: row.receipt_file ?? row.receiptFile ?? null,
+          receipts: [],
           createdByLogin: String(row.created_by_login ?? row.createdByLogin ?? row.staff_username ?? row.staffUsername ?? ""),
           collectionStaffNickname: String(row.collection_staff_nickname ?? row.collectionStaffNickname ?? row.staff_username ?? row.staffUsername ?? ""),
           createdAt
         };
+      }
+      mapCollectionRecordReceiptRow(row) {
+        const createdAtRaw = row.created_at ?? row.createdAt;
+        const createdAt = createdAtRaw instanceof Date ? createdAtRaw : new Date(createdAtRaw ?? Date.now());
+        return {
+          id: String(row.id ?? ""),
+          collectionRecordId: String(row.collection_record_id ?? row.collectionRecordId ?? ""),
+          storagePath: String(row.storage_path ?? row.storagePath ?? ""),
+          originalFileName: String(row.original_file_name ?? row.originalFileName ?? ""),
+          originalMimeType: String(row.original_mime_type ?? row.originalMimeType ?? "application/octet-stream"),
+          originalExtension: String(row.original_extension ?? row.originalExtension ?? ""),
+          fileSize: Number(row.file_size ?? row.fileSize ?? 0),
+          createdAt
+        };
+      }
+      async loadReceiptMapByRecordIds(recordIds) {
+        const normalizedIds = Array.from(
+          new Set(
+            recordIds.map((value) => String(value || "").trim()).filter(Boolean)
+          )
+        );
+        const receiptMap = /* @__PURE__ */ new Map();
+        if (!normalizedIds.length) return receiptMap;
+        const idSql = sql17.join(normalizedIds.map((value) => sql17`${value}::uuid`), sql17`, `);
+        const result = await db.execute(sql17`
+      SELECT
+        id,
+        collection_record_id,
+        storage_path,
+        original_file_name,
+        original_mime_type,
+        original_extension,
+        file_size,
+        created_at
+      FROM public.collection_record_receipts
+      WHERE collection_record_id IN (${idSql})
+      ORDER BY created_at ASC, id ASC
+    `);
+        for (const row of result.rows || []) {
+          const receipt = this.mapCollectionRecordReceiptRow(row);
+          const current = receiptMap.get(receipt.collectionRecordId) || [];
+          current.push(receipt);
+          receiptMap.set(receipt.collectionRecordId, current);
+        }
+        return receiptMap;
+      }
+      async attachReceipts(records) {
+        if (!records.length) return records;
+        const receiptMap = await this.loadReceiptMapByRecordIds(records.map((record) => record.id));
+        return records.map((record) => {
+          const receipts = receiptMap.get(record.id) || [];
+          const firstReceiptPath = receipts[0]?.storagePath || record.receiptFile || null;
+          return {
+            ...record,
+            receiptFile: firstReceiptPath,
+            receipts
+          };
+        });
       }
       async getCollectionStaffNicknames(filters) {
         const conditions = [];
@@ -5843,9 +6003,41 @@ var init_collection_repository = __esm({
     `);
         return Boolean(result.rows?.[0]);
       }
+      buildCollectionRecordConditions(filters) {
+        const conditions = [];
+        if (filters?.from) {
+          conditions.push(sql17`payment_date >= ${filters.from}::date`);
+        }
+        if (filters?.to) {
+          conditions.push(sql17`payment_date <= ${filters.to}::date`);
+        }
+        const search = String(filters?.search || "").trim();
+        if (search) {
+          const like = `%${search}%`;
+          conditions.push(sql17`(
+        customer_name ILIKE ${like}
+        OR ic_number ILIKE ${like}
+        OR account_number ILIKE ${like}
+        OR batch ILIKE ${like}
+        OR customer_phone ILIKE ${like}
+        OR amount::text ILIKE ${like}
+      )`);
+        }
+        const createdByLogin = String(filters?.createdByLogin || "").trim();
+        if (createdByLogin) {
+          conditions.push(sql17`created_by_login = ${createdByLogin}`);
+        }
+        const nicknameSource = filters?.nicknames;
+        const nicknames = Array.isArray(nicknameSource) ? nicknameSource.map((value) => String(value || "").trim().toLowerCase()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
+        if (nicknames.length > 0) {
+          const nicknameSql = sql17.join(nicknames.map((value) => sql17`${value}`), sql17`, `);
+          conditions.push(sql17`lower(collection_staff_nickname) IN (${nicknameSql})`);
+        }
+        return conditions;
+      }
       async createCollectionRecord(data) {
         const id = randomUUID3();
-        const result = await db.execute(sql17`
+        await db.execute(sql17`
       INSERT INTO public.collection_records (
         id,
         customer_name,
@@ -5876,55 +6068,20 @@ var init_collection_repository = __esm({
         ${data.collectionStaffNickname},
         now()
       )
-      RETURNING
-        id,
-        customer_name,
-        ic_number,
-        customer_phone,
-        account_number,
-        batch,
-        payment_date,
-        amount,
-        receipt_file,
-        created_by_login,
-        collection_staff_nickname,
-        staff_username,
-        created_at
     `);
-        return this.mapCollectionRecordRow(result.rows[0]);
+        const created = await this.getCollectionRecordById(id);
+        if (!created) {
+          throw new Error("Failed to load created collection record.");
+        }
+        return created;
       }
       async listCollectionRecords(filters) {
-        const conditions = [];
-        if (filters?.from) {
-          conditions.push(sql17`payment_date >= ${filters.from}::date`);
-        }
-        if (filters?.to) {
-          conditions.push(sql17`payment_date <= ${filters.to}::date`);
-        }
-        const search = String(filters?.search || "").trim();
-        if (search) {
-          const like = `%${search}%`;
-          conditions.push(sql17`(
-        customer_name ILIKE ${like}
-        OR ic_number ILIKE ${like}
-        OR account_number ILIKE ${like}
-        OR customer_phone ILIKE ${like}
-        OR amount::text ILIKE ${like}
-      )`);
-        }
-        const createdByLogin = String(filters?.createdByLogin || "").trim();
-        if (createdByLogin) {
-          conditions.push(sql17`created_by_login = ${createdByLogin}`);
-        }
-        const nicknameSource = filters?.nicknames;
-        const nicknames = Array.isArray(nicknameSource) ? nicknameSource.map((value) => String(value || "").trim().toLowerCase()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
-        if (nicknames.length > 0) {
-          const nicknameSql = sql17.join(nicknames.map((value) => sql17`${value}`), sql17`, `);
-          conditions.push(sql17`lower(collection_staff_nickname) IN (${nicknameSql})`);
-        }
+        const conditions = this.buildCollectionRecordConditions(filters);
         const whereSql = conditions.length ? sql17`WHERE ${sql17.join(conditions, sql17` AND `)}` : sql17``;
         const parsedLimit = Number(filters?.limit);
         const safeLimit = Number.isFinite(parsedLimit) ? Math.min(2e3, Math.max(1, Math.floor(parsedLimit))) : 500;
+        const parsedOffset = Number(filters?.offset);
+        const safeOffset = Number.isFinite(parsedOffset) ? Math.max(0, Math.floor(parsedOffset)) : 0;
         const result = await db.execute(sql17`
       SELECT
         id,
@@ -5942,10 +6099,116 @@ var init_collection_repository = __esm({
         created_at
       FROM public.collection_records
       ${whereSql}
-      ORDER BY payment_date DESC, created_at DESC
+      ORDER BY payment_date ASC, created_at ASC, id ASC
       LIMIT ${safeLimit}
+      OFFSET ${safeOffset}
     `);
-        return (result.rows || []).map((row) => this.mapCollectionRecordRow(row));
+        const records = (result.rows || []).map((row) => this.mapCollectionRecordRow(row));
+        return this.attachReceipts(records);
+      }
+      async summarizeCollectionRecords(filters) {
+        const conditions = this.buildCollectionRecordConditions(filters);
+        const whereSql = conditions.length ? sql17`WHERE ${sql17.join(conditions, sql17` AND `)}` : sql17``;
+        const result = await db.execute(sql17`
+      SELECT
+        COUNT(*)::int AS total_records,
+        COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
+      FROM public.collection_records
+      ${whereSql}
+    `);
+        const row = result.rows?.[0];
+        return {
+          totalRecords: Number(row?.total_records ?? 0),
+          totalAmount: Number(row?.total_amount ?? 0)
+        };
+      }
+      async summarizeCollectionRecordsOlderThan(beforeDate) {
+        const normalizedBeforeDate = String(beforeDate || "").trim();
+        if (!normalizedBeforeDate) {
+          return {
+            totalRecords: 0,
+            totalAmount: 0
+          };
+        }
+        const result = await db.execute(sql17`
+      SELECT
+        COUNT(*)::int AS total_records,
+        COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
+      FROM public.collection_records
+      WHERE payment_date < ${normalizedBeforeDate}::date
+    `);
+        const row = result.rows?.[0];
+        return {
+          totalRecords: Number(row?.total_records ?? 0),
+          totalAmount: Number(row?.total_amount ?? 0)
+        };
+      }
+      async purgeCollectionRecordsOlderThan(beforeDate) {
+        const normalizedBeforeDate = String(beforeDate || "").trim();
+        if (!normalizedBeforeDate) {
+          return {
+            totalRecords: 0,
+            totalAmount: 0,
+            receiptPaths: []
+          };
+        }
+        return db.transaction(async (tx) => {
+          const oldRecordsResult = await tx.execute(sql17`
+        SELECT
+          id,
+          amount,
+          receipt_file
+        FROM public.collection_records
+        WHERE payment_date < ${normalizedBeforeDate}::date
+        ORDER BY payment_date ASC, created_at ASC, id ASC
+      `);
+          const oldRecordRows = Array.isArray(oldRecordsResult.rows) ? oldRecordsResult.rows : [];
+          if (!oldRecordRows.length) {
+            return {
+              totalRecords: 0,
+              totalAmount: 0,
+              receiptPaths: []
+            };
+          }
+          const recordIds = oldRecordRows.map((row) => String(row.id || "").trim()).filter(Boolean);
+          if (!recordIds.length) {
+            return {
+              totalRecords: 0,
+              totalAmount: 0,
+              receiptPaths: []
+            };
+          }
+          const recordIdSql = sql17.join(recordIds.map((value) => sql17`${value}::uuid`), sql17`, `);
+          const receiptRowsResult = await tx.execute(sql17`
+        SELECT storage_path
+        FROM public.collection_record_receipts
+        WHERE collection_record_id IN (${recordIdSql})
+      `);
+          await tx.execute(sql17`
+        DELETE FROM public.collection_record_receipts
+        WHERE collection_record_id IN (${recordIdSql})
+      `);
+          await tx.execute(sql17`
+        DELETE FROM public.collection_records
+        WHERE id IN (${recordIdSql})
+      `);
+          const receiptPaths = Array.from(
+            new Set(
+              [
+                ...oldRecordRows.map((row) => String(row.receipt_file || "").trim()),
+                ...Array.isArray(receiptRowsResult.rows) ? receiptRowsResult.rows.map((row) => String(row.storage_path || "").trim()) : []
+              ].filter(Boolean)
+            )
+          );
+          return {
+            totalRecords: oldRecordRows.length,
+            totalAmount: oldRecordRows.reduce(
+              (sum, row) => sum + Number(row.amount ?? 0),
+              0
+            ),
+            receiptPaths
+          };
+        });
       }
       async getCollectionMonthlySummary(filters) {
         const safeYear = Number.isFinite(filters.year) ? Math.min(2100, Math.max(2e3, Math.floor(filters.year))) : (/* @__PURE__ */ new Date()).getFullYear();
@@ -6019,7 +6282,147 @@ var init_collection_repository = __esm({
     `);
         const row = result.rows?.[0];
         if (!row) return void 0;
-        return this.mapCollectionRecordRow(row);
+        const [record] = await this.attachReceipts([this.mapCollectionRecordRow(row)]);
+        return record;
+      }
+      async listCollectionRecordReceipts(recordId) {
+        const normalizedRecordId = String(recordId || "").trim();
+        if (!normalizedRecordId) return [];
+        const result = await db.execute(sql17`
+      SELECT
+        id,
+        collection_record_id,
+        storage_path,
+        original_file_name,
+        original_mime_type,
+        original_extension,
+        file_size,
+        created_at
+      FROM public.collection_record_receipts
+      WHERE collection_record_id = ${normalizedRecordId}::uuid
+      ORDER BY created_at ASC, id ASC
+    `);
+        return (result.rows || []).map((row) => this.mapCollectionRecordReceiptRow(row));
+      }
+      async getCollectionRecordReceiptById(recordId, receiptId) {
+        const normalizedRecordId = String(recordId || "").trim();
+        const normalizedReceiptId = String(receiptId || "").trim();
+        if (!normalizedRecordId || !normalizedReceiptId) return void 0;
+        const result = await db.execute(sql17`
+      SELECT
+        id,
+        collection_record_id,
+        storage_path,
+        original_file_name,
+        original_mime_type,
+        original_extension,
+        file_size,
+        created_at
+      FROM public.collection_record_receipts
+      WHERE collection_record_id = ${normalizedRecordId}::uuid
+        AND id = ${normalizedReceiptId}::uuid
+      LIMIT 1
+    `);
+        const row = result.rows?.[0];
+        if (!row) return void 0;
+        return this.mapCollectionRecordReceiptRow(row);
+      }
+      async createCollectionRecordReceipts(recordId, receipts) {
+        const normalizedRecordId = String(recordId || "").trim();
+        if (!normalizedRecordId || !Array.isArray(receipts) || !receipts.length) {
+          return [];
+        }
+        const insertedIds = [];
+        for (const receipt of receipts) {
+          const id = randomUUID3();
+          insertedIds.push(id);
+          await db.execute(sql17`
+        INSERT INTO public.collection_record_receipts (
+          id,
+          collection_record_id,
+          storage_path,
+          original_file_name,
+          original_mime_type,
+          original_extension,
+          file_size,
+          created_at
+        )
+        VALUES (
+          ${id}::uuid,
+          ${normalizedRecordId}::uuid,
+          ${receipt.storagePath},
+          ${receipt.originalFileName},
+          ${receipt.originalMimeType},
+          ${receipt.originalExtension},
+          ${receipt.fileSize},
+          now()
+        )
+      `);
+        }
+        const idSql = sql17.join(insertedIds.map((value) => sql17`${value}::uuid`), sql17`, `);
+        const result = await db.execute(sql17`
+      SELECT
+        id,
+        collection_record_id,
+        storage_path,
+        original_file_name,
+        original_mime_type,
+        original_extension,
+        file_size,
+        created_at
+      FROM public.collection_record_receipts
+      WHERE id IN (${idSql})
+      ORDER BY created_at ASC, id ASC
+    `);
+        return (result.rows || []).map((row) => this.mapCollectionRecordReceiptRow(row));
+      }
+      async deleteCollectionRecordReceipts(recordId, receiptIds) {
+        const normalizedRecordId = String(recordId || "").trim();
+        const normalizedReceiptIds = Array.from(
+          new Set(
+            (Array.isArray(receiptIds) ? receiptIds : []).map((value) => String(value || "").trim()).filter(Boolean)
+          )
+        );
+        if (!normalizedRecordId || !normalizedReceiptIds.length) {
+          return [];
+        }
+        const idSql = sql17.join(normalizedReceiptIds.map((value) => sql17`${value}::uuid`), sql17`, `);
+        const existing = await db.execute(sql17`
+      SELECT
+        id,
+        collection_record_id,
+        storage_path,
+        original_file_name,
+        original_mime_type,
+        original_extension,
+        file_size,
+        created_at
+      FROM public.collection_record_receipts
+      WHERE collection_record_id = ${normalizedRecordId}::uuid
+        AND id IN (${idSql})
+    `);
+        const receipts = (existing.rows || []).map((row) => this.mapCollectionRecordReceiptRow(row));
+        if (!receipts.length) {
+          return [];
+        }
+        await db.execute(sql17`
+      DELETE FROM public.collection_record_receipts
+      WHERE collection_record_id = ${normalizedRecordId}::uuid
+        AND id IN (${idSql})
+    `);
+        return receipts;
+      }
+      async deleteAllCollectionRecordReceipts(recordId) {
+        const receipts = await this.listCollectionRecordReceipts(recordId);
+        if (!receipts.length) {
+          return [];
+        }
+        const idSql = sql17.join(receipts.map((receipt) => sql17`${receipt.id}::uuid`), sql17`, `);
+        await db.execute(sql17`
+      DELETE FROM public.collection_record_receipts
+      WHERE id IN (${idSql})
+    `);
+        return receipts;
       }
       async updateCollectionRecord(id, data) {
         const updateChunks = [];
@@ -6075,9 +6478,10 @@ var init_collection_repository = __esm({
     `);
         const row = result.rows?.[0];
         if (!row) return void 0;
-        return this.mapCollectionRecordRow(row);
+        return this.getCollectionRecordById(id);
       }
       async deleteCollectionRecord(id) {
+        await db.execute(sql17`DELETE FROM public.collection_record_receipts WHERE collection_record_id = ${id}::uuid`);
         await db.execute(sql17`DELETE FROM public.collection_records WHERE id = ${id}::uuid`);
         return true;
       }
@@ -6667,6 +7071,9 @@ var init_storage_postgres = __esm({
       async getManagedUsers() {
         return this.authRepository.getManagedUsers();
       }
+      async deleteManagedUserAccount(userId) {
+        return this.authRepository.deleteManagedUserAccount(userId);
+      }
       async updateActivitiesUsername(oldUsername, newUsername) {
         return this.authRepository.updateActivitiesUsername(oldUsername, newUsername);
       }
@@ -6976,11 +7383,35 @@ var init_storage_postgres = __esm({
       async listCollectionRecords(filters) {
         return this.collectionRepository.listCollectionRecords(filters);
       }
+      async summarizeCollectionRecords(filters) {
+        return this.collectionRepository.summarizeCollectionRecords(filters);
+      }
+      async summarizeCollectionRecordsOlderThan(beforeDate) {
+        return this.collectionRepository.summarizeCollectionRecordsOlderThan(beforeDate);
+      }
+      async purgeCollectionRecordsOlderThan(beforeDate) {
+        return this.collectionRepository.purgeCollectionRecordsOlderThan(beforeDate);
+      }
       async getCollectionMonthlySummary(filters) {
         return this.collectionRepository.getCollectionMonthlySummary(filters);
       }
       async getCollectionRecordById(id) {
         return this.collectionRepository.getCollectionRecordById(id);
+      }
+      async listCollectionRecordReceipts(recordId) {
+        return this.collectionRepository.listCollectionRecordReceipts(recordId);
+      }
+      async getCollectionRecordReceiptById(recordId, receiptId) {
+        return this.collectionRepository.getCollectionRecordReceiptById(recordId, receiptId);
+      }
+      async createCollectionRecordReceipts(recordId, receipts) {
+        return this.collectionRepository.createCollectionRecordReceipts(recordId, receipts);
+      }
+      async deleteCollectionRecordReceipts(recordId, receiptIds) {
+        return this.collectionRepository.deleteCollectionRecordReceipts(recordId, receiptIds);
+      }
+      async deleteAllCollectionRecordReceipts(recordId) {
+        return this.collectionRepository.deleteAllCollectionRecordReceipts(recordId);
       }
       async updateCollectionRecord(id, data) {
         return this.collectionRepository.updateCollectionRecord(id, data);
@@ -7116,19 +7547,19 @@ function createApiProtectionMiddleware(options) {
     const controlState = options.getControlState();
     const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim();
     const method = String(req.method || "GET").toUpperCase();
-    const path6 = req.path || "/";
+    const path7 = req.path || "/";
     let bucketScope = "api";
     let baseLimit = 40;
     let minLimit = 8;
-    if (path6.startsWith("/api/ai/")) {
+    if (path7.startsWith("/api/ai/")) {
       bucketScope = "ai";
       baseLimit = 14;
       minLimit = 4;
-    } else if (path6.startsWith("/api/activity/heartbeat")) {
+    } else if (path7.startsWith("/api/activity/heartbeat")) {
       bucketScope = "heartbeat";
       baseLimit = 120;
       minLimit = 20;
-    } else if (method === "GET" && (path6.startsWith("/api/collection/nicknames") || path6.startsWith("/api/collection/admin-groups"))) {
+    } else if (method === "GET" && (path7.startsWith("/api/collection/nicknames") || path7.startsWith("/api/collection/admin-groups"))) {
       bucketScope = "collection-meta";
       baseLimit = 120;
       minLimit = 24;
@@ -7328,8 +7759,8 @@ var init_logger = __esm({
 
 // server/auth/guards.ts
 import jwt from "jsonwebtoken";
-function canAccessDuringForcedPasswordChange(method, path6) {
-  return FORCED_PASSWORD_CHANGE_ALLOWLIST.has(`${method.toUpperCase()}:${path6}`);
+function canAccessDuringForcedPasswordChange(method, path7) {
+  return FORCED_PASSWORD_CHANGE_ALLOWLIST.has(`${method.toUpperCase()}:${path7}`);
 }
 function createAuthGuards(options) {
   const storage2 = options.storage;
@@ -9363,7 +9794,7 @@ var init_activation_links = __esm({
 // server/mail/dev-mail-outbox.ts
 import { randomBytes as randomBytes3 } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
+import path2 from "node:path";
 function readFlag(name, fallback) {
   const raw = String(process.env[name] || "").trim().toLowerCase();
   if (!raw) return fallback;
@@ -9373,7 +9804,7 @@ function readFlag(name, fallback) {
 }
 function getDevMailOutboxDir() {
   const configured = String(process.env.MAIL_DEV_OUTBOX_DIR || "").trim();
-  return configured ? path.resolve(configured) : path.resolve(process.cwd(), "var", "dev-mail-outbox");
+  return configured ? path2.resolve(configured) : path2.resolve(process.cwd(), "var", "dev-mail-outbox");
 }
 function getOutboxRetentionLimit() {
   const parsed = Number(process.env.MAIL_DEV_OUTBOX_MAX_FILES || DEFAULT_OUTBOX_MAX_FILES);
@@ -9395,7 +9826,7 @@ function buildPreviewId() {
   return `${Date.now()}-${randomBytes3(8).toString("hex")}`;
 }
 function buildPreviewFilePath(previewId) {
-  return path.join(getDevMailOutboxDir(), `${previewId}.json`);
+  return path2.join(getDevMailOutboxDir(), `${previewId}.json`);
 }
 function buildPreviewUrl(previewId) {
   const url = new URL(`/dev/mail-preview/${previewId}`, getPublicAppBaseUrl());
@@ -9409,7 +9840,7 @@ async function trimOutboxIfNeeded() {
   const staleEntries = entries.sort().slice(0, Math.max(0, entries.length - maxFiles));
   await Promise.all(
     staleEntries.map(
-      (entry) => rm(path.join(outboxDir, entry), { force: true })
+      (entry) => rm(path2.join(outboxDir, entry), { force: true })
     )
   );
 }
@@ -9485,6 +9916,39 @@ async function listDevMailPreviews(limit = 25) {
     return previews.filter((preview) => preview !== null);
   } catch {
     return [];
+  }
+}
+async function deleteDevMailPreview(previewId) {
+  if (!isDevMailOutboxEnabled()) {
+    return false;
+  }
+  const normalizedId = String(previewId || "").trim();
+  if (!DEV_OUTBOX_ID_PATTERN.test(normalizedId)) {
+    return false;
+  }
+  try {
+    await rm(buildPreviewFilePath(normalizedId));
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function clearDevMailOutbox() {
+  if (!isDevMailOutboxEnabled()) {
+    return 0;
+  }
+  try {
+    const outboxDir = getDevMailOutboxDir();
+    const entries = (await readdir(outboxDir)).filter((name) => DEV_OUTBOX_FILE_PATTERN.test(name));
+    if (entries.length === 0) {
+      return 0;
+    }
+    const results = await Promise.allSettled(
+      entries.map((entry) => rm(path2.join(outboxDir, entry), { force: true }))
+    );
+    return results.filter((result) => result.status === "fulfilled").length;
+  } catch {
+    return 0;
   }
 }
 function renderDevMailPreviewHtml(record) {
@@ -10461,6 +10925,38 @@ var init_auth_account_service = __esm({
         await this.requireSuperuser(authUser);
         return this.storage.getManagedUsers();
       }
+      async deleteManagedUser(authUser, targetUserId) {
+        const actor = await this.requireSuperuser(authUser);
+        const target = await this.requireManageableTarget(targetUserId);
+        if (actor.id === target.id) {
+          throw new AuthAccountError(
+            403,
+            "PERMISSION_DENIED",
+            "Superuser cannot delete the current account from this action."
+          );
+        }
+        const closedSessionIds = await this.invalidateUserSessions(target.username, "ACCOUNT_DELETED");
+        const deleted = await this.storage.deleteManagedUserAccount(target.id);
+        if (!deleted) {
+          throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
+        }
+        await this.storage.createAuditLog({
+          action: "ACCOUNT_DELETED",
+          performedBy: actor.username,
+          targetUser: target.id,
+          details: JSON.stringify({
+            metadata: {
+              deleted_role: target.role,
+              deleted_status: target.status,
+              was_banned: Boolean(target.isBanned)
+            }
+          })
+        });
+        return {
+          user: target,
+          closedSessionIds
+        };
+      }
       async createManagedUser(authUser, input) {
         const actor = await this.requireSuperuser(authUser);
         const username = normalizeUsernameInput(input.username);
@@ -11100,6 +11596,23 @@ function registerAuthRoutes(app2, deps) {
       };
     })
   );
+  app2.delete(
+    "/api/admin/users/:id",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute2(async (req) => {
+      const result = await authAccountService.deleteManagedUser(req.user, req.params.id);
+      closeActivitySockets(
+        result.closedSessionIds,
+        "Account deleted by superuser."
+      );
+      return {
+        ok: true,
+        deleted: true,
+        user: buildUserPayload(result.user)
+      };
+    })
+  );
   app2.patch(
     "/api/admin/users/:id/role",
     authenticateToken,
@@ -11197,6 +11710,52 @@ function registerAuthRoutes(app2, deps) {
         ok: true,
         enabled: isDevMailOutboxEnabled(),
         previews: await listDevMailPreviews(25)
+      };
+    })
+  );
+  app2.delete(
+    "/api/admin/dev-mail-outbox/:previewId",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute2(async (req) => {
+      const deleted = await deleteDevMailPreview(req.params.previewId);
+      if (!deleted) {
+        throw new AuthAccountError(404, "MAIL_PREVIEW_NOT_FOUND", "Mail preview not found.");
+      }
+      if (req.user) {
+        await storage2.createAuditLog({
+          action: "DEV_MAIL_OUTBOX_ENTRY_DELETED",
+          performedBy: req.user.username,
+          targetResource: req.params.previewId,
+          details: "Local mail outbox preview deleted."
+        });
+      }
+      return {
+        ok: true,
+        deleted: true
+      };
+    })
+  );
+  app2.delete(
+    "/api/admin/dev-mail-outbox",
+    authenticateToken,
+    requireRole("superuser"),
+    jsonRoute2(async (req) => {
+      const deletedCount = await clearDevMailOutbox();
+      if (req.user) {
+        await storage2.createAuditLog({
+          action: "DEV_MAIL_OUTBOX_CLEARED",
+          performedBy: req.user.username,
+          details: JSON.stringify({
+            metadata: {
+              deleted_count: deletedCount
+            }
+          })
+        });
+      }
+      return {
+        ok: true,
+        deletedCount
       };
     })
   );
@@ -11993,12 +12552,12 @@ var init_collection_nickname_service = __esm({
 
 // server/routes/collection-receipt.service.ts
 import fs from "fs";
-import path2 from "path";
+import path3 from "path";
 import { randomUUID as randomUUID4 } from "node:crypto";
 function resolveReceiptExtension(receipt) {
   const originalFileName = String(receipt.fileName || "").trim();
   const mimeType = String(receipt.mimeType || "").trim().toLowerCase();
-  const extFromName = path2.extname(originalFileName).toLowerCase();
+  const extFromName = path3.extname(originalFileName).toLowerCase();
   if (extFromName && COLLECTION_RECEIPT_ALLOWED_EXT.has(extFromName)) {
     return extFromName === ".jpeg" ? ".jpg" : extFromName;
   }
@@ -12020,6 +12579,13 @@ function extractReceiptBuffer(receipt) {
     return null;
   }
 }
+function sanitizeOriginalFileName(fileName, fallbackExtension) {
+  const raw = String(fileName || "").trim();
+  const ext = path3.extname(raw).toLowerCase();
+  const stem = path3.basename(raw, ext).replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").slice(0, 80) || "receipt";
+  const safeExtension = ext || fallbackExtension || "";
+  return `${stem}${safeExtension}`.slice(0, 140);
+}
 async function saveCollectionReceipt(receipt) {
   const mimeType = String(receipt.mimeType || "").trim().toLowerCase();
   if (mimeType && !COLLECTION_RECEIPT_ALLOWED_MIME.has(mimeType)) {
@@ -12037,19 +12603,28 @@ async function saveCollectionReceipt(receipt) {
     throw new Error("Receipt file exceeds 5MB.");
   }
   await fs.promises.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
-  const originalFileName = String(receipt.fileName || "receipt").trim();
-  const stem = path2.basename(originalFileName, path2.extname(originalFileName)).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40) || "receipt";
+  const originalFileName = sanitizeOriginalFileName(
+    String(receipt.fileName || "receipt"),
+    extension
+  );
+  const stem = path3.basename(originalFileName, path3.extname(originalFileName)).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40) || "receipt";
   const storedFileName = `${Date.now()}-${randomUUID4()}-${stem}${extension}`;
-  const absolutePath = path2.join(COLLECTION_RECEIPT_DIR, storedFileName);
+  const absolutePath = path3.join(COLLECTION_RECEIPT_DIR, storedFileName);
   await fs.promises.writeFile(absolutePath, buffer);
-  return `${COLLECTION_RECEIPT_PUBLIC_PREFIX}/${storedFileName}`.replace(/\\/g, "/");
+  return {
+    storagePath: `${COLLECTION_RECEIPT_PUBLIC_PREFIX}/${storedFileName}`.replace(/\\/g, "/"),
+    originalFileName,
+    originalMimeType: mimeType || "application/octet-stream",
+    originalExtension: extension,
+    fileSize: buffer.length
+  };
 }
 async function removeCollectionReceiptFile(receiptPath) {
   const normalized = String(receiptPath || "").trim().replace(/\\/g, "/");
   if (!normalized.startsWith(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`)) return;
   const fileName = normalized.slice(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`.length);
   if (!fileName || fileName.includes("..") || fileName.includes("/") || fileName.includes("\\")) return;
-  const absolutePath = path2.resolve(COLLECTION_RECEIPT_DIR, fileName);
+  const absolutePath = path3.resolve(COLLECTION_RECEIPT_DIR, fileName);
   if (!absolutePath.startsWith(COLLECTION_RECEIPT_DIR)) return;
   try {
     await fs.promises.unlink(absolutePath);
@@ -12057,7 +12632,7 @@ async function removeCollectionReceiptFile(receiptPath) {
   }
 }
 function resolveCollectionReceiptMimeTypeFromFileName(fileName) {
-  const extension = path2.extname(fileName).toLowerCase();
+  const extension = path3.extname(fileName).toLowerCase();
   if (extension === ".pdf") return "application/pdf";
   if (extension === ".png") return "image/png";
   if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
@@ -12073,10 +12648,10 @@ function resolveCollectionReceiptFile(receiptPath) {
   const storedFileName = normalized.slice(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`.length);
   if (!storedFileName) return null;
   if (storedFileName.includes("..") || storedFileName.includes("/") || storedFileName.includes("\\")) return null;
-  if (path2.basename(storedFileName) !== storedFileName) return null;
-  const absolutePath = path2.resolve(COLLECTION_RECEIPT_DIR, storedFileName);
-  const relativePath = path2.relative(COLLECTION_RECEIPT_DIR, absolutePath);
-  if (!relativePath || relativePath.startsWith("..") || path2.isAbsolute(relativePath)) return null;
+  if (path3.basename(storedFileName) !== storedFileName) return null;
+  const absolutePath = path3.resolve(COLLECTION_RECEIPT_DIR, storedFileName);
+  const relativePath = path3.relative(COLLECTION_RECEIPT_DIR, absolutePath);
+  if (!relativePath || relativePath.startsWith("..") || path3.isAbsolute(relativePath)) return null;
   const mimeType = resolveCollectionReceiptMimeTypeFromFileName(storedFileName);
   return {
     absolutePath,
@@ -12085,7 +12660,15 @@ function resolveCollectionReceiptFile(receiptPath) {
     isInlinePreviewSupported: COLLECTION_RECEIPT_INLINE_MIME.has(mimeType)
   };
 }
-async function serveCollectionReceipt(storage2, req, res, mode2) {
+async function resolveSelectedReceipt(storage2, recordId, receiptIdRaw) {
+  const receiptId = normalizeCollectionText(receiptIdRaw);
+  if (receiptId) {
+    return await storage2.getCollectionRecordReceiptById(recordId, receiptId) || null;
+  }
+  const receipts = await storage2.listCollectionRecordReceipts(recordId);
+  return receipts[0] || null;
+}
+async function serveCollectionReceipt(storage2, req, res, mode2, receiptIdRaw) {
   try {
     if (!req.user) {
       return res.status(401).json({ ok: false, message: "Unauthenticated" });
@@ -12105,23 +12688,31 @@ async function serveCollectionReceipt(storage2, req, res, mode2) {
     if (!canAccessRecord) {
       return res.status(403).json({ ok: false, message: "Forbidden" });
     }
-    if (!record.receiptFile) {
-      return res.status(404).json({ ok: false, message: "Receipt file not found." });
-    }
-    const resolved = resolveCollectionReceiptFile(record.receiptFile);
+    const selectedReceipt = await resolveSelectedReceipt(
+      storage2,
+      id,
+      receiptIdRaw ?? req.params.receiptId ?? null
+    );
+    const legacyReceiptPath = !selectedReceipt && record.receiptFile ? record.receiptFile : null;
+    const resolved = resolveCollectionReceiptFile(
+      selectedReceipt?.storagePath ?? legacyReceiptPath
+    );
     if (!resolved) {
-      return res.status(404).json({ ok: false, message: "Receipt file path is invalid." });
+      return res.status(404).json({ ok: false, message: "Receipt file not found." });
     }
     try {
       await fs.promises.access(resolved.absolutePath, fs.constants.R_OK);
     } catch {
       return res.status(404).json({ ok: false, message: "Receipt file not found." });
     }
-    if (mode2 === "view" && !resolved.isInlinePreviewSupported) {
+    const responseMimeType = selectedReceipt?.originalMimeType || resolved.mimeType;
+    if (mode2 === "view" && !COLLECTION_RECEIPT_INLINE_MIME.has(responseMimeType)) {
       return res.status(415).json({ ok: false, message: "Preview not available for this file type." });
     }
-    const safeFileName = sanitizeReceiptDownloadName(resolved.storedFileName);
-    res.setHeader("Content-Type", resolved.mimeType);
+    const safeFileName = sanitizeReceiptDownloadName(
+      selectedReceipt?.originalFileName || resolved.storedFileName
+    );
+    res.setHeader("Content-Type", responseMimeType);
     res.setHeader(
       "Content-Disposition",
       `${mode2 === "download" ? "attachment" : "inline"}; filename="${safeFileName}"`
@@ -12148,25 +12739,41 @@ var init_collection_receipt_service = __esm({
     COLLECTION_RECEIPT_ALLOWED_EXT = /* @__PURE__ */ new Set([".jpg", ".jpeg", ".png", ".pdf"]);
     COLLECTION_RECEIPT_ALLOWED_MIME = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "application/pdf"]);
     COLLECTION_RECEIPT_INLINE_MIME = /* @__PURE__ */ new Set(["application/pdf", "image/png", "image/jpeg"]);
-    COLLECTION_RECEIPT_DIR = path2.resolve(process.cwd(), "uploads", "collection-receipts");
+    COLLECTION_RECEIPT_DIR = path3.resolve(process.cwd(), "uploads", "collection-receipts");
     COLLECTION_RECEIPT_PUBLIC_PREFIX = "/uploads/collection-receipts";
   }
 });
 
 // server/services/collection/collection-record.service.ts
-var CollectionRecordService;
+function buildCollectionPurgeCutoffDate(referenceDate = /* @__PURE__ */ new Date()) {
+  const utcYear = referenceDate.getUTCFullYear();
+  const utcMonth = referenceDate.getUTCMonth();
+  const utcDay = referenceDate.getUTCDate();
+  const monthAnchor = new Date(Date.UTC(utcYear, utcMonth, 1));
+  monthAnchor.setUTCMonth(monthAnchor.getUTCMonth() - COLLECTION_PURGE_RETENTION_MONTHS);
+  const maxDayInTargetMonth = new Date(
+    Date.UTC(monthAnchor.getUTCFullYear(), monthAnchor.getUTCMonth() + 1, 0)
+  ).getUTCDate();
+  const safeDay = Math.min(utcDay, maxDayInTargetMonth);
+  return new Date(
+    Date.UTC(monthAnchor.getUTCFullYear(), monthAnchor.getUTCMonth(), safeDay)
+  ).toISOString().slice(0, 10);
+}
+var COLLECTION_PURGE_RETENTION_MONTHS, CollectionRecordService;
 var init_collection_record_service = __esm({
   "server/services/collection/collection-record.service.ts"() {
     "use strict";
     init_errors();
+    init_passwords();
     init_collection_access();
     init_collection_receipt_service();
     init_collection_validation();
     init_collection_service_support();
+    COLLECTION_PURGE_RETENTION_MONTHS = 6;
     CollectionRecordService = class extends CollectionServiceSupport {
       async createRecord(userInput, bodyRaw) {
         const user = this.requireUser(userInput);
-        let uploadedReceiptPath = null;
+        const uploadedReceipts = [];
         try {
           const body = ensureLooseObject(bodyRaw) || {};
           const customerName = normalizeCollectionText(body.customerName);
@@ -12200,8 +12807,12 @@ var init_collection_record_service = __esm({
             throw forbidden("Nickname ini tidak dibenarkan untuk role semasa.");
           }
           const receiptPayload = ensureLooseObject(body.receipt);
-          if (receiptPayload) {
-            uploadedReceiptPath = await saveCollectionReceipt(receiptPayload);
+          const receiptPayloads = [
+            ...receiptPayload ? [receiptPayload] : [],
+            ...Array.isArray(body.receipts) ? body.receipts.map((item) => ensureLooseObject(item)).filter((item) => Boolean(item)) : []
+          ];
+          for (const nextReceipt of receiptPayloads) {
+            uploadedReceipts.push(await saveCollectionReceipt(nextReceipt));
           }
           const record = await this.storage.createCollectionRecord({
             customerName,
@@ -12211,20 +12822,25 @@ var init_collection_record_service = __esm({
             batch,
             paymentDate,
             amount,
-            receiptFile: uploadedReceiptPath,
+            receiptFile: uploadedReceipts[0]?.storagePath ?? null,
             createdByLogin: user.username,
             collectionStaffNickname
           });
+          if (uploadedReceipts.length > 0) {
+            await this.storage.createCollectionRecordReceipts(record.id, uploadedReceipts);
+          }
+          const hydratedRecord = await this.storage.getCollectionRecordById(record.id);
+          const finalRecord = hydratedRecord || record;
           await this.storage.createAuditLog({
             action: "COLLECTION_RECORD_CREATED",
             performedBy: user.username,
-            targetResource: record.id,
+            targetResource: finalRecord.id,
             details: `Collection record created by ${user.username}`
           });
-          return { ok: true, record };
+          return { ok: true, record: finalRecord };
         } catch (err) {
-          if (uploadedReceiptPath) {
-            await removeCollectionReceiptFile(uploadedReceiptPath);
+          for (const uploadedReceipt of uploadedReceipts) {
+            await removeCollectionReceiptFile(uploadedReceipt.storagePath);
           }
           throw err;
         }
@@ -12280,41 +12896,181 @@ var init_collection_record_service = __esm({
         const from = normalizeCollectionText(query.from);
         const to = normalizeCollectionText(query.to);
         const search = normalizeCollectionText(query.search);
-        const nickname = normalizeCollectionText(query.nickname);
+        const requestedNicknameFilters = readNicknameFiltersFromQuery(query);
+        const limitRaw = Number.parseInt(normalizeCollectionText(query.limit), 10);
+        const offsetRaw = Number.parseInt(normalizeCollectionText(query.offset), 10);
+        const limit = Number.isInteger(limitRaw) ? Math.min(5e3, Math.max(1, limitRaw)) : 1e3;
+        const offset = Number.isInteger(offsetRaw) ? Math.max(0, offsetRaw) : 0;
         if (from && !isValidCollectionDate(from)) throw badRequest("Invalid from date.");
         if (to && !isValidCollectionDate(to)) throw badRequest("Invalid to date.");
         if (from && to && from > to) throw badRequest("From date cannot be later than To date.");
         let nicknameFilters;
         if (user.role === "superuser") {
-          if (nickname) {
-            const isActiveNickname = await this.storage.isCollectionStaffNicknameActive(nickname);
-            if (!isActiveNickname) {
-              throw badRequest("Invalid nickname filter.");
+          if (requestedNicknameFilters.length > 0) {
+            for (const requestedNickname of requestedNicknameFilters) {
+              const isActiveNickname = await this.storage.isCollectionStaffNicknameActive(requestedNickname);
+              if (!isActiveNickname) {
+                throw badRequest("Invalid nickname filter.");
+              }
             }
-            nicknameFilters = [nickname];
+            nicknameFilters = requestedNicknameFilters;
           }
         } else if (user.role === "admin") {
           const allowedNicknames = await getAdminVisibleNicknameValues(this.storage, user);
-          if (nickname) {
-            if (!hasNicknameValue(allowedNicknames, nickname)) {
+          if (requestedNicknameFilters.length > 0) {
+            const hasInvalid = requestedNicknameFilters.some((value) => !hasNicknameValue(allowedNicknames, value));
+            if (hasInvalid) {
               throw badRequest("Invalid nickname filter.");
             }
-            nicknameFilters = [nickname];
+            nicknameFilters = requestedNicknameFilters;
           } else if (allowedNicknames.length === 0) {
-            return { ok: true, records: [] };
+            return {
+              ok: true,
+              records: [],
+              total: 0,
+              totalAmount: 0,
+              limit,
+              offset
+            };
           } else {
             nicknameFilters = allowedNicknames;
           }
         }
-        const records = await this.storage.listCollectionRecords({
+        const baseFilters = {
           from: from || void 0,
           to: to || void 0,
           search: search || void 0,
           createdByLogin: user.role === "user" ? user.username : void 0,
-          nicknames: nicknameFilters,
-          limit: 1e3
+          nicknames: nicknameFilters
+        };
+        const [aggregate, records] = await Promise.all([
+          this.storage.summarizeCollectionRecords(baseFilters),
+          this.storage.listCollectionRecords({
+            ...baseFilters,
+            limit,
+            offset
+          })
+        ]);
+        return {
+          ok: true,
+          records,
+          total: aggregate.totalRecords,
+          totalAmount: aggregate.totalAmount,
+          limit,
+          offset
+        };
+      }
+      async getPurgeSummary(userInput) {
+        const user = this.requireUser(userInput);
+        if (user.role !== "superuser") {
+          throw forbidden("Purge data collection hanya untuk superuser.");
+        }
+        const cutoffDate = buildCollectionPurgeCutoffDate();
+        const aggregate = await this.storage.summarizeCollectionRecordsOlderThan(cutoffDate);
+        return {
+          ok: true,
+          retentionMonths: COLLECTION_PURGE_RETENTION_MONTHS,
+          cutoffDate,
+          eligibleRecords: aggregate.totalRecords,
+          totalAmount: aggregate.totalAmount
+        };
+      }
+      async getNicknameSummary(userInput, query) {
+        const user = this.requireUser(userInput);
+        if (user.role !== "admin" && user.role !== "superuser") {
+          throw forbidden("Nickname summary hanya untuk admin atau superuser.");
+        }
+        const from = normalizeCollectionText(query.from);
+        const to = normalizeCollectionText(query.to);
+        if (from && !isValidCollectionDate(from)) throw badRequest("Invalid from date.");
+        if (to && !isValidCollectionDate(to)) throw badRequest("Invalid to date.");
+        if (from && to && from > to) throw badRequest("From date cannot be later than To date.");
+        const requestedNicknameFilters = readNicknameFiltersFromQuery(query);
+        if (requestedNicknameFilters.length === 0) {
+          return {
+            ok: true,
+            nicknames: [],
+            totalRecords: 0,
+            totalAmount: 0,
+            records: []
+          };
+        }
+        const summaryOnlyRaw = normalizeCollectionText(query.summaryOnly).toLowerCase();
+        const summaryOnly = summaryOnlyRaw === "1" || summaryOnlyRaw === "true" || summaryOnlyRaw === "yes";
+        let nicknameFilters = normalizeCollectionStringList(requestedNicknameFilters);
+        if (user.role === "superuser") {
+          for (const requestedNickname of nicknameFilters) {
+            const isActiveNickname = await this.storage.isCollectionStaffNicknameActive(requestedNickname);
+            if (!isActiveNickname) {
+              throw badRequest("Invalid nickname filter.");
+            }
+          }
+        } else {
+          const allowedNicknames = await getAdminVisibleNicknameValues(this.storage, user);
+          const hasInvalid = nicknameFilters.some((value) => !hasNicknameValue(allowedNicknames, value));
+          if (hasInvalid) {
+            throw badRequest("Invalid nickname filter.");
+          }
+        }
+        const aggregate = await this.storage.summarizeCollectionRecords({
+          from: from || void 0,
+          to: to || void 0,
+          nicknames: nicknameFilters
         });
-        return { ok: true, records };
+        const records = summaryOnly ? [] : await this.storage.listCollectionRecords({
+          from: from || void 0,
+          to: to || void 0,
+          nicknames: nicknameFilters,
+          limit: 5e3
+        });
+        return {
+          ok: true,
+          nicknames: nicknameFilters,
+          totalRecords: aggregate.totalRecords,
+          totalAmount: aggregate.totalAmount,
+          records
+        };
+      }
+      async purgeOldRecords(userInput, bodyRaw) {
+        const user = this.requireUser(userInput);
+        if (user.role !== "superuser") {
+          throw forbidden("Purge data collection hanya untuk superuser.");
+        }
+        const actor = (user.userId ? await this.storage.getUser(user.userId) : void 0) || await this.storage.getUserByUsername(user.username);
+        if (!actor?.passwordHash) {
+          throw forbidden("Tidak dapat sahkan kelayakan superuser.");
+        }
+        const body = ensureLooseObject(bodyRaw) || {};
+        const currentPassword = String(body.currentPassword || "");
+        if (!currentPassword) {
+          throw badRequest("Password login superuser diperlukan untuk purge.");
+        }
+        const isValidPassword = await verifyPassword(currentPassword, actor.passwordHash);
+        if (!isValidPassword) {
+          throw forbidden("Password login superuser tidak sah.");
+        }
+        const cutoffDate = buildCollectionPurgeCutoffDate();
+        const purged = await this.storage.purgeCollectionRecordsOlderThan(cutoffDate);
+        if (purged.receiptPaths.length > 0) {
+          await Promise.allSettled(
+            purged.receiptPaths.map((receiptPath) => removeCollectionReceiptFile(receiptPath))
+          );
+        }
+        if (purged.totalRecords > 0) {
+          await this.storage.createAuditLog({
+            action: "COLLECTION_RECORDS_PURGED",
+            performedBy: user.username,
+            targetResource: "collection-records",
+            details: `Purged ${purged.totalRecords} collection records older than ${cutoffDate} by ${user.username}`
+          });
+        }
+        return {
+          ok: true,
+          retentionMonths: COLLECTION_PURGE_RETENTION_MONTHS,
+          cutoffDate,
+          deletedRecords: purged.totalRecords,
+          totalAmount: purged.totalAmount
+        };
       }
       async updateRecord(userInput, idRaw, bodyRaw) {
         const user = this.requireUser(userInput);
@@ -12326,7 +13082,7 @@ var init_collection_record_service = __esm({
         if (!existing) {
           throw notFound("Collection record not found.");
         }
-        let uploadedReceiptPath = null;
+        const uploadedReceipts = [];
         try {
           const body = ensureLooseObject(bodyRaw) || {};
           const updatePayload = {};
@@ -12386,27 +13142,35 @@ var init_collection_record_service = __esm({
           }
           const shouldRemoveReceipt = body.removeReceipt === true;
           const receiptPayload = ensureLooseObject(body.receipt);
-          if (shouldRemoveReceipt && receiptPayload) {
-            throw badRequest("Cannot remove and upload receipt at the same time.");
+          const receiptPayloads = [
+            ...receiptPayload ? [receiptPayload] : [],
+            ...Array.isArray(body.receipts) ? body.receipts.map((item) => ensureLooseObject(item)).filter((item) => Boolean(item)) : []
+          ];
+          const removeReceiptIds = Array.isArray(body.removeReceiptIds) ? normalizeCollectionStringList(body.removeReceiptIds) : [];
+          for (const nextReceipt of receiptPayloads) {
+            uploadedReceipts.push(await saveCollectionReceipt(nextReceipt));
           }
-          if (receiptPayload) {
-            uploadedReceiptPath = await saveCollectionReceipt(receiptPayload);
-            updatePayload.receiptFile = uploadedReceiptPath;
-          } else if (shouldRemoveReceipt) {
-            updatePayload.receiptFile = null;
-          }
-          if (Object.keys(updatePayload).length === 0) {
+          const hasReceiptMutation = shouldRemoveReceipt || removeReceiptIds.length > 0 || uploadedReceipts.length > 0;
+          if (Object.keys(updatePayload).length === 0 && !hasReceiptMutation) {
             return { ok: true, record: existing };
+          }
+          const removedReceipts = shouldRemoveReceipt ? await this.storage.deleteAllCollectionRecordReceipts(id) : removeReceiptIds.length > 0 ? await this.storage.deleteCollectionRecordReceipts(id, removeReceiptIds) : [];
+          if (uploadedReceipts.length > 0) {
+            await this.storage.createCollectionRecordReceipts(id, uploadedReceipts);
+          }
+          const finalReceipts = hasReceiptMutation ? await this.storage.listCollectionRecordReceipts(id) : existing.receipts;
+          if (hasReceiptMutation) {
+            updatePayload.receiptFile = finalReceipts[0]?.storagePath ?? null;
           }
           const updated = await this.storage.updateCollectionRecord(id, updatePayload);
           if (!updated) {
-            if (uploadedReceiptPath) {
-              await removeCollectionReceiptFile(uploadedReceiptPath);
+            for (const uploadedReceipt of uploadedReceipts) {
+              await removeCollectionReceiptFile(uploadedReceipt.storagePath);
             }
             throw notFound("Collection record not found.");
           }
-          if ((receiptPayload || shouldRemoveReceipt) && existing.receiptFile) {
-            await removeCollectionReceiptFile(existing.receiptFile);
+          for (const removedReceipt of removedReceipts) {
+            await removeCollectionReceiptFile(removedReceipt.storagePath);
           }
           await this.storage.createAuditLog({
             action: "COLLECTION_RECORD_UPDATED",
@@ -12416,8 +13180,8 @@ var init_collection_record_service = __esm({
           });
           return { ok: true, record: updated };
         } catch (err) {
-          if (uploadedReceiptPath) {
-            await removeCollectionReceiptFile(uploadedReceiptPath);
+          for (const uploadedReceipt of uploadedReceipts) {
+            await removeCollectionReceiptFile(uploadedReceipt.storagePath);
           }
           throw err;
         }
@@ -12432,8 +13196,12 @@ var init_collection_record_service = __esm({
         if (!existing) {
           throw notFound("Collection record not found.");
         }
+        const removedReceipts = await this.storage.deleteAllCollectionRecordReceipts(id);
         await this.storage.deleteCollectionRecord(id);
-        if (existing.receiptFile) {
+        for (const receipt of removedReceipts) {
+          await removeCollectionReceiptFile(receipt.storagePath);
+        }
+        if (removedReceipts.length === 0 && existing.receiptFile) {
           await removeCollectionReceiptFile(existing.receiptFile);
         }
         await this.storage.createAuditLog({
@@ -12518,6 +13286,15 @@ var init_collection_service = __esm({
       }
       listRecords(user, query) {
         return this.recordService.listRecords(user, query);
+      }
+      getPurgeSummary(user) {
+        return this.recordService.getPurgeSummary(user);
+      }
+      getNicknameSummary(user, query) {
+        return this.recordService.getNicknameSummary(user, query);
+      }
+      purgeOldRecords(user, bodyRaw) {
+        return this.recordService.purgeOldRecords(user, bodyRaw);
       }
       updateRecord(user, idRaw, bodyRaw) {
         return this.recordService.updateRecord(user, idRaw, bodyRaw);
@@ -12687,6 +13464,20 @@ function registerCollectionRoutes(app2, deps) {
     jsonRoute("Failed to load collection records.", (req) => collectionService.listRecords(req.user, req.query))
   );
   app2.get(
+    "/api/collection/purge-summary",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to load purge summary.", (req) => collectionService.getPurgeSummary(req.user))
+  );
+  app2.get(
+    "/api/collection/nickname-summary",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to load nickname summary.", (req) => collectionService.getNicknameSummary(req.user, req.query))
+  );
+  app2.get(
     "/api/collection/:id/receipt/view",
     authenticateToken,
     requireRole("user", "admin", "superuser"),
@@ -12699,6 +13490,20 @@ function registerCollectionRoutes(app2, deps) {
     requireRole("user", "admin", "superuser"),
     requireTabAccess("collection-report"),
     async (req, res) => serveCollectionReceipt(storage2, req, res, "download")
+  );
+  app2.get(
+    "/api/collection/:id/receipts/:receiptId/view",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    async (req, res) => serveCollectionReceipt(storage2, req, res, "view", req.params.receiptId)
+  );
+  app2.get(
+    "/api/collection/:id/receipts/:receiptId/download",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report"),
+    async (req, res) => serveCollectionReceipt(storage2, req, res, "download", req.params.receiptId)
   );
   app2.get(
     "/api/receipts/:id/view",
@@ -12728,6 +13533,13 @@ function registerCollectionRoutes(app2, deps) {
     requireRole("user", "admin", "superuser"),
     requireTabAccess("collection-report"),
     handleUpdateCollectionRecord
+  );
+  app2.delete(
+    "/api/collection/purge-old",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report"),
+    jsonRoute("Failed to purge old collection records.", (req) => collectionService.purgeOldRecords(req.user, req.body))
   );
   app2.delete(
     "/api/collection/:id",
@@ -16702,7 +17514,7 @@ var init_wrapAsyncPrototypeMethods = __esm({
 // server/internal/frontend-static.ts
 import express2 from "express";
 import fs2 from "fs";
-import path3 from "path";
+import path4 from "path";
 function registerFrontendStatic(app2, options) {
   const cwd = options?.cwd || process.cwd();
   const possiblePaths = options?.paths || DEFAULT_FRONTEND_PATHS;
@@ -16710,8 +17522,8 @@ function registerFrontendStatic(app2, options) {
   let foundPath = null;
   let foundIndex = null;
   for (const relPath of possiblePaths) {
-    const fullPath = path3.resolve(cwd, relPath);
-    const indexFile = path3.join(fullPath, "index.html");
+    const fullPath = path4.resolve(cwd, relPath);
+    const indexFile = path4.join(fullPath, "index.html");
     console.log(`  Checking: ${fullPath}`);
     try {
       if (fs2.existsSync(fullPath) && fs2.statSync(fullPath).isDirectory()) {
@@ -16743,7 +17555,7 @@ function registerFrontendStatic(app2, options) {
   console.log("");
   console.log("  ERROR: Frontend files not found!");
   console.log("  Please run: npm run build:local");
-  console.log(`  Expected location: ${path3.resolve(cwd, "dist-local/public")}`);
+  console.log(`  Expected location: ${path4.resolve(cwd, "dist-local/public")}`);
   app2.use((req, res) => {
     if (!req.path.startsWith("/api") && !req.path.startsWith("/ws")) {
       res.status(404).send(`
@@ -16938,7 +17750,7 @@ var index_local_exports = {};
 import "dotenv/config";
 import express3 from "express";
 import { createServer } from "http";
-import path4 from "path";
+import path5 from "path";
 import { WebSocketServer } from "ws";
 function notifyMasterFatalStartup(reason, details) {
   if (startupFatalReason) return;
@@ -17007,7 +17819,7 @@ var init_index_local = __esm({
     DEFAULT_BODY_LIMIT = "2mb";
     IMPORT_BODY_LIMIT = process.env.IMPORT_BODY_LIMIT || "50mb";
     COLLECTION_BODY_LIMIT = process.env.COLLECTION_BODY_LIMIT || "8mb";
-    UPLOADS_ROOT_DIR = path4.resolve(process.cwd(), "uploads");
+    UPLOADS_ROOT_DIR = path5.resolve(process.cwd(), "uploads");
     PG_POOL_WARN_COOLDOWN_MS = 6e4;
     AI_PRECOMPUTE_ON_START = String(process.env.AI_PRECOMPUTE_ON_START || "0") === "1";
     API_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
@@ -17151,7 +17963,7 @@ var init_index_local = __esm({
 // server/cluster-local.ts
 import cluster from "node:cluster";
 import os2 from "node:os";
-import path5 from "node:path";
+import path6 from "node:path";
 import { fileURLToPath } from "node:url";
 
 // server/internal/loadPredictor.ts
@@ -17582,8 +18394,8 @@ function wireWorker(worker) {
 }
 function bootCluster() {
   const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path5.dirname(__filename);
-  const workerExec = path5.join(__dirname, "index-local.js");
+  const __dirname = path6.dirname(__filename);
+  const workerExec = path6.join(__dirname, "index-local.js");
   cluster.setupPrimary({
     exec: workerExec
   });

@@ -61,7 +61,7 @@ export function CollectionRecordsFilters({
           <Input
             value={searchInput}
             onChange={(event) => onSearchInputChange(event.target.value)}
-            placeholder="Cari nama / IC / akaun / telefon / jumlah bayaran"
+            placeholder="Cari nama / IC / akaun / batch / telefon / jumlah bayaran"
             className="pl-9"
           />
         </div>

@@ -9,8 +9,8 @@ import {
   type CollectionRecord,
   type CollectionStaffNickname,
 } from "@/lib/api";
-import { formatAmountRM, parseApiError } from "./utils";
-import { CollectionMonthDetails } from "@/pages/collection-summary/CollectionMonthDetails";
+import { parseApiError } from "./utils";
+import { CollectionMonthDetailsDialog } from "@/pages/collection-summary/CollectionMonthDetailsDialog";
 import { CollectionSummaryFilters } from "@/pages/collection-summary/CollectionSummaryFilters";
 import { CollectionSummaryTable } from "@/pages/collection-summary/CollectionSummaryTable";
 import { CollectionSummaryTotals } from "@/pages/collection-summary/CollectionSummaryTotals";
@@ -25,6 +25,8 @@ import {
 type CollectionSummaryPageProps = {
   role: string;
 };
+
+const MONTH_DIALOG_PAGE_SIZE = 10;
 
 function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
   const { toast } = useToast();
@@ -48,8 +50,13 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
   const [nicknameDropdownOpen, setNicknameDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [summaryRows, setSummaryRows] = useState<CollectionMonthlySummary[]>(() => buildEmptySummary());
-  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+
+  const [monthDialogOpen, setMonthDialogOpen] = useState(false);
+  const [activeMonth, setActiveMonth] = useState<number | null>(null);
+  const [monthDialogPage, setMonthDialogPage] = useState(1);
+  const [monthDialogPageSize, setMonthDialogPageSize] = useState(MONTH_DIALOG_PAGE_SIZE);
   const [monthRecords, setMonthRecords] = useState<CollectionRecord[]>([]);
+  const [monthRecordsTotal, setMonthRecordsTotal] = useState(0);
   const [loadingMonthRecords, setLoadingMonthRecords] = useState(false);
 
   useEffect(() => {
@@ -75,6 +82,17 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
     () => visibleNicknameOptions.map((item) => item.nickname),
     [visibleNicknameOptions],
   );
+
+  const resetMonthDialog = useCallback(() => {
+    monthRecordsRequestIdRef.current += 1;
+    setMonthDialogOpen(false);
+    setActiveMonth(null);
+    setMonthDialogPage(1);
+    setMonthDialogPageSize(MONTH_DIALOG_PAGE_SIZE);
+    setMonthRecords([]);
+    setMonthRecordsTotal(0);
+    setLoadingMonthRecords(false);
+  }, []);
 
   const loadNicknameOptions = useCallback(async () => {
     const requestId = ++nicknamesRequestIdRef.current;
@@ -124,44 +142,35 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
   );
 
   const loadMonthRecords = useCallback(
-    async (year: number, month: number, nicknames?: string[]) => {
+    async (year: number, month: number, page: number, pageSize: number, nicknames?: string[]) => {
       const requestId = ++monthRecordsRequestIdRef.current;
+      const range = buildMonthRange(year, month);
+      const normalizedFilters =
+        Array.isArray(nicknames) && nicknames.length > 0
+          ? Array.from(new Set(nicknames.map((value) => String(value || "").trim()).filter(Boolean)))
+          : [];
+
       setLoadingMonthRecords(true);
+      setMonthRecords([]);
 
       try {
-        const range = buildMonthRange(year, month);
-        const normalizedFilters =
-          Array.isArray(nicknames) && nicknames.length > 0
-            ? Array.from(new Set(nicknames.map((value) => String(value || "").trim()).filter(Boolean)))
-            : [];
-
         const response = await getCollectionRecords({
           from: range.from,
           to: range.to,
           nickname: normalizedFilters.length === 1 ? normalizedFilters[0] : undefined,
+          nicknames: normalizedFilters.length > 1 ? normalizedFilters : undefined,
+          limit: pageSize,
+          offset: (page - 1) * pageSize,
         });
 
         if (!isMountedRef.current || requestId !== monthRecordsRequestIdRef.current) return;
 
-        const records: CollectionRecord[] = Array.isArray(response?.records)
-          ? (response.records as CollectionRecord[])
-          : [];
-        const normalizedFiltersSet =
-          normalizedFilters.length > 1
-            ? new Set(normalizedFilters.map((value) => value.toLowerCase()))
-            : null;
-        const filteredRecords = normalizedFiltersSet
-          ? records.filter((item: CollectionRecord) =>
-              normalizedFiltersSet.has(
-                String(item.collectionStaffNickname || "").trim().toLowerCase(),
-              ),
-            )
-          : records;
-
-        setMonthRecords(filteredRecords);
+        setMonthRecords(Array.isArray(response?.records) ? response.records : []);
+        setMonthRecordsTotal(Number(response?.total || 0));
       } catch (error: unknown) {
         if (!isMountedRef.current || requestId !== monthRecordsRequestIdRef.current) return;
         setMonthRecords([]);
+        setMonthRecordsTotal(0);
         toast({
           title: "Failed to Load Monthly Records",
           description: parseApiError(error),
@@ -201,18 +210,29 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
   }, [selectedYear, canFilterByNickname, selectedNicknames, loadSummary]);
 
   useEffect(() => {
-    if (selectedMonth === null) {
-      setMonthRecords([]);
+    if (!monthDialogOpen || activeMonth === null) {
       return;
     }
+
     const year = Number(selectedYear);
-    if (!Number.isInteger(year) || selectedMonth < 1 || selectedMonth > 12) {
+    if (!Number.isInteger(year) || activeMonth < 1 || activeMonth > 12) {
       setMonthRecords([]);
+      setMonthRecordsTotal(0);
       return;
     }
+
     const nicknames = canFilterByNickname && selectedNicknames.length > 0 ? selectedNicknames : undefined;
-    void loadMonthRecords(year, selectedMonth, nicknames);
-  }, [selectedYear, selectedMonth, canFilterByNickname, selectedNicknames, loadMonthRecords]);
+    void loadMonthRecords(year, activeMonth, monthDialogPage, monthDialogPageSize, nicknames);
+  }, [
+    activeMonth,
+    canFilterByNickname,
+    loadMonthRecords,
+    monthDialogOpen,
+    monthDialogPage,
+    monthDialogPageSize,
+    selectedNicknames,
+    selectedYear,
+  ]);
 
   const grandTotal = useMemo(
     () =>
@@ -227,36 +247,22 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
     [summaryRows],
   );
 
-  const selectedMonthSummary = useMemo(() => {
-    if (selectedMonth === null) return null;
-    return summaryRows.find((item) => item.month === selectedMonth) || null;
-  }, [summaryRows, selectedMonth]);
+  const activeMonthSummary = useMemo(() => {
+    if (activeMonth === null) return null;
+    return summaryRows.find((item) => item.month === activeMonth) || null;
+  }, [summaryRows, activeMonth]);
 
-  const selectedMonthRange = useMemo(() => {
-    if (selectedMonth === null) return null;
+  const activeMonthRange = useMemo(() => {
+    if (activeMonth === null) return null;
     const year = Number(selectedYear);
     if (!Number.isInteger(year)) return null;
-    const range = buildMonthRange(year, selectedMonth);
+    const range = buildMonthRange(year, activeMonth);
     return {
       from: range.from,
       to: range.to,
       label: `Dari ${toDisplayDate(range.from)} hingga ${toDisplayDate(range.to)}`,
     };
-  }, [selectedYear, selectedMonth]);
-
-  const monthRecordTotals = useMemo(
-    () =>
-      monthRecords.reduce(
-        (acc, row) => {
-          acc.totalRecords += 1;
-          const amount = Number(row.amount);
-          acc.totalAmount += Number.isFinite(amount) ? amount : 0;
-          return acc;
-        },
-        { totalRecords: 0, totalAmount: 0 },
-      ),
-    [monthRecords],
-  );
+  }, [selectedYear, activeMonth]);
 
   const selectedNicknameSet = useMemo(
     () => new Set(selectedNicknames.map((value) => value.toLowerCase())),
@@ -293,6 +299,14 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
   const selectedNicknameLabel =
     selectedNicknames.length === 0 ? "Semua staff" : `${selectedNicknames.length} nickname dipilih`;
 
+  const monthDialogTotalPages = Math.max(1, Math.ceil(monthRecordsTotal / monthDialogPageSize));
+
+  const handleSelectMonth = (month: number) => {
+    setActiveMonth(month);
+    setMonthDialogPage(1);
+    setMonthDialogOpen(true);
+  };
+
   return (
     <Card className="border-border/60 bg-background/70">
       <CardHeader className="pb-4">
@@ -321,23 +335,40 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
         <CollectionSummaryTable
           loading={loading}
           summaryRows={summaryRows}
-          selectedMonth={selectedMonth}
-          onSelectMonth={setSelectedMonth}
-        />
-
-        <CollectionMonthDetails
-          selectedMonth={selectedMonth}
-          selectedYear={selectedYear}
-          selectedMonthSummary={selectedMonthSummary}
-          selectedMonthRange={selectedMonthRange}
-          monthRecords={monthRecords}
-          loadingMonthRecords={loadingMonthRecords}
-          monthRecordTotals={monthRecordTotals}
-          toDisplayDate={toDisplayDate}
+          selectedMonth={monthDialogOpen ? activeMonth : null}
+          onSelectMonth={handleSelectMonth}
         />
 
         <CollectionSummaryTotals grandTotal={grandTotal} />
       </CardContent>
+
+      {monthDialogOpen && activeMonthSummary && activeMonthRange ? (
+        <CollectionMonthDetailsDialog
+          open={monthDialogOpen}
+          loading={loadingMonthRecords}
+          selectedYear={selectedYear}
+          selectedMonthSummary={activeMonthSummary}
+          selectedMonthRange={activeMonthRange}
+          records={monthRecords}
+          totalRecords={monthRecordsTotal}
+          page={monthDialogPage}
+          pageSize={monthDialogPageSize}
+          totalPages={monthDialogTotalPages}
+          onOpenChange={(open) => {
+            if (!open) {
+              resetMonthDialog();
+            } else {
+              setMonthDialogOpen(true);
+            }
+          }}
+          onPageChange={setMonthDialogPage}
+          onPageSizeChange={(nextPageSize) => {
+            setMonthDialogPageSize(nextPageSize);
+            setMonthDialogPage(1);
+          }}
+          toDisplayDate={toDisplayDate}
+        />
+      ) : null}
     </Card>
   );
 }

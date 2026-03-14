@@ -1,5 +1,4 @@
-import { memo, type ChangeEvent, useMemo, useRef, useState } from "react";
-import { Paperclip, RotateCcw } from "lucide-react";
+import { memo, type ChangeEvent, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { createCollectionRecord, type CollectionBatch } from "@/lib/api";
+import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
 import {
   COLLECTION_BATCH_OPTIONS,
   isValidCustomerPhone,
@@ -33,10 +33,8 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const [batch, setBatch] = useState<CollectionBatch>("P10");
   const [paymentDate, setPaymentDate] = useState("");
   const [amount, setAmount] = useState("");
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
-
-  const selectedReceiptName = useMemo(() => receiptFile?.name || "", [receiptFile]);
 
   const clearForm = () => {
     setCustomerName("");
@@ -46,20 +44,17 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     setBatch("P10");
     setPaymentDate("");
     setAmount("");
-    setReceiptFile(null);
+    setReceiptFiles([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const handleSelectReceipt = () => {
-    fileInputRef.current?.click();
   };
 
   const handleReceiptChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null;
+    event.target.value = "";
     if (!file) {
-      setReceiptFile(null);
       return;
     }
+
     const error = validateReceiptFile(file);
     if (error) {
       toast({
@@ -67,14 +62,18 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         description: error,
         variant: "destructive",
       });
-      event.target.value = "";
       return;
     }
-    setReceiptFile(file);
+
+    setReceiptFiles((previous) => [...previous, file]);
   };
 
-  const handleClearReceipt = () => {
-    setReceiptFile(null);
+  const handleRemoveReceipt = (index: number) => {
+    setReceiptFiles((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  const handleClearPendingReceipts = () => {
+    setReceiptFiles([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -105,7 +104,12 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
 
     setSubmitting(true);
     try {
-      const payload: any = {
+      const receipts =
+        receiptFiles.length > 0
+          ? await Promise.all(receiptFiles.map((file) => toReceiptPayload(file)))
+          : [];
+
+      await createCollectionRecord({
         customerName: customerName.trim(),
         icNumber: icNumber.trim(),
         customerPhone: customerPhone.trim(),
@@ -114,13 +118,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         paymentDate,
         amount: Number(amount),
         collectionStaffNickname: staffNickname.trim(),
-      };
+        receipts,
+      });
 
-      if (receiptFile) {
-        payload.receipt = await toReceiptPayload(receiptFile);
-      }
-
-      await createCollectionRecord(payload);
       toast({
         title: "Collection Saved",
         description: "Rekod collection berjaya disimpan.",
@@ -187,42 +187,32 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
             <Label>Amount (RM)</Label>
             <Input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={submitting} />
           </div>
-          <div className="space-y-2 md:col-span-2">
+          <div className="space-y-2 md:col-span-3">
             <Label>Receipt Upload</Label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".jpg,.jpeg,.png,.pdf"
-              className="hidden"
-              onChange={handleReceiptChange}
+            <CollectionReceiptPanel
+              pendingFiles={receiptFiles}
+              inputRef={fileInputRef}
               disabled={submitting}
+              onFileChange={handleReceiptChange}
+              onRemovePending={handleRemoveReceipt}
+              onClearPending={handleClearPendingReceipts}
+              uploadLabel="Upload Receipt One by One"
+              helperText="Tambah satu receipt pada satu masa. Semua receipt ini akan disimpan di bawah customer collection yang sama."
             />
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" onClick={handleSelectReceipt} disabled={submitting}>
-                <Paperclip className="w-4 h-4 mr-2" />
-                Upload Resit Bayaran
-              </Button>
-              <Button type="button" variant="ghost" onClick={handleClearReceipt} disabled={submitting || !receiptFile}>
-                <RotateCcw className="w-4 h-4 mr-2" />
-                Clear
-              </Button>
-              {selectedReceiptName && (
-                <span className="text-sm text-muted-foreground">{selectedReceiptName}</span>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Sila upload resit bayaran daripada customer (optional). Format: JPG, PNG, PDF
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label>Staff Nickname</Label>
-            <Input value={staffNickname} disabled />
           </div>
         </div>
 
-        <div className="flex justify-end">
-          <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Saving..." : "Simpan Collection"}
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={clearForm}
+            disabled={submitting}
+          >
+            Reset Form
+          </Button>
+          <Button type="button" onClick={handleSubmit} disabled={submitting}>
+            {submitting ? "Saving..." : "Save Collection"}
           </Button>
         </div>
       </CardContent>
@@ -230,7 +220,4 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   );
 }
 
-const MemoizedSaveCollectionPage = memo(SaveCollectionPage);
-MemoizedSaveCollectionPage.displayName = "SaveCollectionPage";
-
-export default MemoizedSaveCollectionPage;
+export default memo(SaveCollectionPage);
