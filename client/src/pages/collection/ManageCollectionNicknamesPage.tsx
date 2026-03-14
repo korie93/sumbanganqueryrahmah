@@ -1,24 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import {
   createCollectionAdminGroup,
@@ -34,6 +15,15 @@ import {
   updateCollectionAdminGroup,
   updateCollectionNickname,
 } from "@/lib/api";
+import { CollectionNicknameDialogs } from "@/pages/collection-nicknames/CollectionNicknameDialogs";
+import { GroupListPanel } from "@/pages/collection-nicknames/GroupListPanel";
+import { NicknameAssignmentPanel } from "@/pages/collection-nicknames/NicknameAssignmentPanel";
+import {
+  normalizeCollectionNicknameIds,
+  sameCollectionNicknameIds,
+  sortLeaderOptions,
+  type PendingUngroup,
+} from "@/pages/collection-nicknames/utils";
 import { parseApiError } from "./utils";
 
 type Props = {
@@ -42,30 +32,11 @@ type Props = {
   onNicknameListChanged?: () => void;
 };
 
-type PendingUngroup = {
-  groupId: string;
-  nicknameId: string;
-};
-
-const ROLE_SCOPE_OPTIONS: Array<{ value: "admin" | "user" | "both"; label: string }> = [
-  { value: "admin", label: "Admin" },
-  { value: "user", label: "User" },
-  { value: "both", label: "Admin + User" },
-];
-
-const normalizeIds = (ids: string[]) =>
-  Array.from(new Set(ids.map((id) => String(id || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-
-const sameIds = (left: string[], right: string[]) => {
-  const a = normalizeIds(left);
-  const b = normalizeIds(right);
-  if (a.length !== b.length) return false;
-  return a.every((value, index) => value === b[index]);
-};
-
-const scopeLabel = (scope: string) => (scope === "admin" ? "Admin" : scope === "user" ? "User" : "Admin + User");
-
-function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListChanged }: Props) {
+function ManageCollectionNicknamesPage({
+  role,
+  currentNickname,
+  onNicknameListChanged,
+}: Props) {
   const { toast } = useToast();
   const isSuperuser = role === "superuser";
 
@@ -91,71 +62,104 @@ function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListCh
   const [changeLeaderOpen, setChangeLeaderOpen] = useState(false);
   const [changeLeaderId, setChangeLeaderId] = useState("");
   const [savingLeader, setSavingLeader] = useState(false);
-  const [pendingDeleteGroup, setPendingDeleteGroup] = useState<CollectionAdminGroup | null>(null);
+  const [pendingDeleteGroup, setPendingDeleteGroup] =
+    useState<CollectionAdminGroup | null>(null);
   const [deletingGroup, setDeletingGroup] = useState(false);
 
   const [addOpen, setAddOpen] = useState(false);
   const [newNickname, setNewNickname] = useState("");
   const [newRoleScope, setNewRoleScope] = useState<"admin" | "user" | "both">("both");
   const [addingNickname, setAddingNickname] = useState(false);
-  const [editingNickname, setEditingNickname] = useState<CollectionStaffNickname | null>(null);
+  const [editingNickname, setEditingNickname] =
+    useState<CollectionStaffNickname | null>(null);
   const [editValue, setEditValue] = useState("");
   const [editRoleScope, setEditRoleScope] = useState<"admin" | "user" | "both">("both");
   const [savingEdit, setSavingEdit] = useState(false);
-  const [pendingDeactivate, setPendingDeactivate] = useState<CollectionStaffNickname | null>(null);
+  const [pendingDeactivate, setPendingDeactivate] =
+    useState<CollectionStaffNickname | null>(null);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
-  const [pendingDeleteNickname, setPendingDeleteNickname] = useState<CollectionStaffNickname | null>(null);
+  const [pendingDeleteNickname, setPendingDeleteNickname] =
+    useState<CollectionStaffNickname | null>(null);
   const [deletingNicknameId, setDeletingNicknameId] = useState<string | null>(null);
-  const [pendingResetPassword, setPendingResetPassword] = useState<CollectionStaffNickname | null>(null);
+  const [pendingResetPassword, setPendingResetPassword] =
+    useState<CollectionStaffNickname | null>(null);
   const [resettingNicknameId, setResettingNicknameId] = useState<string | null>(null);
   const [pendingUngroup, setPendingUngroup] = useState<PendingUngroup | null>(null);
   const [ungrouping, setUngrouping] = useState(false);
 
-  const selectedGroup = useMemo(() => groups.find((g) => g.id === selectedGroupId) || null, [groups, selectedGroupId]);
-  const nicknameById = useMemo(() => new Map(nicknames.map((n) => [n.id, n])), [nicknames]);
+  const deferredGroupSearch = useDeferredValue(groupSearch);
+  const deferredNicknameSearch = useDeferredValue(nicknameSearch);
+
+  const selectedGroup = useMemo(
+    () => groups.find((group) => group.id === selectedGroupId) || null,
+    [groups, selectedGroupId],
+  );
+
+  const nicknameById = useMemo(
+    () => new Map(nicknames.map((nickname) => [nickname.id, nickname])),
+    [nicknames],
+  );
+
   const nicknameIdByName = useMemo(() => {
     const map = new Map<string, string>();
-    for (const n of nicknames) {
-      const key = n.nickname.trim().toLowerCase();
-      if (key && !map.has(key)) map.set(key, n.id);
+    for (const nickname of nicknames) {
+      const key = nickname.nickname.trim().toLowerCase();
+      if (key && !map.has(key)) map.set(key, nickname.id);
     }
     return map;
   }, [nicknames]);
 
-  const leaderOptions = useMemo(
-    () =>
-      nicknames
-        .filter((n) => n.isActive && (n.roleScope === "admin" || n.roleScope === "both"))
-        .sort((a, b) => a.nickname.localeCompare(b.nickname, undefined, { sensitivity: "base" })),
+  const leaderOptions = useMemo(() => sortLeaderOptions(nicknames), [nicknames]);
+
+  const filteredGroups = useMemo(() => {
+    const query = deferredGroupSearch.trim().toLowerCase();
+    if (!query) return groups;
+    return groups.filter(
+      (group) =>
+        group.leaderNickname.toLowerCase().includes(query) ||
+        group.memberNicknames.some((member) => member.toLowerCase().includes(query)),
+    );
+  }, [deferredGroupSearch, groups]);
+
+  const filteredNicknames = useMemo(() => {
+    const query = deferredNicknameSearch.trim().toLowerCase();
+    if (!query) return nicknames;
+    return nicknames.filter((nickname) =>
+      nickname.nickname.toLowerCase().includes(query),
+    );
+  }, [deferredNicknameSearch, nicknames]);
+
+  const activeAvailable = useMemo(
+    () => nicknames.filter((nickname) => nickname.isActive).length,
     [nicknames],
   );
 
-  const filteredGroups = useMemo(() => {
-    const q = groupSearch.trim().toLowerCase();
-    if (!q) return groups;
-    return groups.filter((g) => g.leaderNickname.toLowerCase().includes(q) || g.memberNicknames.some((m) => m.toLowerCase().includes(q)));
-  }, [groupSearch, groups]);
+  const assignedActive = useMemo(
+    () => assignedIds.filter((id) => nicknameById.get(id)?.isActive).length,
+    [assignedIds, nicknameById],
+  );
 
-  const filteredNicknames = useMemo(() => {
-    const q = nicknameSearch.trim().toLowerCase();
-    if (!q) return nicknames;
-    return nicknames.filter((n) => n.nickname.toLowerCase().includes(q));
-  }, [nicknameSearch, nicknames]);
-
-  const activeAvailable = useMemo(() => nicknames.filter((n) => n.isActive).length, [nicknames]);
-  const assignedActive = useMemo(() => assignedIds.filter((id) => nicknameById.get(id)?.isActive).length, [assignedIds, nicknameById]);
-  const unsaved = useMemo(() => !sameIds(assignedIds, savedAssignedIds), [assignedIds, savedAssignedIds]);
+  const unsaved = useMemo(
+    () => !sameCollectionNicknameIds(assignedIds, savedAssignedIds),
+    [assignedIds, savedAssignedIds],
+  );
 
   const loadGroups = useCallback(async () => {
     if (!isSuperuser) return;
     setLoadingGroups(true);
     try {
-      const res = await getCollectionAdminGroups();
-      const rows = Array.isArray(res?.groups) ? res.groups : [];
+      const response = await getCollectionAdminGroups();
+      const rows = Array.isArray(response?.groups) ? response.groups : [];
       setGroups(rows);
-      setSelectedGroupId((prev) => (prev && rows.some((r) => r.id === prev) ? prev : rows[0]?.id || ""));
+      setSelectedGroupId((previous) =>
+        previous && rows.some((row) => row.id === previous) ? previous : rows[0]?.id || "",
+      );
     } catch (error: unknown) {
-      toast({ title: "Failed to Load Admin Groups", description: parseApiError(error), variant: "destructive" });
+      toast({
+        title: "Failed to Load Admin Groups",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
     } finally {
       setLoadingGroups(false);
     }
@@ -165,10 +169,14 @@ function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListCh
     if (!isSuperuser) return;
     setLoadingNicknames(true);
     try {
-      const res = await getCollectionNicknames({ includeInactive: true });
-      setNicknames(Array.isArray(res?.nicknames) ? res.nicknames : []);
+      const response = await getCollectionNicknames({ includeInactive: true });
+      setNicknames(Array.isArray(response?.nicknames) ? response.nicknames : []);
     } catch (error: unknown) {
-      toast({ title: "Failed to Load Nicknames", description: parseApiError(error), variant: "destructive" });
+      toast({
+        title: "Failed to Load Nicknames",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
     } finally {
       setLoadingNicknames(false);
     }
@@ -183,23 +191,29 @@ function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListCh
   }, [reloadData]);
 
   useEffect(() => {
-    const group = groups.find((g) => g.id === selectedGroupId);
-    const ids = normalizeIds(group?.memberNicknameIds || []);
+    const group = groups.find((item) => item.id === selectedGroupId);
+    const ids = normalizeCollectionNicknameIds(group?.memberNicknameIds || []);
     setAssignedIds(ids);
     setSavedAssignedIds(ids);
   }, [groups, selectedGroupId]);
 
   useEffect(() => {
     if (!selectedGroupId) return;
-    setExpandedGroupIds((prev) => (prev.includes(selectedGroupId) ? prev : [selectedGroupId, ...prev]));
+    setExpandedGroupIds((previous) =>
+      previous.includes(selectedGroupId) ? previous : [selectedGroupId, ...previous],
+    );
   }, [selectedGroupId]);
 
   if (!isSuperuser) {
     return (
       <Card className="border-border/60 bg-background/70">
-        <CardHeader><CardTitle className="text-xl">Manage Nickname</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-xl">Manage Nickname</CardTitle>
+        </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">Hanya superuser dibenarkan mengurus admin nickname groups.</p>
+          <p className="text-sm text-muted-foreground">
+            Hanya superuser dibenarkan mengurus admin nickname groups.
+          </p>
         </CardContent>
       </Card>
     );
@@ -216,18 +230,30 @@ function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListCh
   };
 
   const toggleExpandGroup = (groupId: string) => {
-    setExpandedGroupIds((prev) => (prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId]));
+    setExpandedGroupIds((previous) =>
+      previous.includes(groupId)
+        ? previous.filter((id) => id !== groupId)
+        : [...previous, groupId],
+    );
   };
 
   const toggleAssigned = (nicknameId: string, checked: boolean) => {
-    setAssignedIds((prev) => (checked ? normalizeIds([...prev, nicknameId]) : prev.filter((id) => id !== nicknameId)));
+    setAssignedIds((previous) =>
+      checked
+        ? normalizeCollectionNicknameIds([...previous, nicknameId])
+        : previous.filter((id) => id !== nicknameId),
+    );
   };
 
   const selectAll = () => {
     if (!selectedGroup) return;
     const leaderId = selectedGroup.leaderNicknameId || "";
-    const selectable = filteredNicknames.filter((n) => n.isActive && n.id !== leaderId).map((n) => n.id);
-    setAssignedIds((prev) => normalizeIds([...prev, ...selectable]));
+    const selectableIds = filteredNicknames
+      .filter((nickname) => nickname.isActive && nickname.id !== leaderId)
+      .map((nickname) => nickname.id);
+    setAssignedIds((previous) =>
+      normalizeCollectionNicknameIds([...previous, ...selectableIds]),
+    );
   };
 
   const clearAll = () => setAssignedIds([]);
@@ -237,18 +263,31 @@ function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListCh
     setSavingAssignment(true);
     try {
       const leaderId = selectedGroup.leaderNicknameId || "";
-      const nextMembers = normalizeIds(assignedIds.filter((id) => id !== leaderId && nicknameById.has(id)));
-      const res = await updateCollectionAdminGroup(selectedGroup.id, { memberNicknameIds: nextMembers });
-      const updated = res?.group;
+      const nextMembers = normalizeCollectionNicknameIds(
+        assignedIds.filter((id) => id !== leaderId && nicknameById.has(id)),
+      );
+      const response = await updateCollectionAdminGroup(selectedGroup.id, {
+        memberNicknameIds: nextMembers,
+      });
+      const updated = response?.group;
       if (updated) {
-        setGroups((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
-        const saved = normalizeIds(updated.memberNicknameIds || []);
+        setGroups((previous) =>
+          previous.map((group) => (group.id === updated.id ? updated : group)),
+        );
+        const saved = normalizeCollectionNicknameIds(updated.memberNicknameIds || []);
         setAssignedIds(saved);
         setSavedAssignedIds(saved);
       }
-      toast({ title: "Assignment Saved", description: `Assignment untuk ${selectedGroup.leaderNickname} berjaya disimpan.` });
+      toast({
+        title: "Assignment Saved",
+        description: `Assignment untuk ${selectedGroup.leaderNickname} berjaya disimpan.`,
+      });
     } catch (error: unknown) {
-      toast({ title: "Failed to Save Assignment", description: parseApiError(error), variant: "destructive" });
+      toast({
+        title: "Failed to Save Assignment",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
     } finally {
       setSavingAssignment(false);
     }
@@ -258,15 +297,25 @@ function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListCh
     if (!createLeaderId || creatingGroup) return;
     setCreatingGroup(true);
     try {
-      const res = await createCollectionAdminGroup({ leaderNicknameId: createLeaderId, memberNicknameIds: [] });
+      const response = await createCollectionAdminGroup({
+        leaderNicknameId: createLeaderId,
+        memberNicknameIds: [],
+      });
       setCreateGroupOpen(false);
       setCreateLeaderId("");
-      toast({ title: "Admin Group Created", description: "Group admin berjaya ditambah." });
+      toast({
+        title: "Admin Group Created",
+        description: "Group admin berjaya ditambah.",
+      });
       await reloadData();
       onNicknameListChanged?.();
-      if (res?.group?.id) setSelectedGroupId(res.group.id);
+      if (response?.group?.id) setSelectedGroupId(response.group.id);
     } catch (error: unknown) {
-      toast({ title: "Failed to Create Group", description: parseApiError(error), variant: "destructive" });
+      toast({
+        title: "Failed to Create Group",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
     } finally {
       setCreatingGroup(false);
     }
@@ -282,23 +331,34 @@ function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListCh
     if (!selectedGroup || !changeLeaderId || savingLeader) return;
     setSavingLeader(true);
     try {
-      const nextMembers = normalizeIds(assignedIds.filter((id) => id !== changeLeaderId && nicknameById.has(id)));
-      const res = await updateCollectionAdminGroup(selectedGroup.id, {
+      const nextMembers = normalizeCollectionNicknameIds(
+        assignedIds.filter((id) => id !== changeLeaderId && nicknameById.has(id)),
+      );
+      const response = await updateCollectionAdminGroup(selectedGroup.id, {
         leaderNicknameId: changeLeaderId,
         memberNicknameIds: nextMembers,
       });
-      const updated = res?.group;
+      const updated = response?.group;
       if (updated) {
-        setGroups((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
-        const saved = normalizeIds(updated.memberNicknameIds || []);
+        setGroups((previous) =>
+          previous.map((group) => (group.id === updated.id ? updated : group)),
+        );
+        const saved = normalizeCollectionNicknameIds(updated.memberNicknameIds || []);
         setAssignedIds(saved);
         setSavedAssignedIds(saved);
       }
       setChangeLeaderOpen(false);
-      toast({ title: "Leader Updated", description: "Leader group berjaya dikemaskini." });
+      toast({
+        title: "Leader Updated",
+        description: "Leader group berjaya dikemaskini.",
+      });
       onNicknameListChanged?.();
     } catch (error: unknown) {
-      toast({ title: "Failed to Update Leader", description: parseApiError(error), variant: "destructive" });
+      toast({
+        title: "Failed to Update Leader",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
     } finally {
       setSavingLeader(false);
     }
@@ -310,11 +370,18 @@ function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListCh
     try {
       await deleteCollectionAdminGroup(pendingDeleteGroup.id);
       setPendingDeleteGroup(null);
-      toast({ title: "Group Deleted", description: "Admin nickname group berjaya dipadam." });
+      toast({
+        title: "Group Deleted",
+        description: "Admin nickname group berjaya dipadam.",
+      });
       await reloadData();
       onNicknameListChanged?.();
     } catch (error: unknown) {
-      toast({ title: "Failed to Delete Group", description: parseApiError(error), variant: "destructive" });
+      toast({
+        title: "Failed to Delete Group",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
     } finally {
       setDeletingGroup(false);
     }
@@ -323,7 +390,11 @@ function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListCh
   const createNickname = async () => {
     const nickname = newNickname.trim();
     if (nickname.length < 2) {
-      toast({ title: "Validation Error", description: "Nickname mesti sekurang-kurangnya 2 aksara.", variant: "destructive" });
+      toast({
+        title: "Validation Error",
+        description: "Nickname mesti sekurang-kurangnya 2 aksara.",
+        variant: "destructive",
+      });
       return;
     }
     setAddingNickname(true);
@@ -332,11 +403,18 @@ function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListCh
       setNewNickname("");
       setNewRoleScope("both");
       setAddOpen(false);
-      toast({ title: "Nickname Created", description: "Nickname baru berjaya ditambah." });
+      toast({
+        title: "Nickname Created",
+        description: "Nickname baru berjaya ditambah.",
+      });
       await reloadData();
       onNicknameListChanged?.();
     } catch (error: unknown) {
-      toast({ title: "Failed to Create Nickname", description: parseApiError(error), variant: "destructive" });
+      toast({
+        title: "Failed to Create Nickname",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
     } finally {
       setAddingNickname(false);
     }
@@ -346,18 +424,32 @@ function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListCh
     if (!editingNickname || savingEdit) return;
     const nickname = editValue.trim();
     if (nickname.length < 2) {
-      toast({ title: "Validation Error", description: "Nickname mesti sekurang-kurangnya 2 aksara.", variant: "destructive" });
+      toast({
+        title: "Validation Error",
+        description: "Nickname mesti sekurang-kurangnya 2 aksara.",
+        variant: "destructive",
+      });
       return;
     }
     setSavingEdit(true);
     try {
-      await updateCollectionNickname(editingNickname.id, { nickname, roleScope: editRoleScope });
+      await updateCollectionNickname(editingNickname.id, {
+        nickname,
+        roleScope: editRoleScope,
+      });
       setEditingNickname(null);
-      toast({ title: "Nickname Updated", description: "Nickname berjaya dikemaskini." });
+      toast({
+        title: "Nickname Updated",
+        description: "Nickname berjaya dikemaskini.",
+      });
       await reloadData();
       onNicknameListChanged?.();
     } catch (error: unknown) {
-      toast({ title: "Failed to Update Nickname", description: parseApiError(error), variant: "destructive" });
+      toast({
+        title: "Failed to Update Nickname",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
     } finally {
       setSavingEdit(false);
     }
@@ -368,12 +460,19 @@ function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListCh
     setStatusBusyId(item.id);
     try {
       await setCollectionNicknameStatus(item.id, isActive);
-      toast({ title: isActive ? "Nickname Activated" : "Nickname Deactivated", description: item.nickname });
+      toast({
+        title: isActive ? "Nickname Activated" : "Nickname Deactivated",
+        description: item.nickname,
+      });
       await reloadData();
       onNicknameListChanged?.();
       setPendingDeactivate(null);
     } catch (error: unknown) {
-      toast({ title: "Failed to Update Status", description: parseApiError(error), variant: "destructive" });
+      toast({
+        title: "Failed to Update Status",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
     } finally {
       setStatusBusyId(null);
     }
@@ -386,11 +485,18 @@ function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListCh
     try {
       await deleteCollectionNickname(target.id);
       setPendingDeleteNickname(null);
-      toast({ title: "Nickname Updated", description: `${target.nickname} berjaya diproses.` });
+      toast({
+        title: "Nickname Updated",
+        description: `${target.nickname} berjaya diproses.`,
+      });
       await reloadData();
       onNicknameListChanged?.();
     } catch (error: unknown) {
-      toast({ title: "Failed to Delete Nickname", description: parseApiError(error), variant: "destructive" });
+      toast({
+        title: "Failed to Delete Nickname",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
     } finally {
       setDeletingNicknameId(null);
     }
@@ -408,7 +514,11 @@ function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListCh
         description: `${target.nickname} telah direset. Password sementara: 12345678a`,
       });
     } catch (error: unknown) {
-      toast({ title: "Failed to Reset Password", description: parseApiError(error), variant: "destructive" });
+      toast({
+        title: "Failed to Reset Password",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
     } finally {
       setResettingNicknameId(null);
     }
@@ -416,26 +526,48 @@ function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListCh
 
   const confirmUngroup = async () => {
     if (!pendingUngroup || ungrouping) return;
-    const group = groups.find((g) => g.id === pendingUngroup.groupId);
+    const group = groups.find((item) => item.id === pendingUngroup.groupId);
     if (!group) {
       setPendingUngroup(null);
       return;
     }
     setUngrouping(true);
     try {
-      const nextMembers = normalizeIds((group.memberNicknameIds || []).filter((id) => id !== pendingUngroup.nicknameId));
-      const res = await updateCollectionAdminGroup(group.id, { memberNicknameIds: nextMembers });
-      const updated = res?.group;
+      const nextMembers = normalizeCollectionNicknameIds(
+        (group.memberNicknameIds || []).filter(
+          (id) => id !== pendingUngroup.nicknameId,
+        ),
+      );
+      const response = await updateCollectionAdminGroup(group.id, {
+        memberNicknameIds: nextMembers,
+      });
+      const updated = response?.group;
       if (updated) {
-        setGroups((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
+        setGroups((previous) =>
+          previous.map((item) => (item.id === updated.id ? updated : item)),
+        );
       }
       setPendingUngroup(null);
-      toast({ title: "Ungroup Berjaya", description: "Relationship grouping dibuang." });
+      toast({
+        title: "Ungroup Berjaya",
+        description: "Relationship grouping dibuang.",
+      });
     } catch (error: unknown) {
-      toast({ title: "Failed to Ungroup", description: parseApiError(error), variant: "destructive" });
+      toast({
+        title: "Failed to Ungroup",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
     } finally {
       setUngrouping(false);
     }
+  };
+
+  const handleConfirmedGroupSwitch = () => {
+    const nextGroupId = pendingGroupSwitchId;
+    setPendingGroupSwitchId(null);
+    setConfirmSwitchOpen(false);
+    if (nextGroupId) setSelectedGroupId(nextGroupId);
   };
 
   return (
@@ -444,327 +576,130 @@ function ManageCollectionNicknamesPage({ role, currentNickname, onNicknameListCh
         <CardHeader className="pb-4">
           <CardTitle className="text-xl">Manage Nickname</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Total nickname: {nicknames.length} · Active: {activeAvailable}{currentNickname ? ` · Staff semasa: ${currentNickname}` : ""}
+            Total nickname: {nicknames.length} | Active: {activeAvailable}
+            {currentNickname ? ` | Staff semasa: ${currentNickname}` : ""}
           </p>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-          <div className="rounded-md border border-border/60 bg-background/40 p-3">
-            <div className="space-y-2">
-              <Label>Admin Nickname Groups</Label>
-              <Input value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)} placeholder="Cari leader/member..." />
-            </div>
-            <div className="mt-3 max-h-[58vh] overflow-y-auto space-y-2 pr-1">
-              {loadingGroups ? (
-                <p className="text-sm text-muted-foreground">Loading groups...</p>
-              ) : filteredGroups.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Tiada admin group ditemui.</p>
-              ) : (
-                filteredGroups.map((group) => {
-                  const expanded = expandedGroupIds.includes(group.id);
-                  const members = (group.memberNicknames || []).slice().sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-                  return (
-                    <div key={group.id} className="rounded-md border border-border/60 bg-background/50">
-                      <div className="flex items-center justify-between px-2 py-2">
-                        <button type="button" className="inline-flex items-center gap-2 text-left" onClick={() => toggleExpandGroup(group.id)}>
-                          <ChevronRight className={`h-4 w-4 transition ${expanded ? "rotate-90" : ""}`} />
-                          <span className="text-sm font-medium">{group.leaderNickname}</span>
-                        </button>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline">{members.length}</Badge>
-                          <Button size="sm" variant={selectedGroupId === group.id ? "default" : "outline"} onClick={() => trySelectGroup(group.id)}>Open</Button>
-                        </div>
-                      </div>
-                      {expanded && (
-                        <div className="border-t border-border/60 px-3 py-2 space-y-2">
-                          {members.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">Tiada member dalam group ini.</p>
-                          ) : (
-                            members.map((memberNickname) => {
-                              const nicknameId = nicknameIdByName.get(memberNickname.toLowerCase()) || "";
-                              return (
-                                <div key={`${group.id}-${memberNickname}`} className="flex items-center justify-between gap-2 text-sm">
-                                  <span className="truncate">- {memberNickname}</span>
-                                  <Button size="sm" variant="outline" onClick={() => nicknameId && setPendingUngroup({ groupId: group.id, nicknameId })} disabled={!nicknameId}>
-                                    Ungroup
-                                  </Button>
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
+          <GroupListPanel
+            loadingGroups={loadingGroups}
+            filteredGroups={filteredGroups}
+            expandedGroupIds={expandedGroupIds}
+            selectedGroupId={selectedGroupId}
+            groupSearch={groupSearch}
+            nicknameIdByName={nicknameIdByName}
+            onGroupSearchChange={setGroupSearch}
+            onToggleExpandGroup={toggleExpandGroup}
+            onSelectGroup={trySelectGroup}
+            onUngroup={(groupId, nicknameId) =>
+              setPendingUngroup({ groupId, nicknameId })
+            }
+          />
 
-          <div className="rounded-md border border-border/60 bg-background/40 p-3">
-            <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-              <div className="space-y-2">
-                <p className="text-sm font-semibold">Nickname List / Assignment</p>
-                <p className="text-xs text-muted-foreground">{selectedGroup ? `Group dipilih: ${selectedGroup.leaderNickname}` : "Pilih admin group dahulu."}</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">Assigned: {assignedActive}</Badge>
-                  <Badge variant="secondary">Active Available: {activeAvailable}</Badge>
-                  {unsaved && <Badge variant="destructive">Unsaved changes</Badge>}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" onClick={() => setCreateGroupOpen(true)}>Tambah Group</Button>
-                <Button variant="outline" onClick={openChangeLeader} disabled={!selectedGroup}>Tukar Leader</Button>
-                <Button variant="destructive" onClick={() => selectedGroup && setPendingDeleteGroup(selectedGroup)} disabled={!selectedGroup}>Padam Group</Button>
-                <Button variant="outline" onClick={() => setAddOpen(true)}>Tambah Nickname</Button>
-              </div>
-            </div>
-
-            <div className="mb-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
-              <Input value={nicknameSearch} onChange={(e) => setNicknameSearch(e.target.value)} placeholder="Cari nickname..." />
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" onClick={selectAll} disabled={!selectedGroupId}>Select All</Button>
-                <Button variant="outline" onClick={clearAll} disabled={!selectedGroupId}>Clear All</Button>
-                <Button onClick={() => void saveAssignment()} disabled={!selectedGroupId || savingAssignment || !unsaved}>
-                  {savingAssignment ? "Saving..." : "Save Assignment"}
-                </Button>
-              </div>
-            </div>
-
-            <div className="max-h-[58vh] overflow-auto pr-1">
-              {loadingNicknames ? (
-                <div className="rounded-md border border-border/60 p-6 text-center text-sm text-muted-foreground">Loading nickname data...</div>
-              ) : (
-                <Table className="text-sm">
-                  <TableHeader className="bg-background">
-                    <TableRow>
-                      <TableHead className="w-[86px]">Assign</TableHead>
-                      <TableHead>Nickname</TableHead>
-                      <TableHead>Role Scope</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredNicknames.map((item) => {
-                      const isLeader = selectedGroup?.leaderNicknameId === item.id;
-                      const checked = isLeader || assignedIds.includes(item.id);
-                      return (
-                        <TableRow key={item.id}>
-                          <TableCell>{isLeader ? <Badge variant="outline">Leader</Badge> : <Checkbox checked={checked} onCheckedChange={(v) => toggleAssigned(item.id, Boolean(v))} disabled={!item.isActive || !selectedGroupId} />}</TableCell>
-                          <TableCell className="font-medium">{item.nickname}</TableCell>
-                          <TableCell><Badge variant="outline">{scopeLabel(item.roleScope)}</Badge></TableCell>
-                          <TableCell><Badge variant={item.isActive ? "default" : "secondary"}>{item.isActive ? "Active" : "Inactive"}</Badge></TableCell>
-                          <TableCell className="text-right">
-                            <div className="inline-flex items-center gap-2">
-                              <Button size="sm" variant="outline" onClick={() => { setEditingNickname(item); setEditValue(item.nickname); setEditRoleScope(item.roleScope || "both"); }}>Edit</Button>
-                              {item.isActive ? (
-                                <Button size="sm" variant="outline" onClick={() => setPendingDeactivate(item)} disabled={statusBusyId === item.id}>Nyahaktif</Button>
-                              ) : (
-                                <Button size="sm" variant="outline" onClick={() => void updateStatus(item, true)} disabled={statusBusyId === item.id}>Aktifkan</Button>
-                              )}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setPendingResetPassword(item)}
-                                disabled={resettingNicknameId === item.id}
-                              >
-                                Reset Password
-                              </Button>
-                              <Button size="sm" variant="destructive" onClick={() => setPendingDeleteNickname(item)} disabled={deletingNicknameId === item.id}>Delete</Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-          </div>
+          <NicknameAssignmentPanel
+            selectedGroup={selectedGroup}
+            selectedGroupId={selectedGroupId}
+            assignedActive={assignedActive}
+            activeAvailable={activeAvailable}
+            unsaved={unsaved}
+            nicknameSearch={nicknameSearch}
+            loadingNicknames={loadingNicknames}
+            filteredNicknames={filteredNicknames}
+            assignedIds={assignedIds}
+            savingAssignment={savingAssignment}
+            statusBusyId={statusBusyId}
+            resettingNicknameId={resettingNicknameId}
+            deletingNicknameId={deletingNicknameId}
+            onNicknameSearchChange={setNicknameSearch}
+            onOpenCreateGroup={() => setCreateGroupOpen(true)}
+            onOpenChangeLeader={openChangeLeader}
+            onDeleteSelectedGroup={() => selectedGroup && setPendingDeleteGroup(selectedGroup)}
+            onOpenAddNickname={() => setAddOpen(true)}
+            onSelectAll={selectAll}
+            onClearAll={clearAll}
+            onSaveAssignment={() => void saveAssignment()}
+            onToggleAssigned={toggleAssigned}
+            onEditNickname={(item) => {
+              setEditingNickname(item);
+              setEditValue(item.nickname);
+              setEditRoleScope(item.roleScope || "both");
+            }}
+            onDeactivateNickname={setPendingDeactivate}
+            onActivateNickname={(item) => void updateStatus(item, true)}
+            onResetNicknamePassword={setPendingResetPassword}
+            onDeleteNickname={setPendingDeleteNickname}
+          />
         </CardContent>
       </Card>
 
-      <Dialog open={createGroupOpen} onOpenChange={setCreateGroupOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Tambah Admin Group</DialogTitle>
-            <DialogDescription>Pilih leader nickname untuk group admin baharu.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label>Leader Nickname</Label>
-            <Select value={createLeaderId} onValueChange={setCreateLeaderId}>
-              <SelectTrigger><SelectValue placeholder="Pilih leader nickname" /></SelectTrigger>
-              <SelectContent>
-                {leaderOptions.map((option) => <SelectItem key={option.id} value={option.id}>{option.nickname}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateGroupOpen(false)} disabled={creatingGroup}>Batal</Button>
-            <Button onClick={() => void createGroup()} disabled={creatingGroup || !createLeaderId}>{creatingGroup ? "Saving..." : "Simpan"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={changeLeaderOpen} onOpenChange={setChangeLeaderOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Tukar Leader Group</DialogTitle>
-            <DialogDescription>Leader nickname mesti unik dan bertaraf admin.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label>Leader Nickname</Label>
-            <Select value={changeLeaderId} onValueChange={setChangeLeaderId}>
-              <SelectTrigger><SelectValue placeholder="Pilih leader nickname" /></SelectTrigger>
-              <SelectContent>
-                {leaderOptions.map((option) => <SelectItem key={option.id} value={option.id}>{option.nickname}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setChangeLeaderOpen(false)} disabled={savingLeader}>Batal</Button>
-            <Button onClick={() => void saveLeader()} disabled={savingLeader || !changeLeaderId}>{savingLeader ? "Saving..." : "Simpan"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Tambah Nickname</DialogTitle>
-            <DialogDescription>Tambah nickname rasmi baharu dan tetapkan role scope.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label>Nickname</Label>
-            <Input value={newNickname} onChange={(e) => setNewNickname(e.target.value)} placeholder="Contoh: SW.HAIZAL_1131" maxLength={64} />
-          </div>
-          <div className="space-y-2">
-            <Label>Role Scope</Label>
-            <Select value={newRoleScope} onValueChange={(value) => setNewRoleScope(value as "admin" | "user" | "both")}>
-              <SelectTrigger><SelectValue placeholder="Pilih role scope" /></SelectTrigger>
-              <SelectContent>
-                {ROLE_SCOPE_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={addingNickname}>Batal</Button>
-            <Button onClick={() => void createNickname()} disabled={addingNickname}>{addingNickname ? "Saving..." : "Simpan"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={Boolean(editingNickname)} onOpenChange={(open) => !open && setEditingNickname(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Nickname</DialogTitle>
-            <DialogDescription>Kemaskini nama nickname dan role scope akses nickname.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label>Nickname</Label>
-            <Input value={editValue} onChange={(e) => setEditValue(e.target.value)} maxLength={64} />
-          </div>
-          <div className="space-y-2">
-            <Label>Role Scope</Label>
-            <Select value={editRoleScope} onValueChange={(value) => setEditRoleScope(value as "admin" | "user" | "both")}>
-              <SelectTrigger><SelectValue placeholder="Pilih role scope" /></SelectTrigger>
-              <SelectContent>
-                {ROLE_SCOPE_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingNickname(null)} disabled={savingEdit}>Batal</Button>
-            <Button onClick={() => void saveEditNickname()} disabled={savingEdit}>{savingEdit ? "Saving..." : "Simpan"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={Boolean(pendingDeactivate)} onOpenChange={(open) => !open && setPendingDeactivate(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Nyahaktif Nickname</DialogTitle>
-            <DialogDescription>Adakah anda pasti mahu nyahaktif nickname ini?</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingDeactivate(null)}>Batal</Button>
-            <Button variant="destructive" onClick={() => pendingDeactivate && void updateStatus(pendingDeactivate, false)} disabled={!pendingDeactivate || statusBusyId === pendingDeactivate.id}>
-              {pendingDeactivate && statusBusyId === pendingDeactivate.id ? "Processing..." : "Nyahaktif"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog open={Boolean(pendingDeleteGroup)} onOpenChange={(open) => !open && setPendingDeleteGroup(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Padam Admin Group</AlertDialogTitle>
-            <AlertDialogDescription>Adakah anda pasti mahu padam group ini?</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletingGroup}>Batal</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void confirmDeleteGroup()} disabled={deletingGroup}>{deletingGroup ? "Processing..." : "Padam"}</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={Boolean(pendingDeleteNickname)} onOpenChange={(open) => !open && setPendingDeleteNickname(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Padam Nickname</AlertDialogTitle>
-            <AlertDialogDescription>Jika nickname sedang digunakan, sistem akan nyahaktifkan secara selamat.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={Boolean(deletingNicknameId)}>Batal</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void deleteNickname()} disabled={!pendingDeleteNickname || Boolean(deletingNicknameId)}>
-              {deletingNicknameId ? "Processing..." : "Padam"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={Boolean(pendingResetPassword)} onOpenChange={(open) => !open && setPendingResetPassword(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reset Password Nickname</AlertDialogTitle>
-            <AlertDialogDescription>Adakah anda pasti mahu reset password nickname ini?</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={Boolean(resettingNicknameId)}>Batal</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void confirmResetPassword()} disabled={!pendingResetPassword || Boolean(resettingNicknameId)}>
-              {resettingNicknameId ? "Processing..." : "Reset Password"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={Boolean(pendingUngroup)} onOpenChange={(open) => !open && setPendingUngroup(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Ungroup Nickname</AlertDialogTitle>
-            <AlertDialogDescription>Adakah anda pasti mahu buang nickname ini daripada grouping admin ini?</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Batal</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void confirmUngroup()} disabled={ungrouping}>{ungrouping ? "Processing..." : "Buang"}</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={confirmSwitchOpen} onOpenChange={(open) => !open && setConfirmSwitchOpen(false)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Perubahan Belum Disimpan</AlertDialogTitle>
-            <AlertDialogDescription>Perubahan belum disimpan. Adakah anda mahu teruskan tanpa simpan?</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Batal</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { const next = pendingGroupSwitchId; setPendingGroupSwitchId(null); setConfirmSwitchOpen(false); if (next) setSelectedGroupId(next); }}>
-              Teruskan
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <CollectionNicknameDialogs
+        leaderOptions={leaderOptions}
+        createGroupOpen={createGroupOpen}
+        createLeaderId={createLeaderId}
+        creatingGroup={creatingGroup}
+        changeLeaderOpen={changeLeaderOpen}
+        changeLeaderId={changeLeaderId}
+        savingLeader={savingLeader}
+        addOpen={addOpen}
+        newNickname={newNickname}
+        newRoleScope={newRoleScope}
+        addingNickname={addingNickname}
+        editingNickname={editingNickname}
+        editValue={editValue}
+        editRoleScope={editRoleScope}
+        savingEdit={savingEdit}
+        pendingDeactivate={pendingDeactivate}
+        statusBusyId={statusBusyId}
+        pendingDeleteGroup={pendingDeleteGroup}
+        deletingGroup={deletingGroup}
+        pendingDeleteNickname={pendingDeleteNickname}
+        deletingNicknameId={deletingNicknameId}
+        pendingResetPassword={pendingResetPassword}
+        resettingNicknameId={resettingNicknameId}
+        pendingUngroup={pendingUngroup}
+        ungrouping={ungrouping}
+        confirmSwitchOpen={confirmSwitchOpen}
+        onCreateGroupOpenChange={setCreateGroupOpen}
+        onCreateLeaderIdChange={setCreateLeaderId}
+        onCreateGroup={() => void createGroup()}
+        onChangeLeaderOpenChange={setChangeLeaderOpen}
+        onChangeLeaderIdChange={setChangeLeaderId}
+        onSaveLeader={() => void saveLeader()}
+        onAddOpenChange={setAddOpen}
+        onNewNicknameChange={setNewNickname}
+        onNewRoleScopeChange={setNewRoleScope}
+        onCreateNickname={() => void createNickname()}
+        onEditingNicknameOpenChange={(open) => {
+          if (!open) setEditingNickname(null);
+        }}
+        onEditValueChange={setEditValue}
+        onEditRoleScopeChange={setEditRoleScope}
+        onSaveEditNickname={() => void saveEditNickname()}
+        onPendingDeactivateOpenChange={(open) => {
+          if (!open) setPendingDeactivate(null);
+        }}
+        onConfirmDeactivate={() => pendingDeactivate && void updateStatus(pendingDeactivate, false)}
+        onPendingDeleteGroupOpenChange={(open) => {
+          if (!open) setPendingDeleteGroup(null);
+        }}
+        onConfirmDeleteGroup={() => void confirmDeleteGroup()}
+        onPendingDeleteNicknameOpenChange={(open) => {
+          if (!open) setPendingDeleteNickname(null);
+        }}
+        onConfirmDeleteNickname={() => void deleteNickname()}
+        onPendingResetPasswordOpenChange={(open) => {
+          if (!open) setPendingResetPassword(null);
+        }}
+        onConfirmResetPassword={() => void confirmResetPassword()}
+        onPendingUngroupOpenChange={(open) => {
+          if (!open) setPendingUngroup(null);
+        }}
+        onConfirmUngroup={() => void confirmUngroup()}
+        onConfirmSwitchOpenChange={(open) => {
+          if (!open) setConfirmSwitchOpen(false);
+        }}
+        onConfirmSwitch={handleConfirmedGroupSwitch}
+      />
     </>
   );
 }
