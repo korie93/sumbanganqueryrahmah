@@ -265,10 +265,18 @@ export class ActivityRepository {
       id: row.id,
       username: row.username,
       passwordHash: row.password_hash,
+      fullName: row.full_name ?? null,
+      email: row.email ?? null,
       role: row.role,
+      status: row.status ?? "active",
+      mustChangePassword: Boolean(row.must_change_password ?? false),
+      passwordResetBySuperuser: Boolean(row.password_reset_by_superuser ?? false),
+      createdBy: row.created_by ?? null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       passwordChangedAt: row.password_changed_at,
+      activatedAt: row.activated_at ?? null,
+      lastLoginAt: row.last_login_at ?? null,
       isBanned: row.is_banned,
       banInfo: row.banLogoutTime
         ? {

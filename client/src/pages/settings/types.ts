@@ -31,13 +31,56 @@ export type SettingCategory = {
 export type CurrentUser = {
   id: string;
   username: string;
+  fullName?: string | null;
+  email?: string | null;
   role: string;
+  status: string;
+  mustChangePassword: boolean;
+  passwordResetBySuperuser?: boolean;
+  isBanned?: boolean | null;
 };
 
 export type ManagedUser = {
   id: string;
   username: string;
+  fullName: string | null;
+  email: string | null;
   role: string;
+  status: string;
+  mustChangePassword: boolean;
+  passwordResetBySuperuser: boolean;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  activatedAt: string | null;
+  lastLoginAt: string | null;
+  passwordChangedAt: string | null;
+  isBanned: boolean | null;
+};
+
+export type PendingPasswordResetRequest = {
+  id: string;
+  userId: string;
+  username: string;
+  fullName: string | null;
+  email: string | null;
+  role: string;
+  status: string;
+  isBanned: boolean | null;
+  requestedByUser: string | null;
+  approvedBy: string | null;
+  resetType: string;
+  createdAt: string;
+  expiresAt: string | null;
+  usedAt: string | null;
+};
+
+export type DevMailOutboxPreview = {
+  createdAt: string;
+  id: string;
+  previewUrl: string;
+  subject: string;
+  to: string;
 };
 
 export type NormalizedSettingsError = {

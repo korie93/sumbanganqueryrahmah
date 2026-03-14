@@ -8,11 +8,41 @@ export const users = pgTable("users", {
   id: text("id").primaryKey(),
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
+  fullName: text("full_name"),
+  email: text("email"),
   role: text("role").notNull().default("user"),
+  status: text("status").notNull().default("active"),
+  mustChangePassword: boolean("must_change_password").default(false).notNull(),
+  passwordResetBySuperuser: boolean("password_reset_by_superuser").default(false).notNull(),
+  createdBy: text("created_by"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   passwordChangedAt: timestamp("password_changed_at"),
+  activatedAt: timestamp("activated_at"),
+  lastLoginAt: timestamp("last_login_at"),
   isBanned: boolean("is_banned").default(false),
+});
+
+export const accountActivationTokens = pgTable("account_activation_tokens", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const passwordResetRequests = pgTable("password_reset_requests", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  requestedByUser: text("requested_by_user"),
+  approvedBy: text("approved_by"),
+  resetType: text("reset_type").notNull().default("email_link"),
+  tokenHash: text("token_hash"),
+  expiresAt: timestamp("expires_at"),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const imports = pgTable("imports", {
@@ -68,6 +98,8 @@ export const backups = pgTable("backups", {
 export const insertUserSchema = z.object({
   username: z.string().min(1, "Username is required"),
   password: z.string().min(1, "Password is required"),
+  fullName: z.string().optional(),
+  email: z.string().email().optional(),
   role: z.string().optional(),
 });
 
@@ -136,3 +168,5 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertBackup = z.infer<typeof insertBackupSchema>;
 export type Backup = typeof backups.$inferSelect;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type AccountActivationToken = typeof accountActivationTokens.$inferSelect;
+export type PasswordResetRequest = typeof passwordResetRequests.$inferSelect;

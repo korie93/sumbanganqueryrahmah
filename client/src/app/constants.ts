@@ -16,6 +16,7 @@ export const LOCAL_STORAGE_KEYS_TO_CLEAR = [
   "user",
   "username",
   "role",
+  "forcePasswordChange",
   "activityId",
   "activeTab",
   "lastPage",

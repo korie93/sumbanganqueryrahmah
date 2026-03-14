@@ -1,7 +1,15 @@
 import { Suspense } from "react";
 import { AppPageRenderer } from "@/app/AppPageRenderer";
 import { AppProviders } from "@/app/AppProviders";
-import { BannedPage, LoginPage, MaintenanceRoutePage } from "@/app/lazy-pages";
+import {
+  ActivateAccountPage,
+  BannedPage,
+  ChangePasswordPage,
+  ForgotPasswordPage,
+  LoginPage,
+  MaintenanceRoutePage,
+  ResetPasswordPage,
+} from "@/app/lazy-pages";
 import { PageSpinner } from "@/app/PageSpinner";
 import { useAppShellState } from "@/app/useAppShellState";
 import AutoLogout from "@/components/AutoLogout";
@@ -49,10 +57,53 @@ function AppContent() {
       );
     }
 
+    if (currentPage === "forgot-password") {
+      return (
+        <Suspense fallback={<PageSpinner fullscreen />}>
+          <ForgotPasswordPage />
+        </Suspense>
+      );
+    }
+
+    if (currentPage === "activate-account") {
+      return (
+        <Suspense fallback={<PageSpinner fullscreen />}>
+          <ActivateAccountPage />
+        </Suspense>
+      );
+    }
+
+    if (currentPage === "reset-password") {
+      return (
+        <Suspense fallback={<PageSpinner fullscreen />}>
+          <ResetPasswordPage />
+        </Suspense>
+      );
+    }
+
     return (
       <Suspense fallback={<PageSpinner fullscreen />}>
         <LoginPage onLoginSuccess={handleLoginSuccess} />
       </Suspense>
+    );
+  }
+
+  if (user.mustChangePassword) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AutoLogout
+          onLogout={handleLogout}
+          timeoutMinutes={runtimeConfig.sessionTimeoutMinutes}
+          heartbeatIntervalMinutes={runtimeConfig.heartbeatIntervalMinutes}
+          username={user.username}
+        />
+        <Suspense fallback={<PageSpinner fullscreen />}>
+          <ChangePasswordPage
+            forced
+            username={user.username}
+          />
+        </Suspense>
+      </div>
     );
   }
 

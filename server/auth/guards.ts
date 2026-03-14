@@ -2,6 +2,10 @@ import type { NextFunction, Request, RequestHandler, Response } from "express";
 import jwt from "jsonwebtoken";
 import type { IStorage } from "../storage-postgres";
 import { getSessionSecret } from "../config/security";
+import {
+  canUserBypassForcedPasswordChange,
+  getAccountAccessBlockReason,
+} from "./account-lifecycle";
 import { logger } from "../lib/logger";
 
 export interface AuthenticatedUser {
@@ -9,6 +13,10 @@ export interface AuthenticatedUser {
   username: string;
   role: string;
   activityId: string;
+  status?: string;
+  mustChangePassword?: boolean;
+  passwordResetBySuperuser?: boolean;
+  isBanned?: boolean | null;
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -16,11 +24,31 @@ export interface AuthenticatedRequest extends Request {
 }
 
 type CreateAuthGuardsOptions = {
-  storage: Pick<IStorage, "getActivityById" | "isVisitorBanned" | "updateActivity" | "getRoleTabVisibility">;
+  storage: Pick<
+    IStorage,
+    | "getActivityById"
+    | "getUser"
+    | "getUserByUsername"
+    | "isVisitorBanned"
+    | "updateActivity"
+    | "getRoleTabVisibility"
+  >;
   secret?: string;
 };
 
 const TAB_VISIBILITY_CACHE_TTL_MS = 5_000;
+const FORCED_PASSWORD_CHANGE_ALLOWLIST = new Set([
+  "GET:/api/auth/me",
+  "GET:/api/me",
+  "POST:/api/auth/change-password",
+  "PATCH:/api/me/credentials",
+  "POST:/api/activity/logout",
+  "POST:/api/activity/heartbeat",
+]);
+
+function canAccessDuringForcedPasswordChange(method: string, path: string) {
+  return FORCED_PASSWORD_CHANGE_ALLOWLIST.has(`${method.toUpperCase()}:${path}`);
+}
 
 export function createAuthGuards(options: CreateAuthGuardsOptions) {
   const storage = options.storage;
@@ -75,16 +103,63 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         });
       }
 
+      const user = activity.userId
+        ? await storage.getUser(activity.userId)
+        : await storage.getUserByUsername(activity.username || decoded.username);
+
+      if (!user) {
+        await storage.updateActivity(decoded.activityId, {
+          isActive: false,
+          logoutTime: new Date(),
+          logoutReason: "USER_NOT_FOUND",
+        });
+        return res.status(401).json({
+          message: "Session expired. Please login again.",
+          forceLogout: true,
+        });
+      }
+
+      const blockReason = getAccountAccessBlockReason(user);
+      if (blockReason) {
+        await storage.updateActivity(decoded.activityId, {
+          isActive: false,
+          logoutTime: new Date(),
+          logoutReason: blockReason.toUpperCase(),
+        });
+        return res.status(blockReason === "banned" ? 403 : 401).json({
+          message: blockReason === "banned"
+            ? "Account is banned"
+            : "Session expired. Please login again.",
+          banned: blockReason === "banned",
+          forceLogout: true,
+          code: blockReason === "banned" ? "ACCOUNT_BANNED" : "ACCOUNT_UNAVAILABLE",
+        });
+      }
+
+      const forcePasswordChange =
+        user.mustChangePassword === true && !canUserBypassForcedPasswordChange(user.role);
+      if (forcePasswordChange && !canAccessDuringForcedPasswordChange(req.method, req.path)) {
+        return res.status(403).json({
+          message: "Password change required before accessing the application.",
+          code: "PASSWORD_CHANGE_REQUIRED",
+          forcePasswordChange: true,
+        });
+      }
+
       await storage.updateActivity(decoded.activityId, {
         lastActivityTime: new Date(),
         isActive: true,
       });
 
       req.user = {
-        userId: activity.userId || decoded.userId,
-        username: activity.username || decoded.username,
-        role: activity.role || decoded.role,
+        userId: user.id || activity.userId || decoded.userId,
+        username: user.username || activity.username || decoded.username,
+        role: user.role || activity.role || decoded.role,
         activityId: decoded.activityId,
+        status: user.status,
+        mustChangePassword: user.mustChangePassword,
+        passwordResetBySuperuser: user.passwordResetBySuperuser,
+        isBanned: user.isBanned,
       };
 
       return next();

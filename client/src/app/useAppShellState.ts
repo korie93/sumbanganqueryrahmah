@@ -10,6 +10,7 @@ import {
 import { buildPathForPage, parseMonitorSectionFromPageInput, replaceHistory, resolveRouteFromLocation, type ResolvedRoute } from "@/app/routing";
 import type { AppRuntimeConfig, MonitorSection, TabVisibility, User } from "@/app/types";
 import { activityLogout, getAppConfig, getImports, getMaintenanceStatus, getMe, getTabVisibility } from "@/lib/api";
+import { persistAuthenticatedUser } from "@/lib/auth-session";
 import { queryClient } from "@/lib/queryClient";
 
 type ProfileUpdatedDetail = {
@@ -108,14 +109,23 @@ export function useAppShellState() {
     const token = localStorage.getItem("token");
     const savedUser = localStorage.getItem("user");
     const savedPage = localStorage.getItem("activeTab") || localStorage.getItem("lastPage");
+    const forcePasswordChange = localStorage.getItem("forcePasswordChange") === "1";
 
     if (token && savedUser) {
       try {
         const parsedUser = JSON.parse(savedUser) as User;
-        setUser(parsedUser);
+        const restoredUser: User = {
+          ...parsedUser,
+          mustChangePassword:
+            forcePasswordChange || Boolean(parsedUser.mustChangePassword),
+        };
+        setUser(restoredUser);
 
         if (!applyResolvedRoute(resolvedRoute)) {
-          if (parsedUser.role === "user") {
+          if (restoredUser.mustChangePassword) {
+            setCurrentPage("change-password");
+            replaceHistory("/change-password");
+          } else if (restoredUser.role === "user") {
             setCurrentPage(savedPage === "settings" ? "settings" : "general-search");
           } else if (savedPage) {
             const savedMonitorSection = parseMonitorSectionFromPageInput(savedPage);
@@ -158,9 +168,24 @@ export function useAppShellState() {
           throw new Error("Invalid session");
         }
 
-        localStorage.setItem("username", username);
-        localStorage.setItem("role", role);
-        localStorage.setItem("user", JSON.stringify({ username, role }));
+        const nextUser: User = {
+          id: me.id,
+          username,
+          fullName: me.fullName ?? null,
+          email: me.email ?? null,
+          role,
+          status: me.status,
+          mustChangePassword: Boolean(me.mustChangePassword),
+          passwordResetBySuperuser: Boolean(me.passwordResetBySuperuser),
+          isBanned: me.isBanned ?? null,
+        };
+
+        persistAuthenticatedUser(nextUser);
+        setUser(nextUser);
+        if (nextUser.mustChangePassword) {
+          setCurrentPage("change-password");
+          replaceHistory("/change-password");
+        }
       } catch {
         if (!cancelled) {
           applyLoggedOutClientState(true);
@@ -181,7 +206,37 @@ export function useAppShellState() {
       replaceHistory("/");
       setCurrentPage("home");
     }
+    if (pathname === "/change-password") {
+      replaceHistory("/");
+      setCurrentPage("home");
+    }
   }, [user]);
+
+  useEffect(() => {
+    if (!user || user.mustChangePassword || currentPage !== "change-password") return;
+
+    const nextPage = getDefaultPageForRole(user.role, tabVisibility, tabVisibilityLoaded);
+    setCurrentPage(nextPage);
+    replaceHistory(buildPathForPage(nextPage));
+  }, [currentPage, tabVisibility, tabVisibilityLoaded, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const pathname = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "/";
+    if (
+      pathname !== "/forgot-password"
+      && pathname !== "/activate-account"
+      && pathname !== "/reset-password"
+    ) {
+      return;
+    }
+
+    const nextPage = user.mustChangePassword
+      ? "change-password"
+      : getDefaultPageForRole(user.role, tabVisibility, tabVisibilityLoaded);
+    setCurrentPage(nextPage);
+    replaceHistory(buildPathForPage(nextPage));
+  }, [tabVisibility, tabVisibilityLoaded, user]);
 
   useEffect(() => {
     const onProfileUpdated = (event: Event) => {
@@ -192,15 +247,43 @@ export function useAppShellState() {
 
       setUser((previous) => {
         if (!previous) {
-          return { username, role };
+          const nextUser = { username, role };
+          persistAuthenticatedUser(nextUser);
+          return nextUser;
         }
-        return { ...previous, username, role };
+        const nextUser = { ...previous, username, role };
+        persistAuthenticatedUser(nextUser);
+        return nextUser;
       });
     };
 
     window.addEventListener("profile-updated", onProfileUpdated as EventListener);
     return () => window.removeEventListener("profile-updated", onProfileUpdated as EventListener);
   }, []);
+
+  useEffect(() => {
+    const onForcePasswordChange = () => {
+      setUser((previous) => {
+        if (!previous) return previous;
+        const nextUser = { ...previous, mustChangePassword: true };
+        persistAuthenticatedUser(nextUser);
+        return nextUser;
+      });
+      setCurrentPage("change-password");
+      replaceHistory("/change-password");
+    };
+
+    const onForceLogout = () => {
+      applyLoggedOutClientState(true);
+    };
+
+    window.addEventListener("force-password-change", onForcePasswordChange);
+    window.addEventListener("force-logout", onForceLogout);
+    return () => {
+      window.removeEventListener("force-password-change", onForcePasswordChange);
+      window.removeEventListener("force-logout", onForceLogout);
+    };
+  }, [applyLoggedOutClientState]);
 
   useEffect(() => {
     if (!user) {
@@ -403,6 +486,11 @@ export function useAppShellState() {
 
   const handleLoginSuccess = useCallback((loggedInUser: User) => {
     setUser(loggedInUser);
+    if (loggedInUser.mustChangePassword) {
+      setCurrentPage("change-password");
+      replaceHistory("/change-password");
+      return;
+    }
     setCurrentPage(loggedInUser.role === "user" ? "general-search" : "home");
   }, []);
 
@@ -418,6 +506,14 @@ export function useAppShellState() {
   const handleNavigate = useCallback((page: string, importId?: string) => {
     const monitorSectionTarget = parseMonitorSectionFromPageInput(page);
     const requestedPage = monitorSectionTarget ? "monitor" : page;
+
+    if (user?.mustChangePassword && requestedPage !== "change-password") {
+      setCurrentPage("change-password");
+      localStorage.setItem("activeTab", "change-password");
+      localStorage.setItem("lastPage", "change-password");
+      replaceHistory("/change-password");
+      return;
+    }
 
     if (featureLockdown && requestedPage !== "general-search") {
       setCurrentPage("general-search");

@@ -1,15 +1,19 @@
 import type { Response } from "express";
 
 export const CREDENTIAL_USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,32}$/;
+export const CREDENTIAL_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const CREDENTIAL_PASSWORD_MIN_LENGTH = 8;
 export const CREDENTIAL_BCRYPT_COST = 12;
 
 export type CredentialErrorCode =
   | "USERNAME_TAKEN"
   | "INVALID_PASSWORD"
+  | "INVALID_EMAIL"
   | "INVALID_CURRENT_PASSWORD"
   | "PERMISSION_DENIED"
-  | "USER_NOT_FOUND";
+  | "USER_NOT_FOUND"
+  | "ACCOUNT_UNAVAILABLE"
+  | "PASSWORD_CHANGE_REQUIRED";
 
 export type CredentialAuditPayload = {
   actor_user_id: string;
@@ -18,6 +22,10 @@ export type CredentialAuditPayload = {
 };
 
 export function normalizeUsernameInput(raw: unknown): string {
+  return String(raw ?? "").trim().toLowerCase();
+}
+
+export function normalizeEmailInput(raw: unknown): string {
   return String(raw ?? "").trim().toLowerCase();
 }
 
