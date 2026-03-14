@@ -12771,6 +12771,17 @@ var init_collection_record_service = __esm({
     init_collection_service_support();
     COLLECTION_PURGE_RETENTION_MONTHS = 6;
     CollectionRecordService = class extends CollectionServiceSupport {
+      async logRejectedPurgeAttempt(username, details) {
+        try {
+          await this.storage.createAuditLog({
+            action: "COLLECTION_RECORDS_PURGE_REJECTED",
+            performedBy: username,
+            targetResource: "collection-records",
+            details
+          });
+        } catch {
+        }
+      }
       async createRecord(userInput, bodyRaw) {
         const user = this.requireUser(userInput);
         const uploadedReceipts = [];
@@ -13047,6 +13058,10 @@ var init_collection_record_service = __esm({
         }
         const isValidPassword = await verifyPassword(currentPassword, actor.passwordHash);
         if (!isValidPassword) {
+          await this.logRejectedPurgeAttempt(
+            user.username,
+            `Rejected collection purge attempt due to invalid superuser password by ${user.username}`
+          );
           throw forbidden("Password login superuser tidak sah.");
         }
         const cutoffDate = buildCollectionPurgeCutoffDate();
