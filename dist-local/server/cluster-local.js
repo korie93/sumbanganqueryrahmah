@@ -5043,21 +5043,115 @@ var init_analytics_repository = __esm({
   }
 });
 
-// server/repositories/collection.repository.ts
-import { randomUUID as randomUUID3 } from "crypto";
+// server/repositories/collection-record-query-utils.ts
 import { sql as sql17 } from "drizzle-orm";
-function normalizeCollectionNicknameRoleScope(value) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  if (normalized === "admin" || normalized === "user" || normalized === "both") {
-    return normalized;
-  }
-  return "both";
+function normalizeCollectionNicknameFilters(nicknameSource) {
+  return Array.isArray(nicknameSource) ? nicknameSource.map((value) => String(value || "").trim().toLowerCase()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
 }
-var COLLECTION_MONTH_NAMES, CollectionRepository;
-var init_collection_repository = __esm({
-  "server/repositories/collection.repository.ts"() {
+function buildCollectionRecordConditions(filters) {
+  const conditions = [];
+  if (filters?.from) {
+    conditions.push(sql17`payment_date >= ${filters.from}::date`);
+  }
+  if (filters?.to) {
+    conditions.push(sql17`payment_date <= ${filters.to}::date`);
+  }
+  const search = String(filters?.search || "").trim();
+  if (search) {
+    const like = `%${search}%`;
+    conditions.push(sql17`(
+      customer_name ILIKE ${like}
+      OR ic_number ILIKE ${like}
+      OR account_number ILIKE ${like}
+      OR batch ILIKE ${like}
+      OR customer_phone ILIKE ${like}
+      OR amount::text ILIKE ${like}
+    )`);
+  }
+  const createdByLogin = String(filters?.createdByLogin || "").trim();
+  if (createdByLogin) {
+    conditions.push(sql17`created_by_login = ${createdByLogin}`);
+  }
+  const nicknames = normalizeCollectionNicknameFilters(filters?.nicknames);
+  if (nicknames.length > 0) {
+    const nicknameSql = sql17.join(nicknames.map((value) => sql17`${value}`), sql17`, `);
+    conditions.push(sql17`lower(collection_staff_nickname) IN (${nicknameSql})`);
+  }
+  return conditions;
+}
+function buildCollectionRecordWhereSql(filters) {
+  const conditions = buildCollectionRecordConditions(filters);
+  return conditions.length ? sql17`WHERE ${sql17.join(conditions, sql17` AND `)}` : sql17``;
+}
+function buildCollectionMonthlySummaryWhereSql(filters) {
+  const safeYear = Number.isFinite(filters.year) ? Math.min(2100, Math.max(2e3, Math.floor(filters.year))) : (/* @__PURE__ */ new Date()).getFullYear();
+  const yearStart = `${safeYear}-01-01`;
+  const yearEnd = `${safeYear}-12-31`;
+  const conditions = [
+    sql17`payment_date >= ${yearStart}::date`,
+    sql17`payment_date <= ${yearEnd}::date`
+  ];
+  const nicknames = normalizeCollectionNicknameFilters(filters.nicknames);
+  if (nicknames.length > 0) {
+    const nicknameSql = sql17.join(nicknames.map((value) => sql17`${value}`), sql17`, `);
+    conditions.push(sql17`lower(collection_staff_nickname) IN (${nicknameSql})`);
+  }
+  const createdByLogin = String(filters.createdByLogin || "").trim();
+  if (createdByLogin) {
+    conditions.push(sql17`created_by_login = ${createdByLogin}`);
+  }
+  return {
+    safeYear,
+    whereSql: sql17`WHERE ${sql17.join(conditions, sql17` AND `)}`
+  };
+}
+function mapCollectionAggregateRow(row) {
+  return {
+    totalRecords: Number(row?.total_records ?? 0),
+    totalAmount: Number(row?.total_amount ?? 0)
+  };
+}
+function mapCollectionMonthlySummaryRows(rows) {
+  const byMonth = /* @__PURE__ */ new Map();
+  for (const row of rows || []) {
+    const month = Number(row?.month ?? 0);
+    if (!Number.isFinite(month) || month < 1 || month > 12) continue;
+    byMonth.set(month, {
+      totalRecords: Number(row?.total_records ?? 0),
+      totalAmount: Number(row?.total_amount ?? 0)
+    });
+  }
+  return COLLECTION_MONTH_NAMES.map((monthName, index) => {
+    const month = index + 1;
+    const data = byMonth.get(month);
+    return {
+      month,
+      monthName,
+      totalRecords: data?.totalRecords ?? 0,
+      totalAmount: data?.totalAmount ?? 0
+    };
+  });
+}
+function extractCollectionRecordIds(rows) {
+  return (rows || []).map((row) => String(row?.id || "").trim()).filter(Boolean);
+}
+function collectCollectionReceiptPaths(recordRows, receiptRows) {
+  return Array.from(
+    new Set(
+      [
+        ...(recordRows || []).map((row) => String(row?.receipt_file || "").trim()),
+        ...(receiptRows || []).map((row) => String(row?.storage_path || "").trim())
+      ].filter(Boolean)
+    )
+  );
+}
+function sumCollectionRowAmounts(rows) {
+  return (rows || []).reduce((sum, row) => sum + Number(row?.amount ?? 0), 0);
+}
+var COLLECTION_MONTH_NAMES;
+var init_collection_record_query_utils = __esm({
+  "server/repositories/collection-record-query-utils.ts"() {
     "use strict";
-    init_db_postgres();
     COLLECTION_MONTH_NAMES = [
       "January",
       "February",
@@ -5072,82 +5166,1128 @@ var init_collection_repository = __esm({
       "November",
       "December"
     ];
+  }
+});
+
+// server/repositories/collection-nickname-utils.ts
+import { sql as sql18 } from "drizzle-orm";
+function normalizeCollectionDate(value, fallback = Date.now()) {
+  if (value instanceof Date) {
+    return value;
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    return new Date(value);
+  }
+  return new Date(fallback);
+}
+function normalizeNullableText(value) {
+  return value === null || value === void 0 ? null : String(value);
+}
+function normalizeNullableBoolean(value) {
+  if (value === null || value === void 0) {
+    return null;
+  }
+  return Boolean(value);
+}
+function readRows(result) {
+  return Array.isArray(result.rows) ? result.rows : [];
+}
+function normalizeCollectionNicknameRoleScope(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "admin" || normalized === "user" || normalized === "both") {
+    return normalized;
+  }
+  return "both";
+}
+function mapCollectionStaffNicknameRow(row) {
+  return {
+    id: String(row.id ?? ""),
+    nickname: String(row.nickname ?? ""),
+    isActive: Boolean(row.is_active ?? row.isActive),
+    roleScope: normalizeCollectionNicknameRoleScope(row.role_scope ?? row.roleScope),
+    createdBy: normalizeNullableText(row.created_by ?? row.createdBy),
+    createdAt: normalizeCollectionDate(row.created_at ?? row.createdAt)
+  };
+}
+function mapCollectionNicknameAuthProfileRow(row) {
+  const passwordUpdatedAtRaw = row.password_updated_at ?? row.passwordUpdatedAt ?? null;
+  const passwordUpdatedAt = passwordUpdatedAtRaw === null || passwordUpdatedAtRaw === void 0 ? null : normalizeCollectionDate(passwordUpdatedAtRaw);
+  return {
+    id: String(row.id ?? ""),
+    nickname: String(row.nickname ?? ""),
+    isActive: Boolean(row.is_active ?? row.isActive),
+    roleScope: normalizeCollectionNicknameRoleScope(row.role_scope ?? row.roleScope),
+    mustChangePassword: Boolean(row.must_change_password ?? row.mustChangePassword ?? true),
+    passwordResetBySuperuser: Boolean(row.password_reset_by_superuser ?? row.passwordResetBySuperuser ?? false),
+    nicknamePasswordHash: normalizeNullableText(row.nickname_password_hash ?? row.nicknamePasswordHash),
+    passwordUpdatedAt
+  };
+}
+function mapCollectionAdminUserRow(row) {
+  return {
+    id: String(row.id ?? ""),
+    username: String(row.username ?? ""),
+    role: "admin",
+    isBanned: normalizeNullableBoolean(row.is_banned ?? row.isBanned),
+    createdAt: normalizeCollectionDate(row.created_at ?? row.createdAt),
+    updatedAt: normalizeCollectionDate(row.updated_at ?? row.updatedAt)
+  };
+}
+function mapCollectionAdminGroupRow(row, nicknameIdByLowerName) {
+  const rawMembers = Array.isArray(row.member_nicknames) ? row.member_nicknames : Array.isArray(row.memberNicknames) ? row.memberNicknames : [];
+  const memberNicknames = Array.from(new Set(
+    rawMembers.map((value) => String(value ?? "").trim()).filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b, void 0, { sensitivity: "base" }));
+  const memberNicknameIds = memberNicknames.map((name) => nicknameIdByLowerName.get(name.toLowerCase()) || "").filter(Boolean);
+  return {
+    id: String(row.id ?? ""),
+    leaderNickname: String(row.leader_nickname ?? row.leaderNickname ?? ""),
+    leaderNicknameId: row.leader_nickname_id || row.leaderNicknameId ? String(row.leader_nickname_id ?? row.leaderNicknameId) : null,
+    leaderIsActive: Boolean(row.leader_is_active ?? row.leaderIsActive ?? false),
+    leaderRoleScope: row.leader_role_scope ? normalizeCollectionNicknameRoleScope(row.leader_role_scope) : row.leaderRoleScope ? normalizeCollectionNicknameRoleScope(row.leaderRoleScope) : null,
+    memberNicknames,
+    memberNicknameIds,
+    createdBy: normalizeNullableText(row.created_by ?? row.createdBy),
+    createdAt: normalizeCollectionDate(row.created_at ?? row.createdAt),
+    updatedAt: normalizeCollectionDate(row.updated_at ?? row.updatedAt)
+  };
+}
+function mapCollectionNicknameSessionRow(row) {
+  const verifiedAtRaw = row.verified_at ?? row.verifiedAt;
+  const updatedAtRaw = row.updated_at ?? row.updatedAt;
+  return {
+    activityId: String(row.activity_id ?? row.activityId ?? ""),
+    username: String(row.username ?? ""),
+    userRole: String(row.user_role ?? row.userRole ?? ""),
+    nickname: String(row.nickname ?? ""),
+    verifiedAt: normalizeCollectionDate(verifiedAtRaw),
+    updatedAt: normalizeCollectionDate(updatedAtRaw)
+  };
+}
+async function resolveCollectionNicknameRowsByIds(tx, nicknameIds) {
+  const normalizedIds = Array.isArray(nicknameIds) ? nicknameIds.map((value) => String(value || "").trim()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
+  if (!normalizedIds.length) return [];
+  const idSql = sql18.join(normalizedIds.map((value) => sql18`${value}::uuid`), sql18`, `);
+  const result = await tx.execute(sql18`
+    SELECT id, nickname, role_scope, is_active
+    FROM public.collection_staff_nicknames
+    WHERE id IN (${idSql})
+    LIMIT 5000
+  `);
+  const rows = readRows(result).map((row) => ({
+    id: String(row.id || "").trim(),
+    nickname: String(row.nickname || "").trim(),
+    roleScope: normalizeCollectionNicknameRoleScope(row.role_scope),
+    isActive: Boolean(row.is_active)
+  }));
+  if (rows.length !== normalizedIds.length) {
+    throw new Error("Invalid nickname ids.");
+  }
+  return rows;
+}
+async function validateCollectionAdminGroupComposition(params) {
+  const leaderLower = params.leaderNickname.toLowerCase();
+  const uniqueMembers = Array.from(new Set(
+    params.memberNicknames.map((value) => String(value || "").trim()).filter(Boolean)
+  ));
+  const memberLower = uniqueMembers.map((value) => value.toLowerCase());
+  if (memberLower.includes(leaderLower)) {
+    throw new Error("Leader nickname cannot be a member of the same group.");
+  }
+  const leaderRows = await params.tx.execute(sql18`
+    SELECT id
+    FROM public.admin_groups
+    WHERE lower(leader_nickname) = lower(${params.leaderNickname})
+      ${params.groupIdToExclude ? sql18`AND id <> ${params.groupIdToExclude}::uuid` : sql18``}
+    LIMIT 1
+  `);
+  if (leaderRows.rows?.[0]) {
+    throw new Error("Leader nickname already assigned.");
+  }
+  if (!memberLower.length) return;
+  const membersSql = sql18.join(memberLower.map((value) => sql18`${value}`), sql18`, `);
+  const memberConflict = await params.tx.execute(sql18`
+    SELECT member_nickname
+    FROM public.admin_group_members
+    WHERE lower(member_nickname) IN (${membersSql})
+      ${params.groupIdToExclude ? sql18`AND admin_group_id <> ${params.groupIdToExclude}::uuid` : sql18``}
+    LIMIT 1
+  `);
+  if (memberConflict.rows?.[0]) {
+    throw new Error("This nickname is already assigned to another admin group.");
+  }
+  const leaderConflict = await params.tx.execute(sql18`
+    SELECT leader_nickname
+    FROM public.admin_groups
+    WHERE lower(leader_nickname) IN (${membersSql})
+      ${params.groupIdToExclude ? sql18`AND id <> ${params.groupIdToExclude}::uuid` : sql18``}
+    LIMIT 1
+  `);
+  if (leaderConflict.rows?.[0]) {
+    throw new Error("Group member conflicts with another group leader.");
+  }
+}
+var init_collection_nickname_utils = __esm({
+  "server/repositories/collection-nickname-utils.ts"() {
+    "use strict";
+  }
+});
+
+// server/repositories/collection-admin-assignment-utils.ts
+import { randomUUID as randomUUID3 } from "crypto";
+import { sql as sql19 } from "drizzle-orm";
+function normalizeUniqueValues(values) {
+  return Array.from(
+    new Set(
+      (Array.isArray(values) ? values : []).map((value) => String(value || "").trim()).filter(Boolean)
+    )
+  );
+}
+async function listCollectionAdminAssignedNicknameIds(executor, adminUserId) {
+  const normalized = String(adminUserId || "").trim();
+  if (!normalized) return [];
+  const result = await executor.execute(sql19`
+    SELECT avn.nickname_id
+    FROM public.admin_visible_nicknames avn
+    WHERE avn.admin_user_id = ${normalized}
+    ORDER BY avn.nickname_id ASC
+    LIMIT 5000
+  `);
+  return (result.rows || []).map((row) => String(row.nickname_id || "").trim()).filter(Boolean);
+}
+async function listCollectionAdminVisibleNicknames(executor, adminUserId, filters) {
+  const normalized = String(adminUserId || "").trim();
+  if (!normalized) return [];
+  const conditions = [sql19`avn.admin_user_id = ${normalized}`];
+  if (filters?.activeOnly === true) {
+    conditions.push(sql19`n.is_active = true`);
+  }
+  if (filters?.allowedRole === "admin") {
+    conditions.push(sql19`n.role_scope IN ('admin', 'both')`);
+  } else if (filters?.allowedRole === "user") {
+    conditions.push(sql19`n.role_scope IN ('user', 'both')`);
+  }
+  const whereSql = sql19`WHERE ${sql19.join(conditions, sql19` AND `)}`;
+  const result = await executor.execute(sql19`
+    SELECT
+      n.id,
+      n.nickname,
+      n.is_active,
+      n.role_scope,
+      n.created_by,
+      n.created_at
+    FROM public.admin_visible_nicknames avn
+    INNER JOIN public.collection_staff_nicknames n
+      ON n.id = avn.nickname_id
+    INNER JOIN public.users u
+      ON u.id = avn.admin_user_id
+     AND u.role = 'admin'
+    ${whereSql}
+    ORDER BY n.is_active DESC, lower(n.nickname) ASC
+    LIMIT 1000
+  `);
+  return (result.rows || []).map((row) => mapCollectionStaffNicknameRow(row));
+}
+async function resolveValidCollectionNicknameIds(executor, nicknameIds) {
+  const normalizedNicknameIds = normalizeUniqueValues(nicknameIds);
+  if (!normalizedNicknameIds.length) {
+    return [];
+  }
+  const nicknameSql = sql19.join(
+    normalizedNicknameIds.map((value) => sql19`${value}::uuid`),
+    sql19`, `
+  );
+  const validRows = await executor.execute(sql19`
+    SELECT id
+    FROM public.collection_staff_nicknames
+    WHERE id IN (${nicknameSql})
+    LIMIT 5000
+  `);
+  const validNicknameIds = (validRows.rows || []).map((row) => String(row.id || "").trim()).filter(Boolean);
+  if (validNicknameIds.length !== normalizedNicknameIds.length) {
+    throw new Error("Invalid nickname ids.");
+  }
+  return validNicknameIds;
+}
+async function replaceCollectionAdminAssignedNicknameIds(executor, params) {
+  const adminUserId = String(params.adminUserId || "").trim();
+  const createdBySuperuser = String(params.createdBySuperuser || "").trim();
+  if (!adminUserId) {
+    throw new Error("adminUserId is required.");
+  }
+  if (!createdBySuperuser) {
+    throw new Error("createdBySuperuser is required.");
+  }
+  const adminCheck = await executor.execute(sql19`
+    SELECT id
+    FROM public.users
+    WHERE id = ${adminUserId}
+      AND role = 'admin'
+    LIMIT 1
+  `);
+  if (!adminCheck.rows?.[0]) {
+    throw new Error("Admin user not found.");
+  }
+  const validNicknameIds = await resolveValidCollectionNicknameIds(executor, params.nicknameIds);
+  await executor.execute(sql19`
+    DELETE FROM public.admin_visible_nicknames
+    WHERE admin_user_id = ${adminUserId}
+  `);
+  for (const nicknameId of validNicknameIds) {
+    await executor.execute(sql19`
+      INSERT INTO public.admin_visible_nicknames (
+        id,
+        admin_user_id,
+        nickname_id,
+        created_by_superuser,
+        created_at
+      )
+      VALUES (
+        ${randomUUID3()}::uuid,
+        ${adminUserId},
+        ${nicknameId}::uuid,
+        ${createdBySuperuser},
+        now()
+      )
+      ON CONFLICT (admin_user_id, nickname_id) DO NOTHING
+    `);
+  }
+  return listCollectionAdminAssignedNicknameIds(executor, adminUserId);
+}
+var init_collection_admin_assignment_utils = __esm({
+  "server/repositories/collection-admin-assignment-utils.ts"() {
+    "use strict";
+    init_collection_nickname_utils();
+  }
+});
+
+// server/repositories/collection-admin-group-utils.ts
+import { randomUUID as randomUUID4 } from "crypto";
+import { sql as sql20 } from "drizzle-orm";
+function normalizeCollectionText(value) {
+  return String(value || "").trim();
+}
+function readRows2(result) {
+  return Array.isArray(result.rows) ? result.rows : [];
+}
+function readFirstRow(result) {
+  return readRows2(result)[0];
+}
+async function insertAdminGroupMembers(executor, groupId, leaderNickname, memberNicknames) {
+  for (const memberNickname of memberNicknames) {
+    if (!memberNickname || memberNickname.toLowerCase() === leaderNickname.toLowerCase()) continue;
+    await executor.execute(sql20`
+      INSERT INTO public.admin_group_members (
+        id,
+        admin_group_id,
+        member_nickname,
+        created_at
+      )
+      VALUES (
+        ${randomUUID4()}::uuid,
+        ${groupId}::uuid,
+        ${memberNickname},
+        now()
+      )
+      ON CONFLICT DO NOTHING
+    `);
+  }
+}
+async function listCollectionAdminGroups(executor) {
+  const nicknameRows = await executor.execute(sql20`
+    SELECT id, nickname
+    FROM public.collection_staff_nicknames
+    LIMIT 5000
+  `);
+  const nicknameIdByLowerName = /* @__PURE__ */ new Map();
+  for (const row of readRows2(nicknameRows)) {
+    const nickname = normalizeCollectionText(row.nickname).toLowerCase();
+    const id = normalizeCollectionText(row.id);
+    if (!nickname || !id || nicknameIdByLowerName.has(nickname)) continue;
+    nicknameIdByLowerName.set(nickname, id);
+  }
+  const result = await executor.execute(sql20`
+    SELECT
+      g.id,
+      g.leader_nickname,
+      g.created_by,
+      g.created_at,
+      g.updated_at,
+      leader.id AS leader_nickname_id,
+      leader.is_active AS leader_is_active,
+      leader.role_scope AS leader_role_scope,
+      COALESCE(
+        array_agg(DISTINCT gm.member_nickname) FILTER (WHERE gm.member_nickname IS NOT NULL),
+        ARRAY[]::text[]
+      ) AS member_nicknames
+    FROM public.admin_groups g
+    LEFT JOIN public.collection_staff_nicknames leader
+      ON lower(leader.nickname) = lower(g.leader_nickname)
+    LEFT JOIN public.admin_group_members gm
+      ON gm.admin_group_id = g.id
+    GROUP BY
+      g.id,
+      g.leader_nickname,
+      g.created_by,
+      g.created_at,
+      g.updated_at,
+      leader.id,
+      leader.is_active,
+      leader.role_scope
+    ORDER BY lower(g.leader_nickname) ASC
+    LIMIT 5000
+  `);
+  return readRows2(result).map((row) => mapCollectionAdminGroupRow(row, nicknameIdByLowerName));
+}
+async function findCollectionAdminGroupById(executor, groupId) {
+  const normalizedGroupId = normalizeCollectionText(groupId);
+  if (!normalizedGroupId) return void 0;
+  const groups = await listCollectionAdminGroups(executor);
+  return groups.find((item) => item.id === normalizedGroupId);
+}
+async function createCollectionAdminGroupInTransaction(executor, params) {
+  const createdBy = normalizeCollectionText(params.createdBy);
+  if (!createdBy) {
+    throw new Error("createdBy is required.");
+  }
+  const leaderRows = await resolveCollectionNicknameRowsByIds(executor, [params.leaderNicknameId]);
+  const leader = leaderRows[0];
+  if (!leader || !leader.nickname) {
+    throw new Error("Invalid leader nickname.");
+  }
+  if (!(leader.roleScope === "admin" || leader.roleScope === "both")) {
+    throw new Error("Leader nickname must have admin scope.");
+  }
+  if (!leader.isActive) {
+    throw new Error("Leader nickname must be active.");
+  }
+  const memberRows = await resolveCollectionNicknameRowsByIds(executor, params.memberNicknameIds || []);
+  const memberNicknames = memberRows.map((item) => item.nickname).filter(Boolean);
+  await validateCollectionAdminGroupComposition({
+    tx: executor,
+    leaderNickname: leader.nickname,
+    memberNicknames
+  });
+  const groupId = randomUUID4();
+  await executor.execute(sql20`
+    INSERT INTO public.admin_groups (
+      id,
+      leader_nickname,
+      created_by,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${groupId}::uuid,
+      ${leader.nickname},
+      ${createdBy},
+      now(),
+      now()
+    )
+  `);
+  await insertAdminGroupMembers(executor, groupId, leader.nickname, memberNicknames);
+  return groupId;
+}
+async function updateCollectionAdminGroupInTransaction(executor, params) {
+  const groupId = normalizeCollectionText(params.groupId);
+  const updatedBy = normalizeCollectionText(params.updatedBy);
+  if (!groupId) {
+    throw new Error("groupId is required.");
+  }
+  if (!updatedBy) {
+    throw new Error("updatedBy is required.");
+  }
+  const existingRow = await executor.execute(sql20`
+    SELECT id, leader_nickname
+    FROM public.admin_groups
+    WHERE id = ${groupId}::uuid
+    LIMIT 1
+  `);
+  const existing = readFirstRow(existingRow);
+  if (!existing) {
+    return null;
+  }
+  let leaderNickname = normalizeCollectionText(existing.leader_nickname);
+  if (params.leaderNicknameId) {
+    const leaderRows = await resolveCollectionNicknameRowsByIds(executor, [params.leaderNicknameId]);
+    const leader = leaderRows[0];
+    if (!leader || !leader.nickname) {
+      throw new Error("Invalid leader nickname.");
+    }
+    if (!(leader.roleScope === "admin" || leader.roleScope === "both")) {
+      throw new Error("Leader nickname must have admin scope.");
+    }
+    if (!leader.isActive) {
+      throw new Error("Leader nickname must be active.");
+    }
+    leaderNickname = leader.nickname;
+  }
+  let memberNicknames = [];
+  if (params.memberNicknameIds !== void 0) {
+    const memberRows = await resolveCollectionNicknameRowsByIds(executor, params.memberNicknameIds || []);
+    memberNicknames = memberRows.map((item) => item.nickname).filter(Boolean);
+  } else {
+    const existingMembers = await executor.execute(sql20`
+      SELECT member_nickname
+      FROM public.admin_group_members
+      WHERE admin_group_id = ${groupId}::uuid
+      LIMIT 5000
+    `);
+    memberNicknames = readRows2(existingMembers).map((row) => normalizeCollectionText(row.member_nickname)).filter(Boolean);
+  }
+  await validateCollectionAdminGroupComposition({
+    tx: executor,
+    groupIdToExclude: groupId,
+    leaderNickname,
+    memberNicknames
+  });
+  await executor.execute(sql20`
+    UPDATE public.admin_groups
+    SET
+      leader_nickname = ${leaderNickname},
+      created_by = COALESCE(NULLIF(trim(COALESCE(created_by, '')), ''), ${updatedBy}),
+      updated_at = now()
+    WHERE id = ${groupId}::uuid
+  `);
+  await executor.execute(sql20`
+    DELETE FROM public.admin_group_members
+    WHERE admin_group_id = ${groupId}::uuid
+  `);
+  await insertAdminGroupMembers(executor, groupId, leaderNickname, memberNicknames);
+  return groupId;
+}
+async function deleteCollectionAdminGroupInTransaction(executor, groupId) {
+  const normalizedGroupId = normalizeCollectionText(groupId);
+  if (!normalizedGroupId) return false;
+  await executor.execute(sql20`
+    DELETE FROM public.admin_group_members
+    WHERE admin_group_id = ${normalizedGroupId}::uuid
+  `);
+  const result = await executor.execute(sql20`
+    DELETE FROM public.admin_groups
+    WHERE id = ${normalizedGroupId}::uuid
+    RETURNING id
+  `);
+  return Boolean(result.rows?.[0]);
+}
+async function getCollectionAdminGroupVisibleNicknameValuesByLeader(executor, leaderNickname) {
+  const normalizedLeader = normalizeCollectionText(leaderNickname);
+  if (!normalizedLeader) return [];
+  const rows = await executor.execute(sql20`
+    SELECT
+      g.leader_nickname,
+      COALESCE(
+        array_agg(DISTINCT gm.member_nickname) FILTER (WHERE gm.member_nickname IS NOT NULL),
+        ARRAY[]::text[]
+      ) AS member_nicknames
+    FROM public.admin_groups g
+    LEFT JOIN public.admin_group_members gm
+      ON gm.admin_group_id = g.id
+    WHERE lower(g.leader_nickname) = lower(${normalizedLeader})
+    GROUP BY g.id, g.leader_nickname
+    LIMIT 1
+  `);
+  const row = readFirstRow(rows);
+  if (!row) {
+    return [normalizedLeader];
+  }
+  const members = Array.isArray(row.member_nicknames) ? row.member_nicknames.map((value) => normalizeCollectionText(value)).filter(Boolean) : [];
+  const uniqueMembers = Array.from(new Set(members.filter((value) => value.toLowerCase() !== normalizedLeader.toLowerCase()))).sort((a, b) => a.localeCompare(b, void 0, { sensitivity: "base" }));
+  return [normalizeCollectionText(row.leader_nickname || normalizedLeader), ...uniqueMembers];
+}
+var init_collection_admin_group_utils = __esm({
+  "server/repositories/collection-admin-group-utils.ts"() {
+    "use strict";
+    init_collection_nickname_utils();
+  }
+});
+
+// server/repositories/collection-receipt-utils.ts
+import { randomUUID as randomUUID5 } from "crypto";
+import { sql as sql21 } from "drizzle-orm";
+function normalizeUniqueValues2(values) {
+  return Array.from(
+    new Set(
+      (Array.isArray(values) ? values : []).map((value) => String(value || "").trim()).filter(Boolean)
+    )
+  );
+}
+function normalizeCollectionDate2(value) {
+  if (value instanceof Date) {
+    return value;
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    return new Date(value);
+  }
+  return /* @__PURE__ */ new Date();
+}
+function readRows3(result) {
+  return Array.isArray(result.rows) ? result.rows : [];
+}
+function readFirstRow2(result) {
+  return readRows3(result)[0];
+}
+function mapCollectionRecordReceiptRow(row) {
+  return {
+    id: String(row.id ?? ""),
+    collectionRecordId: String(row.collection_record_id ?? row.collectionRecordId ?? ""),
+    storagePath: String(row.storage_path ?? row.storagePath ?? ""),
+    originalFileName: String(row.original_file_name ?? row.originalFileName ?? ""),
+    originalMimeType: String(row.original_mime_type ?? row.originalMimeType ?? "application/octet-stream"),
+    originalExtension: String(row.original_extension ?? row.originalExtension ?? ""),
+    fileSize: Number(row.file_size ?? row.fileSize ?? 0),
+    createdAt: normalizeCollectionDate2(row.created_at ?? row.createdAt)
+  };
+}
+async function loadCollectionReceiptMapByRecordIds(executor, recordIds) {
+  const normalizedIds = normalizeUniqueValues2(recordIds);
+  const receiptMap = /* @__PURE__ */ new Map();
+  if (!normalizedIds.length) return receiptMap;
+  const idSql = sql21.join(normalizedIds.map((value) => sql21`${value}::uuid`), sql21`, `);
+  const result = await executor.execute(sql21`
+    SELECT
+      id,
+      collection_record_id,
+      storage_path,
+      original_file_name,
+      original_mime_type,
+      original_extension,
+      file_size,
+      created_at
+    FROM public.collection_record_receipts
+    WHERE collection_record_id IN (${idSql})
+    ORDER BY created_at ASC, id ASC
+  `);
+  for (const row of readRows3(result)) {
+    const receipt = mapCollectionRecordReceiptRow(row);
+    const current = receiptMap.get(receipt.collectionRecordId) || [];
+    current.push(receipt);
+    receiptMap.set(receipt.collectionRecordId, current);
+  }
+  return receiptMap;
+}
+async function attachCollectionReceipts(executor, records) {
+  if (!records.length) return records;
+  const receiptMap = await loadCollectionReceiptMapByRecordIds(
+    executor,
+    records.map((record) => record.id)
+  );
+  return records.map((record) => {
+    const receipts = receiptMap.get(record.id) || [];
+    const firstReceiptPath = receipts[0]?.storagePath || record.receiptFile || null;
+    return {
+      ...record,
+      receiptFile: firstReceiptPath,
+      receipts
+    };
+  });
+}
+async function listCollectionRecordReceiptsByRecordId(executor, recordId) {
+  const normalizedRecordId = String(recordId || "").trim();
+  if (!normalizedRecordId) return [];
+  const result = await executor.execute(sql21`
+    SELECT
+      id,
+      collection_record_id,
+      storage_path,
+      original_file_name,
+      original_mime_type,
+      original_extension,
+      file_size,
+      created_at
+    FROM public.collection_record_receipts
+    WHERE collection_record_id = ${normalizedRecordId}::uuid
+    ORDER BY created_at ASC, id ASC
+  `);
+  return readRows3(result).map((row) => mapCollectionRecordReceiptRow(row));
+}
+async function getCollectionRecordReceiptByIdForRecord(executor, recordId, receiptId) {
+  const normalizedRecordId = String(recordId || "").trim();
+  const normalizedReceiptId = String(receiptId || "").trim();
+  if (!normalizedRecordId || !normalizedReceiptId) return void 0;
+  const result = await executor.execute(sql21`
+    SELECT
+      id,
+      collection_record_id,
+      storage_path,
+      original_file_name,
+      original_mime_type,
+      original_extension,
+      file_size,
+      created_at
+    FROM public.collection_record_receipts
+    WHERE collection_record_id = ${normalizedRecordId}::uuid
+      AND id = ${normalizedReceiptId}::uuid
+    LIMIT 1
+  `);
+  const row = readFirstRow2(result);
+  if (!row) return void 0;
+  return mapCollectionRecordReceiptRow(row);
+}
+async function listCollectionRecordReceiptsByIds(executor, receiptIds) {
+  const normalizedReceiptIds = normalizeUniqueValues2(receiptIds);
+  if (!normalizedReceiptIds.length) return [];
+  const idSql = sql21.join(normalizedReceiptIds.map((value) => sql21`${value}::uuid`), sql21`, `);
+  const result = await executor.execute(sql21`
+    SELECT
+      id,
+      collection_record_id,
+      storage_path,
+      original_file_name,
+      original_mime_type,
+      original_extension,
+      file_size,
+      created_at
+    FROM public.collection_record_receipts
+    WHERE id IN (${idSql})
+    ORDER BY created_at ASC, id ASC
+  `);
+  return readRows3(result).map((row) => mapCollectionRecordReceiptRow(row));
+}
+async function createCollectionRecordReceiptRows(executor, recordId, receipts) {
+  const normalizedRecordId = String(recordId || "").trim();
+  if (!normalizedRecordId || !Array.isArray(receipts) || !receipts.length) {
+    return [];
+  }
+  const insertedIds = [];
+  for (const receipt of receipts) {
+    const id = randomUUID5();
+    insertedIds.push(id);
+    await executor.execute(sql21`
+      INSERT INTO public.collection_record_receipts (
+        id,
+        collection_record_id,
+        storage_path,
+        original_file_name,
+        original_mime_type,
+        original_extension,
+        file_size,
+        created_at
+      )
+      VALUES (
+        ${id}::uuid,
+        ${normalizedRecordId}::uuid,
+        ${receipt.storagePath},
+        ${receipt.originalFileName},
+        ${receipt.originalMimeType},
+        ${receipt.originalExtension},
+        ${receipt.fileSize},
+        now()
+      )
+    `);
+  }
+  return listCollectionRecordReceiptsByIds(executor, insertedIds);
+}
+async function listCollectionRecordReceiptsForDeletion(executor, recordId, receiptIds) {
+  const normalizedRecordId = String(recordId || "").trim();
+  const normalizedReceiptIds = normalizeUniqueValues2(receiptIds);
+  if (!normalizedRecordId || !normalizedReceiptIds.length) {
+    return [];
+  }
+  const idSql = sql21.join(normalizedReceiptIds.map((value) => sql21`${value}::uuid`), sql21`, `);
+  const existing = await executor.execute(sql21`
+    SELECT
+      id,
+      collection_record_id,
+      storage_path,
+      original_file_name,
+      original_mime_type,
+      original_extension,
+      file_size,
+      created_at
+    FROM public.collection_record_receipts
+    WHERE collection_record_id = ${normalizedRecordId}::uuid
+      AND id IN (${idSql})
+  `);
+  return readRows3(existing).map((row) => mapCollectionRecordReceiptRow(row));
+}
+async function deleteCollectionRecordReceiptRows(executor, recordId, receiptIds) {
+  const normalizedRecordId = String(recordId || "").trim();
+  const normalizedReceiptIds = normalizeUniqueValues2(receiptIds);
+  if (!normalizedRecordId || !normalizedReceiptIds.length) {
+    return [];
+  }
+  const receipts = await listCollectionRecordReceiptsForDeletion(executor, normalizedRecordId, normalizedReceiptIds);
+  if (!receipts.length) {
+    return [];
+  }
+  const idSql = sql21.join(normalizedReceiptIds.map((value) => sql21`${value}::uuid`), sql21`, `);
+  await executor.execute(sql21`
+    DELETE FROM public.collection_record_receipts
+    WHERE collection_record_id = ${normalizedRecordId}::uuid
+      AND id IN (${idSql})
+  `);
+  return receipts;
+}
+async function deleteAllCollectionRecordReceiptRows(executor, recordId) {
+  const receipts = await listCollectionRecordReceiptsByRecordId(executor, recordId);
+  if (!receipts.length) {
+    return [];
+  }
+  const idSql = sql21.join(receipts.map((receipt) => sql21`${receipt.id}::uuid`), sql21`, `);
+  await executor.execute(sql21`
+    DELETE FROM public.collection_record_receipts
+    WHERE id IN (${idSql})
+  `);
+  return receipts;
+}
+var init_collection_receipt_utils = __esm({
+  "server/repositories/collection-receipt-utils.ts"() {
+    "use strict";
+  }
+});
+
+// server/repositories/collection-staff-nickname-utils.ts
+import { randomUUID as randomUUID6 } from "crypto";
+import { sql as sql22 } from "drizzle-orm";
+function normalizeCollectionText2(value) {
+  return String(value || "").trim();
+}
+function readRows4(result) {
+  return Array.isArray(result.rows) ? result.rows : [];
+}
+function readFirstRow3(result) {
+  return readRows4(result)[0];
+}
+async function listCollectionStaffNicknames(executor, filters) {
+  const conditions = [];
+  if (filters?.activeOnly === true) {
+    conditions.push(sql22`is_active = true`);
+  }
+  if (filters?.allowedRole === "admin") {
+    conditions.push(sql22`role_scope IN ('admin', 'both')`);
+  } else if (filters?.allowedRole === "user") {
+    conditions.push(sql22`role_scope IN ('user', 'both')`);
+  }
+  const whereSql = conditions.length > 0 ? sql22`WHERE ${sql22.join(conditions, sql22` AND `)}` : sql22``;
+  const result = await executor.execute(sql22`
+    SELECT
+      id,
+      nickname,
+      is_active,
+      role_scope,
+      created_by,
+      created_at
+    FROM public.collection_staff_nicknames
+    ${whereSql}
+    ORDER BY is_active DESC, lower(nickname) ASC
+    LIMIT 1000
+  `);
+  return readRows4(result).map((row) => mapCollectionStaffNicknameRow(row));
+}
+async function setCollectionNicknameSessionValue(executor, params) {
+  const activityId = normalizeCollectionText2(params.activityId);
+  const username = normalizeCollectionText2(params.username);
+  const userRole = normalizeCollectionText2(params.userRole);
+  const nickname = normalizeCollectionText2(params.nickname);
+  if (!activityId || !username || !userRole || !nickname) {
+    throw new Error("Invalid collection nickname session payload.");
+  }
+  await executor.execute(sql22`
+    INSERT INTO public.collection_nickname_sessions (
+      activity_id,
+      username,
+      user_role,
+      nickname,
+      verified_at,
+      updated_at
+    )
+    VALUES (
+      ${activityId},
+      ${username},
+      ${userRole},
+      ${nickname},
+      now(),
+      now()
+    )
+    ON CONFLICT (activity_id) DO UPDATE
+    SET
+      username = EXCLUDED.username,
+      user_role = EXCLUDED.user_role,
+      nickname = EXCLUDED.nickname,
+      updated_at = now()
+  `);
+}
+async function getCollectionNicknameSessionValueByActivity(executor, activityId) {
+  const normalizedActivityId = normalizeCollectionText2(activityId);
+  if (!normalizedActivityId) return void 0;
+  const result = await executor.execute(sql22`
+    SELECT
+      activity_id,
+      username,
+      user_role,
+      nickname,
+      verified_at,
+      updated_at
+    FROM public.collection_nickname_sessions
+    WHERE activity_id = ${normalizedActivityId}
+    LIMIT 1
+  `);
+  const row = readFirstRow3(result);
+  if (!row) return void 0;
+  return mapCollectionNicknameSessionRow(row);
+}
+async function clearCollectionNicknameSessionValueByActivity(executor, activityId) {
+  const normalizedActivityId = normalizeCollectionText2(activityId);
+  if (!normalizedActivityId) return;
+  await executor.execute(sql22`
+    DELETE FROM public.collection_nickname_sessions
+    WHERE activity_id = ${normalizedActivityId}
+  `);
+}
+async function getCollectionStaffNicknameByIdValue(executor, id) {
+  const normalizedId = normalizeCollectionText2(id);
+  if (!normalizedId) return void 0;
+  const result = await executor.execute(sql22`
+    SELECT
+      id,
+      nickname,
+      is_active,
+      role_scope,
+      created_by,
+      created_at
+    FROM public.collection_staff_nicknames
+    WHERE id = ${normalizedId}::uuid
+    LIMIT 1
+  `);
+  const row = readFirstRow3(result);
+  if (!row) return void 0;
+  return mapCollectionStaffNicknameRow(row);
+}
+async function getCollectionStaffNicknameByNameValue(executor, nickname) {
+  const normalized = normalizeCollectionText2(nickname);
+  if (!normalized) return void 0;
+  const result = await executor.execute(sql22`
+    SELECT
+      id,
+      nickname,
+      is_active,
+      role_scope,
+      created_by,
+      created_at
+    FROM public.collection_staff_nicknames
+    WHERE lower(nickname) = lower(${normalized})
+    LIMIT 1
+  `);
+  const row = readFirstRow3(result);
+  if (!row) return void 0;
+  return mapCollectionStaffNicknameRow(row);
+}
+async function getCollectionNicknameAuthProfileByNameValue(executor, nickname) {
+  const normalized = normalizeCollectionText2(nickname);
+  if (!normalized) return void 0;
+  const result = await executor.execute(sql22`
+    SELECT
+      id,
+      nickname,
+      is_active,
+      role_scope,
+      nickname_password_hash,
+      must_change_password,
+      password_reset_by_superuser,
+      password_updated_at
+    FROM public.collection_staff_nicknames
+    WHERE lower(nickname) = lower(${normalized})
+    LIMIT 1
+  `);
+  const row = readFirstRow3(result);
+  if (!row) return void 0;
+  return mapCollectionNicknameAuthProfileRow(row);
+}
+async function setCollectionNicknamePasswordValue(executor, params) {
+  const nicknameId = normalizeCollectionText2(params.nicknameId);
+  const passwordHash = normalizeCollectionText2(params.passwordHash);
+  const mustChangePassword = params.mustChangePassword ?? false;
+  const passwordResetBySuperuser = params.passwordResetBySuperuser ?? false;
+  const passwordUpdatedAt = params.passwordUpdatedAt ?? /* @__PURE__ */ new Date();
+  if (!nicknameId) {
+    throw new Error("nicknameId is required.");
+  }
+  if (!passwordHash) {
+    throw new Error("passwordHash is required.");
+  }
+  await executor.execute(sql22`
+    UPDATE public.collection_staff_nicknames
+    SET
+      nickname_password_hash = ${passwordHash},
+      must_change_password = ${mustChangePassword},
+      password_reset_by_superuser = ${passwordResetBySuperuser},
+      password_updated_at = ${passwordUpdatedAt}
+    WHERE id = ${nicknameId}::uuid
+  `);
+}
+async function createCollectionStaffNicknameValue(executor, data) {
+  const result = await executor.execute(sql22`
+    INSERT INTO public.collection_staff_nicknames (
+      id,
+      nickname,
+      is_active,
+      role_scope,
+      nickname_password_hash,
+      must_change_password,
+      password_reset_by_superuser,
+      password_updated_at,
+      created_by,
+      created_at
+    )
+    VALUES (
+      ${randomUUID6()}::uuid,
+      ${data.nickname},
+      true,
+      ${normalizeCollectionNicknameRoleScope(data.roleScope)},
+      NULL,
+      true,
+      false,
+      NULL,
+      ${data.createdBy},
+      now()
+    )
+    RETURNING
+      id,
+      nickname,
+      is_active,
+      role_scope,
+      created_by,
+      created_at
+  `);
+  const row = readFirstRow3(result);
+  if (!row) {
+    throw new Error("Failed to create collection staff nickname.");
+  }
+  return mapCollectionStaffNicknameRow(row);
+}
+async function updateCollectionStaffNicknameValue(executor, id, data) {
+  const existing = await getCollectionStaffNicknameByIdValue(executor, id);
+  if (!existing) return void 0;
+  const updates = [];
+  if (data.nickname !== void 0) {
+    updates.push(sql22`nickname = ${data.nickname}`);
+  }
+  if (data.isActive !== void 0) {
+    updates.push(sql22`is_active = ${data.isActive}`);
+  }
+  if (data.roleScope !== void 0) {
+    updates.push(sql22`role_scope = ${normalizeCollectionNicknameRoleScope(data.roleScope)}`);
+  }
+  if (!updates.length) {
+    return existing;
+  }
+  const result = await executor.execute(sql22`
+    UPDATE public.collection_staff_nicknames
+    SET ${sql22.join(updates, sql22`, `)}
+    WHERE id = ${normalizeCollectionText2(id)}::uuid
+    RETURNING
+      id,
+      nickname,
+      is_active,
+      role_scope,
+      created_by,
+      created_at
+  `);
+  const row = readFirstRow3(result);
+  if (!row) return void 0;
+  const updated = mapCollectionStaffNicknameRow(row);
+  const oldNickname = normalizeCollectionText2(existing.nickname);
+  const newNickname = normalizeCollectionText2(updated.nickname);
+  if (oldNickname && newNickname && oldNickname.toLowerCase() !== newNickname.toLowerCase()) {
+    await executor.execute(sql22`
+      UPDATE public.admin_groups
+      SET
+        leader_nickname = ${newNickname},
+        updated_at = now()
+      WHERE lower(leader_nickname) = lower(${oldNickname})
+    `);
+    await executor.execute(sql22`
+      UPDATE public.admin_group_members
+      SET member_nickname = ${newNickname}
+      WHERE lower(member_nickname) = lower(${oldNickname})
+    `);
+    await executor.execute(sql22`
+      UPDATE public.collection_nickname_sessions
+      SET
+        nickname = ${newNickname},
+        updated_at = now()
+      WHERE lower(nickname) = lower(${oldNickname})
+    `);
+  }
+  return updated;
+}
+async function deleteCollectionStaffNicknameValue(executor, id) {
+  const existing = await getCollectionStaffNicknameByIdValue(executor, id);
+  if (!existing) {
+    return { deleted: false, deactivated: false };
+  }
+  const usage = await executor.execute(sql22`
+    SELECT COUNT(*)::int AS total
+    FROM public.collection_records
+    WHERE lower(collection_staff_nickname) = lower(${existing.nickname})
+    LIMIT 1
+  `);
+  const total = Number(readFirstRow3(usage)?.total ?? 0);
+  if (total > 0) {
+    await executor.execute(sql22`
+      UPDATE public.collection_staff_nicknames
+      SET is_active = false
+      WHERE id = ${normalizeCollectionText2(id)}::uuid
+    `);
+    return { deleted: false, deactivated: true };
+  }
+  await executor.execute(sql22`
+    DELETE FROM public.admin_visible_nicknames
+    WHERE nickname_id = ${normalizeCollectionText2(id)}::uuid
+  `);
+  await executor.execute(sql22`
+    DELETE FROM public.admin_group_members
+    WHERE lower(member_nickname) = lower(${existing.nickname})
+  `);
+  await executor.execute(sql22`
+    DELETE FROM public.admin_groups
+    WHERE lower(leader_nickname) = lower(${existing.nickname})
+  `);
+  await executor.execute(sql22`
+    DELETE FROM public.collection_nickname_sessions
+    WHERE lower(nickname) = lower(${existing.nickname})
+  `);
+  await executor.execute(sql22`
+    DELETE FROM public.collection_staff_nicknames
+    WHERE id = ${normalizeCollectionText2(id)}::uuid
+  `);
+  return { deleted: true, deactivated: false };
+}
+async function isCollectionStaffNicknameActiveValue(executor, nickname) {
+  const normalized = normalizeCollectionText2(nickname);
+  if (!normalized) return false;
+  const result = await executor.execute(sql22`
+    SELECT id
+    FROM public.collection_staff_nicknames
+    WHERE lower(nickname) = lower(${normalized})
+      AND is_active = true
+    LIMIT 1
+  `);
+  return Boolean(readFirstRow3(result));
+}
+var init_collection_staff_nickname_utils = __esm({
+  "server/repositories/collection-staff-nickname-utils.ts"() {
+    "use strict";
+    init_collection_nickname_utils();
+  }
+});
+
+// server/repositories/collection.repository.ts
+import { randomUUID as randomUUID7 } from "crypto";
+import { sql as sql23 } from "drizzle-orm";
+var CollectionRepository;
+var init_collection_repository = __esm({
+  "server/repositories/collection.repository.ts"() {
+    "use strict";
+    init_db_postgres();
+    init_collection_record_query_utils();
+    init_collection_nickname_utils();
+    init_collection_admin_assignment_utils();
+    init_collection_admin_group_utils();
+    init_collection_receipt_utils();
+    init_collection_staff_nickname_utils();
     CollectionRepository = class {
-      mapCollectionStaffNicknameRow(row) {
-        const createdAtRaw = row.created_at ?? row.createdAt;
-        const createdAt = createdAtRaw instanceof Date ? createdAtRaw : new Date(createdAtRaw ?? Date.now());
-        return {
-          id: String(row.id ?? ""),
-          nickname: String(row.nickname ?? ""),
-          isActive: Boolean(row.is_active ?? row.isActive),
-          roleScope: normalizeCollectionNicknameRoleScope(row.role_scope ?? row.roleScope),
-          createdBy: row.created_by ?? row.createdBy ?? null,
-          createdAt
-        };
-      }
-      mapCollectionNicknameAuthProfileRow(row) {
-        const passwordUpdatedAtRaw = row.password_updated_at ?? row.passwordUpdatedAt ?? null;
-        const passwordUpdatedAt = passwordUpdatedAtRaw instanceof Date ? passwordUpdatedAtRaw : passwordUpdatedAtRaw ? new Date(passwordUpdatedAtRaw) : null;
-        return {
-          id: String(row.id ?? ""),
-          nickname: String(row.nickname ?? ""),
-          isActive: Boolean(row.is_active ?? row.isActive),
-          roleScope: normalizeCollectionNicknameRoleScope(row.role_scope ?? row.roleScope),
-          mustChangePassword: Boolean(row.must_change_password ?? row.mustChangePassword ?? true),
-          passwordResetBySuperuser: Boolean(row.password_reset_by_superuser ?? row.passwordResetBySuperuser ?? false),
-          nicknamePasswordHash: row.nickname_password_hash ?? row.nicknamePasswordHash ?? null,
-          passwordUpdatedAt
-        };
-      }
-      mapCollectionAdminUserRow(row) {
-        const createdAtRaw = row.created_at ?? row.createdAt;
-        const createdAt = createdAtRaw instanceof Date ? createdAtRaw : new Date(createdAtRaw ?? Date.now());
-        const updatedAtRaw = row.updated_at ?? row.updatedAt;
-        const updatedAt = updatedAtRaw instanceof Date ? updatedAtRaw : new Date(updatedAtRaw ?? Date.now());
-        return {
-          id: String(row.id ?? ""),
-          username: String(row.username ?? ""),
-          role: "admin",
-          isBanned: row.is_banned ?? row.isBanned ?? null,
-          createdAt,
-          updatedAt
-        };
-      }
-      mapCollectionAdminGroupRow(row, nicknameIdByLowerName) {
-        const createdAtRaw = row.created_at ?? row.createdAt;
-        const createdAt = createdAtRaw instanceof Date ? createdAtRaw : new Date(createdAtRaw ?? Date.now());
-        const updatedAtRaw = row.updated_at ?? row.updatedAt;
-        const updatedAt = updatedAtRaw instanceof Date ? updatedAtRaw : new Date(updatedAtRaw ?? Date.now());
-        const rawMembers = Array.isArray(row.member_nicknames) ? row.member_nicknames : Array.isArray(row.memberNicknames) ? row.memberNicknames : [];
-        const memberNicknames = Array.from(new Set(
-          rawMembers.map((value) => String(value ?? "").trim()).filter(Boolean)
-        )).sort((a, b) => a.localeCompare(b, void 0, { sensitivity: "base" }));
-        const memberNicknameIds = memberNicknames.map((name) => nicknameIdByLowerName.get(name.toLowerCase()) || "").filter(Boolean);
-        return {
-          id: String(row.id ?? ""),
-          leaderNickname: String(row.leader_nickname ?? row.leaderNickname ?? ""),
-          leaderNicknameId: row.leader_nickname_id || row.leaderNicknameId ? String(row.leader_nickname_id ?? row.leaderNicknameId) : null,
-          leaderIsActive: Boolean(row.leader_is_active ?? row.leaderIsActive ?? false),
-          leaderRoleScope: row.leader_role_scope ? normalizeCollectionNicknameRoleScope(row.leader_role_scope) : row.leaderRoleScope ? normalizeCollectionNicknameRoleScope(row.leaderRoleScope) : null,
-          memberNicknames,
-          memberNicknameIds,
-          createdBy: row.created_by ?? row.createdBy ?? null,
-          createdAt,
-          updatedAt
-        };
-      }
-      mapCollectionNicknameSessionRow(row) {
-        const verifiedAtRaw = row.verified_at ?? row.verifiedAt;
-        const updatedAtRaw = row.updated_at ?? row.updatedAt;
-        return {
-          activityId: String(row.activity_id ?? row.activityId ?? ""),
-          username: String(row.username ?? ""),
-          userRole: String(row.user_role ?? row.userRole ?? ""),
-          nickname: String(row.nickname ?? ""),
-          verifiedAt: verifiedAtRaw instanceof Date ? verifiedAtRaw : new Date(verifiedAtRaw ?? Date.now()),
-          updatedAt: updatedAtRaw instanceof Date ? updatedAtRaw : new Date(updatedAtRaw ?? Date.now())
-        };
-      }
       mapCollectionRecordRow(row) {
         const paymentDateRaw = row.payment_date ?? row.paymentDate;
         const paymentDate = typeof paymentDateRaw === "string" ? paymentDateRaw.slice(0, 10) : paymentDateRaw instanceof Date ? paymentDateRaw.toISOString().slice(0, 10) : "";
@@ -5169,92 +6309,11 @@ var init_collection_repository = __esm({
           createdAt
         };
       }
-      mapCollectionRecordReceiptRow(row) {
-        const createdAtRaw = row.created_at ?? row.createdAt;
-        const createdAt = createdAtRaw instanceof Date ? createdAtRaw : new Date(createdAtRaw ?? Date.now());
-        return {
-          id: String(row.id ?? ""),
-          collectionRecordId: String(row.collection_record_id ?? row.collectionRecordId ?? ""),
-          storagePath: String(row.storage_path ?? row.storagePath ?? ""),
-          originalFileName: String(row.original_file_name ?? row.originalFileName ?? ""),
-          originalMimeType: String(row.original_mime_type ?? row.originalMimeType ?? "application/octet-stream"),
-          originalExtension: String(row.original_extension ?? row.originalExtension ?? ""),
-          fileSize: Number(row.file_size ?? row.fileSize ?? 0),
-          createdAt
-        };
-      }
-      async loadReceiptMapByRecordIds(recordIds) {
-        const normalizedIds = Array.from(
-          new Set(
-            recordIds.map((value) => String(value || "").trim()).filter(Boolean)
-          )
-        );
-        const receiptMap = /* @__PURE__ */ new Map();
-        if (!normalizedIds.length) return receiptMap;
-        const idSql = sql17.join(normalizedIds.map((value) => sql17`${value}::uuid`), sql17`, `);
-        const result = await db.execute(sql17`
-      SELECT
-        id,
-        collection_record_id,
-        storage_path,
-        original_file_name,
-        original_mime_type,
-        original_extension,
-        file_size,
-        created_at
-      FROM public.collection_record_receipts
-      WHERE collection_record_id IN (${idSql})
-      ORDER BY created_at ASC, id ASC
-    `);
-        for (const row of result.rows || []) {
-          const receipt = this.mapCollectionRecordReceiptRow(row);
-          const current = receiptMap.get(receipt.collectionRecordId) || [];
-          current.push(receipt);
-          receiptMap.set(receipt.collectionRecordId, current);
-        }
-        return receiptMap;
-      }
-      async attachReceipts(records) {
-        if (!records.length) return records;
-        const receiptMap = await this.loadReceiptMapByRecordIds(records.map((record) => record.id));
-        return records.map((record) => {
-          const receipts = receiptMap.get(record.id) || [];
-          const firstReceiptPath = receipts[0]?.storagePath || record.receiptFile || null;
-          return {
-            ...record,
-            receiptFile: firstReceiptPath,
-            receipts
-          };
-        });
-      }
       async getCollectionStaffNicknames(filters) {
-        const conditions = [];
-        if (filters?.activeOnly === true) {
-          conditions.push(sql17`is_active = true`);
-        }
-        if (filters?.allowedRole === "admin") {
-          conditions.push(sql17`role_scope IN ('admin', 'both')`);
-        } else if (filters?.allowedRole === "user") {
-          conditions.push(sql17`role_scope IN ('user', 'both')`);
-        }
-        const whereSql = conditions.length > 0 ? sql17`WHERE ${sql17.join(conditions, sql17` AND `)}` : sql17``;
-        const result = await db.execute(sql17`
-      SELECT
-        id,
-        nickname,
-        is_active,
-        role_scope,
-        created_by,
-        created_at
-      FROM public.collection_staff_nicknames
-      ${whereSql}
-      ORDER BY is_active DESC, lower(nickname) ASC
-      LIMIT 1000
-    `);
-        return (result.rows || []).map((row) => this.mapCollectionStaffNicknameRow(row));
+        return listCollectionStaffNicknames(db, filters);
       }
       async getCollectionAdminUsers() {
-        const result = await db.execute(sql17`
+        const result = await db.execute(sql23`
       SELECT
         id,
         username,
@@ -5267,12 +6326,12 @@ var init_collection_repository = __esm({
       ORDER BY lower(username) ASC
       LIMIT 1000
     `);
-        return (result.rows || []).map((row) => this.mapCollectionAdminUserRow(row));
+        return (result.rows || []).map((row) => mapCollectionAdminUserRow(row));
       }
       async getCollectionAdminUserById(adminUserId) {
         const normalized = String(adminUserId || "").trim();
         if (!normalized) return void 0;
-        const result = await db.execute(sql17`
+        const result = await db.execute(sql23`
       SELECT
         id,
         username,
@@ -5287,298 +6346,28 @@ var init_collection_repository = __esm({
     `);
         const row = result.rows?.[0];
         if (!row) return void 0;
-        return this.mapCollectionAdminUserRow(row);
+        return mapCollectionAdminUserRow(row);
       }
       async getCollectionAdminAssignedNicknameIds(adminUserId) {
-        const normalized = String(adminUserId || "").trim();
-        if (!normalized) return [];
-        const result = await db.execute(sql17`
-      SELECT avn.nickname_id
-      FROM public.admin_visible_nicknames avn
-      WHERE avn.admin_user_id = ${normalized}
-      ORDER BY avn.nickname_id ASC
-      LIMIT 5000
-    `);
-        return (result.rows || []).map((row) => String(row.nickname_id || "").trim()).filter(Boolean);
+        return listCollectionAdminAssignedNicknameIds(db, adminUserId);
       }
       async getCollectionAdminVisibleNicknames(adminUserId, filters) {
-        const normalized = String(adminUserId || "").trim();
-        if (!normalized) return [];
-        const conditions = [sql17`avn.admin_user_id = ${normalized}`];
-        if (filters?.activeOnly === true) {
-          conditions.push(sql17`n.is_active = true`);
-        }
-        if (filters?.allowedRole === "admin") {
-          conditions.push(sql17`n.role_scope IN ('admin', 'both')`);
-        } else if (filters?.allowedRole === "user") {
-          conditions.push(sql17`n.role_scope IN ('user', 'both')`);
-        }
-        const whereSql = sql17`WHERE ${sql17.join(conditions, sql17` AND `)}`;
-        const result = await db.execute(sql17`
-      SELECT
-        n.id,
-        n.nickname,
-        n.is_active,
-        n.role_scope,
-        n.created_by,
-        n.created_at
-      FROM public.admin_visible_nicknames avn
-      INNER JOIN public.collection_staff_nicknames n
-        ON n.id = avn.nickname_id
-      INNER JOIN public.users u
-        ON u.id = avn.admin_user_id
-       AND u.role = 'admin'
-      ${whereSql}
-      ORDER BY n.is_active DESC, lower(n.nickname) ASC
-      LIMIT 1000
-    `);
-        return (result.rows || []).map((row) => this.mapCollectionStaffNicknameRow(row));
+        return listCollectionAdminVisibleNicknames(db, adminUserId, filters);
       }
       async setCollectionAdminAssignedNicknameIds(params) {
-        const adminUserId = String(params.adminUserId || "").trim();
-        const createdBySuperuser = String(params.createdBySuperuser || "").trim();
-        if (!adminUserId) {
-          throw new Error("adminUserId is required.");
-        }
-        if (!createdBySuperuser) {
-          throw new Error("createdBySuperuser is required.");
-        }
-        const normalizedNicknameIds = Array.isArray(params.nicknameIds) ? params.nicknameIds.map((value) => String(value || "").trim()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
         return db.transaction(async (tx) => {
-          const adminCheck = await tx.execute(sql17`
-        SELECT id
-        FROM public.users
-        WHERE id = ${adminUserId}
-          AND role = 'admin'
-        LIMIT 1
-      `);
-          if (!adminCheck.rows?.[0]) {
-            throw new Error("Admin user not found.");
-          }
-          let validNicknameIds = [];
-          if (normalizedNicknameIds.length > 0) {
-            const nicknameSql = sql17.join(
-              normalizedNicknameIds.map((value) => sql17`${value}::uuid`),
-              sql17`, `
-            );
-            const validRows = await tx.execute(sql17`
-          SELECT id
-          FROM public.collection_staff_nicknames
-          WHERE id IN (${nicknameSql})
-          LIMIT 5000
-        `);
-            validNicknameIds = (validRows.rows || []).map((row) => String(row.id || "").trim()).filter(Boolean);
-            if (validNicknameIds.length !== normalizedNicknameIds.length) {
-              throw new Error("Invalid nickname ids.");
-            }
-          }
-          await tx.execute(sql17`
-        DELETE FROM public.admin_visible_nicknames
-        WHERE admin_user_id = ${adminUserId}
-      `);
-          for (const nicknameId of validNicknameIds) {
-            await tx.execute(sql17`
-          INSERT INTO public.admin_visible_nicknames (
-            id,
-            admin_user_id,
-            nickname_id,
-            created_by_superuser,
-            created_at
-          )
-          VALUES (
-            ${randomUUID3()}::uuid,
-            ${adminUserId},
-            ${nicknameId}::uuid,
-            ${createdBySuperuser},
-            now()
-          )
-          ON CONFLICT (admin_user_id, nickname_id) DO NOTHING
-        `);
-          }
-          const assignedRows = await tx.execute(sql17`
-        SELECT nickname_id
-        FROM public.admin_visible_nicknames
-        WHERE admin_user_id = ${adminUserId}
-        ORDER BY nickname_id ASC
-      `);
-          return (assignedRows.rows || []).map((row) => String(row.nickname_id || "").trim()).filter(Boolean);
+          return replaceCollectionAdminAssignedNicknameIds(tx, params);
         });
       }
-      async resolveNicknameNamesByIds(tx, nicknameIds) {
-        const normalizedIds = Array.isArray(nicknameIds) ? nicknameIds.map((value) => String(value || "").trim()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
-        if (!normalizedIds.length) return [];
-        const idSql = sql17.join(normalizedIds.map((value) => sql17`${value}::uuid`), sql17`, `);
-        const result = await tx.execute(sql17`
-      SELECT id, nickname, role_scope, is_active
-      FROM public.collection_staff_nicknames
-      WHERE id IN (${idSql})
-      LIMIT 5000
-    `);
-        const rows = (result.rows || []).map((row) => ({
-          id: String(row.id || "").trim(),
-          nickname: String(row.nickname || "").trim(),
-          roleScope: normalizeCollectionNicknameRoleScope(row.role_scope),
-          isActive: Boolean(row.is_active)
-        }));
-        if (rows.length !== normalizedIds.length) {
-          throw new Error("Invalid nickname ids.");
-        }
-        return rows;
-      }
-      async validateAdminGroupComposition(params) {
-        const leaderLower = params.leaderNickname.toLowerCase();
-        const uniqueMembers = Array.from(new Set(
-          params.memberNicknames.map((value) => String(value || "").trim()).filter(Boolean)
-        ));
-        const memberLower = uniqueMembers.map((value) => value.toLowerCase());
-        if (memberLower.includes(leaderLower)) {
-          throw new Error("Leader nickname cannot be a member of the same group.");
-        }
-        const leaderRows = await params.tx.execute(sql17`
-      SELECT id
-      FROM public.admin_groups
-      WHERE lower(leader_nickname) = lower(${params.leaderNickname})
-        ${params.groupIdToExclude ? sql17`AND id <> ${params.groupIdToExclude}::uuid` : sql17``}
-      LIMIT 1
-    `);
-        if (leaderRows.rows?.[0]) {
-          throw new Error("Leader nickname already assigned.");
-        }
-        if (!memberLower.length) return;
-        const membersSql = sql17.join(memberLower.map((value) => sql17`${value}`), sql17`, `);
-        const memberConflict = await params.tx.execute(sql17`
-      SELECT member_nickname
-      FROM public.admin_group_members
-      WHERE lower(member_nickname) IN (${membersSql})
-        ${params.groupIdToExclude ? sql17`AND admin_group_id <> ${params.groupIdToExclude}::uuid` : sql17``}
-      LIMIT 1
-    `);
-        if (memberConflict.rows?.[0]) {
-          throw new Error("This nickname is already assigned to another admin group.");
-        }
-        const leaderConflict = await params.tx.execute(sql17`
-      SELECT leader_nickname
-      FROM public.admin_groups
-      WHERE lower(leader_nickname) IN (${membersSql})
-        ${params.groupIdToExclude ? sql17`AND id <> ${params.groupIdToExclude}::uuid` : sql17``}
-      LIMIT 1
-    `);
-        if (leaderConflict.rows?.[0]) {
-          throw new Error("Group member conflicts with another group leader.");
-        }
-      }
       async getCollectionAdminGroups() {
-        const nicknameRows = await db.execute(sql17`
-      SELECT id, nickname
-      FROM public.collection_staff_nicknames
-      LIMIT 5000
-    `);
-        const nicknameIdByLowerName = /* @__PURE__ */ new Map();
-        for (const row of nicknameRows.rows || []) {
-          const nickname = String(row.nickname || "").trim().toLowerCase();
-          const id = String(row.id || "").trim();
-          if (!nickname || !id || nicknameIdByLowerName.has(nickname)) continue;
-          nicknameIdByLowerName.set(nickname, id);
-        }
-        const result = await db.execute(sql17`
-      SELECT
-        g.id,
-        g.leader_nickname,
-        g.created_by,
-        g.created_at,
-        g.updated_at,
-        leader.id AS leader_nickname_id,
-        leader.is_active AS leader_is_active,
-        leader.role_scope AS leader_role_scope,
-        COALESCE(
-          array_agg(DISTINCT gm.member_nickname) FILTER (WHERE gm.member_nickname IS NOT NULL),
-          ARRAY[]::text[]
-        ) AS member_nicknames
-      FROM public.admin_groups g
-      LEFT JOIN public.collection_staff_nicknames leader
-        ON lower(leader.nickname) = lower(g.leader_nickname)
-      LEFT JOIN public.admin_group_members gm
-        ON gm.admin_group_id = g.id
-      GROUP BY
-        g.id,
-        g.leader_nickname,
-        g.created_by,
-        g.created_at,
-        g.updated_at,
-        leader.id,
-        leader.is_active,
-        leader.role_scope
-      ORDER BY lower(g.leader_nickname) ASC
-      LIMIT 5000
-    `);
-        return (result.rows || []).map((row) => this.mapCollectionAdminGroupRow(row, nicknameIdByLowerName));
+        return listCollectionAdminGroups(db);
       }
       async getCollectionAdminGroupById(groupId) {
-        const normalizedGroupId = String(groupId || "").trim();
-        if (!normalizedGroupId) return void 0;
-        const groups = await this.getCollectionAdminGroups();
-        return groups.find((item) => item.id === normalizedGroupId);
+        return findCollectionAdminGroupById(db, groupId);
       }
       async createCollectionAdminGroup(params) {
-        const createdBy = String(params.createdBy || "").trim();
-        if (!createdBy) {
-          throw new Error("createdBy is required.");
-        }
         const createdGroupId = await db.transaction(async (tx) => {
-          const leaderRows = await this.resolveNicknameNamesByIds(tx, [params.leaderNicknameId]);
-          const leader = leaderRows[0];
-          if (!leader || !leader.nickname) {
-            throw new Error("Invalid leader nickname.");
-          }
-          if (!(leader.roleScope === "admin" || leader.roleScope === "both")) {
-            throw new Error("Leader nickname must have admin scope.");
-          }
-          if (!leader.isActive) {
-            throw new Error("Leader nickname must be active.");
-          }
-          const memberRows = await this.resolveNicknameNamesByIds(tx, params.memberNicknameIds || []);
-          const memberNicknames = memberRows.map((item) => item.nickname).filter(Boolean);
-          await this.validateAdminGroupComposition({
-            tx,
-            leaderNickname: leader.nickname,
-            memberNicknames
-          });
-          const groupId = randomUUID3();
-          await tx.execute(sql17`
-        INSERT INTO public.admin_groups (
-          id,
-          leader_nickname,
-          created_by,
-          created_at,
-          updated_at
-        )
-        VALUES (
-          ${groupId}::uuid,
-          ${leader.nickname},
-          ${createdBy},
-          now(),
-          now()
-        )
-      `);
-          for (const memberNickname of memberNicknames) {
-            if (!memberNickname || memberNickname.toLowerCase() === leader.nickname.toLowerCase()) continue;
-            await tx.execute(sql17`
-          INSERT INTO public.admin_group_members (
-            id,
-            admin_group_id,
-            member_nickname,
-            created_at
-          )
-          VALUES (
-            ${randomUUID3()}::uuid,
-            ${groupId}::uuid,
-            ${memberNickname},
-            now()
-          )
-          ON CONFLICT DO NOTHING
-        `);
-          }
-          return groupId;
+          return createCollectionAdminGroupInTransaction(tx, params);
         });
         const created = await this.getCollectionAdminGroupById(createdGroupId);
         if (!created) {
@@ -5587,457 +6376,58 @@ var init_collection_repository = __esm({
         return created;
       }
       async updateCollectionAdminGroup(params) {
-        const groupId = String(params.groupId || "").trim();
-        const updatedBy = String(params.updatedBy || "").trim();
-        if (!groupId) {
-          throw new Error("groupId is required.");
-        }
-        if (!updatedBy) {
-          throw new Error("updatedBy is required.");
-        }
         const updatedGroupId = await db.transaction(async (tx) => {
-          const existingRow = await tx.execute(sql17`
-        SELECT id, leader_nickname
-        FROM public.admin_groups
-        WHERE id = ${groupId}::uuid
-        LIMIT 1
-      `);
-          const existing = existingRow.rows?.[0];
-          if (!existing) {
-            return null;
-          }
-          let leaderNickname = String(existing.leader_nickname || "").trim();
-          if (params.leaderNicknameId) {
-            const leaderRows = await this.resolveNicknameNamesByIds(tx, [params.leaderNicknameId]);
-            const leader = leaderRows[0];
-            if (!leader || !leader.nickname) {
-              throw new Error("Invalid leader nickname.");
-            }
-            if (!(leader.roleScope === "admin" || leader.roleScope === "both")) {
-              throw new Error("Leader nickname must have admin scope.");
-            }
-            if (!leader.isActive) {
-              throw new Error("Leader nickname must be active.");
-            }
-            leaderNickname = leader.nickname;
-          }
-          let memberNicknames = [];
-          if (params.memberNicknameIds !== void 0) {
-            const memberRows = await this.resolveNicknameNamesByIds(tx, params.memberNicknameIds || []);
-            memberNicknames = memberRows.map((item) => item.nickname).filter(Boolean);
-          } else {
-            const existingMembers = await tx.execute(sql17`
-          SELECT member_nickname
-          FROM public.admin_group_members
-          WHERE admin_group_id = ${groupId}::uuid
-          LIMIT 5000
-        `);
-            memberNicknames = (existingMembers.rows || []).map((row) => String(row.member_nickname || "").trim()).filter(Boolean);
-          }
-          await this.validateAdminGroupComposition({
-            tx,
-            groupIdToExclude: groupId,
-            leaderNickname,
-            memberNicknames
-          });
-          await tx.execute(sql17`
-        UPDATE public.admin_groups
-        SET
-          leader_nickname = ${leaderNickname},
-          created_by = COALESCE(NULLIF(trim(COALESCE(created_by, '')), ''), ${updatedBy}),
-          updated_at = now()
-        WHERE id = ${groupId}::uuid
-      `);
-          await tx.execute(sql17`
-        DELETE FROM public.admin_group_members
-        WHERE admin_group_id = ${groupId}::uuid
-      `);
-          for (const memberNickname of memberNicknames) {
-            if (!memberNickname || memberNickname.toLowerCase() === leaderNickname.toLowerCase()) continue;
-            await tx.execute(sql17`
-          INSERT INTO public.admin_group_members (
-            id,
-            admin_group_id,
-            member_nickname,
-            created_at
-          )
-          VALUES (
-            ${randomUUID3()}::uuid,
-            ${groupId}::uuid,
-            ${memberNickname},
-            now()
-          )
-          ON CONFLICT DO NOTHING
-        `);
-          }
-          return groupId;
+          return updateCollectionAdminGroupInTransaction(tx, params);
         });
         if (!updatedGroupId) return void 0;
         return this.getCollectionAdminGroupById(updatedGroupId);
       }
       async deleteCollectionAdminGroup(groupId) {
-        const normalizedGroupId = String(groupId || "").trim();
-        if (!normalizedGroupId) return false;
         return db.transaction(async (tx) => {
-          await tx.execute(sql17`
-        DELETE FROM public.admin_group_members
-        WHERE admin_group_id = ${normalizedGroupId}::uuid
-      `);
-          const result = await tx.execute(sql17`
-        DELETE FROM public.admin_groups
-        WHERE id = ${normalizedGroupId}::uuid
-        RETURNING id
-      `);
-          return Boolean(result.rows?.[0]);
+          return deleteCollectionAdminGroupInTransaction(tx, groupId);
         });
       }
       async getCollectionAdminGroupVisibleNicknameValuesByLeader(leaderNickname) {
-        const normalizedLeader = String(leaderNickname || "").trim();
-        if (!normalizedLeader) return [];
-        const rows = await db.execute(sql17`
-      SELECT
-        g.leader_nickname,
-        COALESCE(
-          array_agg(DISTINCT gm.member_nickname) FILTER (WHERE gm.member_nickname IS NOT NULL),
-          ARRAY[]::text[]
-        ) AS member_nicknames
-      FROM public.admin_groups g
-      LEFT JOIN public.admin_group_members gm
-        ON gm.admin_group_id = g.id
-      WHERE lower(g.leader_nickname) = lower(${normalizedLeader})
-      GROUP BY g.id, g.leader_nickname
-      LIMIT 1
-    `);
-        const row = rows.rows?.[0];
-        if (!row) {
-          return [normalizedLeader];
-        }
-        const members = Array.isArray(row.member_nicknames) ? row.member_nicknames.map((value) => String(value || "").trim()).filter(Boolean) : [];
-        const uniqueMembers = Array.from(new Set(members.filter((value) => value.toLowerCase() !== normalizedLeader.toLowerCase()))).sort((a, b) => a.localeCompare(b, void 0, { sensitivity: "base" }));
-        return [String(row.leader_nickname || normalizedLeader).trim(), ...uniqueMembers];
+        return getCollectionAdminGroupVisibleNicknameValuesByLeader(db, leaderNickname);
       }
       async setCollectionNicknameSession(params) {
-        const activityId = String(params.activityId || "").trim();
-        const username = String(params.username || "").trim();
-        const userRole = String(params.userRole || "").trim();
-        const nickname = String(params.nickname || "").trim();
-        if (!activityId || !username || !userRole || !nickname) {
-          throw new Error("Invalid collection nickname session payload.");
-        }
-        await db.execute(sql17`
-      INSERT INTO public.collection_nickname_sessions (
-        activity_id,
-        username,
-        user_role,
-        nickname,
-        verified_at,
-        updated_at
-      )
-      VALUES (
-        ${activityId},
-        ${username},
-        ${userRole},
-        ${nickname},
-        now(),
-        now()
-      )
-      ON CONFLICT (activity_id) DO UPDATE
-      SET
-        username = EXCLUDED.username,
-        user_role = EXCLUDED.user_role,
-        nickname = EXCLUDED.nickname,
-        updated_at = now()
-    `);
+        return setCollectionNicknameSessionValue(db, params);
       }
       async getCollectionNicknameSessionByActivity(activityId) {
-        const normalizedActivityId = String(activityId || "").trim();
-        if (!normalizedActivityId) return void 0;
-        const result = await db.execute(sql17`
-      SELECT
-        activity_id,
-        username,
-        user_role,
-        nickname,
-        verified_at,
-        updated_at
-      FROM public.collection_nickname_sessions
-      WHERE activity_id = ${normalizedActivityId}
-      LIMIT 1
-    `);
-        const row = result.rows?.[0];
-        if (!row) return void 0;
-        return this.mapCollectionNicknameSessionRow(row);
+        return getCollectionNicknameSessionValueByActivity(db, activityId);
       }
       async clearCollectionNicknameSessionByActivity(activityId) {
-        const normalizedActivityId = String(activityId || "").trim();
-        if (!normalizedActivityId) return;
-        await db.execute(sql17`
-      DELETE FROM public.collection_nickname_sessions
-      WHERE activity_id = ${normalizedActivityId}
-    `);
+        return clearCollectionNicknameSessionValueByActivity(db, activityId);
       }
       async getCollectionStaffNicknameById(id) {
-        const result = await db.execute(sql17`
-      SELECT
-        id,
-        nickname,
-        is_active,
-        role_scope,
-        created_by,
-        created_at
-      FROM public.collection_staff_nicknames
-      WHERE id = ${id}::uuid
-      LIMIT 1
-    `);
-        const row = result.rows?.[0];
-        if (!row) return void 0;
-        return this.mapCollectionStaffNicknameRow(row);
+        return getCollectionStaffNicknameByIdValue(db, id);
       }
       async getCollectionStaffNicknameByName(nickname) {
-        const normalized = String(nickname || "").trim();
-        if (!normalized) return void 0;
-        const result = await db.execute(sql17`
-      SELECT
-        id,
-        nickname,
-        is_active,
-        role_scope,
-        created_by,
-        created_at
-      FROM public.collection_staff_nicknames
-      WHERE lower(nickname) = lower(${normalized})
-      LIMIT 1
-    `);
-        const row = result.rows?.[0];
-        if (!row) return void 0;
-        return this.mapCollectionStaffNicknameRow(row);
+        return getCollectionStaffNicknameByNameValue(db, nickname);
       }
       async getCollectionNicknameAuthProfileByName(nickname) {
-        const normalized = String(nickname || "").trim();
-        if (!normalized) return void 0;
-        const result = await db.execute(sql17`
-      SELECT
-        id,
-        nickname,
-        is_active,
-        role_scope,
-        nickname_password_hash,
-        must_change_password,
-        password_reset_by_superuser,
-        password_updated_at
-      FROM public.collection_staff_nicknames
-      WHERE lower(nickname) = lower(${normalized})
-      LIMIT 1
-    `);
-        const row = result.rows?.[0];
-        if (!row) return void 0;
-        return this.mapCollectionNicknameAuthProfileRow(row);
+        return getCollectionNicknameAuthProfileByNameValue(db, nickname);
       }
       async setCollectionNicknamePassword(params) {
-        const nicknameId = String(params.nicknameId || "").trim();
-        const passwordHash = String(params.passwordHash || "").trim();
-        const mustChangePassword = params.mustChangePassword ?? false;
-        const passwordResetBySuperuser = params.passwordResetBySuperuser ?? false;
-        const passwordUpdatedAt = params.passwordUpdatedAt ?? /* @__PURE__ */ new Date();
-        if (!nicknameId) {
-          throw new Error("nicknameId is required.");
-        }
-        if (!passwordHash) {
-          throw new Error("passwordHash is required.");
-        }
-        await db.execute(sql17`
-      UPDATE public.collection_staff_nicknames
-      SET
-        nickname_password_hash = ${passwordHash},
-        must_change_password = ${mustChangePassword},
-        password_reset_by_superuser = ${passwordResetBySuperuser},
-        password_updated_at = ${passwordUpdatedAt}
-      WHERE id = ${nicknameId}::uuid
-    `);
+        return setCollectionNicknamePasswordValue(db, params);
       }
       async createCollectionStaffNickname(data) {
-        const result = await db.execute(sql17`
-      INSERT INTO public.collection_staff_nicknames (
-        id,
-        nickname,
-        is_active,
-        role_scope,
-        nickname_password_hash,
-        must_change_password,
-        password_reset_by_superuser,
-        password_updated_at,
-        created_by,
-        created_at
-      )
-      VALUES (
-        ${randomUUID3()}::uuid,
-        ${data.nickname},
-        true,
-        ${normalizeCollectionNicknameRoleScope(data.roleScope)},
-        NULL,
-        true,
-        false,
-        NULL,
-        ${data.createdBy},
-        now()
-      )
-      RETURNING
-        id,
-        nickname,
-        is_active,
-        role_scope,
-        created_by,
-        created_at
-    `);
-        return this.mapCollectionStaffNicknameRow(result.rows[0]);
+        return createCollectionStaffNicknameValue(db, data);
       }
       async updateCollectionStaffNickname(id, data) {
-        const existing = await this.getCollectionStaffNicknameById(id);
-        if (!existing) return void 0;
-        const updates = [];
-        if (data.nickname !== void 0) {
-          updates.push(sql17`nickname = ${data.nickname}`);
-        }
-        if (data.isActive !== void 0) {
-          updates.push(sql17`is_active = ${data.isActive}`);
-        }
-        if (data.roleScope !== void 0) {
-          updates.push(sql17`role_scope = ${normalizeCollectionNicknameRoleScope(data.roleScope)}`);
-        }
-        if (!updates.length) {
-          return existing;
-        }
         return db.transaction(async (tx) => {
-          const result = await tx.execute(sql17`
-        UPDATE public.collection_staff_nicknames
-        SET ${sql17.join(updates, sql17`, `)}
-        WHERE id = ${id}::uuid
-        RETURNING
-          id,
-          nickname,
-          is_active,
-          role_scope,
-          created_by,
-          created_at
-      `);
-          const row = result.rows?.[0];
-          if (!row) return void 0;
-          const updated = this.mapCollectionStaffNicknameRow(row);
-          const oldNickname = String(existing.nickname || "").trim();
-          const newNickname = String(updated.nickname || "").trim();
-          if (oldNickname && newNickname && oldNickname.toLowerCase() !== newNickname.toLowerCase()) {
-            await tx.execute(sql17`
-          UPDATE public.admin_groups
-          SET
-            leader_nickname = ${newNickname},
-            updated_at = now()
-          WHERE lower(leader_nickname) = lower(${oldNickname})
-        `);
-            await tx.execute(sql17`
-          UPDATE public.admin_group_members
-          SET member_nickname = ${newNickname}
-          WHERE lower(member_nickname) = lower(${oldNickname})
-        `);
-            await tx.execute(sql17`
-          UPDATE public.collection_nickname_sessions
-          SET
-            nickname = ${newNickname},
-            updated_at = now()
-          WHERE lower(nickname) = lower(${oldNickname})
-        `);
-          }
-          return updated;
+          return updateCollectionStaffNicknameValue(tx, id, data);
         });
       }
       async deleteCollectionStaffNickname(id) {
-        const existing = await this.getCollectionStaffNicknameById(id);
-        if (!existing) {
-          return { deleted: false, deactivated: false };
-        }
-        const usage = await db.execute(sql17`
-      SELECT COUNT(*)::int AS total
-      FROM public.collection_records
-      WHERE lower(collection_staff_nickname) = lower(${existing.nickname})
-      LIMIT 1
-    `);
-        const total = Number(usage.rows?.[0]?.total ?? 0);
-        if (total > 0) {
-          await db.execute(sql17`
-        UPDATE public.collection_staff_nicknames
-        SET is_active = false
-        WHERE id = ${id}::uuid
-      `);
-          return { deleted: false, deactivated: true };
-        }
-        await db.execute(sql17`
-      DELETE FROM public.admin_visible_nicknames
-      WHERE nickname_id = ${id}::uuid
-    `);
-        await db.execute(sql17`
-      DELETE FROM public.admin_group_members
-      WHERE lower(member_nickname) = lower(${existing.nickname})
-    `);
-        await db.execute(sql17`
-      DELETE FROM public.admin_groups
-      WHERE lower(leader_nickname) = lower(${existing.nickname})
-    `);
-        await db.execute(sql17`
-      DELETE FROM public.collection_nickname_sessions
-      WHERE lower(nickname) = lower(${existing.nickname})
-    `);
-        await db.execute(sql17`
-      DELETE FROM public.collection_staff_nicknames
-      WHERE id = ${id}::uuid
-    `);
-        return { deleted: true, deactivated: false };
+        return deleteCollectionStaffNicknameValue(db, id);
       }
       async isCollectionStaffNicknameActive(nickname) {
-        const normalized = String(nickname || "").trim();
-        if (!normalized) return false;
-        const result = await db.execute(sql17`
-      SELECT id
-      FROM public.collection_staff_nicknames
-      WHERE lower(nickname) = lower(${normalized})
-        AND is_active = true
-      LIMIT 1
-    `);
-        return Boolean(result.rows?.[0]);
-      }
-      buildCollectionRecordConditions(filters) {
-        const conditions = [];
-        if (filters?.from) {
-          conditions.push(sql17`payment_date >= ${filters.from}::date`);
-        }
-        if (filters?.to) {
-          conditions.push(sql17`payment_date <= ${filters.to}::date`);
-        }
-        const search = String(filters?.search || "").trim();
-        if (search) {
-          const like = `%${search}%`;
-          conditions.push(sql17`(
-        customer_name ILIKE ${like}
-        OR ic_number ILIKE ${like}
-        OR account_number ILIKE ${like}
-        OR batch ILIKE ${like}
-        OR customer_phone ILIKE ${like}
-        OR amount::text ILIKE ${like}
-      )`);
-        }
-        const createdByLogin = String(filters?.createdByLogin || "").trim();
-        if (createdByLogin) {
-          conditions.push(sql17`created_by_login = ${createdByLogin}`);
-        }
-        const nicknameSource = filters?.nicknames;
-        const nicknames = Array.isArray(nicknameSource) ? nicknameSource.map((value) => String(value || "").trim().toLowerCase()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
-        if (nicknames.length > 0) {
-          const nicknameSql = sql17.join(nicknames.map((value) => sql17`${value}`), sql17`, `);
-          conditions.push(sql17`lower(collection_staff_nickname) IN (${nicknameSql})`);
-        }
-        return conditions;
+        return isCollectionStaffNicknameActiveValue(db, nickname);
       }
       async createCollectionRecord(data) {
-        const id = randomUUID3();
-        await db.execute(sql17`
+        const id = randomUUID7();
+        await db.execute(sql23`
       INSERT INTO public.collection_records (
         id,
         customer_name,
@@ -6076,13 +6466,12 @@ var init_collection_repository = __esm({
         return created;
       }
       async listCollectionRecords(filters) {
-        const conditions = this.buildCollectionRecordConditions(filters);
-        const whereSql = conditions.length ? sql17`WHERE ${sql17.join(conditions, sql17` AND `)}` : sql17``;
+        const whereSql = buildCollectionRecordWhereSql(filters);
         const parsedLimit = Number(filters?.limit);
         const safeLimit = Number.isFinite(parsedLimit) ? Math.min(2e3, Math.max(1, Math.floor(parsedLimit))) : 500;
         const parsedOffset = Number(filters?.offset);
         const safeOffset = Number.isFinite(parsedOffset) ? Math.max(0, Math.floor(parsedOffset)) : 0;
-        const result = await db.execute(sql17`
+        const result = await db.execute(sql23`
       SELECT
         id,
         customer_name,
@@ -6104,23 +6493,18 @@ var init_collection_repository = __esm({
       OFFSET ${safeOffset}
     `);
         const records = (result.rows || []).map((row) => this.mapCollectionRecordRow(row));
-        return this.attachReceipts(records);
+        return attachCollectionReceipts(db, records);
       }
       async summarizeCollectionRecords(filters) {
-        const conditions = this.buildCollectionRecordConditions(filters);
-        const whereSql = conditions.length ? sql17`WHERE ${sql17.join(conditions, sql17` AND `)}` : sql17``;
-        const result = await db.execute(sql17`
+        const whereSql = buildCollectionRecordWhereSql(filters);
+        const result = await db.execute(sql23`
       SELECT
         COUNT(*)::int AS total_records,
         COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
       FROM public.collection_records
       ${whereSql}
     `);
-        const row = result.rows?.[0];
-        return {
-          totalRecords: Number(row?.total_records ?? 0),
-          totalAmount: Number(row?.total_amount ?? 0)
-        };
+        return mapCollectionAggregateRow(result.rows?.[0]);
       }
       async summarizeCollectionRecordsOlderThan(beforeDate) {
         const normalizedBeforeDate = String(beforeDate || "").trim();
@@ -6130,18 +6514,14 @@ var init_collection_repository = __esm({
             totalAmount: 0
           };
         }
-        const result = await db.execute(sql17`
+        const result = await db.execute(sql23`
       SELECT
         COUNT(*)::int AS total_records,
         COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
       FROM public.collection_records
       WHERE payment_date < ${normalizedBeforeDate}::date
     `);
-        const row = result.rows?.[0];
-        return {
-          totalRecords: Number(row?.total_records ?? 0),
-          totalAmount: Number(row?.total_amount ?? 0)
-        };
+        return mapCollectionAggregateRow(result.rows?.[0]);
       }
       async purgeCollectionRecordsOlderThan(beforeDate) {
         const normalizedBeforeDate = String(beforeDate || "").trim();
@@ -6153,7 +6533,7 @@ var init_collection_repository = __esm({
           };
         }
         return db.transaction(async (tx) => {
-          const oldRecordsResult = await tx.execute(sql17`
+          const oldRecordsResult = await tx.execute(sql23`
         SELECT
           id,
           amount,
@@ -6170,7 +6550,7 @@ var init_collection_repository = __esm({
               receiptPaths: []
             };
           }
-          const recordIds = oldRecordRows.map((row) => String(row.id || "").trim()).filter(Boolean);
+          const recordIds = extractCollectionRecordIds(oldRecordRows);
           if (!recordIds.length) {
             return {
               totalRecords: 0,
@@ -6178,58 +6558,34 @@ var init_collection_repository = __esm({
               receiptPaths: []
             };
           }
-          const recordIdSql = sql17.join(recordIds.map((value) => sql17`${value}::uuid`), sql17`, `);
-          const receiptRowsResult = await tx.execute(sql17`
+          const recordIdSql = sql23.join(recordIds.map((value) => sql23`${value}::uuid`), sql23`, `);
+          const receiptRowsResult = await tx.execute(sql23`
         SELECT storage_path
         FROM public.collection_record_receipts
         WHERE collection_record_id IN (${recordIdSql})
       `);
-          await tx.execute(sql17`
+          await tx.execute(sql23`
         DELETE FROM public.collection_record_receipts
         WHERE collection_record_id IN (${recordIdSql})
       `);
-          await tx.execute(sql17`
+          await tx.execute(sql23`
         DELETE FROM public.collection_records
         WHERE id IN (${recordIdSql})
       `);
-          const receiptPaths = Array.from(
-            new Set(
-              [
-                ...oldRecordRows.map((row) => String(row.receipt_file || "").trim()),
-                ...Array.isArray(receiptRowsResult.rows) ? receiptRowsResult.rows.map((row) => String(row.storage_path || "").trim()) : []
-              ].filter(Boolean)
-            )
+          const receiptPaths = collectCollectionReceiptPaths(
+            oldRecordRows,
+            Array.isArray(receiptRowsResult.rows) ? receiptRowsResult.rows : []
           );
           return {
             totalRecords: oldRecordRows.length,
-            totalAmount: oldRecordRows.reduce(
-              (sum, row) => sum + Number(row.amount ?? 0),
-              0
-            ),
+            totalAmount: sumCollectionRowAmounts(oldRecordRows),
             receiptPaths
           };
         });
       }
       async getCollectionMonthlySummary(filters) {
-        const safeYear = Number.isFinite(filters.year) ? Math.min(2100, Math.max(2e3, Math.floor(filters.year))) : (/* @__PURE__ */ new Date()).getFullYear();
-        const yearStart = `${safeYear}-01-01`;
-        const yearEnd = `${safeYear}-12-31`;
-        const createdByLogin = String(filters.createdByLogin || "").trim();
-        const nicknameSource = filters.nicknames;
-        const nicknames = Array.isArray(nicknameSource) ? nicknameSource.map((value) => String(value || "").trim().toLowerCase()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
-        const conditions = [
-          sql17`payment_date >= ${yearStart}::date`,
-          sql17`payment_date <= ${yearEnd}::date`
-        ];
-        if (nicknames.length > 0) {
-          const nicknameSql = sql17.join(nicknames.map((value) => sql17`${value}`), sql17`, `);
-          conditions.push(sql17`lower(collection_staff_nickname) IN (${nicknameSql})`);
-        }
-        if (createdByLogin) {
-          conditions.push(sql17`created_by_login = ${createdByLogin}`);
-        }
-        const whereSql = sql17`WHERE ${sql17.join(conditions, sql17` AND `)}`;
-        const result = await db.execute(sql17`
+        const { whereSql } = buildCollectionMonthlySummaryWhereSql(filters);
+        const result = await db.execute(sql23`
       SELECT
         EXTRACT(MONTH FROM payment_date)::int AS month,
         COUNT(*)::int AS total_records,
@@ -6240,28 +6596,10 @@ var init_collection_repository = __esm({
       ORDER BY 1
       LIMIT 12
     `);
-        const byMonth = /* @__PURE__ */ new Map();
-        for (const row of result.rows || []) {
-          const month = Number(row.month ?? 0);
-          if (!Number.isFinite(month) || month < 1 || month > 12) continue;
-          byMonth.set(month, {
-            totalRecords: Number(row.total_records ?? 0),
-            totalAmount: Number(row.total_amount ?? 0)
-          });
-        }
-        return COLLECTION_MONTH_NAMES.map((monthName, index) => {
-          const month = index + 1;
-          const data = byMonth.get(month);
-          return {
-            month,
-            monthName,
-            totalRecords: data?.totalRecords ?? 0,
-            totalAmount: data?.totalAmount ?? 0
-          };
-        });
+        return mapCollectionMonthlySummaryRows(result.rows || []);
       }
       async getCollectionRecordById(id) {
-        const result = await db.execute(sql17`
+        const result = await db.execute(sql23`
       SELECT
         id,
         customer_name,
@@ -6282,184 +6620,60 @@ var init_collection_repository = __esm({
     `);
         const row = result.rows?.[0];
         if (!row) return void 0;
-        const [record] = await this.attachReceipts([this.mapCollectionRecordRow(row)]);
+        const [record] = await attachCollectionReceipts(db, [this.mapCollectionRecordRow(row)]);
         return record;
       }
       async listCollectionRecordReceipts(recordId) {
-        const normalizedRecordId = String(recordId || "").trim();
-        if (!normalizedRecordId) return [];
-        const result = await db.execute(sql17`
-      SELECT
-        id,
-        collection_record_id,
-        storage_path,
-        original_file_name,
-        original_mime_type,
-        original_extension,
-        file_size,
-        created_at
-      FROM public.collection_record_receipts
-      WHERE collection_record_id = ${normalizedRecordId}::uuid
-      ORDER BY created_at ASC, id ASC
-    `);
-        return (result.rows || []).map((row) => this.mapCollectionRecordReceiptRow(row));
+        return listCollectionRecordReceiptsByRecordId(db, recordId);
       }
       async getCollectionRecordReceiptById(recordId, receiptId) {
-        const normalizedRecordId = String(recordId || "").trim();
-        const normalizedReceiptId = String(receiptId || "").trim();
-        if (!normalizedRecordId || !normalizedReceiptId) return void 0;
-        const result = await db.execute(sql17`
-      SELECT
-        id,
-        collection_record_id,
-        storage_path,
-        original_file_name,
-        original_mime_type,
-        original_extension,
-        file_size,
-        created_at
-      FROM public.collection_record_receipts
-      WHERE collection_record_id = ${normalizedRecordId}::uuid
-        AND id = ${normalizedReceiptId}::uuid
-      LIMIT 1
-    `);
-        const row = result.rows?.[0];
-        if (!row) return void 0;
-        return this.mapCollectionRecordReceiptRow(row);
+        return getCollectionRecordReceiptByIdForRecord(db, recordId, receiptId);
       }
       async createCollectionRecordReceipts(recordId, receipts) {
-        const normalizedRecordId = String(recordId || "").trim();
-        if (!normalizedRecordId || !Array.isArray(receipts) || !receipts.length) {
-          return [];
-        }
-        const insertedIds = [];
-        for (const receipt of receipts) {
-          const id = randomUUID3();
-          insertedIds.push(id);
-          await db.execute(sql17`
-        INSERT INTO public.collection_record_receipts (
-          id,
-          collection_record_id,
-          storage_path,
-          original_file_name,
-          original_mime_type,
-          original_extension,
-          file_size,
-          created_at
-        )
-        VALUES (
-          ${id}::uuid,
-          ${normalizedRecordId}::uuid,
-          ${receipt.storagePath},
-          ${receipt.originalFileName},
-          ${receipt.originalMimeType},
-          ${receipt.originalExtension},
-          ${receipt.fileSize},
-          now()
-        )
-      `);
-        }
-        const idSql = sql17.join(insertedIds.map((value) => sql17`${value}::uuid`), sql17`, `);
-        const result = await db.execute(sql17`
-      SELECT
-        id,
-        collection_record_id,
-        storage_path,
-        original_file_name,
-        original_mime_type,
-        original_extension,
-        file_size,
-        created_at
-      FROM public.collection_record_receipts
-      WHERE id IN (${idSql})
-      ORDER BY created_at ASC, id ASC
-    `);
-        return (result.rows || []).map((row) => this.mapCollectionRecordReceiptRow(row));
+        return createCollectionRecordReceiptRows(db, recordId, receipts);
       }
       async deleteCollectionRecordReceipts(recordId, receiptIds) {
-        const normalizedRecordId = String(recordId || "").trim();
-        const normalizedReceiptIds = Array.from(
-          new Set(
-            (Array.isArray(receiptIds) ? receiptIds : []).map((value) => String(value || "").trim()).filter(Boolean)
-          )
-        );
-        if (!normalizedRecordId || !normalizedReceiptIds.length) {
-          return [];
-        }
-        const idSql = sql17.join(normalizedReceiptIds.map((value) => sql17`${value}::uuid`), sql17`, `);
-        const existing = await db.execute(sql17`
-      SELECT
-        id,
-        collection_record_id,
-        storage_path,
-        original_file_name,
-        original_mime_type,
-        original_extension,
-        file_size,
-        created_at
-      FROM public.collection_record_receipts
-      WHERE collection_record_id = ${normalizedRecordId}::uuid
-        AND id IN (${idSql})
-    `);
-        const receipts = (existing.rows || []).map((row) => this.mapCollectionRecordReceiptRow(row));
-        if (!receipts.length) {
-          return [];
-        }
-        await db.execute(sql17`
-      DELETE FROM public.collection_record_receipts
-      WHERE collection_record_id = ${normalizedRecordId}::uuid
-        AND id IN (${idSql})
-    `);
-        return receipts;
+        return deleteCollectionRecordReceiptRows(db, recordId, receiptIds);
       }
       async deleteAllCollectionRecordReceipts(recordId) {
-        const receipts = await this.listCollectionRecordReceipts(recordId);
-        if (!receipts.length) {
-          return [];
-        }
-        const idSql = sql17.join(receipts.map((receipt) => sql17`${receipt.id}::uuid`), sql17`, `);
-        await db.execute(sql17`
-      DELETE FROM public.collection_record_receipts
-      WHERE id IN (${idSql})
-    `);
-        return receipts;
+        return deleteAllCollectionRecordReceiptRows(db, recordId);
       }
       async updateCollectionRecord(id, data) {
         const updateChunks = [];
         if (data.customerName !== void 0) {
-          updateChunks.push(sql17`customer_name = ${data.customerName}`);
+          updateChunks.push(sql23`customer_name = ${data.customerName}`);
         }
         if (data.icNumber !== void 0) {
-          updateChunks.push(sql17`ic_number = ${data.icNumber}`);
+          updateChunks.push(sql23`ic_number = ${data.icNumber}`);
         }
         if (data.customerPhone !== void 0) {
-          updateChunks.push(sql17`customer_phone = ${data.customerPhone}`);
+          updateChunks.push(sql23`customer_phone = ${data.customerPhone}`);
         }
         if (data.accountNumber !== void 0) {
-          updateChunks.push(sql17`account_number = ${data.accountNumber}`);
+          updateChunks.push(sql23`account_number = ${data.accountNumber}`);
         }
         if (data.batch !== void 0) {
-          updateChunks.push(sql17`batch = ${data.batch}`);
+          updateChunks.push(sql23`batch = ${data.batch}`);
         }
         if (data.paymentDate !== void 0) {
-          updateChunks.push(sql17`payment_date = ${data.paymentDate}::date`);
+          updateChunks.push(sql23`payment_date = ${data.paymentDate}::date`);
         }
         if (data.amount !== void 0) {
-          updateChunks.push(sql17`amount = ${data.amount}`);
+          updateChunks.push(sql23`amount = ${data.amount}`);
         }
         if (Object.prototype.hasOwnProperty.call(data, "receiptFile")) {
-          updateChunks.push(sql17`receipt_file = ${data.receiptFile ?? null}`);
+          updateChunks.push(sql23`receipt_file = ${data.receiptFile ?? null}`);
         }
         if (data.collectionStaffNickname !== void 0) {
-          updateChunks.push(sql17`collection_staff_nickname = ${data.collectionStaffNickname}`);
-          updateChunks.push(sql17`staff_username = ${data.collectionStaffNickname}`);
+          updateChunks.push(sql23`collection_staff_nickname = ${data.collectionStaffNickname}`);
+          updateChunks.push(sql23`staff_username = ${data.collectionStaffNickname}`);
         }
         if (!updateChunks.length) {
           return this.getCollectionRecordById(id);
         }
-        const result = await db.execute(sql17`
+        const result = await db.execute(sql23`
       UPDATE public.collection_records
-      SET ${sql17.join(updateChunks, sql17`, `)}
+      SET ${sql23.join(updateChunks, sql23`, `)}
       WHERE id = ${id}::uuid
       RETURNING
         id,
@@ -6481,8 +6695,8 @@ var init_collection_repository = __esm({
         return this.getCollectionRecordById(id);
       }
       async deleteCollectionRecord(id) {
-        await db.execute(sql17`DELETE FROM public.collection_record_receipts WHERE collection_record_id = ${id}::uuid`);
-        await db.execute(sql17`DELETE FROM public.collection_records WHERE id = ${id}::uuid`);
+        await db.execute(sql23`DELETE FROM public.collection_record_receipts WHERE collection_record_id = ${id}::uuid`);
+        await db.execute(sql23`DELETE FROM public.collection_records WHERE id = ${id}::uuid`);
         return true;
       }
     };
@@ -6490,7 +6704,7 @@ var init_collection_repository = __esm({
 });
 
 // server/repositories/settings.repository.ts
-import { sql as sql18 } from "drizzle-orm";
+import { sql as sql24 } from "drizzle-orm";
 var TRUTHY_SETTING_VALUES, SettingsRepository;
 var init_settings_repository = __esm({
   "server/repositories/settings.repository.ts"() {
@@ -6558,7 +6772,7 @@ var init_settings_repository = __esm({
         return settingKey === "maintenance_message" || settingKey === "maintenance_start_time" || settingKey === "maintenance_end_time";
       }
       async isAdminMaintenanceEditingEnabled() {
-        const result = await db.execute(sql18`
+        const result = await db.execute(sql24`
       SELECT value
       FROM public.system_settings
       WHERE key = 'admin_can_edit_maintenance_message'
@@ -6568,7 +6782,7 @@ var init_settings_repository = __esm({
         return TRUTHY_SETTING_VALUES.has(String(row?.value ?? "").trim().toLowerCase());
       }
       async getSettingsForRole(role) {
-        const rows = await db.execute(sql18`
+        const rows = await db.execute(sql24`
       SELECT
         c.id as category_id,
         c.name as category_name,
@@ -6596,10 +6810,10 @@ var init_settings_repository = __esm({
         const optionsMap = /* @__PURE__ */ new Map();
         if (settingIds.length > 0) {
           const quoted = settingIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
-          const optionsRows = await db.execute(sql18`
+          const optionsRows = await db.execute(sql24`
         SELECT DISTINCT ON (setting_id, value) setting_id, value, label
         FROM public.setting_options
-        WHERE setting_id IN (${sql18.raw(quoted)})
+        WHERE setting_id IN (${sql24.raw(quoted)})
         ORDER BY setting_id, value, label
       `);
           const seenOptionsBySetting = /* @__PURE__ */ new Map();
@@ -6649,7 +6863,7 @@ var init_settings_repository = __esm({
         return Array.from(categories.values());
       }
       async getBooleanSystemSetting(key, fallback = false) {
-        const result = await db.execute(sql18`
+        const result = await db.execute(sql24`
       SELECT value
       FROM public.system_settings
       WHERE key = ${key}
@@ -6679,10 +6893,10 @@ var init_settings_repository = __esm({
           return visibility;
         }
         const keyList = keys.map((key) => `'${key.replace(/'/g, "''")}'`).join(",");
-        const rows = await db.execute(sql18`
+        const rows = await db.execute(sql24`
       SELECT key, value
       FROM public.system_settings
-      WHERE key IN (${sql18.raw(keyList)})
+      WHERE key IN (${sql24.raw(keyList)})
     `);
         const pageIdByKey = /* @__PURE__ */ new Map();
         for (const tab of tabs) {
@@ -6695,7 +6909,7 @@ var init_settings_repository = __esm({
           visibility[pageId] = TRUTHY_SETTING_VALUES.has(String(row.value ?? "").trim().toLowerCase());
         }
         if (roleKey === "admin") {
-          const result = await db.execute(sql18`
+          const result = await db.execute(sql24`
         SELECT value
         FROM public.system_settings
         WHERE key = 'canViewSystemPerformance'
@@ -6710,7 +6924,7 @@ var init_settings_repository = __esm({
         return visibility;
       }
       async updateSystemSetting(params) {
-        const settingRes = await db.execute(sql18`
+        const settingRes = await db.execute(sql24`
       SELECT
         s.id,
         s.key,
@@ -6756,7 +6970,7 @@ var init_settings_repository = __esm({
         }
         const nextValue = constrained.value;
         if (settingType === "select") {
-          const optionRes = await db.execute(sql18`
+          const optionRes = await db.execute(sql24`
         SELECT 1
         FROM public.setting_options
         WHERE setting_id = ${current.id}
@@ -6771,16 +6985,16 @@ var init_settings_repository = __esm({
         if (previousValue === nextValue) {
           return { status: "unchanged", message: "No change detected." };
         }
-        await db.execute(sql18`
+        await db.execute(sql24`
       UPDATE public.system_settings
       SET value = ${nextValue}, updated_at = now()
       WHERE id = ${current.id}
     `);
-        await db.execute(sql18`
+        await db.execute(sql24`
       INSERT INTO public.setting_versions (setting_key, old_value, new_value, changed_by, changed_at)
       VALUES (${params.settingKey}, ${previousValue}, ${nextValue}, ${params.updatedBy}, now())
     `);
-        const latestRes = await db.execute(sql18`
+        const latestRes = await db.execute(sql24`
       SELECT
         id,
         key,
@@ -6815,7 +7029,7 @@ var init_settings_repository = __esm({
         };
       }
       async getMaintenanceState(now = /* @__PURE__ */ new Date()) {
-        const rows = await db.execute(sql18`
+        const rows = await db.execute(sql24`
       SELECT key, value
       FROM public.system_settings
       WHERE key IN (
@@ -6857,7 +7071,7 @@ var init_settings_repository = __esm({
         };
       }
       async getAppConfig() {
-        const result = await db.execute(sql18`
+        const result = await db.execute(sql24`
       SELECT key, value
       FROM public.system_settings
       WHERE key IN (
@@ -11831,14 +12045,14 @@ function ensureLooseObject(value) {
   }
   return null;
 }
-function normalizeCollectionText(value) {
+function normalizeCollectionText3(value) {
   return String(value ?? "").trim();
 }
 function normalizeCollectionStringList(values) {
-  return values.map((value) => normalizeCollectionText(value)).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index);
+  return values.map((value) => normalizeCollectionText3(value)).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index);
 }
 function normalizeCollectionNicknameRoleScope2(value, fallback = "both") {
-  const normalized = normalizeCollectionText(value).toLowerCase();
+  const normalized = normalizeCollectionText3(value).toLowerCase();
   if (COLLECTION_NICKNAME_ROLE_SCOPE_SET.has(normalized)) {
     return normalized;
   }
@@ -11896,17 +12110,17 @@ var init_collection_validation = __esm({
 
 // server/routes/collection-access.ts
 async function resolveCurrentCollectionNicknameFromSession(storage2, user) {
-  const activityId = normalizeCollectionText(user.activityId);
+  const activityId = normalizeCollectionText3(user.activityId);
   if (!activityId) return null;
   const session = await storage2.getCollectionNicknameSessionByActivity(activityId);
   if (!session) return null;
-  if (normalizeCollectionText(session.username).toLowerCase() !== normalizeCollectionText(user.username).toLowerCase()) {
+  if (normalizeCollectionText3(session.username).toLowerCase() !== normalizeCollectionText3(user.username).toLowerCase()) {
     return null;
   }
-  if (normalizeCollectionText(session.userRole).toLowerCase() !== normalizeCollectionText(user.role).toLowerCase()) {
+  if (normalizeCollectionText3(session.userRole).toLowerCase() !== normalizeCollectionText3(user.role).toLowerCase()) {
     return null;
   }
-  const nickname = normalizeCollectionText(session.nickname);
+  const nickname = normalizeCollectionText3(session.nickname);
   return nickname || null;
 }
 async function getAdminGroupNicknameValues(storage2, user) {
@@ -11930,20 +12144,20 @@ async function getAdminVisibleNicknameValues(storage2, user) {
   return getAdminGroupNicknameValues(storage2, user);
 }
 function hasNicknameValue(values, target) {
-  const normalizedTarget = normalizeCollectionText(target).toLowerCase();
+  const normalizedTarget = normalizeCollectionText3(target).toLowerCase();
   if (!normalizedTarget) return false;
   return values.some((value) => value.toLowerCase() === normalizedTarget);
 }
 async function canUserAccessCollectionRecord(storage2, user, record) {
   if (user.role === "superuser") return true;
   if (user.role === "user") {
-    const owner = normalizeCollectionText(record.createdByLogin).toLowerCase();
-    const current = normalizeCollectionText(user.username).toLowerCase();
+    const owner = normalizeCollectionText3(record.createdByLogin).toLowerCase();
+    const current = normalizeCollectionText3(user.username).toLowerCase();
     return Boolean(owner) && owner === current;
   }
   if (user.role === "admin") {
     const allowedNicknames = await getAdminVisibleNicknameValues(storage2, user);
-    return hasNicknameValue(allowedNicknames, normalizeCollectionText(record.collectionStaffNickname));
+    return hasNicknameValue(allowedNicknames, normalizeCollectionText3(record.collectionStaffNickname));
   }
   return false;
 }
@@ -11954,9 +12168,9 @@ function readNicknameFiltersFromQuery(query) {
       for (const item of raw) pushValue(item);
       return;
     }
-    const normalized = normalizeCollectionText(raw);
+    const normalized = normalizeCollectionText3(raw);
     if (!normalized) return;
-    const parts = normalized.split(",").map((part) => normalizeCollectionText(part)).filter(Boolean);
+    const parts = normalized.split(",").map((part) => normalizeCollectionText3(part)).filter(Boolean);
     candidates.push(...parts);
   };
   pushValue(query.nickname);
@@ -11965,7 +12179,7 @@ function readNicknameFiltersFromQuery(query) {
   return normalizeCollectionStringList(candidates);
 }
 async function resolveCollectionNicknameAccessForUser(storage2, user, nicknameRaw) {
-  const nickname = normalizeCollectionText(nicknameRaw);
+  const nickname = normalizeCollectionText3(nicknameRaw);
   if (nickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
     return {
       ok: false,
@@ -12097,7 +12311,7 @@ var init_collection_admin_service = __esm({
       async createAdminGroup(userInput, bodyRaw) {
         const user = this.requireUser(userInput);
         const body = ensureLooseObject(bodyRaw) || {};
-        const leaderNicknameId = normalizeCollectionText(body.leaderNicknameId);
+        const leaderNicknameId = normalizeCollectionText3(body.leaderNicknameId);
         if (!leaderNicknameId) {
           throw badRequest("leaderNicknameId is required.");
         }
@@ -12121,7 +12335,7 @@ var init_collection_admin_service = __esm({
       }
       async updateAdminGroup(userInput, groupIdRaw, bodyRaw) {
         const user = this.requireUser(userInput);
-        const groupId = normalizeCollectionText(groupIdRaw);
+        const groupId = normalizeCollectionText3(groupIdRaw);
         if (!groupId) {
           throw badRequest("groupId is required.");
         }
@@ -12131,7 +12345,7 @@ var init_collection_admin_service = __esm({
         if (!hasLeader && !hasMembers) {
           throw badRequest("No admin group update payload provided.");
         }
-        const leaderNicknameId = hasLeader ? normalizeCollectionText(body.leaderNicknameId) : void 0;
+        const leaderNicknameId = hasLeader ? normalizeCollectionText3(body.leaderNicknameId) : void 0;
         if (hasLeader && !leaderNicknameId) {
           throw badRequest("leaderNicknameId is required.");
         }
@@ -12159,7 +12373,7 @@ var init_collection_admin_service = __esm({
       }
       async deleteAdminGroup(userInput, groupIdRaw) {
         const user = this.requireUser(userInput);
-        const groupId = normalizeCollectionText(groupIdRaw);
+        const groupId = normalizeCollectionText3(groupIdRaw);
         if (!groupId) {
           throw badRequest("groupId is required.");
         }
@@ -12176,7 +12390,7 @@ var init_collection_admin_service = __esm({
         return { ok: true };
       }
       async getNicknameAssignments(adminIdRaw) {
-        const adminId = normalizeCollectionText(adminIdRaw);
+        const adminId = normalizeCollectionText3(adminIdRaw);
         if (!adminId) {
           throw badRequest("Admin id is required.");
         }
@@ -12189,7 +12403,7 @@ var init_collection_admin_service = __esm({
       }
       async setNicknameAssignments(userInput, adminIdRaw, bodyRaw) {
         const user = this.requireUser(userInput);
-        const adminId = normalizeCollectionText(adminIdRaw);
+        const adminId = normalizeCollectionText3(adminIdRaw);
         if (!adminId) {
           throw badRequest("Admin id is required.");
         }
@@ -12237,7 +12451,7 @@ var init_collection_nickname_service = __esm({
     CollectionNicknameService = class extends CollectionServiceSupport {
       async listNicknames(userInput, includeInactiveRaw) {
         const user = this.requireUser(userInput);
-        const includeInactive = normalizeCollectionText(includeInactiveRaw) === "1";
+        const includeInactive = normalizeCollectionText3(includeInactiveRaw) === "1";
         let nicknames;
         if (user.role === "superuser") {
           nicknames = await this.storage.getCollectionStaffNicknames({ activeOnly: !includeInactive });
@@ -12249,7 +12463,7 @@ var init_collection_nickname_service = __esm({
             const activeNicknames = await this.storage.getCollectionStaffNicknames({ activeOnly: true });
             const byName = /* @__PURE__ */ new Map();
             for (const item of activeNicknames) {
-              const key = normalizeCollectionText(item.nickname).toLowerCase();
+              const key = normalizeCollectionText3(item.nickname).toLowerCase();
               if (key && !byName.has(key)) byName.set(key, item);
             }
             nicknames = allowedValues.map((value) => byName.get(value.toLowerCase())).filter(Boolean);
@@ -12266,7 +12480,7 @@ var init_collection_nickname_service = __esm({
         const user = this.requireUser(userInput);
         const body = ensureLooseObject(bodyRaw) || {};
         const profile = await this.requireNicknameAccess(user, body.nickname);
-        const hasPassword = Boolean(normalizeCollectionText(profile.nicknamePasswordHash));
+        const hasPassword = Boolean(normalizeCollectionText3(profile.nicknamePasswordHash));
         const mustChangePassword = Boolean(profile.mustChangePassword || !hasPassword);
         const passwordResetBySuperuser = Boolean(profile.passwordResetBySuperuser);
         const requiresPasswordSetup = !hasPassword;
@@ -12303,7 +12517,7 @@ var init_collection_nickname_service = __esm({
             `Password mesti sekurang-kurangnya ${CREDENTIAL_PASSWORD_MIN_LENGTH} aksara dan mengandungi huruf serta nombor.`
           );
         }
-        const existingHash = normalizeCollectionText(profile.nicknamePasswordHash);
+        const existingHash = normalizeCollectionText3(profile.nicknamePasswordHash);
         const hasExistingPassword = Boolean(existingHash);
         if (hasExistingPassword) {
           if (!currentPassword) {
@@ -12358,7 +12572,7 @@ var init_collection_nickname_service = __esm({
         if (!password) {
           throw badRequest("Password diperlukan.");
         }
-        const hash = normalizeCollectionText(profile.nicknamePasswordHash);
+        const hash = normalizeCollectionText3(profile.nicknamePasswordHash);
         if (!hash) {
           throw badRequest("Sila tetapkan kata laluan baharu untuk nickname ini sebelum meneruskan.");
         }
@@ -12401,7 +12615,7 @@ var init_collection_nickname_service = __esm({
       async createNickname(userInput, bodyRaw) {
         const user = this.requireUser(userInput);
         const body = ensureLooseObject(bodyRaw) || {};
-        const nickname = normalizeCollectionText(body.nickname);
+        const nickname = normalizeCollectionText3(body.nickname);
         const roleScope = normalizeCollectionNicknameRoleScope2(body.roleScope, "both");
         if (nickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
           throw badRequest("Nickname mesti sekurang-kurangnya 2 aksara.");
@@ -12433,9 +12647,9 @@ var init_collection_nickname_service = __esm({
       }
       async updateNickname(userInput, idRaw, bodyRaw) {
         const user = this.requireUser(userInput);
-        const id = normalizeCollectionText(idRaw);
+        const id = normalizeCollectionText3(idRaw);
         const body = ensureLooseObject(bodyRaw) || {};
-        const nickname = normalizeCollectionText(body.nickname);
+        const nickname = normalizeCollectionText3(body.nickname);
         const roleScopeProvided = Object.prototype.hasOwnProperty.call(body, "roleScope");
         const roleScope = normalizeCollectionNicknameRoleScope2(body.roleScope, "both");
         if (!id) {
@@ -12473,7 +12687,7 @@ var init_collection_nickname_service = __esm({
       }
       async updateNicknameStatus(userInput, idRaw, bodyRaw) {
         const user = this.requireUser(userInput);
-        const id = normalizeCollectionText(idRaw);
+        const id = normalizeCollectionText3(idRaw);
         if (!id) {
           throw badRequest("Nickname id is required.");
         }
@@ -12496,7 +12710,7 @@ var init_collection_nickname_service = __esm({
       }
       async resetNicknamePassword(userInput, idRaw) {
         const user = this.requireUser(userInput);
-        const id = normalizeCollectionText(idRaw);
+        const id = normalizeCollectionText3(idRaw);
         if (!id) {
           throw badRequest("Nickname id is required.");
         }
@@ -12530,7 +12744,7 @@ var init_collection_nickname_service = __esm({
       }
       async deleteNickname(userInput, idRaw) {
         const user = this.requireUser(userInput);
-        const id = normalizeCollectionText(idRaw);
+        const id = normalizeCollectionText3(idRaw);
         if (!id) {
           throw badRequest("Nickname id is required.");
         }
@@ -12553,7 +12767,7 @@ var init_collection_nickname_service = __esm({
 // server/routes/collection-receipt.service.ts
 import fs from "fs";
 import path3 from "path";
-import { randomUUID as randomUUID4 } from "node:crypto";
+import { randomUUID as randomUUID8 } from "node:crypto";
 function resolveReceiptExtension(receipt) {
   const originalFileName = String(receipt.fileName || "").trim();
   const mimeType = String(receipt.mimeType || "").trim().toLowerCase();
@@ -12608,7 +12822,7 @@ async function saveCollectionReceipt(receipt) {
     extension
   );
   const stem = path3.basename(originalFileName, path3.extname(originalFileName)).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40) || "receipt";
-  const storedFileName = `${Date.now()}-${randomUUID4()}-${stem}${extension}`;
+  const storedFileName = `${Date.now()}-${randomUUID8()}-${stem}${extension}`;
   const absolutePath = path3.join(COLLECTION_RECEIPT_DIR, storedFileName);
   await fs.promises.writeFile(absolutePath, buffer);
   return {
@@ -12661,7 +12875,7 @@ function resolveCollectionReceiptFile(receiptPath) {
   };
 }
 async function resolveSelectedReceipt(storage2, recordId, receiptIdRaw) {
-  const receiptId = normalizeCollectionText(receiptIdRaw);
+  const receiptId = normalizeCollectionText3(receiptIdRaw);
   if (receiptId) {
     return await storage2.getCollectionRecordReceiptById(recordId, receiptId) || null;
   }
@@ -12673,7 +12887,7 @@ async function serveCollectionReceipt(storage2, req, res, mode2, receiptIdRaw) {
     if (!req.user) {
       return res.status(401).json({ ok: false, message: "Unauthenticated" });
     }
-    const id = normalizeCollectionText(req.params.id);
+    const id = normalizeCollectionText3(req.params.id);
     if (!id) {
       return res.status(400).json({ ok: false, message: "Collection id is required." });
     }
@@ -12787,13 +13001,13 @@ var init_collection_record_service = __esm({
         const uploadedReceipts = [];
         try {
           const body = ensureLooseObject(bodyRaw) || {};
-          const customerName = normalizeCollectionText(body.customerName);
-          const icNumber = normalizeCollectionText(body.icNumber);
-          const customerPhone = normalizeCollectionText(body.customerPhone);
-          const accountNumber = normalizeCollectionText(body.accountNumber);
-          const batch = normalizeCollectionText(body.batch).toUpperCase();
-          const paymentDate = normalizeCollectionText(body.paymentDate);
-          const collectionStaffNickname = normalizeCollectionText(body.collectionStaffNickname);
+          const customerName = normalizeCollectionText3(body.customerName);
+          const icNumber = normalizeCollectionText3(body.icNumber);
+          const customerPhone = normalizeCollectionText3(body.customerPhone);
+          const accountNumber = normalizeCollectionText3(body.accountNumber);
+          const batch = normalizeCollectionText3(body.batch).toUpperCase();
+          const paymentDate = normalizeCollectionText3(body.paymentDate);
+          const collectionStaffNickname = normalizeCollectionText3(body.collectionStaffNickname);
           const amount = parseCollectionAmount(body.amount);
           if (!customerName) throw badRequest("Customer Name is required.");
           if (!icNumber) throw badRequest("IC Number is required.");
@@ -12858,7 +13072,7 @@ var init_collection_record_service = __esm({
       }
       async getSummary(userInput, query) {
         const user = this.requireUser(userInput);
-        const yearRaw = normalizeCollectionText(query.year);
+        const yearRaw = normalizeCollectionText3(query.year);
         const requestedNicknameFilters = readNicknameFiltersFromQuery(query);
         const parsedYear = yearRaw ? Number.parseInt(yearRaw, 10) : (/* @__PURE__ */ new Date()).getFullYear();
         if (!Number.isInteger(parsedYear) || parsedYear < 2e3 || parsedYear > 2100) {
@@ -12869,7 +13083,7 @@ var init_collection_record_service = __esm({
           if (requestedNicknameFilters.length > 0) {
             const activeNicknames = await this.storage.getCollectionStaffNicknames({ activeOnly: true });
             const activeSet = new Set(
-              activeNicknames.map((item) => normalizeCollectionText(item.nickname).toLowerCase()).filter(Boolean)
+              activeNicknames.map((item) => normalizeCollectionText3(item.nickname).toLowerCase()).filter(Boolean)
             );
             const hasInvalid = requestedNicknameFilters.some((value) => !activeSet.has(value.toLowerCase()));
             if (hasInvalid) {
@@ -12904,12 +13118,12 @@ var init_collection_record_service = __esm({
       }
       async listRecords(userInput, query) {
         const user = this.requireUser(userInput);
-        const from = normalizeCollectionText(query.from);
-        const to = normalizeCollectionText(query.to);
-        const search = normalizeCollectionText(query.search);
+        const from = normalizeCollectionText3(query.from);
+        const to = normalizeCollectionText3(query.to);
+        const search = normalizeCollectionText3(query.search);
         const requestedNicknameFilters = readNicknameFiltersFromQuery(query);
-        const limitRaw = Number.parseInt(normalizeCollectionText(query.limit), 10);
-        const offsetRaw = Number.parseInt(normalizeCollectionText(query.offset), 10);
+        const limitRaw = Number.parseInt(normalizeCollectionText3(query.limit), 10);
+        const offsetRaw = Number.parseInt(normalizeCollectionText3(query.offset), 10);
         const limit = Number.isInteger(limitRaw) ? Math.min(5e3, Math.max(1, limitRaw)) : 1e3;
         const offset = Number.isInteger(offsetRaw) ? Math.max(0, offsetRaw) : 0;
         if (from && !isValidCollectionDate(from)) throw badRequest("Invalid from date.");
@@ -12991,8 +13205,8 @@ var init_collection_record_service = __esm({
         if (user.role !== "admin" && user.role !== "superuser") {
           throw forbidden("Nickname summary hanya untuk admin atau superuser.");
         }
-        const from = normalizeCollectionText(query.from);
-        const to = normalizeCollectionText(query.to);
+        const from = normalizeCollectionText3(query.from);
+        const to = normalizeCollectionText3(query.to);
         if (from && !isValidCollectionDate(from)) throw badRequest("Invalid from date.");
         if (to && !isValidCollectionDate(to)) throw badRequest("Invalid to date.");
         if (from && to && from > to) throw badRequest("From date cannot be later than To date.");
@@ -13006,7 +13220,7 @@ var init_collection_record_service = __esm({
             records: []
           };
         }
-        const summaryOnlyRaw = normalizeCollectionText(query.summaryOnly).toLowerCase();
+        const summaryOnlyRaw = normalizeCollectionText3(query.summaryOnly).toLowerCase();
         const summaryOnly = summaryOnlyRaw === "1" || summaryOnlyRaw === "true" || summaryOnlyRaw === "yes";
         let nicknameFilters = normalizeCollectionStringList(requestedNicknameFilters);
         if (user.role === "superuser") {
@@ -13089,7 +13303,7 @@ var init_collection_record_service = __esm({
       }
       async updateRecord(userInput, idRaw, bodyRaw) {
         const user = this.requireUser(userInput);
-        const id = normalizeCollectionText(idRaw);
+        const id = normalizeCollectionText3(idRaw);
         if (!id) {
           throw badRequest("Collection id is required.");
         }
@@ -13101,13 +13315,13 @@ var init_collection_record_service = __esm({
         try {
           const body = ensureLooseObject(bodyRaw) || {};
           const updatePayload = {};
-          const customerName = normalizeCollectionText(body.customerName);
-          const icNumber = normalizeCollectionText(body.icNumber);
-          const customerPhone = normalizeCollectionText(body.customerPhone);
-          const accountNumber = normalizeCollectionText(body.accountNumber);
-          const batch = normalizeCollectionText(body.batch).toUpperCase();
-          const paymentDate = normalizeCollectionText(body.paymentDate);
-          const collectionStaffNickname = normalizeCollectionText(body.collectionStaffNickname);
+          const customerName = normalizeCollectionText3(body.customerName);
+          const icNumber = normalizeCollectionText3(body.icNumber);
+          const customerPhone = normalizeCollectionText3(body.customerPhone);
+          const accountNumber = normalizeCollectionText3(body.accountNumber);
+          const batch = normalizeCollectionText3(body.batch).toUpperCase();
+          const paymentDate = normalizeCollectionText3(body.paymentDate);
+          const collectionStaffNickname = normalizeCollectionText3(body.collectionStaffNickname);
           const amount = body.amount !== void 0 ? parseCollectionAmount(body.amount) : null;
           if (body.customerName !== void 0) {
             if (!customerName) throw badRequest("Customer Name cannot be empty.");
@@ -13203,7 +13417,7 @@ var init_collection_record_service = __esm({
       }
       async deleteRecord(userInput, idRaw) {
         const user = this.requireUser(userInput);
-        const id = normalizeCollectionText(idRaw);
+        const id = normalizeCollectionText3(idRaw);
         if (!id) {
           throw badRequest("Collection id is required.");
         }
