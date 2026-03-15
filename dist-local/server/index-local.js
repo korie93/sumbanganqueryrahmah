@@ -15759,8 +15759,29 @@ var ImportAnalysisService = class {
 };
 
 // server/ws/runtime-manager.ts
-import jwt3 from "jsonwebtoken";
 import { WebSocket as WebSocket3 } from "ws";
+
+// server/ws/session-auth.ts
+import jwt3 from "jsonwebtoken";
+function extractWsActivityId(token, secret) {
+  if (!token || !secret) return null;
+  try {
+    const decoded = jwt3.verify(token, secret);
+    const activityId = String(decoded?.activityId || "").trim();
+    return activityId || null;
+  } catch {
+    return null;
+  }
+}
+function isActiveWebSocketSession(activity) {
+  if (!activity) return false;
+  const activityId = String(activity.id || "").trim();
+  if (!activityId) return false;
+  if (activity.isActive === false) return false;
+  return activity.logoutTime == null;
+}
+
+// server/ws/runtime-manager.ts
 function createRuntimeWebSocketManager(options) {
   const { wss: wss2, storage: storage2, secret } = options;
   const connectedClients2 = /* @__PURE__ */ new Map();
@@ -15799,14 +15820,13 @@ function createRuntimeWebSocketManager(options) {
       return;
     }
     try {
-      const decoded = jwt3.verify(token, secret);
-      const activityId = String(decoded.activityId || "");
+      const activityId = extractWsActivityId(token, secret);
       if (!activityId) {
         ws.close();
         return;
       }
       const activity = await storage2.getActivityById(activityId);
-      if (!activity || activity.isActive === false || activity.logoutTime !== null) {
+      if (!isActiveWebSocketSession(activity)) {
         console.log("WS rejected: invalid or expired session");
         ws.close();
         return;
