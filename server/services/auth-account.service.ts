@@ -1,11 +1,9 @@
-import { addHours } from "date-fns";
 import type { AuthenticatedUser } from "../auth/guards";
 import { buildActivationUrl, buildPasswordResetUrl } from "../auth/activation-links";
 import {
   buildCredentialAuditDetails,
   CREDENTIAL_EMAIL_REGEX,
   CREDENTIAL_USERNAME_REGEX,
-  isStrongPassword,
   normalizeEmailInput,
   normalizeUsernameInput,
 } from "../auth/credentials";
@@ -26,15 +24,32 @@ import { buildAccountActivationEmail } from "../mail/account-activation-email";
 import { buildPasswordResetEmail } from "../mail/password-reset-email";
 import { sendMail } from "../mail/mailer";
 import type {
-  AccountActivationTokenSummary,
   ManagedUserAccount,
   PendingPasswordResetRequestSummary,
-  PasswordResetTokenSummary,
   PostgresStorage,
 } from "../storage-postgres";
-
-const ACTIVATION_TOKEN_TTL_HOURS = 24;
-const PASSWORD_RESET_TOKEN_TTL_HOURS = 4;
+import {
+  assertConfirmedStrongPassword,
+  assertStrongPasswordInput,
+  assertUsableActivationTokenRecord,
+  assertUsablePasswordResetTokenRecord,
+  createActivationTokenPayload,
+  createPasswordResetTokenPayload,
+} from "./auth-account-token-utils";
+import {
+  type ActivationTokenValidationResult,
+  type ManagedAccountActivationDelivery,
+  type ManagedAccountPasswordResetDelivery,
+  type PasswordResetTokenValidationResult,
+  AuthAccountError,
+} from "./auth-account-types";
+export {
+  type ActivationTokenValidationResult,
+  type ManagedAccountActivationDelivery,
+  type ManagedAccountPasswordResetDelivery,
+  type PasswordResetTokenValidationResult,
+  AuthAccountError,
+} from "./auth-account-types";
 
 type LoginInput = {
   username: string;
@@ -67,46 +82,6 @@ type ChangePasswordInput = {
   currentPassword: string;
   newPassword: string;
 };
-
-export type ManagedAccountActivationDelivery = {
-  deliveryMode: "dev_outbox" | "none" | "smtp";
-  errorCode: string | null;
-  errorMessage: string | null;
-  expiresAt: Date;
-  previewUrl: string | null;
-  recipientEmail: string;
-  sent: boolean;
-};
-
-export type ActivationTokenValidationResult = {
-  email: string | null;
-  expiresAt: Date;
-  fullName: string | null;
-  role: string;
-  username: string;
-};
-
-export type ManagedAccountPasswordResetDelivery = ManagedAccountActivationDelivery;
-
-export type PasswordResetTokenValidationResult = {
-  email: string | null;
-  expiresAt: Date;
-  fullName: string | null;
-  role: string;
-  username: string;
-};
-
-export class AuthAccountError extends Error {
-  constructor(
-    public readonly statusCode: number,
-    public readonly code: string,
-    message: string,
-    public readonly extra?: Record<string, unknown>,
-  ) {
-    super(message);
-    this.name = "AuthAccountError";
-  }
-}
 
 export class AuthAccountService {
   constructor(private readonly storage: PostgresStorage) {}
@@ -204,128 +179,17 @@ export class AuthAccountService {
     userId: string;
     createdBy: string;
   }) {
-    const rawToken = generateOneTimeToken();
-    const tokenHash = hashOpaqueToken(rawToken);
-    const expiresAt = addHours(new Date(), ACTIVATION_TOKEN_TTL_HOURS);
+    const activation = createActivationTokenPayload();
 
     await this.storage.invalidateUnusedActivationTokens(params.userId);
     await this.storage.createActivationToken({
       userId: params.userId,
-      tokenHash,
-      expiresAt,
+      tokenHash: activation.tokenHash,
+      expiresAt: activation.expiresAt,
       createdBy: params.createdBy,
     });
 
-    return {
-      token: rawToken,
-      expiresAt,
-    };
-  }
-
-  private buildPasswordResetToken() {
-    const rawToken = generateOneTimeToken();
-    const tokenHash = hashOpaqueToken(rawToken);
-    const expiresAt = addHours(new Date(), PASSWORD_RESET_TOKEN_TTL_HOURS);
-
-    return {
-      token: rawToken,
-      tokenHash,
-      expiresAt,
-    };
-  }
-
-  private assertActivationRecordUsable(
-    record: AccountActivationTokenSummary | undefined,
-    now: Date,
-  ): AccountActivationTokenSummary {
-    if (!record) {
-      throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
-    }
-
-    const expiresAt = new Date(record.expiresAt);
-    const usedAt = record.usedAt ? new Date(record.usedAt) : null;
-    const normalizedRecord = {
-      ...record,
-      expiresAt,
-      usedAt,
-    };
-
-    if (usedAt) {
-      throw new AuthAccountError(410, "TOKEN_USED", "Activation link has already been used.");
-    }
-
-    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= now.getTime()) {
-      throw new AuthAccountError(410, "TOKEN_EXPIRED", "Activation link has expired.");
-    }
-
-    if (normalizedRecord.isBanned) {
-      throw new AuthAccountError(
-        409,
-        "ACCOUNT_UNAVAILABLE",
-        "Account activation is not available for this account.",
-      );
-    }
-
-    if (normalizeAccountStatus(normalizedRecord.status, "pending_activation") !== "pending_activation") {
-      throw new AuthAccountError(
-        409,
-        "ACCOUNT_UNAVAILABLE",
-        "Account activation is no longer available.",
-      );
-    }
-
-    if (!isManageableUserRole(normalizedRecord.role)) {
-      throw new AuthAccountError(
-        409,
-        "ACCOUNT_UNAVAILABLE",
-        "Account activation is not available for this account.",
-      );
-    }
-
-    return normalizedRecord;
-  }
-
-  private assertPasswordResetRecordUsable(
-    record: PasswordResetTokenSummary | undefined,
-    now: Date,
-  ): PasswordResetTokenSummary {
-    if (!record) {
-      throw new AuthAccountError(400, "INVALID_TOKEN", "Password reset token is invalid.");
-    }
-
-    const expiresAt = new Date(record.expiresAt);
-    const usedAt = record.usedAt ? new Date(record.usedAt) : null;
-    const normalizedRecord = {
-      ...record,
-      expiresAt,
-      usedAt,
-    };
-
-    if (usedAt) {
-      throw new AuthAccountError(410, "TOKEN_USED", "Password reset link has already been used.");
-    }
-
-    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= now.getTime()) {
-      throw new AuthAccountError(410, "TOKEN_EXPIRED", "Password reset link has expired.");
-    }
-
-    if (!isManageableUserRole(normalizedRecord.role)) {
-      throw new AuthAccountError(
-        409,
-        "ACCOUNT_UNAVAILABLE",
-        "Password reset is not available for this account.",
-      );
-    }
-
-    if (normalizeAccountStatus(normalizedRecord.status, "active") === "pending_activation") {
-      throw new AuthAccountError(
-        409,
-        "ACCOUNT_UNAVAILABLE",
-        "Pending accounts must complete activation before password reset.",
-      );
-    }
-
-    return normalizedRecord;
+    return activation;
   }
 
   private async sendActivationEmail(params: {
@@ -554,7 +418,7 @@ export class AuthAccountService {
 
     const tokenHash = hashOpaqueToken(rawToken);
     const now = new Date();
-    const record = this.assertActivationRecordUsable(
+    const record = assertUsableActivationTokenRecord(
       await this.storage.getActivationTokenRecordByHash(tokenHash),
       now,
     );
@@ -582,21 +446,11 @@ export class AuthAccountService {
       throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
     }
 
-    if (!isStrongPassword(newPassword)) {
-      throw new AuthAccountError(
-        400,
-        "INVALID_PASSWORD",
-        "Password must be at least 8 characters and include at least one letter and one number.",
-      );
-    }
-
-    if (newPassword !== confirmPassword) {
-      throw new AuthAccountError(400, "INVALID_PASSWORD", "Confirm password does not match.");
-    }
+    assertConfirmedStrongPassword(newPassword, confirmPassword);
 
     const tokenHash = hashOpaqueToken(rawToken);
     const now = new Date();
-    const record = this.assertActivationRecordUsable(
+    const record = assertUsableActivationTokenRecord(
       await this.storage.getActivationTokenRecordByHash(tokenHash),
       now,
     );
@@ -611,7 +465,7 @@ export class AuthAccountService {
     });
     if (!consumed) {
       const latest = await this.storage.getActivationTokenRecordByHash(tokenHash);
-      this.assertActivationRecordUsable(latest, now);
+      assertUsableActivationTokenRecord(latest, now);
       throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
     }
 
@@ -691,7 +545,7 @@ export class AuthAccountService {
 
     const tokenHash = hashOpaqueToken(rawToken);
     const now = new Date();
-    const record = this.assertPasswordResetRecordUsable(
+    const record = assertUsablePasswordResetTokenRecord(
       await this.storage.getPasswordResetTokenRecordByHash(tokenHash),
       now,
     );
@@ -718,21 +572,11 @@ export class AuthAccountService {
       throw new AuthAccountError(400, "INVALID_TOKEN", "Password reset token is invalid.");
     }
 
-    if (!isStrongPassword(newPassword)) {
-      throw new AuthAccountError(
-        400,
-        "INVALID_PASSWORD",
-        "Password must be at least 8 characters and include at least one letter and one number.",
-      );
-    }
-
-    if (newPassword !== confirmPassword) {
-      throw new AuthAccountError(400, "INVALID_PASSWORD", "Confirm password does not match.");
-    }
+    assertConfirmedStrongPassword(newPassword, confirmPassword);
 
     const tokenHash = hashOpaqueToken(rawToken);
     const now = new Date();
-    const record = this.assertPasswordResetRecordUsable(
+    const record = assertUsablePasswordResetTokenRecord(
       await this.storage.getPasswordResetTokenRecordByHash(tokenHash),
       now,
     );
@@ -743,7 +587,7 @@ export class AuthAccountService {
 
     if (!consumed) {
       const latest = await this.storage.getPasswordResetTokenRecordByHash(tokenHash);
-      this.assertPasswordResetRecordUsable(latest, now);
+      assertUsablePasswordResetTokenRecord(latest, now);
       throw new AuthAccountError(400, "INVALID_TOKEN", "Password reset token is invalid.");
     }
 
@@ -808,13 +652,7 @@ export class AuthAccountService {
       throw new AuthAccountError(400, "INVALID_CURRENT_PASSWORD", "Current password is invalid.");
     }
 
-    if (!isStrongPassword(newPassword)) {
-      throw new AuthAccountError(
-        400,
-        "INVALID_PASSWORD",
-        "Password must be at least 8 characters and include at least one letter and one number.",
-      );
-    }
+    assertStrongPasswordInput(newPassword);
 
     const sameAsCurrent = await verifyPassword(newPassword, actor.passwordHash);
     if (sameAsCurrent) {
@@ -1207,7 +1045,7 @@ export class AuthAccountService {
     );
     const now = new Date();
     await this.storage.invalidateUnusedPasswordResetTokens(target.id, now);
-    const reset = this.buildPasswordResetToken();
+    const reset = createPasswordResetTokenPayload();
     const resetUrl = buildPasswordResetUrl(reset.token);
     const resetRequest = await this.storage.createPasswordResetRequest({
       userId: target.id,

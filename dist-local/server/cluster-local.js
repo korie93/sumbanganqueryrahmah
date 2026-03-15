@@ -4213,10 +4213,10 @@ var init_ai_repository = __esm({
       FROM public.data_rows
       WHERE import_id = ${params.importId}
     `);
-        const normalizeKey = (key) => key.toLowerCase().replace(/[^a-z0-9]/g, "");
+        const normalizeKey2 = (key) => key.toLowerCase().replace(/[^a-z0-9]/g, "");
         const detectKeys = (sample2) => {
           const keys = Object.keys(sample2);
-          const normalized = keys.map((key) => ({ raw: key, norm: normalizeKey(key) }));
+          const normalized = keys.map((key) => ({ raw: key, norm: normalizeKey2(key) }));
           const findBy = (candidates) => {
             const hit = normalized.find((key) => candidates.some((candidate) => key.norm.includes(candidate)));
             return hit?.raw || null;
@@ -10478,19 +10478,11 @@ var init_mailer = __esm({
   }
 });
 
-// server/services/auth-account.service.ts
-import { addHours } from "date-fns";
-var ACTIVATION_TOKEN_TTL_HOURS, PASSWORD_RESET_TOKEN_TTL_HOURS, AuthAccountError, AuthAccountService;
-var init_auth_account_service = __esm({
-  "server/services/auth-account.service.ts"() {
+// server/services/auth-account-types.ts
+var ACTIVATION_TOKEN_TTL_HOURS, PASSWORD_RESET_TOKEN_TTL_HOURS, AuthAccountError;
+var init_auth_account_types = __esm({
+  "server/services/auth-account-types.ts"() {
     "use strict";
-    init_activation_links();
-    init_credentials();
-    init_account_lifecycle();
-    init_passwords();
-    init_account_activation_email();
-    init_password_reset_email();
-    init_mailer();
     ACTIVATION_TOKEN_TTL_HOURS = 24;
     PASSWORD_RESET_TOKEN_TTL_HOURS = 4;
     AuthAccountError = class extends Error {
@@ -10502,6 +10494,145 @@ var init_auth_account_service = __esm({
         this.name = "AuthAccountError";
       }
     };
+  }
+});
+
+// server/services/auth-account-token-utils.ts
+import { addHours } from "date-fns";
+function normalizeTokenDates(record) {
+  return {
+    ...record,
+    expiresAt: new Date(record.expiresAt),
+    usedAt: record.usedAt ? new Date(record.usedAt) : null
+  };
+}
+function createActivationTokenPayload(now = /* @__PURE__ */ new Date()) {
+  const token = generateOneTimeToken();
+  const tokenHash = hashOpaqueToken(token);
+  const expiresAt = addHours(now, ACTIVATION_TOKEN_TTL_HOURS);
+  return {
+    token,
+    tokenHash,
+    expiresAt
+  };
+}
+function createPasswordResetTokenPayload(now = /* @__PURE__ */ new Date()) {
+  const token = generateOneTimeToken();
+  const tokenHash = hashOpaqueToken(token);
+  const expiresAt = addHours(now, PASSWORD_RESET_TOKEN_TTL_HOURS);
+  return {
+    token,
+    tokenHash,
+    expiresAt
+  };
+}
+function assertConfirmedStrongPassword(newPassword, confirmPassword) {
+  if (!isStrongPassword(newPassword)) {
+    throw new AuthAccountError(
+      400,
+      "INVALID_PASSWORD",
+      "Password must be at least 8 characters and include at least one letter and one number."
+    );
+  }
+  if (newPassword !== confirmPassword) {
+    throw new AuthAccountError(400, "INVALID_PASSWORD", "Confirm password does not match.");
+  }
+}
+function assertStrongPasswordInput(newPassword) {
+  if (!isStrongPassword(newPassword)) {
+    throw new AuthAccountError(
+      400,
+      "INVALID_PASSWORD",
+      "Password must be at least 8 characters and include at least one letter and one number."
+    );
+  }
+}
+function assertUsableActivationTokenRecord(record, now) {
+  if (!record) {
+    throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
+  }
+  const normalizedRecord = normalizeTokenDates(record);
+  if (normalizedRecord.usedAt) {
+    throw new AuthAccountError(410, "TOKEN_USED", "Activation link has already been used.");
+  }
+  if (Number.isNaN(normalizedRecord.expiresAt.getTime()) || normalizedRecord.expiresAt.getTime() <= now.getTime()) {
+    throw new AuthAccountError(410, "TOKEN_EXPIRED", "Activation link has expired.");
+  }
+  if (normalizedRecord.isBanned) {
+    throw new AuthAccountError(
+      409,
+      "ACCOUNT_UNAVAILABLE",
+      "Account activation is not available for this account."
+    );
+  }
+  if (normalizeAccountStatus(normalizedRecord.status, "pending_activation") !== "pending_activation") {
+    throw new AuthAccountError(
+      409,
+      "ACCOUNT_UNAVAILABLE",
+      "Account activation is no longer available."
+    );
+  }
+  if (!isManageableUserRole(normalizedRecord.role)) {
+    throw new AuthAccountError(
+      409,
+      "ACCOUNT_UNAVAILABLE",
+      "Account activation is not available for this account."
+    );
+  }
+  return normalizedRecord;
+}
+function assertUsablePasswordResetTokenRecord(record, now) {
+  if (!record) {
+    throw new AuthAccountError(400, "INVALID_TOKEN", "Password reset token is invalid.");
+  }
+  const normalizedRecord = normalizeTokenDates(record);
+  if (normalizedRecord.usedAt) {
+    throw new AuthAccountError(410, "TOKEN_USED", "Password reset link has already been used.");
+  }
+  if (Number.isNaN(normalizedRecord.expiresAt.getTime()) || normalizedRecord.expiresAt.getTime() <= now.getTime()) {
+    throw new AuthAccountError(410, "TOKEN_EXPIRED", "Password reset link has expired.");
+  }
+  if (!isManageableUserRole(normalizedRecord.role)) {
+    throw new AuthAccountError(
+      409,
+      "ACCOUNT_UNAVAILABLE",
+      "Password reset is not available for this account."
+    );
+  }
+  if (normalizeAccountStatus(normalizedRecord.status, "active") === "pending_activation") {
+    throw new AuthAccountError(
+      409,
+      "ACCOUNT_UNAVAILABLE",
+      "Pending accounts must complete activation before password reset."
+    );
+  }
+  return normalizedRecord;
+}
+var init_auth_account_token_utils = __esm({
+  "server/services/auth-account-token-utils.ts"() {
+    "use strict";
+    init_account_lifecycle();
+    init_credentials();
+    init_passwords();
+    init_auth_account_types();
+  }
+});
+
+// server/services/auth-account.service.ts
+var AuthAccountService;
+var init_auth_account_service = __esm({
+  "server/services/auth-account.service.ts"() {
+    "use strict";
+    init_activation_links();
+    init_credentials();
+    init_account_lifecycle();
+    init_passwords();
+    init_account_activation_email();
+    init_password_reset_email();
+    init_mailer();
+    init_auth_account_token_utils();
+    init_auth_account_types();
+    init_auth_account_types();
     AuthAccountService = class {
       constructor(storage2) {
         this.storage = storage2;
@@ -10575,103 +10706,15 @@ var init_auth_account_service = __esm({
         }
       }
       async issueActivationToken(params) {
-        const rawToken = generateOneTimeToken();
-        const tokenHash = hashOpaqueToken(rawToken);
-        const expiresAt = addHours(/* @__PURE__ */ new Date(), ACTIVATION_TOKEN_TTL_HOURS);
+        const activation = createActivationTokenPayload();
         await this.storage.invalidateUnusedActivationTokens(params.userId);
         await this.storage.createActivationToken({
           userId: params.userId,
-          tokenHash,
-          expiresAt,
+          tokenHash: activation.tokenHash,
+          expiresAt: activation.expiresAt,
           createdBy: params.createdBy
         });
-        return {
-          token: rawToken,
-          expiresAt
-        };
-      }
-      buildPasswordResetToken() {
-        const rawToken = generateOneTimeToken();
-        const tokenHash = hashOpaqueToken(rawToken);
-        const expiresAt = addHours(/* @__PURE__ */ new Date(), PASSWORD_RESET_TOKEN_TTL_HOURS);
-        return {
-          token: rawToken,
-          tokenHash,
-          expiresAt
-        };
-      }
-      assertActivationRecordUsable(record, now) {
-        if (!record) {
-          throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
-        }
-        const expiresAt = new Date(record.expiresAt);
-        const usedAt = record.usedAt ? new Date(record.usedAt) : null;
-        const normalizedRecord = {
-          ...record,
-          expiresAt,
-          usedAt
-        };
-        if (usedAt) {
-          throw new AuthAccountError(410, "TOKEN_USED", "Activation link has already been used.");
-        }
-        if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= now.getTime()) {
-          throw new AuthAccountError(410, "TOKEN_EXPIRED", "Activation link has expired.");
-        }
-        if (normalizedRecord.isBanned) {
-          throw new AuthAccountError(
-            409,
-            "ACCOUNT_UNAVAILABLE",
-            "Account activation is not available for this account."
-          );
-        }
-        if (normalizeAccountStatus(normalizedRecord.status, "pending_activation") !== "pending_activation") {
-          throw new AuthAccountError(
-            409,
-            "ACCOUNT_UNAVAILABLE",
-            "Account activation is no longer available."
-          );
-        }
-        if (!isManageableUserRole(normalizedRecord.role)) {
-          throw new AuthAccountError(
-            409,
-            "ACCOUNT_UNAVAILABLE",
-            "Account activation is not available for this account."
-          );
-        }
-        return normalizedRecord;
-      }
-      assertPasswordResetRecordUsable(record, now) {
-        if (!record) {
-          throw new AuthAccountError(400, "INVALID_TOKEN", "Password reset token is invalid.");
-        }
-        const expiresAt = new Date(record.expiresAt);
-        const usedAt = record.usedAt ? new Date(record.usedAt) : null;
-        const normalizedRecord = {
-          ...record,
-          expiresAt,
-          usedAt
-        };
-        if (usedAt) {
-          throw new AuthAccountError(410, "TOKEN_USED", "Password reset link has already been used.");
-        }
-        if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= now.getTime()) {
-          throw new AuthAccountError(410, "TOKEN_EXPIRED", "Password reset link has expired.");
-        }
-        if (!isManageableUserRole(normalizedRecord.role)) {
-          throw new AuthAccountError(
-            409,
-            "ACCOUNT_UNAVAILABLE",
-            "Password reset is not available for this account."
-          );
-        }
-        if (normalizeAccountStatus(normalizedRecord.status, "active") === "pending_activation") {
-          throw new AuthAccountError(
-            409,
-            "ACCOUNT_UNAVAILABLE",
-            "Pending accounts must complete activation before password reset."
-          );
-        }
-        return normalizedRecord;
+        return activation;
       }
       async sendActivationEmail(params) {
         if (!params.user) {
@@ -10869,7 +10912,7 @@ var init_auth_account_service = __esm({
         }
         const tokenHash = hashOpaqueToken(rawToken);
         const now = /* @__PURE__ */ new Date();
-        const record = this.assertActivationRecordUsable(
+        const record = assertUsableActivationTokenRecord(
           await this.storage.getActivationTokenRecordByHash(tokenHash),
           now
         );
@@ -10888,19 +10931,10 @@ var init_auth_account_service = __esm({
         if (!rawToken) {
           throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
         }
-        if (!isStrongPassword(newPassword)) {
-          throw new AuthAccountError(
-            400,
-            "INVALID_PASSWORD",
-            "Password must be at least 8 characters and include at least one letter and one number."
-          );
-        }
-        if (newPassword !== confirmPassword) {
-          throw new AuthAccountError(400, "INVALID_PASSWORD", "Confirm password does not match.");
-        }
+        assertConfirmedStrongPassword(newPassword, confirmPassword);
         const tokenHash = hashOpaqueToken(rawToken);
         const now = /* @__PURE__ */ new Date();
-        const record = this.assertActivationRecordUsable(
+        const record = assertUsableActivationTokenRecord(
           await this.storage.getActivationTokenRecordByHash(tokenHash),
           now
         );
@@ -10914,7 +10948,7 @@ var init_auth_account_service = __esm({
         });
         if (!consumed) {
           const latest = await this.storage.getActivationTokenRecordByHash(tokenHash);
-          this.assertActivationRecordUsable(latest, now);
+          assertUsableActivationTokenRecord(latest, now);
           throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
         }
         const target = await this.storage.getUser(record.userId);
@@ -10975,7 +11009,7 @@ var init_auth_account_service = __esm({
         }
         const tokenHash = hashOpaqueToken(rawToken);
         const now = /* @__PURE__ */ new Date();
-        const record = this.assertPasswordResetRecordUsable(
+        const record = assertUsablePasswordResetTokenRecord(
           await this.storage.getPasswordResetTokenRecordByHash(tokenHash),
           now
         );
@@ -10994,19 +11028,10 @@ var init_auth_account_service = __esm({
         if (!rawToken) {
           throw new AuthAccountError(400, "INVALID_TOKEN", "Password reset token is invalid.");
         }
-        if (!isStrongPassword(newPassword)) {
-          throw new AuthAccountError(
-            400,
-            "INVALID_PASSWORD",
-            "Password must be at least 8 characters and include at least one letter and one number."
-          );
-        }
-        if (newPassword !== confirmPassword) {
-          throw new AuthAccountError(400, "INVALID_PASSWORD", "Confirm password does not match.");
-        }
+        assertConfirmedStrongPassword(newPassword, confirmPassword);
         const tokenHash = hashOpaqueToken(rawToken);
         const now = /* @__PURE__ */ new Date();
-        const record = this.assertPasswordResetRecordUsable(
+        const record = assertUsablePasswordResetTokenRecord(
           await this.storage.getPasswordResetTokenRecordByHash(tokenHash),
           now
         );
@@ -11016,7 +11041,7 @@ var init_auth_account_service = __esm({
         });
         if (!consumed) {
           const latest = await this.storage.getPasswordResetTokenRecordByHash(tokenHash);
-          this.assertPasswordResetRecordUsable(latest, now);
+          assertUsablePasswordResetTokenRecord(latest, now);
           throw new AuthAccountError(400, "INVALID_TOKEN", "Password reset token is invalid.");
         }
         const target = await this.storage.getUser(record.userId);
@@ -11071,13 +11096,7 @@ var init_auth_account_service = __esm({
         if (!currentPasswordMatch) {
           throw new AuthAccountError(400, "INVALID_CURRENT_PASSWORD", "Current password is invalid.");
         }
-        if (!isStrongPassword(newPassword)) {
-          throw new AuthAccountError(
-            400,
-            "INVALID_PASSWORD",
-            "Password must be at least 8 characters and include at least one letter and one number."
-          );
-        }
+        assertStrongPasswordInput(newPassword);
         const sameAsCurrent = await verifyPassword(newPassword, actor.passwordHash);
         if (sameAsCurrent) {
           throw new AuthAccountError(
@@ -11393,7 +11412,7 @@ var init_auth_account_service = __esm({
         );
         const now = /* @__PURE__ */ new Date();
         await this.storage.invalidateUnusedPasswordResetTokens(target.id, now);
-        const reset = this.buildPasswordResetToken();
+        const reset = createPasswordResetTokenPayload();
         const resetUrl = buildPasswordResetUrl(reset.token);
         const resetRequest = await this.storage.createPasswordResetRequest({
           userId: target.id,
@@ -15189,12 +15208,377 @@ var init_ai_index_service = __esm({
   }
 });
 
+// server/services/ai-search-explanation-utils.ts
+function buildPersonSummary(person) {
+  const summary = [];
+  if (person && typeof person === "object") {
+    const pushIf = (label, key) => {
+      const value = person[key];
+      if (value !== void 0 && value !== null && String(value).trim() !== "") {
+        summary.push({ label, value: String(value) });
+      }
+    };
+    pushIf("Nama", "Nama");
+    pushIf("Nama", "Customer Name");
+    pushIf("Nama", "name");
+    pushIf("No. MyKad", "No. MyKad");
+    pushIf("ID No", "ID No");
+    pushIf("No Pengenalan", "No Pengenalan");
+    pushIf("IC", "ic");
+    pushIf("Account No", "Account No");
+    pushIf("Card No", "Card No");
+    pushIf("No. Telefon Rumah", "No. Telefon Rumah");
+    pushIf("No. Telefon Bimbit", "No. Telefon Bimbit");
+    pushIf("Handphone", "Handphone");
+    pushIf("OfficePhone", "OfficePhone");
+    pushIf("Alamat Surat Menyurat", "Alamat Surat Menyurat");
+    pushIf("HomeAddress1", "HomeAddress1");
+    pushIf("HomeAddress2", "HomeAddress2");
+    pushIf("HomeAddress3", "HomeAddress3");
+    pushIf("HomePostcode", "HomePostcode");
+    pushIf("Home Post Code", "Home Post Code");
+    pushIf("Home Postal Code", "Home Postal Code");
+    pushIf("Bandar", "Bandar");
+    pushIf("Negeri", "Negeri");
+    pushIf("Poskod", "Poskod");
+  }
+  if (summary.length === 0 && person && typeof person === "object") {
+    const entries = Object.entries(person).filter(([key]) => key !== "id").slice(0, 8);
+    for (const [key, value] of entries) {
+      if (value !== void 0 && value !== null && String(value).trim() !== "") {
+        summary.push({ label: key, value: String(value) });
+      }
+    }
+  }
+  return summary;
+}
+function buildBranchSummary(nearestBranch) {
+  const summary = [];
+  if (!nearestBranch) {
+    return summary;
+  }
+  const push = (label, value) => {
+    if (value !== void 0 && value !== null && String(value).trim() !== "") {
+      summary.push({ label, value: String(value) });
+    }
+  };
+  push("Nama Cawangan", nearestBranch.name);
+  push("Alamat", nearestBranch.address);
+  push("Telefon", nearestBranch.phone);
+  push("Fax", nearestBranch.fax);
+  push("Business Hour", nearestBranch.businessHour);
+  push("Day Open", nearestBranch.dayOpen);
+  push("ATM & CDM", nearestBranch.atmCdm);
+  push("Inquiry Availability", nearestBranch.inquiryAvailability);
+  push("Application Availability", nearestBranch.applicationAvailability);
+  push("AEON Lounge", nearestBranch.aeonLounge);
+  push("Jarak (KM)", nearestBranch.distanceKm);
+  return summary;
+}
+function buildExplanation(payload) {
+  const personLines = payload.personSummary.length > 0 ? payload.personSummary.map((item) => `${item.label}: ${item.value}`).join("\n") : "Tiada maklumat pelanggan dijumpai.";
+  const branchLines = payload.branchSummary.length > 0 ? payload.branchSummary.map((item) => `${item.label}: ${item.value}`).join("\n") : payload.missingCoords ? "Lokasi pelanggan tidak lengkap (tiada LAT/LNG atau Postcode)." : payload.branchTextSearch ? "Tiada padanan cawangan ditemui berdasarkan lokasi/teks." : "Tiada maklumat cawangan dijumpai.";
+  let decisionLine = "Tiada cadangan dibuat.";
+  if (payload.decision) {
+    const timeInfo = payload.estimatedMinutes ? ` Anggaran masa ${payload.estimatedMinutes} minit.` : "";
+    const modeInfo = payload.travelMode ? ` Mod: ${payload.travelMode}.` : "";
+    if (payload.distanceKm && payload.branch) {
+      decisionLine = `Cadangan: ${payload.decision}. Jarak ke ${payload.branch} adalah ${payload.distanceKm.toFixed(1)}KM.${timeInfo}${modeInfo}`;
+    } else {
+      decisionLine = `Cadangan: ${payload.decision}.${timeInfo}${modeInfo}`;
+    }
+  } else if (payload.branchSummary.length > 0) {
+    decisionLine = "Cadangan: Sila hubungi/kunjungi cawangan di atas.";
+  }
+  const base = [
+    "Maklumat Pelanggan:",
+    personLines,
+    "",
+    "Cadangan Cawangan Terdekat:",
+    branchLines,
+    "",
+    decisionLine
+  ];
+  if (payload.matchFields && payload.matchFields.length > 0) {
+    base.push("", "Padanan Medan (Top):", payload.matchFields.join("\n"));
+  }
+  if (payload.suggestions && payload.suggestions.length > 0) {
+    base.push("", "Cadangan Rekod (fuzzy):", payload.suggestions.join("\n"));
+  }
+  return base.join("\n");
+}
+var init_ai_search_explanation_utils = __esm({
+  "server/services/ai-search-explanation-utils.ts"() {
+    "use strict";
+  }
+});
+
+// server/services/ai-search-query-utils.ts
+function normalizeKey(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+function isRelationKey(normalizedKey) {
+  const relationWordsNorm = RELATION_WORDS.map(normalizeKey);
+  return relationWordsNorm.some((word) => normalizedKey.includes(word));
+}
+function normalizeToObject(value) {
+  if (value && typeof value === "object") {
+    return value;
+  }
+  return {};
+}
+function parseIntentFallback(query) {
+  const digits = query.match(/\d{6,}/g) || [];
+  const ic = digits.find((value) => value.length === 12) || null;
+  const account = digits.find((value) => value.length >= 10 && value.length <= 16) || null;
+  const phone = digits.find((value) => value.length >= 9 && value.length <= 11) || null;
+  const needBranch = /cawangan|branch|terdekat|nearest|lokasi|alamat/i.test(query);
+  const name = needBranch ? null : ic ? null : query.trim();
+  return {
+    intent: "search_person",
+    entities: {
+      name,
+      ic,
+      account_no: account,
+      phone,
+      address: null,
+      count_groups: null
+    },
+    need_nearest_branch: needBranch
+  };
+}
+function extractJsonObject(text2) {
+  const first = text2.indexOf("{");
+  const last = text2.lastIndexOf("}");
+  if (first === -1 || last === -1 || last <= first) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(text2.slice(first, last + 1));
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+function tokenizeQuery(text2) {
+  return text2.toLowerCase().split(/\s+/).map((token) => token.replace(/[^a-z0-9]/gi, "")).filter((token) => token.length >= 3);
+}
+function buildFieldMatchSummary(data, query) {
+  const tokens = tokenizeQuery(query);
+  if (tokens.length === 0) {
+    return [];
+  }
+  const matches = [];
+  for (const [key, value] of Object.entries(data).slice(0, 80)) {
+    if (key === "id") continue;
+    const valueStr = String(value ?? "");
+    const valueLower = valueStr.toLowerCase();
+    let score = 0;
+    for (const token of tokens) {
+      if (valueLower.includes(token)) score += 1;
+    }
+    if (score > 0) {
+      matches.push({ key, value: valueStr, score });
+    }
+  }
+  return matches.sort((a, b) => b.score - a.score).slice(0, 6).map((match) => `${match.key}: ${match.value}`);
+}
+function rowScore(row, ic, name, account, phone) {
+  const data = normalizeToObject(row.jsonDataJsonb);
+  let score = 0;
+  const icDigits = ic ? ic.replace(/\D/g, "") : "";
+  const accountDigits = account ? account.replace(/\D/g, "") : "";
+  const phoneDigits = phone ? phone.replace(/\D/g, "") : "";
+  for (const [key, value] of Object.entries(data).slice(0, 80)) {
+    const keyLower = key.toLowerCase();
+    const valueStr = String(value ?? "");
+    const valueDigits = valueStr.replace(/\D/g, "");
+    if (icDigits && valueDigits === icDigits) {
+      score += keyLower.includes("ic") || keyLower.includes("mykad") || keyLower.includes("nric") || keyLower.includes("kp") || keyLower.includes("id no") || keyLower.includes("idno") ? 20 : 10;
+    }
+    if (accountDigits && valueDigits === accountDigits) {
+      score += keyLower.includes("akaun") || keyLower.includes("account") ? 12 : 6;
+    }
+    if (phoneDigits && valueDigits === phoneDigits) {
+      score += keyLower.includes("telefon") || keyLower.includes("phone") || keyLower.includes("hp") ? 8 : 4;
+    }
+    if (name && valueStr.toLowerCase().includes(name.toLowerCase())) {
+      score += keyLower.includes("nama") || keyLower.includes("name") ? 6 : 2;
+    }
+  }
+  return score;
+}
+function scoreRowDigits(row, digits) {
+  const data = toObjectJson(row.jsonDataJsonb) || {};
+  const keyGroups = [
+    { keys: ["No. MyKad", "ID No", "No Pengenalan", "IC", "NRIC", "MyKad"], score: 20 },
+    {
+      keys: [
+        "Account No",
+        "Account Number",
+        "Card No",
+        "No Akaun",
+        "Nombor Akaun Bank Pemohon"
+      ],
+      score: 12
+    },
+    {
+      keys: ["No. Telefon Rumah", "No. Telefon Bimbit", "Phone", "Handphone", "OfficePhone"],
+      score: 8
+    }
+  ];
+  let best = 0;
+  for (const group of keyGroups) {
+    for (const key of group.keys) {
+      const value = data[key];
+      if (!value) continue;
+      if (String(value).replace(/\D/g, "") === digits) {
+        best = Math.max(best, group.score);
+      }
+    }
+  }
+  return { score: best, parsed: data };
+}
+function ensureJsonRow(row) {
+  if (typeof row?.jsonDataJsonb === "string") {
+    try {
+      row.jsonDataJsonb = JSON.parse(row.jsonDataJsonb);
+    } catch {
+    }
+  }
+  return row;
+}
+function extractLatLng(data) {
+  const keys = Object.keys(data);
+  const findValue = (names) => {
+    const key = keys.find((candidate) => names.includes(candidate.toLowerCase()));
+    if (!key) return null;
+    const value = Number(String(data[key]).replace(/[^0-9.\-]/g, ""));
+    return Number.isFinite(value) ? value : null;
+  };
+  const lat = findValue(["lat", "latitude", "latitud"]);
+  const lng = findValue(["lng", "long", "longitude", "longitud"]);
+  if (lat === null || lng === null) {
+    return null;
+  }
+  return { lat, lng };
+}
+function isLatLng(value) {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value;
+  return typeof candidate.lat === "number" && Number.isFinite(candidate.lat) && typeof candidate.lng === "number" && Number.isFinite(candidate.lng);
+}
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+function hasPostcodeCoord(value) {
+  return isLatLng(value);
+}
+function extractCustomerPostcode(data) {
+  if (!data || typeof data !== "object") return null;
+  const entries = Object.entries(data);
+  const extractDigits = (value) => {
+    if (value === void 0 || value === null) return null;
+    const raw = String(value);
+    const five = raw.match(/\b\d{5}\b/);
+    if (five) return five[0];
+    const four = raw.match(/\b\d{4}\b/);
+    if (four) return `0${four[0]}`;
+    return null;
+  };
+  const pickByKey = (matcher, valueMatcher) => {
+    for (const [rawKey, rawValue] of entries) {
+      const keyNorm = normalizeKey(rawKey);
+      if (!matcher(keyNorm, rawKey)) continue;
+      if (valueMatcher && !valueMatcher(keyNorm, rawValue)) continue;
+      const postcode = extractDigits(rawValue);
+      if (postcode) return postcode;
+    }
+    return null;
+  };
+  const homePostcode = pickByKey(
+    (key) => !isRelationKey(key) && key.includes("home") && (key.includes("postcode") || key.includes("postalcode") || key.includes("poskod"))
+  );
+  if (homePostcode) return homePostcode;
+  const genericPostcode = pickByKey((key) => {
+    const isGenericPostcode = key === "poskod" || key === "postcode" || key === "postalcode" || key.endsWith("postcode") || key.endsWith("poskod");
+    if (!isGenericPostcode) return false;
+    if (/[23]$/.test(key)) return false;
+    if (key.includes("office")) return false;
+    if (isRelationKey(key)) return false;
+    return true;
+  });
+  if (genericPostcode) return genericPostcode;
+  return pickByKey(
+    (key) => {
+      if (isRelationKey(key)) return false;
+      if (key.includes("office")) return false;
+      return key.includes("homeaddress") || key.includes("alamatsuratmenyurat") || key === "address" || key.includes("alamat");
+    },
+    (_key, rawValue) => isNonEmptyString(rawValue)
+  );
+}
+function extractCustomerLocationHint(data) {
+  if (!data || typeof data !== "object") return "";
+  const parts = [];
+  for (const [rawKey, rawValue] of Object.entries(data)) {
+    if (!isNonEmptyString(rawValue)) continue;
+    const key = normalizeKey(rawKey);
+    if (isRelationKey(key)) continue;
+    if (key.includes("office")) continue;
+    const isLocationField = key.includes("homeaddress") || key.includes("alamatsuratmenyurat") || key === "address" || key.includes("alamat") || key === "bandar" || key === "city" || key.includes("citytown") || key === "negeri" || key === "state" || key.includes("postcode") || key.includes("poskod");
+    if (!isLocationField) continue;
+    const value = String(rawValue).trim();
+    if (value) {
+      parts.push(value);
+    }
+  }
+  return Array.from(new Set(parts)).join(" ");
+}
+function normalizeLocationHint(value) {
+  return value.replace(/[^a-z0-9\s]/gi, " ").replace(/\s+/g, " ").trim();
+}
+function toObjectJson(value) {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+var RELATION_WORDS;
+var init_ai_search_query_utils = __esm({
+  "server/services/ai-search-query-utils.ts"() {
+    "use strict";
+    RELATION_WORDS = [
+      "pasangan",
+      "wakil",
+      "hubungan",
+      "spouse",
+      "guardian",
+      "emergency",
+      "waris",
+      "ibu",
+      "bapa",
+      "suami",
+      "isteri"
+    ];
+  }
+});
+
 // server/services/ai-search.service.ts
 var AiSearchService;
 var init_ai_search_service = __esm({
   "server/services/ai-search.service.ts"() {
     "use strict";
     init_circuitBreaker();
+    init_ai_search_explanation_utils();
+    init_ai_search_query_utils();
     AiSearchService = class {
       constructor(options) {
         this.options = options;
@@ -15351,7 +15735,7 @@ var init_ai_search_service = __esm({
         if (hasDigitsQuery) {
           const candidates = [...keywordResults, ...fallbackDigitsResults];
           for (const row of candidates) {
-            const scored = this.scoreRowDigits(row, queryDigits);
+            const scored = scoreRowDigits(row, queryDigits);
             if (scored.score > bestScore) {
               bestScore = scored.score;
               row.jsonDataJsonb = scored.parsed;
@@ -15370,10 +15754,10 @@ var init_ai_search_service = __esm({
             resultMap.set(row.rowId, row);
           }
           const scored = Array.from(resultMap.values()).map((row) => {
-            const normalized = this.ensureJson(row);
+            const normalized = ensureJsonRow(row);
             return {
               row: normalized,
-              score: this.rowScore(
+              score: rowScore(
                 normalized,
                 entities.ic,
                 entities.name,
@@ -15408,7 +15792,7 @@ var init_ai_search_service = __esm({
         let branchTextSearch = false;
         try {
           if (branchTextPreferred) {
-            const locationHint = this.normalizeLocationHint(
+            const locationHint = normalizeLocationHint(
               query.replace(/cawangan|branch|terdekat|nearest|lokasi|alamat|di|yang|paling|dekat/gi, " ")
             );
             if (locationHint.length >= 3) {
@@ -15419,23 +15803,21 @@ var init_ai_search_service = __esm({
               branchTextSearch = true;
             }
           } else if (personForBranch && shouldFindBranch) {
-            const coords = this.extractLatLng(personForBranch.jsonDataJsonb || {});
-            if (this.isLatLng(coords)) {
+            const coords = extractLatLng(personForBranch.jsonDataJsonb || {});
+            if (isLatLng(coords)) {
               const branches = await this.safeNearestBranches(coords.lat, coords.lng, 1, branchTimeoutMs);
               nearestBranch = branches[0] || null;
             } else {
-              let data = this.toObjectJson(personForBranch.jsonDataJsonb) || {};
-              const basePostcode = this.extractCustomerPostcode(data);
-              const baseHint = this.normalizeLocationHint(this.extractCustomerLocationHint(data));
+              let data = toObjectJson(personForBranch.jsonDataJsonb) || {};
+              const basePostcode = extractCustomerPostcode(data);
+              const baseHint = normalizeLocationHint(extractCustomerLocationHint(data));
               if (!basePostcode && baseHint.length < 3) {
                 const locationCandidateRows = [best, ...keywordResults, ...fallbackDigitsResults];
                 for (const candidate of locationCandidateRows) {
-                  const candidateData = this.toObjectJson(candidate?.jsonDataJsonb);
+                  const candidateData = toObjectJson(candidate?.jsonDataJsonb);
                   if (!candidateData) continue;
-                  const candidatePostcode = this.extractCustomerPostcode(candidateData);
-                  const candidateHint = this.normalizeLocationHint(
-                    this.extractCustomerLocationHint(candidateData)
-                  );
+                  const candidatePostcode = extractCustomerPostcode(candidateData);
+                  const candidateHint = normalizeLocationHint(extractCustomerLocationHint(candidateData));
                   if (candidatePostcode || candidateHint.length >= 3) {
                     data = candidateData;
                     break;
@@ -15443,12 +15825,12 @@ var init_ai_search_service = __esm({
                 }
               }
               let postcodeWasProvided = false;
-              const postcode = this.extractCustomerPostcode(data);
+              const postcode = extractCustomerPostcode(data);
               if (postcode) {
                 postcodeWasProvided = true;
-                if (this.isNonEmptyString(postcode)) {
+                if (isNonEmptyString(postcode)) {
                   const pc = await this.safePostcodeLatLng(postcode, branchTimeoutMs);
-                  if (this.hasPostcodeCoord(pc)) {
+                  if (hasPostcodeCoord(pc)) {
                     const branches = await this.safeNearestBranches(pc.lat, pc.lng, 1, branchTimeoutMs);
                     nearestBranch = branches[0] || null;
                     if (process.env.AI_DEBUG === "1") {
@@ -15488,7 +15870,7 @@ var init_ai_search_service = __esm({
                 missingCoords = true;
               }
               if (!nearestBranch && missingCoords && !postcodeWasProvided) {
-                const hint = this.normalizeLocationHint(this.extractCustomerLocationHint(data));
+                const hint = normalizeLocationHint(extractCustomerLocationHint(data));
                 if (hint.length >= 3) {
                   branchTextSearch = true;
                   const branches = await this.safeFindBranchesByText(hint, 1, branchTimeoutMs);
@@ -15528,7 +15910,7 @@ var init_ai_search_service = __esm({
         let suggestions = [];
         if ((!person || bestScore < 6) && !hasDigitsQuery) {
           const fuzzyResults = await this.options.storage.aiFuzzySearch({ query, limit: 5 });
-          const tokens = this.tokenizeQuery(query);
+          const tokens = tokenizeQuery(query);
           const maxScore = Math.max(1, tokens.length);
           suggestions = fuzzyResults.map((row) => {
             let data = row.jsonDataJsonb;
@@ -15548,9 +15930,9 @@ var init_ai_search_service = __esm({
             return hasAny ? `- ${name} | IC: ${ic} | Alamat: ${addr} | Keyakinan: ${confidence}%` : "";
           }).filter(Boolean);
         }
-        const personSummary = this.buildPersonSummary(person);
-        const branchSummary = this.buildBranchSummary(nearestBranch);
-        const explanation = this.buildExplanation({
+        const personSummary = buildPersonSummary(person);
+        const branchSummary = buildBranchSummary(nearestBranch);
+        const explanation = buildExplanation({
           decision,
           distanceKm: nearestBranch?.distanceKm ?? null,
           branch: nearestBranch?.name ?? null,
@@ -15560,7 +15942,7 @@ var init_ai_search_service = __esm({
           travelMode,
           missingCoords,
           suggestions,
-          matchFields: !hasDigitsQuery && person && typeof person === "object" ? this.buildFieldMatchSummary(person, query) : [],
+          matchFields: !hasDigitsQuery && person && typeof person === "object" ? buildFieldMatchSummary(person, query) : [],
           branchTextSearch
         });
         return {
@@ -15606,108 +15988,10 @@ var init_ai_search_service = __esm({
         }
         return entry.row;
       }
-      buildPersonSummary(person) {
-        const summary = [];
-        if (person && typeof person === "object") {
-          const pushIf = (label, key) => {
-            const value = person[key];
-            if (value !== void 0 && value !== null && String(value).trim() !== "") {
-              summary.push({ label, value: String(value) });
-            }
-          };
-          pushIf("Nama", "Nama");
-          pushIf("Nama", "Customer Name");
-          pushIf("Nama", "name");
-          pushIf("No. MyKad", "No. MyKad");
-          pushIf("ID No", "ID No");
-          pushIf("No Pengenalan", "No Pengenalan");
-          pushIf("IC", "ic");
-          pushIf("Account No", "Account No");
-          pushIf("Card No", "Card No");
-          pushIf("No. Telefon Rumah", "No. Telefon Rumah");
-          pushIf("No. Telefon Bimbit", "No. Telefon Bimbit");
-          pushIf("Handphone", "Handphone");
-          pushIf("OfficePhone", "OfficePhone");
-          pushIf("Alamat Surat Menyurat", "Alamat Surat Menyurat");
-          pushIf("HomeAddress1", "HomeAddress1");
-          pushIf("HomeAddress2", "HomeAddress2");
-          pushIf("HomeAddress3", "HomeAddress3");
-          pushIf("HomePostcode", "HomePostcode");
-          pushIf("Home Post Code", "Home Post Code");
-          pushIf("Home Postal Code", "Home Postal Code");
-          pushIf("Bandar", "Bandar");
-          pushIf("Negeri", "Negeri");
-          pushIf("Poskod", "Poskod");
-        }
-        if (summary.length === 0 && person && typeof person === "object") {
-          const entries = Object.entries(person).filter(([key]) => key !== "id").slice(0, 8);
-          for (const [key, value] of entries) {
-            if (value !== void 0 && value !== null && String(value).trim() !== "") {
-              summary.push({ label: key, value: String(value) });
-            }
-          }
-        }
-        return summary;
-      }
-      buildBranchSummary(nearestBranch) {
-        const summary = [];
-        if (!nearestBranch) {
-          return summary;
-        }
-        const push = (label, value) => {
-          if (value !== void 0 && value !== null && String(value).trim() !== "") {
-            summary.push({ label, value: String(value) });
-          }
-        };
-        push("Nama Cawangan", nearestBranch.name);
-        push("Alamat", nearestBranch.address);
-        push("Telefon", nearestBranch.phone);
-        push("Fax", nearestBranch.fax);
-        push("Business Hour", nearestBranch.businessHour);
-        push("Day Open", nearestBranch.dayOpen);
-        push("ATM & CDM", nearestBranch.atmCdm);
-        push("Inquiry Availability", nearestBranch.inquiryAvailability);
-        push("Application Availability", nearestBranch.applicationAvailability);
-        push("AEON Lounge", nearestBranch.aeonLounge);
-        push("Jarak (KM)", nearestBranch.distanceKm);
-        return summary;
-      }
-      buildExplanation(payload) {
-        const personLines = payload.personSummary.length > 0 ? payload.personSummary.map((item) => `${item.label}: ${item.value}`).join("\n") : "Tiada maklumat pelanggan dijumpai.";
-        const branchLines = payload.branchSummary.length > 0 ? payload.branchSummary.map((item) => `${item.label}: ${item.value}`).join("\n") : payload.missingCoords ? "Lokasi pelanggan tidak lengkap (tiada LAT/LNG atau Postcode)." : payload.branchTextSearch ? "Tiada padanan cawangan ditemui berdasarkan lokasi/teks." : "Tiada maklumat cawangan dijumpai.";
-        let decisionLine = "Tiada cadangan dibuat.";
-        if (payload.decision) {
-          const timeInfo = payload.estimatedMinutes ? ` Anggaran masa ${payload.estimatedMinutes} minit.` : "";
-          const modeInfo = payload.travelMode ? ` Mod: ${payload.travelMode}.` : "";
-          if (payload.distanceKm && payload.branch) {
-            decisionLine = `Cadangan: ${payload.decision}. Jarak ke ${payload.branch} adalah ${payload.distanceKm.toFixed(1)}KM.${timeInfo}${modeInfo}`;
-          } else {
-            decisionLine = `Cadangan: ${payload.decision}.${timeInfo}${modeInfo}`;
-          }
-        } else if (payload.branchSummary.length > 0) {
-          decisionLine = "Cadangan: Sila hubungi/kunjungi cawangan di atas.";
-        }
-        const base = [
-          "Maklumat Pelanggan:",
-          personLines,
-          "",
-          "Cadangan Cawangan Terdekat:",
-          branchLines,
-          "",
-          decisionLine
-        ];
-        if (payload.matchFields && payload.matchFields.length > 0) {
-          base.push("", "Padanan Medan (Top):", payload.matchFields.join("\n"));
-        }
-        if (payload.suggestions && payload.suggestions.length > 0) {
-          base.push("", "Cadangan Rekod (fuzzy):", payload.suggestions.join("\n"));
-        }
-        return base.join("\n");
-      }
       async parseIntent(query, timeoutMs = this.options.defaultAiTimeoutMs) {
         const intentMode = String(process.env.AI_INTENT_MODE || "fast").toLowerCase();
         if (intentMode === "fast") {
-          return this.parseIntentFallback(query);
+          return parseIntentFallback(query);
         }
         const system = 'Anda hanya keluarkan JSON SAHAJA. Tugas: kenalpasti intent carian dan entiti.\nFormat WAJIB:\n{"intent":"search_person","entities":{"name":null,"ic":null,"account_no":null,"phone":null,"address":null},"need_nearest_branch":false}\nJika IC/MyKad ada, isi "ic". Jika akaun, isi "account_no". Jika nombor telefon, isi "phone".';
         const messages = [
@@ -15723,289 +16007,25 @@ var init_ai_search_service = __esm({
               timeoutMs
             })
           );
-          const parsed = this.extractJsonObject(raw);
-          if (parsed && parsed.intent && parsed.entities) {
+          const parsed = extractJsonObject(raw);
+          const entities = parsed?.entities;
+          if (parsed && parsed.intent && entities && typeof entities === "object") {
+            const entityRecord = entities;
             return {
               intent: String(parsed.intent || "search_person"),
               entities: {
-                name: parsed.entities?.name ?? null,
-                ic: parsed.entities?.ic ?? null,
-                account_no: parsed.entities?.account_no ?? null,
-                phone: parsed.entities?.phone ?? null,
-                address: parsed.entities?.address ?? null
+                name: typeof entityRecord.name === "string" ? entityRecord.name : null,
+                ic: typeof entityRecord.ic === "string" ? entityRecord.ic : null,
+                account_no: typeof entityRecord.account_no === "string" ? entityRecord.account_no : null,
+                phone: typeof entityRecord.phone === "string" ? entityRecord.phone : null,
+                address: typeof entityRecord.address === "string" ? entityRecord.address : null
               },
               need_nearest_branch: Boolean(parsed.need_nearest_branch)
             };
           }
         } catch {
         }
-        return this.parseIntentFallback(query);
-      }
-      parseIntentFallback(query) {
-        const digits = query.match(/\d{6,}/g) || [];
-        const ic = digits.find((value) => value.length === 12) || null;
-        const account = digits.find((value) => value.length >= 10 && value.length <= 16) || null;
-        const phone = digits.find((value) => value.length >= 9 && value.length <= 11) || null;
-        const needBranch = /cawangan|branch|terdekat|nearest|lokasi|alamat/i.test(query);
-        const name = needBranch ? null : ic ? null : query.trim();
-        return {
-          intent: "search_person",
-          entities: {
-            name,
-            ic,
-            account_no: account,
-            phone,
-            address: null,
-            count_groups: null
-          },
-          need_nearest_branch: needBranch
-        };
-      }
-      extractJsonObject(text2) {
-        const first = text2.indexOf("{");
-        const last = text2.lastIndexOf("}");
-        if (first === -1 || last === -1 || last <= first) {
-          return null;
-        }
-        try {
-          return JSON.parse(text2.slice(first, last + 1));
-        } catch {
-          return null;
-        }
-      }
-      tokenizeQuery(text2) {
-        return text2.toLowerCase().split(/\s+/).map((token) => token.replace(/[^a-z0-9]/gi, "")).filter((token) => token.length >= 3);
-      }
-      buildFieldMatchSummary(data, query) {
-        const tokens = this.tokenizeQuery(query);
-        if (tokens.length === 0) {
-          return [];
-        }
-        const matches = [];
-        for (const [key, value] of Object.entries(data || {}).slice(0, 80)) {
-          if (key === "id") continue;
-          const valueStr = String(value ?? "");
-          const valueLower = valueStr.toLowerCase();
-          let score = 0;
-          for (const token of tokens) {
-            if (valueLower.includes(token)) score += 1;
-          }
-          if (score > 0) {
-            matches.push({ key, value: valueStr, score });
-          }
-        }
-        return matches.sort((a, b) => b.score - a.score).slice(0, 6).map((match) => `${match.key}: ${match.value}`);
-      }
-      rowScore(row, ic, name, account, phone) {
-        const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
-        let score = 0;
-        const icDigits = ic ? ic.replace(/\D/g, "") : "";
-        const accountDigits = account ? account.replace(/\D/g, "") : "";
-        const phoneDigits = phone ? phone.replace(/\D/g, "") : "";
-        for (const [key, value] of Object.entries(data).slice(0, 80)) {
-          const keyLower = key.toLowerCase();
-          const valueStr = String(value ?? "");
-          const valueDigits = valueStr.replace(/\D/g, "");
-          if (icDigits && valueDigits === icDigits) {
-            score += keyLower.includes("ic") || keyLower.includes("mykad") || keyLower.includes("nric") || keyLower.includes("kp") || keyLower.includes("id no") || keyLower.includes("idno") ? 20 : 10;
-          }
-          if (accountDigits && valueDigits === accountDigits) {
-            score += keyLower.includes("akaun") || keyLower.includes("account") ? 12 : 6;
-          }
-          if (phoneDigits && valueDigits === phoneDigits) {
-            score += keyLower.includes("telefon") || keyLower.includes("phone") || keyLower.includes("hp") ? 8 : 4;
-          }
-          if (name && valueStr.toLowerCase().includes(name.toLowerCase())) {
-            score += keyLower.includes("nama") || keyLower.includes("name") ? 6 : 2;
-          }
-        }
-        return score;
-      }
-      scoreRowDigits(row, digits) {
-        let data = row?.jsonDataJsonb;
-        if (typeof data === "string") {
-          try {
-            data = JSON.parse(data);
-          } catch {
-            data = {};
-          }
-        }
-        if (!data || typeof data !== "object") {
-          data = {};
-        }
-        const keyGroups = [
-          { keys: ["No. MyKad", "ID No", "No Pengenalan", "IC", "NRIC", "MyKad"], score: 20 },
-          {
-            keys: [
-              "Account No",
-              "Account Number",
-              "Card No",
-              "No Akaun",
-              "Nombor Akaun Bank Pemohon"
-            ],
-            score: 12
-          },
-          {
-            keys: ["No. Telefon Rumah", "No. Telefon Bimbit", "Phone", "Handphone", "OfficePhone"],
-            score: 8
-          }
-        ];
-        let best = 0;
-        for (const group of keyGroups) {
-          for (const key of group.keys) {
-            const value = data[key];
-            if (!value) continue;
-            if (String(value).replace(/\D/g, "") === digits) {
-              best = Math.max(best, group.score);
-            }
-          }
-        }
-        return { score: best, parsed: data };
-      }
-      ensureJson(row) {
-        if (row?.jsonDataJsonb && typeof row.jsonDataJsonb === "string") {
-          try {
-            row.jsonDataJsonb = JSON.parse(row.jsonDataJsonb);
-          } catch {
-          }
-        }
-        return row;
-      }
-      extractLatLng(data) {
-        const keys = Object.keys(data);
-        const findValue = (names) => {
-          const key = keys.find((candidate) => names.includes(candidate.toLowerCase()));
-          if (!key) return null;
-          const value = Number(String(data[key]).replace(/[^0-9.\-]/g, ""));
-          return Number.isFinite(value) ? value : null;
-        };
-        const lat = findValue(["lat", "latitude", "latitud"]);
-        const lng = findValue(["lng", "long", "longitude", "longitud"]);
-        if (lat === null || lng === null) {
-          return null;
-        }
-        return { lat, lng };
-      }
-      isLatLng(value) {
-        if (!value || typeof value !== "object") return false;
-        const candidate = value;
-        return typeof candidate.lat === "number" && Number.isFinite(candidate.lat) && typeof candidate.lng === "number" && Number.isFinite(candidate.lng);
-      }
-      isNonEmptyString(value) {
-        return typeof value === "string" && value.trim().length > 0;
-      }
-      hasPostcodeCoord(value) {
-        return this.isLatLng(value);
-      }
-      extractCustomerPostcode(data) {
-        if (!data || typeof data !== "object") return null;
-        const entries = Object.entries(data);
-        const normalize = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
-        const relationWords = [
-          "pasangan",
-          "wakil",
-          "hubungan",
-          "spouse",
-          "guardian",
-          "emergency",
-          "waris",
-          "ibu",
-          "bapa",
-          "suami",
-          "isteri"
-        ];
-        const relationWordsNorm = relationWords.map(normalize);
-        const extractDigits = (value) => {
-          if (value === void 0 || value === null) return null;
-          const raw = String(value);
-          const five = raw.match(/\b\d{5}\b/);
-          if (five) return five[0];
-          const four = raw.match(/\b\d{4}\b/);
-          if (four) return `0${four[0]}`;
-          return null;
-        };
-        const isRelationKey = (normalizedKey) => {
-          return relationWordsNorm.some((word) => normalizedKey.includes(word));
-        };
-        const pickByKey = (matcher, valueMatcher) => {
-          for (const [rawKey, rawValue] of entries) {
-            const keyNorm = normalize(rawKey);
-            if (!matcher(keyNorm, rawKey)) continue;
-            if (valueMatcher && !valueMatcher(keyNorm, rawValue)) continue;
-            const postcode = extractDigits(rawValue);
-            if (postcode) return postcode;
-          }
-          return null;
-        };
-        const homePostcode = pickByKey(
-          (key) => !isRelationKey(key) && key.includes("home") && (key.includes("postcode") || key.includes("postalcode") || key.includes("poskod"))
-        );
-        if (homePostcode) return homePostcode;
-        const genericPostcode = pickByKey((key) => {
-          const isGenericPostcode = key === "poskod" || key === "postcode" || key === "postalcode" || key.endsWith("postcode") || key.endsWith("poskod");
-          if (!isGenericPostcode) return false;
-          if (/[23]$/.test(key)) return false;
-          if (key.includes("office")) return false;
-          if (isRelationKey(key)) return false;
-          return true;
-        });
-        if (genericPostcode) return genericPostcode;
-        return pickByKey(
-          (key) => {
-            if (isRelationKey(key)) return false;
-            if (key.includes("office")) return false;
-            return key.includes("homeaddress") || key.includes("alamatsuratmenyurat") || key === "address" || key.includes("alamat");
-          },
-          (_key, rawValue) => this.isNonEmptyString(rawValue)
-        );
-      }
-      extractCustomerLocationHint(data) {
-        if (!data || typeof data !== "object") return "";
-        const normalizeKey = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
-        const relationWords = [
-          "pasangan",
-          "wakil",
-          "hubungan",
-          "spouse",
-          "guardian",
-          "waris",
-          "ibu",
-          "bapa",
-          "suami",
-          "isteri"
-        ];
-        const relationWordsNorm = relationWords.map(normalizeKey);
-        const isRelationKey = (key) => relationWordsNorm.some((word) => key.includes(word));
-        const parts = [];
-        for (const [rawKey, rawValue] of Object.entries(data)) {
-          if (!this.isNonEmptyString(rawValue)) continue;
-          const key = normalizeKey(rawKey);
-          if (isRelationKey(key)) continue;
-          if (key.includes("office")) continue;
-          const isLocationField = key.includes("homeaddress") || key.includes("alamatsuratmenyurat") || key === "address" || key.includes("alamat") || key === "bandar" || key === "city" || key.includes("citytown") || key === "negeri" || key === "state" || key.includes("postcode") || key.includes("poskod");
-          if (!isLocationField) continue;
-          const value = String(rawValue).trim();
-          if (value) {
-            parts.push(value);
-          }
-        }
-        return Array.from(new Set(parts)).join(" ");
-      }
-      normalizeLocationHint(value) {
-        return value.replace(/[^a-z0-9\s]/gi, " ").replace(/\s+/g, " ").trim();
-      }
-      toObjectJson(value) {
-        if (!value) return null;
-        if (typeof value === "object") return value;
-        if (typeof value === "string") {
-          try {
-            const parsed = JSON.parse(value);
-            return parsed && typeof parsed === "object" ? parsed : null;
-          } catch {
-            return null;
-          }
-        }
-        return null;
+        return parseIntentFallback(query);
       }
       async safeFindBranchesByText(text2, limit, timeoutMs) {
         try {
