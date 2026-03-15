@@ -48,6 +48,12 @@ Jika anda ada `psql`, gunakan:
 \i C:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/sql/import_aeon_branches_template.sql
 ```
 
+Atau gunakan importer `node` yang saya sediakan:
+
+```powershell
+npm run import:aeon-branches
+```
+
 ## 3. Apa script SQL ini buat
 
 - baca CSV ke temporary table
