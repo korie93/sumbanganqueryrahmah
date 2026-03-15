@@ -1,67 +1,36 @@
 import type { OllamaMessage } from "../ai-ollama";
 import { CircuitOpenError } from "../internal/circuitBreaker";
-import type { PostgresStorage } from "../storage-postgres";
-
-type AiIntent = {
-  intent: string;
-  entities: {
-    name?: string | null;
-    ic?: string | null;
-    account_no?: string | null;
-    phone?: string | null;
-    address?: string | null;
-    count_groups?: string[] | null;
-  };
-  need_nearest_branch: boolean;
-};
-
-type AiSearchAudit = {
-  query: string;
-  intent: AiIntent;
-  matched_profile_id: string | null;
-  branch: string | null;
-  distance_km: number | null;
-  decision: string | null;
-  travel_mode: string | null;
-  estimated_minutes: number | null;
-  used_last_person: boolean;
-};
-
-type AiSearchResult = {
-  payload: any;
-  audit: AiSearchAudit;
-};
-
-type AiSearchResponse = {
-  statusCode: number;
-  body: any;
-  audit?: AiSearchAudit;
-};
-
-type AiSearchRuntimeSettings = {
-  semanticSearchEnabled: boolean;
-  aiTimeoutMs: number;
-};
-
-type SearchCacheEntry = {
-  ts: number;
-  payload: any;
-  audit: AiSearchAudit;
-};
-
-type LastAiPersonEntry = {
-  ts: number;
-  row: any;
-};
-
-type AiSearchServiceOptions = {
-  storage: PostgresStorage;
-  withAiCircuit: <T>(operation: () => Promise<T>) => Promise<T>;
-  ollamaChat: (messages: OllamaMessage[], options?: Record<string, unknown>) => Promise<string>;
-  ollamaEmbed: (text: string) => Promise<number[]>;
-  defaultAiTimeoutMs: number;
-  lowMemoryMode: boolean;
-};
+import {
+  buildBranchSummary,
+  buildExplanation,
+  buildPersonSummary,
+} from "./ai-search-explanation-utils";
+import {
+  buildFieldMatchSummary,
+  ensureJsonRow,
+  extractCustomerLocationHint,
+  extractCustomerPostcode,
+  extractJsonObject,
+  extractLatLng,
+  hasPostcodeCoord,
+  isLatLng,
+  isNonEmptyString,
+  normalizeLocationHint,
+  parseIntentFallback,
+  rowScore,
+  scoreRowDigits,
+  tokenizeQuery,
+  toObjectJson,
+} from "./ai-search-query-utils";
+import type {
+  AiIntent,
+  AiSearchResponse,
+  AiSearchResult,
+  AiSearchRuntimeSettings,
+  AiSearchServiceOptions,
+  LastAiPersonEntry,
+  SearchCacheEntry,
+} from "./ai-search-types";
 
 export class AiSearchService {
   private readonly searchCache = new Map<string, SearchCacheEntry>();
@@ -256,7 +225,7 @@ export class AiSearchService {
     if (hasDigitsQuery) {
       const candidates = [...keywordResults, ...fallbackDigitsResults];
       for (const row of candidates) {
-        const scored = this.scoreRowDigits(row, queryDigits);
+        const scored = scoreRowDigits(row, queryDigits);
         if (scored.score > bestScore) {
           bestScore = scored.score;
           row.jsonDataJsonb = scored.parsed;
@@ -277,10 +246,10 @@ export class AiSearchService {
 
       const scored = Array.from(resultMap.values())
         .map((row) => {
-          const normalized = this.ensureJson(row);
+          const normalized = ensureJsonRow(row);
           return {
             row: normalized,
-            score: this.rowScore(
+            score: rowScore(
               normalized,
               entities.ic,
               entities.name,
@@ -327,7 +296,7 @@ export class AiSearchService {
 
     try {
       if (branchTextPreferred) {
-        const locationHint = this.normalizeLocationHint(
+        const locationHint = normalizeLocationHint(
           query.replace(/cawangan|branch|terdekat|nearest|lokasi|alamat|di|yang|paling|dekat/gi, " "),
         );
         if (locationHint.length >= 3) {
@@ -338,24 +307,22 @@ export class AiSearchService {
           branchTextSearch = true;
         }
       } else if (personForBranch && shouldFindBranch) {
-        const coords = this.extractLatLng(personForBranch.jsonDataJsonb || {});
-        if (this.isLatLng(coords)) {
+        const coords = extractLatLng(personForBranch.jsonDataJsonb || {});
+        if (isLatLng(coords)) {
           const branches = await this.safeNearestBranches(coords.lat, coords.lng, 1, branchTimeoutMs);
           nearestBranch = branches[0] || null;
         } else {
-          let data = this.toObjectJson(personForBranch.jsonDataJsonb) || {};
-          const basePostcode = this.extractCustomerPostcode(data);
-          const baseHint = this.normalizeLocationHint(this.extractCustomerLocationHint(data));
+          let data = toObjectJson(personForBranch.jsonDataJsonb) || {};
+          const basePostcode = extractCustomerPostcode(data);
+          const baseHint = normalizeLocationHint(extractCustomerLocationHint(data));
 
           if (!basePostcode && baseHint.length < 3) {
             const locationCandidateRows = [best, ...keywordResults, ...fallbackDigitsResults];
             for (const candidate of locationCandidateRows) {
-              const candidateData = this.toObjectJson((candidate as any)?.jsonDataJsonb);
+              const candidateData = toObjectJson(candidate?.jsonDataJsonb);
               if (!candidateData) continue;
-              const candidatePostcode = this.extractCustomerPostcode(candidateData);
-              const candidateHint = this.normalizeLocationHint(
-                this.extractCustomerLocationHint(candidateData),
-              );
+              const candidatePostcode = extractCustomerPostcode(candidateData);
+              const candidateHint = normalizeLocationHint(extractCustomerLocationHint(candidateData));
               if (candidatePostcode || candidateHint.length >= 3) {
                 data = candidateData;
                 break;
@@ -364,12 +331,12 @@ export class AiSearchService {
           }
 
           let postcodeWasProvided = false;
-          const postcode = this.extractCustomerPostcode(data);
+          const postcode = extractCustomerPostcode(data);
           if (postcode) {
             postcodeWasProvided = true;
-            if (this.isNonEmptyString(postcode)) {
+            if (isNonEmptyString(postcode)) {
               const pc = await this.safePostcodeLatLng(postcode, branchTimeoutMs);
-              if (this.hasPostcodeCoord(pc)) {
+              if (hasPostcodeCoord(pc)) {
                 const branches = await this.safeNearestBranches(pc.lat, pc.lng, 1, branchTimeoutMs);
                 nearestBranch = branches[0] || null;
                 if (process.env.AI_DEBUG === "1") {
@@ -410,7 +377,7 @@ export class AiSearchService {
           }
 
           if (!nearestBranch && missingCoords && !postcodeWasProvided) {
-            const hint = this.normalizeLocationHint(this.extractCustomerLocationHint(data));
+            const hint = normalizeLocationHint(extractCustomerLocationHint(data));
             if (hint.length >= 3) {
               branchTextSearch = true;
               const branches = await this.safeFindBranchesByText(hint, 1, branchTimeoutMs);
@@ -456,7 +423,7 @@ export class AiSearchService {
     let suggestions: string[] = [];
     if ((!person || bestScore < 6) && !hasDigitsQuery) {
       const fuzzyResults = await this.options.storage.aiFuzzySearch({ query, limit: 5 });
-      const tokens = this.tokenizeQuery(query);
+      const tokens = tokenizeQuery(query);
       const maxScore = Math.max(1, tokens.length);
       suggestions = fuzzyResults
         .map((row) => {
@@ -488,9 +455,9 @@ export class AiSearchService {
         .filter(Boolean);
     }
 
-    const personSummary = this.buildPersonSummary(person);
-    const branchSummary = this.buildBranchSummary(nearestBranch);
-    const explanation = this.buildExplanation({
+    const personSummary = buildPersonSummary(person);
+    const branchSummary = buildBranchSummary(nearestBranch);
+    const explanation = buildExplanation({
       decision,
       distanceKm: nearestBranch?.distanceKm ?? null,
       branch: nearestBranch?.name ?? null,
@@ -502,7 +469,7 @@ export class AiSearchService {
       suggestions,
       matchFields:
         !hasDigitsQuery && person && typeof person === "object"
-          ? this.buildFieldMatchSummary(person, query)
+          ? buildFieldMatchSummary(person, query)
           : [],
       branchTextSearch,
     });
@@ -554,145 +521,10 @@ export class AiSearchService {
     return entry.row;
   }
 
-  private buildPersonSummary(person: Record<string, any> | null) {
-    const summary: Array<{ label: string; value: string }> = [];
-    if (person && typeof person === "object") {
-      const pushIf = (label: string, key: string) => {
-        const value = person[key];
-        if (value !== undefined && value !== null && String(value).trim() !== "") {
-          summary.push({ label, value: String(value) });
-        }
-      };
-
-      pushIf("Nama", "Nama");
-      pushIf("Nama", "Customer Name");
-      pushIf("Nama", "name");
-      pushIf("No. MyKad", "No. MyKad");
-      pushIf("ID No", "ID No");
-      pushIf("No Pengenalan", "No Pengenalan");
-      pushIf("IC", "ic");
-      pushIf("Account No", "Account No");
-      pushIf("Card No", "Card No");
-      pushIf("No. Telefon Rumah", "No. Telefon Rumah");
-      pushIf("No. Telefon Bimbit", "No. Telefon Bimbit");
-      pushIf("Handphone", "Handphone");
-      pushIf("OfficePhone", "OfficePhone");
-      pushIf("Alamat Surat Menyurat", "Alamat Surat Menyurat");
-      pushIf("HomeAddress1", "HomeAddress1");
-      pushIf("HomeAddress2", "HomeAddress2");
-      pushIf("HomeAddress3", "HomeAddress3");
-      pushIf("HomePostcode", "HomePostcode");
-      pushIf("Home Post Code", "Home Post Code");
-      pushIf("Home Postal Code", "Home Postal Code");
-      pushIf("Bandar", "Bandar");
-      pushIf("Negeri", "Negeri");
-      pushIf("Poskod", "Poskod");
-    }
-
-    if (summary.length === 0 && person && typeof person === "object") {
-      const entries = Object.entries(person).filter(([key]) => key !== "id").slice(0, 8);
-      for (const [key, value] of entries) {
-        if (value !== undefined && value !== null && String(value).trim() !== "") {
-          summary.push({ label: key, value: String(value) });
-        }
-      }
-    }
-
-    return summary;
-  }
-
-  private buildBranchSummary(nearestBranch: any | null) {
-    const summary: Array<{ label: string; value: string }> = [];
-    if (!nearestBranch) {
-      return summary;
-    }
-
-    const push = (label: string, value: any) => {
-      if (value !== undefined && value !== null && String(value).trim() !== "") {
-        summary.push({ label, value: String(value) });
-      }
-    };
-
-    push("Nama Cawangan", nearestBranch.name);
-    push("Alamat", nearestBranch.address);
-    push("Telefon", nearestBranch.phone);
-    push("Fax", nearestBranch.fax);
-    push("Business Hour", nearestBranch.businessHour);
-    push("Day Open", nearestBranch.dayOpen);
-    push("ATM & CDM", nearestBranch.atmCdm);
-    push("Inquiry Availability", nearestBranch.inquiryAvailability);
-    push("Application Availability", nearestBranch.applicationAvailability);
-    push("AEON Lounge", nearestBranch.aeonLounge);
-    push("Jarak (KM)", nearestBranch.distanceKm);
-    return summary;
-  }
-
-  private buildExplanation(payload: {
-    decision: string | null;
-    distanceKm: number | null;
-    branch: string | null;
-    personSummary: Array<{ label: string; value: string }>;
-    branchSummary: Array<{ label: string; value: string }>;
-    estimatedMinutes: number | null;
-    travelMode: string | null;
-    missingCoords: boolean;
-    suggestions?: string[];
-    matchFields?: string[];
-    branchTextSearch?: boolean;
-  }): string {
-    const personLines =
-      payload.personSummary.length > 0
-        ? payload.personSummary.map((item) => `${item.label}: ${item.value}`).join("\n")
-        : "Tiada maklumat pelanggan dijumpai.";
-    const branchLines =
-      payload.branchSummary.length > 0
-        ? payload.branchSummary.map((item) => `${item.label}: ${item.value}`).join("\n")
-        : payload.missingCoords
-          ? "Lokasi pelanggan tidak lengkap (tiada LAT/LNG atau Postcode)."
-          : payload.branchTextSearch
-            ? "Tiada padanan cawangan ditemui berdasarkan lokasi/teks."
-            : "Tiada maklumat cawangan dijumpai.";
-
-    let decisionLine = "Tiada cadangan dibuat.";
-    if (payload.decision) {
-      const timeInfo = payload.estimatedMinutes
-        ? ` Anggaran masa ${payload.estimatedMinutes} minit.`
-        : "";
-      const modeInfo = payload.travelMode ? ` Mod: ${payload.travelMode}.` : "";
-      if (payload.distanceKm && payload.branch) {
-        decisionLine = `Cadangan: ${payload.decision}. Jarak ke ${payload.branch} adalah ${payload.distanceKm.toFixed(1)}KM.${timeInfo}${modeInfo}`;
-      } else {
-        decisionLine = `Cadangan: ${payload.decision}.${timeInfo}${modeInfo}`;
-      }
-    } else if (payload.branchSummary.length > 0) {
-      decisionLine = "Cadangan: Sila hubungi/kunjungi cawangan di atas.";
-    }
-
-    const base = [
-      "Maklumat Pelanggan:",
-      personLines,
-      "",
-      "Cadangan Cawangan Terdekat:",
-      branchLines,
-      "",
-      decisionLine,
-    ];
-
-    if (payload.matchFields && payload.matchFields.length > 0) {
-      base.push("", "Padanan Medan (Top):", payload.matchFields.join("\n"));
-    }
-
-    if (payload.suggestions && payload.suggestions.length > 0) {
-      base.push("", "Cadangan Rekod (fuzzy):", payload.suggestions.join("\n"));
-    }
-
-    return base.join("\n");
-  }
-
   private async parseIntent(query: string, timeoutMs = this.options.defaultAiTimeoutMs): Promise<AiIntent> {
     const intentMode = String(process.env.AI_INTENT_MODE || "fast").toLowerCase();
     if (intentMode === "fast") {
-      return this.parseIntentFallback(query);
+      return parseIntentFallback(query);
     }
 
     const system =
@@ -715,16 +547,19 @@ export class AiSearchService {
           timeoutMs,
         }),
       );
-      const parsed = this.extractJsonObject(raw);
-      if (parsed && parsed.intent && parsed.entities) {
+      const parsed = extractJsonObject(raw);
+      const entities = parsed?.entities;
+      if (parsed && parsed.intent && entities && typeof entities === "object") {
+        const entityRecord = entities as Record<string, unknown>;
         return {
           intent: String(parsed.intent || "search_person"),
           entities: {
-            name: parsed.entities?.name ?? null,
-            ic: parsed.entities?.ic ?? null,
-            account_no: parsed.entities?.account_no ?? null,
-            phone: parsed.entities?.phone ?? null,
-            address: parsed.entities?.address ?? null,
+            name: typeof entityRecord.name === "string" ? entityRecord.name : null,
+            ic: typeof entityRecord.ic === "string" ? entityRecord.ic : null,
+            account_no:
+              typeof entityRecord.account_no === "string" ? entityRecord.account_no : null,
+            phone: typeof entityRecord.phone === "string" ? entityRecord.phone : null,
+            address: typeof entityRecord.address === "string" ? entityRecord.address : null,
           },
           need_nearest_branch: Boolean(parsed.need_nearest_branch),
         };
@@ -733,367 +568,7 @@ export class AiSearchService {
       // fallback below
     }
 
-    return this.parseIntentFallback(query);
-  }
-
-  private parseIntentFallback(query: string): AiIntent {
-    const digits = query.match(/\d{6,}/g) || [];
-    const ic = digits.find((value) => value.length === 12) || null;
-    const account = digits.find((value) => value.length >= 10 && value.length <= 16) || null;
-    const phone = digits.find((value) => value.length >= 9 && value.length <= 11) || null;
-    const needBranch = /cawangan|branch|terdekat|nearest|lokasi|alamat/i.test(query);
-    const name = needBranch ? null : (ic ? null : query.trim());
-
-    return {
-      intent: "search_person",
-      entities: {
-        name,
-        ic,
-        account_no: account,
-        phone,
-        address: null,
-        count_groups: null,
-      },
-      need_nearest_branch: needBranch,
-    };
-  }
-
-  private extractJsonObject(text: string): any | null {
-    const first = text.indexOf("{");
-    const last = text.lastIndexOf("}");
-    if (first === -1 || last === -1 || last <= first) {
-      return null;
-    }
-
-    try {
-      return JSON.parse(text.slice(first, last + 1));
-    } catch {
-      return null;
-    }
-  }
-
-  private tokenizeQuery(text: string): string[] {
-    return text
-      .toLowerCase()
-      .split(/\s+/)
-      .map((token) => token.replace(/[^a-z0-9]/gi, ""))
-      .filter((token) => token.length >= 3);
-  }
-
-  private buildFieldMatchSummary(data: Record<string, any>, query: string): string[] {
-    const tokens = this.tokenizeQuery(query);
-    if (tokens.length === 0) {
-      return [];
-    }
-
-    const matches: Array<{ key: string; value: string; score: number }> = [];
-    for (const [key, value] of Object.entries(data || {}).slice(0, 80)) {
-      if (key === "id") continue;
-      const valueStr = String(value ?? "");
-      const valueLower = valueStr.toLowerCase();
-      let score = 0;
-      for (const token of tokens) {
-        if (valueLower.includes(token)) score += 1;
-      }
-      if (score > 0) {
-        matches.push({ key, value: valueStr, score });
-      }
-    }
-
-    return matches
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 6)
-      .map((match) => `${match.key}: ${match.value}`);
-  }
-
-  private rowScore(
-    row: any,
-    ic?: string | null,
-    name?: string | null,
-    account?: string | null,
-    phone?: string | null,
-  ): number {
-    const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
-    let score = 0;
-    const icDigits = ic ? ic.replace(/\D/g, "") : "";
-    const accountDigits = account ? account.replace(/\D/g, "") : "";
-    const phoneDigits = phone ? phone.replace(/\D/g, "") : "";
-
-    for (const [key, value] of Object.entries(data).slice(0, 80)) {
-      const keyLower = key.toLowerCase();
-      const valueStr = String(value ?? "");
-      const valueDigits = valueStr.replace(/\D/g, "");
-
-      if (icDigits && valueDigits === icDigits) {
-        score +=
-          keyLower.includes("ic") ||
-          keyLower.includes("mykad") ||
-          keyLower.includes("nric") ||
-          keyLower.includes("kp") ||
-          keyLower.includes("id no") ||
-          keyLower.includes("idno")
-            ? 20
-            : 10;
-      }
-      if (accountDigits && valueDigits === accountDigits) {
-        score += keyLower.includes("akaun") || keyLower.includes("account") ? 12 : 6;
-      }
-      if (phoneDigits && valueDigits === phoneDigits) {
-        score +=
-          keyLower.includes("telefon") || keyLower.includes("phone") || keyLower.includes("hp")
-            ? 8
-            : 4;
-      }
-      if (name && valueStr.toLowerCase().includes(name.toLowerCase())) {
-        score += keyLower.includes("nama") || keyLower.includes("name") ? 6 : 2;
-      }
-    }
-
-    return score;
-  }
-
-  private scoreRowDigits(row: any, digits: string): { score: number; parsed: any } {
-    let data = row?.jsonDataJsonb;
-    if (typeof data === "string") {
-      try {
-        data = JSON.parse(data);
-      } catch {
-        data = {};
-      }
-    }
-    if (!data || typeof data !== "object") {
-      data = {};
-    }
-
-    const keyGroups: Array<{ keys: string[]; score: number }> = [
-      { keys: ["No. MyKad", "ID No", "No Pengenalan", "IC", "NRIC", "MyKad"], score: 20 },
-      {
-        keys: [
-          "Account No",
-          "Account Number",
-          "Card No",
-          "No Akaun",
-          "Nombor Akaun Bank Pemohon",
-        ],
-        score: 12,
-      },
-      {
-        keys: ["No. Telefon Rumah", "No. Telefon Bimbit", "Phone", "Handphone", "OfficePhone"],
-        score: 8,
-      },
-    ];
-
-    let best = 0;
-    for (const group of keyGroups) {
-      for (const key of group.keys) {
-        const value = (data as any)[key];
-        if (!value) continue;
-        if (String(value).replace(/\D/g, "") === digits) {
-          best = Math.max(best, group.score);
-        }
-      }
-    }
-
-    return { score: best, parsed: data };
-  }
-
-  private ensureJson(row: any) {
-    if (row?.jsonDataJsonb && typeof row.jsonDataJsonb === "string") {
-      try {
-        row.jsonDataJsonb = JSON.parse(row.jsonDataJsonb);
-      } catch {
-        // keep as string
-      }
-    }
-    return row;
-  }
-
-  private extractLatLng(data: Record<string, any>): { lat: number; lng: number } | null {
-    const keys = Object.keys(data);
-    const findValue = (names: string[]) => {
-      const key = keys.find((candidate) => names.includes(candidate.toLowerCase()));
-      if (!key) return null;
-      const value = Number(String(data[key]).replace(/[^0-9.\-]/g, ""));
-      return Number.isFinite(value) ? value : null;
-    };
-
-    const lat = findValue(["lat", "latitude", "latitud"]);
-    const lng = findValue(["lng", "long", "longitude", "longitud"]);
-    if (lat === null || lng === null) {
-      return null;
-    }
-
-    return { lat, lng };
-  }
-
-  private isLatLng(value: unknown): value is { lat: number; lng: number } {
-    if (!value || typeof value !== "object") return false;
-    const candidate = value as { lat?: unknown; lng?: unknown };
-    return (
-      typeof candidate.lat === "number" &&
-      Number.isFinite(candidate.lat) &&
-      typeof candidate.lng === "number" &&
-      Number.isFinite(candidate.lng)
-    );
-  }
-
-  private isNonEmptyString(value: unknown): value is string {
-    return typeof value === "string" && value.trim().length > 0;
-  }
-
-  private hasPostcodeCoord(value: unknown): value is { lat: number; lng: number } {
-    return this.isLatLng(value);
-  }
-
-  private extractCustomerPostcode(data: Record<string, any>): string | null {
-    if (!data || typeof data !== "object") return null;
-    const entries = Object.entries(data);
-    const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const relationWords = [
-      "pasangan",
-      "wakil",
-      "hubungan",
-      "spouse",
-      "guardian",
-      "emergency",
-      "waris",
-      "ibu",
-      "bapa",
-      "suami",
-      "isteri",
-    ];
-    const relationWordsNorm = relationWords.map(normalize);
-
-    const extractDigits = (value: unknown): string | null => {
-      if (value === undefined || value === null) return null;
-      const raw = String(value);
-      const five = raw.match(/\b\d{5}\b/);
-      if (five) return five[0];
-      const four = raw.match(/\b\d{4}\b/);
-      if (four) return `0${four[0]}`;
-      return null;
-    };
-
-    const isRelationKey = (normalizedKey: string): boolean => {
-      return relationWordsNorm.some((word) => normalizedKey.includes(word));
-    };
-
-    const pickByKey = (
-      matcher: (normalizedKey: string, rawKey: string) => boolean,
-      valueMatcher?: (normalizedKey: string, rawValue: unknown) => boolean,
-    ): string | null => {
-      for (const [rawKey, rawValue] of entries) {
-        const keyNorm = normalize(rawKey);
-        if (!matcher(keyNorm, rawKey)) continue;
-        if (valueMatcher && !valueMatcher(keyNorm, rawValue)) continue;
-        const postcode = extractDigits(rawValue);
-        if (postcode) return postcode;
-      }
-      return null;
-    };
-
-    const homePostcode = pickByKey(
-      (key) =>
-        !isRelationKey(key) &&
-        key.includes("home") &&
-        (key.includes("postcode") || key.includes("postalcode") || key.includes("poskod")),
-    );
-    if (homePostcode) return homePostcode;
-
-    const genericPostcode = pickByKey((key) => {
-      const isGenericPostcode =
-        key === "poskod" ||
-        key === "postcode" ||
-        key === "postalcode" ||
-        key.endsWith("postcode") ||
-        key.endsWith("poskod");
-      if (!isGenericPostcode) return false;
-      if (/[23]$/.test(key)) return false;
-      if (key.includes("office")) return false;
-      if (isRelationKey(key)) return false;
-      return true;
-    });
-    if (genericPostcode) return genericPostcode;
-
-    return pickByKey(
-      (key) => {
-        if (isRelationKey(key)) return false;
-        if (key.includes("office")) return false;
-        return (
-          key.includes("homeaddress") ||
-          key.includes("alamatsuratmenyurat") ||
-          key === "address" ||
-          key.includes("alamat")
-        );
-      },
-      (_key, rawValue) => this.isNonEmptyString(rawValue),
-    );
-  }
-
-  private extractCustomerLocationHint(data: Record<string, any>): string {
-    if (!data || typeof data !== "object") return "";
-    const normalizeKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const relationWords = [
-      "pasangan",
-      "wakil",
-      "hubungan",
-      "spouse",
-      "guardian",
-      "waris",
-      "ibu",
-      "bapa",
-      "suami",
-      "isteri",
-    ];
-    const relationWordsNorm = relationWords.map(normalizeKey);
-    const isRelationKey = (key: string) => relationWordsNorm.some((word) => key.includes(word));
-
-    const parts: string[] = [];
-    for (const [rawKey, rawValue] of Object.entries(data)) {
-      if (!this.isNonEmptyString(rawValue)) continue;
-      const key = normalizeKey(rawKey);
-      if (isRelationKey(key)) continue;
-      if (key.includes("office")) continue;
-
-      const isLocationField =
-        key.includes("homeaddress") ||
-        key.includes("alamatsuratmenyurat") ||
-        key === "address" ||
-        key.includes("alamat") ||
-        key === "bandar" ||
-        key === "city" ||
-        key.includes("citytown") ||
-        key === "negeri" ||
-        key === "state" ||
-        key.includes("postcode") ||
-        key.includes("poskod");
-
-      if (!isLocationField) continue;
-      const value = String(rawValue).trim();
-      if (value) {
-        parts.push(value);
-      }
-    }
-
-    return Array.from(new Set(parts)).join(" ");
-  }
-
-  private normalizeLocationHint(value: string) {
-    return value.replace(/[^a-z0-9\s]/gi, " ").replace(/\s+/g, " ").trim();
-  }
-
-  private toObjectJson(value: unknown): Record<string, any> | null {
-    if (!value) return null;
-    if (typeof value === "object") return value as Record<string, any>;
-    if (typeof value === "string") {
-      try {
-        const parsed = JSON.parse(value);
-        return parsed && typeof parsed === "object" ? (parsed as Record<string, any>) : null;
-      } catch {
-        return null;
-      }
-    }
-    return null;
+    return parseIntentFallback(query);
   }
 
   private async safeFindBranchesByText(text: string, limit: number, timeoutMs: number) {
