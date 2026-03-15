@@ -1,6 +1,6 @@
-import jwt from "jsonwebtoken";
 import { WebSocket, type WebSocketServer } from "ws";
 import type { PostgresStorage } from "../storage-postgres";
+import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
 
 type RuntimeManagerOptions = {
   wss: WebSocketServer;
@@ -56,15 +56,14 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     }
 
     try {
-      const decoded = jwt.verify(token, secret) as { activityId?: string };
-      const activityId = String(decoded.activityId || "");
+      const activityId = extractWsActivityId(token, secret);
       if (!activityId) {
         ws.close();
         return;
       }
 
       const activity = await storage.getActivityById(activityId);
-      if (!activity || activity.isActive === false || activity.logoutTime !== null) {
+      if (!isActiveWebSocketSession(activity)) {
         console.log("WS rejected: invalid or expired session");
         ws.close();
         return;
