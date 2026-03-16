@@ -14,6 +14,8 @@ export type AiIntent = {
   need_nearest_branch: boolean;
 };
 
+export type AiIntentEntities = AiIntent["entities"];
+
 export type AiSearchAudit = {
   query: string;
   intent: AiIntent;
@@ -50,7 +52,7 @@ export type SearchCacheEntry = {
 
 export type LastAiPersonEntry = {
   ts: number;
-  row: unknown;
+  row: AiSearchCandidateRow;
 };
 
 export type AiSearchServiceOptions = {
@@ -61,3 +63,18 @@ export type AiSearchServiceOptions = {
   defaultAiTimeoutMs: number;
   lowMemoryMode: boolean;
 };
+
+export type AiKeywordSearchRow = Awaited<ReturnType<PostgresStorage["aiKeywordSearch"]>>[number];
+export type AiNameSearchRow = Awaited<ReturnType<PostgresStorage["aiNameSearch"]>>[number];
+export type AiDigitsSearchRow = Awaited<ReturnType<PostgresStorage["aiDigitsSearch"]>>[number];
+export type AiSemanticSearchRow = Awaited<ReturnType<PostgresStorage["semanticSearch"]>>[number];
+export type AiFuzzySearchRow = Awaited<ReturnType<PostgresStorage["aiFuzzySearch"]>>[number];
+export type AiBranchSearchResult = Awaited<ReturnType<PostgresStorage["findBranchesByText"]>>[number];
+export type AiNearestBranchResult = Awaited<ReturnType<PostgresStorage["getNearestBranches"]>>[number];
+export type AiPostcodeCoord = NonNullable<Awaited<ReturnType<PostgresStorage["getPostcodeLatLng"]>>>;
+
+export type AiSearchCandidateRow =
+  | AiKeywordSearchRow
+  | AiNameSearchRow
+  | AiDigitsSearchRow
+  | AiSemanticSearchRow;

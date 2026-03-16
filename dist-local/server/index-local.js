@@ -3633,8 +3633,57 @@ var AuditRepository = class {
 };
 
 // server/repositories/ai.repository.ts
-import crypto5 from "crypto";
+import crypto6 from "crypto";
+import { sql as sql15 } from "drizzle-orm";
+
+// server/repositories/ai-branch-import-utils.ts
+function coerceImportBranchRecord(value) {
+  return value && typeof value === "object" ? value : {};
+}
+function detectAiBranchImportKeys(sample) {
+  const normalizeKey2 = (key) => key.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const keys = Object.keys(sample);
+  const normalized = keys.map((key) => ({ raw: key, norm: normalizeKey2(key) }));
+  const findBy = (candidates) => {
+    const hit = normalized.find(
+      (key) => candidates.some((candidate) => key.norm.includes(candidate))
+    );
+    return hit?.raw || null;
+  };
+  return {
+    nameKey: findBy(["branchnames", "branchname", "cawangan", "branch", "nama"]),
+    latKey: findBy(["latitude", "lat"]),
+    lngKey: findBy(["longitude", "lng", "long"]),
+    addressKey: findBy(["branchaddress", "address", "alamat"]),
+    postcodeKey: findBy(["postcode", "poskod", "postalcode", "zip"]),
+    phoneKey: findBy(["phonenumber", "phone", "telefon", "tel"]),
+    faxKey: findBy(["faxnumber", "fax"]),
+    businessHourKey: findBy(["businesshour", "operatinghour", "waktu", "jam"]),
+    dayOpenKey: findBy(["dayopen", "day", "hari"]),
+    atmKey: findBy(["atmcdm", "atm", "cdm"]),
+    inquiryKey: findBy(["inquiryavailability", "inquiry"]),
+    applicationKey: findBy(["applicationavailability", "application"]),
+    loungeKey: findBy(["aeonlounge", "lounge"]),
+    stateKey: findBy(["state", "negeri"])
+  };
+}
+function normalizeImportedBranchPostcode(value) {
+  if (value === void 0 || value === null) return null;
+  const raw = String(value);
+  const fiveDigits = raw.match(/\b\d{5}\b/);
+  if (fiveDigits) return fiveDigits[0];
+  const fourDigits = raw.match(/\b\d{4}\b/);
+  if (fourDigits) return `0${fourDigits[0]}`;
+  return null;
+}
+
+// server/repositories/ai-branch-lookup-utils.ts
 import { sql as sql13 } from "drizzle-orm";
+
+// server/repositories/ai-repository-mappers.ts
+function readRows(result) {
+  return Array.isArray(result.rows) ? result.rows : [];
+}
 function normalizeJsonPayload2(value) {
   let next = value;
   if (typeof next === "string") {
@@ -3645,6 +3694,12 @@ function normalizeJsonPayload2(value) {
     }
   }
   return next;
+}
+function mapSearchRow(row) {
+  return {
+    ...row,
+    jsonDataJsonb: normalizeJsonPayload2(row.jsonDataJsonb)
+  };
 }
 function mapBranchRow(row) {
   return {
@@ -3660,319 +3715,29 @@ function mapBranchRow(row) {
     aeonLounge: row.aeon_lounge ?? null
   };
 }
-var AiRepository = class {
-  constructor(options) {
-    this.options = options;
-  }
-  async createConversation(createdBy) {
-    const id = crypto5.randomUUID();
-    await db.execute(sql13`
-      INSERT INTO public.ai_conversations (id, created_by, created_at)
-      VALUES (${id}, ${createdBy}, ${/* @__PURE__ */ new Date()})
-    `);
-    return id;
-  }
-  async saveConversationMessage(conversationId, role, content) {
-    await db.execute(sql13`
-      INSERT INTO public.ai_messages (id, conversation_id, role, content, created_at)
-      VALUES (${crypto5.randomUUID()}, ${conversationId}, ${role}, ${content}, ${/* @__PURE__ */ new Date()})
-    `);
-  }
-  async getConversationMessages(conversationId, limit = 20) {
-    const result = await db.execute(sql13`
-      SELECT role, content
-      FROM public.ai_messages
-      WHERE conversation_id = ${conversationId}
-      ORDER BY created_at ASC
-      LIMIT ${limit}
-    `);
-    return result.rows;
-  }
-  async saveEmbedding(params) {
-    const embeddingLiteral = sql13.raw(`'[${params.embedding.join(",")}]'`);
-    await db.execute(sql13`
-      INSERT INTO public.data_embeddings (id, import_id, row_id, content, embedding, created_at)
-      VALUES (${crypto5.randomUUID()}, ${params.importId}, ${params.rowId}, ${params.content}, ${embeddingLiteral}::vector, ${/* @__PURE__ */ new Date()})
-      ON CONFLICT (row_id) DO UPDATE SET
-        import_id = EXCLUDED.import_id,
-        content = EXCLUDED.content,
-        embedding = EXCLUDED.embedding
-    `);
-  }
-  async semanticSearch(params) {
-    const embeddingLiteral = sql13.raw(`'[${params.embedding.join(",")}]'`);
-    const importFilter = params.importId ? sql13`AND e.import_id = ${params.importId}` : sql13``;
-    try {
-      await db.execute(sql13`SET ivfflat.probes = 5`);
-    } catch {
-    }
-    const result = await db.execute(sql13`
-      SELECT
-        e.row_id as "rowId",
-        e.import_id as "importId",
-        e.content as "content",
-        (1 - (e.embedding <=> ${embeddingLiteral}::vector))::float as "score",
-        i.name as "importName",
-        i.filename as "importFilename",
-        dr.json_data as "jsonDataJsonb"
-      FROM public.data_embeddings e
-      JOIN public.data_rows dr ON dr.id = e.row_id
-      LEFT JOIN public.imports i ON i.id = e.import_id
-      WHERE (i.is_deleted = false OR i.is_deleted IS NULL)
-      ${importFilter}
-      ORDER BY e.embedding <=> ${embeddingLiteral}::vector
-      LIMIT ${params.limit}
-    `);
-    return result.rows.map((row) => ({
-      ...row,
-      jsonDataJsonb: normalizeJsonPayload2(row.jsonDataJsonb)
-    }));
-  }
-  async aiKeywordSearch(params) {
-    const digits = String(params.query || "").replace(/[^0-9]/g, "");
-    const limit = Math.max(1, Math.min(50, params.limit || 10));
-    if (digits.length < 6) return [];
-    const isIc = digits.length === 12;
-    const isPhone = digits.length >= 9 && digits.length <= 11;
-    const icFields = ["No. MyKad", "ID No", "No Pengenalan", "IC", "NRIC", "MyKad"];
-    const phoneFields = ["No. Telefon Rumah", "No. Telefon Bimbit", "Telefon", "Phone", "HP", "Handphone", "OfficePhone"];
-    const accountFields = ["Nombor Akaun Bank Pemohon", "Account No", "Account Number", "No Akaun", "Card No"];
-    const primaryFields = isIc ? icFields : isPhone ? phoneFields : accountFields;
-    if (primaryFields.length === 0) return [];
-    const perFieldMatch = sql13.join(
-      primaryFields.map((key) => sql13`coalesce((dr.json_data::jsonb)->>${key}, '') = ${digits}`),
-      sql13` OR `
-    );
-    const result = await db.execute(sql13`
-      SELECT
-        dr.id as "rowId",
-        dr.import_id as "importId",
-        i.name as "importName",
-        i.filename as "importFilename",
-        dr.json_data as "jsonDataJsonb"
-      FROM public.data_rows dr
-      JOIN public.imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-        AND (${perFieldMatch})
-      ORDER BY dr.id
-      LIMIT ${limit}
-    `);
-    return result.rows.map((row) => ({
-      ...row,
-      jsonDataJsonb: normalizeJsonPayload2(row.jsonDataJsonb)
-    }));
-  }
-  async aiNameSearch(params) {
-    const q = String(params.query || "").trim();
-    if (!q) return [];
-    const nameKeysMatch = sql13`
-      (
-        coalesce((dr.json_data::jsonb)->>'Nama','') ILIKE ${`%${q}%`} OR
-        coalesce((dr.json_data::jsonb)->>'Customer Name','') ILIKE ${`%${q}%`} OR
-        coalesce((dr.json_data::jsonb)->>'name','') ILIKE ${`%${q}%`} OR
-        coalesce((dr.json_data::jsonb)->>'MAKLUMAT PEMOHON','') ILIKE ${`%${q}%`}
-      )
-    `;
-    const result = await db.execute(sql13`
-      SELECT
-        dr.id as "rowId",
-        dr.import_id as "importId",
-        i.name as "importName",
-        i.filename as "importFilename",
-        dr.json_data as "jsonDataJsonb"
-      FROM public.data_rows dr
-      JOIN public.imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-        AND ${nameKeysMatch}
-      ORDER BY dr.id
-      LIMIT ${params.limit}
-    `);
-    return result.rows.map((row) => ({
-      ...row,
-      jsonDataJsonb: normalizeJsonPayload2(row.jsonDataJsonb)
-    }));
-  }
-  async aiDigitsSearch(params) {
-    const result = await db.execute(sql13`
-      SELECT
-        dr.id as "rowId",
-        dr.import_id as "importId",
-        i.name as "importName",
-        i.filename as "importFilename",
-        dr.json_data as "jsonDataJsonb"
-      FROM public.data_rows dr
-      JOIN public.imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-        AND regexp_replace(dr.json_data::text, '[^0-9]', '', 'g') LIKE ${`%${params.digits}%`}
-      ORDER BY dr.id
-      LIMIT ${params.limit}
-    `);
-    return result.rows.map((row) => ({
-      ...row,
-      jsonDataJsonb: normalizeJsonPayload2(row.jsonDataJsonb)
-    }));
-  }
-  async aiFuzzySearch(params) {
-    const raw = String(params.query || "").toLowerCase().trim();
-    const tokens = raw.split(/\s+/).map((token) => token.replace(/[^a-z0-9]/gi, "")).filter((token) => token.length >= 3);
-    if (tokens.length === 0) return [];
-    const scoreSql = sql13.join(
-      tokens.map((token) => sql13`CASE WHEN dr.json_data::text ILIKE ${`%${token}%`} THEN 1 ELSE 0 END`),
-      sql13` + `
-    );
-    const whereSql = sql13.join(
-      tokens.map((token) => sql13`dr.json_data::text ILIKE ${`%${token}%`}`),
-      sql13` OR `
-    );
-    const result = await db.execute(sql13`
-      SELECT
-        dr.id as "rowId",
-        dr.import_id as "importId",
-        i.name as "importName",
-        i.filename as "importFilename",
-        dr.json_data as "jsonDataJsonb",
-        (${scoreSql})::int as "score"
-      FROM public.data_rows dr
-      JOIN public.imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-        AND (${whereSql})
-      ORDER BY "score" DESC, dr.id
-      LIMIT ${params.limit}
-    `);
-    return result.rows.map((row) => ({
-      ...row,
-      jsonDataJsonb: normalizeJsonPayload2(row.jsonDataJsonb)
-    }));
-  }
-  async findBranchesByText(params) {
-    const q = String(params.query || "").trim();
-    if (!q) return [];
-    const limit = Math.max(1, Math.min(5, params.limit));
-    try {
-      const result = await db.execute(sql13`
-        SELECT
-          name,
-          branch_address,
-          phone_number,
-          fax_number,
-          business_hour,
-          day_open,
-          atm_cdm,
-          inquiry_availability,
-          application_availability,
-          aeon_lounge,
-          GREATEST(
-            similarity(coalesce(name, ''), ${q}),
-            similarity(coalesce(branch_address, ''), ${q})
-          ) AS score
-        FROM public.aeon_branches
-        WHERE
-          name ILIKE ${`%${q}%`}
-          OR branch_address ILIKE ${`%${q}%`}
-          OR GREATEST(
-            similarity(coalesce(name, ''), ${q}),
-            similarity(coalesce(branch_address, ''), ${q})
-          ) > 0.1
-        ORDER BY
-          CASE
-            WHEN name ILIKE ${`%${q}%`} OR branch_address ILIKE ${`%${q}%`} THEN 0
-            ELSE 1
-          END,
-          score DESC,
-          name
-        LIMIT ${limit}
-      `);
-      return result.rows.map(mapBranchRow);
-    } catch {
-      const result = await db.execute(sql13`
-        SELECT
-          name,
-          branch_address,
-          phone_number,
-          fax_number,
-          business_hour,
-          day_open,
-          atm_cdm,
-          inquiry_availability,
-          application_availability,
-          aeon_lounge
-        FROM public.aeon_branches
-        WHERE name ILIKE ${`%${q}%`}
-           OR branch_address ILIKE ${`%${q}%`}
-        ORDER BY name
-        LIMIT ${limit}
-      `);
-      return result.rows.map(mapBranchRow);
-    }
-  }
-  async findBranchesByPostcode(params) {
-    await this.options.ensureSpatialTables();
-    const rawDigits = String(params.postcode || "").replace(/\D/g, "");
-    const postcode = rawDigits.length === 4 ? `0${rawDigits}` : rawDigits.slice(0, 5);
-    if (postcode.length !== 5) return [];
-    const limit = Math.max(1, Math.min(5, params.limit));
-    let result = await db.execute(sql13`
-      (
-        SELECT DISTINCT
-          b.name,
-          b.branch_address,
-          b.phone_number,
-          b.fax_number,
-          b.business_hour,
-          b.day_open,
-          b.atm_cdm,
-          b.inquiry_availability,
-          b.application_availability,
-          b.aeon_lounge
-        FROM public.aeon_branch_postcodes p
-        JOIN public.aeon_branches b
-          ON lower(b.name) = lower(p.source_branch)
-        WHERE p.postcode = ${postcode}
-      )
-      UNION
-      (
-        SELECT
-          b.name,
-          b.branch_address,
-          b.phone_number,
-          b.fax_number,
-          b.business_hour,
-          b.day_open,
-          b.atm_cdm,
-          b.inquiry_availability,
-          b.application_availability,
-          b.aeon_lounge
-        FROM public.aeon_branches b
-        WHERE coalesce(b.branch_address, '') ~ ('(^|\\D)' || ${postcode} || '(\\D|$)')
-      )
-      ORDER BY name
-      LIMIT ${limit}
-    `);
-    if (result.rows.length === 0) {
-      result = await db.execute(sql13`
-        SELECT
-          b.name,
-          b.branch_address,
-          b.phone_number,
-          b.fax_number,
-          b.business_hour,
-          b.day_open,
-          b.atm_cdm,
-          b.inquiry_availability,
-          b.application_availability,
-          b.aeon_lounge
-        FROM public.aeon_branch_postcodes p
-        JOIN public.aeon_branches b
-          ON lower(b.name) = lower(p.source_branch)
-        WHERE p.postcode ~ '^[0-9]{5}$'
-        ORDER BY abs((p.postcode)::int - (${postcode})::int), b.name
-        LIMIT ${limit}
-      `);
-    }
-    return result.rows.map(mapBranchRow);
-  }
-  async getNearestBranches(params) {
-    const limit = Math.max(1, Math.min(5, params.limit ?? 3));
+
+// server/repositories/ai-branch-lookup-utils.ts
+function clampAiBranchLookupLimit(limit, fallback = 5) {
+  return Math.max(1, Math.min(5, limit ?? fallback));
+}
+function normalizeAiBranchLookupQuery(query) {
+  return String(query || "").trim();
+}
+function normalizeAiBranchLookupPostcode(postcode) {
+  const rawDigits = String(postcode || "").replace(/\D/g, "");
+  return rawDigits.length === 4 ? `0${rawDigits}` : rawDigits.slice(0, 5);
+}
+function extractAiBranchSeedPostcode(address) {
+  const raw = String(address || "");
+  const match5 = raw.match(/\b\d{5}\b/);
+  const match4 = raw.match(/\b\d{4}\b/);
+  return match5 ? match5[0] : match4 ? `0${match4[0]}` : null;
+}
+async function findBranchesByTextRows(params) {
+  const q = normalizeAiBranchLookupQuery(params.query);
+  if (!q) return [];
+  const limit = clampAiBranchLookupLimit(params.limit);
+  try {
     const result = await db.execute(sql13`
       SELECT
         name,
@@ -3985,100 +3750,421 @@ var AiRepository = class {
         inquiry_availability,
         application_availability,
         aeon_lounge,
-        ST_DistanceSphere(
-          ST_MakePoint(${params.lng}, ${params.lat}),
-          ST_MakePoint(branch_lng, branch_lat)
-        ) / 1000 AS distance_km
+        GREATEST(
+          similarity(coalesce(name, ''), ${q}),
+          similarity(coalesce(branch_address, ''), ${q})
+        ) AS score
       FROM public.aeon_branches
-      ORDER BY distance_km
+      WHERE
+        name ILIKE ${`%${q}%`}
+        OR branch_address ILIKE ${`%${q}%`}
+        OR GREATEST(
+          similarity(coalesce(name, ''), ${q}),
+          similarity(coalesce(branch_address, ''), ${q})
+        ) > 0.1
+      ORDER BY
+        CASE
+          WHEN name ILIKE ${`%${q}%`} OR branch_address ILIKE ${`%${q}%`} THEN 0
+          ELSE 1
+        END,
+        score DESC,
+        name
       LIMIT ${limit}
     `);
-    return result.rows.map((row) => ({
-      ...mapBranchRow(row),
-      distanceKm: Number(row.distance_km)
-    }));
+    return readRows(result).map(mapBranchRow);
+  } catch {
+    const result = await db.execute(sql13`
+      SELECT
+        name,
+        branch_address,
+        phone_number,
+        fax_number,
+        business_hour,
+        day_open,
+        atm_cdm,
+        inquiry_availability,
+        application_availability,
+        aeon_lounge
+      FROM public.aeon_branches
+      WHERE name ILIKE ${`%${q}%`}
+         OR branch_address ILIKE ${`%${q}%`}
+      ORDER BY name
+      LIMIT ${limit}
+    `);
+    return readRows(result).map(mapBranchRow);
+  }
+}
+async function findBranchesByPostcodeRows(params) {
+  await params.ensureSpatialTables();
+  const postcode = normalizeAiBranchLookupPostcode(params.postcode);
+  if (postcode.length !== 5) return [];
+  const limit = clampAiBranchLookupLimit(params.limit);
+  let result = await db.execute(sql13`
+    (
+      SELECT DISTINCT
+        b.name,
+        b.branch_address,
+        b.phone_number,
+        b.fax_number,
+        b.business_hour,
+        b.day_open,
+        b.atm_cdm,
+        b.inquiry_availability,
+        b.application_availability,
+        b.aeon_lounge
+      FROM public.aeon_branch_postcodes p
+      JOIN public.aeon_branches b
+        ON lower(b.name) = lower(p.source_branch)
+      WHERE p.postcode = ${postcode}
+    )
+    UNION
+    (
+      SELECT
+        b.name,
+        b.branch_address,
+        b.phone_number,
+        b.fax_number,
+        b.business_hour,
+        b.day_open,
+        b.atm_cdm,
+        b.inquiry_availability,
+        b.application_availability,
+        b.aeon_lounge
+      FROM public.aeon_branches b
+      WHERE coalesce(b.branch_address, '') ~ ('(^|\\D)' || ${postcode} || '(\\D|$)')
+    )
+    ORDER BY name
+    LIMIT ${limit}
+  `);
+  if (readRows(result).length === 0) {
+    result = await db.execute(sql13`
+      SELECT
+        b.name,
+        b.branch_address,
+        b.phone_number,
+        b.fax_number,
+        b.business_hour,
+        b.day_open,
+        b.atm_cdm,
+        b.inquiry_availability,
+        b.application_availability,
+        b.aeon_lounge
+      FROM public.aeon_branch_postcodes p
+      JOIN public.aeon_branches b
+        ON lower(b.name) = lower(p.source_branch)
+      WHERE p.postcode ~ '^[0-9]{5}$'
+      ORDER BY abs((p.postcode)::int - (${postcode})::int), b.name
+      LIMIT ${limit}
+    `);
+  }
+  return readRows(result).map(mapBranchRow);
+}
+async function getNearestBranchesRows(params) {
+  const limit = clampAiBranchLookupLimit(params.limit, 3);
+  const result = await db.execute(sql13`
+    SELECT
+      name,
+      branch_address,
+      phone_number,
+      fax_number,
+      business_hour,
+      day_open,
+      atm_cdm,
+      inquiry_availability,
+      application_availability,
+      aeon_lounge,
+      ST_DistanceSphere(
+        ST_MakePoint(${params.lng}, ${params.lat}),
+        ST_MakePoint(branch_lng, branch_lat)
+      ) / 1000 AS distance_km
+    FROM public.aeon_branches
+    ORDER BY distance_km
+    LIMIT ${limit}
+  `);
+  return readRows(result).map((row) => ({
+    ...mapBranchRow(row),
+    distanceKm: Number(row.distance_km)
+  }));
+}
+async function getPostcodeLatLngValue(params) {
+  await params.ensureSpatialTables();
+  const postcodeNorm = normalizeAiBranchLookupPostcode(params.postcode);
+  if (!postcodeNorm) return null;
+  const lookup = async () => {
+    const result = await db.execute(sql13`
+      SELECT lat, lng
+      FROM public.aeon_branch_postcodes
+      WHERE postcode = ${postcodeNorm}
+      LIMIT 1
+    `);
+    return readRows(result)[0] ?? null;
+  };
+  let row = await lookup();
+  if (row) return { lat: Number(row.lat), lng: Number(row.lng) };
+  const countRes = await db.execute(sql13`
+    SELECT COUNT(*)::int as "count"
+    FROM public.aeon_branch_postcodes
+  `);
+  const count3 = Number(readRows(countRes)[0]?.count ?? 0);
+  if (count3 === 0) {
+    const branches = await db.execute(sql13`
+      SELECT name, branch_address, branch_lat, branch_lng
+      FROM public.aeon_branches
+    `);
+    for (const branch of readRows(branches)) {
+      const normalized = extractAiBranchSeedPostcode(branch.branch_address);
+      if (!normalized) continue;
+      await db.execute(sql13`
+        INSERT INTO public.aeon_branch_postcodes (postcode, lat, lng, source_branch, state)
+        VALUES (${normalized}, ${Number(branch.branch_lat)}, ${Number(branch.branch_lng)}, ${String(branch.name)}, null)
+        ON CONFLICT (postcode) DO NOTHING
+      `);
+    }
+    row = await lookup();
+    if (row) return { lat: Number(row.lat), lng: Number(row.lng) };
+  }
+  return null;
+}
+
+// server/repositories/ai-search-record-utils.ts
+import crypto5 from "crypto";
+import { sql as sql14 } from "drizzle-orm";
+var IC_FIELDS = ["No. MyKad", "ID No", "No Pengenalan", "IC", "NRIC", "MyKad"];
+var PHONE_FIELDS = [
+  "No. Telefon Rumah",
+  "No. Telefon Bimbit",
+  "Telefon",
+  "Phone",
+  "HP",
+  "Handphone",
+  "OfficePhone"
+];
+var ACCOUNT_FIELDS = [
+  "Nombor Akaun Bank Pemohon",
+  "Account No",
+  "Account Number",
+  "No Akaun",
+  "Card No"
+];
+function resolveAiKeywordFields(digits) {
+  if (digits.length === 12) return IC_FIELDS;
+  if (digits.length >= 9 && digits.length <= 11) return PHONE_FIELDS;
+  return ACCOUNT_FIELDS;
+}
+function tokenizeAiFuzzyQuery(query) {
+  return String(query || "").toLowerCase().trim().split(/\s+/).map((token) => token.replace(/[^a-z0-9]/gi, "")).filter((token) => token.length >= 3);
+}
+async function saveAiEmbeddingRow(params) {
+  const embeddingLiteral = sql14.raw(`'[${params.embedding.join(",")}]'`);
+  await db.execute(sql14`
+    INSERT INTO public.data_embeddings (id, import_id, row_id, content, embedding, created_at)
+    VALUES (${crypto5.randomUUID()}, ${params.importId}, ${params.rowId}, ${params.content}, ${embeddingLiteral}::vector, ${/* @__PURE__ */ new Date()})
+    ON CONFLICT (row_id) DO UPDATE SET
+      import_id = EXCLUDED.import_id,
+      content = EXCLUDED.content,
+      embedding = EXCLUDED.embedding
+  `);
+}
+async function semanticSearchRows(params) {
+  const embeddingLiteral = sql14.raw(`'[${params.embedding.join(",")}]'`);
+  const importFilter = params.importId ? sql14`AND e.import_id = ${params.importId}` : sql14``;
+  try {
+    await db.execute(sql14`SET ivfflat.probes = 5`);
+  } catch {
+  }
+  const result = await db.execute(sql14`
+    SELECT
+      e.row_id as "rowId",
+      e.import_id as "importId",
+      e.content as "content",
+      (1 - (e.embedding <=> ${embeddingLiteral}::vector))::float as "score",
+      i.name as "importName",
+      i.filename as "importFilename",
+      dr.json_data as "jsonDataJsonb"
+    FROM public.data_embeddings e
+    JOIN public.data_rows dr ON dr.id = e.row_id
+    LEFT JOIN public.imports i ON i.id = e.import_id
+    WHERE (i.is_deleted = false OR i.is_deleted IS NULL)
+    ${importFilter}
+    ORDER BY e.embedding <=> ${embeddingLiteral}::vector
+    LIMIT ${params.limit}
+  `);
+  return readRows(result).map(mapSearchRow);
+}
+async function aiKeywordSearchRows(params) {
+  const digits = String(params.query || "").replace(/[^0-9]/g, "");
+  const limit = Math.max(1, Math.min(50, params.limit || 10));
+  if (digits.length < 6) return [];
+  const primaryFields = resolveAiKeywordFields(digits);
+  if (primaryFields.length === 0) return [];
+  const perFieldMatch = sql14.join(
+    primaryFields.map((key) => sql14`coalesce((dr.json_data::jsonb)->>${key}, '') = ${digits}`),
+    sql14` OR `
+  );
+  const result = await db.execute(sql14`
+    SELECT
+      dr.id as "rowId",
+      dr.import_id as "importId",
+      i.name as "importName",
+      i.filename as "importFilename",
+      dr.json_data as "jsonDataJsonb"
+    FROM public.data_rows dr
+    JOIN public.imports i ON i.id = dr.import_id
+    WHERE i.is_deleted = false
+      AND (${perFieldMatch})
+    ORDER BY dr.id
+    LIMIT ${limit}
+  `);
+  return readRows(result).map(mapSearchRow);
+}
+async function aiNameSearchRows(params) {
+  const q = String(params.query || "").trim();
+  if (!q) return [];
+  const nameKeysMatch = sql14`
+    (
+      coalesce((dr.json_data::jsonb)->>'Nama','') ILIKE ${`%${q}%`} OR
+      coalesce((dr.json_data::jsonb)->>'Customer Name','') ILIKE ${`%${q}%`} OR
+      coalesce((dr.json_data::jsonb)->>'name','') ILIKE ${`%${q}%`} OR
+      coalesce((dr.json_data::jsonb)->>'MAKLUMAT PEMOHON','') ILIKE ${`%${q}%`}
+    )
+  `;
+  const result = await db.execute(sql14`
+    SELECT
+      dr.id as "rowId",
+      dr.import_id as "importId",
+      i.name as "importName",
+      i.filename as "importFilename",
+      dr.json_data as "jsonDataJsonb"
+    FROM public.data_rows dr
+    JOIN public.imports i ON i.id = dr.import_id
+    WHERE i.is_deleted = false
+      AND ${nameKeysMatch}
+    ORDER BY dr.id
+    LIMIT ${params.limit}
+  `);
+  return readRows(result).map(mapSearchRow);
+}
+async function aiDigitsSearchRows(params) {
+  const result = await db.execute(sql14`
+    SELECT
+      dr.id as "rowId",
+      dr.import_id as "importId",
+      i.name as "importName",
+      i.filename as "importFilename",
+      dr.json_data as "jsonDataJsonb"
+    FROM public.data_rows dr
+    JOIN public.imports i ON i.id = dr.import_id
+    WHERE i.is_deleted = false
+      AND regexp_replace(dr.json_data::text, '[^0-9]', '', 'g') LIKE ${`%${params.digits}%`}
+    ORDER BY dr.id
+    LIMIT ${params.limit}
+  `);
+  return readRows(result).map(mapSearchRow);
+}
+async function aiFuzzySearchRows(params) {
+  const tokens = tokenizeAiFuzzyQuery(params.query);
+  if (tokens.length === 0) return [];
+  const scoreSql = sql14.join(
+    tokens.map((token) => sql14`CASE WHEN dr.json_data::text ILIKE ${`%${token}%`} THEN 1 ELSE 0 END`),
+    sql14` + `
+  );
+  const whereSql = sql14.join(
+    tokens.map((token) => sql14`dr.json_data::text ILIKE ${`%${token}%`}`),
+    sql14` OR `
+  );
+  const result = await db.execute(sql14`
+    SELECT
+      dr.id as "rowId",
+      dr.import_id as "importId",
+      i.name as "importName",
+      i.filename as "importFilename",
+      dr.json_data as "jsonDataJsonb",
+      (${scoreSql})::int as "score"
+    FROM public.data_rows dr
+    JOIN public.imports i ON i.id = dr.import_id
+    WHERE i.is_deleted = false
+      AND (${whereSql})
+    ORDER BY "score" DESC, dr.id
+    LIMIT ${params.limit}
+  `);
+  return readRows(result).map(mapSearchRow);
+}
+
+// server/repositories/ai.repository.ts
+var AiRepository = class {
+  constructor(options) {
+    this.options = options;
+  }
+  async createConversation(createdBy) {
+    const id = crypto6.randomUUID();
+    await db.execute(sql15`
+      INSERT INTO public.ai_conversations (id, created_by, created_at)
+      VALUES (${id}, ${createdBy}, ${/* @__PURE__ */ new Date()})
+    `);
+    return id;
+  }
+  async saveConversationMessage(conversationId, role, content) {
+    await db.execute(sql15`
+      INSERT INTO public.ai_messages (id, conversation_id, role, content, created_at)
+      VALUES (${crypto6.randomUUID()}, ${conversationId}, ${role}, ${content}, ${/* @__PURE__ */ new Date()})
+    `);
+  }
+  async getConversationMessages(conversationId, limit = 20) {
+    const result = await db.execute(sql15`
+      SELECT role, content
+      FROM public.ai_messages
+      WHERE conversation_id = ${conversationId}
+      ORDER BY created_at ASC
+      LIMIT ${limit}
+    `);
+    return result.rows;
+  }
+  async saveEmbedding(params) {
+    return saveAiEmbeddingRow(params);
+  }
+  async semanticSearch(params) {
+    return semanticSearchRows(params);
+  }
+  async aiKeywordSearch(params) {
+    return aiKeywordSearchRows(params);
+  }
+  async aiNameSearch(params) {
+    return aiNameSearchRows(params);
+  }
+  async aiDigitsSearch(params) {
+    return aiDigitsSearchRows(params);
+  }
+  async aiFuzzySearch(params) {
+    return aiFuzzySearchRows(params);
+  }
+  async findBranchesByText(params) {
+    return findBranchesByTextRows(params);
+  }
+  async findBranchesByPostcode(params) {
+    return findBranchesByPostcodeRows({
+      ...params,
+      ensureSpatialTables: this.options.ensureSpatialTables
+    });
+  }
+  async getNearestBranches(params) {
+    return getNearestBranchesRows(params);
   }
   async getPostcodeLatLng(postcode) {
-    await this.options.ensureSpatialTables();
-    const postcodeNorm = (() => {
-      const digits = String(postcode || "").replace(/\D/g, "");
-      if (digits.length === 4) return `0${digits}`;
-      return digits.length >= 5 ? digits.slice(0, 5) : digits;
-    })();
-    if (!postcodeNorm) return null;
-    const lookup = async () => {
-      const result = await db.execute(sql13`
-        SELECT lat, lng
-        FROM public.aeon_branch_postcodes
-        WHERE postcode = ${postcodeNorm}
-        LIMIT 1
-      `);
-      return result.rows?.[0];
-    };
-    let row = await lookup();
-    if (row) return { lat: Number(row.lat), lng: Number(row.lng) };
-    const countRes = await db.execute(sql13`
-      SELECT COUNT(*)::int as "count"
-      FROM public.aeon_branch_postcodes
-    `);
-    const count3 = Number(countRes.rows[0]?.count ?? 0);
-    if (count3 === 0) {
-      const branches = await db.execute(sql13`
-        SELECT name, branch_address, branch_lat, branch_lng
-        FROM public.aeon_branches
-      `);
-      for (const branch of branches.rows) {
-        const address = String(branch.branch_address || "");
-        const match5 = address.match(/\b\d{5}\b/);
-        const match4 = address.match(/\b\d{4}\b/);
-        const normalized = match5 ? match5[0] : match4 ? `0${match4[0]}` : null;
-        if (!normalized) continue;
-        await db.execute(sql13`
-          INSERT INTO public.aeon_branch_postcodes (postcode, lat, lng, source_branch, state)
-          VALUES (${normalized}, ${Number(branch.branch_lat)}, ${Number(branch.branch_lng)}, ${String(branch.name)}, null)
-          ON CONFLICT (postcode) DO NOTHING
-        `);
-      }
-      row = await lookup();
-      if (row) return { lat: Number(row.lat), lng: Number(row.lng) };
-    }
-    return null;
+    return getPostcodeLatLngValue({
+      postcode,
+      ensureSpatialTables: this.options.ensureSpatialTables
+    });
   }
   async importBranchesFromRows(params) {
     await this.options.ensureSpatialTables();
-    const rows = await db.execute(sql13`
+    const rows = await db.execute(sql15`
       SELECT id, json_data as "jsonDataJsonb"
       FROM public.data_rows
       WHERE import_id = ${params.importId}
     `);
-    const normalizeKey2 = (key) => key.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const detectKeys = (sample2) => {
-      const keys = Object.keys(sample2);
-      const normalized = keys.map((key) => ({ raw: key, norm: normalizeKey2(key) }));
-      const findBy = (candidates) => {
-        const hit = normalized.find((key) => candidates.some((candidate) => key.norm.includes(candidate)));
-        return hit?.raw || null;
-      };
-      return {
-        nameKey: findBy(["branchnames", "branchname", "cawangan", "branch", "nama"]),
-        latKey: findBy(["latitude", "lat"]),
-        lngKey: findBy(["longitude", "lng", "long"]),
-        addressKey: findBy(["branchaddress", "address", "alamat"]),
-        postcodeKey: findBy(["postcode", "poskod", "postalcode", "zip"]),
-        phoneKey: findBy(["phonenumber", "phone", "telefon", "tel"]),
-        faxKey: findBy(["faxnumber", "fax"]),
-        businessHourKey: findBy(["businesshour", "operatinghour", "waktu", "jam"]),
-        dayOpenKey: findBy(["dayopen", "day", "hari"]),
-        atmKey: findBy(["atmcdm", "atm", "cdm"]),
-        inquiryKey: findBy(["inquiryavailability", "inquiry"]),
-        applicationKey: findBy(["applicationavailability", "application"]),
-        loungeKey: findBy(["aeonlounge", "lounge"]),
-        stateKey: findBy(["state", "negeri"])
-      };
-    };
-    const firstRow = rows.rows[0];
-    const sample = firstRow && firstRow.jsonDataJsonb && typeof firstRow.jsonDataJsonb === "object" ? firstRow.jsonDataJsonb : {};
-    const detected = detectKeys(sample);
+    const firstRow = readRows(rows)[0];
+    const sample = coerceImportBranchRecord(firstRow?.jsonDataJsonb);
+    const detected = detectAiBranchImportKeys(sample);
     const nameKey = params.nameKey || detected.nameKey;
     const latKey = params.latKey || detected.latKey;
     const lngKey = params.lngKey || detected.lngKey;
@@ -4096,23 +4182,14 @@ var AiRepository = class {
     if (!nameKey || !latKey || !lngKey) {
       return {
         inserted: 0,
-        skipped: rows.rows.length,
+        skipped: readRows(rows).length,
         usedKeys: { nameKey: nameKey || "", latKey: latKey || "", lngKey: lngKey || "" }
       };
     }
-    const normalizePostcode = (value) => {
-      if (value === void 0 || value === null) return null;
-      const raw = String(value);
-      const fiveDigits = raw.match(/\b\d{5}\b/);
-      if (fiveDigits) return fiveDigits[0];
-      const fourDigits = raw.match(/\b\d{4}\b/);
-      if (fourDigits) return `0${fourDigits[0]}`;
-      return null;
-    };
     let inserted = 0;
     let skipped = 0;
-    for (const row of rows.rows) {
-      const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
+    for (const row of readRows(rows)) {
+      const data = coerceImportBranchRecord(row.jsonDataJsonb);
       const nameVal = data[nameKey];
       const latVal = data[latKey];
       const lngVal = data[lngKey];
@@ -4137,14 +4214,14 @@ var AiRepository = class {
         skipped += 1;
         continue;
       }
-      await db.execute(sql13`
+      await db.execute(sql15`
         INSERT INTO public.aeon_branches (
           id, name, branch_address, phone_number, fax_number, business_hour, day_open,
           atm_cdm, inquiry_availability, application_availability, aeon_lounge,
           branch_lat, branch_lng
         )
         VALUES (
-          ${crypto5.randomUUID()},
+          ${crypto6.randomUUID()},
           ${String(nameVal)},
           ${addressVal ? String(addressVal) : null},
           ${phoneVal ? String(phoneVal) : null},
@@ -4162,13 +4239,13 @@ var AiRepository = class {
       `);
       let postcode = null;
       if (postcodeVal) {
-        postcode = normalizePostcode(postcodeVal);
+        postcode = normalizeImportedBranchPostcode(postcodeVal);
       }
       if (!postcode && addressVal) {
-        postcode = normalizePostcode(addressVal);
+        postcode = normalizeImportedBranchPostcode(addressVal);
       }
       if (postcode) {
-        await db.execute(sql13`
+        await db.execute(sql15`
           INSERT INTO public.aeon_branch_postcodes (postcode, lat, lng, source_branch, state)
           VALUES (${postcode}, ${lat}, ${lng}, ${String(nameVal)}, ${stateVal ? String(stateVal) : null})
           ON CONFLICT (postcode) DO NOTHING
@@ -4179,14 +4256,14 @@ var AiRepository = class {
     return { inserted, skipped, usedKeys: { nameKey, latKey, lngKey } };
   }
   async getDataRowsForEmbedding(importId, limit, offset) {
-    const result = await db.execute(sql13`
+    const result = await db.execute(sql15`
       SELECT id, json_data as "jsonDataJsonb"
       FROM public.data_rows
       WHERE import_id = ${importId}
       ORDER BY id
       LIMIT ${limit} OFFSET ${offset}
     `);
-    return result.rows.map((row) => ({
+    return readRows(result).map((row) => ({
       id: row.id,
       jsonDataJsonb: normalizeJsonPayload2(row.jsonDataJsonb)
     }));
@@ -4194,7 +4271,7 @@ var AiRepository = class {
 };
 
 // server/repositories/ai-category.repository.ts
-import { sql as sql14 } from "drizzle-orm";
+import { sql as sql16 } from "drizzle-orm";
 function normalizeRuleArray(value) {
   if (Array.isArray(value)) {
     return value.map((entry) => String(entry)).filter((entry) => entry.trim().length > 0);
@@ -4232,32 +4309,32 @@ function extractIc(data) {
 function buildMatchSql(terms, fields, matchMode) {
   if (terms.length === 0) return null;
   if (fields.length === 0) {
-    return sql14.join(
-      terms.map((term) => sql14`dr.json_data::text ILIKE ${`%${term}%`}`),
-      sql14` OR `
+    return sql16.join(
+      terms.map((term) => sql16`dr.json_data::text ILIKE ${`%${term}%`}`),
+      sql16` OR `
     );
   }
   if (matchMode === "exact") {
-    return sql14.join(
+    return sql16.join(
       fields.map((field) => {
-        const list = sql14.join(
-          terms.map((value) => sql14`${value.toUpperCase()}`),
-          sql14`, `
+        const list = sql16.join(
+          terms.map((value) => sql16`${value.toUpperCase()}`),
+          sql16`, `
         );
-        return sql14`upper(trim(coalesce((dr.json_data::jsonb)->>${field}, ''))) IN (${list})`;
+        return sql16`upper(trim(coalesce((dr.json_data::jsonb)->>${field}, ''))) IN (${list})`;
       }),
-      sql14` OR `
+      sql16` OR `
     );
   }
-  return sql14.join(
+  return sql16.join(
     terms.map((term) => {
-      const perField = sql14.join(
-        fields.map((field) => sql14`(dr.json_data::jsonb)->>${field} ILIKE ${`%${term}%`}`),
-        sql14` OR `
+      const perField = sql16.join(
+        fields.map((field) => sql16`(dr.json_data::jsonb)->>${field} ILIKE ${`%${term}%`}`),
+        sql16` OR `
       );
-      return sql14`(${perField})`;
+      return sql16`(${perField})`;
     }),
-    sql14` OR `
+    sql16` OR `
   );
 }
 var AiCategoryRepository = class {
@@ -4271,46 +4348,46 @@ var AiCategoryRepository = class {
       const matchMode = String(group.matchMode || "contains").toLowerCase();
       if (matchMode === "complement") continue;
       if (terms.length === 0 || fields.length === 0) {
-        countSqls.push(sql14`0::int as "${sql14.raw(group.key)}"`);
+        countSqls.push(sql16`0::int as "${sql16.raw(group.key)}"`);
         continue;
       }
-      const termSql = matchMode === "exact" ? sql14.join(
+      const termSql = matchMode === "exact" ? sql16.join(
         fields.map((field) => {
-          const list = sql14.join(
-            terms.map((value) => sql14`${value.toUpperCase()}`),
-            sql14`, `
+          const list = sql16.join(
+            terms.map((value) => sql16`${value.toUpperCase()}`),
+            sql16`, `
           );
-          return sql14`upper(trim(coalesce((dr.json_data::jsonb)->>${field}, ''))) IN (${list})`;
+          return sql16`upper(trim(coalesce((dr.json_data::jsonb)->>${field}, ''))) IN (${list})`;
         }),
-        sql14` OR `
-      ) : sql14.join(
+        sql16` OR `
+      ) : sql16.join(
         terms.map((term) => {
-          const perField = sql14.join(
-            fields.map((field) => sql14`coalesce((dr.json_data::jsonb)->>${field}, '') ILIKE ${`%${term}%`}`),
-            sql14` OR `
+          const perField = sql16.join(
+            fields.map((field) => sql16`coalesce((dr.json_data::jsonb)->>${field}, '') ILIKE ${`%${term}%`}`),
+            sql16` OR `
           );
-          return sql14`((${perField}) OR dr.json_data::text ILIKE ${`%${term}%`})`;
+          return sql16`((${perField}) OR dr.json_data::text ILIKE ${`%${term}%`})`;
         }),
-        sql14` OR `
+        sql16` OR `
       );
       matchSqlByKey.set(group.key, termSql);
-      countSqls.push(sql14`COUNT(*) FILTER (WHERE (${termSql}))::int as "${sql14.raw(group.key)}"`);
+      countSqls.push(sql16`COUNT(*) FILTER (WHERE (${termSql}))::int as "${sql16.raw(group.key)}"`);
     }
     const complementGroups = groups.filter((group) => String(group.matchMode || "").toLowerCase() === "complement");
     if (complementGroups.length > 0) {
       if (matchSqlByKey.size > 0) {
-        const combined = sql14.join(Array.from(matchSqlByKey.values()).map((value) => sql14`(${value})`), sql14` OR `);
+        const combined = sql16.join(Array.from(matchSqlByKey.values()).map((value) => sql16`(${value})`), sql16` OR `);
         for (const group of complementGroups) {
-          countSqls.push(sql14`COUNT(*) FILTER (WHERE NOT (${combined}))::int as "${sql14.raw(group.key)}"`);
+          countSqls.push(sql16`COUNT(*) FILTER (WHERE NOT (${combined}))::int as "${sql16.raw(group.key)}"`);
         }
       } else {
         for (const group of complementGroups) {
-          countSqls.push(sql14`COUNT(*)::int as "${sql14.raw(group.key)}"`);
+          countSqls.push(sql16`COUNT(*)::int as "${sql16.raw(group.key)}"`);
         }
       }
     }
-    const selectParts = countSqls.length > 0 ? sql14.join(countSqls, sql14`, `) : sql14``;
-    const result = await db.execute(sql14`
+    const selectParts = countSqls.length > 0 ? sql16.join(countSqls, sql16`, `) : sql16``;
+    const result = await db.execute(sql16`
       SELECT
         COUNT(*)::int as "total",
         ${selectParts}
@@ -4327,7 +4404,7 @@ var AiCategoryRepository = class {
     return { totalRows, counts };
   }
   async getCategoryRules() {
-    const result = await db.execute(sql14`
+    const result = await db.execute(sql16`
       SELECT key, terms, fields, match_mode, enabled
       FROM public.ai_category_rules
       ORDER BY key
@@ -4341,7 +4418,7 @@ var AiCategoryRepository = class {
     }));
   }
   async getCategoryRulesMaxUpdatedAt() {
-    const result = await db.execute(sql14`
+    const result = await db.execute(sql16`
       SELECT MAX(updated_at) as updated_at
       FROM public.ai_category_rules
     `);
@@ -4351,10 +4428,10 @@ var AiCategoryRepository = class {
   async getCategoryStats(keys) {
     if (!keys.length) return [];
     const quoted = keys.map((key) => `'${key.replace(/'/g, "''")}'`).join(",");
-    const result = await db.execute(sql14`
+    const result = await db.execute(sql16`
       SELECT key, total, samples, updated_at
       FROM public.ai_category_stats
-      WHERE key IN (${sql14.raw(quoted)})
+      WHERE key IN (${sql16.raw(quoted)})
     `);
     return result.rows.map((row) => ({
       key: row.key,
@@ -4369,14 +4446,14 @@ var AiCategoryRepository = class {
     const ruleMap = new Map(groups.map((group) => [group.key, group]));
     const requestedGroups = uniqueKeys.filter((key) => key !== "__all__").map((key) => ruleMap.get(key)).filter((group) => Boolean(group && group.enabled !== false));
     if (uniqueKeys.includes("__all__")) {
-      const totalRes = await db.execute(sql14`
+      const totalRes = await db.execute(sql16`
         SELECT COUNT(*)::int as "count"
         FROM public.data_rows dr
         JOIN public.imports i ON i.id = dr.import_id
         WHERE i.is_deleted = false
       `);
       const totalRows = Number(totalRes.rows[0]?.count ?? 0);
-      await db.execute(sql14`
+      await db.execute(sql16`
         INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
         VALUES ('__all__', ${totalRows}, '[]'::jsonb, now())
         ON CONFLICT (key)
@@ -4389,7 +4466,7 @@ var AiCategoryRepository = class {
       const matchMode = String(group.matchMode || "contains").toLowerCase();
       const termSql = buildMatchSql(terms, fields, matchMode);
       if (!termSql) {
-        await db.execute(sql14`
+        await db.execute(sql16`
           INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
           VALUES (${group.key}, 0, '[]'::jsonb, now())
           ON CONFLICT (key)
@@ -4397,7 +4474,7 @@ var AiCategoryRepository = class {
         `);
         continue;
       }
-      const countRes = await db.execute(sql14`
+      const countRes = await db.execute(sql16`
         SELECT COUNT(*)::int as "count"
         FROM public.data_rows dr
         JOIN public.imports i ON i.id = dr.import_id
@@ -4407,7 +4484,7 @@ var AiCategoryRepository = class {
       const total = Number(countRes.rows[0]?.count ?? 0);
       let samples = [];
       if (total > 0) {
-        const sampleRes = await db.execute(sql14`
+        const sampleRes = await db.execute(sql16`
           SELECT dr.json_data as "jsonData", i.name as "importName", i.filename as "importFilename"
           FROM public.data_rows dr
           JOIN public.imports i ON i.id = dr.import_id
@@ -4425,7 +4502,7 @@ var AiCategoryRepository = class {
           };
         });
       }
-      await db.execute(sql14`
+      await db.execute(sql16`
         INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
         VALUES (${group.key}, ${total}, ${JSON.stringify(samples)}::jsonb, now())
         ON CONFLICT (key)
@@ -4436,18 +4513,18 @@ var AiCategoryRepository = class {
   }
   async rebuildCategoryStats(groups) {
     if (!groups.length) return;
-    const totalRes = await db.execute(sql14`
+    const totalRes = await db.execute(sql16`
       SELECT COUNT(*)::int as "count"
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id
       WHERE i.is_deleted = false
     `);
     const totalRows = Number(totalRes.rows[0]?.count ?? 0);
-    await db.execute(sql14`
+    await db.execute(sql16`
       DELETE FROM public.ai_category_stats
       WHERE key <> '__all__'
     `);
-    await db.execute(sql14`
+    await db.execute(sql16`
       INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
       VALUES ('__all__', ${totalRows}, '[]'::jsonb, now())
       ON CONFLICT (key)
@@ -4463,7 +4540,7 @@ var AiCategoryRepository = class {
       const matchMode = String(group.matchMode || "contains").toLowerCase();
       const termSql = buildMatchSql(terms, fields, matchMode);
       if (!termSql) {
-        await db.execute(sql14`
+        await db.execute(sql16`
           INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
           VALUES (${group.key}, 0, '[]'::jsonb, now())
           ON CONFLICT (key)
@@ -4472,7 +4549,7 @@ var AiCategoryRepository = class {
         continue;
       }
       matchSqlByKey.set(group.key, termSql);
-      const countRes = await db.execute(sql14`
+      const countRes = await db.execute(sql16`
         SELECT COUNT(*)::int as "count"
         FROM public.data_rows dr
         JOIN public.imports i ON i.id = dr.import_id
@@ -4480,7 +4557,7 @@ var AiCategoryRepository = class {
           AND (${termSql})
       `);
       const total = Number(countRes.rows[0]?.count ?? 0);
-      const sampleRes = await db.execute(sql14`
+      const sampleRes = await db.execute(sql16`
         SELECT dr.json_data as "jsonData", i.name as "importName", i.filename as "importFilename"
         FROM public.data_rows dr
         JOIN public.imports i ON i.id = dr.import_id
@@ -4497,7 +4574,7 @@ var AiCategoryRepository = class {
           source
         };
       });
-      await db.execute(sql14`
+      await db.execute(sql16`
         INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
         VALUES (${group.key}, ${total}, ${JSON.stringify(samples)}::jsonb, now())
         ON CONFLICT (key)
@@ -4507,12 +4584,12 @@ var AiCategoryRepository = class {
     if (complementGroups.length === 0) {
       return;
     }
-    const combined = matchSqlByKey.size > 0 ? sql14.join(Array.from(matchSqlByKey.values()).map((value) => sql14`(${value})`), sql14` OR `) : null;
+    const combined = matchSqlByKey.size > 0 ? sql16.join(Array.from(matchSqlByKey.values()).map((value) => sql16`(${value})`), sql16` OR `) : null;
     for (const group of complementGroups) {
       let total = totalRows;
       let samples = [];
       if (combined) {
-        const countRes = await db.execute(sql14`
+        const countRes = await db.execute(sql16`
           SELECT COUNT(*)::int as "count"
           FROM public.data_rows dr
           JOIN public.imports i ON i.id = dr.import_id
@@ -4520,7 +4597,7 @@ var AiCategoryRepository = class {
             AND NOT (${combined})
         `);
         total = Number(countRes.rows[0]?.count ?? 0);
-        const sampleRes = await db.execute(sql14`
+        const sampleRes = await db.execute(sql16`
           SELECT dr.json_data as "jsonData", i.name as "importName", i.filename as "importFilename"
           FROM public.data_rows dr
           JOIN public.imports i ON i.id = dr.import_id
@@ -4538,7 +4615,7 @@ var AiCategoryRepository = class {
           };
         });
       }
-      await db.execute(sql14`
+      await db.execute(sql16`
         INSERT INTO public.ai_category_stats (key, total, samples, updated_at)
         VALUES (${group.key}, ${total}, ${JSON.stringify(samples)}::jsonb, now())
         ON CONFLICT (key)
@@ -4549,8 +4626,8 @@ var AiCategoryRepository = class {
 };
 
 // server/repositories/backups.repository.ts
-import crypto6 from "crypto";
-import { eq as eq4, sql as sql15 } from "drizzle-orm";
+import crypto7 from "crypto";
+import { eq as eq4, sql as sql17 } from "drizzle-orm";
 var BACKUP_CHUNK_SIZE = 500;
 var QUERY_PAGE_LIMIT5 = 1e3;
 var BackupsRepository = class {
@@ -4559,8 +4636,8 @@ var BackupsRepository = class {
   }
   async createBackup(data) {
     await this.options.ensureBackupsTable();
-    const id = crypto6.randomUUID();
-    const result = await db.execute(sql15`
+    const id = crypto7.randomUUID();
+    const result = await db.execute(sql17`
       INSERT INTO public.backups (id, name, created_at, created_by, backup_data, metadata)
       VALUES (${id}, ${data.name}, ${/* @__PURE__ */ new Date()}, ${data.createdBy}, ${data.backupData}, ${data.metadata ?? null})
       RETURNING
@@ -4578,7 +4655,7 @@ var BackupsRepository = class {
     const rows = [];
     let offset = 0;
     while (true) {
-      const result = await db.execute(sql15`
+      const result = await db.execute(sql17`
         SELECT
           id,
           name,
@@ -4608,7 +4685,7 @@ var BackupsRepository = class {
   }
   async getBackupById(id) {
     await this.options.ensureBackupsTable();
-    const result = await db.execute(sql15`
+    const result = await db.execute(sql17`
       SELECT
         id,
         name,
@@ -4633,7 +4710,7 @@ var BackupsRepository = class {
   }
   async deleteBackup(id) {
     await this.options.ensureBackupsTable();
-    await db.execute(sql15`DELETE FROM public.backups WHERE id = ${id}`);
+    await db.execute(sql17`DELETE FROM public.backups WHERE id = ${id}`);
     return true;
   }
   async getBackupDataForExport() {
@@ -4696,7 +4773,7 @@ var BackupsRepository = class {
       if (backupData.dataRows.length > 0) {
         for (const chunk of chunkArray(backupData.dataRows, BACKUP_CHUNK_SIZE)) {
           const rows = chunk.map((row) => ({
-            id: row.id ?? crypto6.randomUUID(),
+            id: row.id ?? crypto7.randomUUID(),
             importId: row.importId,
             jsonDataJsonb: row.jsonDataJsonb
           }));
@@ -4707,7 +4784,7 @@ var BackupsRepository = class {
       if (backupData.users.length > 0) {
         const now = /* @__PURE__ */ new Date();
         const rows = backupData.users.filter((user) => user.passwordHash).map((user) => ({
-          id: crypto6.randomUUID(),
+          id: crypto7.randomUUID(),
           username: user.username,
           passwordHash: user.passwordHash,
           role: user.role,
@@ -4724,7 +4801,7 @@ var BackupsRepository = class {
       if (backupData.auditLogs.length > 0) {
         for (const chunk of chunkArray(backupData.auditLogs, BACKUP_CHUNK_SIZE)) {
           const rows = chunk.map((log2) => ({
-            id: log2.id ?? crypto6.randomUUID(),
+            id: log2.id ?? crypto7.randomUUID(),
             action: log2.action,
             performedBy: log2.performedBy,
             targetUser: log2.targetUser ?? null,
@@ -4742,7 +4819,7 @@ var BackupsRepository = class {
 };
 
 // server/repositories/analytics.repository.ts
-import { count as count2, eq as eq5, gte as gte3, sql as sql16 } from "drizzle-orm";
+import { count as count2, eq as eq5, gte as gte3, sql as sql18 } from "drizzle-orm";
 var ANALYTICS_TZ = process.env.ANALYTICS_TZ || "Asia/Kuala_Lumpur";
 var AnalyticsRepository = class {
   async getDashboardSummary() {
@@ -4766,7 +4843,7 @@ var AnalyticsRepository = class {
     };
   }
   async getLoginTrends(days = 7) {
-    const result = await db.execute(sql16`
+    const result = await db.execute(sql18`
       WITH bounds AS (
         SELECT (NOW() AT TIME ZONE ${ANALYTICS_TZ})::date AS end_date
       ),
@@ -4805,7 +4882,7 @@ var AnalyticsRepository = class {
     return result.rows || [];
   }
   async getTopActiveUsers(limit = 10) {
-    const result = await db.execute(sql16`
+    const result = await db.execute(sql18`
       SELECT
         username,
         role,
@@ -4824,7 +4901,7 @@ var AnalyticsRepository = class {
     }));
   }
   async getPeakHours() {
-    const result = await db.execute(sql16`
+    const result = await db.execute(sql18`
       SELECT
         EXTRACT(HOUR FROM (login_time AT TIME ZONE 'UTC' AT TIME ZONE ${ANALYTICS_TZ}))::int AS hour,
         COUNT(*)::int AS count
@@ -4846,7 +4923,7 @@ var AnalyticsRepository = class {
     }));
   }
   async getRoleDistribution() {
-    const result = await db.execute(sql16`
+    const result = await db.execute(sql18`
       SELECT role, COUNT(*)::int AS count
       FROM public.users
       GROUP BY role
@@ -4858,10 +4935,10 @@ var AnalyticsRepository = class {
 
 // server/repositories/collection.repository.ts
 import { randomUUID as randomUUID7 } from "crypto";
-import { sql as sql23 } from "drizzle-orm";
+import { sql as sql25 } from "drizzle-orm";
 
 // server/repositories/collection-record-query-utils.ts
-import { sql as sql17 } from "drizzle-orm";
+import { sql as sql19 } from "drizzle-orm";
 var COLLECTION_MONTH_NAMES = [
   "January",
   "February",
@@ -4882,15 +4959,15 @@ function normalizeCollectionNicknameFilters(nicknameSource) {
 function buildCollectionRecordConditions(filters) {
   const conditions = [];
   if (filters?.from) {
-    conditions.push(sql17`payment_date >= ${filters.from}::date`);
+    conditions.push(sql19`payment_date >= ${filters.from}::date`);
   }
   if (filters?.to) {
-    conditions.push(sql17`payment_date <= ${filters.to}::date`);
+    conditions.push(sql19`payment_date <= ${filters.to}::date`);
   }
   const search = String(filters?.search || "").trim();
   if (search) {
     const like = `%${search}%`;
-    conditions.push(sql17`(
+    conditions.push(sql19`(
       customer_name ILIKE ${like}
       OR ic_number ILIKE ${like}
       OR account_number ILIKE ${like}
@@ -4901,39 +4978,39 @@ function buildCollectionRecordConditions(filters) {
   }
   const createdByLogin = String(filters?.createdByLogin || "").trim();
   if (createdByLogin) {
-    conditions.push(sql17`created_by_login = ${createdByLogin}`);
+    conditions.push(sql19`created_by_login = ${createdByLogin}`);
   }
   const nicknames = normalizeCollectionNicknameFilters(filters?.nicknames);
   if (nicknames.length > 0) {
-    const nicknameSql = sql17.join(nicknames.map((value) => sql17`${value}`), sql17`, `);
-    conditions.push(sql17`lower(collection_staff_nickname) IN (${nicknameSql})`);
+    const nicknameSql = sql19.join(nicknames.map((value) => sql19`${value}`), sql19`, `);
+    conditions.push(sql19`lower(collection_staff_nickname) IN (${nicknameSql})`);
   }
   return conditions;
 }
 function buildCollectionRecordWhereSql(filters) {
   const conditions = buildCollectionRecordConditions(filters);
-  return conditions.length ? sql17`WHERE ${sql17.join(conditions, sql17` AND `)}` : sql17``;
+  return conditions.length ? sql19`WHERE ${sql19.join(conditions, sql19` AND `)}` : sql19``;
 }
 function buildCollectionMonthlySummaryWhereSql(filters) {
   const safeYear = Number.isFinite(filters.year) ? Math.min(2100, Math.max(2e3, Math.floor(filters.year))) : (/* @__PURE__ */ new Date()).getFullYear();
   const yearStart = `${safeYear}-01-01`;
   const yearEnd = `${safeYear}-12-31`;
   const conditions = [
-    sql17`payment_date >= ${yearStart}::date`,
-    sql17`payment_date <= ${yearEnd}::date`
+    sql19`payment_date >= ${yearStart}::date`,
+    sql19`payment_date <= ${yearEnd}::date`
   ];
   const nicknames = normalizeCollectionNicknameFilters(filters.nicknames);
   if (nicknames.length > 0) {
-    const nicknameSql = sql17.join(nicknames.map((value) => sql17`${value}`), sql17`, `);
-    conditions.push(sql17`lower(collection_staff_nickname) IN (${nicknameSql})`);
+    const nicknameSql = sql19.join(nicknames.map((value) => sql19`${value}`), sql19`, `);
+    conditions.push(sql19`lower(collection_staff_nickname) IN (${nicknameSql})`);
   }
   const createdByLogin = String(filters.createdByLogin || "").trim();
   if (createdByLogin) {
-    conditions.push(sql17`created_by_login = ${createdByLogin}`);
+    conditions.push(sql19`created_by_login = ${createdByLogin}`);
   }
   return {
     safeYear,
-    whereSql: sql17`WHERE ${sql17.join(conditions, sql17` AND `)}`
+    whereSql: sql19`WHERE ${sql19.join(conditions, sql19` AND `)}`
   };
 }
 function mapCollectionAggregateRow(row) {
@@ -4981,7 +5058,7 @@ function sumCollectionRowAmounts(rows) {
 }
 
 // server/repositories/collection-nickname-utils.ts
-import { sql as sql18 } from "drizzle-orm";
+import { sql as sql20 } from "drizzle-orm";
 function normalizeCollectionDate(value, fallback = Date.now()) {
   if (value instanceof Date) {
     return value;
@@ -5000,7 +5077,7 @@ function normalizeNullableBoolean(value) {
   }
   return Boolean(value);
 }
-function readRows(result) {
+function readRows2(result) {
   return Array.isArray(result.rows) ? result.rows : [];
 }
 function normalizeCollectionNicknameRoleScope(value) {
@@ -5078,14 +5155,14 @@ function mapCollectionNicknameSessionRow(row) {
 async function resolveCollectionNicknameRowsByIds(tx, nicknameIds) {
   const normalizedIds = Array.isArray(nicknameIds) ? nicknameIds.map((value) => String(value || "").trim()).filter((value, index, array) => Boolean(value) && array.indexOf(value) === index) : [];
   if (!normalizedIds.length) return [];
-  const idSql = sql18.join(normalizedIds.map((value) => sql18`${value}::uuid`), sql18`, `);
-  const result = await tx.execute(sql18`
+  const idSql = sql20.join(normalizedIds.map((value) => sql20`${value}::uuid`), sql20`, `);
+  const result = await tx.execute(sql20`
     SELECT id, nickname, role_scope, is_active
     FROM public.collection_staff_nicknames
     WHERE id IN (${idSql})
     LIMIT 5000
   `);
-  const rows = readRows(result).map((row) => ({
+  const rows = readRows2(result).map((row) => ({
     id: String(row.id || "").trim(),
     nickname: String(row.nickname || "").trim(),
     roleScope: normalizeCollectionNicknameRoleScope(row.role_scope),
@@ -5105,33 +5182,33 @@ async function validateCollectionAdminGroupComposition(params) {
   if (memberLower.includes(leaderLower)) {
     throw new Error("Leader nickname cannot be a member of the same group.");
   }
-  const leaderRows = await params.tx.execute(sql18`
+  const leaderRows = await params.tx.execute(sql20`
     SELECT id
     FROM public.admin_groups
     WHERE lower(leader_nickname) = lower(${params.leaderNickname})
-      ${params.groupIdToExclude ? sql18`AND id <> ${params.groupIdToExclude}::uuid` : sql18``}
+      ${params.groupIdToExclude ? sql20`AND id <> ${params.groupIdToExclude}::uuid` : sql20``}
     LIMIT 1
   `);
   if (leaderRows.rows?.[0]) {
     throw new Error("Leader nickname already assigned.");
   }
   if (!memberLower.length) return;
-  const membersSql = sql18.join(memberLower.map((value) => sql18`${value}`), sql18`, `);
-  const memberConflict = await params.tx.execute(sql18`
+  const membersSql = sql20.join(memberLower.map((value) => sql20`${value}`), sql20`, `);
+  const memberConflict = await params.tx.execute(sql20`
     SELECT member_nickname
     FROM public.admin_group_members
     WHERE lower(member_nickname) IN (${membersSql})
-      ${params.groupIdToExclude ? sql18`AND admin_group_id <> ${params.groupIdToExclude}::uuid` : sql18``}
+      ${params.groupIdToExclude ? sql20`AND admin_group_id <> ${params.groupIdToExclude}::uuid` : sql20``}
     LIMIT 1
   `);
   if (memberConflict.rows?.[0]) {
     throw new Error("This nickname is already assigned to another admin group.");
   }
-  const leaderConflict = await params.tx.execute(sql18`
+  const leaderConflict = await params.tx.execute(sql20`
     SELECT leader_nickname
     FROM public.admin_groups
     WHERE lower(leader_nickname) IN (${membersSql})
-      ${params.groupIdToExclude ? sql18`AND id <> ${params.groupIdToExclude}::uuid` : sql18``}
+      ${params.groupIdToExclude ? sql20`AND id <> ${params.groupIdToExclude}::uuid` : sql20``}
     LIMIT 1
   `);
   if (leaderConflict.rows?.[0]) {
@@ -5141,7 +5218,7 @@ async function validateCollectionAdminGroupComposition(params) {
 
 // server/repositories/collection-admin-assignment-utils.ts
 import { randomUUID as randomUUID3 } from "crypto";
-import { sql as sql19 } from "drizzle-orm";
+import { sql as sql21 } from "drizzle-orm";
 function normalizeUniqueValues(values) {
   return Array.from(
     new Set(
@@ -5152,7 +5229,7 @@ function normalizeUniqueValues(values) {
 async function listCollectionAdminAssignedNicknameIds(executor, adminUserId) {
   const normalized = String(adminUserId || "").trim();
   if (!normalized) return [];
-  const result = await executor.execute(sql19`
+  const result = await executor.execute(sql21`
     SELECT avn.nickname_id
     FROM public.admin_visible_nicknames avn
     WHERE avn.admin_user_id = ${normalized}
@@ -5164,17 +5241,17 @@ async function listCollectionAdminAssignedNicknameIds(executor, adminUserId) {
 async function listCollectionAdminVisibleNicknames(executor, adminUserId, filters) {
   const normalized = String(adminUserId || "").trim();
   if (!normalized) return [];
-  const conditions = [sql19`avn.admin_user_id = ${normalized}`];
+  const conditions = [sql21`avn.admin_user_id = ${normalized}`];
   if (filters?.activeOnly === true) {
-    conditions.push(sql19`n.is_active = true`);
+    conditions.push(sql21`n.is_active = true`);
   }
   if (filters?.allowedRole === "admin") {
-    conditions.push(sql19`n.role_scope IN ('admin', 'both')`);
+    conditions.push(sql21`n.role_scope IN ('admin', 'both')`);
   } else if (filters?.allowedRole === "user") {
-    conditions.push(sql19`n.role_scope IN ('user', 'both')`);
+    conditions.push(sql21`n.role_scope IN ('user', 'both')`);
   }
-  const whereSql = sql19`WHERE ${sql19.join(conditions, sql19` AND `)}`;
-  const result = await executor.execute(sql19`
+  const whereSql = sql21`WHERE ${sql21.join(conditions, sql21` AND `)}`;
+  const result = await executor.execute(sql21`
     SELECT
       n.id,
       n.nickname,
@@ -5199,11 +5276,11 @@ async function resolveValidCollectionNicknameIds(executor, nicknameIds) {
   if (!normalizedNicknameIds.length) {
     return [];
   }
-  const nicknameSql = sql19.join(
-    normalizedNicknameIds.map((value) => sql19`${value}::uuid`),
-    sql19`, `
+  const nicknameSql = sql21.join(
+    normalizedNicknameIds.map((value) => sql21`${value}::uuid`),
+    sql21`, `
   );
-  const validRows = await executor.execute(sql19`
+  const validRows = await executor.execute(sql21`
     SELECT id
     FROM public.collection_staff_nicknames
     WHERE id IN (${nicknameSql})
@@ -5224,7 +5301,7 @@ async function replaceCollectionAdminAssignedNicknameIds(executor, params) {
   if (!createdBySuperuser) {
     throw new Error("createdBySuperuser is required.");
   }
-  const adminCheck = await executor.execute(sql19`
+  const adminCheck = await executor.execute(sql21`
     SELECT id
     FROM public.users
     WHERE id = ${adminUserId}
@@ -5235,12 +5312,12 @@ async function replaceCollectionAdminAssignedNicknameIds(executor, params) {
     throw new Error("Admin user not found.");
   }
   const validNicknameIds = await resolveValidCollectionNicknameIds(executor, params.nicknameIds);
-  await executor.execute(sql19`
+  await executor.execute(sql21`
     DELETE FROM public.admin_visible_nicknames
     WHERE admin_user_id = ${adminUserId}
   `);
   for (const nicknameId of validNicknameIds) {
-    await executor.execute(sql19`
+    await executor.execute(sql21`
       INSERT INTO public.admin_visible_nicknames (
         id,
         admin_user_id,
@@ -5263,20 +5340,20 @@ async function replaceCollectionAdminAssignedNicknameIds(executor, params) {
 
 // server/repositories/collection-admin-group-utils.ts
 import { randomUUID as randomUUID4 } from "crypto";
-import { sql as sql20 } from "drizzle-orm";
+import { sql as sql22 } from "drizzle-orm";
 function normalizeCollectionText(value) {
   return String(value || "").trim();
 }
-function readRows2(result) {
+function readRows3(result) {
   return Array.isArray(result.rows) ? result.rows : [];
 }
 function readFirstRow(result) {
-  return readRows2(result)[0];
+  return readRows3(result)[0];
 }
 async function insertAdminGroupMembers(executor, groupId, leaderNickname, memberNicknames) {
   for (const memberNickname of memberNicknames) {
     if (!memberNickname || memberNickname.toLowerCase() === leaderNickname.toLowerCase()) continue;
-    await executor.execute(sql20`
+    await executor.execute(sql22`
       INSERT INTO public.admin_group_members (
         id,
         admin_group_id,
@@ -5294,19 +5371,19 @@ async function insertAdminGroupMembers(executor, groupId, leaderNickname, member
   }
 }
 async function listCollectionAdminGroups(executor) {
-  const nicknameRows = await executor.execute(sql20`
+  const nicknameRows = await executor.execute(sql22`
     SELECT id, nickname
     FROM public.collection_staff_nicknames
     LIMIT 5000
   `);
   const nicknameIdByLowerName = /* @__PURE__ */ new Map();
-  for (const row of readRows2(nicknameRows)) {
+  for (const row of readRows3(nicknameRows)) {
     const nickname = normalizeCollectionText(row.nickname).toLowerCase();
     const id = normalizeCollectionText(row.id);
     if (!nickname || !id || nicknameIdByLowerName.has(nickname)) continue;
     nicknameIdByLowerName.set(nickname, id);
   }
-  const result = await executor.execute(sql20`
+  const result = await executor.execute(sql22`
     SELECT
       g.id,
       g.leader_nickname,
@@ -5337,7 +5414,7 @@ async function listCollectionAdminGroups(executor) {
     ORDER BY lower(g.leader_nickname) ASC
     LIMIT 5000
   `);
-  return readRows2(result).map((row) => mapCollectionAdminGroupRow(row, nicknameIdByLowerName));
+  return readRows3(result).map((row) => mapCollectionAdminGroupRow(row, nicknameIdByLowerName));
 }
 async function findCollectionAdminGroupById(executor, groupId) {
   const normalizedGroupId = normalizeCollectionText(groupId);
@@ -5369,7 +5446,7 @@ async function createCollectionAdminGroupInTransaction(executor, params) {
     memberNicknames
   });
   const groupId = randomUUID4();
-  await executor.execute(sql20`
+  await executor.execute(sql22`
     INSERT INTO public.admin_groups (
       id,
       leader_nickname,
@@ -5397,7 +5474,7 @@ async function updateCollectionAdminGroupInTransaction(executor, params) {
   if (!updatedBy) {
     throw new Error("updatedBy is required.");
   }
-  const existingRow = await executor.execute(sql20`
+  const existingRow = await executor.execute(sql22`
     SELECT id, leader_nickname
     FROM public.admin_groups
     WHERE id = ${groupId}::uuid
@@ -5427,13 +5504,13 @@ async function updateCollectionAdminGroupInTransaction(executor, params) {
     const memberRows = await resolveCollectionNicknameRowsByIds(executor, params.memberNicknameIds || []);
     memberNicknames = memberRows.map((item) => item.nickname).filter(Boolean);
   } else {
-    const existingMembers = await executor.execute(sql20`
+    const existingMembers = await executor.execute(sql22`
       SELECT member_nickname
       FROM public.admin_group_members
       WHERE admin_group_id = ${groupId}::uuid
       LIMIT 5000
     `);
-    memberNicknames = readRows2(existingMembers).map((row) => normalizeCollectionText(row.member_nickname)).filter(Boolean);
+    memberNicknames = readRows3(existingMembers).map((row) => normalizeCollectionText(row.member_nickname)).filter(Boolean);
   }
   await validateCollectionAdminGroupComposition({
     tx: executor,
@@ -5441,7 +5518,7 @@ async function updateCollectionAdminGroupInTransaction(executor, params) {
     leaderNickname,
     memberNicknames
   });
-  await executor.execute(sql20`
+  await executor.execute(sql22`
     UPDATE public.admin_groups
     SET
       leader_nickname = ${leaderNickname},
@@ -5449,7 +5526,7 @@ async function updateCollectionAdminGroupInTransaction(executor, params) {
       updated_at = now()
     WHERE id = ${groupId}::uuid
   `);
-  await executor.execute(sql20`
+  await executor.execute(sql22`
     DELETE FROM public.admin_group_members
     WHERE admin_group_id = ${groupId}::uuid
   `);
@@ -5459,11 +5536,11 @@ async function updateCollectionAdminGroupInTransaction(executor, params) {
 async function deleteCollectionAdminGroupInTransaction(executor, groupId) {
   const normalizedGroupId = normalizeCollectionText(groupId);
   if (!normalizedGroupId) return false;
-  await executor.execute(sql20`
+  await executor.execute(sql22`
     DELETE FROM public.admin_group_members
     WHERE admin_group_id = ${normalizedGroupId}::uuid
   `);
-  const result = await executor.execute(sql20`
+  const result = await executor.execute(sql22`
     DELETE FROM public.admin_groups
     WHERE id = ${normalizedGroupId}::uuid
     RETURNING id
@@ -5473,7 +5550,7 @@ async function deleteCollectionAdminGroupInTransaction(executor, groupId) {
 async function getCollectionAdminGroupVisibleNicknameValuesByLeader(executor, leaderNickname) {
   const normalizedLeader = normalizeCollectionText(leaderNickname);
   if (!normalizedLeader) return [];
-  const rows = await executor.execute(sql20`
+  const rows = await executor.execute(sql22`
     SELECT
       g.leader_nickname,
       COALESCE(
@@ -5498,7 +5575,7 @@ async function getCollectionAdminGroupVisibleNicknameValuesByLeader(executor, le
 
 // server/repositories/collection-receipt-utils.ts
 import { randomUUID as randomUUID5 } from "crypto";
-import { sql as sql21 } from "drizzle-orm";
+import { sql as sql23 } from "drizzle-orm";
 function normalizeUniqueValues2(values) {
   return Array.from(
     new Set(
@@ -5515,11 +5592,11 @@ function normalizeCollectionDate2(value) {
   }
   return /* @__PURE__ */ new Date();
 }
-function readRows3(result) {
+function readRows4(result) {
   return Array.isArray(result.rows) ? result.rows : [];
 }
 function readFirstRow2(result) {
-  return readRows3(result)[0];
+  return readRows4(result)[0];
 }
 function mapCollectionRecordReceiptRow(row) {
   return {
@@ -5537,8 +5614,8 @@ async function loadCollectionReceiptMapByRecordIds(executor, recordIds) {
   const normalizedIds = normalizeUniqueValues2(recordIds);
   const receiptMap = /* @__PURE__ */ new Map();
   if (!normalizedIds.length) return receiptMap;
-  const idSql = sql21.join(normalizedIds.map((value) => sql21`${value}::uuid`), sql21`, `);
-  const result = await executor.execute(sql21`
+  const idSql = sql23.join(normalizedIds.map((value) => sql23`${value}::uuid`), sql23`, `);
+  const result = await executor.execute(sql23`
     SELECT
       id,
       collection_record_id,
@@ -5552,7 +5629,7 @@ async function loadCollectionReceiptMapByRecordIds(executor, recordIds) {
     WHERE collection_record_id IN (${idSql})
     ORDER BY created_at ASC, id ASC
   `);
-  for (const row of readRows3(result)) {
+  for (const row of readRows4(result)) {
     const receipt = mapCollectionRecordReceiptRow(row);
     const current = receiptMap.get(receipt.collectionRecordId) || [];
     current.push(receipt);
@@ -5579,7 +5656,7 @@ async function attachCollectionReceipts(executor, records) {
 async function listCollectionRecordReceiptsByRecordId(executor, recordId) {
   const normalizedRecordId = String(recordId || "").trim();
   if (!normalizedRecordId) return [];
-  const result = await executor.execute(sql21`
+  const result = await executor.execute(sql23`
     SELECT
       id,
       collection_record_id,
@@ -5593,13 +5670,13 @@ async function listCollectionRecordReceiptsByRecordId(executor, recordId) {
     WHERE collection_record_id = ${normalizedRecordId}::uuid
     ORDER BY created_at ASC, id ASC
   `);
-  return readRows3(result).map((row) => mapCollectionRecordReceiptRow(row));
+  return readRows4(result).map((row) => mapCollectionRecordReceiptRow(row));
 }
 async function getCollectionRecordReceiptByIdForRecord(executor, recordId, receiptId) {
   const normalizedRecordId = String(recordId || "").trim();
   const normalizedReceiptId = String(receiptId || "").trim();
   if (!normalizedRecordId || !normalizedReceiptId) return void 0;
-  const result = await executor.execute(sql21`
+  const result = await executor.execute(sql23`
     SELECT
       id,
       collection_record_id,
@@ -5621,8 +5698,8 @@ async function getCollectionRecordReceiptByIdForRecord(executor, recordId, recei
 async function listCollectionRecordReceiptsByIds(executor, receiptIds) {
   const normalizedReceiptIds = normalizeUniqueValues2(receiptIds);
   if (!normalizedReceiptIds.length) return [];
-  const idSql = sql21.join(normalizedReceiptIds.map((value) => sql21`${value}::uuid`), sql21`, `);
-  const result = await executor.execute(sql21`
+  const idSql = sql23.join(normalizedReceiptIds.map((value) => sql23`${value}::uuid`), sql23`, `);
+  const result = await executor.execute(sql23`
     SELECT
       id,
       collection_record_id,
@@ -5636,7 +5713,7 @@ async function listCollectionRecordReceiptsByIds(executor, receiptIds) {
     WHERE id IN (${idSql})
     ORDER BY created_at ASC, id ASC
   `);
-  return readRows3(result).map((row) => mapCollectionRecordReceiptRow(row));
+  return readRows4(result).map((row) => mapCollectionRecordReceiptRow(row));
 }
 async function createCollectionRecordReceiptRows(executor, recordId, receipts) {
   const normalizedRecordId = String(recordId || "").trim();
@@ -5647,7 +5724,7 @@ async function createCollectionRecordReceiptRows(executor, recordId, receipts) {
   for (const receipt of receipts) {
     const id = randomUUID5();
     insertedIds.push(id);
-    await executor.execute(sql21`
+    await executor.execute(sql23`
       INSERT INTO public.collection_record_receipts (
         id,
         collection_record_id,
@@ -5678,8 +5755,8 @@ async function listCollectionRecordReceiptsForDeletion(executor, recordId, recei
   if (!normalizedRecordId || !normalizedReceiptIds.length) {
     return [];
   }
-  const idSql = sql21.join(normalizedReceiptIds.map((value) => sql21`${value}::uuid`), sql21`, `);
-  const existing = await executor.execute(sql21`
+  const idSql = sql23.join(normalizedReceiptIds.map((value) => sql23`${value}::uuid`), sql23`, `);
+  const existing = await executor.execute(sql23`
     SELECT
       id,
       collection_record_id,
@@ -5693,7 +5770,7 @@ async function listCollectionRecordReceiptsForDeletion(executor, recordId, recei
     WHERE collection_record_id = ${normalizedRecordId}::uuid
       AND id IN (${idSql})
   `);
-  return readRows3(existing).map((row) => mapCollectionRecordReceiptRow(row));
+  return readRows4(existing).map((row) => mapCollectionRecordReceiptRow(row));
 }
 async function deleteCollectionRecordReceiptRows(executor, recordId, receiptIds) {
   const normalizedRecordId = String(recordId || "").trim();
@@ -5705,8 +5782,8 @@ async function deleteCollectionRecordReceiptRows(executor, recordId, receiptIds)
   if (!receipts.length) {
     return [];
   }
-  const idSql = sql21.join(normalizedReceiptIds.map((value) => sql21`${value}::uuid`), sql21`, `);
-  await executor.execute(sql21`
+  const idSql = sql23.join(normalizedReceiptIds.map((value) => sql23`${value}::uuid`), sql23`, `);
+  await executor.execute(sql23`
     DELETE FROM public.collection_record_receipts
     WHERE collection_record_id = ${normalizedRecordId}::uuid
       AND id IN (${idSql})
@@ -5718,8 +5795,8 @@ async function deleteAllCollectionRecordReceiptRows(executor, recordId) {
   if (!receipts.length) {
     return [];
   }
-  const idSql = sql21.join(receipts.map((receipt) => sql21`${receipt.id}::uuid`), sql21`, `);
-  await executor.execute(sql21`
+  const idSql = sql23.join(receipts.map((receipt) => sql23`${receipt.id}::uuid`), sql23`, `);
+  await executor.execute(sql23`
     DELETE FROM public.collection_record_receipts
     WHERE id IN (${idSql})
   `);
@@ -5728,28 +5805,28 @@ async function deleteAllCollectionRecordReceiptRows(executor, recordId) {
 
 // server/repositories/collection-staff-nickname-utils.ts
 import { randomUUID as randomUUID6 } from "crypto";
-import { sql as sql22 } from "drizzle-orm";
+import { sql as sql24 } from "drizzle-orm";
 function normalizeCollectionText2(value) {
   return String(value || "").trim();
 }
-function readRows4(result) {
+function readRows5(result) {
   return Array.isArray(result.rows) ? result.rows : [];
 }
 function readFirstRow3(result) {
-  return readRows4(result)[0];
+  return readRows5(result)[0];
 }
 async function listCollectionStaffNicknames(executor, filters) {
   const conditions = [];
   if (filters?.activeOnly === true) {
-    conditions.push(sql22`is_active = true`);
+    conditions.push(sql24`is_active = true`);
   }
   if (filters?.allowedRole === "admin") {
-    conditions.push(sql22`role_scope IN ('admin', 'both')`);
+    conditions.push(sql24`role_scope IN ('admin', 'both')`);
   } else if (filters?.allowedRole === "user") {
-    conditions.push(sql22`role_scope IN ('user', 'both')`);
+    conditions.push(sql24`role_scope IN ('user', 'both')`);
   }
-  const whereSql = conditions.length > 0 ? sql22`WHERE ${sql22.join(conditions, sql22` AND `)}` : sql22``;
-  const result = await executor.execute(sql22`
+  const whereSql = conditions.length > 0 ? sql24`WHERE ${sql24.join(conditions, sql24` AND `)}` : sql24``;
+  const result = await executor.execute(sql24`
     SELECT
       id,
       nickname,
@@ -5762,7 +5839,7 @@ async function listCollectionStaffNicknames(executor, filters) {
     ORDER BY is_active DESC, lower(nickname) ASC
     LIMIT 1000
   `);
-  return readRows4(result).map((row) => mapCollectionStaffNicknameRow(row));
+  return readRows5(result).map((row) => mapCollectionStaffNicknameRow(row));
 }
 async function setCollectionNicknameSessionValue(executor, params) {
   const activityId = normalizeCollectionText2(params.activityId);
@@ -5772,7 +5849,7 @@ async function setCollectionNicknameSessionValue(executor, params) {
   if (!activityId || !username || !userRole || !nickname) {
     throw new Error("Invalid collection nickname session payload.");
   }
-  await executor.execute(sql22`
+  await executor.execute(sql24`
     INSERT INTO public.collection_nickname_sessions (
       activity_id,
       username,
@@ -5800,7 +5877,7 @@ async function setCollectionNicknameSessionValue(executor, params) {
 async function getCollectionNicknameSessionValueByActivity(executor, activityId) {
   const normalizedActivityId = normalizeCollectionText2(activityId);
   if (!normalizedActivityId) return void 0;
-  const result = await executor.execute(sql22`
+  const result = await executor.execute(sql24`
     SELECT
       activity_id,
       username,
@@ -5819,7 +5896,7 @@ async function getCollectionNicknameSessionValueByActivity(executor, activityId)
 async function clearCollectionNicknameSessionValueByActivity(executor, activityId) {
   const normalizedActivityId = normalizeCollectionText2(activityId);
   if (!normalizedActivityId) return;
-  await executor.execute(sql22`
+  await executor.execute(sql24`
     DELETE FROM public.collection_nickname_sessions
     WHERE activity_id = ${normalizedActivityId}
   `);
@@ -5827,7 +5904,7 @@ async function clearCollectionNicknameSessionValueByActivity(executor, activityI
 async function getCollectionStaffNicknameByIdValue(executor, id) {
   const normalizedId = normalizeCollectionText2(id);
   if (!normalizedId) return void 0;
-  const result = await executor.execute(sql22`
+  const result = await executor.execute(sql24`
     SELECT
       id,
       nickname,
@@ -5846,7 +5923,7 @@ async function getCollectionStaffNicknameByIdValue(executor, id) {
 async function getCollectionStaffNicknameByNameValue(executor, nickname) {
   const normalized = normalizeCollectionText2(nickname);
   if (!normalized) return void 0;
-  const result = await executor.execute(sql22`
+  const result = await executor.execute(sql24`
     SELECT
       id,
       nickname,
@@ -5865,7 +5942,7 @@ async function getCollectionStaffNicknameByNameValue(executor, nickname) {
 async function getCollectionNicknameAuthProfileByNameValue(executor, nickname) {
   const normalized = normalizeCollectionText2(nickname);
   if (!normalized) return void 0;
-  const result = await executor.execute(sql22`
+  const result = await executor.execute(sql24`
     SELECT
       id,
       nickname,
@@ -5895,7 +5972,7 @@ async function setCollectionNicknamePasswordValue(executor, params) {
   if (!passwordHash) {
     throw new Error("passwordHash is required.");
   }
-  await executor.execute(sql22`
+  await executor.execute(sql24`
     UPDATE public.collection_staff_nicknames
     SET
       nickname_password_hash = ${passwordHash},
@@ -5906,7 +5983,7 @@ async function setCollectionNicknamePasswordValue(executor, params) {
   `);
 }
 async function createCollectionStaffNicknameValue(executor, data) {
-  const result = await executor.execute(sql22`
+  const result = await executor.execute(sql24`
     INSERT INTO public.collection_staff_nicknames (
       id,
       nickname,
@@ -5950,20 +6027,20 @@ async function updateCollectionStaffNicknameValue(executor, id, data) {
   if (!existing) return void 0;
   const updates = [];
   if (data.nickname !== void 0) {
-    updates.push(sql22`nickname = ${data.nickname}`);
+    updates.push(sql24`nickname = ${data.nickname}`);
   }
   if (data.isActive !== void 0) {
-    updates.push(sql22`is_active = ${data.isActive}`);
+    updates.push(sql24`is_active = ${data.isActive}`);
   }
   if (data.roleScope !== void 0) {
-    updates.push(sql22`role_scope = ${normalizeCollectionNicknameRoleScope(data.roleScope)}`);
+    updates.push(sql24`role_scope = ${normalizeCollectionNicknameRoleScope(data.roleScope)}`);
   }
   if (!updates.length) {
     return existing;
   }
-  const result = await executor.execute(sql22`
+  const result = await executor.execute(sql24`
     UPDATE public.collection_staff_nicknames
-    SET ${sql22.join(updates, sql22`, `)}
+    SET ${sql24.join(updates, sql24`, `)}
     WHERE id = ${normalizeCollectionText2(id)}::uuid
     RETURNING
       id,
@@ -5979,19 +6056,19 @@ async function updateCollectionStaffNicknameValue(executor, id, data) {
   const oldNickname = normalizeCollectionText2(existing.nickname);
   const newNickname = normalizeCollectionText2(updated.nickname);
   if (oldNickname && newNickname && oldNickname.toLowerCase() !== newNickname.toLowerCase()) {
-    await executor.execute(sql22`
+    await executor.execute(sql24`
       UPDATE public.admin_groups
       SET
         leader_nickname = ${newNickname},
         updated_at = now()
       WHERE lower(leader_nickname) = lower(${oldNickname})
     `);
-    await executor.execute(sql22`
+    await executor.execute(sql24`
       UPDATE public.admin_group_members
       SET member_nickname = ${newNickname}
       WHERE lower(member_nickname) = lower(${oldNickname})
     `);
-    await executor.execute(sql22`
+    await executor.execute(sql24`
       UPDATE public.collection_nickname_sessions
       SET
         nickname = ${newNickname},
@@ -6006,7 +6083,7 @@ async function deleteCollectionStaffNicknameValue(executor, id) {
   if (!existing) {
     return { deleted: false, deactivated: false };
   }
-  const usage = await executor.execute(sql22`
+  const usage = await executor.execute(sql24`
     SELECT COUNT(*)::int AS total
     FROM public.collection_records
     WHERE lower(collection_staff_nickname) = lower(${existing.nickname})
@@ -6014,30 +6091,30 @@ async function deleteCollectionStaffNicknameValue(executor, id) {
   `);
   const total = Number(readFirstRow3(usage)?.total ?? 0);
   if (total > 0) {
-    await executor.execute(sql22`
+    await executor.execute(sql24`
       UPDATE public.collection_staff_nicknames
       SET is_active = false
       WHERE id = ${normalizeCollectionText2(id)}::uuid
     `);
     return { deleted: false, deactivated: true };
   }
-  await executor.execute(sql22`
+  await executor.execute(sql24`
     DELETE FROM public.admin_visible_nicknames
     WHERE nickname_id = ${normalizeCollectionText2(id)}::uuid
   `);
-  await executor.execute(sql22`
+  await executor.execute(sql24`
     DELETE FROM public.admin_group_members
     WHERE lower(member_nickname) = lower(${existing.nickname})
   `);
-  await executor.execute(sql22`
+  await executor.execute(sql24`
     DELETE FROM public.admin_groups
     WHERE lower(leader_nickname) = lower(${existing.nickname})
   `);
-  await executor.execute(sql22`
+  await executor.execute(sql24`
     DELETE FROM public.collection_nickname_sessions
     WHERE lower(nickname) = lower(${existing.nickname})
   `);
-  await executor.execute(sql22`
+  await executor.execute(sql24`
     DELETE FROM public.collection_staff_nicknames
     WHERE id = ${normalizeCollectionText2(id)}::uuid
   `);
@@ -6046,7 +6123,7 @@ async function deleteCollectionStaffNicknameValue(executor, id) {
 async function isCollectionStaffNicknameActiveValue(executor, nickname) {
   const normalized = normalizeCollectionText2(nickname);
   if (!normalized) return false;
-  const result = await executor.execute(sql22`
+  const result = await executor.execute(sql24`
     SELECT id
     FROM public.collection_staff_nicknames
     WHERE lower(nickname) = lower(${normalized})
@@ -6083,7 +6160,7 @@ var CollectionRepository = class {
     return listCollectionStaffNicknames(db, filters);
   }
   async getCollectionAdminUsers() {
-    const result = await db.execute(sql23`
+    const result = await db.execute(sql25`
       SELECT
         id,
         username,
@@ -6101,7 +6178,7 @@ var CollectionRepository = class {
   async getCollectionAdminUserById(adminUserId) {
     const normalized = String(adminUserId || "").trim();
     if (!normalized) return void 0;
-    const result = await db.execute(sql23`
+    const result = await db.execute(sql25`
       SELECT
         id,
         username,
@@ -6197,7 +6274,7 @@ var CollectionRepository = class {
   }
   async createCollectionRecord(data) {
     const id = randomUUID7();
-    await db.execute(sql23`
+    await db.execute(sql25`
       INSERT INTO public.collection_records (
         id,
         customer_name,
@@ -6241,7 +6318,7 @@ var CollectionRepository = class {
     const safeLimit = Number.isFinite(parsedLimit) ? Math.min(2e3, Math.max(1, Math.floor(parsedLimit))) : 500;
     const parsedOffset = Number(filters?.offset);
     const safeOffset = Number.isFinite(parsedOffset) ? Math.max(0, Math.floor(parsedOffset)) : 0;
-    const result = await db.execute(sql23`
+    const result = await db.execute(sql25`
       SELECT
         id,
         customer_name,
@@ -6267,7 +6344,7 @@ var CollectionRepository = class {
   }
   async summarizeCollectionRecords(filters) {
     const whereSql = buildCollectionRecordWhereSql(filters);
-    const result = await db.execute(sql23`
+    const result = await db.execute(sql25`
       SELECT
         COUNT(*)::int AS total_records,
         COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
@@ -6284,7 +6361,7 @@ var CollectionRepository = class {
         totalAmount: 0
       };
     }
-    const result = await db.execute(sql23`
+    const result = await db.execute(sql25`
       SELECT
         COUNT(*)::int AS total_records,
         COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
@@ -6303,7 +6380,7 @@ var CollectionRepository = class {
       };
     }
     return db.transaction(async (tx) => {
-      const oldRecordsResult = await tx.execute(sql23`
+      const oldRecordsResult = await tx.execute(sql25`
         SELECT
           id,
           amount,
@@ -6328,17 +6405,17 @@ var CollectionRepository = class {
           receiptPaths: []
         };
       }
-      const recordIdSql = sql23.join(recordIds.map((value) => sql23`${value}::uuid`), sql23`, `);
-      const receiptRowsResult = await tx.execute(sql23`
+      const recordIdSql = sql25.join(recordIds.map((value) => sql25`${value}::uuid`), sql25`, `);
+      const receiptRowsResult = await tx.execute(sql25`
         SELECT storage_path
         FROM public.collection_record_receipts
         WHERE collection_record_id IN (${recordIdSql})
       `);
-      await tx.execute(sql23`
+      await tx.execute(sql25`
         DELETE FROM public.collection_record_receipts
         WHERE collection_record_id IN (${recordIdSql})
       `);
-      await tx.execute(sql23`
+      await tx.execute(sql25`
         DELETE FROM public.collection_records
         WHERE id IN (${recordIdSql})
       `);
@@ -6355,7 +6432,7 @@ var CollectionRepository = class {
   }
   async getCollectionMonthlySummary(filters) {
     const { whereSql } = buildCollectionMonthlySummaryWhereSql(filters);
-    const result = await db.execute(sql23`
+    const result = await db.execute(sql25`
       SELECT
         EXTRACT(MONTH FROM payment_date)::int AS month,
         COUNT(*)::int AS total_records,
@@ -6369,7 +6446,7 @@ var CollectionRepository = class {
     return mapCollectionMonthlySummaryRows(result.rows || []);
   }
   async getCollectionRecordById(id) {
-    const result = await db.execute(sql23`
+    const result = await db.execute(sql25`
       SELECT
         id,
         customer_name,
@@ -6411,39 +6488,39 @@ var CollectionRepository = class {
   async updateCollectionRecord(id, data) {
     const updateChunks = [];
     if (data.customerName !== void 0) {
-      updateChunks.push(sql23`customer_name = ${data.customerName}`);
+      updateChunks.push(sql25`customer_name = ${data.customerName}`);
     }
     if (data.icNumber !== void 0) {
-      updateChunks.push(sql23`ic_number = ${data.icNumber}`);
+      updateChunks.push(sql25`ic_number = ${data.icNumber}`);
     }
     if (data.customerPhone !== void 0) {
-      updateChunks.push(sql23`customer_phone = ${data.customerPhone}`);
+      updateChunks.push(sql25`customer_phone = ${data.customerPhone}`);
     }
     if (data.accountNumber !== void 0) {
-      updateChunks.push(sql23`account_number = ${data.accountNumber}`);
+      updateChunks.push(sql25`account_number = ${data.accountNumber}`);
     }
     if (data.batch !== void 0) {
-      updateChunks.push(sql23`batch = ${data.batch}`);
+      updateChunks.push(sql25`batch = ${data.batch}`);
     }
     if (data.paymentDate !== void 0) {
-      updateChunks.push(sql23`payment_date = ${data.paymentDate}::date`);
+      updateChunks.push(sql25`payment_date = ${data.paymentDate}::date`);
     }
     if (data.amount !== void 0) {
-      updateChunks.push(sql23`amount = ${data.amount}`);
+      updateChunks.push(sql25`amount = ${data.amount}`);
     }
     if (Object.prototype.hasOwnProperty.call(data, "receiptFile")) {
-      updateChunks.push(sql23`receipt_file = ${data.receiptFile ?? null}`);
+      updateChunks.push(sql25`receipt_file = ${data.receiptFile ?? null}`);
     }
     if (data.collectionStaffNickname !== void 0) {
-      updateChunks.push(sql23`collection_staff_nickname = ${data.collectionStaffNickname}`);
-      updateChunks.push(sql23`staff_username = ${data.collectionStaffNickname}`);
+      updateChunks.push(sql25`collection_staff_nickname = ${data.collectionStaffNickname}`);
+      updateChunks.push(sql25`staff_username = ${data.collectionStaffNickname}`);
     }
     if (!updateChunks.length) {
       return this.getCollectionRecordById(id);
     }
-    const result = await db.execute(sql23`
+    const result = await db.execute(sql25`
       UPDATE public.collection_records
-      SET ${sql23.join(updateChunks, sql23`, `)}
+      SET ${sql25.join(updateChunks, sql25`, `)}
       WHERE id = ${id}::uuid
       RETURNING
         id,
@@ -6465,14 +6542,14 @@ var CollectionRepository = class {
     return this.getCollectionRecordById(id);
   }
   async deleteCollectionRecord(id) {
-    await db.execute(sql23`DELETE FROM public.collection_record_receipts WHERE collection_record_id = ${id}::uuid`);
-    await db.execute(sql23`DELETE FROM public.collection_records WHERE id = ${id}::uuid`);
+    await db.execute(sql25`DELETE FROM public.collection_record_receipts WHERE collection_record_id = ${id}::uuid`);
+    await db.execute(sql25`DELETE FROM public.collection_records WHERE id = ${id}::uuid`);
     return true;
   }
 };
 
 // server/repositories/settings.repository.ts
-import { sql as sql24 } from "drizzle-orm";
+import { sql as sql26 } from "drizzle-orm";
 var TRUTHY_SETTING_VALUES = /* @__PURE__ */ new Set(["true", "1", "yes", "on"]);
 var SettingsRepository = class {
   parseSettingType(raw) {
@@ -6534,7 +6611,7 @@ var SettingsRepository = class {
     return settingKey === "maintenance_message" || settingKey === "maintenance_start_time" || settingKey === "maintenance_end_time";
   }
   async isAdminMaintenanceEditingEnabled() {
-    const result = await db.execute(sql24`
+    const result = await db.execute(sql26`
       SELECT value
       FROM public.system_settings
       WHERE key = 'admin_can_edit_maintenance_message'
@@ -6544,7 +6621,7 @@ var SettingsRepository = class {
     return TRUTHY_SETTING_VALUES.has(String(row?.value ?? "").trim().toLowerCase());
   }
   async getSettingsForRole(role) {
-    const rows = await db.execute(sql24`
+    const rows = await db.execute(sql26`
       SELECT
         c.id as category_id,
         c.name as category_name,
@@ -6572,10 +6649,10 @@ var SettingsRepository = class {
     const optionsMap = /* @__PURE__ */ new Map();
     if (settingIds.length > 0) {
       const quoted = settingIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
-      const optionsRows = await db.execute(sql24`
+      const optionsRows = await db.execute(sql26`
         SELECT DISTINCT ON (setting_id, value) setting_id, value, label
         FROM public.setting_options
-        WHERE setting_id IN (${sql24.raw(quoted)})
+        WHERE setting_id IN (${sql26.raw(quoted)})
         ORDER BY setting_id, value, label
       `);
       const seenOptionsBySetting = /* @__PURE__ */ new Map();
@@ -6625,7 +6702,7 @@ var SettingsRepository = class {
     return Array.from(categories.values());
   }
   async getBooleanSystemSetting(key, fallback = false) {
-    const result = await db.execute(sql24`
+    const result = await db.execute(sql26`
       SELECT value
       FROM public.system_settings
       WHERE key = ${key}
@@ -6655,10 +6732,10 @@ var SettingsRepository = class {
       return visibility;
     }
     const keyList = keys.map((key) => `'${key.replace(/'/g, "''")}'`).join(",");
-    const rows = await db.execute(sql24`
+    const rows = await db.execute(sql26`
       SELECT key, value
       FROM public.system_settings
-      WHERE key IN (${sql24.raw(keyList)})
+      WHERE key IN (${sql26.raw(keyList)})
     `);
     const pageIdByKey = /* @__PURE__ */ new Map();
     for (const tab of tabs) {
@@ -6671,7 +6748,7 @@ var SettingsRepository = class {
       visibility[pageId] = TRUTHY_SETTING_VALUES.has(String(row.value ?? "").trim().toLowerCase());
     }
     if (roleKey === "admin") {
-      const result = await db.execute(sql24`
+      const result = await db.execute(sql26`
         SELECT value
         FROM public.system_settings
         WHERE key = 'canViewSystemPerformance'
@@ -6686,7 +6763,7 @@ var SettingsRepository = class {
     return visibility;
   }
   async updateSystemSetting(params) {
-    const settingRes = await db.execute(sql24`
+    const settingRes = await db.execute(sql26`
       SELECT
         s.id,
         s.key,
@@ -6732,7 +6809,7 @@ var SettingsRepository = class {
     }
     const nextValue = constrained.value;
     if (settingType === "select") {
-      const optionRes = await db.execute(sql24`
+      const optionRes = await db.execute(sql26`
         SELECT 1
         FROM public.setting_options
         WHERE setting_id = ${current.id}
@@ -6747,16 +6824,16 @@ var SettingsRepository = class {
     if (previousValue === nextValue) {
       return { status: "unchanged", message: "No change detected." };
     }
-    await db.execute(sql24`
+    await db.execute(sql26`
       UPDATE public.system_settings
       SET value = ${nextValue}, updated_at = now()
       WHERE id = ${current.id}
     `);
-    await db.execute(sql24`
+    await db.execute(sql26`
       INSERT INTO public.setting_versions (setting_key, old_value, new_value, changed_by, changed_at)
       VALUES (${params.settingKey}, ${previousValue}, ${nextValue}, ${params.updatedBy}, now())
     `);
-    const latestRes = await db.execute(sql24`
+    const latestRes = await db.execute(sql26`
       SELECT
         id,
         key,
@@ -6791,7 +6868,7 @@ var SettingsRepository = class {
     };
   }
   async getMaintenanceState(now = /* @__PURE__ */ new Date()) {
-    const rows = await db.execute(sql24`
+    const rows = await db.execute(sql26`
       SELECT key, value
       FROM public.system_settings
       WHERE key IN (
@@ -6833,7 +6910,7 @@ var SettingsRepository = class {
     };
   }
   async getAppConfig() {
-    const result = await db.execute(sql24`
+    const result = await db.execute(sql26`
       SELECT key, value
       FROM public.system_settings
       WHERE key IN (
@@ -7957,7 +8034,7 @@ var AnomalyEngine = class {
 };
 
 // server/intelligence/chaos/ChaosEngine.ts
-import crypto7 from "crypto";
+import crypto8 from "crypto";
 var DEFAULT_DURATION_MS = 2e4;
 var MAX_DURATION_MS = 5 * 6e4;
 var DEFAULT_MAGNITUDE = {
@@ -7981,7 +8058,7 @@ var ChaosEngine = class {
       MAX_DURATION_MS
     );
     const event = {
-      id: crypto7.randomUUID(),
+      id: crypto8.randomUUID(),
       type: input.type,
       magnitude,
       createdAt: now,
@@ -14592,106 +14669,6 @@ var AiIndexService = class {
   }
 };
 
-// server/services/ai-search-explanation-utils.ts
-function buildPersonSummary(person) {
-  const summary = [];
-  if (person && typeof person === "object") {
-    const pushIf = (label, key) => {
-      const value = person[key];
-      if (value !== void 0 && value !== null && String(value).trim() !== "") {
-        summary.push({ label, value: String(value) });
-      }
-    };
-    pushIf("Nama", "Nama");
-    pushIf("Nama", "Customer Name");
-    pushIf("Nama", "name");
-    pushIf("No. MyKad", "No. MyKad");
-    pushIf("ID No", "ID No");
-    pushIf("No Pengenalan", "No Pengenalan");
-    pushIf("IC", "ic");
-    pushIf("Account No", "Account No");
-    pushIf("Card No", "Card No");
-    pushIf("No. Telefon Rumah", "No. Telefon Rumah");
-    pushIf("No. Telefon Bimbit", "No. Telefon Bimbit");
-    pushIf("Handphone", "Handphone");
-    pushIf("OfficePhone", "OfficePhone");
-    pushIf("Alamat Surat Menyurat", "Alamat Surat Menyurat");
-    pushIf("HomeAddress1", "HomeAddress1");
-    pushIf("HomeAddress2", "HomeAddress2");
-    pushIf("HomeAddress3", "HomeAddress3");
-    pushIf("HomePostcode", "HomePostcode");
-    pushIf("Home Post Code", "Home Post Code");
-    pushIf("Home Postal Code", "Home Postal Code");
-    pushIf("Bandar", "Bandar");
-    pushIf("Negeri", "Negeri");
-    pushIf("Poskod", "Poskod");
-  }
-  if (summary.length === 0 && person && typeof person === "object") {
-    const entries = Object.entries(person).filter(([key]) => key !== "id").slice(0, 8);
-    for (const [key, value] of entries) {
-      if (value !== void 0 && value !== null && String(value).trim() !== "") {
-        summary.push({ label: key, value: String(value) });
-      }
-    }
-  }
-  return summary;
-}
-function buildBranchSummary(nearestBranch) {
-  const summary = [];
-  if (!nearestBranch) {
-    return summary;
-  }
-  const push = (label, value) => {
-    if (value !== void 0 && value !== null && String(value).trim() !== "") {
-      summary.push({ label, value: String(value) });
-    }
-  };
-  push("Nama Cawangan", nearestBranch.name);
-  push("Alamat", nearestBranch.address);
-  push("Telefon", nearestBranch.phone);
-  push("Fax", nearestBranch.fax);
-  push("Business Hour", nearestBranch.businessHour);
-  push("Day Open", nearestBranch.dayOpen);
-  push("ATM & CDM", nearestBranch.atmCdm);
-  push("Inquiry Availability", nearestBranch.inquiryAvailability);
-  push("Application Availability", nearestBranch.applicationAvailability);
-  push("AEON Lounge", nearestBranch.aeonLounge);
-  push("Jarak (KM)", nearestBranch.distanceKm);
-  return summary;
-}
-function buildExplanation(payload) {
-  const personLines = payload.personSummary.length > 0 ? payload.personSummary.map((item) => `${item.label}: ${item.value}`).join("\n") : "Tiada maklumat pelanggan dijumpai.";
-  const branchLines = payload.branchSummary.length > 0 ? payload.branchSummary.map((item) => `${item.label}: ${item.value}`).join("\n") : payload.missingCoords ? "Lokasi pelanggan tidak lengkap (tiada LAT/LNG atau Postcode)." : payload.branchTextSearch ? "Tiada padanan cawangan ditemui berdasarkan lokasi/teks." : "Tiada maklumat cawangan dijumpai.";
-  let decisionLine = "Tiada cadangan dibuat.";
-  if (payload.decision) {
-    const timeInfo = payload.estimatedMinutes ? ` Anggaran masa ${payload.estimatedMinutes} minit.` : "";
-    const modeInfo = payload.travelMode ? ` Mod: ${payload.travelMode}.` : "";
-    if (payload.distanceKm && payload.branch) {
-      decisionLine = `Cadangan: ${payload.decision}. Jarak ke ${payload.branch} adalah ${payload.distanceKm.toFixed(1)}KM.${timeInfo}${modeInfo}`;
-    } else {
-      decisionLine = `Cadangan: ${payload.decision}.${timeInfo}${modeInfo}`;
-    }
-  } else if (payload.branchSummary.length > 0) {
-    decisionLine = "Cadangan: Sila hubungi/kunjungi cawangan di atas.";
-  }
-  const base = [
-    "Maklumat Pelanggan:",
-    personLines,
-    "",
-    "Cadangan Cawangan Terdekat:",
-    branchLines,
-    "",
-    decisionLine
-  ];
-  if (payload.matchFields && payload.matchFields.length > 0) {
-    base.push("", "Padanan Medan (Top):", payload.matchFields.join("\n"));
-  }
-  if (payload.suggestions && payload.suggestions.length > 0) {
-    base.push("", "Cadangan Rekod (fuzzy):", payload.suggestions.join("\n"));
-  }
-  return base.join("\n");
-}
-
 // server/services/ai-search-query-utils.ts
 var RELATION_WORDS = [
   "pasangan",
@@ -14944,10 +14921,607 @@ function toObjectJson(value) {
   return null;
 }
 
+// server/services/ai-search-candidate-utils.ts
+function buildAiSearchKeywordContext(query, entities) {
+  const keywordTerms = [
+    entities?.ic,
+    entities?.account_no,
+    entities?.phone,
+    entities?.name
+  ].filter(Boolean);
+  const keywordQuery = keywordTerms.length > 0 ? keywordTerms[0] : query;
+  const queryDigits = keywordQuery.replace(/[^0-9]/g, "");
+  return {
+    keywordQuery,
+    queryDigits,
+    hasDigitsQuery: queryDigits.length >= 6
+  };
+}
+function selectAiSearchCandidate(params) {
+  const {
+    entities,
+    keywordQuery: _keywordQuery,
+    hasDigitsQuery,
+    queryDigits,
+    keywordResults,
+    fallbackDigitsResults,
+    vectorResults
+  } = params;
+  let best = null;
+  let bestScore = 0;
+  if (hasDigitsQuery) {
+    for (const row of [...keywordResults, ...fallbackDigitsResults]) {
+      const scored = scoreRowDigits(row, queryDigits);
+      if (scored.score > bestScore) {
+        bestScore = scored.score;
+        row.jsonDataJsonb = scored.parsed;
+        best = row;
+      }
+    }
+  } else {
+    const resultMap = /* @__PURE__ */ new Map();
+    for (const row of keywordResults) {
+      resultMap.set(row.rowId, row);
+    }
+    for (const row of fallbackDigitsResults) {
+      resultMap.set(row.rowId, row);
+    }
+    for (const row of vectorResults) {
+      resultMap.set(row.rowId, row);
+    }
+    const scored = Array.from(resultMap.values()).map((row) => {
+      const normalized = ensureJsonRow(row);
+      return {
+        row: normalized,
+        score: rowScore(
+          normalized,
+          entities?.ic,
+          entities?.name,
+          entities?.account_no,
+          entities?.phone
+        )
+      };
+    }).sort((a, b) => b.score - a.score);
+    best = scored.length > 0 ? scored[0].row : null;
+    bestScore = scored.length > 0 ? scored[0].score : 0;
+  }
+  return {
+    keywordQuery: _keywordQuery,
+    queryDigits,
+    hasDigitsQuery,
+    best,
+    bestScore
+  };
+}
+function buildAiSearchDebugPayload(params) {
+  return {
+    query: params.query,
+    keywordQuery: params.keywordQuery,
+    queryDigits: params.queryDigits,
+    keywordCount: params.keywordResults.length,
+    fallbackDigitsCount: params.fallbackDigitsResults.length
+  };
+}
+function buildAiBestCandidateDebugPayload(best) {
+  if (!best) {
+    return null;
+  }
+  const keys = best.jsonDataJsonb && typeof best.jsonDataJsonb === "object" ? Object.keys(best.jsonDataJsonb) : [];
+  return {
+    rowId: best.rowId,
+    jsonType: typeof best.jsonDataJsonb,
+    sampleKeys: keys.slice(0, 10)
+  };
+}
+
+// server/services/ai-search-branch-utils.ts
+var BRANCH_TEXT_QUERY_PATTERN = /cawangan|branch|terdekat|nearest|lokasi|alamat|di|yang|paling|dekat/gi;
+function extractBranchLookupText(query) {
+  return normalizeLocationHint(query.replace(BRANCH_TEXT_QUERY_PATTERN, " "));
+}
+function selectLocationSource(params) {
+  let data = toObjectJson(params.personForBranch.jsonDataJsonb) || {};
+  const basePostcode = extractCustomerPostcode(data);
+  const baseHint = normalizeLocationHint(extractCustomerLocationHint(data));
+  if (basePostcode || baseHint.length >= 3) {
+    return data;
+  }
+  for (const candidate of [params.best, ...params.keywordResults, ...params.fallbackDigitsResults]) {
+    const candidateData = toObjectJson(candidate?.jsonDataJsonb);
+    if (!candidateData) continue;
+    const candidatePostcode = extractCustomerPostcode(candidateData);
+    const candidateHint = normalizeLocationHint(extractCustomerLocationHint(candidateData));
+    if (candidatePostcode || candidateHint.length >= 3) {
+      data = candidateData;
+      break;
+    }
+  }
+  return data;
+}
+async function resolveAiBranchLookup(params) {
+  const {
+    query,
+    shouldFindBranch,
+    hasPersonId,
+    best,
+    fallbackPerson,
+    keywordResults,
+    fallbackDigitsResults,
+    branchTimeoutMs,
+    lookups,
+    debugEnabled = false
+  } = params;
+  if (!shouldFindBranch) {
+    return {
+      nearestBranch: null,
+      missingCoords: false,
+      branchTextSearch: false
+    };
+  }
+  const branchTextPreferred = !hasPersonId;
+  const personForBranch = branchTextPreferred ? null : best || (!hasPersonId ? fallbackPerson : null) || null;
+  let nearestBranch = null;
+  let missingCoords = false;
+  let branchTextSearch = false;
+  try {
+    if (branchTextPreferred) {
+      const locationHint = extractBranchLookupText(query);
+      branchTextSearch = true;
+      if (locationHint.length >= 3) {
+        const branches = await lookups.findBranchesByText(locationHint, 3, branchTimeoutMs);
+        nearestBranch = branches[0] || null;
+      }
+      return {
+        nearestBranch,
+        missingCoords,
+        branchTextSearch
+      };
+    }
+    if (!personForBranch) {
+      return {
+        nearestBranch,
+        missingCoords,
+        branchTextSearch
+      };
+    }
+    const coords = extractLatLng(personForBranch.jsonDataJsonb || {});
+    if (isLatLng(coords)) {
+      const branches = await lookups.nearestBranches(coords.lat, coords.lng, 1, branchTimeoutMs);
+      nearestBranch = branches[0] || null;
+      return {
+        nearestBranch,
+        missingCoords,
+        branchTextSearch
+      };
+    }
+    const data = selectLocationSource({
+      best,
+      keywordResults,
+      fallbackDigitsResults,
+      personForBranch
+    });
+    let postcodeWasProvided = false;
+    const postcode = extractCustomerPostcode(data);
+    if (postcode) {
+      postcodeWasProvided = true;
+      if (isNonEmptyString(postcode)) {
+        const pc = await lookups.postcodeLatLng(postcode, branchTimeoutMs);
+        if (hasPostcodeCoord(pc)) {
+          const branches = await lookups.nearestBranches(pc.lat, pc.lng, 1, branchTimeoutMs);
+          nearestBranch = branches[0] || null;
+          if (debugEnabled) {
+            console.log("AI_SEARCH POSTCODE_COORD", {
+              postcode,
+              lat: pc.lat,
+              lng: pc.lng,
+              branchCount: branches.length
+            });
+          }
+        } else {
+          let branches = await lookups.findBranchesByPostcode(postcode, 1, branchTimeoutMs);
+          if (!branches.length && lookups.findBranchesByPostcodeFallback) {
+            try {
+              branches = await lookups.findBranchesByPostcodeFallback(postcode, 1);
+            } catch {
+              branches = [];
+            }
+          }
+          nearestBranch = branches[0] || null;
+          if (debugEnabled) {
+            console.log("AI_SEARCH POSTCODE_TEXT", {
+              postcode,
+              branchCount: branches.length,
+              branch: branches[0]?.name || null
+            });
+          }
+          if (!nearestBranch) {
+            missingCoords = false;
+          }
+        }
+      } else {
+        missingCoords = true;
+      }
+    } else {
+      missingCoords = true;
+    }
+    if (!nearestBranch && missingCoords && !postcodeWasProvided) {
+      const hint = normalizeLocationHint(extractCustomerLocationHint(data));
+      if (hint.length >= 3) {
+        branchTextSearch = true;
+        const branches = await lookups.findBranchesByText(hint, 1, branchTimeoutMs);
+        nearestBranch = branches[0] ? { ...branches[0], distanceKm: void 0 } : null;
+      }
+    }
+  } catch {
+    missingCoords = true;
+    nearestBranch = null;
+  }
+  return {
+    nearestBranch,
+    missingCoords,
+    branchTextSearch
+  };
+}
+function deriveAiTravelDecision(distanceKm) {
+  if (distanceKm === void 0 || distanceKm === null) {
+    return {
+      decision: null,
+      travelMode: null,
+      estimatedMinutes: null
+    };
+  }
+  if (distanceKm < 5) {
+    return {
+      decision: "WALK-IN",
+      travelMode: "WALK",
+      estimatedMinutes: Math.max(1, Math.round(distanceKm / 5 * 60))
+    };
+  }
+  if (distanceKm < 20) {
+    return {
+      decision: "DRIVE",
+      travelMode: "DRIVE",
+      estimatedMinutes: Math.max(1, Math.round(distanceKm / 40 * 60))
+    };
+  }
+  return {
+    decision: "CALL",
+    travelMode: "CALL",
+    estimatedMinutes: null
+  };
+}
+
+// server/services/ai-search-explanation-utils.ts
+function buildPersonSummary(person) {
+  const summary = [];
+  if (person && typeof person === "object") {
+    const pushIf = (label, key) => {
+      const value = person[key];
+      if (value !== void 0 && value !== null && String(value).trim() !== "") {
+        summary.push({ label, value: String(value) });
+      }
+    };
+    pushIf("Nama", "Nama");
+    pushIf("Nama", "Customer Name");
+    pushIf("Nama", "name");
+    pushIf("No. MyKad", "No. MyKad");
+    pushIf("ID No", "ID No");
+    pushIf("No Pengenalan", "No Pengenalan");
+    pushIf("IC", "ic");
+    pushIf("Account No", "Account No");
+    pushIf("Card No", "Card No");
+    pushIf("No. Telefon Rumah", "No. Telefon Rumah");
+    pushIf("No. Telefon Bimbit", "No. Telefon Bimbit");
+    pushIf("Handphone", "Handphone");
+    pushIf("OfficePhone", "OfficePhone");
+    pushIf("Alamat Surat Menyurat", "Alamat Surat Menyurat");
+    pushIf("HomeAddress1", "HomeAddress1");
+    pushIf("HomeAddress2", "HomeAddress2");
+    pushIf("HomeAddress3", "HomeAddress3");
+    pushIf("HomePostcode", "HomePostcode");
+    pushIf("Home Post Code", "Home Post Code");
+    pushIf("Home Postal Code", "Home Postal Code");
+    pushIf("Bandar", "Bandar");
+    pushIf("Negeri", "Negeri");
+    pushIf("Poskod", "Poskod");
+  }
+  if (summary.length === 0 && person && typeof person === "object") {
+    const entries = Object.entries(person).filter(([key]) => key !== "id").slice(0, 8);
+    for (const [key, value] of entries) {
+      if (value !== void 0 && value !== null && String(value).trim() !== "") {
+        summary.push({ label: key, value: String(value) });
+      }
+    }
+  }
+  return summary;
+}
+function buildBranchSummary(nearestBranch) {
+  const summary = [];
+  if (!nearestBranch) {
+    return summary;
+  }
+  const push = (label, value) => {
+    if (value !== void 0 && value !== null && String(value).trim() !== "") {
+      summary.push({ label, value: String(value) });
+    }
+  };
+  push("Nama Cawangan", nearestBranch.name);
+  push("Alamat", nearestBranch.address);
+  push("Telefon", nearestBranch.phone);
+  push("Fax", nearestBranch.fax);
+  push("Business Hour", nearestBranch.businessHour);
+  push("Day Open", nearestBranch.dayOpen);
+  push("ATM & CDM", nearestBranch.atmCdm);
+  push("Inquiry Availability", nearestBranch.inquiryAvailability);
+  push("Application Availability", nearestBranch.applicationAvailability);
+  push("AEON Lounge", nearestBranch.aeonLounge);
+  push("Jarak (KM)", nearestBranch.distanceKm);
+  return summary;
+}
+function buildExplanation(payload) {
+  const personLines = payload.personSummary.length > 0 ? payload.personSummary.map((item) => `${item.label}: ${item.value}`).join("\n") : "Tiada maklumat pelanggan dijumpai.";
+  const branchLines = payload.branchSummary.length > 0 ? payload.branchSummary.map((item) => `${item.label}: ${item.value}`).join("\n") : payload.missingCoords ? "Lokasi pelanggan tidak lengkap (tiada LAT/LNG atau Postcode)." : payload.branchTextSearch ? "Tiada padanan cawangan ditemui berdasarkan lokasi/teks." : "Tiada maklumat cawangan dijumpai.";
+  let decisionLine = "Tiada cadangan dibuat.";
+  if (payload.decision) {
+    const timeInfo = payload.estimatedMinutes ? ` Anggaran masa ${payload.estimatedMinutes} minit.` : "";
+    const modeInfo = payload.travelMode ? ` Mod: ${payload.travelMode}.` : "";
+    if (payload.distanceKm && payload.branch) {
+      decisionLine = `Cadangan: ${payload.decision}. Jarak ke ${payload.branch} adalah ${payload.distanceKm.toFixed(1)}KM.${timeInfo}${modeInfo}`;
+    } else {
+      decisionLine = `Cadangan: ${payload.decision}.${timeInfo}${modeInfo}`;
+    }
+  } else if (payload.branchSummary.length > 0) {
+    decisionLine = "Cadangan: Sila hubungi/kunjungi cawangan di atas.";
+  }
+  const base = [
+    "Maklumat Pelanggan:",
+    personLines,
+    "",
+    "Cadangan Cawangan Terdekat:",
+    branchLines,
+    "",
+    decisionLine
+  ];
+  if (payload.matchFields && payload.matchFields.length > 0) {
+    base.push("", "Padanan Medan (Top):", payload.matchFields.join("\n"));
+  }
+  if (payload.suggestions && payload.suggestions.length > 0) {
+    base.push("", "Cadangan Rekod (fuzzy):", payload.suggestions.join("\n"));
+  }
+  return base.join("\n");
+}
+
+// server/services/ai-search-runtime-utils.ts
+function trimTimedCacheEntries(cache, maxEntries) {
+  if (cache.size <= maxEntries) return;
+  const excess = cache.size - maxEntries;
+  const keysByAge = Array.from(cache.entries()).sort((a, b) => a[1].ts - b[1].ts).slice(0, excess).map(([key]) => key);
+  for (const key of keysByAge) {
+    cache.delete(key);
+  }
+}
+function sweepTimedCacheEntries(cache, maxAgeMs, maxEntries, now = Date.now()) {
+  for (const [key, entry] of cache.entries()) {
+    if (now - entry.ts >= maxAgeMs) {
+      cache.delete(key);
+    }
+  }
+  trimTimedCacheEntries(cache, maxEntries);
+}
+function getFreshTimedCacheEntry(cache, key, maxAgeMs, now = Date.now()) {
+  const entry = cache.get(key);
+  if (!entry) {
+    return null;
+  }
+  if (now - entry.ts >= maxAgeMs) {
+    cache.delete(key);
+    return null;
+  }
+  return entry;
+}
+function getFreshLastAiPerson(cache, key, ttlMs, now = Date.now()) {
+  const entry = getFreshTimedCacheEntry(cache, key, ttlMs, now);
+  return entry?.row || null;
+}
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const id = setTimeout(() => reject(new Error("timeout")), ms);
+    promise.then((value) => {
+      clearTimeout(id);
+      resolve(value);
+    }).catch((error) => {
+      clearTimeout(id);
+      reject(error);
+    });
+  });
+}
+function getOrCreateAiSearchInflight(params) {
+  const now = params.now ?? Date.now;
+  const existing = params.inflight.get(params.cacheKey);
+  if (existing) {
+    return existing;
+  }
+  const created = params.compute().then((result) => {
+    params.cache.set(params.cacheKey, {
+      ts: now(),
+      payload: result.payload,
+      audit: result.audit
+    });
+    trimTimedCacheEntries(params.cache, params.maxCacheEntries);
+    params.inflight.delete(params.cacheKey);
+    return result;
+  }).catch((error) => {
+    params.inflight.delete(params.cacheKey);
+    throw error;
+  });
+  params.inflight.set(params.cacheKey, created);
+  return created;
+}
+function buildAiSearchResolveErrorResponse(error) {
+  if (error instanceof CircuitOpenError) {
+    return {
+      statusCode: 503,
+      body: {
+        person: null,
+        nearest_branch: null,
+        decision: null,
+        ai_explanation: "AI service is temporarily throttled for system stability. Please retry in a few seconds.",
+        processing: false,
+        circuit: "OPEN"
+      }
+    };
+  }
+  return {
+    statusCode: 200,
+    body: {
+      person: null,
+      nearest_branch: null,
+      decision: null,
+      ai_explanation: "Sedang proses carian. Sila tunggu beberapa saat dan cuba semula.",
+      processing: true
+    }
+  };
+}
+function shouldLogAiSearchResolveError(error) {
+  const errorMessage = error instanceof Error ? error.message : String(error ?? "");
+  return Boolean(errorMessage && errorMessage !== "timeout" && !(error instanceof CircuitOpenError));
+}
+
+// server/services/ai-search-io-utils.ts
+async function safeAiLookup(operation, timeoutMs, fallback) {
+  try {
+    return await withTimeout(operation(), timeoutMs);
+  } catch {
+    return fallback;
+  }
+}
+function createAiSafeBranchLookups(storage2) {
+  return {
+    findBranchesByText: (text2, limit, timeoutMs) => safeAiLookup(() => storage2.findBranchesByText({ query: text2, limit }), timeoutMs, []),
+    findBranchesByPostcode: (postcode, limit, timeoutMs) => safeAiLookup(() => storage2.findBranchesByPostcode({ postcode, limit }), timeoutMs, []),
+    findBranchesByPostcodeFallback: (postcode, limit) => storage2.findBranchesByPostcode({ postcode, limit }),
+    nearestBranches: (lat, lng, limit, timeoutMs) => safeAiLookup(() => storage2.getNearestBranches({ lat, lng, limit }), timeoutMs, []),
+    postcodeLatLng: (postcode, timeoutMs) => safeAiLookup(() => storage2.getPostcodeLatLng(postcode), timeoutMs, null)
+  };
+}
+
+// server/services/ai-search-intent-utils.ts
+async function resolveAiSearchIntent(params) {
+  const intentMode = String(params.intentMode || "fast").toLowerCase();
+  if (intentMode === "fast") {
+    return parseIntentFallback(params.query);
+  }
+  const system = 'Anda hanya keluarkan JSON SAHAJA. Tugas: kenalpasti intent carian dan entiti.\nFormat WAJIB:\n{"intent":"search_person","entities":{"name":null,"ic":null,"account_no":null,"phone":null,"address":null},"need_nearest_branch":false}\nJika IC/MyKad ada, isi "ic". Jika akaun, isi "account_no". Jika nombor telefon, isi "phone".';
+  const messages = [
+    { role: "system", content: system },
+    { role: "user", content: params.query }
+  ];
+  try {
+    const raw = await params.withAiCircuit(
+      () => params.ollamaChat(messages, {
+        num_predict: 160,
+        temperature: 0.1,
+        top_p: 0.9,
+        timeoutMs: params.timeoutMs
+      })
+    );
+    const parsed = extractJsonObject(raw);
+    const entities = parsed?.entities;
+    if (parsed && parsed.intent && entities && typeof entities === "object") {
+      const entityRecord = entities;
+      return {
+        intent: String(parsed.intent || "search_person"),
+        entities: {
+          name: typeof entityRecord.name === "string" ? entityRecord.name : null,
+          ic: typeof entityRecord.ic === "string" ? entityRecord.ic : null,
+          account_no: typeof entityRecord.account_no === "string" ? entityRecord.account_no : null,
+          phone: typeof entityRecord.phone === "string" ? entityRecord.phone : null,
+          address: typeof entityRecord.address === "string" ? entityRecord.address : null
+        },
+        need_nearest_branch: Boolean(parsed.need_nearest_branch)
+      };
+    }
+  } catch {
+  }
+  return parseIntentFallback(params.query);
+}
+
+// server/services/ai-search-result-utils.ts
+function buildAiSuggestions(query, fuzzyResults) {
+  const tokens = tokenizeQuery(query);
+  const maxScore = Math.max(1, tokens.length);
+  return fuzzyResults.map((row) => {
+    const data = toObjectJson(row.jsonDataJsonb) || {};
+    const name = data["Nama"] || data["Customer Name"] || data["name"] || "-";
+    const ic = data["No. MyKad"] || data["ID No"] || data["No Pengenalan"] || data["IC"] || "-";
+    const addr = data["Alamat Surat Menyurat"] || data["HomeAddress1"] || data["Address"] || data["Alamat"] || "-";
+    const confidence = Math.min(100, Math.round(Number(row.score || 0) / maxScore * 100));
+    const hasAny = [name, ic, addr].some(
+      (value) => value && value !== "-" && String(value).trim() !== ""
+    );
+    return hasAny ? `- ${name} | IC: ${ic} | Alamat: ${addr} | Keyakinan: ${confidence}%` : "";
+  }).filter(Boolean);
+}
+function mapAiSearchPerson(best) {
+  if (!best) {
+    return null;
+  }
+  return {
+    id: best.rowId,
+    ...best.jsonDataJsonb
+  };
+}
+function mapAiNearestBranchPayload(nearestBranch, travelMode, estimatedMinutes) {
+  if (!nearestBranch) {
+    return null;
+  }
+  return {
+    name: nearestBranch.name,
+    address: nearestBranch.address,
+    phone: nearestBranch.phone,
+    fax: nearestBranch.fax,
+    business_hour: nearestBranch.businessHour,
+    day_open: nearestBranch.dayOpen,
+    atm_cdm: nearestBranch.atmCdm,
+    inquiry_availability: nearestBranch.inquiryAvailability,
+    application_availability: nearestBranch.applicationAvailability,
+    aeon_lounge: nearestBranch.aeonLounge,
+    distance_km: nearestBranch.distanceKm,
+    travel_mode: travelMode,
+    estimated_minutes: estimatedMinutes
+  };
+}
+function buildAiSearchPayload(params) {
+  return {
+    person: params.person,
+    nearest_branch: mapAiNearestBranchPayload(
+      params.nearestBranch,
+      params.travelMode,
+      params.estimatedMinutes
+    ),
+    decision: params.decision,
+    ai_explanation: params.explanation
+  };
+}
+function buildAiSearchAudit(params) {
+  return {
+    query: params.query,
+    intent: params.intent,
+    matched_profile_id: params.person?.id || null,
+    branch: params.nearestBranch?.name || null,
+    distance_km: params.nearestBranch?.distanceKm || null,
+    decision: params.decision,
+    travel_mode: params.travelMode,
+    estimated_minutes: params.estimatedMinutes,
+    used_last_person: params.usedLastPerson
+  };
+}
+
 // server/services/ai-search.service.ts
 var AiSearchService = class {
   constructor(options) {
     this.options = options;
+    this.debugGlobal = globalThis;
     this.searchCache = /* @__PURE__ */ new Map();
     this.searchInflight = /* @__PURE__ */ new Map();
     this.lastAiPerson = /* @__PURE__ */ new Map();
@@ -14960,21 +15534,22 @@ var AiSearchService = class {
       process.env.SQR_MAX_AI_LAST_PERSON_ENTRIES ?? (options.lowMemoryMode ? "40" : "120")
     );
     this.lastAiPersonTtlMs = Number(process.env.SQR_AI_LAST_PERSON_TTL_MS ?? "1800000");
-    global.__searchInflightMap = this.searchInflight;
+    this.branchLookups = createAiSafeBranchLookups(options.storage);
+    this.debugGlobal.__searchInflightMap = this.searchInflight;
   }
   sweepCaches(now = Date.now()) {
-    for (const [key, entry] of this.searchCache.entries()) {
-      if (now - entry.ts >= this.searchCacheMs) {
-        this.searchCache.delete(key);
-      }
-    }
-    this.trimCacheEntries(this.searchCache, Math.max(10, this.maxSearchCacheEntries));
-    for (const [key, entry] of this.lastAiPerson.entries()) {
-      if (now - entry.ts >= this.lastAiPersonTtlMs) {
-        this.lastAiPerson.delete(key);
-      }
-    }
-    this.trimCacheEntries(this.lastAiPerson, Math.max(10, this.maxLastAiPersonEntries));
+    sweepTimedCacheEntries(
+      this.searchCache,
+      this.searchCacheMs,
+      Math.max(10, this.maxSearchCacheEntries),
+      now
+    );
+    sweepTimedCacheEntries(
+      this.lastAiPerson,
+      this.lastAiPersonTtlMs,
+      Math.max(10, this.maxLastAiPersonEntries),
+      now
+    );
   }
   clearSearchCache() {
     this.searchCache.clear();
@@ -14982,93 +15557,56 @@ var AiSearchService = class {
   async resolveSearchRequest(params) {
     const { query, userKey, runtimeSettings } = params;
     const cacheKey = `search:${query.toLowerCase()}`;
-    const cached = this.searchCache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < this.searchCacheMs) {
+    const cached = getFreshTimedCacheEntry(this.searchCache, cacheKey, this.searchCacheMs);
+    if (cached) {
       return {
         statusCode: 200,
         body: cached.payload,
         audit: cached.audit
       };
     }
-    if (cached) {
-      this.searchCache.delete(cacheKey);
-    }
-    let inflight = this.searchInflight.get(cacheKey);
-    if (!inflight) {
-      inflight = this.options.withAiCircuit(
+    const inflight = getOrCreateAiSearchInflight({
+      cacheKey,
+      inflight: this.searchInflight,
+      cache: this.searchCache,
+      maxCacheEntries: Math.max(10, this.maxSearchCacheEntries),
+      compute: () => this.options.withAiCircuit(
         () => this.computeAiSearch(
           query,
           userKey,
           runtimeSettings.semanticSearchEnabled,
           runtimeSettings.aiTimeoutMs
         )
-      ).then((result) => {
-        this.searchCache.set(cacheKey, {
-          ts: Date.now(),
-          payload: result.payload,
-          audit: result.audit
-        });
-        this.trimCacheEntries(this.searchCache, Math.max(10, this.maxSearchCacheEntries));
-        this.searchInflight.delete(cacheKey);
-        return result;
-      }).catch((error) => {
-        this.searchInflight.delete(cacheKey);
-        throw error;
-      });
-      this.searchInflight.set(cacheKey, inflight);
-    }
+      )
+    });
     try {
       const configuredTimeout = runtimeSettings.aiTimeoutMs || this.searchFastTimeoutMs;
       const timeoutMs = Math.max(1e3, Math.min(configuredTimeout, configuredTimeout - 1200));
-      const result = await this.withTimeout(inflight, timeoutMs);
+      const result = await withTimeout(inflight, timeoutMs);
       return {
         statusCode: 200,
         body: result.payload,
         audit: result.audit
       };
     } catch (error) {
-      if (error instanceof CircuitOpenError) {
-        return {
-          statusCode: 503,
-          body: {
-            person: null,
-            nearest_branch: null,
-            decision: null,
-            ai_explanation: "AI service is temporarily throttled for system stability. Please retry in a few seconds.",
-            processing: false,
-            circuit: "OPEN"
-          }
-        };
+      if (shouldLogAiSearchResolveError(error)) {
+        const errorMessage = error instanceof Error ? error.message : String(error ?? "");
+        console.error("AI search compute failed:", errorMessage || error);
       }
-      if (error?.message && error.message !== "timeout") {
-        console.error("AI search compute failed:", error?.message || error);
-      }
-      return {
-        statusCode: 200,
-        body: {
-          person: null,
-          nearest_branch: null,
-          decision: null,
-          ai_explanation: "Sedang proses carian. Sila tunggu beberapa saat dan cuba semula.",
-          processing: true
-        }
-      };
+      return buildAiSearchResolveErrorResponse(error);
     }
   }
   async computeAiSearch(query, userKey, semanticSearchEnabled, aiTimeoutMs) {
-    const intent = await this.parseIntent(query, aiTimeoutMs);
+    const intent = await resolveAiSearchIntent({
+      query,
+      timeoutMs: aiTimeoutMs,
+      withAiCircuit: this.options.withAiCircuit,
+      ollamaChat: this.options.ollamaChat,
+      intentMode: process.env.AI_INTENT_MODE
+    });
     const entities = intent.entities || {};
-    const keywordTerms = [
-      entities.ic,
-      entities.account_no,
-      entities.phone,
-      entities.name
-    ].filter(Boolean);
-    const keywordQuery = keywordTerms.length > 0 ? keywordTerms[0] : query;
-    const digitsOnly = keywordQuery.replace(/[^0-9]/g, "");
-    const hasDigitsQuery = digitsOnly.length >= 6;
+    const { keywordQuery, queryDigits, hasDigitsQuery } = buildAiSearchKeywordContext(query, entities);
     const keywordResults = hasDigitsQuery ? await this.options.storage.aiKeywordSearch({ query: keywordQuery, limit: 10 }) : await this.options.storage.aiNameSearch({ query: keywordQuery, limit: 10 });
-    const queryDigits = keywordQuery.replace(/[^0-9]/g, "");
     let fallbackDigitsResults = [];
     if (!hasDigitsQuery && keywordResults.length === 0 && queryDigits.length >= 6) {
       fallbackDigitsResults = await this.options.storage.aiDigitsSearch({
@@ -15077,13 +15615,16 @@ var AiSearchService = class {
       });
     }
     if (process.env.AI_DEBUG === "1") {
-      console.log("AI_SEARCH DEBUG", {
-        query,
-        keywordQuery,
-        queryDigits,
-        keywordCount: keywordResults.length,
-        fallbackDigitsCount: fallbackDigitsResults.length
-      });
+      console.log(
+        "AI_SEARCH DEBUG",
+        buildAiSearchDebugPayload({
+          query,
+          keywordQuery,
+          queryDigits,
+          keywordResults,
+          fallbackDigitsResults
+        })
+      );
     }
     let vectorResults = [];
     if (semanticSearchEnabled && !hasDigitsQuery) {
@@ -15096,205 +15637,50 @@ var AiSearchService = class {
         vectorResults = [];
       }
     }
-    let best = null;
-    let bestScore = 0;
-    if (hasDigitsQuery) {
-      const candidates = [...keywordResults, ...fallbackDigitsResults];
-      for (const row of candidates) {
-        const scored = scoreRowDigits(row, queryDigits);
-        if (scored.score > bestScore) {
-          bestScore = scored.score;
-          row.jsonDataJsonb = scored.parsed;
-          best = row;
-        }
-      }
-    } else {
-      const resultMap = /* @__PURE__ */ new Map();
-      for (const row of keywordResults) {
-        resultMap.set(row.rowId, row);
-      }
-      for (const row of fallbackDigitsResults) {
-        resultMap.set(row.rowId, row);
-      }
-      for (const row of vectorResults) {
-        resultMap.set(row.rowId, row);
-      }
-      const scored = Array.from(resultMap.values()).map((row) => {
-        const normalized = ensureJsonRow(row);
-        return {
-          row: normalized,
-          score: rowScore(
-            normalized,
-            entities.ic,
-            entities.name,
-            entities.account_no,
-            entities.phone
-          )
-        };
-      }).sort((a, b) => b.score - a.score);
-      best = scored.length > 0 ? scored[0].row : null;
-      bestScore = scored.length > 0 ? scored[0].score : 0;
-    }
+    const { best, bestScore } = selectAiSearchCandidate({
+      entities,
+      keywordQuery,
+      hasDigitsQuery,
+      queryDigits,
+      keywordResults,
+      fallbackDigitsResults,
+      vectorResults
+    });
     if (process.env.AI_DEBUG === "1" && best) {
-      const keys = best.jsonDataJsonb && typeof best.jsonDataJsonb === "object" ? Object.keys(best.jsonDataJsonb) : [];
-      console.log("AI_SEARCH BEST ROW", {
-        rowId: best.rowId,
-        jsonType: typeof best.jsonDataJsonb,
-        sampleKeys: keys.slice(0, 10)
-      });
+      console.log("AI_SEARCH BEST ROW", buildAiBestCandidateDebugPayload(best));
     }
     if (best) {
       this.lastAiPerson.set(userKey, { ts: Date.now(), row: best });
-      this.trimCacheEntries(this.lastAiPerson, Math.max(10, this.maxLastAiPersonEntries));
+      sweepTimedCacheEntries(
+        this.lastAiPerson,
+        this.lastAiPersonTtlMs,
+        Math.max(10, this.maxLastAiPersonEntries)
+      );
     }
-    const fallbackPerson = this.getLastAiPerson(userKey);
+    const fallbackPerson = getFreshLastAiPerson(this.lastAiPerson, userKey, this.lastAiPersonTtlMs);
     const hasPersonId = Boolean(entities.ic || entities.account_no || entities.phone);
     const shouldFindBranch = intent.need_nearest_branch || hasPersonId;
-    const branchTextPreferred = shouldFindBranch && !hasPersonId;
-    const personForBranch = branchTextPreferred ? null : best || (!hasPersonId ? fallbackPerson : null) || null;
     const branchTimeoutMs = Math.max(700, Math.min(2200, Math.floor(aiTimeoutMs * 0.35)));
-    let nearestBranch = null;
-    let missingCoords = false;
-    let branchTextSearch = false;
-    try {
-      if (branchTextPreferred) {
-        const locationHint = normalizeLocationHint(
-          query.replace(/cawangan|branch|terdekat|nearest|lokasi|alamat|di|yang|paling|dekat/gi, " ")
-        );
-        if (locationHint.length >= 3) {
-          branchTextSearch = true;
-          const branches = await this.safeFindBranchesByText(locationHint, 3, branchTimeoutMs);
-          nearestBranch = branches[0] || null;
-        } else {
-          branchTextSearch = true;
-        }
-      } else if (personForBranch && shouldFindBranch) {
-        const coords = extractLatLng(personForBranch.jsonDataJsonb || {});
-        if (isLatLng(coords)) {
-          const branches = await this.safeNearestBranches(coords.lat, coords.lng, 1, branchTimeoutMs);
-          nearestBranch = branches[0] || null;
-        } else {
-          let data = toObjectJson(personForBranch.jsonDataJsonb) || {};
-          const basePostcode = extractCustomerPostcode(data);
-          const baseHint = normalizeLocationHint(extractCustomerLocationHint(data));
-          if (!basePostcode && baseHint.length < 3) {
-            const locationCandidateRows = [best, ...keywordResults, ...fallbackDigitsResults];
-            for (const candidate of locationCandidateRows) {
-              const candidateData = toObjectJson(candidate?.jsonDataJsonb);
-              if (!candidateData) continue;
-              const candidatePostcode = extractCustomerPostcode(candidateData);
-              const candidateHint = normalizeLocationHint(extractCustomerLocationHint(candidateData));
-              if (candidatePostcode || candidateHint.length >= 3) {
-                data = candidateData;
-                break;
-              }
-            }
-          }
-          let postcodeWasProvided = false;
-          const postcode = extractCustomerPostcode(data);
-          if (postcode) {
-            postcodeWasProvided = true;
-            if (isNonEmptyString(postcode)) {
-              const pc = await this.safePostcodeLatLng(postcode, branchTimeoutMs);
-              if (hasPostcodeCoord(pc)) {
-                const branches = await this.safeNearestBranches(pc.lat, pc.lng, 1, branchTimeoutMs);
-                nearestBranch = branches[0] || null;
-                if (process.env.AI_DEBUG === "1") {
-                  console.log("AI_SEARCH POSTCODE_COORD", {
-                    postcode,
-                    lat: pc.lat,
-                    lng: pc.lng,
-                    branchCount: branches.length
-                  });
-                }
-              } else {
-                let branches = await this.safeFindBranchesByPostcode(postcode, 1, branchTimeoutMs);
-                if (!branches.length) {
-                  try {
-                    branches = await this.options.storage.findBranchesByPostcode({
-                      postcode,
-                      limit: 1
-                    });
-                  } catch {
-                    branches = [];
-                  }
-                }
-                nearestBranch = branches[0] || null;
-                if (process.env.AI_DEBUG === "1") {
-                  console.log("AI_SEARCH POSTCODE_TEXT", {
-                    postcode,
-                    branchCount: branches.length,
-                    branch: branches[0]?.name || null
-                  });
-                }
-                if (!nearestBranch) missingCoords = false;
-              }
-            } else {
-              missingCoords = true;
-            }
-          } else {
-            missingCoords = true;
-          }
-          if (!nearestBranch && missingCoords && !postcodeWasProvided) {
-            const hint = normalizeLocationHint(extractCustomerLocationHint(data));
-            if (hint.length >= 3) {
-              branchTextSearch = true;
-              const branches = await this.safeFindBranchesByText(hint, 1, branchTimeoutMs);
-              nearestBranch = branches[0] ? { ...branches[0], distanceKm: void 0 } : null;
-            }
-          }
-        }
-      }
-    } catch {
-      missingCoords = true;
-      nearestBranch = null;
-    }
-    let decision = null;
-    let travelMode = null;
-    let estimatedMinutes = null;
-    if (nearestBranch?.distanceKm !== void 0) {
-      if (nearestBranch.distanceKm < 5) {
-        decision = "WALK-IN";
-        travelMode = "WALK";
-        estimatedMinutes = Math.max(1, Math.round(nearestBranch.distanceKm / 5 * 60));
-      } else if (nearestBranch.distanceKm < 20) {
-        decision = "DRIVE";
-        travelMode = "DRIVE";
-        estimatedMinutes = Math.max(1, Math.round(nearestBranch.distanceKm / 40 * 60));
-      } else {
-        decision = "CALL";
-      }
-      if (decision === "CALL") {
-        travelMode = "CALL";
-        estimatedMinutes = null;
-      }
-    }
-    const person = best ? {
-      id: best.rowId,
-      ...best.jsonDataJsonb
-    } : null;
+    const { nearestBranch, missingCoords, branchTextSearch } = await resolveAiBranchLookup({
+      query,
+      shouldFindBranch,
+      hasPersonId,
+      best,
+      fallbackPerson,
+      keywordResults,
+      fallbackDigitsResults,
+      branchTimeoutMs,
+      debugEnabled: process.env.AI_DEBUG === "1",
+      lookups: this.branchLookups
+    });
+    const { decision, travelMode, estimatedMinutes } = deriveAiTravelDecision(
+      nearestBranch?.distanceKm
+    );
+    const person = mapAiSearchPerson(best);
     let suggestions = [];
     if ((!person || bestScore < 6) && !hasDigitsQuery) {
       const fuzzyResults = await this.options.storage.aiFuzzySearch({ query, limit: 5 });
-      const tokens = tokenizeQuery(query);
-      const maxScore = Math.max(1, tokens.length);
-      suggestions = fuzzyResults.map((row) => {
-        let data = row.jsonDataJsonb;
-        if (typeof data === "string") {
-          try {
-            data = JSON.parse(data);
-          } catch {
-            data = {};
-          }
-        }
-        if (!data || typeof data !== "object") data = {};
-        const name = data["Nama"] || data["Customer Name"] || data["name"] || "-";
-        const ic = data["No. MyKad"] || data["ID No"] || data["No Pengenalan"] || data["IC"] || "-";
-        const addr = data["Alamat Surat Menyurat"] || data["HomeAddress1"] || data["Address"] || data["Alamat"] || "-";
-        const confidence = Math.min(100, Math.round(Number(row.score || 0) / maxScore * 100));
-        const hasAny = [name, ic, addr].some((value) => value && value !== "-" && String(value).trim() !== "");
-        return hasAny ? `- ${name} | IC: ${ic} | Alamat: ${addr} | Keyakinan: ${confidence}%` : "";
-      }).filter(Boolean);
+      suggestions = buildAiSuggestions(query, fuzzyResults);
     }
     const personSummary = buildPersonSummary(person);
     const branchSummary = buildBranchSummary(nearestBranch);
@@ -15312,143 +15698,25 @@ var AiSearchService = class {
       branchTextSearch
     });
     return {
-      payload: {
+      payload: buildAiSearchPayload({
         person,
-        nearest_branch: nearestBranch ? {
-          name: nearestBranch.name,
-          address: nearestBranch.address,
-          phone: nearestBranch.phone,
-          fax: nearestBranch.fax,
-          business_hour: nearestBranch.businessHour,
-          day_open: nearestBranch.dayOpen,
-          atm_cdm: nearestBranch.atmCdm,
-          inquiry_availability: nearestBranch.inquiryAvailability,
-          application_availability: nearestBranch.applicationAvailability,
-          aeon_lounge: nearestBranch.aeonLounge,
-          distance_km: nearestBranch.distanceKm,
-          travel_mode: travelMode,
-          estimated_minutes: estimatedMinutes
-        } : null,
+        nearestBranch,
         decision,
-        ai_explanation: explanation
-      },
-      audit: {
+        explanation,
+        travelMode,
+        estimatedMinutes
+      }),
+      audit: buildAiSearchAudit({
         query,
         intent,
-        matched_profile_id: person?.id || null,
-        branch: nearestBranch?.name || null,
-        distance_km: nearestBranch?.distanceKm || null,
+        person,
+        nearestBranch,
         decision,
-        travel_mode: travelMode,
-        estimated_minutes: estimatedMinutes,
-        used_last_person: !best && !!fallbackPerson
-      }
+        travelMode,
+        estimatedMinutes,
+        usedLastPerson: !best && !!fallbackPerson
+      })
     };
-  }
-  getLastAiPerson(userKey) {
-    const entry = this.lastAiPerson.get(userKey);
-    if (!entry) return null;
-    if (Date.now() - entry.ts >= this.lastAiPersonTtlMs) {
-      this.lastAiPerson.delete(userKey);
-      return null;
-    }
-    return entry.row;
-  }
-  async parseIntent(query, timeoutMs = this.options.defaultAiTimeoutMs) {
-    const intentMode = String(process.env.AI_INTENT_MODE || "fast").toLowerCase();
-    if (intentMode === "fast") {
-      return parseIntentFallback(query);
-    }
-    const system = 'Anda hanya keluarkan JSON SAHAJA. Tugas: kenalpasti intent carian dan entiti.\nFormat WAJIB:\n{"intent":"search_person","entities":{"name":null,"ic":null,"account_no":null,"phone":null,"address":null},"need_nearest_branch":false}\nJika IC/MyKad ada, isi "ic". Jika akaun, isi "account_no". Jika nombor telefon, isi "phone".';
-    const messages = [
-      { role: "system", content: system },
-      { role: "user", content: query }
-    ];
-    try {
-      const raw = await this.options.withAiCircuit(
-        () => this.options.ollamaChat(messages, {
-          num_predict: 160,
-          temperature: 0.1,
-          top_p: 0.9,
-          timeoutMs
-        })
-      );
-      const parsed = extractJsonObject(raw);
-      const entities = parsed?.entities;
-      if (parsed && parsed.intent && entities && typeof entities === "object") {
-        const entityRecord = entities;
-        return {
-          intent: String(parsed.intent || "search_person"),
-          entities: {
-            name: typeof entityRecord.name === "string" ? entityRecord.name : null,
-            ic: typeof entityRecord.ic === "string" ? entityRecord.ic : null,
-            account_no: typeof entityRecord.account_no === "string" ? entityRecord.account_no : null,
-            phone: typeof entityRecord.phone === "string" ? entityRecord.phone : null,
-            address: typeof entityRecord.address === "string" ? entityRecord.address : null
-          },
-          need_nearest_branch: Boolean(parsed.need_nearest_branch)
-        };
-      }
-    } catch {
-    }
-    return parseIntentFallback(query);
-  }
-  async safeFindBranchesByText(text2, limit, timeoutMs) {
-    try {
-      return await this.withTimeout(
-        this.options.storage.findBranchesByText({ query: text2, limit }),
-        timeoutMs
-      );
-    } catch {
-      return [];
-    }
-  }
-  async safeFindBranchesByPostcode(postcode, limit, timeoutMs) {
-    try {
-      return await this.withTimeout(
-        this.options.storage.findBranchesByPostcode({ postcode, limit }),
-        timeoutMs
-      );
-    } catch {
-      return [];
-    }
-  }
-  async safeNearestBranches(lat, lng, limit, timeoutMs) {
-    try {
-      return await this.withTimeout(
-        this.options.storage.getNearestBranches({ lat, lng, limit }),
-        timeoutMs
-      );
-    } catch {
-      return [];
-    }
-  }
-  async safePostcodeLatLng(postcode, timeoutMs) {
-    try {
-      return await this.withTimeout(this.options.storage.getPostcodeLatLng(postcode), timeoutMs);
-    } catch {
-      return null;
-    }
-  }
-  withTimeout(promise, ms) {
-    return new Promise((resolve, reject) => {
-      const id = setTimeout(() => reject(new Error("timeout")), ms);
-      promise.then((value) => {
-        clearTimeout(id);
-        resolve(value);
-      }).catch((error) => {
-        clearTimeout(id);
-        reject(error);
-      });
-    });
-  }
-  trimCacheEntries(cache, maxEntries) {
-    if (cache.size <= maxEntries) return;
-    const excess = cache.size - maxEntries;
-    const keysByAge = Array.from(cache.entries()).sort((a, b) => a[1].ts - b[1].ts).slice(0, excess).map(([key]) => key);
-    for (const key of keysByAge) {
-      cache.delete(key);
-    }
   }
 };
 
