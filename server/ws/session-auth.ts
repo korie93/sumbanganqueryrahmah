@@ -14,7 +14,7 @@ export function extractWsActivityId(token: string, secret: string): string | nul
   if (!token || !secret) return null;
 
   try {
-    const decoded = jwt.verify(token, secret) as WsTokenPayload;
+    const decoded = jwt.verify(token, secret, { algorithms: ["HS256"] }) as WsTokenPayload;
     const activityId = String(decoded?.activityId || "").trim();
     return activityId || null;
   } catch {

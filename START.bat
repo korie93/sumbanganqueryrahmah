@@ -14,7 +14,7 @@ set IP=%IP:~1%
 echo Local:  http://localhost:5000
 echo LAN:    http://%IP%:5000
 echo.
-echo Login: superuser / 0441024k
+echo Login with the credentials configured in your .env file
 echo Press Ctrl+C to stop
 echo =========================================
 node dist-local/server/index-local.js

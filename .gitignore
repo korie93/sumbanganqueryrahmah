@@ -8,3 +8,22 @@ var/dev-mail-outbox/
 .env
 .env.*
 !.env.example
+
+# Build outputs
+dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Keys and certificates
+*.pem
+*.key
+*.crt
+
+# Old database artifacts
+*.db

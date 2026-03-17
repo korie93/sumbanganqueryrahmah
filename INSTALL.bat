@@ -36,6 +36,6 @@ echo.
 echo =========================================
 echo   INSTALLATION COMPLETE!
 echo =========================================
-echo Login: superuser / 0441024k
 echo Run START.bat to start the server
+echo Login with the credentials configured in your .env file
 pause
