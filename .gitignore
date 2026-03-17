@@ -3,3 +3,23 @@ var/dev-mail-outbox/
 .env
 .env.*
 !.env.example
+
+# Build outputs
+dist/
+dist-local/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Keys and certificates
+*.pem
+*.key
+*.crt
+
+# Server log (generated at runtime)
+server.log
