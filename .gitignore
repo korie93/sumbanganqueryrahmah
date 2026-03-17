@@ -1,4 +1,9 @@
 node_modules
+dist-local/
+output/
+server.log
+tmp-smoke-server.out
+tmp-smoke-server.err
 var/dev-mail-outbox/
 .env
 .env.*

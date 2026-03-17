@@ -1,5 +1,6 @@
 import type { AuthenticatedUser } from "../auth/guards";
-import type { CollectionNicknameAuthProfile, PostgresStorage } from "../storage-postgres";
+import type { CollectionNicknameAuthProfile } from "../storage-postgres";
+import type { CollectionStoragePort } from "../services/collection/collection-service-support";
 import {
   COLLECTION_STAFF_NICKNAME_MIN_LENGTH,
   isNicknameScopeAllowedForRole,
@@ -7,20 +8,12 @@ import {
   normalizeCollectionText,
 } from "./collection.validation";
 
-type CollectionAccessStorage = Pick<
-  PostgresStorage,
-  | "getCollectionAdminGroupVisibleNicknameValuesByLeader"
-  | "getCollectionNicknameAuthProfileByName"
-  | "getCollectionNicknameSessionByActivity"
-  | "getCollectionStaffNicknameByName"
->;
-
 export type CollectionNicknameAccessResolution =
   | { ok: true; profile: CollectionNicknameAuthProfile }
   | { ok: false; status: number; message: string };
 
 export async function resolveCurrentCollectionNicknameFromSession(
-  storage: CollectionAccessStorage,
+  storage: CollectionStoragePort,
   user: AuthenticatedUser,
 ): Promise<string | null> {
   const activityId = normalizeCollectionText(user.activityId);
@@ -39,7 +32,7 @@ export async function resolveCurrentCollectionNicknameFromSession(
 }
 
 export async function getAdminGroupNicknameValues(
-  storage: CollectionAccessStorage,
+  storage: CollectionStoragePort,
   user: AuthenticatedUser,
 ): Promise<string[]> {
   const currentNickname = await resolveCurrentCollectionNicknameFromSession(storage, user);
@@ -64,7 +57,7 @@ export async function getAdminGroupNicknameValues(
 }
 
 export async function getAdminVisibleNicknameValues(
-  storage: CollectionAccessStorage,
+  storage: CollectionStoragePort,
   user: AuthenticatedUser,
 ): Promise<string[]> {
   return getAdminGroupNicknameValues(storage, user);
@@ -77,7 +70,7 @@ export function hasNicknameValue(values: string[], target: string): boolean {
 }
 
 export async function canUserAccessCollectionRecord(
-  storage: CollectionAccessStorage,
+  storage: CollectionStoragePort,
   user: AuthenticatedUser,
   record: {
     createdByLogin?: string | null;
@@ -123,7 +116,7 @@ export function readNicknameFiltersFromQuery(query: Record<string, unknown>): st
 }
 
 export async function resolveCollectionNicknameAccessForUser(
-  storage: CollectionAccessStorage,
+  storage: CollectionStoragePort,
   user: AuthenticatedUser,
   nicknameRaw: unknown,
 ): Promise<CollectionNicknameAccessResolution> {
