@@ -93,10 +93,14 @@ export default function Import({ onNavigate }: ImportProps) {
     setError("");
 
     try {
-      await createImport(importName.trim(), file?.name || "unknown.csv", parsedData);
+      const rowCount = parsedData.length;
+      const savedName = importName.trim();
+      await createImport(savedName, file?.name || "unknown.csv", parsedData);
+      // Clear heavy state before navigating to release memory
+      resetSingleImport();
       toast({
         title: "Success",
-        description: `Data "${importName}" has been saved (${parsedData.length} rows).`,
+        description: `Data "${savedName}" has been saved (${rowCount} rows).`,
       });
       onNavigate("saved");
     } catch (saveError: unknown) {
