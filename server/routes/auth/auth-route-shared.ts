@@ -186,7 +186,7 @@ export function createAuthRouteContext(app: Express, deps: AuthRouteDeps): AuthR
     buildDeliveryPayload,
     buildOkPayload,
     signSessionToken(payload, res) {
-      const token = jwt.sign(payload, runtimeConfig.auth.sessionSecret, { expiresIn: "24h" });
+      const token = jwt.sign(payload, runtimeConfig.auth.sessionSecret, { algorithm: "HS256", expiresIn: "24h" });
       if (res) {
         setAuthSessionCookie(res, token);
       }

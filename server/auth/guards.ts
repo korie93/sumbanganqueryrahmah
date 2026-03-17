@@ -82,7 +82,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     }
 
     try {
-      const decoded = jwt.verify(token, secret) as AuthenticatedUser;
+      const decoded = jwt.verify(token, secret, { algorithms: ["HS256"] }) as AuthenticatedUser;
       const activity = await storage.getActivityById(decoded.activityId);
 
       if (!activity || activity.isActive === false || activity.logoutTime !== null) {

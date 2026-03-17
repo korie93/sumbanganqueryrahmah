@@ -102,7 +102,7 @@ export function createRuntimeConfigManager(options: RuntimeConfigManagerOptions)
     if (!token) return null;
 
     try {
-      const decoded = jwt.verify(token, secret) as { role?: string };
+      const decoded = jwt.verify(token, secret, { algorithms: ["HS256"] }) as { role?: string };
       return decoded?.role || null;
     } catch {
       return null;

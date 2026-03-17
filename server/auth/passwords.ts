@@ -15,9 +15,13 @@ export async function hashPassword(raw: string): Promise<string> {
   return bcrypt.hash(raw, CREDENTIAL_BCRYPT_COST);
 }
 
+const DUMMY_BCRYPT_HASH = "$2b$12$K4v1w0L8w0L8w0L8w0L8wO0000000000000000000000000000000";
+
 export async function verifyPassword(raw: string, hash: string | null | undefined): Promise<boolean> {
   const normalizedHash = String(hash || "").trim();
   if (!normalizedHash || !isBcryptHash(normalizedHash)) {
+    // Perform a dummy comparison to prevent timing-based user enumeration.
+    await bcrypt.compare(raw, DUMMY_BCRYPT_HASH);
     return false;
   }
   return bcrypt.compare(raw, normalizedHash);

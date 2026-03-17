@@ -27,7 +27,7 @@ export async function authenticateToken(
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as any;
     const activity = await storage.getActivityById(decoded.activityId);
 
     if (!activity || activity.isActive === false || activity.logoutTime !== null) {

@@ -9,6 +9,14 @@ const REDACT_KEYS = [
   "icnumber",
   "accountnumber",
   "fingerprint",
+  "email",
+  "fullname",
+  "creditcard",
+  "bankaccount",
+  "secretkey",
+  "apikey",
+  "accesstoken",
+  "refreshtoken",
 ];
 
 function sanitize(value: unknown): unknown {
