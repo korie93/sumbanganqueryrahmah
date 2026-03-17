@@ -101,12 +101,29 @@ export default function BackupRestore({ userRole }: BackupRestoreProps) {
   const restoreBackupMutation = useMutation({
     mutationFn: (backupId: string) => restoreBackup(backupId) as Promise<RestoreResponse>,
     onSuccess: (result) => {
+      const stats = result.stats;
+      const totalRestored = stats.imports + stats.dataRows + stats.users + stats.auditLogs;
+      const parts: string[] = [];
+      if (stats.imports > 0) parts.push(`${stats.imports} imports`);
+      if (stats.dataRows > 0) parts.push(`${stats.dataRows} data rows`);
+      if (stats.users > 0) parts.push(`${stats.users} users`);
+      if (stats.auditLogs > 0) parts.push(`${stats.auditLogs} audit logs`);
+
+      const summary = totalRestored > 0
+        ? `Restored: ${parts.join(", ")}.`
+        : "No new records were added (data may already exist).";
+      const duration = result.durationMs != null
+        ? ` Duration: ${(result.durationMs / 1000).toFixed(1)}s.`
+        : "";
+
       toast({
-        title: "Success",
-        description: result.message || "Backup has been successfully restored.",
+        title: totalRestored > 0 ? "Restore Successful" : "Restore Complete",
+        description: `${summary}${duration}`,
+        duration: 8000,
       });
       setShowRestoreDialog(null);
       setRestoringId(null);
+      void queryClient.invalidateQueries({ queryKey: ["/api/backups"] });
     },
     onError: (error) => {
       console.error("Failed to restore backup:", error);

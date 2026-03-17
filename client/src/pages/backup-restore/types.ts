@@ -21,6 +21,10 @@ export interface BackupsResponse {
 export interface RestoreResponse {
   success: boolean;
   message: string;
+  backupId?: string;
+  backupName?: string;
+  restoredAt?: string;
+  durationMs?: number;
   stats: {
     imports: number;
     dataRows: number;

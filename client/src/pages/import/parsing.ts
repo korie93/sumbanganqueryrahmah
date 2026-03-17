@@ -87,18 +87,41 @@ async function parseCsvFile(file: File): Promise<ParsedPreviewResult> {
   return { headers, rows };
 }
 
-async function parseExcelFile(file: File): Promise<ParsedPreviewResult> {
-  const arrayBuffer = await file.arrayBuffer();
-  const xlsx = await loadXlsx();
-  const workbook = xlsx.read(arrayBuffer, { type: "array", cellDates: true, cellNF: false, cellText: false });
-  const firstSheetName = workbook.SheetNames[0];
+/**
+ * Parse an Excel ArrayBuffer into headers + rows.
+ * Shared by both preview and bulk-import paths to avoid duplicating the
+ * workbook-read / sheet-to-json logic (and the memory that comes with it).
+ */
+function parseExcelBuffer(
+  xlsx: XlsxModule,
+  arrayBuffer: ArrayBuffer,
+): { headers: string[]; rows: ImportRow[]; error?: string } {
+  let workbook;
+  try {
+    workbook = xlsx.read(arrayBuffer, { type: "array", cellDates: true, cellNF: false, cellText: false });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to read Excel file";
+    if (message.includes("password") || message.includes("encrypt")) {
+      return { headers: [], rows: [], error: "File is password protected" };
+    }
+    if (message.includes("Unsupported") || message.includes("corrupt")) {
+      return { headers: [], rows: [], error: "File is corrupted or unsupported format" };
+    }
+    return { headers: [], rows: [], error: message };
+  }
 
+  const firstSheetName = workbook.SheetNames[0];
   if (!firstSheetName) {
     return { headers: [], rows: [], error: "Excel file does not have any sheets." };
   }
 
   const worksheet = workbook.Sheets[firstSheetName];
   const jsonData = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: "", raw: false }) as unknown[][];
+
+  // Null out workbook references early to allow GC to reclaim memory
+  (workbook as any).SheetNames = null;
+  (workbook as any).Sheets = null;
+  workbook = null as any;
 
   if (jsonData.length === 0) {
     return { headers: [], rows: [], error: "Excel file is empty." };
@@ -143,6 +166,12 @@ async function parseExcelFile(file: File): Promise<ParsedPreviewResult> {
   return { headers, rows };
 }
 
+async function parseExcelFile(file: File): Promise<ParsedPreviewResult> {
+  const arrayBuffer = await file.arrayBuffer();
+  const xlsx = await loadXlsx();
+  return parseExcelBuffer(xlsx, arrayBuffer);
+}
+
 export async function parseImportPreview(file: File): Promise<ParsedPreviewResult> {
   const fileName = file.name.toLowerCase();
   if (!isSupportedSpreadsheet(fileName)) {
@@ -166,67 +195,11 @@ export async function parseImportFileForBulk(file: File): Promise<ParsedBulkResu
 
     const arrayBuffer = await file.arrayBuffer();
     const xlsx = await loadXlsx();
-    let workbook;
-
-    try {
-      workbook = xlsx.read(arrayBuffer, { type: "array", cellDates: true, cellNF: false, cellText: false });
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Failed to read Excel file";
-      if (message.includes("password") || message.includes("encrypt")) {
-        return { data: [], error: "File is password protected" };
-      }
-      if (message.includes("Unsupported") || message.includes("corrupt")) {
-        return { data: [], error: "File is corrupted or unsupported format" };
-      }
-      return { data: [], error: message };
+    const result = parseExcelBuffer(xlsx, arrayBuffer);
+    if (result.error) {
+      return { data: [], error: result.error };
     }
-
-    const firstSheetName = workbook.SheetNames[0];
-    if (!firstSheetName) {
-      return { data: [], error: "Excel file has no sheets" };
-    }
-
-    const worksheet = workbook.Sheets[firstSheetName];
-    const jsonData = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: "", raw: false }) as unknown[][];
-
-    if (jsonData.length === 0) {
-      return { data: [], error: "Excel file is empty" };
-    }
-
-    let headerRowIndex = 0;
-    let maxNonEmptyCols = 0;
-    for (let index = 0; index < Math.min(5, jsonData.length); index += 1) {
-      const row = jsonData[index];
-      const nonEmptyCount = row.filter((cell) => cell !== "" && cell !== null && cell !== undefined).length;
-      if (nonEmptyCount > maxNonEmptyCols) {
-        maxNonEmptyCols = nonEmptyCount;
-        headerRowIndex = index;
-      }
-    }
-
-    const headers = jsonData[headerRowIndex].map((header, index) => {
-      const value = String(header || "").trim();
-      return value || `Column_${index + 1}`;
-    });
-
-    const rows: ImportRow[] = [];
-    for (let rowIndex = headerRowIndex + 1; rowIndex < jsonData.length; rowIndex += 1) {
-      const rowData = jsonData[rowIndex];
-      const hasAnyData = rowData.some((cell, index) => {
-        if (index >= headers.length) return false;
-        return String(cell ?? "").trim() !== "";
-      });
-      if (!hasAnyData) continue;
-
-      const row: ImportRow = {};
-      headers.forEach((header, index) => {
-        const cellValue = rowData[index];
-        row[header] = cellValue instanceof Date ? cellValue.toLocaleDateString("en-MY") : String(cellValue ?? "").trim();
-      });
-      rows.push(row);
-    }
-
-    return { data: rows };
+    return { data: result.rows };
   } catch (error: unknown) {
     return { data: [], error: error instanceof Error ? error.message : "Failed to parse file" };
   }
