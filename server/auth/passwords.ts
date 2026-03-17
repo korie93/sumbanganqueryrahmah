@@ -15,7 +15,10 @@ export async function hashPassword(raw: string): Promise<string> {
   return bcrypt.hash(raw, CREDENTIAL_BCRYPT_COST);
 }
 
-const DUMMY_BCRYPT_HASH = "$2b$12$K4v1w0L8w0L8w0L8w0L8wO0000000000000000000000000000000";
+// Pre-computed bcrypt hash of a random value used for timing-safe comparison when
+// the real password hash is missing or invalid. This ensures verifyPassword takes
+// consistent time regardless of whether the user exists.
+const DUMMY_BCRYPT_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5NU7z6xUfIjm6";
 
 export async function verifyPassword(raw: string, hash: string | null | undefined): Promise<boolean> {
   const normalizedHash = String(hash || "").trim();

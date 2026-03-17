@@ -5,7 +5,7 @@ import { runtimeConfig } from "./config/runtime";
 const { Pool } = pg;
 
 function validateSearchPath(searchPath: string): string {
-  if (!/^[a-zA-Z0-9_,\s]+$/.test(searchPath)) {
+  if (!/^[a-zA-Z0-9_]+(,[a-zA-Z0-9_]+)*$/.test(searchPath)) {
     throw new Error(`Invalid PG search_path: "${searchPath}"`);
   }
   return searchPath;
