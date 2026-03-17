@@ -15,6 +15,8 @@ import {
 } from "@/lib/api";
 import {
   COLLECTION_BATCH_OPTIONS,
+  getTodayIsoDate,
+  isFutureDate,
   isPositiveAmount,
   isValidCustomerPhone,
   isValidDate,
@@ -57,6 +59,7 @@ export function useCollectionRecordEdit({
   const [editNewReceiptFiles, setEditNewReceiptFiles] = useState<File[]>([]);
   const [editRemovedReceiptIds, setEditRemovedReceiptIds] = useState<string[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
+  const maxPaymentDate = getTodayIsoDate();
 
   useEffect(() => {
     return () => {
@@ -147,6 +150,14 @@ export function useCollectionRecordEdit({
       toast({
         title: "Validation Error",
         description: "Payment Date is invalid.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (isFutureDate(editPaymentDate)) {
+      toast({
+        title: "Validation Error",
+        description: "Payment Date cannot be in the future.",
         variant: "destructive",
       });
       return;
@@ -266,6 +277,7 @@ export function useCollectionRecordEdit({
       editPaymentDate,
       editAmount,
       editStaffNickname,
+      maxPaymentDate,
       editNewReceiptFiles,
       editRemovedReceiptIds,
       editReceiptInputRef,

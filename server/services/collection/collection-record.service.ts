@@ -11,6 +11,7 @@ import {
   COLLECTION_BATCHES,
   COLLECTION_STAFF_NICKNAME_MIN_LENGTH,
   ensureLooseObject,
+  isFutureCollectionDate,
   isNicknameScopeAllowedForRole,
   isValidCollectionDate,
   isValidCollectionPhone,
@@ -22,9 +23,57 @@ import {
   type CollectionReceiptPayload,
   type CollectionUpdatePayload,
 } from "../../routes/collection.validation";
+import { computeCollectionDailyTimeline } from "./collection-daily-utils";
 import { CollectionServiceSupport, type ListQuery, type SummaryQuery } from "./collection-service-support";
 
 const COLLECTION_PURGE_RETENTION_MONTHS = 6;
+
+type DailyResolvedUser = {
+  username: string;
+  role: string;
+};
+
+type DailyOverviewBundle = {
+  user: DailyResolvedUser;
+  timeline: ReturnType<typeof computeCollectionDailyTimeline>;
+};
+
+type DailyOverviewComputation = {
+  selectedUsers: DailyResolvedUser[];
+  summary: {
+    monthlyTarget: number;
+    collectedAmount: number;
+    balancedAmount: number;
+    workingDays: number;
+    completedDays: number;
+    incompleteDays: number;
+    noCollectionDays: number;
+    neutralDays: number;
+    baseDailyTarget: number;
+    dailyTarget: number;
+    achievedAmount: number;
+    remainingAmount: number;
+    metDays: number;
+    yellowDays: number;
+    redDays: number;
+  };
+  daysInMonth: number;
+  days: Array<{
+    day: number;
+    date: string;
+    amount: number;
+    target: number;
+    isWorkingDay: boolean;
+    isHoliday: boolean;
+    holidayName: string | null;
+    customerCount: number;
+    status: "green" | "yellow" | "red" | "neutral";
+  }>;
+};
+
+function roundMoney(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
 
 function buildCollectionPurgeCutoffDate(referenceDate = new Date()): string {
   const utcYear = referenceDate.getUTCFullYear();
@@ -60,6 +109,203 @@ export class CollectionRecordService extends CollectionServiceSupport {
     }
   }
 
+  private parseRequestedDailyUsernames(query: ListQuery): string[] {
+    const rawValues: unknown[] = [];
+    const appendValues = (raw: unknown) => {
+      if (Array.isArray(raw)) {
+        for (const value of raw) appendValues(value);
+        return;
+      }
+      const normalized = normalizeCollectionText(raw);
+      if (!normalized) return;
+      const parts = normalized
+        .split(",")
+        .map((value) => normalizeCollectionText(value))
+        .filter(Boolean);
+      rawValues.push(...parts);
+    };
+
+    appendValues(query.usernames);
+    appendValues(query.username);
+    const normalized = normalizeCollectionStringList(rawValues)
+      .map((value) => value.toLowerCase());
+    return Array.from(new Set(normalized));
+  }
+
+  private resolveDailySelectedUsers(
+    user: { username: string; role: string },
+    requestedUsernames: string[],
+    availableUsers: Array<{ username: string; role: string }>,
+  ): DailyResolvedUser[] {
+    const userMap = new Map<string, DailyResolvedUser>(
+      availableUsers.map((item) => [item.username.toLowerCase(), { username: item.username.toLowerCase(), role: item.role }]),
+    );
+    if (user.role === "user") {
+      const ownUsername = user.username.toLowerCase();
+      if (requestedUsernames.length > 0 && requestedUsernames.some((value) => value !== ownUsername)) {
+        throw forbidden("User hanya boleh melihat data sendiri.");
+      }
+      const ownUser = userMap.get(ownUsername);
+      if (!ownUser) {
+        throw badRequest("User not found.");
+      }
+      return [ownUser];
+    }
+
+    const targetUsernames = requestedUsernames.length > 0
+      ? requestedUsernames
+      : (userMap.has(user.username.toLowerCase())
+          ? [user.username.toLowerCase()]
+          : availableUsers.length > 0
+            ? [availableUsers[0].username.toLowerCase()]
+            : []);
+
+    const selectedUsers: DailyResolvedUser[] = [];
+    for (const username of targetUsernames) {
+      const matched = userMap.get(username.toLowerCase());
+      if (!matched) {
+        throw badRequest(`Invalid username filter: ${username}`);
+      }
+      selectedUsers.push(matched);
+    }
+
+    if (selectedUsers.length === 0) {
+      throw badRequest("No users selected.");
+    }
+
+    return selectedUsers;
+  }
+
+  private async buildDailyOverviewComputation(
+    user: { username: string; role: string },
+    year: number,
+    month: number,
+    query: ListQuery,
+  ): Promise<DailyOverviewComputation> {
+    const users = await this.storage.listCollectionDailyUsers();
+    const selectedUsers = this.resolveDailySelectedUsers(
+      user,
+      this.parseRequestedDailyUsernames(query),
+      users.map((item) => ({ username: item.username.toLowerCase(), role: item.role })),
+    );
+
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+    const monthEnd = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
+    const calendarRows = await this.storage.listCollectionDailyCalendar({ year, month });
+
+    const bundles: DailyOverviewBundle[] = await Promise.all(
+      selectedUsers.map(async (selectedUser) => {
+        const [target, records] = await Promise.all([
+          this.storage.getCollectionDailyTarget({ username: selectedUser.username, year, month }),
+          this.storage.listCollectionRecords({
+            from: monthStart,
+            to: monthEnd,
+            createdByLogin: selectedUser.username,
+            limit: 5000,
+            offset: 0,
+          }),
+        ]);
+
+        const amountByDate = new Map<string, number>();
+        const customerCountByDate = new Map<string, number>();
+        for (const record of records) {
+          const key = record.paymentDate;
+          const amount = Number(record.amount || 0);
+          amountByDate.set(key, roundMoney((amountByDate.get(key) || 0) + (Number.isFinite(amount) ? amount : 0)));
+          customerCountByDate.set(key, (customerCountByDate.get(key) || 0) + 1);
+        }
+
+        return {
+          user: selectedUser,
+          timeline: computeCollectionDailyTimeline({
+            year,
+            month,
+            monthlyTarget: Number(target?.monthlyTarget || 0),
+            calendarRows,
+            amountByDate,
+            customerCountByDate,
+          }),
+        };
+      }),
+    );
+
+    const monthlyTarget = roundMoney(
+      bundles.reduce((sum, bundle) => sum + bundle.timeline.summary.monthlyTarget, 0),
+    );
+    const collectedAmount = roundMoney(
+      bundles.reduce((sum, bundle) => sum + bundle.timeline.summary.collectedAmount, 0),
+    );
+    const balancedAmount = roundMoney(Math.max(0, monthlyTarget - collectedAmount));
+    const baseDailyTarget = roundMoney(
+      bundles.reduce((sum, bundle) => sum + bundle.timeline.summary.baseDailyTarget, 0),
+    );
+    const workingDays = bundles[0]?.timeline.summary.workingDays || 0;
+
+    let completedDays = 0;
+    let incompleteDays = 0;
+    let noCollectionDays = 0;
+    let neutralDays = 0;
+
+    const days = Array.from({ length: daysInMonth }, (_, index) => {
+      const dayEntries = bundles.map((bundle) => bundle.timeline.days[index]);
+      const sample = dayEntries[0];
+      const amount = roundMoney(dayEntries.reduce((sum, entry) => sum + entry.amount, 0));
+      const target = roundMoney(dayEntries.reduce((sum, entry) => sum + entry.target, 0));
+      const customerCount = dayEntries.reduce((sum, entry) => sum + entry.customerCount, 0);
+
+      let status: "green" | "yellow" | "red" | "neutral" = "neutral";
+      if (!sample?.isWorkingDay) {
+        status = "neutral";
+        neutralDays += 1;
+      } else if (amount <= 0) {
+        status = "red";
+        noCollectionDays += 1;
+      } else if (amount < target) {
+        status = "yellow";
+        incompleteDays += 1;
+      } else {
+        status = "green";
+        completedDays += 1;
+      }
+
+      return {
+        day: sample?.day ?? index + 1,
+        date: sample?.date ?? `${year}-${String(month).padStart(2, "0")}-${String(index + 1).padStart(2, "0")}`,
+        amount,
+        target,
+        isWorkingDay: sample?.isWorkingDay ?? false,
+        isHoliday: sample?.isHoliday ?? false,
+        holidayName: sample?.holidayName ?? null,
+        customerCount,
+        status,
+      };
+    });
+
+    return {
+      selectedUsers,
+      summary: {
+        monthlyTarget,
+        collectedAmount,
+        balancedAmount,
+        workingDays,
+        completedDays,
+        incompleteDays,
+        noCollectionDays,
+        neutralDays,
+        baseDailyTarget,
+        dailyTarget: baseDailyTarget,
+        achievedAmount: collectedAmount,
+        remainingAmount: balancedAmount,
+        metDays: completedDays,
+        yellowDays: incompleteDays,
+        redDays: noCollectionDays,
+      },
+      daysInMonth,
+      days,
+    };
+  }
+
   async createRecord(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], bodyRaw: unknown) {
     const user = this.requireUser(userInput);
     const uploadedReceipts: Array<Awaited<ReturnType<typeof saveCollectionReceipt>>> = [];
@@ -81,6 +327,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
       if (!accountNumber) throw badRequest("Account Number is required.");
       if (!COLLECTION_BATCHES.has(batch)) throw badRequest("Invalid batch value.");
       if (!paymentDate || !isValidCollectionDate(paymentDate)) throw badRequest("Invalid payment date.");
+      if (isFutureCollectionDate(paymentDate)) throw badRequest("Payment date cannot be in the future.");
       if (amount === null) throw badRequest("Amount must be a positive number.");
       if (collectionStaffNickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
         throw badRequest("Staff nickname must be at least 2 characters.");
@@ -490,129 +737,26 @@ export class CollectionRecordService extends CollectionServiceSupport {
     const user = this.requireUser(userInput);
     const year = Number.parseInt(normalizeCollectionText(query.year), 10);
     const month = Number.parseInt(normalizeCollectionText(query.month), 10);
-    const requestedUsername = normalizeCollectionText(query.username).toLowerCase();
 
     if (!Number.isInteger(year) || year < 2000 || year > 2100) throw badRequest("Invalid year.");
     if (!Number.isInteger(month) || month < 1 || month > 12) throw badRequest("Invalid month.");
-
-    const username = user.role === "user" ? user.username.toLowerCase() : (requestedUsername || user.username.toLowerCase());
-    if (user.role === "user" && requestedUsername && requestedUsername !== username) {
-      throw forbidden("User hanya boleh melihat data sendiri.");
-    }
-
-    const users = await this.storage.listCollectionDailyUsers();
-    const foundUser = users.find((item) => item.username.toLowerCase() === username);
-    if (!foundUser) throw badRequest("User not found.");
-
-    const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
-    const monthEnd = `${year}-${String(month).padStart(2, "0")}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
-
-    const [target, calendarRows, records] = await Promise.all([
-      this.storage.getCollectionDailyTarget({ username, year, month }),
-      this.storage.listCollectionDailyCalendar({ year, month }),
-      this.storage.listCollectionRecords({
-        from: monthStart,
-        to: monthEnd,
-        createdByLogin: username,
-        limit: 5000,
-        offset: 0,
-      }),
-    ]);
-
-    const calendarByDay = new Map(calendarRows.map((item) => [item.day, item]));
-    const amountByDate = new Map<string, number>();
-    const customerCountByDate = new Map<string, number>();
-    for (const record of records) {
-      const key = record.paymentDate;
-      const amount = Number(record.amount || 0);
-      amountByDate.set(key, (amountByDate.get(key) || 0) + (Number.isFinite(amount) ? amount : 0));
-      customerCountByDate.set(key, (customerCountByDate.get(key) || 0) + 1);
-    }
-
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const monthlyTarget = Number(target?.monthlyTarget || 0);
-    let workingDays = 0;
-    const workingFlags: boolean[] = [];
-
-    for (let day = 1; day <= daysInMonth; day += 1) {
-      const override = calendarByDay.get(day);
-      const defaultWorking = (() => {
-        const weekday = new Date(year, month - 1, day).getDay();
-        return weekday !== 0 && weekday !== 6;
-      })();
-      const isWorkingDay = override ? Boolean(override.isWorkingDay) && !Boolean(override.isHoliday) : defaultWorking;
-      workingFlags.push(isWorkingDay);
-      if (isWorkingDay) {
-        workingDays += 1;
-      }
-    }
-
-    const dailyTarget = workingDays > 0 ? monthlyTarget / workingDays : 0;
-    let achievedAmount = 0;
-    let metDays = 0;
-    let yellowDays = 0;
-    let redDays = 0;
-    let neutralDays = 0;
-
-    const days = Array.from({ length: daysInMonth }, (_, index) => {
-      const day = index + 1;
-      const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-      const amount = amountByDate.get(date) || 0;
-      achievedAmount += amount;
-      const override = calendarByDay.get(day);
-      const isWorkingDay = workingFlags[index];
-
-      let status: "green" | "yellow" | "red" | "neutral" = "neutral";
-      if (!isWorkingDay) {
-        status = "neutral";
-        neutralDays += 1;
-      } else if (amount <= 0) {
-        status = "red";
-        redDays += 1;
-      } else if (amount < dailyTarget) {
-        status = "yellow";
-        yellowDays += 1;
-      } else {
-        status = "green";
-        metDays += 1;
-      }
-
-      return {
-        day,
-        date,
-        amount,
-        target: dailyTarget,
-        isWorkingDay,
-        isHoliday: Boolean(override?.isHoliday),
-        holidayName: override?.holidayName || null,
-        customerCount: customerCountByDate.get(date) || 0,
-        status,
-      };
-    });
-
-    const remainingAmount = Math.max(0, monthlyTarget - achievedAmount);
+    const computation = await this.buildDailyOverviewComputation(user, year, month, query);
+    const selectedUsernames = computation.selectedUsers.map((item) => item.username);
 
     return {
       ok: true as const,
-      username,
-      role: foundUser.role,
+      username: selectedUsernames[0] || user.username.toLowerCase(),
+      usernames: selectedUsernames,
+      role: computation.selectedUsers.length === 1 ? computation.selectedUsers[0].role : "mixed",
       month: {
         year,
         month,
-        daysInMonth,
+        daysInMonth: computation.daysInMonth,
       },
-      summary: {
-        monthlyTarget,
-        achievedAmount,
-        remainingAmount,
-        workingDays,
-        metDays,
-        yellowDays,
-        redDays,
-        neutralDays,
-        dailyTarget,
-      },
-      days,
+      summary: computation.summary,
+      days: computation.days,
+      carryForwardRule:
+        "Daily shortfall is carried forward to the next working day. Excess collection reduces future required targets.",
     };
   }
 
@@ -622,61 +766,66 @@ export class CollectionRecordService extends CollectionServiceSupport {
   ) {
     const user = this.requireUser(userInput);
     const date = normalizeCollectionText(query.date);
-    const requestedUsername = normalizeCollectionText(query.username).toLowerCase();
     if (!date || !isValidCollectionDate(date)) throw badRequest("Invalid date.");
 
-    const username = user.role === "user" ? user.username.toLowerCase() : (requestedUsername || user.username.toLowerCase());
-    if (user.role === "user" && requestedUsername && requestedUsername !== username) {
-      throw forbidden("User hanya boleh melihat data sendiri.");
-    }
-
-    const [yearText, monthText, dayText] = date.split("-");
+    const [yearText, monthText] = date.split("-");
     const year = Number.parseInt(yearText, 10);
     const month = Number.parseInt(monthText, 10);
-    const day = Number.parseInt(dayText, 10);
+    const pageRaw = Number.parseInt(normalizeCollectionText(query.page), 10);
+    const pageSizeRaw = Number.parseInt(normalizeCollectionText(query.pageSize), 10);
+    const pageSize = Number.isInteger(pageSizeRaw) ? Math.min(100, Math.max(1, pageSizeRaw)) : 10;
+    const requestedPage = Number.isInteger(pageRaw) ? Math.max(1, pageRaw) : 1;
 
-    const [target, calendarRows, customers] = await Promise.all([
-      this.storage.getCollectionDailyTarget({ username, year, month }),
-      this.storage.listCollectionDailyCalendar({ year, month }),
-      this.storage.listCollectionDailyPaidCustomers({ username, date }),
-    ]);
+    const computation = await this.buildDailyOverviewComputation(user, year, month, query);
+    const selectedUsernames = computation.selectedUsers.map((item) => item.username);
+    const dayOverview = computation.days.find((item) => item.date === date);
+    if (!dayOverview) {
+      throw badRequest("Date is outside selected month.");
+    }
 
-    const amount = customers.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const calendar = calendarRows.find((item) => item.day === day);
-    const defaultWorking = (() => {
-      const weekday = new Date(year, month - 1, day).getDay();
-      return weekday !== 0 && weekday !== 6;
-    })();
-    const isWorkingDay = calendar ? Boolean(calendar.isWorkingDay) && !Boolean(calendar.isHoliday) : defaultWorking;
-    const workingDays = (() => {
-      const daysInMonth = new Date(year, month, 0).getDate();
-      let total = 0;
-      const byDay = new Map(calendarRows.map((item) => [item.day, item]));
-      for (let d = 1; d <= daysInMonth; d += 1) {
-        const override = byDay.get(d);
-        const isWorking = override
-          ? Boolean(override.isWorkingDay) && !Boolean(override.isHoliday)
-          : (() => {
-            const weekday = new Date(year, month - 1, d).getDay();
-            return weekday !== 0 && weekday !== 6;
-          })();
-        if (isWorking) total += 1;
-      }
-      return total;
-    })();
-    const dailyTarget = workingDays > 0 ? Number(target?.monthlyTarget || 0) / workingDays : 0;
+    const recordsByUser = await Promise.all(
+      selectedUsernames.map((username) =>
+        this.storage.listCollectionRecords({
+          from: date,
+          to: date,
+          createdByLogin: username,
+          limit: 5000,
+          offset: 0,
+        })),
+    );
+    const mergedRecords = recordsByUser
+      .flat()
+      .sort((left, right) => {
+        const leftTime = left.createdAt instanceof Date ? left.createdAt.getTime() : new Date(left.createdAt).getTime();
+        const rightTime = right.createdAt instanceof Date ? right.createdAt.getTime() : new Date(right.createdAt).getTime();
+        if (leftTime !== rightTime) return leftTime - rightTime;
+        return left.id.localeCompare(right.id);
+      });
+
+    const totalRecords = mergedRecords.length;
+    const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+    const page = Math.min(requestedPage, totalPages);
+    const offset = (page - 1) * pageSize;
+    const pagedRecords = mergedRecords.slice(offset, offset + pageSize);
+    const pagedCustomers = pagedRecords.map((record) => ({
+      id: record.id,
+      customerName: record.customerName,
+      accountNumber: record.accountNumber,
+      amount: Number(record.amount || 0),
+      collectionStaffNickname: record.collectionStaffNickname,
+    }));
 
     let status: "green" | "yellow" | "red" | "neutral" = "neutral";
     let message = "";
-    if (!isWorkingDay) {
+    if (!dayOverview.isWorkingDay) {
       status = "neutral";
-      message = "Non-working day.";
-    } else if (amount <= 0) {
+      message = "Holiday / non-working day.";
+    } else if (dayOverview.amount <= 0) {
       status = "red";
-      message = "No collection recorded for this day.";
-    } else if (amount < dailyTarget) {
+      message = "No collection on this working day.";
+    } else if (dayOverview.amount < dayOverview.target) {
       status = "yellow";
-      message = "Daily target not achieved";
+      message = "Collection recorded but daily target not achieved.";
     } else {
       status = "green";
       message = "Daily target achieved.";
@@ -684,13 +833,49 @@ export class CollectionRecordService extends CollectionServiceSupport {
 
     return {
       ok: true as const,
-      username,
+      username: selectedUsernames[0] || user.username.toLowerCase(),
+      usernames: selectedUsernames,
       date,
       status,
       message,
-      amount,
-      dailyTarget,
-      customers,
+      amount: dayOverview.amount,
+      dailyTarget: dayOverview.target,
+      customers: pagedCustomers,
+      summary: {
+        monthlyTarget: computation.summary.monthlyTarget,
+        collected: computation.summary.collectedAmount,
+        balanced: computation.summary.balancedAmount,
+        totalForDate: dayOverview.amount,
+        targetForDate: dayOverview.target,
+      },
+      pagination: {
+        page,
+        pageSize,
+        totalRecords,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+      records: pagedRecords.map((record) => ({
+        id: record.id,
+        customerName: record.customerName,
+        accountNumber: record.accountNumber,
+        paymentDate: record.paymentDate,
+        amount: Number(record.amount || 0),
+        batch: record.batch,
+        paymentReference: record.accountNumber,
+        username: record.createdByLogin,
+        collectionStaffNickname: record.collectionStaffNickname,
+        createdAt: record.createdAt instanceof Date ? record.createdAt.toISOString() : String(record.createdAt),
+        receiptFile: record.receiptFile,
+        receipts: (record.receipts || []).map((receipt) => ({
+          id: receipt.id,
+          originalFileName: receipt.originalFileName,
+          originalMimeType: receipt.originalMimeType,
+          fileSize: receipt.fileSize,
+          createdAt: receipt.createdAt instanceof Date ? receipt.createdAt.toISOString() : String(receipt.createdAt),
+        })),
+      })),
     };
   }
 
@@ -802,6 +987,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
       }
       if (body.paymentDate !== undefined) {
         if (!paymentDate || !isValidCollectionDate(paymentDate)) throw badRequest("Invalid payment date.");
+        if (isFutureCollectionDate(paymentDate)) throw badRequest("Payment date cannot be in the future.");
         updatePayload.paymentDate = paymentDate;
       }
       if (body.amount !== undefined) {

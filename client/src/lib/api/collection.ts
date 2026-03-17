@@ -269,6 +269,7 @@ export type CollectionDailyOverviewDay = {
 export type CollectionDailyOverviewResponse = {
   ok: boolean;
   username: string;
+  usernames: string[];
   role: string;
   month: {
     year: number;
@@ -277,21 +278,29 @@ export type CollectionDailyOverviewResponse = {
   };
   summary: {
     monthlyTarget: number;
+    collectedAmount: number;
+    balancedAmount: number;
+    workingDays: number;
+    completedDays: number;
+    incompleteDays: number;
+    noCollectionDays: number;
+    neutralDays: number;
+    baseDailyTarget: number;
+    dailyTarget: number;
     achievedAmount: number;
     remainingAmount: number;
-    workingDays: number;
     metDays: number;
     yellowDays: number;
     redDays: number;
-    neutralDays: number;
-    dailyTarget: number;
   };
   days: CollectionDailyOverviewDay[];
+  carryForwardRule?: string;
 };
 
 export type CollectionDailyDayDetailsResponse = {
   ok: boolean;
   username: string;
+  usernames: string[];
   date: string;
   status: "green" | "yellow" | "red" | "neutral";
   message: string;
@@ -303,6 +312,41 @@ export type CollectionDailyDayDetailsResponse = {
     accountNumber: string;
     amount: number;
     collectionStaffNickname: string;
+  }>;
+  summary: {
+    monthlyTarget: number;
+    collected: number;
+    balanced: number;
+    totalForDate: number;
+    targetForDate: number;
+  };
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalRecords: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+  records: Array<{
+    id: string;
+    customerName: string;
+    accountNumber: string;
+    paymentDate: string;
+    amount: number;
+    batch: string;
+    paymentReference: string;
+    username: string;
+    collectionStaffNickname: string;
+    createdAt: string;
+    receiptFile: string | null;
+    receipts: Array<{
+      id: string;
+      originalFileName: string;
+      originalMimeType: string;
+      fileSize: number;
+      createdAt: string;
+    }>;
   }>;
 };
 
@@ -348,10 +392,17 @@ export async function getCollectionDailyOverview(filters: {
   year: number;
   month: number;
   username?: string;
+  usernames?: string[];
 }) {
   const params = new URLSearchParams();
   params.set("year", String(filters.year));
   params.set("month", String(filters.month));
+  if (Array.isArray(filters.usernames) && filters.usernames.length > 0) {
+    params.set(
+      "usernames",
+      filters.usernames.map((value) => String(value || "").trim()).filter(Boolean).join(","),
+    );
+  }
   if (filters.username) {
     params.set("username", filters.username);
   }
@@ -359,11 +410,29 @@ export async function getCollectionDailyOverview(filters: {
   return response.json() as Promise<CollectionDailyOverviewResponse>;
 }
 
-export async function getCollectionDailyDayDetails(filters: { date: string; username?: string }) {
+export async function getCollectionDailyDayDetails(filters: {
+  date: string;
+  username?: string;
+  usernames?: string[];
+  page?: number;
+  pageSize?: number;
+}) {
   const params = new URLSearchParams();
   params.set("date", filters.date);
+  if (Array.isArray(filters.usernames) && filters.usernames.length > 0) {
+    params.set(
+      "usernames",
+      filters.usernames.map((value) => String(value || "").trim()).filter(Boolean).join(","),
+    );
+  }
   if (filters.username) {
     params.set("username", filters.username);
+  }
+  if (typeof filters.page === "number" && Number.isFinite(filters.page)) {
+    params.set("page", String(filters.page));
+  }
+  if (typeof filters.pageSize === "number" && Number.isFinite(filters.pageSize)) {
+    params.set("pageSize", String(filters.pageSize));
   }
   const response = await apiRequest("GET", `/api/collection/daily/day-details?${params.toString()}`);
   return response.json() as Promise<CollectionDailyDayDetailsResponse>;
