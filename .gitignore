@@ -1,6 +1,7 @@
 node_modules
 dist-local/
 output/
+uploads/
 server.log
 tmp-smoke-server.out
 tmp-smoke-server.err
