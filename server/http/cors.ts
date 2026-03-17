@@ -1,4 +1,5 @@
 import type { RequestHandler } from "express";
+import { runtimeConfig } from "../config/runtime";
 
 const DEFAULT_ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
 const DEFAULT_ALLOWED_HEADERS = "Origin, X-Requested-With, Content-Type, Accept, Authorization";
@@ -38,7 +39,15 @@ export function normalizeCorsOrigin(value: string | null | undefined): string | 
   }
 }
 
-export function resolveAllowedCorsOrigins(env: CorsEnvironmentSource = process.env): string[] {
+function buildDefaultCorsEnvironment(): CorsEnvironmentSource {
+  return {
+    NODE_ENV: runtimeConfig.app.nodeEnv,
+    PUBLIC_APP_URL: runtimeConfig.app.publicAppUrl ?? undefined,
+    CORS_ALLOWED_ORIGINS: runtimeConfig.app.corsAllowedOrigins.join(","),
+  };
+}
+
+export function resolveAllowedCorsOrigins(env: CorsEnvironmentSource = buildDefaultCorsEnvironment()): string[] {
   const origins = new Set<string>();
   const addOrigin = (value: string | null | undefined) => {
     const normalized = normalizeCorsOrigin(value);

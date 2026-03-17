@@ -21,7 +21,6 @@ type SettingsRouteDeps = {
   invalidateMaintenanceCache: () => void;
   getMaintenanceStateCached: (force?: boolean) => Promise<MaintenanceState>;
   broadcastWsMessage: (payload: Record<string, unknown>) => void;
-  defaultAiTimeoutMs: number;
 };
 
 export function registerSettingsRoutes(app: Express, deps: SettingsRouteDeps) {
@@ -34,7 +33,6 @@ export function registerSettingsRoutes(app: Express, deps: SettingsRouteDeps) {
     invalidateMaintenanceCache,
     getMaintenanceStateCached,
     broadcastWsMessage,
-    defaultAiTimeoutMs,
   } = deps;
 
   app.get("/api/app-config", authenticateToken, asyncHandler(async (_req, res) => {
@@ -99,11 +97,6 @@ export function registerSettingsRoutes(app: Express, deps: SettingsRouteDeps) {
         targetResource: key,
         details: `Updated setting ${key} to "${String(result.setting?.value ?? "")}"`,
       });
-
-      if (key === "ai_timeout_ms") {
-        process.env.OLLAMA_TIMEOUT_MS = String(result.setting?.value ?? defaultAiTimeoutMs);
-      }
-
       if (result.shouldBroadcast) {
         invalidateMaintenanceCache();
         const maintenanceState = await getMaintenanceStateCached(true);

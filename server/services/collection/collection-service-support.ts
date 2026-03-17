@@ -7,8 +7,48 @@ import { COLLECTION_SUMMARY_MONTH_NAMES } from "../../routes/collection.validati
 export type SummaryQuery = Record<string, unknown>;
 export type ListQuery = Record<string, unknown>;
 
+export type CollectionStoragePort = Pick<
+  PostgresStorage,
+  | "createAuditLog"
+  | "createCollectionAdminGroup"
+  | "createCollectionRecord"
+  | "createCollectionRecordReceipts"
+  | "createCollectionStaffNickname"
+  | "deleteAllCollectionRecordReceipts"
+  | "deleteCollectionAdminGroup"
+  | "deleteCollectionRecord"
+  | "deleteCollectionRecordReceipts"
+  | "deleteCollectionStaffNickname"
+  | "getCollectionAdminAssignedNicknameIds"
+  | "getCollectionAdminGroupVisibleNicknameValuesByLeader"
+  | "getCollectionAdminGroups"
+  | "getCollectionAdminUserById"
+  | "getCollectionAdminUsers"
+  | "getCollectionMonthlySummary"
+  | "getCollectionNicknameAuthProfileByName"
+  | "getCollectionNicknameSessionByActivity"
+  | "getCollectionRecordById"
+  | "getCollectionStaffNicknameById"
+  | "getCollectionStaffNicknameByName"
+  | "getCollectionStaffNicknames"
+  | "getUser"
+  | "getUserByUsername"
+  | "isCollectionStaffNicknameActive"
+  | "listCollectionRecordReceipts"
+  | "listCollectionRecords"
+  | "purgeCollectionRecordsOlderThan"
+  | "setCollectionAdminAssignedNicknameIds"
+  | "setCollectionNicknamePassword"
+  | "setCollectionNicknameSession"
+  | "summarizeCollectionRecords"
+  | "summarizeCollectionRecordsOlderThan"
+  | "updateCollectionAdminGroup"
+  | "updateCollectionRecord"
+  | "updateCollectionStaffNickname"
+>;
+
 export class CollectionServiceSupport {
-  constructor(protected readonly storage: PostgresStorage) {}
+  constructor(protected readonly storage: CollectionStoragePort) {}
 
   protected requireUser(user?: AuthenticatedUser): AuthenticatedUser {
     if (!user) {

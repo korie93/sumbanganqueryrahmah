@@ -1,5 +1,6 @@
 import type { IncomingHttpHeaders } from "node:http";
 import type { Response } from "express";
+import { runtimeConfig } from "../config/runtime";
 
 export const AUTH_SESSION_COOKIE_NAME = "sqr_auth";
 export const AUTH_SESSION_HINT_COOKIE_NAME = "sqr_auth_hint";
@@ -15,17 +16,7 @@ function firstHeaderValue(value: HeaderValue): string {
 }
 
 function shouldUseSecureAuthCookie() {
-  const explicit = String(process.env.AUTH_COOKIE_SECURE || "").trim().toLowerCase();
-  if (explicit === "1" || explicit === "true") {
-    return true;
-  }
-  if (explicit === "0" || explicit === "false") {
-    return false;
-  }
-
-  const publicUrl = String(process.env.PUBLIC_APP_URL || "").trim().toLowerCase();
-  return String(process.env.NODE_ENV || "").trim().toLowerCase() === "production"
-    || publicUrl.startsWith("https://");
+  return runtimeConfig.auth.cookieSecure;
 }
 
 function getBaseAuthCookieOptions() {

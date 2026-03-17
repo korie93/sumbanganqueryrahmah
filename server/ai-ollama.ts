@@ -1,11 +1,13 @@
+import { runtimeConfig } from "./config/runtime";
+
 export type OllamaMessage = {
   role: "system" | "user" | "assistant";
   content: string;
 };
 
-const OLLAMA_HOST = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
-const OLLAMA_CHAT_MODEL = process.env.OLLAMA_CHAT_MODEL || "llama3:8b";
-const OLLAMA_EMBED_MODEL = process.env.OLLAMA_EMBED_MODEL || "nomic-embed-text";
+const OLLAMA_HOST = runtimeConfig.ai.host;
+const OLLAMA_CHAT_MODEL = runtimeConfig.ai.chatModel;
+const OLLAMA_EMBED_MODEL = runtimeConfig.ai.embedModel;
 const MAX_OLLAMA_MESSAGES = 50;
 
 function ensureText(input: string) {
@@ -38,7 +40,7 @@ export async function ollamaChat(
   messages: OllamaMessage[],
   options?: { num_predict?: number; temperature?: number; top_p?: number; timeoutMs?: number }
 ): Promise<string> {
-  const timeoutMs = Number(options?.timeoutMs ?? process.env.OLLAMA_TIMEOUT_MS ?? 2000);
+  const timeoutMs = Number(options?.timeoutMs ?? runtimeConfig.ai.timeoutMs);
   const boundedMessages = Array.isArray(messages)
     ? messages.slice(Math.max(0, messages.length - MAX_OLLAMA_MESSAGES))
     : [];

@@ -1,7 +1,9 @@
+import "dotenv/config";
 import cluster, { type Worker } from "node:cluster";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runtimeConfig } from "./config/runtime";
 import { LoadPredictor, type LoadTrendSnapshot } from "./internal/loadPredictor";
 import {
   isWorkerFatalMessage,
@@ -30,13 +32,13 @@ const SCALE_INTERVAL_MS = 5_000;
 const LOW_LOAD_HOLD_MS = 60_000;
 const ACTIVE_REQUESTS_THRESHOLD = 80;
 const LOW_REQ_RATE_THRESHOLD = 8;
-const LOW_MEMORY_MODE = String(process.env.SQR_LOW_MEMORY_MODE ?? "1") === "1";
-const PREALLOCATE_MB = Number(process.env.SQR_PREALLOCATE_MB ?? (LOW_MEMORY_MODE ? "0" : "32"));
+const LOW_MEMORY_MODE = runtimeConfig.cluster.lowMemoryMode;
+const PREALLOCATE_MB = runtimeConfig.cluster.preallocateMb;
 const MAX_SPAWN_PER_CYCLE = 1;
 
 // HARD CAP: Prevent uncontrolled worker spawning
 const MAX_WORKERS = Math.min(4, os.cpus().length);
-const requestedMaxWorkers = Number(process.env.SQR_MAX_WORKERS ?? (LOW_MEMORY_MODE ? "1" : String(MAX_WORKERS)));
+const requestedMaxWorkers = runtimeConfig.cluster.maxWorkers;
 const normalizedMaxWorkers = Number.isFinite(requestedMaxWorkers) ? Math.floor(requestedMaxWorkers) : 1;
 const MAX_WORKERS_HARD_CAP = Math.max(1, Math.min(MAX_WORKERS, normalizedMaxWorkers));
 const MIN_WORKERS = 1;

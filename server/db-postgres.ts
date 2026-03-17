@@ -1,19 +1,19 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { readDatabasePassword } from "./config/security";
+import { runtimeConfig } from "./config/runtime";
 
 const { Pool } = pg;
 
 export const pool = new Pool({
-  host: process.env.PG_HOST || "localhost",
-  port: Number(process.env.PG_PORT || 5432),
-  user: process.env.PG_USER || "postgres",
-  password: readDatabasePassword(),
-  database: process.env.PG_DATABASE || "sqr_db",
-  max: 5,
-  idleTimeoutMillis: 30_000,
-  connectionTimeoutMillis: 5_000,
-  options: "-c search_path=public",
+  host: runtimeConfig.database.host,
+  port: runtimeConfig.database.port,
+  user: runtimeConfig.database.user,
+  password: runtimeConfig.database.password,
+  database: runtimeConfig.database.database,
+  max: runtimeConfig.database.maxConnections,
+  idleTimeoutMillis: runtimeConfig.database.idleTimeoutMs,
+  connectionTimeoutMillis: runtimeConfig.database.connectionTimeoutMs,
+  options: `-c search_path=${runtimeConfig.database.searchPath}`,
 });
 
 export const db = drizzle(pool);

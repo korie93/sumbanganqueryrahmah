@@ -1,16 +1,19 @@
 import type { AuthenticatedUser } from "../auth/guards";
-import type { PostgresStorage } from "../storage-postgres";
 import { CollectionAdminService } from "./collection/collection-admin.service";
 import { CollectionNicknameService } from "./collection/collection-nickname.service";
 import { CollectionRecordService } from "./collection/collection-record.service";
-import type { ListQuery, SummaryQuery } from "./collection/collection-service-support";
+import type {
+  CollectionStoragePort,
+  ListQuery,
+  SummaryQuery,
+} from "./collection/collection-service-support";
 
 export class CollectionService {
   private readonly adminService: CollectionAdminService;
   private readonly nicknameService: CollectionNicknameService;
   private readonly recordService: CollectionRecordService;
 
-  constructor(storage: PostgresStorage) {
+  constructor(storage: CollectionStoragePort) {
     this.adminService = new CollectionAdminService(storage);
     this.nicknameService = new CollectionNicknameService(storage);
     this.recordService = new CollectionRecordService(storage);
