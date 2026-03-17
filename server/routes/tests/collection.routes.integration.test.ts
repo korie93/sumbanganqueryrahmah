@@ -581,6 +581,48 @@ test("POST /api/collection creates a collection record and writes an audit log",
   }
 });
 
+test("POST /api/collection rejects future payment dates", async () => {
+  const { storage } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        customerName: "Future Customer",
+        icNumber: "880202026666",
+        customerPhone: "0129876543",
+        accountNumber: "ACC-2999",
+        batch: "P25",
+        paymentDate: "2999-01-01",
+        amount: 100,
+        collectionStaffNickname: "Collector Alpha",
+      }),
+    });
+
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.match(String(payload.message), /future/i);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /api/collection/list applies pagination and user-scoped filters", async () => {
   const { storage, listCalls, summaryCalls } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
@@ -655,6 +697,41 @@ test("PATCH /api/collection/:id updates a record and writes an audit log", async
     assert.equal(updateCalls[0].data.amount, 55.3);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "COLLECTION_RECORD_UPDATED");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/collection/:id rejects future payment dates", async () => {
+  const { storage } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        paymentDate: "2999-01-01",
+      }),
+    });
+
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.match(String(payload.message), /future/i);
   } finally {
     await stopTestServer(server);
   }

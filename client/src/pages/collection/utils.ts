@@ -24,6 +24,15 @@ export function isValidDate(value: string): boolean {
   return Number.isFinite(parsed.getTime());
 }
 
+export function getTodayIsoDate(referenceDate = new Date()): string {
+  return `${referenceDate.getFullYear()}-${String(referenceDate.getMonth() + 1).padStart(2, "0")}-${String(referenceDate.getDate()).padStart(2, "0")}`;
+}
+
+export function isFutureDate(value: string, referenceDate = new Date()): boolean {
+  if (!isValidDate(value)) return false;
+  return value > getTodayIsoDate(referenceDate);
+}
+
 export function isPositiveAmount(value: string): boolean {
   const amount = Number(value);
   return Number.isFinite(amount) && amount > 0;
