@@ -13,7 +13,7 @@ import {
 import type { CollectionRecord, CollectionRecordReceipt } from "@/lib/api";
 import type { ReceiptPreviewKind } from "@/pages/collection-records/types";
 
-interface ReceiptPreviewDialogProps {
+export interface ReceiptPreviewDialogProps {
   open: boolean;
   record: CollectionRecord | null;
   receipts: CollectionRecordReceipt[];

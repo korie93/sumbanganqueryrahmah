@@ -1,6 +1,13 @@
 import type { ChangeEvent, MutableRefObject } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,7 +19,7 @@ import type {
 } from "@/lib/api";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
 
-interface EditCollectionRecordDialogProps {
+export interface EditCollectionRecordDialogProps {
   open: boolean;
   savingEdit: boolean;
   loadingNicknames: boolean;
@@ -81,11 +88,15 @@ export function EditCollectionRecordDialog({
   onViewExistingReceipt,
   onSave,
 }: EditCollectionRecordDialogProps) {
+  const dialogDescription =
+    "Kemaskini maklumat collection, staff nickname, dan receipt yang dipautkan pada rekod ini.";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-auto">
         <DialogHeader>
           <DialogTitle>Edit Collection Record</DialogTitle>
+          <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">

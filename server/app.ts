@@ -1,6 +1,7 @@
 import express from "express";
 import { WebSocket } from "ws";
 import { createAuthGuards } from "./auth/guards";
+import { createCorsMiddleware } from "./http/cors";
 import { errorHandler } from "./middleware/error-handler";
 import { searchRateLimiter } from "./middleware/rate-limit";
 import { registerActivityRoutes } from "./routes/activity.routes";
@@ -26,13 +27,7 @@ app.use("/api/imports", express.urlencoded({ extended: true, limit: IMPORT_BODY_
 app.use(express.json({ limit: DEFAULT_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT }));
 
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-  if (req.method === "OPTIONS") return res.sendStatus(200);
-  return next();
-});
+app.use(createCorsMiddleware());
 
 const guards = createAuthGuards({ storage });
 const connectedClients = new Map<string, WebSocket>();

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Eye, EyeOff, LogIn, Lock } from "lucide-react";
 import type { User } from "@/app/types";
 import { Input } from "@/components/ui/input";
@@ -52,15 +52,15 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       const fingerprint = await generateFingerprint();
       const response = await login(username, password, fingerprint);
 
-      if (response.banned) {
+      if ("banned" in response) {
         localStorage.setItem("banned", "1");
         window.location.href = "/banned";
         return;
       }
 
-      const { token, username: responseUsername, role, activityId } = response;
-      
-      if (!token || !responseUsername || !role) {
+      const { username: responseUsername, role, activityId } = response;
+
+      if (!responseUsername || !role) {
         throw new Error("Incomplete login information from server.");
       }
 
@@ -81,7 +81,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       };
 
       localStorage.removeItem("banned");
-      localStorage.setItem("token", token);
       localStorage.setItem("fingerprint", fingerprint);
       persistAuthenticatedUser(authenticatedUser);
 
@@ -110,9 +109,15 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     }
   };
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void handleLogin();
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
-      handleLogin();
+      e.preventDefault();
+      void handleLogin();
     }
   };
 
@@ -141,7 +146,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               </p>
             </div>
 
-            <div className="space-y-4">
+            <form className="space-y-4" onSubmit={handleSubmit}>
               <div className="relative">
                 <Input
                   className="w-full px-4 py-3 rounded-xl bg-white/90 border-0 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-400 transition-all"
@@ -149,6 +154,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   onKeyDown={onKeyDown}
+                  autoComplete="username"
                   data-testid="input-username"
                   autoFocus
                 />
@@ -162,6 +168,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={onKeyDown}
+                  autoComplete="current-password"
                   data-testid="input-password"
                 />
                 <button
@@ -173,26 +180,26 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
-            </div>
 
-            <Button
-              className="mt-6 w-full h-12 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold shadow-lg shadow-blue-500/30 transition-all"
-              onClick={handleLogin}
-              disabled={loading}
-              data-testid="button-login"
-            >
-              {loading ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Signing in...
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <LogIn className="w-5 h-5" />
-                  Log In
-                </div>
-              )}
-            </Button>
+              <Button
+                type="submit"
+                className="mt-6 w-full h-12 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold shadow-lg shadow-blue-500/30 transition-all"
+                disabled={loading}
+                data-testid="button-login"
+              >
+                {loading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Signing in...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <LogIn className="w-5 h-5" />
+                    Log In
+                  </div>
+                )}
+              </Button>
+            </form>
 
             <button
               type="button"

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { hashOpaqueToken, verifyPassword } from "../../auth/passwords";
+import rateLimit from "express-rate-limit";
+import jwt from "jsonwebtoken";
+import { createAuthGuards } from "../../auth/guards";
+import { hashOpaqueToken, hashPassword, verifyPassword } from "../../auth/passwords";
 import { registerAuthRoutes } from "../auth.routes";
 import type { PostgresStorage } from "../../storage-postgres";
 import {
@@ -253,6 +256,96 @@ function createPasswordResetStorageDouble(options?: {
   };
 }
 
+function createCookieAuthStorageDouble() {
+  const user = {
+    id: "cookie-user-1",
+    username: "cookie.user",
+    fullName: "Cookie User",
+    email: "cookie.user@example.com",
+    role: "admin",
+    status: "active",
+    mustChangePassword: false,
+    passwordResetBySuperuser: false,
+    isBanned: false,
+    activatedAt: new Date("2026-03-01T00:00:00.000Z"),
+    passwordChangedAt: null,
+    lastLoginAt: null,
+  };
+  const activity = {
+    id: "activity-cookie-1",
+    userId: user.id,
+    username: user.username,
+    role: user.role,
+    isActive: true,
+    logoutTime: null,
+    fingerprint: "fingerprint-cookie",
+    ipAddress: "127.0.0.1",
+  };
+
+  const storage = {
+    getActivityById: async (activityId: string) => (activityId === activity.id ? activity : null),
+    getUser: async (userId: string) => (userId === user.id ? user : null),
+    getUserByUsername: async (username: string) => (username === user.username ? user : null),
+    isVisitorBanned: async () => false,
+    updateActivity: async () => activity,
+    getRoleTabVisibility: async () => ({}),
+  } as unknown as PostgresStorage;
+
+  return {
+    storage,
+    user,
+    activity,
+  };
+}
+
+async function createLoginStorageDouble() {
+  const passwordHash = await hashPassword("StrongPass123!");
+  const auditLogs: AuditEntry[] = [];
+  const user = {
+    id: "login-user-1",
+    username: "login.user",
+    fullName: "Login User",
+    email: "login.user@example.com",
+    role: "user",
+    status: "active",
+    passwordHash,
+    mustChangePassword: false,
+    passwordResetBySuperuser: false,
+    isBanned: false,
+    activatedAt: new Date("2026-03-01T00:00:00.000Z"),
+    passwordChangedAt: new Date("2026-03-01T00:00:00.000Z"),
+    lastLoginAt: null,
+  };
+  const activity = {
+    id: "activity-login-1",
+    userId: user.id,
+    username: user.username,
+    role: user.role,
+    isActive: true,
+    logoutTime: null,
+    fingerprint: "fingerprint-login",
+    ipAddress: "127.0.0.1",
+  };
+
+  const storage = {
+    getUserByUsername: async (username: string) => (username === user.username ? user : null),
+    isVisitorBanned: async () => false,
+    createAuditLog: async (entry: AuditEntry) => {
+      auditLogs.push(entry);
+      return { id: `audit-${auditLogs.length}`, ...entry };
+    },
+    createActivity: async () => activity,
+    touchLastLogin: async () => undefined,
+  } as unknown as PostgresStorage;
+
+  return {
+    storage,
+    user,
+    activity,
+    auditLogs,
+  };
+}
+
 test("POST /api/auth/request-password-reset stays generic for unknown accounts", async () => {
   const { storage, resetRequests, auditLogs } = createAuthStorageDouble();
   const app = createJsonTestApp();
@@ -281,6 +374,91 @@ test("POST /api/auth/request-password-reset stays generic for unknown accounts",
     });
     assert.equal(resetRequests.length, 0);
     assert.equal(auditLogs.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/me accepts the auth session cookie without a bearer token", async () => {
+  const secret = "cookie-auth-test-secret";
+  const { storage, user, activity } = createCookieAuthStorageDouble();
+  const guards = createAuthGuards({ storage, secret });
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: guards.authenticateToken,
+    requireRole: guards.requireRole,
+    connectedClients: new Map(),
+  });
+
+  const token = jwt.sign(
+    {
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+      activityId: activity.id,
+    },
+    secret,
+    { expiresIn: "24h" },
+  );
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/me`, {
+      headers: {
+        Cookie: `sqr_auth=${encodeURIComponent(token)}`,
+      },
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.user.username, user.username);
+    assert.equal(payload.user.role, user.role);
+    assert.equal(payload.user.status, user.status);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/auth/login sets the auth cookie without exposing the JWT in JSON", async () => {
+  const { storage, user, activity, auditLogs } = await createLoginStorageDouble();
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: (_req, _res, next) => next(),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: user.username,
+        password: "StrongPass123!",
+        fingerprint: "fingerprint-login",
+        browser: "Mozilla/5.0",
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.username, user.username);
+    assert.equal(payload.activityId, activity.id);
+    assert.equal(payload.token, undefined);
+
+    const setCookie = response.headers.get("set-cookie") || "";
+    assert.match(setCookie, /sqr_auth=/);
+    assert.match(setCookie, /sqr_auth_hint=1/);
+    assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_SUCCESS"), true);
   } finally {
     await stopTestServer(server);
   }
@@ -330,6 +508,70 @@ test("POST /api/auth/request-password-reset creates a request and audit log for 
     assert.equal(auditLogs[0].action, "PASSWORD_RESET_REQUESTED");
     assert.equal(auditLogs[0].performedBy, "managed.user");
     assert.equal(auditLogs[0].targetUser, "user-1");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/auth/request-password-reset is rate limited after repeated attempts", async () => {
+  const { storage } = createAuthStorageDouble();
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: (_req, _res, next) => next(),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+    rateLimiters: {
+      publicRecovery: rateLimit({
+        windowMs: 60 * 1000,
+        max: 2,
+        standardHeaders: true,
+        legacyHeaders: false,
+        handler: (_req, res) => {
+          res.status(429).json({
+            ok: false,
+            error: {
+              code: "AUTH_RECOVERY_RATE_LIMITED",
+              message: "Too many activation or password reset attempts. Please try again shortly.",
+            },
+          });
+        },
+      }),
+    },
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const requestBody = JSON.stringify({ identifier: "missing.user@example.com" });
+    const headers = { "Content-Type": "application/json" };
+
+    const first = await fetch(`${baseUrl}/api/auth/request-password-reset`, {
+      method: "POST",
+      headers,
+      body: requestBody,
+    });
+    const second = await fetch(`${baseUrl}/api/auth/request-password-reset`, {
+      method: "POST",
+      headers,
+      body: requestBody,
+    });
+    const third = await fetch(`${baseUrl}/api/auth/request-password-reset`, {
+      method: "POST",
+      headers,
+      body: requestBody,
+    });
+
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200);
+    assert.equal(third.status, 429);
+    assert.deepEqual(await third.json(), {
+      ok: false,
+      error: {
+        code: "AUTH_RECOVERY_RATE_LIMITED",
+        message: "Too many activation or password reset attempts. Please try again shortly.",
+      },
+    });
   } finally {
     await stopTestServer(server);
   }

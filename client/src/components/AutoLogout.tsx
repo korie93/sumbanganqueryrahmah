@@ -166,7 +166,7 @@ export default function AutoLogout({
         void runLogout();
       }
 
-      if (event.key === "token" && !event.newValue) {
+      if (event.key === "user" && !event.newValue) {
         void runLogout();
       }
     };
@@ -186,8 +186,7 @@ export default function AutoLogout({
 
   useEffect(() => {
     const currentUsername = username || localStorage.getItem("username");
-    const token = localStorage.getItem("token");
-    if (!currentUsername || !token) {
+    if (!currentUsername) {
       return;
     }
 
@@ -196,7 +195,8 @@ export default function AutoLogout({
     reconnectEnabledRef.current = true;
 
     const scheduleReconnect = () => {
-      if (!mountedRef.current || !reconnectEnabledRef.current || !localStorage.getItem("token")) {
+      const nextUsername = username || localStorage.getItem("username");
+      if (!mountedRef.current || !reconnectEnabledRef.current || !nextUsername) {
         return;
       }
 
@@ -210,11 +210,8 @@ export default function AutoLogout({
     const connectWebSocket = () => {
       if (!mountedRef.current || !reconnectEnabledRef.current) return;
 
-      const currentToken = localStorage.getItem("token");
-      if (!currentToken) return;
-
       try {
-        const wsUrl = `${protocol}//${host}/ws?token=${encodeURIComponent(currentToken)}`;
+        const wsUrl = `${protocol}//${host}/ws`;
         const socket = new WebSocket(wsUrl);
         wsRef.current = socket;
 

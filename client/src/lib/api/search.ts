@@ -5,6 +5,7 @@ export async function searchData(query: string, page: number = 1, limit: number 
   const res = await fetch(
     `/api/search/global?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`,
     {
+      credentials: "include",
       headers: {
         ...getAuthHeader(),
       },

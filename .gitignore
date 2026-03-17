@@ -1,2 +1,5 @@
 node_modules
 var/dev-mail-outbox/
+.env
+.env.*
+!.env.example

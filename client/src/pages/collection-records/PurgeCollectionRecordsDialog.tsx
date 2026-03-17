@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { formatAmountRM } from "@/pages/collection/utils";
 
-type PurgeCollectionRecordsDialogProps = {
+export type PurgeCollectionRecordsDialogProps = {
   open: boolean;
   loading: boolean;
   purging: boolean;

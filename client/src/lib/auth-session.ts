@@ -1,5 +1,20 @@
 import type { User } from "@/app/types";
 
+const AUTH_SESSION_HINT_COOKIE_NAME = "sqr_auth_hint";
+
+function clearAuthSessionHintCookie() {
+  if (typeof document === "undefined") return;
+
+  document.cookie = `${AUTH_SESSION_HINT_COOKIE_NAME}=; Max-Age=0; path=/; SameSite=Lax`;
+}
+
+export function hasAuthSessionHintCookie() {
+  if (typeof document === "undefined") return false;
+
+  const cookiePrefix = `${AUTH_SESSION_HINT_COOKIE_NAME}=`;
+  return document.cookie.split(";").some((part) => part.trim().startsWith(cookiePrefix));
+}
+
 export function persistAuthenticatedUser(user: User) {
   localStorage.setItem("username", user.username);
   localStorage.setItem("role", user.role);
@@ -12,6 +27,7 @@ export function persistAuthenticatedUser(user: User) {
 }
 
 export function clearAuthenticatedUserStorage() {
+  clearAuthSessionHintCookie();
   localStorage.removeItem("token");
   localStorage.removeItem("user");
   localStorage.removeItem("username");

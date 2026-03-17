@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { CollectionAdminGroup } from "@/lib/api";
 
-interface GroupListPanelProps {
+export interface GroupListPanelProps {
   loadingGroups: boolean;
   filteredGroups: CollectionAdminGroup[];
   expandedGroupIds: string[];

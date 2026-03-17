@@ -1,5 +1,4 @@
 import { apiRequest } from "../queryClient";
-import { getStoredToken } from "./shared";
 
 export type ActivityLoginPayload = {
   username: string;
@@ -35,28 +34,20 @@ export async function activityHeartbeat(payload?: {
   browser?: string;
   fingerprint?: string;
 }) {
-  const token = getStoredToken();
-  if (!token) return;
-
   return fetch("/api/activity/heartbeat", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
     },
+    credentials: "include",
     body: JSON.stringify(payload || {}),
   });
 }
 
 export async function activityHeartbeatLight() {
-  const token = getStoredToken();
-  if (!token) return;
-
   return fetch("/api/activity/heartbeat", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    credentials: "include",
   });
 }
 
