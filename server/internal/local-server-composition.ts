@@ -299,7 +299,6 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     invalidateMaintenanceCache,
     getMaintenanceStateCached,
     broadcastWsMessage,
-    defaultAiTimeoutMs,
   });
 
   registerOperationsRoutes(app, {

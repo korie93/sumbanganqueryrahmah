@@ -83,8 +83,39 @@ type ChangePasswordInput = {
   newPassword: string;
 };
 
+type AuthAccountStorage = Pick<
+  PostgresStorage,
+  | "consumeActivationTokenById"
+  | "consumePasswordResetRequestById"
+  | "createActivationToken"
+  | "createActivity"
+  | "createAuditLog"
+  | "createManagedUserAccount"
+  | "createPasswordResetRequest"
+  | "deactivateUserActivities"
+  | "deactivateUserSessionsByFingerprint"
+  | "deleteManagedUserAccount"
+  | "getActivationTokenRecordByHash"
+  | "getActiveActivitiesByUsername"
+  | "getBooleanSystemSetting"
+  | "getManagedUsers"
+  | "getPasswordResetTokenRecordByHash"
+  | "getUser"
+  | "getUserByEmail"
+  | "getUserByUsername"
+  | "invalidateUnusedActivationTokens"
+  | "invalidateUnusedPasswordResetTokens"
+  | "isVisitorBanned"
+  | "listPendingPasswordResetRequests"
+  | "resolvePendingPasswordResetRequestsForUser"
+  | "touchLastLogin"
+  | "updateActivitiesUsername"
+  | "updateUserAccount"
+  | "updateUserCredentials"
+>;
+
 export class AuthAccountService {
-  constructor(private readonly storage: PostgresStorage) {}
+  constructor(private readonly storage: AuthAccountStorage) {}
 
   private requireManagedEmail(email: string | null, message: string) {
     const normalizedEmail = normalizeEmailInput(email);

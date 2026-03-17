@@ -55,8 +55,21 @@ export type LastAiPersonEntry = {
   row: AiSearchCandidateRow;
 };
 
+export type AiSearchStorage = Pick<
+  PostgresStorage,
+  | "aiDigitsSearch"
+  | "aiFuzzySearch"
+  | "aiKeywordSearch"
+  | "aiNameSearch"
+  | "findBranchesByPostcode"
+  | "findBranchesByText"
+  | "getNearestBranches"
+  | "getPostcodeLatLng"
+  | "semanticSearch"
+>;
+
 export type AiSearchServiceOptions = {
-  storage: PostgresStorage;
+  storage: AiSearchStorage;
   withAiCircuit: <T>(operation: () => Promise<T>) => Promise<T>;
   ollamaChat: (messages: OllamaMessage[], options?: Record<string, unknown>) => Promise<string>;
   ollamaEmbed: (text: string) => Promise<number[]>;

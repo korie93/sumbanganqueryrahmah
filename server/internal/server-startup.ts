@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import type { WebSocket } from "ws";
+import { runtimeConfig } from "../config/runtime";
 import type { PostgresStorage } from "../storage-postgres";
 import type { CategoryStatsService } from "../services/category-stats.service";
 import { registerFrontendStatic } from "./frontend-static";
@@ -46,8 +47,8 @@ export async function startLocalServer(options: StartLocalServerOptions) {
     aiPrecomputeOnStart,
     categoryStatsService,
     notifyFatalStartup,
-    port = parseInt(process.env.PORT || "5000", 10),
-    host = "0.0.0.0",
+    port = runtimeConfig.app.port,
+    host = runtimeConfig.app.host,
   } = options;
 
   console.log("");

@@ -1,32 +1,47 @@
-# CODEX.md
+# Codex Guide
 
-## Codex Execution Guide
+## Current Refactor Priorities
 
-This repository supports automated improvements using Codex (GPT‑5.x).
+When making incremental changes in this repository, prefer this order:
 
-### Responsibilities
+1. keep the runtime boot path deterministic
+2. centralize and validate configuration
+3. narrow domain boundaries without breaking route contracts
+4. decompose large route/controller modules by domain
+5. keep CI reproducible with typecheck, tests, build, and smoke
 
-Codex should: - Identify security issues - Improve architecture -
-Generate safe refactor patches - Improve logging and error handling -
-Add tests - Add CI/CD pipelines
+## Runtime Truth
 
-### Priority Fix Order
+The source local server entrypoint is:
 
-1.  Remove `.env` from repository
-2.  Standardize database to PostgreSQL
-3.  Refactor backend architecture
-4.  Add global error handler
-5.  Implement structured logging
-6.  Add rate limiting
-7.  Add AI fallback logic
-8.  Add test infrastructure
-9.  Add CI/CD
-10. Audit dependencies
+- `server/index-local.ts`
 
-### Expected Codex Outputs
+The shared app/runtime assembly lives in:
 
--   Pull request patches
--   Dependency cleanup
--   Security fixes
--   Test scaffolding
--   CI pipeline setup
+- `server/internal/local-runtime-environment.ts`
+
+The built clustered runtime starts from:
+
+- `server/cluster-local.ts`
+
+## Required Verification
+
+For runtime, route, or config changes, run:
+
+1. `npm run typecheck`
+2. `npm test`
+3. `npm run build`
+4. `npm run smoke:ui`
+
+If the change touches authenticated navigation, run smoke with:
+
+- `SMOKE_TEST_USERNAME`
+- `SMOKE_TEST_PASSWORD`
+
+## Safe Refactor Style
+
+- keep endpoints stable
+- prefer extraction over rewrite
+- introduce typed parsers before changing behavior
+- reduce storage/service coupling with narrow ports
+- update docs when entrypoints, config, or verification flow changes

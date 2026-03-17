@@ -1,87 +1,1560 @@
 // server/index-local.ts
 import "dotenv/config";
-import express3 from "express";
-import { createServer } from "http";
-import path5 from "path";
-import { WebSocketServer } from "ws";
 
-// server/internal/aiBootstrap.ts
-import { sql } from "drizzle-orm";
-
-// server/db-postgres.ts
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
-
-// server/config/security.ts
+// server/config/runtime.ts
+import path from "node:path";
 import { randomBytes } from "node:crypto";
-var isProduction = process.env.NODE_ENV === "production";
-var cachedSessionSecret = null;
-var cachedCollectionNicknameTempPassword = null;
-function readEnv(name) {
+function readOptionalString(name) {
   const value = process.env[name];
-  if (typeof value !== "string") return null;
+  if (typeof value !== "string") {
+    return null;
+  }
   const normalized = value.trim();
   return normalized ? normalized : null;
+}
+function readString(name, fallback) {
+  return readOptionalString(name) ?? fallback;
+}
+function readInt(name, fallback, options) {
+  const raw = readOptionalString(name);
+  const parsed = raw == null ? fallback : Number(raw);
+  const normalized = Number.isFinite(parsed) ? Math.floor(parsed) : fallback;
+  const min = options?.min ?? Number.NEGATIVE_INFINITY;
+  const max = options?.max ?? Number.POSITIVE_INFINITY;
+  return Math.max(min, Math.min(max, normalized));
+}
+function readBoolean(name, fallback) {
+  const raw = String(readOptionalString(name) ?? "").trim().toLowerCase();
+  if (raw === "1" || raw === "true") return true;
+  if (raw === "0" || raw === "false") return false;
+  return fallback;
 }
 function buildEphemeralSecret(label) {
   return `${label.toLowerCase()}-${randomBytes(32).toString("hex")}`;
 }
-function getSessionSecret() {
-  if (cachedSessionSecret) return cachedSessionSecret;
-  const secret = readEnv("SESSION_SECRET");
-  if (secret) {
-    cachedSessionSecret = secret;
-    return secret;
+function readSecretOrThrow(name, label, isProduction2, fallbackFactory) {
+  const value = readOptionalString(name);
+  if (value) {
+    return value;
   }
-  if (isProduction) {
-    throw new Error("SESSION_SECRET is required in production.");
+  if (isProduction2) {
+    throw new Error(`${name} is required in production.`);
   }
-  cachedSessionSecret = buildEphemeralSecret("session");
-  return cachedSessionSecret;
+  return fallbackFactory();
 }
-function getCollectionNicknameTempPassword() {
-  if (cachedCollectionNicknameTempPassword) {
-    return cachedCollectionNicknameTempPassword;
+function resolveNodeEnv() {
+  const raw = String(process.env.NODE_ENV || "development").trim().toLowerCase();
+  if (raw === "production" || raw === "test") {
+    return raw;
   }
-  const password = readEnv("COLLECTION_NICKNAME_TEMP_PASSWORD");
-  if (password) {
-    cachedCollectionNicknameTempPassword = password;
-    return password;
-  }
-  if (isProduction) {
-    throw new Error("COLLECTION_NICKNAME_TEMP_PASSWORD is required in production.");
-  }
-  cachedCollectionNicknameTempPassword = buildEphemeralSecret("collection-temp").slice(0, 16);
-  return cachedCollectionNicknameTempPassword;
+  return "development";
 }
-function shouldSeedDefaultUsers() {
-  return String(process.env.SEED_DEFAULT_USERS || "0") === "1";
-}
-function readDatabasePassword() {
-  const password = readEnv("PG_PASSWORD");
-  if (password) return password;
-  if (isProduction) {
-    throw new Error("PG_PASSWORD is required in production.");
+function resolveCookieSecure(isProduction2, publicAppUrl2) {
+  const explicit = String(readOptionalString("AUTH_COOKIE_SECURE") || "").toLowerCase();
+  if (explicit === "1" || explicit === "true") {
+    return true;
   }
-  return void 0;
+  if (explicit === "0" || explicit === "false") {
+    return false;
+  }
+  return isProduction2 || String(publicAppUrl2 || "").toLowerCase().startsWith("https://");
+}
+function resolveCorsAllowedOrigins(publicAppUrl2) {
+  const configured = readString("CORS_ALLOWED_ORIGINS", "").split(",").map((entry) => entry.trim()).filter(Boolean);
+  if (publicAppUrl2 && !configured.includes(publicAppUrl2)) {
+    configured.push(publicAppUrl2);
+  }
+  return configured;
+}
+var nodeEnv = resolveNodeEnv();
+var isProduction = nodeEnv === "production";
+var publicAppUrl = readOptionalString("PUBLIC_APP_URL");
+var lowMemoryMode = readBoolean("SQR_LOW_MEMORY_MODE", true);
+var runtimeConfig = Object.freeze({
+  app: {
+    nodeEnv,
+    isProduction,
+    port: readInt("PORT", 5e3, { min: 1, max: 65535 }),
+    host: readString("HOST", "0.0.0.0"),
+    publicAppUrl,
+    debugLogs: readBoolean("DEBUG_LOGS", false),
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    bodyLimits: {
+      default: readString("DEFAULT_BODY_LIMIT", "2mb"),
+      imports: readString("IMPORT_BODY_LIMIT", "50mb"),
+      collection: readString("COLLECTION_BODY_LIMIT", "8mb")
+    },
+    corsAllowedOrigins: resolveCorsAllowedOrigins(publicAppUrl)
+  },
+  database: {
+    host: readString("PG_HOST", "localhost"),
+    port: readInt("PG_PORT", 5432, { min: 1, max: 65535 }),
+    user: readString("PG_USER", "postgres"),
+    password: (() => {
+      const configured = readOptionalString("PG_PASSWORD");
+      if (configured) {
+        return configured;
+      }
+      if (isProduction) {
+        throw new Error("PG_PASSWORD is required in production.");
+      }
+      return void 0;
+    })(),
+    database: readString("PG_DATABASE", "sqr_db"),
+    maxConnections: readInt("PG_MAX_CONNECTIONS", 5, { min: 1, max: 50 }),
+    idleTimeoutMs: readInt("PG_IDLE_TIMEOUT_MS", 3e4, { min: 1e3 }),
+    connectionTimeoutMs: readInt("PG_CONNECTION_TIMEOUT_MS", 5e3, { min: 1e3 }),
+    searchPath: readString("PG_SEARCH_PATH", "public")
+  },
+  auth: {
+    sessionSecret: readSecretOrThrow("SESSION_SECRET", "session", isProduction, () => buildEphemeralSecret("session")),
+    collectionNicknameTempPassword: readSecretOrThrow(
+      "COLLECTION_NICKNAME_TEMP_PASSWORD",
+      "collection temp password",
+      isProduction,
+      () => buildEphemeralSecret("collection-temp").slice(0, 16)
+    ),
+    seedDefaultUsers: readBoolean("SEED_DEFAULT_USERS", false),
+    cookieSecure: resolveCookieSecure(isProduction, publicAppUrl)
+  },
+  ai: {
+    host: readString("OLLAMA_HOST", "http://127.0.0.1:11434"),
+    chatModel: readString("OLLAMA_CHAT_MODEL", "llama3:8b"),
+    embedModel: readString("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
+    timeoutMs: readInt("OLLAMA_TIMEOUT_MS", 6e3, { min: 1e3 }),
+    precomputeOnStart: readBoolean("AI_PRECOMPUTE_ON_START", false),
+    lowMemoryMode,
+    debugLogs: readBoolean("DEBUG_LOGS", false),
+    gate: {
+      globalLimit: readInt("AI_GATE_GLOBAL_LIMIT", 4, { min: 1 }),
+      queueLimit: readInt("AI_GATE_QUEUE_LIMIT", 20, { min: 0 }),
+      queueWaitMs: readInt("AI_GATE_QUEUE_WAIT_MS", 12e3, { min: 1e3 }),
+      roleLimits: {
+        user: readInt("AI_GATE_USER_LIMIT", 2, { min: 1 }),
+        admin: readInt("AI_GATE_ADMIN_LIMIT", 1, { min: 1 }),
+        superuser: readInt("AI_GATE_SUPERUSER_LIMIT", 1, { min: 1 })
+      }
+    },
+    latency: {
+      staleAfterMs: readInt("AI_LATENCY_STALE_AFTER_MS", 2e4, { min: 5e3 }),
+      decayHalfLifeMs: readInt("AI_LATENCY_DECAY_HALF_LIFE_MS", 3e4, { min: 5e3 })
+    },
+    cache: {
+      maxSearchEntries: readInt("SQR_MAX_SEARCH_CACHE_ENTRIES", lowMemoryMode ? 60 : 180, { min: 10 }),
+      maxLastPersonEntries: readInt("SQR_MAX_AI_LAST_PERSON_ENTRIES", lowMemoryMode ? 40 : 120, { min: 10 }),
+      lastPersonTtlMs: readInt("SQR_AI_LAST_PERSON_TTL_MS", 18e5, { min: 6e4 })
+    }
+  },
+  runtime: {
+    defaults: {
+      sessionTimeoutMinutes: readInt("DEFAULT_SESSION_TIMEOUT_MINUTES", 30, { min: 1 }),
+      wsIdleMinutes: readInt("DEFAULT_WS_IDLE_MINUTES", 3, { min: 1 }),
+      aiTimeoutMs: readInt("DEFAULT_AI_TIMEOUT_MS", 6e3, { min: 1e3 }),
+      searchResultLimit: readInt("DEFAULT_SEARCH_RESULT_LIMIT", 200, { min: 10, max: 5e3 }),
+      viewerRowsPerPage: readInt("DEFAULT_VIEWER_ROWS_PER_PAGE", 100, { min: 10, max: 500 })
+    },
+    maintenanceCacheTtlMs: readInt("MAINTENANCE_CACHE_TTL_MS", 3e3, { min: 500 }),
+    runtimeSettingsCacheTtlMs: readInt("RUNTIME_SETTINGS_CACHE_TTL_MS", 3e3, { min: 500 }),
+    pgPoolWarnCooldownMs: readInt("PG_POOL_WARN_COOLDOWN_MS", 6e4, { min: 1e3 })
+  },
+  cluster: {
+    lowMemoryMode,
+    maxWorkers: readInt("SQR_MAX_WORKERS", lowMemoryMode ? 1 : 4, { min: 1 }),
+    preallocateMb: readInt("SQR_PREALLOCATE_MB", lowMemoryMode ? 0 : 32, { min: 0 })
+  }
+});
+
+// server/internal/frontend-static.ts
+import express from "express";
+import fs from "fs";
+import path2 from "path";
+var DEFAULT_FRONTEND_PATHS = [
+  "dist-local/public",
+  "dist-local\\public",
+  "dist/public",
+  "dist\\public"
+];
+function registerFrontendStatic(app2, options) {
+  const cwd = options?.cwd || process.cwd();
+  const possiblePaths = options?.paths || DEFAULT_FRONTEND_PATHS;
+  console.log(`  Working directory: ${cwd}`);
+  let foundPath = null;
+  let foundIndex = null;
+  for (const relPath of possiblePaths) {
+    const fullPath = path2.resolve(cwd, relPath);
+    const indexFile = path2.join(fullPath, "index.html");
+    console.log(`  Checking: ${fullPath}`);
+    try {
+      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
+        const files = fs.readdirSync(fullPath);
+        const preview = files.slice(0, 5).join(", ");
+        console.log(`    Found ${files.length} files: ${preview}${files.length > 5 ? "..." : ""}`);
+        if (fs.existsSync(indexFile)) {
+          foundPath = fullPath;
+          foundIndex = indexFile;
+          break;
+        }
+      }
+    } catch (error) {
+      console.log(`    Error: ${error.message}`);
+    }
+  }
+  if (foundPath && foundIndex) {
+    console.log(`  Frontend: Serving from ${foundPath}`);
+    app2.use(express.static(foundPath));
+    app2.use((req, res, next) => {
+      if (req.path.startsWith("/api") || req.path.startsWith("/ws")) {
+        return next();
+      }
+      return res.sendFile(foundIndex);
+    });
+    console.log("  Frontend: OK");
+    return;
+  }
+  console.log("");
+  console.log("  ERROR: Frontend files not found!");
+  console.log("  Please run: npm run build:local");
+  console.log(`  Expected location: ${path2.resolve(cwd, "dist-local/public")}`);
+  app2.use((req, res) => {
+    if (!req.path.startsWith("/api") && !req.path.startsWith("/ws")) {
+      res.status(404).send(`
+          <html>
+            <body style="font-family: sans-serif; padding: 40px;">
+              <h1>Frontend Not Built</h1>
+              <p>Please run: <code>npm run build:local</code></p>
+              <p>Then restart the server.</p>
+            </body>
+          </html>
+        `);
+    }
+  });
+}
+
+// server/internal/idle-session-sweeper.ts
+import { WebSocket } from "ws";
+function startIdleSessionSweeper(options) {
+  const {
+    storage: storage2,
+    connectedClients: connectedClients2,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    defaultSessionTimeoutMinutes: defaultSessionTimeoutMinutes2,
+    intervalMs = 6e4
+  } = options;
+  let running = false;
+  const handle = setInterval(async () => {
+    if (running) {
+      return;
+    }
+    running = true;
+    try {
+      const now = Date.now();
+      const activities = await storage2.getActiveActivities();
+      const runtimeSettings = await getRuntimeSettingsCached2();
+      const idleMinutes = Math.max(
+        1,
+        runtimeSettings.sessionTimeoutMinutes || runtimeSettings.wsIdleMinutes || defaultSessionTimeoutMinutes2
+      );
+      const idleMs = idleMinutes * 60 * 1e3;
+      for (const activity of activities) {
+        if (!activity.lastActivityTime) {
+          continue;
+        }
+        const last = new Date(activity.lastActivityTime).getTime();
+        if (now - last <= idleMs) {
+          continue;
+        }
+        const freshActivity = await storage2.getActivityById(activity.id);
+        if (!freshActivity || freshActivity.isActive === false) {
+          continue;
+        }
+        const freshLast = freshActivity.lastActivityTime ? new Date(freshActivity.lastActivityTime).getTime() : 0;
+        if (!freshLast || now - freshLast <= idleMs) {
+          continue;
+        }
+        console.log(`IDLE TIMEOUT: ${activity.username} (${activity.id})`);
+        await storage2.updateActivity(activity.id, {
+          isActive: false,
+          logoutTime: /* @__PURE__ */ new Date(),
+          logoutReason: "IDLE_TIMEOUT"
+        });
+        const socket = connectedClients2.get(activity.id);
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({
+            type: "idle_timeout",
+            reason: "Session expired due to inactivity"
+          }));
+          socket.close();
+        }
+        connectedClients2.delete(activity.id);
+        await storage2.clearCollectionNicknameSessionByActivity(activity.id);
+        await storage2.createAuditLog({
+          action: "SESSION_IDLE_TIMEOUT",
+          performedBy: activity.username,
+          details: `Auto logout after ${idleMinutes} minutes idle`
+        });
+      }
+    } catch (error) {
+      console.error("Idle session checker error:", error);
+    } finally {
+      running = false;
+    }
+  }, intervalMs);
+  handle.unref();
+  return handle;
+}
+
+// server/internal/server-startup.ts
+async function startLocalServer(options) {
+  const {
+    app: app2,
+    server: server2,
+    storage: storage2,
+    connectedClients: connectedClients2,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    defaultSessionTimeoutMinutes: defaultSessionTimeoutMinutes2,
+    aiPrecomputeOnStart: aiPrecomputeOnStart2,
+    categoryStatsService: categoryStatsService2,
+    notifyFatalStartup,
+    port: port2 = runtimeConfig.app.port,
+    host: host2 = runtimeConfig.app.host
+  } = options;
+  console.log("");
+  console.log("=========================================");
+  console.log("  SQR - SUMBANGAN QUERY RAHMAH");
+  console.log("  Mode: Local (PostgreSQL Database)");
+  console.log("=========================================");
+  console.log("");
+  console.log("  Database: PostgreSQL - OK");
+  await storage2.init();
+  registerFrontendStatic(app2);
+  const idleSweeperHandle = startIdleSessionSweeper({
+    storage: storage2,
+    connectedClients: connectedClients2,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    defaultSessionTimeoutMinutes: defaultSessionTimeoutMinutes2
+  });
+  server2.once("close", () => {
+    clearInterval(idleSweeperHandle);
+  });
+  server2.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      notifyFatalStartup("EADDRINUSE", `Port ${port2} is already in use`);
+      console.error(`ERROR Port ${port2} is already in use.`);
+      console.error("   This usually means a previous server process hasn't fully released the port yet.");
+      console.error(`   Please wait a few seconds and try again, or use: lsof -i :${port2} (or netstat -ano | findstr :${port2} on Windows)`);
+      setTimeout(() => process.exit(98), 10).unref();
+      return;
+    }
+    notifyFatalStartup("SERVER_STARTUP_ERROR", String(err?.message || err));
+    console.error("ERROR Server error:", err);
+    setTimeout(() => process.exit(1), 10).unref();
+  });
+  server2.listen(port2, host2, () => {
+    console.log("");
+    console.log("=========================================");
+    console.log(`  Server berjalan di port ${port2}`);
+    console.log("");
+    console.log("  Buka browser:");
+    console.log(`    http://localhost:${port2}`);
+    console.log("");
+    console.log("  Untuk akses dari PC lain (LAN):");
+    console.log(`    http://[IP-KOMPUTER]:${port2}`);
+    console.log("=========================================");
+    console.log("");
+  });
+  if (!aiPrecomputeOnStart2) {
+    return;
+  }
+  setTimeout(async () => {
+    try {
+      const result = await categoryStatsService2.warmCategoryStats();
+      if (result.skipped) {
+        console.log("OK Category stats already present. Skipping precompute.");
+        return;
+      }
+      console.log(`INFO Precomputing category stats (${result.computeKeys} key(s))...`);
+      console.log("OK Precomputed category stats.");
+    } catch (err) {
+      console.error("ERROR Precompute stats failed:", err?.message || err);
+    }
+  }, 0);
+}
+
+// server/internal/local-runtime-environment.ts
+import express3 from "express";
+import { createServer } from "http";
+import { WebSocketServer } from "ws";
+
+// server/ai-ollama.ts
+var OLLAMA_HOST = runtimeConfig.ai.host;
+var OLLAMA_CHAT_MODEL = runtimeConfig.ai.chatModel;
+var OLLAMA_EMBED_MODEL = runtimeConfig.ai.embedModel;
+var MAX_OLLAMA_MESSAGES = 50;
+function ensureText(input) {
+  return (input || "").trim();
+}
+async function ollamaEmbed(input) {
+  const prompt = ensureText(input);
+  if (!prompt) return [];
+  const res = await fetch(`${OLLAMA_HOST}/api/embeddings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: OLLAMA_EMBED_MODEL,
+      prompt
+    })
+  });
+  if (!res.ok) {
+    const text2 = await res.text();
+    throw new Error(`Ollama embeddings failed: ${res.status} ${text2}`);
+  }
+  const data = await res.json();
+  return Array.isArray(data.embedding) ? data.embedding : [];
+}
+async function ollamaChat(messages, options) {
+  const timeoutMs = Number(options?.timeoutMs ?? runtimeConfig.ai.timeoutMs);
+  const boundedMessages = Array.isArray(messages) ? messages.slice(Math.max(0, messages.length - MAX_OLLAMA_MESSAGES)) : [];
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch(`${OLLAMA_HOST}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: OLLAMA_CHAT_MODEL,
+        messages: boundedMessages,
+        stream: false,
+        options: {
+          num_predict: options?.num_predict ?? 96,
+          temperature: options?.temperature ?? 0.2,
+          top_p: options?.top_p ?? 0.9
+        }
+      })
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!res.ok) {
+    const text2 = await res.text();
+    throw new Error(`Ollama chat failed: ${res.status} ${text2}`);
+  }
+  const data = await res.json();
+  return data?.message?.content ?? "";
+}
+function getOllamaConfig() {
+  return {
+    host: OLLAMA_HOST,
+    chatModel: OLLAMA_CHAT_MODEL,
+    embedModel: OLLAMA_EMBED_MODEL
+  };
 }
 
 // server/db-postgres.ts
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
 var { Pool } = pg;
 var pool = new Pool({
-  host: process.env.PG_HOST || "localhost",
-  port: Number(process.env.PG_PORT || 5432),
-  user: process.env.PG_USER || "postgres",
-  password: readDatabasePassword(),
-  database: process.env.PG_DATABASE || "sqr_db",
-  max: 5,
-  idleTimeoutMillis: 3e4,
-  connectionTimeoutMillis: 5e3,
-  options: "-c search_path=public"
+  host: runtimeConfig.database.host,
+  port: runtimeConfig.database.port,
+  user: runtimeConfig.database.user,
+  password: runtimeConfig.database.password,
+  database: runtimeConfig.database.database,
+  max: runtimeConfig.database.maxConnections,
+  idleTimeoutMillis: runtimeConfig.database.idleTimeoutMs,
+  connectionTimeoutMillis: runtimeConfig.database.connectionTimeoutMs,
+  options: `-c search_path=${runtimeConfig.database.searchPath}`
 });
 var db = drizzle(pool);
 
+// server/intelligence/anomaly/AnomalyEngine.ts
+var WEIGHTS = {
+  normalizedZScore: 0.3,
+  slopeWeight: 0.2,
+  percentileShift: 0.2,
+  correlationWeight: 0.2,
+  forecastRisk: 0.1
+};
+var clamp01 = (value) => Math.max(0, Math.min(1, value));
+var AnomalyEngine = class {
+  constructor(stats) {
+    this.stats = stats;
+  }
+  evaluate(params) {
+    try {
+      const { snapshot, history, correlationMatrix, predictiveResult } = params;
+      const mutationFactor = Number.isFinite(params.mutationFactor) ? params.mutationFactor : 1;
+      const mean = this.stats.computeMean(history.p95LatencyMs);
+      const stdDev = this.stats.computeStdDev(history.p95LatencyMs);
+      const zScore = this.stats.computeZScore(snapshot.p95LatencyMs, mean, stdDev);
+      const normalizedZScore = clamp01(Math.abs(zScore) / 5);
+      const slope = this.stats.computeSlope(history.p95LatencyMs);
+      const slopeWeight = clamp01(Math.abs(slope) / 50);
+      const p90 = this.stats.computePercentile(history.p95LatencyMs, 90);
+      const p50 = this.stats.computePercentile(history.p95LatencyMs, 50);
+      const baseline = Math.max(1, p90 - p50);
+      const percentileShift = clamp01(Math.max(0, (snapshot.p95LatencyMs - p90) / baseline));
+      const maxCorrelation = Math.max(
+        0,
+        correlationMatrix.cpuToLatency,
+        correlationMatrix.dbToErrors,
+        correlationMatrix.aiToQueue
+      );
+      const correlationWeight = clamp01(maxCorrelation);
+      const forecastRisk = this.computeForecastRisk(predictiveResult);
+      const weightedBase = WEIGHTS.normalizedZScore * normalizedZScore + WEIGHTS.slopeWeight * slopeWeight + WEIGHTS.percentileShift * percentileShift + WEIGHTS.correlationWeight * correlationWeight + WEIGHTS.forecastRisk * forecastRisk;
+      const withMutation = weightedBase * clamp01(Math.max(0.1, mutationFactor));
+      const boosted = correlationMatrix.boostedPairs.length > 0 ? Math.min(1, withMutation * 1.15) : withMutation;
+      const score = clamp01(boosted);
+      const severity = this.resolveSeverity(score);
+      const breakdown = {
+        normalizedZScore,
+        slopeWeight,
+        percentileShift,
+        correlationWeight,
+        forecastRisk,
+        mutationFactor: clamp01(mutationFactor),
+        weightedScore: score
+      };
+      return {
+        score,
+        severity,
+        breakdown
+      };
+    } catch {
+      return this.failSafe();
+    }
+  }
+  computeForecastRisk(predictiveResult) {
+    if (predictiveResult.predictiveState === "CRITICAL_IMMINENT") return 1;
+    if (predictiveResult.predictiveState === "PREEMPTIVE_DEGRADATION") return 0.65;
+    return 0.1;
+  }
+  resolveSeverity(score) {
+    if (score >= 0.85) return "EMERGENCY";
+    if (score >= 0.65) return "CRITICAL";
+    if (score >= 0.4) return "WARNING";
+    return "NORMAL";
+  }
+  failSafe() {
+    return {
+      score: 0,
+      severity: "NORMAL",
+      breakdown: {
+        normalizedZScore: 0,
+        slopeWeight: 0,
+        percentileShift: 0,
+        correlationWeight: 0,
+        forecastRisk: 0,
+        mutationFactor: 1,
+        weightedScore: 0
+      }
+    };
+  }
+};
+
+// server/intelligence/chaos/ChaosEngine.ts
+import crypto from "crypto";
+var DEFAULT_DURATION_MS = 2e4;
+var MAX_DURATION_MS = 5 * 6e4;
+var DEFAULT_MAGNITUDE = {
+  cpu_spike: 25,
+  db_latency_spike: 450,
+  ai_delay: 600,
+  worker_crash: 1,
+  memory_pressure: 18
+};
+var clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+var ChaosEngine = class {
+  constructor() {
+    this.events = /* @__PURE__ */ new Map();
+  }
+  inject(input) {
+    const now = Date.now();
+    const magnitude = Number.isFinite(input.magnitude) ? Number(input.magnitude) : DEFAULT_MAGNITUDE[input.type];
+    const durationMs = clamp(
+      Number.isFinite(input.durationMs) ? Number(input.durationMs) : DEFAULT_DURATION_MS,
+      5e3,
+      MAX_DURATION_MS
+    );
+    const event = {
+      id: crypto.randomUUID(),
+      type: input.type,
+      magnitude,
+      createdAt: now,
+      expiresAt: now + durationMs
+    };
+    this.events.set(event.id, event);
+    return event;
+  }
+  apply(snapshot) {
+    this.cleanupExpired();
+    if (this.events.size === 0) return snapshot;
+    const next = {
+      ...snapshot
+    };
+    for (const event of this.events.values()) {
+      switch (event.type) {
+        case "cpu_spike":
+          next.cpuPercent = clamp(next.cpuPercent + event.magnitude, 0, 100);
+          next.p95LatencyMs += event.magnitude * 2;
+          break;
+        case "db_latency_spike":
+          next.dbLatencyMs = Math.max(0, next.dbLatencyMs + event.magnitude);
+          next.p95LatencyMs += event.magnitude * 0.4;
+          next.errorRate = clamp(next.errorRate + 1.5, 0, 100);
+          break;
+        case "ai_delay":
+          next.aiLatencyMs = Math.max(0, next.aiLatencyMs + event.magnitude);
+          next.queueSize = Math.max(0, next.queueSize + Math.ceil(event.magnitude / 120));
+          next.aiFailRate = clamp(next.aiFailRate + 0.8, 0, 100);
+          break;
+        case "worker_crash": {
+          const drop = Math.max(1, Math.floor(event.magnitude));
+          next.workerCount = Math.max(1, next.workerCount - drop);
+          next.p95LatencyMs += 80 * drop;
+          next.activeRequests += 10 * drop;
+          break;
+        }
+        case "memory_pressure":
+          next.ramPercent = clamp(next.ramPercent + event.magnitude, 0, 100);
+          next.eventLoopLagMs += event.magnitude * 1.5;
+          break;
+        default:
+          break;
+      }
+    }
+    next.score = clamp(next.score - 10, 0, 100);
+    return next;
+  }
+  listActive(now = Date.now()) {
+    this.cleanupExpired(now);
+    return Array.from(this.events.values()).sort((a, b) => a.expiresAt - b.expiresAt);
+  }
+  cleanupExpired(now = Date.now()) {
+    for (const [id, event] of this.events.entries()) {
+      if (event.expiresAt <= now) {
+        this.events.delete(id);
+      }
+    }
+  }
+};
+
+// server/intelligence/governance/GovernanceEngine.ts
+var COOLDOWN_MS = 6e4;
+var LOCKDOWN_WINDOW_MS = 10 * 6e4;
+var OSCILLATION_GUARD_MS = 5e3;
+var GovernanceEngine = class {
+  constructor() {
+    this.state = "IDLE" /* IDLE */;
+    this.cooldownUntil = 0;
+    this.lastTransitionAt = 0;
+    this.emergencyEvents = [];
+    this.transitionLogs = [];
+  }
+  update(input, now = Date.now()) {
+    this.recordEmergency(input.severity, now);
+    this.pruneEmergencyWindow(now);
+    if (input.failSafe === true) {
+      this.transition("FAIL_SAFE" /* FAIL_SAFE */, "Fail-safe trigger received.", now);
+      return this.state;
+    }
+    if (this.emergencyEvents.length >= 3) {
+      this.transition("LOCKDOWN" /* LOCKDOWN */, "Emergency threshold reached (3 in 10 minutes).", now);
+      this.cooldownUntil = Math.max(this.cooldownUntil, now + COOLDOWN_MS);
+      return this.state;
+    }
+    switch (this.state) {
+      case "FAIL_SAFE" /* FAIL_SAFE */: {
+        if (input.manualReset === true) {
+          this.transition("COOLDOWN" /* COOLDOWN */, "Manual reset from fail-safe.", now);
+          this.cooldownUntil = now + COOLDOWN_MS;
+        }
+        return this.state;
+      }
+      case "LOCKDOWN" /* LOCKDOWN */: {
+        if (input.manualReset === true && now >= this.cooldownUntil) {
+          this.transition("COOLDOWN" /* COOLDOWN */, "Manual reset from lockdown.", now);
+          this.cooldownUntil = now + COOLDOWN_MS;
+        }
+        return this.state;
+      }
+      case "IDLE" /* IDLE */: {
+        if (this.shouldPropose(input)) {
+          this.transition("PROPOSED" /* PROPOSED */, "Action proposed from idle.", now);
+        }
+        return this.state;
+      }
+      case "PROPOSED" /* PROPOSED */: {
+        if (!this.shouldPropose(input)) {
+          this.transition("IDLE" /* IDLE */, "Proposal cancelled due to stable condition.", now);
+          return this.state;
+        }
+        this.transition("CONSENSUS_PENDING" /* CONSENSUS_PENDING */, "Proposal accepted, waiting consensus.", now);
+        return this.state;
+      }
+      case "CONSENSUS_PENDING" /* CONSENSUS_PENDING */: {
+        if (!this.shouldPropose(input)) {
+          this.transition("IDLE" /* IDLE */, "Consensus abandoned due to stable condition.", now);
+          return this.state;
+        }
+        if (input.consensusApproved === true) {
+          this.transition("EXECUTED" /* EXECUTED */, "Consensus approved.", now);
+        }
+        return this.state;
+      }
+      case "EXECUTED" /* EXECUTED */: {
+        this.transition("COOLDOWN" /* COOLDOWN */, "Execution completed, entering cooldown.", now);
+        this.cooldownUntil = now + COOLDOWN_MS;
+        return this.state;
+      }
+      case "COOLDOWN" /* COOLDOWN */: {
+        if (now < this.cooldownUntil) return this.state;
+        if (this.shouldPropose(input)) {
+          this.transition("PROPOSED" /* PROPOSED */, "Cooldown elapsed, new proposal required.", now);
+        } else {
+          this.transition("IDLE" /* IDLE */, "Cooldown elapsed and stable.", now);
+        }
+        return this.state;
+      }
+      default:
+        return this.state;
+    }
+  }
+  getState() {
+    return this.state;
+  }
+  getCooldownRemainingMs(now = Date.now()) {
+    if (this.state !== "COOLDOWN" /* COOLDOWN */ && this.state !== "LOCKDOWN" /* LOCKDOWN */) return 0;
+    return Math.max(0, this.cooldownUntil - now);
+  }
+  getTransitionLogs(limit = 100) {
+    const safeLimit = Math.max(1, Math.min(500, limit));
+    if (this.transitionLogs.length <= safeLimit) return [...this.transitionLogs];
+    return this.transitionLogs.slice(this.transitionLogs.length - safeLimit);
+  }
+  shouldPropose(input) {
+    return input.recommendedAction !== "NONE" && input.severity !== "NORMAL";
+  }
+  recordEmergency(severity, now) {
+    if (severity === "EMERGENCY") {
+      this.emergencyEvents.push(now);
+    }
+  }
+  pruneEmergencyWindow(now) {
+    const boundary = now - LOCKDOWN_WINDOW_MS;
+    this.emergencyEvents = this.emergencyEvents.filter((ts) => ts >= boundary);
+  }
+  transition(next, reason, now) {
+    if (next === this.state) return;
+    if (!this.passesOscillationGuard(next, now)) return;
+    const previous = this.state;
+    this.state = next;
+    this.lastTransitionAt = now;
+    this.transitionLogs.push({
+      from: previous,
+      to: next,
+      reason,
+      timestamp: now
+    });
+    if (this.transitionLogs.length > 500) {
+      this.transitionLogs.splice(0, this.transitionLogs.length - 500);
+    }
+  }
+  passesOscillationGuard(next, now) {
+    if (this.lastTransitionAt === 0) return true;
+    if (now - this.lastTransitionAt >= OSCILLATION_GUARD_MS) return true;
+    const guardedStates = /* @__PURE__ */ new Set([
+      "IDLE" /* IDLE */,
+      "PROPOSED" /* PROPOSED */,
+      "CONSENSUS_PENDING" /* CONSENSUS_PENDING */,
+      "EXECUTED" /* EXECUTED */
+    ]);
+    if (guardedStates.has(this.state) && guardedStates.has(next)) {
+      return false;
+    }
+    return true;
+  }
+};
+
+// server/intelligence/control/AdaptiveControlEngine.ts
+var AdaptiveControlEngine = class {
+  resolve(input) {
+    if (input.governanceState === "LOCKDOWN" || input.governanceState === "FAIL_SAFE") {
+      return "NONE";
+    }
+    if (input.predictiveState === "CRITICAL_IMMINENT" && input.requestedAction === "NONE") {
+      return "ENABLE_THROTTLE_MODE";
+    }
+    if (input.severity === "EMERGENCY" && input.requestedAction === "PAUSE_AI_QUEUE") {
+      return "SELECTIVE_WORKER_RESTART";
+    }
+    return input.requestedAction;
+  }
+};
+
+// server/intelligence/control/ControlEngine.ts
+var ACTION_COOLDOWN_MS = 6e4;
+var AUTO_HEALING_ENABLED = false;
+var ControlEngine = class {
+  constructor(callbacks) {
+    this.adaptiveControl = new AdaptiveControlEngine();
+    this.lastActionByKey = /* @__PURE__ */ new Map();
+    this.lastAction = "NONE";
+    this.callbacks = callbacks || {};
+  }
+  async execute(input, now = Date.now()) {
+    const action = this.adaptiveControl.resolve({
+      requestedAction: input.requestedAction,
+      governanceState: input.governanceState,
+      severity: input.severity,
+      predictiveState: input.predictiveState
+    });
+    if (action === "NONE") {
+      return { action, executed: false, reason: "No action requested by adaptive control." };
+    }
+    if (!AUTO_HEALING_ENABLED) {
+      return { action, executed: false, reason: "AUTO_HEALING_ENABLED is false." };
+    }
+    if (!this.isGovernanceAllowed(input.governanceState)) {
+      return { action, executed: false, reason: "Governance state does not allow autonomous control." };
+    }
+    if (!this.passesCooldown(action, now)) {
+      return { action, executed: false, reason: "Action is in cooldown window." };
+    }
+    if (!this.passesOscillationGuard(action, now)) {
+      return { action, executed: false, reason: "Oscillation guard blocked rapid action flip." };
+    }
+    const executed = await this.executeAction(action);
+    if (!executed) {
+      return { action, executed: false, reason: "Control callback returned false." };
+    }
+    this.lastActionByKey.set(action, now);
+    this.lastAction = action;
+    return { action, executed: true, reason: "Action executed successfully." };
+  }
+  async reduceWorkerCount() {
+    return this.runCallback(this.callbacks.reduceWorkerCount);
+  }
+  async enableThrottleMode() {
+    return this.runCallback(this.callbacks.enableThrottleMode);
+  }
+  async pauseAIQueue() {
+    return this.runCallback(this.callbacks.pauseAIQueue);
+  }
+  async triggerSelectiveWorkerRestart() {
+    return this.runCallback(this.callbacks.triggerSelectiveWorkerRestart);
+  }
+  isGovernanceAllowed(governanceState) {
+    if (governanceState === "LOCKDOWN" /* LOCKDOWN */ || governanceState === "FAIL_SAFE" /* FAIL_SAFE */) return false;
+    return governanceState === "EXECUTED" /* EXECUTED */ || governanceState === "CONSENSUS_PENDING" /* CONSENSUS_PENDING */ || governanceState === "PROPOSED" /* PROPOSED */;
+  }
+  passesCooldown(action, now) {
+    const last = this.lastActionByKey.get(action);
+    if (!last) return true;
+    return now - last >= ACTION_COOLDOWN_MS;
+  }
+  passesOscillationGuard(action, now) {
+    if (this.lastAction === "NONE" || this.lastAction === action) return true;
+    const last = this.lastActionByKey.get(this.lastAction);
+    if (!last) return true;
+    return now - last >= ACTION_COOLDOWN_MS;
+  }
+  async executeAction(action) {
+    switch (action) {
+      case "REDUCE_WORKER_COUNT":
+        return this.reduceWorkerCount();
+      case "ENABLE_THROTTLE_MODE":
+        return this.enableThrottleMode();
+      case "PAUSE_AI_QUEUE":
+        return this.pauseAIQueue();
+      case "SELECTIVE_WORKER_RESTART":
+        return this.triggerSelectiveWorkerRestart();
+      default:
+        return false;
+    }
+  }
+  async runCallback(callback) {
+    if (!callback) return true;
+    try {
+      const result = await Promise.resolve(callback());
+      return result !== false;
+    } catch {
+      return false;
+    }
+  }
+};
+
+// server/intelligence/correlation/CorrelationEngine.ts
+var BOOST_THRESHOLD = 0.6;
+var BOOST_MULTIPLIER = 1.15;
+var CorrelationEngine = class {
+  constructor(stats) {
+    this.stats = stats;
+  }
+  evaluate(history) {
+    const cpuToLatency = this.safeCorrelation(history.cpuPercent, history.p95LatencyMs);
+    const dbToErrors = this.safeCorrelation(history.dbLatencyMs, history.errorRate);
+    const aiToQueue = this.safeCorrelation(history.aiLatencyMs, history.queueSize);
+    const pairs = [
+      { pair: "CPU\u2194P95_LATENCY", coefficient: cpuToLatency, boosted: cpuToLatency > BOOST_THRESHOLD },
+      { pair: "DB_LATENCY\u2194ERROR_RATE", coefficient: dbToErrors, boosted: dbToErrors > BOOST_THRESHOLD },
+      { pair: "AI_LATENCY\u2194QUEUE_SIZE", coefficient: aiToQueue, boosted: aiToQueue > BOOST_THRESHOLD }
+    ];
+    return {
+      matrix: {
+        cpuToLatency,
+        dbToErrors,
+        aiToQueue,
+        boostedPairs: pairs.filter((p) => p.boosted).map((p) => p.pair)
+      },
+      pairs
+    };
+  }
+  applyBoost(baseScore, matrix) {
+    if (!Number.isFinite(baseScore)) return 0;
+    if (matrix.boostedPairs.length === 0) return baseScore;
+    return Math.min(1, baseScore * BOOST_MULTIPLIER);
+  }
+  safeCorrelation(x, y) {
+    try {
+      return this.stats.computeCorrelation(x, y);
+    } catch {
+      return 0;
+    }
+  }
+};
+
+// server/intelligence/learning/StabilityDnaEngine.ts
+var StabilityDnaEngine = class {
+  constructor() {
+    this.ensurePromise = null;
+  }
+  async ensureTable() {
+    if (this.ensurePromise) return this.ensurePromise;
+    this.ensurePromise = (async () => {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS system_stability_patterns (
+          id BIGSERIAL PRIMARY KEY,
+          metric_signature TEXT NOT NULL,
+          hour INTEGER NOT NULL,
+          weekday INTEGER NOT NULL,
+          severity TEXT NOT NULL,
+          action_taken TEXT NOT NULL,
+          duration_ms BIGINT NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_stability_patterns_signature_window
+        ON system_stability_patterns (metric_signature, hour, weekday, severity)
+      `);
+    })().catch((error) => {
+      this.ensurePromise = null;
+      throw error;
+    });
+    return this.ensurePromise;
+  }
+  buildMetricSignature(snapshot) {
+    const cpu = Math.round(snapshot.cpuPercent / 10) * 10;
+    const ram = Math.round(snapshot.ramPercent / 10) * 10;
+    const p95 = Math.round(snapshot.p95LatencyMs / 100) * 100;
+    const db2 = Math.round(snapshot.dbLatencyMs / 100) * 100;
+    const ai = Math.round(snapshot.aiLatencyMs / 100) * 100;
+    const queue = Math.round(snapshot.queueSize / 5) * 5;
+    return `cpu:${cpu}|ram:${ram}|p95:${p95}|db:${db2}|ai:${ai}|q:${queue}|mode:${snapshot.mode}`;
+  }
+  async getMutationFactor(metricSignature) {
+    try {
+      await this.ensureTable();
+      const result = await pool.query(
+        `
+          SELECT COUNT(*)::int AS count
+          FROM system_stability_patterns
+          WHERE metric_signature = $1
+        `,
+        [metricSignature]
+      );
+      const count3 = Number(result.rows?.[0]?.count || 0);
+      if (count3 > 5) return 0.85;
+      return 1;
+    } catch {
+      return 1;
+    }
+  }
+  async recordPattern(input) {
+    try {
+      await this.ensureTable();
+      await pool.query(
+        `
+          INSERT INTO system_stability_patterns (
+            metric_signature,
+            hour,
+            weekday,
+            severity,
+            action_taken,
+            duration_ms
+          )
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `,
+        [
+          input.metricSignature,
+          input.hour,
+          input.weekday,
+          input.severity,
+          input.actionTaken,
+          Math.max(0, Math.round(input.durationMs))
+        ]
+      );
+    } catch {
+    }
+  }
+};
+
+// server/intelligence/predictive/PredictiveEngine.ts
+var DEFAULT_CONFIG = {
+  warningLatencyMs: 800,
+  criticalLatencyMs: 1200,
+  projectionSteps: 3
+  // 5s polling * 3 = ~15 seconds
+};
+var PredictiveEngine = class {
+  constructor(stats, config) {
+    this.stats = stats;
+    this.config = {
+      ...DEFAULT_CONFIG,
+      ...config || {}
+    };
+  }
+  evaluate(history) {
+    const projection = this.stats.forecastNext(history.p95LatencyMs || [], this.config.projectionSteps);
+    const maxProjectedLatencyMs = projection.reduce((max, value) => Math.max(max, value), 0);
+    if (maxProjectedLatencyMs >= this.config.criticalLatencyMs) {
+      return {
+        predictiveState: "CRITICAL_IMMINENT",
+        projection,
+        maxProjectedLatencyMs
+      };
+    }
+    if (maxProjectedLatencyMs >= this.config.warningLatencyMs) {
+      return {
+        predictiveState: "PREEMPTIVE_DEGRADATION",
+        projection,
+        maxProjectedLatencyMs
+      };
+    }
+    return {
+      predictiveState: "NORMAL",
+      projection,
+      maxProjectedLatencyMs
+    };
+  }
+};
+
+// server/intelligence/statistical/StatisticalEngine.ts
+var StatisticalEngine = class {
+  constructor(maxSamples = 300) {
+    this.maxSamples = Math.max(10, maxSamples);
+  }
+  boundBuffer(values) {
+    if (!Array.isArray(values) || values.length === 0) return [];
+    if (values.length <= this.maxSamples) return values.filter((v) => Number.isFinite(v));
+    return values.slice(values.length - this.maxSamples).filter((v) => Number.isFinite(v));
+  }
+  pushSample(values, sample) {
+    if (!Number.isFinite(sample)) return this.boundBuffer(values);
+    const next = [...this.boundBuffer(values), sample];
+    if (next.length <= this.maxSamples) return next;
+    return next.slice(next.length - this.maxSamples);
+  }
+  computeMean(values) {
+    const bounded = this.boundBuffer(values);
+    if (bounded.length === 0) return 0;
+    let sum = 0;
+    for (let i = 0; i < bounded.length; i += 1) sum += bounded[i];
+    return sum / bounded.length;
+  }
+  computeStdDev(values) {
+    const bounded = this.boundBuffer(values);
+    if (bounded.length < 2) return 0;
+    const mean = this.computeMean(bounded);
+    let varianceSum = 0;
+    for (let i = 0; i < bounded.length; i += 1) {
+      const diff = bounded[i] - mean;
+      varianceSum += diff * diff;
+    }
+    return Math.sqrt(varianceSum / bounded.length);
+  }
+  computeZScore(value, mean, stdDev) {
+    if (!Number.isFinite(value) || !Number.isFinite(mean) || !Number.isFinite(stdDev) || stdDev === 0) {
+      return 0;
+    }
+    return (value - mean) / stdDev;
+  }
+  computeSlope(values) {
+    const bounded = this.boundBuffer(values);
+    const n = bounded.length;
+    if (n < 2) return 0;
+    let sumX = 0;
+    let sumY = 0;
+    let sumXY = 0;
+    let sumXX = 0;
+    for (let i = 0; i < n; i += 1) {
+      const x = i + 1;
+      const y = bounded[i];
+      sumX += x;
+      sumY += y;
+      sumXY += x * y;
+      sumXX += x * x;
+    }
+    const denominator = n * sumXX - sumX * sumX;
+    if (denominator === 0) return 0;
+    return (n * sumXY - sumX * sumY) / denominator;
+  }
+  computePercentile(values, p) {
+    const bounded = this.boundBuffer(values);
+    if (bounded.length === 0) return 0;
+    const normalizedP = Math.max(0, Math.min(100, p));
+    const rank = Math.floor(normalizedP / 100 * (bounded.length - 1));
+    const copy = bounded.slice();
+    return this.quickSelect(copy, rank);
+  }
+  computeCorrelation(x, y) {
+    const aligned = this.alignSeries(x, y);
+    if (aligned.x.length < 2) return 0;
+    const xMean = this.computeMean(aligned.x);
+    const yMean = this.computeMean(aligned.y);
+    let numerator = 0;
+    let xVariance = 0;
+    let yVariance = 0;
+    for (let i = 0; i < aligned.x.length; i += 1) {
+      const dx = aligned.x[i] - xMean;
+      const dy = aligned.y[i] - yMean;
+      numerator += dx * dy;
+      xVariance += dx * dx;
+      yVariance += dy * dy;
+    }
+    const denominator = Math.sqrt(xVariance * yVariance);
+    if (denominator === 0) return 0;
+    return numerator / denominator;
+  }
+  forecastNext(values, steps = 2) {
+    const bounded = this.boundBuffer(values);
+    const safeSteps = Math.max(1, Math.min(12, Math.floor(steps)));
+    if (bounded.length === 0) return Array.from({ length: safeSteps }, () => 0);
+    if (bounded.length === 1) return Array.from({ length: safeSteps }, () => bounded[0]);
+    const slope = this.computeSlope(bounded);
+    const mean = this.computeMean(bounded);
+    const tail = bounded[bounded.length - 1];
+    const momentum = (tail - mean) * 0.08;
+    const forecast = [];
+    for (let i = 1; i <= safeSteps; i += 1) {
+      forecast.push(tail + slope * i + momentum);
+    }
+    return forecast;
+  }
+  alignSeries(x, y) {
+    const safeX = this.boundBuffer(x);
+    const safeY = this.boundBuffer(y);
+    const n = Math.min(safeX.length, safeY.length);
+    if (n === 0) return { x: [], y: [] };
+    return {
+      x: safeX.slice(safeX.length - n),
+      y: safeY.slice(safeY.length - n)
+    };
+  }
+  quickSelect(values, targetIndex) {
+    let left = 0;
+    let right = values.length - 1;
+    while (left <= right) {
+      const pivotIndex = this.partition(values, left, right);
+      if (pivotIndex === targetIndex) return values[pivotIndex];
+      if (pivotIndex < targetIndex) left = pivotIndex + 1;
+      else right = pivotIndex - 1;
+    }
+    return values[Math.max(0, Math.min(values.length - 1, targetIndex))];
+  }
+  partition(values, left, right) {
+    const pivotIndex = Math.floor((left + right) / 2);
+    const pivotValue = values[pivotIndex];
+    [values[pivotIndex], values[right]] = [values[right], values[pivotIndex]];
+    let store = left;
+    for (let i = left; i < right; i += 1) {
+      if (values[i] < pivotValue) {
+        [values[i], values[store]] = [values[store], values[i]];
+        store += 1;
+      }
+    }
+    [values[store], values[right]] = [values[right], values[store]];
+    return store;
+  }
+};
+
+// server/intelligence/strategy/StrategyEngine.ts
+var STRATEGY_ORDER = ["ADAPTIVE", "CONSERVATIVE", "AGGRESSIVE"];
+var StrategyEngine = class {
+  constructor() {
+    this.strategyStats = {
+      CONSERVATIVE: { wins: 0, plays: 0 },
+      AGGRESSIVE: { wins: 0, plays: 0 },
+      ADAPTIVE: { wins: 0, plays: 0 }
+    };
+    this.anomalyOutcomes = [];
+  }
+  evaluate(context) {
+    const conservative = this.runConservative(context);
+    const aggressive = this.runAggressive(context);
+    const adaptive = this.runAdaptive(context, conservative, aggressive);
+    const candidates = [conservative, aggressive, adaptive];
+    const winRates = this.getWinRates();
+    const scored = candidates.map((candidate) => {
+      const winRateBoost = winRates[candidate.strategy] * 0.2;
+      return {
+        candidate,
+        score: candidate.confidenceScore + winRateBoost
+      };
+    });
+    scored.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return STRATEGY_ORDER.indexOf(a.candidate.strategy) - STRATEGY_ORDER.indexOf(b.candidate.strategy);
+    });
+    return {
+      chosen: scored[0].candidate,
+      candidates,
+      winRates
+    };
+  }
+  recordOutcome(strategy, success) {
+    const stats = this.strategyStats[strategy];
+    stats.plays += 1;
+    if (success) stats.wins += 1;
+  }
+  recordAnomalyOutcome(severity) {
+    this.anomalyOutcomes.push(severity);
+    if (this.anomalyOutcomes.length > 30) {
+      this.anomalyOutcomes = this.anomalyOutcomes.slice(this.anomalyOutcomes.length - 30);
+    }
+  }
+  getLastThreeOutcomes() {
+    if (this.anomalyOutcomes.length <= 3) return [...this.anomalyOutcomes];
+    return this.anomalyOutcomes.slice(this.anomalyOutcomes.length - 3);
+  }
+  getWinRates() {
+    return {
+      CONSERVATIVE: this.computeWinRate("CONSERVATIVE"),
+      AGGRESSIVE: this.computeWinRate("AGGRESSIVE"),
+      ADAPTIVE: this.computeWinRate("ADAPTIVE")
+    };
+  }
+  computeWinRate(strategy) {
+    const stats = this.strategyStats[strategy];
+    if (stats.plays === 0) return 0.5;
+    return stats.wins / stats.plays;
+  }
+  runConservative(context) {
+    if (context.anomalySeverity === "EMERGENCY") {
+      return {
+        strategy: "CONSERVATIVE",
+        recommendedAction: "ENABLE_THROTTLE_MODE",
+        confidenceScore: 0.72,
+        reason: "Emergency detected; conservative strategy enables throttle first."
+      };
+    }
+    if (context.predictiveState === "PREEMPTIVE_DEGRADATION" || context.anomalySeverity === "CRITICAL") {
+      return {
+        strategy: "CONSERVATIVE",
+        recommendedAction: "PAUSE_AI_QUEUE",
+        confidenceScore: 0.66,
+        reason: "High latency risk; conservative strategy pauses AI queue to protect stability."
+      };
+    }
+    if (context.anomalySeverity === "WARNING") {
+      return {
+        strategy: "CONSERVATIVE",
+        recommendedAction: "ENABLE_THROTTLE_MODE",
+        confidenceScore: 0.58,
+        reason: "Warning state; conservative strategy applies mild traffic control."
+      };
+    }
+    return {
+      strategy: "CONSERVATIVE",
+      recommendedAction: "NONE",
+      confidenceScore: 0.52,
+      reason: "Normal state; conservative strategy keeps system unchanged."
+    };
+  }
+  runAggressive(context) {
+    if (context.anomalySeverity === "EMERGENCY" || context.predictiveState === "CRITICAL_IMMINENT") {
+      return {
+        strategy: "AGGRESSIVE",
+        recommendedAction: "SELECTIVE_WORKER_RESTART",
+        confidenceScore: 0.82,
+        reason: "Critical imminent condition; aggressive strategy favors rapid worker reset."
+      };
+    }
+    if (context.anomalySeverity === "CRITICAL") {
+      return {
+        strategy: "AGGRESSIVE",
+        recommendedAction: "REDUCE_WORKER_COUNT",
+        confidenceScore: 0.74,
+        reason: "Critical instability; aggressive strategy trims worker pressure quickly."
+      };
+    }
+    if (context.anomalySeverity === "WARNING") {
+      return {
+        strategy: "AGGRESSIVE",
+        recommendedAction: "PAUSE_AI_QUEUE",
+        confidenceScore: 0.61,
+        reason: "Warning state with aggressive posture; AI queue is paused preemptively."
+      };
+    }
+    return {
+      strategy: "AGGRESSIVE",
+      recommendedAction: "NONE",
+      confidenceScore: 0.48,
+      reason: "Normal state; aggressive strategy does not force intervention."
+    };
+  }
+  runAdaptive(context, conservative, aggressive) {
+    const emergencyCount = context.lastThreeAnomalyOutcomes.filter((s) => s === "EMERGENCY").length;
+    const criticalCount = context.lastThreeAnomalyOutcomes.filter((s) => s === "CRITICAL").length;
+    const unstableTrend = emergencyCount > 0 || criticalCount >= 2 || context.stabilityAverage5m < 62;
+    if (unstableTrend || context.predictiveState === "CRITICAL_IMMINENT") {
+      return {
+        strategy: "ADAPTIVE",
+        recommendedAction: aggressive.recommendedAction,
+        confidenceScore: Math.min(0.92, aggressive.confidenceScore + 0.08),
+        reason: "Adaptive strategy selected aggressive mode due to instability trend in last outcomes."
+      };
+    }
+    if (context.stabilityAverage5m >= 80 && context.anomalySeverity === "NORMAL") {
+      return {
+        strategy: "ADAPTIVE",
+        recommendedAction: "NONE",
+        confidenceScore: 0.84,
+        reason: "Adaptive strategy keeps no-op under strong 5-minute stability."
+      };
+    }
+    return {
+      strategy: "ADAPTIVE",
+      recommendedAction: conservative.recommendedAction,
+      confidenceScore: Math.min(0.88, conservative.confidenceScore + 0.1),
+      reason: "Adaptive strategy selected conservative mode for balanced recovery."
+    };
+  }
+};
+
+// server/intelligence/index.ts
+var MAX_HISTORY = 300;
+function clamp2(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+function normalizeHistory(history, stats) {
+  return {
+    cpuPercent: stats.boundBuffer(history.cpuPercent || []).slice(-MAX_HISTORY),
+    p95LatencyMs: stats.boundBuffer(history.p95LatencyMs || []).slice(-MAX_HISTORY),
+    dbLatencyMs: stats.boundBuffer(history.dbLatencyMs || []).slice(-MAX_HISTORY),
+    errorRate: stats.boundBuffer(history.errorRate || []).slice(-MAX_HISTORY),
+    aiLatencyMs: stats.boundBuffer(history.aiLatencyMs || []).slice(-MAX_HISTORY),
+    queueSize: stats.boundBuffer(history.queueSize || []).slice(-MAX_HISTORY),
+    ramPercent: stats.boundBuffer(history.ramPercent || []).slice(-MAX_HISTORY),
+    requestRate: stats.boundBuffer(history.requestRate || []).slice(-MAX_HISTORY),
+    workerCount: stats.boundBuffer(history.workerCount || []).slice(-MAX_HISTORY)
+  };
+}
+var IntelligenceEcosystem = class {
+  constructor() {
+    this.stats = new StatisticalEngine(MAX_HISTORY);
+    this.correlation = new CorrelationEngine(this.stats);
+    this.predictive = new PredictiveEngine(this.stats);
+    this.anomaly = new AnomalyEngine(this.stats);
+    this.governance = new GovernanceEngine();
+    this.strategy = new StrategyEngine();
+    this.chaos = new ChaosEngine();
+    this.dna = new StabilityDnaEngine();
+    this.control = new ControlEngine();
+    this.explainability = {
+      anomalyBreakdown: {
+        normalizedZScore: 0,
+        slopeWeight: 0,
+        percentileShift: 0,
+        correlationWeight: 0,
+        forecastRisk: 0,
+        mutationFactor: 1,
+        weightedScore: 0
+      },
+      correlationMatrix: {
+        cpuToLatency: 0,
+        dbToErrors: 0,
+        aiToQueue: 0,
+        boostedPairs: []
+      },
+      slopeValues: {},
+      forecastProjection: [],
+      governanceState: "IDLE",
+      chosenStrategy: {
+        strategy: "CONSERVATIVE",
+        recommendedAction: "NONE",
+        confidenceScore: 0.5,
+        reason: "No evaluation yet."
+      },
+      decisionReason: "No evaluation yet."
+    };
+    this.stabilitySamples = [];
+    this.previousStabilityIndex = 100;
+    this.previousChosenStrategy = null;
+    this.activeIncident = null;
+    void this.dna.ensureTable();
+  }
+  setControlCallbacks(callbacks) {
+    this.control = new ControlEngine(callbacks);
+  }
+  async evaluateSystem(snapshot, history) {
+    const normalizedHistory = normalizeHistory(history, this.stats);
+    const chaosSnapshot = this.chaos.apply(snapshot);
+    const signature = this.dna.buildMetricSignature(chaosSnapshot);
+    const mutationFactor = await this.dna.getMutationFactor(signature);
+    const correlationResult = this.correlation.evaluate(normalizedHistory);
+    const predictiveResult = this.predictive.evaluate(normalizedHistory);
+    const anomalySummary = this.anomaly.evaluate({
+      snapshot: chaosSnapshot,
+      history: normalizedHistory,
+      correlationMatrix: correlationResult.matrix,
+      predictiveResult,
+      mutationFactor
+    });
+    const stabilityIndex = clamp2(100 - anomalySummary.score * 100, 0, 100);
+    this.pushStabilitySample(stabilityIndex, chaosSnapshot.timestamp);
+    this.strategy.recordAnomalyOutcome(anomalySummary.severity);
+    const strategyOutcome = this.strategy.evaluate({
+      snapshot: chaosSnapshot,
+      anomalySeverity: anomalySummary.severity,
+      predictiveState: predictiveResult.predictiveState,
+      governanceState: this.governance.getState(),
+      stabilityAverage5m: this.getStabilityAverage5m(chaosSnapshot.timestamp),
+      lastThreeAnomalyOutcomes: this.strategy.getLastThreeOutcomes()
+    });
+    const governanceState = this.governance.update({
+      severity: anomalySummary.severity,
+      recommendedAction: strategyOutcome.chosen.recommendedAction,
+      consensusApproved: anomalySummary.severity !== "NORMAL"
+    });
+    const controlResult = await this.control.execute({
+      requestedAction: strategyOutcome.chosen.recommendedAction,
+      governanceState,
+      severity: anomalySummary.severity,
+      predictiveState: predictiveResult.predictiveState
+    });
+    if (this.previousChosenStrategy) {
+      const success = stabilityIndex >= this.previousStabilityIndex;
+      this.strategy.recordOutcome(this.previousChosenStrategy, success);
+    }
+    this.previousChosenStrategy = strategyOutcome.chosen.strategy;
+    this.previousStabilityIndex = stabilityIndex;
+    await this.updateIncidentLearning({
+      snapshot: chaosSnapshot,
+      severity: anomalySummary.severity,
+      action: strategyOutcome.chosen.recommendedAction
+    });
+    this.explainability = {
+      anomalyBreakdown: anomalySummary.breakdown,
+      correlationMatrix: correlationResult.matrix,
+      slopeValues: {
+        cpuSlope: this.stats.computeSlope(normalizedHistory.cpuPercent),
+        latencySlope: this.stats.computeSlope(normalizedHistory.p95LatencyMs),
+        dbSlope: this.stats.computeSlope(normalizedHistory.dbLatencyMs),
+        aiSlope: this.stats.computeSlope(normalizedHistory.aiLatencyMs),
+        errorSlope: this.stats.computeSlope(normalizedHistory.errorRate)
+      },
+      forecastProjection: predictiveResult.projection,
+      governanceState,
+      chosenStrategy: strategyOutcome.chosen,
+      decisionReason: `${strategyOutcome.chosen.reason} Control: ${controlResult.reason}`
+    };
+    return {
+      stabilityIndex,
+      anomalySummary,
+      recommendedAction: strategyOutcome.chosen.recommendedAction,
+      predictiveState: predictiveResult.predictiveState,
+      governanceState
+    };
+  }
+  getExplainability() {
+    return this.explainability;
+  }
+  injectChaos(input) {
+    const event = this.chaos.inject(input);
+    return {
+      injected: event,
+      active: this.chaos.listActive()
+    };
+  }
+  pushStabilitySample(stabilityIndex, now) {
+    this.stabilitySamples.push({ ts: now, stabilityIndex });
+    const boundary = now - 10 * 6e4;
+    this.stabilitySamples = this.stabilitySamples.filter((sample) => sample.ts >= boundary);
+  }
+  getStabilityAverage5m(now) {
+    const boundary = now - 5 * 6e4;
+    const slice = this.stabilitySamples.filter((sample) => sample.ts >= boundary);
+    if (slice.length === 0) return this.previousStabilityIndex;
+    const sum = slice.reduce((acc, sample) => acc + sample.stabilityIndex, 0);
+    return sum / slice.length;
+  }
+  async updateIncidentLearning(params) {
+    if (params.severity !== "NORMAL" && !this.activeIncident) {
+      this.activeIncident = {
+        startedAt: params.snapshot.timestamp,
+        metricSignature: this.dna.buildMetricSignature(params.snapshot),
+        severity: params.severity,
+        actionTaken: params.action
+      };
+      return;
+    }
+    if (params.severity !== "NORMAL" && this.activeIncident) {
+      this.activeIncident.severity = this.maxSeverity(this.activeIncident.severity, params.severity);
+      this.activeIncident.actionTaken = params.action;
+      return;
+    }
+    if (params.severity === "NORMAL" && this.activeIncident) {
+      const startedAt = this.activeIncident.startedAt;
+      const now = params.snapshot.timestamp;
+      const date = new Date(startedAt);
+      await this.dna.recordPattern({
+        metricSignature: this.activeIncident.metricSignature,
+        hour: date.getHours(),
+        weekday: date.getDay(),
+        severity: this.activeIncident.severity,
+        actionTaken: this.activeIncident.actionTaken,
+        durationMs: Math.max(0, now - startedAt)
+      });
+      this.activeIncident = null;
+    }
+  }
+  maxSeverity(a, b) {
+    const rank = {
+      NORMAL: 0,
+      WARNING: 1,
+      CRITICAL: 2,
+      EMERGENCY: 3
+    };
+    return rank[a] >= rank[b] ? a : b;
+  }
+};
+var ecosystem = new IntelligenceEcosystem();
+async function evaluateSystem(snapshot, history) {
+  return ecosystem.evaluateSystem(snapshot, history);
+}
+function getIntelligenceExplainability() {
+  return ecosystem.getExplainability();
+}
+function injectChaos(input) {
+  return ecosystem.injectChaos(input);
+}
+
 // server/internal/aiBootstrap.ts
+import { sql } from "drizzle-orm";
 var AiBootstrap = class {
   constructor() {
     this.aiReady = false;
@@ -461,10 +1934,10 @@ var BackupsBootstrap = class {
 
 // server/internal/collectionBootstrap.ts
 import { randomUUID } from "crypto";
-import path from "path";
+import path3 from "path";
 import { sql as sql3 } from "drizzle-orm";
 function inferMimeTypeFromReceiptPath(receiptPath) {
-  const extension = path.extname(String(receiptPath || "").trim()).toLowerCase();
+  const extension = path3.extname(String(receiptPath || "").trim()).toLowerCase();
   if (extension === ".pdf") return "application/pdf";
   if (extension === ".png") return "image/png";
   if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
@@ -599,9 +2072,9 @@ var CollectionBootstrap = class {
           const collectionRecordId = String(row.id || "").trim();
           const storagePath = String(row.receipt_file || "").trim();
           if (!collectionRecordId || !storagePath) continue;
-          const fileName = path.basename(storagePath);
+          const fileName = path3.basename(storagePath);
           const createdAt = row.created_at ? new Date(row.created_at) : /* @__PURE__ */ new Date();
-          const extension = path.extname(fileName).toLowerCase();
+          const extension = path3.extname(fileName).toLowerCase();
           await db.execute(sql3`
             INSERT INTO public.collection_record_receipts (
               id,
@@ -2268,6 +3741,17 @@ function generateTemporaryPassword(length = 18) {
   return next;
 }
 
+// server/config/security.ts
+function getSessionSecret() {
+  return runtimeConfig.auth.sessionSecret;
+}
+function getCollectionNicknameTempPassword() {
+  return runtimeConfig.auth.collectionNicknameTempPassword;
+}
+function shouldSeedDefaultUsers() {
+  return runtimeConfig.auth.seedDefaultUsers;
+}
+
 // server/internal/usersBootstrap.ts
 var BCRYPT_COST = 12;
 var UsersBootstrap = class {
@@ -2562,7 +4046,7 @@ var UsersBootstrap = class {
 };
 
 // server/repositories/auth.repository.ts
-import crypto from "crypto";
+import crypto2 from "crypto";
 import { and, eq, inArray, isNull, sql as sql8 } from "drizzle-orm";
 var QUERY_PAGE_LIMIT = 1e3;
 var AuthRepository = class {
@@ -2583,7 +4067,7 @@ var AuthRepository = class {
     return result[0];
   }
   async createUser(user) {
-    const id = crypto.randomUUID();
+    const id = crypto2.randomUUID();
     const now = /* @__PURE__ */ new Date();
     const hashedPassword = await hashPassword(user.password);
     await db.insert(users).values({
@@ -2606,7 +4090,7 @@ var AuthRepository = class {
     return await this.getUser(id);
   }
   async createManagedUserAccount(params) {
-    const id = crypto.randomUUID();
+    const id = crypto2.randomUUID();
     const now = /* @__PURE__ */ new Date();
     await db.insert(users).values({
       id,
@@ -2766,7 +4250,7 @@ var AuthRepository = class {
   }
   async createActivationToken(params) {
     const record = {
-      id: crypto.randomUUID(),
+      id: crypto2.randomUUID(),
       userId: params.userId,
       tokenHash: params.tokenHash,
       expiresAt: params.expiresAt,
@@ -2830,7 +4314,7 @@ var AuthRepository = class {
   }
   async createPasswordResetRequest(params) {
     const record = {
-      id: crypto.randomUUID(),
+      id: crypto2.randomUUID(),
       userId: params.userId,
       requestedByUser: params.requestedByUser,
       approvedBy: params.approvedBy ?? null,
@@ -2961,13 +4445,13 @@ var AuthRepository = class {
 };
 
 // server/repositories/imports.repository.ts
-import crypto2 from "crypto";
+import crypto3 from "crypto";
 import { and as and2, desc as desc2, eq as eq2, sql as sql9 } from "drizzle-orm";
 var QUERY_PAGE_LIMIT2 = 1e3;
 var ImportsRepository = class {
   async createImport(data) {
     const result = await db.insert(imports).values({
-      id: crypto2.randomUUID(),
+      id: crypto3.randomUUID(),
       name: data.name,
       filename: data.filename,
       createdBy: data.createdBy || null,
@@ -3023,7 +4507,7 @@ var ImportsRepository = class {
       throw new Error("Invalid jsonDataJsonb");
     }
     const result = await db.insert(dataRows).values({
-      id: crypto2.randomUUID(),
+      id: crypto3.randomUUID(),
       importId: data.importId,
       jsonDataJsonb: data.jsonDataJsonb
     }).returning();
@@ -3318,7 +4802,7 @@ var SearchRepository = class {
 };
 
 // server/repositories/activity.repository.ts
-import crypto3 from "crypto";
+import crypto4 from "crypto";
 import { and as and3, desc as desc3, eq as eq3, gte, lte, sql as sql11 } from "drizzle-orm";
 var QUERY_PAGE_LIMIT3 = 1e3;
 var ActivityRepository = class {
@@ -3341,7 +4825,7 @@ var ActivityRepository = class {
   async createActivity(data) {
     const now = /* @__PURE__ */ new Date();
     const result = await db.insert(userActivity).values({
-      id: crypto3.randomUUID(),
+      id: crypto4.randomUUID(),
       userId: data.userId,
       username: data.username,
       role: data.role,
@@ -3531,7 +5015,7 @@ var ActivityRepository = class {
   }
   async banVisitor(params) {
     await this.options.ensureBannedSessionsTable();
-    const banId = crypto3.randomUUID();
+    const banId = crypto4.randomUUID();
     await db.execute(sql11`
       INSERT INTO public.banned_sessions
         (id, username, role, activity_id, fingerprint, ip_address, browser, pc_name, banned_at)
@@ -3565,13 +5049,13 @@ var ActivityRepository = class {
 };
 
 // server/repositories/audit.repository.ts
-import crypto4 from "crypto";
+import crypto5 from "crypto";
 import { desc as desc4, gte as gte2, sql as sql12 } from "drizzle-orm";
 var QUERY_PAGE_LIMIT4 = 1e3;
 var AuditRepository = class {
   async createAuditLog(data) {
     const result = await db.insert(auditLogs).values({
-      id: crypto4.randomUUID(),
+      id: crypto5.randomUUID(),
       action: data.action,
       performedBy: data.performedBy,
       targetUser: data.targetUser ?? null,
@@ -3627,7 +5111,7 @@ var AuditRepository = class {
 };
 
 // server/repositories/ai.repository.ts
-import crypto6 from "crypto";
+import crypto7 from "crypto";
 import { sql as sql15 } from "drizzle-orm";
 
 // server/repositories/ai-branch-import-utils.ts
@@ -3921,7 +5405,7 @@ async function getPostcodeLatLngValue(params) {
 }
 
 // server/repositories/ai-search-record-utils.ts
-import crypto5 from "crypto";
+import crypto6 from "crypto";
 import { sql as sql14 } from "drizzle-orm";
 var IC_FIELDS = ["No. MyKad", "ID No", "No Pengenalan", "IC", "NRIC", "MyKad"];
 var PHONE_FIELDS = [
@@ -3952,7 +5436,7 @@ async function saveAiEmbeddingRow(params) {
   const embeddingLiteral = sql14.raw(`'[${params.embedding.join(",")}]'`);
   await db.execute(sql14`
     INSERT INTO public.data_embeddings (id, import_id, row_id, content, embedding, created_at)
-    VALUES (${crypto5.randomUUID()}, ${params.importId}, ${params.rowId}, ${params.content}, ${embeddingLiteral}::vector, ${/* @__PURE__ */ new Date()})
+    VALUES (${crypto6.randomUUID()}, ${params.importId}, ${params.rowId}, ${params.content}, ${embeddingLiteral}::vector, ${/* @__PURE__ */ new Date()})
     ON CONFLICT (row_id) DO UPDATE SET
       import_id = EXCLUDED.import_id,
       content = EXCLUDED.content,
@@ -4090,7 +5574,7 @@ var AiRepository = class {
     this.options = options;
   }
   async createConversation(createdBy) {
-    const id = crypto6.randomUUID();
+    const id = crypto7.randomUUID();
     await db.execute(sql15`
       INSERT INTO public.ai_conversations (id, created_by, created_at)
       VALUES (${id}, ${createdBy}, ${/* @__PURE__ */ new Date()})
@@ -4100,7 +5584,7 @@ var AiRepository = class {
   async saveConversationMessage(conversationId, role, content) {
     await db.execute(sql15`
       INSERT INTO public.ai_messages (id, conversation_id, role, content, created_at)
-      VALUES (${crypto6.randomUUID()}, ${conversationId}, ${role}, ${content}, ${/* @__PURE__ */ new Date()})
+      VALUES (${crypto7.randomUUID()}, ${conversationId}, ${role}, ${content}, ${/* @__PURE__ */ new Date()})
     `);
   }
   async getConversationMessages(conversationId, limit = 20) {
@@ -4215,7 +5699,7 @@ var AiRepository = class {
           branch_lat, branch_lng
         )
         VALUES (
-          ${crypto6.randomUUID()},
+          ${crypto7.randomUUID()},
           ${String(nameVal)},
           ${addressVal ? String(addressVal) : null},
           ${phoneVal ? String(phoneVal) : null},
@@ -4620,7 +6104,7 @@ var AiCategoryRepository = class {
 };
 
 // server/repositories/backups.repository.ts
-import crypto7 from "crypto";
+import crypto8 from "crypto";
 import { eq as eq4, sql as sql17 } from "drizzle-orm";
 var BACKUP_CHUNK_SIZE = 500;
 var QUERY_PAGE_LIMIT5 = 1e3;
@@ -4630,7 +6114,7 @@ var BackupsRepository = class {
   }
   async createBackup(data) {
     await this.options.ensureBackupsTable();
-    const id = crypto7.randomUUID();
+    const id = crypto8.randomUUID();
     const result = await db.execute(sql17`
       INSERT INTO public.backups (id, name, created_at, created_by, backup_data, metadata)
       VALUES (${id}, ${data.name}, ${/* @__PURE__ */ new Date()}, ${data.createdBy}, ${data.backupData}, ${data.metadata ?? null})
@@ -4767,7 +6251,7 @@ var BackupsRepository = class {
       if (backupData.dataRows.length > 0) {
         for (const chunk of chunkArray(backupData.dataRows, BACKUP_CHUNK_SIZE)) {
           const rows = chunk.map((row) => ({
-            id: row.id ?? crypto7.randomUUID(),
+            id: row.id ?? crypto8.randomUUID(),
             importId: row.importId,
             jsonDataJsonb: row.jsonDataJsonb
           }));
@@ -4778,7 +6262,7 @@ var BackupsRepository = class {
       if (backupData.users.length > 0) {
         const now = /* @__PURE__ */ new Date();
         const rows = backupData.users.filter((user) => user.passwordHash).map((user) => ({
-          id: crypto7.randomUUID(),
+          id: crypto8.randomUUID(),
           username: user.username,
           passwordHash: user.passwordHash,
           role: user.role,
@@ -4795,7 +6279,7 @@ var BackupsRepository = class {
       if (backupData.auditLogs.length > 0) {
         for (const chunk of chunkArray(backupData.auditLogs, BACKUP_CHUNK_SIZE)) {
           const rows = chunk.map((log2) => ({
-            id: log2.id ?? crypto7.randomUUID(),
+            id: log2.id ?? crypto8.randomUUID(),
             action: log2.action,
             performedBy: log2.performedBy,
             targetUser: log2.targetUser ?? null,
@@ -7482,74 +8966,164 @@ var PostgresStorage = class {
   }
 };
 
-// server/ai-ollama.ts
-var OLLAMA_HOST = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
-var OLLAMA_CHAT_MODEL = process.env.OLLAMA_CHAT_MODEL || "llama3:8b";
-var OLLAMA_EMBED_MODEL = process.env.OLLAMA_EMBED_MODEL || "nomic-embed-text";
-var MAX_OLLAMA_MESSAGES = 50;
-function ensureText(input) {
-  return (input || "").trim();
-}
-async function ollamaEmbed(input) {
-  const prompt = ensureText(input);
-  if (!prompt) return [];
-  const res = await fetch(`${OLLAMA_HOST}/api/embeddings`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: OLLAMA_EMBED_MODEL,
-      prompt
-    })
-  });
-  if (!res.ok) {
-    const text2 = await res.text();
-    throw new Error(`Ollama embeddings failed: ${res.status} ${text2}`);
-  }
-  const data = await res.json();
-  return Array.isArray(data.embedding) ? data.embedding : [];
-}
-async function ollamaChat(messages, options) {
-  const timeoutMs = Number(options?.timeoutMs ?? process.env.OLLAMA_TIMEOUT_MS ?? 2e3);
-  const boundedMessages = Array.isArray(messages) ? messages.slice(Math.max(0, messages.length - MAX_OLLAMA_MESSAGES)) : [];
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  let res;
-  try {
-    res = await fetch(`${OLLAMA_HOST}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: OLLAMA_CHAT_MODEL,
-        messages: boundedMessages,
-        stream: false,
-        options: {
-          num_predict: options?.num_predict ?? 96,
-          temperature: options?.temperature ?? 0.2,
-          top_p: options?.top_p ?? 0.9
-        }
-      })
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
-  if (!res.ok) {
-    const text2 = await res.text();
-    throw new Error(`Ollama chat failed: ${res.status} ${text2}`);
-  }
-  const data = await res.json();
-  return data?.message?.content ?? "";
-}
-function getOllamaConfig() {
-  return {
-    host: OLLAMA_HOST,
-    chatModel: OLLAMA_CHAT_MODEL,
-    embedModel: OLLAMA_EMBED_MODEL
+// server/internal/aiConcurrencyGate.ts
+function createAiConcurrencyGate(options) {
+  const { globalLimit, queueLimit, queueWaitMs, roleLimits } = options;
+  let sequence = 0;
+  let inflightGlobal = 0;
+  const inflightByRole = {
+    user: 0,
+    admin: 0,
+    superuser: 0
   };
+  const queue = [];
+  const normalizeAiRole = (role) => {
+    if (role === "superuser") return "superuser";
+    if (role === "admin") return "admin";
+    return "user";
+  };
+  const getAiGateSnapshot = (role) => {
+    const safeRole = role ? normalizeAiRole(role) : "user";
+    return {
+      globalInFlight: inflightGlobal,
+      globalLimit,
+      queueSize: queue.length,
+      queueLimit,
+      role: safeRole,
+      roleInFlight: inflightByRole[safeRole],
+      roleLimit: roleLimits[safeRole]
+    };
+  };
+  const canAcquire = (role) => inflightGlobal < globalLimit && inflightByRole[role] < roleLimits[role];
+  const acquire = (role, route) => {
+    inflightGlobal += 1;
+    inflightByRole[role] += 1;
+    return {
+      role,
+      route,
+      released: false
+    };
+  };
+  const drainQueue = () => {
+    if (queue.length === 0) return;
+    let progressed = true;
+    while (progressed && queue.length > 0) {
+      progressed = false;
+      for (let index = 0; index < queue.length; index += 1) {
+        const item = queue[index];
+        if (!canAcquire(item.role)) continue;
+        queue.splice(index, 1);
+        clearTimeout(item.timeout);
+        progressed = true;
+        item.resolve({
+          lease: acquire(item.role, item.route),
+          waitedMs: Math.max(0, Date.now() - item.enqueuedAt)
+        });
+        break;
+      }
+    }
+  };
+  const release = (lease) => {
+    if (lease.released) return;
+    lease.released = true;
+    inflightGlobal = Math.max(0, inflightGlobal - 1);
+    inflightByRole[lease.role] = Math.max(0, inflightByRole[lease.role] - 1);
+    queueMicrotask(() => {
+      drainQueue();
+    });
+  };
+  const createGateError = (message, code, status = 429) => {
+    const error = new Error(message);
+    error.code = code;
+    error.status = status;
+    return error;
+  };
+  const waitForSlot = (role, route) => {
+    if (canAcquire(role)) {
+      return Promise.resolve({
+        lease: acquire(role, route),
+        waitedMs: 0
+      });
+    }
+    if (queue.length >= queueLimit) {
+      return Promise.reject(
+        createGateError(
+          "AI queue is full. Please retry in a few seconds.",
+          "AI_GATE_QUEUE_FULL",
+          429
+        )
+      );
+    }
+    return new Promise((resolve, reject) => {
+      const id = ++sequence;
+      const timeout = setTimeout(() => {
+        const index = queue.findIndex((item) => item.id === id);
+        if (index >= 0) {
+          queue.splice(index, 1);
+        }
+        reject(
+          createGateError(
+            "AI queue wait timed out. Please retry.",
+            "AI_GATE_WAIT_TIMEOUT",
+            429
+          )
+        );
+      }, queueWaitMs).unref();
+      queue.push({
+        id,
+        role,
+        route,
+        enqueuedAt: Date.now(),
+        resolve,
+        reject,
+        timeout
+      });
+      drainQueue();
+    });
+  };
+  const withAiConcurrencyGate = (route, handler) => {
+    return async (req, res) => {
+      const role = normalizeAiRole(req.user?.role);
+      let acquired = null;
+      try {
+        acquired = await waitForSlot(role, route);
+      } catch (error) {
+        const status = Number.isFinite(error?.status) ? Number(error.status) : 429;
+        const snapshot = getAiGateSnapshot(role);
+        return res.status(status).json({
+          message: error?.message || "AI queue is currently busy. Please retry shortly.",
+          gate: {
+            ...snapshot,
+            queueWaitMs,
+            code: error?.code || "AI_GATE_BUSY"
+          }
+        });
+      }
+      const releaseOnce = () => {
+        if (!acquired) return;
+        release(acquired.lease);
+        acquired = null;
+      };
+      res.once("finish", releaseOnce);
+      res.once("close", releaseOnce);
+      res.setHeader("x-ai-gate-global-limit", String(globalLimit));
+      res.setHeader("x-ai-gate-inflight", String(inflightGlobal));
+      res.setHeader("x-ai-gate-queue-size", String(queue.length));
+      if (acquired.waitedMs > 0) {
+        res.setHeader("x-ai-gate-wait-ms", String(Math.round(acquired.waitedMs)));
+      }
+      try {
+        await handler(req, res);
+      } finally {
+        releaseOnce();
+      }
+    };
+  };
+  return { withAiConcurrencyGate };
 }
 
 // server/internal/apiProtection.ts
-function clamp(value, min, max) {
+function clamp3(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 function isHeavyRoute(pathname) {
@@ -7579,11 +9153,11 @@ function createApiProtectionMiddleware(options) {
       minLimit = 24;
     }
     const modePenalty = controlState.mode === "PROTECTION" ? 0.5 : controlState.mode === "DEGRADED" ? 0.75 : 1;
-    const throttle = clamp(controlState.throttleFactor || 1, 0.2, 1.2);
+    const throttle = clamp3(controlState.throttleFactor || 1, 0.2, 1.2);
     const dynamicLimit = Math.max(minLimit, Math.floor(baseLimit * modePenalty * throttle));
     return { bucketKey: `${ip}:${bucketScope}`, dynamicLimit };
   }
-  const adaptiveRateLimit2 = (req, res, next) => {
+  const adaptiveRateLimit = (req, res, next) => {
     const controlState = options.getControlState();
     if (!req.path.startsWith("/api/")) return next();
     const windowMs = 1e4;
@@ -7605,7 +9179,7 @@ function createApiProtectionMiddleware(options) {
     }
     return next();
   };
-  const systemProtectionMiddleware2 = (req, res, next) => {
+  const systemProtectionMiddleware = (req, res, next) => {
     const controlState = options.getControlState();
     if (!req.path.startsWith("/api/")) return next();
     if (req.path.startsWith("/api/health") || req.path.startsWith("/api/maintenance-status")) {
@@ -7635,7 +9209,7 @@ function createApiProtectionMiddleware(options) {
     }
     return next();
   };
-  const sweepAdaptiveRateState2 = (now = Date.now()) => {
+  const sweepAdaptiveRateState = (now = Date.now()) => {
     for (const [bucketKey, bucket] of adaptiveRateState.entries()) {
       if (now >= bucket.resetAt + 6e4) {
         adaptiveRateState.delete(bucketKey);
@@ -7643,127 +9217,10 @@ function createApiProtectionMiddleware(options) {
     }
   };
   return {
-    adaptiveRateLimit: adaptiveRateLimit2,
-    systemProtectionMiddleware: systemProtectionMiddleware2,
-    sweepAdaptiveRateState: sweepAdaptiveRateState2
+    adaptiveRateLimit,
+    systemProtectionMiddleware,
+    sweepAdaptiveRateState
   };
-}
-
-// server/internal/local-http-pipeline.ts
-import express from "express";
-
-// server/http/cors.ts
-var DEFAULT_ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
-var DEFAULT_ALLOWED_HEADERS = "Origin, X-Requested-With, Content-Type, Accept, Authorization";
-var LOCAL_DEV_ORIGINS = [
-  "http://localhost:5000",
-  "http://127.0.0.1:5000",
-  "http://localhost:5173",
-  "http://127.0.0.1:5173"
-];
-function normalizeCorsOrigin(value) {
-  if (!value) {
-    return null;
-  }
-  try {
-    const normalized = new URL(value.trim()).origin;
-    return normalized || null;
-  } catch {
-    return null;
-  }
-}
-function resolveAllowedCorsOrigins(env = process.env) {
-  const origins = /* @__PURE__ */ new Set();
-  const addOrigin = (value) => {
-    const normalized = normalizeCorsOrigin(value);
-    if (normalized) {
-      origins.add(normalized);
-    }
-  };
-  const configuredOrigins = String(env.CORS_ALLOWED_ORIGINS || "").split(",").map((entry) => entry.trim()).filter(Boolean);
-  for (const origin of configuredOrigins) {
-    addOrigin(origin);
-  }
-  addOrigin(env.PUBLIC_APP_URL);
-  if (String(env.NODE_ENV || "development") !== "production") {
-    for (const origin of LOCAL_DEV_ORIGINS) {
-      addOrigin(origin);
-    }
-  }
-  return Array.from(origins);
-}
-function createCorsMiddleware(allowedOrigins = resolveAllowedCorsOrigins()) {
-  const allowedOriginSet = new Set(
-    allowedOrigins.map((origin) => normalizeCorsOrigin(origin)).filter((origin) => Boolean(origin))
-  );
-  const deniedPayload = {
-    ok: false,
-    error: {
-      code: "CORS_ORIGIN_DENIED",
-      message: "Origin is not allowed."
-    }
-  };
-  return (req, res, next) => {
-    const requestOrigin = normalizeCorsOrigin(req.headers.origin);
-    res.header("Vary", "Origin");
-    res.header("Access-Control-Allow-Methods", DEFAULT_ALLOWED_METHODS);
-    res.header("Access-Control-Allow-Headers", DEFAULT_ALLOWED_HEADERS);
-    if (!requestOrigin) {
-      if (req.method === "OPTIONS") {
-        return res.sendStatus(204);
-      }
-      return next();
-    }
-    if (allowedOriginSet.has(requestOrigin)) {
-      res.header("Access-Control-Allow-Origin", requestOrigin);
-      if (req.method === "OPTIONS") {
-        return res.sendStatus(204);
-      }
-      return next();
-    }
-    if (req.method === "OPTIONS") {
-      return res.status(403).json(deniedPayload);
-    }
-    return res.status(403).json(deniedPayload);
-  };
-}
-
-// server/internal/local-http-pipeline.ts
-function registerLocalHttpPipeline(app2, options) {
-  const {
-    importBodyLimit,
-    collectionBodyLimit,
-    defaultBodyLimit,
-    uploadsRootDir,
-    recordRequestStarted: recordRequestStarted2,
-    recordRequestFinished: recordRequestFinished2,
-    adaptiveRateLimit: adaptiveRateLimit2,
-    systemProtectionMiddleware: systemProtectionMiddleware2,
-    maintenanceGuard: maintenanceGuard2
-  } = options;
-  app2.use("/api/imports", express.json({ limit: importBodyLimit }));
-  app2.use("/api/imports", express.urlencoded({ extended: true, limit: importBodyLimit }));
-  app2.use("/api/collection", express.json({ limit: collectionBodyLimit }));
-  app2.use("/api/collection", express.urlencoded({ extended: true, limit: collectionBodyLimit }));
-  app2.use(express.json({ limit: defaultBodyLimit }));
-  app2.use(express.urlencoded({ extended: true, limit: defaultBodyLimit }));
-  app2.use(createCorsMiddleware());
-  app2.use("/uploads/collection-receipts", (_req, res) => {
-    return res.status(404).json({ ok: false, message: "Not found." });
-  });
-  app2.use("/uploads", express.static(uploadsRootDir));
-  app2.use((req, res, next) => {
-    const start = process.hrtime.bigint();
-    recordRequestStarted2();
-    res.on("finish", () => {
-      const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6;
-      recordRequestFinished2(elapsedMs);
-    });
-    next();
-  });
-  app2.use(adaptiveRateLimit2);
-  app2.use(systemProtectionMiddleware2);
-  app2.use(maintenanceGuard2);
 }
 
 // server/auth/guards.ts
@@ -7780,15 +9237,7 @@ function firstHeaderValue(value) {
   return String(value || "");
 }
 function shouldUseSecureAuthCookie() {
-  const explicit = String(process.env.AUTH_COOKIE_SECURE || "").trim().toLowerCase();
-  if (explicit === "1" || explicit === "true") {
-    return true;
-  }
-  if (explicit === "0" || explicit === "false") {
-    return false;
-  }
-  const publicUrl = String(process.env.PUBLIC_APP_URL || "").trim().toLowerCase();
-  return String(process.env.NODE_ENV || "").trim().toLowerCase() === "production" || publicUrl.startsWith("https://");
+  return runtimeConfig.auth.cookieSecure;
 }
 function getBaseAuthCookieOptions() {
   return {
@@ -8106,1091 +9555,6 @@ function createAuthGuards(options) {
   };
 }
 
-// server/intelligence/anomaly/AnomalyEngine.ts
-var WEIGHTS = {
-  normalizedZScore: 0.3,
-  slopeWeight: 0.2,
-  percentileShift: 0.2,
-  correlationWeight: 0.2,
-  forecastRisk: 0.1
-};
-var clamp01 = (value) => Math.max(0, Math.min(1, value));
-var AnomalyEngine = class {
-  constructor(stats) {
-    this.stats = stats;
-  }
-  evaluate(params) {
-    try {
-      const { snapshot, history, correlationMatrix, predictiveResult } = params;
-      const mutationFactor = Number.isFinite(params.mutationFactor) ? params.mutationFactor : 1;
-      const mean = this.stats.computeMean(history.p95LatencyMs);
-      const stdDev = this.stats.computeStdDev(history.p95LatencyMs);
-      const zScore = this.stats.computeZScore(snapshot.p95LatencyMs, mean, stdDev);
-      const normalizedZScore = clamp01(Math.abs(zScore) / 5);
-      const slope = this.stats.computeSlope(history.p95LatencyMs);
-      const slopeWeight = clamp01(Math.abs(slope) / 50);
-      const p90 = this.stats.computePercentile(history.p95LatencyMs, 90);
-      const p50 = this.stats.computePercentile(history.p95LatencyMs, 50);
-      const baseline = Math.max(1, p90 - p50);
-      const percentileShift = clamp01(Math.max(0, (snapshot.p95LatencyMs - p90) / baseline));
-      const maxCorrelation = Math.max(
-        0,
-        correlationMatrix.cpuToLatency,
-        correlationMatrix.dbToErrors,
-        correlationMatrix.aiToQueue
-      );
-      const correlationWeight = clamp01(maxCorrelation);
-      const forecastRisk = this.computeForecastRisk(predictiveResult);
-      const weightedBase = WEIGHTS.normalizedZScore * normalizedZScore + WEIGHTS.slopeWeight * slopeWeight + WEIGHTS.percentileShift * percentileShift + WEIGHTS.correlationWeight * correlationWeight + WEIGHTS.forecastRisk * forecastRisk;
-      const withMutation = weightedBase * clamp01(Math.max(0.1, mutationFactor));
-      const boosted = correlationMatrix.boostedPairs.length > 0 ? Math.min(1, withMutation * 1.15) : withMutation;
-      const score = clamp01(boosted);
-      const severity = this.resolveSeverity(score);
-      const breakdown = {
-        normalizedZScore,
-        slopeWeight,
-        percentileShift,
-        correlationWeight,
-        forecastRisk,
-        mutationFactor: clamp01(mutationFactor),
-        weightedScore: score
-      };
-      return {
-        score,
-        severity,
-        breakdown
-      };
-    } catch {
-      return this.failSafe();
-    }
-  }
-  computeForecastRisk(predictiveResult) {
-    if (predictiveResult.predictiveState === "CRITICAL_IMMINENT") return 1;
-    if (predictiveResult.predictiveState === "PREEMPTIVE_DEGRADATION") return 0.65;
-    return 0.1;
-  }
-  resolveSeverity(score) {
-    if (score >= 0.85) return "EMERGENCY";
-    if (score >= 0.65) return "CRITICAL";
-    if (score >= 0.4) return "WARNING";
-    return "NORMAL";
-  }
-  failSafe() {
-    return {
-      score: 0,
-      severity: "NORMAL",
-      breakdown: {
-        normalizedZScore: 0,
-        slopeWeight: 0,
-        percentileShift: 0,
-        correlationWeight: 0,
-        forecastRisk: 0,
-        mutationFactor: 1,
-        weightedScore: 0
-      }
-    };
-  }
-};
-
-// server/intelligence/chaos/ChaosEngine.ts
-import crypto8 from "crypto";
-var DEFAULT_DURATION_MS = 2e4;
-var MAX_DURATION_MS = 5 * 6e4;
-var DEFAULT_MAGNITUDE = {
-  cpu_spike: 25,
-  db_latency_spike: 450,
-  ai_delay: 600,
-  worker_crash: 1,
-  memory_pressure: 18
-};
-var clamp2 = (value, min, max) => Math.max(min, Math.min(max, value));
-var ChaosEngine = class {
-  constructor() {
-    this.events = /* @__PURE__ */ new Map();
-  }
-  inject(input) {
-    const now = Date.now();
-    const magnitude = Number.isFinite(input.magnitude) ? Number(input.magnitude) : DEFAULT_MAGNITUDE[input.type];
-    const durationMs = clamp2(
-      Number.isFinite(input.durationMs) ? Number(input.durationMs) : DEFAULT_DURATION_MS,
-      5e3,
-      MAX_DURATION_MS
-    );
-    const event = {
-      id: crypto8.randomUUID(),
-      type: input.type,
-      magnitude,
-      createdAt: now,
-      expiresAt: now + durationMs
-    };
-    this.events.set(event.id, event);
-    return event;
-  }
-  apply(snapshot) {
-    this.cleanupExpired();
-    if (this.events.size === 0) return snapshot;
-    const next = {
-      ...snapshot
-    };
-    for (const event of this.events.values()) {
-      switch (event.type) {
-        case "cpu_spike":
-          next.cpuPercent = clamp2(next.cpuPercent + event.magnitude, 0, 100);
-          next.p95LatencyMs += event.magnitude * 2;
-          break;
-        case "db_latency_spike":
-          next.dbLatencyMs = Math.max(0, next.dbLatencyMs + event.magnitude);
-          next.p95LatencyMs += event.magnitude * 0.4;
-          next.errorRate = clamp2(next.errorRate + 1.5, 0, 100);
-          break;
-        case "ai_delay":
-          next.aiLatencyMs = Math.max(0, next.aiLatencyMs + event.magnitude);
-          next.queueSize = Math.max(0, next.queueSize + Math.ceil(event.magnitude / 120));
-          next.aiFailRate = clamp2(next.aiFailRate + 0.8, 0, 100);
-          break;
-        case "worker_crash": {
-          const drop = Math.max(1, Math.floor(event.magnitude));
-          next.workerCount = Math.max(1, next.workerCount - drop);
-          next.p95LatencyMs += 80 * drop;
-          next.activeRequests += 10 * drop;
-          break;
-        }
-        case "memory_pressure":
-          next.ramPercent = clamp2(next.ramPercent + event.magnitude, 0, 100);
-          next.eventLoopLagMs += event.magnitude * 1.5;
-          break;
-        default:
-          break;
-      }
-    }
-    next.score = clamp2(next.score - 10, 0, 100);
-    return next;
-  }
-  listActive(now = Date.now()) {
-    this.cleanupExpired(now);
-    return Array.from(this.events.values()).sort((a, b) => a.expiresAt - b.expiresAt);
-  }
-  cleanupExpired(now = Date.now()) {
-    for (const [id, event] of this.events.entries()) {
-      if (event.expiresAt <= now) {
-        this.events.delete(id);
-      }
-    }
-  }
-};
-
-// server/intelligence/governance/GovernanceEngine.ts
-var COOLDOWN_MS = 6e4;
-var LOCKDOWN_WINDOW_MS = 10 * 6e4;
-var OSCILLATION_GUARD_MS = 5e3;
-var GovernanceEngine = class {
-  constructor() {
-    this.state = "IDLE" /* IDLE */;
-    this.cooldownUntil = 0;
-    this.lastTransitionAt = 0;
-    this.emergencyEvents = [];
-    this.transitionLogs = [];
-  }
-  update(input, now = Date.now()) {
-    this.recordEmergency(input.severity, now);
-    this.pruneEmergencyWindow(now);
-    if (input.failSafe === true) {
-      this.transition("FAIL_SAFE" /* FAIL_SAFE */, "Fail-safe trigger received.", now);
-      return this.state;
-    }
-    if (this.emergencyEvents.length >= 3) {
-      this.transition("LOCKDOWN" /* LOCKDOWN */, "Emergency threshold reached (3 in 10 minutes).", now);
-      this.cooldownUntil = Math.max(this.cooldownUntil, now + COOLDOWN_MS);
-      return this.state;
-    }
-    switch (this.state) {
-      case "FAIL_SAFE" /* FAIL_SAFE */: {
-        if (input.manualReset === true) {
-          this.transition("COOLDOWN" /* COOLDOWN */, "Manual reset from fail-safe.", now);
-          this.cooldownUntil = now + COOLDOWN_MS;
-        }
-        return this.state;
-      }
-      case "LOCKDOWN" /* LOCKDOWN */: {
-        if (input.manualReset === true && now >= this.cooldownUntil) {
-          this.transition("COOLDOWN" /* COOLDOWN */, "Manual reset from lockdown.", now);
-          this.cooldownUntil = now + COOLDOWN_MS;
-        }
-        return this.state;
-      }
-      case "IDLE" /* IDLE */: {
-        if (this.shouldPropose(input)) {
-          this.transition("PROPOSED" /* PROPOSED */, "Action proposed from idle.", now);
-        }
-        return this.state;
-      }
-      case "PROPOSED" /* PROPOSED */: {
-        if (!this.shouldPropose(input)) {
-          this.transition("IDLE" /* IDLE */, "Proposal cancelled due to stable condition.", now);
-          return this.state;
-        }
-        this.transition("CONSENSUS_PENDING" /* CONSENSUS_PENDING */, "Proposal accepted, waiting consensus.", now);
-        return this.state;
-      }
-      case "CONSENSUS_PENDING" /* CONSENSUS_PENDING */: {
-        if (!this.shouldPropose(input)) {
-          this.transition("IDLE" /* IDLE */, "Consensus abandoned due to stable condition.", now);
-          return this.state;
-        }
-        if (input.consensusApproved === true) {
-          this.transition("EXECUTED" /* EXECUTED */, "Consensus approved.", now);
-        }
-        return this.state;
-      }
-      case "EXECUTED" /* EXECUTED */: {
-        this.transition("COOLDOWN" /* COOLDOWN */, "Execution completed, entering cooldown.", now);
-        this.cooldownUntil = now + COOLDOWN_MS;
-        return this.state;
-      }
-      case "COOLDOWN" /* COOLDOWN */: {
-        if (now < this.cooldownUntil) return this.state;
-        if (this.shouldPropose(input)) {
-          this.transition("PROPOSED" /* PROPOSED */, "Cooldown elapsed, new proposal required.", now);
-        } else {
-          this.transition("IDLE" /* IDLE */, "Cooldown elapsed and stable.", now);
-        }
-        return this.state;
-      }
-      default:
-        return this.state;
-    }
-  }
-  getState() {
-    return this.state;
-  }
-  getCooldownRemainingMs(now = Date.now()) {
-    if (this.state !== "COOLDOWN" /* COOLDOWN */ && this.state !== "LOCKDOWN" /* LOCKDOWN */) return 0;
-    return Math.max(0, this.cooldownUntil - now);
-  }
-  getTransitionLogs(limit = 100) {
-    const safeLimit = Math.max(1, Math.min(500, limit));
-    if (this.transitionLogs.length <= safeLimit) return [...this.transitionLogs];
-    return this.transitionLogs.slice(this.transitionLogs.length - safeLimit);
-  }
-  shouldPropose(input) {
-    return input.recommendedAction !== "NONE" && input.severity !== "NORMAL";
-  }
-  recordEmergency(severity, now) {
-    if (severity === "EMERGENCY") {
-      this.emergencyEvents.push(now);
-    }
-  }
-  pruneEmergencyWindow(now) {
-    const boundary = now - LOCKDOWN_WINDOW_MS;
-    this.emergencyEvents = this.emergencyEvents.filter((ts) => ts >= boundary);
-  }
-  transition(next, reason, now) {
-    if (next === this.state) return;
-    if (!this.passesOscillationGuard(next, now)) return;
-    const previous = this.state;
-    this.state = next;
-    this.lastTransitionAt = now;
-    this.transitionLogs.push({
-      from: previous,
-      to: next,
-      reason,
-      timestamp: now
-    });
-    if (this.transitionLogs.length > 500) {
-      this.transitionLogs.splice(0, this.transitionLogs.length - 500);
-    }
-  }
-  passesOscillationGuard(next, now) {
-    if (this.lastTransitionAt === 0) return true;
-    if (now - this.lastTransitionAt >= OSCILLATION_GUARD_MS) return true;
-    const guardedStates = /* @__PURE__ */ new Set([
-      "IDLE" /* IDLE */,
-      "PROPOSED" /* PROPOSED */,
-      "CONSENSUS_PENDING" /* CONSENSUS_PENDING */,
-      "EXECUTED" /* EXECUTED */
-    ]);
-    if (guardedStates.has(this.state) && guardedStates.has(next)) {
-      return false;
-    }
-    return true;
-  }
-};
-
-// server/intelligence/control/AdaptiveControlEngine.ts
-var AdaptiveControlEngine = class {
-  resolve(input) {
-    if (input.governanceState === "LOCKDOWN" || input.governanceState === "FAIL_SAFE") {
-      return "NONE";
-    }
-    if (input.predictiveState === "CRITICAL_IMMINENT" && input.requestedAction === "NONE") {
-      return "ENABLE_THROTTLE_MODE";
-    }
-    if (input.severity === "EMERGENCY" && input.requestedAction === "PAUSE_AI_QUEUE") {
-      return "SELECTIVE_WORKER_RESTART";
-    }
-    return input.requestedAction;
-  }
-};
-
-// server/intelligence/control/ControlEngine.ts
-var ACTION_COOLDOWN_MS = 6e4;
-var AUTO_HEALING_ENABLED = false;
-var ControlEngine = class {
-  constructor(callbacks) {
-    this.adaptiveControl = new AdaptiveControlEngine();
-    this.lastActionByKey = /* @__PURE__ */ new Map();
-    this.lastAction = "NONE";
-    this.callbacks = callbacks || {};
-  }
-  async execute(input, now = Date.now()) {
-    const action = this.adaptiveControl.resolve({
-      requestedAction: input.requestedAction,
-      governanceState: input.governanceState,
-      severity: input.severity,
-      predictiveState: input.predictiveState
-    });
-    if (action === "NONE") {
-      return { action, executed: false, reason: "No action requested by adaptive control." };
-    }
-    if (!AUTO_HEALING_ENABLED) {
-      return { action, executed: false, reason: "AUTO_HEALING_ENABLED is false." };
-    }
-    if (!this.isGovernanceAllowed(input.governanceState)) {
-      return { action, executed: false, reason: "Governance state does not allow autonomous control." };
-    }
-    if (!this.passesCooldown(action, now)) {
-      return { action, executed: false, reason: "Action is in cooldown window." };
-    }
-    if (!this.passesOscillationGuard(action, now)) {
-      return { action, executed: false, reason: "Oscillation guard blocked rapid action flip." };
-    }
-    const executed = await this.executeAction(action);
-    if (!executed) {
-      return { action, executed: false, reason: "Control callback returned false." };
-    }
-    this.lastActionByKey.set(action, now);
-    this.lastAction = action;
-    return { action, executed: true, reason: "Action executed successfully." };
-  }
-  async reduceWorkerCount() {
-    return this.runCallback(this.callbacks.reduceWorkerCount);
-  }
-  async enableThrottleMode() {
-    return this.runCallback(this.callbacks.enableThrottleMode);
-  }
-  async pauseAIQueue() {
-    return this.runCallback(this.callbacks.pauseAIQueue);
-  }
-  async triggerSelectiveWorkerRestart() {
-    return this.runCallback(this.callbacks.triggerSelectiveWorkerRestart);
-  }
-  isGovernanceAllowed(governanceState) {
-    if (governanceState === "LOCKDOWN" /* LOCKDOWN */ || governanceState === "FAIL_SAFE" /* FAIL_SAFE */) return false;
-    return governanceState === "EXECUTED" /* EXECUTED */ || governanceState === "CONSENSUS_PENDING" /* CONSENSUS_PENDING */ || governanceState === "PROPOSED" /* PROPOSED */;
-  }
-  passesCooldown(action, now) {
-    const last = this.lastActionByKey.get(action);
-    if (!last) return true;
-    return now - last >= ACTION_COOLDOWN_MS;
-  }
-  passesOscillationGuard(action, now) {
-    if (this.lastAction === "NONE" || this.lastAction === action) return true;
-    const last = this.lastActionByKey.get(this.lastAction);
-    if (!last) return true;
-    return now - last >= ACTION_COOLDOWN_MS;
-  }
-  async executeAction(action) {
-    switch (action) {
-      case "REDUCE_WORKER_COUNT":
-        return this.reduceWorkerCount();
-      case "ENABLE_THROTTLE_MODE":
-        return this.enableThrottleMode();
-      case "PAUSE_AI_QUEUE":
-        return this.pauseAIQueue();
-      case "SELECTIVE_WORKER_RESTART":
-        return this.triggerSelectiveWorkerRestart();
-      default:
-        return false;
-    }
-  }
-  async runCallback(callback) {
-    if (!callback) return true;
-    try {
-      const result = await Promise.resolve(callback());
-      return result !== false;
-    } catch {
-      return false;
-    }
-  }
-};
-
-// server/intelligence/correlation/CorrelationEngine.ts
-var BOOST_THRESHOLD = 0.6;
-var BOOST_MULTIPLIER = 1.15;
-var CorrelationEngine = class {
-  constructor(stats) {
-    this.stats = stats;
-  }
-  evaluate(history) {
-    const cpuToLatency = this.safeCorrelation(history.cpuPercent, history.p95LatencyMs);
-    const dbToErrors = this.safeCorrelation(history.dbLatencyMs, history.errorRate);
-    const aiToQueue = this.safeCorrelation(history.aiLatencyMs, history.queueSize);
-    const pairs = [
-      { pair: "CPU\u2194P95_LATENCY", coefficient: cpuToLatency, boosted: cpuToLatency > BOOST_THRESHOLD },
-      { pair: "DB_LATENCY\u2194ERROR_RATE", coefficient: dbToErrors, boosted: dbToErrors > BOOST_THRESHOLD },
-      { pair: "AI_LATENCY\u2194QUEUE_SIZE", coefficient: aiToQueue, boosted: aiToQueue > BOOST_THRESHOLD }
-    ];
-    return {
-      matrix: {
-        cpuToLatency,
-        dbToErrors,
-        aiToQueue,
-        boostedPairs: pairs.filter((p) => p.boosted).map((p) => p.pair)
-      },
-      pairs
-    };
-  }
-  applyBoost(baseScore, matrix) {
-    if (!Number.isFinite(baseScore)) return 0;
-    if (matrix.boostedPairs.length === 0) return baseScore;
-    return Math.min(1, baseScore * BOOST_MULTIPLIER);
-  }
-  safeCorrelation(x, y) {
-    try {
-      return this.stats.computeCorrelation(x, y);
-    } catch {
-      return 0;
-    }
-  }
-};
-
-// server/intelligence/learning/StabilityDnaEngine.ts
-var StabilityDnaEngine = class {
-  constructor() {
-    this.ensurePromise = null;
-  }
-  async ensureTable() {
-    if (this.ensurePromise) return this.ensurePromise;
-    this.ensurePromise = (async () => {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS system_stability_patterns (
-          id BIGSERIAL PRIMARY KEY,
-          metric_signature TEXT NOT NULL,
-          hour INTEGER NOT NULL,
-          weekday INTEGER NOT NULL,
-          severity TEXT NOT NULL,
-          action_taken TEXT NOT NULL,
-          duration_ms BIGINT NOT NULL,
-          created_at TIMESTAMP NOT NULL DEFAULT NOW()
-        )
-      `);
-      await pool.query(`
-        CREATE INDEX IF NOT EXISTS idx_stability_patterns_signature_window
-        ON system_stability_patterns (metric_signature, hour, weekday, severity)
-      `);
-    })().catch((error) => {
-      this.ensurePromise = null;
-      throw error;
-    });
-    return this.ensurePromise;
-  }
-  buildMetricSignature(snapshot) {
-    const cpu = Math.round(snapshot.cpuPercent / 10) * 10;
-    const ram = Math.round(snapshot.ramPercent / 10) * 10;
-    const p95 = Math.round(snapshot.p95LatencyMs / 100) * 100;
-    const db2 = Math.round(snapshot.dbLatencyMs / 100) * 100;
-    const ai = Math.round(snapshot.aiLatencyMs / 100) * 100;
-    const queue = Math.round(snapshot.queueSize / 5) * 5;
-    return `cpu:${cpu}|ram:${ram}|p95:${p95}|db:${db2}|ai:${ai}|q:${queue}|mode:${snapshot.mode}`;
-  }
-  async getMutationFactor(metricSignature) {
-    try {
-      await this.ensureTable();
-      const result = await pool.query(
-        `
-          SELECT COUNT(*)::int AS count
-          FROM system_stability_patterns
-          WHERE metric_signature = $1
-        `,
-        [metricSignature]
-      );
-      const count3 = Number(result.rows?.[0]?.count || 0);
-      if (count3 > 5) return 0.85;
-      return 1;
-    } catch {
-      return 1;
-    }
-  }
-  async recordPattern(input) {
-    try {
-      await this.ensureTable();
-      await pool.query(
-        `
-          INSERT INTO system_stability_patterns (
-            metric_signature,
-            hour,
-            weekday,
-            severity,
-            action_taken,
-            duration_ms
-          )
-          VALUES ($1, $2, $3, $4, $5, $6)
-        `,
-        [
-          input.metricSignature,
-          input.hour,
-          input.weekday,
-          input.severity,
-          input.actionTaken,
-          Math.max(0, Math.round(input.durationMs))
-        ]
-      );
-    } catch {
-    }
-  }
-};
-
-// server/intelligence/predictive/PredictiveEngine.ts
-var DEFAULT_CONFIG = {
-  warningLatencyMs: 800,
-  criticalLatencyMs: 1200,
-  projectionSteps: 3
-  // 5s polling * 3 = ~15 seconds
-};
-var PredictiveEngine = class {
-  constructor(stats, config) {
-    this.stats = stats;
-    this.config = {
-      ...DEFAULT_CONFIG,
-      ...config || {}
-    };
-  }
-  evaluate(history) {
-    const projection = this.stats.forecastNext(history.p95LatencyMs || [], this.config.projectionSteps);
-    const maxProjectedLatencyMs = projection.reduce((max, value) => Math.max(max, value), 0);
-    if (maxProjectedLatencyMs >= this.config.criticalLatencyMs) {
-      return {
-        predictiveState: "CRITICAL_IMMINENT",
-        projection,
-        maxProjectedLatencyMs
-      };
-    }
-    if (maxProjectedLatencyMs >= this.config.warningLatencyMs) {
-      return {
-        predictiveState: "PREEMPTIVE_DEGRADATION",
-        projection,
-        maxProjectedLatencyMs
-      };
-    }
-    return {
-      predictiveState: "NORMAL",
-      projection,
-      maxProjectedLatencyMs
-    };
-  }
-};
-
-// server/intelligence/statistical/StatisticalEngine.ts
-var StatisticalEngine = class {
-  constructor(maxSamples = 300) {
-    this.maxSamples = Math.max(10, maxSamples);
-  }
-  boundBuffer(values) {
-    if (!Array.isArray(values) || values.length === 0) return [];
-    if (values.length <= this.maxSamples) return values.filter((v) => Number.isFinite(v));
-    return values.slice(values.length - this.maxSamples).filter((v) => Number.isFinite(v));
-  }
-  pushSample(values, sample) {
-    if (!Number.isFinite(sample)) return this.boundBuffer(values);
-    const next = [...this.boundBuffer(values), sample];
-    if (next.length <= this.maxSamples) return next;
-    return next.slice(next.length - this.maxSamples);
-  }
-  computeMean(values) {
-    const bounded = this.boundBuffer(values);
-    if (bounded.length === 0) return 0;
-    let sum = 0;
-    for (let i = 0; i < bounded.length; i += 1) sum += bounded[i];
-    return sum / bounded.length;
-  }
-  computeStdDev(values) {
-    const bounded = this.boundBuffer(values);
-    if (bounded.length < 2) return 0;
-    const mean = this.computeMean(bounded);
-    let varianceSum = 0;
-    for (let i = 0; i < bounded.length; i += 1) {
-      const diff = bounded[i] - mean;
-      varianceSum += diff * diff;
-    }
-    return Math.sqrt(varianceSum / bounded.length);
-  }
-  computeZScore(value, mean, stdDev) {
-    if (!Number.isFinite(value) || !Number.isFinite(mean) || !Number.isFinite(stdDev) || stdDev === 0) {
-      return 0;
-    }
-    return (value - mean) / stdDev;
-  }
-  computeSlope(values) {
-    const bounded = this.boundBuffer(values);
-    const n = bounded.length;
-    if (n < 2) return 0;
-    let sumX = 0;
-    let sumY = 0;
-    let sumXY = 0;
-    let sumXX = 0;
-    for (let i = 0; i < n; i += 1) {
-      const x = i + 1;
-      const y = bounded[i];
-      sumX += x;
-      sumY += y;
-      sumXY += x * y;
-      sumXX += x * x;
-    }
-    const denominator = n * sumXX - sumX * sumX;
-    if (denominator === 0) return 0;
-    return (n * sumXY - sumX * sumY) / denominator;
-  }
-  computePercentile(values, p) {
-    const bounded = this.boundBuffer(values);
-    if (bounded.length === 0) return 0;
-    const normalizedP = Math.max(0, Math.min(100, p));
-    const rank = Math.floor(normalizedP / 100 * (bounded.length - 1));
-    const copy = bounded.slice();
-    return this.quickSelect(copy, rank);
-  }
-  computeCorrelation(x, y) {
-    const aligned = this.alignSeries(x, y);
-    if (aligned.x.length < 2) return 0;
-    const xMean = this.computeMean(aligned.x);
-    const yMean = this.computeMean(aligned.y);
-    let numerator = 0;
-    let xVariance = 0;
-    let yVariance = 0;
-    for (let i = 0; i < aligned.x.length; i += 1) {
-      const dx = aligned.x[i] - xMean;
-      const dy = aligned.y[i] - yMean;
-      numerator += dx * dy;
-      xVariance += dx * dx;
-      yVariance += dy * dy;
-    }
-    const denominator = Math.sqrt(xVariance * yVariance);
-    if (denominator === 0) return 0;
-    return numerator / denominator;
-  }
-  forecastNext(values, steps = 2) {
-    const bounded = this.boundBuffer(values);
-    const safeSteps = Math.max(1, Math.min(12, Math.floor(steps)));
-    if (bounded.length === 0) return Array.from({ length: safeSteps }, () => 0);
-    if (bounded.length === 1) return Array.from({ length: safeSteps }, () => bounded[0]);
-    const slope = this.computeSlope(bounded);
-    const mean = this.computeMean(bounded);
-    const tail = bounded[bounded.length - 1];
-    const momentum = (tail - mean) * 0.08;
-    const forecast = [];
-    for (let i = 1; i <= safeSteps; i += 1) {
-      forecast.push(tail + slope * i + momentum);
-    }
-    return forecast;
-  }
-  alignSeries(x, y) {
-    const safeX = this.boundBuffer(x);
-    const safeY = this.boundBuffer(y);
-    const n = Math.min(safeX.length, safeY.length);
-    if (n === 0) return { x: [], y: [] };
-    return {
-      x: safeX.slice(safeX.length - n),
-      y: safeY.slice(safeY.length - n)
-    };
-  }
-  quickSelect(values, targetIndex) {
-    let left = 0;
-    let right = values.length - 1;
-    while (left <= right) {
-      const pivotIndex = this.partition(values, left, right);
-      if (pivotIndex === targetIndex) return values[pivotIndex];
-      if (pivotIndex < targetIndex) left = pivotIndex + 1;
-      else right = pivotIndex - 1;
-    }
-    return values[Math.max(0, Math.min(values.length - 1, targetIndex))];
-  }
-  partition(values, left, right) {
-    const pivotIndex = Math.floor((left + right) / 2);
-    const pivotValue = values[pivotIndex];
-    [values[pivotIndex], values[right]] = [values[right], values[pivotIndex]];
-    let store = left;
-    for (let i = left; i < right; i += 1) {
-      if (values[i] < pivotValue) {
-        [values[i], values[store]] = [values[store], values[i]];
-        store += 1;
-      }
-    }
-    [values[store], values[right]] = [values[right], values[store]];
-    return store;
-  }
-};
-
-// server/intelligence/strategy/StrategyEngine.ts
-var STRATEGY_ORDER = ["ADAPTIVE", "CONSERVATIVE", "AGGRESSIVE"];
-var StrategyEngine = class {
-  constructor() {
-    this.strategyStats = {
-      CONSERVATIVE: { wins: 0, plays: 0 },
-      AGGRESSIVE: { wins: 0, plays: 0 },
-      ADAPTIVE: { wins: 0, plays: 0 }
-    };
-    this.anomalyOutcomes = [];
-  }
-  evaluate(context) {
-    const conservative = this.runConservative(context);
-    const aggressive = this.runAggressive(context);
-    const adaptive = this.runAdaptive(context, conservative, aggressive);
-    const candidates = [conservative, aggressive, adaptive];
-    const winRates = this.getWinRates();
-    const scored = candidates.map((candidate) => {
-      const winRateBoost = winRates[candidate.strategy] * 0.2;
-      return {
-        candidate,
-        score: candidate.confidenceScore + winRateBoost
-      };
-    });
-    scored.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      return STRATEGY_ORDER.indexOf(a.candidate.strategy) - STRATEGY_ORDER.indexOf(b.candidate.strategy);
-    });
-    return {
-      chosen: scored[0].candidate,
-      candidates,
-      winRates
-    };
-  }
-  recordOutcome(strategy, success) {
-    const stats = this.strategyStats[strategy];
-    stats.plays += 1;
-    if (success) stats.wins += 1;
-  }
-  recordAnomalyOutcome(severity) {
-    this.anomalyOutcomes.push(severity);
-    if (this.anomalyOutcomes.length > 30) {
-      this.anomalyOutcomes = this.anomalyOutcomes.slice(this.anomalyOutcomes.length - 30);
-    }
-  }
-  getLastThreeOutcomes() {
-    if (this.anomalyOutcomes.length <= 3) return [...this.anomalyOutcomes];
-    return this.anomalyOutcomes.slice(this.anomalyOutcomes.length - 3);
-  }
-  getWinRates() {
-    return {
-      CONSERVATIVE: this.computeWinRate("CONSERVATIVE"),
-      AGGRESSIVE: this.computeWinRate("AGGRESSIVE"),
-      ADAPTIVE: this.computeWinRate("ADAPTIVE")
-    };
-  }
-  computeWinRate(strategy) {
-    const stats = this.strategyStats[strategy];
-    if (stats.plays === 0) return 0.5;
-    return stats.wins / stats.plays;
-  }
-  runConservative(context) {
-    if (context.anomalySeverity === "EMERGENCY") {
-      return {
-        strategy: "CONSERVATIVE",
-        recommendedAction: "ENABLE_THROTTLE_MODE",
-        confidenceScore: 0.72,
-        reason: "Emergency detected; conservative strategy enables throttle first."
-      };
-    }
-    if (context.predictiveState === "PREEMPTIVE_DEGRADATION" || context.anomalySeverity === "CRITICAL") {
-      return {
-        strategy: "CONSERVATIVE",
-        recommendedAction: "PAUSE_AI_QUEUE",
-        confidenceScore: 0.66,
-        reason: "High latency risk; conservative strategy pauses AI queue to protect stability."
-      };
-    }
-    if (context.anomalySeverity === "WARNING") {
-      return {
-        strategy: "CONSERVATIVE",
-        recommendedAction: "ENABLE_THROTTLE_MODE",
-        confidenceScore: 0.58,
-        reason: "Warning state; conservative strategy applies mild traffic control."
-      };
-    }
-    return {
-      strategy: "CONSERVATIVE",
-      recommendedAction: "NONE",
-      confidenceScore: 0.52,
-      reason: "Normal state; conservative strategy keeps system unchanged."
-    };
-  }
-  runAggressive(context) {
-    if (context.anomalySeverity === "EMERGENCY" || context.predictiveState === "CRITICAL_IMMINENT") {
-      return {
-        strategy: "AGGRESSIVE",
-        recommendedAction: "SELECTIVE_WORKER_RESTART",
-        confidenceScore: 0.82,
-        reason: "Critical imminent condition; aggressive strategy favors rapid worker reset."
-      };
-    }
-    if (context.anomalySeverity === "CRITICAL") {
-      return {
-        strategy: "AGGRESSIVE",
-        recommendedAction: "REDUCE_WORKER_COUNT",
-        confidenceScore: 0.74,
-        reason: "Critical instability; aggressive strategy trims worker pressure quickly."
-      };
-    }
-    if (context.anomalySeverity === "WARNING") {
-      return {
-        strategy: "AGGRESSIVE",
-        recommendedAction: "PAUSE_AI_QUEUE",
-        confidenceScore: 0.61,
-        reason: "Warning state with aggressive posture; AI queue is paused preemptively."
-      };
-    }
-    return {
-      strategy: "AGGRESSIVE",
-      recommendedAction: "NONE",
-      confidenceScore: 0.48,
-      reason: "Normal state; aggressive strategy does not force intervention."
-    };
-  }
-  runAdaptive(context, conservative, aggressive) {
-    const emergencyCount = context.lastThreeAnomalyOutcomes.filter((s) => s === "EMERGENCY").length;
-    const criticalCount = context.lastThreeAnomalyOutcomes.filter((s) => s === "CRITICAL").length;
-    const unstableTrend = emergencyCount > 0 || criticalCount >= 2 || context.stabilityAverage5m < 62;
-    if (unstableTrend || context.predictiveState === "CRITICAL_IMMINENT") {
-      return {
-        strategy: "ADAPTIVE",
-        recommendedAction: aggressive.recommendedAction,
-        confidenceScore: Math.min(0.92, aggressive.confidenceScore + 0.08),
-        reason: "Adaptive strategy selected aggressive mode due to instability trend in last outcomes."
-      };
-    }
-    if (context.stabilityAverage5m >= 80 && context.anomalySeverity === "NORMAL") {
-      return {
-        strategy: "ADAPTIVE",
-        recommendedAction: "NONE",
-        confidenceScore: 0.84,
-        reason: "Adaptive strategy keeps no-op under strong 5-minute stability."
-      };
-    }
-    return {
-      strategy: "ADAPTIVE",
-      recommendedAction: conservative.recommendedAction,
-      confidenceScore: Math.min(0.88, conservative.confidenceScore + 0.1),
-      reason: "Adaptive strategy selected conservative mode for balanced recovery."
-    };
-  }
-};
-
-// server/intelligence/index.ts
-var MAX_HISTORY = 300;
-function clamp3(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-function normalizeHistory(history, stats) {
-  return {
-    cpuPercent: stats.boundBuffer(history.cpuPercent || []).slice(-MAX_HISTORY),
-    p95LatencyMs: stats.boundBuffer(history.p95LatencyMs || []).slice(-MAX_HISTORY),
-    dbLatencyMs: stats.boundBuffer(history.dbLatencyMs || []).slice(-MAX_HISTORY),
-    errorRate: stats.boundBuffer(history.errorRate || []).slice(-MAX_HISTORY),
-    aiLatencyMs: stats.boundBuffer(history.aiLatencyMs || []).slice(-MAX_HISTORY),
-    queueSize: stats.boundBuffer(history.queueSize || []).slice(-MAX_HISTORY),
-    ramPercent: stats.boundBuffer(history.ramPercent || []).slice(-MAX_HISTORY),
-    requestRate: stats.boundBuffer(history.requestRate || []).slice(-MAX_HISTORY),
-    workerCount: stats.boundBuffer(history.workerCount || []).slice(-MAX_HISTORY)
-  };
-}
-var IntelligenceEcosystem = class {
-  constructor() {
-    this.stats = new StatisticalEngine(MAX_HISTORY);
-    this.correlation = new CorrelationEngine(this.stats);
-    this.predictive = new PredictiveEngine(this.stats);
-    this.anomaly = new AnomalyEngine(this.stats);
-    this.governance = new GovernanceEngine();
-    this.strategy = new StrategyEngine();
-    this.chaos = new ChaosEngine();
-    this.dna = new StabilityDnaEngine();
-    this.control = new ControlEngine();
-    this.explainability = {
-      anomalyBreakdown: {
-        normalizedZScore: 0,
-        slopeWeight: 0,
-        percentileShift: 0,
-        correlationWeight: 0,
-        forecastRisk: 0,
-        mutationFactor: 1,
-        weightedScore: 0
-      },
-      correlationMatrix: {
-        cpuToLatency: 0,
-        dbToErrors: 0,
-        aiToQueue: 0,
-        boostedPairs: []
-      },
-      slopeValues: {},
-      forecastProjection: [],
-      governanceState: "IDLE",
-      chosenStrategy: {
-        strategy: "CONSERVATIVE",
-        recommendedAction: "NONE",
-        confidenceScore: 0.5,
-        reason: "No evaluation yet."
-      },
-      decisionReason: "No evaluation yet."
-    };
-    this.stabilitySamples = [];
-    this.previousStabilityIndex = 100;
-    this.previousChosenStrategy = null;
-    this.activeIncident = null;
-    void this.dna.ensureTable();
-  }
-  setControlCallbacks(callbacks) {
-    this.control = new ControlEngine(callbacks);
-  }
-  async evaluateSystem(snapshot, history) {
-    const normalizedHistory = normalizeHistory(history, this.stats);
-    const chaosSnapshot = this.chaos.apply(snapshot);
-    const signature = this.dna.buildMetricSignature(chaosSnapshot);
-    const mutationFactor = await this.dna.getMutationFactor(signature);
-    const correlationResult = this.correlation.evaluate(normalizedHistory);
-    const predictiveResult = this.predictive.evaluate(normalizedHistory);
-    const anomalySummary = this.anomaly.evaluate({
-      snapshot: chaosSnapshot,
-      history: normalizedHistory,
-      correlationMatrix: correlationResult.matrix,
-      predictiveResult,
-      mutationFactor
-    });
-    const stabilityIndex = clamp3(100 - anomalySummary.score * 100, 0, 100);
-    this.pushStabilitySample(stabilityIndex, chaosSnapshot.timestamp);
-    this.strategy.recordAnomalyOutcome(anomalySummary.severity);
-    const strategyOutcome = this.strategy.evaluate({
-      snapshot: chaosSnapshot,
-      anomalySeverity: anomalySummary.severity,
-      predictiveState: predictiveResult.predictiveState,
-      governanceState: this.governance.getState(),
-      stabilityAverage5m: this.getStabilityAverage5m(chaosSnapshot.timestamp),
-      lastThreeAnomalyOutcomes: this.strategy.getLastThreeOutcomes()
-    });
-    const governanceState = this.governance.update({
-      severity: anomalySummary.severity,
-      recommendedAction: strategyOutcome.chosen.recommendedAction,
-      consensusApproved: anomalySummary.severity !== "NORMAL"
-    });
-    const controlResult = await this.control.execute({
-      requestedAction: strategyOutcome.chosen.recommendedAction,
-      governanceState,
-      severity: anomalySummary.severity,
-      predictiveState: predictiveResult.predictiveState
-    });
-    if (this.previousChosenStrategy) {
-      const success = stabilityIndex >= this.previousStabilityIndex;
-      this.strategy.recordOutcome(this.previousChosenStrategy, success);
-    }
-    this.previousChosenStrategy = strategyOutcome.chosen.strategy;
-    this.previousStabilityIndex = stabilityIndex;
-    await this.updateIncidentLearning({
-      snapshot: chaosSnapshot,
-      severity: anomalySummary.severity,
-      action: strategyOutcome.chosen.recommendedAction
-    });
-    this.explainability = {
-      anomalyBreakdown: anomalySummary.breakdown,
-      correlationMatrix: correlationResult.matrix,
-      slopeValues: {
-        cpuSlope: this.stats.computeSlope(normalizedHistory.cpuPercent),
-        latencySlope: this.stats.computeSlope(normalizedHistory.p95LatencyMs),
-        dbSlope: this.stats.computeSlope(normalizedHistory.dbLatencyMs),
-        aiSlope: this.stats.computeSlope(normalizedHistory.aiLatencyMs),
-        errorSlope: this.stats.computeSlope(normalizedHistory.errorRate)
-      },
-      forecastProjection: predictiveResult.projection,
-      governanceState,
-      chosenStrategy: strategyOutcome.chosen,
-      decisionReason: `${strategyOutcome.chosen.reason} Control: ${controlResult.reason}`
-    };
-    return {
-      stabilityIndex,
-      anomalySummary,
-      recommendedAction: strategyOutcome.chosen.recommendedAction,
-      predictiveState: predictiveResult.predictiveState,
-      governanceState
-    };
-  }
-  getExplainability() {
-    return this.explainability;
-  }
-  injectChaos(input) {
-    const event = this.chaos.inject(input);
-    return {
-      injected: event,
-      active: this.chaos.listActive()
-    };
-  }
-  pushStabilitySample(stabilityIndex, now) {
-    this.stabilitySamples.push({ ts: now, stabilityIndex });
-    const boundary = now - 10 * 6e4;
-    this.stabilitySamples = this.stabilitySamples.filter((sample) => sample.ts >= boundary);
-  }
-  getStabilityAverage5m(now) {
-    const boundary = now - 5 * 6e4;
-    const slice = this.stabilitySamples.filter((sample) => sample.ts >= boundary);
-    if (slice.length === 0) return this.previousStabilityIndex;
-    const sum = slice.reduce((acc, sample) => acc + sample.stabilityIndex, 0);
-    return sum / slice.length;
-  }
-  async updateIncidentLearning(params) {
-    if (params.severity !== "NORMAL" && !this.activeIncident) {
-      this.activeIncident = {
-        startedAt: params.snapshot.timestamp,
-        metricSignature: this.dna.buildMetricSignature(params.snapshot),
-        severity: params.severity,
-        actionTaken: params.action
-      };
-      return;
-    }
-    if (params.severity !== "NORMAL" && this.activeIncident) {
-      this.activeIncident.severity = this.maxSeverity(this.activeIncident.severity, params.severity);
-      this.activeIncident.actionTaken = params.action;
-      return;
-    }
-    if (params.severity === "NORMAL" && this.activeIncident) {
-      const startedAt = this.activeIncident.startedAt;
-      const now = params.snapshot.timestamp;
-      const date = new Date(startedAt);
-      await this.dna.recordPattern({
-        metricSignature: this.activeIncident.metricSignature,
-        hour: date.getHours(),
-        weekday: date.getDay(),
-        severity: this.activeIncident.severity,
-        actionTaken: this.activeIncident.actionTaken,
-        durationMs: Math.max(0, now - startedAt)
-      });
-      this.activeIncident = null;
-    }
-  }
-  maxSeverity(a, b) {
-    const rank = {
-      NORMAL: 0,
-      WARNING: 1,
-      CRITICAL: 2,
-      EMERGENCY: 3
-    };
-    return rank[a] >= rank[b] ? a : b;
-  }
-};
-var ecosystem = new IntelligenceEcosystem();
-async function evaluateSystem(snapshot, history) {
-  return ecosystem.evaluateSystem(snapshot, history);
-}
-function getIntelligenceExplainability() {
-  return ecosystem.getExplainability();
-}
-function injectChaos(input) {
-  return ecosystem.injectChaos(input);
-}
-
 // server/http/errors.ts
 var HttpError = class extends Error {
   constructor(statusCode, message, options) {
@@ -9332,7 +9696,7 @@ function createAuthRouteRateLimiters() {
 }
 
 // server/routes/activity.routes.ts
-import { WebSocket } from "ws";
+import { WebSocket as WebSocket2 } from "ws";
 
 // server/http/async-handler.ts
 function asyncHandler(fn) {
@@ -9389,7 +9753,7 @@ function registerActivityRoutes(app2, deps) {
   const { storage: storage2, authenticateToken, requireRole, requireTabAccess, connectedClients: connectedClients2 } = deps;
   const closeSocket = async (activityId, payload) => {
     const socket = connectedClients2.get(activityId);
-    if (socket && socket.readyState === WebSocket.OPEN) {
+    if (socket && socket.readyState === WebSocket2.OPEN) {
       if (payload) {
         socket.send(JSON.stringify(payload));
       }
@@ -9659,9 +10023,9 @@ function registerAiRoutes(app2, deps) {
     storage: storage2,
     authenticateToken,
     requireRole,
-    withAiConcurrencyGate: withAiConcurrencyGate2,
+    withAiConcurrencyGate,
     getRuntimeSettingsCached: getRuntimeSettingsCached2,
-    aiSearchService: aiSearchService2,
+    aiSearchService,
     categoryStatsService: categoryStatsService2,
     aiChatService,
     aiIndexService,
@@ -9686,7 +10050,7 @@ function registerAiRoutes(app2, deps) {
     "/api/ai/search",
     authenticateToken,
     requireRole("user", "admin", "superuser"),
-    withAiConcurrencyGate2("search", async (req, res) => {
+    withAiConcurrencyGate("search", async (req, res) => {
       try {
         const body = ensureObject(req.body) || {};
         const query = String(body.query || "").trim();
@@ -9714,7 +10078,7 @@ function registerAiRoutes(app2, deps) {
             stats: countSummary.stats
           });
         }
-        const result = await aiSearchService2.resolveSearchRequest({
+        const result = await aiSearchService.resolveSearchRequest({
           query,
           userKey: req.user.activityId || req.user.username,
           runtimeSettings: {
@@ -9783,7 +10147,7 @@ function registerAiRoutes(app2, deps) {
     "/api/ai/chat",
     authenticateToken,
     requireRole("user", "admin", "superuser"),
-    withAiConcurrencyGate2("chat", async (req, res) => {
+    withAiConcurrencyGate("chat", async (req, res) => {
       try {
         const body = ensureObject(req.body) || {};
         const message = String(body.message || "").trim();
@@ -9809,9 +10173,9 @@ function registerAiRoutes(app2, deps) {
   );
 }
 
-// server/routes/auth.routes.ts
+// server/routes/auth/auth-route-shared.ts
 import jwt2 from "jsonwebtoken";
-import { WebSocket as WebSocket2 } from "ws";
+import { WebSocket as WebSocket3 } from "ws";
 
 // server/lib/browser.ts
 function parseBrowser(userAgent) {
@@ -9872,11 +10236,6 @@ function parseBrowser(userAgent) {
   return "Unknown";
 }
 
-// server/mail/dev-mail-outbox.ts
-import { randomBytes as randomBytes3 } from "node:crypto";
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import path2 from "node:path";
-
 // server/auth/activation-links.ts
 function readBaseUrlEnv(name) {
   const raw = String(process.env[name] || "").trim();
@@ -9905,7 +10264,111 @@ function buildPasswordResetUrl(token) {
   return url.toString();
 }
 
+// server/mail/account-activation-email.ts
+function formatExpiry(expiresAt) {
+  return expiresAt.toUTCString();
+}
+function buildAccountActivationEmail(input) {
+  const systemName = String(input.systemName || "SQR System").trim() || "SQR System";
+  const expiresAtText = formatExpiry(input.expiresAt);
+  const subject = `Activate Your ${systemName} Account`;
+  const intro = `A new account has been created for you in ${systemName}.`;
+  const usernameLine = `Username: ${input.username}`;
+  const expiryLine = `This activation link expires on ${expiresAtText}.`;
+  const text2 = [
+    intro,
+    "",
+    usernameLine,
+    "",
+    "Activate your account by opening the link below and creating your password:",
+    input.activationUrl,
+    "",
+    expiryLine,
+    "",
+    "If you did not expect this account, please contact the system administrator."
+  ].join("\n");
+  const html = `
+    <div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.6;color:#0f172a;">
+      <p>${intro}</p>
+      <p><strong>${usernameLine}</strong></p>
+      <p>Click the button below to activate your account and create your password.</p>
+      <p>
+        <a
+          href="${input.activationUrl}"
+          style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;"
+        >
+          Activate Account
+        </a>
+      </p>
+      <p>If the button does not work, copy and paste this link into your browser:</p>
+      <p><a href="${input.activationUrl}">${input.activationUrl}</a></p>
+      <p>${expiryLine}</p>
+      <p>If you did not expect this account, please contact the system administrator.</p>
+    </div>
+  `.trim();
+  return {
+    subject,
+    text: text2,
+    html
+  };
+}
+
+// server/mail/password-reset-email.ts
+function formatExpiry2(expiresAt) {
+  return expiresAt.toUTCString();
+}
+function buildPasswordResetEmail(input) {
+  const systemName = String(input.systemName || "SQR System").trim() || "SQR System";
+  const expiresAtText = formatExpiry2(input.expiresAt);
+  const subject = `Reset Your ${systemName} Password`;
+  const intro = `A password reset has been approved for your ${systemName} account.`;
+  const usernameLine = `Username: ${input.username}`;
+  const expiryLine = `This reset link expires on ${expiresAtText}.`;
+  const text2 = [
+    intro,
+    "",
+    usernameLine,
+    "",
+    "Create your new password by opening the link below:",
+    input.resetUrl,
+    "",
+    expiryLine,
+    "",
+    "If you did not request this reset, contact the system administrator immediately."
+  ].join("\n");
+  const html = `
+    <div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.6;color:#0f172a;">
+      <p>${intro}</p>
+      <p><strong>${usernameLine}</strong></p>
+      <p>Click the button below to create your new password.</p>
+      <p>
+        <a
+          href="${input.resetUrl}"
+          style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;"
+        >
+          Reset Password
+        </a>
+      </p>
+      <p>If the button does not work, copy and paste this link into your browser:</p>
+      <p><a href="${input.resetUrl}">${input.resetUrl}</a></p>
+      <p>${expiryLine}</p>
+      <p>If you did not request this reset, contact the system administrator immediately.</p>
+    </div>
+  `.trim();
+  return {
+    subject,
+    text: text2,
+    html
+  };
+}
+
+// server/mail/mailer.ts
+import nodemailer from "nodemailer";
+
 // server/mail/dev-mail-outbox.ts
+import { randomBytes as randomBytes3 } from "node:crypto";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import path4 from "node:path";
 var DEFAULT_OUTBOX_MAX_FILES = 50;
 var DEV_OUTBOX_FILE_PATTERN = /^\d{13}-[a-f0-9]{16}\.json$/i;
 var DEV_OUTBOX_ID_PATTERN = /^\d{13}-[a-f0-9]{16}$/i;
@@ -9918,7 +10381,7 @@ function readFlag(name, fallback) {
 }
 function getDevMailOutboxDir() {
   const configured = String(process.env.MAIL_DEV_OUTBOX_DIR || "").trim();
-  return configured ? path2.resolve(configured) : path2.resolve(process.cwd(), "var", "dev-mail-outbox");
+  return configured ? path4.resolve(configured) : path4.resolve(process.cwd(), "var", "dev-mail-outbox");
 }
 function getOutboxRetentionLimit() {
   const parsed = Number(process.env.MAIL_DEV_OUTBOX_MAX_FILES || DEFAULT_OUTBOX_MAX_FILES);
@@ -9940,7 +10403,7 @@ function buildPreviewId() {
   return `${Date.now()}-${randomBytes3(8).toString("hex")}`;
 }
 function buildPreviewFilePath(previewId) {
-  return path2.join(getDevMailOutboxDir(), `${previewId}.json`);
+  return path4.join(getDevMailOutboxDir(), `${previewId}.json`);
 }
 function buildPreviewUrl(previewId) {
   const url = new URL(`/dev/mail-preview/${previewId}`, getPublicAppBaseUrl());
@@ -9954,7 +10417,7 @@ async function trimOutboxIfNeeded() {
   const staleEntries = entries.sort().slice(0, Math.max(0, entries.length - maxFiles));
   await Promise.all(
     staleEntries.map(
-      (entry) => rm(path2.join(outboxDir, entry), { force: true })
+      (entry) => rm(path4.join(outboxDir, entry), { force: true })
     )
   );
 }
@@ -10058,7 +10521,7 @@ async function clearDevMailOutbox() {
       return 0;
     }
     const results = await Promise.allSettled(
-      entries.map((entry) => rm(path2.join(outboxDir, entry), { force: true }))
+      entries.map((entry) => rm(path4.join(outboxDir, entry), { force: true }))
     );
     return results.filter((result) => result.status === "fulfilled").length;
   } catch {
@@ -10112,106 +10575,7 @@ function renderDevMailPreviewHtml(record) {
 </html>`;
 }
 
-// server/mail/account-activation-email.ts
-function formatExpiry(expiresAt) {
-  return expiresAt.toUTCString();
-}
-function buildAccountActivationEmail(input) {
-  const systemName = String(input.systemName || "SQR System").trim() || "SQR System";
-  const expiresAtText = formatExpiry(input.expiresAt);
-  const subject = `Activate Your ${systemName} Account`;
-  const intro = `A new account has been created for you in ${systemName}.`;
-  const usernameLine = `Username: ${input.username}`;
-  const expiryLine = `This activation link expires on ${expiresAtText}.`;
-  const text2 = [
-    intro,
-    "",
-    usernameLine,
-    "",
-    "Activate your account by opening the link below and creating your password:",
-    input.activationUrl,
-    "",
-    expiryLine,
-    "",
-    "If you did not expect this account, please contact the system administrator."
-  ].join("\n");
-  const html = `
-    <div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.6;color:#0f172a;">
-      <p>${intro}</p>
-      <p><strong>${usernameLine}</strong></p>
-      <p>Click the button below to activate your account and create your password.</p>
-      <p>
-        <a
-          href="${input.activationUrl}"
-          style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;"
-        >
-          Activate Account
-        </a>
-      </p>
-      <p>If the button does not work, copy and paste this link into your browser:</p>
-      <p><a href="${input.activationUrl}">${input.activationUrl}</a></p>
-      <p>${expiryLine}</p>
-      <p>If you did not expect this account, please contact the system administrator.</p>
-    </div>
-  `.trim();
-  return {
-    subject,
-    text: text2,
-    html
-  };
-}
-
-// server/mail/password-reset-email.ts
-function formatExpiry2(expiresAt) {
-  return expiresAt.toUTCString();
-}
-function buildPasswordResetEmail(input) {
-  const systemName = String(input.systemName || "SQR System").trim() || "SQR System";
-  const expiresAtText = formatExpiry2(input.expiresAt);
-  const subject = `Reset Your ${systemName} Password`;
-  const intro = `A password reset has been approved for your ${systemName} account.`;
-  const usernameLine = `Username: ${input.username}`;
-  const expiryLine = `This reset link expires on ${expiresAtText}.`;
-  const text2 = [
-    intro,
-    "",
-    usernameLine,
-    "",
-    "Create your new password by opening the link below:",
-    input.resetUrl,
-    "",
-    expiryLine,
-    "",
-    "If you did not request this reset, contact the system administrator immediately."
-  ].join("\n");
-  const html = `
-    <div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.6;color:#0f172a;">
-      <p>${intro}</p>
-      <p><strong>${usernameLine}</strong></p>
-      <p>Click the button below to create your new password.</p>
-      <p>
-        <a
-          href="${input.resetUrl}"
-          style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;"
-        >
-          Reset Password
-        </a>
-      </p>
-      <p>If the button does not work, copy and paste this link into your browser:</p>
-      <p><a href="${input.resetUrl}">${input.resetUrl}</a></p>
-      <p>${expiryLine}</p>
-      <p>If you did not request this reset, contact the system administrator immediately.</p>
-    </div>
-  `.trim();
-  return {
-    subject,
-    text: text2,
-    html
-  };
-}
-
 // server/mail/mailer.ts
-import nodemailer from "nodemailer";
 var cachedTransportConfig = null;
 var cachedTransporter = null;
 function readMailEnv(name) {
@@ -10228,7 +10592,7 @@ function parseBooleanFlag(value, fallback) {
 function readTransportConfig() {
   if (cachedTransportConfig) return cachedTransportConfig;
   const service = readMailEnv("SMTP_SERVICE");
-  const host = readMailEnv("SMTP_HOST");
+  const host2 = readMailEnv("SMTP_HOST");
   const portRaw = readMailEnv("SMTP_PORT");
   const user = readMailEnv("SMTP_USER") || void 0;
   const password = readMailEnv("SMTP_PASSWORD") || void 0;
@@ -10250,23 +10614,23 @@ function readTransportConfig() {
     };
     return cachedTransportConfig;
   }
-  if (!host) {
+  if (!host2) {
     return null;
   }
   if (user && !password) {
     return null;
   }
-  const port = Number(portRaw || "587");
-  if (!Number.isFinite(port) || port <= 0) {
+  const port2 = Number(portRaw || "587");
+  if (!Number.isFinite(port2) || port2 <= 0) {
     return null;
   }
-  const secure = parseBooleanFlag(readMailEnv("SMTP_SECURE"), port === 465);
+  const secure = parseBooleanFlag(readMailEnv("SMTP_SECURE"), port2 === 465);
   const requireTls = parseBooleanFlag(readMailEnv("SMTP_REQUIRE_TLS"), false);
   cachedTransportConfig = {
     from,
-    host,
+    host: host2,
     password,
-    port,
+    port: port2,
     requireTls,
     secure,
     user
@@ -11339,7 +11703,7 @@ var AuthAccountService = class {
   }
 };
 
-// server/routes/auth.routes.ts
+// server/routes/auth/auth-route-shared.ts
 function buildManagedUserPayload(user) {
   return {
     id: user.id,
@@ -11393,10 +11757,9 @@ function buildOkPayload(payload) {
     ...payload
   };
 }
-function registerAuthRoutes(app2, deps) {
+function createAuthRouteContext(app2, deps) {
   const { storage: storage2, authenticateToken, requireRole, connectedClients: connectedClients2 } = deps;
   const authAccountService = new AuthAccountService(storage2);
-  const jwtSecret = getSessionSecret();
   const rateLimiters = {
     ...createAuthRouteRateLimiters(),
     ...deps.rateLimiters
@@ -11416,66 +11779,366 @@ function registerAuthRoutes(app2, deps) {
     });
     return true;
   };
-  const jsonRoute2 = (handler) => asyncHandler(async (req, res) => {
-    try {
-      const payload = await handler(req, res);
-      if (!res.headersSent && payload !== void 0) {
-        res.json(payload);
+  return {
+    app: app2,
+    storage: storage2,
+    authAccountService,
+    authenticateToken,
+    requireRole,
+    rateLimiters,
+    jsonRoute: (handler) => async (req, res) => {
+      try {
+        const payload = await handler(req, res);
+        if (!res.headersSent && payload !== void 0) {
+          res.json(payload);
+        }
+      } catch (error) {
+        if (sendAuthError(res, error)) {
+          return;
+        }
+        throw error;
       }
-    } catch (error) {
-      if (sendAuthError(res, error)) {
-        return;
+    },
+    closeActivitySockets(activityIds, reason, messageType = "logout") {
+      for (const activityId of activityIds) {
+        const socket = connectedClients2.get(activityId);
+        if (socket && socket.readyState === WebSocket3.OPEN) {
+          socket.send(JSON.stringify({ type: messageType, reason }));
+          socket.close();
+        }
+        connectedClients2.delete(activityId);
+        void storage2.clearCollectionNicknameSessionByActivity(activityId);
       }
-      throw error;
-    }
-  });
-  const closeActivitySockets = (activityIds, reason, messageType = "logout") => {
-    for (const activityId of activityIds) {
-      const socket = connectedClients2.get(activityId);
-      if (socket && socket.readyState === WebSocket2.OPEN) {
-        socket.send(JSON.stringify({ type: messageType, reason }));
-        socket.close();
+    },
+    buildUserPayload,
+    buildManagedUserPayload,
+    buildDeliveryPayload,
+    buildOkPayload,
+    signSessionToken(payload, res) {
+      const token = jwt2.sign(payload, runtimeConfig.auth.sessionSecret, { expiresIn: "24h" });
+      if (res) {
+        setAuthSessionCookie(res, token);
       }
-      connectedClients2.delete(activityId);
-      void storage2.clearCollectionNicknameSessionByActivity(activityId);
+      return token;
+    },
+    parseBrowserName(browserHeader, userAgentHeader) {
+      const firstHeaderValue2 = (value) => Array.isArray(value) ? value[0] : value;
+      return parseBrowser(firstHeaderValue2(browserHeader) || firstHeaderValue2(userAgentHeader));
     }
   };
-  const handleLogin = jsonRoute2(async (req) => {
-    const body = ensureObject(req.body) || {};
-    const fingerprint = typeof body.fingerprint === "string" ? body.fingerprint : null;
-    const pcName = typeof body.pcName === "string" ? body.pcName : null;
-    const browser = typeof body.browser === "string" ? body.browser : null;
-    const { user, activity } = await authAccountService.login({
-      username: String(body.username ?? ""),
-      password: String(body.password ?? ""),
-      fingerprint,
-      pcName,
-      browserName: parseBrowser(browser || req.headers["user-agent"]),
-      ipAddress: req.ip || req.socket.remoteAddress || null
-    });
-    const token = jwt2.sign(
-      {
-        userId: user.id,
-        username: user.username,
-        role: user.role,
-        activityId: activity.id
-      },
-      jwtSecret,
-      { expiresIn: "24h" }
-    );
-    req.res && setAuthSessionCookie(req.res, token);
+}
+
+// server/routes/auth/auth-request-parsers.ts
+function readLoginBody(bodyRaw) {
+  const body = ensureObject(bodyRaw) || {};
+  return {
+    username: String(body.username ?? ""),
+    password: String(body.password ?? ""),
+    fingerprint: typeof body.fingerprint === "string" ? body.fingerprint : null,
+    pcName: typeof body.pcName === "string" ? body.pcName : null,
+    browser: typeof body.browser === "string" ? body.browser : null
+  };
+}
+function readActivationBody(bodyRaw) {
+  const body = ensureObject(bodyRaw) || {};
+  return {
+    username: body.username == null ? void 0 : String(body.username),
+    token: String(body.token ?? ""),
+    newPassword: String(body.newPassword ?? ""),
+    confirmPassword: String(body.confirmPassword ?? "")
+  };
+}
+function readTokenBody(bodyRaw) {
+  const body = ensureObject(bodyRaw) || {};
+  return {
+    token: String(body.token ?? "")
+  };
+}
+function readPasswordResetRequestBody(bodyRaw) {
+  const body = ensureObject(bodyRaw) || {};
+  return {
+    identifier: String(body.identifier ?? body.username ?? body.email ?? "")
+  };
+}
+function readPasswordChangeBody(bodyRaw) {
+  const body = ensureObject(bodyRaw) || {};
+  return {
+    currentPassword: String(body.currentPassword ?? ""),
+    newPassword: String(body.newPassword ?? "")
+  };
+}
+function readOwnCredentialPatchBody(bodyRaw) {
+  const body = ensureObject(bodyRaw) || {};
+  return {
+    body,
+    hasUsernameField: Object.prototype.hasOwnProperty.call(body, "newUsername"),
+    hasPasswordField: Object.prototype.hasOwnProperty.call(body, "newPassword") || Object.prototype.hasOwnProperty.call(body, "currentPassword"),
+    newUsername: body.newUsername !== void 0 ? String(body.newUsername ?? "") : void 0,
+    currentPassword: String(body.currentPassword ?? ""),
+    newPassword: String(body.newPassword ?? "")
+  };
+}
+function readManagedUserBody(bodyRaw) {
+  const body = ensureObject(bodyRaw) || {};
+  return {
+    username: String(body.username ?? ""),
+    fullName: body.fullName == null ? null : String(body.fullName),
+    email: body.email == null ? null : String(body.email),
+    role: String(body.role ?? "user")
+  };
+}
+function readManagedUserPatchBody(bodyRaw) {
+  const body = ensureObject(bodyRaw) || {};
+  return {
+    username: body.username !== void 0 ? String(body.username) : void 0,
+    fullName: body.fullName !== void 0 ? String(body.fullName ?? "") : void 0,
+    email: body.email !== void 0 ? String(body.email ?? "") : void 0
+  };
+}
+function readManagedUserRoleBody(bodyRaw) {
+  const body = ensureObject(bodyRaw) || {};
+  return {
+    role: String(body.role ?? "")
+  };
+}
+function readManagedUserStatusBody(bodyRaw) {
+  const body = ensureObject(bodyRaw) || {};
+  return {
+    status: body.status !== void 0 ? String(body.status) : void 0,
+    isBanned: body.isBanned === void 0 ? void 0 : Boolean(body.isBanned)
+  };
+}
+function readManagedCredentialsBody(bodyRaw) {
+  const body = ensureObject(bodyRaw) || {};
+  return {
+    newPassword: String(body.newPassword ?? ""),
+    newUsername: body.newUsername !== void 0 ? String(body.newUsername) : void 0
+  };
+}
+
+// server/routes/auth/auth-admin-routes.ts
+function registerAuthAdminRoutes(context) {
+  const {
+    app: app2,
+    storage: storage2,
+    authAccountService,
+    authenticateToken,
+    requireRole,
+    rateLimiters,
+    jsonRoute,
+    closeActivitySockets,
+    buildUserPayload: buildUserPayload2,
+    buildManagedUserPayload: buildManagedUserPayload2,
+    buildDeliveryPayload: buildDeliveryPayload2,
+    buildOkPayload: buildOkPayload2
+  } = context;
+  app2.get(
+    "/api/admin/users",
+    authenticateToken,
+    requireRole("superuser"),
+    rateLimiters.adminAction,
+    jsonRoute(async (req) => {
+      const users3 = await authAccountService.getManagedUsers(req.user);
+      return {
+        ok: true,
+        users: users3.map((user) => buildManagedUserPayload2(user))
+      };
+    })
+  );
+  const handleCreateManagedUser = jsonRoute(async (req) => {
+    const result = await authAccountService.createManagedUser(req.user, readManagedUserBody(req.body));
     return {
       ok: true,
-      username: user.username,
-      role: user.role,
-      activityId: activity.id,
-      mustChangePassword: user.mustChangePassword,
-      status: user.status,
-      user: buildUserPayload(user)
+      user: buildUserPayload2(result.user),
+      activation: buildDeliveryPayload2(result.activation)
     };
   });
-  app2.post("/api/login", rateLimiters.login, handleLogin);
-  app2.post("/api/auth/login", rateLimiters.login, handleLogin);
+  app2.post(
+    "/api/admin/users",
+    authenticateToken,
+    requireRole("superuser"),
+    rateLimiters.adminAction,
+    handleCreateManagedUser
+  );
+  app2.patch(
+    "/api/admin/users/:id",
+    authenticateToken,
+    requireRole("superuser"),
+    rateLimiters.adminAction,
+    jsonRoute(async (req) => {
+      const user = await authAccountService.updateManagedUser(
+        req.user,
+        req.params.id,
+        readManagedUserPatchBody(req.body)
+      );
+      return {
+        ok: true,
+        user: buildUserPayload2(user)
+      };
+    })
+  );
+  app2.delete(
+    "/api/admin/users/:id",
+    authenticateToken,
+    requireRole("superuser"),
+    rateLimiters.adminAction,
+    jsonRoute(async (req) => {
+      const result = await authAccountService.deleteManagedUser(req.user, req.params.id);
+      closeActivitySockets(
+        result.closedSessionIds,
+        "Account deleted by superuser."
+      );
+      return {
+        ok: true,
+        deleted: true,
+        user: buildUserPayload2(result.user)
+      };
+    })
+  );
+  app2.patch(
+    "/api/admin/users/:id/role",
+    authenticateToken,
+    requireRole("superuser"),
+    rateLimiters.adminAction,
+    jsonRoute(async (req) => {
+      const body = readManagedUserRoleBody(req.body);
+      const result = await authAccountService.updateManagedUserRole(
+        req.user,
+        req.params.id,
+        body.role
+      );
+      closeActivitySockets(
+        result.closedSessionIds,
+        "Account role changed. Please login again."
+      );
+      return {
+        ok: true,
+        forceLogout: result.closedSessionIds.length > 0,
+        user: buildUserPayload2(result.user)
+      };
+    })
+  );
+  app2.patch(
+    "/api/admin/users/:id/status",
+    authenticateToken,
+    requireRole("superuser"),
+    rateLimiters.adminAction,
+    jsonRoute(async (req) => {
+      const body = readManagedUserStatusBody(req.body);
+      const result = await authAccountService.updateManagedUserStatus(req.user, req.params.id, body);
+      closeActivitySockets(
+        result.closedSessionIds,
+        body.isBanned ? "Account has been banned." : "Account status changed. Please login again.",
+        body.isBanned ? "banned" : "logout"
+      );
+      return {
+        ok: true,
+        forceLogout: result.closedSessionIds.length > 0,
+        user: buildUserPayload2(result.user)
+      };
+    })
+  );
+  app2.post(
+    "/api/admin/users/:id/reset-password",
+    authenticateToken,
+    requireRole("superuser"),
+    rateLimiters.adminAction,
+    jsonRoute(async (req) => {
+      const result = await authAccountService.resetManagedUserPassword(req.user, req.params.id);
+      closeActivitySockets(
+        result.closedSessionIds,
+        "Password reset by superuser. Please login again."
+      );
+      return {
+        ok: true,
+        forceLogout: result.closedSessionIds.length > 0,
+        user: buildUserPayload2(result.user),
+        reset: buildDeliveryPayload2(result.reset)
+      };
+    })
+  );
+  app2.post(
+    "/api/admin/users/:id/resend-activation",
+    authenticateToken,
+    requireRole("superuser"),
+    rateLimiters.adminAction,
+    jsonRoute(async (req) => {
+      const result = await authAccountService.resendActivation(req.user, req.params.id);
+      return {
+        ok: true,
+        user: buildUserPayload2(result.user),
+        activation: buildDeliveryPayload2(result.activation)
+      };
+    })
+  );
+  app2.get(
+    "/api/admin/password-reset-requests",
+    authenticateToken,
+    requireRole("superuser"),
+    rateLimiters.adminAction,
+    jsonRoute(async (req) => {
+      const requests = await authAccountService.listPendingPasswordResetRequests(req.user);
+      return {
+        ok: true,
+        requests
+      };
+    })
+  );
+  app2.patch(
+    "/api/admin/users/:id/credentials",
+    authenticateToken,
+    requireRole("superuser"),
+    rateLimiters.adminAction,
+    jsonRoute(async (req) => {
+      const body = readManagedCredentialsBody(req.body);
+      if (body.newPassword) {
+        throw new AuthAccountError(
+          409,
+          "ACCOUNT_UNAVAILABLE",
+          "Direct password assignment is disabled. Use the reset-password action instead."
+        );
+      }
+      const user = await authAccountService.updateManagedUser(req.user, req.params.id, {
+        username: body.newUsername
+      });
+      return {
+        ok: true,
+        user: buildUserPayload2(user)
+      };
+    })
+  );
+  app2.get(
+    "/api/accounts",
+    authenticateToken,
+    requireRole("superuser"),
+    rateLimiters.adminAction,
+    jsonRoute(async () => {
+      const accounts = await storage2.getAccounts();
+      return buildOkPayload2({ accounts });
+    })
+  );
+  app2.post(
+    "/api/users",
+    authenticateToken,
+    requireRole("superuser"),
+    rateLimiters.adminAction,
+    handleCreateManagedUser
+  );
+}
+
+// server/routes/auth/auth-recovery-routes.ts
+function registerAuthRecoveryRoutes(context) {
+  const {
+    app: app2,
+    storage: storage2,
+    authAccountService,
+    authenticateToken,
+    requireRole,
+    rateLimiters,
+    jsonRoute,
+    buildUserPayload: buildUserPayload2,
+    buildDeliveryPayload: buildDeliveryPayload2
+  } = context;
   app2.get(
     "/dev/mail-preview/:previewId",
     asyncHandler(async (req, res) => {
@@ -11490,316 +12153,52 @@ function registerAuthRoutes(app2, deps) {
       return res.status(200).type("html").send(renderDevMailPreviewHtml(preview));
     })
   );
-  const handleMe = jsonRoute2(async (req) => {
-    if (!req.user) {
-      throw new AuthAccountError(401, "PERMISSION_DENIED", "Authentication required.");
-    }
-    const user = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
-    if (!user) {
-      throw new AuthAccountError(404, "USER_NOT_FOUND", "User not found.");
-    }
-    return buildOkPayload({
-      user: buildUserPayload(user)
-    });
-  });
-  app2.get("/api/me", authenticateToken, handleMe);
-  app2.get("/api/auth/me", authenticateToken, jsonRoute2(async (req, res) => {
-    const payload = await (async () => {
-      if (!req.user) {
-        throw new AuthAccountError(401, "PERMISSION_DENIED", "Authentication required.");
-      }
-      const user = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
-      if (!user) {
-        throw new AuthAccountError(404, "USER_NOT_FOUND", "User not found.");
-      }
-      return buildOkPayload({
-        user: buildUserPayload(user)
-      });
-    })();
-    return payload;
-  }));
-  app2.post("/api/auth/activate-account", rateLimiters.publicRecovery, jsonRoute2(async (req) => {
-    const body = ensureObject(req.body) || {};
-    const user = await authAccountService.activateAccount({
-      username: body.username == null ? void 0 : String(body.username),
-      token: String(body.token ?? ""),
-      newPassword: String(body.newPassword ?? ""),
-      confirmPassword: String(body.confirmPassword ?? "")
-    });
+  app2.post("/api/auth/activate-account", rateLimiters.publicRecovery, jsonRoute(async (req) => {
+    const body = readActivationBody(req.body);
+    const user = await authAccountService.activateAccount(body);
     return {
       ok: true,
-      user: buildUserPayload(user)
+      user: buildUserPayload2(user)
     };
   }));
-  app2.post("/api/auth/validate-activation-token", rateLimiters.publicRecovery, jsonRoute2(async (req) => {
-    const body = ensureObject(req.body) || {};
-    const activation = await authAccountService.validateActivationToken(String(body.token ?? ""));
+  app2.post("/api/auth/validate-activation-token", rateLimiters.publicRecovery, jsonRoute(async (req) => {
+    const body = readTokenBody(req.body);
+    const activation = await authAccountService.validateActivationToken(body.token);
     return {
       ok: true,
       activation
     };
   }));
-  app2.post("/api/auth/request-password-reset", rateLimiters.publicRecovery, jsonRoute2(async (req) => {
-    const body = ensureObject(req.body) || {};
-    const identifier = String(body.identifier ?? body.username ?? body.email ?? "");
-    await authAccountService.requestPasswordReset(identifier);
+  app2.post("/api/auth/request-password-reset", rateLimiters.publicRecovery, jsonRoute(async (req) => {
+    const body = readPasswordResetRequestBody(req.body);
+    await authAccountService.requestPasswordReset(body.identifier);
     return {
       ok: true,
       message: "If the account exists, the request has been submitted for superuser review."
     };
   }));
-  app2.post("/api/auth/validate-password-reset-token", rateLimiters.publicRecovery, jsonRoute2(async (req) => {
-    const body = ensureObject(req.body) || {};
-    const reset = await authAccountService.validatePasswordResetToken(String(body.token ?? ""));
+  app2.post("/api/auth/validate-password-reset-token", rateLimiters.publicRecovery, jsonRoute(async (req) => {
+    const body = readTokenBody(req.body);
+    const reset = await authAccountService.validatePasswordResetToken(body.token);
     return {
       ok: true,
       reset
     };
   }));
-  app2.post("/api/auth/reset-password-with-token", rateLimiters.publicRecovery, jsonRoute2(async (req) => {
-    const body = ensureObject(req.body) || {};
-    const user = await authAccountService.resetPasswordWithToken({
-      token: String(body.token ?? ""),
-      newPassword: String(body.newPassword ?? ""),
-      confirmPassword: String(body.confirmPassword ?? "")
-    });
+  app2.post("/api/auth/reset-password-with-token", rateLimiters.publicRecovery, jsonRoute(async (req) => {
+    const body = readActivationBody(req.body);
+    const user = await authAccountService.resetPasswordWithToken(body);
     return {
       ok: true,
-      user: buildUserPayload(user)
+      user: buildUserPayload2(user)
     };
   }));
-  app2.post("/api/auth/change-password", authenticateToken, rateLimiters.authenticatedAuth, jsonRoute2(async (req) => {
-    const body = ensureObject(req.body) || {};
-    const result = await authAccountService.changeOwnPassword(req.user, {
-      currentPassword: String(body.currentPassword ?? ""),
-      newPassword: String(body.newPassword ?? "")
-    });
-    closeActivitySockets(
-      result.closedSessionIds,
-      "Password changed. Please login again."
-    );
-    return {
-      ok: true,
-      forceLogout: true,
-      user: buildUserPayload(result.user)
-    };
-  }));
-  app2.patch("/api/me/credentials", authenticateToken, rateLimiters.authenticatedAuth, jsonRoute2(async (req) => {
-    if (!req.user) {
-      throw new AuthAccountError(401, "PERMISSION_DENIED", "Authentication required.");
-    }
-    const body = ensureObject(req.body) || {};
-    const hasUsernameField = Object.prototype.hasOwnProperty.call(body, "newUsername");
-    const hasPasswordField = Object.prototype.hasOwnProperty.call(body, "newPassword") || Object.prototype.hasOwnProperty.call(body, "currentPassword");
-    if (!hasUsernameField && !hasPasswordField) {
-      const user = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
-      return {
-        ok: true,
-        forceLogout: false,
-        user: buildUserPayload(user)
-      };
-    }
-    if (req.user.mustChangePassword && !hasPasswordField) {
-      throw new AuthAccountError(
-        403,
-        "PASSWORD_CHANGE_REQUIRED",
-        "Password change is required before other account updates."
-      );
-    }
-    let updatedUser = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
-    let forceLogout = false;
-    if (hasUsernameField) {
-      updatedUser = await authAccountService.changeOwnUsername(
-        req.user,
-        String(body.newUsername ?? "")
-      );
-    }
-    if (hasPasswordField) {
-      const result = await authAccountService.changeOwnPassword(req.user, {
-        currentPassword: String(body.currentPassword ?? ""),
-        newPassword: String(body.newPassword ?? "")
-      });
-      closeActivitySockets(
-        result.closedSessionIds,
-        "Password changed. Please login again."
-      );
-      updatedUser = result.user;
-      forceLogout = true;
-    }
-    return {
-      ok: true,
-      forceLogout,
-      user: buildUserPayload(updatedUser)
-    };
-  }));
-  app2.get(
-    "/api/admin/users",
-    authenticateToken,
-    requireRole("superuser"),
-    rateLimiters.adminAction,
-    jsonRoute2(async (req) => {
-      const users3 = await authAccountService.getManagedUsers(req.user);
-      return {
-        ok: true,
-        users: users3.map((user) => buildManagedUserPayload(user))
-      };
-    })
-  );
-  app2.post(
-    "/api/admin/users",
-    authenticateToken,
-    requireRole("superuser"),
-    rateLimiters.adminAction,
-    jsonRoute2(async (req) => {
-      const body = ensureObject(req.body) || {};
-      const result = await authAccountService.createManagedUser(req.user, {
-        username: String(body.username ?? ""),
-        fullName: body.fullName == null ? null : String(body.fullName),
-        email: body.email == null ? null : String(body.email),
-        role: String(body.role ?? "user")
-      });
-      return {
-        ok: true,
-        user: buildUserPayload(result.user),
-        activation: buildDeliveryPayload(result.activation)
-      };
-    })
-  );
-  app2.patch(
-    "/api/admin/users/:id",
-    authenticateToken,
-    requireRole("superuser"),
-    rateLimiters.adminAction,
-    jsonRoute2(async (req) => {
-      const body = ensureObject(req.body) || {};
-      const user = await authAccountService.updateManagedUser(req.user, req.params.id, {
-        username: body.username !== void 0 ? String(body.username) : void 0,
-        fullName: body.fullName !== void 0 ? String(body.fullName ?? "") : void 0,
-        email: body.email !== void 0 ? String(body.email ?? "") : void 0
-      });
-      return {
-        ok: true,
-        user: buildUserPayload(user)
-      };
-    })
-  );
-  app2.delete(
-    "/api/admin/users/:id",
-    authenticateToken,
-    requireRole("superuser"),
-    rateLimiters.adminAction,
-    jsonRoute2(async (req) => {
-      const result = await authAccountService.deleteManagedUser(req.user, req.params.id);
-      closeActivitySockets(
-        result.closedSessionIds,
-        "Account deleted by superuser."
-      );
-      return {
-        ok: true,
-        deleted: true,
-        user: buildUserPayload(result.user)
-      };
-    })
-  );
-  app2.patch(
-    "/api/admin/users/:id/role",
-    authenticateToken,
-    requireRole("superuser"),
-    rateLimiters.adminAction,
-    jsonRoute2(async (req) => {
-      const body = ensureObject(req.body) || {};
-      const result = await authAccountService.updateManagedUserRole(
-        req.user,
-        req.params.id,
-        String(body.role ?? "")
-      );
-      closeActivitySockets(
-        result.closedSessionIds,
-        "Account role changed. Please login again."
-      );
-      return {
-        ok: true,
-        forceLogout: result.closedSessionIds.length > 0,
-        user: buildUserPayload(result.user)
-      };
-    })
-  );
-  app2.patch(
-    "/api/admin/users/:id/status",
-    authenticateToken,
-    requireRole("superuser"),
-    rateLimiters.adminAction,
-    jsonRoute2(async (req) => {
-      const body = ensureObject(req.body) || {};
-      const isBanned = body.isBanned === void 0 ? void 0 : Boolean(body.isBanned);
-      const result = await authAccountService.updateManagedUserStatus(req.user, req.params.id, {
-        status: body.status !== void 0 ? String(body.status) : void 0,
-        isBanned
-      });
-      closeActivitySockets(
-        result.closedSessionIds,
-        isBanned ? "Account has been banned." : "Account status changed. Please login again.",
-        isBanned ? "banned" : "logout"
-      );
-      return {
-        ok: true,
-        forceLogout: result.closedSessionIds.length > 0,
-        user: buildUserPayload(result.user)
-      };
-    })
-  );
-  app2.post(
-    "/api/admin/users/:id/reset-password",
-    authenticateToken,
-    requireRole("superuser"),
-    rateLimiters.adminAction,
-    jsonRoute2(async (req) => {
-      const result = await authAccountService.resetManagedUserPassword(req.user, req.params.id);
-      closeActivitySockets(
-        result.closedSessionIds,
-        "Password reset by superuser. Please login again."
-      );
-      return {
-        ok: true,
-        forceLogout: result.closedSessionIds.length > 0,
-        user: buildUserPayload(result.user),
-        reset: buildDeliveryPayload(result.reset)
-      };
-    })
-  );
-  app2.post(
-    "/api/admin/users/:id/resend-activation",
-    authenticateToken,
-    requireRole("superuser"),
-    rateLimiters.adminAction,
-    jsonRoute2(async (req) => {
-      const result = await authAccountService.resendActivation(req.user, req.params.id);
-      return {
-        ok: true,
-        user: buildUserPayload(result.user),
-        activation: buildDeliveryPayload(result.activation)
-      };
-    })
-  );
-  app2.get(
-    "/api/admin/password-reset-requests",
-    authenticateToken,
-    requireRole("superuser"),
-    rateLimiters.adminAction,
-    jsonRoute2(async (req) => {
-      const requests = await authAccountService.listPendingPasswordResetRequests(req.user);
-      return {
-        ok: true,
-        requests
-      };
-    })
-  );
   app2.get(
     "/api/admin/dev-mail-outbox",
     authenticateToken,
     requireRole("superuser"),
     rateLimiters.adminAction,
-    jsonRoute2(async () => {
+    jsonRoute(async () => {
       return {
         ok: true,
         enabled: isDevMailOutboxEnabled(),
@@ -11812,7 +12211,7 @@ function registerAuthRoutes(app2, deps) {
     authenticateToken,
     requireRole("superuser"),
     rateLimiters.adminAction,
-    jsonRoute2(async (req) => {
+    jsonRoute(async (req) => {
       const deleted = await deleteDevMailPreview(req.params.previewId);
       if (!deleted) {
         throw new AuthAccountError(404, "MAIL_PREVIEW_NOT_FOUND", "Mail preview not found.");
@@ -11836,7 +12235,7 @@ function registerAuthRoutes(app2, deps) {
     authenticateToken,
     requireRole("superuser"),
     rateLimiters.adminAction,
-    jsonRoute2(async (req) => {
+    jsonRoute(async (req) => {
       const deletedCount = await clearDevMailOutbox();
       if (req.user) {
         await storage2.createAuditLog({
@@ -11855,60 +12254,145 @@ function registerAuthRoutes(app2, deps) {
       };
     })
   );
-  app2.patch(
-    "/api/admin/users/:id/credentials",
+}
+
+// server/routes/auth/auth-session-routes.ts
+function registerAuthSessionRoutes(context) {
+  const {
+    app: app2,
+    storage: storage2,
+    authAccountService,
     authenticateToken,
-    requireRole("superuser"),
-    rateLimiters.adminAction,
-    jsonRoute2(async (req) => {
-      const body = ensureObject(req.body) || {};
-      const newPassword = String(body.newPassword ?? "");
-      if (newPassword) {
+    rateLimiters,
+    jsonRoute,
+    closeActivitySockets,
+    buildUserPayload: buildUserPayload2,
+    buildOkPayload: buildOkPayload2,
+    signSessionToken,
+    parseBrowserName
+  } = context;
+  const handleLogin = jsonRoute(async (req, res) => {
+    const body = readLoginBody(req.body);
+    const { user, activity } = await authAccountService.login({
+      username: body.username,
+      password: body.password,
+      fingerprint: body.fingerprint,
+      pcName: body.pcName,
+      browserName: parseBrowserName(body.browser, req.headers["user-agent"]),
+      ipAddress: req.ip || req.socket.remoteAddress || null
+    });
+    signSessionToken(
+      {
+        userId: user.id,
+        username: user.username,
+        role: user.role,
+        activityId: activity.id
+      },
+      res
+    );
+    return {
+      ok: true,
+      username: user.username,
+      role: user.role,
+      activityId: activity.id,
+      mustChangePassword: user.mustChangePassword,
+      status: user.status,
+      user: buildUserPayload2(user)
+    };
+  });
+  app2.post("/api/login", rateLimiters.login, handleLogin);
+  app2.post("/api/auth/login", rateLimiters.login, handleLogin);
+  const handleMe = jsonRoute(async (req) => {
+    if (!req.user) {
+      throw new AuthAccountError(401, "PERMISSION_DENIED", "Authentication required.");
+    }
+    const user = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
+    if (!user) {
+      throw new AuthAccountError(404, "USER_NOT_FOUND", "User not found.");
+    }
+    return buildOkPayload2({
+      user: buildUserPayload2(user)
+    });
+  });
+  app2.get("/api/me", authenticateToken, handleMe);
+  app2.get("/api/auth/me", authenticateToken, handleMe);
+  app2.post(
+    "/api/auth/change-password",
+    authenticateToken,
+    rateLimiters.authenticatedAuth,
+    jsonRoute(async (req) => {
+      const body = readPasswordChangeBody(req.body);
+      const result = await authAccountService.changeOwnPassword(req.user, body);
+      closeActivitySockets(
+        result.closedSessionIds,
+        "Password changed. Please login again."
+      );
+      return {
+        ok: true,
+        forceLogout: true,
+        user: buildUserPayload2(result.user)
+      };
+    })
+  );
+  app2.patch(
+    "/api/me/credentials",
+    authenticateToken,
+    rateLimiters.authenticatedAuth,
+    jsonRoute(async (req) => {
+      if (!req.user) {
+        throw new AuthAccountError(401, "PERMISSION_DENIED", "Authentication required.");
+      }
+      const parsed = readOwnCredentialPatchBody(req.body);
+      if (!parsed.hasUsernameField && !parsed.hasPasswordField) {
+        const user = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
+        return {
+          ok: true,
+          forceLogout: false,
+          user: buildUserPayload2(user)
+        };
+      }
+      if (req.user.mustChangePassword && !parsed.hasPasswordField) {
         throw new AuthAccountError(
-          409,
-          "ACCOUNT_UNAVAILABLE",
-          "Direct password assignment is disabled. Use the reset-password action instead."
+          403,
+          "PASSWORD_CHANGE_REQUIRED",
+          "Password change is required before other account updates."
         );
       }
-      const user = await authAccountService.updateManagedUser(req.user, req.params.id, {
-        username: body.newUsername !== void 0 ? String(body.newUsername) : void 0
-      });
+      let updatedUser = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
+      let forceLogout = false;
+      if (parsed.hasUsernameField) {
+        updatedUser = await authAccountService.changeOwnUsername(
+          req.user,
+          parsed.newUsername ?? ""
+        );
+      }
+      if (parsed.hasPasswordField) {
+        const result = await authAccountService.changeOwnPassword(req.user, {
+          currentPassword: parsed.currentPassword,
+          newPassword: parsed.newPassword
+        });
+        closeActivitySockets(
+          result.closedSessionIds,
+          "Password changed. Please login again."
+        );
+        updatedUser = result.user;
+        forceLogout = true;
+      }
       return {
         ok: true,
-        user: buildUserPayload(user)
+        forceLogout,
+        user: buildUserPayload2(updatedUser)
       };
     })
   );
-  app2.get(
-    "/api/accounts",
-    authenticateToken,
-    requireRole("superuser"),
-    rateLimiters.adminAction,
-    jsonRoute2(async (_req) => {
-      const accounts = await storage2.getAccounts();
-      return buildOkPayload({ accounts });
-    })
-  );
-  app2.post(
-    "/api/users",
-    authenticateToken,
-    requireRole("superuser"),
-    rateLimiters.adminAction,
-    jsonRoute2(async (req) => {
-      const body = ensureObject(req.body) || {};
-      const result = await authAccountService.createManagedUser(req.user, {
-        username: String(body.username ?? ""),
-        fullName: body.fullName == null ? null : String(body.fullName),
-        email: body.email == null ? null : String(body.email),
-        role: String(body.role ?? "user")
-      });
-      return {
-        ok: true,
-        user: buildUserPayload(result.user),
-        activation: buildDeliveryPayload(result.activation)
-      };
-    })
-  );
+}
+
+// server/routes/auth.routes.ts
+function registerAuthRoutes(app2, deps) {
+  const context = createAuthRouteContext(app2, deps);
+  registerAuthSessionRoutes(context);
+  registerAuthRecoveryRoutes(context);
+  registerAuthAdminRoutes(context);
 }
 
 // server/routes/collection.validation.ts
@@ -12596,19 +13080,19 @@ var CollectionNicknameService = class extends CollectionServiceSupport {
 };
 
 // server/routes/collection-receipt.service.ts
-import fs from "fs";
-import path3 from "path";
+import fs2 from "fs";
+import path5 from "path";
 import { randomUUID as randomUUID8 } from "node:crypto";
 var COLLECTION_RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
 var COLLECTION_RECEIPT_ALLOWED_EXT = /* @__PURE__ */ new Set([".jpg", ".jpeg", ".png", ".pdf"]);
 var COLLECTION_RECEIPT_ALLOWED_MIME = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "application/pdf"]);
 var COLLECTION_RECEIPT_INLINE_MIME = /* @__PURE__ */ new Set(["application/pdf", "image/png", "image/jpeg"]);
-var COLLECTION_RECEIPT_DIR = path3.resolve(process.cwd(), "uploads", "collection-receipts");
+var COLLECTION_RECEIPT_DIR = path5.resolve(process.cwd(), "uploads", "collection-receipts");
 var COLLECTION_RECEIPT_PUBLIC_PREFIX = "/uploads/collection-receipts";
 function resolveReceiptExtension(receipt) {
   const originalFileName = String(receipt.fileName || "").trim();
   const mimeType = String(receipt.mimeType || "").trim().toLowerCase();
-  const extFromName = path3.extname(originalFileName).toLowerCase();
+  const extFromName = path5.extname(originalFileName).toLowerCase();
   if (extFromName && COLLECTION_RECEIPT_ALLOWED_EXT.has(extFromName)) {
     return extFromName === ".jpeg" ? ".jpg" : extFromName;
   }
@@ -12632,8 +13116,8 @@ function extractReceiptBuffer(receipt) {
 }
 function sanitizeOriginalFileName(fileName, fallbackExtension) {
   const raw = String(fileName || "").trim();
-  const ext = path3.extname(raw).toLowerCase();
-  const stem = path3.basename(raw, ext).replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").slice(0, 80) || "receipt";
+  const ext = path5.extname(raw).toLowerCase();
+  const stem = path5.basename(raw, ext).replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").slice(0, 80) || "receipt";
   const safeExtension = ext || fallbackExtension || "";
   return `${stem}${safeExtension}`.slice(0, 140);
 }
@@ -12653,15 +13137,15 @@ async function saveCollectionReceipt(receipt) {
   if (buffer.length > COLLECTION_RECEIPT_MAX_BYTES) {
     throw new Error("Receipt file exceeds 5MB.");
   }
-  await fs.promises.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
+  await fs2.promises.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
   const originalFileName = sanitizeOriginalFileName(
     String(receipt.fileName || "receipt"),
     extension
   );
-  const stem = path3.basename(originalFileName, path3.extname(originalFileName)).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40) || "receipt";
+  const stem = path5.basename(originalFileName, path5.extname(originalFileName)).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40) || "receipt";
   const storedFileName = `${Date.now()}-${randomUUID8()}-${stem}${extension}`;
-  const absolutePath = path3.join(COLLECTION_RECEIPT_DIR, storedFileName);
-  await fs.promises.writeFile(absolutePath, buffer);
+  const absolutePath = path5.join(COLLECTION_RECEIPT_DIR, storedFileName);
+  await fs2.promises.writeFile(absolutePath, buffer);
   return {
     storagePath: `${COLLECTION_RECEIPT_PUBLIC_PREFIX}/${storedFileName}`.replace(/\\/g, "/"),
     originalFileName,
@@ -12675,15 +13159,15 @@ async function removeCollectionReceiptFile(receiptPath) {
   if (!normalized.startsWith(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`)) return;
   const fileName = normalized.slice(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`.length);
   if (!fileName || fileName.includes("..") || fileName.includes("/") || fileName.includes("\\")) return;
-  const absolutePath = path3.resolve(COLLECTION_RECEIPT_DIR, fileName);
+  const absolutePath = path5.resolve(COLLECTION_RECEIPT_DIR, fileName);
   if (!absolutePath.startsWith(COLLECTION_RECEIPT_DIR)) return;
   try {
-    await fs.promises.unlink(absolutePath);
+    await fs2.promises.unlink(absolutePath);
   } catch {
   }
 }
 function resolveCollectionReceiptMimeTypeFromFileName(fileName) {
-  const extension = path3.extname(fileName).toLowerCase();
+  const extension = path5.extname(fileName).toLowerCase();
   if (extension === ".pdf") return "application/pdf";
   if (extension === ".png") return "image/png";
   if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
@@ -12699,10 +13183,10 @@ function resolveCollectionReceiptFile(receiptPath) {
   const storedFileName = normalized.slice(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`.length);
   if (!storedFileName) return null;
   if (storedFileName.includes("..") || storedFileName.includes("/") || storedFileName.includes("\\")) return null;
-  if (path3.basename(storedFileName) !== storedFileName) return null;
-  const absolutePath = path3.resolve(COLLECTION_RECEIPT_DIR, storedFileName);
-  const relativePath = path3.relative(COLLECTION_RECEIPT_DIR, absolutePath);
-  if (!relativePath || relativePath.startsWith("..") || path3.isAbsolute(relativePath)) return null;
+  if (path5.basename(storedFileName) !== storedFileName) return null;
+  const absolutePath = path5.resolve(COLLECTION_RECEIPT_DIR, storedFileName);
+  const relativePath = path5.relative(COLLECTION_RECEIPT_DIR, absolutePath);
+  if (!relativePath || relativePath.startsWith("..") || path5.isAbsolute(relativePath)) return null;
   const mimeType = resolveCollectionReceiptMimeTypeFromFileName(storedFileName);
   return {
     absolutePath,
@@ -12752,7 +13236,7 @@ async function serveCollectionReceipt(storage2, req, res, mode, receiptIdRaw) {
       return res.status(404).json({ ok: false, message: "Receipt file not found." });
     }
     try {
-      await fs.promises.access(resolved.absolutePath, fs.constants.R_OK);
+      await fs2.promises.access(resolved.absolutePath, fs2.constants.R_OK);
     } catch {
       return res.status(404).json({ ok: false, message: "Receipt file not found." });
     }
@@ -13337,7 +13821,7 @@ var CollectionService = class {
   }
 };
 
-// server/routes/collection.routes.ts
+// server/routes/collection/collection-route-shared.ts
 function sendCollectionError(res, err, fallbackMessage) {
   if (err instanceof HttpError) {
     return res.status(err.statusCode).json({
@@ -13349,236 +13833,239 @@ function sendCollectionError(res, err, fallbackMessage) {
   const message = err?.message || fallbackMessage;
   return res.status(500).json({ ok: false, message });
 }
-function jsonRoute(fallbackMessage, handler) {
-  return async (req, res) => {
-    try {
-      return res.json(await handler(req));
-    } catch (err) {
-      return sendCollectionError(res, err, fallbackMessage);
+function createCollectionRouteContext(app2, deps) {
+  const { storage: storage2, authenticateToken, requireRole, requireTabAccess } = deps;
+  const collectionService = new CollectionService(storage2);
+  const reportAccess = [
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("collection-report")
+  ];
+  const superuserReportAccess = [
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("collection-report")
+  ];
+  const adminSummaryAccess = [
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("collection-report")
+  ];
+  return {
+    app: app2,
+    storage: storage2,
+    collectionService,
+    reportAccess,
+    superuserReportAccess,
+    adminSummaryAccess,
+    jsonRoute(fallbackMessage, handler) {
+      return async (req, res) => {
+        try {
+          return res.json(await handler(req));
+        } catch (err) {
+          return sendCollectionError(res, err, fallbackMessage);
+        }
+      };
     }
   };
 }
-function registerCollectionRoutes(app2, deps) {
-  const { storage: storage2, authenticateToken, requireRole, requireTabAccess } = deps;
-  const collectionService = new CollectionService(storage2);
-  app2.get(
-    "/api/collection/nicknames",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("collection-report"),
-    jsonRoute("Failed to load staff nicknames.", (req) => collectionService.listNicknames(req.user, req.query.includeInactive))
-  );
-  app2.post(
-    "/api/collection/nickname-auth/check",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("collection-report"),
-    jsonRoute("Failed to validate nickname.", (req) => collectionService.checkNicknameAuth(req.user, req.body))
-  );
-  app2.post(
-    "/api/collection/nickname-auth/setup-password",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("collection-report"),
-    jsonRoute("Failed to set nickname password.", (req) => collectionService.setupNicknamePassword(req.user, req.body))
-  );
-  app2.post(
-    "/api/collection/nickname-auth/login",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("collection-report"),
-    jsonRoute("Failed to login nickname.", (req) => collectionService.loginNickname(req.user, req.body))
-  );
+
+// server/routes/collection/collection-admin-routes.ts
+function registerCollectionAdminRoutes(context) {
+  const {
+    app: app2,
+    collectionService,
+    superuserReportAccess,
+    jsonRoute
+  } = context;
   app2.get(
     "/api/collection/admins",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("collection-report"),
+    ...superuserReportAccess,
     jsonRoute("Failed to load admin list.", async () => collectionService.listAdmins())
   );
   app2.get(
     "/api/collection/admin-groups",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("collection-report"),
+    ...superuserReportAccess,
     jsonRoute("Failed to load admin groups.", async () => collectionService.listAdminGroups())
   );
   app2.post(
     "/api/collection/admin-groups",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("collection-report"),
+    ...superuserReportAccess,
     jsonRoute("Failed to create admin group.", (req) => collectionService.createAdminGroup(req.user, req.body))
   );
   app2.put(
     "/api/collection/admin-groups/:groupId",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("collection-report"),
+    ...superuserReportAccess,
     jsonRoute("Failed to update admin group.", (req) => collectionService.updateAdminGroup(req.user, req.params.groupId, req.body))
   );
   app2.delete(
     "/api/collection/admin-groups/:groupId",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("collection-report"),
+    ...superuserReportAccess,
     jsonRoute("Failed to delete admin group.", (req) => collectionService.deleteAdminGroup(req.user, req.params.groupId))
   );
   app2.get(
     "/api/collection/nickname-assignments/:adminId",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("collection-report"),
+    ...superuserReportAccess,
     jsonRoute("Failed to load nickname assignments.", (req) => collectionService.getNicknameAssignments(req.params.adminId))
   );
   app2.put(
     "/api/collection/nickname-assignments/:adminId",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("collection-report"),
+    ...superuserReportAccess,
     jsonRoute("Failed to save nickname assignments.", (req) => collectionService.setNicknameAssignments(req.user, req.params.adminId, req.body))
+  );
+}
+
+// server/routes/collection/collection-nickname-routes.ts
+function registerCollectionNicknameRoutes(context) {
+  const {
+    app: app2,
+    collectionService,
+    reportAccess,
+    superuserReportAccess,
+    jsonRoute
+  } = context;
+  app2.get(
+    "/api/collection/nicknames",
+    ...reportAccess,
+    jsonRoute("Failed to load staff nicknames.", (req) => collectionService.listNicknames(req.user, req.query.includeInactive))
+  );
+  app2.post(
+    "/api/collection/nickname-auth/check",
+    ...reportAccess,
+    jsonRoute("Failed to validate nickname.", (req) => collectionService.checkNicknameAuth(req.user, req.body))
+  );
+  app2.post(
+    "/api/collection/nickname-auth/setup-password",
+    ...reportAccess,
+    jsonRoute("Failed to set nickname password.", (req) => collectionService.setupNicknamePassword(req.user, req.body))
+  );
+  app2.post(
+    "/api/collection/nickname-auth/login",
+    ...reportAccess,
+    jsonRoute("Failed to login nickname.", (req) => collectionService.loginNickname(req.user, req.body))
   );
   app2.post(
     "/api/collection/nicknames",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("collection-report"),
+    ...superuserReportAccess,
     jsonRoute("Failed to create nickname.", (req) => collectionService.createNickname(req.user, req.body))
   );
   app2.put(
     "/api/collection/nicknames/:id",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("collection-report"),
+    ...superuserReportAccess,
     jsonRoute("Failed to update nickname.", (req) => collectionService.updateNickname(req.user, req.params.id, req.body))
   );
   app2.patch(
     "/api/collection/nicknames/:id",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("collection-report"),
+    ...superuserReportAccess,
     jsonRoute("Failed to update nickname status.", (req) => collectionService.updateNicknameStatus(req.user, req.params.id, req.body))
   );
   app2.post(
     "/api/collection/nicknames/:id/reset-password",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("collection-report"),
+    ...superuserReportAccess,
     jsonRoute("Failed to reset nickname password.", (req) => collectionService.resetNicknamePassword(req.user, req.params.id))
   );
   app2.delete(
     "/api/collection/nicknames/:id",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("collection-report"),
+    ...superuserReportAccess,
     jsonRoute("Failed to delete nickname.", (req) => collectionService.deleteNickname(req.user, req.params.id))
   );
+}
+
+// server/routes/collection/collection-report-routes.ts
+function registerCollectionReportRoutes(context) {
+  const {
+    app: app2,
+    storage: storage2,
+    collectionService,
+    reportAccess,
+    superuserReportAccess,
+    adminSummaryAccess,
+    jsonRoute
+  } = context;
   app2.post(
     "/api/collection",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("collection-report"),
+    ...reportAccess,
     jsonRoute("Failed to create collection record.", (req) => collectionService.createRecord(req.user, req.body))
   );
   app2.get(
     "/api/collection/summary",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("collection-report"),
+    ...reportAccess,
     jsonRoute("Failed to load collection summary.", (req) => collectionService.getSummary(req.user, req.query))
   );
   app2.get(
     "/api/collection/list",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("collection-report"),
+    ...reportAccess,
     jsonRoute("Failed to load collection records.", (req) => collectionService.listRecords(req.user, req.query))
   );
   app2.get(
     "/api/collection/purge-summary",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("collection-report"),
+    ...superuserReportAccess,
     jsonRoute("Failed to load purge summary.", (req) => collectionService.getPurgeSummary(req.user))
   );
   app2.get(
     "/api/collection/nickname-summary",
-    authenticateToken,
-    requireRole("admin", "superuser"),
-    requireTabAccess("collection-report"),
+    ...adminSummaryAccess,
     jsonRoute("Failed to load nickname summary.", (req) => collectionService.getNicknameSummary(req.user, req.query))
   );
   app2.get(
     "/api/collection/:id/receipt/view",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("collection-report"),
+    ...reportAccess,
     async (req, res) => serveCollectionReceipt(storage2, req, res, "view")
   );
   app2.get(
     "/api/collection/:id/receipt/download",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("collection-report"),
+    ...reportAccess,
     async (req, res) => serveCollectionReceipt(storage2, req, res, "download")
   );
   app2.get(
     "/api/collection/:id/receipts/:receiptId/view",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("collection-report"),
+    ...reportAccess,
     async (req, res) => serveCollectionReceipt(storage2, req, res, "view", req.params.receiptId)
   );
   app2.get(
     "/api/collection/:id/receipts/:receiptId/download",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("collection-report"),
+    ...reportAccess,
     async (req, res) => serveCollectionReceipt(storage2, req, res, "download", req.params.receiptId)
   );
   app2.get(
     "/api/receipts/:id/view",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("collection-report"),
+    ...reportAccess,
     async (req, res) => serveCollectionReceipt(storage2, req, res, "view")
   );
   app2.get(
     "/api/receipts/:id/download",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("collection-report"),
+    ...reportAccess,
     async (req, res) => serveCollectionReceipt(storage2, req, res, "download")
   );
   const handleUpdateCollectionRecord = jsonRoute("Failed to update collection record.", (req) => collectionService.updateRecord(req.user, req.params.id, req.body));
   app2.patch(
     "/api/collection/:id",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("collection-report"),
+    ...reportAccess,
     handleUpdateCollectionRecord
   );
   app2.put(
     "/api/collection/:id",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("collection-report"),
+    ...reportAccess,
     handleUpdateCollectionRecord
   );
   app2.delete(
     "/api/collection/purge-old",
-    authenticateToken,
-    requireRole("superuser"),
-    requireTabAccess("collection-report"),
+    ...superuserReportAccess,
     jsonRoute("Failed to purge old collection records.", (req) => collectionService.purgeOldRecords(req.user, req.body))
   );
   app2.delete(
     "/api/collection/:id",
-    authenticateToken,
-    requireRole("user", "admin", "superuser"),
-    requireTabAccess("collection-report"),
+    ...reportAccess,
     jsonRoute("Failed to delete collection record.", (req) => collectionService.deleteRecord(req.user, req.params.id))
   );
+}
+
+// server/routes/collection.routes.ts
+function registerCollectionRoutes(app2, deps) {
+  const context = createCollectionRouteContext(app2, deps);
+  registerCollectionNicknameRoutes(context);
+  registerCollectionAdminRoutes(context);
+  registerCollectionReportRoutes(context);
 }
 
 // server/routes/imports.routes.ts
@@ -13782,7 +14269,7 @@ function registerOperationsRoutes(app2, deps) {
     authenticateToken,
     requireRole,
     requireTabAccess,
-    withExportCircuit: withExportCircuit2,
+    withExportCircuit,
     isExportCircuitOpenError,
     connectedClients: connectedClients2
   } = deps;
@@ -13893,7 +14380,7 @@ function registerOperationsRoutes(app2, deps) {
       const name = String(body.name || "");
       let backup;
       try {
-        backup = await withExportCircuit2(async () => {
+        backup = await withExportCircuit(async () => {
           const startTime = Date.now();
           const backupData = await backupsRepository.getBackupDataForExport();
           const metadata = {
@@ -13950,7 +14437,7 @@ function registerOperationsRoutes(app2, deps) {
     asyncHandler(async (req, res) => {
       let backup;
       try {
-        backup = await withExportCircuit2(() => backupsRepository.getBackupById(req.params.id));
+        backup = await withExportCircuit(() => backupsRepository.getBackupById(req.params.id));
       } catch (error) {
         if (isExportCircuitOpenError(error)) {
           return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
@@ -13962,7 +14449,7 @@ function registerOperationsRoutes(app2, deps) {
       }
       let result;
       try {
-        result = await withExportCircuit2(async () => {
+        result = await withExportCircuit(async () => {
           const startTime = Date.now();
           const backupData = JSON.parse(backup.backupData);
           const restored = await backupsRepository.restoreFromBackup(backupData);
@@ -13998,8 +14485,8 @@ function registerOperationsRoutes(app2, deps) {
       let backup;
       let deleted;
       try {
-        backup = await withExportCircuit2(() => backupsRepository.getBackupById(req.params.id));
-        deleted = await withExportCircuit2(() => backupsRepository.deleteBackup(req.params.id));
+        backup = await withExportCircuit(() => backupsRepository.getBackupById(req.params.id));
+        deleted = await withExportCircuit(() => backupsRepository.deleteBackup(req.params.id));
       } catch (error) {
         if (isExportCircuitOpenError(error)) {
           return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
@@ -14161,11 +14648,10 @@ function registerSettingsRoutes(app2, deps) {
     authenticateToken,
     requireRole,
     clearTabVisibilityCache,
-    invalidateRuntimeSettingsCache: invalidateRuntimeSettingsCache2,
-    invalidateMaintenanceCache: invalidateMaintenanceCache2,
-    getMaintenanceStateCached: getMaintenanceStateCached2,
-    broadcastWsMessage,
-    defaultAiTimeoutMs
+    invalidateRuntimeSettingsCache,
+    invalidateMaintenanceCache,
+    getMaintenanceStateCached,
+    broadcastWsMessage
   } = deps;
   app2.get("/api/app-config", authenticateToken, asyncHandler(async (_req, res) => {
     const config = await storage2.getAppConfig();
@@ -14215,19 +14701,16 @@ function registerSettingsRoutes(app2, deps) {
     }
     if (result.status === "updated") {
       clearTabVisibilityCache();
-      invalidateRuntimeSettingsCache2();
+      invalidateRuntimeSettingsCache();
       await storage2.createAuditLog({
         action: result.setting?.isCritical ? "CRITICAL_SETTING_UPDATED" : "SETTING_UPDATED",
         performedBy: req.user?.username || "system",
         targetResource: key,
         details: `Updated setting ${key} to "${String(result.setting?.value ?? "")}"`
       });
-      if (key === "ai_timeout_ms") {
-        process.env.OLLAMA_TIMEOUT_MS = String(result.setting?.value ?? defaultAiTimeoutMs);
-      }
       if (result.shouldBroadcast) {
-        invalidateMaintenanceCache2();
-        const maintenanceState = await getMaintenanceStateCached2(true);
+        invalidateMaintenanceCache();
+        const maintenanceState = await getMaintenanceStateCached(true);
         broadcastWsMessage({
           type: "maintenance_update",
           maintenance: maintenanceState.maintenance,
@@ -14259,14 +14742,14 @@ function registerSystemRoutes(app2, deps) {
     authenticateToken,
     requireRole,
     requireMonitorAccess,
-    getMaintenanceStateCached: getMaintenanceStateCached2,
-    computeInternalMonitorSnapshot: computeInternalMonitorSnapshot2,
-    buildInternalMonitorAlerts: buildInternalMonitorAlerts2,
-    getControlState: getControlState2,
-    getDbProtection: getDbProtection2,
-    getRequestRate: getRequestRate2,
-    getLatencyP95: getLatencyP952,
-    getLocalCircuitSnapshots: getLocalCircuitSnapshots2,
+    getMaintenanceStateCached,
+    computeInternalMonitorSnapshot,
+    buildInternalMonitorAlerts,
+    getControlState,
+    getDbProtection,
+    getRequestRate,
+    getLatencyP95,
+    getLocalCircuitSnapshots,
     getIntelligenceExplainability: getIntelligenceExplainability2,
     injectChaos: injectChaos2,
     createAuditLog
@@ -14275,7 +14758,7 @@ function registerSystemRoutes(app2, deps) {
     res.json({ status: "ok", mode: "postgresql" });
   });
   app2.get("/api/maintenance-status", asyncHandler(async (_req, res) => {
-    return res.json(await getMaintenanceStateCached2());
+    return res.json(await getMaintenanceStateCached());
   }));
   app2.get(
     "/internal/system-health",
@@ -14283,8 +14766,8 @@ function registerSystemRoutes(app2, deps) {
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
     (_req, res) => {
-      const snapshot = computeInternalMonitorSnapshot2();
-      const alerts = buildInternalMonitorAlerts2(snapshot);
+      const snapshot = computeInternalMonitorSnapshot();
+      const alerts = buildInternalMonitorAlerts(snapshot);
       res.json({
         ...snapshot,
         activeAlertCount: alerts.length
@@ -14297,12 +14780,12 @@ function registerSystemRoutes(app2, deps) {
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
     (_req, res) => {
-      const controlState = getControlState2();
+      const controlState = getControlState();
       res.json({
         mode: controlState.mode,
         throttleFactor: controlState.throttleFactor,
         rejectHeavyRoutes: controlState.rejectHeavyRoutes,
-        dbProtection: getDbProtection2(),
+        dbProtection: getDbProtection(),
         preAllocatedMB: controlState.preAllocateMB,
         updatedAt: controlState.updatedAt
       });
@@ -14314,7 +14797,7 @@ function registerSystemRoutes(app2, deps) {
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
     (_req, res) => {
-      const controlState = getControlState2();
+      const controlState = getControlState();
       res.json({
         count: controlState.workerCount,
         maxWorkers: controlState.maxWorkers,
@@ -14329,8 +14812,8 @@ function registerSystemRoutes(app2, deps) {
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
     (_req, res) => {
-      const snapshot = computeInternalMonitorSnapshot2();
-      const alerts = buildInternalMonitorAlerts2(snapshot);
+      const snapshot = computeInternalMonitorSnapshot();
+      const alerts = buildInternalMonitorAlerts(snapshot);
       res.json({
         alerts,
         updatedAt: snapshot.updatedAt
@@ -14343,12 +14826,12 @@ function registerSystemRoutes(app2, deps) {
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
     (_req, res) => {
-      const controlState = getControlState2();
+      const controlState = getControlState();
       res.json({
         predictor: controlState.predictor,
         queueLength: controlState.queueLength,
-        requestRate: getRequestRate2(),
-        p95LatencyMs: getLatencyP952(),
+        requestRate: getRequestRate(),
+        p95LatencyMs: getLatencyP95(),
         updatedAt: controlState.updatedAt
       });
     }
@@ -14359,9 +14842,9 @@ function registerSystemRoutes(app2, deps) {
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
     (_req, res) => {
-      const controlState = getControlState2();
+      const controlState = getControlState();
       res.json({
-        local: getLocalCircuitSnapshots2(),
+        local: getLocalCircuitSnapshots(),
         cluster: controlState.circuits,
         updatedAt: controlState.updatedAt
       });
@@ -16453,7 +16936,7 @@ var ImportAnalysisService = class {
 };
 
 // server/ws/runtime-manager.ts
-import { WebSocket as WebSocket3 } from "ws";
+import { WebSocket as WebSocket4 } from "ws";
 
 // server/ws/session-auth.ts
 import jwt3 from "jsonwebtoken";
@@ -16477,12 +16960,12 @@ function isActiveWebSocketSession(activity) {
 
 // server/ws/runtime-manager.ts
 function createRuntimeWebSocketManager(options) {
-  const { wss: wss2, storage: storage2, secret } = options;
+  const { wss, storage: storage2, secret } = options;
   const connectedClients2 = /* @__PURE__ */ new Map();
   const broadcastWsMessage = (payload) => {
     const message = JSON.stringify(payload);
     for (const [activityId, ws] of connectedClients2.entries()) {
-      if (!ws || ws.readyState !== WebSocket3.OPEN) {
+      if (!ws || ws.readyState !== WebSocket4.OPEN) {
         connectedClients2.delete(activityId);
         void storage2.clearCollectionNicknameSessionByActivity(activityId);
         continue;
@@ -16497,16 +16980,16 @@ function createRuntimeWebSocketManager(options) {
   };
   const staleSocketSweepHandle = setInterval(() => {
     for (const [activityId, ws] of connectedClients2.entries()) {
-      if (!ws || ws.readyState !== WebSocket3.OPEN && ws.readyState !== WebSocket3.CONNECTING) {
+      if (!ws || ws.readyState !== WebSocket4.OPEN && ws.readyState !== WebSocket4.CONNECTING) {
         connectedClients2.delete(activityId);
       }
     }
   }, 3e4);
   staleSocketSweepHandle.unref();
-  wss2.once("close", () => {
+  wss.once("close", () => {
     clearInterval(staleSocketSweepHandle);
   });
-  wss2.on("connection", async (ws, req) => {
+  wss.on("connection", async (ws, req) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const token = url.searchParams.get("token") || readAuthSessionTokenFromHeaders(req.headers);
     if (!token) {
@@ -16526,7 +17009,7 @@ function createRuntimeWebSocketManager(options) {
         return;
       }
       const existingWs = connectedClients2.get(activityId);
-      if (existingWs && existingWs.readyState === WebSocket3.OPEN) {
+      if (existingWs && existingWs.readyState === WebSocket4.OPEN) {
         existingWs.close();
       }
       connectedClients2.set(activityId, ws);
@@ -16556,10 +17039,10 @@ function createRuntimeWebSocketManager(options) {
 function createLocalServerComposition(options) {
   const {
     storage: storage2,
-    wss: wss2,
+    wss,
     secret,
-    withAiCircuit: withAiCircuit2,
-    lowMemoryMode,
+    withAiCircuit,
+    lowMemoryMode: lowMemoryMode2,
     defaultAiTimeoutMs,
     ollamaChat: ollamaChat2,
     ollamaEmbed: ollamaEmbed2
@@ -16574,24 +17057,24 @@ function createLocalServerComposition(options) {
   });
   const importAnalysisService = new ImportAnalysisService(importsRepository);
   const websocketManager = createRuntimeWebSocketManager({
-    wss: wss2,
+    wss,
     storage: storage2,
     secret
   });
   const authGuards = createAuthGuards({ storage: storage2, secret });
   const categoryStatsService2 = new CategoryStatsService(storage2);
-  const aiSearchService2 = new AiSearchService({
+  const aiSearchService = new AiSearchService({
     storage: storage2,
-    withAiCircuit: withAiCircuit2,
+    withAiCircuit,
     ollamaChat: ollamaChat2,
     ollamaEmbed: ollamaEmbed2,
     defaultAiTimeoutMs,
-    lowMemoryMode
+    lowMemoryMode: lowMemoryMode2
   });
   const aiChatService = new AiChatService({
     storage: storage2,
     categoryStatsService: categoryStatsService2,
-    withAiCircuit: withAiCircuit2,
+    withAiCircuit,
     ollamaChat: ollamaChat2
   });
   const aiIndexService = new AiIndexService({
@@ -16606,7 +17089,7 @@ function createLocalServerComposition(options) {
     analyticsRepository,
     backupsRepository,
     importAnalysisService,
-    aiSearchService: aiSearchService2,
+    aiSearchService,
     categoryStatsService: categoryStatsService2,
     aiChatService,
     aiIndexService,
@@ -16622,11 +17105,11 @@ function createLocalServerComposition(options) {
 function registerLocalServerRoutes(options) {
   const {
     app: app2,
-    composition: composition2,
-    runtimeConfig,
+    composition,
+    runtimeConfig: runtimeConfig2,
     runtimeMonitor,
-    withAiConcurrencyGate: withAiConcurrencyGate2,
-    withExportCircuit: withExportCircuit2,
+    withAiConcurrencyGate,
+    withExportCircuit,
     defaultAiTimeoutMs
   } = options;
   const {
@@ -16637,7 +17120,7 @@ function registerLocalServerRoutes(options) {
     analyticsRepository,
     backupsRepository,
     importAnalysisService,
-    aiSearchService: aiSearchService2,
+    aiSearchService,
     categoryStatsService: categoryStatsService2,
     aiChatService,
     aiIndexService,
@@ -16648,34 +17131,34 @@ function registerLocalServerRoutes(options) {
     requireTabAccess,
     requireMonitorAccess,
     clearTabVisibilityCache
-  } = composition2;
+  } = composition;
   const {
     getRuntimeSettingsCached: getRuntimeSettingsCached2,
-    getMaintenanceStateCached: getMaintenanceStateCached2,
-    invalidateRuntimeSettingsCache: invalidateRuntimeSettingsCache2,
-    invalidateMaintenanceCache: invalidateMaintenanceCache2
-  } = runtimeConfig;
+    getMaintenanceStateCached,
+    invalidateRuntimeSettingsCache,
+    invalidateMaintenanceCache
+  } = runtimeConfig2;
   const {
-    computeInternalMonitorSnapshot: computeInternalMonitorSnapshot2,
-    buildInternalMonitorAlerts: buildInternalMonitorAlerts2,
-    getControlState: getControlState2,
-    getDbProtection: getDbProtection2,
-    getRequestRate: getRequestRate2,
-    getLatencyP95: getLatencyP952,
-    getLocalCircuitSnapshots: getLocalCircuitSnapshots2
+    computeInternalMonitorSnapshot,
+    buildInternalMonitorAlerts,
+    getControlState,
+    getDbProtection,
+    getRequestRate,
+    getLatencyP95,
+    getLocalCircuitSnapshots
   } = runtimeMonitor;
   registerSystemRoutes(app2, {
     authenticateToken,
     requireRole,
     requireMonitorAccess,
-    getMaintenanceStateCached: getMaintenanceStateCached2,
-    computeInternalMonitorSnapshot: computeInternalMonitorSnapshot2,
-    buildInternalMonitorAlerts: buildInternalMonitorAlerts2,
-    getControlState: getControlState2,
-    getDbProtection: getDbProtection2,
-    getRequestRate: getRequestRate2,
-    getLatencyP95: getLatencyP952,
-    getLocalCircuitSnapshots: getLocalCircuitSnapshots2,
+    getMaintenanceStateCached,
+    computeInternalMonitorSnapshot,
+    buildInternalMonitorAlerts,
+    getControlState,
+    getDbProtection,
+    getRequestRate,
+    getLatencyP95,
+    getLocalCircuitSnapshots,
     getIntelligenceExplainability,
     injectChaos,
     createAuditLog: (data) => storage2.createAuditLog(data)
@@ -16702,7 +17185,7 @@ function registerLocalServerRoutes(options) {
     requireTabAccess,
     searchRateLimiter,
     getRuntimeSettingsCached: getRuntimeSettingsCached2,
-    isDbProtected: getDbProtection2
+    isDbProtected: getDbProtection
   });
   registerSearchRoutes(app2, {
     storage: storage2,
@@ -16710,15 +17193,15 @@ function registerLocalServerRoutes(options) {
     authenticateToken,
     searchRateLimiter,
     getRuntimeSettingsCached: getRuntimeSettingsCached2,
-    isDbProtected: getDbProtection2
+    isDbProtected: getDbProtection
   });
   registerAiRoutes(app2, {
     storage: storage2,
     authenticateToken,
     requireRole,
-    withAiConcurrencyGate: withAiConcurrencyGate2,
+    withAiConcurrencyGate,
     getRuntimeSettingsCached: getRuntimeSettingsCached2,
-    aiSearchService: aiSearchService2,
+    aiSearchService,
     categoryStatsService: categoryStatsService2,
     aiChatService,
     aiIndexService,
@@ -16730,11 +17213,10 @@ function registerLocalServerRoutes(options) {
     authenticateToken,
     requireRole,
     clearTabVisibilityCache,
-    invalidateRuntimeSettingsCache: invalidateRuntimeSettingsCache2,
-    invalidateMaintenanceCache: invalidateMaintenanceCache2,
-    getMaintenanceStateCached: getMaintenanceStateCached2,
-    broadcastWsMessage,
-    defaultAiTimeoutMs
+    invalidateRuntimeSettingsCache,
+    invalidateMaintenanceCache,
+    getMaintenanceStateCached,
+    broadcastWsMessage
   });
   registerOperationsRoutes(app2, {
     storage: storage2,
@@ -16744,7 +17226,7 @@ function registerLocalServerRoutes(options) {
     authenticateToken,
     requireRole,
     requireTabAccess,
-    withExportCircuit: withExportCircuit2,
+    withExportCircuit,
     isExportCircuitOpenError: (error) => error instanceof CircuitOpenError,
     connectedClients: connectedClients2
   });
@@ -16757,6 +17239,130 @@ function registerLocalServerRoutes(options) {
   app2.use(errorHandler);
 }
 
+// server/internal/local-http-pipeline.ts
+import express2 from "express";
+
+// server/http/cors.ts
+var DEFAULT_ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
+var DEFAULT_ALLOWED_HEADERS = "Origin, X-Requested-With, Content-Type, Accept, Authorization";
+var LOCAL_DEV_ORIGINS = [
+  "http://localhost:5000",
+  "http://127.0.0.1:5000",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173"
+];
+function normalizeCorsOrigin(value) {
+  if (!value) {
+    return null;
+  }
+  try {
+    const normalized = new URL(value.trim()).origin;
+    return normalized || null;
+  } catch {
+    return null;
+  }
+}
+function buildDefaultCorsEnvironment() {
+  return {
+    NODE_ENV: runtimeConfig.app.nodeEnv,
+    PUBLIC_APP_URL: runtimeConfig.app.publicAppUrl ?? void 0,
+    CORS_ALLOWED_ORIGINS: runtimeConfig.app.corsAllowedOrigins.join(",")
+  };
+}
+function resolveAllowedCorsOrigins(env = buildDefaultCorsEnvironment()) {
+  const origins = /* @__PURE__ */ new Set();
+  const addOrigin = (value) => {
+    const normalized = normalizeCorsOrigin(value);
+    if (normalized) {
+      origins.add(normalized);
+    }
+  };
+  const configuredOrigins = String(env.CORS_ALLOWED_ORIGINS || "").split(",").map((entry) => entry.trim()).filter(Boolean);
+  for (const origin of configuredOrigins) {
+    addOrigin(origin);
+  }
+  addOrigin(env.PUBLIC_APP_URL);
+  if (String(env.NODE_ENV || "development") !== "production") {
+    for (const origin of LOCAL_DEV_ORIGINS) {
+      addOrigin(origin);
+    }
+  }
+  return Array.from(origins);
+}
+function createCorsMiddleware(allowedOrigins = resolveAllowedCorsOrigins()) {
+  const allowedOriginSet = new Set(
+    allowedOrigins.map((origin) => normalizeCorsOrigin(origin)).filter((origin) => Boolean(origin))
+  );
+  const deniedPayload = {
+    ok: false,
+    error: {
+      code: "CORS_ORIGIN_DENIED",
+      message: "Origin is not allowed."
+    }
+  };
+  return (req, res, next) => {
+    const requestOrigin = normalizeCorsOrigin(req.headers.origin);
+    res.header("Vary", "Origin");
+    res.header("Access-Control-Allow-Methods", DEFAULT_ALLOWED_METHODS);
+    res.header("Access-Control-Allow-Headers", DEFAULT_ALLOWED_HEADERS);
+    if (!requestOrigin) {
+      if (req.method === "OPTIONS") {
+        return res.sendStatus(204);
+      }
+      return next();
+    }
+    if (allowedOriginSet.has(requestOrigin)) {
+      res.header("Access-Control-Allow-Origin", requestOrigin);
+      if (req.method === "OPTIONS") {
+        return res.sendStatus(204);
+      }
+      return next();
+    }
+    if (req.method === "OPTIONS") {
+      return res.status(403).json(deniedPayload);
+    }
+    return res.status(403).json(deniedPayload);
+  };
+}
+
+// server/internal/local-http-pipeline.ts
+function registerLocalHttpPipeline(app2, options) {
+  const {
+    importBodyLimit,
+    collectionBodyLimit,
+    defaultBodyLimit,
+    uploadsRootDir,
+    recordRequestStarted,
+    recordRequestFinished,
+    adaptiveRateLimit,
+    systemProtectionMiddleware,
+    maintenanceGuard
+  } = options;
+  app2.use("/api/imports", express2.json({ limit: importBodyLimit }));
+  app2.use("/api/imports", express2.urlencoded({ extended: true, limit: importBodyLimit }));
+  app2.use("/api/collection", express2.json({ limit: collectionBodyLimit }));
+  app2.use("/api/collection", express2.urlencoded({ extended: true, limit: collectionBodyLimit }));
+  app2.use(express2.json({ limit: defaultBodyLimit }));
+  app2.use(express2.urlencoded({ extended: true, limit: defaultBodyLimit }));
+  app2.use(createCorsMiddleware());
+  app2.use("/uploads/collection-receipts", (_req, res) => {
+    return res.status(404).json({ ok: false, message: "Not found." });
+  });
+  app2.use("/uploads", express2.static(uploadsRootDir));
+  app2.use((req, res, next) => {
+    const start = process.hrtime.bigint();
+    recordRequestStarted();
+    res.on("finish", () => {
+      const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6;
+      recordRequestFinished(elapsedMs);
+    });
+    next();
+  });
+  app2.use(adaptiveRateLimit);
+  app2.use(systemProtectionMiddleware);
+  app2.use(maintenanceGuard);
+}
+
 // server/internal/local-runtime-glue.ts
 function getSearchQueueLength() {
   return globalThis.__searchInflightMap?.size ?? 0;
@@ -16764,26 +17370,26 @@ function getSearchQueueLength() {
 function attachLocalRuntimeGlue(options) {
   const {
     server: server2,
-    aiSearchService: aiSearchService2,
-    attachGcObserver: attachGcObserver2,
-    attachProcessMessageHandlers: attachProcessMessageHandlers2,
-    startRuntimeLoops: startRuntimeLoops2,
-    sweepAdaptiveRateState: sweepAdaptiveRateState2
+    aiSearchService,
+    attachGcObserver,
+    attachProcessMessageHandlers,
+    startRuntimeLoops,
+    sweepAdaptiveRateState
   } = options;
-  attachGcObserver2();
-  attachProcessMessageHandlers2({
+  attachGcObserver();
+  attachProcessMessageHandlers({
     onGracefulShutdown: () => {
       server2.close(() => process.exit(0));
       setTimeout(() => process.exit(0), 25e3).unref();
     }
   });
-  startRuntimeLoops2({
-    clearSearchCache: () => aiSearchService2.clearSearchCache()
+  startRuntimeLoops({
+    clearSearchCache: () => aiSearchService.clearSearchCache()
   });
   const cacheSweepHandle = setInterval(() => {
     const now = Date.now();
-    sweepAdaptiveRateState2(now);
-    aiSearchService2.sweepCaches(now);
+    sweepAdaptiveRateState(now);
+    aiSearchService.sweepCaches(now);
   }, 3e4);
   cacheSweepHandle.unref();
   server2.once("close", () => {
@@ -16803,10 +17409,10 @@ function createRuntimeConfigManager(options) {
   } = options;
   let maintenanceCache = null;
   let runtimeSettingsCache = null;
-  const invalidateMaintenanceCache2 = () => {
+  const invalidateMaintenanceCache = () => {
     maintenanceCache = null;
   };
-  const invalidateRuntimeSettingsCache2 = () => {
+  const invalidateRuntimeSettingsCache = () => {
     runtimeSettingsCache = null;
   };
   const getRuntimeSettingsCached2 = async (force = false) => {
@@ -16827,7 +17433,7 @@ function createRuntimeConfigManager(options) {
     runtimeSettingsCache = { settings, cachedAt: now };
     return settings;
   };
-  const getMaintenanceStateCached2 = async (force = false) => {
+  const getMaintenanceStateCached = async (force = false) => {
     const now = Date.now();
     if (!force && maintenanceCache && now - maintenanceCache.cachedAt < maintenanceCacheTtlMs) {
       return maintenanceCache.state;
@@ -16847,12 +17453,12 @@ function createRuntimeConfigManager(options) {
     }
   };
   const isMaintenanceBypassPath = (pathname) => pathname.startsWith("/api/login") || pathname.startsWith("/api/auth/login") || pathname.startsWith("/api/health") || pathname.startsWith("/api/maintenance-status") || pathname.startsWith("/api/settings/maintenance") || pathname.startsWith("/internal/") || pathname.startsWith("/ws");
-  const maintenanceGuard2 = async (req, res, next) => {
+  const maintenanceGuard = async (req, res, next) => {
     try {
       if (isMaintenanceBypassPath(req.path)) {
         return next();
       }
-      const state = await getMaintenanceStateCached2();
+      const state = await getMaintenanceStateCached();
       if (!state.maintenance) {
         return next();
       }
@@ -16889,168 +17495,12 @@ function createRuntimeConfigManager(options) {
     }
   };
   return {
-    invalidateMaintenanceCache: invalidateMaintenanceCache2,
-    invalidateRuntimeSettingsCache: invalidateRuntimeSettingsCache2,
+    invalidateMaintenanceCache,
+    invalidateRuntimeSettingsCache,
     getRuntimeSettingsCached: getRuntimeSettingsCached2,
-    getMaintenanceStateCached: getMaintenanceStateCached2,
-    maintenanceGuard: maintenanceGuard2
+    getMaintenanceStateCached,
+    maintenanceGuard
   };
-}
-
-// server/internal/aiConcurrencyGate.ts
-function createAiConcurrencyGate(options) {
-  const { globalLimit, queueLimit, queueWaitMs, roleLimits } = options;
-  let sequence = 0;
-  let inflightGlobal = 0;
-  const inflightByRole = {
-    user: 0,
-    admin: 0,
-    superuser: 0
-  };
-  const queue = [];
-  const normalizeAiRole = (role) => {
-    if (role === "superuser") return "superuser";
-    if (role === "admin") return "admin";
-    return "user";
-  };
-  const getAiGateSnapshot = (role) => {
-    const safeRole = role ? normalizeAiRole(role) : "user";
-    return {
-      globalInFlight: inflightGlobal,
-      globalLimit,
-      queueSize: queue.length,
-      queueLimit,
-      role: safeRole,
-      roleInFlight: inflightByRole[safeRole],
-      roleLimit: roleLimits[safeRole]
-    };
-  };
-  const canAcquire = (role) => inflightGlobal < globalLimit && inflightByRole[role] < roleLimits[role];
-  const acquire = (role, route) => {
-    inflightGlobal += 1;
-    inflightByRole[role] += 1;
-    return {
-      role,
-      route,
-      released: false
-    };
-  };
-  const drainQueue = () => {
-    if (queue.length === 0) return;
-    let progressed = true;
-    while (progressed && queue.length > 0) {
-      progressed = false;
-      for (let index = 0; index < queue.length; index += 1) {
-        const item = queue[index];
-        if (!canAcquire(item.role)) continue;
-        queue.splice(index, 1);
-        clearTimeout(item.timeout);
-        progressed = true;
-        item.resolve({
-          lease: acquire(item.role, item.route),
-          waitedMs: Math.max(0, Date.now() - item.enqueuedAt)
-        });
-        break;
-      }
-    }
-  };
-  const release = (lease) => {
-    if (lease.released) return;
-    lease.released = true;
-    inflightGlobal = Math.max(0, inflightGlobal - 1);
-    inflightByRole[lease.role] = Math.max(0, inflightByRole[lease.role] - 1);
-    queueMicrotask(() => {
-      drainQueue();
-    });
-  };
-  const createGateError = (message, code, status = 429) => {
-    const error = new Error(message);
-    error.code = code;
-    error.status = status;
-    return error;
-  };
-  const waitForSlot = (role, route) => {
-    if (canAcquire(role)) {
-      return Promise.resolve({
-        lease: acquire(role, route),
-        waitedMs: 0
-      });
-    }
-    if (queue.length >= queueLimit) {
-      return Promise.reject(
-        createGateError(
-          "AI queue is full. Please retry in a few seconds.",
-          "AI_GATE_QUEUE_FULL",
-          429
-        )
-      );
-    }
-    return new Promise((resolve, reject) => {
-      const id = ++sequence;
-      const timeout = setTimeout(() => {
-        const index = queue.findIndex((item) => item.id === id);
-        if (index >= 0) {
-          queue.splice(index, 1);
-        }
-        reject(
-          createGateError(
-            "AI queue wait timed out. Please retry.",
-            "AI_GATE_WAIT_TIMEOUT",
-            429
-          )
-        );
-      }, queueWaitMs).unref();
-      queue.push({
-        id,
-        role,
-        route,
-        enqueuedAt: Date.now(),
-        resolve,
-        reject,
-        timeout
-      });
-      drainQueue();
-    });
-  };
-  const withAiConcurrencyGate2 = (route, handler) => {
-    return async (req, res) => {
-      const role = normalizeAiRole(req.user?.role);
-      let acquired = null;
-      try {
-        acquired = await waitForSlot(role, route);
-      } catch (error) {
-        const status = Number.isFinite(error?.status) ? Number(error.status) : 429;
-        const snapshot = getAiGateSnapshot(role);
-        return res.status(status).json({
-          message: error?.message || "AI queue is currently busy. Please retry shortly.",
-          gate: {
-            ...snapshot,
-            queueWaitMs,
-            code: error?.code || "AI_GATE_BUSY"
-          }
-        });
-      }
-      const releaseOnce = () => {
-        if (!acquired) return;
-        release(acquired.lease);
-        acquired = null;
-      };
-      res.once("finish", releaseOnce);
-      res.once("close", releaseOnce);
-      res.setHeader("x-ai-gate-global-limit", String(globalLimit));
-      res.setHeader("x-ai-gate-inflight", String(inflightGlobal));
-      res.setHeader("x-ai-gate-queue-size", String(queue.length));
-      if (acquired.waitedMs > 0) {
-        res.setHeader("x-ai-gate-wait-ms", String(Math.round(acquired.waitedMs)));
-      }
-      try {
-        await handler(req, res);
-      } finally {
-        releaseOnce();
-      }
-    };
-  };
-  return { withAiConcurrencyGate: withAiConcurrencyGate2 };
 }
 
 // server/internal/runtime-monitor-manager.ts
@@ -17239,7 +17689,7 @@ function createRuntimeMonitorManager(options) {
       `[PG_POOL] total=${total} idle=${idle} waiting=${waiting} max=${max} source=${source}`
     );
   }
-  async function withDbCircuit2(operation) {
+  async function withDbCircuit(operation) {
     return circuitDb.execute(async () => {
       const start = Date.now();
       try {
@@ -17250,7 +17700,7 @@ function createRuntimeMonitorManager(options) {
       }
     });
   }
-  async function withAiCircuit2(operation) {
+  async function withAiCircuit(operation) {
     return circuitAi.execute(async () => {
       const start = Date.now();
       try {
@@ -17260,10 +17710,10 @@ function createRuntimeMonitorManager(options) {
       }
     });
   }
-  async function withExportCircuit2(operation) {
+  async function withExportCircuit(operation) {
     return circuitExport.execute(operation);
   }
-  function getControlState2() {
+  function getControlState() {
     return controlState;
   }
   function applyControlState(payload) {
@@ -17281,10 +17731,10 @@ function createRuntimeMonitorManager(options) {
       preAllocatedBuffer = null;
     }
   }
-  function getDbProtection2() {
+  function getDbProtection() {
     return controlState.dbProtection || lastDbLatencyMs > 1e3;
   }
-  function computeInternalMonitorSnapshot2() {
+  function computeInternalMonitorSnapshot() {
     const workerSamples = controlState.workers || [];
     const maxWorkerP95 = workerSamples.reduce(
       (max, worker) => Math.max(max, Number(worker.latencyP95Ms || 0)),
@@ -17330,7 +17780,7 @@ function createRuntimeMonitorManager(options) {
       queueLength: options.getSearchQueueLength(),
       workerCount: controlState.workerCount,
       maxWorkers: controlState.maxWorkers,
-      dbProtection: getDbProtection2(),
+      dbProtection: getDbProtection(),
       slowQueryCount,
       dbConnections: Math.max(
         0,
@@ -17341,7 +17791,7 @@ function createRuntimeMonitorManager(options) {
       updatedAt: controlState.updatedAt
     };
   }
-  function buildInternalMonitorAlerts2(snapshot) {
+  function buildInternalMonitorAlerts(snapshot) {
     const alerts = [];
     const timestamp2 = new Date(snapshot.updatedAt || Date.now()).toISOString();
     const pushAlert = (severity, source, message) => {
@@ -17432,7 +17882,7 @@ function createRuntimeMonitorManager(options) {
     if (intelligenceInFlight) return;
     intelligenceInFlight = true;
     try {
-      const monitorSnapshot = computeInternalMonitorSnapshot2();
+      const monitorSnapshot = computeInternalMonitorSnapshot();
       const snapshot = toIntelligenceSnapshot(monitorSnapshot);
       appendIntelligenceValue("cpuPercent", snapshot.cpuPercent);
       appendIntelligenceValue("p95LatencyMs", snapshot.p95LatencyMs);
@@ -17452,13 +17902,13 @@ function createRuntimeMonitorManager(options) {
       intelligenceInFlight = false;
     }
   }
-  function getRequestRate2() {
+  function getRequestRate() {
     return reqRatePerSec;
   }
-  function getLatencyP952() {
+  function getLatencyP95() {
     return percentile(latencySamples, 95);
   }
-  function getLocalCircuitSnapshots2() {
+  function getLocalCircuitSnapshots() {
     return {
       ai: circuitAi.getSnapshot(),
       db: circuitDb.getSnapshot(),
@@ -17470,15 +17920,15 @@ function createRuntimeMonitorManager(options) {
       gcCountWindow += entryCount;
     }
   }
-  function recordRequestStarted2() {
+  function recordRequestStarted() {
     activeRequests += 1;
     requestCounter += 1;
   }
-  function recordRequestFinished2(elapsedMs) {
+  function recordRequestFinished(elapsedMs) {
     activeRequests = Math.max(0, activeRequests - 1);
     recordLatency(elapsedMs);
   }
-  function attachGcObserver2() {
+  function attachGcObserver() {
     if (gcObserverAttached) return;
     gcObserverAttached = true;
     try {
@@ -17489,7 +17939,7 @@ function createRuntimeMonitorManager(options) {
     } catch {
     }
   }
-  function attachProcessMessageHandlers2({ onGracefulShutdown }) {
+  function attachProcessMessageHandlers({ onGracefulShutdown }) {
     if (processHandlersAttached || typeof process.on !== "function") {
       return;
     }
@@ -17505,7 +17955,7 @@ function createRuntimeMonitorManager(options) {
       }, 50);
     });
   }
-  function startRuntimeLoops2({ clearSearchCache }) {
+  function startRuntimeLoops({ clearSearchCache }) {
     if (runtimeLoopHandle) return;
     runtimeLoopHandle = setInterval(() => {
       reqRatePerSec = requestCounter / 5;
@@ -17566,21 +18016,21 @@ function createRuntimeMonitorManager(options) {
     void runIntelligenceCycle();
   }
   return {
-    attachGcObserver: attachGcObserver2,
-    attachProcessMessageHandlers: attachProcessMessageHandlers2,
-    buildInternalMonitorAlerts: buildInternalMonitorAlerts2,
-    computeInternalMonitorSnapshot: computeInternalMonitorSnapshot2,
-    getControlState: getControlState2,
-    getDbProtection: getDbProtection2,
-    getLatencyP95: getLatencyP952,
-    getLocalCircuitSnapshots: getLocalCircuitSnapshots2,
-    getRequestRate: getRequestRate2,
-    recordRequestFinished: recordRequestFinished2,
-    recordRequestStarted: recordRequestStarted2,
-    startRuntimeLoops: startRuntimeLoops2,
-    withAiCircuit: withAiCircuit2,
-    withDbCircuit: withDbCircuit2,
-    withExportCircuit: withExportCircuit2
+    attachGcObserver,
+    attachProcessMessageHandlers,
+    buildInternalMonitorAlerts,
+    computeInternalMonitorSnapshot,
+    getControlState,
+    getDbProtection,
+    getLatencyP95,
+    getLocalCircuitSnapshots,
+    getRequestRate,
+    recordRequestFinished,
+    recordRequestStarted,
+    startRuntimeLoops,
+    withAiCircuit,
+    withDbCircuit,
+    withExportCircuit
   };
 }
 
@@ -17590,7 +18040,7 @@ function wrapAsyncPrototypeMethods(target, options) {
   if (!prototype || typeof prototype !== "object") {
     return;
   }
-  const host = target;
+  const host2 = target;
   for (const methodName of Object.getOwnPropertyNames(prototype)) {
     if (options.exclude?.has(methodName)) {
       continue;
@@ -17604,231 +18054,154 @@ function wrapAsyncPrototypeMethods(target, options) {
       continue;
     }
     const original = method.bind(target);
-    host[methodName] = async (...args) => options.wrap(() => original(...args));
+    host2[methodName] = async (...args) => options.wrap(() => original(...args));
   }
 }
 
-// server/internal/frontend-static.ts
-import express2 from "express";
-import fs2 from "fs";
-import path4 from "path";
-var DEFAULT_FRONTEND_PATHS = [
-  "dist-local/public",
-  "dist-local\\public",
-  "dist/public",
-  "dist\\public"
-];
-function registerFrontendStatic(app2, options) {
-  const cwd = options?.cwd || process.cwd();
-  const possiblePaths = options?.paths || DEFAULT_FRONTEND_PATHS;
-  console.log(`  Working directory: ${cwd}`);
-  let foundPath = null;
-  let foundIndex = null;
-  for (const relPath of possiblePaths) {
-    const fullPath = path4.resolve(cwd, relPath);
-    const indexFile = path4.join(fullPath, "index.html");
-    console.log(`  Checking: ${fullPath}`);
-    try {
-      if (fs2.existsSync(fullPath) && fs2.statSync(fullPath).isDirectory()) {
-        const files = fs2.readdirSync(fullPath);
-        const preview = files.slice(0, 5).join(", ");
-        console.log(`    Found ${files.length} files: ${preview}${files.length > 5 ? "..." : ""}`);
-        if (fs2.existsSync(indexFile)) {
-          foundPath = fullPath;
-          foundIndex = indexFile;
-          break;
-        }
-      }
-    } catch (error) {
-      console.log(`    Error: ${error.message}`);
-    }
-  }
-  if (foundPath && foundIndex) {
-    console.log(`  Frontend: Serving from ${foundPath}`);
-    app2.use(express2.static(foundPath));
-    app2.use((req, res, next) => {
-      if (req.path.startsWith("/api") || req.path.startsWith("/ws")) {
-        return next();
-      }
-      return res.sendFile(foundIndex);
-    });
-    console.log("  Frontend: OK");
-    return;
-  }
-  console.log("");
-  console.log("  ERROR: Frontend files not found!");
-  console.log("  Please run: npm run build:local");
-  console.log(`  Expected location: ${path4.resolve(cwd, "dist-local/public")}`);
-  app2.use((req, res) => {
-    if (!req.path.startsWith("/api") && !req.path.startsWith("/ws")) {
-      res.status(404).send(`
-          <html>
-            <body style="font-family: sans-serif; padding: 40px;">
-              <h1>Frontend Not Built</h1>
-              <p>Please run: <code>npm run build:local</code></p>
-              <p>Then restart the server.</p>
-            </body>
-          </html>
-        `);
-    }
-  });
-}
-
-// server/internal/idle-session-sweeper.ts
-import { WebSocket as WebSocket4 } from "ws";
-function startIdleSessionSweeper(options) {
-  const {
-    storage: storage2,
-    connectedClients: connectedClients2,
-    getRuntimeSettingsCached: getRuntimeSettingsCached2,
-    defaultSessionTimeoutMinutes,
-    intervalMs = 6e4
-  } = options;
-  let running = false;
-  const handle = setInterval(async () => {
-    if (running) {
+// server/internal/local-runtime-environment.ts
+var DB_METHOD_WRAP_EXCLUDE = /* @__PURE__ */ new Set(["constructor"]);
+function createLocalRuntimeEnvironment(options = {}) {
+  const storage2 = new PostgresStorage();
+  const app2 = express3();
+  const server2 = createServer(app2);
+  const wss = new WebSocketServer({ server: server2, path: "/ws" });
+  const notifyFatalStartup = options.notifyFatalStartup ?? (() => void 0);
+  wss.on("error", (err) => {
+    const code = String(err?.code || "");
+    if (code === "EADDRINUSE") {
+      notifyFatalStartup("EADDRINUSE", "WebSocket server failed to bind address");
+      console.error("ERROR WebSocket startup failed: port already in use.");
+      setTimeout(() => process.exit(98), 10).unref();
       return;
     }
-    running = true;
-    try {
-      const now = Date.now();
-      const activities = await storage2.getActiveActivities();
-      const runtimeSettings = await getRuntimeSettingsCached2();
-      const idleMinutes = Math.max(
-        1,
-        runtimeSettings.sessionTimeoutMinutes || runtimeSettings.wsIdleMinutes || defaultSessionTimeoutMinutes
-      );
-      const idleMs = idleMinutes * 60 * 1e3;
-      for (const activity of activities) {
-        if (!activity.lastActivityTime) {
-          continue;
-        }
-        const last = new Date(activity.lastActivityTime).getTime();
-        if (now - last <= idleMs) {
-          continue;
-        }
-        const freshActivity = await storage2.getActivityById(activity.id);
-        if (!freshActivity || freshActivity.isActive === false) {
-          continue;
-        }
-        const freshLast = freshActivity.lastActivityTime ? new Date(freshActivity.lastActivityTime).getTime() : 0;
-        if (!freshLast || now - freshLast <= idleMs) {
-          continue;
-        }
-        console.log(`IDLE TIMEOUT: ${activity.username} (${activity.id})`);
-        await storage2.updateActivity(activity.id, {
-          isActive: false,
-          logoutTime: /* @__PURE__ */ new Date(),
-          logoutReason: "IDLE_TIMEOUT"
-        });
-        const socket = connectedClients2.get(activity.id);
-        if (socket && socket.readyState === WebSocket4.OPEN) {
-          socket.send(JSON.stringify({
-            type: "idle_timeout",
-            reason: "Session expired due to inactivity"
-          }));
-          socket.close();
-        }
-        connectedClients2.delete(activity.id);
-        await storage2.clearCollectionNicknameSessionByActivity(activity.id);
-        await storage2.createAuditLog({
-          action: "SESSION_IDLE_TIMEOUT",
-          performedBy: activity.username,
-          details: `Auto logout after ${idleMinutes} minutes idle`
-        });
-      }
-    } catch (error) {
-      console.error("Idle session checker error:", error);
-    } finally {
-      running = false;
-    }
-  }, intervalMs);
-  handle.unref();
-  return handle;
-}
-
-// server/internal/server-startup.ts
-async function startLocalServer(options) {
+    console.error("ERROR WebSocket server error:", err);
+  });
+  const runtimeMonitorManager = createRuntimeMonitorManager({
+    pool,
+    apiDebugLogs: runtimeConfig.app.debugLogs,
+    lowMemoryMode: runtimeConfig.cluster.lowMemoryMode,
+    pgPoolWarnCooldownMs: runtimeConfig.runtime.pgPoolWarnCooldownMs,
+    aiLatencyStaleAfterMs: runtimeConfig.ai.latency.staleAfterMs,
+    aiLatencyDecayHalfLifeMs: runtimeConfig.ai.latency.decayHalfLifeMs,
+    getSearchQueueLength: () => getSearchQueueLength(),
+    evaluateSystem
+  });
   const {
+    attachGcObserver,
+    attachProcessMessageHandlers,
+    buildInternalMonitorAlerts,
+    computeInternalMonitorSnapshot,
+    getControlState,
+    getDbProtection,
+    getLatencyP95,
+    getLocalCircuitSnapshots,
+    getRequestRate,
+    recordRequestFinished,
+    recordRequestStarted,
+    startRuntimeLoops,
+    withAiCircuit,
+    withDbCircuit,
+    withExportCircuit
+  } = runtimeMonitorManager;
+  wrapAsyncPrototypeMethods(storage2, {
+    exclude: DB_METHOD_WRAP_EXCLUDE,
+    wrap: withDbCircuit
+  });
+  const composition = createLocalServerComposition({
+    storage: storage2,
+    wss,
+    secret: runtimeConfig.auth.sessionSecret,
+    withAiCircuit,
+    ollamaChat,
+    ollamaEmbed,
+    defaultAiTimeoutMs: runtimeConfig.runtime.defaults.aiTimeoutMs,
+    lowMemoryMode: runtimeConfig.cluster.lowMemoryMode
+  });
+  const {
+    aiSearchService,
+    categoryStatsService: categoryStatsService2,
+    connectedClients: connectedClients2
+  } = composition;
+  const { adaptiveRateLimit, systemProtectionMiddleware, sweepAdaptiveRateState } = createApiProtectionMiddleware({
+    getControlState,
+    getDbProtection
+  });
+  const { withAiConcurrencyGate } = createAiConcurrencyGate({
+    globalLimit: runtimeConfig.ai.gate.globalLimit,
+    queueLimit: runtimeConfig.ai.gate.queueLimit,
+    queueWaitMs: runtimeConfig.ai.gate.queueWaitMs,
+    roleLimits: runtimeConfig.ai.gate.roleLimits
+  });
+  const runtimeConfigManager = createRuntimeConfigManager({
+    storage: storage2,
+    secret: runtimeConfig.auth.sessionSecret,
+    defaults: runtimeConfig.runtime.defaults,
+    maintenanceCacheTtlMs: runtimeConfig.runtime.maintenanceCacheTtlMs,
+    runtimeSettingsCacheTtlMs: runtimeConfig.runtime.runtimeSettingsCacheTtlMs
+  });
+  const {
+    invalidateMaintenanceCache,
+    invalidateRuntimeSettingsCache,
+    getRuntimeSettingsCached: getRuntimeSettingsCached2,
+    getMaintenanceStateCached,
+    maintenanceGuard
+  } = runtimeConfigManager;
+  attachLocalRuntimeGlue({
+    server: server2,
+    aiSearchService,
+    attachGcObserver,
+    attachProcessMessageHandlers,
+    startRuntimeLoops,
+    sweepAdaptiveRateState
+  });
+  registerLocalHttpPipeline(app2, {
+    importBodyLimit: runtimeConfig.app.bodyLimits.imports,
+    collectionBodyLimit: runtimeConfig.app.bodyLimits.collection,
+    defaultBodyLimit: runtimeConfig.app.bodyLimits.default,
+    uploadsRootDir: runtimeConfig.app.uploadsRootDir,
+    recordRequestStarted,
+    recordRequestFinished,
+    adaptiveRateLimit,
+    systemProtectionMiddleware,
+    maintenanceGuard
+  });
+  registerLocalServerRoutes({
+    app: app2,
+    composition,
+    runtimeConfig: {
+      getRuntimeSettingsCached: getRuntimeSettingsCached2,
+      getMaintenanceStateCached,
+      invalidateRuntimeSettingsCache,
+      invalidateMaintenanceCache
+    },
+    runtimeMonitor: {
+      computeInternalMonitorSnapshot,
+      buildInternalMonitorAlerts,
+      getControlState,
+      getDbProtection,
+      getRequestRate,
+      getLatencyP95,
+      getLocalCircuitSnapshots
+    },
+    withAiConcurrencyGate,
+    withExportCircuit,
+    defaultAiTimeoutMs: runtimeConfig.runtime.defaults.aiTimeoutMs
+  });
+  return {
     app: app2,
     server: server2,
     storage: storage2,
     connectedClients: connectedClients2,
-    getRuntimeSettingsCached: getRuntimeSettingsCached2,
-    defaultSessionTimeoutMinutes,
-    aiPrecomputeOnStart,
     categoryStatsService: categoryStatsService2,
-    notifyFatalStartup,
-    port = parseInt(process.env.PORT || "5000", 10),
-    host = "0.0.0.0"
-  } = options;
-  console.log("");
-  console.log("=========================================");
-  console.log("  SQR - SUMBANGAN QUERY RAHMAH");
-  console.log("  Mode: Local (PostgreSQL Database)");
-  console.log("=========================================");
-  console.log("");
-  console.log("  Database: PostgreSQL - OK");
-  await storage2.init();
-  registerFrontendStatic(app2);
-  const idleSweeperHandle = startIdleSessionSweeper({
-    storage: storage2,
-    connectedClients: connectedClients2,
     getRuntimeSettingsCached: getRuntimeSettingsCached2,
-    defaultSessionTimeoutMinutes
-  });
-  server2.once("close", () => {
-    clearInterval(idleSweeperHandle);
-  });
-  server2.on("error", (err) => {
-    if (err.code === "EADDRINUSE") {
-      notifyFatalStartup("EADDRINUSE", `Port ${port} is already in use`);
-      console.error(`ERROR Port ${port} is already in use.`);
-      console.error("   This usually means a previous server process hasn't fully released the port yet.");
-      console.error(`   Please wait a few seconds and try again, or use: lsof -i :${port} (or netstat -ano | findstr :${port} on Windows)`);
-      setTimeout(() => process.exit(98), 10).unref();
-      return;
-    }
-    notifyFatalStartup("SERVER_STARTUP_ERROR", String(err?.message || err));
-    console.error("ERROR Server error:", err);
-    setTimeout(() => process.exit(1), 10).unref();
-  });
-  server2.listen(port, host, () => {
-    console.log("");
-    console.log("=========================================");
-    console.log(`  Server berjalan di port ${port}`);
-    console.log("");
-    console.log("  Buka browser:");
-    console.log(`    http://localhost:${port}`);
-    console.log("");
-    console.log("  Untuk akses dari PC lain (LAN):");
-    console.log(`    http://[IP-KOMPUTER]:${port}`);
-    console.log("=========================================");
-    console.log("");
-  });
-  if (!aiPrecomputeOnStart) {
-    return;
-  }
-  setTimeout(async () => {
-    try {
-      const result = await categoryStatsService2.warmCategoryStats();
-      if (result.skipped) {
-        console.log("OK Category stats already present. Skipping precompute.");
-        return;
-      }
-      console.log(`INFO Precomputing category stats (${result.computeKeys} key(s))...`);
-      console.log("OK Precomputed category stats.");
-    } catch (err) {
-      console.error("ERROR Precompute stats failed:", err?.message || err);
-    }
-  }, 0);
+    defaultSessionTimeoutMinutes: runtimeConfig.runtime.defaults.sessionTimeoutMinutes,
+    aiPrecomputeOnStart: runtimeConfig.ai.precomputeOnStart,
+    port: runtimeConfig.app.port,
+    host: runtimeConfig.app.host
+  };
 }
 
 // server/index-local.ts
-var storage = new PostgresStorage();
-var app = express3();
-var server = createServer(app);
-var wss = new WebSocketServer({ server, path: "/ws" });
 var startupFatalReason = null;
 var workerIpcProcess = process;
 function notifyMasterFatalStartup(reason, details) {
@@ -17844,159 +18217,19 @@ function notifyMasterFatalStartup(reason, details) {
     }
   }
 }
-wss.on("error", (err) => {
-  const code = String(err?.code || "");
-  if (code === "EADDRINUSE") {
-    notifyMasterFatalStartup("EADDRINUSE", "WebSocket server failed to bind address");
-    console.error("ERROR WebSocket startup failed: port already in use.");
-    setTimeout(() => process.exit(98), 10).unref();
-    return;
-  }
-  console.error("ERROR WebSocket server error:", err);
-});
-var JWT_SECRET = getSessionSecret();
-var DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
-var DEFAULT_WS_IDLE_MINUTES = 3;
-var DEFAULT_AI_TIMEOUT_MS = 6e3;
-var DEFAULT_BODY_LIMIT = "2mb";
-var IMPORT_BODY_LIMIT = process.env.IMPORT_BODY_LIMIT || "50mb";
-var COLLECTION_BODY_LIMIT = process.env.COLLECTION_BODY_LIMIT || "8mb";
-var UPLOADS_ROOT_DIR = path5.resolve(process.cwd(), "uploads");
-var PG_POOL_WARN_COOLDOWN_MS = 6e4;
-var AI_PRECOMPUTE_ON_START = String(process.env.AI_PRECOMPUTE_ON_START || "0") === "1";
-var API_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
-var LOW_MEMORY_MODE = String(process.env.SQR_LOW_MEMORY_MODE ?? "1") === "1";
-var AI_GATE_GLOBAL_LIMIT = Math.max(1, Number(process.env.AI_GATE_GLOBAL_LIMIT ?? "4"));
-var AI_GATE_QUEUE_LIMIT = Math.max(0, Number(process.env.AI_GATE_QUEUE_LIMIT ?? "20"));
-var AI_GATE_QUEUE_WAIT_MS = Math.max(1e3, Number(process.env.AI_GATE_QUEUE_WAIT_MS ?? "12000"));
-var AI_GATE_ROLE_LIMITS = {
-  user: Math.max(1, Number(process.env.AI_GATE_USER_LIMIT ?? "2")),
-  admin: Math.max(1, Number(process.env.AI_GATE_ADMIN_LIMIT ?? "1")),
-  superuser: Math.max(1, Number(process.env.AI_GATE_SUPERUSER_LIMIT ?? "1"))
-};
-var AI_LATENCY_STALE_AFTER_MS = Math.max(5e3, Number(process.env.AI_LATENCY_STALE_AFTER_MS ?? "20000"));
-var AI_LATENCY_DECAY_HALF_LIFE_MS = Math.max(5e3, Number(process.env.AI_LATENCY_DECAY_HALF_LIFE_MS ?? "30000"));
-var MAINTENANCE_CACHE_TTL_MS = 3e3;
-var RUNTIME_SETTINGS_CACHE_TTL_MS = 3e3;
-var runtimeMonitorManager = createRuntimeMonitorManager({
-  pool,
-  apiDebugLogs: API_DEBUG_LOGS,
-  lowMemoryMode: LOW_MEMORY_MODE,
-  pgPoolWarnCooldownMs: PG_POOL_WARN_COOLDOWN_MS,
-  aiLatencyStaleAfterMs: AI_LATENCY_STALE_AFTER_MS,
-  aiLatencyDecayHalfLifeMs: AI_LATENCY_DECAY_HALF_LIFE_MS,
-  getSearchQueueLength: () => getSearchQueueLength(),
-  evaluateSystem
-});
 var {
-  attachGcObserver,
-  attachProcessMessageHandlers,
-  buildInternalMonitorAlerts,
-  computeInternalMonitorSnapshot,
-  getControlState,
-  getDbProtection,
-  getLatencyP95,
-  getLocalCircuitSnapshots,
-  getRequestRate,
-  recordRequestFinished,
-  recordRequestStarted,
-  startRuntimeLoops,
-  withAiCircuit,
-  withDbCircuit,
-  withExportCircuit
-} = runtimeMonitorManager;
-var DB_METHOD_WRAP_EXCLUDE = /* @__PURE__ */ new Set([
-  "constructor"
-]);
-wrapAsyncPrototypeMethods(storage, {
-  exclude: DB_METHOD_WRAP_EXCLUDE,
-  wrap: withDbCircuit
-});
-var composition = createLocalServerComposition({
-  storage,
-  wss,
-  secret: JWT_SECRET,
-  withAiCircuit,
-  ollamaChat,
-  ollamaEmbed,
-  defaultAiTimeoutMs: DEFAULT_AI_TIMEOUT_MS,
-  lowMemoryMode: LOW_MEMORY_MODE
-});
-var {
-  aiSearchService,
-  categoryStatsService,
-  connectedClients
-} = composition;
-var { adaptiveRateLimit, systemProtectionMiddleware, sweepAdaptiveRateState } = createApiProtectionMiddleware({
-  getControlState,
-  getDbProtection
-});
-var { withAiConcurrencyGate } = createAiConcurrencyGate({
-  globalLimit: AI_GATE_GLOBAL_LIMIT,
-  queueLimit: AI_GATE_QUEUE_LIMIT,
-  queueWaitMs: AI_GATE_QUEUE_WAIT_MS,
-  roleLimits: AI_GATE_ROLE_LIMITS
-});
-var runtimeConfigManager = createRuntimeConfigManager({
-  storage,
-  secret: JWT_SECRET,
-  defaults: {
-    sessionTimeoutMinutes: DEFAULT_SESSION_TIMEOUT_MINUTES,
-    wsIdleMinutes: DEFAULT_WS_IDLE_MINUTES,
-    aiTimeoutMs: DEFAULT_AI_TIMEOUT_MS,
-    searchResultLimit: 200,
-    viewerRowsPerPage: 100
-  },
-  maintenanceCacheTtlMs: MAINTENANCE_CACHE_TTL_MS,
-  runtimeSettingsCacheTtlMs: RUNTIME_SETTINGS_CACHE_TTL_MS
-});
-var {
-  invalidateMaintenanceCache,
-  invalidateRuntimeSettingsCache,
-  getRuntimeSettingsCached,
-  getMaintenanceStateCached,
-  maintenanceGuard
-} = runtimeConfigManager;
-attachLocalRuntimeGlue({
-  server,
-  aiSearchService,
-  attachGcObserver,
-  attachProcessMessageHandlers,
-  startRuntimeLoops,
-  sweepAdaptiveRateState
-});
-registerLocalHttpPipeline(app, {
-  importBodyLimit: IMPORT_BODY_LIMIT,
-  collectionBodyLimit: COLLECTION_BODY_LIMIT,
-  defaultBodyLimit: DEFAULT_BODY_LIMIT,
-  uploadsRootDir: UPLOADS_ROOT_DIR,
-  recordRequestStarted,
-  recordRequestFinished,
-  adaptiveRateLimit,
-  systemProtectionMiddleware,
-  maintenanceGuard
-});
-registerLocalServerRoutes({
   app,
-  composition,
-  runtimeConfig: {
-    getRuntimeSettingsCached,
-    getMaintenanceStateCached,
-    invalidateRuntimeSettingsCache,
-    invalidateMaintenanceCache
-  },
-  runtimeMonitor: {
-    computeInternalMonitorSnapshot,
-    buildInternalMonitorAlerts,
-    getControlState,
-    getDbProtection,
-    getRequestRate,
-    getLatencyP95,
-    getLocalCircuitSnapshots
-  },
-  withAiConcurrencyGate,
-  withExportCircuit,
-  defaultAiTimeoutMs: DEFAULT_AI_TIMEOUT_MS
+  server,
+  storage,
+  connectedClients,
+  categoryStatsService,
+  getRuntimeSettingsCached,
+  defaultSessionTimeoutMinutes,
+  aiPrecomputeOnStart,
+  port,
+  host
+} = createLocalRuntimeEnvironment({
+  notifyFatalStartup: notifyMasterFatalStartup
 });
 async function startServer() {
   await startLocalServer({
@@ -18005,10 +18238,12 @@ async function startServer() {
     storage,
     connectedClients,
     getRuntimeSettingsCached,
-    defaultSessionTimeoutMinutes: DEFAULT_SESSION_TIMEOUT_MINUTES,
-    aiPrecomputeOnStart: AI_PRECOMPUTE_ON_START,
+    defaultSessionTimeoutMinutes,
+    aiPrecomputeOnStart,
     categoryStatsService,
-    notifyFatalStartup: notifyMasterFatalStartup
+    notifyFatalStartup: notifyMasterFatalStartup,
+    port,
+    host
   });
 }
 startServer();
