@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { clearAuthSessionCookie, readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import { PostgresStorage } from "../storage-postgres";
 import { getSessionSecret } from "../config/security";
 
@@ -19,21 +20,25 @@ export async function authenticateToken(
   res: Response,
   next: NextFunction
 ) {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.split(" ")[1];
-  if (!token) return res.status(401).json({ message: "Token required" });
+  const token = readAuthSessionTokenFromHeaders(req.headers);
+  if (!token) {
+    clearAuthSessionCookie(res);
+    return res.status(401).json({ message: "Token required" });
+  }
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
     const activity = await storage.getActivityById(decoded.activityId);
 
     if (!activity || activity.isActive === false || activity.logoutTime !== null) {
+      clearAuthSessionCookie(res);
       return res.status(401).json({ message: "Session expired", forceLogout: true });
     }
 
     req.user = decoded;
     next();
   } catch {
+    clearAuthSessionCookie(res);
     return res.status(403).json({ message: "Invalid token" });
   }
 }

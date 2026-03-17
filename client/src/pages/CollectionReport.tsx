@@ -1,55 +1,18 @@
 import {
-  lazy,
-  startTransition,
-  Suspense,
   useCallback,
-  useEffect,
   useMemo,
-  useState,
 } from "react";
-import { BarChart3, FolderPlus, ListChecks, Settings2, Users } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   COLLECTION_STAFF_NICKNAME_KEY,
   getCurrentRole,
   getCurrentUsername,
 } from "@/pages/collection/utils";
+import { CollectionReportContent } from "@/pages/collection-report/CollectionReportContent";
 import { CollectionNicknameDialog } from "@/pages/collection-report/CollectionNicknameDialog";
 import { CollectionSidebar } from "@/pages/collection-report/CollectionSidebar";
-import type {
-  CollectionSidebarItem,
-  CollectionSubPage,
-} from "@/pages/collection-report/types";
 import { useCollectionNicknameAccess } from "@/pages/collection-report/useCollectionNicknameAccess";
-import {
-  getPathForSubPage,
-  getSubPageFromPath,
-} from "@/pages/collection-report/utils";
-
-const SaveCollectionPage = lazy(() => import("@/pages/collection/SaveCollectionPage"));
-const CollectionRecordsPage = lazy(
-  () => import("@/pages/collection/CollectionRecordsPage"),
-);
-const CollectionSummaryPage = lazy(
-  () => import("@/pages/collection/CollectionSummaryPage"),
-);
-const CollectionNicknameSummaryPage = lazy(
-  () => import("@/pages/collection/CollectionNicknameSummaryPage"),
-);
-const ManageCollectionNicknamesPage = lazy(
-  () => import("@/pages/collection/ManageCollectionNicknamesPage"),
-);
-
-function CollectionSectionFallback() {
-  return (
-    <Card className="border-border/60 bg-background/70">
-      <CardContent className="flex min-h-[320px] items-center justify-center p-8">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
-      </CardContent>
-    </Card>
-  );
-}
+import { useCollectionReportNavigation } from "@/pages/collection-report/useCollectionReportNavigation";
 
 export default function CollectionReport() {
   const role = useMemo(() => getCurrentRole(), []);
@@ -58,79 +21,16 @@ export default function CollectionReport() {
   const canAccessNicknameSummary = role === "admin" || role === "superuser";
   const requiresNicknamePassword = role === "admin" || role === "user";
 
-  const [subPage, setSubPage] = useState<CollectionSubPage>(() => {
-    if (typeof window === "undefined") return "save";
-    return getSubPageFromPath(window.location.pathname || "/collection/save");
-  });
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-
   const nicknameAccess = useCollectionNicknameAccess({
     currentUsername,
     isSuperuser,
     requiresNicknamePassword,
     role,
   });
-
-  const sidebarItems = useMemo<CollectionSidebarItem[]>(() => {
-    const items: CollectionSidebarItem[] = [
-      { key: "save", label: "Simpan Collection Individual", icon: FolderPlus },
-      { key: "records", label: "View Rekod Collection", icon: ListChecks },
-      { key: "summary", label: "Collection Summary", icon: BarChart3 },
-    ];
-    if (canAccessNicknameSummary) {
-      items.push({
-        key: "nickname-summary",
-        label: "Nickname Summary",
-        icon: Users,
-      });
-    }
-    if (isSuperuser) {
-      items.push({
-        key: "manage-nicknames",
-        label: "Manage Nickname",
-        icon: Settings2,
-      });
-    }
-    return items;
-  }, [canAccessNicknameSummary, isSuperuser]);
-
-  const activeSidebarItem = useMemo(
-    () => sidebarItems.find((item) => item.key === subPage) || sidebarItems[0],
-    [sidebarItems, subPage],
-  );
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (subPage === "manage-nicknames" && !isSuperuser) {
-      setSubPage("save");
-      return;
-    }
-    if (subPage === "nickname-summary" && !canAccessNicknameSummary) {
-      setSubPage("save");
-      return;
-    }
-
-    const targetPath = getPathForSubPage(subPage);
-    if (window.location.pathname.toLowerCase() !== targetPath.toLowerCase()) {
-      window.history.replaceState({}, "", targetPath);
-    }
-  }, [canAccessNicknameSummary, isSuperuser, subPage]);
-
-  useEffect(() => {
-    setMobileSidebarOpen(false);
-  }, [subPage]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const onPopState = () => {
-      setSubPage(getSubPageFromPath(window.location.pathname || "/collection/save"));
-    };
-
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+  const navigation = useCollectionReportNavigation({
+    canAccessNicknameSummary,
+    isSuperuser,
+  });
 
   const redirectToSearchTab = useCallback(() => {
     nicknameAccess.clearNicknameSession();
@@ -151,71 +51,6 @@ export default function CollectionReport() {
       return;
     }
     nicknameAccess.setNicknameDialogOpen(false);
-  };
-
-  const handleSelectSubPage = useCallback((nextSubPage: CollectionSubPage) => {
-    startTransition(() => {
-      setSubPage(nextSubPage);
-    });
-    setMobileSidebarOpen(false);
-  }, []);
-
-  const renderContent = () => {
-    if (!nicknameAccess.canAccessCollection) {
-      return (
-        <Card className="border-border/60 bg-background/75 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xl">Pengesahan Nickname Diperlukan</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Sila lengkapkan pengesahan nickname dahulu sebelum meneruskan ke
-              Collection Report.
-            </p>
-            <Button onClick={() => nicknameAccess.setNicknameDialogOpen(true)}>
-              Buka Pengesahan Nickname
-            </Button>
-          </CardContent>
-        </Card>
-      );
-    }
-
-    if (subPage === "save") {
-      return (
-        <Suspense fallback={<CollectionSectionFallback />}>
-          <SaveCollectionPage staffNickname={nicknameAccess.staffNickname} />
-        </Suspense>
-      );
-    }
-    if (subPage === "records") {
-      return (
-        <Suspense fallback={<CollectionSectionFallback />}>
-          <CollectionRecordsPage role={role} />
-        </Suspense>
-      );
-    }
-    if (subPage === "summary") {
-      return (
-        <Suspense fallback={<CollectionSectionFallback />}>
-          <CollectionSummaryPage role={role} />
-        </Suspense>
-      );
-    }
-    if (subPage === "nickname-summary") {
-      return (
-        <Suspense fallback={<CollectionSectionFallback />}>
-          <CollectionNicknameSummaryPage role={role} />
-        </Suspense>
-      );
-    }
-    return (
-      <Suspense fallback={<CollectionSectionFallback />}>
-        <ManageCollectionNicknamesPage
-          role={role}
-          currentNickname={nicknameAccess.staffNickname}
-        />
-      </Suspense>
-    );
   };
 
   const primaryActionLabel =
@@ -246,10 +81,12 @@ export default function CollectionReport() {
                   <span className="font-medium">
                     {nicknameAccess.staffNickname || "-"}
                   </span>
-                  {activeSidebarItem ? (
+                  {navigation.activeSidebarItem ? (
                     <span>
                       {" | "}Section:{" "}
-                      <span className="font-medium">{activeSidebarItem.label}</span>
+                      <span className="font-medium">
+                        {navigation.activeSidebarItem.label}
+                      </span>
                     </span>
                   ) : null}
                 </p>
@@ -260,16 +97,24 @@ export default function CollectionReport() {
 
         <div className="relative flex items-start gap-4">
           <CollectionSidebar
-            items={sidebarItems}
-            mobileOpen={mobileSidebarOpen}
-            onMobileOpenChange={setMobileSidebarOpen}
-            onSelectSubPage={handleSelectSubPage}
-            onSidebarCollapsedChange={setSidebarCollapsed}
-            selectedSubPage={subPage}
-            sidebarCollapsed={sidebarCollapsed}
+            items={navigation.sidebarItems}
+            mobileOpen={navigation.mobileSidebarOpen}
+            onMobileOpenChange={navigation.setMobileSidebarOpen}
+            onSelectSubPage={navigation.handleSelectSubPage}
+            onSidebarCollapsedChange={navigation.setSidebarCollapsed}
+            selectedSubPage={navigation.subPage}
+            sidebarCollapsed={navigation.sidebarCollapsed}
           />
 
-          <div className="min-w-0 flex-1">{renderContent()}</div>
+          <div className="min-w-0 flex-1">
+            <CollectionReportContent
+              canAccessCollection={nicknameAccess.canAccessCollection}
+              role={role}
+              staffNickname={nicknameAccess.staffNickname}
+              subPage={navigation.subPage}
+              onOpenNicknameDialog={() => nicknameAccess.setNicknameDialogOpen(true)}
+            />
+          </div>
         </div>
       </div>
 

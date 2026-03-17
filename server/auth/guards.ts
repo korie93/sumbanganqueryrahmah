@@ -6,6 +6,7 @@ import {
   canUserBypassForcedPasswordChange,
   getAccountAccessBlockReason,
 } from "./account-lifecycle";
+import { clearAuthSessionCookie, readAuthSessionTokenFromHeaders } from "./session-cookie";
 import { logger } from "../lib/logger";
 
 export interface AuthenticatedUser {
@@ -73,10 +74,10 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     res: Response,
     next: NextFunction,
   ) => {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.split(" ")[1];
+    const token = readAuthSessionTokenFromHeaders(req.headers);
 
     if (!token) {
+      clearAuthSessionCookie(res);
       return res.status(401).json({ message: "Token required" });
     }
 
@@ -85,6 +86,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
       const activity = await storage.getActivityById(decoded.activityId);
 
       if (!activity || activity.isActive === false || activity.logoutTime !== null) {
+        clearAuthSessionCookie(res);
         return res.status(401).json({
           message: "Session expired. Please login again.",
           forceLogout: true,
@@ -97,6 +99,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
       );
 
       if (isVisitorBanned) {
+        clearAuthSessionCookie(res);
         return res.status(401).json({
           message: "Session banned. Please login again.",
           forceLogout: true,
@@ -113,6 +116,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           logoutTime: new Date(),
           logoutReason: "USER_NOT_FOUND",
         });
+        clearAuthSessionCookie(res);
         return res.status(401).json({
           message: "Session expired. Please login again.",
           forceLogout: true,
@@ -126,6 +130,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           logoutTime: new Date(),
           logoutReason: blockReason.toUpperCase(),
         });
+        clearAuthSessionCookie(res);
         return res.status(blockReason === "banned" ? 403 : 401).json({
           message: blockReason === "banned"
             ? "Account is banned"
@@ -169,6 +174,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         method: req.method,
         error: (error as Error)?.message,
       });
+      clearAuthSessionCookie(res);
       return res.status(403).json({ message: "Invalid token" });
     }
   };

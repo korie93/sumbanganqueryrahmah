@@ -321,3 +321,7 @@ export function useCollectionNicknameAccess({
     verifiedNicknamePassword,
   };
 }
+
+export type CollectionNicknameAccessValue = ReturnType<
+  typeof useCollectionNicknameAccess
+>;

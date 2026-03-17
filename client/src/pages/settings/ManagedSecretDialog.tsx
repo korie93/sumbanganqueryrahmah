@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-interface ManagedSecretDialogProps {
+export interface ManagedSecretDialogProps {
   description: string;
   onOpenChange: (open: boolean) => void;
   open: boolean;

@@ -2,6 +2,7 @@ import type { Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 import { PostgresStorage } from "../storage-postgres";
 import { getSessionSecret } from "../config/security";
+import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
 
 type LegacyWebSocketOptions = {
@@ -21,7 +22,7 @@ export function setupWebSocket(server: Server, options: LegacyWebSocketOptions =
 
   wss.on("connection", async (ws, req) => {
     const url = new URL(req.url!, `http://${req.headers.host}`);
-    const token = url.searchParams.get("token");
+    const token = url.searchParams.get("token") || readAuthSessionTokenFromHeaders(req.headers);
     const activityId = token ? extractWsActivityId(token, sessionSecret) : null;
     if (!activityId) return ws.close();
 

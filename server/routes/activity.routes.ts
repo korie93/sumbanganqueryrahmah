@@ -1,6 +1,7 @@
 import type { Express, RequestHandler, Response } from "express";
 import { WebSocket } from "ws";
 import type { AuthenticatedRequest } from "../auth/guards";
+import { clearAuthSessionCookie } from "../auth/session-cookie";
 import { asyncHandler } from "../http/async-handler";
 import { ensureObject, readDate, readNonEmptyString, readStringList } from "../http/validation";
 import type { PostgresStorage } from "../storage-postgres";
@@ -41,12 +42,14 @@ export function registerActivityRoutes(app: Express, deps: ActivityRouteDeps) {
 
   app.post("/api/activity/logout", authenticateToken, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     if (!req.user) {
+      clearAuthSessionCookie(res);
       return res.status(401).json({ success: false });
     }
 
     const activityId = req.user.activityId;
     const activity = await storage.getActivityById(activityId);
     if (!activity || activity.isActive === false) {
+      clearAuthSessionCookie(res);
       return res.json({ success: true });
     }
 
@@ -66,6 +69,7 @@ export function registerActivityRoutes(app: Express, deps: ActivityRouteDeps) {
       performedBy: req.user.username,
     });
 
+    clearAuthSessionCookie(res);
     return res.json({ success: true });
   }));
 

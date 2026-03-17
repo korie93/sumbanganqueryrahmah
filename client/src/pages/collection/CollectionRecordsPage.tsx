@@ -7,7 +7,7 @@ import { CollectionRecordsToolbar } from "@/pages/collection-records/CollectionR
 import { EditCollectionRecordDialog } from "@/pages/collection-records/EditCollectionRecordDialog";
 import { PurgeCollectionRecordsDialog } from "@/pages/collection-records/PurgeCollectionRecordsDialog";
 import { ReceiptPreviewDialog } from "@/pages/collection-records/ReceiptPreviewDialog";
-import { toCollectionDisplayDate } from "@/pages/collection-records/utils";
+import { buildCollectionRecordsPageViewModel } from "@/pages/collection-records/collection-records-page-view-models";
 import { ViewAllRecordsDialog } from "@/pages/collection-records/ViewAllRecordsDialog";
 import { useCollectionRecordsController } from "@/pages/collection-records/useCollectionRecordsController";
 
@@ -17,6 +17,7 @@ type CollectionRecordsPageProps = {
 
 function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
   const controller = useCollectionRecordsController({ role });
+  const viewModel = buildCollectionRecordsPageViewModel(controller);
 
   return (
     <div className="space-y-3">
@@ -25,51 +26,23 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
           <CardTitle className="text-xl">View Rekod Collection</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <CollectionRecordsFilters
-            canUseNicknameFilter={controller.canUseNicknameFilter}
-            {...controller.filters}
-          />
+          <CollectionRecordsFilters {...viewModel.filters} />
 
-          <CollectionRecordsToolbar {...controller.toolbar} />
+          <CollectionRecordsToolbar {...viewModel.toolbar} />
 
-          <CollectionRecordsTable
-            loadingRecords={controller.table.loadingRecords}
-            visibleRecords={controller.table.visibleRecords}
-            paginatedRecords={controller.table.paginatedRecords}
-            pageOffset={controller.table.pageOffset}
-            canEdit={controller.canEdit}
-            onViewReceipt={controller.table.onViewReceipt}
-            onEdit={controller.table.onEdit}
-            onDelete={controller.table.onDelete}
-            canDeleteRow={controller.table.canDeleteRow}
-          />
+          <CollectionRecordsTable {...viewModel.table} />
         </CardContent>
       </Card>
 
-      <ReceiptPreviewDialog {...controller.receiptPreview} />
+      <ReceiptPreviewDialog {...viewModel.receiptPreview} />
 
-      <EditCollectionRecordDialog {...controller.editDialog} />
+      <EditCollectionRecordDialog {...viewModel.editDialog} />
 
-      <DeleteCollectionRecordDialog {...controller.deleteDialog} />
+      <DeleteCollectionRecordDialog {...viewModel.deleteDialog} />
 
-      <PurgeCollectionRecordsDialog {...controller.purgeDialog} />
+      <PurgeCollectionRecordsDialog {...viewModel.purgeDialog} />
 
-      <ViewAllRecordsDialog
-        open={controller.viewAll.open}
-        loading={controller.viewAll.loading}
-        fromDate={controller.viewAll.fromDate}
-        toDate={controller.viewAll.toDate}
-        viewAllRecords={controller.viewAll.records}
-        viewAllSummary={controller.viewAll.summary}
-        page={controller.viewAll.page}
-        pageSize={controller.viewAll.pageSize}
-        totalPages={controller.viewAll.totalPages}
-        onOpenChange={controller.viewAll.onOpenChange}
-        onPageChange={controller.viewAll.onPageChange}
-        onPageSizeChange={controller.viewAll.onPageSizeChange}
-        onViewReceipt={controller.viewAll.onViewReceipt}
-        toDisplayDate={toCollectionDisplayDate}
-      />
+      <ViewAllRecordsDialog {...viewModel.viewAll} />
     </div>
   );
 }

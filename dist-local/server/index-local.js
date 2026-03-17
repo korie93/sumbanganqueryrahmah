@@ -2223,12 +2223,6 @@ function isStrongPassword(raw) {
   if (raw.length < CREDENTIAL_PASSWORD_MIN_LENGTH) return false;
   return /[A-Za-z]/.test(raw) && /\d/.test(raw);
 }
-function sendCredentialError(res, status, code, message) {
-  return res.status(status).json({
-    ok: false,
-    error: { code, message }
-  });
-}
 function buildCredentialAuditDetails(payload) {
   return JSON.stringify({
     actor_user_id: payload.actor_user_id,
@@ -7657,6 +7651,84 @@ function createApiProtectionMiddleware(options) {
 
 // server/internal/local-http-pipeline.ts
 import express from "express";
+
+// server/http/cors.ts
+var DEFAULT_ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
+var DEFAULT_ALLOWED_HEADERS = "Origin, X-Requested-With, Content-Type, Accept, Authorization";
+var LOCAL_DEV_ORIGINS = [
+  "http://localhost:5000",
+  "http://127.0.0.1:5000",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173"
+];
+function normalizeCorsOrigin(value) {
+  if (!value) {
+    return null;
+  }
+  try {
+    const normalized = new URL(value.trim()).origin;
+    return normalized || null;
+  } catch {
+    return null;
+  }
+}
+function resolveAllowedCorsOrigins(env = process.env) {
+  const origins = /* @__PURE__ */ new Set();
+  const addOrigin = (value) => {
+    const normalized = normalizeCorsOrigin(value);
+    if (normalized) {
+      origins.add(normalized);
+    }
+  };
+  const configuredOrigins = String(env.CORS_ALLOWED_ORIGINS || "").split(",").map((entry) => entry.trim()).filter(Boolean);
+  for (const origin of configuredOrigins) {
+    addOrigin(origin);
+  }
+  addOrigin(env.PUBLIC_APP_URL);
+  if (String(env.NODE_ENV || "development") !== "production") {
+    for (const origin of LOCAL_DEV_ORIGINS) {
+      addOrigin(origin);
+    }
+  }
+  return Array.from(origins);
+}
+function createCorsMiddleware(allowedOrigins = resolveAllowedCorsOrigins()) {
+  const allowedOriginSet = new Set(
+    allowedOrigins.map((origin) => normalizeCorsOrigin(origin)).filter((origin) => Boolean(origin))
+  );
+  const deniedPayload = {
+    ok: false,
+    error: {
+      code: "CORS_ORIGIN_DENIED",
+      message: "Origin is not allowed."
+    }
+  };
+  return (req, res, next) => {
+    const requestOrigin = normalizeCorsOrigin(req.headers.origin);
+    res.header("Vary", "Origin");
+    res.header("Access-Control-Allow-Methods", DEFAULT_ALLOWED_METHODS);
+    res.header("Access-Control-Allow-Headers", DEFAULT_ALLOWED_HEADERS);
+    if (!requestOrigin) {
+      if (req.method === "OPTIONS") {
+        return res.sendStatus(204);
+      }
+      return next();
+    }
+    if (allowedOriginSet.has(requestOrigin)) {
+      res.header("Access-Control-Allow-Origin", requestOrigin);
+      if (req.method === "OPTIONS") {
+        return res.sendStatus(204);
+      }
+      return next();
+    }
+    if (req.method === "OPTIONS") {
+      return res.status(403).json(deniedPayload);
+    }
+    return res.status(403).json(deniedPayload);
+  };
+}
+
+// server/internal/local-http-pipeline.ts
 function registerLocalHttpPipeline(app2, options) {
   const {
     importBodyLimit,
@@ -7675,15 +7747,7 @@ function registerLocalHttpPipeline(app2, options) {
   app2.use("/api/collection", express.urlencoded({ extended: true, limit: collectionBodyLimit }));
   app2.use(express.json({ limit: defaultBodyLimit }));
   app2.use(express.urlencoded({ extended: true, limit: defaultBodyLimit }));
-  app2.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-    if (req.method === "OPTIONS") {
-      return res.sendStatus(200);
-    }
-    next();
-  });
+  app2.use(createCorsMiddleware());
   app2.use("/uploads/collection-receipts", (_req, res) => {
     return res.status(404).json({ ok: false, message: "Not found." });
   });
@@ -7704,6 +7768,96 @@ function registerLocalHttpPipeline(app2, options) {
 
 // server/auth/guards.ts
 import jwt from "jsonwebtoken";
+
+// server/auth/session-cookie.ts
+var AUTH_SESSION_COOKIE_NAME = "sqr_auth";
+var AUTH_SESSION_HINT_COOKIE_NAME = "sqr_auth_hint";
+var AUTH_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1e3;
+function firstHeaderValue(value) {
+  if (Array.isArray(value)) {
+    return String(value[0] || "");
+  }
+  return String(value || "");
+}
+function shouldUseSecureAuthCookie() {
+  const explicit = String(process.env.AUTH_COOKIE_SECURE || "").trim().toLowerCase();
+  if (explicit === "1" || explicit === "true") {
+    return true;
+  }
+  if (explicit === "0" || explicit === "false") {
+    return false;
+  }
+  const publicUrl = String(process.env.PUBLIC_APP_URL || "").trim().toLowerCase();
+  return String(process.env.NODE_ENV || "").trim().toLowerCase() === "production" || publicUrl.startsWith("https://");
+}
+function getBaseAuthCookieOptions() {
+  return {
+    sameSite: "lax",
+    secure: shouldUseSecureAuthCookie(),
+    path: "/"
+  };
+}
+function getAuthSessionCookieOptions() {
+  return {
+    ...getBaseAuthCookieOptions(),
+    httpOnly: true
+  };
+}
+function getAuthSessionHintCookieOptions() {
+  return {
+    ...getBaseAuthCookieOptions(),
+    httpOnly: false
+  };
+}
+function readCookieValue(cookieHeader, cookieName) {
+  const rawCookieHeader = firstHeaderValue(cookieHeader);
+  if (!rawCookieHeader) {
+    return null;
+  }
+  const pairs = rawCookieHeader.split(";");
+  for (const pair of pairs) {
+    const [rawName, ...rawValueParts] = pair.split("=");
+    const name = String(rawName || "").trim();
+    if (name !== cookieName) {
+      continue;
+    }
+    const value = rawValueParts.join("=").trim();
+    if (!value) {
+      return null;
+    }
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+  return null;
+}
+function readBearerToken(authorizationHeader) {
+  const rawAuthorization = firstHeaderValue(authorizationHeader).trim();
+  if (!rawAuthorization.toLowerCase().startsWith("bearer ")) {
+    return null;
+  }
+  const token = rawAuthorization.slice(7).trim();
+  return token || null;
+}
+function readAuthSessionTokenFromHeaders(headers) {
+  return readBearerToken(headers.authorization) || readCookieValue(headers.cookie, AUTH_SESSION_COOKIE_NAME);
+}
+function setAuthSessionCookie(res, token) {
+  res.cookie(AUTH_SESSION_COOKIE_NAME, token, {
+    ...getAuthSessionCookieOptions(),
+    maxAge: AUTH_SESSION_MAX_AGE_MS
+  });
+  res.cookie(AUTH_SESSION_HINT_COOKIE_NAME, "1", {
+    ...getAuthSessionHintCookieOptions(),
+    maxAge: AUTH_SESSION_MAX_AGE_MS
+  });
+}
+function clearAuthSessionCookie(res) {
+  res.clearCookie(AUTH_SESSION_COOKIE_NAME, getAuthSessionCookieOptions());
+  res.clearCookie(AUTH_SESSION_HINT_COOKIE_NAME, getAuthSessionHintCookieOptions());
+}
 
 // server/lib/logger.ts
 var DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
@@ -7793,15 +7947,16 @@ function createAuthGuards(options) {
     return tabs;
   }
   const authenticateToken = async (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.split(" ")[1];
+    const token = readAuthSessionTokenFromHeaders(req.headers);
     if (!token) {
+      clearAuthSessionCookie(res);
       return res.status(401).json({ message: "Token required" });
     }
     try {
       const decoded = jwt.verify(token, secret);
       const activity = await storage2.getActivityById(decoded.activityId);
       if (!activity || activity.isActive === false || activity.logoutTime !== null) {
+        clearAuthSessionCookie(res);
         return res.status(401).json({
           message: "Session expired. Please login again.",
           forceLogout: true
@@ -7812,6 +7967,7 @@ function createAuthGuards(options) {
         activity.ipAddress ?? null
       );
       if (isVisitorBanned) {
+        clearAuthSessionCookie(res);
         return res.status(401).json({
           message: "Session banned. Please login again.",
           forceLogout: true
@@ -7824,6 +7980,7 @@ function createAuthGuards(options) {
           logoutTime: /* @__PURE__ */ new Date(),
           logoutReason: "USER_NOT_FOUND"
         });
+        clearAuthSessionCookie(res);
         return res.status(401).json({
           message: "Session expired. Please login again.",
           forceLogout: true
@@ -7836,6 +7993,7 @@ function createAuthGuards(options) {
           logoutTime: /* @__PURE__ */ new Date(),
           logoutReason: blockReason.toUpperCase()
         });
+        clearAuthSessionCookie(res);
         return res.status(blockReason === "banned" ? 403 : 401).json({
           message: blockReason === "banned" ? "Account is banned" : "Session expired. Please login again.",
           banned: blockReason === "banned",
@@ -7872,6 +8030,7 @@ function createAuthGuards(options) {
         method: req.method,
         error: error?.message
       });
+      clearAuthSessionCookie(res);
       return res.status(403).json({ message: "Invalid token" });
     }
   };
@@ -9085,17 +9244,92 @@ function errorHandler(err, req, res, next) {
 
 // server/middleware/rate-limit.ts
 import rateLimit from "express-rate-limit";
-var searchRateLimiter = rateLimit({
-  windowMs: 10 * 1e3,
-  // ⏱️ 10 saat
-  max: 10,
-  // ❌ max 10 request
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    error: "Too many search requests. Please slow down."
+function normalizeKeyPart(value) {
+  if (typeof value !== "string") {
+    return null;
   }
+  const normalized = value.trim().toLowerCase();
+  return normalized ? normalized.slice(0, 160) : null;
+}
+function buildRateLimitKey(req, scope, ...parts) {
+  const keyParts = [scope, req.ip];
+  for (const part of parts) {
+    const normalized = normalizeKeyPart(part);
+    if (normalized) {
+      keyParts.push(normalized);
+    }
+  }
+  return keyParts.join("|");
+}
+function createJsonRateLimiter(options) {
+  const payload = {
+    ok: false,
+    error: {
+      code: options.code,
+      message: options.message
+    }
+  };
+  return rateLimit({
+    windowMs: options.windowMs,
+    max: options.max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: options.keyGenerator,
+    handler: (_req, res) => {
+      res.status(429).json(payload);
+    }
+  });
+}
+var searchRateLimiter = createJsonRateLimiter({
+  windowMs: 10 * 1e3,
+  max: 10,
+  code: "SEARCH_RATE_LIMITED",
+  message: "Too many search requests. Please slow down."
 });
+function createAuthRouteRateLimiters() {
+  return {
+    login: createJsonRateLimiter({
+      windowMs: 10 * 60 * 1e3,
+      max: 15,
+      code: "AUTH_RATE_LIMITED",
+      message: "Too many login attempts. Please try again shortly.",
+      keyGenerator: (req) => buildRateLimitKey(req, "auth-login", req.body?.username)
+    }),
+    publicRecovery: createJsonRateLimiter({
+      windowMs: 10 * 60 * 1e3,
+      max: 20,
+      code: "AUTH_RECOVERY_RATE_LIMITED",
+      message: "Too many activation or password reset attempts. Please try again shortly.",
+      keyGenerator: (req) => buildRateLimitKey(
+        req,
+        `auth-recovery:${req.path}`,
+        req.body?.identifier,
+        req.body?.username,
+        req.body?.email
+      )
+    }),
+    authenticatedAuth: createJsonRateLimiter({
+      windowMs: 10 * 60 * 1e3,
+      max: 12,
+      code: "AUTH_MUTATION_RATE_LIMITED",
+      message: "Too many account security updates. Please wait before trying again.",
+      keyGenerator: (req) => {
+        const authReq = req;
+        return buildRateLimitKey(req, `auth-mutation:${req.path}`, authReq.user?.username);
+      }
+    }),
+    adminAction: createJsonRateLimiter({
+      windowMs: 10 * 60 * 1e3,
+      max: 30,
+      code: "ADMIN_ACTION_RATE_LIMITED",
+      message: "Too many admin account actions. Please slow down and try again.",
+      keyGenerator: (req) => {
+        const authReq = req;
+        return buildRateLimitKey(req, `admin-action:${req.path}`, authReq.user?.username);
+      }
+    })
+  };
+}
 
 // server/routes/activity.routes.ts
 import { WebSocket } from "ws";
@@ -9166,11 +9400,13 @@ function registerActivityRoutes(app2, deps) {
   };
   app2.post("/api/activity/logout", authenticateToken, asyncHandler(async (req, res) => {
     if (!req.user) {
+      clearAuthSessionCookie(res);
       return res.status(401).json({ success: false });
     }
     const activityId = req.user.activityId;
     const activity = await storage2.getActivityById(activityId);
     if (!activity || activity.isActive === false) {
+      clearAuthSessionCookie(res);
       return res.json({ success: true });
     }
     await storage2.updateActivity(activityId, {
@@ -9186,6 +9422,7 @@ function registerActivityRoutes(app2, deps) {
       action: "LOGOUT",
       performedBy: req.user.username
     });
+    clearAuthSessionCookie(res);
     return res.json({ success: true });
   }));
   app2.get(
@@ -11150,10 +11387,20 @@ function buildDeliveryPayload(activation) {
     sent: activation.sent
   };
 }
+function buildOkPayload(payload) {
+  return {
+    ok: true,
+    ...payload
+  };
+}
 function registerAuthRoutes(app2, deps) {
   const { storage: storage2, authenticateToken, requireRole, connectedClients: connectedClients2 } = deps;
   const authAccountService = new AuthAccountService(storage2);
   const jwtSecret = getSessionSecret();
+  const rateLimiters = {
+    ...createAuthRouteRateLimiters(),
+    ...deps.rateLimiters
+  };
   const sendAuthError = (res, error) => {
     if (!(error instanceof AuthAccountError)) {
       return false;
@@ -11216,9 +11463,9 @@ function registerAuthRoutes(app2, deps) {
       jwtSecret,
       { expiresIn: "24h" }
     );
+    req.res && setAuthSessionCookie(req.res, token);
     return {
       ok: true,
-      token,
       username: user.username,
       role: user.role,
       activityId: activity.id,
@@ -11227,8 +11474,8 @@ function registerAuthRoutes(app2, deps) {
       user: buildUserPayload(user)
     };
   });
-  app2.post("/api/login", handleLogin);
-  app2.post("/api/auth/login", handleLogin);
+  app2.post("/api/login", rateLimiters.login, handleLogin);
+  app2.post("/api/auth/login", rateLimiters.login, handleLogin);
   app2.get(
     "/dev/mail-preview/:previewId",
     asyncHandler(async (req, res) => {
@@ -11245,34 +11492,33 @@ function registerAuthRoutes(app2, deps) {
   );
   const handleMe = jsonRoute2(async (req) => {
     if (!req.user) {
-      return sendCredentialError(
-        req.res,
-        401,
-        "PERMISSION_DENIED",
-        "Authentication required."
-      );
+      throw new AuthAccountError(401, "PERMISSION_DENIED", "Authentication required.");
     }
     const user = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
     if (!user) {
-      return sendCredentialError(req.res, 404, "USER_NOT_FOUND", "User not found.");
+      throw new AuthAccountError(404, "USER_NOT_FOUND", "User not found.");
     }
-    return buildUserPayload(user);
+    return buildOkPayload({
+      user: buildUserPayload(user)
+    });
   });
   app2.get("/api/me", authenticateToken, handleMe);
   app2.get("/api/auth/me", authenticateToken, jsonRoute2(async (req, res) => {
     const payload = await (async () => {
       if (!req.user) {
-        return sendCredentialError(res, 401, "PERMISSION_DENIED", "Authentication required.");
+        throw new AuthAccountError(401, "PERMISSION_DENIED", "Authentication required.");
       }
       const user = req.user.userId ? await storage2.getUser(req.user.userId) : await storage2.getUserByUsername(req.user.username);
       if (!user) {
-        return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
+        throw new AuthAccountError(404, "USER_NOT_FOUND", "User not found.");
       }
-      return { user: buildUserPayload(user) };
+      return buildOkPayload({
+        user: buildUserPayload(user)
+      });
     })();
     return payload;
   }));
-  app2.post("/api/auth/activate-account", jsonRoute2(async (req) => {
+  app2.post("/api/auth/activate-account", rateLimiters.publicRecovery, jsonRoute2(async (req) => {
     const body = ensureObject(req.body) || {};
     const user = await authAccountService.activateAccount({
       username: body.username == null ? void 0 : String(body.username),
@@ -11285,7 +11531,7 @@ function registerAuthRoutes(app2, deps) {
       user: buildUserPayload(user)
     };
   }));
-  app2.post("/api/auth/validate-activation-token", jsonRoute2(async (req) => {
+  app2.post("/api/auth/validate-activation-token", rateLimiters.publicRecovery, jsonRoute2(async (req) => {
     const body = ensureObject(req.body) || {};
     const activation = await authAccountService.validateActivationToken(String(body.token ?? ""));
     return {
@@ -11293,7 +11539,7 @@ function registerAuthRoutes(app2, deps) {
       activation
     };
   }));
-  app2.post("/api/auth/request-password-reset", jsonRoute2(async (req) => {
+  app2.post("/api/auth/request-password-reset", rateLimiters.publicRecovery, jsonRoute2(async (req) => {
     const body = ensureObject(req.body) || {};
     const identifier = String(body.identifier ?? body.username ?? body.email ?? "");
     await authAccountService.requestPasswordReset(identifier);
@@ -11302,7 +11548,7 @@ function registerAuthRoutes(app2, deps) {
       message: "If the account exists, the request has been submitted for superuser review."
     };
   }));
-  app2.post("/api/auth/validate-password-reset-token", jsonRoute2(async (req) => {
+  app2.post("/api/auth/validate-password-reset-token", rateLimiters.publicRecovery, jsonRoute2(async (req) => {
     const body = ensureObject(req.body) || {};
     const reset = await authAccountService.validatePasswordResetToken(String(body.token ?? ""));
     return {
@@ -11310,7 +11556,7 @@ function registerAuthRoutes(app2, deps) {
       reset
     };
   }));
-  app2.post("/api/auth/reset-password-with-token", jsonRoute2(async (req) => {
+  app2.post("/api/auth/reset-password-with-token", rateLimiters.publicRecovery, jsonRoute2(async (req) => {
     const body = ensureObject(req.body) || {};
     const user = await authAccountService.resetPasswordWithToken({
       token: String(body.token ?? ""),
@@ -11322,7 +11568,7 @@ function registerAuthRoutes(app2, deps) {
       user: buildUserPayload(user)
     };
   }));
-  app2.post("/api/auth/change-password", authenticateToken, jsonRoute2(async (req) => {
+  app2.post("/api/auth/change-password", authenticateToken, rateLimiters.authenticatedAuth, jsonRoute2(async (req) => {
     const body = ensureObject(req.body) || {};
     const result = await authAccountService.changeOwnPassword(req.user, {
       currentPassword: String(body.currentPassword ?? ""),
@@ -11338,7 +11584,7 @@ function registerAuthRoutes(app2, deps) {
       user: buildUserPayload(result.user)
     };
   }));
-  app2.patch("/api/me/credentials", authenticateToken, jsonRoute2(async (req) => {
+  app2.patch("/api/me/credentials", authenticateToken, rateLimiters.authenticatedAuth, jsonRoute2(async (req) => {
     if (!req.user) {
       throw new AuthAccountError(401, "PERMISSION_DENIED", "Authentication required.");
     }
@@ -11390,6 +11636,7 @@ function registerAuthRoutes(app2, deps) {
     "/api/admin/users",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute2(async (req) => {
       const users3 = await authAccountService.getManagedUsers(req.user);
       return {
@@ -11402,6 +11649,7 @@ function registerAuthRoutes(app2, deps) {
     "/api/admin/users",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute2(async (req) => {
       const body = ensureObject(req.body) || {};
       const result = await authAccountService.createManagedUser(req.user, {
@@ -11421,6 +11669,7 @@ function registerAuthRoutes(app2, deps) {
     "/api/admin/users/:id",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute2(async (req) => {
       const body = ensureObject(req.body) || {};
       const user = await authAccountService.updateManagedUser(req.user, req.params.id, {
@@ -11438,6 +11687,7 @@ function registerAuthRoutes(app2, deps) {
     "/api/admin/users/:id",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute2(async (req) => {
       const result = await authAccountService.deleteManagedUser(req.user, req.params.id);
       closeActivitySockets(
@@ -11455,6 +11705,7 @@ function registerAuthRoutes(app2, deps) {
     "/api/admin/users/:id/role",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute2(async (req) => {
       const body = ensureObject(req.body) || {};
       const result = await authAccountService.updateManagedUserRole(
@@ -11477,6 +11728,7 @@ function registerAuthRoutes(app2, deps) {
     "/api/admin/users/:id/status",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute2(async (req) => {
       const body = ensureObject(req.body) || {};
       const isBanned = body.isBanned === void 0 ? void 0 : Boolean(body.isBanned);
@@ -11500,6 +11752,7 @@ function registerAuthRoutes(app2, deps) {
     "/api/admin/users/:id/reset-password",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute2(async (req) => {
       const result = await authAccountService.resetManagedUserPassword(req.user, req.params.id);
       closeActivitySockets(
@@ -11518,6 +11771,7 @@ function registerAuthRoutes(app2, deps) {
     "/api/admin/users/:id/resend-activation",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute2(async (req) => {
       const result = await authAccountService.resendActivation(req.user, req.params.id);
       return {
@@ -11531,6 +11785,7 @@ function registerAuthRoutes(app2, deps) {
     "/api/admin/password-reset-requests",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute2(async (req) => {
       const requests = await authAccountService.listPendingPasswordResetRequests(req.user);
       return {
@@ -11543,6 +11798,7 @@ function registerAuthRoutes(app2, deps) {
     "/api/admin/dev-mail-outbox",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute2(async () => {
       return {
         ok: true,
@@ -11555,6 +11811,7 @@ function registerAuthRoutes(app2, deps) {
     "/api/admin/dev-mail-outbox/:previewId",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute2(async (req) => {
       const deleted = await deleteDevMailPreview(req.params.previewId);
       if (!deleted) {
@@ -11578,6 +11835,7 @@ function registerAuthRoutes(app2, deps) {
     "/api/admin/dev-mail-outbox",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute2(async (req) => {
       const deletedCount = await clearDevMailOutbox();
       if (req.user) {
@@ -11601,6 +11859,7 @@ function registerAuthRoutes(app2, deps) {
     "/api/admin/users/:id/credentials",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute2(async (req) => {
       const body = ensureObject(req.body) || {};
       const newPassword = String(body.newPassword ?? "");
@@ -11624,15 +11883,17 @@ function registerAuthRoutes(app2, deps) {
     "/api/accounts",
     authenticateToken,
     requireRole("superuser"),
-    asyncHandler(async (_req, res) => {
+    rateLimiters.adminAction,
+    jsonRoute2(async (_req) => {
       const accounts = await storage2.getAccounts();
-      res.json(accounts);
+      return buildOkPayload({ accounts });
     })
   );
   app2.post(
     "/api/users",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute2(async (req) => {
       const body = ensureObject(req.body) || {};
       const result = await authAccountService.createManagedUser(req.user, {
@@ -16247,7 +16508,7 @@ function createRuntimeWebSocketManager(options) {
   });
   wss2.on("connection", async (ws, req) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
-    const token = url.searchParams.get("token");
+    const token = url.searchParams.get("token") || readAuthSessionTokenFromHeaders(req.headers);
     if (!token) {
       ws.close();
       return;
@@ -16576,8 +16837,7 @@ function createRuntimeConfigManager(options) {
     return state;
   };
   const extractRoleFromToken = (req) => {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.split(" ")[1];
+    const token = readAuthSessionTokenFromHeaders(req.headers);
     if (!token) return null;
     try {
       const decoded = jwt4.verify(token, secret);

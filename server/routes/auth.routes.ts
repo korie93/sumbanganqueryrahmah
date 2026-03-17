@@ -2,8 +2,8 @@ import type { Express, RequestHandler, Response } from "express";
 import jwt from "jsonwebtoken";
 import { WebSocket } from "ws";
 import { getSessionSecret } from "../config/security";
-import { sendCredentialError } from "../auth/credentials";
 import type { AuthenticatedRequest } from "../auth/guards";
+import { setAuthSessionCookie } from "../auth/session-cookie";
 import { asyncHandler } from "../http/async-handler";
 import { ensureObject } from "../http/validation";
 import { parseBrowser } from "../lib/browser";
@@ -21,6 +21,10 @@ import {
   AuthAccountError,
   AuthAccountService,
 } from "../services/auth-account.service";
+import {
+  createAuthRouteRateLimiters,
+  type AuthRouteRateLimiters,
+} from "../middleware/rate-limit";
 import type { PostgresStorage } from "../storage-postgres";
 
 type AuthRouteDeps = {
@@ -28,6 +32,7 @@ type AuthRouteDeps = {
   authenticateToken: RequestHandler;
   requireRole: (...roles: string[]) => RequestHandler;
   connectedClients: Map<string, WebSocket>;
+  rateLimiters?: Partial<AuthRouteRateLimiters>;
 };
 
 type JsonHandler = (
@@ -87,10 +92,21 @@ function buildDeliveryPayload(
   };
 }
 
+function buildOkPayload<T extends Record<string, unknown>>(payload: T): T & { ok: true } {
+  return {
+    ok: true,
+    ...payload,
+  };
+}
+
 export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
   const { storage, authenticateToken, requireRole, connectedClients } = deps;
   const authAccountService = new AuthAccountService(storage);
   const jwtSecret = getSessionSecret();
+  const rateLimiters: AuthRouteRateLimiters = {
+    ...createAuthRouteRateLimiters(),
+    ...deps.rateLimiters,
+  };
 
   const sendAuthError = (res: Response, error: unknown) => {
     if (!(error instanceof AuthAccountError)) {
@@ -165,10 +181,10 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
       jwtSecret,
       { expiresIn: "24h" },
     );
+    req.res && setAuthSessionCookie(req.res, token);
 
     return {
       ok: true,
-      token,
       username: user.username,
       role: user.role,
       activityId: activity.id,
@@ -178,8 +194,8 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     };
   });
 
-  app.post("/api/login", handleLogin);
-  app.post("/api/auth/login", handleLogin);
+  app.post("/api/login", rateLimiters.login, handleLogin);
+  app.post("/api/auth/login", rateLimiters.login, handleLogin);
 
   app.get(
     "/dev/mail-preview/:previewId",
@@ -200,12 +216,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
 
   const handleMe = jsonRoute(async (req) => {
     if (!req.user) {
-      return sendCredentialError(
-        req.res!,
-        401,
-        "PERMISSION_DENIED",
-        "Authentication required.",
-      );
+      throw new AuthAccountError(401, "PERMISSION_DENIED", "Authentication required.");
     }
 
     const user = req.user.userId
@@ -213,17 +224,19 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
       : await storage.getUserByUsername(req.user.username);
 
     if (!user) {
-      return sendCredentialError(req.res!, 404, "USER_NOT_FOUND", "User not found.");
+      throw new AuthAccountError(404, "USER_NOT_FOUND", "User not found.");
     }
 
-    return buildUserPayload(user);
+    return buildOkPayload({
+      user: buildUserPayload(user),
+    });
   });
 
   app.get("/api/me", authenticateToken, handleMe);
   app.get("/api/auth/me", authenticateToken, jsonRoute(async (req, res) => {
     const payload = await (async () => {
       if (!req.user) {
-        return sendCredentialError(res, 401, "PERMISSION_DENIED", "Authentication required.");
+        throw new AuthAccountError(401, "PERMISSION_DENIED", "Authentication required.");
       }
 
       const user = req.user.userId
@@ -231,16 +244,18 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
         : await storage.getUserByUsername(req.user.username);
 
       if (!user) {
-        return sendCredentialError(res, 404, "USER_NOT_FOUND", "User not found.");
+        throw new AuthAccountError(404, "USER_NOT_FOUND", "User not found.");
       }
 
-      return { user: buildUserPayload(user) };
+      return buildOkPayload({
+        user: buildUserPayload(user),
+      });
     })();
 
     return payload;
   }));
 
-  app.post("/api/auth/activate-account", jsonRoute(async (req) => {
+  app.post("/api/auth/activate-account", rateLimiters.publicRecovery, jsonRoute(async (req) => {
     const body = ensureObject(req.body) || {};
     const user = await authAccountService.activateAccount({
       username: body.username == null ? undefined : String(body.username),
@@ -255,7 +270,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     };
   }));
 
-  app.post("/api/auth/validate-activation-token", jsonRoute(async (req) => {
+  app.post("/api/auth/validate-activation-token", rateLimiters.publicRecovery, jsonRoute(async (req) => {
     const body = ensureObject(req.body) || {};
     const activation = await authAccountService.validateActivationToken(String(body.token ?? ""));
     return {
@@ -264,7 +279,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     };
   }));
 
-  app.post("/api/auth/request-password-reset", jsonRoute(async (req) => {
+  app.post("/api/auth/request-password-reset", rateLimiters.publicRecovery, jsonRoute(async (req) => {
     const body = ensureObject(req.body) || {};
     const identifier = String(body.identifier ?? body.username ?? body.email ?? "");
     await authAccountService.requestPasswordReset(identifier);
@@ -275,7 +290,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     };
   }));
 
-  app.post("/api/auth/validate-password-reset-token", jsonRoute(async (req) => {
+  app.post("/api/auth/validate-password-reset-token", rateLimiters.publicRecovery, jsonRoute(async (req) => {
     const body = ensureObject(req.body) || {};
     const reset = await authAccountService.validatePasswordResetToken(String(body.token ?? ""));
     return {
@@ -284,7 +299,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     };
   }));
 
-  app.post("/api/auth/reset-password-with-token", jsonRoute(async (req) => {
+  app.post("/api/auth/reset-password-with-token", rateLimiters.publicRecovery, jsonRoute(async (req) => {
     const body = ensureObject(req.body) || {};
     const user = await authAccountService.resetPasswordWithToken({
       token: String(body.token ?? ""),
@@ -298,7 +313,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     };
   }));
 
-  app.post("/api/auth/change-password", authenticateToken, jsonRoute(async (req) => {
+  app.post("/api/auth/change-password", authenticateToken, rateLimiters.authenticatedAuth, jsonRoute(async (req) => {
     const body = ensureObject(req.body) || {};
     const result = await authAccountService.changeOwnPassword(req.user, {
       currentPassword: String(body.currentPassword ?? ""),
@@ -317,7 +332,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     };
   }));
 
-  app.patch("/api/me/credentials", authenticateToken, jsonRoute(async (req) => {
+  app.patch("/api/me/credentials", authenticateToken, rateLimiters.authenticatedAuth, jsonRoute(async (req) => {
     if (!req.user) {
       throw new AuthAccountError(401, "PERMISSION_DENIED", "Authentication required.");
     }
@@ -384,6 +399,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     "/api/admin/users",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute(async (req) => {
       const users = await authAccountService.getManagedUsers(req.user);
       return {
@@ -397,6 +413,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     "/api/admin/users",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute(async (req) => {
       const body = ensureObject(req.body) || {};
       const result = await authAccountService.createManagedUser(req.user, {
@@ -418,6 +435,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     "/api/admin/users/:id",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute(async (req) => {
       const body = ensureObject(req.body) || {};
       const user = await authAccountService.updateManagedUser(req.user, req.params.id, {
@@ -437,6 +455,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     "/api/admin/users/:id",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute(async (req) => {
       const result = await authAccountService.deleteManagedUser(req.user, req.params.id);
       closeActivitySockets(
@@ -456,6 +475,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     "/api/admin/users/:id/role",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute(async (req) => {
       const body = ensureObject(req.body) || {};
       const result = await authAccountService.updateManagedUserRole(
@@ -480,6 +500,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     "/api/admin/users/:id/status",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute(async (req) => {
       const body = ensureObject(req.body) || {};
       const isBanned =
@@ -507,6 +528,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     "/api/admin/users/:id/reset-password",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute(async (req) => {
       const result = await authAccountService.resetManagedUserPassword(req.user, req.params.id);
       closeActivitySockets(
@@ -527,6 +549,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     "/api/admin/users/:id/resend-activation",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute(async (req) => {
       const result = await authAccountService.resendActivation(req.user, req.params.id);
       return {
@@ -541,6 +564,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     "/api/admin/password-reset-requests",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute(async (req) => {
       const requests = await authAccountService.listPendingPasswordResetRequests(req.user);
       return {
@@ -554,6 +578,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     "/api/admin/dev-mail-outbox",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute(async () => {
       return {
         ok: true,
@@ -567,6 +592,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     "/api/admin/dev-mail-outbox/:previewId",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute(async (req) => {
       const deleted = await deleteDevMailPreview(req.params.previewId);
       if (!deleted) {
@@ -593,6 +619,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     "/api/admin/dev-mail-outbox",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute(async (req) => {
       const deletedCount = await clearDevMailOutbox();
 
@@ -619,6 +646,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     "/api/admin/users/:id/credentials",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute(async (req) => {
       const body = ensureObject(req.body) || {};
       const newPassword = String(body.newPassword ?? "");
@@ -645,9 +673,10 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     "/api/accounts",
     authenticateToken,
     requireRole("superuser"),
-    asyncHandler(async (_req: AuthenticatedRequest, res: Response) => {
+    rateLimiters.adminAction,
+    jsonRoute(async (_req: AuthenticatedRequest) => {
       const accounts = await storage.getAccounts();
-      res.json(accounts);
+      return buildOkPayload({ accounts });
     }),
   );
 
@@ -655,6 +684,7 @@ export function registerAuthRoutes(app: Express, deps: AuthRouteDeps) {
     "/api/users",
     authenticateToken,
     requireRole("superuser"),
+    rateLimiters.adminAction,
     jsonRoute(async (req) => {
       const body = ensureObject(req.body) || {};
       const result = await authAccountService.createManagedUser(req.user, {

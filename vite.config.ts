@@ -36,7 +36,6 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          react: ["react", "react-dom"],
           query: ["@tanstack/react-query"],
           charts: ["recharts"],
           excel: ["xlsx"],

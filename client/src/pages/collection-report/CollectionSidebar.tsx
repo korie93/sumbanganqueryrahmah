@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CollectionSidebarItem, CollectionSubPage } from "@/pages/collection-report/types";
 
-interface CollectionSidebarProps {
+export interface CollectionSidebarProps {
   items: CollectionSidebarItem[];
   mobileOpen: boolean;
   onMobileOpenChange: (open: boolean) => void;

@@ -47,7 +47,107 @@ export type DevMailOutboxPreviewPayload = {
   to: string;
 };
 
-export async function login(username: string, password: string, fingerprint?: string) {
+export type AuthOkResponse<T extends Record<string, unknown>> = {
+  ok: true;
+} & T;
+
+export type ManagedUserSummary = Omit<
+  CurrentUser,
+  "fullName" | "email" | "passwordResetBySuperuser" | "isBanned"
+> & {
+  fullName: string | null;
+  email: string | null;
+  passwordResetBySuperuser: boolean;
+  isBanned: boolean | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  activatedAt: string | null;
+  lastLoginAt: string | null;
+  passwordChangedAt: string | null;
+};
+
+export type PendingPasswordResetRequestSummary = {
+  id: string;
+  userId: string;
+  username: string;
+  fullName: string | null;
+  email: string | null;
+  role: string;
+  status: string;
+  isBanned: boolean | null;
+  requestedByUser: string | null;
+  approvedBy: string | null;
+  resetType: string;
+  createdAt: string;
+  expiresAt: string | null;
+  usedAt: string | null;
+};
+
+export type LoginResponse = AuthOkResponse<{
+  username: string;
+  role: string;
+  activityId: string;
+  mustChangePassword: boolean;
+  status: string;
+  user: CurrentUser | null;
+}>;
+
+export type AuthUserResponse = AuthOkResponse<{
+  user: CurrentUser | null;
+}>;
+
+export type AuthUserForceLogoutResponse = AuthOkResponse<{
+  forceLogout: boolean;
+  user: CurrentUser | null;
+}>;
+
+export type AuthMessageResponse = AuthOkResponse<{
+  message: string;
+}>;
+
+export type ManagedUsersResponse = AuthOkResponse<{
+  users: ManagedUserSummary[];
+}>;
+
+export type ManagedAccountActivationResponse = AuthOkResponse<{
+  user: CurrentUser | null;
+  activation: ActivationDeliveryPayload;
+}>;
+
+export type ManagedAccountPasswordResetResponse = AuthOkResponse<{
+  forceLogout: boolean;
+  user: CurrentUser | null;
+  reset: ActivationDeliveryPayload;
+}>;
+
+export type ManagedAccountDeleteResponse = AuthOkResponse<{
+  deleted: boolean;
+  user: CurrentUser | null;
+}>;
+
+export type DevMailOutboxPreviewsResponse = AuthOkResponse<{
+  enabled: boolean;
+  previews: DevMailOutboxPreviewPayload[];
+}>;
+
+export type DevMailOutboxDeleteResponse = AuthOkResponse<{
+  deleted: boolean;
+}>;
+
+export type DevMailOutboxClearResponse = AuthOkResponse<{
+  deletedCount: number;
+}>;
+
+export type PendingPasswordResetRequestsResponse = AuthOkResponse<{
+  requests: PendingPasswordResetRequestSummary[];
+}>;
+
+export async function login(
+  username: string,
+  password: string,
+  fingerprint?: string,
+): Promise<LoginResponse | { banned: true }> {
   const res = await fetch("/api/login", {
     method: "POST",
     headers: {
@@ -70,7 +170,7 @@ export async function login(username: string, password: string, fingerprint?: st
     throw new Error(data.message || "Login failed");
   }
 
-  return data;
+  return data as LoginResponse;
 }
 
 export async function checkHealth() {
@@ -80,7 +180,11 @@ export async function checkHealth() {
 
 export async function getMe(): Promise<CurrentUser> {
   const response = await apiRequest("GET", "/api/me");
-  return response.json();
+  const payload = (await response.json()) as AuthUserResponse;
+  if (!payload.user) {
+    throw new Error("Authenticated user payload is missing.");
+  }
+  return payload.user;
 }
 
 export async function validateActivationToken(payload: { token: string }) {
@@ -98,14 +202,14 @@ export async function activateAccount(payload: {
   confirmPassword: string;
 }) {
   const response = await apiRequest("POST", "/api/auth/activate-account", payload);
-  return response.json();
+  return response.json() as Promise<AuthUserResponse>;
 }
 
 export async function requestPasswordReset(payload: {
   identifier: string;
 }) {
   const response = await apiRequest("POST", "/api/auth/request-password-reset", payload);
-  return response.json();
+  return response.json() as Promise<AuthMessageResponse>;
 }
 
 export async function validatePasswordResetToken(payload: { token: string }) {
@@ -122,7 +226,7 @@ export async function resetPasswordWithToken(payload: {
   confirmPassword: string;
 }) {
   const response = await apiRequest("POST", "/api/auth/reset-password-with-token", payload);
-  return response.json();
+  return response.json() as Promise<AuthUserResponse>;
 }
 
 export async function changeMyPassword(payload: {
@@ -130,7 +234,7 @@ export async function changeMyPassword(payload: {
   newPassword: string;
 }) {
   const response = await apiRequest("POST", "/api/auth/change-password", payload);
-  return response.json();
+  return response.json() as Promise<AuthUserForceLogoutResponse>;
 }
 
 export async function updateMyCredentials(payload: {
@@ -139,31 +243,12 @@ export async function updateMyCredentials(payload: {
   newPassword?: string;
 }) {
   const response = await apiRequest("PATCH", "/api/me/credentials", payload);
-  return response.json();
+  return response.json() as Promise<AuthUserForceLogoutResponse>;
 }
 
-export async function getSuperuserManagedUsers(): Promise<{
-  ok: boolean;
-  users: Array<{
-    id: string;
-    username: string;
-    fullName: string | null;
-    email: string | null;
-    role: string;
-    status: string;
-    mustChangePassword: boolean;
-    passwordResetBySuperuser: boolean;
-    createdBy: string | null;
-    createdAt: string;
-    updatedAt: string;
-    activatedAt: string | null;
-    lastLoginAt: string | null;
-    passwordChangedAt: string | null;
-    isBanned: boolean | null;
-  }>;
-}> {
+export async function getSuperuserManagedUsers(): Promise<ManagedUsersResponse> {
   const response = await apiRequest("GET", "/api/admin/users");
-  return response.json();
+  return response.json() as Promise<ManagedUsersResponse>;
 }
 
 export async function createManagedUserAccount(payload: {
@@ -173,11 +258,7 @@ export async function createManagedUserAccount(payload: {
   role: "admin" | "user";
 }) {
   const response = await apiRequest("POST", "/api/admin/users", payload);
-  return response.json() as Promise<{
-    ok: boolean;
-    user: CurrentUser;
-    activation: ActivationDeliveryPayload;
-  }>;
+  return response.json() as Promise<ManagedAccountActivationResponse>;
 }
 
 export async function updateManagedUserAccount(
@@ -189,16 +270,12 @@ export async function updateManagedUserAccount(
   },
 ) {
   const response = await apiRequest("PATCH", `/api/admin/users/${encodeURIComponent(userId)}`, payload);
-  return response.json();
+  return response.json() as Promise<AuthUserResponse>;
 }
 
 export async function deleteManagedUserAccount(userId: string) {
   const response = await apiRequest("DELETE", `/api/admin/users/${encodeURIComponent(userId)}`);
-  return response.json() as Promise<{
-    ok: boolean;
-    deleted: boolean;
-    user: CurrentUser | null;
-  }>;
+  return response.json() as Promise<ManagedAccountDeleteResponse>;
 }
 
 export async function updateManagedUserRole(
@@ -206,7 +283,7 @@ export async function updateManagedUserRole(
   role: "admin" | "user",
 ) {
   const response = await apiRequest("PATCH", `/api/admin/users/${encodeURIComponent(userId)}/role`, { role });
-  return response.json();
+  return response.json() as Promise<AuthUserForceLogoutResponse>;
 }
 
 export async function updateManagedUserStatus(
@@ -217,72 +294,35 @@ export async function updateManagedUserStatus(
   },
 ) {
   const response = await apiRequest("PATCH", `/api/admin/users/${encodeURIComponent(userId)}/status`, payload);
-  return response.json();
+  return response.json() as Promise<AuthUserForceLogoutResponse>;
 }
 
 export async function resetManagedUserPassword(userId: string) {
   const response = await apiRequest("POST", `/api/admin/users/${encodeURIComponent(userId)}/reset-password`);
-  return response.json() as Promise<{
-    ok: boolean;
-    forceLogout: boolean;
-    user: CurrentUser;
-    reset: ActivationDeliveryPayload;
-  }>;
+  return response.json() as Promise<ManagedAccountPasswordResetResponse>;
 }
 
 export async function resendManagedUserActivation(userId: string) {
   const response = await apiRequest("POST", `/api/admin/users/${encodeURIComponent(userId)}/resend-activation`);
-  return response.json() as Promise<{
-    ok: boolean;
-    user: CurrentUser;
-    activation: ActivationDeliveryPayload;
-  }>;
+  return response.json() as Promise<ManagedAccountActivationResponse>;
 }
 
-export async function getPendingPasswordResetRequests(): Promise<{
-  ok: boolean;
-  requests: Array<{
-    id: string;
-    userId: string;
-    username: string;
-    fullName: string | null;
-    email: string | null;
-    role: string;
-    status: string;
-    isBanned: boolean | null;
-    requestedByUser: string | null;
-    approvedBy: string | null;
-    resetType: string;
-    createdAt: string;
-    expiresAt: string | null;
-    usedAt: string | null;
-  }>;
-}> {
+export async function getPendingPasswordResetRequests(): Promise<PendingPasswordResetRequestsResponse> {
   const response = await apiRequest("GET", "/api/admin/password-reset-requests");
-  return response.json();
+  return response.json() as Promise<PendingPasswordResetRequestsResponse>;
 }
 
-export async function getDevMailOutboxPreviews(): Promise<{
-  ok: boolean;
-  enabled: boolean;
-  previews: DevMailOutboxPreviewPayload[];
-}> {
+export async function getDevMailOutboxPreviews(): Promise<DevMailOutboxPreviewsResponse> {
   const response = await apiRequest("GET", "/api/admin/dev-mail-outbox");
-  return response.json();
+  return response.json() as Promise<DevMailOutboxPreviewsResponse>;
 }
 
 export async function deleteDevMailOutboxPreview(previewId: string) {
   const response = await apiRequest("DELETE", `/api/admin/dev-mail-outbox/${encodeURIComponent(previewId)}`);
-  return response.json() as Promise<{
-    ok: boolean;
-    deleted: boolean;
-  }>;
+  return response.json() as Promise<DevMailOutboxDeleteResponse>;
 }
 
 export async function clearDevMailOutboxPreviews() {
   const response = await apiRequest("DELETE", "/api/admin/dev-mail-outbox");
-  return response.json() as Promise<{
-    ok: boolean;
-    deletedCount: number;
-  }>;
+  return response.json() as Promise<DevMailOutboxClearResponse>;
 }

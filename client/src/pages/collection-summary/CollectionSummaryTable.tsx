@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import type { CollectionMonthlySummary } from "@/lib/api";
 import { formatAmountRM } from "@/pages/collection/utils";
 
-interface CollectionSummaryTableProps {
+export interface CollectionSummaryTableProps {
   loading: boolean;
   summaryRows: CollectionMonthlySummary[];
   selectedMonth: number | null;

@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { CollectionRecord } from "@/lib/api";
 import { formatAmountRM } from "@/pages/collection/utils";
 
-interface CollectionRecordsTableProps {
+export interface CollectionRecordsTableProps {
   loadingRecords: boolean;
   visibleRecords: CollectionRecord[];
   paginatedRecords: CollectionRecord[];

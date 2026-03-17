@@ -3,7 +3,7 @@ import { CollectionNicknameMultiSelect } from "@/pages/collection-report/Collect
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { CollectionStaffNickname } from "@/lib/api";
 
-interface CollectionSummaryFiltersProps {
+export interface CollectionSummaryFiltersProps {
   canFilterByNickname: boolean;
   selectedYear: string;
   yearOptions: number[];

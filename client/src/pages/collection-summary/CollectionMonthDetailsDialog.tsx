@@ -4,7 +4,7 @@ import { CollectionPaginationBar } from "@/pages/collection-report/CollectionPag
 import type { CollectionMonthlySummary, CollectionRecord } from "@/lib/api";
 import { formatAmountRM } from "@/pages/collection/utils";
 
-type CollectionMonthDetailsDialogProps = {
+export type CollectionMonthDetailsDialogProps = {
   open: boolean;
   loading: boolean;
   selectedYear: string;

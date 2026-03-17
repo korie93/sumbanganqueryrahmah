@@ -9,7 +9,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-interface DeleteCollectionRecordDialogProps {
+export interface DeleteCollectionRecordDialogProps {
   open: boolean;
   deleting: boolean;
   onOpenChange: (open: boolean) => void;

@@ -20,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import type { ManagedUser } from "@/pages/settings/types";
 
-interface ManagedUserDialogProps {
+export interface ManagedUserDialogProps {
   confirmCriticalOpen: boolean;
   managedDialogOpen: boolean;
   managedEmailInput: string;

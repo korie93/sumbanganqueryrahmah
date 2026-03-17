@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { formatAmountRM } from "@/pages/collection/utils";
 
-interface CollectionSummaryTotalsProps {
+export interface CollectionSummaryTotalsProps {
   grandTotal: { totalRecords: number; totalAmount: number };
 }
 

@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import type { AuthenticatedRequest } from "../auth/guards";
+import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import type { MaintenanceState } from "../config/system-settings";
 import type { PostgresStorage } from "../storage-postgres";
 
@@ -97,8 +98,7 @@ export function createRuntimeConfigManager(options: RuntimeConfigManagerOptions)
   };
 
   const extractRoleFromToken = (req: Request): string | null => {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.split(" ")[1];
+    const token = readAuthSessionTokenFromHeaders(req.headers);
     if (!token) return null;
 
     try {

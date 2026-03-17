@@ -232,9 +232,7 @@ export function useAIPageController({
       let waitingNextRetry = false;
 
       try {
-        const token = localStorage.getItem("token");
         const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (token) headers.Authorization = `Bearer ${token}`;
 
         const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
         const response = await fetch("/api/ai/search", {

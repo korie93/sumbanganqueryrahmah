@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatAmountRM } from "@/pages/collection/utils";
 
-interface CollectionRecordsToolbarProps {
+export interface CollectionRecordsToolbarProps {
   summary: { totalRecords: number; totalAmount: number };
   loadingRecords: boolean;
   viewAllLoading: boolean;

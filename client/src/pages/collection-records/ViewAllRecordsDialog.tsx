@@ -1,6 +1,12 @@
 import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -15,7 +21,7 @@ import { formatAmountRM } from "@/pages/collection/utils";
 
 const VIEW_ALL_PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50];
 
-interface ViewAllRecordsDialogProps {
+export interface ViewAllRecordsDialogProps {
   open: boolean;
   loading: boolean;
   fromDate: string;
@@ -48,16 +54,22 @@ export function ViewAllRecordsDialog({
   onViewReceipt,
   toDisplayDate,
 }: ViewAllRecordsDialogProps) {
+  const dialogDescription = `Dari ${toDisplayDate(fromDate)} hingga ${toDisplayDate(toDate)}`;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="h-[90vh] w-[96vw] max-w-[96vw] gap-0 overflow-hidden p-0">
+        <DialogHeader className="sr-only">
+          <DialogTitle>Senarai Penuh Rekod Collection</DialogTitle>
+          <DialogDescription>{dialogDescription}</DialogDescription>
+        </DialogHeader>
         <div className="flex h-full flex-col">
           <div className="border-b bg-background/95 px-6 py-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-xl font-semibold">Senarai Penuh Rekod Collection</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Dari {toDisplayDate(fromDate)} hingga {toDisplayDate(toDate)}
+                  {dialogDescription}
                 </p>
                 <div className="mt-2 text-sm text-muted-foreground">
                   Total Records:{" "}

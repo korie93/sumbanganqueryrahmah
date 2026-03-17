@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { CollectionStaffNickname } from "@/lib/api";
 
-interface CollectionRecordsFiltersProps {
+export interface CollectionRecordsFiltersProps {
   canUseNicknameFilter: boolean;
   fromDate: string;
   toDate: string;

@@ -1,4 +1,5 @@
 import { WebSocket, type WebSocketServer } from "ws";
+import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import type { PostgresStorage } from "../storage-postgres";
 import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
 
@@ -48,7 +49,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
   wss.on("connection", async (ws, req) => {
     const url = new URL(req.url!, `http://${req.headers.host}`);
-    const token = url.searchParams.get("token");
+    const token = url.searchParams.get("token") || readAuthSessionTokenFromHeaders(req.headers);
 
     if (!token) {
       ws.close();
