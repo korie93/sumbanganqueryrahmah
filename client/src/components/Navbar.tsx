@@ -90,7 +90,7 @@ function NavbarImpl({
           <button
             type="button"
             onClick={toggleCollapse}
-            className="hidden lg:inline-flex items-center justify-center h-7 w-7 rounded-full border border-border/70 bg-card/75 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors flex-shrink-0"
+            className="nav-collapse-btn"
             title={collapsed ? "Expand navigation" : "Collapse navigation"}
             aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
             data-testid="button-toggle-navbar"

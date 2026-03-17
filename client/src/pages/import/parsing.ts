@@ -118,9 +118,10 @@ function parseExcelBuffer(
   const worksheet = workbook.Sheets[firstSheetName];
   const jsonData = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: "", raw: false }) as unknown[][];
 
-  // Release workbook/worksheet references early to free memory
-  workbook.SheetNames.length = 0;
-  workbook.Sheets = {};
+  // Null out workbook references early to allow GC to reclaim memory
+  (workbook as any).SheetNames = null;
+  (workbook as any).Sheets = null;
+  workbook = null as any;
 
   if (jsonData.length === 0) {
     return { headers: [], rows: [], error: "Excel file is empty." };
