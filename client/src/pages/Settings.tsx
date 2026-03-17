@@ -5,6 +5,7 @@ import { ManagedSecretDialog } from "@/pages/settings/ManagedSecretDialog";
 import { SettingsRoleSections } from "@/pages/settings/SettingsRoleSections";
 import { SettingsSaveBar } from "@/pages/settings/SettingsSaveBar";
 import { SettingsSidebar } from "@/pages/settings/SettingsSidebar";
+import { UserAccountManagementSection } from "@/pages/settings/UserAccountManagementSection";
 import { useSettingsController } from "@/pages/settings/useSettingsController";
 
 export default function SettingsPage() {
@@ -76,21 +77,25 @@ export default function SettingsPage() {
 
               {controller.isSecurityCategory &&
               controller.canAccessAccountSecurity ? (
-                <AccountSecuritySection {...controller.security} />
-              ) : null}
-
-              {controller.isRolePermissionCategory ? (
-                <SettingsRoleSections
-                  renderSettingCard={controller.renderSettingCard}
-                  roleSections={controller.roleSections}
-                />
+                <AccountSecuritySection {...controller.security} showAccountManagement={false} />
               ) : (
-                (controller.currentCategory?.settings || []).map(
-                  controller.renderSettingCard,
+                controller.isAccountManagementCategory ? (
+                  <UserAccountManagementSection {...controller.accountManagement} />
+                ) : controller.isRolePermissionCategory ? (
+                  <SettingsRoleSections
+                    renderSettingCard={controller.renderSettingCard}
+                    roleSections={controller.roleSections}
+                  />
+                ) : (
+                  (controller.currentCategory?.settings || []).map(
+                    controller.renderSettingCard,
+                  )
                 )
               )}
 
-              <SettingsSaveBar {...controller.saveBar} />
+              {!controller.isAccountManagementCategory ? (
+                <SettingsSaveBar {...controller.saveBar} />
+              ) : null}
             </div>
           </div>
         )}

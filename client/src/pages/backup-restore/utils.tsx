@@ -1,4 +1,5 @@
 import { downloadBlob } from "@/lib/download";
+import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import type { BackupFilters, BackupOption, BackupRecord } from "@/pages/backup-restore/types";
 
 type BackupRecordLike = Record<string, unknown>;
@@ -45,12 +46,20 @@ export function normalizeBackup(raw: unknown): BackupRecord {
     name: String(record.name ?? ""),
     createdAt: String(record.createdAt ?? record.created_at ?? new Date().toISOString()),
     createdBy: String(record.createdBy ?? record.created_by ?? "system"),
-    metadata: isRecord(metadata)
+        metadata: isRecord(metadata)
       ? {
           importsCount: Number(metadata.importsCount ?? metadata.imports_count ?? 0),
           dataRowsCount: Number(metadata.dataRowsCount ?? metadata.data_rows_count ?? 0),
           usersCount: Number(metadata.usersCount ?? metadata.users_count ?? 0),
           auditLogsCount: Number(metadata.auditLogsCount ?? metadata.audit_logs_count ?? 0),
+          collectionRecordsCount: Number(
+            metadata.collectionRecordsCount ?? metadata.collection_records_count ?? 0,
+          ),
+          collectionRecordReceiptsCount: Number(
+            metadata.collectionRecordReceiptsCount
+            ?? metadata.collection_record_receipts_count
+            ?? 0,
+          ),
           createdAt: String(metadata.createdAt ?? metadata.created_at ?? ""),
         }
       : null,
@@ -136,18 +145,7 @@ export function filterAndSortBackups(backups: BackupRecord[], filters: BackupFil
 }
 
 export function formatBackupTime(dateStr: string) {
-  try {
-    return new Date(dateStr).toLocaleString("en-US", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  } catch {
-    return dateStr;
-  }
+  return formatDateTimeDDMMYYYY(dateStr, { includeSeconds: true, fallback: dateStr });
 }
 
 function escapeCsvValue(value: string) {
@@ -206,7 +204,7 @@ export async function exportBackupsToPdf(backups: BackupRecord[]) {
   pdf.setFontSize(10);
   pdf.setFont("helvetica", "normal");
   pdf.setTextColor(isDark ? 180 : 100);
-  pdf.text(`${backups.length} backups | Generated: ${new Date().toLocaleString()}`, margin, yPos);
+  pdf.text(`${backups.length} backups | Generated: ${formatDateTimeDDMMYYYY(new Date(), { includeSeconds: true })}`, margin, yPos);
   yPos += 8;
 
   pdf.setDrawColor(isDark ? 100 : 200);

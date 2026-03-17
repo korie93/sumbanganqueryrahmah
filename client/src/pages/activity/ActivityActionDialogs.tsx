@@ -14,34 +14,42 @@ import type { ActivityRecord, BannedUser } from "@/pages/activity/types";
 interface ActivityActionDialogsProps {
   banDialogOpen: boolean;
   deleteDialogOpen: boolean;
+  bulkDeleteDialogOpen: boolean;
   kickDialogOpen: boolean;
   onBanConfirm: () => void;
   onBanDialogOpenChange: (open: boolean) => void;
   onDeleteConfirm: () => void;
   onDeleteDialogOpenChange: (open: boolean) => void;
+  onBulkDeleteConfirm: () => void;
+  onBulkDeleteDialogOpenChange: (open: boolean) => void;
   onKickConfirm: () => void;
   onKickDialogOpenChange: (open: boolean) => void;
   onUnbanConfirm: () => void;
   onUnbanDialogOpenChange: (open: boolean) => void;
   selectedActivity: ActivityRecord | null;
   selectedBannedUser: BannedUser | null;
+  selectedBulkCount: number;
   unbanDialogOpen: boolean;
 }
 
 export function ActivityActionDialogs({
   banDialogOpen,
   deleteDialogOpen,
+  bulkDeleteDialogOpen,
   kickDialogOpen,
   onBanConfirm,
   onBanDialogOpenChange,
   onDeleteConfirm,
   onDeleteDialogOpenChange,
+  onBulkDeleteConfirm,
+  onBulkDeleteDialogOpenChange,
   onKickConfirm,
   onKickDialogOpenChange,
   onUnbanConfirm,
   onUnbanDialogOpenChange,
   selectedActivity,
   selectedBannedUser,
+  selectedBulkCount,
   unbanDialogOpen,
 }: ActivityActionDialogsProps) {
   return (
@@ -109,6 +117,30 @@ export function ActivityActionDialogs({
               data-testid="button-confirm-delete"
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={onBulkDeleteDialogOpenChange}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-destructive" />
+              Delete Selected Logs?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedBulkCount} selected activity log(s)? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={onBulkDeleteConfirm}
+              className="bg-destructive text-destructive-foreground"
+              data-testid="button-confirm-bulk-delete"
+            >
+              Delete Selected
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

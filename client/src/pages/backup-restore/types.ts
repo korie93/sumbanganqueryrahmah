@@ -3,6 +3,8 @@ export interface BackupMetadata {
   dataRowsCount: number;
   usersCount: number;
   auditLogsCount: number;
+  collectionRecordsCount?: number;
+  collectionRecordReceiptsCount?: number;
   createdAt: string;
 }
 
@@ -26,11 +28,25 @@ export interface RestoreResponse {
   restoredAt?: string;
   durationMs?: number;
   stats: {
-    imports: number;
-    dataRows: number;
-    users: number;
-    auditLogs: number;
+    imports: RestoreDatasetStats;
+    dataRows: RestoreDatasetStats;
+    users: RestoreDatasetStats;
+    auditLogs: RestoreDatasetStats;
+    collectionRecords: RestoreDatasetStats;
+    collectionRecordReceipts: RestoreDatasetStats;
+    warnings: string[];
+    totalProcessed: number;
+    totalInserted: number;
+    totalSkipped: number;
+    totalReactivated: number;
   };
+}
+
+export interface RestoreDatasetStats {
+  processed: number;
+  inserted: number;
+  skipped: number;
+  reactivated: number;
 }
 
 export interface BackupFilters {

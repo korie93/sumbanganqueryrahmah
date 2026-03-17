@@ -9,6 +9,7 @@ import {
   validateActivationToken,
 } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 
 type ActivationPhase = "invalid" | "ready" | "success" | "validating";
 const AUTH_NOTICE_STORAGE_KEY = "auth_notice";
@@ -19,9 +20,7 @@ function getTokenFromLocation() {
 }
 
 function formatExpiry(value: string) {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString();
+  return formatDateTimeDDMMYYYY(value, { fallback: value });
 }
 
 export default function ActivateAccountPage() {

@@ -51,6 +51,7 @@ export interface AccountSecuritySectionProps {
   pendingResetRequestsLoading: boolean;
   usernameInput: string;
   usernameSaving: boolean;
+  showAccountManagement?: boolean;
 }
 
 export function AccountSecuritySection(props: AccountSecuritySectionProps) {
@@ -72,39 +73,41 @@ export function AccountSecuritySection(props: AccountSecuritySectionProps) {
         usernameSaving={props.usernameSaving}
       />
 
-      <UserAccountManagementSection
-        clearingDevMailOutbox={props.clearingDevMailOutbox}
-        createEmailInput={props.createEmailInput}
-        createFullNameInput={props.createFullNameInput}
-        createRoleInput={props.createRoleInput}
-        createUsernameInput={props.createUsernameInput}
-        creatingManagedUser={props.creatingManagedUser}
-        deletingDevMailOutboxId={props.deletingDevMailOutboxId}
-        deletingManagedUserId={props.deletingManagedUserId}
-        devMailOutboxEnabled={props.devMailOutboxEnabled}
-        devMailOutboxEntries={props.devMailOutboxEntries}
-        devMailOutboxLoading={props.devMailOutboxLoading}
-        isSuperuser={props.isSuperuser}
-        managedUsers={props.managedUsers}
-        managedUsersLoading={props.managedUsersLoading}
-        onClearDevMailOutbox={props.onClearDevMailOutbox}
-        onCreateEmailInputChange={props.onCreateEmailInputChange}
-        onCreateFullNameInputChange={props.onCreateFullNameInputChange}
-        onCreateManagedUser={props.onCreateManagedUser}
-        onCreateRoleInputChange={props.onCreateRoleInputChange}
-        onCreateUsernameInputChange={props.onCreateUsernameInputChange}
-        onDeleteDevMailOutboxEntry={props.onDeleteDevMailOutboxEntry}
-        onDeleteManagedUser={props.onDeleteManagedUser}
-        onDevMailOutboxRefresh={props.onDevMailOutboxRefresh}
-        onEditManagedUser={props.onEditManagedUser}
-        onManagedBanToggle={props.onManagedBanToggle}
-        onManagedResetPassword={props.onManagedResetPassword}
-        onManagedResendActivation={props.onManagedResendActivation}
-        onManagedUsersRefresh={props.onManagedUsersRefresh}
-        onPendingResetRequestsRefresh={props.onPendingResetRequestsRefresh}
-        pendingResetRequests={props.pendingResetRequests}
-        pendingResetRequestsLoading={props.pendingResetRequestsLoading}
-      />
+      {props.showAccountManagement ? (
+        <UserAccountManagementSection
+          clearingDevMailOutbox={props.clearingDevMailOutbox}
+          createEmailInput={props.createEmailInput}
+          createFullNameInput={props.createFullNameInput}
+          createRoleInput={props.createRoleInput}
+          createUsernameInput={props.createUsernameInput}
+          creatingManagedUser={props.creatingManagedUser}
+          deletingDevMailOutboxId={props.deletingDevMailOutboxId}
+          deletingManagedUserId={props.deletingManagedUserId}
+          devMailOutboxEnabled={props.devMailOutboxEnabled}
+          devMailOutboxEntries={props.devMailOutboxEntries}
+          devMailOutboxLoading={props.devMailOutboxLoading}
+          isSuperuser={props.isSuperuser}
+          managedUsers={props.managedUsers}
+          managedUsersLoading={props.managedUsersLoading}
+          onClearDevMailOutbox={props.onClearDevMailOutbox}
+          onCreateEmailInputChange={props.onCreateEmailInputChange}
+          onCreateFullNameInputChange={props.onCreateFullNameInputChange}
+          onCreateManagedUser={props.onCreateManagedUser}
+          onCreateRoleInputChange={props.onCreateRoleInputChange}
+          onCreateUsernameInputChange={props.onCreateUsernameInputChange}
+          onDeleteDevMailOutboxEntry={props.onDeleteDevMailOutboxEntry}
+          onDeleteManagedUser={props.onDeleteManagedUser}
+          onDevMailOutboxRefresh={props.onDevMailOutboxRefresh}
+          onEditManagedUser={props.onEditManagedUser}
+          onManagedBanToggle={props.onManagedBanToggle}
+          onManagedResetPassword={props.onManagedResetPassword}
+          onManagedResendActivation={props.onManagedResendActivation}
+          onManagedUsersRefresh={props.onManagedUsersRefresh}
+          onPendingResetRequestsRefresh={props.onPendingResetRequestsRefresh}
+          pendingResetRequests={props.pendingResetRequests}
+          pendingResetRequestsLoading={props.pendingResetRequestsLoading}
+        />
+      ) : null}
     </div>
   );
 }

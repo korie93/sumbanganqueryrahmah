@@ -1,8 +1,8 @@
 import { Crown, Users } from "lucide-react";
-import { format } from "date-fns";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import type { RoleData, TopUser } from "@/pages/dashboard/types";
 import { ROLE_COLORS } from "@/pages/dashboard/utils";
 
@@ -49,7 +49,9 @@ export function DashboardUserInsightsGrid({
                     <div>
                       <p className="font-medium text-foreground">{user.username}</p>
                       <p className="text-xs text-muted-foreground">
-                        Last login: {user.lastLogin ? format(new Date(user.lastLogin), "MMM d, h:mm a") : "Unknown"}
+                        Last login: {user.lastLogin
+                          ? formatDateTimeDDMMYYYY(user.lastLogin, { fallback: "Unknown" })
+                          : "Unknown"}
                       </p>
                     </div>
                   </div>

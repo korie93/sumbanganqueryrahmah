@@ -110,6 +110,53 @@ export function registerActivityRoutes(app: Express, deps: ActivityRouteDeps) {
     }),
   );
 
+  app.delete(
+    "/api/activity/logs/bulk-delete",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+      const body = ensureObject(req.body) || {};
+      const rawIds = Array.isArray(body.activityIds) ? body.activityIds : [];
+      const activityIds = Array.from(
+        new Set(
+          rawIds
+            .map((value) => readNonEmptyString(value))
+            .filter((value): value is string => Boolean(value)),
+        ),
+      ).slice(0, 500);
+
+      if (activityIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "activityIds is required",
+        });
+      }
+
+      let deletedCount = 0;
+      const notFoundIds: string[] = [];
+
+      for (const activityId of activityIds) {
+        const activity = await storage.getActivityById(activityId);
+        if (!activity) {
+          notFoundIds.push(activityId);
+          continue;
+        }
+
+        await storage.deleteActivity(activityId);
+        await closeSocket(activityId);
+        deletedCount += 1;
+      }
+
+      return res.json({
+        success: true,
+        requestedCount: activityIds.length,
+        deletedCount,
+        notFoundIds,
+      });
+    }),
+  );
+
   app.post(
     "/api/activity/kick",
     authenticateToken,

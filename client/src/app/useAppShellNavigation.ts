@@ -32,9 +32,20 @@ export function useAppShellNavigation({
   tabVisibilityLoaded,
   user,
 }: UseAppShellNavigationArgs) {
+  const clearViewerSelection = useCallback(() => {
+    setSelectedImportId(undefined);
+    localStorage.removeItem("selectedImportId");
+    localStorage.removeItem("selectedImportName");
+  }, [setSelectedImportId]);
+
   const handleNavigate = useCallback((page: string, importId?: string) => {
     const monitorSectionTarget = parseMonitorSectionFromPageInput(page);
     const requestedPage = monitorSectionTarget ? "monitor" : page;
+    const preserveViewerSelection = requestedPage === "viewer" && Boolean(importId);
+
+    if (!preserveViewerSelection) {
+      clearViewerSelection();
+    }
 
     if (user?.mustChangePassword && requestedPage !== "change-password") {
       setCurrentPage("change-password");
@@ -88,6 +99,7 @@ export function useAppShellNavigation({
       setSelectedImportId(importId);
     }
   }, [
+    clearViewerSelection,
     featureLockdown,
     monitorVisibilityMonitor,
     setCurrentPage,

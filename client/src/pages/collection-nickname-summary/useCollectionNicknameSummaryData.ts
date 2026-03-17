@@ -3,13 +3,10 @@ import { useToast } from "@/hooks/use-toast";
 import {
   getCollectionNicknameSummary,
   getCollectionNicknames,
-  type CollectionRecord,
   type CollectionStaffNickname,
 } from "@/lib/api";
 import {
-  buildNicknameBatchSections,
-  buildNicknameTotals,
-  type NicknameBatchSection,
+  normalizeNicknameTotals,
   type NicknameTotalSummary,
 } from "@/pages/collection-nickname-summary/utils";
 import { parseApiError } from "@/pages/collection/utils";
@@ -40,7 +37,6 @@ type UseCollectionNicknameSummaryDataValue = {
   allSelected: boolean;
   partiallySelected: boolean;
   nicknameTotals: NicknameTotalSummary[];
-  batchSections: NicknameBatchSection[];
   setNicknameDropdownOpen: (open: boolean) => void;
   setFromDate: (value: string) => void;
   setToDate: (value: string) => void;
@@ -66,7 +62,7 @@ export function useCollectionNicknameSummaryData({
   const [toDate, setToDate] = useState("");
   const [loadingNicknames, setLoadingNicknames] = useState(false);
   const [loadingSummary, setLoadingSummary] = useState(false);
-  const [records, setRecords] = useState<CollectionRecord[]>([]);
+  const [nicknameTotals, setNicknameTotals] = useState<NicknameTotalSummary[]>([]);
   const [totalAmount, setTotalAmount] = useState(0);
   const [totalRecords, setTotalRecords] = useState(0);
   const [hasApplied, setHasApplied] = useState(false);
@@ -110,9 +106,6 @@ export function useCollectionNicknameSummaryData({
     selectedNicknames.length === 0
       ? "Pilih staff nickname"
       : `${selectedNicknames.length} nickname dipilih`;
-
-  const nicknameTotals = useMemo(() => buildNicknameTotals(records), [records]);
-  const batchSections = useMemo(() => buildNicknameBatchSections(records), [records]);
 
   const loadNicknames = useCallback(async () => {
     if (!canAccess) return;
@@ -205,15 +198,16 @@ export function useCollectionNicknameSummaryData({
         from: fromDate,
         to: toDate,
         nicknames: selectedNicknames,
+        summaryOnly: true,
       });
       if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
-      setRecords(Array.isArray(response?.records) ? response.records : []);
+      setNicknameTotals(normalizeNicknameTotals(response?.nicknameTotals));
       setTotalAmount(Number(response?.totalAmount || 0));
       setTotalRecords(Number(response?.totalRecords || 0));
       setHasApplied(true);
     } catch (error: unknown) {
       if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
-      setRecords([]);
+      setNicknameTotals([]);
       setTotalAmount(0);
       setTotalRecords(0);
       setHasApplied(false);
@@ -233,7 +227,7 @@ export function useCollectionNicknameSummaryData({
     setSelectedNicknames([]);
     setFromDate("");
     setToDate("");
-    setRecords([]);
+    setNicknameTotals([]);
     setTotalAmount(0);
     setTotalRecords(0);
     setHasApplied(false);
@@ -255,7 +249,6 @@ export function useCollectionNicknameSummaryData({
     allSelected,
     partiallySelected,
     nicknameTotals,
-    batchSections,
     setNicknameDropdownOpen,
     setFromDate,
     setToDate,

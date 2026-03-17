@@ -214,6 +214,15 @@ function createCollectionSummaryStorageDouble() {
         totalAmount: 450.5,
       };
     },
+    summarizeCollectionRecordsByNickname: async (filters: Record<string, unknown>) => {
+      return [
+        {
+          nickname: "Collector Alpha",
+          totalRecords: 3,
+          totalAmount: 450.5,
+        },
+      ];
+    },
     listCollectionRecords: async (filters: Record<string, unknown>) => {
       nicknameListCalls.push(filters);
       return [
@@ -295,6 +304,15 @@ function createAdminCollectionSummaryStorageDouble() {
         totalRecords: 2,
         totalAmount: 420.75,
       };
+    },
+    summarizeCollectionRecordsByNickname: async (filters: Record<string, unknown>) => {
+      return [
+        {
+          nickname: "Collector Beta",
+          totalRecords: 2,
+          totalAmount: 420.75,
+        },
+      ];
     },
     listCollectionRecords: async (filters: Record<string, unknown>) => {
       nicknameListCalls.push(filters);

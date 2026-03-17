@@ -239,8 +239,134 @@ export async function getCollectionNicknameSummary(filters: {
     nicknames: string[];
     totalRecords: number;
     totalAmount: number;
+    nicknameTotals: Array<{
+      nickname: string;
+      totalRecords: number;
+      totalAmount: number;
+    }>;
     records: CollectionRecord[];
   }>;
+}
+
+export type CollectionDailyUser = {
+  id: string;
+  username: string;
+  role: string;
+};
+
+export type CollectionDailyOverviewDay = {
+  day: number;
+  date: string;
+  amount: number;
+  target: number;
+  isWorkingDay: boolean;
+  isHoliday: boolean;
+  holidayName: string | null;
+  customerCount: number;
+  status: "green" | "yellow" | "red" | "neutral";
+};
+
+export type CollectionDailyOverviewResponse = {
+  ok: boolean;
+  username: string;
+  role: string;
+  month: {
+    year: number;
+    month: number;
+    daysInMonth: number;
+  };
+  summary: {
+    monthlyTarget: number;
+    achievedAmount: number;
+    remainingAmount: number;
+    workingDays: number;
+    metDays: number;
+    yellowDays: number;
+    redDays: number;
+    neutralDays: number;
+    dailyTarget: number;
+  };
+  days: CollectionDailyOverviewDay[];
+};
+
+export type CollectionDailyDayDetailsResponse = {
+  ok: boolean;
+  username: string;
+  date: string;
+  status: "green" | "yellow" | "red" | "neutral";
+  message: string;
+  amount: number;
+  dailyTarget: number;
+  customers: Array<{
+    id: string;
+    customerName: string;
+    accountNumber: string;
+    amount: number;
+    collectionStaffNickname: string;
+  }>;
+};
+
+export async function getCollectionDailyUsers() {
+  const response = await apiRequest("GET", "/api/collection/daily/users");
+  return response.json() as Promise<{ ok: boolean; users: CollectionDailyUser[] }>;
+}
+
+export async function setCollectionDailyTarget(payload: {
+  username: string;
+  year: number;
+  month: number;
+  monthlyTarget: number;
+}) {
+  const response = await apiRequest("PUT", "/api/collection/daily/target", payload);
+  return response.json() as Promise<{
+    ok: boolean;
+    target: {
+      id: string;
+      username: string;
+      year: number;
+      month: number;
+      monthlyTarget: number;
+    };
+  }>;
+}
+
+export async function setCollectionDailyCalendar(payload: {
+  year: number;
+  month: number;
+  days: Array<{
+    day: number;
+    isWorkingDay: boolean;
+    isHoliday: boolean;
+    holidayName?: string | null;
+  }>;
+}) {
+  const response = await apiRequest("PUT", "/api/collection/daily/calendar", payload);
+  return response.json() as Promise<{ ok: boolean; calendar: Array<Record<string, unknown>> }>;
+}
+
+export async function getCollectionDailyOverview(filters: {
+  year: number;
+  month: number;
+  username?: string;
+}) {
+  const params = new URLSearchParams();
+  params.set("year", String(filters.year));
+  params.set("month", String(filters.month));
+  if (filters.username) {
+    params.set("username", filters.username);
+  }
+  const response = await apiRequest("GET", `/api/collection/daily/overview?${params.toString()}`);
+  return response.json() as Promise<CollectionDailyOverviewResponse>;
+}
+
+export async function getCollectionDailyDayDetails(filters: { date: string; username?: string }) {
+  const params = new URLSearchParams();
+  params.set("date", filters.date);
+  if (filters.username) {
+    params.set("username", filters.username);
+  }
+  const response = await apiRequest("GET", `/api/collection/daily/day-details?${params.toString()}`);
+  return response.json() as Promise<CollectionDailyDayDetailsResponse>;
 }
 
 export async function getCollectionNicknames(filters?: { includeInactive?: boolean }) {

@@ -1,5 +1,4 @@
 import { Calendar, Filter, X } from "lucide-react";
-import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -7,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import type { ActivityFilters } from "@/lib/api";
 import { STATUS_OPTIONS } from "@/pages/activity/types";
 
@@ -101,7 +101,7 @@ export function ActivityFiltersPanel({
               <PopoverTrigger asChild>
                 <Button variant="outline" className="w-full justify-start text-left font-normal" data-testid="button-date-from">
                   <Calendar className="w-4 h-4 mr-2" />
-                  {filters.dateFrom ? format(new Date(`${filters.dateFrom}T12:00:00`), "dd MMM yyyy") : "Select date..."}
+                  {filters.dateFrom ? formatIsoDateToDDMMYYYY(filters.dateFrom) : "Select date..."}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -131,7 +131,7 @@ export function ActivityFiltersPanel({
               <PopoverTrigger asChild>
                 <Button variant="outline" className="w-full justify-start text-left font-normal" data-testid="button-date-to">
                   <Calendar className="w-4 h-4 mr-2" />
-                  {filters.dateTo ? format(new Date(`${filters.dateTo}T12:00:00`), "dd MMM yyyy") : "Select date..."}
+                  {filters.dateTo ? formatIsoDateToDDMMYYYY(filters.dateTo) : "Select date..."}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">

@@ -4,6 +4,7 @@ export type CollectionSubPage =
   | "save"
   | "records"
   | "summary"
+  | "daily"
   | "nickname-summary"
   | "manage-nicknames";
 export type NicknameDialogStep = "nickname" | "setup" | "login";

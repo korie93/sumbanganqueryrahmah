@@ -1,8 +1,8 @@
 import { CalendarIcon, Search, X } from "lucide-react";
-import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
+import { formatDateDDMMYYYY } from "@/lib/date-format";
 import {
   Popover,
   PopoverContent,
@@ -47,7 +47,7 @@ export function SavedFiltersBar({
               data-testid="button-date-filter"
             >
               <CalendarIcon className="w-4 h-4 mr-2" />
-              {dateFilter ? format(dateFilter, "dd MMM yyyy") : "Filter by date"}
+              {dateFilter ? formatDateDDMMYYYY(dateFilter) : "Filter by date"}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">

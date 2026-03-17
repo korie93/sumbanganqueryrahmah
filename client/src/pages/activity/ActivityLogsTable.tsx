@@ -1,6 +1,7 @@
 import { Activity as ActivityIcon, ChevronDown, Shield, Trash2, UserX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { ActivityRecord } from "@/pages/activity/types";
 import { formatActivityTime, getSessionDuration, getStatusBadge, parseActivityUserAgent } from "@/pages/activity/utils";
@@ -15,6 +16,11 @@ interface ActivityLogsTableProps {
   onDeleteClick: (activity: ActivityRecord) => void;
   onKickClick: (activity: ActivityRecord) => void;
   onLogsOpenChange: (open: boolean) => void;
+  onToggleSelected: (activityId: string, checked: boolean) => void;
+  onToggleSelectAllVisible: (checked: boolean) => void;
+  selectedActivityIds: Set<string>;
+  allVisibleSelected: boolean;
+  partiallySelected: boolean;
 }
 
 export function ActivityLogsTable({
@@ -27,6 +33,11 @@ export function ActivityLogsTable({
   onDeleteClick,
   onKickClick,
   onLogsOpenChange,
+  onToggleSelected,
+  onToggleSelectAllVisible,
+  selectedActivityIds,
+  allVisibleSelected,
+  partiallySelected,
 }: ActivityLogsTableProps) {
   return (
     <Collapsible open={logsOpen} onOpenChange={onLogsOpenChange}>
@@ -58,6 +69,15 @@ export function ActivityLogsTable({
                 <table className="w-full text-sm">
                   <thead className="bg-muted sticky top-0 z-10">
                     <tr>
+                      {canModerateActivity ? (
+                        <th className="text-left p-3 font-medium text-muted-foreground w-[50px]">
+                          <Checkbox
+                            checked={allVisibleSelected || (partiallySelected ? "indeterminate" : false)}
+                            onCheckedChange={(checked) => onToggleSelectAllVisible(Boolean(checked))}
+                            aria-label="Select all visible activity logs"
+                          />
+                        </th>
+                      ) : null}
                       <th className="text-left p-3 font-medium text-muted-foreground">User</th>
                       <th className="text-left p-3 font-medium text-muted-foreground">Status</th>
                       <th className="text-left p-3 font-medium text-muted-foreground">IP</th>
@@ -75,6 +95,15 @@ export function ActivityLogsTable({
                       const { browser, version } = parseActivityUserAgent(activity.browser);
                       return (
                         <tr key={activity.id} className="border-t border-border hover:bg-muted/50" data-testid={`activity-row-${activity.id}`}>
+                          {canModerateActivity ? (
+                            <td className="p-3 align-top">
+                              <Checkbox
+                                checked={selectedActivityIds.has(activity.id)}
+                                onCheckedChange={(checked) => onToggleSelected(activity.id, Boolean(checked))}
+                                aria-label={`Select activity log ${activity.id}`}
+                              />
+                            </td>
+                          ) : null}
                           <td className="p-3">
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-foreground">{activity.username}</span>

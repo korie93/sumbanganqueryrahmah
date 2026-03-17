@@ -18,6 +18,7 @@ import {
 import type { CollectionRecord } from "@/lib/api";
 import { CollectionPaginationBar } from "@/pages/collection-report/CollectionPaginationBar";
 import { formatAmountRM } from "@/pages/collection/utils";
+import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 
 const VIEW_ALL_PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50];
 
@@ -170,7 +171,7 @@ export function ViewAllRecordsDialog({
                         <TableCell className="py-2">
                           {formatAmountRM(record.amount)}
                         </TableCell>
-                        <TableCell className="py-2">{record.paymentDate}</TableCell>
+                        <TableCell className="py-2">{formatIsoDateToDDMMYYYY(record.paymentDate)}</TableCell>
                         <TableCell className="py-2">
                           {(record.receipts?.length || 0) > 0 || record.receiptFile ? (
                             <Button

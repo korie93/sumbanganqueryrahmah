@@ -164,6 +164,12 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
             dataRowsCount: backupData.dataRows.length,
             usersCount: backupData.users.length,
             auditLogsCount: backupData.auditLogs.length,
+            collectionRecordsCount: Array.isArray(backupData.collectionRecords)
+              ? backupData.collectionRecords.length
+              : 0,
+            collectionRecordReceiptsCount: Array.isArray(backupData.collectionRecordReceipts)
+              ? backupData.collectionRecordReceipts.length
+              : 0,
           };
           const created = await backupsRepository.createBackup({
             name,
@@ -238,7 +244,11 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
             performedBy: req.user!.username,
             targetResource: backup.name,
             details: JSON.stringify({
-              ...restored.stats,
+              totalProcessed: restored.stats.totalProcessed,
+              totalInserted: restored.stats.totalInserted,
+              totalSkipped: restored.stats.totalSkipped,
+              totalReactivated: restored.stats.totalReactivated,
+              warningCount: restored.stats.warnings.length,
               durationMs: Date.now() - startTime,
             }),
           });
@@ -257,7 +267,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
         backupName: backup.name,
         restoredAt: new Date().toISOString(),
         durationMs: Date.now() - result.startTime,
-        message: `Restore completed in ${Math.round((Date.now() - result.startTime) / 1000)}s`,
+        message: `Restore completed in ${Math.round((Date.now() - result.startTime) / 1000)}s.`,
       });
     }),
   );

@@ -1,4 +1,5 @@
 import type { ImportItem } from "@/pages/saved/types";
+import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 
 export function filterSavedImports(
   imports: ImportItem[],
@@ -29,16 +30,5 @@ export function filterSavedImports(
 }
 
 export function formatSavedImportDate(dateStr: string) {
-  try {
-    return new Date(dateStr).toLocaleString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-  } catch {
-    return dateStr;
-  }
+  return formatDateTimeDDMMYYYY(dateStr, { fallback: dateStr });
 }

@@ -317,6 +317,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
         nicknames: [],
         totalRecords: 0,
         totalAmount: 0,
+        nicknameTotals: [],
         records: [],
       };
     }
@@ -345,6 +346,21 @@ export class CollectionRecordService extends CollectionServiceSupport {
       to: to || undefined,
       nicknames: nicknameFilters,
     });
+    const nicknameTotalsRaw = await this.storage.summarizeCollectionRecordsByNickname({
+      from: from || undefined,
+      to: to || undefined,
+      nicknames: nicknameFilters,
+    });
+    const nicknameTotals = nicknameFilters.map((nickname) => {
+      const matched = nicknameTotalsRaw.find(
+        (item) => item.nickname.toLowerCase() === nickname.toLowerCase(),
+      );
+      return {
+        nickname,
+        totalRecords: matched?.totalRecords ?? 0,
+        totalAmount: matched?.totalAmount ?? 0,
+      };
+    });
     const records = summaryOnly
       ? []
       : await this.storage.listCollectionRecords({
@@ -359,7 +375,322 @@ export class CollectionRecordService extends CollectionServiceSupport {
       nicknames: nicknameFilters,
       totalRecords: aggregate.totalRecords,
       totalAmount: aggregate.totalAmount,
+      nicknameTotals,
       records,
+    };
+  }
+
+  async listDailyUsers(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0]) {
+    const user = this.requireUser(userInput);
+    if (user.role !== "admin" && user.role !== "superuser") {
+      throw forbidden("Collection daily user list hanya untuk admin atau superuser.");
+    }
+    const users = await this.storage.listCollectionDailyUsers();
+    return {
+      ok: true as const,
+      users,
+    };
+  }
+
+  async upsertDailyTarget(
+    userInput: Parameters<CollectionServiceSupport["requireUser"]>[0],
+    bodyRaw: unknown,
+  ) {
+    const user = this.requireUser(userInput);
+    if (user.role !== "admin" && user.role !== "superuser") {
+      throw forbidden("Set target harian hanya untuk admin atau superuser.");
+    }
+
+    const body = ensureLooseObject(bodyRaw) || {};
+    const username = normalizeCollectionText(body.username).toLowerCase();
+    const year = Number.parseInt(normalizeCollectionText(body.year), 10);
+    const month = Number.parseInt(normalizeCollectionText(body.month), 10);
+    const monthlyTarget = Number(body.monthlyTarget);
+
+    if (!username) throw badRequest("Username is required.");
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) throw badRequest("Invalid year.");
+    if (!Number.isInteger(month) || month < 1 || month > 12) throw badRequest("Invalid month.");
+    if (!Number.isFinite(monthlyTarget) || monthlyTarget < 0) {
+      throw badRequest("Monthly target must be a non-negative number.");
+    }
+
+    const users = await this.storage.listCollectionDailyUsers();
+    const foundUser = users.some((item) => item.username.toLowerCase() === username);
+    if (!foundUser) {
+      throw badRequest("User not found.");
+    }
+
+    const target = await this.storage.upsertCollectionDailyTarget({
+      username,
+      year,
+      month,
+      monthlyTarget,
+      actor: user.username,
+    });
+    return {
+      ok: true as const,
+      target,
+    };
+  }
+
+  async upsertDailyCalendar(
+    userInput: Parameters<CollectionServiceSupport["requireUser"]>[0],
+    bodyRaw: unknown,
+  ) {
+    const user = this.requireUser(userInput);
+    if (user.role !== "admin" && user.role !== "superuser") {
+      throw forbidden("Update daily calendar hanya untuk admin atau superuser.");
+    }
+
+    const body = ensureLooseObject(bodyRaw) || {};
+    const year = Number.parseInt(normalizeCollectionText(body.year), 10);
+    const month = Number.parseInt(normalizeCollectionText(body.month), 10);
+    const rawDays = Array.isArray(body.days) ? body.days : [];
+
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) throw badRequest("Invalid year.");
+    if (!Number.isInteger(month) || month < 1 || month > 12) throw badRequest("Invalid month.");
+
+    const maxDay = new Date(year, month, 0).getDate();
+    const parsedDays = rawDays
+      .map((item) => ensureLooseObject(item) || {})
+      .map((item) => ({
+        day: Number.parseInt(normalizeCollectionText(item.day), 10),
+        isWorkingDay: item.isWorkingDay !== false,
+        isHoliday: item.isHoliday === true,
+        holidayName: normalizeCollectionText(item.holidayName) || null,
+      }))
+      .filter((item) => Number.isInteger(item.day) && item.day >= 1 && item.day <= maxDay);
+
+    if (parsedDays.length === 0) {
+      throw badRequest("At least one valid calendar day is required.");
+    }
+
+    const uniqueByDay = new Map<number, (typeof parsedDays)[number]>();
+    for (const day of parsedDays) {
+      uniqueByDay.set(day.day, day);
+    }
+
+    const calendar = await this.storage.upsertCollectionDailyCalendarDays({
+      year,
+      month,
+      actor: user.username,
+      days: Array.from(uniqueByDay.values()),
+    });
+
+    return {
+      ok: true as const,
+      calendar,
+    };
+  }
+
+  async getDailyOverview(
+    userInput: Parameters<CollectionServiceSupport["requireUser"]>[0],
+    query: ListQuery,
+  ) {
+    const user = this.requireUser(userInput);
+    const year = Number.parseInt(normalizeCollectionText(query.year), 10);
+    const month = Number.parseInt(normalizeCollectionText(query.month), 10);
+    const requestedUsername = normalizeCollectionText(query.username).toLowerCase();
+
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) throw badRequest("Invalid year.");
+    if (!Number.isInteger(month) || month < 1 || month > 12) throw badRequest("Invalid month.");
+
+    const username = user.role === "user" ? user.username.toLowerCase() : (requestedUsername || user.username.toLowerCase());
+    if (user.role === "user" && requestedUsername && requestedUsername !== username) {
+      throw forbidden("User hanya boleh melihat data sendiri.");
+    }
+
+    const users = await this.storage.listCollectionDailyUsers();
+    const foundUser = users.find((item) => item.username.toLowerCase() === username);
+    if (!foundUser) throw badRequest("User not found.");
+
+    const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+    const monthEnd = `${year}-${String(month).padStart(2, "0")}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
+
+    const [target, calendarRows, records] = await Promise.all([
+      this.storage.getCollectionDailyTarget({ username, year, month }),
+      this.storage.listCollectionDailyCalendar({ year, month }),
+      this.storage.listCollectionRecords({
+        from: monthStart,
+        to: monthEnd,
+        createdByLogin: username,
+        limit: 5000,
+        offset: 0,
+      }),
+    ]);
+
+    const calendarByDay = new Map(calendarRows.map((item) => [item.day, item]));
+    const amountByDate = new Map<string, number>();
+    const customerCountByDate = new Map<string, number>();
+    for (const record of records) {
+      const key = record.paymentDate;
+      const amount = Number(record.amount || 0);
+      amountByDate.set(key, (amountByDate.get(key) || 0) + (Number.isFinite(amount) ? amount : 0));
+      customerCountByDate.set(key, (customerCountByDate.get(key) || 0) + 1);
+    }
+
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const monthlyTarget = Number(target?.monthlyTarget || 0);
+    let workingDays = 0;
+    const workingFlags: boolean[] = [];
+
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const override = calendarByDay.get(day);
+      const defaultWorking = (() => {
+        const weekday = new Date(year, month - 1, day).getDay();
+        return weekday !== 0 && weekday !== 6;
+      })();
+      const isWorkingDay = override ? Boolean(override.isWorkingDay) && !Boolean(override.isHoliday) : defaultWorking;
+      workingFlags.push(isWorkingDay);
+      if (isWorkingDay) {
+        workingDays += 1;
+      }
+    }
+
+    const dailyTarget = workingDays > 0 ? monthlyTarget / workingDays : 0;
+    let achievedAmount = 0;
+    let metDays = 0;
+    let yellowDays = 0;
+    let redDays = 0;
+    let neutralDays = 0;
+
+    const days = Array.from({ length: daysInMonth }, (_, index) => {
+      const day = index + 1;
+      const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      const amount = amountByDate.get(date) || 0;
+      achievedAmount += amount;
+      const override = calendarByDay.get(day);
+      const isWorkingDay = workingFlags[index];
+
+      let status: "green" | "yellow" | "red" | "neutral" = "neutral";
+      if (!isWorkingDay) {
+        status = "neutral";
+        neutralDays += 1;
+      } else if (amount <= 0) {
+        status = "red";
+        redDays += 1;
+      } else if (amount < dailyTarget) {
+        status = "yellow";
+        yellowDays += 1;
+      } else {
+        status = "green";
+        metDays += 1;
+      }
+
+      return {
+        day,
+        date,
+        amount,
+        target: dailyTarget,
+        isWorkingDay,
+        isHoliday: Boolean(override?.isHoliday),
+        holidayName: override?.holidayName || null,
+        customerCount: customerCountByDate.get(date) || 0,
+        status,
+      };
+    });
+
+    const remainingAmount = Math.max(0, monthlyTarget - achievedAmount);
+
+    return {
+      ok: true as const,
+      username,
+      role: foundUser.role,
+      month: {
+        year,
+        month,
+        daysInMonth,
+      },
+      summary: {
+        monthlyTarget,
+        achievedAmount,
+        remainingAmount,
+        workingDays,
+        metDays,
+        yellowDays,
+        redDays,
+        neutralDays,
+        dailyTarget,
+      },
+      days,
+    };
+  }
+
+  async getDailyDayDetails(
+    userInput: Parameters<CollectionServiceSupport["requireUser"]>[0],
+    query: ListQuery,
+  ) {
+    const user = this.requireUser(userInput);
+    const date = normalizeCollectionText(query.date);
+    const requestedUsername = normalizeCollectionText(query.username).toLowerCase();
+    if (!date || !isValidCollectionDate(date)) throw badRequest("Invalid date.");
+
+    const username = user.role === "user" ? user.username.toLowerCase() : (requestedUsername || user.username.toLowerCase());
+    if (user.role === "user" && requestedUsername && requestedUsername !== username) {
+      throw forbidden("User hanya boleh melihat data sendiri.");
+    }
+
+    const [yearText, monthText, dayText] = date.split("-");
+    const year = Number.parseInt(yearText, 10);
+    const month = Number.parseInt(monthText, 10);
+    const day = Number.parseInt(dayText, 10);
+
+    const [target, calendarRows, customers] = await Promise.all([
+      this.storage.getCollectionDailyTarget({ username, year, month }),
+      this.storage.listCollectionDailyCalendar({ year, month }),
+      this.storage.listCollectionDailyPaidCustomers({ username, date }),
+    ]);
+
+    const amount = customers.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const calendar = calendarRows.find((item) => item.day === day);
+    const defaultWorking = (() => {
+      const weekday = new Date(year, month - 1, day).getDay();
+      return weekday !== 0 && weekday !== 6;
+    })();
+    const isWorkingDay = calendar ? Boolean(calendar.isWorkingDay) && !Boolean(calendar.isHoliday) : defaultWorking;
+    const workingDays = (() => {
+      const daysInMonth = new Date(year, month, 0).getDate();
+      let total = 0;
+      const byDay = new Map(calendarRows.map((item) => [item.day, item]));
+      for (let d = 1; d <= daysInMonth; d += 1) {
+        const override = byDay.get(d);
+        const isWorking = override
+          ? Boolean(override.isWorkingDay) && !Boolean(override.isHoliday)
+          : (() => {
+            const weekday = new Date(year, month - 1, d).getDay();
+            return weekday !== 0 && weekday !== 6;
+          })();
+        if (isWorking) total += 1;
+      }
+      return total;
+    })();
+    const dailyTarget = workingDays > 0 ? Number(target?.monthlyTarget || 0) / workingDays : 0;
+
+    let status: "green" | "yellow" | "red" | "neutral" = "neutral";
+    let message = "";
+    if (!isWorkingDay) {
+      status = "neutral";
+      message = "Non-working day.";
+    } else if (amount <= 0) {
+      status = "red";
+      message = "No collection recorded for this day.";
+    } else if (amount < dailyTarget) {
+      status = "yellow";
+      message = "Daily target not achieved";
+    } else {
+      status = "green";
+      message = "Daily target achieved.";
+    }
+
+    return {
+      ok: true as const,
+      username,
+      date,
+      status,
+      message,
+      amount,
+      dailyTarget,
+      customers,
     };
   }
 
