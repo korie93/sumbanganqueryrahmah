@@ -15,6 +15,7 @@
     "dev:server": "tsx server/index-local.ts",
     "build": "npx vite build && npx esbuild server/index-local.ts --bundle --platform=node --packages=external --outfile=dist-local/server/index-local.js --format=esm && npx esbuild server/cluster-local.ts --bundle --platform=node --packages=external --outfile=dist-local/server/cluster-local.js --format=esm",
     "start": "npm run start:built",
+    "prestart": "test -f dist-local/server/cluster-local.js || npm run build",
     "start:built": "node dist-local/server/cluster-local.js",
     "import:aeon-branches": "node scripts/import-aeon-branches.mjs"
   },
