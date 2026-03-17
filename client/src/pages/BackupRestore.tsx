@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import { createBackup, deleteBackup, getBackups, restoreBackup } from "@/lib/api";
 import { BackupDialogs } from "@/pages/backup-restore/BackupDialogs";
 import { BackupFiltersPanel } from "@/pages/backup-restore/BackupFiltersPanel";
@@ -40,6 +41,7 @@ export default function BackupRestore({ userRole }: BackupRestoreProps) {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [lastRestoreResult, setLastRestoreResult] = useState<RestoreResponse | null>(null);
   const { toast } = useToast();
   const deferredSearchName = useDeferredValue(searchName.trim());
 
@@ -102,12 +104,26 @@ export default function BackupRestore({ userRole }: BackupRestoreProps) {
     mutationFn: (backupId: string) => restoreBackup(backupId) as Promise<RestoreResponse>,
     onSuccess: (result) => {
       const stats = result.stats;
-      const totalRestored = stats.imports + stats.dataRows + stats.users + stats.auditLogs;
+      const totalRestored = stats.totalInserted + stats.totalReactivated;
       const parts: string[] = [];
-      if (stats.imports > 0) parts.push(`${stats.imports} imports`);
-      if (stats.dataRows > 0) parts.push(`${stats.dataRows} data rows`);
-      if (stats.users > 0) parts.push(`${stats.users} users`);
-      if (stats.auditLogs > 0) parts.push(`${stats.auditLogs} audit logs`);
+      if (stats.imports.inserted + stats.imports.reactivated > 0) {
+        parts.push(`${stats.imports.inserted + stats.imports.reactivated} imports`);
+      }
+      if (stats.dataRows.inserted > 0) {
+        parts.push(`${stats.dataRows.inserted} data rows`);
+      }
+      if (stats.users.inserted > 0) {
+        parts.push(`${stats.users.inserted} users`);
+      }
+      if (stats.auditLogs.inserted > 0) {
+        parts.push(`${stats.auditLogs.inserted} audit logs`);
+      }
+      if (stats.collectionRecords.inserted > 0) {
+        parts.push(`${stats.collectionRecords.inserted} collection records`);
+      }
+      if (stats.collectionRecordReceipts.inserted > 0) {
+        parts.push(`${stats.collectionRecordReceipts.inserted} collection receipts`);
+      }
 
       const summary = totalRestored > 0
         ? `Restored: ${parts.join(", ")}.`
@@ -121,6 +137,7 @@ export default function BackupRestore({ userRole }: BackupRestoreProps) {
         description: `${summary}${duration}`,
         duration: 8000,
       });
+      setLastRestoreResult(result);
       setShowRestoreDialog(null);
       setRestoringId(null);
       void queryClient.invalidateQueries({ queryKey: ["/api/backups"] });
@@ -333,6 +350,44 @@ export default function BackupRestore({ userRole }: BackupRestoreProps) {
             >
               Retry
             </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {lastRestoreResult ? (
+        <Card className="border-border/60">
+          <CardContent className="pt-6 space-y-3">
+            <div className="text-sm font-medium">Last Restore Result</div>
+            <div className="text-sm text-muted-foreground">
+              Backup: {lastRestoreResult.backupName || lastRestoreResult.backupId || "-"}
+              {lastRestoreResult.restoredAt
+                ? ` | Restored at ${formatDateTimeDDMMYYYY(lastRestoreResult.restoredAt, { includeSeconds: true })}`
+                : ""}
+              {typeof lastRestoreResult.durationMs === "number"
+                ? ` | Duration ${(lastRestoreResult.durationMs / 1000).toFixed(1)}s`
+                : ""}
+            </div>
+            <div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
+              <div>Imports: +{lastRestoreResult.stats.imports.inserted} inserted, {lastRestoreResult.stats.imports.reactivated} reactivated</div>
+              <div>Data rows: +{lastRestoreResult.stats.dataRows.inserted} inserted</div>
+              <div>Users: +{lastRestoreResult.stats.users.inserted} inserted</div>
+              <div>Audit logs: +{lastRestoreResult.stats.auditLogs.inserted} inserted</div>
+              <div>Collection records: +{lastRestoreResult.stats.collectionRecords.inserted} inserted</div>
+              <div>Collection receipts: +{lastRestoreResult.stats.collectionRecordReceipts.inserted} inserted</div>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Processed: {lastRestoreResult.stats.totalProcessed} | Inserted: {lastRestoreResult.stats.totalInserted} | Reactivated: {lastRestoreResult.stats.totalReactivated} | Skipped: {lastRestoreResult.stats.totalSkipped}
+            </div>
+            {lastRestoreResult.stats.warnings.length > 0 ? (
+              <div className="rounded-md border border-amber-300/40 bg-amber-50/40 p-3 text-sm">
+                <div className="font-medium text-amber-800">Warnings ({lastRestoreResult.stats.warnings.length})</div>
+                <ul className="mt-1 list-disc pl-5 text-amber-900">
+                  {lastRestoreResult.stats.warnings.slice(0, 5).map((warning, index) => (
+                    <li key={`${warning}-${index}`}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}

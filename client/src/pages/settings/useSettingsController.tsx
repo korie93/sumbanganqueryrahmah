@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
+import type { UserAccountManagementSectionProps } from "@/pages/settings/UserAccountManagementSection";
 import { useSettingsAccountManagement } from "@/pages/settings/useSettingsAccountManagement";
 import { useSettingsBootstrap } from "@/pages/settings/useSettingsBootstrap";
 import {
@@ -9,7 +10,9 @@ import {
 } from "@/pages/settings/settings-controller-view-models";
 import { useSettingsMyAccount } from "@/pages/settings/useSettingsMyAccount";
 import { useSettingsSystemSettings } from "@/pages/settings/useSettingsSystemSettings";
-import type { ManagedUser } from "@/pages/settings/types";
+import type { ManagedUser, SettingCategory } from "@/pages/settings/types";
+
+const ACCOUNT_MANAGEMENT_CATEGORY_ID = "account-management";
 
 export function useSettingsController() {
   const { toast } = useToast();
@@ -45,6 +48,7 @@ export function useSettingsController() {
     currentUser?.role === "admin" || currentUser?.role === "superuser";
   const isSuperuser = currentUser?.role === "superuser";
   const canAccessAccountSecurity = currentUser?.role === "superuser";
+  const canAccessAccountManagement = currentUser?.role === "superuser";
   const currentUserRole = currentUser?.role ?? "";
 
   const systemSettings = useSettingsSystemSettings({
@@ -194,6 +198,57 @@ export function useSettingsController() {
     usernameSaving,
   });
 
+  const accountManagementSection: UserAccountManagementSectionProps = {
+    clearingDevMailOutbox,
+    createEmailInput,
+    createFullNameInput,
+    createRoleInput,
+    createUsernameInput,
+    creatingManagedUser,
+    deletingDevMailOutboxId,
+    deletingManagedUserId,
+    devMailOutboxEnabled,
+    devMailOutboxEntries,
+    devMailOutboxLoading,
+    isSuperuser,
+    managedUsers,
+    managedUsersLoading,
+    onClearDevMailOutbox: () => void handleClearDevMailOutbox(),
+    onCreateEmailInputChange: setCreateEmailInput,
+    onCreateFullNameInputChange: setCreateFullNameInput,
+    onCreateManagedUser: () => void handleCreateManagedUser(),
+    onCreateRoleInputChange: setCreateRoleInput,
+    onCreateUsernameInputChange: setCreateUsernameInput,
+    onDeleteDevMailOutboxEntry: (previewId) => void handleDeleteDevMailOutboxEntry(previewId),
+    onDeleteManagedUser: (user) => void handleDeleteManagedUser(user),
+    onDevMailOutboxRefresh: () => void refreshDevMailOutboxSection(),
+    onEditManagedUser: openManagedEditor,
+    onManagedBanToggle: (user) => void handleManagedBanToggle(user),
+    onManagedResetPassword: (user) => void handleResetManagedUserPassword(user),
+    onManagedResendActivation: (user) => void handleResendManagedUserActivation(user),
+    onManagedUsersRefresh: () => void refreshManagedUsersSection(),
+    onPendingResetRequestsRefresh: () => void refreshPendingResetRequestsSection(),
+    pendingResetRequests,
+    pendingResetRequestsLoading,
+  };
+
+  const sidebarCategories: SettingCategory[] = canAccessAccountManagement
+    ? [
+        ...categories,
+        {
+          id: ACCOUNT_MANAGEMENT_CATEGORY_ID,
+          name: "Account Management",
+          description: "Manage user lifecycle, reset requests, and local mail outbox.",
+          settings: [],
+        },
+      ]
+    : categories;
+
+  const isAccountManagementCategory = selectedCategory === ACCOUNT_MANAGEMENT_CATEGORY_ID;
+  const currentCategoryForDisplay = isAccountManagementCategory
+    ? sidebarCategories.find((category) => category.id === ACCOUNT_MANAGEMENT_CATEGORY_ID) || null
+    : currentCategory;
+
   const managedDialog = buildManagedDialogViewModel({
     confirmCriticalOpen,
     managedDialogOpen,
@@ -236,12 +291,13 @@ export function useSettingsController() {
     canAccessAccountSecurity,
     isSuperuser,
     currentUserRole,
-    categories,
+    categories: sidebarCategories,
     selectedCategory,
     setSelectedCategory,
-    currentCategory,
+    currentCategory: currentCategoryForDisplay,
     isRolePermissionCategory,
     isSecurityCategory,
+    isAccountManagementCategory,
     roleSections,
     categoryDirtyMap,
     dirtyCount,
@@ -253,6 +309,7 @@ export function useSettingsController() {
       onSave: () => void handleSave(),
     },
     security,
+    accountManagement: accountManagementSection,
     managedDialog,
     managedSecretDialog,
     loadingState: {

@@ -47,6 +47,41 @@ export function registerCollectionReportRoutes(context: CollectionRouteContext) 
   );
 
   app.get(
+    "/api/collection/daily/users",
+    ...adminSummaryAccess,
+    jsonRoute("Failed to load collection daily users.", (req) =>
+      collectionService.listDailyUsers(req.user)),
+  );
+
+  app.put(
+    "/api/collection/daily/target",
+    ...adminSummaryAccess,
+    jsonRoute("Failed to save collection daily target.", (req) =>
+      collectionService.upsertDailyTarget(req.user, req.body)),
+  );
+
+  app.put(
+    "/api/collection/daily/calendar",
+    ...adminSummaryAccess,
+    jsonRoute("Failed to save collection daily calendar.", (req) =>
+      collectionService.upsertDailyCalendar(req.user, req.body)),
+  );
+
+  app.get(
+    "/api/collection/daily/overview",
+    ...reportAccess,
+    jsonRoute("Failed to load collection daily overview.", (req) =>
+      collectionService.getDailyOverview(req.user, req.query as Record<string, unknown>)),
+  );
+
+  app.get(
+    "/api/collection/daily/day-details",
+    ...reportAccess,
+    jsonRoute("Failed to load collection daily details.", (req) =>
+      collectionService.getDailyDayDetails(req.user, req.query as Record<string, unknown>)),
+  );
+
+  app.get(
     "/api/collection/:id/receipt/view",
     ...reportAccess,
     async (req: AuthenticatedRequest, res) => serveCollectionReceipt(storage, req, res, "view"),

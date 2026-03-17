@@ -78,6 +78,18 @@ export async function deleteActivityLog(activityId: string) {
   return response.json();
 }
 
+export async function deleteActivityLogsBulk(activityIds: string[]) {
+  const response = await apiRequest("DELETE", "/api/activity/logs/bulk-delete", {
+    activityIds,
+  });
+  return response.json() as Promise<{
+    success: boolean;
+    deletedCount: number;
+    requestedCount: number;
+    notFoundIds: string[];
+  }>;
+}
+
 export async function kickUser(activityId: string) {
   const response = await apiRequest("POST", "/api/activity/kick", { activityId });
   return response.json();

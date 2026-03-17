@@ -87,6 +87,12 @@ export type CollectionRecordAggregate = {
   totalAmount: number;
 };
 
+export type CollectionNicknameAggregate = {
+  nickname: string;
+  totalRecords: number;
+  totalAmount: number;
+};
+
 export type CollectionMonthlySummary = {
   month: number;
   monthName: string;
@@ -143,6 +149,46 @@ export type CollectionNicknameSession = {
   nickname: string;
   verifiedAt: Date;
   updatedAt: Date;
+};
+
+export type CollectionDailyUser = {
+  id: string;
+  username: string;
+  role: string;
+};
+
+export type CollectionDailyTarget = {
+  id: string;
+  username: string;
+  year: number;
+  month: number;
+  monthlyTarget: number;
+  createdBy: string | null;
+  updatedBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type CollectionDailyCalendarDay = {
+  id: string;
+  year: number;
+  month: number;
+  day: number;
+  isWorkingDay: boolean;
+  isHoliday: boolean;
+  holidayName: string | null;
+  createdBy: string | null;
+  updatedBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type CollectionDailyPaidCustomer = {
+  id: string;
+  customerName: string;
+  accountNumber: string;
+  amount: number;
+  collectionStaffNickname: string;
 };
 
 export type ManagedUserAccount = ManagedUserRecord;
@@ -322,6 +368,13 @@ type CategoryRule = {
     createdByLogin?: string;
     nicknames?: string[];
   }): Promise<CollectionRecordAggregate>;
+  summarizeCollectionRecordsByNickname(filters?: {
+    from?: string;
+    to?: string;
+    search?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+  }): Promise<CollectionNicknameAggregate[]>;
   summarizeCollectionRecordsOlderThan(beforeDate: string): Promise<CollectionRecordAggregate>;
   purgeCollectionRecordsOlderThan(beforeDate: string): Promise<{
     totalRecords: number;
@@ -372,6 +425,34 @@ type CategoryRule = {
   }): Promise<void>;
   getCollectionNicknameSessionByActivity(activityId: string): Promise<CollectionNicknameSession | undefined>;
   clearCollectionNicknameSessionByActivity(activityId: string): Promise<void>;
+  listCollectionDailyUsers(): Promise<CollectionDailyUser[]>;
+  getCollectionDailyTarget(params: { username: string; year: number; month: number }): Promise<CollectionDailyTarget | undefined>;
+  upsertCollectionDailyTarget(params: {
+    username: string;
+    year: number;
+    month: number;
+    monthlyTarget: number;
+    actor: string;
+  }): Promise<CollectionDailyTarget>;
+  listCollectionDailyCalendar(params: {
+    year: number;
+    month: number;
+  }): Promise<CollectionDailyCalendarDay[]>;
+  upsertCollectionDailyCalendarDays(params: {
+    year: number;
+    month: number;
+    actor: string;
+    days: Array<{
+      day: number;
+      isWorkingDay: boolean;
+      isHoliday: boolean;
+      holidayName?: string | null;
+    }>;
+  }): Promise<CollectionDailyCalendarDay[]>;
+  listCollectionDailyPaidCustomers(params: {
+    username: string;
+    date: string;
+  }): Promise<CollectionDailyPaidCustomer[]>;
   getCollectionStaffNicknameById(id: string): Promise<CollectionStaffNickname | undefined>;
   getCollectionStaffNicknameByName(nickname: string): Promise<CollectionStaffNickname | undefined>;
   getCollectionNicknameAuthProfileByName(nickname: string): Promise<CollectionNicknameAuthProfile | undefined>;
@@ -589,15 +670,80 @@ type CategoryRule = {
   getBackupDataForExport(): Promise<{
     imports: Import[];
     dataRows: DataRow[];
-    users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash: string }>;
+    users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash?: string }>;
     auditLogs: AuditLog[];
+    collectionRecords?: Array<{
+      id: string;
+      customerName: string;
+      icNumber: string;
+      customerPhone: string;
+      accountNumber: string;
+      batch: string;
+      paymentDate: string;
+      amount: string | number;
+      receiptFile: string | null;
+      createdByLogin: string;
+      collectionStaffNickname: string;
+      staffUsername?: string | null;
+      createdAt: string | Date;
+    }>;
+    collectionRecordReceipts?: Array<{
+      id: string;
+      collectionRecordId: string;
+      storagePath: string;
+      originalFileName: string;
+      originalMimeType: string;
+      originalExtension: string;
+      fileSize: number;
+      createdAt: string | Date;
+    }>;
   }>;
   restoreFromBackup(backupData: {
     imports: Import[];
     dataRows: DataRow[];
     users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash?: string }>;
     auditLogs: AuditLog[];
-  }): Promise<{ success: boolean; stats: { imports: number; dataRows: number; users: number; auditLogs: number } }>;
+    collectionRecords?: Array<{
+      id: string;
+      customerName: string;
+      icNumber: string;
+      customerPhone: string;
+      accountNumber: string;
+      batch: string;
+      paymentDate: string;
+      amount: string | number;
+      receiptFile: string | null;
+      createdByLogin: string;
+      collectionStaffNickname: string;
+      staffUsername?: string | null;
+      createdAt: string | Date;
+    }>;
+    collectionRecordReceipts?: Array<{
+      id: string;
+      collectionRecordId: string;
+      storagePath: string;
+      originalFileName: string;
+      originalMimeType: string;
+      originalExtension: string;
+      fileSize: number;
+      createdAt: string | Date;
+    }>;
+  }): Promise<{
+    success: boolean;
+    stats: {
+      imports: { processed: number; inserted: number; skipped: number; reactivated: number };
+      dataRows: { processed: number; inserted: number; skipped: number; reactivated: number };
+      users: { processed: number; inserted: number; skipped: number; reactivated: number };
+      auditLogs: { processed: number; inserted: number; skipped: number; reactivated: number };
+      collectionRecords: { processed: number; inserted: number; skipped: number; reactivated: number };
+      collectionRecordReceipts: { processed: number; inserted: number; skipped: number; reactivated: number };
+      warnings: string[];
+      totalProcessed: number;
+      totalInserted: number;
+      totalSkipped: number;
+      totalReactivated: number;
+    };
+  }>;
 }
 
 export class PostgresStorage implements IStorage {
@@ -640,6 +786,7 @@ export class PostgresStorage implements IStorage {
     await this.ensureCollectionAdminGroupsTables();
     await this.ensureCollectionNicknameSessionsTable();
     await this.ensureCollectionAdminVisibleNicknamesTable();
+    await this.ensureCollectionDailyTables();
     await this.seedDefaultUsers();
     await this.ensureBackupsTable();
     await this.ensurePerformanceIndexes();
@@ -689,6 +836,10 @@ export class PostgresStorage implements IStorage {
 
   private async ensureCollectionAdminVisibleNicknamesTable() {
     await this.collectionBootstrap.ensureAdminVisibleNicknamesTable();
+  }
+
+  private async ensureCollectionDailyTables() {
+    await this.collectionBootstrap.ensureDailyTables();
   }
 
   private async ensurePerformanceIndexes() {
@@ -1418,6 +1569,56 @@ export class PostgresStorage implements IStorage {
     return this.collectionRepository.clearCollectionNicknameSessionByActivity(activityId);
   }
 
+  async listCollectionDailyUsers(): Promise<CollectionDailyUser[]> {
+    return this.collectionRepository.listCollectionDailyUsers();
+  }
+
+  async getCollectionDailyTarget(params: {
+    username: string;
+    year: number;
+    month: number;
+  }): Promise<CollectionDailyTarget | undefined> {
+    return this.collectionRepository.getCollectionDailyTarget(params);
+  }
+
+  async upsertCollectionDailyTarget(params: {
+    username: string;
+    year: number;
+    month: number;
+    monthlyTarget: number;
+    actor: string;
+  }): Promise<CollectionDailyTarget> {
+    return this.collectionRepository.upsertCollectionDailyTarget(params);
+  }
+
+  async listCollectionDailyCalendar(params: {
+    year: number;
+    month: number;
+  }): Promise<CollectionDailyCalendarDay[]> {
+    return this.collectionRepository.listCollectionDailyCalendar(params);
+  }
+
+  async upsertCollectionDailyCalendarDays(params: {
+    year: number;
+    month: number;
+    actor: string;
+    days: Array<{
+      day: number;
+      isWorkingDay: boolean;
+      isHoliday: boolean;
+      holidayName?: string | null;
+    }>;
+  }): Promise<CollectionDailyCalendarDay[]> {
+    return this.collectionRepository.upsertCollectionDailyCalendarDays(params);
+  }
+
+  async listCollectionDailyPaidCustomers(params: {
+    username: string;
+    date: string;
+  }): Promise<CollectionDailyPaidCustomer[]> {
+    return this.collectionRepository.listCollectionDailyPaidCustomers(params);
+  }
+
   async getCollectionStaffNicknameById(id: string): Promise<CollectionStaffNickname | undefined> {
     return this.collectionRepository.getCollectionStaffNicknameById(id);
   }
@@ -1483,6 +1684,16 @@ export class PostgresStorage implements IStorage {
     nicknames?: string[];
   }): Promise<CollectionRecordAggregate> {
     return this.collectionRepository.summarizeCollectionRecords(filters);
+  }
+
+  async summarizeCollectionRecordsByNickname(filters?: {
+    from?: string;
+    to?: string;
+    search?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+  }): Promise<CollectionNicknameAggregate[]> {
+    return this.collectionRepository.summarizeCollectionRecordsByNickname(filters);
   }
 
   async summarizeCollectionRecordsOlderThan(beforeDate: string): Promise<CollectionRecordAggregate> {
@@ -1573,8 +1784,33 @@ export class PostgresStorage implements IStorage {
   async getBackupDataForExport(): Promise<{
     imports: Import[];
     dataRows: DataRow[];
-    users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash: string }>;
+    users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash?: string }>;
     auditLogs: AuditLog[];
+    collectionRecords?: Array<{
+      id: string;
+      customerName: string;
+      icNumber: string;
+      customerPhone: string;
+      accountNumber: string;
+      batch: string;
+      paymentDate: string;
+      amount: string | number;
+      receiptFile: string | null;
+      createdByLogin: string;
+      collectionStaffNickname: string;
+      staffUsername?: string | null;
+      createdAt: string | Date;
+    }>;
+    collectionRecordReceipts?: Array<{
+      id: string;
+      collectionRecordId: string;
+      storagePath: string;
+      originalFileName: string;
+      originalMimeType: string;
+      originalExtension: string;
+      fileSize: number;
+      createdAt: string | Date;
+    }>;
   }> {
     return this.backupsRepository.getBackupDataForExport();
   }
@@ -1584,7 +1820,47 @@ export class PostgresStorage implements IStorage {
     dataRows: DataRow[];
     users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash?: string }>;
     auditLogs: AuditLog[];
-  }): Promise<{ success: boolean; stats: { imports: number; dataRows: number; users: number; auditLogs: number } }> {
+    collectionRecords?: Array<{
+      id: string;
+      customerName: string;
+      icNumber: string;
+      customerPhone: string;
+      accountNumber: string;
+      batch: string;
+      paymentDate: string;
+      amount: string | number;
+      receiptFile: string | null;
+      createdByLogin: string;
+      collectionStaffNickname: string;
+      staffUsername?: string | null;
+      createdAt: string | Date;
+    }>;
+    collectionRecordReceipts?: Array<{
+      id: string;
+      collectionRecordId: string;
+      storagePath: string;
+      originalFileName: string;
+      originalMimeType: string;
+      originalExtension: string;
+      fileSize: number;
+      createdAt: string | Date;
+    }>;
+  }): Promise<{
+    success: boolean;
+    stats: {
+      imports: { processed: number; inserted: number; skipped: number; reactivated: number };
+      dataRows: { processed: number; inserted: number; skipped: number; reactivated: number };
+      users: { processed: number; inserted: number; skipped: number; reactivated: number };
+      auditLogs: { processed: number; inserted: number; skipped: number; reactivated: number };
+      collectionRecords: { processed: number; inserted: number; skipped: number; reactivated: number };
+      collectionRecordReceipts: { processed: number; inserted: number; skipped: number; reactivated: number };
+      warnings: string[];
+      totalProcessed: number;
+      totalInserted: number;
+      totalSkipped: number;
+      totalReactivated: number;
+    };
+  }> {
     return this.backupsRepository.restoreFromBackup(backupData);
   }
 

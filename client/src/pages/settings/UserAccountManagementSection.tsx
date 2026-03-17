@@ -13,7 +13,7 @@ import type {
   UserAccountManagementTabId,
 } from "@/pages/settings/types";
 
-interface UserAccountManagementSectionProps {
+export interface UserAccountManagementSectionProps {
   clearingDevMailOutbox: boolean;
   createEmailInput: string;
   createFullNameInput: string;

@@ -1,9 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Filter, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Filter, RefreshCw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ActivityFilters } from "@/lib/api";
-import { banUser, deleteActivityLog, getAllActivity, getBannedUsers, getFilteredActivity, kickUser, unbanUser } from "@/lib/api";
+import {
+  banUser,
+  deleteActivityLog,
+  deleteActivityLogsBulk,
+  getAllActivity,
+  getBannedUsers,
+  getFilteredActivity,
+  kickUser,
+  unbanUser,
+} from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { ActivityActionDialogs } from "@/pages/activity/ActivityActionDialogs";
 import { ActivityBannedUsersPanel } from "@/pages/activity/ActivityBannedUsersPanel";
@@ -32,8 +41,10 @@ export default function Activity() {
   const [banDialogOpen, setBanDialogOpen] = useState(false);
   const [unbanDialogOpen, setUnbanDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<ActivityRecord | null>(null);
   const [selectedBannedUser, setSelectedBannedUser] = useState<BannedUser | null>(null);
+  const [selectedActivityIds, setSelectedActivityIds] = useState<Set<string>>(new Set());
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<ActivityFilters>(DEFAULT_ACTIVITY_FILTERS);
   const [dateFromOpen, setDateFromOpen] = useState(false);
@@ -50,7 +61,22 @@ export default function Activity() {
         ? await getFilteredActivity(currentFilters)
         : await getAllActivity();
 
-      setActivities(activityResponse.activities || []);
+      const nextActivities = activityResponse.activities || [];
+      setActivities(nextActivities);
+      setSelectedActivityIds((previous) => {
+        if (previous.size === 0) return previous;
+        const validIds = new Set(nextActivities.map((activity: ActivityRecord) => activity.id));
+        let changed = false;
+        const next = new Set<string>();
+        for (const id of previous) {
+          if (validIds.has(id)) {
+            next.add(id);
+          } else {
+            changed = true;
+          }
+        }
+        return changed ? next : previous;
+      });
 
       if (canModerateActivity) {
         const bannedResponse = await getBannedUsers();
@@ -158,6 +184,12 @@ export default function Activity() {
         title: "Success",
         description: `Activity log for ${selectedActivity.username} has been deleted.`,
       });
+      setSelectedActivityIds((previous) => {
+        if (!previous.has(selectedActivity.id)) return previous;
+        const next = new Set(previous);
+        next.delete(selectedActivity.id);
+        return next;
+      });
       void fetchActivities(hasActiveActivityFilters(filtersRef.current));
     } catch (error) {
       toast({
@@ -169,6 +201,34 @@ export default function Activity() {
       setActionLoading(null);
       setDeleteDialogOpen(false);
       setSelectedActivity(null);
+    }
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    const ids = Array.from(selectedActivityIds);
+    if (ids.length === 0) return;
+
+    setActionLoading("bulk-delete");
+    try {
+      const response = await deleteActivityLogsBulk(ids);
+      setSelectedActivityIds(new Set());
+      toast({
+        title: response.deletedCount === response.requestedCount ? "Success" : "Partial Success",
+        description: response.deletedCount === response.requestedCount
+          ? `${response.deletedCount} activity log(s) deleted.`
+          : `${response.deletedCount} deleted, ${response.notFoundIds.length} missing.`,
+        variant: response.deletedCount === response.requestedCount ? "default" : "destructive",
+      });
+      void fetchActivities(hasActiveActivityFilters(filtersRef.current));
+    } catch (error) {
+      toast({
+        title: "Failed",
+        description: error instanceof Error ? error.message : "Failed to delete selected logs.",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+      setBulkDeleteDialogOpen(false);
     }
   };
 
@@ -199,6 +259,13 @@ export default function Activity() {
     }
   };
 
+  const selectedVisibleCount = useMemo(
+    () => activities.filter((activity) => selectedActivityIds.has(activity.id)).length,
+    [activities, selectedActivityIds],
+  );
+  const allVisibleSelected = activities.length > 0 && selectedVisibleCount === activities.length;
+  const partiallySelected = selectedVisibleCount > 0 && !allVisibleSelected;
+
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
       <div className="max-w-6xl mx-auto">
@@ -208,6 +275,16 @@ export default function Activity() {
             <p className="text-muted-foreground">Monitor user activity in real-time</p>
           </div>
           <div className="flex gap-2 flex-wrap">
+            {canModerateActivity && selectedActivityIds.size > 0 ? (
+              <Button
+                variant="destructive"
+                onClick={() => setBulkDeleteDialogOpen(true)}
+                data-testid="button-bulk-delete-activity"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Selected ({selectedActivityIds.size})
+              </Button>
+            ) : null}
             <Button
               variant={showFilters ? "default" : "outline"}
               onClick={() => setShowFilters((previous) => !previous)}
@@ -280,23 +357,54 @@ export default function Activity() {
             setKickDialogOpen(true);
           }}
           onLogsOpenChange={setLogsOpen}
+          onToggleSelected={(activityId, checked) => {
+            setSelectedActivityIds((previous) => {
+              const next = new Set(previous);
+              if (checked) {
+                next.add(activityId);
+              } else {
+                next.delete(activityId);
+              }
+              return next;
+            });
+          }}
+          onToggleSelectAllVisible={(checked) => {
+            setSelectedActivityIds((previous) => {
+              const next = new Set(previous);
+              for (const activity of activities) {
+                if (checked) {
+                  next.add(activity.id);
+                } else {
+                  next.delete(activity.id);
+                }
+              }
+              return next;
+            });
+          }}
+          selectedActivityIds={selectedActivityIds}
+          allVisibleSelected={allVisibleSelected}
+          partiallySelected={partiallySelected}
         />
       </div>
 
       <ActivityActionDialogs
         banDialogOpen={banDialogOpen}
+        bulkDeleteDialogOpen={bulkDeleteDialogOpen}
         deleteDialogOpen={deleteDialogOpen}
         kickDialogOpen={kickDialogOpen}
         onBanConfirm={() => void handleBanConfirm()}
         onBanDialogOpenChange={setBanDialogOpen}
         onDeleteConfirm={() => void handleDeleteConfirm()}
         onDeleteDialogOpenChange={setDeleteDialogOpen}
+        onBulkDeleteConfirm={() => void handleBulkDeleteConfirm()}
+        onBulkDeleteDialogOpenChange={setBulkDeleteDialogOpen}
         onKickConfirm={() => void handleKickConfirm()}
         onKickDialogOpenChange={setKickDialogOpen}
         onUnbanConfirm={() => void handleUnbanConfirm()}
         onUnbanDialogOpenChange={setUnbanDialogOpen}
         selectedActivity={selectedActivity}
         selectedBannedUser={selectedBannedUser}
+        selectedBulkCount={selectedActivityIds.size}
         unbanDialogOpen={unbanDialogOpen}
       />
     </div>

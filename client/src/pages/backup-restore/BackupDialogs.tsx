@@ -62,7 +62,7 @@ export function BackupDialogs({
           <DialogHeader>
             <DialogTitle>Create New Backup</DialogTitle>
             <DialogDescription>
-              The backup will save all import data, data rows, users, and audit logs.
+              The backup will save imports, data rows, users, audit logs, and collection records.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
