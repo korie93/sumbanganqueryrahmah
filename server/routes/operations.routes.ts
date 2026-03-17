@@ -253,6 +253,10 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
 
       return res.json({
         ...result.restored,
+        backupId: backup.id,
+        backupName: backup.name,
+        restoredAt: new Date().toISOString(),
+        durationMs: Date.now() - result.startTime,
         message: `Restore completed in ${Math.round((Date.now() - result.startTime) / 1000)}s`,
       });
     }),
