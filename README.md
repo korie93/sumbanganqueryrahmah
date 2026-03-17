@@ -1,65 +1,74 @@
-# Sumbangan Query Rahmah
+# Sumbangan Query Rahmah (SQR)
+
+Sumbangan Query Rahmah is a contribution management platform for tracking donations, processing queries, and managing community support initiatives.
 
 ## Client User Manual
+
 Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin`, `user`), rujuk:
 - [README_CLIENT_MANUAL.md](./README_CLIENT_MANUAL.md)
 
-## Description
-Sumbangan Query Rahmah is a project designed to streamline and manage contributions effectively. It aims to provide a comprehensive solution for tracking donations, processing queries, and managing community support initiatives. This platform enables users to easily contribute and allows administrators to efficiently oversee and analyze the contributions made by the community.
-
 ## Tech Stack
-- **Frontend:** React, Redux
-- **Backend:** Node.js, Express
-- **Database:** MongoDB
-- **Authentication:** JSON Web Tokens (JWT)
-- **Deployment:** Heroku, AWS
+
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS
+- **Backend:** Node.js, Express, TypeScript
+- **Database:** PostgreSQL (via Drizzle ORM)
+- **Authentication:** JSON Web Tokens (JWT, HS256) with bcrypt passwords
+- **AI Integration:** Ollama (llama3 / nomic-embed-text)
+- **Real-time:** WebSocket (ws)
 
 ## Setup Instructions
-1. **Clone the repository:**  
-   ```bash  
-   git clone https://github.com/korie93/sumbanganqueryrahmah.git  
-   ```  
 
-2. **Navigate into the directory:**  
-   ```bash  
-   cd sumbanganqueryrahmah  
-   ```  
+1. **Clone and install:**
+   ```bash
+   git clone https://github.com/korie93/sumbanganqueryrahmah.git
+   cd sumbanganqueryrahmah
+   npm install
+   ```
 
-3. **Install dependencies for the backend:**  
-   ```bash  
-   cd server  
-   npm install  
-   ```  
+2. **Set up environment variables:**
+   ```bash
+   cp .env.example .env
+   ```
+   Edit `.env` and fill in your PostgreSQL credentials and session secret.
+   See [.env.example](./.env.example) for all available options.
 
-4. **Install dependencies for the frontend:**  
-   ```bash  
-   cd ../client  
-   npm install  
-   ```  
+3. **Development mode:**
+   ```bash
+   npm run dev:server
+   ```
 
-5. **Set up environment variables:**  
-   Create a `.env` file in the root of the server directory and specify the following variables:  
-   - `MONGODB_URI` - Your MongoDB connection string  
-   - `JWT_SECRET` - Secret key for JWT signing
+4. **Production build and start:**
+   ```bash
+   npm run build
+   npm start
+   ```
 
-6. **Start the server:**  
-   ```bash  
-   cd server  
-   npm start  
-   ```  
+## Scripts
 
-7. **Start the client:**  
-   ```bash  
-   cd ../client  
-   npm start  
-   ```  
+| Command | Description |
+|---------|-------------|
+| `npm run dev:server` | Start development server with hot reload |
+| `npm run build` | Build client and server bundles |
+| `npm start` | Start the built production server |
+| `npm run typecheck` | Run TypeScript type checking |
+| `npm test` | Run all test suites |
 
 ## Features
-- User registration and authentication
-- Ability to make contributions
-- Real-time tracking of contributions
-- Admin dashboard for managing contributions
-- Comprehensive analytics of donation data
+
+- Role-based access control (superuser, admin, user)
+- Collection record management with receipt uploads
+- Staff nickname assignment and admin group management
+- AI-powered search with Ollama integration
+- Real-time WebSocket notifications
+- Comprehensive analytics and reporting
+- Account activation and password reset via email
+
+## Documentation
+
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — System architecture overview
+- [docs/](./docs/) — Additional documentation
+- [README_CLIENT_MANUAL.md](./README_CLIENT_MANUAL.md) — Client user manual
 
 ## License
+
 This project is licensed under the MIT License.

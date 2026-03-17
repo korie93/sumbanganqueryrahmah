@@ -5,7 +5,13 @@ import { runtimeConfig } from "./config/runtime";
 const { Pool } = pg;
 
 function validateSearchPath(searchPath: string): string {
-  if (!/^[a-zA-Z0-9_]+(,[a-zA-Z0-9_]+)*$/.test(searchPath)) {
+  // Each schema name is either:
+  //   - a bare identifier:   $user, public, pg_catalog
+  //   - a quoted identifier: "my schema"
+  // Names are separated by commas with optional whitespace.
+  const schemaName = String.raw`\$?[a-zA-Z_][a-zA-Z0-9_]*|"[^"]*"`;
+  const pattern = new RegExp(`^(${schemaName})(,\\s*(${schemaName}))*$`);
+  if (!pattern.test(searchPath)) {
     throw new Error(`Invalid PG search_path: "${searchPath}"`);
   }
   return searchPath;
