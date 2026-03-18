@@ -19,6 +19,44 @@ export type AiBranchSummarySource = {
   distanceKm?: unknown;
 };
 
+function normalizeAtmCdmAvailability(value: unknown): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) {
+    return null;
+  }
+
+  const normalized = raw.toLowerCase();
+  const indicatesNo =
+    normalized === "tidak"
+    || normalized === "tiada"
+    || normalized === "no"
+    || normalized.includes("tiada")
+    || normalized.includes("none")
+    || normalized === "n/a";
+
+  if (indicatesNo) {
+    return "Tiada ATM & CDM";
+  }
+
+  const indicatesYes =
+    normalized === "ya"
+    || normalized === "yes"
+    || normalized.includes("atm")
+    || normalized.includes("cdm")
+    || normalized.includes("available")
+    || normalized.includes("ada");
+
+  if (indicatesYes) {
+    return "Ada ATM & CDM";
+  }
+
+  return raw;
+}
+
 export function buildPersonSummary(person: AiSearchJsonRecord | null): AiSummaryItem[] {
   const summary: AiSummaryItem[] = [];
   if (person && typeof person === "object") {
@@ -84,7 +122,7 @@ export function buildBranchSummary(nearestBranch: AiBranchSummarySource | null):
   push("Fax", nearestBranch.fax);
   push("Business Hour", nearestBranch.businessHour);
   push("Day Open", nearestBranch.dayOpen);
-  push("ATM & CDM", nearestBranch.atmCdm);
+  push("ATM & CDM", normalizeAtmCdmAvailability(nearestBranch.atmCdm));
   push("Inquiry Availability", nearestBranch.inquiryAvailability);
   push("Application Availability", nearestBranch.applicationAvailability);
   push("AEON Lounge", nearestBranch.aeonLounge);
