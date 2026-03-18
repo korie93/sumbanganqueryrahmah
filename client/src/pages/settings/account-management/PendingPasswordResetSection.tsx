@@ -81,8 +81,11 @@ export function PendingPasswordResetSection({
             </div>
           </div>
           <div className="space-y-2">
-            <p className="text-sm font-medium">Status</p>
+            <label htmlFor="pending-reset-status-filter" className="text-sm font-medium">
+              Status
+            </label>
             <select
+              id="pending-reset-status-filter"
               value={statusFilter}
               onChange={(event) =>
                 setStatusFilter(

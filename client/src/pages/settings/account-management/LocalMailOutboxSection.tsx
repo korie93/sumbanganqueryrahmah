@@ -136,8 +136,19 @@ export function LocalMailOutboxSection({
               </div>
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-medium">Sort by date</p>
+              <label
+                id="local-mail-outbox-sort-direction-label"
+                htmlFor="local-mail-outbox-sort-direction"
+                className="text-sm font-medium"
+              >
+                Sort by date
+              </label>
               <select
+                id="local-mail-outbox-sort-direction"
+                name="localMailOutboxSortDirection"
+                aria-label="Sort by date"
+                aria-labelledby="local-mail-outbox-sort-direction-label"
+                title="Sort by date"
                 value={sortDirection}
                 onChange={(event) =>
                   setSortDirection(event.target.value === "asc" ? "asc" : "desc")

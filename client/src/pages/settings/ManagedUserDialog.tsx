@@ -108,8 +108,11 @@ export function ManagedUserDialog({
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-2">
-                <p className="text-sm font-medium">Role</p>
+                <label htmlFor="managed-user-role" className="text-sm font-medium">
+                  Role
+                </label>
                 <select
+                  id="managed-user-role"
                   value={managedRoleInput}
                   onChange={(event) =>
                     onManagedRoleInputChange(event.target.value === "admin" ? "admin" : "user")
@@ -122,8 +125,11 @@ export function ManagedUserDialog({
                 </select>
               </div>
               <div className="space-y-2">
-                <p className="text-sm font-medium">Status</p>
+                <label htmlFor="managed-user-status" className="text-sm font-medium">
+                  Status
+                </label>
                 <select
+                  id="managed-user-status"
                   value={managedStatusInput}
                   onChange={(event) =>
                     onManagedStatusInputChange(
@@ -144,8 +150,11 @@ export function ManagedUserDialog({
                 </select>
               </div>
               <div className="space-y-2">
-                <p className="text-sm font-medium">Banned</p>
+                <label htmlFor="managed-user-banned" className="text-sm font-medium">
+                  Banned
+                </label>
                 <select
+                  id="managed-user-banned"
                   value={managedIsBanned ? "true" : "false"}
                   onChange={(event) => onManagedIsBannedChange(event.target.value === "true")}
                   className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
