@@ -62,10 +62,10 @@ jobs:
       PG_PASSWORD: postgres
       PG_DATABASE: sqr_db
       SEED_DEFAULT_USERS: 1
-      SEED_SUPERUSER_USERNAME: superuser
+      SEED_SUPERUSER_USERNAME: superuser${{ github.run_id }}${{ github.run_attempt }}
       SEED_SUPERUSER_PASSWORD: Password123!
       SEED_SUPERUSER_FULL_NAME: CI Superuser
-      SMOKE_TEST_USERNAME: superuser
+      SMOKE_TEST_USERNAME: superuser${{ github.run_id }}${{ github.run_attempt }}
       SMOKE_TEST_PASSWORD: Password123!
       SMOKE_BASE_URL: http://127.0.0.1:5000
 
