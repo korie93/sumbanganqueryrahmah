@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Inbox, RefreshCw, Search, Trash2 } from "lucide-react";
 import {
   AlertDialog,
@@ -10,10 +10,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { AppPaginationBar } from "@/components/data/AppPaginationBar";
+import { UrlPreviewDialog } from "@/components/dialogs/UrlPreviewDialog";
+import { SideTabDataPanel } from "@/components/layout/SideTabDataPanel";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { usePaginatedItems } from "@/hooks/usePaginatedItems";
 import type { DevMailOutboxPreview } from "@/pages/settings/types";
 import { formatDateTime, normalizeSearchValue } from "@/pages/settings/account-management/utils";
 
@@ -43,6 +46,7 @@ export function LocalMailOutboxSection({
   const [sortDirection, setSortDirection] = useState<"desc" | "asc">("desc");
   const [previewToDelete, setPreviewToDelete] = useState<DevMailOutboxPreview | null>(null);
   const [clearAllOpen, setClearAllOpen] = useState(false);
+  const [previewEntry, setPreviewEntry] = useState<DevMailOutboxPreview | null>(null);
   const deferredEmailQuery = useDeferredValue(emailQuery);
   const deferredSubjectQuery = useDeferredValue(subjectQuery);
 
@@ -72,21 +76,24 @@ export function LocalMailOutboxSection({
     : entries.length === 0
       ? "No local email previews captured yet."
       : "No email previews match the current filters.";
+  const pagination = usePaginatedItems(filteredEntries, {
+    resetKey: `${deferredEmailQuery}::${deferredSubjectQuery}::${sortDirection}`,
+  });
+
+  useEffect(() => {
+    if (!previewEntry) return;
+    if (entries.some((entry) => entry.id === previewEntry.id)) return;
+    setPreviewEntry(null);
+  }, [entries, previewEntry]);
 
   return (
     <>
-      <Card className="border-border/60 bg-background/60">
-        <CardHeader className="gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Inbox className="h-5 w-5" />
-              Local Mail Outbox
-            </CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Search and manage development activation or reset emails captured locally.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
+      <SideTabDataPanel
+        title="Local Mail Outbox"
+        description="Search and manage development activation or reset emails captured locally."
+        icon={Inbox}
+        actions={
+          <>
             <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
               <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               Refresh
@@ -100,9 +107,9 @@ export function LocalMailOutboxSection({
               <Trash2 className="mr-2 h-4 w-4" />
               Delete All
             </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          </>
+        }
+        filters={
           <div className="grid gap-3 xl:grid-cols-[1fr_1fr_180px]">
             <div className="space-y-2">
               <p className="text-sm font-medium">Search by email</p>
@@ -142,72 +149,92 @@ export function LocalMailOutboxSection({
               </select>
             </div>
           </div>
-
-          {!enabled && entries.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border/60 bg-muted/20 p-6 text-sm text-muted-foreground">
-              Local development mail outbox is disabled.
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
+        }
+        summary={
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm">
+            <span className="font-medium">Total previews: {entries.length}</span>
+            <span className="text-muted-foreground">Filtered: {filteredEntries.length}</span>
+            <span className="text-muted-foreground">Dev outbox: {enabled ? "Enabled" : "Disabled"}</span>
+          </div>
+        }
+        pagination={
+          <AppPaginationBar
+            disabled={loading}
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            pageSize={pagination.pageSize}
+            totalItems={filteredEntries.length}
+            itemLabel="emails"
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
+        }
+      >
+        {!enabled && entries.length === 0 ? (
+          <div className="flex h-full min-h-[240px] items-center justify-center p-6 text-sm text-muted-foreground">
+            Local development mail outbox is disabled.
+          </div>
+        ) : (
+          <Table className="min-w-[920px] text-sm">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Recipient</TableHead>
+                <TableHead>Subject</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading || filteredEntries.length === 0 ? (
                 <TableRow>
-                  <TableHead>Recipient</TableHead>
-                  <TableHead>Subject</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                    {emptyMessage}
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading || filteredEntries.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground">
-                      {emptyMessage}
+              ) : (
+                pagination.paginatedItems.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell className="font-medium">{entry.to}</TableCell>
+                    <TableCell>{entry.subject}</TableCell>
+                    <TableCell>{formatDateTime(entry.createdAt)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPreviewEntry(entry)}
+                        >
+                          Open
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            if (!navigator.clipboard?.writeText) {
+                              return;
+                            }
+                            await navigator.clipboard.writeText(entry.previewUrl);
+                          }}
+                        >
+                          Copy Link
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPreviewToDelete(entry)}
+                          disabled={deletingDevMailOutboxId === entry.id || clearingDevMailOutbox}
+                        >
+                          {deletingDevMailOutboxId === entry.id ? "Deleting..." : "Delete"}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
-                ) : (
-                  filteredEntries.map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell className="font-medium">{entry.to}</TableCell>
-                      <TableCell>{entry.subject}</TableCell>
-                      <TableCell>{formatDateTime(entry.createdAt)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex flex-wrap justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              window.open(entry.previewUrl, "_blank", "noopener,noreferrer");
-                            }}
-                          >
-                            Open
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              await navigator.clipboard.writeText(entry.previewUrl);
-                            }}
-                          >
-                            Copy Link
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setPreviewToDelete(entry)}
-                            disabled={deletingDevMailOutboxId === entry.id || clearingDevMailOutbox}
-                          >
-                            {deletingDevMailOutboxId === entry.id ? "Deleting..." : "Delete"}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        )}
+      </SideTabDataPanel>
 
       <AlertDialog
         open={previewToDelete !== null}
@@ -262,6 +289,23 @@ export function LocalMailOutboxSection({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <UrlPreviewDialog
+        open={previewEntry !== null}
+        title="Local Email Preview"
+        description={
+          previewEntry
+            ? `${previewEntry.subject} for ${previewEntry.to}`
+            : "Preview the stored development email."
+        }
+        url={previewEntry?.previewUrl || ""}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPreviewEntry(null);
+          }
+        }}
+        onClose={() => setPreviewEntry(null)}
+      />
     </>
   );
 }

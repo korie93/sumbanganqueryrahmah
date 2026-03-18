@@ -1,61 +1,66 @@
-import { ChevronRight, Settings2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DatabaseBackup, KeyRound, ShieldCheck, SlidersHorizontal, UserCog } from "lucide-react";
+import { SideTabNavigation } from "@/components/navigation/SideTabNavigation";
 import type { SettingCategory } from "@/pages/settings/types";
 
 interface SettingsSidebarProps {
   categories: SettingCategory[];
   categoryDirtyMap: Map<string, number>;
+  mobileOpen: boolean;
+  onMobileOpenChange: (open: boolean) => void;
   onSelectCategory: (categoryId: string) => void;
+  onSidebarCollapsedChange: (value: boolean) => void;
   selectedCategory: string;
+  sidebarCollapsed: boolean;
+}
+
+function getSettingsCategoryIcon(category: SettingCategory) {
+  if (category.id === "backup-restore") {
+    return DatabaseBackup;
+  }
+  if (category.id === "account-management") {
+    return UserCog;
+  }
+  if (category.id.includes("security")) {
+    return ShieldCheck;
+  }
+  if (category.id.includes("role") || category.id.includes("permission")) {
+    return KeyRound;
+  }
+  return SlidersHorizontal;
 }
 
 export function SettingsSidebar({
   categories,
   categoryDirtyMap,
+  mobileOpen,
+  onMobileOpenChange,
   onSelectCategory,
+  onSidebarCollapsedChange,
   selectedCategory,
+  sidebarCollapsed,
 }: SettingsSidebarProps) {
+  const items = categories.map((category) => ({
+    key: category.id,
+    label: category.name,
+    icon: getSettingsCategoryIcon(category),
+    description: category.description,
+    badge: categoryDirtyMap.get(category.id) || null,
+  }));
+
   return (
-    <Card className="col-span-12 lg:col-span-3 border-border/60 bg-background/70">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Settings2 className="w-4 h-4" />
-          Settings Navigation
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {categories.map((category) => {
-          const categoryDirty = categoryDirtyMap.get(category.id) || 0;
-          const active = selectedCategory === category.id;
-          return (
-            <button
-              key={category.id}
-              type="button"
-              onClick={() => onSelectCategory(category.id)}
-              title={category.description || `Open ${category.name} settings`}
-              className={`w-full rounded-xl border px-3 py-3 text-left transition ${
-                active
-                  ? "border-primary/70 bg-primary/10 shadow-sm"
-                  : "border-border bg-background/40 hover:border-border/90 hover:bg-accent/40"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{category.name}</span>
-                    {active ? <ChevronRight className="h-3.5 w-3.5 text-primary" /> : null}
-                  </div>
-                  {category.description ? (
-                    <p className="text-xs text-muted-foreground">{category.description}</p>
-                  ) : null}
-                </div>
-                {categoryDirty > 0 ? <Badge variant="secondary">{categoryDirty}</Badge> : null}
-              </div>
-            </button>
-          );
-        })}
-      </CardContent>
-    </Card>
+    <SideTabNavigation
+      items={items}
+      selectedKey={selectedCategory}
+      onSelect={onSelectCategory}
+      mobileOpen={mobileOpen}
+      onMobileOpenChange={onMobileOpenChange}
+      collapsed={sidebarCollapsed}
+      onCollapsedChange={onSidebarCollapsedChange}
+      menuLabel="Settings Menu"
+      navigationLabel="Settings Navigation"
+      expandedWidth={296}
+      collapsedWidth={88}
+      className="border-border/60 bg-background/75"
+    />
   );
 }
