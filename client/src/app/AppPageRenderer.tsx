@@ -1,7 +1,6 @@
 import { memo } from "react";
 import {
   AIPage,
-  BackupRestorePage,
   CollectionReportPage,
   ForbiddenPage,
   GeneralSearchPage,
@@ -97,7 +96,7 @@ function AppPageRendererImpl({
         />
       );
     case "backup":
-      return <BackupRestorePage userRole={user.role} />;
+      return <SettingsRoutePage tabVisibility={tabVisibility} initialSectionId="backup-restore" />;
     case "collection-report":
       return <CollectionReportPage />;
     case "ai":
@@ -111,7 +110,7 @@ function AppPageRendererImpl({
       }
       return <AIPage timeoutMs={runtimeConfig.aiTimeoutMs} aiEnabled={runtimeConfig.aiEnabled} />;
     case "settings":
-      return <SettingsRoutePage />;
+      return <SettingsRoutePage tabVisibility={tabVisibility} />;
     case "maintenance":
       return <MaintenanceRoutePage />;
     case "analysis":

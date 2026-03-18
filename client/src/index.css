@@ -294,9 +294,10 @@
 .navbar-premium-glass {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem;
+  gap: 0.4rem;
+  padding: 0.35rem;
   max-width: 100%;
+  flex-wrap: nowrap;
   overflow-x: auto;
   border-radius: 9999px;
   background: hsl(var(--card) / 0.78);
@@ -318,12 +319,12 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  min-height: 2.25rem;
+  gap: 0.5rem;
+  min-height: 2.5rem;
   min-width: 2.25rem;
-  padding: 0.45rem 0.8rem;
+  padding: 0.55rem 0.95rem;
   border-radius: 9999px;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: hsl(var(--foreground));
   background: transparent;
@@ -378,44 +379,55 @@
   white-space: nowrap;
 }
 
-/* Collapsed navbar: show only icons, hide labels */
-.navbar-collapsed .nav-pill {
-  padding: 0.45rem;
+.nav-home-pill {
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
 }
 
-.navbar-collapsed .nav-pill-label {
-  display: none !important;
+.nav-mobile-trigger,
+.user-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.5rem;
+  padding: 0.55rem 0.95rem;
+  border-radius: 9999px;
+  border: 1px solid hsl(var(--border) / 0.75);
+  background: hsl(var(--card) / 0.75);
+  color: hsl(var(--foreground));
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
-.navbar-collapsed .navbar-premium-glass {
-  gap: 0.2rem;
-  padding: 0.25rem;
+.nav-mobile-trigger:hover,
+.user-menu-trigger:hover {
+  background: hsl(var(--accent) / 0.92);
+  border-color: hsl(var(--border) / 0.95);
+  box-shadow: 0 14px 24px rgba(15, 23, 42, 0.1);
 }
 
-.nav-collapse-btn {
-  display: none;
+.user-menu-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.user-menu-role {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 1.75rem;
-  width: 1.75rem;
-  flex-shrink: 0;
   border-radius: 9999px;
-  border: 1px solid hsl(var(--border) / 0.7);
-  background: hsl(var(--card) / 0.75);
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-  transition: color 0.2s ease, background 0.2s ease;
-}
-
-.nav-collapse-btn:hover {
-  color: hsl(var(--foreground));
-  background: hsl(var(--accent));
-}
-
-@media (min-width: 1024px) {
-  .nav-collapse-btn {
-    display: inline-flex;
-  }
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .app-nav-select {
@@ -822,6 +834,18 @@
 .dark .nav-pill-active .nav-pill-icon svg {
   color: currentColor;
   stroke: currentColor;
+}
+
+.dark .nav-mobile-trigger,
+.dark .user-menu-trigger {
+  background: hsl(var(--card) / 0.82);
+  border-color: hsl(var(--border) / 0.85);
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.22);
+}
+
+.dark .nav-mobile-trigger:hover,
+.dark .user-menu-trigger:hover {
+  background: hsl(var(--accent) / 0.9);
 }
 
 .dark .btn-premium {

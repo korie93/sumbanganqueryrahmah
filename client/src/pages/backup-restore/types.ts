@@ -60,6 +60,7 @@ export interface BackupFilters {
 
 export interface BackupRestoreProps {
   userRole?: string;
+  embedded?: boolean;
 }
 
 export interface BackupOption {

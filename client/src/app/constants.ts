@@ -11,6 +11,8 @@ export const DEFAULT_RUNTIME_CONFIG: AppRuntimeConfig = {
   viewerRowsPerPage: 100,
 };
 
+export const ACTIVE_SETTINGS_SECTION_KEY = "activeSettingsSection";
+
 export const LOCAL_STORAGE_KEYS_TO_CLEAR = [
   "token",
   "user",
@@ -20,6 +22,7 @@ export const LOCAL_STORAGE_KEYS_TO_CLEAR = [
   "activityId",
   "activeTab",
   "lastPage",
+  ACTIVE_SETTINGS_SECTION_KEY,
   "selectedImportId",
   "selectedImportName",
   "fingerprint",

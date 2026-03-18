@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
+import type { TabVisibility } from "@/app/types";
 import type { UserAccountManagementSectionProps } from "@/pages/settings/UserAccountManagementSection";
 import { useSettingsAccountManagement } from "@/pages/settings/useSettingsAccountManagement";
 import { useSettingsBootstrap } from "@/pages/settings/useSettingsBootstrap";
@@ -13,8 +14,24 @@ import { useSettingsSystemSettings } from "@/pages/settings/useSettingsSystemSet
 import type { ManagedUser, SettingCategory } from "@/pages/settings/types";
 
 const ACCOUNT_MANAGEMENT_CATEGORY_ID = "account-management";
+export const BACKUP_SETTINGS_CATEGORY_ID = "backup-restore";
 
-export function useSettingsController() {
+type UseSettingsControllerArgs = {
+  initialSectionId?: string;
+  tabVisibility?: TabVisibility;
+};
+
+function canAccessBackupCategory(role: string | undefined, tabVisibility: TabVisibility | undefined) {
+  if (!role) return false;
+  if (role === "superuser") return true;
+  if (!tabVisibility) return true;
+  return tabVisibility.backup !== false;
+}
+
+export function useSettingsController({
+  initialSectionId,
+  tabVisibility,
+}: UseSettingsControllerArgs = {}) {
   const { toast } = useToast();
   const isMountedRef = useRef(true);
 
@@ -50,6 +67,7 @@ export function useSettingsController() {
   const canAccessAccountSecurity = currentUser?.role === "superuser";
   const canAccessAccountManagement = currentUser?.role === "superuser";
   const currentUserRole = currentUser?.role ?? "";
+  const canAccessBackupSection = canAccessBackupCategory(currentUser?.role, tabVisibility);
 
   const systemSettings = useSettingsSystemSettings({
     isMountedRef,
@@ -232,22 +250,51 @@ export function useSettingsController() {
     pendingResetRequestsLoading,
   };
 
-  const sidebarCategories: SettingCategory[] = canAccessAccountManagement
-    ? [
-        ...categories,
-        {
+  const sidebarCategories: SettingCategory[] = [
+    ...categories,
+    ...(canAccessBackupSection
+      ? [{
+          id: BACKUP_SETTINGS_CATEGORY_ID,
+          name: "Backup & Restore",
+          description: "Create, export, delete, and restore backups from one settings area.",
+          settings: [],
+        }]
+      : []),
+    ...(canAccessAccountManagement
+      ? [{
           id: ACCOUNT_MANAGEMENT_CATEGORY_ID,
           name: "Account Management",
           description: "Manage user lifecycle, reset requests, and local mail outbox.",
           settings: [],
-        },
-      ]
-    : categories;
+        }]
+      : []),
+  ];
 
   const isAccountManagementCategory = selectedCategory === ACCOUNT_MANAGEMENT_CATEGORY_ID;
+  const isBackupCategory = selectedCategory === BACKUP_SETTINGS_CATEGORY_ID;
   const currentCategoryForDisplay = isAccountManagementCategory
     ? sidebarCategories.find((category) => category.id === ACCOUNT_MANAGEMENT_CATEGORY_ID) || null
-    : currentCategory;
+    : isBackupCategory
+      ? sidebarCategories.find((category) => category.id === BACKUP_SETTINGS_CATEGORY_ID) || null
+      : currentCategory;
+
+  useEffect(() => {
+    if (sidebarCategories.length === 0) return;
+
+    const requestedSection = initialSectionId && sidebarCategories.some((category) => category.id === initialSectionId)
+      ? initialSectionId
+      : null;
+    const selectedStillValid = sidebarCategories.some((category) => category.id === selectedCategory);
+
+    if (requestedSection && selectedCategory !== requestedSection) {
+      setSelectedCategory(requestedSection);
+      return;
+    }
+
+    if (!selectedStillValid) {
+      setSelectedCategory(sidebarCategories[0].id);
+    }
+  }, [initialSectionId, selectedCategory, setSelectedCategory, sidebarCategories]);
 
   const managedDialog = buildManagedDialogViewModel({
     confirmCriticalOpen,
@@ -298,6 +345,8 @@ export function useSettingsController() {
     isRolePermissionCategory,
     isSecurityCategory,
     isAccountManagementCategory,
+    isBackupCategory,
+    canAccessBackupSection,
     roleSections,
     categoryDirtyMap,
     dirtyCount,

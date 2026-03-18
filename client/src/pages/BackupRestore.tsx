@@ -24,7 +24,7 @@ import {
   normalizeBackup,
 } from "@/pages/backup-restore/utils";
 
-export default function BackupRestore({ userRole }: BackupRestoreProps) {
+export default function BackupRestore({ userRole, embedded = false }: BackupRestoreProps) {
   const canManageBackups = userRole === "admin" || userRole === "superuser";
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState<BackupRecord | null>(null);
@@ -238,21 +238,29 @@ export default function BackupRestore({ userRole }: BackupRestoreProps) {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className={embedded ? "space-y-6" : "space-y-6 p-6"}>
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <Database className="h-6 w-6 text-primary" />
-          </div>
+        {embedded ? (
           <div>
-            <h1 className="text-2xl font-bold" data-testid="text-backup-title">
-              Backup & Restore
-            </h1>
             <p className="text-sm text-muted-foreground">
-              Create data backups and restore from existing backups
+              Create data backups, restore previous snapshots, and export the current backup register.
             </p>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Database className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className={`${embedded ? "text-xl" : "text-2xl"} font-bold`} data-testid="text-backup-title">
+                Backup & Restore
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Create data backups and restore from existing backups
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center gap-2">
           <Popover>
