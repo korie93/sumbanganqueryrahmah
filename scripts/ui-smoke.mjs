@@ -278,6 +278,21 @@ const checkCollectionDailyPage = async (page, tracker) => {
 const readCookieNames = async (context) =>
   new Set((await context.cookies(baseUrl)).map((cookie) => cookie.name));
 
+const waitForAuthCookies = async (context, timeoutMs = 5_000) => {
+  const startedAt = Date.now();
+  let cookieNames = await readCookieNames(context);
+
+  while (
+    Date.now() - startedAt < timeoutMs
+    && (!cookieNames.has("sqr_auth") || !cookieNames.has("sqr_auth_hint"))
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    cookieNames = await readCookieNames(context);
+  }
+
+  return cookieNames;
+};
+
 const checkLogoutFlow = async (page, context, tracker) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.waitForLoadState("networkidle");
@@ -347,9 +362,15 @@ const run = async () => {
       await page.waitForLoadState("networkidle");
       await page.waitForTimeout(250);
 
-      const cookieNames = await readCookieNames(context);
-      assert(cookieNames.has("sqr_auth"), "auth session cookie should exist after login");
-      assert(cookieNames.has("sqr_auth_hint"), "auth session hint cookie should exist after login");
+      const cookieNames = await waitForAuthCookies(context);
+      assert(
+        cookieNames.has("sqr_auth"),
+        `auth session cookie should exist after login. Cookies seen: ${Array.from(cookieNames).join(", ") || "(none)"}`,
+      );
+      assert(
+        cookieNames.has("sqr_auth_hint"),
+        `auth session hint cookie should exist after login. Cookies seen: ${Array.from(cookieNames).join(", ") || "(none)"}`,
+      );
 
       const bodyText = (await page.locator("body").innerText()).toLowerCase();
       assert(!bodyText.includes("log in sqr system"), "login page should be replaced after successful login");
