@@ -107,8 +107,11 @@ export function ManagedAccountsSection({
               </div>
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-medium">Role</p>
+              <label htmlFor="managed-accounts-role-filter" className="text-sm font-medium">
+                Role
+              </label>
               <select
+                id="managed-accounts-role-filter"
                 value={roleFilter}
                 onChange={(event) =>
                   setRoleFilter(event.target.value === "admin" || event.target.value === "user"
@@ -123,8 +126,11 @@ export function ManagedAccountsSection({
               </select>
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-medium">Status</p>
+              <label htmlFor="managed-accounts-status-filter" className="text-sm font-medium">
+                Status
+              </label>
               <select
+                id="managed-accounts-status-filter"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(
