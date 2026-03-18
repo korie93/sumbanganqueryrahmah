@@ -464,6 +464,63 @@ test("POST /api/auth/login sets the auth cookie without exposing the JWT in JSON
   }
 });
 
+test("POST /api/auth/login scopes visitor-ban lookup to the target username", async () => {
+  const { storage, user } = await createLoginStorageDouble();
+  let banLookup: { fingerprint: string | null; ipAddress: string | null; username: string | null } | null = null;
+
+  const storageWithBanSpy = {
+    ...storage,
+    isVisitorBanned: async (
+      fingerprint?: string | null,
+      ipAddress?: string | null,
+      username?: string | null,
+    ) => {
+      banLookup = {
+        fingerprint: fingerprint ?? null,
+        ipAddress: ipAddress ?? null,
+        username: username ?? null,
+      };
+      return false;
+    },
+  } as unknown as PostgresStorage;
+
+  const app = createJsonTestApp();
+  registerAuthRoutes(app, {
+    storage: storageWithBanSpy,
+    authenticateToken: (_req, _res, next) => next(),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: user.username,
+        password: "StrongPass123!",
+        fingerprint: "fingerprint-login",
+        browser: "Mozilla/5.0",
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.ok(banLookup, "expected visitor-ban lookup to be called during login");
+    const lookup = banLookup as { fingerprint: string | null; ipAddress: string | null; username: string | null };
+    assert.equal(lookup.fingerprint, "fingerprint-login");
+    assert.equal(lookup.username, user.username);
+    assert.ok(
+      typeof lookup.ipAddress === "string" && lookup.ipAddress.includes("127.0.0.1"),
+      "expected login IP to be forwarded to visitor-ban lookup",
+    );
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /api/auth/request-password-reset creates a request and audit log for a known manageable account", async () => {
   const managedUser = {
     id: "user-1",

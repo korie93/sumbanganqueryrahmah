@@ -358,6 +358,7 @@ export class AuthAccountService {
     const visitorBanned = await this.storage.isVisitorBanned(
       input.fingerprint ?? null,
       input.ipAddress ?? null,
+      user.username,
     );
 
     if (visitorBanned || user.isBanned) {

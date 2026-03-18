@@ -514,7 +514,7 @@ type CategoryRule = {
   deactivateUserActivities(username: string, reason?: string): Promise<void>;
   deactivateUserSessionsByFingerprint(username: string, fingerprint: string): Promise<void>;
   getBannedUsers(): Promise<Array<User & { banInfo?: { ipAddress: string | null; browser: string | null; bannedAt: Date | null } }>>;
-  isVisitorBanned(fingerprint?: string | null, ipAddress?: string | null): Promise<boolean>;
+  isVisitorBanned(fingerprint?: string | null, ipAddress?: string | null, username?: string | null): Promise<boolean>;
   banVisitor(params: { username: string; role: string; activityId: string; fingerprint?: string | null; ipAddress?: string | null; browser?: string | null; pcName?: string | null }): Promise<void>;
   unbanVisitor(banId: string): Promise<void>;
   getBannedSessions(): Promise<Array<{
@@ -1199,8 +1199,12 @@ export class PostgresStorage implements IStorage {
     return this.activityRepository.getBannedUsers();
   }
 
-  async isVisitorBanned(fingerprint?: string | null, ipAddress?: string | null): Promise<boolean> {
-    return this.activityRepository.isVisitorBanned(fingerprint, ipAddress);
+  async isVisitorBanned(
+    fingerprint?: string | null,
+    ipAddress?: string | null,
+    username?: string | null,
+  ): Promise<boolean> {
+    return this.activityRepository.isVisitorBanned(fingerprint, ipAddress, username);
   }
 
   async banVisitor(params: {

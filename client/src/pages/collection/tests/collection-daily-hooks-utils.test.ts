@@ -19,6 +19,7 @@ import {
   shouldLoadCollectionDailyOverview,
   updateCollectionDailyEditableCalendarDay,
 } from "@/pages/collection/useCollectionDailyData";
+import { buildCollectionDailyReceiptKey } from "@/pages/collection/useCollectionDailyReceiptViewer";
 
 test("parseIntegerInput returns integer values and rejects blanks", () => {
   assert.equal(parseIntegerInput("12"), 12);
@@ -234,4 +235,10 @@ test("updateCollectionDailyEditableCalendarDay updates only the targeted day", (
 test("getCollectionDailyFirstWeekday matches JavaScript month indexing correctly", () => {
   assert.equal(getCollectionDailyFirstWeekday(2026, 3), 0);
   assert.equal(getCollectionDailyFirstWeekday(2026, 4), 3);
+});
+
+test("buildCollectionDailyReceiptKey normalizes primary and specific receipt keys", () => {
+  assert.equal(buildCollectionDailyReceiptKey("record-1"), "record-1:primary");
+  assert.equal(buildCollectionDailyReceiptKey("record-1", ""), "record-1:primary");
+  assert.equal(buildCollectionDailyReceiptKey("record-1", "receipt-2"), "record-1:receipt-2");
 });

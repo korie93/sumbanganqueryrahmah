@@ -180,6 +180,7 @@ export async function fetchCollectionReceiptBlob(
   recordId: string,
   mode: "view" | "download",
   receiptId?: string | null,
+  options?: { signal?: AbortSignal },
 ) {
   const receiptSegment = receiptId
     ? `/receipts/${encodeURIComponent(receiptId)}`
@@ -187,6 +188,8 @@ export async function fetchCollectionReceiptBlob(
   const response = await apiRequest(
     "GET",
     `/api/collection/${encodeURIComponent(recordId)}${receiptSegment}/${mode}`,
+    undefined,
+    { signal: options?.signal },
   );
   const blob = await response.blob();
   const mimeType = String(response.headers.get("Content-Type") || blob.type || "").toLowerCase();
