@@ -10,6 +10,7 @@ import {
 import type { CollectionDailyDayDetailsResponse, CollectionDailyOverviewDay } from "@/lib/api";
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import { statusLabel, statusTextClass } from "@/pages/collection/CollectionDailyShared";
+import { buildCollectionDailyReceiptKey } from "@/pages/collection/useCollectionDailyReceiptViewer";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 type CollectionDailyDayDetailsDialogProps = {
@@ -20,7 +21,7 @@ type CollectionDailyDayDetailsDialogProps = {
   selectedOverviewDay: CollectionDailyOverviewDay | null;
   loadingReceiptKey: string | null;
   onOpenChange: (open: boolean) => void;
-  onViewReceipt: (recordId: string, receiptId?: string) => void;
+  onViewReceipt: (record: CollectionDailyDayDetailsResponse["records"][number], receiptId?: string) => void;
   onChangePage: (page: number) => void;
 };
 
@@ -139,7 +140,7 @@ export function CollectionDailyDayDetailsDialog({
                       ) : (
                         <div className="flex flex-wrap gap-2">
                           {record.receipts.map((receipt) => {
-                            const key = `${record.id}:${receipt.id}`;
+                            const key = buildCollectionDailyReceiptKey(record.id, receipt.id);
                             return (
                               <Button
                                 key={receipt.id}
@@ -147,7 +148,7 @@ export function CollectionDailyDayDetailsDialog({
                                 size="sm"
                                 variant="outline"
                                 disabled={loadingReceiptKey === key}
-                                onClick={() => onViewReceipt(record.id, receipt.id)}
+                                onClick={() => onViewReceipt(record, receipt.id)}
                               >
                                 {loadingReceiptKey === key ? (
                                   <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
@@ -163,10 +164,10 @@ export function CollectionDailyDayDetailsDialog({
                               type="button"
                               size="sm"
                               variant="outline"
-                              disabled={loadingReceiptKey === `${record.id}:primary`}
-                              onClick={() => onViewReceipt(record.id)}
+                              disabled={loadingReceiptKey === buildCollectionDailyReceiptKey(record.id)}
+                              onClick={() => onViewReceipt(record)}
                             >
-                              {loadingReceiptKey === `${record.id}:primary` ? (
+                              {loadingReceiptKey === buildCollectionDailyReceiptKey(record.id) ? (
                                 <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
                               ) : (
                                 <Eye className="mr-2 h-3.5 w-3.5" />

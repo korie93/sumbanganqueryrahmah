@@ -267,6 +267,28 @@ const checkCollectionDailyPage = async (page, tracker) => {
   if (await firstDayCell.count()) {
     await firstDayCell.click();
     await page.getByTestId("collection-daily-day-dialog").waitFor();
+
+    const dayDialog = page.getByTestId("collection-daily-day-dialog");
+    const receiptButtons = dayDialog
+      .locator('button')
+      .filter({ hasText: /View Receipt|\.pdf|\.png|\.jpg|\.jpeg/i });
+    const receiptButtonCount = await receiptButtons.count();
+
+    if (receiptButtonCount > 0) {
+      const receiptTrigger = receiptButtons.first();
+      for (let cycle = 1; cycle <= 2; cycle += 1) {
+        await receiptTrigger.click();
+        await page.getByRole("heading", { name: "Receipt Preview" }).waitFor();
+        await page.getByRole("button", { name: "Close" }).waitFor();
+        await page.getByRole("button", { name: "Close" }).click();
+        await page.waitForTimeout(100);
+        assert(
+          await page.getByRole("heading", { name: "Receipt Preview" }).count() === 0,
+          `Receipt preview should fully close after cycle ${cycle}`,
+        );
+      }
+    }
+
     await page.keyboard.press("Escape");
     await page.waitForTimeout(100);
   }

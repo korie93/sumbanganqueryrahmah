@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from "react";
+import type { CollectionDailyDayDetailsResponse } from "@/lib/api";
 import { getCurrentUsername } from "@/pages/collection/utils";
 import {
   MAX_COLLECTION_DAILY_YEAR,
@@ -12,6 +13,8 @@ import { useCollectionDailyUsersData } from "@/pages/collection/useCollectionDai
 type UseCollectionDailyPageModelOptions = {
   role: string;
 };
+
+type CollectionDailyDayRecord = CollectionDailyDayDetailsResponse["records"][number];
 
 export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageModelOptions) {
   const now = useMemo(() => new Date(), []);
@@ -61,8 +64,8 @@ export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageMode
     if (!open) data.closeDayDetails();
   }, [data]);
 
-  const handleViewReceipt = useCallback((recordId: string, receiptId?: string) => {
-    void data.viewReceipt(recordId, receiptId);
+  const handleViewReceipt = useCallback((record: CollectionDailyDayRecord, receiptId?: string) => {
+    data.viewReceipt(record, receiptId);
   }, [data]);
 
   const handleDialogPageChange = useCallback((page: number) => {
@@ -139,5 +142,6 @@ export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageMode
       onViewReceipt: handleViewReceipt,
       onChangePage: handleDialogPageChange,
     },
+    receiptPreviewDialogProps: data.receiptPreviewDialogProps,
   };
 }

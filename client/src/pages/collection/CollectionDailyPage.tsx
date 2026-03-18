@@ -2,6 +2,7 @@ import { CollectionDailyCalendarCard } from "@/pages/collection/CollectionDailyC
 import { CollectionDailyDayDetailsDialog } from "@/pages/collection/CollectionDailyDayDetailsDialog";
 import { CollectionDailyFiltersCard } from "@/pages/collection/CollectionDailyFiltersCard";
 import { CollectionDailySummaryCard } from "@/pages/collection/CollectionDailySummaryCard";
+import { ReceiptPreviewDialog } from "@/pages/collection-records/ReceiptPreviewDialog";
 import { useCollectionDailyPageModel } from "@/pages/collection/useCollectionDailyPageModel";
 
 type CollectionDailyPageProps = {
@@ -20,6 +21,10 @@ export default function CollectionDailyPage({ role }: CollectionDailyPageProps) 
       <CollectionDailyCalendarCard {...model.calendarCardProps} />
 
       <CollectionDailyDayDetailsDialog {...model.dayDetailsDialogProps} />
+
+      {model.receiptPreviewDialogProps.open ? (
+        <ReceiptPreviewDialog {...model.receiptPreviewDialogProps} />
+      ) : null}
     </div>
   );
 }

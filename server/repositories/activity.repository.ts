@@ -288,15 +288,22 @@ export class ActivityRepository {
     }));
   }
 
-  async isVisitorBanned(fingerprint?: string | null, ipAddress?: string | null): Promise<boolean> {
+  async isVisitorBanned(
+    fingerprint?: string | null,
+    ipAddress?: string | null,
+    username?: string | null,
+  ): Promise<boolean> {
     await this.options.ensureBannedSessionsTable();
-    if (!fingerprint && !ipAddress) return false;
+    if (!username || (!fingerprint && !ipAddress)) return false;
 
     const result = await db.execute(sql`
       SELECT id
       FROM public.banned_sessions
-      WHERE (${fingerprint ?? null}::text IS NOT NULL AND fingerprint = ${fingerprint ?? null}::text)
-         OR (${ipAddress ?? null}::text IS NOT NULL AND ip_address = ${ipAddress ?? null}::text)
+      WHERE lower(username) = lower(${username})
+        AND (
+          (${fingerprint ?? null}::text IS NOT NULL AND fingerprint = ${fingerprint ?? null}::text)
+          OR (${ipAddress ?? null}::text IS NOT NULL AND ip_address = ${ipAddress ?? null}::text)
+        )
       LIMIT 1
     `);
 

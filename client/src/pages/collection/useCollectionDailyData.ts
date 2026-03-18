@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  fetchCollectionReceiptBlob,
   getCollectionDailyDayDetails,
   getCollectionDailyOverview,
   setCollectionDailyCalendar,
@@ -9,6 +8,7 @@ import {
   type CollectionDailyOverviewResponse,
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useCollectionDailyReceiptViewer } from "@/pages/collection/useCollectionDailyReceiptViewer";
 import { parseApiError } from "@/pages/collection/utils";
 import type { EditableCalendarDay } from "@/pages/collection/CollectionDailyShared";
 
@@ -104,7 +104,12 @@ export function useCollectionDailyData({
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [dayDetails, setDayDetails] = useState<CollectionDailyDayDetailsResponse | null>(null);
   const [loadingDayDetails, setLoadingDayDetails] = useState(false);
-  const [loadingReceiptKey, setLoadingReceiptKey] = useState<string | null>(null);
+  const {
+    loadingReceiptKey,
+    openReceiptViewer,
+    closeReceiptViewer,
+    receiptPreviewDialogProps,
+  } = useCollectionDailyReceiptViewer();
 
   const loadOverview = useCallback(async () => {
     if (
@@ -115,6 +120,7 @@ export function useCollectionDailyData({
       })
     ) {
       setOverview(null);
+      closeReceiptViewer();
       return;
     }
 
@@ -135,6 +141,7 @@ export function useCollectionDailyData({
       setCalendarDays(mapCollectionDailyEditableCalendarDays(response));
       setSelectedDate(null);
       setDayDetails(null);
+      closeReceiptViewer();
     } catch (error: unknown) {
       if (overviewRequestRef.current !== requestId) return;
       setOverview(null);
@@ -148,7 +155,17 @@ export function useCollectionDailyData({
         setLoadingOverview(false);
       }
     }
-  }, [canEditTarget, canManage, currentUsername, month, selectedQueryUsers, selectedUsernames.length, toast, year]);
+  }, [
+    canEditTarget,
+    canManage,
+    closeReceiptViewer,
+    currentUsername,
+    month,
+    selectedQueryUsers,
+    selectedUsernames.length,
+    toast,
+    year,
+  ]);
 
   useEffect(() => {
     if (
@@ -272,29 +289,15 @@ export function useCollectionDailyData({
   const closeDayDetails = useCallback(() => {
     setSelectedDate(null);
     setDayDetails(null);
-  }, []);
+    closeReceiptViewer();
+  }, [closeReceiptViewer]);
 
-  const viewReceipt = useCallback(async (recordId: string, receiptId?: string) => {
-    const key = `${recordId}:${receiptId || "primary"}`;
-    setLoadingReceiptKey(key);
-    try {
-      const { blob } = await fetchCollectionReceiptBlob(recordId, "view", receiptId);
-      const url = URL.createObjectURL(blob);
-      const opened = window.open(url, "_blank", "noopener,noreferrer");
-      if (!opened) {
-        window.location.href = url;
-      }
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (error: unknown) {
-      toast({
-        title: "Failed to View Receipt",
-        description: parseApiError(error),
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingReceiptKey(null);
-    }
-  }, [toast]);
+  const viewReceipt = useCallback(
+    (record: CollectionDailyDayDetailsResponse["records"][number], receiptId?: string) => {
+      openReceiptViewer(record, receiptId);
+    },
+    [openReceiptViewer],
+  );
 
   const editableCalendarByDay = useMemo(
     () => new Map(calendarDays.map((day) => [day.day, day])),
@@ -330,6 +333,7 @@ export function useCollectionDailyData({
     dayDetails,
     loadingDayDetails,
     loadingReceiptKey,
+    receiptPreviewDialogProps,
     editableCalendarByDay,
     selectedOverviewDay,
     emptyOverviewMessage,
