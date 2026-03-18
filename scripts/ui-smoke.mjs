@@ -198,7 +198,7 @@ const checkMobileNavbar = async (page, tracker) => {
 const checkHomeEntryPoint = async (page, tracker) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${baseUrl}/settings`, { waitUntil: "networkidle" });
-  await page.getByText("Settings Navigation").waitFor();
+  await page.getByRole("navigation", { name: "Settings Navigation" }).waitFor();
   await page.getByTestId("nav-home").click();
   await page.waitForLoadState("networkidle");
   await page.waitForURL(/\/$/);
