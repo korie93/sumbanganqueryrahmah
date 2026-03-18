@@ -214,8 +214,7 @@ export function GeneralSearchResults({
       >
         <style>{`
           .scrollbar-visible {
-            scrollbar-width: thin;
-            scrollbar-color: rgba(99, 102, 241, 0.5) rgba(31, 41, 55, 0.1);
+            -ms-overflow-style: auto;
           }
           .scrollbar-visible::-webkit-scrollbar {
             width: 8px;
