@@ -97,6 +97,8 @@ function NavbarImpl({
               onClick={() => navigateToItem(HOME_NAV_ITEM.id)}
               className={`nav-pill nav-home-pill hidden lg:inline-flex ${isNavigationItemActive(currentPage, HOME_NAV_ITEM.id) ? "nav-pill-active" : ""}`}
               data-testid="nav-home"
+              aria-label={HOME_NAV_ITEM.label}
+              aria-current={isNavigationItemActive(currentPage, HOME_NAV_ITEM.id) ? "page" : undefined}
             >
               <span className="nav-pill-icon">
                 <Home className="h-4 w-4" />
@@ -118,6 +120,7 @@ function NavbarImpl({
                   type="button"
                   title={item.label}
                   aria-label={item.label}
+                  aria-current={isActive ? "page" : undefined}
                   onClick={() => navigateToItem(item.id)}
                   data-testid={`nav-${item.id}`}
                   className={`nav-pill ${isActive ? "nav-pill-active" : ""}`}
@@ -146,6 +149,8 @@ function NavbarImpl({
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
+                      title={group.label}
+                      aria-label={`${group.label} menu`}
                       className={`nav-pill ${active ? "nav-pill-active" : ""}`}
                       data-testid={`nav-group-${group.id}`}
                     >
@@ -203,6 +208,7 @@ function NavbarImpl({
                   type="button"
                   className="nav-mobile-trigger"
                   aria-label="Open navigation menu"
+                  aria-haspopup="menu"
                   data-testid="button-open-mobile-nav"
                 >
                   <Menu className="h-4 w-4" />
@@ -249,6 +255,7 @@ function NavbarImpl({
                 className="user-menu-trigger"
                 data-testid="button-user-menu"
                 aria-label="Open user menu"
+                aria-haspopup="menu"
               >
                 <span className="user-menu-copy">
                   <span className="truncate font-medium text-foreground">{username}</span>

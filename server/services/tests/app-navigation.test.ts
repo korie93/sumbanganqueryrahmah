@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   getVisibleNavigationGroups,
   getVisiblePrimaryNavItems,
+  isNavigationGroupActive,
   isNavigationItemActive,
   resolveNavigationTarget,
 } from "../../../client/src/app/navigation";
@@ -38,6 +39,34 @@ test("settings navigation stays active for legacy backup page state", () => {
   assert.equal(isNavigationItemActive("backup", "settings"), true);
   assert.equal(isNavigationItemActive("settings", "backup"), true);
   assert.equal(isNavigationItemActive("dashboard", "monitor"), true);
+});
+
+test("group active-state stays aligned with grouped route mappings", () => {
+  const groups = getVisibleNavigationGroups("admin", {
+    backup: true,
+    settings: true,
+    dashboard: true,
+    activity: true,
+    monitor: true,
+    analysis: true,
+    "audit-logs": true,
+    import: true,
+    saved: true,
+    viewer: true,
+  }, false);
+
+  const workspaceGroup = groups.find((group) => group.id === "workspace");
+  const insightsGroup = groups.find((group) => group.id === "insights");
+  const settingsGroup = groups.find((group) => group.id === "settings-menu");
+
+  assert.ok(workspaceGroup);
+  assert.ok(insightsGroup);
+  assert.ok(settingsGroup);
+
+  assert.equal(isNavigationGroupActive("viewer", workspaceGroup), true);
+  assert.equal(isNavigationGroupActive("analysis", insightsGroup), true);
+  assert.equal(isNavigationGroupActive("backup", settingsGroup), true);
+  assert.equal(isNavigationGroupActive("general-search", settingsGroup), false);
 });
 
 test("monitor sub-pages resolve to monitor section routes", () => {
