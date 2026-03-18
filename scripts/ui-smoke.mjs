@@ -293,6 +293,23 @@ const waitForAuthCookies = async (context, timeoutMs = 5_000) => {
   return cookieNames;
 };
 
+const probeAuthSession = async (page) =>
+  page.evaluate(async () => {
+    const response = await fetch("/api/me", { credentials: "include" });
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+    return {
+      ok: response.ok,
+      status: response.status,
+      hasUser: Boolean(payload?.user),
+      message: payload?.message || null,
+    };
+  });
+
 const checkLogoutFlow = async (page, context, tracker) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.waitForLoadState("networkidle");
@@ -356,20 +373,37 @@ const run = async () => {
     tracker.clear();
 
     if (username && password) {
+      const loginResponsePromise = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST"
+          && response.url().includes("/api/login"),
+      );
+
       await page.getByPlaceholder("Username").fill(username);
       await page.getByPlaceholder("Password").fill(password);
       await page.getByRole("button", { name: "Log In" }).click();
       await page.waitForLoadState("networkidle");
       await page.waitForTimeout(250);
+      const loginResponse = await loginResponsePromise;
+      let loginPayload = null;
+      try {
+        loginPayload = await loginResponse.json();
+      } catch {
+        loginPayload = null;
+      }
 
       const cookieNames = await waitForAuthCookies(context);
+      const authProbe = await probeAuthSession(page);
       assert(
-        cookieNames.has("sqr_auth"),
-        `auth session cookie should exist after login. Cookies seen: ${Array.from(cookieNames).join(", ") || "(none)"}`,
-      );
-      assert(
-        cookieNames.has("sqr_auth_hint"),
-        `auth session hint cookie should exist after login. Cookies seen: ${Array.from(cookieNames).join(", ") || "(none)"}`,
+        authProbe.ok && authProbe.hasUser,
+        [
+          "Login should establish an authenticated session.",
+          `POST /api/login status: ${loginResponse.status()}`,
+          `POST /api/login message: ${String(loginPayload?.message || "(none)")}`,
+          `GET /api/me status: ${authProbe.status}`,
+          `GET /api/me message: ${String(authProbe.message || "(none)")}`,
+          `Cookies seen after login: ${Array.from(cookieNames).join(", ") || "(none)"}`,
+        ].join("\n"),
       );
 
       const bodyText = (await page.locator("body").innerText()).toLowerCase();
