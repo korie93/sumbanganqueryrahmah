@@ -106,7 +106,11 @@ jobs:
           exit 1
 
       - name: Run UI smoke
-        run: npm run smoke:ui
+        run: |
+          echo "Running smoke-ui on commit: $GITHUB_SHA"
+          git rev-parse HEAD
+          grep -n "Login should establish an authenticated session." scripts/ui-smoke.mjs
+          npm run smoke:ui
 
       - name: Print server log on failure
         if: failure()
