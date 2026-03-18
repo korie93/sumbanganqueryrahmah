@@ -1,3 +1,4 @@
+import { STANDARD_PAGE_SIZE_OPTIONS } from "@/components/data/AppPaginationBar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CollectionPaginationBar } from "@/pages/collection-report/CollectionPaginationBar";
@@ -21,7 +22,7 @@ export type CollectionMonthDetailsDialogProps = {
   toDisplayDate: (value: string) => string;
 };
 
-const MONTH_PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50, 100];
+const MONTH_PAGE_SIZE_OPTIONS = [...STANDARD_PAGE_SIZE_OPTIONS];
 
 export function CollectionMonthDetailsDialog({
   open,

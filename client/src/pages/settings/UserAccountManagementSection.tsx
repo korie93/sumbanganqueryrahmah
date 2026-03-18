@@ -1,4 +1,4 @@
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateClosedAccountSection } from "@/pages/settings/account-management/CreateClosedAccountSection";
@@ -81,7 +81,13 @@ export function UserAccountManagementSection({
   pendingResetRequestsLoading,
 }: UserAccountManagementSectionProps) {
   const [activeTab, setActiveTab] = useState<UserAccountManagementTabId>("create-closed-account");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [activeTab]);
 
   if (!isSuperuser) {
     return null;
@@ -100,11 +106,15 @@ export function UserAccountManagementSection({
         </p>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start">
           <UserAccountManagementNav
             activeTab={activeTab}
+            collapsed={navCollapsed}
             managedUserCount={managedUsers.length}
+            mobileOpen={mobileNavOpen}
             outboxCount={devMailOutboxEntries.length}
+            onCollapsedChange={setNavCollapsed}
+            onMobileOpenChange={setMobileNavOpen}
             pendingResetCount={pendingResetRequests.length}
             onSelect={(tab) => {
               startTransition(() => {
@@ -113,7 +123,7 @@ export function UserAccountManagementSection({
             }}
           />
 
-          <div className={isPending ? "opacity-90 transition-opacity" : ""}>
+          <div className={`min-w-0 flex-1 ${isPending ? "opacity-90 transition-opacity" : ""}`}>
             {activeTab === "create-closed-account" ? (
               <CreateClosedAccountSection
                 createEmailInput={createEmailInput}

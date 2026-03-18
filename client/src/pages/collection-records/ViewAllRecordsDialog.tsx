@@ -15,12 +15,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { STANDARD_PAGE_SIZE_OPTIONS } from "@/components/data/AppPaginationBar";
 import type { CollectionRecord } from "@/lib/api";
 import { CollectionPaginationBar } from "@/pages/collection-report/CollectionPaginationBar";
 import { formatAmountRM } from "@/pages/collection/utils";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 
-const VIEW_ALL_PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50];
+const VIEW_ALL_PAGE_SIZE_OPTIONS = [...STANDARD_PAGE_SIZE_OPTIONS];
 
 export interface ViewAllRecordsDialogProps {
   open: boolean;

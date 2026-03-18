@@ -1,8 +1,7 @@
 import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, ChevronLeft, ChevronRight, ClipboardList, FileText, Menu, Server } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { BarChart3, ClipboardList, FileText, Server } from "lucide-react";
+import { SideTabNavigation } from "@/components/navigation/SideTabNavigation";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const DashboardPage = lazy(() => import("@/pages/Dashboard"));
 const ActivityPage = lazy(() => import("@/pages/Activity"));
@@ -89,6 +88,7 @@ export default function SystemMonitorLayout({
   onNavigate,
 }: SystemMonitorLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const availableSections = useMemo(() => {
     const sections: MonitorSection[] = [];
@@ -166,64 +166,37 @@ export default function SystemMonitorLayout({
   );
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 md:p-6">
-      <div className="mx-auto max-w-[1440px]">
-        <div className="mb-3 md:hidden">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="inline-flex items-center gap-2"
-            onClick={() => setSidebarOpen((prev) => !prev)}
-          >
-            <Menu className="h-4 w-4" />
-            Sections
-            {sidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </Button>
-        </div>
+    <div className="min-h-[calc(100vh-3.5rem)] bg-background px-4 py-4 lg:px-6">
+      <div className="mx-auto max-w-[1680px] space-y-4">
+        <Card className="border-border/60 bg-background/75 shadow-sm">
+          <CardHeader className="py-4">
+            <CardTitle className="text-2xl">{sectionMeta[activeSection].label}</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {sectionMeta[activeSection].description}
+            </p>
+          </CardHeader>
+        </Card>
 
-        <div className="flex flex-col gap-4 md:flex-row">
-          <aside
-            className={cn(
-              "w-full rounded-2xl border border-border/60 bg-slate-200/50 p-3 backdrop-blur-sm dark:bg-slate-900/70 md:w-[240px] md:shrink-0",
-              sidebarOpen ? "block" : "hidden md:block",
-            )}
-          >
-            <div className="mb-2 px-2 py-1 text-xs uppercase tracking-wide text-muted-foreground">
-              System Monitor
-            </div>
-            <div className="space-y-2">
-              {availableSections.map((section) => {
-                const meta = sectionMeta[section];
-                const Icon = meta.icon;
-                const active = activeSection === section;
-                return (
-                  <button
-                    key={section}
-                    type="button"
-                    onClick={() => setActiveSection(section)}
-                    className={cn(
-                      "w-full rounded-xl border px-3 py-2 text-left transition-colors",
-                      active
-                        ? "border-primary/40 bg-primary/15 text-foreground"
-                        : "border-border/60 bg-background/50 text-muted-foreground hover:bg-background/75 hover:text-foreground",
-                    )}
-                  >
-                    <span className="flex items-center gap-2 text-sm font-medium">
-                      <Icon className="h-4 w-4" />
-                      {meta.label}
-                    </span>
-                    <p className="mt-1 text-xs">{meta.description}</p>
-                  </button>
-                );
-              })}
-            </div>
-          </aside>
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start">
+          <SideTabNavigation
+            items={availableSections.map((section) => ({
+              key: section,
+              label: sectionMeta[section].label,
+              icon: sectionMeta[section].icon,
+              description: sectionMeta[section].description,
+            }))}
+            selectedKey={activeSection}
+            onSelect={(key) => setActiveSection(key as MonitorSection)}
+            mobileOpen={sidebarOpen}
+            onMobileOpenChange={setSidebarOpen}
+            collapsed={sidebarCollapsed}
+            onCollapsedChange={setSidebarCollapsed}
+            menuLabel="Sections"
+            navigationLabel="System Monitor"
+          />
 
-          <section className="min-w-0 flex-1 rounded-2xl border border-border/60 bg-background/35 backdrop-blur-sm">
-            <Suspense fallback={sectionFallback}>
-              {renderActiveSection()}
-            </Suspense>
+          <section className="min-w-0 flex-1 overflow-hidden rounded-xl border border-border/60 bg-background/70 shadow-sm">
+            <Suspense fallback={sectionFallback}>{renderActiveSection()}</Suspense>
           </section>
         </div>
       </div>
