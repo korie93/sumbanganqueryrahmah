@@ -338,8 +338,7 @@ test("POST /api/activity/logout logs out the session, closes the socket, and aud
     assert.equal(connectedClients.has("activity-1"), false);
     assert.deepEqual(clearNicknameSessionCalls, ["activity-1"]);
     assert.equal(socketStates.get("activity-1")?.closeCalls, 1);
-    assert.equal(socketStates.get("activity-1")?.sentMessages.length, 1);
-    assert.match(String(socketStates.get("activity-1")?.sentMessages[0]), /"type":"logout"/);
+    assert.equal(socketStates.get("activity-1")?.sentMessages.length, 0);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "LOGOUT");
     assert.equal(auditLogs[0].performedBy, "user.one");

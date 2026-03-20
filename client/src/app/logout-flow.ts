@@ -27,9 +27,7 @@ export async function performAppLogout({
   warn,
 }: PerformAppLogoutParams) {
   try {
-    if (activityId) {
-      await activityLogout(activityId);
-    }
+    await activityLogout(activityId);
   } catch (error) {
     if (!(error instanceof Error) || !error.message.startsWith("401:")) {
       warn("Logout activity failed:", error);
