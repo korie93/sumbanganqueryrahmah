@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createSearchController } from "../../controllers/search.controller";
 import type { SearchRepository } from "../../repositories/search.repository";
+import { SearchService } from "../../services/search.service";
 import { registerSearchRoutes } from "../search.routes";
-import type { PostgresStorage } from "../../storage-postgres";
 import {
   createJsonTestApp,
   createTestAuthenticateToken,
@@ -88,8 +89,13 @@ function createSearchRouteHarness(options?: {
 
   const app = createJsonTestApp();
   registerSearchRoutes(app, {
-    storage: {} as PostgresStorage,
-    searchRepository,
+    searchController: createSearchController({
+      searchService: new SearchService(searchRepository),
+      getRuntimeSettingsCached: async () => ({
+        searchResultLimit: options?.searchResultLimit ?? 200,
+      }),
+      isDbProtected: () => options?.isDbProtected ?? false,
+    }),
     authenticateToken: createTestAuthenticateToken({
       userId: "user-1",
       username: "user.one",
@@ -97,13 +103,6 @@ function createSearchRouteHarness(options?: {
       activityId: "activity-1",
     }),
     searchRateLimiter: (_req, _res, next) => next(),
-    getRuntimeSettingsCached: async () => ({
-      searchResultLimit: options?.searchResultLimit ?? 200,
-      aiEnabled: true,
-      semanticSearchEnabled: true,
-      aiTimeoutMs: 6000,
-    }),
-    isDbProtected: () => options?.isDbProtected ?? false,
   });
 
   return {
