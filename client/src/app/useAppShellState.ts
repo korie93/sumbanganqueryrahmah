@@ -8,7 +8,7 @@ import type { MonitorSection } from "@/app/types";
 import { useAppShellRuntimeState } from "@/app/useAppShellRuntimeState";
 import { useAppShellSavedCount } from "@/app/useAppShellSavedCount";
 import { useAppShellTabVisibility } from "@/app/useAppShellTabVisibility";
-import { performAppLogout } from "@/app/logout-flow";
+import { performAppLogout, performClientLogout } from "@/app/logout-flow";
 import { activityLogout } from "@/lib/api";
 
 export function useAppShellState() {
@@ -92,9 +92,17 @@ export function useAppShellState() {
     });
   }, [applyLoggedOutClientState, broadcastLogoutToOtherTabs]);
 
+  const handleClientLogout = useCallback(() => {
+    performClientLogout({
+      applyLoggedOutClientState,
+      broadcastLogoutToOtherTabs,
+    });
+  }, [applyLoggedOutClientState, broadcastLogoutToOtherTabs]);
+
   return {
     currentPage,
     featureLockdown,
+    handleClientLogout,
     handleLoginSuccess,
     handleLogout,
     handleMonitorSectionChange,

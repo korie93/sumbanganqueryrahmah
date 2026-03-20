@@ -1,6 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { performAppLogout } from "@/app/logout-flow";
+import { performAppLogout, performClientLogout } from "@/app/logout-flow";
+
+test("performClientLogout broadcasts first and clears local state without same-tab force events", () => {
+  const events: string[] = [];
+
+  performClientLogout({
+    applyLoggedOutClientState: () => {
+      events.push("client:cleared");
+    },
+    broadcastLogoutToOtherTabs: () => {
+      events.push("broadcast:other-tabs");
+    },
+  });
+
+  assert.deepEqual(events, ["broadcast:other-tabs", "client:cleared"]);
+});
 
 test("performAppLogout waits for server logout before clearing client state", async () => {
   const events: string[] = [];
