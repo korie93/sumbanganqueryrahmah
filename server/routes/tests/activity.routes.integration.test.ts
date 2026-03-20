@@ -304,6 +304,7 @@ test("POST /api/activity/logout clears the auth cookie and returns 401 when the 
     });
     const setCookie = response.headers.get("set-cookie") || "";
     assert.match(setCookie, /sqr_auth=/);
+    assert.match(setCookie, /Max-Age=0/i);
   } finally {
     await stopTestServer(server);
   }
@@ -344,6 +345,7 @@ test("POST /api/activity/logout logs out the session, closes the socket, and aud
     assert.equal(auditLogs[0].performedBy, "user.one");
     const setCookie = response.headers.get("set-cookie") || "";
     assert.match(setCookie, /sqr_auth=/);
+    assert.match(setCookie, /Max-Age=0/i);
   } finally {
     await stopTestServer(server);
   }
