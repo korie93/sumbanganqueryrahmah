@@ -1,38 +1,20 @@
-import type { Express, RequestHandler, Response } from "express";
-import type { WebSocket } from "ws";
-import type { AuthenticatedRequest } from "../auth/guards";
+import type { Express, RequestHandler } from "express";
+import type { OperationsController } from "../controllers/operations.controller";
 import { asyncHandler } from "../http/async-handler";
-import { ensureObject, readInteger } from "../http/validation";
-import type { AnalyticsRepository } from "../repositories/analytics.repository";
-import type { AuditRepository } from "../repositories/audit.repository";
-import type { BackupsRepository } from "../repositories/backups.repository";
-import type { PostgresStorage } from "../storage-postgres";
 
 type OperationsRouteDeps = {
-  storage: PostgresStorage;
-  auditRepository: AuditRepository;
-  backupsRepository: BackupsRepository;
-  analyticsRepository: AnalyticsRepository;
+  operationsController: OperationsController;
   authenticateToken: RequestHandler;
   requireRole: (...roles: string[]) => RequestHandler;
   requireTabAccess: (tabId: string) => RequestHandler;
-  withExportCircuit: <T>(fn: () => Promise<T>) => Promise<T>;
-  isExportCircuitOpenError: (error: unknown) => boolean;
-  connectedClients: Map<string, WebSocket>;
 };
 
 export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps) {
   const {
-    storage,
-    auditRepository,
-    backupsRepository,
-    analyticsRepository,
+    operationsController,
     authenticateToken,
     requireRole,
     requireTabAccess,
-    withExportCircuit,
-    isExportCircuitOpenError,
-    connectedClients,
   } = deps;
 
   app.get(
@@ -40,9 +22,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("audit-logs"),
-    asyncHandler(async (_req, res) => {
-      return res.json({ logs: await auditRepository.getAuditLogs() });
-    }),
+    asyncHandler(operationsController.listAuditLogs),
   );
 
   app.get(
@@ -50,9 +30,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("audit-logs"),
-    asyncHandler(async (_req, res) => {
-      return res.json(await auditRepository.getAuditLogStats());
-    }),
+    asyncHandler(operationsController.getAuditLogStats),
   );
 
   app.delete(
@@ -60,26 +38,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("superuser"),
     requireTabAccess("audit-logs"),
-    asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-      const body = ensureObject(req.body) || {};
-      const olderThanDays = Math.max(1, readInteger(body.olderThanDays, 30));
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
-
-      const deletedCount = await auditRepository.cleanupAuditLogsOlderThan(cutoffDate);
-
-      await storage.createAuditLog({
-        action: "CLEANUP_AUDIT_LOGS",
-        performedBy: req.user?.username || "system",
-        details: `Cleanup requested for logs older than ${olderThanDays} days`,
-      });
-
-      return res.json({
-        success: true,
-        deletedCount,
-        message: "Cleanup completed",
-      });
-    }),
+    asyncHandler(operationsController.cleanupAuditLogs),
   );
 
   app.get(
@@ -87,9 +46,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("dashboard"),
-    asyncHandler(async (_req, res) => {
-      return res.json(await analyticsRepository.getDashboardSummary());
-    }),
+    asyncHandler(operationsController.getDashboardSummary),
   );
 
   app.get(
@@ -97,10 +54,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("dashboard"),
-    asyncHandler(async (req, res) => {
-      const days = Math.max(1, readInteger(req.query.days, 7));
-      return res.json(await analyticsRepository.getLoginTrends(days));
-    }),
+    asyncHandler(operationsController.getLoginTrends),
   );
 
   app.get(
@@ -108,10 +62,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("dashboard"),
-    asyncHandler(async (req, res) => {
-      const limit = Math.max(1, readInteger(req.query.limit, 10));
-      return res.json(await analyticsRepository.getTopActiveUsers(limit));
-    }),
+    asyncHandler(operationsController.getTopActiveUsers),
   );
 
   app.get(
@@ -119,9 +70,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("dashboard"),
-    asyncHandler(async (_req, res) => {
-      return res.json(await analyticsRepository.getPeakHours());
-    }),
+    asyncHandler(operationsController.getPeakHours),
   );
 
   app.get(
@@ -129,9 +78,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("dashboard"),
-    asyncHandler(async (_req, res) => {
-      return res.json(await analyticsRepository.getRoleDistribution());
-    }),
+    asyncHandler(operationsController.getRoleDistribution),
   );
 
   app.get(
@@ -139,9 +86,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("backup"),
-    asyncHandler(async (_req, res) => {
-      return res.json({ backups: await backupsRepository.getBackups() });
-    }),
+    asyncHandler(operationsController.listBackups),
   );
 
   app.post(
@@ -149,54 +94,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("admin", "superuser"),
     requireTabAccess("backup"),
-    asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-      const body = ensureObject(req.body) || {};
-      const name = String(body.name || "");
-
-      let backup;
-      try {
-        backup = await withExportCircuit(async () => {
-          const startTime = Date.now();
-          const backupData = await backupsRepository.getBackupDataForExport();
-          const metadata = {
-            timestamp: new Date().toISOString(),
-            importsCount: backupData.imports.length,
-            dataRowsCount: backupData.dataRows.length,
-            usersCount: backupData.users.length,
-            auditLogsCount: backupData.auditLogs.length,
-            collectionRecordsCount: Array.isArray(backupData.collectionRecords)
-              ? backupData.collectionRecords.length
-              : 0,
-            collectionRecordReceiptsCount: Array.isArray(backupData.collectionRecordReceipts)
-              ? backupData.collectionRecordReceipts.length
-              : 0,
-          };
-          const created = await backupsRepository.createBackup({
-            name,
-            createdBy: req.user!.username,
-            backupData: JSON.stringify(backupData),
-            metadata: JSON.stringify(metadata),
-          });
-          await storage.createAuditLog({
-            action: "CREATE_BACKUP",
-            performedBy: req.user!.username,
-            targetResource: name,
-            details: JSON.stringify({
-              ...metadata,
-              durationMs: Date.now() - startTime,
-            }),
-          });
-          return created;
-        });
-      } catch (error) {
-        if (isExportCircuitOpenError(error)) {
-          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
-        }
-        throw error;
-      }
-
-      return res.json(backup);
-    }),
+    asyncHandler(operationsController.createBackup),
   );
 
   app.get(
@@ -204,13 +102,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("backup"),
-    asyncHandler(async (req, res) => {
-      const backup = await backupsRepository.getBackupById(req.params.id);
-      if (!backup) {
-        return res.status(404).json({ message: "Backup not found" });
-      }
-      return res.json(backup);
-    }),
+    asyncHandler(operationsController.getBackup),
   );
 
   app.post(
@@ -218,58 +110,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("admin", "superuser"),
     requireTabAccess("backup"),
-    asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-      let backup;
-      try {
-        backup = await withExportCircuit(() => backupsRepository.getBackupById(req.params.id));
-      } catch (error) {
-        if (isExportCircuitOpenError(error)) {
-          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
-        }
-        throw error;
-      }
-
-      if (!backup) {
-        return res.status(404).json({ message: "Backup not found" });
-      }
-
-      let result;
-      try {
-        result = await withExportCircuit(async () => {
-          const startTime = Date.now();
-          const backupData = JSON.parse(backup.backupData);
-          const restored = await backupsRepository.restoreFromBackup(backupData);
-          await storage.createAuditLog({
-            action: "RESTORE_BACKUP",
-            performedBy: req.user!.username,
-            targetResource: backup.name,
-            details: JSON.stringify({
-              totalProcessed: restored.stats.totalProcessed,
-              totalInserted: restored.stats.totalInserted,
-              totalSkipped: restored.stats.totalSkipped,
-              totalReactivated: restored.stats.totalReactivated,
-              warningCount: restored.stats.warnings.length,
-              durationMs: Date.now() - startTime,
-            }),
-          });
-          return { restored, startTime };
-        });
-      } catch (error) {
-        if (isExportCircuitOpenError(error)) {
-          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
-        }
-        throw error;
-      }
-
-      return res.json({
-        ...result.restored,
-        backupId: backup.id,
-        backupName: backup.name,
-        restoredAt: new Date().toISOString(),
-        durationMs: Date.now() - result.startTime,
-        message: `Restore completed in ${Math.round((Date.now() - result.startTime) / 1000)}s.`,
-      });
-    }),
+    asyncHandler(operationsController.restoreBackup),
   );
 
   app.delete(
@@ -277,36 +118,8 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
     authenticateToken,
     requireRole("admin", "superuser"),
     requireTabAccess("backup"),
-    asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-      let backup;
-      let deleted;
-
-      try {
-        backup = await withExportCircuit(() => backupsRepository.getBackupById(req.params.id));
-        deleted = await withExportCircuit(() => backupsRepository.deleteBackup(req.params.id));
-      } catch (error) {
-        if (isExportCircuitOpenError(error)) {
-          return res.status(503).json({ message: "Export circuit is OPEN. Retry later." });
-        }
-        throw error;
-      }
-
-      if (!deleted) {
-        return res.status(404).json({ message: "Backup not found" });
-      }
-
-      await storage.createAuditLog({
-        action: "DELETE_BACKUP",
-        performedBy: req.user!.username,
-        targetResource: backup?.name || req.params.id,
-      });
-
-      return res.json({ success: true });
-    }),
+    asyncHandler(operationsController.deleteBackup),
   );
 
-  app.get("/api/debug/websocket-clients", authenticateToken, requireRole("superuser"), asyncHandler(async (_req, res) => {
-    const clients = Array.from(connectedClients.keys());
-    return res.json({ count: clients.length, clients });
-  }));
+  app.get("/api/debug/websocket-clients", authenticateToken, requireRole("superuser"), asyncHandler(operationsController.getWebsocketClients));
 }

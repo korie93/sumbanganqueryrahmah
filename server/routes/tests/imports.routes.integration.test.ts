@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { DataRow, Import } from "../../../shared/schema-postgres";
+import { createImportsController } from "../../controllers/imports.controller";
 import type { ImportWithRowCount, ImportsRepository } from "../../repositories/imports.repository";
 import type { ImportAnalysisService } from "../../services/import-analysis.service";
+import { ImportsService } from "../../services/imports.service";
 import { registerImportRoutes } from "../imports.routes";
 import type { PostgresStorage } from "../../storage-postgres";
 import {
@@ -207,9 +209,13 @@ function createImportsRouteHarness(options?: {
 
   const app = createJsonTestApp();
   registerImportRoutes(app, {
-    storage,
-    importsRepository,
-    importAnalysisService,
+    importsController: createImportsController({
+      importsService: new ImportsService(storage, importsRepository, importAnalysisService),
+      getRuntimeSettingsCached: async () => ({
+        viewerRowsPerPage: options?.viewerRowsPerPage ?? 100,
+      }),
+      isDbProtected: () => options?.isDbProtected ?? false,
+    }),
     authenticateToken: createTestAuthenticateToken({
       userId: "admin-1",
       username: "admin.user",
@@ -218,10 +224,6 @@ function createImportsRouteHarness(options?: {
     requireRole: createTestRequireRole(),
     requireTabAccess: () => allowAllTabs(),
     searchRateLimiter: (_req, _res, next) => next(),
-    getRuntimeSettingsCached: async () => ({
-      viewerRowsPerPage: options?.viewerRowsPerPage ?? 100,
-    }),
-    isDbProtected: () => options?.isDbProtected ?? false,
   });
 
   return {
