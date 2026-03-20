@@ -11,7 +11,7 @@
     "db:migrate:cli": "drizzle-kit migrate --config drizzle.config.ts",
     "db:studio": "drizzle-kit studio --config drizzle.config.ts",
     "db:introspect": "drizzle-kit introspect --config drizzle.config.ts",
-    "test:client": "tsx --test client/src/**/*.test.ts",
+    "test:client": "node scripts/run-client-tests.mjs",
     "test:http": "tsx --test server/http/tests/*.test.ts",
     "test:services": "tsx --test server/services/tests/*.test.ts",
     "test:repositories": "tsx --test server/repositories/tests/*.test.ts",
