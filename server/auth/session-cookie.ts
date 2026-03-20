@@ -99,6 +99,14 @@ export function setAuthSessionCookie(res: Response, token: string) {
 }
 
 export function clearAuthSessionCookie(res: Response) {
-  res.clearCookie(AUTH_SESSION_COOKIE_NAME, getAuthSessionCookieOptions());
-  res.clearCookie(AUTH_SESSION_HINT_COOKIE_NAME, getAuthSessionHintCookieOptions());
+  res.cookie(AUTH_SESSION_COOKIE_NAME, "", {
+    ...getAuthSessionCookieOptions(),
+    expires: new Date(0),
+    maxAge: 0,
+  });
+  res.cookie(AUTH_SESSION_HINT_COOKIE_NAME, "", {
+    ...getAuthSessionHintCookieOptions(),
+    expires: new Date(0),
+    maxAge: 0,
+  });
 }
