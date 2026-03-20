@@ -19,6 +19,7 @@ export function useAppShellState() {
 
   const {
     applyLoggedOutClientState,
+    broadcastLogoutToOtherTabs,
     handleLoginSuccess,
     isInitialized,
     user,
@@ -84,11 +85,12 @@ export function useAppShellState() {
       activityId: localStorage.getItem("activityId") || undefined,
       activityLogout,
       applyLoggedOutClientState,
+      broadcastLogoutToOtherTabs,
       warn: (message, error) => {
         console.warn(message, error);
       },
     });
-  }, [applyLoggedOutClientState]);
+  }, [applyLoggedOutClientState, broadcastLogoutToOtherTabs]);
 
   return {
     currentPage,

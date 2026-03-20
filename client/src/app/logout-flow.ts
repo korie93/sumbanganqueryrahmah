@@ -2,6 +2,7 @@ type PerformAppLogoutParams = {
   activityId?: string;
   activityLogout: (activityId?: string) => Promise<unknown>;
   applyLoggedOutClientState: (redirectToLogin?: boolean, broadcast?: boolean) => void;
+  broadcastLogoutToOtherTabs: () => void;
   warn: (message: string, error: unknown) => void;
 };
 
@@ -9,6 +10,7 @@ export async function performAppLogout({
   activityId,
   activityLogout,
   applyLoggedOutClientState,
+  broadcastLogoutToOtherTabs,
   warn,
 }: PerformAppLogoutParams) {
   try {
@@ -20,6 +22,7 @@ export async function performAppLogout({
       warn("Logout activity failed:", error);
     }
   } finally {
-    applyLoggedOutClientState(true, true);
+    broadcastLogoutToOtherTabs();
+    applyLoggedOutClientState(true, false);
   }
 }
