@@ -6,6 +6,19 @@ type PerformAppLogoutParams = {
   warn: (message: string, error: unknown) => void;
 };
 
+type PerformClientLogoutParams = {
+  applyLoggedOutClientState: (redirectToLogin?: boolean, broadcast?: boolean) => void;
+  broadcastLogoutToOtherTabs: () => void;
+};
+
+export function performClientLogout({
+  applyLoggedOutClientState,
+  broadcastLogoutToOtherTabs,
+}: PerformClientLogoutParams) {
+  broadcastLogoutToOtherTabs();
+  applyLoggedOutClientState(true, false);
+}
+
 export async function performAppLogout({
   activityId,
   activityLogout,
@@ -22,7 +35,9 @@ export async function performAppLogout({
       warn("Logout activity failed:", error);
     }
   } finally {
-    broadcastLogoutToOtherTabs();
-    applyLoggedOutClientState(true, false);
+    performClientLogout({
+      applyLoggedOutClientState,
+      broadcastLogoutToOtherTabs,
+    });
   }
 }
