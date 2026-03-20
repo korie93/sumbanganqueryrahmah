@@ -50,6 +50,10 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 | `npm run dev:server` | Start development server with hot reload |
 | `npm run build` | Build client and server bundles |
 | `npm start` | Start the built production server |
+| `npm run db:generate -- --name <migration_name>` | Generate a reviewed Drizzle SQL migration |
+| `npm run db:migrate` | Apply Drizzle migrations through the repo migration wrapper |
+| `npm run db:migrate:cli` | Run the raw Drizzle CLI migrate command for debugging |
+| `npm run db:studio` | Open Drizzle Studio |
 | `npm run typecheck` | Run TypeScript type checking |
 | `npm test` | Run all test suites |
 
@@ -64,6 +68,8 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 - Account activation and password reset via email
 
 ## Documentation
+
+- [docs/DATABASE_MIGRATIONS.md](./docs/DATABASE_MIGRATIONS.md) - Drizzle and legacy migration workflow
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — System architecture overview
 - [docs/](./docs/) — Additional documentation

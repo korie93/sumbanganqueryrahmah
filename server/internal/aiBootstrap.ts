@@ -76,6 +76,10 @@ export class AiBootstrap {
           )
         `);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation_id ON public.ai_messages(conversation_id)`);
+        await db.execute(sql`
+          CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation_created_at
+          ON public.ai_messages(conversation_id, created_at)
+        `);
 
         this.aiReady = true;
       } catch (err: any) {
