@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
+import { logger } from "../lib/logger";
 
 export class SpatialBootstrap {
   private ready = false;
@@ -57,7 +58,7 @@ export class SpatialBootstrap {
 
         this.ready = true;
       } catch (err: any) {
-        console.warn("⚠️ Failed to ensure PostGIS tables:", err?.message || err);
+        logger.warn("Failed to ensure PostGIS tables", { error: err });
       }
     })();
 

@@ -51,6 +51,7 @@ import { BackupsRepository } from "./repositories/backups.repository";
 import { AnalyticsRepository } from "./repositories/analytics.repository";
 import { CollectionRepository } from "./repositories/collection.repository";
 import { SettingsRepository } from "./repositories/settings.repository";
+import { logger } from "./lib/logger";
 const QUERY_PAGE_LIMIT = 1000;
 const STORAGE_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
 type CollectionBatch = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
@@ -1092,13 +1093,13 @@ export class PostgresStorage implements IStorage {
 
   async getDataRowsByImport(importId: string): Promise<DataRow[]> {
     if (STORAGE_DEBUG_LOGS) {
-      console.log("DEBUG VIEWER importId received:", importId);
+      logger.debug("Viewer import ID received", { importId });
     }
 
     const rows = await this.importsRepository.getDataRowsByImport(importId);
 
     if (STORAGE_DEBUG_LOGS) {
-      console.log("DEBUG ROW COUNT:", rows.length);
+      logger.debug("Viewer row count", { importId, rowCount: rows.length });
     }
 
     return rows;
@@ -1117,13 +1118,23 @@ export class PostgresStorage implements IStorage {
     const trimmedSearch = params.search && params.search.trim() ? params.search.trim() : null;
 
     if (STORAGE_DEBUG_LOGS) {
-      console.log(`DEBUG searchDataRows called: search="${params.search}" -> trimmed="${trimmedSearch}"`);
+      logger.debug("searchDataRows called", {
+        importId: params.importId,
+        search: params.search ?? null,
+        trimmedSearch,
+        limit: params.limit,
+        offset: params.offset,
+      });
     }
 
     const result = await this.searchRepository.searchDataRows(params);
 
     if (STORAGE_DEBUG_LOGS) {
-      console.log(`DEBUG searchDataRows results: ${result.rows.length} rows found (total: ${result.total})`);
+      logger.debug("searchDataRows results", {
+        importId: params.importId,
+        rowCount: result.rows.length,
+        total: result.total,
+      });
     }
 
     return result;

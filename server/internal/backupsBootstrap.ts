@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
+import { logger } from "../lib/logger";
 
 export class BackupsBootstrap {
   private ready = false;
@@ -79,11 +80,14 @@ export class BackupsBootstrap {
 
         const info = await db.execute(sql`SELECT current_database() AS db, current_schema() AS schema`);
         const row = info.rows?.[0] as { db?: string; schema?: string } | undefined;
-        console.log(`🧾 DB info: database=${row?.db ?? "unknown"}, schema=${row?.schema ?? "unknown"}`);
+        logger.info("Backups table ready", {
+          database: row?.db ?? "unknown",
+          schema: row?.schema ?? "unknown",
+        });
 
         this.ready = true;
       } catch (err: any) {
-        console.error("❌ Failed to ensure backups table:", err?.message || err);
+        logger.error("Failed to ensure backups table", { error: err });
       }
     })();
 

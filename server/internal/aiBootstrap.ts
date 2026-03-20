@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
+import { logger } from "../lib/logger";
 
 type AiRuleSeed = {
   key: string;
@@ -32,7 +33,7 @@ export class AiBootstrap {
           await db.execute(sql`CREATE EXTENSION IF NOT EXISTS vector`);
         } catch {
           vectorAvailable = false;
-          console.warn("WARN pgvector extension not available. Embeddings disabled until installed.");
+          logger.warn("pgvector extension is not available; embeddings are disabled until it is installed");
         }
 
         if (vectorAvailable) {
@@ -54,7 +55,7 @@ export class AiBootstrap {
               USING ivfflat (embedding vector_cosine_ops)
             `);
           } catch (err: any) {
-            console.warn("WARN Failed to create ivfflat index:", err?.message || err);
+            logger.warn("Failed to create ivfflat index", { error: err });
           }
         }
 
@@ -78,7 +79,7 @@ export class AiBootstrap {
 
         this.aiReady = true;
       } catch (err: any) {
-        console.error("ERROR Failed to ensure AI tables:", err?.message || err);
+        logger.error("Failed to ensure AI tables", { error: err });
       }
     })();
 
@@ -111,7 +112,7 @@ export class AiBootstrap {
 
         this.categoryStatsReady = true;
       } catch (err: any) {
-        console.error("ERROR Failed to ensure ai_category_stats table:", err?.message || err);
+        logger.error("Failed to ensure AI category stats table", { error: err });
       }
     })();
 
@@ -282,7 +283,7 @@ export class AiBootstrap {
 
         this.categoryRulesReady = true;
       } catch (err: any) {
-        console.error("ERROR Failed to ensure ai_category_rules table:", err?.message || err);
+        logger.error("Failed to ensure AI category rules table", { error: err });
       }
     })();
 
