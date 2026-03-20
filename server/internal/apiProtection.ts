@@ -17,6 +17,14 @@ function isHeavyRoute(pathname: string): boolean {
     || pathname.startsWith("/api/backups");
 }
 
+function isSessionControlRoute(req: Request): boolean {
+  const method = String(req.method || "GET").toUpperCase();
+  const path = req.path || "/";
+
+  return (method === "GET" && (path === "/api/me" || path === "/api/auth/me"))
+    || (method === "POST" && path === "/api/activity/logout");
+}
+
 export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
   adaptiveRateLimit: RequestHandler;
   systemProtectionMiddleware: RequestHandler;
@@ -66,6 +74,7 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
   const adaptiveRateLimit: RequestHandler = (req, res, next) => {
     const controlState = options.getControlState();
     if (!req.path.startsWith("/api/")) return next();
+    if (isSessionControlRoute(req)) return next();
 
     const windowMs = 10_000;
     const now = Date.now();
