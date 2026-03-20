@@ -15,6 +15,9 @@ test("performAppLogout waits for server logout before clearing client state", as
     applyLoggedOutClientState: () => {
       events.push("client:cleared");
     },
+    broadcastLogoutToOtherTabs: () => {
+      events.push("broadcast:other-tabs");
+    },
     warn: () => {
       throw new Error("warn should not run for successful logout");
     },
@@ -23,6 +26,7 @@ test("performAppLogout waits for server logout before clearing client state", as
   assert.deepEqual(events, [
     "server:activity-1:start",
     "server:activity-1:done",
+    "broadcast:other-tabs",
     "client:cleared",
   ]);
 });
@@ -38,12 +42,15 @@ test("performAppLogout clears client state even when the server logout returns 4
     applyLoggedOutClientState: () => {
       events.push("client:cleared");
     },
+    broadcastLogoutToOtherTabs: () => {
+      events.push("broadcast:other-tabs");
+    },
     warn: () => {
       throw new Error("warn should stay quiet for 401 logout cleanup");
     },
   });
 
-  assert.deepEqual(events, ["client:cleared"]);
+  assert.deepEqual(events, ["broadcast:other-tabs", "client:cleared"]);
 });
 
 test("performAppLogout warns on unexpected logout failures and still clears client state", async () => {
@@ -58,12 +65,15 @@ test("performAppLogout warns on unexpected logout failures and still clears clie
     applyLoggedOutClientState: () => {
       events.push("client:cleared");
     },
+    broadcastLogoutToOtherTabs: () => {
+      events.push("broadcast:other-tabs");
+    },
     warn: (message, error) => {
       warnings.push({ message, error });
     },
   });
 
-  assert.deepEqual(events, ["client:cleared"]);
+  assert.deepEqual(events, ["broadcast:other-tabs", "client:cleared"]);
   assert.equal(warnings.length, 1);
   assert.equal(warnings[0]?.message, "Logout activity failed:");
 });
@@ -79,11 +89,14 @@ test("performAppLogout skips the server call when there is no activity id", asyn
     applyLoggedOutClientState: () => {
       events.push("client:cleared");
     },
+    broadcastLogoutToOtherTabs: () => {
+      events.push("broadcast:other-tabs");
+    },
     warn: () => {
       throw new Error("warn should not run without a logout failure");
     },
   });
 
   assert.equal(serverCalled, false);
-  assert.deepEqual(events, ["client:cleared"]);
+  assert.deepEqual(events, ["broadcast:other-tabs", "client:cleared"]);
 });

@@ -31,6 +31,10 @@ export function useAppShellAuthActions({
   setSelectedImportId,
   setUser,
 }: UseAppShellAuthActionsArgs) {
+  const broadcastLogoutToOtherTabs = useCallback(() => {
+    localStorage.setItem("forceLogout", "true");
+  }, []);
+
   const clearClientSessionStorage = useCallback(() => {
     clearAuthenticatedUserStorage();
     for (const key of LOCAL_STORAGE_KEYS_TO_CLEAR) {
@@ -108,6 +112,7 @@ export function useAppShellAuthActions({
   return {
     applyLoggedOutClientState,
     applyResolvedRoute,
+    broadcastLogoutToOtherTabs,
     clearClientSessionStorage,
     handleLoginSuccess,
   };

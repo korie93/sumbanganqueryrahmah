@@ -26,6 +26,7 @@ export function useAppShellAuthState({
   const {
     applyLoggedOutClientState,
     applyResolvedRoute,
+    broadcastLogoutToOtherTabs,
     clearClientSessionStorage,
     handleLoginSuccess,
   } = useAppShellAuthActions({
@@ -56,6 +57,7 @@ export function useAppShellAuthState({
 
   return {
     applyLoggedOutClientState,
+    broadcastLogoutToOtherTabs,
     handleLoginSuccess,
     isInitialized,
     user,
