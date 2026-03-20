@@ -307,8 +307,26 @@ const checkCollectionDailyPage = async (page, tracker) => {
   tracker.clear();
 };
 
+const isLiveCookie = (cookie) => {
+  if (!cookie || typeof cookie.name !== "string") {
+    return false;
+  }
+
+  const value = String(cookie.value || "");
+  if (value.length === 0) {
+    return false;
+  }
+
+  const expires = Number(cookie.expires);
+  return expires === -1 || expires * 1000 > Date.now();
+};
+
 const readCookieNames = async (context) =>
-  new Set((await context.cookies(baseUrl)).map((cookie) => cookie.name));
+  new Set(
+    (await context.cookies(baseUrl))
+      .filter(isLiveCookie)
+      .map((cookie) => cookie.name),
+  );
 
 const waitForAuthCookies = async (context, timeoutMs = 5_000) => {
   const startedAt = Date.now();
