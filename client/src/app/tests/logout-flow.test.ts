@@ -93,13 +93,13 @@ test("performAppLogout warns on unexpected logout failures and still clears clie
   assert.equal(warnings[0]?.message, "Logout activity failed:");
 });
 
-test("performAppLogout skips the server call when there is no activity id", async () => {
-  let serverCalled = false;
+test("performAppLogout still calls the server when there is no activity id", async () => {
+  const serverCalls: Array<string | undefined> = [];
   const events: string[] = [];
 
   await performAppLogout({
-    activityLogout: async () => {
-      serverCalled = true;
+    activityLogout: async (activityId) => {
+      serverCalls.push(activityId);
     },
     applyLoggedOutClientState: () => {
       events.push("client:cleared");
@@ -112,6 +112,6 @@ test("performAppLogout skips the server call when there is no activity id", asyn
     },
   });
 
-  assert.equal(serverCalled, false);
+  assert.deepEqual(serverCalls, [undefined]);
   assert.deepEqual(events, ["broadcast:other-tabs", "client:cleared"]);
 });

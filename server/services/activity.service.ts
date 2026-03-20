@@ -71,10 +71,10 @@ export class ActivityService {
       logoutReason: "USER_LOGOUT",
     });
 
-    await this.closeSocket(activityId, {
-      type: "logout",
-      reason: "User logged out",
-    });
+    // A manual logout already has an in-flight HTTP response that will
+    // transition the current tab; closing the socket is enough here and avoids
+    // racing a same-tab websocket logout event against cookie clearing.
+    await this.closeSocket(activityId);
 
     await this.storage.createAuditLog({
       action: "LOGOUT",

@@ -328,6 +328,9 @@ const readCookieNames = async (context) =>
       .map((cookie) => cookie.name),
   );
 
+const readLiveCookies = async (context) =>
+  (await context.cookies(baseUrl)).filter(isLiveCookie);
+
 const waitForAuthCookies = async (context, timeoutMs = 5_000) => {
   const startedAt = Date.now();
   let cookieNames = await readCookieNames(context);
@@ -386,8 +389,16 @@ const checkLogoutFlow = async (page, context, tracker) => {
   await page.waitForSelector('text="Log In SQR System"');
 
   const cookieNames = await waitForClearedAuthCookies(context);
-  assert(!cookieNames.has("sqr_auth"), "auth session cookie should be cleared after logout");
-  assert(!cookieNames.has("sqr_auth_hint"), "auth session hint cookie should be cleared after logout");
+  if (cookieNames.has("sqr_auth") || cookieNames.has("sqr_auth_hint")) {
+    const liveCookies = await readLiveCookies(context);
+    const authProbe = await probeAuthSession(page);
+    throw new Error([
+      "auth session cookie should be cleared after logout",
+      `Live cookies after logout: ${JSON.stringify(liveCookies)}`,
+      `GET /api/me after logout: ${JSON.stringify(authProbe)}`,
+      `localStorage.activityId after logout: ${JSON.stringify(await page.evaluate(() => localStorage.getItem("activityId")))}`,
+    ].join("\n"));
+  }
 
   const loggedOutState = await page.evaluate(() => ({
     storedUser: localStorage.getItem("user"),
