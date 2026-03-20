@@ -8,6 +8,7 @@ import type { MonitorSection } from "@/app/types";
 import { useAppShellRuntimeState } from "@/app/useAppShellRuntimeState";
 import { useAppShellSavedCount } from "@/app/useAppShellSavedCount";
 import { useAppShellTabVisibility } from "@/app/useAppShellTabVisibility";
+import { performAppLogout } from "@/app/logout-flow";
 import { activityLogout } from "@/lib/api";
 
 export function useAppShellState() {
@@ -79,20 +80,14 @@ export function useAppShellState() {
   });
 
   const handleLogout = useCallback(async () => {
-    const activityId = localStorage.getItem("activityId") || undefined;
-    applyLoggedOutClientState(true, true);
-
-    if (!activityId) {
-      return;
-    }
-
-    try {
-      await activityLogout(activityId);
-    } catch (error) {
-      if (!(error instanceof Error) || !error.message.startsWith("401:")) {
-        console.warn("Logout activity failed:", error);
-      }
-    }
+    await performAppLogout({
+      activityId: localStorage.getItem("activityId") || undefined,
+      activityLogout,
+      applyLoggedOutClientState,
+      warn: (message, error) => {
+        console.warn(message, error);
+      },
+    });
   }, [applyLoggedOutClientState]);
 
   return {

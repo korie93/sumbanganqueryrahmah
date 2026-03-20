@@ -315,6 +315,21 @@ const waitForAuthCookies = async (context, timeoutMs = 5_000) => {
   return cookieNames;
 };
 
+const waitForClearedAuthCookies = async (context, timeoutMs = 5_000) => {
+  const startedAt = Date.now();
+  let cookieNames = await readCookieNames(context);
+
+  while (
+    Date.now() - startedAt < timeoutMs
+    && (cookieNames.has("sqr_auth") || cookieNames.has("sqr_auth_hint"))
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    cookieNames = await readCookieNames(context);
+  }
+
+  return cookieNames;
+};
+
 const probeAuthSession = async (page) =>
   page.evaluate(async () => {
     const response = await fetch("/api/me", { credentials: "include" });
@@ -340,7 +355,7 @@ const checkLogoutFlow = async (page, context, tracker) => {
   await page.waitForLoadState("networkidle");
   await page.waitForSelector('text="Log In SQR System"');
 
-  const cookieNames = await readCookieNames(context);
+  const cookieNames = await waitForClearedAuthCookies(context);
   assert(!cookieNames.has("sqr_auth"), "auth session cookie should be cleared after logout");
   assert(!cookieNames.has("sqr_auth_hint"), "auth session hint cookie should be cleared after logout");
 
