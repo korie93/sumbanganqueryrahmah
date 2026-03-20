@@ -1,9 +1,10 @@
 import type { Express, RequestHandler, Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { asyncHandler } from "../http/async-handler";
-import { ensureObject, readInteger, readNonEmptyString } from "../http/validation";
+import { readInteger, readNonEmptyString } from "../http/validation";
 import type { ImportsRepository } from "../repositories/imports.repository";
 import type { ImportAnalysisService } from "../services/import-analysis.service";
+import { ImportsService } from "../services/imports.service";
 import type { PostgresStorage } from "../storage-postgres";
 
 type RuntimeSettings = {
@@ -34,6 +35,7 @@ export function registerImportRoutes(app: Express, deps: ImportsRouteDeps) {
     getRuntimeSettingsCached,
     isDbProtected,
   } = deps;
+  const importsService = new ImportsService(storage, importsRepository, importAnalysisService);
 
   app.get("/api/data-rows", authenticateToken, asyncHandler(async (req, res) => {
     const importId = readNonEmptyString(req.query.importId);
@@ -45,9 +47,9 @@ export function registerImportRoutes(app: Express, deps: ImportsRouteDeps) {
       return res.status(400).json({ error: "importId is required" });
     }
 
-    const result = await storage.searchDataRows({
+    const result = await importsService.searchImportRows({
       importId,
-      search,
+      search: search || null,
       limit,
       offset,
     });
@@ -56,47 +58,23 @@ export function registerImportRoutes(app: Express, deps: ImportsRouteDeps) {
   }));
 
   app.get("/api/imports", authenticateToken, asyncHandler(async (_req, res) => {
-    const imports = await importsRepository.getImportsWithRowCounts();
+    const imports = await importsService.listImports();
     return res.json({ imports });
   }));
 
   app.post("/api/imports", authenticateToken, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const body = ensureObject(req.body) || {};
-    const name = String(body.name ?? "");
-    const filename = String(body.filename ?? "");
-    const dataRows = Array.isArray(body.rows) ? body.rows : (Array.isArray(body.data) ? body.data : []);
+    const { name, filename, dataRows } = importsService.parseCreateImportBody(req.body);
 
     if (!Array.isArray(dataRows) || dataRows.length === 0) {
       return res.status(400).json({ message: "No data rows provided" });
     }
 
-    const importRecord = await storage.createImport({
+    const importRecord = await importsService.createImport({
       name,
       filename,
+      dataRows,
       createdBy: req.user?.username,
     });
-
-    const insertChunkSize = 20;
-    for (let index = 0; index < dataRows.length; index += insertChunkSize) {
-      const chunk = dataRows.slice(index, index + insertChunkSize);
-      await Promise.all(
-        chunk.map((row) =>
-          storage.createDataRow({
-            importId: importRecord.id,
-            jsonDataJsonb: row,
-          }),
-        ),
-      );
-    }
-
-    if (req.user?.username) {
-      await storage.createAuditLog({
-        action: "IMPORT_DATA",
-        performedBy: req.user.username,
-        targetResource: name,
-        details: `Imported ${dataRows.length} rows from ${filename}`,
-      });
-    }
 
     return res.json(importRecord);
   }));
@@ -107,13 +85,12 @@ export function registerImportRoutes(app: Express, deps: ImportsRouteDeps) {
       return res.status(400).json({ message: "Import not found" });
     }
 
-    const importRecord = await storage.getImportById(importId);
-    if (!importRecord) {
+    const details = await importsService.getImportDetails(importId);
+    if (!details) {
       return res.status(404).json({ message: "Import not found" });
     }
 
-    const rows = await storage.getDataRowsByImport(importId);
-    return res.json({ import: importRecord, rows });
+    return res.json(details);
   }));
 
   app.get("/api/imports/:id/data", authenticateToken, searchRateLimiter, asyncHandler(async (req, res) => {
@@ -121,34 +98,21 @@ export function registerImportRoutes(app: Express, deps: ImportsRouteDeps) {
     const importId = readNonEmptyString(req.params.id);
     const page = Math.max(1, readInteger(req.query.page, 1));
     const requestedLimit = readInteger(req.query.limit, runtimeSettings.viewerRowsPerPage);
-    const maxLimit = Math.min(isDbProtected() ? 120 : 500, runtimeSettings.viewerRowsPerPage);
-    const limit = Math.max(10, Math.min(requestedLimit, maxLimit));
-    const offset = (page - 1) * limit;
     const search = String(req.query.search || "").trim();
 
     if (!importId) {
       return res.status(400).json({ message: "importId is required" });
     }
 
-    const result = await storage.searchDataRows({
+    const result = await importsService.getImportDataPage({
       importId,
-      search: search || null,
-      limit,
-      offset,
-    });
-
-    const formattedRows = (result.rows || []).map((row: any) => ({
-      id: row.id,
-      importId: row.importId,
-      jsonDataJsonb: row.jsonDataJsonb,
-    }));
-
-    return res.json({
-      rows: formattedRows,
-      total: result.total || 0,
       page,
-      limit,
+      requestedLimit,
+      viewerRowsPerPage: runtimeSettings.viewerRowsPerPage,
+      isDbProtected: isDbProtected(),
+      search,
     });
+    return res.json(result);
   }));
 
   app.get(
@@ -157,18 +121,17 @@ export function registerImportRoutes(app: Express, deps: ImportsRouteDeps) {
     requireRole("user", "admin", "superuser"),
     requireTabAccess("analysis"),
     asyncHandler(async (req, res) => {
-      const importRecord = await storage.getImportById(req.params.id);
-      if (!importRecord) {
+      const analysis = await importsService.analyzeImport(req.params.id);
+      if (!analysis) {
         return res.status(404).json({ message: "Import not found" });
       }
 
-      return res.json(await importAnalysisService.analyzeImport(importRecord));
+      return res.json(analysis);
     }),
   );
 
   app.get("/api/analyze/all-summary", authenticateToken, asyncHandler(async (_req, res) => {
-    const imports = await importsRepository.getImportsWithRowCounts();
-    return res.json(await importAnalysisService.analyzeAll(imports));
+    return res.json(await importsService.analyzeAll());
   }));
 
   app.get(
@@ -177,44 +140,25 @@ export function registerImportRoutes(app: Express, deps: ImportsRouteDeps) {
     requireRole("user", "admin", "superuser"),
     requireTabAccess("analysis"),
     asyncHandler(async (_req, res) => {
-      const imports = await importsRepository.getImportsWithRowCounts();
-      return res.json(await importAnalysisService.analyzeAll(imports));
+      return res.json(await importsService.analyzeAll());
     }),
   );
 
   app.patch("/api/imports/:id", authenticateToken, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const body = ensureObject(req.body) || {};
-    const name = String(body.name ?? "");
-    const updated = await storage.updateImportName(req.params.id, name);
+    const { name } = importsService.parseRenameBody(req.body);
+    const updated = await importsService.renameImport(req.params.id, name, req.user?.username);
     if (!updated) {
       return res.status(404).json({ message: "Import not found" });
-    }
-
-    if (req.user?.username) {
-      await storage.createAuditLog({
-        action: "UPDATE_IMPORT",
-        performedBy: req.user.username,
-        targetResource: name,
-      });
     }
 
     return res.json(updated);
   }));
 
   app.patch("/api/imports/:id/rename", authenticateToken, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const body = ensureObject(req.body) || {};
-    const name = String(body.name ?? "");
-    const updated = await storage.updateImportName(req.params.id, name);
+    const { name } = importsService.parseRenameBody(req.body);
+    const updated = await importsService.renameImport(req.params.id, name, req.user?.username);
     if (!updated) {
       return res.status(404).json({ message: "Import not found" });
-    }
-
-    if (req.user?.username) {
-      await storage.createAuditLog({
-        action: "UPDATE_IMPORT",
-        performedBy: req.user.username,
-        targetResource: name,
-      });
     }
 
     return res.json(updated);
@@ -225,18 +169,9 @@ export function registerImportRoutes(app: Express, deps: ImportsRouteDeps) {
     authenticateToken,
     requireRole("admin", "superuser"),
     asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-      const importRecord = await storage.getImportById(req.params.id);
-      const deleted = await storage.deleteImport(req.params.id);
+      const deleted = await importsService.deleteImport(req.params.id, req.user?.username);
       if (!deleted) {
         return res.status(404).json({ message: "Import not found" });
-      }
-
-      if (req.user?.username) {
-        await storage.createAuditLog({
-          action: "DELETE_IMPORT",
-          performedBy: req.user.username,
-          targetResource: importRecord?.name || req.params.id,
-        });
       }
 
       return res.json({ success: true });

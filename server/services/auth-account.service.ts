@@ -21,6 +21,14 @@ import {
   verifyPassword,
 } from "../auth/passwords";
 import { buildAccountActivationEmail } from "../mail/account-activation-email";
+import {
+  clearDevMailOutbox as clearDevMailOutboxFiles,
+  deleteDevMailPreview as deleteDevMailPreviewFile,
+  isDevMailOutboxEnabled,
+  listDevMailPreviews,
+  readDevMailPreview,
+  renderDevMailPreviewHtml,
+} from "../mail/dev-mail-outbox";
 import { buildPasswordResetEmail } from "../mail/password-reset-email";
 import { sendMail } from "../mail/mailer";
 import type {
@@ -83,6 +91,16 @@ type ChangePasswordInput = {
   newPassword: string;
 };
 
+type UpdateOwnCredentialsInput = {
+  hasUsernameField: boolean;
+  hasPasswordField: boolean;
+  newUsername?: string;
+  currentPassword: string;
+  newPassword: string;
+};
+
+type AuthAccountUser = NonNullable<Awaited<ReturnType<PostgresStorage["getUser"]>>>;
+
 type AuthAccountStorage = Pick<
   PostgresStorage,
   | "consumeActivationTokenById"
@@ -98,6 +116,7 @@ type AuthAccountStorage = Pick<
   | "getActivationTokenRecordByHash"
   | "getActiveActivitiesByUsername"
   | "getBooleanSystemSetting"
+  | "getAccounts"
   | "getManagedUsers"
   | "getPasswordResetTokenRecordByHash"
   | "getUser"
@@ -339,6 +358,89 @@ export class AuthAccountService {
     const activeSessions = await this.storage.getActiveActivitiesByUsername(username);
     await this.storage.deactivateUserActivities(username, reason);
     return activeSessions.map((activity) => activity.id);
+  }
+
+  private async updateOwnPassword(actor: AuthAccountUser, input: ChangePasswordInput) {
+    const currentPassword = String(input.currentPassword || "");
+    const newPassword = String(input.newPassword || "");
+
+    if (!currentPassword) {
+      throw new AuthAccountError(400, "INVALID_CURRENT_PASSWORD", "Current password is required.");
+    }
+
+    const currentPasswordMatch = await verifyPassword(currentPassword, actor.passwordHash);
+    if (!currentPasswordMatch) {
+      throw new AuthAccountError(400, "INVALID_CURRENT_PASSWORD", "Current password is invalid.");
+    }
+
+    assertStrongPasswordInput(newPassword);
+
+    const sameAsCurrent = await verifyPassword(newPassword, actor.passwordHash);
+    if (sameAsCurrent) {
+      throw new AuthAccountError(
+        400,
+        "INVALID_PASSWORD",
+        "New password must be different from current password.",
+      );
+    }
+
+    const nextPasswordHash = await hashPassword(newPassword);
+    const updatedUser = await this.storage.updateUserCredentials({
+      userId: actor.id,
+      newPasswordHash: nextPasswordHash,
+      passwordChangedAt: new Date(),
+      mustChangePassword: false,
+      passwordResetBySuperuser: false,
+    });
+
+    const closedSessionIds = await this.invalidateUserSessions(actor.username, "PASSWORD_CHANGED");
+
+    await this.storage.createAuditLog({
+      action: "USER_PASSWORD_CHANGED",
+      performedBy: actor.id,
+      targetUser: actor.id,
+      details: buildCredentialAuditDetails({
+        actor_user_id: actor.id,
+        target_user_id: actor.id,
+        changedField: "password",
+      }),
+    });
+
+    return {
+      user: updatedUser ?? actor,
+      closedSessionIds,
+    };
+  }
+
+  private async updateOwnUsername(actor: AuthAccountUser, newUsernameRaw: string) {
+    const newUsername = normalizeUsernameInput(newUsernameRaw);
+    const previousUsername = actor.username;
+
+    this.validateUsername(newUsername);
+    await this.ensureUniqueIdentity({ username: newUsername, ignoreUserId: actor.id });
+
+    if (newUsername === previousUsername) {
+      return actor;
+    }
+
+    const updatedUser = await this.storage.updateUserCredentials({
+      userId: actor.id,
+      newUsername,
+    });
+
+    await this.storage.updateActivitiesUsername(previousUsername, newUsername);
+    await this.storage.createAuditLog({
+      action: "USER_USERNAME_CHANGED",
+      performedBy: actor.id,
+      targetUser: actor.id,
+      details: buildCredentialAuditDetails({
+        actor_user_id: actor.id,
+        target_user_id: actor.id,
+        changedField: "username",
+      }),
+    });
+
+    return updatedUser ?? actor;
   }
 
   async login(input: LoginInput) {
@@ -672,91 +774,133 @@ export class AuthAccountService {
 
   async changeOwnPassword(authUser: AuthenticatedUser | undefined, input: ChangePasswordInput) {
     const actor = await this.requireActor(authUser);
-    const currentPassword = String(input.currentPassword || "");
-    const newPassword = String(input.newPassword || "");
-
-    if (!currentPassword) {
-      throw new AuthAccountError(400, "INVALID_CURRENT_PASSWORD", "Current password is required.");
-    }
-
-    const currentPasswordMatch = await verifyPassword(currentPassword, actor.passwordHash);
-    if (!currentPasswordMatch) {
-      throw new AuthAccountError(400, "INVALID_CURRENT_PASSWORD", "Current password is invalid.");
-    }
-
-    assertStrongPasswordInput(newPassword);
-
-    const sameAsCurrent = await verifyPassword(newPassword, actor.passwordHash);
-    if (sameAsCurrent) {
-      throw new AuthAccountError(
-        400,
-        "INVALID_PASSWORD",
-        "New password must be different from current password.",
-      );
-    }
-
-    const nextPasswordHash = await hashPassword(newPassword);
-    const updatedUser = await this.storage.updateUserCredentials({
-      userId: actor.id,
-      newPasswordHash: nextPasswordHash,
-      passwordChangedAt: new Date(),
-      mustChangePassword: false,
-      passwordResetBySuperuser: false,
-    });
-
-    const closedSessionIds = await this.invalidateUserSessions(actor.username, "PASSWORD_CHANGED");
-
-    await this.storage.createAuditLog({
-      action: "USER_PASSWORD_CHANGED",
-      performedBy: actor.id,
-      targetUser: actor.id,
-      details: buildCredentialAuditDetails({
-        actor_user_id: actor.id,
-        target_user_id: actor.id,
-        changedField: "password",
-      }),
-    });
-
-    return {
-      user: updatedUser ?? actor,
-      closedSessionIds,
-    };
+    return this.updateOwnPassword(actor, input);
   }
 
   async changeOwnUsername(authUser: AuthenticatedUser | undefined, newUsernameRaw: string) {
     const actor = await this.requireActor(authUser);
-    const newUsername = normalizeUsernameInput(newUsernameRaw);
+    return this.updateOwnUsername(actor, newUsernameRaw);
+  }
 
-    this.validateUsername(newUsername);
-    await this.ensureUniqueIdentity({ username: newUsername, ignoreUserId: actor.id });
+  async getCurrentUser(authUser: AuthenticatedUser | undefined) {
+    return this.requireActor(authUser);
+  }
 
-    if (newUsername === actor.username) {
-      return actor;
+  async updateOwnCredentials(
+    authUser: AuthenticatedUser | undefined,
+    input: UpdateOwnCredentialsInput,
+  ) {
+    const actor = await this.requireActor(authUser);
+
+    if (!input.hasUsernameField && !input.hasPasswordField) {
+      return {
+        user: actor,
+        forceLogout: false,
+        closedSessionIds: [] as string[],
+      };
     }
 
-    const updatedUser = await this.storage.updateUserCredentials({
-      userId: actor.id,
-      newUsername,
-    });
+    if (actor.mustChangePassword && !input.hasPasswordField) {
+      throw new AuthAccountError(
+        403,
+        "PASSWORD_CHANGE_REQUIRED",
+        "Password change is required before other account updates.",
+      );
+    }
 
-    await this.storage.updateActivitiesUsername(actor.username, newUsername);
-    await this.storage.createAuditLog({
-      action: "USER_USERNAME_CHANGED",
-      performedBy: actor.id,
-      targetUser: actor.id,
-      details: buildCredentialAuditDetails({
-        actor_user_id: actor.id,
-        target_user_id: actor.id,
-        changedField: "username",
-      }),
-    });
+    let updatedUser: AuthAccountUser = actor;
+    let forceLogout = false;
+    let closedSessionIds: string[] = [];
 
-    return updatedUser ?? actor;
+    if (input.hasUsernameField) {
+      updatedUser = await this.updateOwnUsername(updatedUser, input.newUsername ?? "");
+    }
+
+    if (input.hasPasswordField) {
+      const passwordResult = await this.updateOwnPassword(updatedUser, {
+        currentPassword: input.currentPassword,
+        newPassword: input.newPassword,
+      });
+      updatedUser = passwordResult.user;
+      forceLogout = true;
+      closedSessionIds = passwordResult.closedSessionIds;
+    }
+
+    return {
+      user: updatedUser,
+      forceLogout,
+      closedSessionIds,
+    };
   }
 
   async getManagedUsers(authUser: AuthenticatedUser | undefined): Promise<ManagedUserAccount[]> {
     await this.requireSuperuser(authUser);
     return this.storage.getManagedUsers();
+  }
+
+  async getAccounts(authUser: AuthenticatedUser | undefined) {
+    await this.requireSuperuser(authUser);
+    return this.storage.getAccounts();
+  }
+
+  async getDevMailPreviewHtml(previewId: string) {
+    if (!isDevMailOutboxEnabled()) {
+      return null;
+    }
+
+    const preview = await readDevMailPreview(previewId);
+    if (!preview) {
+      return null;
+    }
+
+    return renderDevMailPreviewHtml(preview);
+  }
+
+  async listDevMailOutbox(authUser: AuthenticatedUser | undefined) {
+    await this.requireSuperuser(authUser);
+    return {
+      enabled: isDevMailOutboxEnabled(),
+      previews: await listDevMailPreviews(25),
+    };
+  }
+
+  async deleteDevMailPreview(authUser: AuthenticatedUser | undefined, previewId: string) {
+    const actor = await this.requireSuperuser(authUser);
+    const deleted = await deleteDevMailPreviewFile(previewId);
+
+    if (!deleted) {
+      throw new AuthAccountError(404, "MAIL_PREVIEW_NOT_FOUND", "Mail preview not found.");
+    }
+
+    await this.storage.createAuditLog({
+      action: "DEV_MAIL_OUTBOX_ENTRY_DELETED",
+      performedBy: actor.username,
+      targetResource: previewId,
+      details: "Local mail outbox preview deleted.",
+    });
+
+    return {
+      deleted: true,
+    };
+  }
+
+  async clearDevMailOutbox(authUser: AuthenticatedUser | undefined) {
+    const actor = await this.requireSuperuser(authUser);
+    const deletedCount = await clearDevMailOutboxFiles();
+
+    await this.storage.createAuditLog({
+      action: "DEV_MAIL_OUTBOX_CLEARED",
+      performedBy: actor.username,
+      details: JSON.stringify({
+        metadata: {
+          deleted_count: deletedCount,
+        },
+      }),
+    });
+
+    return {
+      deletedCount,
+    };
   }
 
   async deleteManagedUser(authUser: AuthenticatedUser | undefined, targetUserId: string) {

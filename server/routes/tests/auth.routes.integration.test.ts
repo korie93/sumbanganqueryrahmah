@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import { createAuthGuards } from "../../auth/guards";
 import { hashOpaqueToken, hashPassword, verifyPassword } from "../../auth/passwords";
+import { writeDevMailPreview } from "../../mail/dev-mail-outbox";
 import { registerAuthRoutes } from "../auth.routes";
 import type { PostgresStorage } from "../../storage-postgres";
 import {
@@ -346,6 +350,199 @@ async function createLoginStorageDouble() {
   };
 }
 
+function authenticateAs(user: {
+  id?: string;
+  username: string;
+  role: string;
+  mustChangePassword?: boolean;
+}) {
+  return (req: any, _res: any, next: () => void) => {
+    req.user = {
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+      activityId: "activity-auth-test-1",
+      mustChangePassword: user.mustChangePassword ?? false,
+    };
+    next();
+  };
+}
+
+function createOwnCredentialsStorageDouble(options?: {
+  user?: Record<string, any>;
+  existingUsersByUsername?: Record<string, any>;
+}) {
+  const auditLogs: AuditEntry[] = [];
+  const credentialUpdates: Array<Record<string, unknown>> = [];
+  const activityUsernameUpdates: Array<{ previousUsername: string; nextUsername: string }> = [];
+  const user = {
+    id: "credential-user-1",
+    username: "credential.user",
+    fullName: "Credential User",
+    email: "credential.user@example.com",
+    role: "user",
+    status: "active",
+    passwordHash: "$2b$10$1VQv8s4QS6j3fAD/0VjV6euQkTQ6j3Q9T5o9pL7V4Q7ZQ6XnU6QKa",
+    mustChangePassword: false,
+    passwordResetBySuperuser: false,
+    isBanned: false,
+    activatedAt: new Date("2026-03-01T00:00:00.000Z"),
+    passwordChangedAt: null,
+    lastLoginAt: null,
+    ...options?.user,
+  };
+  const usersByUsername = new Map<string, Record<string, any>>(
+    Object.entries(options?.existingUsersByUsername || {}),
+  );
+  usersByUsername.set(user.username, user);
+
+  const storage = {
+    getUser: async (userId: string) => (userId === user.id ? user : null),
+    getUserByUsername: async (username: string) => usersByUsername.get(username) ?? null,
+    updateUserCredentials: async (params: Record<string, any>) => {
+      credentialUpdates.push(params);
+
+      if (typeof params.newUsername === "string" && params.newUsername) {
+        usersByUsername.delete(user.username);
+        user.username = params.newUsername;
+        usersByUsername.set(user.username, user);
+      }
+
+      if (typeof params.newPasswordHash === "string" && params.newPasswordHash) {
+        user.passwordHash = params.newPasswordHash;
+        user.passwordChangedAt = params.passwordChangedAt ?? user.passwordChangedAt;
+        user.mustChangePassword = params.mustChangePassword ?? user.mustChangePassword;
+        user.passwordResetBySuperuser =
+          params.passwordResetBySuperuser ?? user.passwordResetBySuperuser;
+      }
+
+      return user;
+    },
+    updateActivitiesUsername: async (previousUsername: string, nextUsername: string) => {
+      activityUsernameUpdates.push({ previousUsername, nextUsername });
+    },
+    getActiveActivitiesByUsername: async () => [],
+    deactivateUserActivities: async () => undefined,
+    createAuditLog: async (entry: AuditEntry) => {
+      auditLogs.push(entry);
+      return { id: `audit-${auditLogs.length}`, ...entry };
+    },
+  } as unknown as PostgresStorage;
+
+  return {
+    storage,
+    user,
+    auditLogs,
+    credentialUpdates,
+    activityUsernameUpdates,
+  };
+}
+
+function createAccountsStorageDouble() {
+  const actor = {
+    id: "superuser-1",
+    username: "root.admin",
+    fullName: "Root Admin",
+    email: "root.admin@example.com",
+    role: "superuser",
+    status: "active",
+    passwordHash: null,
+    mustChangePassword: false,
+    passwordResetBySuperuser: false,
+    isBanned: false,
+    activatedAt: new Date("2026-03-01T00:00:00.000Z"),
+    passwordChangedAt: null,
+    lastLoginAt: null,
+  };
+  const accounts = [
+    { username: "admin.alpha", role: "admin", isBanned: false },
+    { username: "user.beta", role: "user", isBanned: true },
+  ];
+
+  const storage = {
+    getUser: async (userId: string) => (userId === actor.id ? actor : null),
+    getUserByUsername: async (username: string) => (username === actor.username ? actor : null),
+    getAccounts: async () => accounts,
+  } as unknown as PostgresStorage;
+
+  return {
+    storage,
+    actor,
+    accounts,
+  };
+}
+
+function createDevMailAdminStorageDouble() {
+  const actor = {
+    id: "superuser-mail-1",
+    username: "mail.admin",
+    fullName: "Mail Admin",
+    email: "mail.admin@example.com",
+    role: "superuser",
+    status: "active",
+    passwordHash: null,
+    mustChangePassword: false,
+    passwordResetBySuperuser: false,
+    isBanned: false,
+    activatedAt: new Date("2026-03-01T00:00:00.000Z"),
+    passwordChangedAt: null,
+    lastLoginAt: null,
+  };
+  const auditLogs: AuditEntry[] = [];
+
+  const storage = {
+    getUser: async (userId: string) => (userId === actor.id ? actor : null),
+    getUserByUsername: async (username: string) => (username === actor.username ? actor : null),
+    createAuditLog: async (entry: AuditEntry) => {
+      auditLogs.push(entry);
+      return { id: `audit-${auditLogs.length}`, ...entry };
+    },
+  } as unknown as PostgresStorage;
+
+  return {
+    storage,
+    actor,
+    auditLogs,
+  };
+}
+
+async function withDevMailOutboxFixture(
+  run: (context: { outboxDir: string }) => Promise<void>,
+) {
+  const previousDir = process.env.MAIL_DEV_OUTBOX_DIR;
+  const previousEnabled = process.env.MAIL_DEV_OUTBOX_ENABLED;
+  const previousNodeEnv = process.env.NODE_ENV;
+  const outboxDir = await mkdtemp(path.join(os.tmpdir(), "sqr-dev-mail-outbox-"));
+
+  process.env.MAIL_DEV_OUTBOX_DIR = outboxDir;
+  process.env.MAIL_DEV_OUTBOX_ENABLED = "1";
+  delete process.env.NODE_ENV;
+
+  try {
+    await run({ outboxDir });
+  } finally {
+    if (previousDir === undefined) {
+      delete process.env.MAIL_DEV_OUTBOX_DIR;
+    } else {
+      process.env.MAIL_DEV_OUTBOX_DIR = previousDir;
+    }
+
+    if (previousEnabled === undefined) {
+      delete process.env.MAIL_DEV_OUTBOX_ENABLED;
+    } else {
+      process.env.MAIL_DEV_OUTBOX_ENABLED = previousEnabled;
+    }
+
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
+
+    await rm(outboxDir, { recursive: true, force: true });
+  }
+}
+
 test("POST /api/auth/request-password-reset stays generic for unknown accounts", async () => {
   const { storage, resetRequests, auditLogs } = createAuthStorageDouble();
   const app = createJsonTestApp();
@@ -377,6 +574,222 @@ test("POST /api/auth/request-password-reset stays generic for unknown accounts",
   } finally {
     await stopTestServer(server);
   }
+});
+
+test("GET /api/accounts returns account summaries for the authenticated superuser", async () => {
+  const { storage, actor, accounts } = createAccountsStorageDouble();
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: authenticateAs(actor),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/accounts`);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      ok: true,
+      accounts,
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /dev/mail-preview/:previewId renders the stored preview HTML", { concurrency: false }, async () => {
+  await withDevMailOutboxFixture(async () => {
+    const preview = await writeDevMailPreview({
+      to: "preview.user@example.com",
+      subject: "Activation Preview",
+      text: "Plain preview body",
+      html: "<p><strong>Preview body</strong></p>",
+    });
+    const { storage } = createDevMailAdminStorageDouble();
+    const app = createJsonTestApp();
+
+    registerAuthRoutes(app, {
+      storage,
+      authenticateToken: (_req, _res, next) => next(),
+      requireRole: () => (_req, _res, next) => next(),
+      connectedClients: new Map(),
+    });
+
+    const { server, baseUrl } = await startTestServer(app);
+    try {
+      const response = await fetch(`${baseUrl}/dev/mail-preview/${preview.messageId}`);
+
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      const html = await response.text();
+      assert.match(html, /Activation Preview/);
+      assert.match(html, /Preview body/);
+      assert.match(html, /preview\.user@example\.com/);
+    } finally {
+      await stopTestServer(server);
+    }
+  });
+});
+
+test("GET /api/admin/dev-mail-outbox returns recent preview entries", { concurrency: false }, async () => {
+  await withDevMailOutboxFixture(async () => {
+    const preview = await writeDevMailPreview({
+      to: "admin.preview@example.com",
+      subject: "Reset Preview",
+      text: "Reset plain text",
+      html: "<p>Reset preview</p>",
+    });
+    const { storage, actor } = createDevMailAdminStorageDouble();
+    const app = createJsonTestApp();
+
+    registerAuthRoutes(app, {
+      storage,
+      authenticateToken: authenticateAs(actor),
+      requireRole: () => (_req, _res, next) => next(),
+      connectedClients: new Map(),
+    });
+
+    const { server, baseUrl } = await startTestServer(app);
+    try {
+      const response = await fetch(`${baseUrl}/api/admin/dev-mail-outbox`);
+
+      assert.equal(response.status, 200);
+      const payload = await response.json();
+      assert.equal(payload.ok, true);
+      assert.equal(payload.enabled, true);
+      assert.equal(payload.previews.length, 1);
+      assert.equal(payload.previews[0].id, preview.messageId);
+      assert.match(payload.previews[0].previewUrl, new RegExp(`/dev/mail-preview/${preview.messageId}$`));
+    } finally {
+      await stopTestServer(server);
+    }
+  });
+});
+
+test("DELETE /api/admin/dev-mail-outbox/:previewId deletes a preview and audits the action", { concurrency: false }, async () => {
+  await withDevMailOutboxFixture(async () => {
+    const preview = await writeDevMailPreview({
+      to: "delete.preview@example.com",
+      subject: "Delete Preview",
+      text: "Delete plain text",
+      html: "<p>Delete preview</p>",
+    });
+    const { storage, actor, auditLogs } = createDevMailAdminStorageDouble();
+    const app = createJsonTestApp();
+
+    registerAuthRoutes(app, {
+      storage,
+      authenticateToken: authenticateAs(actor),
+      requireRole: () => (_req, _res, next) => next(),
+      connectedClients: new Map(),
+    });
+
+    const { server, baseUrl } = await startTestServer(app);
+    try {
+      const response = await fetch(`${baseUrl}/api/admin/dev-mail-outbox/${preview.messageId}`, {
+        method: "DELETE",
+      });
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), {
+        ok: true,
+        deleted: true,
+      });
+      assert.equal(auditLogs.length, 1);
+      assert.equal(auditLogs[0].action, "DEV_MAIL_OUTBOX_ENTRY_DELETED");
+      assert.equal(auditLogs[0].performedBy, actor.username);
+
+      const previewResponse = await fetch(`${baseUrl}/dev/mail-preview/${preview.messageId}`);
+      assert.equal(previewResponse.status, 404);
+    } finally {
+      await stopTestServer(server);
+    }
+  });
+});
+
+test("DELETE /api/admin/dev-mail-outbox/:previewId returns a 404 when the preview is missing", { concurrency: false }, async () => {
+  await withDevMailOutboxFixture(async () => {
+    const { storage, actor, auditLogs } = createDevMailAdminStorageDouble();
+    const app = createJsonTestApp();
+
+    registerAuthRoutes(app, {
+      storage,
+      authenticateToken: authenticateAs(actor),
+      requireRole: () => (_req, _res, next) => next(),
+      connectedClients: new Map(),
+    });
+
+    const { server, baseUrl } = await startTestServer(app);
+    try {
+      const response = await fetch(`${baseUrl}/api/admin/dev-mail-outbox/1710000000000-1234567890abcdef`, {
+        method: "DELETE",
+      });
+
+      assert.equal(response.status, 404);
+      const payload = await response.json();
+      assert.equal(payload.ok, false);
+      assert.equal(payload.error.code, "MAIL_PREVIEW_NOT_FOUND");
+      assert.equal(auditLogs.length, 0);
+    } finally {
+      await stopTestServer(server);
+    }
+  });
+});
+
+test("DELETE /api/admin/dev-mail-outbox clears previews and audits the deleted count", { concurrency: false }, async () => {
+  await withDevMailOutboxFixture(async () => {
+    await writeDevMailPreview({
+      to: "clear.one@example.com",
+      subject: "Clear One",
+      text: "First preview",
+      html: "<p>First preview</p>",
+    });
+    await writeDevMailPreview({
+      to: "clear.two@example.com",
+      subject: "Clear Two",
+      text: "Second preview",
+      html: "<p>Second preview</p>",
+    });
+    const { storage, actor, auditLogs } = createDevMailAdminStorageDouble();
+    const app = createJsonTestApp();
+
+    registerAuthRoutes(app, {
+      storage,
+      authenticateToken: authenticateAs(actor),
+      requireRole: () => (_req, _res, next) => next(),
+      connectedClients: new Map(),
+    });
+
+    const { server, baseUrl } = await startTestServer(app);
+    try {
+      const response = await fetch(`${baseUrl}/api/admin/dev-mail-outbox`, {
+        method: "DELETE",
+      });
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), {
+        ok: true,
+        deletedCount: 2,
+      });
+      assert.equal(auditLogs.length, 1);
+      assert.equal(auditLogs[0].action, "DEV_MAIL_OUTBOX_CLEARED");
+      assert.deepEqual(JSON.parse(String(auditLogs[0].details)), {
+        metadata: {
+          deleted_count: 2,
+        },
+      });
+
+      const listResponse = await fetch(`${baseUrl}/api/admin/dev-mail-outbox`);
+      const listPayload = await listResponse.json();
+      assert.equal(listPayload.previews.length, 0);
+    } finally {
+      await stopTestServer(server);
+    }
+  });
 });
 
 test("GET /api/me accepts the auth session cookie without a bearer token", async () => {
@@ -417,6 +830,115 @@ test("GET /api/me accepts the auth session cookie without a bearer token", async
     assert.equal(payload.user.username, user.username);
     assert.equal(payload.user.role, user.role);
     assert.equal(payload.user.status, user.status);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/me/credentials returns the current user when no credential fields are provided", async () => {
+  const { storage, user, credentialUpdates } = createOwnCredentialsStorageDouble();
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: authenticateAs(user),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/me/credentials`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.forceLogout, false);
+    assert.equal(payload.user.username, user.username);
+    assert.equal(credentialUpdates.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/me/credentials rejects username-only updates while password change is required", async () => {
+  const { storage, user, credentialUpdates, activityUsernameUpdates } = createOwnCredentialsStorageDouble({
+    user: {
+      mustChangePassword: true,
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: authenticateAs(user),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/me/credentials`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        newUsername: "renamed.user",
+      }),
+    });
+
+    assert.equal(response.status, 403);
+    const payload = await response.json();
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, "PASSWORD_CHANGE_REQUIRED");
+    assert.equal(credentialUpdates.length, 0);
+    assert.equal(activityUsernameUpdates.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/me/credentials updates the current username without forcing logout", async () => {
+  const { storage, user, auditLogs, activityUsernameUpdates } = createOwnCredentialsStorageDouble();
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: authenticateAs(user),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/me/credentials`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        newUsername: "renamed.user",
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.forceLogout, false);
+    assert.equal(payload.user.username, "renamed.user");
+    assert.deepEqual(activityUsernameUpdates, [{
+      previousUsername: "credential.user",
+      nextUsername: "renamed.user",
+    }]);
+    assert.equal(auditLogs.length, 1);
+    assert.equal(auditLogs[0].action, "USER_USERNAME_CHANGED");
   } finally {
     await stopTestServer(server);
   }

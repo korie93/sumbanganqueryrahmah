@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "verify:repo-hygiene": "node scripts/verify-repo-hygiene.mjs",
     "typecheck": "tsc --noEmit",
     "test:client": "tsx --test client/src/pages/collection/tests/*.test.ts",
     "test:http": "tsx --test server/http/tests/*.test.ts",
@@ -16,7 +17,7 @@
     "dev:server": "tsx server/index-local.ts",
     "build": "npx vite build && npx esbuild server/index-local.ts --bundle --platform=node --packages=external --outfile=dist-local/server/index-local.js --format=esm && npx esbuild server/cluster-local.ts --bundle --platform=node --packages=external --outfile=dist-local/server/cluster-local.js --format=esm",
     "start": "npm run start:built",
-    "prestart": "test -f dist-local/server/cluster-local.js || npm run build",
+    "prestart": "node scripts/ensure-build.mjs",
     "start:built": "node dist-local/server/cluster-local.js",
     "import:aeon-branches": "node scripts/import-aeon-branches.mjs"
   },

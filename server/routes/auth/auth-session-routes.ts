@@ -1,6 +1,3 @@
-import { asyncHandler } from "../../http/async-handler";
-import type { AuthenticatedRequest } from "../../auth/guards";
-import { AuthAccountError } from "../../services/auth-account.service";
 import {
   readLoginBody,
   readOwnCredentialPatchBody,
@@ -11,7 +8,6 @@ import type { AuthRouteContext } from "./auth-route-shared";
 export function registerAuthSessionRoutes(context: AuthRouteContext) {
   const {
     app,
-    storage,
     authAccountService,
     authenticateToken,
     rateLimiters,
@@ -59,18 +55,7 @@ export function registerAuthSessionRoutes(context: AuthRouteContext) {
   app.post("/api/auth/login", rateLimiters.login, handleLogin);
 
   const handleMe = jsonRoute(async (req) => {
-    if (!req.user) {
-      throw new AuthAccountError(401, "PERMISSION_DENIED", "Authentication required.");
-    }
-
-    const user = req.user.userId
-      ? await storage.getUser(req.user.userId)
-      : await storage.getUserByUsername(req.user.username);
-
-    if (!user) {
-      throw new AuthAccountError(404, "USER_NOT_FOUND", "User not found.");
-    }
-
+    const user = await authAccountService.getCurrentUser(req.user);
     return buildOkPayload({
       user: buildUserPayload(user),
     });
@@ -105,60 +90,19 @@ export function registerAuthSessionRoutes(context: AuthRouteContext) {
     authenticateToken,
     rateLimiters.authenticatedAuth,
     jsonRoute(async (req) => {
-      if (!req.user) {
-        throw new AuthAccountError(401, "PERMISSION_DENIED", "Authentication required.");
-      }
-
       const parsed = readOwnCredentialPatchBody(req.body);
-      if (!parsed.hasUsernameField && !parsed.hasPasswordField) {
-        const user = req.user.userId
-          ? await storage.getUser(req.user.userId)
-          : await storage.getUserByUsername(req.user.username);
-
-        return {
-          ok: true,
-          forceLogout: false,
-          user: buildUserPayload(user),
-        };
-      }
-
-      if (req.user.mustChangePassword && !parsed.hasPasswordField) {
-        throw new AuthAccountError(
-          403,
-          "PASSWORD_CHANGE_REQUIRED",
-          "Password change is required before other account updates.",
-        );
-      }
-
-      let updatedUser = req.user.userId
-        ? await storage.getUser(req.user.userId)
-        : await storage.getUserByUsername(req.user.username);
-      let forceLogout = false;
-
-      if (parsed.hasUsernameField) {
-        updatedUser = await authAccountService.changeOwnUsername(
-          req.user,
-          parsed.newUsername ?? "",
-        );
-      }
-
-      if (parsed.hasPasswordField) {
-        const result = await authAccountService.changeOwnPassword(req.user, {
-          currentPassword: parsed.currentPassword,
-          newPassword: parsed.newPassword,
-        });
+      const result = await authAccountService.updateOwnCredentials(req.user, parsed);
+      if (result.forceLogout) {
         closeActivitySockets(
           result.closedSessionIds,
           "Password changed. Please login again.",
         );
-        updatedUser = result.user;
-        forceLogout = true;
       }
 
       return {
         ok: true,
-        forceLogout,
-        user: buildUserPayload(updatedUser),
+        forceLogout: result.forceLogout,
+        user: buildUserPayload(result.user),
       };
     }),
   );

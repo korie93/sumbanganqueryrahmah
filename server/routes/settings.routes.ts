@@ -2,15 +2,9 @@ import type { Express, RequestHandler, Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { asyncHandler } from "../http/async-handler";
 import { ensureObject, readNonEmptyString } from "../http/validation";
+import { SettingsService } from "../services/settings.service";
 import type { PostgresStorage } from "../storage-postgres";
-
-type MaintenanceState = {
-  maintenance: boolean;
-  message: string;
-  type: "soft" | "hard";
-  startTime: string | null;
-  endTime: string | null;
-};
+import type { MaintenanceState } from "../config/system-settings";
 
 type SettingsRouteDeps = {
   storage: PostgresStorage;
@@ -34,9 +28,16 @@ export function registerSettingsRoutes(app: Express, deps: SettingsRouteDeps) {
     getMaintenanceStateCached,
     broadcastWsMessage,
   } = deps;
+  const settingsService = new SettingsService(storage, {
+    clearTabVisibilityCache,
+    invalidateRuntimeSettingsCache,
+    invalidateMaintenanceCache,
+    getMaintenanceStateCached,
+    broadcastWsMessage,
+  });
 
   app.get("/api/app-config", authenticateToken, asyncHandler(async (_req, res) => {
-    const config = await storage.getAppConfig();
+    const config = await settingsService.getAppConfig();
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
@@ -47,14 +48,14 @@ export function registerSettingsRoutes(app: Express, deps: SettingsRouteDeps) {
     const role = req.user?.role || "user";
     return res.json({
       role,
-      tabs: await storage.getRoleTabVisibility(role),
+      tabs: await settingsService.getTabVisibility(role),
     });
   }));
 
   app.get("/api/settings", authenticateToken, requireRole("admin", "superuser"), asyncHandler(async (req: AuthenticatedRequest, res) => {
     const role = req.user?.role || "user";
     return res.json({
-      categories: await storage.getSettingsForRole(role),
+      categories: await settingsService.getSettingsForRole(role),
     });
   }));
 
@@ -66,10 +67,10 @@ export function registerSettingsRoutes(app: Express, deps: SettingsRouteDeps) {
     }
 
     const role = req.user?.role || "user";
-    const result = await storage.updateSystemSetting({
+    const result = await settingsService.updateSetting({
       role,
-      settingKey: key,
-      value: body.value ?? null,
+      key,
+      value: body.value,
       confirmCritical: Boolean(body.confirmCritical),
       updatedBy: req.user?.username || "system",
     });
@@ -85,36 +86,6 @@ export function registerSettingsRoutes(app: Express, deps: SettingsRouteDeps) {
     }
     if (result.status === "invalid") {
       return res.status(400).json({ message: result.message });
-    }
-
-    if (result.status === "updated") {
-      clearTabVisibilityCache();
-      invalidateRuntimeSettingsCache();
-
-      await storage.createAuditLog({
-        action: result.setting?.isCritical ? "CRITICAL_SETTING_UPDATED" : "SETTING_UPDATED",
-        performedBy: req.user?.username || "system",
-        targetResource: key,
-        details: `Updated setting ${key} to "${String(result.setting?.value ?? "")}"`,
-      });
-      if (result.shouldBroadcast) {
-        invalidateMaintenanceCache();
-        const maintenanceState = await getMaintenanceStateCached(true);
-        broadcastWsMessage({
-          type: "maintenance_update",
-          maintenance: maintenanceState.maintenance,
-          message: maintenanceState.message,
-          mode: maintenanceState.type,
-          startTime: maintenanceState.startTime,
-          endTime: maintenanceState.endTime,
-        });
-      } else {
-        broadcastWsMessage({
-          type: "settings_updated",
-          key,
-          updatedBy: req.user?.username || "system",
-        });
-      }
     }
 
     return res.json({
