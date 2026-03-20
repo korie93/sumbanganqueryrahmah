@@ -5,6 +5,7 @@ import { ollamaChat, ollamaEmbed } from "../ai-ollama";
 import { runtimeConfig } from "../config/runtime";
 import { pool } from "../db-postgres";
 import { evaluateSystem } from "../intelligence";
+import { logger } from "../lib/logger";
 import { PostgresStorage } from "../storage-postgres";
 import { createAiConcurrencyGate } from "./aiConcurrencyGate";
 import { createApiProtectionMiddleware } from "./apiProtection";
@@ -38,11 +39,13 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     const code = String(err?.code || "");
     if (code === "EADDRINUSE") {
       notifyFatalStartup("EADDRINUSE", "WebSocket server failed to bind address");
-      console.error("ERROR WebSocket startup failed: port already in use.");
+      logger.error("WebSocket startup failed because the port is already in use", {
+        path: "/ws",
+      });
       setTimeout(() => process.exit(98), 10).unref();
       return;
     }
-    console.error("ERROR WebSocket server error:", err);
+    logger.error("WebSocket server error", { error: err, path: "/ws" });
   });
 
   const runtimeMonitorManager = createRuntimeMonitorManager({

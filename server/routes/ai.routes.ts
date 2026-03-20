@@ -2,6 +2,7 @@ import type { Express, RequestHandler, Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { asyncHandler } from "../http/async-handler";
 import { ensureObject, readInteger } from "../http/validation";
+import { logger } from "../lib/logger";
 import type { AiSearchService } from "../services/ai-search.service";
 import type { CategoryStatsService } from "../services/category-stats.service";
 import type { AiChatService } from "../services/ai-chat.service";
@@ -113,14 +114,14 @@ export function registerAiRoutes(app: Express, deps: AiRouteDeps) {
               targetResource: "ai_search",
               details: JSON.stringify(result.audit),
             }).catch((error) => {
-              console.error("Audit log failed:", error?.message || error);
+              logger.error("Audit log failed for AI search", { error });
             });
           });
         }
 
         return res.status(result.statusCode).json(result.body);
       } catch (error: any) {
-        console.error("AI search error:", error);
+        logger.error("AI search request failed", { error });
         return res.status(500).json({ message: error.message });
       }
     }),
@@ -195,7 +196,7 @@ export function registerAiRoutes(app: Express, deps: AiRouteDeps) {
 
         return res.status(result.statusCode).json(result.body);
       } catch (error: any) {
-        console.error("AI chat error:", error);
+        logger.error("AI chat request failed", { error });
         return res.status(500).json({ message: error.message });
       }
     }),

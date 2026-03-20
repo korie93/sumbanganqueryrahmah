@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runtimeConfig } from "./config/runtime";
+import { logger } from "./lib/logger";
 import { LoadPredictor, type LoadTrendSnapshot } from "./internal/loadPredictor";
 import {
   isWorkerFatalMessage,
@@ -96,7 +97,7 @@ function getWorkers(): Worker[] {
 function shutdownMasterDueToFatalStartup(reason: string) {
   if (fatalShutdownScheduled) return;
   fatalShutdownScheduled = true;
-  console.error(`FATAL Cluster master shutting down due to unrecoverable startup error: ${reason}`);
+  logger.error("Cluster master shutting down due to unrecoverable startup error", { reason });
   setTimeout(() => process.exit(1), 50).unref();
 }
 
@@ -247,7 +248,7 @@ function broadcastControl(control: WorkerControlState) {
       worker.send(toControlStateMessage(control));
     } catch (err) {
       // Silently skip if send fails (worker may have disconnected)
-      console.warn(`WARN Failed to send control-state to worker#${worker.id}`);
+      logger.warn("Failed to send control-state to worker", { workerId: worker.id, error: err });
     }
   }
 }
@@ -255,7 +256,10 @@ function broadcastControl(control: WorkerControlState) {
 // SAFE FORK: Prevents uncontrolled spawn + adds error handling
 function safeFork(reason: string): Worker | null {
   if (fatalStartupLockReason) {
-    console.error(`BLOCKED Spawn blocked due to fatal startup condition: ${fatalStartupLockReason}`);
+    logger.error("Spawn blocked due to fatal startup condition", {
+      fatalStartupLockReason,
+      spawnReason: reason,
+    });
     return null;
   }
 
@@ -263,9 +267,10 @@ function safeFork(reason: string): Worker | null {
   if (now < restartBlockedUntil) {
     if (now - lastRestartBlockLogAt > 5_000) {
       const remainingMs = Math.max(0, restartBlockedUntil - now);
-      console.error(
-        `BLOCKED Restart temporarily blocked (${Math.ceil(remainingMs / 1000)}s left). Skipping spawn for: ${reason}`,
-      );
+      logger.error("Restart temporarily blocked", {
+        remainingSeconds: Math.ceil(remainingMs / 1000),
+        spawnReason: reason,
+      });
       lastRestartBlockLogAt = now;
     }
     return null;
@@ -276,26 +281,26 @@ function safeFork(reason: string): Worker | null {
   const maxWorkers = getMaxWorkers();
 
   if (aliveWorkers.length >= maxWorkers) {
-    console.log(`WARN Max workers (${maxWorkers}) reached. Skipping spawn for: ${reason}`);
+    logger.warn("Max workers reached; skipping spawn", { maxWorkers, spawnReason: reason });
     return null;
   }
 
   try {
     const worker = cluster.fork({ ...process.env, SQR_CLUSTER_WORKER: "1" });
-    console.log(`Spawn worker#${worker.id} (${reason})`);
+    logger.info("Spawned worker", { workerId: worker.id, spawnReason: reason });
 
     // Prevent IPC crash on worker errors
     worker.on("error", (err) => {
-      console.error(`Worker#${worker.id} error:`, err);
+      logger.error("Worker emitted error", { workerId: worker.id, error: err });
     });
 
     worker.on("disconnect", () => {
-      console.warn(`Worker#${worker.id} disconnected`);
+      logger.warn("Worker disconnected", { workerId: worker.id });
     });
 
     return worker;
   } catch (err) {
-    console.error(`Failed to fork worker for ${reason}:`, err);
+    logger.error("Failed to fork worker", { spawnReason: reason, error: err });
     return null;
   }
 }
@@ -376,7 +381,7 @@ function evaluateScale() {
   const memoryPressureHigh = memUsageMB > memoryScaleUpBlockMB;
 
   if (memoryPressureHigh) {
-    console.log(`WARN High memory (${Math.round(memUsageMB)}MB). Skipping scale up.`);
+    logger.warn("High memory detected; skipping scale up", { memoryUsageMB: Math.round(memUsageMB) });
   }
 
   // Predictive actions before overload.
@@ -446,12 +451,12 @@ function wireWorker(worker: Worker) {
         fatalStartupLockReason = reason;
         restartBlockedUntil = Date.now() + RESTART_BLOCK_MS;
         lastRestartBlockLogAt = Date.now();
-        console.error(
-          "FATAL Worker reported fatal startup error: EADDRINUSE. " +
-          "Auto-restart is disabled until process restart to prevent respawn loop."
-        );
+        logger.error("Worker reported fatal startup error and auto-restart is disabled", {
+          workerId: worker.id,
+          reason,
+        });
       } else {
-        console.error(`FATAL Worker reported fatal startup error: ${reason}`);
+        logger.error("Worker reported fatal startup error", { workerId: worker.id, reason });
       }
       return;
     }
@@ -507,10 +512,11 @@ function bootCluster() {
 
     if (fatalReason === "EADDRINUSE") {
       fatalStartupLockReason = "EADDRINUSE";
-      console.error(
-        `FATAL Worker#${worker.id} exited due to EADDRINUSE (port already in use). ` +
-        "Skipping automatic restart to prevent infinite respawn."
-      );
+      logger.error("Worker exited due to EADDRINUSE; skipping automatic restart", {
+        workerId: worker.id,
+        code,
+        signal,
+      });
       if (getWorkers().length === 0) {
         shutdownMasterDueToFatalStartup("EADDRINUSE");
       }
@@ -535,15 +541,21 @@ function bootCluster() {
       if (unexpectedExitTimestamps.length > MAX_RESTART_ATTEMPTS) {
         restartBlockedUntil = now + RESTART_BLOCK_MS;
         lastRestartBlockLogAt = now;
-        console.error(
-          `ERROR CRASH LOOP DETECTED: Worker#${worker.id} failed (code=${code}). ` +
-          `Exceeded max restart attempts (${MAX_RESTART_ATTEMPTS}) within ${Math.round(RESTART_FAILURE_WINDOW_MS / 1000)}s. ` +
-          `Pausing restarts for ${Math.round(RESTART_BLOCK_MS / 1000)}s. Check root cause (for example, EADDRINUSE).`
-        );
+        logger.error("Crash loop detected; pausing worker restarts", {
+          workerId: worker.id,
+          code,
+          maxRestartAttempts: MAX_RESTART_ATTEMPTS,
+          failureWindowSeconds: Math.round(RESTART_FAILURE_WINDOW_MS / 1000),
+          restartBlockSeconds: Math.round(RESTART_BLOCK_MS / 1000),
+        });
         return;
       }
       
-      console.error(`ERROR Worker#${worker.id} exited unexpectedly (code=${code}, signal=${signal}). Restarting...`);
+      logger.error("Worker exited unexpectedly; attempting restart", {
+        workerId: worker.id,
+        code,
+        signal,
+      });
       
       // Only allow ONE spawn attempt per RESTART_THROTTLE_MS period
       // This prevents rapid respawning when multiple workers fail in succession
@@ -552,14 +564,17 @@ function bootCluster() {
         const w = safeFork("unexpected-exit-restart");
         if (w) {
           wireWorker(w);
-          console.log(`  OK Spawned replacement worker in response to failure`);
+          logger.info("Spawned replacement worker in response to failure", { workerId: w.id });
         } else {
-          console.log(`  WARN Failed to spawn replacement (hard cap or resource limit)`);
+          logger.warn("Failed to spawn replacement worker", { workerId: worker.id });
         }
       } else {
         // We just spawned within the throttle window - don't spawn again yet
         const remainingDelay = RESTART_THROTTLE_MS - timeSinceLastSpawn;
-        console.log(`WAIT Throttling restart (${remainingDelay}ms) - spawn already attempted recently`);
+        logger.info("Throttling worker restart because a spawn was attempted recently", {
+          workerId: worker.id,
+          remainingDelayMs: remainingDelay,
+        });
       }
     }
 
@@ -583,17 +598,21 @@ function bootCluster() {
   });
 
   setInterval(evaluateScale, SCALE_INTERVAL_MS);
-  console.log(`Cluster master online. workers=${initialWorkers}/${getMaxWorkers()} (min=${getMinWorkers()})`);
+  logger.info("Cluster master online", {
+    workers: initialWorkers,
+    maxWorkers: getMaxWorkers(),
+    minWorkers: getMinWorkers(),
+  });
 }
 
 // GLOBAL ERROR PROTECTION: Master must NEVER crash
 process.on("uncaughtException", (err) => {
-  console.error("ERROR Uncaught Exception in master:", err);
+  logger.error("Uncaught exception in cluster master", { error: err });
   // Log but don't exit - cluster must survive
 });
 
 process.on("unhandledRejection", (reason, promise) => {
-  console.error("ERROR Unhandled Rejection in master:", reason);
+  logger.error("Unhandled rejection in cluster master", { reason });
   // Log but don't exit - cluster must survive
 });
 

@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import path from "path";
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
+import { logger } from "../lib/logger";
 
 function inferMimeTypeFromReceiptPath(receiptPath: string): string {
   const extension = path.extname(String(receiptPath || "").trim()).toLowerCase();
@@ -173,7 +174,7 @@ export class CollectionBootstrap {
         }
         this.recordsReady = true;
       } catch (err: any) {
-        console.error("ERROR Failed to ensure collection_records table:", err?.message || err);
+        logger.error("Failed to ensure collection records table", { error: err });
         throw err;
       }
     })();
@@ -285,7 +286,7 @@ export class CollectionBootstrap {
 
         this.staffNicknamesReady = true;
       } catch (err: any) {
-        console.error("ERROR Failed to ensure collection_staff_nicknames table:", err?.message || err);
+        logger.error("Failed to ensure collection staff nicknames table", { error: err });
         throw err;
       }
     })();
@@ -419,7 +420,7 @@ export class CollectionBootstrap {
 
         this.adminGroupsReady = true;
       } catch (err: any) {
-        console.error("ERROR Failed to ensure admin group tables:", err?.message || err);
+        logger.error("Failed to ensure admin group tables", { error: err });
         throw err;
       }
     })();
@@ -486,7 +487,7 @@ export class CollectionBootstrap {
 
         this.nicknameSessionsReady = true;
       } catch (err: any) {
-        console.error("ERROR Failed to ensure collection nickname session table:", err?.message || err);
+        logger.error("Failed to ensure collection nickname session table", { error: err });
         throw err;
       }
     })();
@@ -614,7 +615,7 @@ export class CollectionBootstrap {
 
         this.adminVisibleNicknamesReady = true;
       } catch (err: any) {
-        console.error("ERROR Failed to ensure admin_visible_nicknames table:", err?.message || err);
+        logger.error("Failed to ensure admin visible nicknames table", { error: err });
         throw err;
       }
     })();
@@ -719,7 +720,7 @@ export class CollectionBootstrap {
 
         this.dailyTablesReady = true;
       } catch (err: any) {
-        console.error("ERROR Failed to ensure collection daily tables:", err?.message || err);
+        logger.error("Failed to ensure collection daily tables", { error: err });
         throw err;
       }
     })();

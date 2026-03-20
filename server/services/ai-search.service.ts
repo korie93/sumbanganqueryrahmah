@@ -42,6 +42,7 @@ import type {
   LastAiPersonEntry,
   SearchCacheEntry,
 } from "./ai-search-types";
+import { logger } from "../lib/logger";
 
 export class AiSearchService {
   private readonly debugGlobal = globalThis as typeof globalThis & {
@@ -131,8 +132,7 @@ export class AiSearchService {
       };
     } catch (error: unknown) {
       if (shouldLogAiSearchResolveError(error)) {
-        const errorMessage = error instanceof Error ? error.message : String(error ?? "");
-        console.error("AI search compute failed:", errorMessage || error);
+        logger.error("AI search compute failed", { error });
       }
       return buildAiSearchResolveErrorResponse(error);
     }
@@ -166,8 +166,8 @@ export class AiSearchService {
     }
 
     if (process.env.AI_DEBUG === "1") {
-      console.log(
-        "AI_SEARCH DEBUG",
+      logger.debug(
+        "AI search candidate debug",
         buildAiSearchDebugPayload({
           query,
           keywordQuery,
@@ -201,7 +201,10 @@ export class AiSearchService {
     });
 
     if (process.env.AI_DEBUG === "1" && best) {
-      console.log("AI_SEARCH BEST ROW", buildAiBestCandidateDebugPayload(best));
+      const bestCandidateDebugPayload = buildAiBestCandidateDebugPayload(best);
+      if (bestCandidateDebugPayload) {
+        logger.debug("AI search best row", bestCandidateDebugPayload);
+      }
     }
 
     if (best) {

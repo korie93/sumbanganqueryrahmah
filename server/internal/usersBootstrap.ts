@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import { count, sql } from "drizzle-orm";
@@ -11,8 +13,33 @@ import {
 import { generateTemporaryPassword } from "../auth/passwords";
 import { shouldSeedDefaultUsers } from "../config/security";
 import { db } from "../db-postgres";
+import { logger } from "../lib/logger";
 
 const BCRYPT_COST = 12;
+const LOCAL_SUPERUSER_CREDENTIALS_FILE = path.resolve(
+  process.cwd(),
+  "output",
+  "local-superuser-credentials.txt",
+);
+
+async function writeLocalSuperuserCredentials(username: string, password: string) {
+  await mkdir(path.dirname(LOCAL_SUPERUSER_CREDENTIALS_FILE), { recursive: true });
+  await writeFile(
+    LOCAL_SUPERUSER_CREDENTIALS_FILE,
+    [
+      "SQR local superuser bootstrap credentials",
+      `generatedAt=${new Date().toISOString()}`,
+      `username=${username}`,
+      `password=${password}`,
+      "",
+      "Change the password immediately after first login and delete this file afterward.",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  return LOCAL_SUPERUSER_CREDENTIALS_FILE;
+}
 
 export class UsersBootstrap {
   private ready = false;
@@ -222,7 +249,7 @@ export class UsersBootstrap {
 
         this.ready = true;
       } catch (err: any) {
-        console.error("ERROR Failed to ensure users table:", err?.message || err);
+        logger.error("Failed to ensure users table", { error: err });
         throw err;
       }
     })();
@@ -249,6 +276,7 @@ export class UsersBootstrap {
         && Number(existingUserCount || 0) === 0
         && process.env.NODE_ENV !== "production";
       let generatedLocalSuperuserPassword: string | null = null;
+      let localSuperuserCredentialsFilePath: string | null = null;
 
       const defaultUsers = [
         {
@@ -272,9 +300,14 @@ export class UsersBootstrap {
       ].filter((user) => user.password);
 
       if (isFreshLocalBootstrap) {
+        const bootstrapUsername = process.env.SEED_SUPERUSER_USERNAME || "superuser";
         generatedLocalSuperuserPassword = generateTemporaryPassword();
+        localSuperuserCredentialsFilePath = await writeLocalSuperuserCredentials(
+          bootstrapUsername,
+          generatedLocalSuperuserPassword,
+        );
         defaultUsers.push({
-          username: process.env.SEED_SUPERUSER_USERNAME || "superuser",
+          username: bootstrapUsername,
           password: process.env.SEED_SUPERUSER_PASSWORD || generatedLocalSuperuserPassword,
           fullName: process.env.SEED_SUPERUSER_FULL_NAME || "Local Superuser",
           role: "superuser",
@@ -316,10 +349,13 @@ export class UsersBootstrap {
       }
 
       if (generatedLocalSuperuserPassword) {
-        console.warn("[AUTH] No users found. Bootstrapped a local superuser account with a random temporary password.");
-        console.warn(`[AUTH] Local superuser username: ${process.env.SEED_SUPERUSER_USERNAME || "superuser"}`);
-        console.warn(`[AUTH] Local superuser temporary password: ${generatedLocalSuperuserPassword}`);
-        console.warn("[AUTH] Change the password immediately after first login.");
+        logger.warn("Bootstrapped a local superuser account with a temporary password saved to disk", {
+          username: process.env.SEED_SUPERUSER_USERNAME || "superuser",
+          credentialsFilePath: localSuperuserCredentialsFilePath,
+        });
+        logger.warn("Change the local superuser password immediately after first login", {
+          credentialsFilePath: localSuperuserCredentialsFilePath,
+        });
       }
 
       this.seedCompleted = true;

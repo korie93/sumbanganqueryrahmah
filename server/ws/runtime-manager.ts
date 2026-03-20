@@ -1,5 +1,6 @@
 import { WebSocket, type WebSocketServer } from "ws";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
+import { logger } from "../lib/logger";
 import type { PostgresStorage } from "../storage-postgres";
 import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
 
@@ -65,7 +66,9 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
       const activity = await storage.getActivityById(activityId);
       if (!isActiveWebSocketSession(activity)) {
-        console.log("WS rejected: invalid or expired session");
+        logger.debug("WebSocket rejected because the session is invalid or expired", {
+          activityId,
+        });
         ws.close();
         return;
       }
@@ -76,7 +79,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
 
       connectedClients.set(activityId, ws);
-      console.log(`WS connected for activityId=${activityId}`);
+      logger.debug("WebSocket connected", { activityId });
 
       const cleanupSocket = () => {
         if (connectedClients.get(activityId) === ws) {
@@ -86,11 +89,11 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
       ws.on("close", () => {
         cleanupSocket();
-        console.log(`WS closed for activityId=${activityId}`);
+        logger.debug("WebSocket closed", { activityId });
       });
       ws.on("error", cleanupSocket);
-    } catch {
-      console.log("WS handshake failed");
+    } catch (error) {
+      logger.warn("WebSocket handshake failed", { error });
       ws.close();
     }
   });

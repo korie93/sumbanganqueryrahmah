@@ -8,6 +8,7 @@ import {
   normalizeLocationHint,
   toObjectJson,
 } from "./ai-search-query-utils";
+import { logger } from "../lib/logger";
 import type {
   AiBranchSearchResult,
   AiNearestBranchResult,
@@ -182,7 +183,7 @@ export async function resolveAiBranchLookup(
           const branches = await lookups.nearestBranches(pc.lat, pc.lng, 1, branchTimeoutMs);
           nearestBranch = branches[0] || null;
           if (debugEnabled) {
-            console.log("AI_SEARCH POSTCODE_COORD", {
+            logger.debug("AI search postcode coordinate lookup", {
               postcode,
               lat: pc.lat,
               lng: pc.lng,
@@ -201,7 +202,7 @@ export async function resolveAiBranchLookup(
 
           nearestBranch = branches[0] || null;
           if (debugEnabled) {
-            console.log("AI_SEARCH POSTCODE_TEXT", {
+            logger.debug("AI search postcode text lookup", {
               postcode,
               branchCount: branches.length,
               branch: branches[0]?.name || null,
