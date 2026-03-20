@@ -29,6 +29,7 @@ const getNavGroupTrigger = (page, groupId) =>
 const createTracker = () => {
   const failedRequests = [];
   const consoleMessages = [];
+  const baseOrigin = new URL(baseUrl).origin;
 
   return {
     failedRequests,
@@ -45,14 +46,23 @@ const createTracker = () => {
       page.on("console", (message) => {
         const type = message.type();
         if (type === "error" || type === "warning") {
-          consoleMessages.push(`[${type}] ${message.text()}`);
+          const text = message.text();
+          if (/^Failed to load resource: the server responded with a status of \d{3}/.test(text)) {
+            return;
+          }
+          consoleMessages.push(`[${type}] ${text}`);
         }
       });
 
       page.on("response", (response) => {
         const url = response.url();
-        if (url.includes("/api/me") && response.status() >= 400) {
-          failedRequests.push(`GET ${url} :: ${response.status()}`);
+        if (
+          response.status() >= 400
+          && (url.startsWith(baseOrigin) || url.startsWith("/"))
+        ) {
+          failedRequests.push(
+            `${response.request().method()} ${url} :: ${response.status()}`,
+          );
         }
       });
     },
@@ -349,6 +359,8 @@ const probeAuthSession = async (page) =>
 
 const checkLogoutFlow = async (page, context, tracker) => {
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+  await page.getByTestId("button-user-menu").waitFor();
   await page.waitForLoadState("networkidle");
   await openUserMenu(page);
   await page.getByTestId("button-logout").click();

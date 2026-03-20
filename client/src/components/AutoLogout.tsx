@@ -95,6 +95,8 @@ export default function AutoLogout({
   }, [clearIdleTimeout, runLogout, timeoutMs]);
 
   const sendHeartbeat = useCallback(async () => {
+    if (logoutStartedRef.current) return;
+
     const activityId = localStorage.getItem("activityId");
     const fingerprint = localStorage.getItem("fingerprint");
 
