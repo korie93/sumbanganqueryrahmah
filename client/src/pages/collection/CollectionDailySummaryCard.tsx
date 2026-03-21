@@ -9,6 +9,12 @@ type CollectionDailySummaryCardProps = {
 export function CollectionDailySummaryCard({ overview }: CollectionDailySummaryCardProps) {
   const varianceClassName =
     overview.summary.progressVarianceAmount >= 0 ? "font-semibold text-green-700" : "font-semibold text-rose-700";
+  const remainingTarget = overview.summary.remainingTarget ?? overview.summary.balancedAmount;
+  const requiredPerRemainingWorkingDay =
+    overview.summary.requiredPerRemainingWorkingDay
+    || (overview.summary.remainingWorkingDays > 0
+      ? remainingTarget / overview.summary.remainingWorkingDays
+      : 0);
 
   return (
     <Card className="border-border/60 bg-background/70">
@@ -18,19 +24,22 @@ export function CollectionDailySummaryCard({ overview }: CollectionDailySummaryC
             Monthly Target: <span className="font-semibold">{formatAmountRM(overview.summary.monthlyTarget)}</span>
           </div>
           <div>
-            Collected: <span className="font-semibold">{formatAmountRM(overview.summary.collectedAmount)}</span>
+            Collected To Date: <span className="font-semibold">{formatAmountRM(overview.summary.collectedToDate ?? overview.summary.collectedAmount)}</span>
           </div>
           <div>
-            Balanced: <span className="font-semibold">{formatAmountRM(overview.summary.balancedAmount)}</span>
+            Remaining Target: <span className="font-semibold">{formatAmountRM(remainingTarget)}</span>
           </div>
           <div>
-            Daily Working-Day Target: <span className="font-semibold">{formatAmountRM(overview.summary.dailyTarget)}</span>
+            Base Daily Working-Day Target: <span className="font-semibold">{formatAmountRM(overview.summary.dailyTarget)}</span>
           </div>
           <div>
             Expected Progress: <span className="font-semibold">{formatAmountRM(overview.summary.expectedProgressAmount)}</span>
           </div>
           <div>
             Progress Variance: <span className={varianceClassName}>{formatAmountRM(overview.summary.progressVarianceAmount)}</span>
+          </div>
+          <div>
+            Required Per Remaining Working Day: <span className="font-semibold">{formatAmountRM(requiredPerRemainingWorkingDay)}</span>
           </div>
           <div>
             Working Days: <span className="font-semibold">{overview.summary.workingDays}</span>
@@ -52,8 +61,8 @@ export function CollectionDailySummaryCard({ overview }: CollectionDailySummaryC
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          Carry-forward rule: shortfall from a working day is added to the next working day target.
-          Excess collection reduces future required target.
+          Remaining target is always capped to monthly target minus collected amount. Daily requirement is recalculated
+          from remaining target divided by remaining working days.
         </p>
       </CardContent>
     </Card>

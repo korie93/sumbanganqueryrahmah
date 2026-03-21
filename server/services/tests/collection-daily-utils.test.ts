@@ -21,7 +21,7 @@ function buildCalendarMonth(
   });
 }
 
-test("computeCollectionDailyTimeline carries shortfall forward and applies excess credit", () => {
+test("computeCollectionDailyTimeline keeps daily requirements capped by remaining target and working days", () => {
   const year = 2026;
   const month = 3;
   const timeline = computeCollectionDailyTimeline({
@@ -58,21 +58,24 @@ test("computeCollectionDailyTimeline carries shortfall forward and applies exces
   assert.equal(day2.carryOut, 1500);
   assert.equal(day2.status, "yellow");
 
-  assert.equal(day3.target, 5500);
-  assert.equal(day3.carryOut, -500);
+  assert.equal(day3.target, 4500);
+  assert.equal(day3.carryOut, 0);
   assert.equal(day3.status, "green");
 
-  assert.equal(day5.target, 3500);
-  assert.equal(day5.status, "green");
+  assert.equal(day5.target, 3750);
+  assert.equal(day5.status, "yellow");
 
   assert.equal(day6.target, 4000);
   assert.equal(day6.status, "red");
 
+  assert.equal(timeline.summary.collectedToDate, 12000);
+  assert.equal(timeline.summary.remainingTarget, 4000);
   assert.equal(timeline.summary.workingDays, 4);
   assert.equal(timeline.summary.elapsedWorkingDays, 3);
   assert.equal(timeline.summary.remainingWorkingDays, 1);
-  assert.equal(timeline.summary.completedDays, 2);
-  assert.equal(timeline.summary.incompleteDays, 1);
+  assert.equal(timeline.summary.requiredPerRemainingWorkingDay, 4000);
+  assert.equal(timeline.summary.completedDays, 1);
+  assert.equal(timeline.summary.incompleteDays, 2);
   assert.equal(timeline.summary.noCollectionDays, 1);
   assert.equal(timeline.summary.expectedProgressAmount, 12000);
   assert.equal(timeline.summary.progressVarianceAmount, 0);
@@ -94,6 +97,7 @@ test("computeCollectionDailyTimeline keeps non-working days neutral", () => {
   assert.equal(day1.target, 0);
   assert.equal(timeline.summary.workingDays, 0);
   assert.equal(timeline.summary.elapsedWorkingDays, 0);
+  assert.equal(timeline.summary.requiredPerRemainingWorkingDay, 0);
   assert.equal(timeline.summary.expectedProgressAmount, 0);
   assert.equal(timeline.summary.progressVarianceAmount, 200);
   assert.equal(timeline.summary.neutralDays, timeline.daysInMonth);

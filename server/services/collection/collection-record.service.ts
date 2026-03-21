@@ -49,11 +49,14 @@ type DailyOverviewComputation = {
   selectedUsers: DailyResolvedUser[];
   summary: {
     monthlyTarget: number;
+    collectedToDate: number;
     collectedAmount: number;
+    remainingTarget: number;
     balancedAmount: number;
     workingDays: number;
     elapsedWorkingDays: number;
     remainingWorkingDays: number;
+    requiredPerRemainingWorkingDay: number;
     completedDays: number;
     incompleteDays: number;
     noCollectionDays: number;
@@ -840,7 +843,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
       summary: computation.summary,
       days: computation.days,
       carryForwardRule:
-        "Daily shortfall is carried forward to the next working day. Excess collection reduces future required targets.",
+        "Daily requirement is calculated from remaining target divided by remaining working days, capped by the monthly target.",
     };
   }
 
