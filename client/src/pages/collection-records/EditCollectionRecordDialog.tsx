@@ -32,6 +32,7 @@ export interface EditCollectionRecordDialogProps {
   editAccountNumber: string;
   editBatch: CollectionBatch;
   editPaymentDate: string;
+  maxPaymentDate: string;
   editAmount: string;
   editStaffNickname: string;
   editNewReceiptFiles: File[];
@@ -67,6 +68,7 @@ export function EditCollectionRecordDialog({
   editAccountNumber,
   editBatch,
   editPaymentDate,
+  maxPaymentDate,
   editAmount,
   editStaffNickname,
   editNewReceiptFiles,
@@ -151,6 +153,7 @@ export function EditCollectionRecordDialog({
             <Input
               type="date"
               value={editPaymentDate}
+              max={maxPaymentDate}
               onChange={(event) => onPaymentDateChange(event.target.value)}
               disabled={savingEdit}
             />

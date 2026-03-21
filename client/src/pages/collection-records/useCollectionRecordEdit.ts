@@ -15,6 +15,9 @@ import {
 } from "@/lib/api";
 import {
   COLLECTION_BATCH_OPTIONS,
+  emitCollectionDataChanged,
+  getTodayIsoDate,
+  isFutureDate,
   isPositiveAmount,
   isValidCustomerPhone,
   isValidDate,
@@ -57,6 +60,7 @@ export function useCollectionRecordEdit({
   const [editNewReceiptFiles, setEditNewReceiptFiles] = useState<File[]>([]);
   const [editRemovedReceiptIds, setEditRemovedReceiptIds] = useState<string[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
+  const maxPaymentDate = getTodayIsoDate();
 
   useEffect(() => {
     return () => {
@@ -151,6 +155,14 @@ export function useCollectionRecordEdit({
       });
       return;
     }
+    if (isFutureDate(editPaymentDate)) {
+      toast({
+        title: "Validation Error",
+        description: "Payment Date cannot be in the future.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!isPositiveAmount(editAmount)) {
       toast({
         title: "Validation Error",
@@ -214,6 +226,7 @@ export function useCollectionRecordEdit({
         title: "Record Updated",
         description: "Rekod collection berjaya dikemaskini.",
       });
+      emitCollectionDataChanged();
       if (!isMountedRef.current) return;
       setEditOpen(false);
       setEditingRecord(null);
@@ -266,6 +279,7 @@ export function useCollectionRecordEdit({
       editPaymentDate,
       editAmount,
       editStaffNickname,
+      maxPaymentDate,
       editNewReceiptFiles,
       editRemovedReceiptIds,
       editReceiptInputRef,

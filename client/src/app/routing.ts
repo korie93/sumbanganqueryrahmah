@@ -96,6 +96,7 @@ export function resolveRouteFromLocation(pathname: string, search: string): Reso
 
 export function buildPathForPage(page: string, monitorSection: MonitorSection = "monitor") {
   if (page === "settings") return "/settings";
+  if (page === "backup") return "/settings?section=backup-restore";
   if (page === "collection-report") return "/collection/save";
   if (page === "maintenance") return "/maintenance";
   if (page === "forgot-password") return "/forgot-password";

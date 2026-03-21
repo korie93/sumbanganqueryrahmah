@@ -95,7 +95,7 @@ export default function CollectionReport() {
           </CardHeader>
         </Card>
 
-        <div className="relative flex items-start gap-4">
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start">
           <CollectionSidebar
             items={navigation.sidebarItems}
             mobileOpen={navigation.mobileSidebarOpen}

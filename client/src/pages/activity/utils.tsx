@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import type { ActivityFilters } from "@/lib/api";
+import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import type { ActivityRecord, ActivityStatus, ParsedBrowserInfo } from "@/pages/activity/types";
 
 export function getCurrentActivityRole() {
@@ -37,15 +38,7 @@ export function getActivityFilterCount(filters: ActivityFilters) {
 
 export function formatActivityTime(dateStr: string) {
   if (!dateStr) return "-";
-  const date = new Date(dateStr);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString("en-US", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatDateTimeDDMMYYYY(dateStr, { fallback: "-" });
 }
 
 export function getSessionDuration(loginTime: string, logoutTime?: string) {

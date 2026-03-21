@@ -4,6 +4,9 @@ import {
   type SetStateAction,
 } from "react";
 import {
+  ACTIVE_SETTINGS_SECTION_KEY,
+} from "@/app/constants";
+import {
   parseMonitorSectionFromPageInput,
   replaceHistory,
   resolveRouteFromLocation,
@@ -92,6 +95,10 @@ export function useAppShellAuthBootstrap({
             if (nextUser.mustChangePassword) {
               setCurrentPage("change-password");
               replaceHistory("/change-password");
+            } else if (savedPage === "backup") {
+              localStorage.setItem(ACTIVE_SETTINGS_SECTION_KEY, "backup-restore");
+              setCurrentPage("settings");
+              replaceHistory("/settings?section=backup-restore");
             } else if (nextUser.role === "user") {
               setCurrentPage(savedPage === "settings" ? "settings" : "general-search");
             } else if (savedPage) {

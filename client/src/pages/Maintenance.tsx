@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock3, ShieldAlert, TimerReset, Wrench } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMaintenanceStatus } from "@/lib/api";
+import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 
 type MaintenancePayload = {
   maintenance: boolean;
@@ -72,9 +73,7 @@ export default function MaintenancePage() {
 
   const formatTime = (raw?: string | null) => {
     if (!raw) return "-";
-    const date = new Date(raw);
-    if (Number.isNaN(date.getTime())) return "-";
-    return date.toLocaleString();
+    return formatDateTimeDDMMYYYY(raw, { fallback: "-" });
   };
 
   return (

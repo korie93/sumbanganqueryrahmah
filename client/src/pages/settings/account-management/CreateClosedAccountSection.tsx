@@ -70,8 +70,11 @@ export function CreateClosedAccountSection({
             />
           </div>
           <div className="space-y-2">
-            <p className="text-sm font-medium">Role</p>
+            <label htmlFor="create-closed-account-role" className="text-sm font-medium">
+              Role
+            </label>
             <select
+              id="create-closed-account-role"
               value={createRoleInput}
               onChange={(event) =>
                 onCreateRoleInputChange(event.target.value === "admin" ? "admin" : "user")

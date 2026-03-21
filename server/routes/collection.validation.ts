@@ -112,6 +112,15 @@ export function isValidCollectionDate(value: string): boolean {
   return Number.isFinite(parsed.getTime());
 }
 
+export function getCollectionTodayDateString(referenceDate = new Date()): string {
+  return `${referenceDate.getFullYear()}-${String(referenceDate.getMonth() + 1).padStart(2, "0")}-${String(referenceDate.getDate()).padStart(2, "0")}`;
+}
+
+export function isFutureCollectionDate(value: string, referenceDate = new Date()): boolean {
+  if (!isValidCollectionDate(value)) return false;
+  return value > getCollectionTodayDateString(referenceDate);
+}
+
 export function parseCollectionAmount(value: unknown): number | null {
   const num = Number(value);
   if (!Number.isFinite(num)) return null;

@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
+import { logger } from "../lib/logger";
 
 const DEFAULT_FRONTEND_PATHS = [
   "dist-local/public",
@@ -13,7 +14,7 @@ export function registerFrontendStatic(app: Express, options?: { cwd?: string; p
   const cwd = options?.cwd || process.cwd();
   const possiblePaths = options?.paths || DEFAULT_FRONTEND_PATHS;
 
-  console.log(`  Working directory: ${cwd}`);
+  logger.info("Resolving frontend static assets", { cwd });
 
   let foundPath: string | null = null;
   let foundIndex: string | null = null;
@@ -22,13 +23,17 @@ export function registerFrontendStatic(app: Express, options?: { cwd?: string; p
     const fullPath = path.resolve(cwd, relPath);
     const indexFile = path.join(fullPath, "index.html");
 
-    console.log(`  Checking: ${fullPath}`);
+    logger.debug("Checking frontend static path", { fullPath });
 
     try {
       if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
         const files = fs.readdirSync(fullPath);
         const preview = files.slice(0, 5).join(", ");
-        console.log(`    Found ${files.length} files: ${preview}${files.length > 5 ? "..." : ""}`);
+        logger.debug("Frontend static path exists", {
+          fullPath,
+          fileCount: files.length,
+          preview: `${preview}${files.length > 5 ? "..." : ""}`,
+        });
 
         if (fs.existsSync(indexFile)) {
           foundPath = fullPath;
@@ -37,12 +42,12 @@ export function registerFrontendStatic(app: Express, options?: { cwd?: string; p
         }
       }
     } catch (error: any) {
-      console.log(`    Error: ${error.message}`);
+      logger.warn("Failed to inspect frontend static path", { fullPath, error });
     }
   }
 
   if (foundPath && foundIndex) {
-    console.log(`  Frontend: Serving from ${foundPath}`);
+    logger.info("Serving frontend static assets", { foundPath });
     app.use(express.static(foundPath));
 
     app.use((req, res, next) => {
@@ -52,14 +57,14 @@ export function registerFrontendStatic(app: Express, options?: { cwd?: string; p
       return res.sendFile(foundIndex as string);
     });
 
-    console.log("  Frontend: OK");
+    logger.info("Frontend static assets registered successfully");
     return;
   }
 
-  console.log("");
-  console.log("  ERROR: Frontend files not found!");
-  console.log("  Please run: npm run build:local");
-  console.log(`  Expected location: ${path.resolve(cwd, "dist-local/public")}`);
+  logger.error("Frontend files were not found", {
+    expectedLocation: path.resolve(cwd, "dist-local/public"),
+    suggestedCommand: "npm run build:local",
+  });
 
   app.use((req, res) => {
     if (!req.path.startsWith("/api") && !req.path.startsWith("/ws")) {

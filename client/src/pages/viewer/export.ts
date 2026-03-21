@@ -1,5 +1,6 @@
 import { downloadViewerRowsAsCsv } from "@/pages/viewer/utils";
 import type { DataRowWithId } from "@/pages/viewer/types";
+import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 
 interface ViewerExportParams {
   headers: string[];
@@ -106,7 +107,11 @@ export async function exportViewerRowsToPdf({
   let exportType = "All Data";
   if (exportFiltered) exportType = "Filtered Data";
   if (exportSelected) exportType = "Selected Data";
-  pdf.text(`${exportType} | ${rows.length} rows | ${new Date().toLocaleString()}`, margin, yPos);
+  pdf.text(
+    `${exportType} | ${rows.length} rows | ${formatDateTimeDDMMYYYY(new Date(), { includeSeconds: true })}`,
+    margin,
+    yPos,
+  );
   yPos += 6;
 
   pdf.setDrawColor(isDark ? 100 : 200);

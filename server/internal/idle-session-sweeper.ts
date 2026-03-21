@@ -1,4 +1,5 @@
 import { WebSocket } from "ws";
+import { logger } from "../lib/logger";
 import type { PostgresStorage } from "../storage-postgres";
 
 type RuntimeSettings = {
@@ -72,7 +73,11 @@ export function startIdleSessionSweeper(options: IdleSessionSweeperOptions) {
           continue;
         }
 
-        console.log(`IDLE TIMEOUT: ${activity.username} (${activity.id})`);
+        logger.info("Session expired due to inactivity", {
+          username: activity.username,
+          activityId: activity.id,
+          idleMinutes,
+        });
 
         await storage.updateActivity(activity.id, {
           isActive: false,
@@ -99,7 +104,7 @@ export function startIdleSessionSweeper(options: IdleSessionSweeperOptions) {
         });
       }
     } catch (error) {
-      console.error("Idle session checker error:", error);
+      logger.error("Idle session checker failed", { error });
     } finally {
       running = false;
     }

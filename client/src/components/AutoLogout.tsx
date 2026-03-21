@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { activityHeartbeat } from "@/lib/api";
 
 interface AutoLogoutProps {
+  onClientLogout: () => void | Promise<void>;
   onLogout: () => void | Promise<void>;
   timeoutMinutes?: number;
   heartbeatIntervalMinutes?: number;
@@ -9,6 +10,7 @@ interface AutoLogoutProps {
 }
 
 export default function AutoLogout({
+  onClientLogout,
   onLogout,
   timeoutMinutes = 30,
   heartbeatIntervalMinutes = 5,
@@ -72,6 +74,16 @@ export default function AutoLogout({
     await onLogout();
   }, [cleanupSocket, clearHeartbeat, clearIdleTimeout, onLogout]);
 
+  const runClientLogout = useCallback(async () => {
+    if (logoutStartedRef.current) return;
+    logoutStartedRef.current = true;
+    reconnectEnabledRef.current = false;
+    clearIdleTimeout();
+    clearHeartbeat();
+    cleanupSocket();
+    await onClientLogout();
+  }, [cleanupSocket, clearHeartbeat, clearIdleTimeout, onClientLogout]);
+
   const resetTimeout = useCallback(() => {
     lastActivityRef.current = Date.now();
     clearIdleTimeout();
@@ -83,6 +95,8 @@ export default function AutoLogout({
   }, [clearIdleTimeout, runLogout, timeoutMs]);
 
   const sendHeartbeat = useCallback(async () => {
+    if (logoutStartedRef.current) return;
+
     const activityId = localStorage.getItem("activityId");
     const fingerprint = localStorage.getItem("fingerprint");
 
@@ -163,17 +177,17 @@ export default function AutoLogout({
     const handleStorage = (event: StorageEvent) => {
       if (event.key === "forceLogout" && event.newValue === "true") {
         localStorage.removeItem("forceLogout");
-        void runLogout();
+        void runClientLogout();
       }
 
       if (event.key === "user" && !event.newValue) {
-        void runLogout();
+        void runClientLogout();
       }
     };
 
     const handleForceLogout = () => {
       localStorage.removeItem("forceLogout");
-      void runLogout();
+      void runClientLogout();
     };
 
     window.addEventListener("storage", handleStorage);
@@ -182,7 +196,7 @@ export default function AutoLogout({
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener("force-logout", handleForceLogout);
     };
-  }, [runLogout]);
+  }, [runClientLogout]);
 
   useEffect(() => {
     const currentUsername = username || localStorage.getItem("username");
@@ -221,14 +235,14 @@ export default function AutoLogout({
 
             if (message.type === "kicked") {
               alert(message.reason || "Anda telah dilogout oleh pentadbir.");
-              void runLogout();
+              void runClientLogout();
             }
 
             if (message.type === "logout") {
               if (message.reason) {
                 alert(String(message.reason));
               }
-              void runLogout();
+              void runClientLogout();
             }
 
             if (message.type === "banned") {
@@ -282,7 +296,7 @@ export default function AutoLogout({
       reconnectEnabledRef.current = false;
       cleanupSocket();
     };
-  }, [cleanupSocket, clearReconnect, runLogout, username]);
+  }, [cleanupSocket, clearReconnect, runClientLogout, username]);
 
   return null;
 }

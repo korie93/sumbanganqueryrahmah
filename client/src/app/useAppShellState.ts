@@ -8,6 +8,7 @@ import type { MonitorSection } from "@/app/types";
 import { useAppShellRuntimeState } from "@/app/useAppShellRuntimeState";
 import { useAppShellSavedCount } from "@/app/useAppShellSavedCount";
 import { useAppShellTabVisibility } from "@/app/useAppShellTabVisibility";
+import { performAppLogout, performClientLogout } from "@/app/logout-flow";
 import { activityLogout } from "@/lib/api";
 
 export function useAppShellState() {
@@ -18,6 +19,7 @@ export function useAppShellState() {
 
   const {
     applyLoggedOutClientState,
+    broadcastLogoutToOtherTabs,
     handleLoginSuccess,
     isInitialized,
     user,
@@ -79,25 +81,28 @@ export function useAppShellState() {
   });
 
   const handleLogout = useCallback(async () => {
-    const activityId = localStorage.getItem("activityId") || undefined;
-    applyLoggedOutClientState(true, true);
+    await performAppLogout({
+      activityId: localStorage.getItem("activityId") || undefined,
+      activityLogout,
+      applyLoggedOutClientState,
+      broadcastLogoutToOtherTabs,
+      warn: (message, error) => {
+        console.warn(message, error);
+      },
+    });
+  }, [applyLoggedOutClientState, broadcastLogoutToOtherTabs]);
 
-    if (!activityId) {
-      return;
-    }
-
-    try {
-      await activityLogout(activityId);
-    } catch (error) {
-      if (!(error instanceof Error) || !error.message.startsWith("401:")) {
-        console.warn("Logout activity failed:", error);
-      }
-    }
-  }, [applyLoggedOutClientState]);
+  const handleClientLogout = useCallback(() => {
+    performClientLogout({
+      applyLoggedOutClientState,
+      broadcastLogoutToOtherTabs,
+    });
+  }, [applyLoggedOutClientState, broadcastLogoutToOtherTabs]);
 
   return {
     currentPage,
     featureLockdown,
+    handleClientLogout,
     handleLoginSuccess,
     handleLogout,
     handleMonitorSectionChange,

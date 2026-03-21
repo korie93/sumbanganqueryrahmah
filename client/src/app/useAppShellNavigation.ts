@@ -1,4 +1,5 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
+import { ACTIVE_SETTINGS_SECTION_KEY } from "@/app/constants";
 import {
   getDefaultMonitorSection,
   getDefaultPageForRole,
@@ -32,9 +33,33 @@ export function useAppShellNavigation({
   tabVisibilityLoaded,
   user,
 }: UseAppShellNavigationArgs) {
+  const clearViewerSelection = useCallback(() => {
+    setSelectedImportId(undefined);
+    localStorage.removeItem("selectedImportId");
+    localStorage.removeItem("selectedImportName");
+  }, [setSelectedImportId]);
+
   const handleNavigate = useCallback((page: string, importId?: string) => {
+    if (page === "backup") {
+      if (!isPageEnabled(user?.role, "backup", tabVisibility, tabVisibilityLoaded)) {
+        setCurrentPage(getDefaultPageForRole(user?.role || "user", tabVisibility, tabVisibilityLoaded));
+        return;
+      }
+      localStorage.setItem(ACTIVE_SETTINGS_SECTION_KEY, "backup-restore");
+      setCurrentPage("settings");
+      localStorage.setItem("activeTab", "settings");
+      localStorage.setItem("lastPage", "settings");
+      replaceHistory("/settings?section=backup-restore");
+      return;
+    }
+
     const monitorSectionTarget = parseMonitorSectionFromPageInput(page);
     const requestedPage = monitorSectionTarget ? "monitor" : page;
+    const preserveViewerSelection = requestedPage === "viewer" && Boolean(importId);
+
+    if (!preserveViewerSelection) {
+      clearViewerSelection();
+    }
 
     if (user?.mustChangePassword && requestedPage !== "change-password") {
       setCurrentPage("change-password");
@@ -80,6 +105,9 @@ export function useAppShellNavigation({
     }
 
     setCurrentPage(requestedPage);
+    if (requestedPage === "settings") {
+      localStorage.removeItem(ACTIVE_SETTINGS_SECTION_KEY);
+    }
     localStorage.setItem("activeTab", requestedPage);
     localStorage.setItem("lastPage", requestedPage);
     replaceHistory(buildPathForPage(requestedPage));
@@ -88,6 +116,7 @@ export function useAppShellNavigation({
       setSelectedImportId(importId);
     }
   }, [
+    clearViewerSelection,
     featureLockdown,
     monitorVisibilityMonitor,
     setCurrentPage,

@@ -23,29 +23,39 @@ import type { ImportItem } from "@/pages/saved/types";
 interface SavedDialogsProps {
   deleteDialogOpen: boolean;
   renameDialogOpen: boolean;
+  bulkDeleteDialogOpen: boolean;
   deleting: boolean;
   renaming: boolean;
+  bulkDeleting: boolean;
+  bulkDeleteCount: number;
   selectedImport: ImportItem | null;
   newName: string;
   onDeleteDialogOpenChange: (open: boolean) => void;
   onRenameDialogOpenChange: (open: boolean) => void;
+  onBulkDeleteDialogOpenChange: (open: boolean) => void;
   onNewNameChange: (value: string) => void;
   onDeleteConfirm: () => void;
   onRenameConfirm: () => void;
+  onBulkDeleteConfirm: () => void;
 }
 
 export function SavedDialogs({
   deleteDialogOpen,
   renameDialogOpen,
+  bulkDeleteDialogOpen,
   deleting,
   renaming,
+  bulkDeleting,
+  bulkDeleteCount,
   selectedImport,
   newName,
   onDeleteDialogOpenChange,
   onRenameDialogOpenChange,
+  onBulkDeleteDialogOpenChange,
   onNewNameChange,
   onDeleteConfirm,
   onRenameConfirm,
+  onBulkDeleteConfirm,
 }: SavedDialogsProps) {
   return (
     <>
@@ -66,6 +76,27 @@ export function SavedDialogs({
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={onBulkDeleteDialogOpenChange}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Selected Files?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete {bulkDeleteCount} selected file(s)? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={onBulkDeleteConfirm}
+              disabled={bulkDeleting || bulkDeleteCount === 0}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {bulkDeleting ? "Deleting..." : "Delete Selected"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

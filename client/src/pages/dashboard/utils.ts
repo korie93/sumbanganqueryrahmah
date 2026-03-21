@@ -1,5 +1,5 @@
 import { Activity, Database, FileText, LogIn, ShieldOff, Users } from "lucide-react";
-import { format } from "date-fns";
+import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import type { SummaryCardItem, SummaryData } from "@/pages/dashboard/types";
 
 export const ROLE_COLORS: Record<string, string> = {
@@ -16,11 +16,7 @@ export function formatDashboardHour(hour: number) {
 }
 
 export function formatDashboardDate(dateStr: string) {
-  try {
-    return format(new Date(dateStr), "MMM d");
-  } catch {
-    return dateStr;
-  }
+  return formatDateDDMMYYYY(dateStr, dateStr);
 }
 
 export function buildSummaryCards(summary: SummaryData | undefined): SummaryCardItem[] {
@@ -119,7 +115,7 @@ export async function exportDashboardToPdf(element: HTMLDivElement) {
   pdf.setFontSize(11);
   pdf.setFont("helvetica", "normal");
   pdf.setTextColor(isDark ? 180 : 100);
-  pdf.text(`Generated: ${new Date().toLocaleString()}`, 14, 26);
+  pdf.text(`Generated: ${formatDateTimeDDMMYYYY(new Date(), { includeSeconds: true })}`, 14, 26);
 
   pdf.setDrawColor(isDark ? 100 : 200);
   pdf.setLineWidth(0.5);

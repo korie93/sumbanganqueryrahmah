@@ -1,5 +1,6 @@
 import { BarChart3, BookMarked, ChevronDown, Edit2, Eye, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Collapsible,
   CollapsibleContent,
@@ -16,7 +17,12 @@ interface SavedImportsListProps {
   onRename: (item: ImportItem) => void;
   onAnalysis: (item: ImportItem) => void;
   onDelete: (item: ImportItem) => void;
+  onToggleSelected: (id: string, checked: boolean) => void;
+  onToggleSelectAllVisible: (checked: boolean) => void;
   formatDate: (dateStr: string) => string;
+  selectedImportIds: Set<string>;
+  allVisibleSelected: boolean;
+  partiallySelected: boolean;
 }
 
 export function SavedImportsList({
@@ -28,7 +34,12 @@ export function SavedImportsList({
   onRename,
   onAnalysis,
   onDelete,
+  onToggleSelected,
+  onToggleSelectAllVisible,
   formatDate,
+  selectedImportIds,
+  allVisibleSelected,
+  partiallySelected,
 }: SavedImportsListProps) {
   if (imports.length === 0) {
     return (
@@ -67,6 +78,19 @@ export function SavedImportsList({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="mt-4 max-h-[400px] overflow-y-auto pr-2 space-y-3">
+            {isSuperuser ? (
+              <div className="flex items-center gap-3 rounded-md border border-border/70 bg-background/70 px-3 py-2">
+                <Checkbox
+                  checked={allVisibleSelected || (partiallySelected ? "indeterminate" : false)}
+                  onCheckedChange={(checked) => onToggleSelectAllVisible(Boolean(checked))}
+                  aria-label="Select all visible imports"
+                />
+                <span className="text-sm text-muted-foreground">
+                  Select all visible files
+                </span>
+              </div>
+            ) : null}
+
             {imports.map((item) => (
               <div
                 key={item.id}
@@ -74,13 +98,20 @@ export function SavedImportsList({
                 data-testid={`card-import-${item.id}`}
               >
                 <div className="flex items-center gap-4 flex-1 min-w-0">
+                  {isSuperuser ? (
+                    <Checkbox
+                      checked={selectedImportIds.has(item.id)}
+                      onCheckedChange={(checked) => onToggleSelected(item.id, Boolean(checked))}
+                      aria-label={`Select ${item.name}`}
+                    />
+                  ) : null}
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                     <BookMarked className="w-5 h-5 text-primary" />
                   </div>
                   <div className="min-w-0">
                     <h3 className="font-medium text-foreground truncate">{item.name}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {item.filename} • {formatDate(item.createdAt)}
+                      {item.filename} - {formatDate(item.createdAt)}
                     </p>
                   </div>
                 </div>

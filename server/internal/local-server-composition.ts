@@ -2,6 +2,9 @@ import type { Express, RequestHandler, Response } from "express";
 import type { WebSocket, WebSocketServer } from "ws";
 import { getOllamaConfig } from "../ai-ollama";
 import { createAuthGuards, type AuthenticatedRequest } from "../auth/guards";
+import { createImportsController } from "../controllers/imports.controller";
+import { createOperationsController } from "../controllers/operations.controller";
+import { createSearchController } from "../controllers/search.controller";
 import type { MaintenanceState } from "../config/system-settings";
 import { injectChaos, getIntelligenceExplainability } from "../intelligence";
 import { errorHandler } from "../middleware/error-handler";
@@ -11,6 +14,7 @@ import { AuditRepository } from "../repositories/audit.repository";
 import { BackupsRepository } from "../repositories/backups.repository";
 import { ImportsRepository } from "../repositories/imports.repository";
 import { SearchRepository } from "../repositories/search.repository";
+import { createAiController } from "../controllers/ai.controller";
 import { registerActivityRoutes } from "../routes/activity.routes";
 import { registerAiRoutes } from "../routes/ai.routes";
 import { registerAuthRoutes } from "../routes/auth.routes";
@@ -22,9 +26,16 @@ import { registerSettingsRoutes } from "../routes/settings.routes";
 import { registerSystemRoutes } from "../routes/system.routes";
 import { AiChatService } from "../services/ai-chat.service";
 import { AiIndexService } from "../services/ai-index.service";
+import { AiIndexOperationsService } from "../services/ai-index-operations.service";
+import { AiInteractionService } from "../services/ai-interaction.service";
 import { AiSearchService } from "../services/ai-search.service";
+import { AuditLogOperationsService } from "../services/audit-log-operations.service";
+import { BackupOperationsService } from "../services/backup-operations.service";
 import { CategoryStatsService } from "../services/category-stats.service";
 import { ImportAnalysisService } from "../services/import-analysis.service";
+import { ImportsService } from "../services/imports.service";
+import { OperationsAnalyticsService } from "../services/operations-analytics.service";
+import { SearchService } from "../services/search.service";
 import type { PostgresStorage } from "../storage-postgres";
 import { createRuntimeWebSocketManager } from "../ws/runtime-manager";
 import { parseBackupMetadataSafe } from "./backupMetadata";
@@ -256,38 +267,46 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
   });
 
   registerImportRoutes(app, {
-    storage,
-    importsRepository,
-    importAnalysisService,
+    importsController: createImportsController({
+      importsService: new ImportsService(storage, importsRepository, importAnalysisService),
+      getRuntimeSettingsCached,
+      isDbProtected: getDbProtection,
+    }),
     authenticateToken,
     requireRole,
     requireTabAccess,
     searchRateLimiter,
-    getRuntimeSettingsCached,
-    isDbProtected: getDbProtection,
   });
 
   registerSearchRoutes(app, {
-    storage,
-    searchRepository,
+    searchController: createSearchController({
+      searchService: new SearchService(searchRepository),
+      getRuntimeSettingsCached,
+      isDbProtected: getDbProtection,
+    }),
     authenticateToken,
     searchRateLimiter,
-    getRuntimeSettingsCached,
-    isDbProtected: getDbProtection,
   });
 
   registerAiRoutes(app, {
-    storage,
+    aiController: createAiController({
+      aiInteractionService: new AiInteractionService({
+        createAuditLog: (data) => storage.createAuditLog(data),
+        getRuntimeSettingsCached,
+        aiSearchService,
+        categoryStatsService,
+        aiChatService,
+        getOllamaConfig,
+        defaultAiTimeoutMs,
+      }),
+      aiIndexOperationsService: new AiIndexOperationsService({
+        getRuntimeSettingsCached,
+        aiIndexService,
+      }),
+    }),
     authenticateToken,
     requireRole,
     withAiConcurrencyGate,
-    getRuntimeSettingsCached,
-    aiSearchService,
-    categoryStatsService,
-    aiChatService,
-    aiIndexService,
-    getOllamaConfig,
-    defaultAiTimeoutMs,
   });
 
   registerSettingsRoutes(app, {
@@ -302,16 +321,20 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
   });
 
   registerOperationsRoutes(app, {
-    storage,
-    auditRepository,
-    backupsRepository,
-    analyticsRepository,
+    operationsController: createOperationsController({
+      auditLogOperationsService: new AuditLogOperationsService(storage, auditRepository),
+      backupOperationsService: new BackupOperationsService(
+        storage,
+        backupsRepository,
+        withExportCircuit,
+        (error) => error instanceof CircuitOpenError,
+      ),
+      operationsAnalyticsService: new OperationsAnalyticsService(analyticsRepository),
+      connectedClients,
+    }),
     authenticateToken,
     requireRole,
     requireTabAccess,
-    withExportCircuit,
-    isExportCircuitOpenError: (error) => error instanceof CircuitOpenError,
-    connectedClients,
   });
 
   registerCollectionRoutes(app, {

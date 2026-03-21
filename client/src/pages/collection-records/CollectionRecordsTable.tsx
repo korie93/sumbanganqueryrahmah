@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { CollectionRecord } from "@/lib/api";
 import { formatAmountRM } from "@/pages/collection/utils";
+import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 
 export interface CollectionRecordsTableProps {
   loadingRecords: boolean;
@@ -70,7 +71,7 @@ export function CollectionRecordsTable({
                 <TableCell className="py-1.5 whitespace-nowrap">{record.customerPhone}</TableCell>
                 <TableCell className="py-1.5 whitespace-nowrap">{record.batch}</TableCell>
                 <TableCell className="py-1.5 whitespace-nowrap">{formatAmountRM(record.amount)}</TableCell>
-                <TableCell className="py-1.5 whitespace-nowrap">{record.paymentDate}</TableCell>
+                <TableCell className="py-1.5 whitespace-nowrap">{formatIsoDateToDDMMYYYY(record.paymentDate)}</TableCell>
                 <TableCell className="py-1.5 whitespace-nowrap">
                   {(record.receipts?.length || 0) > 0 || record.receiptFile ? (
                     <Button

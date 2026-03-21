@@ -119,6 +119,12 @@ export function BackupList({
                           <Archive className="h-4 w-4" />
                           <span>{backup.metadata.auditLogsCount} audit logs</span>
                         </div>
+                        {backup.metadata.collectionRecordsCount ? (
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <Database className="h-4 w-4" />
+                            <span>{backup.metadata.collectionRecordsCount} collection records</span>
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
 

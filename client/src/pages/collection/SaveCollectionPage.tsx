@@ -9,9 +9,12 @@ import { createCollectionRecord, type CollectionBatch } from "@/lib/api";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
 import {
   COLLECTION_BATCH_OPTIONS,
+  getTodayIsoDate,
+  isFutureDate,
   isValidCustomerPhone,
   isPositiveAmount,
   isValidDate,
+  emitCollectionDataChanged,
   parseApiError,
   toReceiptPayload,
   validateReceiptFile,
@@ -35,6 +38,8 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const [amount, setAmount] = useState("");
   const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const maxPaymentDate = getTodayIsoDate();
+  const isPaymentDateInFuture = paymentDate ? isFutureDate(paymentDate) : false;
 
   const clearForm = () => {
     setCustomerName("");
@@ -85,6 +90,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     if (!accountNumber.trim()) return "Account Number is required.";
     if (!COLLECTION_BATCH_OPTIONS.includes(batch)) return "Batch is not valid.";
     if (!isValidDate(paymentDate)) return "Payment Date is invalid.";
+    if (isFutureDate(paymentDate)) return "Payment Date cannot be in the future.";
     if (!isPositiveAmount(amount)) return "Amount must be greater than 0.";
     return null;
   };
@@ -125,6 +131,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         title: "Collection Saved",
         description: "Rekod collection berjaya disimpan.",
       });
+      emitCollectionDataChanged();
       clearForm();
       onSaved?.();
     } catch (error: unknown) {
@@ -181,7 +188,16 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           </div>
           <div className="space-y-2">
             <Label>Payment Date</Label>
-            <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} disabled={submitting} />
+            <Input
+              type="date"
+              value={paymentDate}
+              max={maxPaymentDate}
+              onChange={(e) => setPaymentDate(e.target.value)}
+              disabled={submitting}
+            />
+            {isPaymentDateInFuture ? (
+              <p className="text-xs text-destructive">Payment Date cannot be in the future.</p>
+            ) : null}
           </div>
           <div className="space-y-2">
             <Label>Amount (RM)</Label>

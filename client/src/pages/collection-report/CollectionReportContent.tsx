@@ -10,6 +10,9 @@ const CollectionRecordsPage = lazy(
 const CollectionSummaryPage = lazy(
   () => import("@/pages/collection/CollectionSummaryPage"),
 );
+const CollectionDailyPage = lazy(
+  () => import("@/pages/collection/CollectionDailyPage"),
+);
 const CollectionNicknameSummaryPage = lazy(
   () => import("@/pages/collection/CollectionNicknameSummaryPage"),
 );
@@ -79,6 +82,13 @@ export function CollectionReportContent({
     return (
       <Suspense fallback={<CollectionSectionFallback />}>
         <CollectionSummaryPage role={role} />
+      </Suspense>
+    );
+  }
+  if (subPage === "daily") {
+    return (
+      <Suspense fallback={<CollectionSectionFallback />}>
+        <CollectionDailyPage role={role} />
       </Suspense>
     );
   }
