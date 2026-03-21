@@ -23,6 +23,34 @@ type CollectionRecordReceiptDbRow = {
 
 export type CollectionReceiptExecutor = CollectionRepositoryExecutor;
 
+async function syncCollectionRecordPrimaryReceiptPath(
+  executor: CollectionReceiptExecutor,
+  recordId: string,
+): Promise<void> {
+  const normalizedRecordId = String(recordId || "").trim();
+  if (!normalizedRecordId) return;
+
+  const firstReceiptResult = await executor.execute(sql`
+    SELECT storage_path
+    FROM public.collection_record_receipts
+    WHERE collection_record_id = ${normalizedRecordId}::uuid
+    ORDER BY created_at ASC, id ASC
+    LIMIT 1
+  `);
+
+  const firstPath = String(
+    (firstReceiptResult.rows?.[0] as { storage_path?: string; storagePath?: string } | undefined)?.storage_path
+    ?? (firstReceiptResult.rows?.[0] as { storage_path?: string; storagePath?: string } | undefined)?.storagePath
+    ?? "",
+  ).trim();
+
+  await executor.execute(sql`
+    UPDATE public.collection_records
+    SET receipt_file = ${firstPath || null}
+    WHERE id = ${normalizedRecordId}::uuid
+  `);
+}
+
 function normalizeUniqueValues(values: string[]): string[] {
   return Array.from(
     new Set(
@@ -236,6 +264,7 @@ export async function createCollectionRecordReceiptRows(
     `);
   }
 
+  await syncCollectionRecordPrimaryReceiptPath(executor, normalizedRecordId);
   return listCollectionRecordReceiptsByIds(executor, insertedIds);
 }
 
@@ -290,6 +319,7 @@ export async function deleteCollectionRecordReceiptRows(
     WHERE collection_record_id = ${normalizedRecordId}::uuid
       AND id IN (${idSql})
   `);
+  await syncCollectionRecordPrimaryReceiptPath(executor, normalizedRecordId);
   return receipts;
 }
 
@@ -306,5 +336,6 @@ export async function deleteAllCollectionRecordReceiptRows(
     DELETE FROM public.collection_record_receipts
     WHERE id IN (${idSql})
   `);
+  await syncCollectionRecordPrimaryReceiptPath(executor, String(recordId || "").trim());
   return receipts;
 }

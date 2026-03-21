@@ -1,3 +1,4 @@
+import { readDate, readInteger, readOptionalString } from "../http/validation";
 import type { BackupsRepository } from "../repositories/backups.repository";
 import type { PostgresStorage } from "../storage-postgres";
 
@@ -6,9 +7,10 @@ type BackupOperationsBackupsRepository = Pick<
   BackupsRepository,
   | "createBackup"
   | "deleteBackup"
+  | "getBackupMetadataById"
   | "getBackupById"
   | "getBackupDataForExport"
-  | "getBackups"
+  | "listBackupsPage"
   | "restoreFromBackup"
 >;
 type BackupExportData = Awaited<
@@ -17,7 +19,19 @@ type BackupExportData = Awaited<
 type BackupRecord = NonNullable<
   Awaited<ReturnType<BackupOperationsBackupsRepository["getBackupById"]>>
 >;
-type BackupListResponse = { backups: Awaited<ReturnType<BackupOperationsBackupsRepository["getBackups"]>> };
+type BackupMetadataRecord = NonNullable<
+  Awaited<ReturnType<BackupOperationsBackupsRepository["getBackupMetadataById"]>>
+>;
+type BackupListPage = Awaited<ReturnType<BackupOperationsBackupsRepository["listBackupsPage"]>>;
+type BackupListResponse = {
+  backups: BackupListPage["backups"];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+};
 type BackupOperationResponse<T> = {
   statusCode: number;
   body: T;
@@ -38,6 +52,8 @@ type DeleteBackupInput = {
   username: string;
 };
 
+type ListBackupsInput = Record<string, unknown>;
+
 export class BackupOperationsService {
   constructor(
     private readonly storage: BackupOperationsStorage,
@@ -46,11 +62,68 @@ export class BackupOperationsService {
     private readonly isExportCircuitOpenError: (error: unknown) => boolean,
   ) {}
 
-  async listBackups(): Promise<BackupListResponse> {
-    return { backups: await this.backupsRepository.getBackups() };
+  async listBackups(query: ListBackupsInput): Promise<BackupListResponse> {
+    const page = Math.max(1, readInteger(query.page, 1));
+    const pageSize = Math.max(1, Math.min(100, readInteger(query.pageSize, 25)));
+    const searchName = readOptionalString(query.searchName ?? query.search);
+    const createdBy = readOptionalString(query.createdBy);
+    const dateFrom = readDate(query.dateFrom);
+    const dateTo = readDate(query.dateTo);
+    const sortBy = String(readOptionalString(query.sortBy) || "newest").toLowerCase();
+
+    const result = await this.backupsRepository.listBackupsPage({
+      page,
+      pageSize,
+      searchName,
+      createdBy,
+      dateFrom,
+      dateTo,
+      sortBy:
+        sortBy === "oldest" || sortBy === "name-asc" || sortBy === "name-desc"
+          ? sortBy
+          : "newest",
+    });
+
+    return {
+      backups: result.backups,
+      pagination: {
+        page: result.page,
+        pageSize: result.pageSize,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+    };
   }
 
-  async getBackup(backupId: string): Promise<BackupOperationResponse<BackupRecord | { message: string }>> {
+  async getBackupMetadata(
+    backupId: string,
+    username: string,
+  ): Promise<BackupOperationResponse<BackupMetadataRecord | { message: string }>> {
+    const backup = await this.backupsRepository.getBackupMetadataById(backupId);
+    if (!backup) {
+      return {
+        statusCode: 404,
+        body: { message: "Backup not found" },
+      };
+    }
+
+    await this.storage.createAuditLog({
+      action: "VIEW_BACKUP_METADATA",
+      performedBy: username,
+      targetResource: backup.name,
+      details: JSON.stringify({ backupId: backup.id }),
+    });
+
+    return {
+      statusCode: 200,
+      body: backup,
+    };
+  }
+
+  async exportBackup(
+    backupId: string,
+    username: string,
+  ): Promise<BackupOperationResponse<{ fileName: string; payloadJson: string } | { message: string }>> {
     const backup = await this.backupsRepository.getBackupById(backupId);
     if (!backup) {
       return {
@@ -59,9 +132,42 @@ export class BackupOperationsService {
       };
     }
 
+    let parsedBackupData: unknown;
+    try {
+      parsedBackupData = JSON.parse(String(backup.backupData || "{}"));
+    } catch {
+      return {
+        statusCode: 500,
+        body: { message: "Backup payload is not readable." },
+      };
+    }
+
+    const exportPayload = {
+      id: backup.id,
+      name: backup.name,
+      createdAt: backup.createdAt,
+      createdBy: backup.createdBy,
+      metadata: backup.metadata ?? null,
+      backupData: parsedBackupData,
+    };
+
+    await this.storage.createAuditLog({
+      action: "DOWNLOAD_BACKUP_EXPORT",
+      performedBy: username,
+      targetResource: backup.name,
+      details: JSON.stringify({ backupId: backup.id }),
+    });
+
+    const safeNameStem = String(backup.name || "backup")
+      .trim()
+      .replace(/[^a-zA-Z0-9._-]+/g, "_")
+      .slice(0, 80) || "backup";
     return {
       statusCode: 200,
-      body: backup,
+      body: {
+        fileName: `${safeNameStem}-${backup.id}.json`,
+        payloadJson: JSON.stringify(exportPayload),
+      },
     };
   }
 

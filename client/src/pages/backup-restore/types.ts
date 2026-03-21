@@ -18,6 +18,12 @@ export interface BackupRecord {
 
 export interface BackupsResponse {
   backups: BackupRecord[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 export interface RestoreResponse {

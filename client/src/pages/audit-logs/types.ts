@@ -16,6 +16,16 @@ export interface AuditLogStats {
   oldestLogDate: string | null;
 }
 
+export interface AuditLogsResponse {
+  logs: AuditLogRecord[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 export interface AuditLogFilters {
   actionFilter: string;
   dateFrom: string;

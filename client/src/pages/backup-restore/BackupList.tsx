@@ -7,7 +7,6 @@ import type { BackupRecord } from "@/pages/backup-restore/types";
 import { formatBackupTime } from "@/pages/backup-restore/utils";
 
 interface BackupListProps {
-  backups: BackupRecord[];
   backupsOpen: boolean;
   canManageBackups: boolean;
   deletingId: string | null;
@@ -18,10 +17,10 @@ interface BackupListProps {
   onDeleteClick: (backup: BackupRecord) => void;
   onRestoreClick: (backup: BackupRecord) => void;
   restoringId: string | null;
+  totalBackups: number;
 }
 
 export function BackupList({
-  backups,
   backupsOpen,
   canManageBackups,
   deletingId,
@@ -32,6 +31,7 @@ export function BackupList({
   onDeleteClick,
   onRestoreClick,
   restoringId,
+  totalBackups,
 }: BackupListProps) {
   return (
     <Collapsible open={backupsOpen} onOpenChange={onBackupsOpenChange}>
@@ -45,7 +45,7 @@ export function BackupList({
             >
               <CardTitle className="text-lg flex items-center gap-2">
                 <Archive className="h-5 w-5" />
-                Backup List ({filteredBackups.length} of {backups.length})
+                Backup List ({filteredBackups.length} of {totalBackups})
               </CardTitle>
               <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${backupsOpen ? "rotate-180" : ""}`} />
             </Button>
@@ -60,7 +60,7 @@ export function BackupList({
             ) : filteredBackups.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                {backups.length === 0 ? (
+                {totalBackups === 0 ? (
                   <>
                     <p>No backups found.</p>
                     <p className="text-sm mt-2">Click "Create Backup" to create a new backup.</p>

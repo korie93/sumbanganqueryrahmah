@@ -10,7 +10,6 @@ import {
   normalizeAccountStatus,
   normalizeUserRole,
 } from "../auth/account-lifecycle";
-import { generateTemporaryPassword } from "../auth/passwords";
 import { shouldSeedDefaultUsers } from "../config/security";
 import { db } from "../db-postgres";
 import { logger } from "../lib/logger";
@@ -21,6 +20,42 @@ const LOCAL_SUPERUSER_CREDENTIALS_FILE = path.resolve(
   "output",
   "local-superuser-credentials.txt",
 );
+
+function readBooleanFlag(name: string, fallback = false): boolean {
+  const raw = String(process.env[name] || "").trim().toLowerCase();
+  if (!raw) return fallback;
+  if (["1", "true", "yes", "on"].includes(raw)) return true;
+  if (["0", "false", "no", "off"].includes(raw)) return false;
+  return fallback;
+}
+
+function isLoopbackHost(value: string): boolean {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "127.0.0.1" || normalized === "localhost" || normalized === "::1";
+}
+
+function isStrictLocalDevelopmentEnvironment(): boolean {
+  if (String(process.env.NODE_ENV || "").trim().toLowerCase() !== "development") {
+    return false;
+  }
+
+  const host = String(process.env.HOST || "").trim();
+  if (host && !isLoopbackHost(host)) {
+    return false;
+  }
+
+  const publicAppUrl = String(process.env.PUBLIC_APP_URL || "").trim();
+  if (!publicAppUrl) {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(publicAppUrl);
+    return isLoopbackHost(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
 
 async function writeLocalSuperuserCredentials(username: string, password: string) {
   await mkdir(path.dirname(LOCAL_SUPERUSER_CREDENTIALS_FILE), { recursive: true });
@@ -214,6 +249,57 @@ export class UsersBootstrap {
         await db.execute(sql`ALTER TABLE public.users ALTER COLUMN status SET NOT NULL`);
         await db.execute(sql`ALTER TABLE public.users ALTER COLUMN password_hash SET NOT NULL`);
 
+        await db.execute(sql`
+          DELETE FROM public.account_activation_tokens token
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM public.users usr
+            WHERE usr.id = token.user_id
+          )
+        `);
+        await db.execute(sql`
+          DELETE FROM public.password_reset_requests req
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM public.users usr
+            WHERE usr.id = req.user_id
+          )
+        `);
+        await db.execute(sql`
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conname = 'fk_account_activation_tokens_user_id'
+            ) THEN
+              ALTER TABLE public.account_activation_tokens
+              ADD CONSTRAINT fk_account_activation_tokens_user_id
+              FOREIGN KEY (user_id)
+              REFERENCES public.users(id)
+              ON UPDATE CASCADE
+              ON DELETE CASCADE;
+            END IF;
+          END $$;
+        `);
+        await db.execute(sql`
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conname = 'fk_password_reset_requests_user_id'
+            ) THEN
+              ALTER TABLE public.password_reset_requests
+              ADD CONSTRAINT fk_password_reset_requests_user_id
+              FOREIGN KEY (user_id)
+              REFERENCES public.users(id)
+              ON UPDATE CASCADE
+              ON DELETE CASCADE;
+            END IF;
+          END $$;
+        `);
+
         await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower_unique ON public.users (lower(username))`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_username_lower ON public.users (lower(username))`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_role ON public.users (role)`);
@@ -275,7 +361,6 @@ export class UsersBootstrap {
         !shouldSeedConfiguredUsers
         && Number(existingUserCount || 0) === 0
         && process.env.NODE_ENV !== "production";
-      let generatedLocalSuperuserPassword: string | null = null;
       let localSuperuserCredentialsFilePath: string | null = null;
 
       const defaultUsers = [
@@ -301,14 +386,27 @@ export class UsersBootstrap {
 
       if (isFreshLocalBootstrap) {
         const bootstrapUsername = process.env.SEED_SUPERUSER_USERNAME || "superuser";
-        generatedLocalSuperuserPassword = generateTemporaryPassword();
-        localSuperuserCredentialsFilePath = await writeLocalSuperuserCredentials(
-          bootstrapUsername,
-          generatedLocalSuperuserPassword,
-        );
+        const bootstrapPassword = String(process.env.SEED_SUPERUSER_PASSWORD || "").trim();
+        if (!bootstrapPassword) {
+          throw new Error(
+            "Fresh local bootstrap requires SEED_SUPERUSER_PASSWORD. Temporary credential generation and disk output are disabled by default.",
+          );
+        }
+        const shouldWriteCredentialsFile = readBooleanFlag("LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED", false);
+        if (shouldWriteCredentialsFile) {
+          if (!isStrictLocalDevelopmentEnvironment()) {
+            throw new Error(
+              "Refusing to write local superuser credentials file outside strict local development mode.",
+            );
+          }
+          localSuperuserCredentialsFilePath = await writeLocalSuperuserCredentials(
+            bootstrapUsername,
+            bootstrapPassword,
+          );
+        }
         defaultUsers.push({
           username: bootstrapUsername,
-          password: process.env.SEED_SUPERUSER_PASSWORD || generatedLocalSuperuserPassword,
+          password: bootstrapPassword,
           fullName: process.env.SEED_SUPERUSER_FULL_NAME || "Local Superuser",
           role: "superuser",
         });
@@ -317,7 +415,13 @@ export class UsersBootstrap {
         return;
       }
 
-      for (const user of defaultUsers) {
+      const dedupedDefaultUsers = Array.from(
+        new Map(
+          defaultUsers.map((user) => [String(user.username || "").trim().toLowerCase(), user]),
+        ).values(),
+      );
+
+      for (const user of dedupedDefaultUsers) {
         const existing = await db
           .select({ id: users.id })
           .from(users)
@@ -348,12 +452,12 @@ export class UsersBootstrap {
         });
       }
 
-      if (generatedLocalSuperuserPassword) {
-        logger.warn("Bootstrapped a local superuser account with a temporary password saved to disk", {
+      if (localSuperuserCredentialsFilePath) {
+        logger.warn("Bootstrapped a local superuser account and wrote credentials to an explicitly enabled local file", {
           username: process.env.SEED_SUPERUSER_USERNAME || "superuser",
           credentialsFilePath: localSuperuserCredentialsFilePath,
         });
-        logger.warn("Change the local superuser password immediately after first login", {
+        logger.warn("Credential-file output should be treated as temporary local development material", {
           credentialsFilePath: localSuperuserCredentialsFilePath,
         });
       }
