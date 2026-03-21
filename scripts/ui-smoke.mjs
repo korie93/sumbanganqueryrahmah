@@ -1,15 +1,61 @@
 import process from "node:process";
+import path from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
 const baseUrl = process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000";
 const username = process.env.SMOKE_TEST_USERNAME || "";
 const password = process.env.SMOKE_TEST_PASSWORD || "";
+const rawArtifactsDir = String(process.env.SMOKE_ARTIFACTS_DIR || "").trim();
+const artifactsDir = rawArtifactsDir ? path.resolve(process.cwd(), rawArtifactsDir) : "";
 const errors = [];
 
 const assert = (condition, message) => {
   if (!condition) {
     throw new Error(message);
   }
+};
+
+const ensureArtifactsDir = async () => {
+  if (!artifactsDir) {
+    return;
+  }
+  await mkdir(artifactsDir, { recursive: true });
+};
+
+const captureFailureArtifacts = async ({ context, page, tracker, error }) => {
+  if (!artifactsDir) {
+    return;
+  }
+
+  await ensureArtifactsDir();
+
+  const failureScreenshotPath = path.join(artifactsDir, "failure.png");
+  const failureStatePath = path.join(artifactsDir, "failure-state.json");
+  const failureHtmlPath = path.join(artifactsDir, "failure-page.html");
+
+  await page.screenshot({ path: failureScreenshotPath, fullPage: true }).catch(() => {});
+  const pageHtml = await page.content().catch(() => "");
+  if (pageHtml) {
+    await writeFile(failureHtmlPath, pageHtml, "utf8").catch(() => {});
+  }
+
+  const cookies = await context.cookies(baseUrl).catch(() => []);
+  const message = error instanceof Error ? error.stack || error.message : String(error);
+  const failureState = {
+    baseUrl,
+    url: page.url(),
+    message,
+    failedRequests: tracker.failedRequests,
+    consoleMessages: tracker.consoleMessages,
+    cookies,
+  };
+
+  await writeFile(
+    failureStatePath,
+    JSON.stringify(failureState, null, 2),
+    "utf8",
+  ).catch(() => {});
 };
 
 const openUserMenu = async (page) => {
@@ -446,7 +492,15 @@ const run = async () => {
   const context = await browser.newContext();
   const page = await context.newPage();
   const tracker = createTracker();
+  let traceStarted = false;
+  let shouldSaveTrace = false;
   tracker.attach(page);
+
+  if (artifactsDir) {
+    await ensureArtifactsDir();
+    await context.tracing.start({ screenshots: true, snapshots: true, sources: false });
+    traceStarted = true;
+  }
 
   try {
     await page.goto(baseUrl, { waitUntil: "networkidle" });
@@ -530,7 +584,19 @@ const run = async () => {
         "Skipping authenticated smoke navigation because SMOKE_TEST_USERNAME and SMOKE_TEST_PASSWORD are not set.",
       );
     }
+  } catch (error) {
+    shouldSaveTrace = Boolean(artifactsDir);
+    await captureFailureArtifacts({ context, page, tracker, error }).catch(() => {});
+    throw error;
   } finally {
+    if (traceStarted) {
+      if (shouldSaveTrace && artifactsDir) {
+        const tracePath = path.join(artifactsDir, "trace.zip");
+        await context.tracing.stop({ path: tracePath }).catch(() => {});
+      } else {
+        await context.tracing.stop().catch(() => {});
+      }
+    }
     await browser.close();
   }
 };
