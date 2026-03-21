@@ -136,6 +136,36 @@ type AuthAccountStorage = Pick<
 export class AuthAccountService {
   constructor(private readonly storage: AuthAccountStorage) {}
 
+  private async getSuperuserSessionIdleWindowMs(): Promise<number> {
+    const fallbackMinutes = 30;
+    try {
+      const runtime = await (this.storage as any).getAppConfig?.();
+      const configuredMinutes = Number(runtime?.sessionTimeoutMinutes);
+      const safeMinutes = Number.isFinite(configuredMinutes)
+        ? Math.min(1440, Math.max(1, Math.floor(configuredMinutes)))
+        : fallbackMinutes;
+      return safeMinutes * 60 * 1000;
+    } catch {
+      return fallbackMinutes * 60 * 1000;
+    }
+  }
+
+  private isRecentActivitySession(
+    activity: { lastActivityTime?: Date | string | null; loginTime?: Date | string | null },
+    nowMs: number,
+    idleWindowMs: number,
+  ): boolean {
+    const timestampSource = activity.lastActivityTime ?? activity.loginTime ?? null;
+    if (!timestampSource) {
+      return true;
+    }
+    const activityMs = new Date(timestampSource).getTime();
+    if (!Number.isFinite(activityMs)) {
+      return true;
+    }
+    return nowMs - activityMs <= idleWindowMs;
+  }
+
   private requireManagedEmail(email: string | null, message: string) {
     const normalizedEmail = normalizeEmailInput(email);
     if (!normalizedEmail) {
@@ -504,16 +534,32 @@ export class AuthAccountService {
       if (enforceSingleSession) {
         const activeSessions = await this.storage.getActiveActivitiesByUsername(user.username);
         if (activeSessions.length > 0) {
-          await this.storage.createAuditLog({
-            action: "LOGIN_BLOCKED_SINGLE_SESSION",
-            performedBy: user.username,
-            details: `Superuser single-session policy blocked login. Active sessions: ${activeSessions.length}`,
-          });
-          throw new AuthAccountError(
-            409,
-            "SUPERUSER_SINGLE_SESSION_ENFORCED",
-            "Single superuser session is enforced. Logout from the current session first.",
+          const nowMs = Date.now();
+          const idleWindowMs = await this.getSuperuserSessionIdleWindowMs();
+          const freshSessions = activeSessions.filter((session) =>
+            this.isRecentActivitySession(session, nowMs, idleWindowMs),
           );
+
+          if (freshSessions.length === 0) {
+            await this.storage.deactivateUserActivities(user.username, "IDLE_TIMEOUT");
+            await this.storage.createAuditLog({
+              action: "LOGIN_STALE_SESSION_RECOVERED",
+              performedBy: user.username,
+              targetUser: user.id,
+              details: `Recovered stale superuser sessions before login. Sessions cleared: ${activeSessions.length}`,
+            });
+          } else {
+            await this.storage.createAuditLog({
+              action: "LOGIN_BLOCKED_SINGLE_SESSION",
+              performedBy: user.username,
+              details: `Superuser single-session policy blocked login. Active sessions: ${freshSessions.length}`,
+            });
+            throw new AuthAccountError(
+              409,
+              "SUPERUSER_SINGLE_SESSION_ENFORCED",
+              "Single superuser session is enforced. Logout from the current session first.",
+            );
+          }
         }
       }
     } else if (user.role === "admin" && input.fingerprint) {
