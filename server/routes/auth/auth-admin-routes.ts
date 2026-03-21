@@ -29,10 +29,14 @@ export function registerAuthAdminRoutes(context: AuthRouteContext) {
     requireRole("superuser"),
     rateLimiters.adminAction,
     jsonRoute(async (req) => {
-      const users = await authAccountService.getManagedUsers(req.user);
+      const result = await authAccountService.getManagedUsers(
+        req.user,
+        req.query as Record<string, unknown>,
+      );
       return {
         ok: true,
-        users: users.map((user) => buildManagedUserPayload(user)),
+        users: result.users.map((user) => buildManagedUserPayload(user)),
+        pagination: result.pagination,
       };
     }),
   );
@@ -184,10 +188,14 @@ export function registerAuthAdminRoutes(context: AuthRouteContext) {
     requireRole("superuser"),
     rateLimiters.adminAction,
     jsonRoute(async (req) => {
-      const requests = await authAccountService.listPendingPasswordResetRequests(req.user);
+      const result = await authAccountService.listPendingPasswordResetRequests(
+        req.user,
+        req.query as Record<string, unknown>,
+      );
       return {
         ok: true,
-        requests,
+        requests: result.requests,
+        pagination: result.pagination,
       };
     }),
   );

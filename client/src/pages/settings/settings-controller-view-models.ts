@@ -2,6 +2,7 @@ import type { AccountSecuritySectionProps } from "@/pages/settings/AccountSecuri
 import type { ManagedSecretDialogProps } from "@/pages/settings/ManagedSecretDialog";
 import type { ManagedUserDialogProps } from "@/pages/settings/ManagedUserDialog";
 import type { ManagedUser } from "@/pages/settings/types";
+import type { DevMailOutboxPaginationState, DevMailOutboxQueryState } from "@/pages/settings/useSettingsDevMailOutbox";
 
 type SecurityViewModelArgs = {
   clearingDevMailOutbox: boolean;
@@ -18,6 +19,8 @@ type SecurityViewModelArgs = {
   devMailOutboxEnabled: boolean;
   devMailOutboxEntries: AccountSecuritySectionProps["devMailOutboxEntries"];
   devMailOutboxLoading: boolean;
+  devMailOutboxPagination: DevMailOutboxPaginationState;
+  devMailOutboxQuery: DevMailOutboxQueryState;
   isSuperuser: boolean;
   managedUsers: ManagedUser[];
   managedUsersLoading: boolean;
@@ -35,6 +38,7 @@ type SecurityViewModelArgs = {
   onDeleteDevMailOutboxEntry: (previewId: string) => void;
   onDeleteManagedUser: (user: ManagedUser) => void;
   onDevMailOutboxRefresh: () => void;
+  onDevMailOutboxQueryChange: (query: Partial<DevMailOutboxQueryState>) => void;
   onEditManagedUser: (user: ManagedUser) => void;
   onManagedBanToggle: (user: ManagedUser) => void;
   onManagedResetPassword: (user: ManagedUser) => void;
@@ -95,6 +99,8 @@ export function buildSettingsSecurityViewModel(
     devMailOutboxEnabled: args.devMailOutboxEnabled,
     devMailOutboxEntries: args.devMailOutboxEntries,
     devMailOutboxLoading: args.devMailOutboxLoading,
+    devMailOutboxPagination: args.devMailOutboxPagination,
+    devMailOutboxQuery: args.devMailOutboxQuery,
     isSuperuser: args.isSuperuser,
     managedUsers: args.managedUsers,
     managedUsersLoading: args.managedUsersLoading,
@@ -112,6 +118,7 @@ export function buildSettingsSecurityViewModel(
     onDeleteDevMailOutboxEntry: args.onDeleteDevMailOutboxEntry,
     onDeleteManagedUser: args.onDeleteManagedUser,
     onDevMailOutboxRefresh: args.onDevMailOutboxRefresh,
+    onDevMailOutboxQueryChange: args.onDevMailOutboxQueryChange,
     onEditManagedUser: args.onEditManagedUser,
     onManagedBanToggle: args.onManagedBanToggle,
     onManagedResetPassword: args.onManagedResetPassword,

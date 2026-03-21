@@ -461,3 +461,35 @@ test("Collection daily overview recalculates immediately after record ownership/
   assert.equal(combinedAfter.days.find((day) => day.date === "2026-03-02")?.amount, 200);
   assert.equal(combinedAfter.days.find((day) => day.date === "2026-03-03")?.amount, 1500);
 });
+
+test("Collection daily overview moves totals across month boundaries after payment-date edits", async () => {
+  const service = createMutableCollectionDailyService();
+  const authUser = { username: "superuser", role: "superuser", userId: "superuser-1" } as any;
+
+  const marchBefore = await service.getDailyOverview(authUser, {
+    year: "2026",
+    month: "3",
+    usernames: "Collector Alpha,Collector Beta",
+  });
+  assert.equal(marchBefore.summary.collectedAmount, 1200);
+
+  await service.updateRecord(authUser, "move-1", {
+    paymentDate: "2026-02-28",
+  });
+
+  const marchAfter = await service.getDailyOverview(authUser, {
+    year: "2026",
+    month: "3",
+    usernames: "Collector Alpha,Collector Beta",
+  });
+  const februaryAfter = await service.getDailyOverview(authUser, {
+    year: "2026",
+    month: "2",
+    usernames: "Collector Alpha,Collector Beta",
+  });
+
+  assert.equal(marchAfter.summary.collectedAmount, 200);
+  assert.equal(februaryAfter.summary.collectedAmount, 1000);
+  assert.equal(marchAfter.days.find((day) => day.date === "2026-03-02")?.amount, 200);
+  assert.equal(februaryAfter.days.find((day) => day.date === "2026-02-28")?.amount, 1000);
+});

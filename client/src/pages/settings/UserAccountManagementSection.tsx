@@ -12,6 +12,7 @@ import type {
   PendingPasswordResetRequest,
   UserAccountManagementTabId,
 } from "@/pages/settings/types";
+import type { DevMailOutboxPaginationState, DevMailOutboxQueryState } from "@/pages/settings/useSettingsDevMailOutbox";
 
 export interface UserAccountManagementSectionProps {
   clearingDevMailOutbox: boolean;
@@ -25,6 +26,8 @@ export interface UserAccountManagementSectionProps {
   devMailOutboxEnabled: boolean;
   devMailOutboxEntries: DevMailOutboxPreview[];
   devMailOutboxLoading: boolean;
+  devMailOutboxPagination: DevMailOutboxPaginationState;
+  devMailOutboxQuery: DevMailOutboxQueryState;
   isSuperuser: boolean;
   managedUsers: ManagedUser[];
   managedUsersLoading: boolean;
@@ -37,6 +40,7 @@ export interface UserAccountManagementSectionProps {
   onDeleteDevMailOutboxEntry: (previewId: string) => void;
   onDeleteManagedUser: (user: ManagedUser) => void;
   onDevMailOutboxRefresh: () => void;
+  onDevMailOutboxQueryChange: (query: Partial<DevMailOutboxQueryState>) => void;
   onEditManagedUser: (user: ManagedUser) => void;
   onManagedBanToggle: (user: ManagedUser) => void;
   onManagedResetPassword: (user: ManagedUser) => void;
@@ -59,6 +63,8 @@ export function UserAccountManagementSection({
   devMailOutboxEnabled,
   devMailOutboxEntries,
   devMailOutboxLoading,
+  devMailOutboxPagination,
+  devMailOutboxQuery,
   isSuperuser,
   managedUsers,
   managedUsersLoading,
@@ -71,6 +77,7 @@ export function UserAccountManagementSection({
   onDeleteDevMailOutboxEntry,
   onDeleteManagedUser,
   onDevMailOutboxRefresh,
+  onDevMailOutboxQueryChange,
   onEditManagedUser,
   onManagedBanToggle,
   onManagedResetPassword,
@@ -112,7 +119,7 @@ export function UserAccountManagementSection({
             collapsed={navCollapsed}
             managedUserCount={managedUsers.length}
             mobileOpen={mobileNavOpen}
-            outboxCount={devMailOutboxEntries.length}
+            outboxCount={devMailOutboxPagination.total}
             onCollapsedChange={setNavCollapsed}
             onMobileOpenChange={setMobileNavOpen}
             pendingResetCount={pendingResetRequests.length}
@@ -146,8 +153,11 @@ export function UserAccountManagementSection({
                 enabled={devMailOutboxEnabled}
                 entries={devMailOutboxEntries}
                 loading={devMailOutboxLoading}
+                pagination={devMailOutboxPagination}
+                query={devMailOutboxQuery}
                 onClear={onClearDevMailOutbox}
                 onDeleteEntry={onDeleteDevMailOutboxEntry}
+                onQueryChange={onDevMailOutboxQueryChange}
                 onRefresh={onDevMailOutboxRefresh}
               />
             ) : null}

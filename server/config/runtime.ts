@@ -160,10 +160,44 @@ function resolveCorsAllowedOrigins(publicAppUrl: string | null) {
   return configured;
 }
 
+function hasBackupEncryptionKeyConfigured(): boolean {
+  return Boolean(
+    readOptionalString("BACKUP_ENCRYPTION_KEY")
+    || readOptionalString("BACKUP_ENCRYPTION_KEYS"),
+  );
+}
+
+function assertProductionSafetyGuards(isProduction: boolean) {
+  if (!isProduction) {
+    return;
+  }
+
+  if (!hasBackupEncryptionKeyConfigured()) {
+    throw new Error(
+      "BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS is required in production.",
+    );
+  }
+
+  if (readBoolean("SEED_DEFAULT_USERS", false)) {
+    throw new Error("SEED_DEFAULT_USERS must be disabled in production.");
+  }
+
+  if (readBoolean("LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED", false)) {
+    throw new Error(
+      "LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED is not allowed in production.",
+    );
+  }
+
+  if (readBoolean("MAIL_DEV_OUTBOX_ENABLED", false)) {
+    throw new Error("MAIL_DEV_OUTBOX_ENABLED must be disabled in production.");
+  }
+}
+
 const nodeEnv = resolveNodeEnv();
 const isProduction = nodeEnv === "production";
 const publicAppUrl = readOptionalString("PUBLIC_APP_URL");
 const lowMemoryMode = readBoolean("SQR_LOW_MEMORY_MODE", true);
+assertProductionSafetyGuards(isProduction);
 
 export const runtimeConfig: RuntimeConfig = Object.freeze({
   app: {

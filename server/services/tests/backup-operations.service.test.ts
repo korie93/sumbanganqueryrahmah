@@ -12,6 +12,7 @@ type AuditEntry = {
 function createBackupOperationsHarness(options?: {
   exportCircuitOpen?: boolean;
   corruptChecksum?: boolean;
+  backupReadErrorMessage?: string;
 }) {
   const auditLogs: AuditEntry[] = [];
   const createBackupCalls: Array<Record<string, unknown>> = [];
@@ -89,7 +90,12 @@ function createBackupOperationsHarness(options?: {
         backupData: "",
       };
     },
-    getBackupById: async (id: string) => backups.get(id),
+    getBackupById: async (id: string) => {
+      if (options?.backupReadErrorMessage) {
+        throw new Error(options.backupReadErrorMessage);
+      }
+      return backups.get(id);
+    },
     restoreFromBackup: async (backupData: unknown) => {
       restoreCalls.push(backupData);
       return {
@@ -258,6 +264,22 @@ test("BackupOperationsService exportBackup blocks corrupted backup payload check
   assert.equal(auditLogs.length, 0);
 });
 
+test("BackupOperationsService exportBackup returns 409 when backup payload cannot be decrypted", async () => {
+  const { service, auditLogs } = createBackupOperationsHarness({
+    backupReadErrorMessage:
+      "Missing backup encryption key 'primary'. Configure BACKUP_ENCRYPTION_KEYS for key rotation support.",
+  });
+
+  const result = await service.exportBackup("backup-1", "super.user");
+
+  assert.equal(result.statusCode, 409);
+  assert.deepEqual(result.body, {
+    message:
+      "Backup payload cannot be decrypted with the current encryption configuration.",
+  });
+  assert.equal(auditLogs.length, 0);
+});
+
 test("BackupOperationsService restoreBackup returns restore details and audit metadata", async () => {
   const { service, restoreCalls, auditLogs } = createBackupOperationsHarness();
 
@@ -301,6 +323,26 @@ test("BackupOperationsService restoreBackup blocks corrupted backup payload chec
   assert.equal(auditLogs.length, 0);
 });
 
+test("BackupOperationsService restoreBackup returns 409 when backup payload cannot be decrypted", async () => {
+  const { service, restoreCalls, auditLogs } = createBackupOperationsHarness({
+    backupReadErrorMessage:
+      "Unable to decrypt legacy encrypted backup payload with configured backup encryption keys.",
+  });
+
+  const result = await service.restoreBackup({
+    backupId: "backup-1",
+    username: "super.user",
+  });
+
+  assert.equal(result.statusCode, 409);
+  assert.deepEqual(result.body, {
+    message:
+      "Backup payload cannot be decrypted with the current encryption configuration.",
+  });
+  assert.equal(restoreCalls.length, 0);
+  assert.equal(auditLogs.length, 0);
+});
+
 test("BackupOperationsService deleteBackup returns 404 for missing backups", async () => {
   const { service, deleteBackupCalls, auditLogs } = createBackupOperationsHarness();
 
@@ -319,6 +361,25 @@ test("BackupOperationsService deleteBackup returns 404 for missing backups", asy
 
 test("BackupOperationsService deleteBackup audits successful deletes", async () => {
   const { service, deleteBackupCalls, auditLogs } = createBackupOperationsHarness();
+
+  const result = await service.deleteBackup({
+    backupId: "backup-1",
+    username: "super.user",
+  });
+
+  assert.equal(result.statusCode, 200);
+  assert.deepEqual(result.body, { success: true });
+  assert.deepEqual(deleteBackupCalls, ["backup-1"]);
+  assert.equal(auditLogs.length, 1);
+  assert.equal(auditLogs[0].action, "DELETE_BACKUP");
+  assert.equal(auditLogs[0].targetResource, "Nightly Backup");
+});
+
+test("BackupOperationsService deleteBackup still succeeds when full payload read is unavailable", async () => {
+  const { service, deleteBackupCalls, auditLogs } = createBackupOperationsHarness({
+    backupReadErrorMessage:
+      "Missing backup encryption key 'primary'. Configure BACKUP_ENCRYPTION_KEYS for key rotation support.",
+  });
 
   const result = await service.deleteBackup({
     backupId: "backup-1",

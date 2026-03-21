@@ -47,6 +47,13 @@ export type DevMailOutboxPreviewPayload = {
   to: string;
 };
 
+export type PaginatedListPayload = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
 export type AuthOkResponse<T extends Record<string, unknown>> = {
   ok: true;
 } & T;
@@ -108,6 +115,7 @@ export type AuthMessageResponse = AuthOkResponse<{
 
 export type ManagedUsersResponse = AuthOkResponse<{
   users: ManagedUserSummary[];
+  pagination?: PaginatedListPayload;
 }>;
 
 export type ManagedAccountActivationResponse = AuthOkResponse<{
@@ -129,6 +137,7 @@ export type ManagedAccountDeleteResponse = AuthOkResponse<{
 export type DevMailOutboxPreviewsResponse = AuthOkResponse<{
   enabled: boolean;
   previews: DevMailOutboxPreviewPayload[];
+  pagination?: PaginatedListPayload;
 }>;
 
 export type DevMailOutboxDeleteResponse = AuthOkResponse<{
@@ -141,6 +150,7 @@ export type DevMailOutboxClearResponse = AuthOkResponse<{
 
 export type PendingPasswordResetRequestsResponse = AuthOkResponse<{
   requests: PendingPasswordResetRequestSummary[];
+  pagination?: PaginatedListPayload;
 }>;
 
 export async function login(
@@ -247,8 +257,21 @@ export async function updateMyCredentials(payload: {
   return response.json() as Promise<AuthUserForceLogoutResponse>;
 }
 
-export async function getSuperuserManagedUsers(): Promise<ManagedUsersResponse> {
-  const response = await apiRequest("GET", "/api/admin/users");
+export async function getSuperuserManagedUsers(query?: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  role?: "all" | "admin" | "user";
+  status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned";
+}): Promise<ManagedUsersResponse> {
+  const params = new URLSearchParams();
+  if (query?.page) params.set("page", String(query.page));
+  if (query?.pageSize) params.set("pageSize", String(query.pageSize));
+  if (query?.search) params.set("search", query.search);
+  if (query?.role && query.role !== "all") params.set("role", query.role);
+  if (query?.status && query.status !== "all") params.set("status", query.status);
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+  const response = await apiRequest("GET", `/api/admin/users${suffix}`);
   return response.json() as Promise<ManagedUsersResponse>;
 }
 
@@ -308,13 +331,37 @@ export async function resendManagedUserActivation(userId: string) {
   return response.json() as Promise<ManagedAccountActivationResponse>;
 }
 
-export async function getPendingPasswordResetRequests(): Promise<PendingPasswordResetRequestsResponse> {
-  const response = await apiRequest("GET", "/api/admin/password-reset-requests");
+export async function getPendingPasswordResetRequests(query?: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned";
+}): Promise<PendingPasswordResetRequestsResponse> {
+  const params = new URLSearchParams();
+  if (query?.page) params.set("page", String(query.page));
+  if (query?.pageSize) params.set("pageSize", String(query.pageSize));
+  if (query?.search) params.set("search", query.search);
+  if (query?.status && query.status !== "all") params.set("status", query.status);
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+  const response = await apiRequest("GET", `/api/admin/password-reset-requests${suffix}`);
   return response.json() as Promise<PendingPasswordResetRequestsResponse>;
 }
 
-export async function getDevMailOutboxPreviews(): Promise<DevMailOutboxPreviewsResponse> {
-  const response = await apiRequest("GET", "/api/admin/dev-mail-outbox");
+export async function getDevMailOutboxPreviews(query?: {
+  page?: number;
+  pageSize?: number;
+  searchEmail?: string;
+  searchSubject?: string;
+  sortDirection?: "asc" | "desc";
+}): Promise<DevMailOutboxPreviewsResponse> {
+  const params = new URLSearchParams();
+  if (query?.page) params.set("page", String(query.page));
+  if (query?.pageSize) params.set("pageSize", String(query.pageSize));
+  if (query?.searchEmail) params.set("searchEmail", query.searchEmail);
+  if (query?.searchSubject) params.set("searchSubject", query.searchSubject);
+  if (query?.sortDirection) params.set("sortDirection", query.sortDirection);
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+  const response = await apiRequest("GET", `/api/admin/dev-mail-outbox${suffix}`);
   return response.json() as Promise<DevMailOutboxPreviewsResponse>;
 }
 

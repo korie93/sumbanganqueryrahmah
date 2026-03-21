@@ -25,12 +25,13 @@ import {
   clearDevMailOutbox as clearDevMailOutboxFiles,
   deleteDevMailPreview as deleteDevMailPreviewFile,
   isDevMailOutboxEnabled,
-  listDevMailPreviews,
+  listDevMailPreviewsPage,
   readDevMailPreview,
   renderDevMailPreviewHtml,
 } from "../mail/dev-mail-outbox";
 import { buildPasswordResetEmail } from "../mail/password-reset-email";
 import { sendMail } from "../mail/mailer";
+import { readInteger, readOptionalString } from "../http/validation";
 import type {
   ManagedUserAccount,
   PendingPasswordResetRequestSummary,
@@ -125,13 +126,22 @@ type AuthAccountStorage = Pick<
   | "invalidateUnusedActivationTokens"
   | "invalidateUnusedPasswordResetTokens"
   | "isVisitorBanned"
+  | "listManagedUsersPage"
   | "listPendingPasswordResetRequests"
+  | "listPendingPasswordResetRequestsPage"
   | "resolvePendingPasswordResetRequestsForUser"
   | "touchLastLogin"
   | "updateActivitiesUsername"
   | "updateUserAccount"
   | "updateUserCredentials"
 >;
+
+type PaginatedListMeta = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
 
 export class AuthAccountService {
   constructor(private readonly storage: AuthAccountStorage) {}
@@ -164,6 +174,34 @@ export class AuthAccountService {
       return true;
     }
     return nowMs - activityMs <= idleWindowMs;
+  }
+
+  private readPaginationMeta(
+    query: Record<string, unknown> | undefined,
+    defaults: { pageSize: number; maxPageSize: number },
+  ): { page: number; pageSize: number } {
+    const page = Math.max(1, readInteger(query?.page, 1));
+    const pageSize = Math.max(
+      1,
+      Math.min(defaults.maxPageSize, readInteger(query?.pageSize, defaults.pageSize)),
+    );
+    return { page, pageSize };
+  }
+
+  private buildLocalPaginationMeta(
+    total: number,
+    page = 1,
+    pageSize = Math.max(1, total || 1),
+  ): PaginatedListMeta {
+    const safePageSize = Math.max(1, pageSize);
+    const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+    const safePage = Math.min(Math.max(1, page), totalPages);
+    return {
+      page: safePage,
+      pageSize: safePageSize,
+      total,
+      totalPages,
+    };
   }
 
   private requireManagedEmail(email: string | null, message: string) {
@@ -879,9 +917,61 @@ export class AuthAccountService {
     };
   }
 
-  async getManagedUsers(authUser: AuthenticatedUser | undefined): Promise<ManagedUserAccount[]> {
+  async getManagedUsers(
+    authUser: AuthenticatedUser | undefined,
+    query: Record<string, unknown> = {},
+  ): Promise<{ users: ManagedUserAccount[]; pagination: PaginatedListMeta }> {
     await this.requireSuperuser(authUser);
-    return this.storage.getManagedUsers();
+
+    const hasQueryFilters =
+      query.page !== undefined
+      || query.pageSize !== undefined
+      || query.search !== undefined
+      || query.role !== undefined
+      || query.status !== undefined;
+
+    if (!hasQueryFilters) {
+      const users = await this.storage.getManagedUsers();
+      return {
+        users,
+        pagination: this.buildLocalPaginationMeta(users.length),
+      };
+    }
+
+    const { page, pageSize } = this.readPaginationMeta(query, {
+      pageSize: 50,
+      maxPageSize: 100,
+    });
+
+    const result = await this.storage.listManagedUsersPage({
+      page,
+      pageSize,
+      search: readOptionalString(query.search),
+      role: (() => {
+        const value = String(readOptionalString(query.role) || "all").toLowerCase();
+        return value === "admin" || value === "user" ? value : "all";
+      })(),
+      status: (() => {
+        const value = String(readOptionalString(query.status) || "all").toLowerCase();
+        return value === "active"
+          || value === "pending_activation"
+          || value === "suspended"
+          || value === "disabled"
+          || value === "banned"
+          ? value
+          : "all";
+      })(),
+    });
+
+    return {
+      users: result.users,
+      pagination: {
+        page: result.page,
+        pageSize: result.pageSize,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+    };
   }
 
   async getAccounts(authUser: AuthenticatedUser | undefined) {
@@ -902,11 +992,39 @@ export class AuthAccountService {
     return renderDevMailPreviewHtml(preview);
   }
 
-  async listDevMailOutbox(authUser: AuthenticatedUser | undefined) {
+  async listDevMailOutbox(
+    authUser: AuthenticatedUser | undefined,
+    query: Record<string, unknown> = {},
+  ) {
     await this.requireSuperuser(authUser);
+    const { page, pageSize } = this.readPaginationMeta(query, {
+      pageSize: 25,
+      maxPageSize: 100,
+    });
+    const searchEmail = readOptionalString(query.searchEmail ?? query.email ?? query.searchTo);
+    const searchSubject = readOptionalString(
+      query.searchSubject ?? query.subject ?? query.search,
+    );
+    const sortDirection = String(readOptionalString(query.sortDirection) || "").toLowerCase() === "asc"
+      ? "asc"
+      : "desc";
+    const previewPage = await listDevMailPreviewsPage({
+      page,
+      pageSize,
+      searchEmail: searchEmail || undefined,
+      searchSubject: searchSubject || undefined,
+      sortDirection,
+    });
+
     return {
       enabled: isDevMailOutboxEnabled(),
-      previews: await listDevMailPreviews(25),
+      previews: previewPage.previews,
+      pagination: {
+        page: previewPage.page,
+        pageSize: previewPage.pageSize,
+        total: previewPage.total,
+        totalPages: previewPage.totalPages,
+      },
     };
   }
 
@@ -1244,9 +1362,53 @@ export class AuthAccountService {
 
   async listPendingPasswordResetRequests(
     authUser: AuthenticatedUser | undefined,
-  ): Promise<PendingPasswordResetRequestSummary[]> {
+    query: Record<string, unknown> = {},
+  ): Promise<{ requests: PendingPasswordResetRequestSummary[]; pagination: PaginatedListMeta }> {
     await this.requireSuperuser(authUser);
-    return this.storage.listPendingPasswordResetRequests();
+
+    const hasQueryFilters =
+      query.page !== undefined
+      || query.pageSize !== undefined
+      || query.search !== undefined
+      || query.status !== undefined;
+
+    if (!hasQueryFilters) {
+      const requests = await this.storage.listPendingPasswordResetRequests();
+      return {
+        requests,
+        pagination: this.buildLocalPaginationMeta(requests.length),
+      };
+    }
+
+    const { page, pageSize } = this.readPaginationMeta(query, {
+      pageSize: 50,
+      maxPageSize: 100,
+    });
+    const result = await this.storage.listPendingPasswordResetRequestsPage({
+      page,
+      pageSize,
+      search: readOptionalString(query.search),
+      status: (() => {
+        const value = String(readOptionalString(query.status) || "all").toLowerCase();
+        return value === "active"
+          || value === "pending_activation"
+          || value === "suspended"
+          || value === "disabled"
+          || value === "banned"
+          ? value
+          : "all";
+      })(),
+    });
+
+    return {
+      requests: result.requests,
+      pagination: {
+        page: result.page,
+        pageSize: result.pageSize,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+    };
   }
 
   async resetManagedUserPassword(authUser: AuthenticatedUser | undefined, targetUserId: string) {
