@@ -1,4 +1,4 @@
-import { getAuthHeader } from "./shared";
+import { getAuthHeader, getCsrfHeader } from "./shared";
 
 export type MonitorRequestState = "ok" | "unauthorized" | "forbidden" | "network_error";
 
@@ -36,6 +36,11 @@ export type SystemHealthPayload = {
   slowQueryCount: number;
   dbConnections: number;
   aiFailRate: number;
+  status401Count: number;
+  status403Count: number;
+  status429Count: number;
+  localOpenCircuitCount: number;
+  clusterOpenCircuitCount: number;
   bottleneckType: string;
   activeAlertCount: number;
   updatedAt: number;
@@ -214,6 +219,7 @@ async function postMonitorEndpoint<T>(endpoint: string, body: unknown): Promise<
       headers: {
         "Content-Type": "application/json",
         ...getAuthHeader(),
+        ...(getCsrfHeader() as Record<string, string>),
       },
       credentials: "include",
       body: JSON.stringify(body ?? {}),

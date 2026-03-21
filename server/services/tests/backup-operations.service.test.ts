@@ -11,6 +11,7 @@ type AuditEntry = {
 
 function createBackupOperationsHarness(options?: {
   exportCircuitOpen?: boolean;
+  corruptChecksum?: boolean;
 }) {
   const auditLogs: AuditEntry[] = [];
   const createBackupCalls: Array<Record<string, unknown>> = [];
@@ -35,6 +36,9 @@ function createBackupOperationsHarness(options?: {
         }),
         metadata: {
           timestamp: "2026-03-20T00:00:00.000Z",
+          payloadChecksumSha256: options?.corruptChecksum
+            ? "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+            : "27c7f1187bb22c1e832d2812300765fda4d9919427fb413b81f9884c763c2ff2",
         },
       },
     ],
@@ -235,8 +239,23 @@ test("BackupOperationsService exportBackup returns downloadable payload and audi
   const payload = JSON.parse(String((result.body as any).payloadJson || "{}"));
   assert.equal(payload.id, "backup-1");
   assert.equal(Array.isArray(payload.backupData.imports), true);
+  assert.equal(payload.integrity.verified, true);
   assert.equal(auditLogs.length, 1);
   assert.equal(auditLogs[0].action, "DOWNLOAD_BACKUP_EXPORT");
+});
+
+test("BackupOperationsService exportBackup blocks corrupted backup payload checksum", async () => {
+  const { service, auditLogs } = createBackupOperationsHarness({
+    corruptChecksum: true,
+  });
+
+  const result = await service.exportBackup("backup-1", "super.user");
+
+  assert.equal(result.statusCode, 409);
+  assert.deepEqual(result.body, {
+    message: "Backup integrity check failed. Export cancelled.",
+  });
+  assert.equal(auditLogs.length, 0);
 });
 
 test("BackupOperationsService restoreBackup returns restore details and audit metadata", async () => {
@@ -251,6 +270,7 @@ test("BackupOperationsService restoreBackup returns restore details and audit me
   assert.equal((result.body as any).success, true);
   assert.equal((result.body as any).backupId, "backup-1");
   assert.equal((result.body as any).backupName, "Nightly Backup");
+  assert.equal((result.body as any).integrity.verified, true);
   assert.equal(restoreCalls.length, 1);
   assert.equal(auditLogs.length, 1);
   assert.equal(auditLogs[0].action, "RESTORE_BACKUP");
@@ -261,6 +281,24 @@ test("BackupOperationsService restoreBackup returns restore details and audit me
   assert.equal(auditDetails.totalInserted, 3);
   assert.equal(auditDetails.warningCount, 0);
   assert.equal(typeof auditDetails.durationMs, "number");
+});
+
+test("BackupOperationsService restoreBackup blocks corrupted backup payload checksum", async () => {
+  const { service, restoreCalls, auditLogs } = createBackupOperationsHarness({
+    corruptChecksum: true,
+  });
+
+  const result = await service.restoreBackup({
+    backupId: "backup-1",
+    username: "super.user",
+  });
+
+  assert.equal(result.statusCode, 409);
+  assert.deepEqual(result.body, {
+    message: "Backup integrity check failed. Restore cancelled.",
+  });
+  assert.equal(restoreCalls.length, 0);
+  assert.equal(auditLogs.length, 0);
 });
 
 test("BackupOperationsService deleteBackup returns 404 for missing backups", async () => {

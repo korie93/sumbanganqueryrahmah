@@ -1,5 +1,5 @@
 import { apiRequest } from "../queryClient";
-import { API_BASE } from "./shared";
+import { API_BASE, getCsrfHeader } from "./shared";
 
 export type CurrentUser = {
   id: string;
@@ -152,6 +152,7 @@ export async function login(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...(getCsrfHeader() as Record<string, string>),
     },
     body: JSON.stringify({
       username: username.toLowerCase().trim(),

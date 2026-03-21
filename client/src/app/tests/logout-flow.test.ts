@@ -115,3 +115,33 @@ test("performAppLogout still calls the server when there is no activity id", asy
   assert.deepEqual(serverCalls, [undefined]);
   assert.deepEqual(events, ["broadcast:other-tabs", "client:cleared"]);
 });
+
+test("performAppLogout stays stable under repeated concurrent 401 cleanup calls", async () => {
+  let warnings = 0;
+  let broadcasts = 0;
+  let cleared = 0;
+  const attempts = 25;
+
+  await Promise.all(
+    Array.from({ length: attempts }, (_, index) =>
+      performAppLogout({
+        activityId: `activity-${index}`,
+        activityLogout: async () => {
+          throw new Error("401: {\"message\":\"Unauthenticated\"}");
+        },
+        applyLoggedOutClientState: () => {
+          cleared += 1;
+        },
+        broadcastLogoutToOtherTabs: () => {
+          broadcasts += 1;
+        },
+        warn: () => {
+          warnings += 1;
+        },
+      })),
+  );
+
+  assert.equal(warnings, 0);
+  assert.equal(broadcasts, attempts);
+  assert.equal(cleared, attempts);
+});

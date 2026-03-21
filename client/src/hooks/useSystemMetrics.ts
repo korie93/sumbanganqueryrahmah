@@ -24,7 +24,11 @@ export type HistoryKey =
   | "connections"
   | "aiLatencyMs"
   | "queueSize"
-  | "aiFailRate";
+  | "aiFailRate"
+  | "status401Count"
+  | "status403Count"
+  | "status429Count"
+  | "openCircuitCount";
 
 export type SeriesPoint = {
   ts: number;
@@ -61,6 +65,10 @@ export type MonitorSnapshot = {
   aiLatencyMs: number;
   queueSize: number;
   aiFailRate: number;
+  status401Count: number;
+  status403Count: number;
+  status429Count: number;
+  openCircuitCount: number;
 };
 
 type UseSystemMetricsResult = {
@@ -98,6 +106,10 @@ const initialSnapshot: MonitorSnapshot = {
   aiLatencyMs: 0,
   queueSize: 0,
   aiFailRate: 0,
+  status401Count: 0,
+  status403Count: 0,
+  status429Count: 0,
+  openCircuitCount: 0,
 };
 
 const initialHistory: MonitorHistory = {
@@ -115,6 +127,10 @@ const initialHistory: MonitorHistory = {
   aiLatencyMs: [],
   queueSize: [],
   aiFailRate: [],
+  status401Count: [],
+  status403Count: [],
+  status429Count: [],
+  openCircuitCount: [],
 };
 
 const HISTORY_KEYS: HistoryKey[] = [
@@ -132,6 +148,10 @@ const HISTORY_KEYS: HistoryKey[] = [
   "aiLatencyMs",
   "queueSize",
   "aiFailRate",
+  "status401Count",
+  "status403Count",
+  "status429Count",
+  "openCircuitCount",
 ];
 
 const initialIntelligence: IntelligenceExplainPayload = {
@@ -218,7 +238,11 @@ const snapshotsEqual = (a: MonitorSnapshot, b: MonitorSnapshot) => (
   a.connections === b.connections &&
   a.aiLatencyMs === b.aiLatencyMs &&
   a.queueSize === b.queueSize &&
-  a.aiFailRate === b.aiFailRate
+  a.aiFailRate === b.aiFailRate &&
+  a.status401Count === b.status401Count &&
+  a.status403Count === b.status403Count &&
+  a.status429Count === b.status429Count &&
+  a.openCircuitCount === b.openCircuitCount
 );
 
 const endpointStatesEqual = (a: EndpointState, b: EndpointState) =>
@@ -415,6 +439,17 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       );
       const aiLatencyMs = toFixedNumber(Number(healthRes.data?.aiLatencyMs ?? previous.aiLatencyMs), 2);
       const queueSize = toFixedNumber(Number(healthRes.data?.queueLength ?? previous.queueSize), 2);
+      const status401Count = toFixedNumber(Number(healthRes.data?.status401Count ?? previous.status401Count), 2);
+      const status403Count = toFixedNumber(Number(healthRes.data?.status403Count ?? previous.status403Count), 2);
+      const status429Count = toFixedNumber(Number(healthRes.data?.status429Count ?? previous.status429Count), 2);
+      const openCircuitCount = toFixedNumber(
+        Number(
+          (healthRes.data?.localOpenCircuitCount ?? 0)
+          + (healthRes.data?.clusterOpenCircuitCount ?? 0)
+          || previous.openCircuitCount,
+        ),
+        2,
+      );
       const workerCount = Number(workersRes.data?.count ?? healthRes.data?.workerCount ?? previous.workerCount);
       const maxWorkers = Number(workersRes.data?.maxWorkers ?? healthRes.data?.maxWorkers ?? previous.maxWorkers);
       const nextAlerts = alertsRes.data?.alerts ?? alertsRef.current;
@@ -440,6 +475,10 @@ export function useSystemMetrics(): UseSystemMetricsResult {
         aiLatencyMs,
         queueSize,
         aiFailRate,
+        status401Count,
+        status403Count,
+        status429Count,
+        openCircuitCount,
       };
 
       const nextSnapshot: MonitorSnapshot = {

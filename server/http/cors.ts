@@ -2,7 +2,7 @@ import type { RequestHandler } from "express";
 import { runtimeConfig } from "../config/runtime";
 
 const DEFAULT_ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
-const DEFAULT_ALLOWED_HEADERS = "Origin, X-Requested-With, Content-Type, Accept, Authorization";
+const DEFAULT_ALLOWED_HEADERS = "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-CSRF-Token, X-Request-Id";
 const LOCAL_DEV_ORIGINS = [
   "http://localhost:5000",
   "http://127.0.0.1:5000",

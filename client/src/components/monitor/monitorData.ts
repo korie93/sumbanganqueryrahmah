@@ -273,6 +273,48 @@ export function buildMetricGroups(snapshot: MonitorSnapshot, history: MonitorHis
       ],
     },
     {
+      title: "Security & Resilience",
+      description: "Authentication pressure, rate-limit spikes, and circuit-breaker activity.",
+      items: [
+        {
+          label: "401 Spike (5s)",
+          value: snapshot.status401Count,
+          unit: "",
+          description: "Unauthorized responses observed in the latest 5-second window.",
+          status: getStatus(snapshot.status401Count, 10, 25),
+          history: history.status401Count.map((point) => point.value),
+          decimals: 0,
+        },
+        {
+          label: "403 Spike (5s)",
+          value: snapshot.status403Count,
+          unit: "",
+          description: "Forbidden responses observed in the latest 5-second window.",
+          status: getStatus(snapshot.status403Count, 10, 25),
+          history: history.status403Count.map((point) => point.value),
+          decimals: 0,
+        },
+        {
+          label: "429 Spike (5s)",
+          value: snapshot.status429Count,
+          unit: "",
+          description: "Rate-limited responses observed in the latest 5-second window.",
+          status: getStatus(snapshot.status429Count, 12, 30),
+          history: history.status429Count.map((point) => point.value),
+          decimals: 0,
+        },
+        {
+          label: "Open Circuits",
+          value: snapshot.openCircuitCount,
+          unit: "",
+          description: "Total open circuit breakers across local + cluster runtime signals.",
+          status: getStatus(snapshot.openCircuitCount, 1, 2),
+          history: history.openCircuitCount.map((point) => point.value),
+          decimals: 0,
+        },
+      ],
+    },
+    {
       title: "AI",
       description: "AI service response performance and queue stability.",
       items: [
