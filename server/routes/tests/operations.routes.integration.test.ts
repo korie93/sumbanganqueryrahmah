@@ -73,6 +73,23 @@ function createOperationsRouteHarness(options?: {
         timestamp: new Date("2026-03-19T10:00:00.000Z"),
       },
     ],
+    listAuditLogsPage: async () => ({
+      logs: [
+        {
+          id: "audit-1",
+          action: "LOGIN",
+          performedBy: "super.user",
+          targetUser: null,
+          targetResource: null,
+          details: "Logged in",
+          timestamp: new Date("2026-03-19T10:00:00.000Z"),
+        },
+      ],
+      page: 1,
+      pageSize: 50,
+      total: 1,
+      totalPages: 1,
+    }),
     getAuditLogStats: async () => ({
       totalLogs: 12,
       todayLogs: 3,
@@ -105,10 +122,16 @@ function createOperationsRouteHarness(options?: {
   } as any;
 
   const backupsRepository = {
-    getBackups: async () => Array.from(backups.values()).map((backup) => ({
-      ...backup,
-      backupData: "",
-    })),
+    listBackupsPage: async () => ({
+      backups: Array.from(backups.values()).map((backup) => ({
+        ...backup,
+        backupData: "",
+      })),
+      page: 1,
+      pageSize: 25,
+      total: backups.size,
+      totalPages: 1,
+    }),
     getBackupDataForExport: async () => ({
       imports: [{ id: "import-1" }],
       dataRows: [{ id: "row-1" }, { id: "row-2" }],
@@ -126,6 +149,14 @@ function createOperationsRouteHarness(options?: {
         createdBy: data.createdBy,
         backupData: "",
         metadata: JSON.parse(String(data.metadata || "{}")),
+      };
+    },
+    getBackupMetadataById: async (id: string) => {
+      const backup = backups.get(id);
+      if (!backup) return undefined;
+      return {
+        ...backup,
+        backupData: "",
       };
     },
     getBackupById: async (id: string) => backups.get(id),
@@ -208,6 +239,22 @@ test("GET /api/audit-logs returns audit log rows", async () => {
     const payload = await response.json();
     assert.equal(payload.logs.length, 1);
     assert.equal(payload.logs[0].action, "LOGIN");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/audit-logs requires superuser role", async () => {
+  const { app } = createOperationsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/audit-logs`, {
+      headers: {
+        "x-test-role": "admin",
+      },
+    });
+    assert.equal(response.status, 403);
   } finally {
     await stopTestServer(server);
   }
@@ -312,6 +359,24 @@ test("POST /api/backups creates a backup and writes an audit log", async () => {
   }
 });
 
+test("GET /api/backups/:id/export returns an attachment and audits the download", async () => {
+  const { app, auditLogs } = createOperationsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/backups/backup-1/export`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-disposition") || "", /attachment; filename=/i);
+    const payload = JSON.parse(await response.text());
+    assert.equal(payload.id, "backup-1");
+    assert.equal(Array.isArray(payload.backupData.imports), true);
+    assert.equal(auditLogs.length, 1);
+    assert.equal(auditLogs[0].action, "DOWNLOAD_BACKUP_EXPORT");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /api/backups/:id/restore returns 404 when the backup does not exist", async () => {
   const { app, restoreCalls, auditLogs } = createOperationsRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
@@ -370,6 +435,22 @@ test("DELETE /api/backups/:id deletes the backup and audits the action", async (
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "DELETE_BACKUP");
     assert.equal(auditLogs[0].targetResource, "Nightly Backup");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/backups requires superuser role", async () => {
+  const { app } = createOperationsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/backups`, {
+      headers: {
+        "x-test-role": "admin",
+      },
+    });
+    assert.equal(response.status, 403);
   } finally {
     await stopTestServer(server);
   }

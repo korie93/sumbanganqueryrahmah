@@ -154,6 +154,32 @@ export class CoreSchemaBootstrap {
             login_time = COALESCE(login_time, now()),
             last_activity_time = COALESCE(last_activity_time, login_time, now())
         `);
+        await db.execute(sql`
+          DELETE FROM public.user_activity activity
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM public.users usr
+            WHERE usr.id = activity.user_id
+          )
+        `);
+        await db.execute(sql`
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conname = 'fk_user_activity_user_id'
+            ) THEN
+              ALTER TABLE public.user_activity
+              ADD CONSTRAINT fk_user_activity_user_id
+              FOREIGN KEY (user_id)
+              REFERENCES public.users(id)
+              ON UPDATE CASCADE
+              ON DELETE CASCADE;
+            END IF;
+          END $$;
+        `);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_user_id ON public.user_activity(user_id)`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_username ON public.user_activity(username)`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_is_active ON public.user_activity(is_active)`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_login_time ON public.user_activity(login_time DESC)`);

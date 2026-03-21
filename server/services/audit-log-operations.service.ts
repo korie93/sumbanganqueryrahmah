@@ -1,11 +1,11 @@
-import { readInteger } from "../http/validation";
+import { readDate, readInteger, readOptionalString } from "../http/validation";
 import type { AuditRepository } from "../repositories/audit.repository";
 import type { PostgresStorage } from "../storage-postgres";
 
 type AuditLogOperationsStorage = Pick<PostgresStorage, "createAuditLog">;
 type AuditLogOperationsRepository = Pick<
   AuditRepository,
-  "cleanupAuditLogsOlderThan" | "getAuditLogStats" | "getAuditLogs"
+  "cleanupAuditLogsOlderThan" | "getAuditLogStats" | "getAuditLogs" | "listAuditLogsPage"
 >;
 
 export class AuditLogOperationsService {
@@ -14,9 +14,31 @@ export class AuditLogOperationsService {
     private readonly auditRepository: AuditLogOperationsRepository,
   ) {}
 
-  async listAuditLogs() {
+  async listAuditLogs(query: Record<string, unknown>) {
+    const page = Math.max(1, readInteger(query.page, 1));
+    const pageSize = Math.max(1, Math.min(100, readInteger(query.pageSize, 50)));
+    const result = await this.auditRepository.listAuditLogsPage({
+      page,
+      pageSize,
+      action: readOptionalString(query.action),
+      performedBy: readOptionalString(query.performedBy),
+      targetUser: readOptionalString(query.targetUser),
+      search: readOptionalString(query.search),
+      dateFrom: readDate(query.dateFrom),
+      dateTo: readDate(query.dateTo),
+      sortBy: String(readOptionalString(query.sortBy) || "newest").toLowerCase() === "oldest"
+        ? "oldest"
+        : "newest",
+    });
+
     return {
-      logs: await this.auditRepository.getAuditLogs(),
+      logs: result.logs,
+      pagination: {
+        page: result.page,
+        pageSize: result.pageSize,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
     };
   }
 

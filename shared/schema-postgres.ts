@@ -40,17 +40,25 @@ export const users = pgTable("users", {
 
 export const accountActivationTokens = pgTable("account_activation_tokens", {
   id: text("id").primaryKey(),
-  userId: text("user_id").notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
   tokenHash: text("token_hash").notNull(),
   expiresAt: timestamp("expires_at").notNull(),
   usedAt: timestamp("used_at"),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  userIdIdx: index("idx_account_activation_tokens_user_id").on(table.userId),
+  expiresAtIdx: index("idx_account_activation_tokens_expires_at").on(table.expiresAt),
+  tokenHashUnique: uniqueIndex("idx_account_activation_tokens_hash_unique").on(table.tokenHash),
+}));
 
 export const passwordResetRequests = pgTable("password_reset_requests", {
   id: text("id").primaryKey(),
-  userId: text("user_id").notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
   requestedByUser: text("requested_by_user"),
   approvedBy: text("approved_by"),
   resetType: text("reset_type").notNull().default("email_link"),
@@ -58,7 +66,10 @@ export const passwordResetRequests = pgTable("password_reset_requests", {
   expiresAt: timestamp("expires_at"),
   usedAt: timestamp("used_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  userIdIdx: index("idx_password_reset_requests_user_id").on(table.userId),
+  createdAtIdx: index("idx_password_reset_requests_created_at").on(table.createdAt),
+}));
 
 export const imports = pgTable("imports", {
   id: text("id").primaryKey(),
@@ -77,7 +88,9 @@ export const dataRows = pgTable("data_rows", {
 
 export const userActivity = pgTable("user_activity", {
   id: text("id").primaryKey(),
-  userId: text("user_id").notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
   username: text("username").notNull(),
   role: text("role").notNull(),
   pcName: text("pc_name"),
@@ -89,7 +102,15 @@ export const userActivity = pgTable("user_activity", {
   lastActivityTime: timestamp("last_activity_time"),
   isActive: boolean("is_active").default(true),
   logoutReason: text("logout_reason"),
-});
+}, (table) => ({
+  userIdIdx: index("idx_user_activity_user_id").on(table.userId),
+  usernameIdx: index("idx_user_activity_username").on(table.username),
+  isActiveIdx: index("idx_user_activity_is_active").on(table.isActive),
+  loginTimeIdx: index("idx_user_activity_login_time").on(table.loginTime),
+  lastActivityTimeIdx: index("idx_user_activity_last_activity_time").on(table.lastActivityTime),
+  fingerprintIdx: index("idx_user_activity_fingerprint").on(table.fingerprint),
+  ipAddressIdx: index("idx_user_activity_ip_address").on(table.ipAddress),
+}));
 
 export const auditLogs = pgTable("audit_logs", {
   id: text("id").primaryKey(),
@@ -201,7 +222,9 @@ export const collectionRecords = pgTable("collection_records", {
 
 export const collectionRecordReceipts = pgTable("collection_record_receipts", {
   id: uuid("id").primaryKey(),
-  collectionRecordId: uuid("collection_record_id").notNull(),
+  collectionRecordId: uuid("collection_record_id")
+    .notNull()
+    .references(() => collectionRecords.id, { onDelete: "cascade", onUpdate: "cascade" }),
   storagePath: text("storage_path").notNull(),
   originalFileName: text("original_file_name").notNull(),
   originalMimeType: text("original_mime_type").notNull(),

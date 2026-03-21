@@ -20,7 +20,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
   app.get(
     "/api/audit-logs",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("superuser"),
     requireTabAccess("audit-logs"),
     asyncHandler(operationsController.listAuditLogs),
   );
@@ -28,7 +28,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
   app.get(
     "/api/audit-logs/stats",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("superuser"),
     requireTabAccess("audit-logs"),
     asyncHandler(operationsController.getAuditLogStats),
   );
@@ -84,7 +84,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
   app.get(
     "/api/backups",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("superuser"),
     requireTabAccess("backup"),
     asyncHandler(operationsController.listBackups),
   );
@@ -92,7 +92,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
   app.post(
     "/api/backups",
     authenticateToken,
-    requireRole("admin", "superuser"),
+    requireRole("superuser"),
     requireTabAccess("backup"),
     asyncHandler(operationsController.createBackup),
   );
@@ -100,15 +100,23 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
   app.get(
     "/api/backups/:id",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("superuser"),
     requireTabAccess("backup"),
     asyncHandler(operationsController.getBackup),
+  );
+
+  app.get(
+    "/api/backups/:id/export",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("backup"),
+    asyncHandler(operationsController.exportBackup),
   );
 
   app.post(
     "/api/backups/:id/restore",
     authenticateToken,
-    requireRole("admin", "superuser"),
+    requireRole("superuser"),
     requireTabAccess("backup"),
     asyncHandler(operationsController.restoreBackup),
   );
@@ -116,7 +124,7 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
   app.delete(
     "/api/backups/:id",
     authenticateToken,
-    requireRole("admin", "superuser"),
+    requireRole("superuser"),
     requireTabAccess("backup"),
     asyncHandler(operationsController.deleteBackup),
   );
