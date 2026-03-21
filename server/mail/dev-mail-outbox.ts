@@ -4,6 +4,8 @@ import path from "node:path";
 import { getPublicAppBaseUrl } from "../auth/activation-links";
 
 const DEFAULT_OUTBOX_MAX_FILES = 50;
+const DEV_OUTBOX_LIST_DEFAULT_PAGE_SIZE = 25;
+const DEV_OUTBOX_LIST_MAX_PAGE_SIZE = 100;
 const DEV_OUTBOX_FILE_PATTERN = /^\d{13}-[a-f0-9]{16}\.json$/i;
 const DEV_OUTBOX_ID_PATTERN = /^\d{13}-[a-f0-9]{16}$/i;
 
@@ -22,6 +24,14 @@ export type DevMailOutboxPreview = {
   previewUrl: string;
   subject: string;
   to: string;
+};
+
+export type DevMailOutboxPreviewPage = {
+  previews: DevMailOutboxPreview[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 function readFlag(name: string, fallback: boolean): boolean {
@@ -160,38 +170,93 @@ export async function readDevMailPreview(previewId: string): Promise<DevMailOutb
 }
 
 export async function listDevMailPreviews(limit = 25): Promise<DevMailOutboxPreview[]> {
+  const page = await listDevMailPreviewsPage({
+    page: 1,
+    pageSize: limit,
+  });
+  return page.previews;
+}
+
+export async function listDevMailPreviewsPage(params?: {
+  page?: number;
+  pageSize?: number;
+  searchEmail?: string;
+  searchSubject?: string;
+  sortDirection?: "asc" | "desc";
+}): Promise<DevMailOutboxPreviewPage> {
   if (!isDevMailOutboxEnabled()) {
-    return [];
+    return {
+      previews: [],
+      page: 1,
+      pageSize: DEV_OUTBOX_LIST_DEFAULT_PAGE_SIZE,
+      total: 0,
+      totalPages: 1,
+    };
   }
 
-  const normalizedLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 25;
+  const requestedPage = Number(params?.page);
+  const requestedPageSize = Number(params?.pageSize);
+  const page = Number.isFinite(requestedPage)
+    ? Math.max(1, Math.floor(requestedPage))
+    : 1;
+  const pageSize = Number.isFinite(requestedPageSize)
+    ? Math.max(1, Math.min(DEV_OUTBOX_LIST_MAX_PAGE_SIZE, Math.floor(requestedPageSize)))
+    : DEV_OUTBOX_LIST_DEFAULT_PAGE_SIZE;
+  const searchEmail = String(params?.searchEmail || "").trim().toLowerCase();
+  const searchSubject = String(params?.searchSubject || "").trim().toLowerCase();
+  const sortDirection = params?.sortDirection === "asc" ? "asc" : "desc";
 
   try {
     const outboxDir = getDevMailOutboxDir();
     const entries = (await readdir(outboxDir))
       .filter((name) => DEV_OUTBOX_FILE_PATTERN.test(name))
-      .sort((left, right) => right.localeCompare(left))
-      .slice(0, normalizedLimit);
+      .sort((left, right) =>
+        sortDirection === "asc"
+          ? left.localeCompare(right)
+          : right.localeCompare(left),
+      );
 
-    const previews = await Promise.all(
+    const loaded = await Promise.all(
       entries.map(async (entry) => {
         const previewId = entry.replace(/\.json$/i, "");
         const record = await readDevMailPreview(previewId);
         if (!record) return null;
 
-        return {
+        const preview = {
           createdAt: record.createdAt,
           id: record.id,
           previewUrl: buildPreviewUrl(record.id),
           subject: record.subject,
           to: record.to,
         } satisfies DevMailOutboxPreview;
+
+        const emailMatches = !searchEmail || preview.to.toLowerCase().includes(searchEmail);
+        const subjectMatches = !searchSubject || preview.subject.toLowerCase().includes(searchSubject);
+        return emailMatches && subjectMatches ? preview : null;
       }),
     );
 
-    return previews.filter((preview): preview is DevMailOutboxPreview => preview !== null);
+    const filtered = loaded.filter((preview): preview is DevMailOutboxPreview => preview !== null);
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * pageSize;
+
+    return {
+      previews: filtered.slice(offset, offset + pageSize),
+      page: safePage,
+      pageSize,
+      total,
+      totalPages,
+    };
   } catch {
-    return [];
+    return {
+      previews: [],
+      page: 1,
+      pageSize,
+      total: 0,
+      totalPages: 1,
+    };
   }
 }
 

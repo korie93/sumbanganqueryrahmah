@@ -44,10 +44,13 @@ export function useSettingsAccountManagement({
     devMailOutboxEnabled,
     devMailOutboxEntries,
     devMailOutboxLoading,
+    devMailOutboxPagination,
+    devMailOutboxQuery,
     handleClearDevMailOutbox,
     handleDeleteDevMailOutboxEntry,
     loadDevMailOutbox,
     refreshDevMailOutboxSection,
+    updateDevMailOutboxQuery,
   } = devMailOutbox;
 
   const managedDialogs = useSettingsManagedDialogs();
@@ -126,6 +129,8 @@ export function useSettingsAccountManagement({
     devMailOutboxEnabled,
     devMailOutboxEntries,
     devMailOutboxLoading,
+    devMailOutboxPagination,
+    devMailOutboxQuery,
     managedDialogOpen,
     managedEmailInput,
     managedFullNameInput,
@@ -159,6 +164,7 @@ export function useSettingsAccountManagement({
     openManagedEditor,
     openManagedSecretDialog,
     refreshDevMailOutboxSection,
+    updateDevMailOutboxQuery,
     refreshManagedUsersSection,
     refreshPendingResetRequestsSection,
     setCreateEmailInput,

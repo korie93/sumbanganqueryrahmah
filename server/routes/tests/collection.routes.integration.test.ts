@@ -74,6 +74,17 @@ function createCollectionStorageDouble(options: {
 
 function createCoreCollectionStorageDouble(options?: {
   sessionNickname?: string | null;
+  seedRecordOverrides?: Partial<CollectionRecordShape>;
+  receiptRowsByRecordId?: Record<string, Array<{
+    id: string;
+    collectionRecordId: string;
+    storagePath: string;
+    originalFileName: string;
+    originalMimeType: string;
+    originalExtension: string;
+    fileSize: number;
+    createdAt: Date;
+  }>>;
 }) {
   const auditLogs: AuditEntry[] = [];
   const createCalls: Array<Record<string, unknown>> = [];
@@ -103,8 +114,22 @@ function createCoreCollectionStorageDouble(options?: {
     createdByLogin: "staff.user",
     collectionStaffNickname: "Collector Alpha",
     createdAt: new Date("2026-03-01T09:00:00.000Z"),
+    ...options?.seedRecordOverrides,
   };
   records.set(seedRecord.id, seedRecord);
+  const receiptRowsByRecordId = new Map<string, Array<{
+    id: string;
+    collectionRecordId: string;
+    storagePath: string;
+    originalFileName: string;
+    originalMimeType: string;
+    originalExtension: string;
+    fileSize: number;
+    createdAt: Date;
+  }>>();
+  for (const [recordId, receipts] of Object.entries(options?.receiptRowsByRecordId || {})) {
+    receiptRowsByRecordId.set(recordId, receipts);
+  }
 
   const storage = {
     getCollectionNicknameSessionByActivity: async (activityId: string) => {
@@ -156,8 +181,11 @@ function createCoreCollectionStorageDouble(options?: {
     },
     listCollectionRecords: async (filters: Record<string, unknown>) => {
       listCalls.push(filters);
-      return [seedRecord];
+      return Array.from(records.values());
     },
+    listCollectionRecordReceipts: async (recordId: string) => receiptRowsByRecordId.get(recordId) || [],
+    getCollectionRecordReceiptById: async (recordId: string, receiptId: string) =>
+      (receiptRowsByRecordId.get(recordId) || []).find((receipt) => receipt.id === receiptId) || null,
     updateCollectionRecord: async (id: string, data: Record<string, unknown>) => {
       updateCalls.push({ id, data });
       const existing = records.get(id);
@@ -836,6 +864,72 @@ test("PATCH /api/collection/:id rejects future payment dates", async () => {
     assert.equal(response.status, 400);
     const payload = await response.json();
     assert.match(String(payload.message), /future/i);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/collection/:id/receipt/view rejects users who no longer own the record nickname", async () => {
+  const { storage } = createCoreCollectionStorageDouble({
+    sessionNickname: "Collector Beta",
+    seedRecordOverrides: {
+      receiptFile: "/uploads/collection-receipts/missing.pdf",
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+      activityId: "activity-user-collection-receipt-1",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1/receipt/view`);
+    assert.equal(response.status, 403);
+    const payload = await response.json();
+    assert.equal(payload.ok, false);
+    assert.match(String(payload.message), /forbidden/i);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/collection/:id/receipt/download returns 404 when receipt file is missing", async () => {
+  const { storage } = createCoreCollectionStorageDouble({
+    sessionNickname: "Collector Alpha",
+    seedRecordOverrides: {
+      receiptFile: "/uploads/collection-receipts/missing.pdf",
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+      activityId: "activity-user-collection-receipt-2",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1/receipt/download`);
+    assert.equal(response.status, 404);
+    const payload = await response.json();
+    assert.equal(payload.ok, false);
+    assert.match(String(payload.message), /receipt file not found/i);
   } finally {
     await stopTestServer(server);
   }

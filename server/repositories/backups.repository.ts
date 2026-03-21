@@ -537,6 +537,7 @@ export class BackupsRepository {
 
     return {
       ...row,
+      backupData: this.decodeBackupDataFromStorage(String(row.backupData || "")),
       metadata: this.options.parseBackupMetadataSafe(row.metadata),
     } as Backup;
   }
@@ -565,7 +566,7 @@ export class BackupsRepository {
 
     return {
       ...row,
-      backupData: this.decodeBackupDataFromStorage(String(row.backupData || "")),
+      backupData: "",
       metadata: this.options.parseBackupMetadataSafe(row.metadata),
     } as Backup;
   }

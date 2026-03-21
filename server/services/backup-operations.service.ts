@@ -148,7 +148,17 @@ export class BackupOperationsService {
     backupId: string,
     username: string,
   ): Promise<BackupOperationResponse<{ fileName: string; payloadJson: string } | { message: string }>> {
-    const backup = await this.backupsRepository.getBackupById(backupId);
+    let backup: Awaited<ReturnType<BackupOperationsBackupsRepository["getBackupById"]>>;
+    try {
+      backup = await this.backupsRepository.getBackupById(backupId);
+    } catch (error) {
+      const payloadReadFailure = this.getBackupPayloadReadErrorResponse(error);
+      if (payloadReadFailure) {
+        return payloadReadFailure;
+      }
+      throw error;
+    }
+
     if (!backup) {
       return {
         statusCode: 404,
@@ -274,6 +284,10 @@ export class BackupOperationsService {
         this.backupsRepository.getBackupById(params.backupId),
       );
     } catch (error) {
+      const payloadReadFailure = this.getBackupPayloadReadErrorResponse(error);
+      if (payloadReadFailure) {
+        return payloadReadFailure;
+      }
       return this.getCircuitOpenResponse(error);
     }
 
@@ -363,12 +377,12 @@ export class BackupOperationsService {
   async deleteBackup(
     params: DeleteBackupInput,
   ): Promise<BackupOperationResponse<{ success: boolean } | { message: string }>> {
-    let backup;
+    let backupMetadata;
     let deleted;
 
     try {
-      backup = await this.withExportCircuit(() =>
-        this.backupsRepository.getBackupById(params.backupId),
+      backupMetadata = await this.withExportCircuit(() =>
+        this.backupsRepository.getBackupMetadataById(params.backupId),
       );
       deleted = await this.withExportCircuit(() =>
         this.backupsRepository.deleteBackup(params.backupId),
@@ -387,7 +401,7 @@ export class BackupOperationsService {
     await this.storage.createAuditLog({
       action: "DELETE_BACKUP",
       performedBy: params.username,
-      targetResource: backup?.name || params.backupId,
+      targetResource: backupMetadata?.name || params.backupId,
     });
 
     return {
@@ -458,5 +472,25 @@ export class BackupOperationsService {
     }
 
     throw error;
+  }
+
+  private getBackupPayloadReadErrorResponse(
+    error: unknown,
+  ): BackupOperationResponse<{ message: string }> | null {
+    const message = String((error as { message?: string })?.message || "");
+    if (
+      /decrypt|encryption key|encrypted format|backup payload|BACKUP_ENCRYPTION_KEY/i.test(
+        message,
+      )
+    ) {
+      return {
+        statusCode: 409,
+        body: {
+          message:
+            "Backup payload cannot be decrypted with the current encryption configuration.",
+        },
+      };
+    }
+    return null;
   }
 }

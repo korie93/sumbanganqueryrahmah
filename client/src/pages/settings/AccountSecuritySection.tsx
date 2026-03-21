@@ -5,6 +5,7 @@ import type {
   ManagedUser,
   PendingPasswordResetRequest,
 } from "@/pages/settings/types";
+import type { DevMailOutboxPaginationState, DevMailOutboxQueryState } from "@/pages/settings/useSettingsDevMailOutbox";
 
 export interface AccountSecuritySectionProps {
   clearingDevMailOutbox: boolean;
@@ -21,6 +22,8 @@ export interface AccountSecuritySectionProps {
   devMailOutboxEnabled: boolean;
   devMailOutboxEntries: DevMailOutboxPreview[];
   devMailOutboxLoading: boolean;
+  devMailOutboxPagination: DevMailOutboxPaginationState;
+  devMailOutboxQuery: DevMailOutboxQueryState;
   isSuperuser: boolean;
   managedUsers: ManagedUser[];
   managedUsersLoading: boolean;
@@ -38,6 +41,7 @@ export interface AccountSecuritySectionProps {
   onDeleteDevMailOutboxEntry: (previewId: string) => void;
   onDeleteManagedUser: (user: ManagedUser) => void;
   onDevMailOutboxRefresh: () => void;
+  onDevMailOutboxQueryChange: (query: Partial<DevMailOutboxQueryState>) => void;
   onEditManagedUser: (user: ManagedUser) => void;
   onManagedBanToggle: (user: ManagedUser) => void;
   onManagedResetPassword: (user: ManagedUser) => void;
@@ -86,6 +90,8 @@ export function AccountSecuritySection(props: AccountSecuritySectionProps) {
           devMailOutboxEnabled={props.devMailOutboxEnabled}
           devMailOutboxEntries={props.devMailOutboxEntries}
           devMailOutboxLoading={props.devMailOutboxLoading}
+          devMailOutboxPagination={props.devMailOutboxPagination}
+          devMailOutboxQuery={props.devMailOutboxQuery}
           isSuperuser={props.isSuperuser}
           managedUsers={props.managedUsers}
           managedUsersLoading={props.managedUsersLoading}
@@ -98,6 +104,7 @@ export function AccountSecuritySection(props: AccountSecuritySectionProps) {
           onDeleteDevMailOutboxEntry={props.onDeleteDevMailOutboxEntry}
           onDeleteManagedUser={props.onDeleteManagedUser}
           onDevMailOutboxRefresh={props.onDevMailOutboxRefresh}
+          onDevMailOutboxQueryChange={props.onDevMailOutboxQueryChange}
           onEditManagedUser={props.onEditManagedUser}
           onManagedBanToggle={props.onManagedBanToggle}
           onManagedResetPassword={props.onManagedResetPassword}
