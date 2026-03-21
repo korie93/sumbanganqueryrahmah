@@ -109,7 +109,7 @@ export function CollectionDailyCalendarCard({
                       <div className={statusTextClass(day.status)}>{statusLabel(day.status)}</div>
                       <div>Collected: {formatAmountRM(day.amount)}</div>
                       <div className="text-[10px] text-muted-foreground">Customers: {day.customerCount}</div>
-                      <div className="text-[10px] text-muted-foreground">Target: {formatAmountRM(day.target)}</div>
+                      <div className="text-[10px] text-muted-foreground">Required Today: {formatAmountRM(day.target)}</div>
                       {day.isHoliday && day.holidayName ? (
                         <div className="truncate text-[10px] text-muted-foreground" title={day.holidayName}>
                           {day.holidayName}

@@ -23,11 +23,14 @@ export type CollectionDailyTimelineDay = {
 
 export type CollectionDailyTimelineSummary = {
   monthlyTarget: number;
+  collectedToDate: number;
   collectedAmount: number;
+  remainingTarget: number;
   balancedAmount: number;
   workingDays: number;
   elapsedWorkingDays: number;
   remainingWorkingDays: number;
+  requiredPerRemainingWorkingDay: number;
   completedDays: number;
   incompleteDays: number;
   noCollectionDays: number;
@@ -70,6 +73,14 @@ type ComputeCollectionDailyTimelineParams = {
 
 function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function getRequiredPerRemainingWorkingDay(
+  remainingTarget: number,
+  remainingWorkingDays: number,
+): number {
+  if (remainingWorkingDays <= 0) return 0;
+  return roundMoney(Math.max(0, remainingTarget) / remainingWorkingDays);
 }
 
 function buildDateKey(year: number, month: number, day: number): string {
@@ -121,6 +132,9 @@ export function getCollectionDailyStatus(params: {
   if (!params.isWorkingDay) {
     return "neutral";
   }
+  if (target <= 0) {
+    return amount > 0 ? "green" : "neutral";
+  }
   if (amount <= 0) {
     return "red";
   }
@@ -131,7 +145,7 @@ export function getCollectionDailyStatus(params: {
 }
 
 export function getCollectionDailyStatusMessage(status: CollectionDailyStatus): string {
-  if (status === "neutral") return "Holiday / non-working day.";
+  if (status === "neutral") return "Holiday / non-working day or no required target for this day.";
   if (status === "red") return "No collection on this working day.";
   if (status === "yellow") return "Collection recorded but daily target not achieved.";
   return "Daily target achieved.";
@@ -140,11 +154,14 @@ export function getCollectionDailyStatusMessage(status: CollectionDailyStatus): 
 function buildEmptyCollectionDailyOverviewSummary(): CollectionDailyOverviewSummary {
   return {
     monthlyTarget: 0,
+    collectedToDate: 0,
     collectedAmount: 0,
+    remainingTarget: 0,
     balancedAmount: 0,
     workingDays: 0,
     elapsedWorkingDays: 0,
     remainingWorkingDays: 0,
+    requiredPerRemainingWorkingDay: 0,
     completedDays: 0,
     incompleteDays: 0,
     noCollectionDays: 0,
@@ -229,20 +246,28 @@ export function aggregateCollectionDailyTimelines(
   const expectedProgressAmount = roundMoney(
     timelines.reduce((sum, timeline) => sum + timeline.summary.expectedProgressAmount, 0),
   );
+  const progressVarianceAmount = roundMoney(collectedAmount - expectedProgressAmount);
   const workingDays = timelines[0]?.summary.workingDays || 0;
   const elapsedWorkingDays = timelines[0]?.summary.elapsedWorkingDays || 0;
   const remainingWorkingDays = timelines[0]?.summary.remainingWorkingDays || 0;
+  const requiredPerRemainingWorkingDay = getRequiredPerRemainingWorkingDay(
+    balancedAmount,
+    remainingWorkingDays,
+  );
 
   return {
     daysInMonth,
     days,
     summary: {
       monthlyTarget,
+      collectedToDate: collectedAmount,
       collectedAmount,
+      remainingTarget: balancedAmount,
       balancedAmount,
       workingDays,
       elapsedWorkingDays,
       remainingWorkingDays,
+      requiredPerRemainingWorkingDay,
       completedDays,
       incompleteDays,
       noCollectionDays,
@@ -250,7 +275,7 @@ export function aggregateCollectionDailyTimelines(
       baseDailyTarget,
       dailyTarget: baseDailyTarget,
       expectedProgressAmount,
-      progressVarianceAmount: roundMoney(collectedAmount - expectedProgressAmount),
+      progressVarianceAmount,
       achievedAmount: collectedAmount,
       remainingAmount: balancedAmount,
       metDays: completedDays,
@@ -298,35 +323,50 @@ export function computeCollectionDailyTimeline({
   let incompleteDays = 0;
   let noCollectionDays = 0;
   let neutralDays = 0;
-  let carryForward = 0;
+  let workingDaysElapsedInMonth = 0;
 
   const days: CollectionDailyTimelineDay[] = [];
   for (let index = 0; index < daysInMonth; index += 1) {
     const day = index + 1;
     const date = buildDateKey(year, month, day);
+    const collectedBeforeDay = collectedAmount;
     const amount = roundMoney(Math.max(0, Number(amountByDate.get(date) || 0)));
-    collectedAmount = roundMoney(collectedAmount + amount);
-
     const override = calendarByDay.get(day);
     const isWorkingDay = workingFlags[index];
-    const carryIn = roundMoney(carryForward);
-    const target = isWorkingDay ? roundMoney(Math.max(0, baseDailyTarget + carryIn)) : 0;
+    if (isWorkingDay) {
+      workingDaysElapsedInMonth += 1;
+    }
+    const elapsedBeforeDay = isWorkingDay
+      ? Math.max(0, workingDaysElapsedInMonth - 1)
+      : workingDaysElapsedInMonth;
+    const expectedBeforeDay = roundMoney(
+      Math.min(safeMonthlyTarget, baseDailyTarget * elapsedBeforeDay),
+    );
+    const carryIn = roundMoney(Math.max(0, expectedBeforeDay - collectedBeforeDay));
+    const remainingTargetBeforeDay = roundMoney(
+      Math.max(0, safeMonthlyTarget - collectedBeforeDay),
+    );
+    const remainingWorkingDaysIncludingToday = isWorkingDay
+      ? Math.max(1, workingDays - elapsedBeforeDay)
+      : 0;
+    const target = isWorkingDay
+      ? getRequiredPerRemainingWorkingDay(remainingTargetBeforeDay, remainingWorkingDaysIncludingToday)
+      : 0;
     const status = getCollectionDailyStatus({ isWorkingDay, amount, target });
-    let carryOut = carryIn;
+    collectedAmount = roundMoney(collectedBeforeDay + amount);
+    const expectedAfterDay = roundMoney(
+      Math.min(safeMonthlyTarget, baseDailyTarget * workingDaysElapsedInMonth),
+    );
+    const carryOut = roundMoney(Math.max(0, expectedAfterDay - collectedAmount));
     if (status === "neutral") {
       neutralDays += 1;
     } else if (status === "red") {
       noCollectionDays += 1;
-      carryOut = roundMoney(target - amount);
     } else if (status === "yellow") {
       incompleteDays += 1;
-      carryOut = roundMoney(target - amount);
     } else {
       completedDays += 1;
-      carryOut = roundMoney(target - amount);
     }
-
-    carryForward = carryOut;
 
     days.push({
       day,
@@ -343,27 +383,36 @@ export function computeCollectionDailyTimeline({
     });
   }
 
+  const remainingTarget = roundMoney(Math.max(0, safeMonthlyTarget - collectedAmount));
+  const expectedProgressAmount = roundMoney(
+    Math.min(safeMonthlyTarget, baseDailyTarget * elapsedWorkingDays),
+  );
+
   return {
     daysInMonth,
     days,
     summary: {
       monthlyTarget: safeMonthlyTarget,
+      collectedToDate: collectedAmount,
       collectedAmount,
-      balancedAmount: roundMoney(Math.max(0, safeMonthlyTarget - collectedAmount)),
+      remainingTarget,
+      balancedAmount: remainingTarget,
       workingDays,
       elapsedWorkingDays,
       remainingWorkingDays,
+      requiredPerRemainingWorkingDay: getRequiredPerRemainingWorkingDay(
+        remainingTarget,
+        remainingWorkingDays,
+      ),
       completedDays,
       incompleteDays,
       noCollectionDays,
       neutralDays,
       baseDailyTarget,
       dailyTarget: baseDailyTarget,
-      expectedProgressAmount: roundMoney(
-        Math.min(safeMonthlyTarget, baseDailyTarget * elapsedWorkingDays),
-      ),
+      expectedProgressAmount,
       progressVarianceAmount: roundMoney(
-        collectedAmount - Math.min(safeMonthlyTarget, baseDailyTarget * elapsedWorkingDays),
+        collectedAmount - expectedProgressAmount,
       ),
     },
   };

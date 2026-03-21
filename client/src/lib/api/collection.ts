@@ -281,11 +281,14 @@ export type CollectionDailyOverviewResponse = {
   };
   summary: {
     monthlyTarget: number;
+    collectedToDate: number;
     collectedAmount: number;
+    remainingTarget: number;
     balancedAmount: number;
     workingDays: number;
     elapsedWorkingDays: number;
     remainingWorkingDays: number;
+    requiredPerRemainingWorkingDay: number;
     completedDays: number;
     incompleteDays: number;
     noCollectionDays: number;
