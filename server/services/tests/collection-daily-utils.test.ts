@@ -21,6 +21,14 @@ function buildCalendarMonth(
   });
 }
 
+function buildDayRange(start: number, end: number): number[] {
+  const values: number[] = [];
+  for (let day = start; day <= end; day += 1) {
+    values.push(day);
+  }
+  return values;
+}
+
 test("computeCollectionDailyTimeline keeps daily requirements capped by remaining target and working days", () => {
   const year = 2026;
   const month = 3;
@@ -101,4 +109,48 @@ test("computeCollectionDailyTimeline keeps non-working days neutral", () => {
   assert.equal(timeline.summary.expectedProgressAmount, 0);
   assert.equal(timeline.summary.progressVarianceAmount, 200);
   assert.equal(timeline.summary.neutralDays, timeline.daysInMonth);
+});
+
+test("computeCollectionDailyTimeline aligns expected progress with working days and monthly ceiling", () => {
+  const timeline = computeCollectionDailyTimeline({
+    year: 2026,
+    month: 3,
+    monthlyTarget: 100000,
+    calendarRows: buildCalendarMonth(2026, 3, buildDayRange(1, 22)),
+    amountByDate: new Map<string, number>([["2026-03-01", 40000]]),
+    referenceDate: new Date("2026-03-15T12:00:00.000Z"),
+  });
+
+  assert.equal(timeline.summary.monthlyTarget, 100000);
+  assert.equal(timeline.summary.collectedToDate, 40000);
+  assert.equal(timeline.summary.baseDailyTarget, 4545.45);
+  assert.equal(timeline.summary.workingDays, 22);
+  assert.equal(timeline.summary.elapsedWorkingDays, 15);
+  assert.equal(timeline.summary.remainingWorkingDays, 7);
+  assert.equal(timeline.summary.expectedProgressAmount, 68181.75);
+  assert.equal(timeline.summary.progressVarianceAmount, -28181.75);
+  assert.equal(timeline.summary.remainingTarget, 60000);
+  assert.equal(timeline.summary.requiredPerRemainingWorkingDay, 8571.43);
+  assert.ok(timeline.summary.expectedProgressAmount <= timeline.summary.monthlyTarget);
+});
+
+test("computeCollectionDailyTimeline never inflates remaining target when collected exceeds monthly target", () => {
+  const timeline = computeCollectionDailyTimeline({
+    year: 2026,
+    month: 3,
+    monthlyTarget: 1000,
+    calendarRows: buildCalendarMonth(2026, 3, [1, 2]),
+    amountByDate: new Map<string, number>([
+      ["2026-03-01", 1200],
+      ["2026-03-02", 300],
+    ]),
+    referenceDate: new Date("2026-03-02T12:00:00.000Z"),
+  });
+
+  assert.equal(timeline.summary.collectedToDate, 1500);
+  assert.equal(timeline.summary.expectedProgressAmount, 1000);
+  assert.equal(timeline.summary.remainingTarget, 0);
+  assert.equal(timeline.summary.requiredPerRemainingWorkingDay, 0);
+  assert.equal(timeline.summary.progressVarianceAmount, 500);
+  assert.equal(timeline.summary.remainingWorkingDays, 0);
 });

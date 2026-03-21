@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { getCsrfHeader } from "./api/shared";
 
 const isLowSpecClient = (() => {
   if (typeof window === "undefined" || typeof navigator === "undefined") {
@@ -83,7 +84,13 @@ export async function apiRequest(
   data?: unknown | undefined,
   options?: ApiRequestOptions,
 ): Promise<Response> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    ...(String(method || "").toUpperCase() === "GET"
+      || String(method || "").toUpperCase() === "HEAD"
+      || String(method || "").toUpperCase() === "OPTIONS"
+      ? {}
+      : (getCsrfHeader() as Record<string, string>)),
+  };
   if (data) headers["Content-Type"] = "application/json";
 
   const res = await fetch(url, {

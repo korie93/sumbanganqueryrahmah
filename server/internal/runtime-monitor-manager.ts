@@ -37,6 +37,11 @@ export type InternalMonitorSnapshot = {
   slowQueryCount: number;
   dbConnections: number;
   aiFailRate: number;
+  status401Count: number;
+  status403Count: number;
+  status429Count: number;
+  localOpenCircuitCount: number;
+  clusterOpenCircuitCount: number;
   bottleneckType: string;
   updatedAt: number;
 };
@@ -159,6 +164,12 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
   const latencySamples: number[] = [];
   let requestCounter = 0;
   let reqRatePerSec = 0;
+  let status401Window = 0;
+  let status403Window = 0;
+  let status429Window = 0;
+  let status401Count = 0;
+  let status403Count = 0;
+  let status429Count = 0;
   let lastCpuUsage = process.cpuUsage();
   let lastCpuTs = Date.now();
   let cpuPercent = 0;
@@ -371,6 +382,16 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
       bottleneckType = pressureScore.type;
     }
 
+    const localOpenCircuitCount = [
+      circuitAi.getState(),
+      circuitDb.getState(),
+      circuitExport.getState(),
+    ].filter((state) => state === "OPEN").length;
+    const clusterOpenCircuitCount =
+      Number(controlState.circuits?.aiOpenWorkers || 0)
+      + Number(controlState.circuits?.dbOpenWorkers || 0)
+      + Number(controlState.circuits?.exportOpenWorkers || 0);
+
     return {
       score: roundMetric(controlState.healthScore, 2),
       mode: controlState.mode,
@@ -393,6 +414,11 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
         Number(options.pool.totalCount || 0) + Number(options.pool.waitingCount || 0),
       ),
       aiFailRate: roundMetric(aiFailureRate, 2),
+      status401Count,
+      status403Count,
+      status429Count,
+      localOpenCircuitCount,
+      clusterOpenCircuitCount,
       bottleneckType,
       updatedAt: controlState.updatedAt,
     };
@@ -456,6 +482,28 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
       pushAlert("CRITICAL", "ERRORS", `Runtime failure rate is high (${snapshot.errorRate.toFixed(2)}%).`);
     } else if (snapshot.errorRate >= 2) {
       pushAlert("WARNING", "ERRORS", `Runtime failure rate is elevated (${snapshot.errorRate.toFixed(2)}%).`);
+    }
+
+    if (snapshot.status429Count >= 40) {
+      pushAlert("CRITICAL", "RATE_LIMIT", `High rate-limit pressure detected (${snapshot.status429Count} x 429 in 5s).`);
+    } else if (snapshot.status429Count >= 15) {
+      pushAlert("WARNING", "RATE_LIMIT", `Elevated rate-limit pressure (${snapshot.status429Count} x 429 in 5s).`);
+    }
+
+    if (snapshot.status401Count + snapshot.status403Count >= 40) {
+      pushAlert(
+        "WARNING",
+        "AUTH",
+        `Authentication/authorization spikes detected (401=${snapshot.status401Count}, 403=${snapshot.status403Count} in 5s).`,
+      );
+    }
+
+    if (snapshot.localOpenCircuitCount > 0 || snapshot.clusterOpenCircuitCount > 0) {
+      pushAlert(
+        snapshot.localOpenCircuitCount > 0 ? "CRITICAL" : "WARNING",
+        "CIRCUITS",
+        `Circuit protection is active (local open=${snapshot.localOpenCircuitCount}, cluster open=${snapshot.clusterOpenCircuitCount}).`,
+      );
     }
 
     if (snapshot.queueLength >= 10) {
@@ -557,9 +605,16 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     requestCounter += 1;
   }
 
-  function recordRequestFinished(elapsedMs: number) {
+  function recordRequestFinished(elapsedMs: number, statusCode = 0) {
     activeRequests = Math.max(0, activeRequests - 1);
     recordLatency(elapsedMs);
+    if (statusCode === 401) {
+      status401Window += 1;
+    } else if (statusCode === 403) {
+      status403Window += 1;
+    } else if (statusCode === 429) {
+      status429Window += 1;
+    }
   }
 
   function attachGcObserver() {
@@ -602,6 +657,12 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     runtimeLoopHandle = setInterval(() => {
       reqRatePerSec = requestCounter / 5;
       requestCounter = 0;
+      status401Count = status401Window;
+      status403Count = status403Window;
+      status429Count = status429Window;
+      status401Window = 0;
+      status403Window = 0;
+      status429Window = 0;
       gcPerMinute = gcCountWindow * 12;
       gcCountWindow = 0;
 
