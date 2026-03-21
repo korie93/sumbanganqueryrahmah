@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Download, FileText, Loader2, RefreshCw } from "lucide-react";
+import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getAuditLogs, getAuditLogStats, cleanupAuditLogs } from "@/lib/api";
@@ -7,11 +8,11 @@ import { useToast } from "@/hooks/use-toast";
 import { AuditLogsCleanupPanel } from "@/pages/audit-logs/AuditLogsCleanupPanel";
 import { AuditLogsFiltersPanel } from "@/pages/audit-logs/AuditLogsFiltersPanel";
 import { AuditLogsRecordsList } from "@/pages/audit-logs/AuditLogsRecordsList";
-import type { AuditLogRecord, AuditLogStats } from "@/pages/audit-logs/types";
+import type { AuditLogRecord, AuditLogsResponse, AuditLogStats } from "@/pages/audit-logs/types";
 import {
   exportAuditLogsToCsv,
   exportAuditLogsToPdf,
-  filterAuditLogs,
+  getAuditDateRange,
   getLogsToDeleteCount,
 } from "@/pages/audit-logs/utils";
 
@@ -45,20 +46,17 @@ export default function AuditLogs() {
   const [cleanupDialogOpen, setCleanupDialogOpen] = useState(false);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 1,
+  });
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const { toast } = useToast();
   const deferredSearchText = useDeferredValue(searchText.trim());
-
-  const fetchLogs = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await getAuditLogs();
-      setLogs(response.logs || []);
-    } catch (error) {
-      console.error("Failed to fetch audit logs:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -70,23 +68,64 @@ export default function AuditLogs() {
   }, []);
 
   useEffect(() => {
-    fetchLogs();
-    fetchStats();
-  }, [fetchLogs, fetchStats]);
+    let cancelled = false;
+    const run = async () => {
+      setLoading(true);
+      try {
+        const dateRange = getAuditDateRange(datePreset, dateFrom, dateTo);
+        const response = await getAuditLogs({
+          page,
+          pageSize,
+          action: actionFilter === "all" ? undefined : actionFilter,
+          performedBy: performedByFilter.trim() || undefined,
+          targetUser: targetUserFilter.trim() || undefined,
+          search: deferredSearchText || undefined,
+          dateFrom: dateRange.from ? dateRange.from.toISOString() : undefined,
+          dateTo: dateRange.to ? dateRange.to.toISOString() : undefined,
+          sortBy: "newest",
+        }) as AuditLogsResponse;
+        if (cancelled) return;
 
-  const filteredLogs = useMemo(
-    () =>
-      filterAuditLogs(logs, {
-        actionFilter,
-        dateFrom,
-        datePreset,
-        dateTo,
-        performedByFilter,
-        searchText: deferredSearchText,
-        targetUserFilter,
-      }),
-    [actionFilter, dateFrom, datePreset, dateTo, deferredSearchText, logs, performedByFilter, targetUserFilter],
-  );
+        const items = Array.isArray(response?.logs) ? response.logs : [];
+        setLogs(items);
+        setPagination({
+          page: Math.max(1, Number(response?.pagination?.page || page)),
+          pageSize: Math.max(1, Number(response?.pagination?.pageSize || pageSize)),
+          total: Math.max(0, Number(response?.pagination?.total || items.length)),
+          totalPages: Math.max(1, Number(response?.pagination?.totalPages || 1)),
+        });
+      } catch (error) {
+        if (cancelled) return;
+        console.error("Failed to fetch audit logs:", error);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    actionFilter,
+    dateFrom,
+    datePreset,
+    dateTo,
+    deferredSearchText,
+    page,
+    pageSize,
+    performedByFilter,
+    refreshNonce,
+    targetUserFilter,
+  ]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  const filteredLogs = logs;
 
   const clearAllFilters = useCallback(() => {
     setSearchText("");
@@ -96,6 +135,7 @@ export default function AuditLogs() {
     setDatePreset("all");
     setDateFrom("");
     setDateTo("");
+    setPage(1);
   }, []);
 
   const hasActiveFilters =
@@ -104,6 +144,12 @@ export default function AuditLogs() {
     Boolean(targetUserFilter) ||
     actionFilter !== "all" ||
     datePreset !== "all";
+
+  useEffect(() => {
+    if (page > pagination.totalPages) {
+      setPage(pagination.totalPages);
+    }
+  }, [page, pagination.totalPages]);
 
   const logsToDeleteCount = useMemo(() => getLogsToDeleteCount(stats, cleanupDays), [cleanupDays, stats]);
 
@@ -126,7 +172,9 @@ export default function AuditLogs() {
         description: `Deleted ${response.deletedCount} audit log entries older than ${days} days.`,
       });
       setCleanupDialogOpen(false);
-      await Promise.all([fetchLogs(), fetchStats()]);
+      setPage(1);
+      setRefreshNonce((value) => value + 1);
+      await fetchStats();
     } catch (error: unknown) {
       toast({
         title: "Cleanup Failed",
@@ -211,7 +259,7 @@ export default function AuditLogs() {
           </Popover>
           <Button
             variant="outline"
-            onClick={fetchLogs}
+            onClick={() => setRefreshNonce((value) => value + 1)}
             disabled={loading}
             data-testid="button-refresh-logs"
           >
@@ -228,21 +276,40 @@ export default function AuditLogs() {
         dateTo={dateTo}
         filtersOpen={filtersOpen}
         hasActiveFilters={hasActiveFilters}
-        onActionFilterChange={setActionFilter}
+        onActionFilterChange={(value) => {
+          setActionFilter(value);
+          setPage(1);
+        }}
         onClearFilters={clearAllFilters}
-        onDateFromChange={setDateFrom}
+        onDateFromChange={(value) => {
+          setDateFrom(value);
+          setPage(1);
+        }}
         onDatePresetChange={(value) => {
           setDatePreset(value);
           if (value !== "custom") {
             setDateFrom("");
             setDateTo("");
           }
+          setPage(1);
         }}
-        onDateToChange={setDateTo}
+        onDateToChange={(value) => {
+          setDateTo(value);
+          setPage(1);
+        }}
         onFiltersOpenChange={setFiltersOpen}
-        onPerformedByFilterChange={setPerformedByFilter}
-        onSearchTextChange={setSearchText}
-        onTargetUserFilterChange={setTargetUserFilter}
+        onPerformedByFilterChange={(value) => {
+          setPerformedByFilter(value);
+          setPage(1);
+        }}
+        onSearchTextChange={(value) => {
+          setSearchText(value);
+          setPage(1);
+        }}
+        onTargetUserFilterChange={(value) => {
+          setTargetUserFilter(value);
+          setPage(1);
+        }}
         performedByFilter={performedByFilter}
         searchText={searchText}
         targetUserFilter={targetUserFilter}
@@ -266,10 +333,24 @@ export default function AuditLogs() {
       <AuditLogsRecordsList
         filteredLogs={filteredLogs}
         loading={loading}
-        logs={logs}
         onClearFilters={clearAllFilters}
         onRecordsOpenChange={setRecordsOpen}
         recordsOpen={recordsOpen}
+        totalLogs={pagination.total}
+      />
+
+      <AppPaginationBar
+        disabled={loading}
+        page={pagination.page}
+        totalPages={pagination.totalPages}
+        pageSize={pagination.pageSize}
+        totalItems={pagination.total}
+        itemLabel="audit logs"
+        onPageChange={setPage}
+        onPageSizeChange={(nextPageSize) => {
+          setPageSize(nextPageSize);
+          setPage(1);
+        }}
       />
     </div>
   );

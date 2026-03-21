@@ -6,6 +6,18 @@ import {
 } from "./auth-request-parsers";
 import type { AuthRouteContext } from "./auth-route-shared";
 
+function isLoopbackHost(hostname: string): boolean {
+  const normalized = String(hostname || "").trim().toLowerCase();
+  return normalized === "127.0.0.1" || normalized === "localhost" || normalized === "::1";
+}
+
+function isLoopbackRemoteAddress(remoteAddress: string): boolean {
+  const normalized = String(remoteAddress || "").trim().toLowerCase();
+  return normalized === "127.0.0.1"
+    || normalized === "::1"
+    || normalized === "::ffff:127.0.0.1";
+}
+
 export function registerAuthRecoveryRoutes(context: AuthRouteContext) {
   const {
     app,
@@ -21,6 +33,16 @@ export function registerAuthRecoveryRoutes(context: AuthRouteContext) {
   app.get(
     "/dev/mail-preview/:previewId",
     asyncHandler(async (req, res) => {
+      if (String(process.env.NODE_ENV || "").trim().toLowerCase() === "production") {
+        return res.status(404).type("text/plain").send("Not found.");
+      }
+
+      const host = String(req.hostname || "");
+      const remoteAddress = String(req.socket?.remoteAddress || "");
+      if (!isLoopbackHost(host) || !isLoopbackRemoteAddress(remoteAddress)) {
+        return res.status(404).type("text/plain").send("Not found.");
+      }
+
       const html = await authAccountService.getDevMailPreviewHtml(req.params.previewId);
       if (!html) {
         return res.status(404).type("text/plain").send("Not found.");

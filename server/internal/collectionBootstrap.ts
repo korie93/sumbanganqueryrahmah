@@ -117,6 +117,31 @@ export class CollectionBootstrap {
         `);
         await db.execute(sql`DELETE FROM public.collection_record_receipts WHERE collection_record_id IS NULL OR trim(COALESCE(storage_path, '')) = ''`);
         await db.execute(sql`
+          DELETE FROM public.collection_record_receipts receipt
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM public.collection_records record
+            WHERE record.id = receipt.collection_record_id
+          )
+        `);
+        await db.execute(sql`
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conname = 'fk_collection_record_receipts_record_id'
+            ) THEN
+              ALTER TABLE public.collection_record_receipts
+              ADD CONSTRAINT fk_collection_record_receipts_record_id
+              FOREIGN KEY (collection_record_id)
+              REFERENCES public.collection_records(id)
+              ON UPDATE CASCADE
+              ON DELETE CASCADE;
+            END IF;
+          END $$;
+        `);
+        await db.execute(sql`
           CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_record_receipts_record_storage_unique
           ON public.collection_record_receipts (collection_record_id, storage_path)
         `);

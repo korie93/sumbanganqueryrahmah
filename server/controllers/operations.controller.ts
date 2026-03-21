@@ -13,7 +13,12 @@ type CreateOperationsControllerDeps = {
   >;
   backupOperationsService: Pick<
     BackupOperationsService,
-    "createBackup" | "deleteBackup" | "getBackup" | "listBackups" | "restoreBackup"
+    | "createBackup"
+    | "deleteBackup"
+    | "exportBackup"
+    | "getBackupMetadata"
+    | "listBackups"
+    | "restoreBackup"
   >;
   operationsAnalyticsService: Pick<
     OperationsAnalyticsService,
@@ -36,8 +41,8 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
     connectedClients,
   } = deps;
 
-  const listAuditLogs = async (_req: AuthenticatedRequest, res: Response) => {
-    return res.json(await auditLogOperationsService.listAuditLogs());
+  const listAuditLogs = async (req: AuthenticatedRequest, res: Response) => {
+    return res.json(await auditLogOperationsService.listAuditLogs(req.query as Record<string, unknown>));
   };
 
   const getAuditLogStats = async (_req: AuthenticatedRequest, res: Response) => {
@@ -74,8 +79,8 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
     return res.json(await operationsAnalyticsService.getRoleDistribution());
   };
 
-  const listBackups = async (_req: AuthenticatedRequest, res: Response) => {
-    return res.json(await backupOperationsService.listBackups());
+  const listBackups = async (req: AuthenticatedRequest, res: Response) => {
+    return res.json(await backupOperationsService.listBackups(req.query as Record<string, unknown>));
   };
 
   const createBackup = async (req: AuthenticatedRequest, res: Response) => {
@@ -88,8 +93,20 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
   };
 
   const getBackup = async (req: AuthenticatedRequest, res: Response) => {
-    const result = await backupOperationsService.getBackup(req.params.id);
+    const result = await backupOperationsService.getBackupMetadata(req.params.id, req.user!.username);
     return res.status(result.statusCode).json(result.body);
+  };
+
+  const exportBackup = async (req: AuthenticatedRequest, res: Response) => {
+    const result = await backupOperationsService.exportBackup(req.params.id, req.user!.username);
+    if (result.statusCode !== 200 || !("fileName" in result.body) || !("payloadJson" in result.body)) {
+      return res.status(result.statusCode).json(result.body);
+    }
+
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Content-Disposition", `attachment; filename="${result.body.fileName}"`);
+    return res.status(200).send(result.body.payloadJson);
   };
 
   const restoreBackup = async (req: AuthenticatedRequest, res: Response) => {
@@ -125,6 +142,7 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
     listBackups,
     createBackup,
     getBackup,
+    exportBackup,
     restoreBackup,
     deleteBackup,
     getWebsocketClients,

@@ -8,7 +8,7 @@ import { formatAuditTime, getAuditActionBadge } from "@/pages/audit-logs/utils";
 interface AuditLogsRecordsListProps {
   filteredLogs: AuditLogRecord[];
   loading: boolean;
-  logs: AuditLogRecord[];
+  totalLogs: number;
   onClearFilters: () => void;
   onRecordsOpenChange: (open: boolean) => void;
   recordsOpen: boolean;
@@ -17,7 +17,7 @@ interface AuditLogsRecordsListProps {
 export function AuditLogsRecordsList({
   filteredLogs,
   loading,
-  logs,
+  totalLogs,
   onClearFilters,
   onRecordsOpenChange,
   recordsOpen,
@@ -34,7 +34,7 @@ export function AuditLogsRecordsList({
             >
               <CardTitle className="text-lg flex items-center gap-2">
                 <Info className="h-5 w-5" />
-                Activity Records ({filteredLogs.length} of {logs.length} entries)
+                Activity Records ({filteredLogs.length} of {totalLogs} entries)
               </CardTitle>
               <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${recordsOpen ? "rotate-180" : ""}`} />
             </Button>
@@ -49,7 +49,7 @@ export function AuditLogsRecordsList({
             ) : filteredLogs.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                {logs.length === 0 ? (
+                {totalLogs === 0 ? (
                   <p>No audit records found.</p>
                 ) : (
                   <>

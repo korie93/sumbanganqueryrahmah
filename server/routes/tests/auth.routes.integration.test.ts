@@ -635,6 +635,42 @@ test("GET /dev/mail-preview/:previewId renders the stored preview HTML", { concu
   });
 });
 
+test("GET /dev/mail-preview/:previewId returns 404 in production mode", { concurrency: false }, async () => {
+  await withDevMailOutboxFixture(async () => {
+    const preview = await writeDevMailPreview({
+      to: "preview.user@example.com",
+      subject: "Activation Preview",
+      text: "Plain preview body",
+      html: "<p><strong>Preview body</strong></p>",
+    });
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+
+    const { storage } = createDevMailAdminStorageDouble();
+    const app = createJsonTestApp();
+
+    registerAuthRoutes(app, {
+      storage,
+      authenticateToken: (_req, _res, next) => next(),
+      requireRole: () => (_req, _res, next) => next(),
+      connectedClients: new Map(),
+    });
+
+    const { server, baseUrl } = await startTestServer(app);
+    try {
+      const response = await fetch(`${baseUrl}/dev/mail-preview/${preview.messageId}`);
+      assert.equal(response.status, 404);
+    } finally {
+      await stopTestServer(server);
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+    }
+  });
+});
+
 test("GET /api/admin/dev-mail-outbox returns recent preview entries", { concurrency: false }, async () => {
   await withDevMailOutboxFixture(async () => {
     const preview = await writeDevMailPreview({
