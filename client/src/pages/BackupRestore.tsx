@@ -1,5 +1,6 @@
-import { useCallback, useDeferredValue, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Database, Download, FileText, Loader2, Plus, RefreshCw } from "lucide-react";
+import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -20,12 +21,12 @@ import type {
 import {
   exportBackupsToCsv,
   exportBackupsToPdf,
-  filterAndSortBackups,
+  getBackupDateRange,
   normalizeBackup,
 } from "@/pages/backup-restore/utils";
 
 export default function BackupRestore({ userRole, embedded = false }: BackupRestoreProps) {
-  const canManageBackups = userRole === "admin" || userRole === "superuser";
+  const canManageBackups = userRole === "superuser";
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState<BackupRecord | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState<BackupRecord | null>(null);
@@ -40,22 +41,54 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
   const [datePreset, setDatePreset] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [lastRestoreResult, setLastRestoreResult] = useState<RestoreResponse | null>(null);
   const { toast } = useToast();
   const deferredSearchName = useDeferredValue(searchName.trim());
+  const dateRange = useMemo(
+    () => getBackupDateRange(datePreset, dateFrom, dateTo),
+    [datePreset, dateFrom, dateTo],
+  );
+  const backupQueryParams = useMemo(() => ({
+    page,
+    pageSize,
+    searchName: deferredSearchName || undefined,
+    createdBy: createdByFilter.trim() || undefined,
+    dateFrom: dateRange.from ? dateRange.from.toISOString() : undefined,
+    dateTo: dateRange.to ? dateRange.to.toISOString() : undefined,
+    sortBy,
+  }), [page, pageSize, deferredSearchName, createdByFilter, dateRange.from, dateRange.to, sortBy]);
 
   const { data, error, isLoading, isRefetching, refetch } = useQuery<BackupsResponse>({
-    queryKey: ["/api/backups"],
+    queryKey: ["/api/backups", backupQueryParams],
     queryFn: async () => {
-      const response = await getBackups();
+      const response = await getBackups(backupQueryParams);
       const list = Array.isArray(response?.backups) ? response.backups : [];
-      return { backups: list.map(normalizeBackup) };
+      const normalizedBackups = list.map(normalizeBackup);
+      const total = Math.max(0, Number(response?.pagination?.total || normalizedBackups.length));
+      const totalPages = Math.max(1, Number(response?.pagination?.totalPages || Math.ceil(total / pageSize) || 1));
+      return {
+        backups: normalizedBackups,
+        pagination: {
+          page: Math.max(1, Number(response?.pagination?.page || page)),
+          pageSize: Math.max(1, Number(response?.pagination?.pageSize || pageSize)),
+          total,
+          totalPages,
+        },
+      };
     },
     retry: 1,
   });
 
   const backups = data?.backups || [];
+  const pagination = data?.pagination || {
+    page,
+    pageSize,
+    total: backups.length,
+    totalPages: Math.max(1, Math.ceil(backups.length / pageSize)),
+  };
 
   const clearAllFilters = useCallback(() => {
     setSearchName("");
@@ -64,18 +97,12 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
     setDatePreset("all");
     setDateFrom("");
     setDateTo("");
+    setPage(1);
   }, []);
 
   const createBackupMutation = useMutation({
     mutationFn: (name: string) => createBackup(name),
-    onSuccess: async (createdRaw: unknown) => {
-      const created = normalizeBackup(createdRaw);
-      queryClient.setQueryData<BackupsResponse>(["/api/backups"], (previous) => {
-        const previousList = previous?.backups ?? [];
-        const withoutSame = previousList.filter((backup) => backup.id !== created.id);
-        return { backups: [created, ...withoutSame] };
-      });
-
+    onSuccess: async () => {
       toast({
         title: "Success",
         description: "Backup has been successfully created.",
@@ -84,6 +111,7 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
       setShowCreateDialog(false);
       setBackupName("");
       clearAllFilters();
+      setPage(1);
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["/api/backups"] }),
@@ -174,25 +202,19 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
       setDeletingId(null);
     },
   });
-
-  const filteredAndSortedBackups = useMemo(
-    () =>
-      filterAndSortBackups(backups, {
-        createdByFilter,
-        dateFrom,
-        datePreset,
-        dateTo,
-        searchName: deferredSearchName,
-        sortBy,
-      }),
-    [backups, createdByFilter, dateFrom, datePreset, dateTo, deferredSearchName, sortBy],
-  );
+  const visibleBackups = backups;
 
   const hasActiveFilters =
     Boolean(searchName) ||
     Boolean(createdByFilter) ||
     sortBy !== "newest" ||
     datePreset !== "all";
+
+  useEffect(() => {
+    if (page > pagination.totalPages) {
+      setPage(pagination.totalPages);
+    }
+  }, [page, pagination.totalPages]);
 
   const loading = isLoading || isRefetching;
 
@@ -220,11 +242,11 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
   };
 
   const handleExportPdf = async () => {
-    if (filteredAndSortedBackups.length === 0) return;
+    if (visibleBackups.length === 0) return;
 
     setExportingPdf(true);
     try {
-      await exportBackupsToPdf(filteredAndSortedBackups);
+      await exportBackupsToPdf(visibleBackups);
     } catch (error: unknown) {
       console.error("Failed to export PDF:", error);
       toast({
@@ -267,7 +289,7 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                disabled={loading || filteredAndSortedBackups.length === 0 || exportingPdf}
+                disabled={loading || visibleBackups.length === 0 || exportingPdf}
                 data-testid="button-export-backups"
               >
                 {exportingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
@@ -279,7 +301,7 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
                 <Button
                   variant="ghost"
                   className="w-full justify-start"
-                  onClick={() => exportBackupsToCsv(filteredAndSortedBackups)}
+                  onClick={() => exportBackupsToCsv(visibleBackups)}
                   data-testid="button-export-csv"
                 >
                   <Download className="w-4 h-4 mr-2" />
@@ -326,19 +348,35 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
         filtersOpen={filtersOpen}
         hasActiveFilters={hasActiveFilters}
         onClearFilters={clearAllFilters}
-        onCreatedByFilterChange={setCreatedByFilter}
-        onDateFromChange={setDateFrom}
+        onCreatedByFilterChange={(value) => {
+          setCreatedByFilter(value);
+          setPage(1);
+        }}
+        onDateFromChange={(value) => {
+          setDateFrom(value);
+          setPage(1);
+        }}
         onDatePresetChange={(value) => {
           setDatePreset(value);
           if (value !== "custom") {
             setDateFrom("");
             setDateTo("");
           }
+          setPage(1);
         }}
-        onDateToChange={setDateTo}
+        onDateToChange={(value) => {
+          setDateTo(value);
+          setPage(1);
+        }}
         onFiltersOpenChange={setFiltersOpen}
-        onSearchNameChange={setSearchName}
-        onSortByChange={setSortBy}
+        onSearchNameChange={(value) => {
+          setSearchName(value);
+          setPage(1);
+        }}
+        onSortByChange={(value) => {
+          setSortBy(value);
+          setPage(1);
+        }}
         searchName={searchName}
         sortBy={sortBy}
       />
@@ -401,17 +439,31 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
       ) : null}
 
       <BackupList
-        backups={backups}
         backupsOpen={backupsOpen}
         canManageBackups={canManageBackups}
         deletingId={deletingId}
-        filteredBackups={filteredAndSortedBackups}
+        filteredBackups={visibleBackups}
         isLoading={isLoading}
         onBackupsOpenChange={setBackupsOpen}
         onClearFilters={clearAllFilters}
         onDeleteClick={setShowDeleteDialog}
         onRestoreClick={setShowRestoreDialog}
         restoringId={restoringId}
+        totalBackups={pagination.total}
+      />
+
+      <AppPaginationBar
+        disabled={loading}
+        page={pagination.page}
+        totalPages={pagination.totalPages}
+        pageSize={pagination.pageSize}
+        totalItems={pagination.total}
+        itemLabel="backups"
+        onPageChange={setPage}
+        onPageSizeChange={(nextPageSize) => {
+          setPageSize(nextPageSize);
+          setPage(1);
+        }}
       />
 
       <BackupDialogs

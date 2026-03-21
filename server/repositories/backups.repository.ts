@@ -12,6 +12,9 @@ import { db } from "../db-postgres";
 
 const BACKUP_CHUNK_SIZE = 500;
 const QUERY_PAGE_LIMIT = 1000;
+const BACKUP_LIST_DEFAULT_PAGE_SIZE = 25;
+const BACKUP_LIST_MAX_PAGE_SIZE = 100;
+const BACKUP_DATA_ENCRYPTION_PREFIX = "enc:v1:";
 
 type BackupsRepositoryOptions = {
   ensureBackupsTable: () => Promise<void>;
@@ -68,6 +71,26 @@ type BackupDataPayload = {
   collectionRecordReceipts?: BackupCollectionReceipt[];
 };
 
+type BackupListSort = "newest" | "oldest" | "name-asc" | "name-desc";
+
+type BackupListPageParams = {
+  page?: number;
+  pageSize?: number;
+  searchName?: string;
+  createdBy?: string;
+  dateFrom?: Date;
+  dateTo?: Date;
+  sortBy?: BackupListSort;
+};
+
+type BackupListPageResult = {
+  backups: Backup[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
 type RestoreStats = {
   imports: RestoreDatasetStats;
   dataRows: RestoreDatasetStats;
@@ -93,6 +116,67 @@ function createRestoreDatasetStats(): RestoreDatasetStats {
 
 export class BackupsRepository {
   constructor(private readonly options: BackupsRepositoryOptions) {}
+
+  private readBackupEncryptionKey(): Buffer | null {
+    const raw = String(process.env.BACKUP_ENCRYPTION_KEY || "").trim();
+    if (!raw) return null;
+
+    const fromHex = /^[a-f0-9]{64}$/i.test(raw) ? Buffer.from(raw, "hex") : null;
+    if (fromHex && fromHex.length === 32) return fromHex;
+
+    const base64Candidate = /^[A-Za-z0-9+/=]+$/.test(raw) ? Buffer.from(raw, "base64") : null;
+    if (base64Candidate && base64Candidate.length === 32) return base64Candidate;
+
+    const utf8 = Buffer.from(raw, "utf8");
+    if (utf8.length === 32) return utf8;
+
+    return null;
+  }
+
+  private encodeBackupDataForStorage(rawPayload: string): string {
+    const encryptionKey = this.readBackupEncryptionKey();
+    if (!encryptionKey) {
+      return rawPayload;
+    }
+
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv("aes-256-gcm", encryptionKey, iv);
+    const ciphertext = Buffer.concat([
+      cipher.update(rawPayload, "utf8"),
+      cipher.final(),
+    ]);
+    const authTag = cipher.getAuthTag();
+    return `${BACKUP_DATA_ENCRYPTION_PREFIX}${iv.toString("base64")}.${authTag.toString("base64")}.${ciphertext.toString("base64")}`;
+  }
+
+  private decodeBackupDataFromStorage(rawPayload: string): string {
+    const normalized = String(rawPayload || "");
+    if (!normalized.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX)) {
+      return normalized;
+    }
+
+    const encryptionKey = this.readBackupEncryptionKey();
+    if (!encryptionKey) {
+      throw new Error("BACKUP_ENCRYPTION_KEY is required to decrypt stored backup data.");
+    }
+
+    const token = normalized.slice(BACKUP_DATA_ENCRYPTION_PREFIX.length);
+    const [ivBase64, authTagBase64, ciphertextBase64] = token.split(".");
+    if (!ivBase64 || !authTagBase64 || !ciphertextBase64) {
+      throw new Error("Stored backup payload has an invalid encrypted format.");
+    }
+
+    const iv = Buffer.from(ivBase64, "base64");
+    const authTag = Buffer.from(authTagBase64, "base64");
+    const ciphertext = Buffer.from(ciphertextBase64, "base64");
+    const decipher = crypto.createDecipheriv("aes-256-gcm", encryptionKey, iv);
+    decipher.setAuthTag(authTag);
+    const decrypted = Buffer.concat([
+      decipher.update(ciphertext),
+      decipher.final(),
+    ]);
+    return decrypted.toString("utf8");
+  }
 
   private toDate(value: unknown): Date | null {
     if (!value) return null;
@@ -156,9 +240,10 @@ export class BackupsRepository {
   async createBackup(data: InsertBackup): Promise<Backup> {
     await this.options.ensureBackupsTable();
     const id = crypto.randomUUID();
+    const backupDataForStorage = this.encodeBackupDataForStorage(String(data.backupData || "{}"));
     const result = await db.execute(sql`
       INSERT INTO public.backups (id, name, created_at, created_by, backup_data, metadata)
-      VALUES (${id}, ${data.name}, ${new Date()}, ${data.createdBy}, ${data.backupData}, ${data.metadata ?? null})
+      VALUES (${id}, ${data.name}, ${new Date()}, ${data.createdBy}, ${backupDataForStorage}, ${data.metadata ?? null})
       RETURNING
         id,
         name,
@@ -172,12 +257,87 @@ export class BackupsRepository {
   }
 
   async getBackups(): Promise<Backup[]> {
-    await this.options.ensureBackupsTable();
-    const rows: any[] = [];
-    let offset = 0;
+    const firstPage = await this.listBackupsPage({
+      page: 1,
+      pageSize: QUERY_PAGE_LIMIT,
+      sortBy: "newest",
+    });
 
-    while (true) {
-      const result = await db.execute(sql`
+    if (firstPage.total <= firstPage.backups.length) {
+      return firstPage.backups;
+    }
+
+    const rows: Backup[] = [...firstPage.backups];
+    let page = 2;
+    while (rows.length < firstPage.total) {
+      const nextPage = await this.listBackupsPage({
+        page,
+        pageSize: QUERY_PAGE_LIMIT,
+        sortBy: "newest",
+      });
+      if (!nextPage.backups.length) break;
+      rows.push(...nextPage.backups);
+      page += 1;
+    }
+
+    return rows;
+  }
+
+  async listBackupsPage(params: BackupListPageParams = {}): Promise<BackupListPageResult> {
+    await this.options.ensureBackupsTable();
+    const rawPage = Number(params.page);
+    const rawPageSize = Number(params.pageSize);
+    const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
+    const pageSize = Number.isFinite(rawPageSize)
+      ? Math.max(1, Math.min(BACKUP_LIST_MAX_PAGE_SIZE, Math.floor(rawPageSize)))
+      : BACKUP_LIST_DEFAULT_PAGE_SIZE;
+    const offset = (page - 1) * pageSize;
+
+    const whereClauses: any[] = [];
+    const searchName = String(params.searchName || "").trim();
+    if (searchName) {
+      whereClauses.push(sql`name ILIKE ${`%${searchName}%`}`);
+    }
+
+    const createdBy = String(params.createdBy || "").trim();
+    if (createdBy) {
+      whereClauses.push(sql`created_by ILIKE ${`%${createdBy}%`}`);
+    }
+
+    const dateFrom = params.dateFrom instanceof Date && Number.isFinite(params.dateFrom.getTime())
+      ? params.dateFrom
+      : null;
+    const dateTo = params.dateTo instanceof Date && Number.isFinite(params.dateTo.getTime())
+      ? params.dateTo
+      : null;
+    if (dateFrom) {
+      whereClauses.push(sql`created_at >= ${dateFrom}`);
+    }
+    if (dateTo) {
+      whereClauses.push(sql`created_at <= ${dateTo}`);
+    }
+
+    const whereSql = whereClauses.length
+      ? sql`WHERE ${sql.join(whereClauses, sql` AND `)}`
+      : sql``;
+
+    const sortBy = String(params.sortBy || "newest").toLowerCase() as BackupListSort;
+    const orderBySql =
+      sortBy === "oldest"
+        ? sql`ORDER BY created_at ASC, id ASC`
+        : sortBy === "name-asc"
+          ? sql`ORDER BY lower(name) ASC, created_at DESC, id DESC`
+          : sortBy === "name-desc"
+            ? sql`ORDER BY lower(name) DESC, created_at DESC, id DESC`
+            : sql`ORDER BY created_at DESC, id DESC`;
+
+    const [countResult, rowsResult] = await Promise.all([
+      db.execute(sql`
+        SELECT COUNT(*)::int AS total
+        FROM public.backups
+        ${whereSql}
+      `),
+      db.execute(sql`
         SELECT
           id,
           name,
@@ -190,22 +350,27 @@ export class BackupsRepository {
             ELSE metadata
           END as metadata
         FROM public.backups
-        ORDER BY created_at DESC
-        LIMIT ${QUERY_PAGE_LIMIT}
+        ${whereSql}
+        ${orderBySql}
+        LIMIT ${pageSize}
         OFFSET ${offset}
-      `);
+      `),
+    ]);
 
-      const chunk = result.rows || [];
-      if (!chunk.length) break;
-      rows.push(...chunk);
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
-      offset += chunk.length;
-    }
-
-    return rows.map((row: any) => ({
+    const total = Number((countResult.rows?.[0] as { total?: number } | undefined)?.total || 0);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const backups = (rowsResult.rows || []).map((row: any) => ({
       ...row,
       metadata: this.options.parseBackupMetadataSafe(row.metadata),
     })) as Backup[];
+
+    return {
+      backups,
+      page,
+      pageSize,
+      total,
+      totalPages,
+    };
   }
 
   async getBackupById(id: string): Promise<Backup | undefined> {
@@ -232,6 +397,35 @@ export class BackupsRepository {
 
     return {
       ...row,
+      metadata: this.options.parseBackupMetadataSafe(row.metadata),
+    } as Backup;
+  }
+
+  async getBackupMetadataById(id: string): Promise<Backup | undefined> {
+    await this.options.ensureBackupsTable();
+    const result = await db.execute(sql`
+      SELECT
+        id,
+        name,
+        created_at as "createdAt",
+        created_by as "createdBy",
+        ''::text as "backupData",
+        CASE
+          WHEN metadata IS NULL THEN NULL
+          WHEN length(metadata) > 200000 THEN NULL
+          ELSE metadata
+        END as metadata
+      FROM public.backups
+      WHERE id = ${id}
+      LIMIT 1
+    `);
+
+    const row = result.rows[0] as any;
+    if (!row) return undefined;
+
+    return {
+      ...row,
+      backupData: this.decodeBackupDataFromStorage(String(row.backupData || "")),
       metadata: this.options.parseBackupMetadataSafe(row.metadata),
     } as Backup;
   }
@@ -304,6 +498,7 @@ export class BackupsRepository {
   async restoreFromBackup(backupDataRaw: BackupDataPayload): Promise<{ success: boolean; stats: RestoreStats }> {
     const backupData = (backupDataRaw || {}) as BackupDataPayload;
     const stats = this.createRestoreStats();
+    const restoredCollectionRecordIds = new Set<string>();
 
     await db.transaction(async (tx) => {
       const importChunks = this.chunkArray(backupData.imports || [], BACKUP_CHUNK_SIZE);
@@ -446,6 +641,9 @@ export class BackupsRepository {
 
         stats.collectionRecords.processed += rows.length;
         if (!rows.length) continue;
+        for (const row of rows) {
+          restoredCollectionRecordIds.add(row.id);
+        }
 
         const valuesSql = sql.join(
           rows.map((row) => sql`(
@@ -546,6 +744,26 @@ export class BackupsRepository {
         const insertedCount = insertedResult.rows?.length || 0;
         stats.collectionRecordReceipts.inserted += insertedCount;
         stats.collectionRecordReceipts.skipped += rows.length - insertedCount;
+      }
+
+      if (restoredCollectionRecordIds.size > 0) {
+        const recordIdSql = sql.join(
+          Array.from(restoredCollectionRecordIds).map((value) => sql`${value}::uuid`),
+          sql`, `,
+        );
+        await tx.execute(sql`
+          UPDATE public.collection_records record
+          SET receipt_file = first_receipt.storage_path
+          FROM (
+            SELECT DISTINCT ON (collection_record_id)
+              collection_record_id,
+              storage_path
+            FROM public.collection_record_receipts
+            WHERE collection_record_id IN (${recordIdSql})
+            ORDER BY collection_record_id, created_at ASC, id ASC
+          ) first_receipt
+          WHERE record.id = first_receipt.collection_record_id
+        `);
       }
     });
 

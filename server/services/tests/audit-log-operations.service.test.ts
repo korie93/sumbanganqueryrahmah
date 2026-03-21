@@ -20,6 +20,13 @@ test("AuditLogOperationsService cleanup clamps the cutoff and writes an audit lo
     } as any,
     {
       getAuditLogs: async () => [],
+      listAuditLogsPage: async () => ({
+        logs: [],
+        page: 1,
+        pageSize: 50,
+        total: 0,
+        totalPages: 1,
+      }),
       getAuditLogStats: async () => ({
         totalLogs: 0,
         todayLogs: 0,
@@ -81,11 +88,26 @@ test("AuditLogOperationsService proxies audit log reads through the repository",
     } as any,
     {
       getAuditLogs: async () => logs,
+      listAuditLogsPage: async () => ({
+        logs,
+        page: 1,
+        pageSize: 50,
+        total: logs.length,
+        totalPages: 1,
+      }),
       getAuditLogStats: async () => stats,
       cleanupAuditLogsOlderThan: async () => 0,
     } as any,
   );
 
-  assert.deepEqual(await service.listAuditLogs(), { logs });
+  assert.deepEqual(await service.listAuditLogs({}), {
+    logs,
+    pagination: {
+      page: 1,
+      pageSize: 50,
+      total: logs.length,
+      totalPages: 1,
+    },
+  });
   assert.deepEqual(await service.getAuditLogStats(), stats);
 });

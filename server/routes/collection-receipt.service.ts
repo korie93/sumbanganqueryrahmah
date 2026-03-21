@@ -12,28 +12,97 @@ import { canUserAccessCollectionRecord } from "./collection-access";
 import { normalizeCollectionText, type CollectionReceiptPayload } from "./collection.validation";
 
 const COLLECTION_RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
-const COLLECTION_RECEIPT_ALLOWED_EXT = new Set([".jpg", ".jpeg", ".png", ".pdf"]);
-const COLLECTION_RECEIPT_ALLOWED_MIME = new Set(["image/jpeg", "image/png", "application/pdf"]);
-const COLLECTION_RECEIPT_INLINE_MIME = new Set(["application/pdf", "image/png", "image/jpeg"]);
+const COLLECTION_RECEIPT_ALLOWED_MIME = new Set(["image/jpeg", "image/png", "application/pdf", "image/webp"]);
+const COLLECTION_RECEIPT_INLINE_MIME = new Set(["application/pdf", "image/png", "image/jpeg", "image/webp"]);
 const COLLECTION_RECEIPT_DIR = path.resolve(process.cwd(), "uploads", "collection-receipts");
 const COLLECTION_RECEIPT_PUBLIC_PREFIX = "/uploads/collection-receipts";
 
-export type StoredCollectionReceiptFile = CreateCollectionRecordReceiptInput;
+type CollectionReceiptFileType = "pdf" | "png" | "jpg" | "webp";
 
-function resolveReceiptExtension(receipt: CollectionReceiptPayload): string | null {
-  const originalFileName = String(receipt.fileName || "").trim();
-  const mimeType = String(receipt.mimeType || "").trim().toLowerCase();
-  const extFromName = path.extname(originalFileName).toLowerCase();
+const COLLECTION_RECEIPT_TYPE_CONFIG: Record<CollectionReceiptFileType, { extension: string; mimeType: string }> = {
+  pdf: { extension: ".pdf", mimeType: "application/pdf" },
+  png: { extension: ".png", mimeType: "image/png" },
+  jpg: { extension: ".jpg", mimeType: "image/jpeg" },
+  webp: { extension: ".webp", mimeType: "image/webp" },
+};
 
-  if (extFromName && COLLECTION_RECEIPT_ALLOWED_EXT.has(extFromName)) {
-    return extFromName === ".jpeg" ? ".jpg" : extFromName;
-  }
-
-  if (mimeType === "image/jpeg") return ".jpg";
-  if (mimeType === "image/png") return ".png";
-  if (mimeType === "application/pdf") return ".pdf";
+function mapCollectionReceiptExtensionToType(extension: string): CollectionReceiptFileType | null {
+  const normalized = String(extension || "").trim().toLowerCase();
+  if (normalized === ".pdf") return "pdf";
+  if (normalized === ".png") return "png";
+  if (normalized === ".jpg" || normalized === ".jpeg") return "jpg";
+  if (normalized === ".webp") return "webp";
   return null;
 }
+
+function mapCollectionReceiptMimeToType(mimeType: string): CollectionReceiptFileType | null {
+  const normalized = String(mimeType || "").trim().toLowerCase();
+  if (normalized === "application/pdf") return "pdf";
+  if (normalized === "image/png") return "png";
+  if (normalized === "image/jpeg") return "jpg";
+  if (normalized === "image/webp") return "webp";
+  return null;
+}
+
+export function detectCollectionReceiptSignature(
+  buffer: Buffer,
+): CollectionReceiptFileType | null {
+  if (!buffer || buffer.length < 4) {
+    return null;
+  }
+
+  if (
+    buffer.length >= 5
+    && buffer[0] === 0x25
+    && buffer[1] === 0x50
+    && buffer[2] === 0x44
+    && buffer[3] === 0x46
+    && buffer[4] === 0x2d
+  ) {
+    return "pdf";
+  }
+
+  if (
+    buffer.length >= 8
+    && buffer[0] === 0x89
+    && buffer[1] === 0x50
+    && buffer[2] === 0x4e
+    && buffer[3] === 0x47
+    && buffer[4] === 0x0d
+    && buffer[5] === 0x0a
+    && buffer[6] === 0x1a
+    && buffer[7] === 0x0a
+  ) {
+    return "png";
+  }
+
+  if (
+    buffer.length >= 3
+    && buffer[0] === 0xff
+    && buffer[1] === 0xd8
+    && buffer[2] === 0xff
+  ) {
+    return "jpg";
+  }
+
+  if (
+    buffer.length >= 12
+    && buffer[0] === 0x52
+    && buffer[1] === 0x49
+    && buffer[2] === 0x46
+    && buffer[3] === 0x46
+    && buffer[8] === 0x57
+    && buffer[9] === 0x45
+    && buffer[10] === 0x42
+    && buffer[11] === 0x50
+  ) {
+    return "webp";
+  }
+
+  return null;
+}
+
+export type StoredCollectionReceiptFile = CreateCollectionRecordReceiptInput;
 
 function extractReceiptBuffer(receipt: CollectionReceiptPayload): Buffer | null {
   const rawBase64 = String(receipt.contentBase64 || "").trim();
@@ -70,11 +139,6 @@ export async function saveCollectionReceipt(
     throw new Error("Receipt file type is not allowed.");
   }
 
-  const extension = resolveReceiptExtension(receipt);
-  if (!extension) {
-    throw new Error("Receipt file extension is not allowed.");
-  }
-
   const buffer = extractReceiptBuffer(receipt);
   if (!buffer) {
     throw new Error("Invalid receipt payload.");
@@ -84,25 +148,49 @@ export async function saveCollectionReceipt(
     throw new Error("Receipt file exceeds 5MB.");
   }
 
+  const signatureType = detectCollectionReceiptSignature(buffer);
+  if (!signatureType) {
+    throw new Error("Receipt file signature is not allowed.");
+  }
+
+  const extFromName = path.extname(String(receipt.fileName || "").trim()).toLowerCase();
+  const extensionType = extFromName ? mapCollectionReceiptExtensionToType(extFromName) : null;
+  if (extFromName && !extensionType) {
+    throw new Error("Receipt file extension is not allowed.");
+  }
+  if (extensionType && extensionType !== signatureType) {
+    throw new Error("Receipt file content does not match file extension.");
+  }
+
+  const mimeTypeResolved = mimeType ? mapCollectionReceiptMimeToType(mimeType) : null;
+  if (mimeType && !mimeTypeResolved) {
+    throw new Error("Receipt file type is not allowed.");
+  }
+  if (mimeTypeResolved && mimeTypeResolved !== signatureType) {
+    throw new Error("Receipt file content does not match declared MIME type.");
+  }
+
   await fs.promises.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
+
+  const canonicalType = COLLECTION_RECEIPT_TYPE_CONFIG[signatureType];
 
   const originalFileName = sanitizeOriginalFileName(
     String(receipt.fileName || "receipt"),
-    extension,
+    canonicalType.extension,
   );
   const stem = path
     .basename(originalFileName, path.extname(originalFileName))
     .replace(/[^a-zA-Z0-9._-]/g, "_")
     .slice(0, 40) || "receipt";
-  const storedFileName = `${Date.now()}-${randomUUID()}-${stem}${extension}`;
+  const storedFileName = `${Date.now()}-${randomUUID()}-${stem}${canonicalType.extension}`;
   const absolutePath = path.join(COLLECTION_RECEIPT_DIR, storedFileName);
   await fs.promises.writeFile(absolutePath, buffer);
 
   return {
     storagePath: `${COLLECTION_RECEIPT_PUBLIC_PREFIX}/${storedFileName}`.replace(/\\/g, "/"),
     originalFileName,
-    originalMimeType: mimeType || "application/octet-stream",
-    originalExtension: extension,
+    originalMimeType: canonicalType.mimeType,
+    originalExtension: canonicalType.extension,
     fileSize: buffer.length,
   };
 }
@@ -131,6 +219,7 @@ function resolveCollectionReceiptMimeTypeFromFileName(fileName: string): string 
   if (extension === ".pdf") return "application/pdf";
   if (extension === ".png") return "image/png";
   if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  if (extension === ".webp") return "image/webp";
   return "application/octet-stream";
 }
 

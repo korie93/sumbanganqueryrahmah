@@ -450,7 +450,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
         batch: batch as CollectionBatchValue,
         paymentDate,
         amount,
-        receiptFile: uploadedReceipts[0]?.storagePath ?? null,
+        receiptFile: null,
         createdByLogin: user.username,
         collectionStaffNickname,
       });
@@ -1121,13 +1121,6 @@ export class CollectionRecordService extends CollectionServiceSupport {
           : [];
       if (uploadedReceipts.length > 0) {
         await this.storage.createCollectionRecordReceipts(id, uploadedReceipts);
-      }
-
-      const finalReceipts = hasReceiptMutation
-        ? await this.storage.listCollectionRecordReceipts(id)
-        : existing.receipts;
-      if (hasReceiptMutation) {
-        updatePayload.receiptFile = finalReceipts[0]?.storagePath ?? null;
       }
 
       const updated = await this.storage.updateCollectionRecord(id, updatePayload);

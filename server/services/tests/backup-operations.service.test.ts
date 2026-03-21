@@ -48,11 +48,16 @@ function createBackupOperationsHarness(options?: {
   };
 
   const backupsRepository = {
-    getBackups: async () =>
-      Array.from(backups.values()).map((backup) => ({
+    listBackupsPage: async () => ({
+      backups: Array.from(backups.values()).map((backup) => ({
         ...backup,
         backupData: "",
       })),
+      page: 1,
+      pageSize: 25,
+      total: backups.size,
+      totalPages: 1,
+    }),
     getBackupDataForExport: async () => ({
       imports: [{ id: "import-1" }],
       dataRows: [{ id: "row-1" }, { id: "row-2" }],
@@ -70,6 +75,14 @@ function createBackupOperationsHarness(options?: {
         createdBy: data.createdBy,
         backupData: "",
         metadata: JSON.parse(String(data.metadata || "{}")),
+      };
+    },
+    getBackupMetadataById: async (id: string) => {
+      const backup = backups.get(id);
+      if (!backup) return undefined;
+      return {
+        ...backup,
+        backupData: "",
       };
     },
     getBackupById: async (id: string) => backups.get(id),
@@ -137,6 +150,24 @@ test("BackupOperationsService createBackup returns 503 when the export circuit i
   assert.equal(auditLogs.length, 0);
 });
 
+test("BackupOperationsService listBackups returns paginated metadata", async () => {
+  const { service } = createBackupOperationsHarness();
+
+  const result = await service.listBackups({
+    page: "1",
+    pageSize: "25",
+  });
+
+  assert.equal(result.backups.length, 1);
+  assert.deepEqual(result.pagination, {
+    page: 1,
+    pageSize: 25,
+    total: 1,
+    totalPages: 1,
+  });
+  assert.equal(result.backups[0].backupData, "");
+});
+
 test("BackupOperationsService createBackup persists backup metadata and audits export", async () => {
   const { service, createBackupCalls, auditLogs } = createBackupOperationsHarness();
 
@@ -180,6 +211,32 @@ test("BackupOperationsService restoreBackup returns 404 when the backup does not
   });
   assert.equal(restoreCalls.length, 0);
   assert.equal(auditLogs.length, 0);
+});
+
+test("BackupOperationsService getBackupMetadata returns metadata-only payload and audits access", async () => {
+  const { service, auditLogs } = createBackupOperationsHarness();
+
+  const result = await service.getBackupMetadata("backup-1", "super.user");
+
+  assert.equal(result.statusCode, 200);
+  assert.equal((result.body as any).id, "backup-1");
+  assert.equal((result.body as any).backupData, "");
+  assert.equal(auditLogs.length, 1);
+  assert.equal(auditLogs[0].action, "VIEW_BACKUP_METADATA");
+});
+
+test("BackupOperationsService exportBackup returns downloadable payload and audits export", async () => {
+  const { service, auditLogs } = createBackupOperationsHarness();
+
+  const result = await service.exportBackup("backup-1", "super.user");
+
+  assert.equal(result.statusCode, 200);
+  assert.equal(typeof (result.body as any).fileName, "string");
+  const payload = JSON.parse(String((result.body as any).payloadJson || "{}"));
+  assert.equal(payload.id, "backup-1");
+  assert.equal(Array.isArray(payload.backupData.imports), true);
+  assert.equal(auditLogs.length, 1);
+  assert.equal(auditLogs[0].action, "DOWNLOAD_BACKUP_EXPORT");
 });
 
 test("BackupOperationsService restoreBackup returns restore details and audit metadata", async () => {
