@@ -180,6 +180,7 @@ export async function fetchCollectionReceiptBlob(
   recordId: string,
   mode: "view" | "download",
   receiptId?: string | null,
+  options?: { signal?: AbortSignal },
 ) {
   const receiptSegment = receiptId
     ? `/receipts/${encodeURIComponent(receiptId)}`
@@ -187,6 +188,8 @@ export async function fetchCollectionReceiptBlob(
   const response = await apiRequest(
     "GET",
     `/api/collection/${encodeURIComponent(recordId)}${receiptSegment}/${mode}`,
+    undefined,
+    { signal: options?.signal },
   );
   const blob = await response.blob();
   const mimeType = String(response.headers.get("Content-Type") || blob.type || "").toLowerCase();
@@ -239,8 +242,210 @@ export async function getCollectionNicknameSummary(filters: {
     nicknames: string[];
     totalRecords: number;
     totalAmount: number;
+    nicknameTotals: Array<{
+      nickname: string;
+      totalRecords: number;
+      totalAmount: number;
+    }>;
     records: CollectionRecord[];
   }>;
+}
+
+export type CollectionDailyUser = {
+  id: string;
+  username: string;
+  role: string;
+};
+
+export type CollectionDailyOverviewDay = {
+  day: number;
+  date: string;
+  amount: number;
+  target: number;
+  isWorkingDay: boolean;
+  isHoliday: boolean;
+  holidayName: string | null;
+  customerCount: number;
+  status: "green" | "yellow" | "red" | "neutral";
+};
+
+export type CollectionDailyOverviewResponse = {
+  ok: boolean;
+  username: string;
+  usernames: string[];
+  role: string;
+  month: {
+    year: number;
+    month: number;
+    daysInMonth: number;
+  };
+  summary: {
+    monthlyTarget: number;
+    collectedToDate: number;
+    collectedAmount: number;
+    remainingTarget: number;
+    balancedAmount: number;
+    workingDays: number;
+    elapsedWorkingDays: number;
+    remainingWorkingDays: number;
+    requiredPerRemainingWorkingDay: number;
+    completedDays: number;
+    incompleteDays: number;
+    noCollectionDays: number;
+    neutralDays: number;
+    baseDailyTarget: number;
+    dailyTarget: number;
+    expectedProgressAmount: number;
+    progressVarianceAmount: number;
+    achievedAmount: number;
+    remainingAmount: number;
+    metDays: number;
+    yellowDays: number;
+    redDays: number;
+  };
+  days: CollectionDailyOverviewDay[];
+  carryForwardRule?: string;
+};
+
+export type CollectionDailyDayDetailsResponse = {
+  ok: boolean;
+  username: string;
+  usernames: string[];
+  date: string;
+  status: "green" | "yellow" | "red" | "neutral";
+  message: string;
+  amount: number;
+  dailyTarget: number;
+  customers: Array<{
+    id: string;
+    customerName: string;
+    accountNumber: string;
+    amount: number;
+    collectionStaffNickname: string;
+  }>;
+  summary: {
+    monthlyTarget: number;
+    collected: number;
+    balanced: number;
+    totalForDate: number;
+    targetForDate: number;
+  };
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalRecords: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+  records: Array<{
+    id: string;
+    customerName: string;
+    accountNumber: string;
+    paymentDate: string;
+    amount: number;
+    batch: string;
+    paymentReference: string;
+    username: string;
+    collectionStaffNickname: string;
+    createdAt: string;
+    receiptFile: string | null;
+    receipts: Array<{
+      id: string;
+      originalFileName: string;
+      originalMimeType: string;
+      fileSize: number;
+      createdAt: string;
+    }>;
+  }>;
+};
+
+export async function getCollectionDailyUsers() {
+  const response = await apiRequest("GET", "/api/collection/daily/users");
+  return response.json() as Promise<{ ok: boolean; users: CollectionDailyUser[] }>;
+}
+
+export async function setCollectionDailyTarget(payload: {
+  username: string;
+  year: number;
+  month: number;
+  monthlyTarget: number;
+}) {
+  const response = await apiRequest("PUT", "/api/collection/daily/target", payload);
+  return response.json() as Promise<{
+    ok: boolean;
+    target: {
+      id: string;
+      username: string;
+      year: number;
+      month: number;
+      monthlyTarget: number;
+    };
+  }>;
+}
+
+export async function setCollectionDailyCalendar(payload: {
+  year: number;
+  month: number;
+  days: Array<{
+    day: number;
+    isWorkingDay: boolean;
+    isHoliday: boolean;
+    holidayName?: string | null;
+  }>;
+}) {
+  const response = await apiRequest("PUT", "/api/collection/daily/calendar", payload);
+  return response.json() as Promise<{ ok: boolean; calendar: Array<Record<string, unknown>> }>;
+}
+
+export async function getCollectionDailyOverview(filters: {
+  year: number;
+  month: number;
+  username?: string;
+  usernames?: string[];
+}) {
+  const params = new URLSearchParams();
+  params.set("year", String(filters.year));
+  params.set("month", String(filters.month));
+  if (Array.isArray(filters.usernames) && filters.usernames.length > 0) {
+    params.set(
+      "usernames",
+      filters.usernames.map((value) => String(value || "").trim()).filter(Boolean).join(","),
+    );
+  }
+  if (filters.username) {
+    params.set("username", filters.username);
+  }
+  const response = await apiRequest("GET", `/api/collection/daily/overview?${params.toString()}`);
+  return response.json() as Promise<CollectionDailyOverviewResponse>;
+}
+
+export async function getCollectionDailyDayDetails(filters: {
+  date: string;
+  username?: string;
+  usernames?: string[];
+  page?: number;
+  pageSize?: number;
+}) {
+  const params = new URLSearchParams();
+  params.set("date", filters.date);
+  if (Array.isArray(filters.usernames) && filters.usernames.length > 0) {
+    params.set(
+      "usernames",
+      filters.usernames.map((value) => String(value || "").trim()).filter(Boolean).join(","),
+    );
+  }
+  if (filters.username) {
+    params.set("username", filters.username);
+  }
+  if (typeof filters.page === "number" && Number.isFinite(filters.page)) {
+    params.set("page", String(filters.page));
+  }
+  if (typeof filters.pageSize === "number" && Number.isFinite(filters.pageSize)) {
+    params.set("pageSize", String(filters.pageSize));
+  }
+  const response = await apiRequest("GET", `/api/collection/daily/day-details?${params.toString()}`);
+  return response.json() as Promise<CollectionDailyDayDetailsResponse>;
 }
 
 export async function getCollectionNicknames(filters?: { includeInactive?: boolean }) {

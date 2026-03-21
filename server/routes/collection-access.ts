@@ -80,6 +80,11 @@ export async function canUserAccessCollectionRecord(
   if (user.role === "superuser") return true;
 
   if (user.role === "user") {
+    const currentNickname = await resolveCurrentCollectionNicknameFromSession(storage, user);
+    if (currentNickname) {
+      return hasNicknameValue([currentNickname], normalizeCollectionText(record.collectionStaffNickname));
+    }
+
     const owner = normalizeCollectionText(record.createdByLogin).toLowerCase();
     const current = normalizeCollectionText(user.username).toLowerCase();
     return Boolean(owner) && owner === current;

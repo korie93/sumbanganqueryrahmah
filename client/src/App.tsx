@@ -20,6 +20,7 @@ function AppContent() {
   const {
     currentPage,
     featureLockdown,
+    handleClientLogout,
     handleLoginSuccess,
     handleLogout,
     handleMonitorSectionChange,
@@ -92,6 +93,7 @@ function AppContent() {
     return (
       <div className="min-h-screen bg-background">
         <AutoLogout
+          onClientLogout={handleClientLogout}
           onLogout={handleLogout}
           timeoutMinutes={runtimeConfig.sessionTimeoutMinutes}
           heartbeatIntervalMinutes={runtimeConfig.heartbeatIntervalMinutes}
@@ -118,6 +120,7 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-background">
       <AutoLogout
+        onClientLogout={handleClientLogout}
         onLogout={handleLogout}
         timeoutMinutes={runtimeConfig.sessionTimeoutMinutes}
         heartbeatIntervalMinutes={runtimeConfig.heartbeatIntervalMinutes}

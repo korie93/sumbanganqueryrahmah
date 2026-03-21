@@ -103,6 +103,26 @@ export class CollectionService {
     return this.recordService.getNicknameSummary(user, query);
   }
 
+  listDailyUsers(user: AuthenticatedUser | undefined) {
+    return this.recordService.listDailyUsers(user);
+  }
+
+  upsertDailyTarget(user: AuthenticatedUser | undefined, bodyRaw: unknown) {
+    return this.recordService.upsertDailyTarget(user, bodyRaw);
+  }
+
+  upsertDailyCalendar(user: AuthenticatedUser | undefined, bodyRaw: unknown) {
+    return this.recordService.upsertDailyCalendar(user, bodyRaw);
+  }
+
+  getDailyOverview(user: AuthenticatedUser | undefined, query: ListQuery) {
+    return this.recordService.getDailyOverview(user, query);
+  }
+
+  getDailyDayDetails(user: AuthenticatedUser | undefined, query: ListQuery) {
+    return this.recordService.getDailyDayDetails(user, query);
+  }
+
   purgeOldRecords(user: AuthenticatedUser | undefined, bodyRaw?: unknown) {
     return this.recordService.purgeOldRecords(user, bodyRaw);
   }

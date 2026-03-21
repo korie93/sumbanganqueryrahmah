@@ -51,6 +51,7 @@ import { BackupsRepository } from "./repositories/backups.repository";
 import { AnalyticsRepository } from "./repositories/analytics.repository";
 import { CollectionRepository } from "./repositories/collection.repository";
 import { SettingsRepository } from "./repositories/settings.repository";
+import { logger } from "./lib/logger";
 const QUERY_PAGE_LIMIT = 1000;
 const STORAGE_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
 type CollectionBatch = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
@@ -83,6 +84,12 @@ export type CollectionRecord = {
 };
 
 export type CollectionRecordAggregate = {
+  totalRecords: number;
+  totalAmount: number;
+};
+
+export type CollectionNicknameAggregate = {
+  nickname: string;
   totalRecords: number;
   totalAmount: number;
 };
@@ -143,6 +150,46 @@ export type CollectionNicknameSession = {
   nickname: string;
   verifiedAt: Date;
   updatedAt: Date;
+};
+
+export type CollectionDailyUser = {
+  id: string;
+  username: string;
+  role: string;
+};
+
+export type CollectionDailyTarget = {
+  id: string;
+  username: string;
+  year: number;
+  month: number;
+  monthlyTarget: number;
+  createdBy: string | null;
+  updatedBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type CollectionDailyCalendarDay = {
+  id: string;
+  year: number;
+  month: number;
+  day: number;
+  isWorkingDay: boolean;
+  isHoliday: boolean;
+  holidayName: string | null;
+  createdBy: string | null;
+  updatedBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type CollectionDailyPaidCustomer = {
+  id: string;
+  customerName: string;
+  accountNumber: string;
+  amount: number;
+  collectionStaffNickname: string;
 };
 
 export type ManagedUserAccount = ManagedUserRecord;
@@ -322,6 +369,13 @@ type CategoryRule = {
     createdByLogin?: string;
     nicknames?: string[];
   }): Promise<CollectionRecordAggregate>;
+  summarizeCollectionRecordsByNickname(filters?: {
+    from?: string;
+    to?: string;
+    search?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+  }): Promise<CollectionNicknameAggregate[]>;
   summarizeCollectionRecordsOlderThan(beforeDate: string): Promise<CollectionRecordAggregate>;
   purgeCollectionRecordsOlderThan(beforeDate: string): Promise<{
     totalRecords: number;
@@ -372,6 +426,34 @@ type CategoryRule = {
   }): Promise<void>;
   getCollectionNicknameSessionByActivity(activityId: string): Promise<CollectionNicknameSession | undefined>;
   clearCollectionNicknameSessionByActivity(activityId: string): Promise<void>;
+  listCollectionDailyUsers(): Promise<CollectionDailyUser[]>;
+  getCollectionDailyTarget(params: { username: string; year: number; month: number }): Promise<CollectionDailyTarget | undefined>;
+  upsertCollectionDailyTarget(params: {
+    username: string;
+    year: number;
+    month: number;
+    monthlyTarget: number;
+    actor: string;
+  }): Promise<CollectionDailyTarget>;
+  listCollectionDailyCalendar(params: {
+    year: number;
+    month: number;
+  }): Promise<CollectionDailyCalendarDay[]>;
+  upsertCollectionDailyCalendarDays(params: {
+    year: number;
+    month: number;
+    actor: string;
+    days: Array<{
+      day: number;
+      isWorkingDay: boolean;
+      isHoliday: boolean;
+      holidayName?: string | null;
+    }>;
+  }): Promise<CollectionDailyCalendarDay[]>;
+  listCollectionDailyPaidCustomers(params: {
+    username: string;
+    date: string;
+  }): Promise<CollectionDailyPaidCustomer[]>;
   getCollectionStaffNicknameById(id: string): Promise<CollectionStaffNickname | undefined>;
   getCollectionStaffNicknameByName(nickname: string): Promise<CollectionStaffNickname | undefined>;
   getCollectionNicknameAuthProfileByName(nickname: string): Promise<CollectionNicknameAuthProfile | undefined>;
@@ -433,7 +515,7 @@ type CategoryRule = {
   deactivateUserActivities(username: string, reason?: string): Promise<void>;
   deactivateUserSessionsByFingerprint(username: string, fingerprint: string): Promise<void>;
   getBannedUsers(): Promise<Array<User & { banInfo?: { ipAddress: string | null; browser: string | null; bannedAt: Date | null } }>>;
-  isVisitorBanned(fingerprint?: string | null, ipAddress?: string | null): Promise<boolean>;
+  isVisitorBanned(fingerprint?: string | null, ipAddress?: string | null, username?: string | null): Promise<boolean>;
   banVisitor(params: { username: string; role: string; activityId: string; fingerprint?: string | null; ipAddress?: string | null; browser?: string | null; pcName?: string | null }): Promise<void>;
   unbanVisitor(banId: string): Promise<void>;
   getBannedSessions(): Promise<Array<{
@@ -589,15 +671,80 @@ type CategoryRule = {
   getBackupDataForExport(): Promise<{
     imports: Import[];
     dataRows: DataRow[];
-    users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash: string }>;
+    users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash?: string }>;
     auditLogs: AuditLog[];
+    collectionRecords?: Array<{
+      id: string;
+      customerName: string;
+      icNumber: string;
+      customerPhone: string;
+      accountNumber: string;
+      batch: string;
+      paymentDate: string;
+      amount: string | number;
+      receiptFile: string | null;
+      createdByLogin: string;
+      collectionStaffNickname: string;
+      staffUsername?: string | null;
+      createdAt: string | Date;
+    }>;
+    collectionRecordReceipts?: Array<{
+      id: string;
+      collectionRecordId: string;
+      storagePath: string;
+      originalFileName: string;
+      originalMimeType: string;
+      originalExtension: string;
+      fileSize: number;
+      createdAt: string | Date;
+    }>;
   }>;
   restoreFromBackup(backupData: {
     imports: Import[];
     dataRows: DataRow[];
     users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash?: string }>;
     auditLogs: AuditLog[];
-  }): Promise<{ success: boolean; stats: { imports: number; dataRows: number; users: number; auditLogs: number } }>;
+    collectionRecords?: Array<{
+      id: string;
+      customerName: string;
+      icNumber: string;
+      customerPhone: string;
+      accountNumber: string;
+      batch: string;
+      paymentDate: string;
+      amount: string | number;
+      receiptFile: string | null;
+      createdByLogin: string;
+      collectionStaffNickname: string;
+      staffUsername?: string | null;
+      createdAt: string | Date;
+    }>;
+    collectionRecordReceipts?: Array<{
+      id: string;
+      collectionRecordId: string;
+      storagePath: string;
+      originalFileName: string;
+      originalMimeType: string;
+      originalExtension: string;
+      fileSize: number;
+      createdAt: string | Date;
+    }>;
+  }): Promise<{
+    success: boolean;
+    stats: {
+      imports: { processed: number; inserted: number; skipped: number; reactivated: number };
+      dataRows: { processed: number; inserted: number; skipped: number; reactivated: number };
+      users: { processed: number; inserted: number; skipped: number; reactivated: number };
+      auditLogs: { processed: number; inserted: number; skipped: number; reactivated: number };
+      collectionRecords: { processed: number; inserted: number; skipped: number; reactivated: number };
+      collectionRecordReceipts: { processed: number; inserted: number; skipped: number; reactivated: number };
+      warnings: string[];
+      totalProcessed: number;
+      totalInserted: number;
+      totalSkipped: number;
+      totalReactivated: number;
+    };
+  }>;
 }
 
 export class PostgresStorage implements IStorage {
@@ -640,6 +787,7 @@ export class PostgresStorage implements IStorage {
     await this.ensureCollectionAdminGroupsTables();
     await this.ensureCollectionNicknameSessionsTable();
     await this.ensureCollectionAdminVisibleNicknamesTable();
+    await this.ensureCollectionDailyTables();
     await this.seedDefaultUsers();
     await this.ensureBackupsTable();
     await this.ensurePerformanceIndexes();
@@ -689,6 +837,10 @@ export class PostgresStorage implements IStorage {
 
   private async ensureCollectionAdminVisibleNicknamesTable() {
     await this.collectionBootstrap.ensureAdminVisibleNicknamesTable();
+  }
+
+  private async ensureCollectionDailyTables() {
+    await this.collectionBootstrap.ensureDailyTables();
   }
 
   private async ensurePerformanceIndexes() {
@@ -941,13 +1093,13 @@ export class PostgresStorage implements IStorage {
 
   async getDataRowsByImport(importId: string): Promise<DataRow[]> {
     if (STORAGE_DEBUG_LOGS) {
-      console.log("DEBUG VIEWER importId received:", importId);
+      logger.debug("Viewer import ID received", { importId });
     }
 
     const rows = await this.importsRepository.getDataRowsByImport(importId);
 
     if (STORAGE_DEBUG_LOGS) {
-      console.log("DEBUG ROW COUNT:", rows.length);
+      logger.debug("Viewer row count", { importId, rowCount: rows.length });
     }
 
     return rows;
@@ -966,13 +1118,23 @@ export class PostgresStorage implements IStorage {
     const trimmedSearch = params.search && params.search.trim() ? params.search.trim() : null;
 
     if (STORAGE_DEBUG_LOGS) {
-      console.log(`DEBUG searchDataRows called: search="${params.search}" -> trimmed="${trimmedSearch}"`);
+      logger.debug("searchDataRows called", {
+        importId: params.importId,
+        search: params.search ?? null,
+        trimmedSearch,
+        limit: params.limit,
+        offset: params.offset,
+      });
     }
 
     const result = await this.searchRepository.searchDataRows(params);
 
     if (STORAGE_DEBUG_LOGS) {
-      console.log(`DEBUG searchDataRows results: ${result.rows.length} rows found (total: ${result.total})`);
+      logger.debug("searchDataRows results", {
+        importId: params.importId,
+        rowCount: result.rows.length,
+        total: result.total,
+      });
     }
 
     return result;
@@ -1048,8 +1210,12 @@ export class PostgresStorage implements IStorage {
     return this.activityRepository.getBannedUsers();
   }
 
-  async isVisitorBanned(fingerprint?: string | null, ipAddress?: string | null): Promise<boolean> {
-    return this.activityRepository.isVisitorBanned(fingerprint, ipAddress);
+  async isVisitorBanned(
+    fingerprint?: string | null,
+    ipAddress?: string | null,
+    username?: string | null,
+  ): Promise<boolean> {
+    return this.activityRepository.isVisitorBanned(fingerprint, ipAddress, username);
   }
 
   async banVisitor(params: {
@@ -1418,6 +1584,56 @@ export class PostgresStorage implements IStorage {
     return this.collectionRepository.clearCollectionNicknameSessionByActivity(activityId);
   }
 
+  async listCollectionDailyUsers(): Promise<CollectionDailyUser[]> {
+    return this.collectionRepository.listCollectionDailyUsers();
+  }
+
+  async getCollectionDailyTarget(params: {
+    username: string;
+    year: number;
+    month: number;
+  }): Promise<CollectionDailyTarget | undefined> {
+    return this.collectionRepository.getCollectionDailyTarget(params);
+  }
+
+  async upsertCollectionDailyTarget(params: {
+    username: string;
+    year: number;
+    month: number;
+    monthlyTarget: number;
+    actor: string;
+  }): Promise<CollectionDailyTarget> {
+    return this.collectionRepository.upsertCollectionDailyTarget(params);
+  }
+
+  async listCollectionDailyCalendar(params: {
+    year: number;
+    month: number;
+  }): Promise<CollectionDailyCalendarDay[]> {
+    return this.collectionRepository.listCollectionDailyCalendar(params);
+  }
+
+  async upsertCollectionDailyCalendarDays(params: {
+    year: number;
+    month: number;
+    actor: string;
+    days: Array<{
+      day: number;
+      isWorkingDay: boolean;
+      isHoliday: boolean;
+      holidayName?: string | null;
+    }>;
+  }): Promise<CollectionDailyCalendarDay[]> {
+    return this.collectionRepository.upsertCollectionDailyCalendarDays(params);
+  }
+
+  async listCollectionDailyPaidCustomers(params: {
+    username: string;
+    date: string;
+  }): Promise<CollectionDailyPaidCustomer[]> {
+    return this.collectionRepository.listCollectionDailyPaidCustomers(params);
+  }
+
   async getCollectionStaffNicknameById(id: string): Promise<CollectionStaffNickname | undefined> {
     return this.collectionRepository.getCollectionStaffNicknameById(id);
   }
@@ -1483,6 +1699,16 @@ export class PostgresStorage implements IStorage {
     nicknames?: string[];
   }): Promise<CollectionRecordAggregate> {
     return this.collectionRepository.summarizeCollectionRecords(filters);
+  }
+
+  async summarizeCollectionRecordsByNickname(filters?: {
+    from?: string;
+    to?: string;
+    search?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+  }): Promise<CollectionNicknameAggregate[]> {
+    return this.collectionRepository.summarizeCollectionRecordsByNickname(filters);
   }
 
   async summarizeCollectionRecordsOlderThan(beforeDate: string): Promise<CollectionRecordAggregate> {
@@ -1573,8 +1799,33 @@ export class PostgresStorage implements IStorage {
   async getBackupDataForExport(): Promise<{
     imports: Import[];
     dataRows: DataRow[];
-    users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash: string }>;
+    users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash?: string }>;
     auditLogs: AuditLog[];
+    collectionRecords?: Array<{
+      id: string;
+      customerName: string;
+      icNumber: string;
+      customerPhone: string;
+      accountNumber: string;
+      batch: string;
+      paymentDate: string;
+      amount: string | number;
+      receiptFile: string | null;
+      createdByLogin: string;
+      collectionStaffNickname: string;
+      staffUsername?: string | null;
+      createdAt: string | Date;
+    }>;
+    collectionRecordReceipts?: Array<{
+      id: string;
+      collectionRecordId: string;
+      storagePath: string;
+      originalFileName: string;
+      originalMimeType: string;
+      originalExtension: string;
+      fileSize: number;
+      createdAt: string | Date;
+    }>;
   }> {
     return this.backupsRepository.getBackupDataForExport();
   }
@@ -1584,7 +1835,47 @@ export class PostgresStorage implements IStorage {
     dataRows: DataRow[];
     users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash?: string }>;
     auditLogs: AuditLog[];
-  }): Promise<{ success: boolean; stats: { imports: number; dataRows: number; users: number; auditLogs: number } }> {
+    collectionRecords?: Array<{
+      id: string;
+      customerName: string;
+      icNumber: string;
+      customerPhone: string;
+      accountNumber: string;
+      batch: string;
+      paymentDate: string;
+      amount: string | number;
+      receiptFile: string | null;
+      createdByLogin: string;
+      collectionStaffNickname: string;
+      staffUsername?: string | null;
+      createdAt: string | Date;
+    }>;
+    collectionRecordReceipts?: Array<{
+      id: string;
+      collectionRecordId: string;
+      storagePath: string;
+      originalFileName: string;
+      originalMimeType: string;
+      originalExtension: string;
+      fileSize: number;
+      createdAt: string | Date;
+    }>;
+  }): Promise<{
+    success: boolean;
+    stats: {
+      imports: { processed: number; inserted: number; skipped: number; reactivated: number };
+      dataRows: { processed: number; inserted: number; skipped: number; reactivated: number };
+      users: { processed: number; inserted: number; skipped: number; reactivated: number };
+      auditLogs: { processed: number; inserted: number; skipped: number; reactivated: number };
+      collectionRecords: { processed: number; inserted: number; skipped: number; reactivated: number };
+      collectionRecordReceipts: { processed: number; inserted: number; skipped: number; reactivated: number };
+      warnings: string[];
+      totalProcessed: number;
+      totalInserted: number;
+      totalSkipped: number;
+      totalReactivated: number;
+    };
+  }> {
     return this.backupsRepository.restoreFromBackup(backupData);
   }
 

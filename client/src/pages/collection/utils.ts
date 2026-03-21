@@ -5,6 +5,7 @@ export const COLLECTION_ACCEPTED_FILE_TYPES = ["image/jpeg", "image/png", "appli
 export const COLLECTION_MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 export const COLLECTION_STAFF_NICKNAME_KEY = "collection_staff_nickname";
 export const COLLECTION_STAFF_NICKNAME_AUTH_KEY = "collection_staff_nickname_auth";
+export const COLLECTION_DATA_CHANGED_EVENT = "collection:data-changed";
 export const COLLECTION_PHONE_REGEX = /^[0-9+\-\s]{8,20}$/;
 
 export function parseApiError(error: unknown): string {
@@ -22,6 +23,15 @@ export function isValidDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00Z`);
   return Number.isFinite(parsed.getTime());
+}
+
+export function getTodayIsoDate(referenceDate = new Date()): string {
+  return `${referenceDate.getFullYear()}-${String(referenceDate.getMonth() + 1).padStart(2, "0")}-${String(referenceDate.getDate()).padStart(2, "0")}`;
+}
+
+export function isFutureDate(value: string, referenceDate = new Date()): boolean {
+  if (!isValidDate(value)) return false;
+  return value > getTodayIsoDate(referenceDate);
 }
 
 export function isPositiveAmount(value: string): boolean {
@@ -63,6 +73,19 @@ export function getCurrentUsername(): string {
     // ignore parse issues
   }
   return String(localStorage.getItem("username") || "").trim().toLowerCase();
+}
+
+export function getCurrentCollectionStaffNickname(): string {
+  try {
+    return String(sessionStorage.getItem(COLLECTION_STAFF_NICKNAME_KEY) || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+export function emitCollectionDataChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(COLLECTION_DATA_CHANGED_EVENT));
 }
 
 export async function toReceiptPayload(file: File): Promise<CollectionReceiptPayload> {

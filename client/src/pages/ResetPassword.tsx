@@ -9,6 +9,7 @@ import {
   validatePasswordResetToken,
 } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 
 type ResetPhase = "invalid" | "ready" | "success" | "validating";
 
@@ -18,9 +19,7 @@ function getTokenFromLocation() {
 }
 
 function formatExpiry(value: string) {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString();
+  return formatDateTimeDDMMYYYY(value, { fallback: value });
 }
 
 export default function ResetPasswordPage() {

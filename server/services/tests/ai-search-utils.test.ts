@@ -121,5 +121,19 @@ test("summary and explanation helpers produce compact AI-ready text", () => {
   assert.ok(explanation.includes("Maklumat Pelanggan:"));
   assert.ok(explanation.includes("Cadangan: WALK-IN."));
   assert.ok(explanation.includes("AEON AU2"));
-  assert.ok(explanation.includes("ATM & CDM: ATM + CDM"));
+  assert.ok(explanation.includes("ATM & CDM: Ada ATM & CDM"));
+});
+
+test("branch summary normalizes ATM & CDM availability into Ada/Tiada wording", () => {
+  const withAtm = buildBranchSummary({
+    name: "AEON A",
+    atmCdm: "ATM + CDM",
+  });
+  const withoutAtm = buildBranchSummary({
+    name: "AEON B",
+    atmCdm: "Tiada CDM",
+  });
+
+  assert.ok(withAtm.some((item) => item.label === "ATM & CDM" && item.value === "Ada ATM & CDM"));
+  assert.ok(withoutAtm.some((item) => item.label === "ATM & CDM" && item.value === "Tiada ATM & CDM"));
 });

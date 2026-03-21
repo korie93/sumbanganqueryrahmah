@@ -1,4 +1,5 @@
 import type { PostgresStorage } from "../storage-postgres";
+import { logger } from "../lib/logger";
 
 type CategoryRule = {
   key: string;
@@ -211,7 +212,7 @@ export class CategoryStatsService {
       .computeCategoryStatsForKeys(normalized, rules)
       .then(() => undefined)
       .catch((error) => {
-        console.error("Category stats compute failed:", error?.message || error);
+        logger.error("Category stats compute failed", { error });
       })
       .finally(() => {
         this.categoryStatsInflight.delete(queueKey);

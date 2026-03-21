@@ -1,6 +1,7 @@
 import { PerformanceObserver, monitorEventLoopDelay } from "node:perf_hooks";
 import os from "node:os";
 import type { Pool } from "pg";
+import { logger } from "../lib/logger";
 import { CircuitBreaker, type CircuitSnapshot } from "./circuitBreaker";
 import type {
   EvaluateSystemResult,
@@ -279,9 +280,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
 
     lastPgPoolWarningAt = now;
     lastPgPoolWarningSignature = signature;
-    console.warn(
-      `[PG_POOL] total=${total} idle=${idle} waiting=${waiting} max=${max} source=${source}`,
-    );
+    logger.warn("PostgreSQL pool pressure detected", { total, idle, waiting, max, source });
   }
 
   async function withDbCircuit<T>(operation: () => Promise<T>): Promise<T> {
@@ -524,7 +523,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
       await options.evaluateSystem(snapshot, intelligenceHistory);
     } catch (err) {
       if (options.apiDebugLogs) {
-        console.warn("Intelligence cycle error:", err);
+        logger.warn("Intelligence cycle error", { error: err });
       }
     } finally {
       intelligenceInFlight = false;

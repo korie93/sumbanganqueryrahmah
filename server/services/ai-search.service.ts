@@ -1,29 +1,12 @@
 import {
   buildAiBestCandidateDebugPayload,
   buildAiSearchDebugPayload,
-  buildAiSearchKeywordContext,
-  selectAiSearchCandidate,
 } from "./ai-search-candidate-utils";
 import {
-  deriveAiTravelDecision,
-  resolveAiBranchLookup,
-} from "./ai-search-branch-utils";
-import {
-  buildBranchSummary,
-  buildExplanation,
-  buildPersonSummary,
-} from "./ai-search-explanation-utils";
-import {
-  buildFieldMatchSummary,
-} from "./ai-search-query-utils";
+  buildResolvedAiSearchResult,
+  resolveAiSearchCandidates,
+} from "./ai-search-compute-utils";
 import { createAiSafeBranchLookups } from "./ai-search-io-utils";
-import { resolveAiSearchIntent } from "./ai-search-intent-utils";
-import {
-  buildAiSearchAudit,
-  buildAiSearchPayload,
-  buildAiSuggestions,
-  mapAiSearchPerson,
-} from "./ai-search-result-utils";
 import {
   buildAiSearchResolveErrorResponse,
   getFreshLastAiPerson,
@@ -34,7 +17,6 @@ import {
   withTimeout,
 } from "./ai-search-runtime-utils";
 import type {
-  AiSearchCandidateRow,
   AiSearchResponse,
   AiSearchResult,
   AiSearchRuntimeSettings,
@@ -42,6 +24,7 @@ import type {
   LastAiPersonEntry,
   SearchCacheEntry,
 } from "./ai-search-types";
+import { logger } from "../lib/logger";
 
 export class AiSearchService {
   private readonly debugGlobal = globalThis as typeof globalThis & {
@@ -131,8 +114,7 @@ export class AiSearchService {
       };
     } catch (error: unknown) {
       if (shouldLogAiSearchResolveError(error)) {
-        const errorMessage = error instanceof Error ? error.message : String(error ?? "");
-        console.error("AI search compute failed:", errorMessage || error);
+        logger.error("AI search compute failed", { error });
       }
       return buildAiSearchResolveErrorResponse(error);
     }
@@ -144,68 +126,39 @@ export class AiSearchService {
     semanticSearchEnabled: boolean,
     aiTimeoutMs: number,
   ): Promise<AiSearchResult> {
-    const intent = await resolveAiSearchIntent({
+    const resolution = await resolveAiSearchCandidates({
       query,
-      timeoutMs: aiTimeoutMs,
+      semanticSearchEnabled,
+      aiTimeoutMs,
+      storage: this.options.storage,
       withAiCircuit: this.options.withAiCircuit,
       ollamaChat: this.options.ollamaChat,
+      ollamaEmbed: this.options.ollamaEmbed,
       intentMode: process.env.AI_INTENT_MODE,
     });
-    const entities = intent.entities || {};
-    const { keywordQuery, queryDigits, hasDigitsQuery } = buildAiSearchKeywordContext(query, entities);
-    const keywordResults = hasDigitsQuery
-      ? await this.options.storage.aiKeywordSearch({ query: keywordQuery, limit: 10 })
-      : await this.options.storage.aiNameSearch({ query: keywordQuery, limit: 10 });
-    let fallbackDigitsResults: AiSearchCandidateRow[] = [];
-
-    if (!hasDigitsQuery && keywordResults.length === 0 && queryDigits.length >= 6) {
-      fallbackDigitsResults = await this.options.storage.aiDigitsSearch({
-        digits: queryDigits,
-        limit: 25,
-      });
-    }
 
     if (process.env.AI_DEBUG === "1") {
-      console.log(
-        "AI_SEARCH DEBUG",
+      logger.debug(
+        "AI search candidate debug",
         buildAiSearchDebugPayload({
           query,
-          keywordQuery,
-          queryDigits,
-          keywordResults,
-          fallbackDigitsResults,
+          keywordQuery: resolution.keywordQuery,
+          queryDigits: resolution.queryDigits,
+          keywordResults: resolution.keywordResults,
+          fallbackDigitsResults: resolution.fallbackDigitsResults,
         }),
       );
     }
 
-    let vectorResults: AiSearchCandidateRow[] = [];
-    if (semanticSearchEnabled && !hasDigitsQuery) {
-      try {
-        const embedding = await this.options.withAiCircuit(() => this.options.ollamaEmbed(query));
-        if (embedding.length > 0) {
-          vectorResults = await this.options.storage.semanticSearch({ embedding, limit: 10 });
-        }
-      } catch {
-        vectorResults = [];
+    if (process.env.AI_DEBUG === "1" && resolution.best) {
+      const bestCandidateDebugPayload = buildAiBestCandidateDebugPayload(resolution.best);
+      if (bestCandidateDebugPayload) {
+        logger.debug("AI search best row", bestCandidateDebugPayload);
       }
     }
 
-    const { best, bestScore } = selectAiSearchCandidate({
-      entities,
-      keywordQuery,
-      hasDigitsQuery,
-      queryDigits,
-      keywordResults,
-      fallbackDigitsResults,
-      vectorResults,
-    });
-
-    if (process.env.AI_DEBUG === "1" && best) {
-      console.log("AI_SEARCH BEST ROW", buildAiBestCandidateDebugPayload(best));
-    }
-
-    if (best) {
-      this.lastAiPerson.set(userKey, { ts: Date.now(), row: best });
+    if (resolution.best) {
+      this.lastAiPerson.set(userKey, { ts: Date.now(), row: resolution.best });
       sweepTimedCacheEntries(
         this.lastAiPerson,
         this.lastAiPersonTtlMs,
@@ -214,72 +167,20 @@ export class AiSearchService {
     }
 
     const fallbackPerson = getFreshLastAiPerson(this.lastAiPerson, userKey, this.lastAiPersonTtlMs);
-    const hasPersonId = Boolean(entities.ic || entities.account_no || entities.phone);
-    const shouldFindBranch = intent.need_nearest_branch || hasPersonId;
-    const branchTimeoutMs = Math.max(700, Math.min(2200, Math.floor(aiTimeoutMs * 0.35)));
-    const { nearestBranch, missingCoords, branchTextSearch } = await resolveAiBranchLookup({
+    return buildResolvedAiSearchResult({
       query,
-      shouldFindBranch,
-      hasPersonId,
-      best,
+      aiTimeoutMs,
+      intent: resolution.intent,
+      best: resolution.best,
+      bestScore: resolution.bestScore,
+      hasDigitsQuery: resolution.hasDigitsQuery,
+      keywordResults: resolution.keywordResults,
+      fallbackDigitsResults: resolution.fallbackDigitsResults,
       fallbackPerson,
-      keywordResults,
-      fallbackDigitsResults,
-      branchTimeoutMs,
+      storage: this.options.storage,
+      branchLookups: this.branchLookups,
       debugEnabled: process.env.AI_DEBUG === "1",
-      lookups: this.branchLookups,
     });
-    const { decision, travelMode, estimatedMinutes } = deriveAiTravelDecision(
-      nearestBranch?.distanceKm,
-    );
-
-    const person = mapAiSearchPerson(best);
-
-    let suggestions: string[] = [];
-    if ((!person || bestScore < 6) && !hasDigitsQuery) {
-      const fuzzyResults = await this.options.storage.aiFuzzySearch({ query, limit: 5 });
-      suggestions = buildAiSuggestions(query, fuzzyResults);
-    }
-
-    const personSummary = buildPersonSummary(person);
-    const branchSummary = buildBranchSummary(nearestBranch);
-    const explanation = buildExplanation({
-      decision,
-      distanceKm: nearestBranch?.distanceKm ?? null,
-      branch: nearestBranch?.name ?? null,
-      personSummary,
-      branchSummary,
-      estimatedMinutes,
-      travelMode,
-      missingCoords,
-      suggestions,
-      matchFields:
-        !hasDigitsQuery && person && typeof person === "object"
-          ? buildFieldMatchSummary(person, query)
-          : [],
-      branchTextSearch,
-    });
-
-    return {
-      payload: buildAiSearchPayload({
-        person,
-        nearestBranch,
-        decision,
-        explanation,
-        travelMode,
-        estimatedMinutes,
-      }),
-      audit: buildAiSearchAudit({
-        query,
-        intent,
-        person,
-        nearestBranch,
-        decision,
-        travelMode,
-        estimatedMinutes,
-        usedLastPerson: !best && !!fallbackPerson,
-      }),
-    };
   }
 
 }

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { File, FolderOpen } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createImport } from "@/lib/api";
@@ -9,6 +9,7 @@ import { SingleImportPanel } from "@/pages/import/SingleImportPanel";
 import type { BulkFileResult, ImportProps, ImportRow } from "@/pages/import/types";
 
 export default function Import({ onNavigate }: ImportProps) {
+  const [activeTab, setActiveTab] = useState<"single" | "bulk">("single");
   const [file, setFile] = useState<File | null>(null);
   const [importName, setImportName] = useState("");
   const [parsedData, setParsedData] = useState<ImportRow[]>([]);
@@ -21,6 +22,7 @@ export default function Import({ onNavigate }: ImportProps) {
   const [bulkProgress, setBulkProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
+  const singleParseRequestIdRef = useRef(0);
   const { toast } = useToast();
 
   const resetSingleImport = () => {
@@ -38,11 +40,17 @@ export default function Import({ onNavigate }: ImportProps) {
     const selectedFile = event.target.files?.[0];
     if (!selectedFile) return;
 
+    const requestId = ++singleParseRequestIdRef.current;
     setError("");
     setFile(selectedFile);
+    setParsedData([]);
+    setHeaders([]);
 
     try {
       const parsed = await parseImportPreview(selectedFile);
+      if (requestId !== singleParseRequestIdRef.current) {
+        return;
+      }
       if (parsed.error) {
         setError(parsed.error);
         setFile(null);
@@ -55,6 +63,9 @@ export default function Import({ onNavigate }: ImportProps) {
         setImportName(stripImportExtension(selectedFile.name));
       }
     } catch (parseError) {
+      if (requestId !== singleParseRequestIdRef.current) {
+        return;
+      }
       setError("Failed to read file. Please ensure the file format is correct.");
       console.error(parseError);
     }
@@ -148,18 +159,28 @@ export default function Import({ onNavigate }: ImportProps) {
       )));
 
       try {
-        const { data, error: parseError } = await parseImportFileForBulk(currentFile);
+        let parsedRows: ImportRow[] | null = null;
+        let parseErrorMessage: string | undefined;
+        {
+          const parsed = await parseImportFileForBulk(currentFile);
+          parsedRows = parsed.data;
+          parseErrorMessage = parsed.error;
+        }
 
-        if (parseError) {
+        if (parseErrorMessage) {
           nextPending.status = "error";
-          nextPending.error = parseError;
-        } else if (data.length === 0) {
+          nextPending.error = parseErrorMessage;
+        } else if (!parsedRows || parsedRows.length === 0) {
           nextPending.status = "error";
           nextPending.error = "No data found in file";
         } else {
-          await createImport(stripImportExtension(currentFile.name), currentFile.name, data);
+          await createImport(stripImportExtension(currentFile.name), currentFile.name, parsedRows);
           nextPending.status = "success";
-          nextPending.rowCount = data.length;
+          nextPending.rowCount = parsedRows.length;
+        }
+
+        if (parsedRows) {
+          parsedRows.length = 0;
         }
       } catch (bulkError: unknown) {
         nextPending.status = "error";
@@ -194,6 +215,18 @@ export default function Import({ onNavigate }: ImportProps) {
     }
   };
 
+  useEffect(() => {
+    if (activeTab === "bulk") {
+      singleParseRequestIdRef.current += 1;
+      resetSingleImport();
+      return;
+    }
+
+    if (!bulkProcessing) {
+      handleClearBulk();
+    }
+  }, [activeTab]);
+
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
       <div className="max-w-5xl mx-auto">
@@ -202,7 +235,15 @@ export default function Import({ onNavigate }: ImportProps) {
           <p className="text-muted-foreground">Import data from CSV or Excel files</p>
         </div>
 
-        <Tabs defaultValue="single" className="w-full">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => {
+            if (value === "single" || value === "bulk") {
+              setActiveTab(value);
+            }
+          }}
+          className="w-full"
+        >
           <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-6">
             <TabsTrigger value="single" data-testid="tab-single-import">
               <File className="w-4 h-4 mr-2" />

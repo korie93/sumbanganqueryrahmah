@@ -1,4 +1,4 @@
-import { BarChart3, FolderPlus, ListChecks, Settings2, Users } from "lucide-react";
+import { BarChart3, CalendarDays, FolderPlus, ListChecks, Settings2, Users } from "lucide-react";
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import type {
   CollectionSidebarItem,
@@ -30,6 +30,7 @@ export function useCollectionReportNavigation({
       { key: "save", label: "Simpan Collection Individual", icon: FolderPlus },
       { key: "records", label: "View Rekod Collection", icon: ListChecks },
       { key: "summary", label: "Collection Summary", icon: BarChart3 },
+      { key: "daily", label: "Collection Daily", icon: CalendarDays },
     ];
     if (canAccessNicknameSummary) {
       items.push({

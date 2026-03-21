@@ -1,6 +1,7 @@
 import { formatAmountRM } from "@/pages/collection/utils";
 import { fitCollectionRecordText } from "@/pages/collection-records/utils";
 import type { CollectionRecord } from "@/lib/api";
+import { formatDateTimeDDMMYYYY, formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 
 interface CollectionRecordsExportParams {
   visibleRecords: CollectionRecord[];
@@ -31,8 +32,8 @@ export async function exportCollectionRecordsToExcel({
 
   const sheetData: (string | number)[][] = [
     ["Collection Report"],
-    ["Generated Date", new Date().toLocaleString()],
-    ["Date Range", `${fromDate || "All"} - ${toDate || "All"}`],
+    ["Generated Date", formatDateTimeDDMMYYYY(new Date(), { includeSeconds: true })],
+    ["Date Range", `${fromDate ? formatIsoDateToDDMMYYYY(fromDate) : "All"} - ${toDate ? formatIsoDateToDDMMYYYY(toDate) : "All"}`],
     ["Total Records", summary.totalRecords],
     ["Total Amount", summary.totalAmount],
     [],
@@ -101,12 +102,12 @@ export async function exportCollectionRecordsToPdf({
     y += 7;
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(10);
-    pdf.text(`Generated Date: ${new Date().toLocaleString()}`, margin, y);
+    pdf.text(`Generated Date: ${formatDateTimeDDMMYYYY(new Date(), { includeSeconds: true })}`, margin, y);
     y += 5;
     const staffLabel = canUseNicknameFilter && nicknameFilter !== "all" ? nicknameFilter : "All";
     pdf.text(`Staff: ${staffLabel}`, margin, y);
     y += 5;
-    pdf.text(`Date Range: ${fromDate || "All"} - ${toDate || "All"}`, margin, y);
+    pdf.text(`Date Range: ${fromDate ? formatIsoDateToDDMMYYYY(fromDate) : "All"} - ${toDate ? formatIsoDateToDDMMYYYY(toDate) : "All"}`, margin, y);
     y += 6;
 
     pdf.setFillColor(235, 240, 248);
@@ -151,7 +152,7 @@ export async function exportCollectionRecordsToPdf({
       fitCollectionRecordText(record.accountNumber, 18),
       fitCollectionRecordText(record.customerPhone, 15),
       fitCollectionRecordText(formatAmountRM(record.amount), 12),
-      fitCollectionRecordText(record.paymentDate, 10),
+      fitCollectionRecordText(formatIsoDateToDDMMYYYY(record.paymentDate), 10),
       record.receiptFile ? "Yes" : "-",
       fitCollectionRecordText(record.collectionStaffNickname, 18),
     ];

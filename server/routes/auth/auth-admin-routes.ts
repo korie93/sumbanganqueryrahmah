@@ -11,7 +11,6 @@ import type { AuthRouteContext } from "./auth-route-shared";
 export function registerAuthAdminRoutes(context: AuthRouteContext) {
   const {
     app,
-    storage,
     authAccountService,
     authenticateToken,
     requireRole,
@@ -224,8 +223,8 @@ export function registerAuthAdminRoutes(context: AuthRouteContext) {
     authenticateToken,
     requireRole("superuser"),
     rateLimiters.adminAction,
-    jsonRoute(async () => {
-      const accounts = await storage.getAccounts();
+    jsonRoute(async (req) => {
+      const accounts = await authAccountService.getAccounts(req.user);
       return buildOkPayload({ accounts });
     }),
   );

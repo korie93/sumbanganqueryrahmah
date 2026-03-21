@@ -1,14 +1,5 @@
 import { asyncHandler } from "../../http/async-handler";
 import {
-  clearDevMailOutbox,
-  deleteDevMailPreview,
-  isDevMailOutboxEnabled,
-  listDevMailPreviews,
-  readDevMailPreview,
-  renderDevMailPreviewHtml,
-} from "../../mail/dev-mail-outbox";
-import { AuthAccountError } from "../../services/auth-account.service";
-import {
   readActivationBody,
   readPasswordResetRequestBody,
   readTokenBody,
@@ -18,7 +9,6 @@ import type { AuthRouteContext } from "./auth-route-shared";
 export function registerAuthRecoveryRoutes(context: AuthRouteContext) {
   const {
     app,
-    storage,
     authAccountService,
     authenticateToken,
     requireRole,
@@ -31,17 +21,13 @@ export function registerAuthRecoveryRoutes(context: AuthRouteContext) {
   app.get(
     "/dev/mail-preview/:previewId",
     asyncHandler(async (req, res) => {
-      if (!isDevMailOutboxEnabled()) {
-        return res.status(404).type("text/plain").send("Not found.");
-      }
-
-      const preview = await readDevMailPreview(req.params.previewId);
-      if (!preview) {
+      const html = await authAccountService.getDevMailPreviewHtml(req.params.previewId);
+      if (!html) {
         return res.status(404).type("text/plain").send("Not found.");
       }
 
       res.setHeader("Cache-Control", "no-store");
-      return res.status(200).type("html").send(renderDevMailPreviewHtml(preview));
+      return res.status(200).type("html").send(html);
     }),
   );
 
@@ -98,11 +84,12 @@ export function registerAuthRecoveryRoutes(context: AuthRouteContext) {
     authenticateToken,
     requireRole("superuser"),
     rateLimiters.adminAction,
-    jsonRoute(async () => {
+    jsonRoute(async (req) => {
+      const result = await authAccountService.listDevMailOutbox(req.user);
       return {
         ok: true,
-        enabled: isDevMailOutboxEnabled(),
-        previews: await listDevMailPreviews(25),
+        enabled: result.enabled,
+        previews: result.previews,
       };
     }),
   );
@@ -113,23 +100,10 @@ export function registerAuthRecoveryRoutes(context: AuthRouteContext) {
     requireRole("superuser"),
     rateLimiters.adminAction,
     jsonRoute(async (req) => {
-      const deleted = await deleteDevMailPreview(req.params.previewId);
-      if (!deleted) {
-        throw new AuthAccountError(404, "MAIL_PREVIEW_NOT_FOUND", "Mail preview not found.");
-      }
-
-      if (req.user) {
-        await storage.createAuditLog({
-          action: "DEV_MAIL_OUTBOX_ENTRY_DELETED",
-          performedBy: req.user.username,
-          targetResource: req.params.previewId,
-          details: "Local mail outbox preview deleted.",
-        });
-      }
-
+      const result = await authAccountService.deleteDevMailPreview(req.user, req.params.previewId);
       return {
         ok: true,
-        deleted: true,
+        deleted: result.deleted,
       };
     }),
   );
@@ -140,23 +114,10 @@ export function registerAuthRecoveryRoutes(context: AuthRouteContext) {
     requireRole("superuser"),
     rateLimiters.adminAction,
     jsonRoute(async (req) => {
-      const deletedCount = await clearDevMailOutbox();
-
-      if (req.user) {
-        await storage.createAuditLog({
-          action: "DEV_MAIL_OUTBOX_CLEARED",
-          performedBy: req.user.username,
-          details: JSON.stringify({
-            metadata: {
-              deleted_count: deletedCount,
-            },
-          }),
-        });
-      }
-
+      const result = await authAccountService.clearDevMailOutbox(req.user);
       return {
         ok: true,
-        deletedCount,
+        deletedCount: result.deletedCount,
       };
     }),
   );

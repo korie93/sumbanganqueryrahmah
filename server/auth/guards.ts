@@ -96,6 +96,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
       const isVisitorBanned = await storage.isVisitorBanned(
         activity.fingerprint ?? null,
         activity.ipAddress ?? null,
+        activity.username || decoded.username,
       );
 
       if (isVisitorBanned) {

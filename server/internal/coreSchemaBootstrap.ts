@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
+import { logger } from "../lib/logger";
 
 export class CoreSchemaBootstrap {
   private importsReady = false;
@@ -55,7 +56,7 @@ export class CoreSchemaBootstrap {
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_created_by ON public.imports(created_by)`);
         this.importsReady = true;
       } catch (err: any) {
-        console.error("Failed to ensure imports table:", err?.message || err);
+        logger.error("Failed to ensure imports table", { error: err });
         throw err;
       }
     })();
@@ -95,7 +96,7 @@ export class CoreSchemaBootstrap {
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_data_rows_import_id ON public.data_rows(import_id)`);
         this.dataRowsReady = true;
       } catch (err: any) {
-        console.error("Failed to ensure data_rows table:", err?.message || err);
+        logger.error("Failed to ensure data rows table", { error: err });
         throw err;
       }
     })();
@@ -161,7 +162,7 @@ export class CoreSchemaBootstrap {
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_ip_address ON public.user_activity(ip_address)`);
         this.userActivityReady = true;
       } catch (err: any) {
-        console.error("Failed to ensure user_activity table:", err?.message || err);
+        logger.error("Failed to ensure user activity table", { error: err });
         throw err;
       }
     })();
@@ -209,7 +210,7 @@ export class CoreSchemaBootstrap {
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_performed_by ON public.audit_logs(performed_by)`);
         this.auditLogsReady = true;
       } catch (err: any) {
-        console.error("Failed to ensure audit_logs table:", err?.message || err);
+        logger.error("Failed to ensure audit logs table", { error: err });
         throw err;
       }
     })();
@@ -386,12 +387,12 @@ export class CoreSchemaBootstrap {
             ON data_rows (((json_data::jsonb)->>'OfficePhone'))
           `);
         } catch (err: any) {
-          console.warn("WARN pg_trgm not available; skipping trigram index:", err?.message || err);
+          logger.warn("pg_trgm is not available; skipping trigram index creation", { error: err });
         }
 
         this.performanceIndexesReady = true;
       } catch (err: any) {
-        console.error("ERROR Failed to ensure performance indexes:", err?.message || err);
+        logger.error("Failed to ensure performance indexes", { error: err });
       }
     })();
 
@@ -429,7 +430,7 @@ export class CoreSchemaBootstrap {
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_banned_sessions_ip ON public.banned_sessions(ip_address)`);
         this.bannedSessionsReady = true;
       } catch (err: any) {
-        console.error("ERROR Failed to ensure banned_sessions table:", err?.message || err);
+        logger.error("Failed to ensure banned sessions table", { error: err });
       }
     })();
 

@@ -92,7 +92,6 @@ function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPagePr
           totalAmount={summaryData.totalAmount}
           totalRecords={summaryData.totalRecords}
           nicknameTotals={summaryData.nicknameTotals}
-          batchSections={summaryData.batchSections}
         />
       </CardContent>
     </Card>

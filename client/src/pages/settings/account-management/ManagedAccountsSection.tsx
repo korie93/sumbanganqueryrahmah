@@ -12,9 +12,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AppPaginationBar } from "@/components/data/AppPaginationBar";
+import { SideTabDataPanel } from "@/components/layout/SideTabDataPanel";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { usePaginatedItems } from "@/hooks/usePaginatedItems";
 import { ManagedAccountRow } from "@/pages/settings/account-management/ManagedAccountRow";
 import { normalizeSearchValue } from "@/pages/settings/account-management/utils";
 import type { ManagedUser } from "@/pages/settings/types";
@@ -74,26 +76,23 @@ export function ManagedAccountsSection({
     : managedUsers.length === 0
       ? "No managed accounts found."
       : "No managed accounts match the current filters.";
+  const pagination = usePaginatedItems(filteredUsers, {
+    resetKey: `${deferredSearchQuery}::${roleFilter}::${statusFilter}`,
+  });
 
   return (
     <>
-      <Card className="border-border/60 bg-background/60">
-        <CardHeader className="gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <UserCog className="h-5 w-5" />
-              Managed Account
-            </CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Search and manage closed accounts without crowding the rest of the Security page.
-            </p>
-          </div>
+      <SideTabDataPanel
+        title="Managed Account"
+        description="Search and manage closed accounts without crowding the rest of the Security page."
+        icon={UserCog}
+        actions={
           <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        }
+        filters={
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px_180px]">
             <div className="space-y-2">
               <p className="text-sm font-medium">Search by user name</p>
@@ -108,8 +107,11 @@ export function ManagedAccountsSection({
               </div>
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-medium">Role</p>
+              <label htmlFor="managed-accounts-role-filter" className="text-sm font-medium">
+                Role
+              </label>
               <select
+                id="managed-accounts-role-filter"
                 value={roleFilter}
                 onChange={(event) =>
                   setRoleFilter(event.target.value === "admin" || event.target.value === "user"
@@ -124,8 +126,11 @@ export function ManagedAccountsSection({
               </select>
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-medium">Status</p>
+              <label htmlFor="managed-accounts-status-filter" className="text-sm font-medium">
+                Status
+              </label>
               <select
+                id="managed-accounts-status-filter"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(
@@ -149,50 +154,63 @@ export function ManagedAccountsSection({
               </select>
             </div>
           </div>
-
+        }
+        summary={
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm">
             <div className="flex items-center gap-2 font-medium">
               <Users className="h-4 w-4 text-muted-foreground" />
               Total users: {managedUsers.length}
             </div>
-            <Badge variant="secondary">Showing {filteredUsers.length}</Badge>
+            <Badge variant="secondary">Filtered {filteredUsers.length}</Badge>
           </div>
-
-          <Table>
-            <TableHeader>
+        }
+        pagination={
+          <AppPaginationBar
+            disabled={loading}
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            pageSize={pagination.pageSize}
+            totalItems={filteredUsers.length}
+            itemLabel="users"
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
+        }
+      >
+        <Table className="min-w-[980px] text-sm">
+          <TableHeader>
+            <TableRow>
+              <TableHead>User</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Last Login</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading || filteredUsers.length === 0 ? (
               <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last Login</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  {emptyMessage}
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading || filteredUsers.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
-                    {emptyMessage}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredUsers.map((user) => (
-                  <ManagedAccountRow
-                    key={user.id}
-                    deletingManagedUserId={deletingManagedUserId}
-                    onBanToggle={onBanToggle}
-                    onDelete={(nextUser) => setUserToDelete(nextUser)}
-                    onEdit={onEditUser}
-                    onResetPassword={onResetPassword}
-                    onResendActivation={onResendActivation}
-                    user={user}
-                  />
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            ) : (
+              pagination.paginatedItems.map((user) => (
+                <ManagedAccountRow
+                  key={user.id}
+                  deletingManagedUserId={deletingManagedUserId}
+                  onBanToggle={onBanToggle}
+                  onDelete={(nextUser) => setUserToDelete(nextUser)}
+                  onEdit={onEditUser}
+                  onResetPassword={onResetPassword}
+                  onResendActivation={onResendActivation}
+                  user={user}
+                />
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </SideTabDataPanel>
 
       <AlertDialog
         open={userToDelete !== null}

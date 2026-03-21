@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { AlertCircle, BookMarked, RefreshCw, Search } from "lucide-react";
+import { AlertCircle, BookMarked, RefreshCw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getImports, deleteImport, renameImport } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -15,10 +15,13 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [selectedImport, setSelectedImport] = useState<ImportItem | null>(null);
+  const [selectedImportIds, setSelectedImportIds] = useState<Set<string>>(new Set());
   const [newName, setNewName] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
@@ -31,6 +34,29 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
     [dateFilter, deferredSearchTerm, imports],
   );
   const hasActiveFilters = searchTerm.trim() !== "" || dateFilter !== undefined;
+  const selectedVisibleCount = useMemo(
+    () => filteredImports.filter((item) => selectedImportIds.has(item.id)).length,
+    [filteredImports, selectedImportIds],
+  );
+  const allVisibleSelected = filteredImports.length > 0 && selectedVisibleCount === filteredImports.length;
+  const partiallySelected = selectedVisibleCount > 0 && !allVisibleSelected;
+
+  useEffect(() => {
+    setSelectedImportIds((previous) => {
+      if (previous.size === 0) return previous;
+      const validIds = new Set(imports.map((item) => item.id));
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of previous) {
+        if (validIds.has(id)) {
+          next.add(id);
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : previous;
+    });
+  }, [imports]);
 
   const clearFilters = () => {
     setSearchTerm("");
@@ -118,6 +144,12 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
         description: `"${selectedImport.name}" has been deleted.`,
       });
       setImports((previous) => previous.filter((item) => item.id !== selectedImport.id));
+      setSelectedImportIds((previous) => {
+        if (!previous.has(selectedImport.id)) return previous;
+        const next = new Set(previous);
+        next.delete(selectedImport.id);
+        return next;
+      });
     } catch (err: any) {
       toast({
         title: "Failed",
@@ -128,6 +160,53 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
       setDeleting(false);
       setDeleteDialogOpen(false);
       setSelectedImport(null);
+    }
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    const ids = Array.from(selectedImportIds);
+    if (ids.length === 0) return;
+
+    setBulkDeleting(true);
+    try {
+      const results = await Promise.allSettled(ids.map((id) => deleteImport(id)));
+      const deletedIds: string[] = [];
+      let failedCount = 0;
+
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          deletedIds.push(ids[index]);
+        } else {
+          failedCount += 1;
+        }
+      });
+
+      if (deletedIds.length > 0) {
+        setImports((previous) => previous.filter((item) => !deletedIds.includes(item.id)));
+      }
+      setSelectedImportIds(new Set());
+
+      if (deletedIds.length > 0 && failedCount === 0) {
+        toast({
+          title: "Success",
+          description: `${deletedIds.length} file(s) deleted.`,
+        });
+      } else if (deletedIds.length > 0) {
+        toast({
+          title: "Partial Success",
+          description: `${deletedIds.length} deleted, ${failedCount} failed.`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Failed",
+          description: "No selected files were deleted.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setBulkDeleting(false);
+      setBulkDeleteDialogOpen(false);
     }
   };
 
@@ -152,6 +231,16 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             <p className="text-muted-foreground">List of all imported data</p>
           </div>
           <div className="flex gap-2">
+            {isSuperuser && selectedImportIds.size > 0 ? (
+              <Button
+                variant="destructive"
+                onClick={() => setBulkDeleteDialogOpen(true)}
+                data-testid="button-bulk-delete"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Selected ({selectedImportIds.size})
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               onClick={() => void fetchImports()}
@@ -221,6 +310,33 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             onRename={handleRenameClick}
             onAnalysis={handleAnalysis}
             onDelete={handleDeleteClick}
+            onToggleSelected={(id, checked) => {
+              setSelectedImportIds((previous) => {
+                const next = new Set(previous);
+                if (checked) {
+                  next.add(id);
+                } else {
+                  next.delete(id);
+                }
+                return next;
+              });
+            }}
+            onToggleSelectAllVisible={(checked) => {
+              setSelectedImportIds((previous) => {
+                const next = new Set(previous);
+                for (const item of filteredImports) {
+                  if (checked) {
+                    next.add(item.id);
+                  } else {
+                    next.delete(item.id);
+                  }
+                }
+                return next;
+              });
+            }}
+            selectedImportIds={selectedImportIds}
+            allVisibleSelected={allVisibleSelected}
+            partiallySelected={partiallySelected}
             formatDate={formatSavedImportDate}
           />
         )}
@@ -229,15 +345,20 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
       <SavedDialogs
         deleteDialogOpen={deleteDialogOpen}
         renameDialogOpen={renameDialogOpen}
+        bulkDeleteDialogOpen={bulkDeleteDialogOpen}
         deleting={deleting}
         renaming={renaming}
+        bulkDeleting={bulkDeleting}
+        bulkDeleteCount={selectedImportIds.size}
         selectedImport={selectedImport}
         newName={newName}
         onDeleteDialogOpenChange={setDeleteDialogOpen}
         onRenameDialogOpenChange={setRenameDialogOpen}
+        onBulkDeleteDialogOpenChange={setBulkDeleteDialogOpen}
         onNewNameChange={setNewName}
         onDeleteConfirm={handleDeleteConfirm}
         onRenameConfirm={handleRenameConfirm}
+        onBulkDeleteConfirm={() => void handleBulkDeleteConfirm()}
       />
     </div>
   );

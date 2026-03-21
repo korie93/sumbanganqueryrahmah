@@ -1,8 +1,8 @@
+import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
+
 export function formatDateTime(value: string | null) {
   if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString();
+  return formatDateTimeDDMMYYYY(value, { fallback: value });
 }
 
 export function getStatusVariant(status: string, isBanned: boolean | null) {

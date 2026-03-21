@@ -51,6 +51,10 @@ import {
 import type {
   CollectionAdminGroup,
   CollectionAdminUser,
+  CollectionDailyCalendarDay,
+  CollectionDailyPaidCustomer,
+  CollectionDailyTarget,
+  CollectionDailyUser,
   CollectionMonthlySummary,
   CollectionNicknameAuthProfile,
   CollectionNicknameSession,
@@ -95,6 +99,36 @@ export class CollectionRepository {
       createdByLogin: String(row.created_by_login ?? row.createdByLogin ?? row.staff_username ?? row.staffUsername ?? ""),
       collectionStaffNickname: String(row.collection_staff_nickname ?? row.collectionStaffNickname ?? row.staff_username ?? row.staffUsername ?? ""),
       createdAt,
+    };
+  }
+
+  private mapCollectionDailyTargetRow(row: any): CollectionDailyTarget {
+    return {
+      id: String(row.id),
+      username: String(row.username || "").toLowerCase(),
+      year: Number(row.year || 0),
+      month: Number(row.month || 0),
+      monthlyTarget: Number(row.monthly_target ?? row.monthlyTarget ?? 0),
+      createdBy: row.created_by ?? row.createdBy ?? null,
+      updatedBy: row.updated_by ?? row.updatedBy ?? null,
+      createdAt: row.created_at instanceof Date ? row.created_at : new Date(row.created_at),
+      updatedAt: row.updated_at instanceof Date ? row.updated_at : new Date(row.updated_at),
+    };
+  }
+
+  private mapCollectionDailyCalendarRow(row: any): CollectionDailyCalendarDay {
+    return {
+      id: String(row.id),
+      year: Number(row.year || 0),
+      month: Number(row.month || 0),
+      day: Number(row.day || 0),
+      isWorkingDay: Boolean(row.is_working_day ?? row.isWorkingDay),
+      isHoliday: Boolean(row.is_holiday ?? row.isHoliday),
+      holidayName: (row.holiday_name ?? row.holidayName ?? null) as string | null,
+      createdBy: (row.created_by ?? row.createdBy ?? null) as string | null,
+      updatedBy: (row.updated_by ?? row.updatedBy ?? null) as string | null,
+      createdAt: row.created_at instanceof Date ? row.created_at : new Date(row.created_at),
+      updatedAt: row.updated_at instanceof Date ? row.updated_at : new Date(row.updated_at),
     };
   }
 
@@ -226,6 +260,211 @@ export class CollectionRepository {
 
   async clearCollectionNicknameSessionByActivity(activityId: string): Promise<void> {
     return clearCollectionNicknameSessionValueByActivity(db, activityId);
+  }
+
+  async listCollectionDailyUsers(): Promise<CollectionDailyUser[]> {
+    const result = await db.execute(sql`
+      SELECT id, username, role
+      FROM public.users
+      WHERE role IN ('user', 'admin', 'superuser')
+        AND COALESCE(is_banned, false) = false
+        AND COALESCE(status, 'active') <> 'disabled'
+      ORDER BY lower(username) ASC
+      LIMIT 5000
+    `);
+    return (result.rows || []).map((row: any) => ({
+      id: String(row.id),
+      username: String(row.username || "").toLowerCase(),
+      role: String(row.role || "user"),
+    }));
+  }
+
+  async getCollectionDailyTarget(params: {
+    username: string;
+    year: number;
+    month: number;
+  }): Promise<CollectionDailyTarget | undefined> {
+    const result = await db.execute(sql`
+      SELECT
+        id,
+        username,
+        year,
+        month,
+        monthly_target,
+        created_by,
+        updated_by,
+        created_at,
+        updated_at
+      FROM public.collection_daily_targets
+      WHERE lower(username) = lower(${params.username})
+        AND year = ${params.year}
+        AND month = ${params.month}
+      LIMIT 1
+    `);
+    const row = result.rows?.[0];
+    return row ? this.mapCollectionDailyTargetRow(row) : undefined;
+  }
+
+  async upsertCollectionDailyTarget(params: {
+    username: string;
+    year: number;
+    month: number;
+    monthlyTarget: number;
+    actor: string;
+  }): Promise<CollectionDailyTarget> {
+    const result = await db.execute(sql`
+      INSERT INTO public.collection_daily_targets (
+        id,
+        username,
+        year,
+        month,
+        monthly_target,
+        created_by,
+        updated_by,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        ${randomUUID()}::uuid,
+        lower(${params.username}),
+        ${params.year},
+        ${params.month},
+        ${params.monthlyTarget},
+        ${params.actor},
+        ${params.actor},
+        now(),
+        now()
+      )
+      ON CONFLICT ((lower(username)), year, month)
+      DO UPDATE SET
+        monthly_target = EXCLUDED.monthly_target,
+        updated_by = EXCLUDED.updated_by,
+        updated_at = now()
+      RETURNING
+        id,
+        username,
+        year,
+        month,
+        monthly_target,
+        created_by,
+        updated_by,
+        created_at,
+        updated_at
+    `);
+    const row = result.rows?.[0];
+    if (!row) {
+      throw new Error("Failed to upsert collection daily target.");
+    }
+    return this.mapCollectionDailyTargetRow(row);
+  }
+
+  async listCollectionDailyCalendar(params: {
+    year: number;
+    month: number;
+  }): Promise<CollectionDailyCalendarDay[]> {
+    const result = await db.execute(sql`
+      SELECT
+        id,
+        year,
+        month,
+        day,
+        is_working_day,
+        is_holiday,
+        holiday_name,
+        created_by,
+        updated_by,
+        created_at,
+        updated_at
+      FROM public.collection_daily_calendar
+      WHERE year = ${params.year}
+        AND month = ${params.month}
+      ORDER BY day ASC
+    `);
+    return (result.rows || []).map((row: any) => this.mapCollectionDailyCalendarRow(row));
+  }
+
+  async upsertCollectionDailyCalendarDays(params: {
+    year: number;
+    month: number;
+    actor: string;
+    days: Array<{
+      day: number;
+      isWorkingDay: boolean;
+      isHoliday: boolean;
+      holidayName?: string | null;
+    }>;
+  }): Promise<CollectionDailyCalendarDay[]> {
+    if (!params.days.length) {
+      return [];
+    }
+
+    for (const day of params.days) {
+      await db.execute(sql`
+        INSERT INTO public.collection_daily_calendar (
+          id,
+          year,
+          month,
+          day,
+          is_working_day,
+          is_holiday,
+          holiday_name,
+          created_by,
+          updated_by,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          ${randomUUID()}::uuid,
+          ${params.year},
+          ${params.month},
+          ${day.day},
+          ${day.isWorkingDay},
+          ${day.isHoliday},
+          ${day.holidayName ?? null},
+          ${params.actor},
+          ${params.actor},
+          now(),
+          now()
+        )
+        ON CONFLICT (year, month, day)
+        DO UPDATE SET
+          is_working_day = EXCLUDED.is_working_day,
+          is_holiday = EXCLUDED.is_holiday,
+          holiday_name = EXCLUDED.holiday_name,
+          updated_by = EXCLUDED.updated_by,
+          updated_at = now()
+      `);
+    }
+
+    return this.listCollectionDailyCalendar({
+      year: params.year,
+      month: params.month,
+    });
+  }
+
+  async listCollectionDailyPaidCustomers(params: {
+    username: string;
+    date: string;
+  }): Promise<CollectionDailyPaidCustomer[]> {
+    const result = await db.execute(sql`
+      SELECT
+        id,
+        customer_name,
+        account_number,
+        amount,
+        collection_staff_nickname
+      FROM public.collection_records
+      WHERE lower(created_by_login) = lower(${params.username})
+        AND payment_date = ${params.date}::date
+      ORDER BY created_at ASC, id ASC
+    `);
+    return (result.rows || []).map((row: any) => ({
+      id: String(row.id),
+      customerName: String(row.customer_name || ""),
+      accountNumber: String(row.account_number || ""),
+      amount: Number(row.amount || 0),
+      collectionStaffNickname: String(row.collection_staff_nickname || ""),
+    }));
   }
 
   async getCollectionStaffNicknameById(id: string): Promise<CollectionStaffNickname | undefined> {
@@ -375,6 +614,33 @@ export class CollectionRepository {
     `);
 
     return mapCollectionAggregateRow(result.rows?.[0]);
+  }
+
+  async summarizeCollectionRecordsByNickname(filters?: {
+    from?: string;
+    to?: string;
+    search?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+  }): Promise<Array<{ nickname: string; totalRecords: number; totalAmount: number }>> {
+    const whereSql = buildCollectionRecordWhereSql(filters);
+
+    const result = await db.execute(sql`
+      SELECT
+        collection_staff_nickname as nickname,
+        COUNT(*)::int AS total_records,
+        COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
+      FROM public.collection_records
+      ${whereSql}
+      GROUP BY collection_staff_nickname
+      ORDER BY lower(collection_staff_nickname) ASC
+    `);
+
+    return (result.rows || []).map((row: any) => ({
+      nickname: String(row.nickname || "Unknown"),
+      totalRecords: Number(row.total_records || 0),
+      totalAmount: Number(row.total_amount || 0),
+    }));
   }
 
   async summarizeCollectionRecordsOlderThan(beforeDate: string): Promise<{ totalRecords: number; totalAmount: number }> {

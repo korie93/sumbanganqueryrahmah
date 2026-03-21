@@ -214,8 +214,7 @@ export function GeneralSearchResults({
       >
         <style>{`
           .scrollbar-visible {
-            scrollbar-width: thin;
-            scrollbar-color: rgba(99, 102, 241, 0.5) rgba(31, 41, 55, 0.1);
+            -ms-overflow-style: auto;
           }
           .scrollbar-visible::-webkit-scrollbar {
             width: 8px;
@@ -248,7 +247,7 @@ export function GeneralSearchResults({
           <tbody>
             {enableVirtualRows && topSpacerHeight > 0 ? (
               <tr aria-hidden="true">
-                <td colSpan={headers.length + 2} style={{ height: `${topSpacerHeight}px`, padding: 0 }} />
+                <td colSpan={headers.length + 2} height={topSpacerHeight} className="p-0" />
               </tr>
             ) : null}
             {virtualRows.map((row, rowIndex) => {
@@ -287,7 +286,7 @@ export function GeneralSearchResults({
             })}
             {enableVirtualRows && bottomSpacerHeight > 0 ? (
               <tr aria-hidden="true">
-                <td colSpan={headers.length + 2} style={{ height: `${bottomSpacerHeight}px`, padding: 0 }} />
+                <td colSpan={headers.length + 2} height={bottomSpacerHeight} className="p-0" />
               </tr>
             ) : null}
           </tbody>

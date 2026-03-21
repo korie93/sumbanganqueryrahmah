@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
+import { logger } from "../lib/logger";
 import {
   type RoleTabSetting,
   type SettingInputType,
@@ -82,7 +83,7 @@ export class SettingsBootstrap {
               AND r.rn > 1
           `);
         } catch (dupCleanupErr: any) {
-          console.warn("⚠️ setting_options duplicate cleanup skipped:", dupCleanupErr?.message || dupCleanupErr);
+          logger.warn("setting_options duplicate cleanup skipped", { error: dupCleanupErr });
         }
 
         try {
@@ -91,7 +92,7 @@ export class SettingsBootstrap {
             ON public.setting_options (setting_id, value)
           `);
         } catch (idxErr: any) {
-          console.warn("⚠️ setting_options unique index not created:", idxErr?.message || idxErr);
+          logger.warn("setting_options unique index was not created", { error: idxErr });
         }
 
         await db.execute(sql`
@@ -458,7 +459,7 @@ export class SettingsBootstrap {
 
         this.ready = true;
       } catch (err: any) {
-        console.error("❌ Failed to ensure enterprise settings tables:", err?.message || err);
+        logger.error("Failed to ensure enterprise settings tables", { error: err });
       }
     })();
 

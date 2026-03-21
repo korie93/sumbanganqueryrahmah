@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import type { SearchResultRow } from "@/pages/general-search/types";
 import { getCellDisplayText } from "@/pages/general-search/utils";
 
@@ -68,7 +69,7 @@ export async function exportSearchResultsToPdf({
     ? `Advanced Search (${activeFiltersCount} filters)`
     : `Search: "${query}"`;
   pdf.text(
-    `${searchInfo} | ${results.length} results | Generated: ${new Date().toLocaleString()}`,
+    `${searchInfo} | ${results.length} results | Generated: ${formatDateTimeDDMMYYYY(new Date(), { includeSeconds: true })}`,
     margin,
     yPos,
   );

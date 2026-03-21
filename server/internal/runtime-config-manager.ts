@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import type { MaintenanceState } from "../config/system-settings";
+import { logger } from "../lib/logger";
 import type { PostgresStorage } from "../storage-postgres";
 
 export type RuntimeSettings = {
@@ -162,7 +163,7 @@ export function createRuntimeConfigManager(options: RuntimeConfigManagerOptions)
 
       return next();
     } catch (err) {
-      console.error("Maintenance guard error:", err);
+      logger.error("Maintenance guard error", { error: err, path: req.path, method: req.method });
       return next();
     }
   };
