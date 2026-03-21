@@ -7,7 +7,7 @@ import {
   type CollectionPurgeSummaryResponse,
   type CollectionRecord,
 } from "@/lib/api";
-import { parseApiError } from "@/pages/collection/utils";
+import { emitCollectionDataChanged, parseApiError } from "@/pages/collection/utils";
 
 type UseCollectionRecordsActionsArgs = {
   canPurgeOldRecords: boolean;
@@ -102,6 +102,7 @@ export function useCollectionRecordsActions({
         title: "Record Deleted",
         description: "Rekod collection berjaya dipadam.",
       });
+      emitCollectionDataChanged();
       if (!isMountedRef.current) return;
       setPendingDeleteRecord(null);
       await Promise.all([
@@ -149,6 +150,7 @@ export function useCollectionRecordsActions({
             ? `${response.deletedRecords} rekod collection lama berjaya dipadam.`
             : "Tiada rekod collection melebihi enam bulan untuk dipurge.",
       });
+      emitCollectionDataChanged();
       if (!isMountedRef.current) return;
       setPurgeDialogOpen(false);
       setPurgePasswordInput("");

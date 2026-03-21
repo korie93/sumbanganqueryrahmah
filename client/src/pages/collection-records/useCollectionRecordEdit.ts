@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import {
   COLLECTION_BATCH_OPTIONS,
+  emitCollectionDataChanged,
   getTodayIsoDate,
   isFutureDate,
   isPositiveAmount,
@@ -225,6 +226,7 @@ export function useCollectionRecordEdit({
         title: "Record Updated",
         description: "Rekod collection berjaya dikemaskini.",
       });
+      emitCollectionDataChanged();
       if (!isMountedRef.current) return;
       setEditOpen(false);
       setEditingRecord(null);

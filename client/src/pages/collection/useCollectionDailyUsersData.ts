@@ -24,7 +24,7 @@ export function useCollectionDailyUsersData({ canManage }: UseCollectionDailyUse
       } catch (error: unknown) {
         if (cancelled) return;
         toast({
-          title: "Failed to Load Users",
+          title: "Failed to Load Staff Nicknames",
           description: parseApiError(error),
           variant: "destructive",
         });

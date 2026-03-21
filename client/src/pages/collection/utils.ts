@@ -5,6 +5,7 @@ export const COLLECTION_ACCEPTED_FILE_TYPES = ["image/jpeg", "image/png", "appli
 export const COLLECTION_MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 export const COLLECTION_STAFF_NICKNAME_KEY = "collection_staff_nickname";
 export const COLLECTION_STAFF_NICKNAME_AUTH_KEY = "collection_staff_nickname_auth";
+export const COLLECTION_DATA_CHANGED_EVENT = "collection:data-changed";
 export const COLLECTION_PHONE_REGEX = /^[0-9+\-\s]{8,20}$/;
 
 export function parseApiError(error: unknown): string {
@@ -72,6 +73,19 @@ export function getCurrentUsername(): string {
     // ignore parse issues
   }
   return String(localStorage.getItem("username") || "").trim().toLowerCase();
+}
+
+export function getCurrentCollectionStaffNickname(): string {
+  try {
+    return String(sessionStorage.getItem(COLLECTION_STAFF_NICKNAME_KEY) || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+export function emitCollectionDataChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(COLLECTION_DATA_CHANGED_EVENT));
 }
 
 export async function toReceiptPayload(file: File): Promise<CollectionReceiptPayload> {

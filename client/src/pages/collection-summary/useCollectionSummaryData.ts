@@ -6,7 +6,10 @@ import {
   type CollectionMonthlySummary,
   type CollectionStaffNickname,
 } from "@/lib/api";
-import { parseApiError } from "@/pages/collection/utils";
+import {
+  COLLECTION_DATA_CHANGED_EVENT,
+  parseApiError,
+} from "@/pages/collection/utils";
 import {
   buildEmptySummary,
   normalizeNicknameSelection,
@@ -143,6 +146,25 @@ export function useCollectionSummaryData({
         : undefined;
     void loadSummary(year, nicknames);
   }, [selectedYear, canFilterByNickname, selectedNicknames, loadSummary]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleCollectionDataChanged = () => {
+      const year = Number(selectedYear);
+      if (!Number.isInteger(year)) return;
+      const nicknames =
+        canFilterByNickname && selectedNicknames.length > 0
+          ? selectedNicknames
+          : undefined;
+      void loadSummary(year, nicknames);
+    };
+
+    window.addEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
+    return () => {
+      window.removeEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
+    };
+  }, [canFilterByNickname, loadSummary, selectedNicknames, selectedYear]);
 
   const grandTotal = useMemo(
     () =>

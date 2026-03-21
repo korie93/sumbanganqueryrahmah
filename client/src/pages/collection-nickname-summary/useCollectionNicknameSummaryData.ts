@@ -9,7 +9,10 @@ import {
   normalizeNicknameTotals,
   type NicknameTotalSummary,
 } from "@/pages/collection-nickname-summary/utils";
-import { parseApiError } from "@/pages/collection/utils";
+import {
+  COLLECTION_DATA_CHANGED_EVENT,
+  parseApiError,
+} from "@/pages/collection/utils";
 
 function normalizeNicknameSelection(values: string[]) {
   return Array.from(
@@ -165,6 +168,41 @@ export function useCollectionNicknameSummaryData({
     setSelectedNicknames([]);
   }, []);
 
+  const loadSummary = useCallback(
+    async (from: string, to: string, nicknames: string[]) => {
+      const requestId = ++summaryRequestIdRef.current;
+      setLoadingSummary(true);
+      try {
+        const response = await getCollectionNicknameSummary({
+          from,
+          to,
+          nicknames,
+          summaryOnly: true,
+        });
+        if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
+        setNicknameTotals(normalizeNicknameTotals(response?.nicknameTotals));
+        setTotalAmount(Number(response?.totalAmount || 0));
+        setTotalRecords(Number(response?.totalRecords || 0));
+        setHasApplied(true);
+      } catch (error: unknown) {
+        if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
+        setNicknameTotals([]);
+        setTotalAmount(0);
+        setTotalRecords(0);
+        setHasApplied(false);
+        toast({
+          title: "Failed to Load Nickname Summary",
+          description: parseApiError(error),
+          variant: "destructive",
+        });
+      } finally {
+        if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
+        setLoadingSummary(false);
+      }
+    },
+    [toast],
+  );
+
   const apply = useCallback(async () => {
     if (!fromDate || !toDate) {
       toast({
@@ -191,36 +229,24 @@ export function useCollectionNicknameSummaryData({
       return;
     }
 
-    const requestId = ++summaryRequestIdRef.current;
-    setLoadingSummary(true);
-    try {
-      const response = await getCollectionNicknameSummary({
-        from: fromDate,
-        to: toDate,
-        nicknames: selectedNicknames,
-        summaryOnly: true,
-      });
-      if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
-      setNicknameTotals(normalizeNicknameTotals(response?.nicknameTotals));
-      setTotalAmount(Number(response?.totalAmount || 0));
-      setTotalRecords(Number(response?.totalRecords || 0));
-      setHasApplied(true);
-    } catch (error: unknown) {
-      if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
-      setNicknameTotals([]);
-      setTotalAmount(0);
-      setTotalRecords(0);
-      setHasApplied(false);
-      toast({
-        title: "Failed to Load Nickname Summary",
-        description: parseApiError(error),
-        variant: "destructive",
-      });
-    } finally {
-      if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
-      setLoadingSummary(false);
-    }
-  }, [fromDate, selectedNicknames, toDate, toast]);
+    await loadSummary(fromDate, toDate, selectedNicknames);
+  }, [fromDate, loadSummary, selectedNicknames, toDate, toast]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleCollectionDataChanged = () => {
+      if (!hasApplied || !fromDate || !toDate || selectedNicknames.length === 0) {
+        return;
+      }
+      void loadSummary(fromDate, toDate, selectedNicknames);
+    };
+
+    window.addEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
+    return () => {
+      window.removeEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
+    };
+  }, [fromDate, hasApplied, loadSummary, selectedNicknames, toDate]);
 
   const reset = useCallback(() => {
     summaryRequestIdRef.current += 1;

@@ -122,7 +122,7 @@ export function CollectionDailyFiltersCard({
             />
           </div>
           <div className="space-y-1">
-            <Label>User</Label>
+            <Label>Staff Nickname</Label>
             {canManage ? (
               <Popover open={userPopoverOpen} onOpenChange={onUserPopoverOpenChange}>
                 <PopoverTrigger asChild>
@@ -148,10 +148,10 @@ export function CollectionDailyFiltersCard({
                   {loadingUsers ? (
                     <div className="flex items-center justify-center gap-2 px-2 py-4 text-sm text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading users...
+                      Loading staff nicknames...
                     </div>
                   ) : users.length === 0 ? (
-                    <p className="px-2 py-3 text-sm text-muted-foreground">No users available.</p>
+                    <p className="px-2 py-3 text-sm text-muted-foreground">No staff nicknames available.</p>
                   ) : (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
@@ -164,7 +164,7 @@ export function CollectionDailyFiltersCard({
                             }}
                             disabled={loadingUsers}
                           />
-                          <span className="text-xs font-medium">Select all users</span>
+                          <span className="text-xs font-medium">Select all staff nicknames</span>
                         </div>
                         <Button
                           size="sm"
@@ -192,9 +192,7 @@ export function CollectionDailyFiltersCard({
                                 }
                                 disabled={loadingUsers}
                               />
-                              <span className="text-sm">
-                                {userItem.username} ({userItem.role})
-                              </span>
+                              <span className="text-sm">{userItem.username}</span>
                             </label>
                           );
                         })}
@@ -234,7 +232,7 @@ export function CollectionDailyFiltersCard({
               />
               {!canEditTarget ? (
                 <p className="text-xs text-muted-foreground">
-                  Select exactly one user to edit monthly target.
+                  Select exactly one staff nickname to edit monthly target.
                 </p>
               ) : null}
             </div>

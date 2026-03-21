@@ -1,10 +1,12 @@
 import { badRequest, forbidden, notFound } from "../../http/errors";
 import { verifyPassword } from "../../auth/passwords";
 import {
+  canUserAccessCollectionRecord,
   getAdminGroupNicknameValues,
   getAdminVisibleNicknameValues,
   hasNicknameValue,
   readNicknameFiltersFromQuery,
+  resolveCurrentCollectionNicknameFromSession,
 } from "../../routes/collection-access";
 import { removeCollectionReceiptFile, saveCollectionReceipt } from "../../routes/collection-receipt.service";
 import {
@@ -23,12 +25,17 @@ import {
   type CollectionReceiptPayload,
   type CollectionUpdatePayload,
 } from "../../routes/collection.validation";
-import { computeCollectionDailyTimeline } from "./collection-daily-utils";
+import {
+  aggregateCollectionDailyTimelines,
+  computeCollectionDailyTimeline,
+  getCollectionDailyStatusMessage,
+} from "./collection-daily-utils";
 import { CollectionServiceSupport, type ListQuery, type SummaryQuery } from "./collection-service-support";
 
 const COLLECTION_PURGE_RETENTION_MONTHS = 6;
 
 type DailyResolvedUser = {
+  id: string;
   username: string;
   role: string;
 };
@@ -45,12 +52,16 @@ type DailyOverviewComputation = {
     collectedAmount: number;
     balancedAmount: number;
     workingDays: number;
+    elapsedWorkingDays: number;
+    remainingWorkingDays: number;
     completedDays: number;
     incompleteDays: number;
     noCollectionDays: number;
     neutralDays: number;
     baseDailyTarget: number;
     dailyTarget: number;
+    expectedProgressAmount: number;
+    progressVarianceAmount: number;
     achievedAmount: number;
     remainingAmount: number;
     metDays: number;
@@ -127,35 +138,102 @@ export class CollectionRecordService extends CollectionServiceSupport {
 
     appendValues(query.usernames);
     appendValues(query.username);
+    appendValues(query.nicknames);
+    appendValues(query.nickname);
+    appendValues(query.staff);
     const normalized = normalizeCollectionStringList(rawValues)
       .map((value) => value.toLowerCase());
     return Array.from(new Set(normalized));
   }
 
+  private async listAvailableDailyUsers(user: { username: string; role: string }): Promise<DailyResolvedUser[]> {
+    const normalizeDailyUser = (
+      id: string | null | undefined,
+      username: string | null | undefined,
+      role: string | null | undefined,
+    ): DailyResolvedUser | null => {
+      const normalizedUsername = normalizeCollectionText(username);
+      if (!normalizedUsername) return null;
+      return {
+        id: normalizeCollectionText(id) || normalizedUsername.toLowerCase(),
+        username: normalizedUsername,
+        role: normalizeCollectionText(role) || "user",
+      };
+    };
+
+    if (user.role === "user") {
+      const currentNickname = await resolveCurrentCollectionNicknameFromSession(this.storage, user as any);
+      if (!currentNickname) {
+        return [];
+      }
+      const nicknameProfile = await this.storage.getCollectionStaffNicknameByName(currentNickname);
+      const resolved = normalizeDailyUser(
+        nicknameProfile?.id,
+        nicknameProfile?.nickname || currentNickname,
+        nicknameProfile?.roleScope || user.role,
+      );
+      return resolved ? [resolved] : [];
+    }
+
+    if (user.role === "admin") {
+      const visibleNicknames = await getAdminVisibleNicknameValues(this.storage, user as any);
+      if (visibleNicknames.length === 0) {
+        return [];
+      }
+      const nicknameProfiles = await this.storage.getCollectionStaffNicknames();
+      const profileByLower = new Map(
+        nicknameProfiles.map((item) => [item.nickname.toLowerCase(), item]),
+      );
+      return visibleNicknames
+        .map((nickname) => {
+          const matched = profileByLower.get(nickname.toLowerCase());
+          return normalizeDailyUser(
+            matched?.id,
+            matched?.nickname || nickname,
+            matched?.roleScope || "user",
+          );
+        })
+        .filter((item): item is DailyResolvedUser => Boolean(item));
+    }
+
+    const nicknameProfiles = await this.storage.getCollectionStaffNicknames();
+    return nicknameProfiles
+      .map((item) => normalizeDailyUser(item.id, item.nickname, item.roleScope))
+      .filter((item): item is DailyResolvedUser => Boolean(item));
+  }
+
   private resolveDailySelectedUsers(
     user: { username: string; role: string },
     requestedUsernames: string[],
-    availableUsers: Array<{ username: string; role: string }>,
+    availableUsers: DailyResolvedUser[],
+    preferredUsername?: string | null,
   ): DailyResolvedUser[] {
     const userMap = new Map<string, DailyResolvedUser>(
-      availableUsers.map((item) => [item.username.toLowerCase(), { username: item.username.toLowerCase(), role: item.role }]),
+      availableUsers.map((item) => [
+        item.username.toLowerCase(),
+        item,
+      ]),
     );
     if (user.role === "user") {
-      const ownUsername = user.username.toLowerCase();
+      const ownUsername = normalizeCollectionText(preferredUsername).toLowerCase();
+      if (!ownUsername) {
+        throw badRequest("Current staff nickname session could not be resolved.");
+      }
       if (requestedUsernames.length > 0 && requestedUsernames.some((value) => value !== ownUsername)) {
         throw forbidden("User hanya boleh melihat data sendiri.");
       }
       const ownUser = userMap.get(ownUsername);
       if (!ownUser) {
-        throw badRequest("User not found.");
+        throw badRequest("Staff nickname not found.");
       }
       return [ownUser];
     }
 
+    const preferredUsernameLower = normalizeCollectionText(preferredUsername).toLowerCase();
     const targetUsernames = requestedUsernames.length > 0
       ? requestedUsernames
-      : (userMap.has(user.username.toLowerCase())
-          ? [user.username.toLowerCase()]
+      : (preferredUsernameLower && userMap.has(preferredUsernameLower)
+          ? [preferredUsernameLower]
           : availableUsers.length > 0
             ? [availableUsers[0].username.toLowerCase()]
             : []);
@@ -164,16 +242,70 @@ export class CollectionRecordService extends CollectionServiceSupport {
     for (const username of targetUsernames) {
       const matched = userMap.get(username.toLowerCase());
       if (!matched) {
-        throw badRequest(`Invalid username filter: ${username}`);
+        throw badRequest(`Invalid staff nickname filter: ${username}`);
       }
       selectedUsers.push(matched);
     }
 
     if (selectedUsers.length === 0) {
-      throw badRequest("No users selected.");
+      throw badRequest("No staff nicknames selected.");
     }
 
     return selectedUsers;
+  }
+
+  private async getDailyTargetForOwner(
+    username: string,
+    year: number,
+    month: number,
+    fallbackUsernames: string[] = [],
+  ) {
+    const normalizedFallbacks = Array.from(
+      new Set(
+        fallbackUsernames
+          .map((value) => normalizeCollectionText(value).toLowerCase())
+          .filter((value) => value && value !== username.toLowerCase()),
+      ),
+    );
+
+    const directTarget = await this.storage.getCollectionDailyTarget({ username, year, month });
+    if (directTarget) {
+      return directTarget;
+    }
+
+    for (const fallbackUsername of normalizedFallbacks) {
+      const fallbackTarget = await this.storage.getCollectionDailyTarget({
+        username: fallbackUsername,
+        year,
+        month,
+      });
+      if (fallbackTarget) {
+        return fallbackTarget;
+      }
+    }
+
+    return undefined;
+  }
+
+  private async resolveUserOwnedRecordFilters(
+    user: { username: string; role: string; activityId?: string },
+  ): Promise<{ createdByLogin?: string; nicknames?: string[] }> {
+    if (user.role !== "user") {
+      return {};
+    }
+
+    const currentNickname = normalizeCollectionText(
+      await resolveCurrentCollectionNicknameFromSession(this.storage, user as any),
+    );
+    if (currentNickname) {
+      return {
+        nicknames: [currentNickname],
+      };
+    }
+
+    return {
+      createdByLogin: user.username,
+    };
   }
 
   private async buildDailyOverviewComputation(
@@ -182,26 +314,39 @@ export class CollectionRecordService extends CollectionServiceSupport {
     month: number,
     query: ListQuery,
   ): Promise<DailyOverviewComputation> {
-    const users = await this.storage.listCollectionDailyUsers();
+    const [users, currentNickname] = await Promise.all([
+      this.listAvailableDailyUsers(user),
+      resolveCurrentCollectionNicknameFromSession(this.storage, user as any),
+    ]);
     const selectedUsers = this.resolveDailySelectedUsers(
       user,
       this.parseRequestedDailyUsernames(query),
-      users.map((item) => ({ username: item.username.toLowerCase(), role: item.role })),
+      users,
+      currentNickname,
     );
 
     const daysInMonth = new Date(year, month, 0).getDate();
     const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
     const monthEnd = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
     const calendarRows = await this.storage.listCollectionDailyCalendar({ year, month });
+    const currentNicknameLower = normalizeCollectionText(currentNickname).toLowerCase();
+    const currentUsernameLower = normalizeCollectionText(user.username).toLowerCase();
 
     const bundles: DailyOverviewBundle[] = await Promise.all(
       selectedUsers.map(async (selectedUser) => {
+        const fallbackUsernames =
+          currentNicknameLower &&
+          currentUsernameLower &&
+          selectedUser.username.toLowerCase() === currentNicknameLower &&
+          currentNicknameLower !== currentUsernameLower
+            ? [currentUsernameLower]
+            : [];
         const [target, records] = await Promise.all([
-          this.storage.getCollectionDailyTarget({ username: selectedUser.username, year, month }),
+          this.getDailyTargetForOwner(selectedUser.username, year, month, fallbackUsernames),
           this.storage.listCollectionRecords({
             from: monthStart,
             to: monthEnd,
-            createdByLogin: selectedUser.username,
+            nicknames: [selectedUser.username],
             limit: 5000,
             offset: 0,
           }),
@@ -229,80 +374,15 @@ export class CollectionRecordService extends CollectionServiceSupport {
         };
       }),
     );
-
-    const monthlyTarget = roundMoney(
-      bundles.reduce((sum, bundle) => sum + bundle.timeline.summary.monthlyTarget, 0),
+    const aggregate = aggregateCollectionDailyTimelines(
+      bundles.map((bundle) => bundle.timeline),
     );
-    const collectedAmount = roundMoney(
-      bundles.reduce((sum, bundle) => sum + bundle.timeline.summary.collectedAmount, 0),
-    );
-    const balancedAmount = roundMoney(Math.max(0, monthlyTarget - collectedAmount));
-    const baseDailyTarget = roundMoney(
-      bundles.reduce((sum, bundle) => sum + bundle.timeline.summary.baseDailyTarget, 0),
-    );
-    const workingDays = bundles[0]?.timeline.summary.workingDays || 0;
-
-    let completedDays = 0;
-    let incompleteDays = 0;
-    let noCollectionDays = 0;
-    let neutralDays = 0;
-
-    const days = Array.from({ length: daysInMonth }, (_, index) => {
-      const dayEntries = bundles.map((bundle) => bundle.timeline.days[index]);
-      const sample = dayEntries[0];
-      const amount = roundMoney(dayEntries.reduce((sum, entry) => sum + entry.amount, 0));
-      const target = roundMoney(dayEntries.reduce((sum, entry) => sum + entry.target, 0));
-      const customerCount = dayEntries.reduce((sum, entry) => sum + entry.customerCount, 0);
-
-      let status: "green" | "yellow" | "red" | "neutral" = "neutral";
-      if (!sample?.isWorkingDay) {
-        status = "neutral";
-        neutralDays += 1;
-      } else if (amount <= 0) {
-        status = "red";
-        noCollectionDays += 1;
-      } else if (amount < target) {
-        status = "yellow";
-        incompleteDays += 1;
-      } else {
-        status = "green";
-        completedDays += 1;
-      }
-
-      return {
-        day: sample?.day ?? index + 1,
-        date: sample?.date ?? `${year}-${String(month).padStart(2, "0")}-${String(index + 1).padStart(2, "0")}`,
-        amount,
-        target,
-        isWorkingDay: sample?.isWorkingDay ?? false,
-        isHoliday: sample?.isHoliday ?? false,
-        holidayName: sample?.holidayName ?? null,
-        customerCount,
-        status,
-      };
-    });
 
     return {
       selectedUsers,
-      summary: {
-        monthlyTarget,
-        collectedAmount,
-        balancedAmount,
-        workingDays,
-        completedDays,
-        incompleteDays,
-        noCollectionDays,
-        neutralDays,
-        baseDailyTarget,
-        dailyTarget: baseDailyTarget,
-        achievedAmount: collectedAmount,
-        remainingAmount: balancedAmount,
-        metDays: completedDays,
-        yellowDays: incompleteDays,
-        redDays: noCollectionDays,
-      },
-      daysInMonth,
-      days,
+      summary: aggregate.summary,
+      daysInMonth: aggregate.daysInMonth || daysInMonth,
+      days: aggregate.days,
     };
   }
 
@@ -398,6 +478,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
     const yearRaw = normalizeCollectionText(query.year);
     const requestedNicknameFilters = readNicknameFiltersFromQuery(query);
     const parsedYear = yearRaw ? Number.parseInt(yearRaw, 10) : new Date().getFullYear();
+    const userOwnedRecordFilters = await this.resolveUserOwnedRecordFilters(user);
 
     if (!Number.isInteger(parsedYear) || parsedYear < 2000 || parsedYear > 2100) {
       throw badRequest("Invalid year.");
@@ -435,8 +516,8 @@ export class CollectionRecordService extends CollectionServiceSupport {
 
     const summary = await this.storage.getCollectionMonthlySummary({
       year: parsedYear,
-      nicknames: nicknameFilters,
-      createdByLogin: user.role === "user" ? user.username : undefined,
+      nicknames: user.role === "user" ? userOwnedRecordFilters.nicknames : nicknameFilters,
+      createdByLogin: user.role === "user" ? userOwnedRecordFilters.createdByLogin : undefined,
     });
 
     return {
@@ -460,6 +541,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
     const offset = Number.isInteger(offsetRaw)
       ? Math.max(0, offsetRaw)
       : 0;
+    const userOwnedRecordFilters = await this.resolveUserOwnedRecordFilters(user);
 
     if (from && !isValidCollectionDate(from)) throw badRequest("Invalid from date.");
     if (to && !isValidCollectionDate(to)) throw badRequest("Invalid to date.");
@@ -502,8 +584,8 @@ export class CollectionRecordService extends CollectionServiceSupport {
       from: from || undefined,
       to: to || undefined,
       search: search || undefined,
-      createdByLogin: user.role === "user" ? user.username : undefined,
-      nicknames: nicknameFilters,
+      createdByLogin: user.role === "user" ? userOwnedRecordFilters.createdByLogin : undefined,
+      nicknames: user.role === "user" ? userOwnedRecordFilters.nicknames : nicknameFilters,
     };
     const [aggregate, records] = await Promise.all([
       this.storage.summarizeCollectionRecords(baseFilters),
@@ -632,7 +714,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
     if (user.role !== "admin" && user.role !== "superuser") {
       throw forbidden("Collection daily user list hanya untuk admin atau superuser.");
     }
-    const users = await this.storage.listCollectionDailyUsers();
+    const users = await this.listAvailableDailyUsers(user);
     return {
       ok: true as const,
       users,
@@ -649,26 +731,27 @@ export class CollectionRecordService extends CollectionServiceSupport {
     }
 
     const body = ensureLooseObject(bodyRaw) || {};
-    const username = normalizeCollectionText(body.username).toLowerCase();
+    const username = normalizeCollectionText(body.nickname ?? body.username);
+    const normalizedUsername = username.toLowerCase();
     const year = Number.parseInt(normalizeCollectionText(body.year), 10);
     const month = Number.parseInt(normalizeCollectionText(body.month), 10);
     const monthlyTarget = Number(body.monthlyTarget);
 
-    if (!username) throw badRequest("Username is required.");
+    if (!normalizedUsername) throw badRequest("Staff nickname is required.");
     if (!Number.isInteger(year) || year < 2000 || year > 2100) throw badRequest("Invalid year.");
     if (!Number.isInteger(month) || month < 1 || month > 12) throw badRequest("Invalid month.");
     if (!Number.isFinite(monthlyTarget) || monthlyTarget < 0) {
       throw badRequest("Monthly target must be a non-negative number.");
     }
 
-    const users = await this.storage.listCollectionDailyUsers();
-    const foundUser = users.some((item) => item.username.toLowerCase() === username);
+    const users = await this.listAvailableDailyUsers(user);
+    const foundUser = users.some((item) => item.username.toLowerCase() === normalizedUsername);
     if (!foundUser) {
-      throw badRequest("User not found.");
+      throw badRequest("Staff nickname not found.");
     }
 
     const target = await this.storage.upsertCollectionDailyTarget({
-      username,
+      username: normalizedUsername,
       year,
       month,
       monthlyTarget,
@@ -742,10 +825,11 @@ export class CollectionRecordService extends CollectionServiceSupport {
     if (!Number.isInteger(month) || month < 1 || month > 12) throw badRequest("Invalid month.");
     const computation = await this.buildDailyOverviewComputation(user, year, month, query);
     const selectedUsernames = computation.selectedUsers.map((item) => item.username);
+    const currentNickname = await resolveCurrentCollectionNicknameFromSession(this.storage, user as any);
 
     return {
       ok: true as const,
-      username: selectedUsernames[0] || user.username.toLowerCase(),
+      username: selectedUsernames[0] || normalizeCollectionText(currentNickname) || user.username.toLowerCase(),
       usernames: selectedUsernames,
       role: computation.selectedUsers.length === 1 ? computation.selectedUsers[0].role : "mixed",
       month: {
@@ -788,7 +872,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
         this.storage.listCollectionRecords({
           from: date,
           to: date,
-          createdByLogin: username,
+          nicknames: [username],
           limit: 5000,
           offset: 0,
         })),
@@ -815,25 +899,14 @@ export class CollectionRecordService extends CollectionServiceSupport {
       collectionStaffNickname: record.collectionStaffNickname,
     }));
 
-    let status: "green" | "yellow" | "red" | "neutral" = "neutral";
-    let message = "";
-    if (!dayOverview.isWorkingDay) {
-      status = "neutral";
-      message = "Holiday / non-working day.";
-    } else if (dayOverview.amount <= 0) {
-      status = "red";
-      message = "No collection on this working day.";
-    } else if (dayOverview.amount < dayOverview.target) {
-      status = "yellow";
-      message = "Collection recorded but daily target not achieved.";
-    } else {
-      status = "green";
-      message = "Daily target achieved.";
-    }
+    const status = dayOverview.status;
+    const message = getCollectionDailyStatusMessage(status);
 
     return {
       ok: true as const,
-      username: selectedUsernames[0] || user.username.toLowerCase(),
+      username: selectedUsernames[0] || normalizeCollectionText(
+        await resolveCurrentCollectionNicknameFromSession(this.storage, user as any),
+      ) || user.username.toLowerCase(),
       usernames: selectedUsernames,
       date,
       status,
@@ -950,6 +1023,9 @@ export class CollectionRecordService extends CollectionServiceSupport {
     const existing = await this.storage.getCollectionRecordById(id);
     if (!existing) {
       throw notFound("Collection record not found.");
+    }
+    if (!(await canUserAccessCollectionRecord(this.storage, user, existing))) {
+      throw forbidden("Forbidden");
     }
 
     const uploadedReceipts: Array<Awaited<ReturnType<typeof saveCollectionReceipt>>> = [];
@@ -1089,6 +1165,9 @@ export class CollectionRecordService extends CollectionServiceSupport {
     const existing = await this.storage.getCollectionRecordById(id);
     if (!existing) {
       throw notFound("Collection record not found.");
+    }
+    if (!(await canUserAccessCollectionRecord(this.storage, user, existing))) {
+      throw forbidden("Forbidden");
     }
 
     const removedReceipts = await this.storage.deleteAllCollectionRecordReceipts(id);

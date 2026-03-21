@@ -72,7 +72,9 @@ function createCollectionStorageDouble(options: {
   };
 }
 
-function createCoreCollectionStorageDouble() {
+function createCoreCollectionStorageDouble(options?: {
+  sessionNickname?: string | null;
+}) {
   const auditLogs: AuditEntry[] = [];
   const createCalls: Array<Record<string, unknown>> = [];
   const listCalls: Array<Record<string, unknown>> = [];
@@ -105,6 +107,19 @@ function createCoreCollectionStorageDouble() {
   records.set(seedRecord.id, seedRecord);
 
   const storage = {
+    getCollectionNicknameSessionByActivity: async (activityId: string) => {
+      if (!options?.sessionNickname) {
+        return null;
+      }
+      return {
+        activityId,
+        username: "staff.user",
+        userRole: "user",
+        nickname: options.sessionNickname,
+        verifiedAt: new Date("2026-03-10T00:00:00.000Z"),
+        updatedAt: new Date("2026-03-10T00:00:00.000Z"),
+      };
+    },
     getCollectionStaffNicknameByName: async (nickname: string) =>
       nickname === activeNickname.nickname ? activeNickname : null,
     createCollectionRecord: async (data: Record<string, unknown>) => {
@@ -169,7 +184,9 @@ function createCoreCollectionStorageDouble() {
   };
 }
 
-function createCollectionSummaryStorageDouble() {
+function createCollectionSummaryStorageDouble(options?: {
+  sessionNickname?: string | null;
+}) {
   const monthlySummaryCalls: Array<Record<string, unknown>> = [];
   const nicknameActiveChecks: string[] = [];
   const nicknameSummaryCalls: Array<Record<string, unknown>> = [];
@@ -195,6 +212,19 @@ function createCollectionSummaryStorageDouble() {
   const nicknameSet = new Set(activeNicknames.map((item) => item.nickname.toLowerCase()));
 
   const storage = {
+    getCollectionNicknameSessionByActivity: async (activityId: string) => {
+      if (!options?.sessionNickname) {
+        return null;
+      }
+      return {
+        activityId,
+        username: "staff.user",
+        userRole: "user",
+        nickname: options.sessionNickname,
+        verifiedAt: new Date("2026-03-10T00:00:00.000Z"),
+        updatedAt: new Date("2026-03-10T00:00:00.000Z"),
+      };
+    },
     getCollectionStaffNicknames: async (_filters?: Record<string, unknown>) => activeNicknames,
     getCollectionMonthlySummary: async (filters: Record<string, unknown>) => {
       monthlySummaryCalls.push(filters);
@@ -661,6 +691,42 @@ test("GET /api/collection/list applies pagination and user-scoped filters", asyn
   }
 });
 
+test("GET /api/collection/list scopes user requests to the active staff nickname session", async () => {
+  const { storage, listCalls, summaryCalls } = createCoreCollectionStorageDouble({
+    sessionNickname: "Collector Alpha",
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+      activityId: "activity-user-collection-1",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/list?from=2026-03-01&to=2026-03-31`);
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(summaryCalls.length, 1);
+    assert.equal(summaryCalls[0].createdByLogin, undefined);
+    assert.deepEqual(summaryCalls[0].nicknames, ["Collector Alpha"]);
+    assert.equal(listCalls.length, 1);
+    assert.equal(listCalls[0].createdByLogin, undefined);
+    assert.deepEqual(listCalls[0].nicknames, ["Collector Alpha"]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("PATCH /api/collection/:id updates a record and writes an audit log", async () => {
   const { storage, updateCalls, auditLogs } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
@@ -697,6 +763,44 @@ test("PATCH /api/collection/:id updates a record and writes an audit log", async
     assert.equal(updateCalls[0].data.amount, 55.3);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "COLLECTION_RECORD_UPDATED");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/collection/:id rejects user updates when the active staff nickname no longer owns the record", async () => {
+  const { storage, updateCalls, auditLogs } = createCoreCollectionStorageDouble({
+    sessionNickname: "Collector Beta",
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+      activityId: "activity-user-collection-2",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        amount: "55.30",
+      }),
+    });
+
+    assert.equal(response.status, 403);
+    assert.equal(updateCalls.length, 0);
+    assert.equal(auditLogs.length, 0);
   } finally {
     await stopTestServer(server);
   }
@@ -767,6 +871,39 @@ test("GET /api/collection/summary passes year and nickname filters to the summar
     assert.equal(monthlySummaryCalls[0].year, 2026);
     assert.deepEqual(monthlySummaryCalls[0].nicknames, ["Collector Alpha", "Collector Beta"]);
     assert.equal(monthlySummaryCalls[0].createdByLogin, undefined);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/collection/summary scopes user requests to the active staff nickname session", async () => {
+  const { storage, monthlySummaryCalls } = createCollectionSummaryStorageDouble({
+    sessionNickname: "Collector Alpha",
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+      activityId: "activity-user-summary-1",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/summary?year=2026`);
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(monthlySummaryCalls.length, 1);
+    assert.equal(monthlySummaryCalls[0].createdByLogin, undefined);
+    assert.deepEqual(monthlySummaryCalls[0].nicknames, ["Collector Alpha"]);
   } finally {
     await stopTestServer(server);
   }

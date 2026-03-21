@@ -49,6 +49,7 @@ test("reconcileCollectionDailySelectedUsers keeps valid selections", () => {
   ];
   assert.deepEqual(reconcileCollectionDailySelectedUsers(["ALICE"], users), ["ALICE"]);
   assert.deepEqual(reconcileCollectionDailySelectedUsers(["carol"], users), ["alice"]);
+  assert.deepEqual(reconcileCollectionDailySelectedUsers([], users, "bob"), ["bob"]);
   assert.deepEqual(reconcileCollectionDailySelectedUsers([], users), ["alice"]);
   assert.deepEqual(reconcileCollectionDailySelectedUsers(["carol"], []), []);
 });
@@ -74,7 +75,7 @@ test("formatCollectionDailySelectedUsersLabel returns business-friendly labels",
       selectedUsernames: [],
       users,
     }),
-    "Select users",
+    "Select staff nicknames",
   );
   assert.equal(
     formatCollectionDailySelectedUsersLabel({
@@ -83,7 +84,7 @@ test("formatCollectionDailySelectedUsersLabel returns business-friendly labels",
       selectedUsernames: ["alice"],
       users,
     }),
-    "alice (admin)",
+    "alice",
   );
   assert.equal(
     formatCollectionDailySelectedUsersLabel({
@@ -92,7 +93,7 @@ test("formatCollectionDailySelectedUsersLabel returns business-friendly labels",
       selectedUsernames: ["alice", "bob"],
       users,
     }),
-    "2 users selected",
+    "2 staff nicknames selected",
   );
 });
 
@@ -130,7 +131,7 @@ test("getCollectionDailyEmptyOverviewMessage returns the correct empty-state cop
       currentUsername: "admin1",
       selectedUsernames: [],
     }),
-    "Select at least one user to view Collection Daily.",
+    "Select at least one staff nickname to view Collection Daily.",
   );
   assert.equal(
     getCollectionDailyEmptyOverviewMessage({
@@ -138,7 +139,7 @@ test("getCollectionDailyEmptyOverviewMessage returns the correct empty-state cop
       currentUsername: "",
       selectedUsernames: ["staff1"],
     }),
-    "Current user session could not be resolved.",
+    "Current staff nickname session could not be resolved.",
   );
   assert.equal(
     getCollectionDailyEmptyOverviewMessage({
@@ -162,12 +163,16 @@ test("mapCollectionDailyEditableCalendarDays normalizes nullable holiday names",
       collectedAmount: 100,
       balancedAmount: 900,
       workingDays: 20,
+      elapsedWorkingDays: 2,
+      remainingWorkingDays: 18,
       completedDays: 1,
       incompleteDays: 1,
       noCollectionDays: 1,
       neutralDays: 0,
       baseDailyTarget: 50,
       dailyTarget: 50,
+      expectedProgressAmount: 100,
+      progressVarianceAmount: 0,
       achievedAmount: 100,
       remainingAmount: 900,
       metDays: 1,
