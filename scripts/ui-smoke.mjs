@@ -237,12 +237,33 @@ const checkCollectionDailyPage = async (page, tracker) => {
     await userTrigger.click();
     const userPopover = page.getByTestId("collection-daily-user-popover");
     await userPopover.waitFor();
-    await page.getByRole("button", { name: "Clear" }).waitFor();
-    await page.getByRole("button", { name: "Clear" }).click();
+    const clearButton = userPopover.getByRole("button", { name: "Clear" });
+    const noUsersMessage = userPopover.getByText(/No staff nicknames available\./i);
+
+    let hasReadyState = false;
+    const startedAt = Date.now();
+    while (!hasReadyState && Date.now() - startedAt < 10_000) {
+      const clearVisible = await clearButton.isVisible().catch(() => false);
+      const noUsersVisible = await noUsersMessage.isVisible().catch(() => false);
+      hasReadyState = clearVisible || noUsersVisible;
+      if (!hasReadyState) {
+        await page.waitForTimeout(100);
+      }
+    }
+
+    assert(
+      hasReadyState,
+      "Collection Daily user popover did not resolve to a ready state (user list or empty message)",
+    );
+
+    const canClearSelection = await clearButton.isVisible().catch(() => false);
+    if (canClearSelection) {
+      await clearButton.click();
+    }
 
     const userRows = userPopover.locator("label");
     const userCount = await userRows.count();
-    if (userCount > 0) {
+    if (canClearSelection && userCount > 0) {
       const emptySelectionPattern = /Select (users|staff nicknames)/i;
       const multiSelectionPattern = /(\d+)\s+(users|staff nicknames)\s+selected/i;
       assert(
@@ -269,6 +290,11 @@ const checkCollectionDailyPage = async (page, tracker) => {
           "Collection Daily should reflect a non-empty multi-user state after select-all",
         );
       }
+    } else if (userCount === 0) {
+      assert(
+        await noUsersMessage.isVisible().catch(() => false),
+        "Collection Daily popover has no user rows but did not show the expected empty-state message",
+      );
     }
 
     await page.keyboard.press("Escape");
