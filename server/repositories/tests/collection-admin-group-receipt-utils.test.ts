@@ -221,6 +221,10 @@ test("createCollectionRecordReceiptRows inserts receipts and reloads them by gen
     { rows: [] },
     { rows: [] },
     {
+      rows: [{ storage_path: "uploads/one.png" }],
+    },
+    { rows: [] },
+    {
       rows: [
         {
           id: "receipt-1",
@@ -265,9 +269,11 @@ test("createCollectionRecordReceiptRows inserts receipts and reloads them by gen
 
   assert.equal(receipts.length, 2);
   assert.equal(receipts[1]?.originalFileName, "two.pdf");
-  assert.equal(queries.length, 3);
+  assert.equal(queries.length, 5);
   assert.match(collectSqlText(queries[0]), /INSERT INTO public\.collection_record_receipts/i);
-  assert.match(collectSqlText(queries[2]), /WHERE id IN/i);
+  assert.match(collectSqlText(queries[2]), /SELECT storage_path/i);
+  assert.match(collectSqlText(queries[3]), /UPDATE public\.collection_records/i);
+  assert.match(collectSqlText(queries[4]), /WHERE id IN/i);
 });
 
 test("getCollectionRecordReceiptByIdForRecord and delete receipt helpers short-circuit safely and return deleted rows", async () => {
@@ -311,6 +317,8 @@ test("getCollectionRecordReceiptByIdForRecord and delete receipt helpers short-c
       ],
     },
     { rows: [] },
+    { rows: [] },
+    { rows: [] },
   ]);
 
   const single = await getCollectionRecordReceiptByIdForRecord(executor, "record-1", "receipt-1");
@@ -318,8 +326,10 @@ test("getCollectionRecordReceiptByIdForRecord and delete receipt helpers short-c
 
   assert.equal(single?.id, "receipt-1");
   assert.equal(deleted.length, 1);
-  assert.equal(queries.length, 3);
+  assert.equal(queries.length, 5);
   assert.match(collectSqlText(queries[2]), /DELETE FROM public\.collection_record_receipts/i);
+  assert.match(collectSqlText(queries[3]), /SELECT storage_path/i);
+  assert.match(collectSqlText(queries[4]), /UPDATE public\.collection_records/i);
 });
 
 test("deleteAllCollectionRecordReceiptRows deletes only after loading existing receipts", async () => {
@@ -349,12 +359,16 @@ test("deleteAllCollectionRecordReceiptRows deletes only after loading existing r
       ],
     },
     { rows: [] },
+    { rows: [] },
+    { rows: [] },
   ]);
 
   const deleted = await deleteAllCollectionRecordReceiptRows(executor, "record-1");
 
   assert.equal(deleted.length, 2);
-  assert.equal(queries.length, 2);
+  assert.equal(queries.length, 4);
   assert.match(collectSqlText(queries[0]), /WHERE collection_record_id =/i);
   assert.match(collectSqlText(queries[1]), /DELETE FROM public\.collection_record_receipts/i);
+  assert.match(collectSqlText(queries[2]), /SELECT storage_path/i);
+  assert.match(collectSqlText(queries[3]), /UPDATE public\.collection_records/i);
 });
