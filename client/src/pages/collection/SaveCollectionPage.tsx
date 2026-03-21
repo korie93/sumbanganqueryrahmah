@@ -14,6 +14,7 @@ import {
   isValidCustomerPhone,
   isPositiveAmount,
   isValidDate,
+  emitCollectionDataChanged,
   parseApiError,
   toReceiptPayload,
   validateReceiptFile,
@@ -130,6 +131,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         title: "Collection Saved",
         description: "Rekod collection berjaya disimpan.",
       });
+      emitCollectionDataChanged();
       clearForm();
       onSaved?.();
     } catch (error: unknown) {

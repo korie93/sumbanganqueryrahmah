@@ -9,7 +9,10 @@ import {
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useCollectionDailyReceiptViewer } from "@/pages/collection/useCollectionDailyReceiptViewer";
-import { parseApiError } from "@/pages/collection/utils";
+import {
+  COLLECTION_DATA_CHANGED_EVENT,
+  parseApiError,
+} from "@/pages/collection/utils";
 import type { EditableCalendarDay } from "@/pages/collection/CollectionDailyShared";
 
 const DAY_DETAILS_PAGE_SIZE = 10;
@@ -22,6 +25,10 @@ type UseCollectionDailyDataOptions = {
   selectedUsernames: string[];
   selectedQueryUsers?: string[];
   canEditTarget: boolean;
+};
+
+type LoadCollectionDailyOverviewOptions = {
+  preserveSelection?: boolean;
 };
 
 export function shouldLoadCollectionDailyOverview(options: {
@@ -42,10 +49,10 @@ export function getCollectionDailyEmptyOverviewMessage(options: {
 }) {
   const { canManage, currentUsername, selectedUsernames } = options;
   if (canManage && selectedUsernames.length === 0) {
-    return "Select at least one user to view Collection Daily.";
+    return "Select at least one staff nickname to view Collection Daily.";
   }
   if (!canManage && !currentUsername) {
-    return "Current user session could not be resolved.";
+    return "Current staff nickname session could not be resolved.";
   }
   return "No overview data found.";
 }
@@ -111,7 +118,10 @@ export function useCollectionDailyData({
     receiptPreviewDialogProps,
   } = useCollectionDailyReceiptViewer();
 
-  const loadOverview = useCallback(async () => {
+  const loadOverview = useCallback(async (
+    options: LoadCollectionDailyOverviewOptions = {},
+  ): Promise<boolean> => {
+    const preserveSelection = options.preserveSelection === true;
     if (
       !shouldLoadCollectionDailyOverview({
         canManage,
@@ -120,8 +130,12 @@ export function useCollectionDailyData({
       })
     ) {
       setOverview(null);
-      closeReceiptViewer();
-      return;
+      if (!preserveSelection) {
+        setSelectedDate(null);
+        setDayDetails(null);
+        closeReceiptViewer();
+      }
+      return false;
     }
 
     const requestId = overviewRequestRef.current + 1;
@@ -133,23 +147,27 @@ export function useCollectionDailyData({
         month,
         usernames: selectedQueryUsers,
       });
-      if (overviewRequestRef.current !== requestId) return;
+      if (overviewRequestRef.current !== requestId) return false;
       setOverview(response);
       if (canEditTarget) {
         setMonthlyTargetInput(String(response.summary.monthlyTarget || 0));
       }
       setCalendarDays(mapCollectionDailyEditableCalendarDays(response));
-      setSelectedDate(null);
-      setDayDetails(null);
-      closeReceiptViewer();
+      if (!preserveSelection) {
+        setSelectedDate(null);
+        setDayDetails(null);
+        closeReceiptViewer();
+      }
+      return true;
     } catch (error: unknown) {
-      if (overviewRequestRef.current !== requestId) return;
+      if (overviewRequestRef.current !== requestId) return false;
       setOverview(null);
       toast({
         title: "Failed to Load Collection Daily",
         description: parseApiError(error),
         variant: "destructive",
       });
+      return false;
     } finally {
       if (overviewRequestRef.current === requestId) {
         setLoadingOverview(false);
@@ -212,12 +230,51 @@ export function useCollectionDailyData({
     [selectedQueryUsers, toast],
   );
 
+  const refreshCurrentView = useCallback(async () => {
+    const activeDate = selectedDate;
+    const activePage = dayDetails?.pagination.page || 1;
+    const didLoadOverview = await loadOverview({
+      preserveSelection: Boolean(activeDate),
+    });
+    if (didLoadOverview && activeDate) {
+      await loadDayDetails(activeDate, activePage);
+    }
+  }, [dayDetails?.pagination.page, loadDayDetails, loadOverview, selectedDate]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleCollectionDataChanged = () => {
+      if (
+        !shouldLoadCollectionDailyOverview({
+          canManage,
+          currentUsername,
+          selectedUsernames,
+        })
+      ) {
+        return;
+      }
+
+      void refreshCurrentView();
+    };
+
+    window.addEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
+    return () => {
+      window.removeEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
+    };
+  }, [
+    canManage,
+    currentUsername,
+    refreshCurrentView,
+    selectedUsernames,
+  ]);
+
   const saveMonthlyTarget = useCallback(async () => {
     if (!canManage) return;
     if (!canEditTarget) {
       toast({
-        title: "Select One User",
-        description: "Please select exactly one user to update monthly target.",
+        title: "Select One Staff Nickname",
+        description: "Please select exactly one staff nickname to update monthly target.",
         variant: "destructive",
       });
       return;
@@ -243,7 +300,7 @@ export function useCollectionDailyData({
         title: "Target Saved",
         description: "Monthly target has been updated.",
       });
-      await loadOverview();
+      await refreshCurrentView();
     } catch (error: unknown) {
       toast({
         title: "Failed to Save Target",
@@ -253,7 +310,7 @@ export function useCollectionDailyData({
     } finally {
       setSavingTarget(false);
     }
-  }, [canEditTarget, canManage, loadOverview, month, monthlyTargetInput, selectedUsernames, toast, year]);
+  }, [canEditTarget, canManage, month, monthlyTargetInput, refreshCurrentView, selectedUsernames, toast, year]);
 
   const saveCalendar = useCallback(async () => {
     if (!calendarDays.length) return;
@@ -268,7 +325,7 @@ export function useCollectionDailyData({
         title: "Calendar Saved",
         description: "Working days and holiday settings have been updated.",
       });
-      await loadOverview();
+      await refreshCurrentView();
     } catch (error: unknown) {
       toast({
         title: "Failed to Save Calendar",
@@ -278,7 +335,7 @@ export function useCollectionDailyData({
     } finally {
       setSavingCalendar(false);
     }
-  }, [calendarDays, loadOverview, month, toast, year]);
+  }, [calendarDays, month, refreshCurrentView, toast, year]);
 
   const updateEditableDay = useCallback((dayNumber: number, patch: Partial<EditableCalendarDay>) => {
     setCalendarDays((previous) =>
@@ -339,6 +396,7 @@ export function useCollectionDailyData({
     emptyOverviewMessage,
     firstWeekday,
     loadOverview,
+    refreshCurrentView,
     loadDayDetails,
     saveMonthlyTarget,
     saveCalendar,

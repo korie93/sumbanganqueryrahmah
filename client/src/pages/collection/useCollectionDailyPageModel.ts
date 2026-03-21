@@ -1,6 +1,9 @@
 import { useCallback, useMemo } from "react";
 import type { CollectionDailyDayDetailsResponse } from "@/lib/api";
-import { getCurrentUsername } from "@/pages/collection/utils";
+import {
+  getCurrentCollectionStaffNickname,
+  getCurrentUsername,
+} from "@/pages/collection/utils";
 import {
   MAX_COLLECTION_DAILY_YEAR,
   MIN_COLLECTION_DAILY_YEAR,
@@ -19,7 +22,10 @@ type CollectionDailyDayRecord = CollectionDailyDayDetailsResponse["records"][num
 export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageModelOptions) {
   const now = useMemo(() => new Date(), []);
   const canManage = role === "admin" || role === "superuser";
-  const currentUsername = useMemo(() => getCurrentUsername(), []);
+  const currentUsername = useMemo(
+    () => getCurrentCollectionStaffNickname() || getCurrentUsername(),
+    [],
+  );
 
   const {
     year,
@@ -53,7 +59,7 @@ export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageMode
   const handleRefresh = useCallback(() => {
     const nextYear = commitYearInput();
     const nextMonth = commitMonthInput();
-    if (nextYear === year && nextMonth === month) void data.loadOverview();
+    if (nextYear === year && nextMonth === month) void data.refreshCurrentView();
   }, [commitMonthInput, commitYearInput, data, month, year]);
 
   const handleDaySelect = useCallback((date: string) => {

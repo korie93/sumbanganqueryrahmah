@@ -49,9 +49,9 @@ function buildCalendarMonth(year: number, month: number, workingDays: number[]) 
 }
 
 function createCollectionDailyService() {
-  const recordsByUser = new Map<string, RecordShape[]>([
+  const recordsByNickname = new Map<string, RecordShape[]>([
     [
-      "alpha",
+      "collector alpha",
       [
         {
           id: "alpha-1",
@@ -72,7 +72,7 @@ function createCollectionDailyService() {
               createdAt: new Date("2026-03-01T10:00:00.000Z"),
             },
           ],
-          createdByLogin: "alpha",
+          createdByLogin: "alpha.user",
           collectionStaffNickname: "Collector Alpha",
           createdAt: new Date("2026-03-01T10:00:00.000Z"),
         },
@@ -87,14 +87,14 @@ function createCollectionDailyService() {
           amount: "3000",
           receiptFile: null,
           receipts: [],
-          createdByLogin: "alpha",
+          createdByLogin: "alpha.user",
           collectionStaffNickname: "Collector Alpha",
           createdAt: new Date("2026-03-02T10:00:00.000Z"),
         },
       ],
     ],
     [
-      "beta",
+      "collector beta",
       [
         {
           id: "beta-1",
@@ -107,7 +107,7 @@ function createCollectionDailyService() {
           amount: "200",
           receiptFile: null,
           receipts: [],
-          createdByLogin: "beta",
+          createdByLogin: "diviya.user",
           collectionStaffNickname: "Collector Beta",
           createdAt: new Date("2026-03-01T11:00:00.000Z"),
         },
@@ -122,7 +122,7 @@ function createCollectionDailyService() {
           amount: "1500",
           receiptFile: null,
           receipts: [],
-          createdByLogin: "beta",
+          createdByLogin: "beta.user",
           collectionStaffNickname: "Collector Beta",
           createdAt: new Date("2026-03-02T11:00:00.000Z"),
         },
@@ -130,16 +130,48 @@ function createCollectionDailyService() {
     ],
   ]);
 
+  const nicknameProfiles = [
+    {
+      id: "nickname-alpha",
+      nickname: "Collector Alpha",
+      isActive: true,
+      roleScope: "user",
+      createdBy: "superuser",
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+    },
+    {
+      id: "nickname-beta",
+      nickname: "Collector Beta",
+      isActive: true,
+      roleScope: "user",
+      createdBy: "superuser",
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+    },
+  ];
+
   const storage = {
-    listCollectionDailyUsers: async () => [
-      { id: "user-alpha", username: "alpha", role: "user" },
-      { id: "user-beta", username: "beta", role: "user" },
-    ],
+    getCollectionStaffNicknames: async () => nicknameProfiles,
+    getCollectionStaffNicknameByName: async (nickname: string) =>
+      nicknameProfiles.find((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase()) || null,
+    getCollectionNicknameSessionByActivity: async (activityId: string) => {
+      if (activityId !== "activity-user-alpha") {
+        return null;
+      }
+      return {
+        activityId,
+        username: "alpha.user",
+        userRole: "user",
+        nickname: "Collector Alpha",
+        verifiedAt: new Date("2026-03-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-03-01T00:00:00.000Z"),
+      };
+    },
     getCollectionDailyTarget: async (params: { username: string }) => {
-      if (params.username === "alpha") {
+      const normalized = String(params.username || "").toLowerCase();
+      if (normalized === "collector alpha") {
         return {
           id: "target-alpha",
-          username: "alpha",
+          username: "collector alpha",
           year: 2026,
           month: 3,
           monthlyTarget: 4000,
@@ -149,10 +181,10 @@ function createCollectionDailyService() {
           updatedAt: new Date("2026-03-01T00:00:00.000Z"),
         };
       }
-      if (params.username === "beta") {
+      if (normalized === "collector beta") {
         return {
           id: "target-beta",
-          username: "beta",
+          username: "collector beta",
           year: 2026,
           month: 3,
           monthlyTarget: 2000,
@@ -169,13 +201,13 @@ function createCollectionDailyService() {
     listCollectionRecords: async (filters?: {
       from?: string;
       to?: string;
-      createdByLogin?: string;
+      nicknames?: string[];
     }) => {
-      const username = String(filters?.createdByLogin || "").toLowerCase();
-      const userRecords = recordsByUser.get(username) || [];
+      const nickname = String(filters?.nicknames?.[0] || "").toLowerCase();
+      const records = recordsByNickname.get(nickname) || [];
       const from = String(filters?.from || "");
       const to = String(filters?.to || "");
-      return userRecords.filter((record) => {
+      return records.filter((record) => {
         if (from && record.paymentDate < from) return false;
         if (to && record.paymentDate > to) return false;
         return true;
@@ -186,19 +218,21 @@ function createCollectionDailyService() {
   return new CollectionRecordService(storage as any);
 }
 
-test("Collection daily overview supports multi-user aggregation", async () => {
+test("Collection daily overview supports multi-staff aggregation", async () => {
   const service = createCollectionDailyService();
   const response = await service.getDailyOverview(
-    { username: "admin.user", role: "admin", userId: "admin-1" } as any,
-    { year: "2026", month: "3", usernames: "alpha,beta" },
+    { username: "superuser", role: "superuser", userId: "superuser-1" } as any,
+    { year: "2026", month: "3", usernames: "Collector Alpha,Collector Beta" },
   );
 
   assert.equal(response.ok, true);
-  assert.deepEqual(response.usernames, ["alpha", "beta"]);
+  assert.deepEqual(response.usernames, ["Collector Alpha", "Collector Beta"]);
   assert.equal(response.summary.monthlyTarget, 6000);
   assert.equal(response.summary.collectedAmount, 5700);
   assert.equal(response.summary.balancedAmount, 300);
   assert.equal(response.summary.dailyTarget, 3000);
+  assert.equal(response.summary.expectedProgressAmount, 6000);
+  assert.equal(response.summary.progressVarianceAmount, -300);
 
   const dayOne = response.days.find((day) => day.date === "2026-03-01");
   const dayTwo = response.days.find((day) => day.date === "2026-03-02");
@@ -215,8 +249,8 @@ test("Collection daily overview supports multi-user aggregation", async () => {
 test("Collection daily day-details returns paginated records with receipt metadata", async () => {
   const service = createCollectionDailyService();
   const pageOne = await service.getDailyDayDetails(
-    { username: "admin.user", role: "admin", userId: "admin-1" } as any,
-    { date: "2026-03-01", usernames: "alpha,beta", page: "1", pageSize: "1" },
+    { username: "superuser", role: "superuser", userId: "superuser-1" } as any,
+    { date: "2026-03-01", usernames: "Collector Alpha,Collector Beta", page: "1", pageSize: "1" },
   );
 
   assert.equal(pageOne.ok, true);
@@ -226,23 +260,25 @@ test("Collection daily day-details returns paginated records with receipt metada
   assert.equal(pageOne.records[0].id, "alpha-1");
   assert.equal(pageOne.records[0].receipts.length, 1);
   assert.equal(pageOne.records[0].receipts[0].originalFileName, "receipt-a1.pdf");
+  assert.equal(pageOne.message, "Collection recorded but daily target not achieved.");
 
   const pageTwo = await service.getDailyDayDetails(
-    { username: "admin.user", role: "admin", userId: "admin-1" } as any,
-    { date: "2026-03-01", usernames: "alpha,beta", page: "2", pageSize: "1" },
+    { username: "superuser", role: "superuser", userId: "superuser-1" } as any,
+    { date: "2026-03-01", usernames: "Collector Alpha,Collector Beta", page: "2", pageSize: "1" },
   );
   assert.equal(pageTwo.records.length, 1);
   assert.equal(pageTwo.records[0].id, "beta-1");
+  assert.equal(pageTwo.records[0].username, "diviya.user");
   assert.equal(pageTwo.records[0].receipts.length, 0);
 });
 
-test("Collection daily user role cannot request other usernames", async () => {
+test("Collection daily user role cannot request other staff nicknames", async () => {
   const service = createCollectionDailyService();
 
   await assert.rejects(
     service.getDailyOverview(
-      { username: "alpha", role: "user", userId: "user-alpha" } as any,
-      { year: "2026", month: "3", usernames: "alpha,beta" },
+      { username: "alpha.user", role: "user", userId: "user-alpha", activityId: "activity-user-alpha" } as any,
+      { year: "2026", month: "3", usernames: "Collector Alpha,Collector Beta" },
     ),
     /User hanya boleh melihat data sendiri/i,
   );

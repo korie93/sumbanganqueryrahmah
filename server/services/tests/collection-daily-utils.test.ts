@@ -40,6 +40,7 @@ test("computeCollectionDailyTimeline carries shortfall forward and applies exces
       ["2026-03-03", 3],
       ["2026-03-05", 1],
     ]),
+    referenceDate: new Date("2026-03-05T12:00:00.000Z"),
   });
 
   const day2 = timeline.days.find((day) => day.date === "2026-03-02");
@@ -68,9 +69,13 @@ test("computeCollectionDailyTimeline carries shortfall forward and applies exces
   assert.equal(day6.status, "red");
 
   assert.equal(timeline.summary.workingDays, 4);
+  assert.equal(timeline.summary.elapsedWorkingDays, 3);
+  assert.equal(timeline.summary.remainingWorkingDays, 1);
   assert.equal(timeline.summary.completedDays, 2);
   assert.equal(timeline.summary.incompleteDays, 1);
   assert.equal(timeline.summary.noCollectionDays, 1);
+  assert.equal(timeline.summary.expectedProgressAmount, 12000);
+  assert.equal(timeline.summary.progressVarianceAmount, 0);
 });
 
 test("computeCollectionDailyTimeline keeps non-working days neutral", () => {
@@ -80,6 +85,7 @@ test("computeCollectionDailyTimeline keeps non-working days neutral", () => {
     monthlyTarget: 1000,
     calendarRows: buildCalendarMonth(2026, 4, []),
     amountByDate: new Map<string, number>([["2026-04-01", 200]]),
+    referenceDate: new Date("2026-04-10T12:00:00.000Z"),
   });
 
   const day1 = timeline.days.find((day) => day.date === "2026-04-01");
@@ -87,5 +93,8 @@ test("computeCollectionDailyTimeline keeps non-working days neutral", () => {
   assert.equal(day1.status, "neutral");
   assert.equal(day1.target, 0);
   assert.equal(timeline.summary.workingDays, 0);
+  assert.equal(timeline.summary.elapsedWorkingDays, 0);
+  assert.equal(timeline.summary.expectedProgressAmount, 0);
+  assert.equal(timeline.summary.progressVarianceAmount, 200);
   assert.equal(timeline.summary.neutralDays, timeline.daysInMonth);
 });

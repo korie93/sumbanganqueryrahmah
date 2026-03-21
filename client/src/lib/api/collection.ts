@@ -284,12 +284,16 @@ export type CollectionDailyOverviewResponse = {
     collectedAmount: number;
     balancedAmount: number;
     workingDays: number;
+    elapsedWorkingDays: number;
+    remainingWorkingDays: number;
     completedDays: number;
     incompleteDays: number;
     noCollectionDays: number;
     neutralDays: number;
     baseDailyTarget: number;
     dailyTarget: number;
+    expectedProgressAmount: number;
+    progressVarianceAmount: number;
     achievedAmount: number;
     remainingAmount: number;
     metDays: number;

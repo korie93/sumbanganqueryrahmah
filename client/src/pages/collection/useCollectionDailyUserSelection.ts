@@ -10,11 +10,16 @@ type UseCollectionDailyUserSelectionOptions = {
 export function reconcileCollectionDailySelectedUsers(
   previous: string[],
   users: CollectionDailyUser[],
+  preferredUsername?: string,
 ) {
   const available = new Set(users.map((item) => item.username.toLowerCase()));
   const kept = previous.filter((value) => available.has(value.toLowerCase()));
   if (kept.length > 0) {
     return kept;
+  }
+  const preferred = String(preferredUsername || "").trim().toLowerCase();
+  if (preferred && available.has(preferred)) {
+    return [preferred];
   }
   if (users.length > 0) {
     return [users[0].username.toLowerCase()];
@@ -30,14 +35,14 @@ export function formatCollectionDailySelectedUsersLabel(options: {
 }) {
   const { canManage, currentUsername, selectedUsernames, users } = options;
   if (!canManage) return currentUsername || "-";
-  if (selectedUsernames.length === 0) return "Select users";
+  if (selectedUsernames.length === 0) return "Select staff nicknames";
   if (selectedUsernames.length === 1) {
     const matched = users.find(
       (item) => item.username.toLowerCase() === selectedUsernames[0],
     );
-    return matched ? `${matched.username} (${matched.role})` : selectedUsernames[0];
+    return matched?.username || selectedUsernames[0];
   }
-  return `${selectedUsernames.length} users selected`;
+  return `${selectedUsernames.length} staff nicknames selected`;
 }
 
 export function useCollectionDailyUserSelection({
@@ -57,9 +62,9 @@ export function useCollectionDailyUserSelection({
   useEffect(() => {
     if (!canManage) return;
     setSelectedUsernames((previous) => {
-      return reconcileCollectionDailySelectedUsers(previous, users);
+      return reconcileCollectionDailySelectedUsers(previous, users, currentUsername);
     });
-  }, [canManage, users]);
+  }, [canManage, currentUsername, users]);
 
   const selectedUserSet = useMemo(
     () => new Set(selectedUsernames.map((value) => value.toLowerCase())),

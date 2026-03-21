@@ -7,6 +7,9 @@ type CollectionDailySummaryCardProps = {
 };
 
 export function CollectionDailySummaryCard({ overview }: CollectionDailySummaryCardProps) {
+  const varianceClassName =
+    overview.summary.progressVarianceAmount >= 0 ? "font-semibold text-green-700" : "font-semibold text-rose-700";
+
   return (
     <Card className="border-border/60 bg-background/70">
       <CardContent className="space-y-3 pt-6">
@@ -21,10 +24,22 @@ export function CollectionDailySummaryCard({ overview }: CollectionDailySummaryC
             Balanced: <span className="font-semibold">{formatAmountRM(overview.summary.balancedAmount)}</span>
           </div>
           <div>
-            Daily Target: <span className="font-semibold">{formatAmountRM(overview.summary.dailyTarget)}</span>
+            Daily Working-Day Target: <span className="font-semibold">{formatAmountRM(overview.summary.dailyTarget)}</span>
+          </div>
+          <div>
+            Expected Progress: <span className="font-semibold">{formatAmountRM(overview.summary.expectedProgressAmount)}</span>
+          </div>
+          <div>
+            Progress Variance: <span className={varianceClassName}>{formatAmountRM(overview.summary.progressVarianceAmount)}</span>
           </div>
           <div>
             Working Days: <span className="font-semibold">{overview.summary.workingDays}</span>
+          </div>
+          <div>
+            Elapsed Working Days: <span className="font-semibold">{overview.summary.elapsedWorkingDays}</span>
+          </div>
+          <div>
+            Remaining Working Days: <span className="font-semibold">{overview.summary.remainingWorkingDays}</span>
           </div>
           <div>
             Completed Days: <span className="font-semibold text-green-700">{overview.summary.completedDays}</span>
