@@ -243,8 +243,10 @@ const checkCollectionDailyPage = async (page, tracker) => {
     const userRows = userPopover.locator("label");
     const userCount = await userRows.count();
     if (userCount > 0) {
+      const emptySelectionPattern = /Select (users|staff nicknames)/i;
+      const multiSelectionPattern = /(\d+)\s+(users|staff nicknames)\s+selected/i;
       assert(
-        (await userTrigger.innerText()).includes("Select users"),
+        emptySelectionPattern.test(await userTrigger.innerText()),
         "Collection Daily user trigger should show empty state after clearing selection",
       );
 
@@ -253,17 +255,17 @@ const checkCollectionDailyPage = async (page, tracker) => {
         await userRows.nth(1).click();
         await page.waitForTimeout(100);
         assert(
-          (await userTrigger.innerText()).includes("2 users selected"),
+          /2\s+(users|staff nicknames)\s+selected/i.test(await userTrigger.innerText()),
           "Collection Daily should reflect multi-user selection in the trigger label",
         );
       }
 
-      await page.getByText("Select all users").click();
+      await page.getByText(/Select all (users|staff nicknames)/i).click();
       await page.waitForTimeout(100);
       if (userCount > 1) {
         const selectedAllLabel = await userTrigger.innerText();
         assert(
-          selectedAllLabel.includes("users selected") && !selectedAllLabel.includes("Select users"),
+          multiSelectionPattern.test(selectedAllLabel) && !emptySelectionPattern.test(selectedAllLabel),
           "Collection Daily should reflect a non-empty multi-user state after select-all",
         );
       }

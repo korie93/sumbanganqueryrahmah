@@ -41,7 +41,7 @@ export function CollectionDailyCalendarCard({
   onUpdateEditableDay,
 }: CollectionDailyCalendarCardProps) {
   return (
-    <Card className="border-border/60 bg-background/70">
+    <Card className="border-border/60 bg-background/70" data-testid="collection-daily-calendar">
       <CardHeader>
         <CardTitle className="text-lg">Monthly Daily Status</CardTitle>
       </CardHeader>
@@ -83,7 +83,7 @@ export function CollectionDailyCalendarCard({
               <div>Fri</div>
               <div>Sat</div>
             </div>
-            <div className="grid grid-cols-7 gap-2" data-testid="collection-daily-calendar">
+            <div className="grid grid-cols-7 gap-2" data-testid="collection-daily-calendar-grid">
               {Array.from({ length: firstWeekday }).map((_, index) => (
                 <div key={`blank-${index}`} />
               ))}
