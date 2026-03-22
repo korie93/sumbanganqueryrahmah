@@ -359,6 +359,7 @@ export type CollectionDailyDayDetailsResponse = {
     receiptFile: string | null;
     receipts: Array<{
       id: string;
+      storagePath: string;
       originalFileName: string;
       originalMimeType: string;
       fileSize: number;

@@ -38,6 +38,12 @@ jobs:
       - name: Run client tests
         run: npm run test:client
 
+      - name: Run http tests
+        run: npm run test:http
+
+      - name: Run services tests
+        run: npm run test:services
+
       - name: Run routes tests
         run: npm run test:routes
 

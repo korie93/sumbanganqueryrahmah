@@ -4,6 +4,7 @@ import { CollectionRecordService } from "../collection/collection-record.service
 
 type Receipt = {
   id: string;
+  storagePath: string;
   originalFileName: string;
   originalMimeType: string;
   fileSize: number;
@@ -66,6 +67,7 @@ function createCollectionDailyService() {
           receipts: [
             {
               id: "receipt-alpha-1",
+              storagePath: "/uploads/receipt-a1.pdf",
               originalFileName: "receipt-a1.pdf",
               originalMimeType: "application/pdf",
               fileSize: 1024,
@@ -722,6 +724,7 @@ test("Collection daily day-details returns paginated records with receipt metada
   assert.equal(pageOne.records.length, 1);
   assert.equal(pageOne.records[0].id, "alpha-1");
   assert.equal(pageOne.records[0].receipts.length, 1);
+  assert.equal(pageOne.records[0].receipts[0].storagePath, "/uploads/receipt-a1.pdf");
   assert.equal(pageOne.records[0].receipts[0].originalFileName, "receipt-a1.pdf");
   assert.equal(pageOne.message, "Collection recorded but daily target not achieved.");
 

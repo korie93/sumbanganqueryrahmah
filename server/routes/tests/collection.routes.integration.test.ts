@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 import { hashPassword } from "../../auth/passwords";
 import { registerCollectionRoutes } from "../collection.routes";
@@ -1054,6 +1056,46 @@ test("GET /api/collection/:id/receipt/download returns 404 when receipt file is 
     assert.match(String(payload.message), /receipt file not found/i);
   } finally {
     await stopTestServer(server);
+  }
+});
+
+test("GET /api/collection/:id/receipts/:receiptId/view does not fallback to legacy receipt_file when receiptId is unknown", async () => {
+  const uploadsDir = path.resolve(process.cwd(), "uploads", "collection-receipts");
+  const storedFileName = `route-test-receipt-${Date.now()}-${Math.random().toString(16).slice(2)}.pdf`;
+  const storedReceiptPath = `/uploads/collection-receipts/${storedFileName}`;
+  await fs.mkdir(uploadsDir, { recursive: true });
+  await fs.writeFile(path.join(uploadsDir, storedFileName), Buffer.from("%PDF-1.7\n%test\n"));
+
+  const { storage } = createCoreCollectionStorageDouble({
+    sessionNickname: "Collector Alpha",
+    seedRecordOverrides: {
+      receiptFile: storedReceiptPath,
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+      activityId: "activity-user-collection-receipt-3",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1/receipts/missing-receipt/view`);
+    assert.equal(response.status, 404);
+    const payload = await response.json();
+    assert.equal(payload.ok, false);
+    assert.match(String(payload.message), /receipt file not found/i);
+  } finally {
+    await stopTestServer(server);
+    await fs.unlink(path.join(uploadsDir, storedFileName)).catch(() => undefined);
   }
 });
 
