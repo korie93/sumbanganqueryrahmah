@@ -112,3 +112,7 @@ Go only if all are true:
 - canary monitoring signals are stable
 
 Otherwise: no-go and rollback/fix first.
+
+Companion checklist:
+
+- `docs/GO_LIVE_LAUNCH_CHECKLIST.md`
