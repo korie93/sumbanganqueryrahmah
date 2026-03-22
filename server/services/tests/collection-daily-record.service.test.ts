@@ -401,6 +401,284 @@ function createLegacyReceiptCleanupService() {
   };
 }
 
+function createMutableCollectionSummaryService() {
+  const records = new Map<string, RecordShape>();
+  records.set("alpha-march-1", {
+    id: "alpha-march-1",
+    customerName: "Alpha March Customer",
+    icNumber: "900101050001",
+    customerPhone: "0161111111",
+    accountNumber: "ACC-SA1",
+    batch: "P10",
+    paymentDate: "2026-01-10",
+    amount: "1000.00",
+    receiptFile: null,
+    receipts: [],
+    createdByLogin: "alpha.user",
+    collectionStaffNickname: "Collector Alpha",
+    createdAt: new Date("2026-01-10T09:00:00.000Z"),
+  });
+  records.set("beta-march-1", {
+    id: "beta-march-1",
+    customerName: "Beta March Customer",
+    icNumber: "900101050002",
+    customerPhone: "0162222222",
+    accountNumber: "ACC-SB1",
+    batch: "P25",
+    paymentDate: "2026-01-11",
+    amount: "200.00",
+    receiptFile: null,
+    receipts: [],
+    createdByLogin: "beta.user",
+    collectionStaffNickname: "Collector Beta",
+    createdAt: new Date("2026-01-11T09:00:00.000Z"),
+  });
+  records.set("alpha-april-1", {
+    id: "alpha-april-1",
+    customerName: "Alpha April Customer",
+    icNumber: "900101050003",
+    customerPhone: "0163333333",
+    accountNumber: "ACC-SA2",
+    batch: "P10",
+    paymentDate: "2026-02-01",
+    amount: "700.00",
+    receiptFile: null,
+    receipts: [],
+    createdByLogin: "alpha.user",
+    collectionStaffNickname: "Collector Alpha",
+    createdAt: new Date("2026-02-01T09:00:00.000Z"),
+  });
+
+  const nicknameProfiles = [
+    {
+      id: "nickname-alpha",
+      nickname: "Collector Alpha",
+      isActive: true,
+      roleScope: "user",
+      createdBy: "superuser",
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+    },
+    {
+      id: "nickname-beta",
+      nickname: "Collector Beta",
+      isActive: true,
+      roleScope: "user",
+      createdBy: "superuser",
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+    },
+  ];
+
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+
+  const normalizeNicknameSet = (values?: string[]) =>
+    new Set(
+      (Array.isArray(values) ? values : [])
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter(Boolean),
+    );
+
+  const filterRecords = (filters?: {
+    from?: string;
+    to?: string;
+    search?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+    limit?: number;
+    offset?: number;
+  }) => {
+    const from = String(filters?.from || "");
+    const to = String(filters?.to || "");
+    const createdByLogin = String(filters?.createdByLogin || "").toLowerCase();
+    const search = String(filters?.search || "").trim().toLowerCase();
+    const nicknameSet = normalizeNicknameSet(filters?.nicknames);
+    const rows = Array.from(records.values()).filter((record) => {
+      if (from && record.paymentDate < from) return false;
+      if (to && record.paymentDate > to) return false;
+      if (createdByLogin && String(record.createdByLogin || "").toLowerCase() !== createdByLogin) {
+        return false;
+      }
+      if (nicknameSet.size > 0 && !nicknameSet.has(record.collectionStaffNickname.toLowerCase())) {
+        return false;
+      }
+      if (search) {
+        const haystack = [
+          record.customerName,
+          record.accountNumber,
+          record.icNumber,
+          record.customerPhone,
+          record.collectionStaffNickname,
+          record.createdByLogin,
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(search)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    rows.sort((left, right) => {
+      const byDate = String(left.paymentDate).localeCompare(String(right.paymentDate));
+      if (byDate !== 0) return byDate;
+      return left.id.localeCompare(right.id);
+    });
+
+    return rows;
+  };
+
+  const storage = {
+    getCollectionStaffNicknames: async () => nicknameProfiles,
+    getCollectionStaffNicknameByName: async (nickname: string) =>
+      nicknameProfiles.find((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase()) || null,
+    isCollectionStaffNicknameActive: async (nickname: string) =>
+      nicknameProfiles.some((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase() && item.isActive),
+    getCollectionMonthlySummary: async (filters: {
+      year: number;
+      nicknames?: string[];
+      createdByLogin?: string;
+    }) => {
+      const nicknameSet = normalizeNicknameSet(filters.nicknames);
+      const createdByLogin = String(filters.createdByLogin || "").toLowerCase();
+      const rows = Array.from(records.values()).filter((record) => {
+        const paymentYear = Number.parseInt(String(record.paymentDate).slice(0, 4), 10);
+        if (paymentYear !== filters.year) return false;
+        if (nicknameSet.size > 0 && !nicknameSet.has(record.collectionStaffNickname.toLowerCase())) {
+          return false;
+        }
+        if (createdByLogin && String(record.createdByLogin || "").toLowerCase() !== createdByLogin) {
+          return false;
+        }
+        return true;
+      });
+
+      const byMonth = new Map<number, { totalRecords: number; totalAmount: number }>();
+      for (const row of rows) {
+        const month = Number.parseInt(String(row.paymentDate).slice(5, 7), 10);
+        const current = byMonth.get(month) || { totalRecords: 0, totalAmount: 0 };
+        current.totalRecords += 1;
+        current.totalAmount += Number(row.amount || 0);
+        byMonth.set(month, current);
+      }
+
+      return Array.from(byMonth.entries())
+        .sort((left, right) => left[0] - right[0])
+        .map(([month, aggregate]) => ({
+          month,
+          monthName: monthNames[month - 1] || `Month ${month}`,
+          totalRecords: aggregate.totalRecords,
+          totalAmount: Math.round((aggregate.totalAmount + Number.EPSILON) * 100) / 100,
+        }));
+    },
+    summarizeCollectionRecords: async (filters?: {
+      from?: string;
+      to?: string;
+      search?: string;
+      createdByLogin?: string;
+      nicknames?: string[];
+    }) => {
+      const rows = filterRecords(filters);
+      return {
+        totalRecords: rows.length,
+        totalAmount: Math.round(
+          (rows.reduce((sum, row) => sum + Number(row.amount || 0), 0) + Number.EPSILON) * 100,
+        ) / 100,
+      };
+    },
+    summarizeCollectionRecordsByNickname: async (filters?: {
+      from?: string;
+      to?: string;
+      search?: string;
+      createdByLogin?: string;
+      nicknames?: string[];
+    }) => {
+      const rows = filterRecords(filters);
+      const byNickname = new Map<string, { totalRecords: number; totalAmount: number }>();
+      for (const row of rows) {
+        const key = row.collectionStaffNickname;
+        const current = byNickname.get(key) || { totalRecords: 0, totalAmount: 0 };
+        current.totalRecords += 1;
+        current.totalAmount += Number(row.amount || 0);
+        byNickname.set(key, current);
+      }
+
+      return Array.from(byNickname.entries())
+        .sort((left, right) => left[0].localeCompare(right[0]))
+        .map(([nickname, aggregate]) => ({
+          nickname,
+          totalRecords: aggregate.totalRecords,
+          totalAmount: Math.round((aggregate.totalAmount + Number.EPSILON) * 100) / 100,
+        }));
+    },
+    listCollectionRecords: async (filters?: {
+      from?: string;
+      to?: string;
+      search?: string;
+      createdByLogin?: string;
+      nicknames?: string[];
+      limit?: number;
+      offset?: number;
+    }) => {
+      const rows = filterRecords(filters);
+      const limit = Number.isFinite(Number(filters?.limit))
+        ? Math.max(1, Number(filters?.limit))
+        : rows.length;
+      const offset = Number.isFinite(Number(filters?.offset))
+        ? Math.max(0, Number(filters?.offset))
+        : 0;
+      return rows.slice(offset, offset + limit);
+    },
+    getCollectionRecordById: async (id: string) => records.get(id) || null,
+    updateCollectionRecord: async (id: string, data: Record<string, unknown>) => {
+      const existing = records.get(id);
+      if (!existing) {
+        return null;
+      }
+      const updated: RecordShape = {
+        ...existing,
+        paymentDate:
+          data.paymentDate !== undefined ? String(data.paymentDate) : existing.paymentDate,
+        amount:
+          data.amount !== undefined ? Number(data.amount || 0).toFixed(2) : existing.amount,
+        collectionStaffNickname:
+          data.collectionStaffNickname !== undefined
+            ? String(data.collectionStaffNickname)
+            : existing.collectionStaffNickname,
+        customerName:
+          data.customerName !== undefined ? String(data.customerName) : existing.customerName,
+        icNumber: data.icNumber !== undefined ? String(data.icNumber) : existing.icNumber,
+        customerPhone:
+          data.customerPhone !== undefined ? String(data.customerPhone) : existing.customerPhone,
+        accountNumber:
+          data.accountNumber !== undefined ? String(data.accountNumber) : existing.accountNumber,
+        batch:
+          data.batch !== undefined ? (String(data.batch) as RecordShape["batch"]) : existing.batch,
+      };
+      records.set(id, updated);
+      return updated;
+    },
+    createAuditLog: async () => ({ id: "audit-summary-1" }),
+  };
+
+  return {
+    service: new CollectionRecordService(storage as any),
+    records,
+  };
+}
+
 test("Collection daily overview supports multi-staff aggregation", async () => {
   const service = createCollectionDailyService();
   const response = await service.getDailyOverview(
@@ -540,6 +818,91 @@ test("Collection daily overview moves totals across month boundaries after payme
   assert.equal(februaryAfter.summary.collectedAmount, 1000);
   assert.equal(marchAfter.days.find((day) => day.date === "2026-03-02")?.amount, 200);
   assert.equal(februaryAfter.days.find((day) => day.date === "2026-02-28")?.amount, 1000);
+});
+
+test("Collection summary and nickname summary recalculate after reassignment/date/amount edits", async () => {
+  const { service } = createMutableCollectionSummaryService();
+  const authUser = { username: "superuser", role: "superuser", userId: "superuser-1" } as any;
+
+  const beforeSummary = await service.getSummary(authUser, { year: "2026" } as any);
+  const beforeJanuary = beforeSummary.summary.find((entry) => entry.month === 1);
+  const beforeFebruary = beforeSummary.summary.find((entry) => entry.month === 2);
+  assert.equal(beforeJanuary?.totalAmount, 1200);
+  assert.equal(beforeFebruary?.totalAmount, 700);
+
+  const beforeNicknameJanuary = await service.getNicknameSummary(authUser, {
+    from: "2026-01-01",
+    to: "2026-01-31",
+    nicknames: "Collector Alpha,Collector Beta",
+    summaryOnly: "true",
+  } as any);
+  const beforeAlphaJanuary = beforeNicknameJanuary.nicknameTotals.find((item) => item.nickname === "Collector Alpha");
+  const beforeBetaJanuary = beforeNicknameJanuary.nicknameTotals.find((item) => item.nickname === "Collector Beta");
+  assert.equal(beforeNicknameJanuary.totalAmount, 1200);
+  assert.equal(beforeAlphaJanuary?.totalAmount, 1000);
+  assert.equal(beforeBetaJanuary?.totalAmount, 200);
+
+  await service.updateRecord(authUser, "alpha-march-1", {
+    collectionStaffNickname: "Collector Beta",
+    paymentDate: "2026-02-02",
+    amount: "1500",
+  });
+
+  const afterSummary = await service.getSummary(authUser, { year: "2026" } as any);
+  const afterJanuary = afterSummary.summary.find((entry) => entry.month === 1);
+  const afterFebruary = afterSummary.summary.find((entry) => entry.month === 2);
+  assert.equal(afterJanuary?.totalAmount, 200);
+  assert.equal(afterFebruary?.totalAmount, 2200);
+
+  const afterNicknameJanuary = await service.getNicknameSummary(authUser, {
+    from: "2026-01-01",
+    to: "2026-01-31",
+    nicknames: "Collector Alpha,Collector Beta",
+    summaryOnly: "true",
+  } as any);
+  const afterAlphaJanuary = afterNicknameJanuary.nicknameTotals.find((item) => item.nickname === "Collector Alpha");
+  const afterBetaJanuary = afterNicknameJanuary.nicknameTotals.find((item) => item.nickname === "Collector Beta");
+  assert.equal(afterNicknameJanuary.totalAmount, 200);
+  assert.equal(afterAlphaJanuary?.totalAmount, 0);
+  assert.equal(afterBetaJanuary?.totalAmount, 200);
+
+  const afterNicknameFebruary = await service.getNicknameSummary(authUser, {
+    from: "2026-02-01",
+    to: "2026-02-28",
+    nicknames: "Collector Alpha,Collector Beta",
+    summaryOnly: "true",
+  } as any);
+  const afterAlphaFebruary = afterNicknameFebruary.nicknameTotals.find((item) => item.nickname === "Collector Alpha");
+  const afterBetaFebruary = afterNicknameFebruary.nicknameTotals.find((item) => item.nickname === "Collector Beta");
+  assert.equal(afterNicknameFebruary.totalAmount, 2200);
+  assert.equal(afterAlphaFebruary?.totalAmount, 700);
+  assert.equal(afterBetaFebruary?.totalAmount, 1500);
+});
+
+test("Collection list pagination keeps month totals stable and month-scoped", async () => {
+  const { service } = createMutableCollectionSummaryService();
+  const authUser = { username: "superuser", role: "superuser", userId: "superuser-1" } as any;
+
+  const pageOne = await service.listRecords(authUser, {
+    from: "2026-01-01",
+    to: "2026-01-31",
+    limit: "1",
+    offset: "0",
+  } as any);
+  const pageTwo = await service.listRecords(authUser, {
+    from: "2026-01-01",
+    to: "2026-01-31",
+    limit: "1",
+    offset: "1",
+  } as any);
+
+  assert.equal(pageOne.total, 2);
+  assert.equal(pageOne.totalAmount, 1200);
+  assert.equal(pageOne.records.length, 1);
+  assert.equal(pageTwo.total, 2);
+  assert.equal(pageTwo.totalAmount, 1200);
+  assert.equal(pageTwo.records.length, 1);
+  assert.notEqual(pageOne.records[0].id, pageTwo.records[0].id);
 });
 
 test("Collection record update clears legacy receipt_file when removeReceipt is requested on legacy-only rows", async () => {
