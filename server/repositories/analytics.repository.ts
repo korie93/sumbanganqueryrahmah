@@ -1,8 +1,9 @@
 import { count, eq, gte, sql } from "drizzle-orm";
-import { dataRows, imports, userActivity, users } from "../../shared/schema-postgres";
+import { auditLogs, dataRows, imports, userActivity, users } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
 
 const ANALYTICS_TZ = process.env.ANALYTICS_TZ || "Asia/Kuala_Lumpur";
+const COLLECTION_RECORD_VERSION_CONFLICT_ACTION = "COLLECTION_RECORD_VERSION_CONFLICT";
 
 type TopActiveUserRow = {
   username: string;
@@ -19,17 +20,30 @@ export class AnalyticsRepository {
     totalDataRows: number;
     totalImports: number;
     bannedUsers: number;
+    collectionRecordVersionConflicts24h: number;
   }> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [totalUsers, activeSessions, loginsToday, totalDataRows, totalImports, bannedUsers] = await Promise.all([
+    const [
+      totalUsers,
+      activeSessions,
+      loginsToday,
+      totalDataRows,
+      totalImports,
+      bannedUsers,
+      collectionRecordVersionConflicts24h,
+    ] = await Promise.all([
       db.select({ value: count() }).from(users),
       db.select({ value: count() }).from(userActivity).where(eq(userActivity.isActive, true)),
       db.select({ value: count() }).from(userActivity).where(gte(userActivity.loginTime, today)),
       db.select({ value: count() }).from(dataRows),
       db.select({ value: count() }).from(imports).where(eq(imports.isDeleted, false)),
       db.select({ value: count() }).from(users).where(eq(users.isBanned, true)),
+      db.select({ value: count() }).from(auditLogs).where(sql`
+        action = ${COLLECTION_RECORD_VERSION_CONFLICT_ACTION}
+        AND timestamp >= NOW() - INTERVAL '24 hours'
+      `),
     ]);
 
     return {
@@ -39,6 +53,7 @@ export class AnalyticsRepository {
       totalDataRows: totalDataRows[0]?.value || 0,
       totalImports: totalImports[0]?.value || 0,
       bannedUsers: bannedUsers[0]?.value || 0,
+      collectionRecordVersionConflicts24h: collectionRecordVersionConflicts24h[0]?.value || 0,
     };
   }
 

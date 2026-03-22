@@ -10,6 +10,7 @@ test("OperationsAnalyticsService proxies summary and distribution reads", async 
     totalDataRows: 10,
     totalImports: 2,
     bannedUsers: 0,
+    collectionRecordVersionConflicts24h: 1,
   };
   const peakHours = [{ hour: 9, count: 4 }];
   const roleDistribution = [{ role: "superuser", count: 1 }];
@@ -38,6 +39,7 @@ test("OperationsAnalyticsService clamps login-trend days and active-user limits"
       totalDataRows: 0,
       totalImports: 0,
       bannedUsers: 0,
+      collectionRecordVersionConflicts24h: 0,
     }),
     getLoginTrends: async (days: number) => {
       loginTrendCalls.push(days);

@@ -5,6 +5,7 @@ export interface SummaryData {
   totalDataRows: number;
   totalImports: number;
   bannedUsers: number;
+  collectionRecordVersionConflicts24h?: number;
 }
 
 export interface LoginTrend {
