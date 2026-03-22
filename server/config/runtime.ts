@@ -1,12 +1,19 @@
 import path from "node:path";
 import { randomBytes } from "node:crypto";
-
-type RuntimeEnvironment = "development" | "test" | "production";
+import {
+  isProductionLikeEnvironment,
+  isStrictLocalDevelopmentEnvironment,
+  readBooleanEnvFlag,
+  resolveRuntimeEnvironment,
+  type RuntimeEnvironment,
+} from "./runtime-environment";
 
 type RuntimeConfig = {
   app: {
     nodeEnv: RuntimeEnvironment;
     isProduction: boolean;
+    isProductionLike: boolean;
+    isStrictLocalDevelopment: boolean;
     port: number;
     host: string;
     publicAppUrl: string | null;
@@ -107,33 +114,26 @@ function readInt(name: string, fallback: number, options?: { min?: number; max?:
 }
 
 function readBoolean(name: string, fallback: boolean): boolean {
-  const raw = String(readOptionalString(name) ?? "").trim().toLowerCase();
-  if (raw === "1" || raw === "true") return true;
-  if (raw === "0" || raw === "false") return false;
-  return fallback;
+  return readBooleanEnvFlag(name, fallback);
 }
 
 function buildEphemeralSecret(label: string) {
   return `${label.toLowerCase()}-${randomBytes(32).toString("hex")}`;
 }
 
-function readSecretOrThrow(name: string, label: string, isProduction: boolean, fallbackFactory: () => string) {
+function readSecretOrThrow(name: string, label: string, isRequired: boolean, fallbackFactory: () => string) {
   const value = readOptionalString(name);
   if (value) {
     return value;
   }
-  if (isProduction) {
-    throw new Error(`${name} is required in production.`);
+  if (isRequired) {
+    throw new Error(`${name} is required outside strict local development.`);
   }
   return fallbackFactory();
 }
 
 function resolveNodeEnv(): RuntimeEnvironment {
-  const raw = String(process.env.NODE_ENV || "development").trim().toLowerCase();
-  if (raw === "production" || raw === "test") {
-    return raw;
-  }
-  return "development";
+  return resolveRuntimeEnvironment(process.env.NODE_ENV);
 }
 
 function resolveCookieSecure(isProduction: boolean, publicAppUrl: string | null) {
@@ -167,42 +167,55 @@ function hasBackupEncryptionKeyConfigured(): boolean {
   );
 }
 
-function assertProductionSafetyGuards(isProduction: boolean) {
-  if (!isProduction) {
-    return;
-  }
+function isBackupFeatureEnabled(): boolean {
+  return readBoolean("BACKUP_FEATURE_ENABLED", true);
+}
 
-  if (!hasBackupEncryptionKeyConfigured()) {
+function assertRuntimeSafetyGuards(params: {
+  isProductionLike: boolean;
+  isStrictLocalDevelopment: boolean;
+}) {
+  const { isProductionLike, isStrictLocalDevelopment } = params;
+
+  if (isProductionLike && isBackupFeatureEnabled() && !hasBackupEncryptionKeyConfigured()) {
     throw new Error(
-      "BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS is required in production.",
+      "BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS is required when backups are enabled outside strict local development.",
     );
   }
 
-  if (readBoolean("SEED_DEFAULT_USERS", false)) {
-    throw new Error("SEED_DEFAULT_USERS must be disabled in production.");
-  }
-
-  if (readBoolean("LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED", false)) {
+  if (!isStrictLocalDevelopment && readBoolean("SEED_DEFAULT_USERS", false)) {
     throw new Error(
-      "LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED is not allowed in production.",
+      "SEED_DEFAULT_USERS is only allowed in strict local development mode.",
     );
   }
 
-  if (readBoolean("MAIL_DEV_OUTBOX_ENABLED", false)) {
-    throw new Error("MAIL_DEV_OUTBOX_ENABLED must be disabled in production.");
+  if (!isStrictLocalDevelopment && readBoolean("LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED", false)) {
+    throw new Error(
+      "LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED is only allowed in strict local development mode.",
+    );
+  }
+
+  if (!isStrictLocalDevelopment && readBoolean("MAIL_DEV_OUTBOX_ENABLED", false)) {
+    throw new Error(
+      "MAIL_DEV_OUTBOX_ENABLED is only allowed in strict local development mode.",
+    );
   }
 }
 
 const nodeEnv = resolveNodeEnv();
 const isProduction = nodeEnv === "production";
+const isStrictLocalDevelopment = isStrictLocalDevelopmentEnvironment();
+const isProductionLike = isProductionLikeEnvironment();
 const publicAppUrl = readOptionalString("PUBLIC_APP_URL");
 const lowMemoryMode = readBoolean("SQR_LOW_MEMORY_MODE", true);
-assertProductionSafetyGuards(isProduction);
+assertRuntimeSafetyGuards({ isProductionLike, isStrictLocalDevelopment });
 
 export const runtimeConfig: RuntimeConfig = Object.freeze({
   app: {
     nodeEnv,
     isProduction,
+    isProductionLike,
+    isStrictLocalDevelopment,
     port: readInt("PORT", 5000, { min: 1, max: 65535 }),
     host: readString("HOST", "0.0.0.0"),
     publicAppUrl,
@@ -224,8 +237,8 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       if (configured) {
         return configured;
       }
-      if (isProduction) {
-        throw new Error("PG_PASSWORD is required in production.");
+      if (isProductionLike) {
+        throw new Error("PG_PASSWORD is required outside strict local development.");
       }
       return undefined;
     })(),
@@ -236,12 +249,12 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     searchPath: readString("PG_SEARCH_PATH", "public"),
   },
   auth: {
-    sessionSecret: readSecretOrThrow("SESSION_SECRET", "session", isProduction, () =>
+    sessionSecret: readSecretOrThrow("SESSION_SECRET", "session", isProductionLike, () =>
       buildEphemeralSecret("session")),
     collectionNicknameTempPassword: readSecretOrThrow(
       "COLLECTION_NICKNAME_TEMP_PASSWORD",
       "collection temp password",
-      isProduction,
+      isProductionLike,
       () => buildEphemeralSecret("collection-temp").slice(0, 16),
     ),
     seedDefaultUsers: readBoolean("SEED_DEFAULT_USERS", false),

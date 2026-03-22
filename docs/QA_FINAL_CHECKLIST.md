@@ -35,6 +35,7 @@ Gunakan checklist ini selepas refactor besar, sebelum release, atau selepas depe
 - `View Rekod Collection` memaparkan jadual, filter, dan pagination
 - `View All` buka dialog dengan pagination dan scroll yang stabil
 - `Edit Record` dialog buka tanpa accessibility warning
+- `Delete Record` menolak stale request dengan mesej `Record Updated Elsewhere` (409 concurrency conflict)
 - `Receipt Preview` buka/tutup tanpa broken viewer state
 - `Collection Summary` buka popup bulan dengan pagination
 - `Nickname Summary` hanya memaparkan total yang betul

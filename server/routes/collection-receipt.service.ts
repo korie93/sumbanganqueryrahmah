@@ -309,6 +309,7 @@ export async function serveCollectionReceipt(
       id,
       receiptIdRaw ?? req.params.receiptId ?? null,
     );
+    // Legacy fallback for records created before collection_record_receipts became authoritative.
     const legacyReceiptPath =
       !selectedReceipt && record.receiptFile ? record.receiptFile : null;
     const resolved = resolveCollectionReceiptFile(

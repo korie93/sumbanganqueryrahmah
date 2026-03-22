@@ -1,4 +1,4 @@
-import { Activity, Database, FileText, LogIn, ShieldOff, Users } from "lucide-react";
+import { Activity, AlertTriangle, Database, FileText, LogIn, ShieldOff, Users } from "lucide-react";
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import type { SummaryCardItem, SummaryData } from "@/pages/dashboard/types";
 
@@ -56,6 +56,12 @@ export function buildSummaryCards(summary: SummaryData | undefined): SummaryCard
       value: summary?.bannedUsers || 0,
       icon: ShieldOff,
       color: "text-red-600 dark:text-red-400",
+    },
+    {
+      title: "Stale Record Conflicts (24h)",
+      value: summary?.collectionRecordVersionConflicts24h || 0,
+      icon: AlertTriangle,
+      color: "text-amber-600 dark:text-amber-400",
     },
   ];
 }

@@ -27,6 +27,7 @@ export type CollectionRecord = {
   createdByLogin: string;
   collectionStaffNickname: string;
   createdAt: string;
+  updatedAt?: string;
 };
 
 export type CollectionStaffNickname = {
@@ -82,6 +83,7 @@ export type CreateCollectionPayload = {
 export type UpdateCollectionPayload = Partial<CreateCollectionPayload> & {
   removeReceipt?: boolean;
   removeReceiptIds?: string[];
+  expectedUpdatedAt?: string;
 };
 
 export type CollectionRecordListResponse = {
@@ -597,7 +599,14 @@ export async function updateCollectionRecord(id: string, payload: UpdateCollecti
   return response.json();
 }
 
-export async function deleteCollectionRecord(id: string) {
-  const response = await apiRequest("DELETE", `/api/collection/${encodeURIComponent(id)}`);
+export async function deleteCollectionRecord(
+  id: string,
+  payload?: {
+    // Optional optimistic-concurrency token from record.updatedAt (or createdAt fallback).
+    // Backend returns 409 COLLECTION_RECORD_VERSION_CONFLICT when this token is stale.
+    expectedUpdatedAt?: string;
+  },
+) {
+  const response = await apiRequest("DELETE", `/api/collection/${encodeURIComponent(id)}`, payload);
   return response.json();
 }

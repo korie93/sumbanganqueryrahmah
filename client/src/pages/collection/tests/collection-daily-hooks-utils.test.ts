@@ -12,6 +12,10 @@ import {
   reconcileCollectionDailySelectedUsers,
 } from "@/pages/collection/useCollectionDailyUserSelection";
 import {
+  parseApiError,
+  parseCollectionApiErrorDetails,
+} from "@/pages/collection/utils";
+import {
   buildCollectionDailyCalendarPayloadDays,
   getCollectionDailyEmptyOverviewMessage,
   getCollectionDailyFirstWeekday,
@@ -249,4 +253,28 @@ test("buildCollectionDailyReceiptKey normalizes primary and specific receipt key
   assert.equal(buildCollectionDailyReceiptKey("record-1"), "record-1:primary");
   assert.equal(buildCollectionDailyReceiptKey("record-1", ""), "record-1:primary");
   assert.equal(buildCollectionDailyReceiptKey("record-1", "receipt-2"), "record-1:receipt-2");
+});
+
+test("parseCollectionApiErrorDetails extracts status, code, and message from API error payloads", () => {
+  const parsed = parseCollectionApiErrorDetails(
+    new Error(
+      '409: {"ok":false,"message":"Collection record has changed since you opened it. Refresh and try again.","error":{"code":"COLLECTION_RECORD_VERSION_CONFLICT","message":"Collection record has changed since you opened it. Refresh and try again."}}',
+    ),
+  );
+
+  assert.equal(parsed.status, 409);
+  assert.equal(parsed.code, "COLLECTION_RECORD_VERSION_CONFLICT");
+  assert.match(parsed.message, /changed since you opened/i);
+  const parsedTopLevelCode = parseCollectionApiErrorDetails(
+    new Error('409: {"ok":false,"message":"Conflict happened","code":"COLLECTION_RECORD_VERSION_CONFLICT"}'),
+  );
+  assert.equal(parsedTopLevelCode.code, "COLLECTION_RECORD_VERSION_CONFLICT");
+  assert.match(parseApiError(new Error("409: {\"message\":\"Conflict happened\"}")), /conflict happened/i);
+});
+
+test("parseCollectionApiErrorDetails falls back safely for non-JSON errors", () => {
+  const parsed = parseCollectionApiErrorDetails(new Error("Network Error"));
+  assert.equal(parsed.status, null);
+  assert.equal(parsed.code, null);
+  assert.equal(parsed.message, "Network Error");
 });

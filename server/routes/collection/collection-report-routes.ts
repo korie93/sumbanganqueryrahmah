@@ -145,6 +145,6 @@ export function registerCollectionReportRoutes(context: CollectionRouteContext) 
     "/api/collection/:id",
     ...reportAccess,
     jsonRoute("Failed to delete collection record.", (req) =>
-      collectionService.deleteRecord(req.user, req.params.id)),
+      collectionService.deleteRecord(req.user, req.params.id, req.body)),
   );
 }
