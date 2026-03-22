@@ -46,6 +46,7 @@ export function useCollectionRecordEdit({
 }: UseCollectionRecordEditArgs) {
   const { toast } = useToast();
   const isMountedRef = useRef(true);
+  const savingEditInFlightRef = useRef(false);
   const editReceiptInputRef = useRef<HTMLInputElement | null>(null);
 
   const [editOpen, setEditOpen] = useState(false);
@@ -106,7 +107,7 @@ export function useCollectionRecordEdit({
   }, [toast]);
 
   const handleSaveEdit = useCallback(async () => {
-    if (!editingRecord || savingEdit) return;
+    if (!editingRecord || savingEdit || savingEditInFlightRef.current) return;
 
     if (!editCustomerName.trim()) {
       toast({
@@ -190,6 +191,7 @@ export function useCollectionRecordEdit({
       }
     }
 
+    savingEditInFlightRef.current = true;
     setSavingEdit(true);
     try {
       const payload: Record<string, unknown> = {
@@ -271,6 +273,7 @@ export function useCollectionRecordEdit({
         variant: "destructive",
       });
     } finally {
+      savingEditInFlightRef.current = false;
       if (!isMountedRef.current) return;
       setSavingEdit(false);
     }
@@ -289,6 +292,7 @@ export function useCollectionRecordEdit({
     nicknameOptions,
     onRefresh,
     savingEdit,
+    savingEditInFlightRef,
     toast,
   ]);
 

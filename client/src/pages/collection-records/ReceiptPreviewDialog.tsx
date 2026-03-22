@@ -58,6 +58,10 @@ export function ReceiptPreviewDialog({
     receipts.find((receipt) => receipt.id === selectedReceiptId) || receipts[0] || null;
   const canZoom = Boolean(source) && (kind === "image" || kind === "pdf");
 
+  if (!open && !record && !loading && !source && !error) {
+    return null;
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[90vh] w-[96vw] max-w-6xl flex-col">
