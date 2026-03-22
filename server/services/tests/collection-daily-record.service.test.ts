@@ -347,6 +347,7 @@ function createMutableCollectionDailyService() {
       records.set(id, updated);
       return updated;
     },
+    deleteCollectionRecord: async (id: string) => records.delete(id),
     createAuditLog: async () => ({ id: "audit-1" }),
   };
 
@@ -670,6 +671,7 @@ function createMutableCollectionSummaryService() {
       records.set(id, updated);
       return updated;
     },
+    deleteCollectionRecord: async (id: string) => records.delete(id),
     createAuditLog: async () => ({ id: "audit-summary-1" }),
   };
 
@@ -820,6 +822,44 @@ test("Collection daily overview moves totals across month boundaries after payme
   assert.equal(februaryAfter.days.find((day) => day.date === "2026-02-28")?.amount, 1000);
 });
 
+test("Collection daily overview recalculates correctly after record deletion", async () => {
+  const service = createMutableCollectionDailyService();
+  const authUser = { username: "superuser", role: "superuser", userId: "superuser-1" } as any;
+
+  const before = await service.getDailyOverview(authUser, {
+    year: "2026",
+    month: "3",
+    usernames: "Collector Alpha,Collector Beta",
+  });
+  assert.equal(before.summary.collectedAmount, 1200);
+  assert.equal(before.days.find((day) => day.date === "2026-03-02")?.amount, 1200);
+
+  await service.deleteRecord(authUser, "move-1");
+
+  const alphaAfter = await service.getDailyOverview(authUser, {
+    year: "2026",
+    month: "3",
+    usernames: "Collector Alpha",
+  });
+  const betaAfter = await service.getDailyOverview(authUser, {
+    year: "2026",
+    month: "3",
+    usernames: "Collector Beta",
+  });
+  const combinedAfter = await service.getDailyOverview(authUser, {
+    year: "2026",
+    month: "3",
+    usernames: "Collector Alpha,Collector Beta",
+  });
+
+  assert.equal(alphaAfter.summary.collectedAmount, 0);
+  assert.equal(alphaAfter.summary.remainingTarget, 5000);
+  assert.equal(betaAfter.summary.collectedAmount, 200);
+  assert.equal(betaAfter.summary.remainingTarget, 4800);
+  assert.equal(combinedAfter.summary.collectedAmount, 200);
+  assert.equal(combinedAfter.days.find((day) => day.date === "2026-03-02")?.amount, 200);
+});
+
 test("Collection summary and nickname summary recalculate after reassignment/date/amount edits", async () => {
   const { service } = createMutableCollectionSummaryService();
   const authUser = { username: "superuser", role: "superuser", userId: "superuser-1" } as any;
@@ -877,6 +917,45 @@ test("Collection summary and nickname summary recalculate after reassignment/dat
   assert.equal(afterNicknameFebruary.totalAmount, 2200);
   assert.equal(afterAlphaFebruary?.totalAmount, 700);
   assert.equal(afterBetaFebruary?.totalAmount, 1500);
+});
+
+test("Collection summary and nickname summary recalculate correctly after record deletion", async () => {
+  const { service } = createMutableCollectionSummaryService();
+  const authUser = { username: "superuser", role: "superuser", userId: "superuser-1" } as any;
+
+  const beforeSummary = await service.getSummary(authUser, { year: "2026" } as any);
+  const beforeJanuary = beforeSummary.summary.find((entry) => entry.month === 1);
+  assert.equal(beforeJanuary?.totalAmount, 1200);
+
+  const beforeNicknameJanuary = await service.getNicknameSummary(authUser, {
+    from: "2026-01-01",
+    to: "2026-01-31",
+    nicknames: "Collector Alpha,Collector Beta",
+    summaryOnly: "true",
+  } as any);
+  const beforeAlphaJanuary = beforeNicknameJanuary.nicknameTotals.find((item) => item.nickname === "Collector Alpha");
+  const beforeBetaJanuary = beforeNicknameJanuary.nicknameTotals.find((item) => item.nickname === "Collector Beta");
+  assert.equal(beforeNicknameJanuary.totalAmount, 1200);
+  assert.equal(beforeAlphaJanuary?.totalAmount, 1000);
+  assert.equal(beforeBetaJanuary?.totalAmount, 200);
+
+  await service.deleteRecord(authUser, "beta-march-1");
+
+  const afterSummary = await service.getSummary(authUser, { year: "2026" } as any);
+  const afterJanuary = afterSummary.summary.find((entry) => entry.month === 1);
+  assert.equal(afterJanuary?.totalAmount, 1000);
+
+  const afterNicknameJanuary = await service.getNicknameSummary(authUser, {
+    from: "2026-01-01",
+    to: "2026-01-31",
+    nicknames: "Collector Alpha,Collector Beta",
+    summaryOnly: "true",
+  } as any);
+  const afterAlphaJanuary = afterNicknameJanuary.nicknameTotals.find((item) => item.nickname === "Collector Alpha");
+  const afterBetaJanuary = afterNicknameJanuary.nicknameTotals.find((item) => item.nickname === "Collector Beta");
+  assert.equal(afterNicknameJanuary.totalAmount, 1000);
+  assert.equal(afterAlphaJanuary?.totalAmount, 1000);
+  assert.equal(afterBetaJanuary?.totalAmount, 0);
 });
 
 test("Collection list pagination keeps month totals stable and month-scoped", async () => {
