@@ -29,6 +29,8 @@
     "smoke:preflight": "node scripts/smoke-preflight.mjs",
     "smoke:ui": "node scripts/ui-smoke.mjs",
     "smoke:ci-local": "node scripts/smoke-ci-local.mjs",
+    "release:verify:local": "node scripts/release-readiness-local.mjs",
+    "monitor:stale-conflicts": "node scripts/monitor-stale-conflicts.mjs",
     "dev:server": "tsx server/index-local.ts",
     "build": "npx vite build && npx esbuild server/index-local.ts --bundle --platform=node --packages=external --outfile=dist-local/server/index-local.js --format=esm && npx esbuild server/cluster-local.ts --bundle --platform=node --packages=external --outfile=dist-local/server/cluster-local.js --format=esm",
     "start": "npm run start:built",
