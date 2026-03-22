@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import {
   clearDevMailOutboxPreviews,
   deleteDevMailOutboxPreview,
@@ -51,6 +51,12 @@ const DEV_MAIL_OUTBOX_DEFAULT_PAGINATION: DevMailOutboxPaginationState = {
   totalPages: 1,
 };
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : error instanceof Error && error.name === "AbortError";
+}
+
 function normalizeDevMailOutboxQuery(
   query: Partial<DevMailOutboxQueryState> | undefined,
 ): DevMailOutboxQueryState {
@@ -72,6 +78,7 @@ export function useSettingsDevMailOutbox({
   toast,
 }: UseSettingsDevMailOutboxArgs) {
   const devMailOutboxRequestIdRef = useRef(0);
+  const devMailOutboxAbortControllerRef = useRef<AbortController | null>(null);
   const deleteDevMailPreviewLocksRef = useRef<Set<string>>(new Set());
   const devMailOutboxQueryRef = useRef<DevMailOutboxQueryState>(DEV_MAIL_OUTBOX_DEFAULT_QUERY);
 
@@ -87,6 +94,20 @@ export function useSettingsDevMailOutbox({
     DEV_MAIL_OUTBOX_DEFAULT_PAGINATION,
   );
 
+  const abortDevMailOutboxRequest = useCallback(() => {
+    if (devMailOutboxAbortControllerRef.current) {
+      devMailOutboxAbortControllerRef.current.abort();
+      devMailOutboxAbortControllerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      devMailOutboxRequestIdRef.current += 1;
+      abortDevMailOutboxRequest();
+    };
+  }, [abortDevMailOutboxRequest]);
+
   const loadDevMailOutbox = useCallback(async (queryInput?: Partial<DevMailOutboxQueryState>) => {
     const query = normalizeDevMailOutboxQuery({
       ...devMailOutboxQueryRef.current,
@@ -100,8 +121,11 @@ export function useSettingsDevMailOutbox({
 
     const requestId = ++devMailOutboxRequestIdRef.current;
     setDevMailOutboxLoading(true);
+    abortDevMailOutboxRequest();
+    const controller = new AbortController();
+    devMailOutboxAbortControllerRef.current = controller;
     try {
-      const response = await getDevMailOutboxPreviews(query);
+      const response = await getDevMailOutboxPreviews(query, { signal: controller.signal });
       const nextEntries = Array.isArray(response?.previews) ? response.previews : [];
       const nextEnabled = Boolean(response?.enabled);
       const responsePagination = response?.pagination;
@@ -111,7 +135,11 @@ export function useSettingsDevMailOutbox({
         total: Math.max(0, Number(responsePagination?.total || 0)),
         totalPages: Math.max(1, Number(responsePagination?.totalPages || 1)),
       };
-      if (!isMountedRef.current || requestId !== devMailOutboxRequestIdRef.current) {
+      if (
+        controller.signal.aborted ||
+        !isMountedRef.current ||
+        requestId !== devMailOutboxRequestIdRef.current
+      ) {
         return {
           enabled: nextEnabled,
           previews: nextEntries,
@@ -139,7 +167,12 @@ export function useSettingsDevMailOutbox({
         pagination: nextPagination,
       };
     } catch (error: unknown) {
-      if (!isMountedRef.current || requestId !== devMailOutboxRequestIdRef.current) {
+      if (
+        controller.signal.aborted ||
+        isAbortError(error) ||
+        !isMountedRef.current ||
+        requestId !== devMailOutboxRequestIdRef.current
+      ) {
         return {
           enabled: false,
           previews: [] as DevMailOutboxPreview[],
@@ -165,10 +198,17 @@ export function useSettingsDevMailOutbox({
         pagination: DEV_MAIL_OUTBOX_DEFAULT_PAGINATION,
       };
     } finally {
-      if (!isMountedRef.current || requestId !== devMailOutboxRequestIdRef.current) return;
+      if (devMailOutboxAbortControllerRef.current === controller) {
+        devMailOutboxAbortControllerRef.current = null;
+      }
+      if (
+        controller.signal.aborted ||
+        !isMountedRef.current ||
+        requestId !== devMailOutboxRequestIdRef.current
+      ) return;
       setDevMailOutboxLoading(false);
     }
-  }, [isMountedRef, toast]);
+  }, [abortDevMailOutboxRequest, isMountedRef, toast]);
 
   const refreshDevMailOutboxSection = useCallback(async (queryInput?: Partial<DevMailOutboxQueryState>) => {
     await loadDevMailOutbox(queryInput);

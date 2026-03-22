@@ -19,10 +19,17 @@ import {
 } from "@/pages/collection-records/utils";
 import { parseApiError } from "@/pages/collection/utils";
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : error instanceof Error && error.name === "AbortError";
+}
+
 export function useCollectionReceiptPreview() {
   const { toast } = useToast();
   const receiptPreviewUrlRef = useRef<string | null>(null);
   const receiptPreviewRequestIdRef = useRef(0);
+  const receiptPreviewAbortControllerRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
 
   const [receiptPreviewOpen, setReceiptPreviewOpen] = useState(false);
@@ -69,8 +76,16 @@ export function useCollectionReceiptPreview() {
     }
   }, []);
 
+  const abortReceiptPreviewRequest = useCallback(() => {
+    if (receiptPreviewAbortControllerRef.current) {
+      receiptPreviewAbortControllerRef.current.abort();
+      receiptPreviewAbortControllerRef.current = null;
+    }
+  }, []);
+
   const closeReceiptPreview = useCallback(() => {
     receiptPreviewRequestIdRef.current += 1;
+    abortReceiptPreviewRequest();
     clearReceiptPreviewObjectUrl();
     setReceiptPreviewOpen(false);
     setReceiptPreviewRecord(null);
@@ -81,7 +96,7 @@ export function useCollectionReceiptPreview() {
     setReceiptPreviewMimeType("");
     setReceiptPreviewFileName("");
     setReceiptPreviewError("");
-  }, [clearReceiptPreviewObjectUrl]);
+  }, [abortReceiptPreviewRequest, clearReceiptPreviewObjectUrl]);
 
   const handleViewReceipt = useCallback((record: CollectionRecord, receiptId?: string) => {
     const nextReceiptId = receiptId || record.receipts?.[0]?.id || null;
@@ -93,15 +108,19 @@ export function useCollectionReceiptPreview() {
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
+      abortReceiptPreviewRequest();
       clearReceiptPreviewObjectUrl();
     };
-  }, [clearReceiptPreviewObjectUrl]);
+  }, [abortReceiptPreviewRequest, clearReceiptPreviewObjectUrl]);
 
   useEffect(() => {
     if (!receiptPreviewOpen || !receiptPreviewRecord) return;
 
     const activeRequestId = ++receiptPreviewRequestIdRef.current;
     const selectedReceiptId = selectedPreviewReceipt?.id || null;
+    abortReceiptPreviewRequest();
+    const controller = new AbortController();
+    receiptPreviewAbortControllerRef.current = controller;
 
     const loadPreview = async () => {
       setReceiptPreviewLoading(true);
@@ -113,8 +132,13 @@ export function useCollectionReceiptPreview() {
           receiptPreviewRecord.id,
           "view",
           selectedReceiptId,
+          { signal: controller.signal },
         );
-        if (!isMountedRef.current || activeRequestId !== receiptPreviewRequestIdRef.current) {
+        if (
+          controller.signal.aborted ||
+          !isMountedRef.current ||
+          activeRequestId !== receiptPreviewRequestIdRef.current
+        ) {
           return;
         }
 
@@ -126,12 +150,20 @@ export function useCollectionReceiptPreview() {
           effectiveMimeType.startsWith("image/")
             ? await optimizeImageBlobForPreview(blob)
             : blob;
-        if (!isMountedRef.current || activeRequestId !== receiptPreviewRequestIdRef.current) {
+        if (
+          controller.signal.aborted ||
+          !isMountedRef.current ||
+          activeRequestId !== receiptPreviewRequestIdRef.current
+        ) {
           return;
         }
 
         const objectUrl = URL.createObjectURL(previewBlob);
-        if (!isMountedRef.current || activeRequestId !== receiptPreviewRequestIdRef.current) {
+        if (
+          controller.signal.aborted ||
+          !isMountedRef.current ||
+          activeRequestId !== receiptPreviewRequestIdRef.current
+        ) {
           URL.revokeObjectURL(objectUrl);
           return;
         }
@@ -147,7 +179,12 @@ export function useCollectionReceiptPreview() {
             "",
         );
       } catch (error: unknown) {
-        if (!isMountedRef.current || activeRequestId !== receiptPreviewRequestIdRef.current) {
+        if (
+          controller.signal.aborted ||
+          isAbortError(error) ||
+          !isMountedRef.current ||
+          activeRequestId !== receiptPreviewRequestIdRef.current
+        ) {
           return;
         }
         setReceiptPreviewSource("");
@@ -160,7 +197,14 @@ export function useCollectionReceiptPreview() {
         );
         setReceiptPreviewError(parseApiError(error));
       } finally {
-        if (!isMountedRef.current || activeRequestId !== receiptPreviewRequestIdRef.current) {
+        if (receiptPreviewAbortControllerRef.current === controller) {
+          receiptPreviewAbortControllerRef.current = null;
+        }
+        if (
+          controller.signal.aborted ||
+          !isMountedRef.current ||
+          activeRequestId !== receiptPreviewRequestIdRef.current
+        ) {
           return;
         }
         setReceiptPreviewLoading(false);
@@ -169,6 +213,7 @@ export function useCollectionReceiptPreview() {
 
     void loadPreview();
   }, [
+    abortReceiptPreviewRequest,
     clearReceiptPreviewObjectUrl,
     receiptPreviewOpen,
     receiptPreviewRecord,

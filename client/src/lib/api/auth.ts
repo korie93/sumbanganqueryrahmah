@@ -153,6 +153,10 @@ export type PendingPasswordResetRequestsResponse = AuthOkResponse<{
   pagination?: PaginatedListPayload;
 }>;
 
+type RequestOptions = {
+  signal?: AbortSignal;
+};
+
 export async function login(
   username: string,
   password: string,
@@ -189,8 +193,10 @@ export async function checkHealth() {
   return response.json();
 }
 
-export async function getMe(): Promise<CurrentUser> {
-  const response = await apiRequest("GET", "/api/me");
+export async function getMe(options?: RequestOptions): Promise<CurrentUser> {
+  const response = await apiRequest("GET", "/api/me", undefined, {
+    signal: options?.signal,
+  });
   const payload = (await response.json()) as AuthUserResponse;
   if (!payload.user) {
     throw new Error("Authenticated user payload is missing.");
@@ -263,7 +269,7 @@ export async function getSuperuserManagedUsers(query?: {
   search?: string;
   role?: "all" | "admin" | "user";
   status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned";
-}): Promise<ManagedUsersResponse> {
+}, options?: RequestOptions): Promise<ManagedUsersResponse> {
   const params = new URLSearchParams();
   if (query?.page) params.set("page", String(query.page));
   if (query?.pageSize) params.set("pageSize", String(query.pageSize));
@@ -271,7 +277,9 @@ export async function getSuperuserManagedUsers(query?: {
   if (query?.role && query.role !== "all") params.set("role", query.role);
   if (query?.status && query.status !== "all") params.set("status", query.status);
   const suffix = params.size > 0 ? `?${params.toString()}` : "";
-  const response = await apiRequest("GET", `/api/admin/users${suffix}`);
+  const response = await apiRequest("GET", `/api/admin/users${suffix}`, undefined, {
+    signal: options?.signal,
+  });
   return response.json() as Promise<ManagedUsersResponse>;
 }
 
@@ -336,14 +344,19 @@ export async function getPendingPasswordResetRequests(query?: {
   pageSize?: number;
   search?: string;
   status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned";
-}): Promise<PendingPasswordResetRequestsResponse> {
+}, options?: RequestOptions): Promise<PendingPasswordResetRequestsResponse> {
   const params = new URLSearchParams();
   if (query?.page) params.set("page", String(query.page));
   if (query?.pageSize) params.set("pageSize", String(query.pageSize));
   if (query?.search) params.set("search", query.search);
   if (query?.status && query.status !== "all") params.set("status", query.status);
   const suffix = params.size > 0 ? `?${params.toString()}` : "";
-  const response = await apiRequest("GET", `/api/admin/password-reset-requests${suffix}`);
+  const response = await apiRequest(
+    "GET",
+    `/api/admin/password-reset-requests${suffix}`,
+    undefined,
+    { signal: options?.signal },
+  );
   return response.json() as Promise<PendingPasswordResetRequestsResponse>;
 }
 
@@ -353,7 +366,7 @@ export async function getDevMailOutboxPreviews(query?: {
   searchEmail?: string;
   searchSubject?: string;
   sortDirection?: "asc" | "desc";
-}): Promise<DevMailOutboxPreviewsResponse> {
+}, options?: RequestOptions): Promise<DevMailOutboxPreviewsResponse> {
   const params = new URLSearchParams();
   if (query?.page) params.set("page", String(query.page));
   if (query?.pageSize) params.set("pageSize", String(query.pageSize));
@@ -361,7 +374,9 @@ export async function getDevMailOutboxPreviews(query?: {
   if (query?.searchSubject) params.set("searchSubject", query.searchSubject);
   if (query?.sortDirection) params.set("sortDirection", query.sortDirection);
   const suffix = params.size > 0 ? `?${params.toString()}` : "";
-  const response = await apiRequest("GET", `/api/admin/dev-mail-outbox${suffix}`);
+  const response = await apiRequest("GET", `/api/admin/dev-mail-outbox${suffix}`, undefined, {
+    signal: options?.signal,
+  });
   return response.json() as Promise<DevMailOutboxPreviewsResponse>;
 }
 
