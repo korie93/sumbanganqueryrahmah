@@ -872,7 +872,8 @@ test("PATCH /api/collection/:id rejects stale expectedUpdatedAt values with 409 
     assert.equal(payload.ok, false);
     assert.match(String(payload.message), /changed since you opened/i);
     assert.equal(updateCalls.length, 0);
-    assert.equal(auditLogs.length, 0);
+    assert.equal(auditLogs.length, 1);
+    assert.equal(auditLogs[0].action, "COLLECTION_RECORD_VERSION_CONFLICT");
   } finally {
     await stopTestServer(server);
   }
@@ -910,7 +911,8 @@ test("DELETE /api/collection/:id rejects stale expectedUpdatedAt values with 409
     assert.equal(payload.ok, false);
     assert.match(String(payload.message), /changed since you opened/i);
     assert.equal(deleteCalls.length, 0);
-    assert.equal(auditLogs.length, 0);
+    assert.equal(auditLogs.length, 1);
+    assert.equal(auditLogs[0].action, "COLLECTION_RECORD_VERSION_CONFLICT");
   } finally {
     await stopTestServer(server);
   }

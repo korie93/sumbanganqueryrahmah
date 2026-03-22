@@ -152,6 +152,29 @@ export class CollectionRecordService extends CollectionServiceSupport {
     }
   }
 
+  private async logRecordVersionConflict(params: {
+    username: string;
+    recordId: string;
+    operation: "update" | "delete";
+    expectedUpdatedAt: Date | null;
+    currentUpdatedAt: Date | null;
+  }) {
+    try {
+      await this.storage.createAuditLog({
+        action: "COLLECTION_RECORD_VERSION_CONFLICT",
+        performedBy: params.username,
+        targetResource: params.recordId,
+        details: [
+          `Collection record ${params.operation} rejected due to stale version by ${params.username}.`,
+          `expectedUpdatedAt=${params.expectedUpdatedAt?.toISOString() || "null"}`,
+          `currentUpdatedAt=${params.currentUpdatedAt?.toISOString() || "null"}`,
+        ].join(" "),
+      });
+    } catch {
+      // best effort telemetry only
+    }
+  }
+
   private parseRequestedDailyUsernames(query: ListQuery): string[] {
     const rawValues: unknown[] = [];
     const appendValues = (raw: unknown) => {
@@ -1067,6 +1090,13 @@ export class CollectionRecordService extends CollectionServiceSupport {
       if (expectedUpdatedAt) {
         const currentVersion = resolveRecordVersionTimestamp(existing);
         if (!currentVersion || currentVersion.getTime() !== expectedUpdatedAt.getTime()) {
+          await this.logRecordVersionConflict({
+            username: user.username,
+            recordId: id,
+            operation: "update",
+            expectedUpdatedAt,
+            currentUpdatedAt: currentVersion,
+          });
           throw conflict(COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE, "COLLECTION_RECORD_VERSION_CONFLICT");
         }
       }
@@ -1179,6 +1209,15 @@ export class CollectionRecordService extends CollectionServiceSupport {
           await removeCollectionReceiptFile(uploadedReceipt.storagePath);
         }
         if (expectedUpdatedAt) {
+          const freshRecord = await this.storage.getCollectionRecordById(id);
+          const freshVersion = freshRecord ? resolveRecordVersionTimestamp(freshRecord) : null;
+          await this.logRecordVersionConflict({
+            username: user.username,
+            recordId: id,
+            operation: "update",
+            expectedUpdatedAt,
+            currentUpdatedAt: freshVersion,
+          });
           throw conflict(COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE, "COLLECTION_RECORD_VERSION_CONFLICT");
         }
         throw notFound("Collection record not found.");
@@ -1231,6 +1270,13 @@ export class CollectionRecordService extends CollectionServiceSupport {
     if (expectedUpdatedAt) {
       const currentVersion = resolveRecordVersionTimestamp(existing);
       if (!currentVersion || currentVersion.getTime() !== expectedUpdatedAt.getTime()) {
+        await this.logRecordVersionConflict({
+          username: user.username,
+          recordId: id,
+          operation: "delete",
+          expectedUpdatedAt,
+          currentUpdatedAt: currentVersion,
+        });
         throw conflict(COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE, "COLLECTION_RECORD_VERSION_CONFLICT");
       }
     }
@@ -1241,6 +1287,15 @@ export class CollectionRecordService extends CollectionServiceSupport {
     });
     if (!deleted) {
       if (expectedUpdatedAt) {
+        const freshRecord = await this.storage.getCollectionRecordById(id);
+        const freshVersion = freshRecord ? resolveRecordVersionTimestamp(freshRecord) : null;
+        await this.logRecordVersionConflict({
+          username: user.username,
+          recordId: id,
+          operation: "delete",
+          expectedUpdatedAt,
+          currentUpdatedAt: freshVersion,
+        });
         throw conflict(COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE, "COLLECTION_RECORD_VERSION_CONFLICT");
       }
       throw notFound("Collection record not found.");
