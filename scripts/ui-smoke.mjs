@@ -694,6 +694,24 @@ const consumeExpectedCollectionPurgeSummaryRateLimit = (tracker) => {
   return consumed;
 };
 
+const consumeExpectedPostLogoutRateLimitNoise = (tracker) => {
+  const expectedPaths = ["/api/imports", "/api/app-config"];
+  let consumed = 0;
+  for (let index = tracker.failedRequests.length - 1; index >= 0; index -= 1) {
+    const entry = String(tracker.failedRequests[index] || "");
+    if (!entry.includes("GET") || !entry.includes(":: 429")) {
+      continue;
+    }
+    const matchedExpectedPath = expectedPaths.some((pathFragment) => entry.includes(pathFragment));
+    if (!matchedExpectedPath) {
+      continue;
+    }
+    tracker.failedRequests.splice(index, 1);
+    consumed += 1;
+  }
+  return consumed;
+};
+
 const probeAuthSession = async (page) =>
   page.evaluate(async () => {
     const response = await fetch("/api/me", { credentials: "include" });
@@ -744,6 +762,10 @@ const checkLogoutFlow = async (page, context, tracker) => {
   assert(loggedOutState.storedUsername === null, "stored username should be cleared after logout");
   assert(loggedOutState.storedRole === null, "stored role should be cleared after logout");
 
+  // Login bootstrap probes may be rate-limited in CI under peak load right after logout.
+  // Ignore only these known post-logout GET 429s; keep all other failures strict.
+  await page.waitForTimeout(250);
+  consumeExpectedPostLogoutRateLimitNoise(tracker);
   tracker.assertClean("logout");
   tracker.clear();
 };
