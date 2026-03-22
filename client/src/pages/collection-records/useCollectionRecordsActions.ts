@@ -7,7 +7,38 @@ import {
   type CollectionPurgeSummaryResponse,
   type CollectionRecord,
 } from "@/lib/api";
-import { emitCollectionDataChanged, parseApiError } from "@/pages/collection/utils";
+import {
+  emitCollectionDataChanged,
+  parseApiError,
+  parseCollectionApiErrorDetails,
+} from "@/pages/collection/utils";
+
+export type DeleteRecordErrorFeedback = {
+  isVersionConflict: boolean;
+  title: string;
+  description: string;
+};
+
+export function buildDeleteRecordErrorFeedback(error: unknown): DeleteRecordErrorFeedback {
+  const apiErrorDetails = parseCollectionApiErrorDetails(error);
+  if (
+    apiErrorDetails.status === 409
+    && apiErrorDetails.code === "COLLECTION_RECORD_VERSION_CONFLICT"
+  ) {
+    return {
+      isVersionConflict: true,
+      title: "Record Updated Elsewhere",
+      description:
+        "This record changed in another session. The list has been refreshed. Reopen the record and try again.",
+    };
+  }
+
+  return {
+    isVersionConflict: false,
+    title: "Failed to Delete Record",
+    description: apiErrorDetails.message || parseApiError(error),
+  };
+}
 
 type UseCollectionRecordsActionsArgs = {
   canPurgeOldRecords: boolean;
@@ -97,7 +128,9 @@ export function useCollectionRecordsActions({
     if (!pendingDeleteRecord || deletingId) return;
     setDeletingId(pendingDeleteRecord.id);
     try {
-      await deleteCollectionRecord(pendingDeleteRecord.id);
+      await deleteCollectionRecord(pendingDeleteRecord.id, {
+        expectedUpdatedAt: pendingDeleteRecord.updatedAt || pendingDeleteRecord.createdAt,
+      });
       toast({
         title: "Record Deleted",
         description: "Rekod collection berjaya dipadam.",
@@ -111,9 +144,29 @@ export function useCollectionRecordsActions({
       ]);
     } catch (error: unknown) {
       if (!isMountedRef.current) return;
+      const feedback = buildDeleteRecordErrorFeedback(error);
+      if (feedback.isVersionConflict) {
+        toast({
+          title: feedback.title,
+          description: feedback.description,
+          variant: "destructive",
+        });
+        emitCollectionDataChanged();
+        setPendingDeleteRecord(null);
+        try {
+          await Promise.all([
+            onRefreshRecords(),
+            canPurgeOldRecords ? loadPurgeSummary() : Promise.resolve(),
+          ]);
+        } catch {
+          // keep conflict UX deterministic even if refresh fails
+        }
+        return;
+      }
+
       toast({
-        title: "Failed to Delete Record",
-        description: parseApiError(error),
+        title: feedback.title,
+        description: feedback.description,
         variant: "destructive",
       });
     } finally {

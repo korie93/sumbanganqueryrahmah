@@ -381,6 +381,68 @@ const checkCollectionDailyPage = async (page, tracker) => {
   tracker.clear();
 };
 
+const checkCollectionRecordsStaleDeleteConflict = async (page, context, tracker) => {
+  const smokeRecord = await provisionStaleDeleteConflictRecord(context);
+  let cleanupVersion = smokeRecord.expectedUpdatedAt;
+
+  try {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${baseUrl}/collection/records`, { waitUntil: "networkidle" });
+    await page.getByText("View Rekod Collection").first().waitFor();
+
+    const searchInput = page.getByPlaceholder("Cari nama / IC / akaun / batch / telefon / jumlah bayaran");
+    await searchInput.fill(smokeRecord.customerName);
+    await page.getByRole("button", { name: "Filter" }).click();
+    await page.waitForLoadState("networkidle");
+
+    const targetRow = page.locator("tr", { hasText: smokeRecord.customerName }).first();
+    await targetRow.waitFor({ state: "visible", timeout: 20_000 });
+    await targetRow.getByRole("button", { name: "Delete" }).click();
+
+    await page.getByText("Adakah anda pasti mahu padam rekod collection ini?").waitFor({ timeout: 15_000 });
+
+    const mutationResponse = await apiJsonRequest(
+      context,
+      "PATCH",
+      `/api/collection/${encodeURIComponent(smokeRecord.id)}`,
+      {
+        amount: smokeRecord.bumpedAmount,
+        expectedUpdatedAt: smokeRecord.expectedUpdatedAt,
+      },
+      [200],
+    );
+    const updatedRecord = mutationResponse.payload?.record;
+    cleanupVersion = String(updatedRecord?.updatedAt || updatedRecord?.createdAt || cleanupVersion || "");
+    assert(cleanupVersion, "stale-delete smoke should capture the updated version timestamp for cleanup");
+
+    await page.getByRole("button", { name: "Padam" }).click();
+    let consumedConflicts = 0;
+    const conflictDeadline = Date.now() + 15_000;
+    while (Date.now() < conflictDeadline && consumedConflicts < 1) {
+      consumedConflicts += consumeExpectedCollectionDeleteConflict(tracker, smokeRecord.id);
+      if (consumedConflicts > 0) {
+        break;
+      }
+      await page.waitForTimeout(100);
+    }
+    assert(
+      consumedConflicts >= 1,
+      `Expected at least one 409 DELETE /api/collection/${smokeRecord.id} response during stale-delete smoke flow`,
+    );
+    await targetRow.waitFor({ state: "visible", timeout: 15_000 });
+
+    // A 429 from purge-summary is non-critical here and can replace the conflict toast due TOAST_LIMIT=1.
+    consumeExpectedCollectionPurgeSummaryRateLimit(tracker);
+    tracker.assertClean("collection records stale-delete conflict");
+    tracker.clear();
+  } finally {
+    await cleanupStaleDeleteConflictRecord(context, {
+      ...smokeRecord,
+      expectedUpdatedAt: cleanupVersion,
+    });
+  }
+};
+
 const isLiveCookie = (cookie) => {
   if (!cookie || typeof cookie.name !== "string") {
     return false;
@@ -435,6 +497,203 @@ const waitForClearedAuthCookies = async (context, timeoutMs = 5_000) => {
   return cookieNames;
 };
 
+const getLocalIsoDate = (referenceDate = new Date()) =>
+  `${referenceDate.getFullYear()}-${String(referenceDate.getMonth() + 1).padStart(2, "0")}-${String(referenceDate.getDate()).padStart(2, "0")}`;
+
+const readCsrfToken = async (context) => {
+  const csrfCookie = (await context.cookies(baseUrl))
+    .find((cookie) => cookie.name === "sqr_csrf" && isLiveCookie(cookie));
+  return String(csrfCookie?.value || "");
+};
+
+const apiJsonRequest = async (context, method, apiPath, body, expectedStatuses = [200]) => {
+  const uppercaseMethod = String(method || "").toUpperCase();
+  const headers = {
+    Accept: "application/json",
+  };
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(uppercaseMethod)) {
+    const csrfToken = await readCsrfToken(context);
+    if (csrfToken) {
+      headers["X-CSRF-Token"] = csrfToken;
+    }
+  }
+
+  const response = await context.request.fetch(`${baseUrl}${apiPath}`, {
+    method: uppercaseMethod,
+    headers,
+    data: body,
+    failOnStatusCode: false,
+  });
+
+  const status = response.status();
+  const rawText = await response.text();
+  let payload = null;
+  try {
+    payload = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    payload = null;
+  }
+
+  if (!expectedStatuses.includes(status)) {
+    throw new Error(
+      [
+        `${uppercaseMethod} ${apiPath} returned unexpected status ${status}.`,
+        `Expected statuses: ${expectedStatuses.join(", ")}`,
+        `Response body: ${rawText || "(empty)"}`,
+      ].join("\n"),
+    );
+  }
+
+  return { status, payload };
+};
+
+const provisionStaleDeleteConflictRecord = async (context) => {
+  const nicknamesResponse = await apiJsonRequest(
+    context,
+    "GET",
+    "/api/collection/nicknames?includeInactive=1",
+    undefined,
+    [200],
+  );
+  const nicknames = Array.isArray(nicknamesResponse.payload?.nicknames)
+    ? nicknamesResponse.payload.nicknames
+    : [];
+  const activeNickname = nicknames.find((nickname) => nickname?.isActive === true);
+  let targetNickname = String(activeNickname?.nickname || "").trim();
+
+  if (!targetNickname) {
+    const generatedNickname = `Smoke Conflict ${Date.now()}`;
+    const createNicknameResponse = await apiJsonRequest(
+      context,
+      "POST",
+      "/api/collection/nicknames",
+      {
+        nickname: generatedNickname,
+        roleScope: "both",
+      },
+      [200],
+    );
+    targetNickname = String(createNicknameResponse.payload?.nickname?.nickname || "").trim();
+  }
+  assert(targetNickname, "stale-delete smoke requires at least one active collection nickname");
+
+  const uniqueSuffix = String(Date.now());
+  const customerName = `Smoke Stale Delete ${uniqueSuffix}`;
+  const accountNumber = `SMK-${uniqueSuffix}`;
+  const createRecordResponse = await apiJsonRequest(
+    context,
+    "POST",
+    "/api/collection",
+    {
+      customerName,
+      icNumber: `900101${uniqueSuffix.slice(-6)}`,
+      customerPhone: `012${uniqueSuffix.slice(-7)}`,
+      accountNumber,
+      batch: "P10",
+      paymentDate: getLocalIsoDate(),
+      amount: 55.3,
+      collectionStaffNickname: targetNickname,
+    },
+    [200],
+  );
+
+  const createdRecord = createRecordResponse.payload?.record;
+  const id = String(createdRecord?.id || "");
+  const expectedUpdatedAt = String(createdRecord?.updatedAt || createdRecord?.createdAt || "");
+  assert(id, "stale-delete smoke should receive a record id from create API");
+  assert(expectedUpdatedAt, "stale-delete smoke should receive a record version timestamp from create API");
+
+  return {
+    id,
+    customerName,
+    accountNumber,
+    expectedUpdatedAt,
+    bumpedAmount: 77.7,
+  };
+};
+
+const waitForRateLimitRecovery = async (payload, fallbackMs = 1_000) => {
+  const retryAfterMs = Number(payload?.retryAfterMs);
+  const boundedRetryMs = Number.isFinite(retryAfterMs)
+    ? Math.min(8_000, Math.max(250, retryAfterMs))
+    : fallbackMs;
+  await new Promise((resolve) => setTimeout(resolve, boundedRetryMs));
+};
+
+const cleanupStaleDeleteConflictRecord = async (
+  context,
+  record,
+) => {
+  let expectedUpdatedAt = String(record.expectedUpdatedAt || "");
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const deleteResponse = await apiJsonRequest(
+      context,
+      "DELETE",
+      `/api/collection/${encodeURIComponent(record.id)}`,
+      expectedUpdatedAt ? { expectedUpdatedAt } : undefined,
+      [200, 404, 409, 429],
+    );
+    if (deleteResponse.status === 429) {
+      await waitForRateLimitRecovery(deleteResponse.payload, 1_000);
+      continue;
+    }
+    if (deleteResponse.status === 200 || deleteResponse.status === 404) {
+      return;
+    }
+
+    const listResponse = await apiJsonRequest(
+      context,
+      "GET",
+      `/api/collection/list?search=${encodeURIComponent(record.accountNumber)}&limit=100&offset=0`,
+      undefined,
+      [200, 429],
+    );
+    if (listResponse.status === 429) {
+      await waitForRateLimitRecovery(listResponse.payload, 1_000);
+      continue;
+    }
+    const rows = Array.isArray(listResponse.payload?.records) ? listResponse.payload.records : [];
+    const matched = rows.find((item) => String(item?.id || "") === record.id);
+    const refreshedVersion = String(matched?.updatedAt || matched?.createdAt || "");
+    if (!refreshedVersion) {
+      return;
+    }
+    expectedUpdatedAt = refreshedVersion;
+  }
+
+  throw new Error(`stale-delete smoke cleanup could not delete record ${record.id}`);
+};
+
+const consumeExpectedCollectionDeleteConflict = (tracker, recordId) => {
+  const pattern = `/api/collection/${recordId}`;
+  let consumed = 0;
+  for (let index = tracker.failedRequests.length - 1; index >= 0; index -= 1) {
+    const entry = String(tracker.failedRequests[index] || "");
+    if (entry.includes("DELETE") && entry.includes(pattern) && entry.includes(":: 409")) {
+      tracker.failedRequests.splice(index, 1);
+      consumed += 1;
+    }
+  }
+  return consumed;
+};
+
+const consumeExpectedCollectionPurgeSummaryRateLimit = (tracker) => {
+  const pattern = "/api/collection/purge-summary";
+  let consumed = 0;
+  for (let index = tracker.failedRequests.length - 1; index >= 0; index -= 1) {
+    const entry = String(tracker.failedRequests[index] || "");
+    if (entry.includes("GET") && entry.includes(pattern) && entry.includes(":: 429")) {
+      tracker.failedRequests.splice(index, 1);
+      consumed += 1;
+    }
+  }
+  return consumed;
+};
+
 const probeAuthSession = async (page) =>
   page.evaluate(async () => {
     const response = await fetch("/api/me", { credentials: "include" });
@@ -453,6 +712,8 @@ const probeAuthSession = async (page) =>
   });
 
 const checkLogoutFlow = async (page, context, tracker) => {
+  // Ignore stale request noise from prior smoke sections; this assertion scopes logout only.
+  tracker.clear();
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByTestId("button-user-menu").waitFor();
@@ -577,6 +838,7 @@ const run = async () => {
       await checkMobileNavbar(page, tracker);
       await checkHomeEntryPoint(page, tracker);
       await checkCollectionDailyPage(page, tracker);
+      await checkCollectionRecordsStaleDeleteConflict(page, context, tracker);
 
       await checkLogoutFlow(page, context, tracker);
     } else {

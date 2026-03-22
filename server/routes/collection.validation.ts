@@ -44,6 +44,13 @@ export type CollectionCreatePayload = {
 export type CollectionUpdatePayload = Partial<CollectionCreatePayload> & {
   removeReceipt?: boolean;
   removeReceiptIds?: unknown;
+  expectedUpdatedAt?: string;
+};
+
+export type CollectionDeletePayload = {
+  // Optional optimistic-concurrency token from the last observed record version.
+  // When provided, DELETE /api/collection/:id will reject stale deletes with HTTP 409.
+  expectedUpdatedAt?: string;
 };
 
 export type CollectionNicknamePayload = {

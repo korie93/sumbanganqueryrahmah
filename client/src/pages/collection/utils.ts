@@ -8,15 +8,44 @@ export const COLLECTION_STAFF_NICKNAME_AUTH_KEY = "collection_staff_nickname_aut
 export const COLLECTION_DATA_CHANGED_EVENT = "collection:data-changed";
 export const COLLECTION_PHONE_REGEX = /^[0-9+\-\s]{8,20}$/;
 
-export function parseApiError(error: unknown): string {
+export type CollectionApiErrorDetails = {
+  status: number | null;
+  code: string | null;
+  message: string;
+};
+
+export function parseCollectionApiErrorDetails(error: unknown): CollectionApiErrorDetails {
   const raw = error instanceof Error ? error.message : "Request failed";
+  const statusMatch = raw.match(/^(\d+):\s*/);
+  const fallbackStatus = statusMatch?.[1] ? Number.parseInt(statusMatch[1], 10) : null;
   const jsonPart = raw.replace(/^\d+:\s*/, "");
+
   try {
     const parsed = JSON.parse(jsonPart);
-    return String(parsed?.message || parsed?.error?.message || raw);
+    const parsedStatus = Number(parsed?.status);
+    const status = Number.isFinite(parsedStatus) ? parsedStatus : fallbackStatus;
+    const code =
+      typeof parsed?.code === "string"
+        ? parsed.code
+        : typeof parsed?.error?.code === "string"
+          ? parsed.error.code
+          : null;
+    return {
+      status: Number.isFinite(Number(status)) ? Number(status) : null,
+      code,
+      message: String(parsed?.message || parsed?.error?.message || raw),
+    };
   } catch {
-    return raw;
+    return {
+      status: fallbackStatus,
+      code: null,
+      message: raw,
+    };
   }
+}
+
+export function parseApiError(error: unknown): string {
+  return parseCollectionApiErrorDetails(error).message;
 }
 
 export function isValidDate(value: string): boolean {

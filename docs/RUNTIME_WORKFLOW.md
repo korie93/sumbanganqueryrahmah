@@ -40,6 +40,8 @@ So the following are defined once and shared:
 Validated runtime config lives in:
 
 - `server/config/runtime.ts`
+- Collection optimistic-concurrency API contract:
+  - `docs/COLLECTION_CONCURRENCY_API.md`
 
 Critical modules should prefer that config over direct `process.env` reads.
 

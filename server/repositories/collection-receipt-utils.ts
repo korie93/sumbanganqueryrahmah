@@ -23,7 +23,9 @@ type CollectionRecordReceiptDbRow = {
 
 export type CollectionReceiptExecutor = CollectionRepositoryExecutor;
 
-async function syncCollectionRecordPrimaryReceiptPath(
+// collection_records.receipt_file is kept only as a compatibility cache for legacy rows.
+// collection_record_receipts is the authoritative source for receipt ownership/mapping.
+async function syncCollectionRecordLegacyReceiptCache(
   executor: CollectionReceiptExecutor,
   recordId: string,
 ): Promise<void> {
@@ -141,6 +143,7 @@ export async function attachCollectionReceipts(
     const firstReceiptPath = receipts[0]?.storagePath || record.receiptFile || null;
     return {
       ...record,
+      // Use relation rows first and keep legacy fallback only for old rows without relation data.
       receiptFile: firstReceiptPath,
       receipts,
     };
@@ -264,7 +267,7 @@ export async function createCollectionRecordReceiptRows(
     `);
   }
 
-  await syncCollectionRecordPrimaryReceiptPath(executor, normalizedRecordId);
+  await syncCollectionRecordLegacyReceiptCache(executor, normalizedRecordId);
   return listCollectionRecordReceiptsByIds(executor, insertedIds);
 }
 
@@ -319,7 +322,7 @@ export async function deleteCollectionRecordReceiptRows(
     WHERE collection_record_id = ${normalizedRecordId}::uuid
       AND id IN (${idSql})
   `);
-  await syncCollectionRecordPrimaryReceiptPath(executor, normalizedRecordId);
+  await syncCollectionRecordLegacyReceiptCache(executor, normalizedRecordId);
   return receipts;
 }
 
@@ -336,6 +339,6 @@ export async function deleteAllCollectionRecordReceiptRows(
     DELETE FROM public.collection_record_receipts
     WHERE id IN (${idSql})
   `);
-  await syncCollectionRecordPrimaryReceiptPath(executor, String(recordId || "").trim());
+  await syncCollectionRecordLegacyReceiptCache(executor, String(recordId || "").trim());
   return receipts;
 }

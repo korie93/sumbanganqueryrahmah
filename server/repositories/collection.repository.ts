@@ -64,7 +64,9 @@ import type {
   CreateCollectionRecordInput,
   CreateCollectionRecordReceiptInput,
   CreateCollectionStaffNicknameInput,
+  DeleteCollectionRecordOptions,
   UpdateCollectionRecordInput,
+  UpdateCollectionRecordOptions,
   UpdateCollectionStaffNicknameInput,
 } from "../storage-postgres";
 
@@ -84,6 +86,10 @@ export class CollectionRepository {
     const createdAt = createdAtRaw instanceof Date
       ? createdAtRaw
       : new Date(createdAtRaw ?? Date.now());
+    const updatedAtRaw = row.updated_at ?? row.updatedAt ?? createdAt;
+    const updatedAt = updatedAtRaw instanceof Date
+      ? updatedAtRaw
+      : new Date(updatedAtRaw ?? createdAt);
 
     return {
       id: String(row.id),
@@ -99,6 +105,7 @@ export class CollectionRepository {
       createdByLogin: String(row.created_by_login ?? row.createdByLogin ?? row.staff_username ?? row.staffUsername ?? ""),
       collectionStaffNickname: String(row.collection_staff_nickname ?? row.collectionStaffNickname ?? row.staff_username ?? row.staffUsername ?? ""),
       createdAt,
+      updatedAt,
     };
   }
 
@@ -526,7 +533,8 @@ export class CollectionRepository {
         created_by_login,
         collection_staff_nickname,
         staff_username,
-        created_at
+        created_at,
+        updated_at
       )
       VALUES (
         ${id}::uuid,
@@ -537,11 +545,12 @@ export class CollectionRepository {
         ${data.batch},
         ${data.paymentDate}::date,
         ${data.amount},
-        ${data.receiptFile ?? null},
+        ${null},
         ${data.createdByLogin},
         ${data.collectionStaffNickname},
         ${data.collectionStaffNickname},
-        now()
+        now(),
+        date_trunc('milliseconds', now())
       )
     `);
     const created = await this.getCollectionRecordById(id);
@@ -584,7 +593,8 @@ export class CollectionRepository {
         created_by_login,
         collection_staff_nickname,
         staff_username,
-        created_at
+        created_at,
+        updated_at
       FROM public.collection_records
       ${whereSql}
       ORDER BY payment_date ASC, created_at ASC, id ASC
@@ -772,7 +782,8 @@ export class CollectionRepository {
         created_by_login,
         collection_staff_nickname,
         staff_username,
-        created_at
+        created_at,
+        updated_at
       FROM public.collection_records
       WHERE id = ${id}::uuid
       LIMIT 1
@@ -813,7 +824,11 @@ export class CollectionRepository {
     return deleteAllCollectionRecordReceiptRows(db, recordId);
   }
 
-  async updateCollectionRecord(id: string, data: UpdateCollectionRecordInput): Promise<CollectionRecord | undefined> {
+  async updateCollectionRecord(
+    id: string,
+    data: UpdateCollectionRecordInput,
+    options?: UpdateCollectionRecordOptions,
+  ): Promise<CollectionRecord | undefined> {
     const updateChunks: any[] = [];
 
     if (data.customerName !== undefined) {
@@ -838,6 +853,7 @@ export class CollectionRepository {
       updateChunks.push(sql`amount = ${data.amount}`);
     }
     if (Object.prototype.hasOwnProperty.call(data, "receiptFile")) {
+      // Transitional-only legacy cache update. Authoritative receipts are stored in collection_record_receipts.
       updateChunks.push(sql`receipt_file = ${data.receiptFile ?? null}`);
     }
     if (data.collectionStaffNickname !== undefined) {
@@ -845,38 +861,118 @@ export class CollectionRepository {
       updateChunks.push(sql`staff_username = ${data.collectionStaffNickname}`);
     }
 
-    if (!updateChunks.length) {
-      return this.getCollectionRecordById(id);
+    const expectedUpdatedAt =
+      options?.expectedUpdatedAt instanceof Date
+      && Number.isFinite(options.expectedUpdatedAt.getTime())
+        ? options.expectedUpdatedAt
+        : null;
+
+    const removeAllReceipts = options?.removeAllReceipts === true;
+    const removeReceiptIds = Array.from(
+      new Set(
+        Array.isArray(options?.removeReceiptIds)
+          ? options.removeReceiptIds.map((value) => String(value || "").trim()).filter(Boolean)
+          : [],
+      ),
+    );
+    const newReceipts = Array.isArray(options?.newReceipts)
+      ? options.newReceipts
+      : [];
+    const hasReceiptMutation = removeAllReceipts || removeReceiptIds.length > 0 || newReceipts.length > 0;
+
+    if (!updateChunks.length && !hasReceiptMutation) {
+      const current = await this.getCollectionRecordById(id);
+      if (!current) return undefined;
+      if (
+        expectedUpdatedAt
+        && current.updatedAt instanceof Date
+        && Number.isFinite(current.updatedAt.getTime())
+        && current.updatedAt.getTime() !== expectedUpdatedAt.getTime()
+      ) {
+        return undefined;
+      }
+      return current;
     }
 
-    const result = await db.execute(sql`
-      UPDATE public.collection_records
-      SET ${sql.join(updateChunks, sql`, `)}
-      WHERE id = ${id}::uuid
-      RETURNING
-        id,
-        customer_name,
-        ic_number,
-        customer_phone,
-        account_number,
-        batch,
-        payment_date,
-        amount,
-        receipt_file,
-        created_by_login,
-        collection_staff_nickname,
-        staff_username,
-        created_at
-    `);
+    updateChunks.push(sql`updated_at = date_trunc('milliseconds', now())`);
 
-    const row = result.rows?.[0];
-    if (!row) return undefined;
-    return this.getCollectionRecordById(id);
+    const whereClauses = [sql`id = ${id}::uuid`];
+    if (expectedUpdatedAt) {
+      whereClauses.push(
+        sql`date_trunc('milliseconds', updated_at) = date_trunc('milliseconds', CAST(${expectedUpdatedAt} AS timestamp))`,
+      );
+    }
+
+    return db.transaction(async (tx) => {
+      const result = await tx.execute(sql`
+        UPDATE public.collection_records
+        SET ${sql.join(updateChunks, sql`, `)}
+        WHERE ${sql.join(whereClauses, sql` AND `)}
+        RETURNING
+          id,
+          customer_name,
+          ic_number,
+          customer_phone,
+          account_number,
+          batch,
+          payment_date,
+          amount,
+          receipt_file,
+          created_by_login,
+          collection_staff_nickname,
+          staff_username,
+          created_at,
+          updated_at
+      `);
+
+      const row = result.rows?.[0];
+      if (!row) return undefined;
+
+      if (removeAllReceipts) {
+        await deleteAllCollectionRecordReceiptRows(tx, id);
+      } else if (removeReceiptIds.length > 0) {
+        await deleteCollectionRecordReceiptRows(tx, id, removeReceiptIds);
+      }
+
+      if (newReceipts.length > 0) {
+        await createCollectionRecordReceiptRows(tx, id, newReceipts);
+      }
+
+      const [hydrated] = await attachCollectionReceipts(tx, [this.mapCollectionRecordRow(row)]);
+      return hydrated || this.mapCollectionRecordRow(row);
+    });
   }
 
-  async deleteCollectionRecord(id: string): Promise<boolean> {
-    await db.execute(sql`DELETE FROM public.collection_record_receipts WHERE collection_record_id = ${id}::uuid`);
-    await db.execute(sql`DELETE FROM public.collection_records WHERE id = ${id}::uuid`);
-    return true;
+  async deleteCollectionRecord(id: string, options?: DeleteCollectionRecordOptions): Promise<boolean> {
+    const expectedUpdatedAt =
+      options?.expectedUpdatedAt instanceof Date
+      && Number.isFinite(options.expectedUpdatedAt.getTime())
+        ? options.expectedUpdatedAt
+        : null;
+
+    const whereClauses = [sql`id = ${id}::uuid`];
+    if (expectedUpdatedAt) {
+      whereClauses.push(
+        sql`date_trunc('milliseconds', updated_at) = date_trunc('milliseconds', CAST(${expectedUpdatedAt} AS timestamp))`,
+      );
+    }
+
+    return db.transaction(async (tx) => {
+      const deletedRecord = await tx.execute(sql`
+        DELETE FROM public.collection_records
+        WHERE ${sql.join(whereClauses, sql` AND `)}
+        RETURNING id
+      `);
+      const deletedId = deletedRecord.rows?.[0]?.id as string | undefined;
+      if (!deletedId) {
+        return false;
+      }
+
+      await tx.execute(sql`
+        DELETE FROM public.collection_record_receipts
+        WHERE collection_record_id = ${deletedId}::uuid
+      `);
+      return true;
+    });
   }
 }

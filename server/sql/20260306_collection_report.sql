@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS public.collection_records (
   created_by_login text NOT NULL,
   collection_staff_nickname text NOT NULL,
   staff_username text NOT NULL,
-  created_at timestamp NOT NULL DEFAULT now()
+  created_at timestamp NOT NULL DEFAULT now(),
+  updated_at timestamp NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_collection_records_payment_date

@@ -1,4 +1,4 @@
-import { badRequest, forbidden, notFound } from "../../http/errors";
+import { badRequest, conflict, forbidden, notFound } from "../../http/errors";
 import { verifyPassword } from "../../auth/passwords";
 import {
   canUserAccessCollectionRecord,
@@ -22,6 +22,7 @@ import {
   parseCollectionAmount,
   type CollectionBatchValue,
   type CollectionCreatePayload,
+  type CollectionDeletePayload,
   type CollectionReceiptPayload,
   type CollectionUpdatePayload,
 } from "../../routes/collection.validation";
@@ -89,6 +90,34 @@ function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+function parseRecordVersionTimestamp(value: unknown): Date | null {
+  const normalized = normalizeCollectionText(value);
+  if (!normalized) return null;
+
+  const parsed = new Date(normalized);
+  if (!Number.isFinite(parsed.getTime())) {
+    throw badRequest("expectedUpdatedAt must be a valid ISO date-time.");
+  }
+
+  return parsed;
+}
+
+function resolveRecordVersionTimestamp(record: { updatedAt?: Date; createdAt: Date }): Date | null {
+  const updatedAt = record.updatedAt instanceof Date
+    ? record.updatedAt
+    : record.updatedAt
+      ? new Date(record.updatedAt)
+      : null;
+  if (updatedAt && Number.isFinite(updatedAt.getTime())) {
+    return updatedAt;
+  }
+  const createdAt = record.createdAt instanceof Date ? record.createdAt : new Date(record.createdAt);
+  return Number.isFinite(createdAt.getTime()) ? createdAt : null;
+}
+
+const COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE =
+  "Collection record has changed since you opened it. Refresh and try again.";
+
 function buildCollectionPurgeCutoffDate(referenceDate = new Date()): string {
   const utcYear = referenceDate.getUTCFullYear();
   const utcMonth = referenceDate.getUTCMonth();
@@ -120,6 +149,29 @@ export class CollectionRecordService extends CollectionServiceSupport {
       });
     } catch {
       // best effort audit only
+    }
+  }
+
+  private async logRecordVersionConflict(params: {
+    username: string;
+    recordId: string;
+    operation: "update" | "delete";
+    expectedUpdatedAt: Date | null;
+    currentUpdatedAt: Date | null;
+  }) {
+    try {
+      await this.storage.createAuditLog({
+        action: "COLLECTION_RECORD_VERSION_CONFLICT",
+        performedBy: params.username,
+        targetResource: params.recordId,
+        details: [
+          `Collection record ${params.operation} rejected due to stale version by ${params.username}.`,
+          `expectedUpdatedAt=${params.expectedUpdatedAt?.toISOString() || "null"}`,
+          `currentUpdatedAt=${params.currentUpdatedAt?.toISOString() || "null"}`,
+        ].join(" "),
+      });
+    } catch {
+      // best effort telemetry only
     }
   }
 
@@ -1034,6 +1086,21 @@ export class CollectionRecordService extends CollectionServiceSupport {
     const uploadedReceipts: Array<Awaited<ReturnType<typeof saveCollectionReceipt>>> = [];
     try {
       const body = (ensureLooseObject(bodyRaw) || {}) as CollectionUpdatePayload;
+      const expectedUpdatedAt = parseRecordVersionTimestamp(body.expectedUpdatedAt);
+      if (expectedUpdatedAt) {
+        const currentVersion = resolveRecordVersionTimestamp(existing);
+        if (!currentVersion || currentVersion.getTime() !== expectedUpdatedAt.getTime()) {
+          await this.logRecordVersionConflict({
+            username: user.username,
+            recordId: id,
+            operation: "update",
+            expectedUpdatedAt,
+            currentUpdatedAt: currentVersion,
+          });
+          throw conflict(COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE, "COLLECTION_RECORD_VERSION_CONFLICT");
+        }
+      }
+
       const updatePayload: Record<string, unknown> = {};
       const customerName = normalizeCollectionText(body.customerName);
       const icNumber = normalizeCollectionText(body.icNumber);
@@ -1114,19 +1181,44 @@ export class CollectionRecordService extends CollectionServiceSupport {
         return { ok: true as const, record: existing };
       }
 
+      const existingReceipts = Array.isArray(existing.receipts) ? existing.receipts : [];
       const removedReceipts = shouldRemoveReceipt
-        ? await this.storage.deleteAllCollectionRecordReceipts(id)
+        ? existingReceipts
         : removeReceiptIds.length > 0
-          ? await this.storage.deleteCollectionRecordReceipts(id, removeReceiptIds)
+          ? existingReceipts.filter((receipt) => removeReceiptIds.includes(receipt.id))
           : [];
-      if (uploadedReceipts.length > 0) {
-        await this.storage.createCollectionRecordReceipts(id, uploadedReceipts);
+
+      const shouldClearLegacyReceiptFallback =
+        shouldRemoveReceipt
+        && uploadedReceipts.length === 0
+        && existingReceipts.length === 0
+        && Boolean(existing.receiptFile);
+      if (shouldClearLegacyReceiptFallback) {
+        // Transitional cleanup for legacy rows that still only use collection_records.receipt_file.
+        updatePayload.receiptFile = null;
       }
 
-      const updated = await this.storage.updateCollectionRecord(id, updatePayload);
+      const updated = await this.storage.updateCollectionRecord(id, updatePayload, {
+        expectedUpdatedAt: expectedUpdatedAt ?? undefined,
+        removeAllReceipts: shouldRemoveReceipt,
+        removeReceiptIds: shouldRemoveReceipt ? [] : removeReceiptIds,
+        newReceipts: uploadedReceipts,
+      });
       if (!updated) {
         for (const uploadedReceipt of uploadedReceipts) {
           await removeCollectionReceiptFile(uploadedReceipt.storagePath);
+        }
+        if (expectedUpdatedAt) {
+          const freshRecord = await this.storage.getCollectionRecordById(id);
+          const freshVersion = freshRecord ? resolveRecordVersionTimestamp(freshRecord) : null;
+          await this.logRecordVersionConflict({
+            username: user.username,
+            recordId: id,
+            operation: "update",
+            expectedUpdatedAt,
+            currentUpdatedAt: freshVersion,
+          });
+          throw conflict(COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE, "COLLECTION_RECORD_VERSION_CONFLICT");
         }
         throw notFound("Collection record not found.");
       }
@@ -1134,11 +1226,14 @@ export class CollectionRecordService extends CollectionServiceSupport {
       for (const removedReceipt of removedReceipts) {
         await removeCollectionReceiptFile(removedReceipt.storagePath);
       }
+      if (shouldClearLegacyReceiptFallback && existing.receiptFile) {
+        await removeCollectionReceiptFile(existing.receiptFile);
+      }
 
       await this.storage.createAuditLog({
         action: "COLLECTION_RECORD_UPDATED",
         performedBy: user.username,
-        targetResource: updated.id,
+        targetResource: id,
         details: `Collection record updated by ${user.username}`,
       });
 
@@ -1151,7 +1246,11 @@ export class CollectionRecordService extends CollectionServiceSupport {
     }
   }
 
-  async deleteRecord(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], idRaw: unknown) {
+  async deleteRecord(
+    userInput: Parameters<CollectionServiceSupport["requireUser"]>[0],
+    idRaw: unknown,
+    bodyRaw?: unknown,
+  ) {
     const user = this.requireUser(userInput);
     const id = normalizeCollectionText(idRaw);
     if (!id) {
@@ -1166,8 +1265,41 @@ export class CollectionRecordService extends CollectionServiceSupport {
       throw forbidden("Forbidden");
     }
 
-    const removedReceipts = await this.storage.deleteAllCollectionRecordReceipts(id);
-    await this.storage.deleteCollectionRecord(id);
+    const body = (ensureLooseObject(bodyRaw) || {}) as CollectionDeletePayload;
+    const expectedUpdatedAt = parseRecordVersionTimestamp(body.expectedUpdatedAt);
+    if (expectedUpdatedAt) {
+      const currentVersion = resolveRecordVersionTimestamp(existing);
+      if (!currentVersion || currentVersion.getTime() !== expectedUpdatedAt.getTime()) {
+        await this.logRecordVersionConflict({
+          username: user.username,
+          recordId: id,
+          operation: "delete",
+          expectedUpdatedAt,
+          currentUpdatedAt: currentVersion,
+        });
+        throw conflict(COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE, "COLLECTION_RECORD_VERSION_CONFLICT");
+      }
+    }
+
+    const removedReceipts = Array.isArray(existing.receipts) ? existing.receipts : [];
+    const deleted = await this.storage.deleteCollectionRecord(id, {
+      expectedUpdatedAt: expectedUpdatedAt ?? undefined,
+    });
+    if (!deleted) {
+      if (expectedUpdatedAt) {
+        const freshRecord = await this.storage.getCollectionRecordById(id);
+        const freshVersion = freshRecord ? resolveRecordVersionTimestamp(freshRecord) : null;
+        await this.logRecordVersionConflict({
+          username: user.username,
+          recordId: id,
+          operation: "delete",
+          expectedUpdatedAt,
+          currentUpdatedAt: freshVersion,
+        });
+        throw conflict(COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE, "COLLECTION_RECORD_VERSION_CONFLICT");
+      }
+      throw notFound("Collection record not found.");
+    }
     for (const receipt of removedReceipts) {
       await removeCollectionReceiptFile(receipt.storagePath);
     }

@@ -1,4 +1,5 @@
 import { asyncHandler } from "../../http/async-handler";
+import { isStrictLocalDevelopmentEnvironment } from "../../config/runtime-environment";
 import {
   readActivationBody,
   readPasswordResetRequestBody,
@@ -33,7 +34,7 @@ export function registerAuthRecoveryRoutes(context: AuthRouteContext) {
   app.get(
     "/dev/mail-preview/:previewId",
     asyncHandler(async (req, res) => {
-      if (String(process.env.NODE_ENV || "").trim().toLowerCase() === "production") {
+      if (!isStrictLocalDevelopmentEnvironment()) {
         return res.status(404).type("text/plain").send("Not found.");
       }
 

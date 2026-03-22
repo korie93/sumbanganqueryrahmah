@@ -2,6 +2,10 @@ import { randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getPublicAppBaseUrl } from "../auth/activation-links";
+import {
+  isStrictLocalDevelopmentEnvironment,
+  readBooleanEnvFlag,
+} from "../config/runtime-environment";
 
 const DEFAULT_OUTBOX_MAX_FILES = 50;
 const DEV_OUTBOX_LIST_DEFAULT_PAGE_SIZE = 25;
@@ -35,11 +39,7 @@ export type DevMailOutboxPreviewPage = {
 };
 
 function readFlag(name: string, fallback: boolean): boolean {
-  const raw = String(process.env[name] || "").trim().toLowerCase();
-  if (!raw) return fallback;
-  if (["1", "true", "yes", "on"].includes(raw)) return true;
-  if (["0", "false", "no", "off"].includes(raw)) return false;
-  return fallback;
+  return readBooleanEnvFlag(name, fallback);
 }
 
 function getDevMailOutboxDir(): string {
@@ -67,7 +67,7 @@ function escapeHtml(value: string): string {
 }
 
 export function isDevMailOutboxEnabled(): boolean {
-  if (process.env.NODE_ENV === "production") {
+  if (!isStrictLocalDevelopmentEnvironment()) {
     return false;
   }
   return readFlag("MAIL_DEV_OUTBOX_ENABLED", true);

@@ -111,6 +111,7 @@ function createOperationsRouteHarness(options?: {
       totalDataRows: 10,
       totalImports: 2,
       bannedUsers: 0,
+      collectionRecordVersionConflicts24h: 4,
     }),
     getLoginTrends: async (days: number) => [{ date: "2026-03-20", logins: days, logouts: 0 }],
     getTopActiveUsers: async (limit: number) => {
@@ -288,6 +289,20 @@ test("DELETE /api/audit-logs/cleanup clamps the cutoff and writes an audit log",
       performedBy: "super.user",
       details: "Cleanup requested for logs older than 1 days",
     }]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/analytics/summary includes stale-record conflict frequency for monitoring", async () => {
+  const { app } = createOperationsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/analytics/summary`);
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.collectionRecordVersionConflicts24h, 4);
   } finally {
     await stopTestServer(server);
   }
