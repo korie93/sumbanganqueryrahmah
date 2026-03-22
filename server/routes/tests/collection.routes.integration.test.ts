@@ -33,6 +33,7 @@ type CollectionRecordShape = {
   createdByLogin: string;
   collectionStaffNickname: string;
   createdAt: Date;
+  updatedAt?: Date;
 };
 
 function createCollectionStorageDouble(options: {
@@ -90,7 +91,11 @@ function createCoreCollectionStorageDouble(options?: {
   const createCalls: Array<Record<string, unknown>> = [];
   const listCalls: Array<Record<string, unknown>> = [];
   const summaryCalls: Array<Record<string, unknown>> = [];
-  const updateCalls: Array<{ id: string; data: Record<string, unknown> }> = [];
+  const updateCalls: Array<{
+    id: string;
+    data: Record<string, unknown>;
+    options?: { expectedUpdatedAt?: Date };
+  }> = [];
   const activeNickname = {
     id: "nickname-1",
     nickname: "Collector Alpha",
@@ -114,6 +119,7 @@ function createCoreCollectionStorageDouble(options?: {
     createdByLogin: "staff.user",
     collectionStaffNickname: "Collector Alpha",
     createdAt: new Date("2026-03-01T09:00:00.000Z"),
+    updatedAt: new Date("2026-03-01T09:00:00.000Z"),
     ...options?.seedRecordOverrides,
   };
   records.set(seedRecord.id, seedRecord);
@@ -163,6 +169,7 @@ function createCoreCollectionStorageDouble(options?: {
         createdByLogin: String(data.createdByLogin),
         collectionStaffNickname: String(data.collectionStaffNickname),
         createdAt: new Date("2026-03-15T10:00:00.000Z"),
+        updatedAt: new Date("2026-03-15T10:00:00.000Z"),
       };
       records.set(created.id, created);
       return created;
@@ -186,16 +193,28 @@ function createCoreCollectionStorageDouble(options?: {
     listCollectionRecordReceipts: async (recordId: string) => receiptRowsByRecordId.get(recordId) || [],
     getCollectionRecordReceiptById: async (recordId: string, receiptId: string) =>
       (receiptRowsByRecordId.get(recordId) || []).find((receipt) => receipt.id === receiptId) || null,
-    updateCollectionRecord: async (id: string, data: Record<string, unknown>) => {
-      updateCalls.push({ id, data });
+    updateCollectionRecord: async (
+      id: string,
+      data: Record<string, unknown>,
+      options?: { expectedUpdatedAt?: Date },
+    ) => {
+      updateCalls.push({ id, data, options });
       const existing = records.get(id);
       if (!existing) {
+        return null;
+      }
+      if (
+        options?.expectedUpdatedAt
+        && existing.updatedAt
+        && existing.updatedAt.getTime() !== options.expectedUpdatedAt.getTime()
+      ) {
         return null;
       }
       const updated: CollectionRecordShape = {
         ...existing,
         ...data,
         amount: data.amount !== undefined ? Number(data.amount).toFixed(2) : existing.amount,
+        updatedAt: new Date("2026-03-16T10:00:00.000Z"),
       };
       records.set(id, updated);
       return updated;
@@ -791,6 +810,45 @@ test("PATCH /api/collection/:id updates a record and writes an audit log", async
     assert.equal(updateCalls[0].data.amount, 55.3);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "COLLECTION_RECORD_UPDATED");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/collection/:id rejects stale expectedUpdatedAt values with 409 conflict", async () => {
+  const { storage, updateCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        amount: "55.30",
+        expectedUpdatedAt: "2026-02-01T00:00:00.000Z",
+      }),
+    });
+
+    assert.equal(response.status, 409);
+    const payload = await response.json();
+    assert.equal(payload.ok, false);
+    assert.match(String(payload.message), /changed since you opened/i);
+    assert.equal(updateCalls.length, 0);
+    assert.equal(auditLogs.length, 0);
   } finally {
     await stopTestServer(server);
   }

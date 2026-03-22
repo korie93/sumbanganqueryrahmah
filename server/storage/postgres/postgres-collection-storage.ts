@@ -17,6 +17,7 @@ import type {
   CreateCollectionRecordReceiptInput,
   CreateCollectionStaffNicknameInput,
   UpdateCollectionRecordInput,
+  UpdateCollectionRecordOptions,
   UpdateCollectionStaffNicknameInput,
 } from "../../storage-postgres";
 import { PostgresSettingsStorage } from "./postgres-settings-storage";
@@ -303,8 +304,9 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
   async updateCollectionRecord(
     id: string,
     data: UpdateCollectionRecordInput,
+    options?: UpdateCollectionRecordOptions,
   ): Promise<CollectionRecord | undefined> {
-    return this.collectionRepository.updateCollectionRecord(id, data);
+    return this.collectionRepository.updateCollectionRecord(id, data, options);
   }
 
   async deleteCollectionRecord(id: string): Promise<boolean> {

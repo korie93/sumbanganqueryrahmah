@@ -52,6 +52,7 @@ export type CollectionRecord = {
   createdByLogin: string;
   collectionStaffNickname: string;
   createdAt: Date;
+  updatedAt?: Date;
 };
 
 export type CollectionRecordAggregate = {
@@ -201,6 +202,10 @@ export type UpdateCollectionRecordInput = {
   // Transitional-only legacy field for cleanup/backfill; avoid using as the primary receipt source.
   receiptFile?: string | null;
   collectionStaffNickname?: string;
+};
+
+export type UpdateCollectionRecordOptions = {
+  expectedUpdatedAt?: Date;
 };
 
 export type CreateCollectionStaffNicknameInput = {
@@ -475,7 +480,11 @@ type CategoryRule = {
   ): Promise<CollectionRecordReceipt[]>;
   deleteCollectionRecordReceipts(recordId: string, receiptIds: string[]): Promise<CollectionRecordReceipt[]>;
   deleteAllCollectionRecordReceipts(recordId: string): Promise<CollectionRecordReceipt[]>;
-  updateCollectionRecord(id: string, data: UpdateCollectionRecordInput): Promise<CollectionRecord | undefined>;
+  updateCollectionRecord(
+    id: string,
+    data: UpdateCollectionRecordInput,
+    options?: UpdateCollectionRecordOptions,
+  ): Promise<CollectionRecord | undefined>;
   deleteCollectionRecord(id: string): Promise<boolean>;
 
   createImport(data: InsertImport & { createdBy?: string }): Promise<Import>;

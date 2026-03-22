@@ -50,7 +50,8 @@ export class CollectionBootstrap {
             created_by_login text NOT NULL,
             collection_staff_nickname text NOT NULL,
             staff_username text NOT NULL,
-            created_at timestamp DEFAULT now() NOT NULL
+            created_at timestamp DEFAULT now() NOT NULL,
+            updated_at timestamp DEFAULT now() NOT NULL
           )
         `);
         await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name text`);
@@ -65,6 +66,7 @@ export class CollectionBootstrap {
         await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS collection_staff_nickname text`);
         await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS staff_username text`);
         await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+        await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
         await db.execute(sql`
           UPDATE public.collection_records
           SET customer_phone = COALESCE(NULLIF(customer_phone, ''), '-')
@@ -80,6 +82,10 @@ export class CollectionBootstrap {
         await db.execute(sql`
           UPDATE public.collection_records
           SET staff_username = COALESCE(NULLIF(staff_username, ''), NULLIF(collection_staff_nickname, ''), NULLIF(created_by_login, ''), 'unknown')
+        `);
+        await db.execute(sql`
+          UPDATE public.collection_records
+          SET updated_at = COALESCE(updated_at, created_at, now())
         `);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_payment_date ON public.collection_records(payment_date)`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_at ON public.collection_records(created_at DESC)`);
