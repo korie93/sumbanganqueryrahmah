@@ -31,7 +31,7 @@ import {
 } from "../mail/dev-mail-outbox";
 import { buildPasswordResetEmail } from "../mail/password-reset-email";
 import { sendMail } from "../mail/mailer";
-import { readInteger, readOptionalString } from "../http/validation";
+import { readOptionalString } from "../http/validation";
 import type {
   ManagedUserAccount,
   PendingPasswordResetRequestSummary,
@@ -45,6 +45,12 @@ import {
   createActivationTokenPayload,
   createPasswordResetTokenPayload,
 } from "./auth-account-token-utils";
+import {
+  buildLocalPaginationMeta,
+  parseManageableStatusFilter,
+  readPaginationMeta,
+  type PaginatedListMeta,
+} from "./auth-account-pagination-utils";
 import {
   type ActivationTokenValidationResult,
   type ManagedAccountActivationDelivery,
@@ -136,13 +142,6 @@ type AuthAccountStorage = Pick<
   | "updateUserCredentials"
 >;
 
-type PaginatedListMeta = {
-  page: number;
-  pageSize: number;
-  total: number;
-  totalPages: number;
-};
-
 export class AuthAccountService {
   constructor(private readonly storage: AuthAccountStorage) {}
 
@@ -174,34 +173,6 @@ export class AuthAccountService {
       return true;
     }
     return nowMs - activityMs <= idleWindowMs;
-  }
-
-  private readPaginationMeta(
-    query: Record<string, unknown> | undefined,
-    defaults: { pageSize: number; maxPageSize: number },
-  ): { page: number; pageSize: number } {
-    const page = Math.max(1, readInteger(query?.page, 1));
-    const pageSize = Math.max(
-      1,
-      Math.min(defaults.maxPageSize, readInteger(query?.pageSize, defaults.pageSize)),
-    );
-    return { page, pageSize };
-  }
-
-  private buildLocalPaginationMeta(
-    total: number,
-    page = 1,
-    pageSize = Math.max(1, total || 1),
-  ): PaginatedListMeta {
-    const safePageSize = Math.max(1, pageSize);
-    const totalPages = Math.max(1, Math.ceil(total / safePageSize));
-    const safePage = Math.min(Math.max(1, page), totalPages);
-    return {
-      page: safePage,
-      pageSize: safePageSize,
-      total,
-      totalPages,
-    };
   }
 
   private requireManagedEmail(email: string | null, message: string) {
@@ -934,11 +905,11 @@ export class AuthAccountService {
       const users = await this.storage.getManagedUsers();
       return {
         users,
-        pagination: this.buildLocalPaginationMeta(users.length),
+        pagination: buildLocalPaginationMeta(users.length),
       };
     }
 
-    const { page, pageSize } = this.readPaginationMeta(query, {
+    const { page, pageSize } = readPaginationMeta(query, {
       pageSize: 50,
       maxPageSize: 100,
     });
@@ -951,16 +922,7 @@ export class AuthAccountService {
         const value = String(readOptionalString(query.role) || "all").toLowerCase();
         return value === "admin" || value === "user" ? value : "all";
       })(),
-      status: (() => {
-        const value = String(readOptionalString(query.status) || "all").toLowerCase();
-        return value === "active"
-          || value === "pending_activation"
-          || value === "suspended"
-          || value === "disabled"
-          || value === "banned"
-          ? value
-          : "all";
-      })(),
+      status: parseManageableStatusFilter(query.status),
     });
 
     return {
@@ -997,7 +959,7 @@ export class AuthAccountService {
     query: Record<string, unknown> = {},
   ) {
     await this.requireSuperuser(authUser);
-    const { page, pageSize } = this.readPaginationMeta(query, {
+    const { page, pageSize } = readPaginationMeta(query, {
       pageSize: 25,
       maxPageSize: 100,
     });
@@ -1376,11 +1338,11 @@ export class AuthAccountService {
       const requests = await this.storage.listPendingPasswordResetRequests();
       return {
         requests,
-        pagination: this.buildLocalPaginationMeta(requests.length),
+        pagination: buildLocalPaginationMeta(requests.length),
       };
     }
 
-    const { page, pageSize } = this.readPaginationMeta(query, {
+    const { page, pageSize } = readPaginationMeta(query, {
       pageSize: 50,
       maxPageSize: 100,
     });
@@ -1388,16 +1350,7 @@ export class AuthAccountService {
       page,
       pageSize,
       search: readOptionalString(query.search),
-      status: (() => {
-        const value = String(readOptionalString(query.status) || "all").toLowerCase();
-        return value === "active"
-          || value === "pending_activation"
-          || value === "suspended"
-          || value === "disabled"
-          || value === "banned"
-          ? value
-          : "all";
-      })(),
+      status: parseManageableStatusFilter(query.status),
     });
 
     return {

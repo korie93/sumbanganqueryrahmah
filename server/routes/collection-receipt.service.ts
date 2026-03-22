@@ -304,14 +304,20 @@ export async function serveCollectionReceipt(
       return res.status(403).json({ ok: false, message: "Forbidden" });
     }
 
+    const requestedReceiptId = normalizeCollectionText(
+      receiptIdRaw ?? req.params.receiptId ?? null,
+    );
     const selectedReceipt = await resolveSelectedReceipt(
       storage,
       id,
-      receiptIdRaw ?? req.params.receiptId ?? null,
+      requestedReceiptId,
     );
+    if (requestedReceiptId && !selectedReceipt) {
+      return res.status(404).json({ ok: false, message: "Receipt file not found." });
+    }
     // Legacy fallback for records created before collection_record_receipts became authoritative.
     const legacyReceiptPath =
-      !selectedReceipt && record.receiptFile ? record.receiptFile : null;
+      !requestedReceiptId && !selectedReceipt && record.receiptFile ? record.receiptFile : null;
     const resolved = resolveCollectionReceiptFile(
       selectedReceipt?.storagePath ?? legacyReceiptPath,
     );

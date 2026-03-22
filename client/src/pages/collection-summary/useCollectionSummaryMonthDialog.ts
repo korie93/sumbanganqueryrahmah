@@ -5,7 +5,10 @@ import {
   type CollectionMonthlySummary,
   type CollectionRecord,
 } from "@/lib/api";
-import { parseApiError } from "@/pages/collection/utils";
+import {
+  COLLECTION_DATA_CHANGED_EVENT,
+  parseApiError,
+} from "@/pages/collection/utils";
 import { buildMonthRange, toDisplayDate } from "@/pages/collection-summary/utils";
 
 const MONTH_DIALOG_PAGE_SIZE = 10;
@@ -163,6 +166,47 @@ export function useCollectionSummaryMonthDialog({
       monthDialogPageSize,
       nicknames,
     );
+  }, [
+    activeMonth,
+    canFilterByNickname,
+    loadMonthRecords,
+    monthDialogOpen,
+    monthDialogPage,
+    monthDialogPageSize,
+    selectedNicknames,
+    selectedYear,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleCollectionDataChanged = () => {
+      if (!monthDialogOpen || activeMonth === null) {
+        return;
+      }
+
+      const year = Number(selectedYear);
+      if (!Number.isInteger(year) || activeMonth < 1 || activeMonth > 12) {
+        return;
+      }
+
+      const nicknames =
+        canFilterByNickname && selectedNicknames.length > 0
+          ? selectedNicknames
+          : undefined;
+      void loadMonthRecords(
+        year,
+        activeMonth,
+        monthDialogPage,
+        monthDialogPageSize,
+        nicknames,
+      );
+    };
+
+    window.addEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
+    return () => {
+      window.removeEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
+    };
   }, [
     activeMonth,
     canFilterByNickname,

@@ -11,7 +11,10 @@ import {
   type CollectionRecord,
 } from "@/lib/api";
 import type { CollectionRecordFilters } from "@/pages/collection-records/types";
-import { parseApiError } from "@/pages/collection/utils";
+import {
+  COLLECTION_DATA_CHANGED_EVENT,
+  parseApiError,
+} from "@/pages/collection/utils";
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException
@@ -46,6 +49,7 @@ export function useCollectionViewAllRecords({
   const [viewAllPageSize, setViewAllPageSize] = useState(10);
   const [viewAllTotalRecords, setViewAllTotalRecords] = useState(0);
   const [viewAllTotalAmount, setViewAllTotalAmount] = useState(0);
+  const [viewAllRefreshToken, setViewAllRefreshToken] = useState(0);
 
   const viewAllTotalPages = useMemo(
     () => Math.max(1, Math.ceil(viewAllTotalRecords / viewAllPageSize)),
@@ -140,7 +144,29 @@ export function useCollectionViewAllRecords({
     };
 
     void loadViewAllPage();
-  }, [abortViewAllRequest, toast, viewAllFiltersSnapshot, viewAllOpen, viewAllPage, viewAllPageSize]);
+  }, [
+    abortViewAllRequest,
+    toast,
+    viewAllFiltersSnapshot,
+    viewAllOpen,
+    viewAllPage,
+    viewAllPageSize,
+    viewAllRefreshToken,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleCollectionDataChanged = () => {
+      if (!viewAllOpen || !viewAllFiltersSnapshot) return;
+      setViewAllRefreshToken((previous) => previous + 1);
+    };
+
+    window.addEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
+    return () => {
+      window.removeEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
+    };
+  }, [viewAllFiltersSnapshot, viewAllOpen]);
 
   return {
     handleOpenViewAll,
