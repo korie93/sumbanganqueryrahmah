@@ -537,7 +537,7 @@ export class CollectionRepository {
         ${data.batch},
         ${data.paymentDate}::date,
         ${data.amount},
-        ${data.receiptFile ?? null},
+        ${null},
         ${data.createdByLogin},
         ${data.collectionStaffNickname},
         ${data.collectionStaffNickname},
@@ -838,6 +838,7 @@ export class CollectionRepository {
       updateChunks.push(sql`amount = ${data.amount}`);
     }
     if (Object.prototype.hasOwnProperty.call(data, "receiptFile")) {
+      // Transitional-only legacy cache update. Authoritative receipts are stored in collection_record_receipts.
       updateChunks.push(sql`receipt_file = ${data.receiptFile ?? null}`);
     }
     if (data.collectionStaffNickname !== undefined) {

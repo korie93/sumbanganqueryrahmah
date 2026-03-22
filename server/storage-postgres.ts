@@ -205,6 +205,7 @@ export type CreateCollectionRecordInput = {
   batch: CollectionBatch;
   paymentDate: string;
   amount: number;
+  // Transitional-only legacy field. Authoritative receipt rows live in collection_record_receipts.
   receiptFile?: string | null;
   createdByLogin: string;
   collectionStaffNickname: string;
@@ -226,6 +227,7 @@ export type UpdateCollectionRecordInput = {
   batch?: CollectionBatch;
   paymentDate?: string;
   amount?: number;
+  // Transitional-only legacy field for cleanup/backfill; avoid using as the primary receipt source.
   receiptFile?: string | null;
   collectionStaffNickname?: string;
 };

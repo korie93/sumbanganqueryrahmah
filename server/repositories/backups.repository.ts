@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { eq, sql } from "drizzle-orm";
+import { isProductionLikeEnvironment } from "../config/runtime-environment";
 import type {
   AuditLog,
   Backup,
@@ -130,14 +131,6 @@ export class BackupsRepository {
     this.assertBackupEncryptionConfig();
   }
 
-  private resolveNodeEnv(): "development" | "test" | "production" | "other" {
-    const normalized = String(process.env.NODE_ENV || "development").trim().toLowerCase();
-    if (normalized === "development" || normalized === "test" || normalized === "production") {
-      return normalized;
-    }
-    return "other";
-  }
-
   private parseEncryptionKey(raw: string): Buffer | null {
     const normalized = String(raw || "").trim();
     if (!normalized) return null;
@@ -182,8 +175,7 @@ export class BackupsRepository {
   }
 
   private resolveBackupEncryptionConfig(): BackupEncryptionConfig {
-    const nodeEnv = this.resolveNodeEnv();
-    const requireEncryption = nodeEnv !== "development" && nodeEnv !== "test";
+    const requireEncryption = isProductionLikeEnvironment();
 
     const envMap = this.parseEncryptionKeyMap(String(process.env.BACKUP_ENCRYPTION_KEYS || ""));
     const singleRawKey = String(process.env.BACKUP_ENCRYPTION_KEY || "").trim();

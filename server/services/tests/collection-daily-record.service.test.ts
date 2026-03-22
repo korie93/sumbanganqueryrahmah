@@ -353,6 +353,54 @@ function createMutableCollectionDailyService() {
   return new CollectionRecordService(storage as any);
 }
 
+function createLegacyReceiptCleanupService() {
+  const records = new Map<string, RecordShape>();
+  records.set("legacy-1", {
+    id: "legacy-1",
+    customerName: "Legacy Receipt Customer",
+    icNumber: "900101040001",
+    customerPhone: "0151111111",
+    accountNumber: "ACC-L1",
+    batch: "P10",
+    paymentDate: "2026-03-02",
+    amount: "800.00",
+    receiptFile: "/uploads/collection-receipts/legacy-only.pdf",
+    receipts: [],
+    createdByLogin: "legacy.user",
+    collectionStaffNickname: "Collector Alpha",
+    createdAt: new Date("2026-03-02T09:00:00.000Z"),
+  });
+
+  const updateCalls: Array<Record<string, unknown>> = [];
+
+  const storage = {
+    getCollectionRecordById: async (id: string) => records.get(id) || null,
+    deleteAllCollectionRecordReceipts: async () => [],
+    deleteCollectionRecordReceipts: async () => [],
+    createCollectionRecordReceipts: async () => [],
+    updateCollectionRecord: async (id: string, data: Record<string, unknown>) => {
+      updateCalls.push({ ...data });
+      const existing = records.get(id);
+      if (!existing) return null;
+      const updated: RecordShape = {
+        ...existing,
+        receiptFile: Object.prototype.hasOwnProperty.call(data, "receiptFile")
+          ? (data.receiptFile as string | null)
+          : existing.receiptFile,
+      };
+      records.set(id, updated);
+      return updated;
+    },
+    createAuditLog: async () => ({ id: "audit-legacy-1" }),
+  };
+
+  return {
+    service: new CollectionRecordService(storage as any),
+    records,
+    updateCalls,
+  };
+}
+
 test("Collection daily overview supports multi-staff aggregation", async () => {
   const service = createCollectionDailyService();
   const response = await service.getDailyOverview(
@@ -492,4 +540,18 @@ test("Collection daily overview moves totals across month boundaries after payme
   assert.equal(februaryAfter.summary.collectedAmount, 1000);
   assert.equal(marchAfter.days.find((day) => day.date === "2026-03-02")?.amount, 200);
   assert.equal(februaryAfter.days.find((day) => day.date === "2026-02-28")?.amount, 1000);
+});
+
+test("Collection record update clears legacy receipt_file when removeReceipt is requested on legacy-only rows", async () => {
+  const { service, records, updateCalls } = createLegacyReceiptCleanupService();
+  const authUser = { username: "superuser", role: "superuser", userId: "superuser-1" } as any;
+
+  const response = await service.updateRecord(authUser, "legacy-1", {
+    removeReceipt: true,
+  });
+
+  assert.equal(response.ok, true);
+  assert.equal(updateCalls.length, 1);
+  assert.equal(updateCalls[0].receiptFile, null);
+  assert.equal(records.get("legacy-1")?.receiptFile, null);
 });
