@@ -140,11 +140,11 @@ export async function attachCollectionReceipts(
 
   return records.map((record) => {
     const receipts = receiptMap.get(record.id) || [];
-    const firstReceiptPath = receipts[0]?.storagePath || record.receiptFile || null;
+    const legacyReceiptPath = receipts.length === 0 ? (record.receiptFile || null) : null;
     return {
       ...record,
-      // Use relation rows first and keep legacy fallback only for old rows without relation data.
-      receiptFile: firstReceiptPath,
+      // Relation rows are authoritative; receiptFile remains transitional fallback only for legacy rows.
+      receiptFile: legacyReceiptPath,
       receipts,
     };
   });

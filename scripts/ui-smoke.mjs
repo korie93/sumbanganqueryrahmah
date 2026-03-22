@@ -381,6 +381,345 @@ const checkCollectionDailyPage = async (page, tracker) => {
   tracker.clear();
 };
 
+const ensureCollectionSmokeNicknames = async (context) => {
+  const nicknamesResponse = await apiJsonRequestWithRetry(
+    context,
+    "GET",
+    "/api/collection/nicknames?includeInactive=1",
+    undefined,
+    [200],
+  );
+  const rows = Array.isArray(nicknamesResponse.payload?.nicknames)
+    ? nicknamesResponse.payload.nicknames
+    : [];
+  const activeNicknames = rows
+    .filter((item) => item?.isActive === true)
+    .map((item) => String(item?.nickname || "").trim())
+    .filter(Boolean);
+
+  const selected = Array.from(new Set(activeNicknames));
+  while (selected.length < 2) {
+    const generatedNickname = `Smoke Collector ${Date.now()}-${selected.length + 1}`;
+    const createResponse = await apiJsonRequestWithRetry(
+      context,
+      "POST",
+      "/api/collection/nicknames",
+      {
+        nickname: generatedNickname,
+        roleScope: "both",
+      },
+      [200],
+    );
+    const createdNickname = String(createResponse.payload?.nickname?.nickname || "").trim();
+    if (createdNickname) {
+      selected.push(createdNickname);
+    }
+  }
+
+  return selected.slice(0, 2);
+};
+
+const fetchCollectionSummaryYear = async (context, year, nicknames) => {
+  const params = new URLSearchParams();
+  params.set("year", String(year));
+  if (Array.isArray(nicknames) && nicknames.length > 0) {
+    params.set("nicknames", nicknames.join(","));
+  }
+  const response = await apiJsonRequestWithRetry(
+    context,
+    "GET",
+    `/api/collection/summary?${params.toString()}`,
+    undefined,
+    [200],
+  );
+  return response.payload;
+};
+
+const fetchNicknameSummary = async (context, { from, to, nicknames }) => {
+  const params = new URLSearchParams();
+  params.set("from", from);
+  params.set("to", to);
+  params.set("nicknames", nicknames.join(","));
+  params.set("summaryOnly", "1");
+  const response = await apiJsonRequestWithRetry(
+    context,
+    "GET",
+    `/api/collection/nickname-summary?${params.toString()}`,
+    undefined,
+    [200],
+  );
+  return response.payload;
+};
+
+const fetchDailyOverview = async (context, { year, month, usernames }) => {
+  const params = new URLSearchParams();
+  params.set("year", String(year));
+  params.set("month", String(month));
+  params.set("usernames", usernames.join(","));
+  const response = await apiJsonRequestWithRetry(
+    context,
+    "GET",
+    `/api/collection/daily/overview?${params.toString()}`,
+    undefined,
+    [200],
+  );
+  return response.payload;
+};
+
+const checkCollectionMutationConsistency = async (context) => {
+  const [nicknameA, nicknameB] = await ensureCollectionSmokeNicknames(context);
+  assert(nicknameA && nicknameB, "collection mutation smoke requires two active nicknames");
+
+  const now = new Date();
+  const yearA = now.getFullYear();
+  const monthA = now.getMonth() + 1;
+  const monthB = monthA === 1 ? 12 : monthA - 1;
+  const yearB = monthA === 1 ? yearA - 1 : yearA;
+  const dateA = toIsoDate(yearA, monthA, Math.max(1, Math.min(now.getDate(), 10)));
+  const dateB = toIsoDate(yearB, monthB, Math.min(15, getDaysInMonth(yearB, monthB)));
+  const rangeFrom = toIsoDate(yearB, monthB, 1);
+  const rangeTo = dateA;
+  const scopedNicknames = [nicknameA, nicknameB];
+  const initialAmount = 111.11;
+  const bumpedAmount = 333.33;
+  const monthlyTarget = 100000;
+
+  const readMonthTotals = async () => {
+    const summaryYearA = await fetchCollectionSummaryYear(context, yearA, scopedNicknames);
+    const summaryYearB = yearA === yearB
+      ? summaryYearA
+      : await fetchCollectionSummaryYear(context, yearB, scopedNicknames);
+    return {
+      monthATotal: readMonthTotalAmount(summaryYearA, monthA),
+      monthBTotal: readMonthTotalAmount(summaryYearB, monthB),
+    };
+  };
+
+  const readNicknameTotals = async () => {
+    const summary = await fetchNicknameSummary(context, {
+      from: rangeFrom,
+      to: rangeTo,
+      nicknames: scopedNicknames,
+    });
+    return {
+      nicknameATotal: readNicknameTotalAmount(summary, nicknameA),
+      nicknameBTotal: readNicknameTotalAmount(summary, nicknameB),
+    };
+  };
+
+  const baselineMonths = await readMonthTotals();
+  const baselineNicknames = await readNicknameTotals();
+
+  let createdRecordId = "";
+  let createdAccountNumber = "";
+  let expectedUpdatedAt = "";
+  let recordDeleted = false;
+
+  try {
+    const uniqueSuffix = `${Date.now()}`;
+    const createResponse = await apiJsonRequestWithRetry(
+      context,
+      "POST",
+      "/api/collection",
+      {
+        customerName: `Smoke Mutation ${uniqueSuffix}`,
+        icNumber: `900101${uniqueSuffix.slice(-6)}`,
+        customerPhone: `012${uniqueSuffix.slice(-7)}`,
+        accountNumber: `SMOKE-MUT-${uniqueSuffix}`,
+        batch: "P10",
+        paymentDate: dateA,
+        amount: initialAmount,
+        collectionStaffNickname: nicknameA,
+      },
+      [200],
+    );
+    const createdRecord = createResponse.payload?.record;
+    createdRecordId = String(createdRecord?.id || "");
+    createdAccountNumber = String(createdRecord?.accountNumber || `SMOKE-MUT-${uniqueSuffix}`);
+    expectedUpdatedAt = String(createdRecord?.updatedAt || createdRecord?.createdAt || "");
+    assert(createdRecordId, "collection mutation smoke should receive a created record id");
+    assert(expectedUpdatedAt, "collection mutation smoke should receive a version timestamp from create API");
+
+    const afterCreateMonths = await readMonthTotals();
+    const afterCreateNicknames = await readNicknameTotals();
+    assertMoneyClose(
+      afterCreateMonths.monthATotal,
+      baselineMonths.monthATotal + initialAmount,
+      "Collection Summary month A total should increase after create",
+    );
+    assertMoneyClose(
+      afterCreateNicknames.nicknameATotal,
+      baselineNicknames.nicknameATotal + initialAmount,
+      "Nickname Summary for staff A should increase after create",
+    );
+
+    const reassignResponse = await apiJsonRequestWithRetry(
+      context,
+      "PATCH",
+      `/api/collection/${encodeURIComponent(createdRecordId)}`,
+      {
+        collectionStaffNickname: nicknameB,
+        expectedUpdatedAt,
+      },
+      [200],
+    );
+    expectedUpdatedAt = String(
+      reassignResponse.payload?.record?.updatedAt
+      || reassignResponse.payload?.record?.createdAt
+      || expectedUpdatedAt,
+    );
+    const afterReassignNicknames = await readNicknameTotals();
+    assertMoneyClose(
+      afterReassignNicknames.nicknameATotal,
+      baselineNicknames.nicknameATotal,
+      "Nickname Summary for staff A should decrease after reassignment",
+    );
+    assertMoneyClose(
+      afterReassignNicknames.nicknameBTotal,
+      baselineNicknames.nicknameBTotal + initialAmount,
+      "Nickname Summary for staff B should increase after reassignment",
+    );
+
+    const moveDateResponse = await apiJsonRequestWithRetry(
+      context,
+      "PATCH",
+      `/api/collection/${encodeURIComponent(createdRecordId)}`,
+      {
+        paymentDate: dateB,
+        expectedUpdatedAt,
+      },
+      [200],
+    );
+    expectedUpdatedAt = String(
+      moveDateResponse.payload?.record?.updatedAt
+      || moveDateResponse.payload?.record?.createdAt
+      || expectedUpdatedAt,
+    );
+    const afterDateMoveMonths = await readMonthTotals();
+    assertMoneyClose(
+      afterDateMoveMonths.monthATotal,
+      baselineMonths.monthATotal,
+      "Collection Summary month A total should decrease after payment-date month move",
+    );
+    assertMoneyClose(
+      afterDateMoveMonths.monthBTotal,
+      baselineMonths.monthBTotal + initialAmount,
+      "Collection Summary month B total should increase after payment-date month move",
+    );
+
+    const amountUpdateResponse = await apiJsonRequestWithRetry(
+      context,
+      "PATCH",
+      `/api/collection/${encodeURIComponent(createdRecordId)}`,
+      {
+        amount: bumpedAmount,
+        expectedUpdatedAt,
+      },
+      [200],
+    );
+    expectedUpdatedAt = String(
+      amountUpdateResponse.payload?.record?.updatedAt
+      || amountUpdateResponse.payload?.record?.createdAt
+      || expectedUpdatedAt,
+    );
+    const afterAmountMonths = await readMonthTotals();
+    const afterAmountNicknames = await readNicknameTotals();
+    assertMoneyClose(
+      afterAmountMonths.monthBTotal,
+      baselineMonths.monthBTotal + bumpedAmount,
+      "Collection Summary month B total should reflect amount edit",
+    );
+    assertMoneyClose(
+      afterAmountNicknames.nicknameBTotal,
+      baselineNicknames.nicknameBTotal + bumpedAmount,
+      "Nickname Summary for staff B should reflect amount edit",
+    );
+
+    await apiJsonRequestWithRetry(
+      context,
+      "PUT",
+      "/api/collection/daily/target",
+      {
+        username: nicknameB,
+        year: yearB,
+        month: monthB,
+        monthlyTarget,
+      },
+      [200],
+    );
+    const dailyOverview = await fetchDailyOverview(context, {
+      year: yearB,
+      month: monthB,
+      usernames: [nicknameB],
+    });
+    const summary = dailyOverview?.summary || {};
+    const collectedToDate = Number(summary.collectedToDate || 0);
+    const expectedProgressAmount = Number(summary.expectedProgressAmount || 0);
+    const remainingTarget = Number(summary.remainingTarget || 0);
+    const remainingWorkingDays = Number(summary.remainingWorkingDays || 0);
+    const requiredPerRemainingWorkingDay = Number(summary.requiredPerRemainingWorkingDay || 0);
+    const boundedRemainingTarget = Math.max(0, monthlyTarget - collectedToDate);
+
+    assert(
+      expectedProgressAmount <= monthlyTarget + 0.01,
+      `Daily expected progress must not exceed monthly target (${expectedProgressAmount} > ${monthlyTarget})`,
+    );
+    assertMoneyClose(
+      remainingTarget,
+      boundedRemainingTarget,
+      "Daily remaining target should equal monthlyTarget - collectedToDate",
+    );
+    if (remainingWorkingDays > 0) {
+      assertMoneyClose(
+        requiredPerRemainingWorkingDay,
+        boundedRemainingTarget / remainingWorkingDays,
+        "Daily required per remaining working day should be mathematically consistent",
+      );
+    }
+
+    const deleteResponse = await apiJsonRequestWithRetry(
+      context,
+      "DELETE",
+      `/api/collection/${encodeURIComponent(createdRecordId)}`,
+      expectedUpdatedAt ? { expectedUpdatedAt } : undefined,
+      [200],
+    );
+    assert(deleteResponse.payload?.ok === true, "Delete flow should succeed in collection mutation smoke");
+    recordDeleted = true;
+
+    const finalMonths = await readMonthTotals();
+    const finalNicknames = await readNicknameTotals();
+    assertMoneyClose(
+      finalMonths.monthATotal,
+      baselineMonths.monthATotal,
+      "Collection Summary month A should return to baseline after delete",
+    );
+    assertMoneyClose(
+      finalMonths.monthBTotal,
+      baselineMonths.monthBTotal,
+      "Collection Summary month B should return to baseline after delete",
+    );
+    assertMoneyClose(
+      finalNicknames.nicknameATotal,
+      baselineNicknames.nicknameATotal,
+      "Nickname Summary for staff A should return to baseline after delete",
+    );
+    assertMoneyClose(
+      finalNicknames.nicknameBTotal,
+      baselineNicknames.nicknameBTotal,
+      "Nickname Summary for staff B should return to baseline after delete",
+    );
+  } finally {
+    if (createdRecordId && !recordDeleted) {
+      await cleanupStaleDeleteConflictRecord(context, {
+        id: createdRecordId,
+        accountNumber: createdAccountNumber,
+        expectedUpdatedAt,
+      }).catch(() => {});
+    }
+  }
+};
+
 const checkCollectionRecordsStaleDeleteConflict = async (page, context, tracker) => {
   const smokeRecord = await provisionStaleDeleteConflictRecord(context);
   let cleanupVersion = smokeRecord.expectedUpdatedAt;
@@ -548,6 +887,65 @@ const apiJsonRequest = async (context, method, apiPath, body, expectedStatuses =
   }
 
   return { status, payload };
+};
+
+const apiJsonRequestWithRetry = async (
+  context,
+  method,
+  apiPath,
+  body,
+  expectedStatuses = [200],
+  maxAttempts = 6,
+) => {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const response = await apiJsonRequest(
+      context,
+      method,
+      apiPath,
+      body,
+      Array.from(new Set([...expectedStatuses, 429])),
+    );
+
+    if (response.status !== 429) {
+      return response;
+    }
+
+    if (attempt === maxAttempts) {
+      break;
+    }
+    await waitForRateLimitRecovery(response.payload, 800);
+  }
+
+  throw new Error(`${String(method).toUpperCase()} ${apiPath} remained rate-limited after ${maxAttempts} attempts.`);
+};
+
+const pad2 = (value) => String(value).padStart(2, "0");
+
+const toIsoDate = (year, month, day) => `${year}-${pad2(month)}-${pad2(day)}`;
+
+const getDaysInMonth = (year, month) => new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+const readMonthTotalAmount = (payload, month) => {
+  const rows = Array.isArray(payload?.summary) ? payload.summary : [];
+  const matched = rows.find((row) => Number(row?.month) === Number(month));
+  return Number(matched?.totalAmount || 0);
+};
+
+const readNicknameTotalAmount = (payload, nickname) => {
+  const rows = Array.isArray(payload?.nicknameTotals) ? payload.nicknameTotals : [];
+  const normalized = String(nickname || "").trim().toLowerCase();
+  const matched = rows.find((row) => String(row?.nickname || "").trim().toLowerCase() === normalized);
+  return Number(matched?.totalAmount || 0);
+};
+
+const assertMoneyClose = (actual, expected, message) => {
+  const actualValue = Number(actual || 0);
+  const expectedValue = Number(expected || 0);
+  const delta = Math.abs(actualValue - expectedValue);
+  assert(
+    delta <= 0.01,
+    `${message}. Expected ${expectedValue.toFixed(2)}, got ${actualValue.toFixed(2)} (delta ${delta.toFixed(4)}).`,
+  );
 };
 
 const provisionStaleDeleteConflictRecord = async (context) => {
@@ -860,6 +1258,7 @@ const run = async () => {
       await checkMobileNavbar(page, tracker);
       await checkHomeEntryPoint(page, tracker);
       await checkCollectionDailyPage(page, tracker);
+      await checkCollectionMutationConsistency(context);
       await checkCollectionRecordsStaleDeleteConflict(page, context, tracker);
 
       await checkLogoutFlow(page, context, tracker);

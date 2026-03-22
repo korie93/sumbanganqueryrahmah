@@ -58,7 +58,7 @@ export function useCollectionReceiptPreview() {
       resolveReceiptPreviewKind({
         mimeType: receiptPreviewMimeType || selectedPreviewReceipt?.originalMimeType || "",
         fileName: receiptPreviewFileName || selectedPreviewReceipt?.originalFileName || "",
-        receiptPath: receiptPreviewRecord?.receiptFile || "",
+        receiptPath: selectedPreviewReceipt?.storagePath || receiptPreviewRecord?.receiptFile || "",
       }),
     [
       receiptPreviewFileName,
@@ -66,6 +66,7 @@ export function useCollectionReceiptPreview() {
       receiptPreviewRecord?.receiptFile,
       selectedPreviewReceipt?.originalFileName,
       selectedPreviewReceipt?.originalMimeType,
+      selectedPreviewReceipt?.storagePath,
     ],
   );
 

@@ -28,6 +28,7 @@ type SaveCollectionPageProps = {
 function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const submitInFlightRef = useRef(false);
 
   const [customerName, setCustomerName] = useState("");
   const [icNumber, setIcNumber] = useState("");
@@ -96,7 +97,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   };
 
   const handleSubmit = async () => {
-    if (submitting) return;
+    if (submitting || submitInFlightRef.current) return;
 
     const validationError = validateForm();
     if (validationError) {
@@ -108,6 +109,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       return;
     }
 
+    submitInFlightRef.current = true;
     setSubmitting(true);
     try {
       const receipts =
@@ -141,6 +143,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         variant: "destructive",
       });
     } finally {
+      submitInFlightRef.current = false;
       setSubmitting(false);
     }
   };
