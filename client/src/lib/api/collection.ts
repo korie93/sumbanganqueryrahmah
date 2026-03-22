@@ -599,7 +599,12 @@ export async function updateCollectionRecord(id: string, payload: UpdateCollecti
   return response.json();
 }
 
-export async function deleteCollectionRecord(id: string) {
-  const response = await apiRequest("DELETE", `/api/collection/${encodeURIComponent(id)}`);
+export async function deleteCollectionRecord(
+  id: string,
+  payload?: {
+    expectedUpdatedAt?: string;
+  },
+) {
+  const response = await apiRequest("DELETE", `/api/collection/${encodeURIComponent(id)}`, payload);
   return response.json();
 }

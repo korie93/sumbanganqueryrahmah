@@ -21,6 +21,7 @@ import {
   isPositiveAmount,
   isValidCustomerPhone,
   isValidDate,
+  parseCollectionApiErrorDetails,
   parseApiError,
   toReceiptPayload,
   validateReceiptFile,
@@ -236,9 +237,37 @@ export function useCollectionRecordEdit({
       await onRefresh();
     } catch (error: unknown) {
       if (!isMountedRef.current) return;
+      const apiErrorDetails = parseCollectionApiErrorDetails(error);
+      if (
+        apiErrorDetails.status === 409
+        && apiErrorDetails.code === "COLLECTION_RECORD_VERSION_CONFLICT"
+      ) {
+        toast({
+          title: "Record Updated Elsewhere",
+          description:
+            "This record changed in another session. The list has been refreshed. Reopen the record and apply your changes again.",
+          variant: "destructive",
+        });
+        emitCollectionDataChanged();
+        try {
+          await onRefresh();
+        } catch {
+          // keep conflict UX deterministic even if refresh fails
+        }
+        if (!isMountedRef.current) return;
+        setEditOpen(false);
+        setEditingRecord(null);
+        setEditNewReceiptFiles([]);
+        setEditRemovedReceiptIds([]);
+        if (editReceiptInputRef.current) {
+          editReceiptInputRef.current.value = "";
+        }
+        return;
+      }
+
       toast({
         title: "Failed to Update Record",
-        description: parseApiError(error),
+        description: apiErrorDetails.message || parseApiError(error),
         variant: "destructive",
       });
     } finally {

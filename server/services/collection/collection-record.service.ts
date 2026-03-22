@@ -22,6 +22,7 @@ import {
   parseCollectionAmount,
   type CollectionBatchValue,
   type CollectionCreatePayload,
+  type CollectionDeletePayload,
   type CollectionReceiptPayload,
   type CollectionUpdatePayload,
 } from "../../routes/collection.validation";
@@ -1150,10 +1151,17 @@ export class CollectionRecordService extends CollectionServiceSupport {
         return { ok: true as const, record: existing };
       }
 
+      const existingReceipts = Array.isArray(existing.receipts) ? existing.receipts : [];
+      const removedReceipts = shouldRemoveReceipt
+        ? existingReceipts
+        : removeReceiptIds.length > 0
+          ? existingReceipts.filter((receipt) => removeReceiptIds.includes(receipt.id))
+          : [];
+
       const shouldClearLegacyReceiptFallback =
         shouldRemoveReceipt
         && uploadedReceipts.length === 0
-        && (existing.receipts?.length || 0) === 0
+        && existingReceipts.length === 0
         && Boolean(existing.receiptFile);
       if (shouldClearLegacyReceiptFallback) {
         // Transitional cleanup for legacy rows that still only use collection_records.receipt_file.
@@ -1162,6 +1170,9 @@ export class CollectionRecordService extends CollectionServiceSupport {
 
       const updated = await this.storage.updateCollectionRecord(id, updatePayload, {
         expectedUpdatedAt: expectedUpdatedAt ?? undefined,
+        removeAllReceipts: shouldRemoveReceipt,
+        removeReceiptIds: shouldRemoveReceipt ? [] : removeReceiptIds,
+        newReceipts: uploadedReceipts,
       });
       if (!updated) {
         for (const uploadedReceipt of uploadedReceipts) {
@@ -1171,15 +1182,6 @@ export class CollectionRecordService extends CollectionServiceSupport {
           throw conflict(COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE, "COLLECTION_RECORD_VERSION_CONFLICT");
         }
         throw notFound("Collection record not found.");
-      }
-
-      const removedReceipts = shouldRemoveReceipt
-        ? await this.storage.deleteAllCollectionRecordReceipts(id)
-        : removeReceiptIds.length > 0
-          ? await this.storage.deleteCollectionRecordReceipts(id, removeReceiptIds)
-          : [];
-      if (uploadedReceipts.length > 0) {
-        await this.storage.createCollectionRecordReceipts(id, uploadedReceipts);
       }
 
       for (const removedReceipt of removedReceipts) {
@@ -1196,8 +1198,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
         details: `Collection record updated by ${user.username}`,
       });
 
-      const finalRecord = await this.storage.getCollectionRecordById(id);
-      return { ok: true as const, record: finalRecord || updated };
+      return { ok: true as const, record: updated };
     } catch (err) {
       for (const uploadedReceipt of uploadedReceipts) {
         await removeCollectionReceiptFile(uploadedReceipt.storagePath);
@@ -1206,7 +1207,11 @@ export class CollectionRecordService extends CollectionServiceSupport {
     }
   }
 
-  async deleteRecord(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], idRaw: unknown) {
+  async deleteRecord(
+    userInput: Parameters<CollectionServiceSupport["requireUser"]>[0],
+    idRaw: unknown,
+    bodyRaw?: unknown,
+  ) {
     const user = this.requireUser(userInput);
     const id = normalizeCollectionText(idRaw);
     if (!id) {
@@ -1221,8 +1226,25 @@ export class CollectionRecordService extends CollectionServiceSupport {
       throw forbidden("Forbidden");
     }
 
-    const removedReceipts = await this.storage.deleteAllCollectionRecordReceipts(id);
-    await this.storage.deleteCollectionRecord(id);
+    const body = (ensureLooseObject(bodyRaw) || {}) as CollectionDeletePayload;
+    const expectedUpdatedAt = parseRecordVersionTimestamp(body.expectedUpdatedAt);
+    if (expectedUpdatedAt) {
+      const currentVersion = resolveRecordVersionTimestamp(existing);
+      if (!currentVersion || currentVersion.getTime() !== expectedUpdatedAt.getTime()) {
+        throw conflict(COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE, "COLLECTION_RECORD_VERSION_CONFLICT");
+      }
+    }
+
+    const removedReceipts = Array.isArray(existing.receipts) ? existing.receipts : [];
+    const deleted = await this.storage.deleteCollectionRecord(id, {
+      expectedUpdatedAt: expectedUpdatedAt ?? undefined,
+    });
+    if (!deleted) {
+      if (expectedUpdatedAt) {
+        throw conflict(COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE, "COLLECTION_RECORD_VERSION_CONFLICT");
+      }
+      throw notFound("Collection record not found.");
+    }
     for (const receipt of removedReceipts) {
       await removeCollectionReceiptFile(receipt.storagePath);
     }

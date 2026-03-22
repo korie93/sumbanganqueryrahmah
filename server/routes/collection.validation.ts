@@ -47,6 +47,10 @@ export type CollectionUpdatePayload = Partial<CollectionCreatePayload> & {
   expectedUpdatedAt?: string;
 };
 
+export type CollectionDeletePayload = {
+  expectedUpdatedAt?: string;
+};
+
 export type CollectionNicknamePayload = {
   nickname?: string;
   isActive?: boolean;
