@@ -8,6 +8,12 @@ This runbook verifies backup create/export integrity and optional restore behavi
 npm run dr:drill
 ```
 
+For a full local pre-release gate (tests + smoke + drill):
+
+```bash
+npm run release:verify:local
+```
+
 ## Required Environment
 
 - `DRILL_BASE_URL` (or `SMOKE_BASE_URL`)

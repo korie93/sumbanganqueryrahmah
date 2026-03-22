@@ -65,6 +65,23 @@ Uji hanya pada data staging / non-production:
 - restore backup
 - chaos / failure injection
 
+## Staging Soak (Disyorkan 30-60 minit)
+
+- Gunakan 2 tab serentak dan ulang flow:
+  - create record
+  - edit amount
+  - edit payment date (termasuk cross-month)
+  - reassign nickname/staff
+  - delete record
+- Selepas setiap mutation, sahkan:
+  - Collection Daily betul
+  - Collection Summary betul
+  - Nickname Summary betul
+  - tiada duplicate counting
+  - tiada hard refresh diperlukan untuk data jadi betul
+
+## Canary / Monitoring
+
 ## Release Gate
 
 Anggap build layak hanya jika:
@@ -74,3 +91,11 @@ Anggap build layak hanya jika:
 - build lulus
 - `npm run smoke:ui` lulus
 - tiada console error/warning pada flow utama
+- monitor utama stabil semasa canary:
+  - `collectionRecordVersionConflicts24h`
+  - `status429Count`
+  - `errorRate`
+
+Rujuk playbook:
+
+- `docs/PRODUCTION_PROMOTION_PLAYBOOK.md`
