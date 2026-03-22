@@ -24,9 +24,15 @@ export function parseCollectionApiErrorDetails(error: unknown): CollectionApiErr
     const parsed = JSON.parse(jsonPart);
     const parsedStatus = Number(parsed?.status);
     const status = Number.isFinite(parsedStatus) ? parsedStatus : fallbackStatus;
+    const code =
+      typeof parsed?.code === "string"
+        ? parsed.code
+        : typeof parsed?.error?.code === "string"
+          ? parsed.error.code
+          : null;
     return {
       status: Number.isFinite(Number(status)) ? Number(status) : null,
-      code: typeof parsed?.code === "string" ? parsed.code : null,
+      code,
       message: String(parsed?.message || parsed?.error?.message || raw),
     };
   } catch {

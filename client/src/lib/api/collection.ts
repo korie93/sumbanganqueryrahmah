@@ -602,6 +602,8 @@ export async function updateCollectionRecord(id: string, payload: UpdateCollecti
 export async function deleteCollectionRecord(
   id: string,
   payload?: {
+    // Optional optimistic-concurrency token from record.updatedAt (or createdAt fallback).
+    // Backend returns 409 COLLECTION_RECORD_VERSION_CONFLICT when this token is stale.
     expectedUpdatedAt?: string;
   },
 ) {
