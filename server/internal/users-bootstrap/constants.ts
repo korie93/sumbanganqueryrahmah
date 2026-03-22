@@ -1,0 +1,2 @@
+export const USERS_BOOTSTRAP_BCRYPT_COST = 12;
+

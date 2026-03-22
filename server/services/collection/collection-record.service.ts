@@ -1119,6 +1119,15 @@ export class CollectionRecordService extends CollectionServiceSupport {
         : removeReceiptIds.length > 0
           ? await this.storage.deleteCollectionRecordReceipts(id, removeReceiptIds)
           : [];
+      const shouldClearLegacyReceiptFallback =
+        shouldRemoveReceipt
+        && uploadedReceipts.length === 0
+        && removedReceipts.length === 0
+        && Boolean(existing.receiptFile);
+      if (shouldClearLegacyReceiptFallback) {
+        // Transitional cleanup for legacy rows that still only use collection_records.receipt_file.
+        updatePayload.receiptFile = null;
+      }
       if (uploadedReceipts.length > 0) {
         await this.storage.createCollectionRecordReceipts(id, uploadedReceipts);
       }
@@ -1133,6 +1142,9 @@ export class CollectionRecordService extends CollectionServiceSupport {
 
       for (const removedReceipt of removedReceipts) {
         await removeCollectionReceiptFile(removedReceipt.storagePath);
+      }
+      if (shouldClearLegacyReceiptFallback && existing.receiptFile) {
+        await removeCollectionReceiptFile(existing.receiptFile);
       }
 
       await this.storage.createAuditLog({
