@@ -56,6 +56,15 @@ Before merging runtime or routing refactors:
    - source mode: `npm run dev:server`
    - built mode: `npm run start:built`
 5. `npm run smoke:ui`
+6. `npm run dr:drill`
+
+For final release verification in one command:
+
+- `npm run release:verify:local`
+
+For stale-tab/429 health snapshots:
+
+- `npm run monitor:stale-conflicts`
 
 For authenticated smoke:
 
