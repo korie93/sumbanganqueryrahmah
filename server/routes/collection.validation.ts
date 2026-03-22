@@ -48,6 +48,8 @@ export type CollectionUpdatePayload = Partial<CollectionCreatePayload> & {
 };
 
 export type CollectionDeletePayload = {
+  // Optional optimistic-concurrency token from the last observed record version.
+  // When provided, DELETE /api/collection/:id will reject stale deletes with HTTP 409.
   expectedUpdatedAt?: string;
 };
 
