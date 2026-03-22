@@ -56,6 +56,12 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 | `npm run db:studio` | Open Drizzle Studio |
 | `npm run typecheck` | Run TypeScript type checking |
 | `npm test` | Run all test suites |
+| `npm run smoke:preflight` | Validate smoke prerequisites and bootstrap assumptions |
+| `npm run smoke:ui` | Run UI smoke coverage against a running server |
+| `npm run smoke:ci-local` | Build + run local CI-style smoke sequence with artifacts |
+| `npm run dr:drill` | Execute backup disaster-recovery drill (create/export/checksum/optional restore) |
+| `npm run release:verify:local` | Run final local release gate (tests + smoke + backup drill) |
+| `npm run monitor:stale-conflicts` | Snapshot stale-conflict/429 runtime monitor signals |
 
 ## Features
 
@@ -69,11 +75,12 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 
 ## Documentation
 
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - System architecture overview
 - [docs/DATABASE_MIGRATIONS.md](./docs/DATABASE_MIGRATIONS.md) - Drizzle and legacy migration workflow
-
-- [ARCHITECTURE.md](./ARCHITECTURE.md) — System architecture overview
-- [docs/](./docs/) — Additional documentation
-- [README_CLIENT_MANUAL.md](./README_CLIENT_MANUAL.md) — Client user manual
+- [docs/QA_FINAL_CHECKLIST.md](./docs/QA_FINAL_CHECKLIST.md) - Final QA and smoke gate checklist
+- [docs/PRODUCTION_PROMOTION_PLAYBOOK.md](./docs/PRODUCTION_PROMOTION_PLAYBOOK.md) - Staging soak, canary, monitor, and rollback playbook
+- [docs/DISASTER_RECOVERY_DRILL.md](./docs/DISASTER_RECOVERY_DRILL.md) - Backup and restore drill guide
+- [README_CLIENT_MANUAL.md](./README_CLIENT_MANUAL.md) - Client user manual
 
 ## License
 
