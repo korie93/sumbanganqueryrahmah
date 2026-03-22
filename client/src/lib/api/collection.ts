@@ -27,6 +27,7 @@ export type CollectionRecord = {
   createdByLogin: string;
   collectionStaffNickname: string;
   createdAt: string;
+  updatedAt?: string;
 };
 
 export type CollectionStaffNickname = {
@@ -82,6 +83,7 @@ export type CreateCollectionPayload = {
 export type UpdateCollectionPayload = Partial<CreateCollectionPayload> & {
   removeReceipt?: boolean;
   removeReceiptIds?: string[];
+  expectedUpdatedAt?: string;
 };
 
 export type CollectionRecordListResponse = {

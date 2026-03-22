@@ -1,4 +1,4 @@
-import { badRequest, forbidden, notFound } from "../../http/errors";
+import { badRequest, conflict, forbidden, notFound } from "../../http/errors";
 import { verifyPassword } from "../../auth/passwords";
 import {
   canUserAccessCollectionRecord,
@@ -88,6 +88,34 @@ type DailyOverviewComputation = {
 function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
+
+function parseRecordVersionTimestamp(value: unknown): Date | null {
+  const normalized = normalizeCollectionText(value);
+  if (!normalized) return null;
+
+  const parsed = new Date(normalized);
+  if (!Number.isFinite(parsed.getTime())) {
+    throw badRequest("expectedUpdatedAt must be a valid ISO date-time.");
+  }
+
+  return parsed;
+}
+
+function resolveRecordVersionTimestamp(record: { updatedAt?: Date; createdAt: Date }): Date | null {
+  const updatedAt = record.updatedAt instanceof Date
+    ? record.updatedAt
+    : record.updatedAt
+      ? new Date(record.updatedAt)
+      : null;
+  if (updatedAt && Number.isFinite(updatedAt.getTime())) {
+    return updatedAt;
+  }
+  const createdAt = record.createdAt instanceof Date ? record.createdAt : new Date(record.createdAt);
+  return Number.isFinite(createdAt.getTime()) ? createdAt : null;
+}
+
+const COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE =
+  "Collection record has changed since you opened it. Refresh and try again.";
 
 function buildCollectionPurgeCutoffDate(referenceDate = new Date()): string {
   const utcYear = referenceDate.getUTCFullYear();
@@ -1034,6 +1062,14 @@ export class CollectionRecordService extends CollectionServiceSupport {
     const uploadedReceipts: Array<Awaited<ReturnType<typeof saveCollectionReceipt>>> = [];
     try {
       const body = (ensureLooseObject(bodyRaw) || {}) as CollectionUpdatePayload;
+      const expectedUpdatedAt = parseRecordVersionTimestamp(body.expectedUpdatedAt);
+      if (expectedUpdatedAt) {
+        const currentVersion = resolveRecordVersionTimestamp(existing);
+        if (!currentVersion || currentVersion.getTime() !== expectedUpdatedAt.getTime()) {
+          throw conflict(COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE, "COLLECTION_RECORD_VERSION_CONFLICT");
+        }
+      }
+
       const updatePayload: Record<string, unknown> = {};
       const customerName = normalizeCollectionText(body.customerName);
       const icNumber = normalizeCollectionText(body.icNumber);
@@ -1114,30 +1150,36 @@ export class CollectionRecordService extends CollectionServiceSupport {
         return { ok: true as const, record: existing };
       }
 
-      const removedReceipts = shouldRemoveReceipt
-        ? await this.storage.deleteAllCollectionRecordReceipts(id)
-        : removeReceiptIds.length > 0
-          ? await this.storage.deleteCollectionRecordReceipts(id, removeReceiptIds)
-          : [];
       const shouldClearLegacyReceiptFallback =
         shouldRemoveReceipt
         && uploadedReceipts.length === 0
-        && removedReceipts.length === 0
+        && (existing.receipts?.length || 0) === 0
         && Boolean(existing.receiptFile);
       if (shouldClearLegacyReceiptFallback) {
         // Transitional cleanup for legacy rows that still only use collection_records.receipt_file.
         updatePayload.receiptFile = null;
       }
-      if (uploadedReceipts.length > 0) {
-        await this.storage.createCollectionRecordReceipts(id, uploadedReceipts);
-      }
 
-      const updated = await this.storage.updateCollectionRecord(id, updatePayload);
+      const updated = await this.storage.updateCollectionRecord(id, updatePayload, {
+        expectedUpdatedAt: expectedUpdatedAt ?? undefined,
+      });
       if (!updated) {
         for (const uploadedReceipt of uploadedReceipts) {
           await removeCollectionReceiptFile(uploadedReceipt.storagePath);
         }
+        if (expectedUpdatedAt) {
+          throw conflict(COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE, "COLLECTION_RECORD_VERSION_CONFLICT");
+        }
         throw notFound("Collection record not found.");
+      }
+
+      const removedReceipts = shouldRemoveReceipt
+        ? await this.storage.deleteAllCollectionRecordReceipts(id)
+        : removeReceiptIds.length > 0
+          ? await this.storage.deleteCollectionRecordReceipts(id, removeReceiptIds)
+          : [];
+      if (uploadedReceipts.length > 0) {
+        await this.storage.createCollectionRecordReceipts(id, uploadedReceipts);
       }
 
       for (const removedReceipt of removedReceipts) {
@@ -1150,11 +1192,12 @@ export class CollectionRecordService extends CollectionServiceSupport {
       await this.storage.createAuditLog({
         action: "COLLECTION_RECORD_UPDATED",
         performedBy: user.username,
-        targetResource: updated.id,
+        targetResource: id,
         details: `Collection record updated by ${user.username}`,
       });
 
-      return { ok: true as const, record: updated };
+      const finalRecord = await this.storage.getCollectionRecordById(id);
+      return { ok: true as const, record: finalRecord || updated };
     } catch (err) {
       for (const uploadedReceipt of uploadedReceipts) {
         await removeCollectionReceiptFile(uploadedReceipt.storagePath);

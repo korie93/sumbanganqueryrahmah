@@ -65,6 +65,7 @@ import type {
   CreateCollectionRecordReceiptInput,
   CreateCollectionStaffNicknameInput,
   UpdateCollectionRecordInput,
+  UpdateCollectionRecordOptions,
   UpdateCollectionStaffNicknameInput,
 } from "../storage-postgres";
 
@@ -84,6 +85,10 @@ export class CollectionRepository {
     const createdAt = createdAtRaw instanceof Date
       ? createdAtRaw
       : new Date(createdAtRaw ?? Date.now());
+    const updatedAtRaw = row.updated_at ?? row.updatedAt ?? createdAt;
+    const updatedAt = updatedAtRaw instanceof Date
+      ? updatedAtRaw
+      : new Date(updatedAtRaw ?? createdAt);
 
     return {
       id: String(row.id),
@@ -99,6 +104,7 @@ export class CollectionRepository {
       createdByLogin: String(row.created_by_login ?? row.createdByLogin ?? row.staff_username ?? row.staffUsername ?? ""),
       collectionStaffNickname: String(row.collection_staff_nickname ?? row.collectionStaffNickname ?? row.staff_username ?? row.staffUsername ?? ""),
       createdAt,
+      updatedAt,
     };
   }
 
@@ -526,7 +532,8 @@ export class CollectionRepository {
         created_by_login,
         collection_staff_nickname,
         staff_username,
-        created_at
+        created_at,
+        updated_at
       )
       VALUES (
         ${id}::uuid,
@@ -541,7 +548,8 @@ export class CollectionRepository {
         ${data.createdByLogin},
         ${data.collectionStaffNickname},
         ${data.collectionStaffNickname},
-        now()
+        now(),
+        date_trunc('milliseconds', now())
       )
     `);
     const created = await this.getCollectionRecordById(id);
@@ -584,7 +592,8 @@ export class CollectionRepository {
         created_by_login,
         collection_staff_nickname,
         staff_username,
-        created_at
+        created_at,
+        updated_at
       FROM public.collection_records
       ${whereSql}
       ORDER BY payment_date ASC, created_at ASC, id ASC
@@ -772,7 +781,8 @@ export class CollectionRepository {
         created_by_login,
         collection_staff_nickname,
         staff_username,
-        created_at
+        created_at,
+        updated_at
       FROM public.collection_records
       WHERE id = ${id}::uuid
       LIMIT 1
@@ -813,7 +823,11 @@ export class CollectionRepository {
     return deleteAllCollectionRecordReceiptRows(db, recordId);
   }
 
-  async updateCollectionRecord(id: string, data: UpdateCollectionRecordInput): Promise<CollectionRecord | undefined> {
+  async updateCollectionRecord(
+    id: string,
+    data: UpdateCollectionRecordInput,
+    options?: UpdateCollectionRecordOptions,
+  ): Promise<CollectionRecord | undefined> {
     const updateChunks: any[] = [];
 
     if (data.customerName !== undefined) {
@@ -846,14 +860,29 @@ export class CollectionRepository {
       updateChunks.push(sql`staff_username = ${data.collectionStaffNickname}`);
     }
 
-    if (!updateChunks.length) {
+    const expectedUpdatedAt =
+      options?.expectedUpdatedAt instanceof Date
+      && Number.isFinite(options.expectedUpdatedAt.getTime())
+        ? options.expectedUpdatedAt
+        : null;
+
+    if (!updateChunks.length && !expectedUpdatedAt) {
       return this.getCollectionRecordById(id);
+    }
+
+    updateChunks.push(sql`updated_at = date_trunc('milliseconds', now())`);
+
+    const whereClauses = [sql`id = ${id}::uuid`];
+    if (expectedUpdatedAt) {
+      whereClauses.push(
+        sql`date_trunc('milliseconds', updated_at) = date_trunc('milliseconds', ${expectedUpdatedAt})`,
+      );
     }
 
     const result = await db.execute(sql`
       UPDATE public.collection_records
       SET ${sql.join(updateChunks, sql`, `)}
-      WHERE id = ${id}::uuid
+      WHERE ${sql.join(whereClauses, sql` AND `)}
       RETURNING
         id,
         customer_name,
@@ -867,7 +896,8 @@ export class CollectionRepository {
         created_by_login,
         collection_staff_nickname,
         staff_username,
-        created_at
+        created_at,
+        updated_at
     `);
 
     const row = result.rows?.[0];

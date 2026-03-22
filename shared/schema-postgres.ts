@@ -211,6 +211,7 @@ export const collectionRecords = pgTable("collection_records", {
   collectionStaffNickname: text("collection_staff_nickname").notNull(),
   staffUsername: text("staff_username").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   paymentDateIdx: index("idx_collection_records_payment_date").on(table.paymentDate),
   createdAtIdx: index("idx_collection_records_created_at").on(table.createdAt),

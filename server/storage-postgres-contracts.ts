@@ -25,6 +25,7 @@ export type {
   PasswordResetTokenSummary,
   PendingPasswordResetRequestSummary,
   UpdateCollectionRecordInput,
+  UpdateCollectionRecordOptions,
   UpdateCollectionStaffNicknameInput,
 } from "./storage-postgres-types";
 

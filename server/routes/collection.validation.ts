@@ -44,6 +44,7 @@ export type CollectionCreatePayload = {
 export type CollectionUpdatePayload = Partial<CollectionCreatePayload> & {
   removeReceipt?: boolean;
   removeReceiptIds?: unknown;
+  expectedUpdatedAt?: string;
 };
 
 export type CollectionNicknamePayload = {

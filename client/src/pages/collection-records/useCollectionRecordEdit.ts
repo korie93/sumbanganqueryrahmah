@@ -199,6 +199,7 @@ export function useCollectionRecordEdit({
         batch: editBatch,
         paymentDate: editPaymentDate,
         amount: Number(editAmount),
+        expectedUpdatedAt: editingRecord.updatedAt || editingRecord.createdAt,
       };
 
       if (staffNicknameChanged) {
