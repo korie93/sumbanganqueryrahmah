@@ -6,6 +6,12 @@ import type {
   PendingPasswordResetRequest,
 } from "@/pages/settings/types";
 import type { DevMailOutboxPaginationState, DevMailOutboxQueryState } from "@/pages/settings/useSettingsDevMailOutbox";
+import type {
+  ManagedUsersPaginationState,
+  ManagedUsersQueryState,
+  PendingResetRequestsPaginationState,
+  PendingResetRequestsQueryState,
+} from "@/pages/settings/useSettingsManagedUserData";
 
 export interface AccountSecuritySectionProps {
   clearingDevMailOutbox: boolean;
@@ -27,6 +33,8 @@ export interface AccountSecuritySectionProps {
   isSuperuser: boolean;
   managedUsers: ManagedUser[];
   managedUsersLoading: boolean;
+  managedUsersPagination: ManagedUsersPaginationState;
+  managedUsersQuery: ManagedUsersQueryState;
   newPasswordInput: string;
   onChangePassword: () => void;
   onChangeUsername: () => void;
@@ -47,12 +55,16 @@ export interface AccountSecuritySectionProps {
   onManagedResetPassword: (user: ManagedUser) => void;
   onManagedResendActivation: (user: ManagedUser) => void;
   onManagedUsersRefresh: () => void;
+  onManagedUsersQueryChange: (query: Partial<ManagedUsersQueryState>) => void;
   onNewPasswordInputChange: (value: string) => void;
   onPendingResetRequestsRefresh: () => void;
+  onPendingResetRequestsQueryChange: (query: Partial<PendingResetRequestsQueryState>) => void;
   onUsernameInputChange: (value: string) => void;
   passwordSaving: boolean;
   pendingResetRequests: PendingPasswordResetRequest[];
   pendingResetRequestsLoading: boolean;
+  pendingResetRequestsPagination: PendingResetRequestsPaginationState;
+  pendingResetRequestsQuery: PendingResetRequestsQueryState;
   usernameInput: string;
   usernameSaving: boolean;
   showAccountManagement?: boolean;
@@ -95,6 +107,8 @@ export function AccountSecuritySection(props: AccountSecuritySectionProps) {
           isSuperuser={props.isSuperuser}
           managedUsers={props.managedUsers}
           managedUsersLoading={props.managedUsersLoading}
+          managedUsersPagination={props.managedUsersPagination}
+          managedUsersQuery={props.managedUsersQuery}
           onClearDevMailOutbox={props.onClearDevMailOutbox}
           onCreateEmailInputChange={props.onCreateEmailInputChange}
           onCreateFullNameInputChange={props.onCreateFullNameInputChange}
@@ -110,9 +124,13 @@ export function AccountSecuritySection(props: AccountSecuritySectionProps) {
           onManagedResetPassword={props.onManagedResetPassword}
           onManagedResendActivation={props.onManagedResendActivation}
           onManagedUsersRefresh={props.onManagedUsersRefresh}
+          onManagedUsersQueryChange={props.onManagedUsersQueryChange}
           onPendingResetRequestsRefresh={props.onPendingResetRequestsRefresh}
+          onPendingResetRequestsQueryChange={props.onPendingResetRequestsQueryChange}
           pendingResetRequests={props.pendingResetRequests}
           pendingResetRequestsLoading={props.pendingResetRequestsLoading}
+          pendingResetRequestsPagination={props.pendingResetRequestsPagination}
+          pendingResetRequestsQuery={props.pendingResetRequestsQuery}
         />
       ) : null}
     </div>

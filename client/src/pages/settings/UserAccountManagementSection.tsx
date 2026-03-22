@@ -13,6 +13,12 @@ import type {
   UserAccountManagementTabId,
 } from "@/pages/settings/types";
 import type { DevMailOutboxPaginationState, DevMailOutboxQueryState } from "@/pages/settings/useSettingsDevMailOutbox";
+import type {
+  ManagedUsersPaginationState,
+  ManagedUsersQueryState,
+  PendingResetRequestsPaginationState,
+  PendingResetRequestsQueryState,
+} from "@/pages/settings/useSettingsManagedUserData";
 
 export interface UserAccountManagementSectionProps {
   clearingDevMailOutbox: boolean;
@@ -31,6 +37,8 @@ export interface UserAccountManagementSectionProps {
   isSuperuser: boolean;
   managedUsers: ManagedUser[];
   managedUsersLoading: boolean;
+  managedUsersPagination: ManagedUsersPaginationState;
+  managedUsersQuery: ManagedUsersQueryState;
   onClearDevMailOutbox: () => void;
   onCreateEmailInputChange: (value: string) => void;
   onCreateFullNameInputChange: (value: string) => void;
@@ -46,9 +54,13 @@ export interface UserAccountManagementSectionProps {
   onManagedResetPassword: (user: ManagedUser) => void;
   onManagedResendActivation: (user: ManagedUser) => void;
   onManagedUsersRefresh: () => void;
+  onManagedUsersQueryChange: (query: Partial<ManagedUsersQueryState>) => void;
   onPendingResetRequestsRefresh: () => void;
+  onPendingResetRequestsQueryChange: (query: Partial<PendingResetRequestsQueryState>) => void;
   pendingResetRequests: PendingPasswordResetRequest[];
   pendingResetRequestsLoading: boolean;
+  pendingResetRequestsPagination: PendingResetRequestsPaginationState;
+  pendingResetRequestsQuery: PendingResetRequestsQueryState;
 }
 
 export function UserAccountManagementSection({
@@ -68,6 +80,8 @@ export function UserAccountManagementSection({
   isSuperuser,
   managedUsers,
   managedUsersLoading,
+  managedUsersPagination,
+  managedUsersQuery,
   onClearDevMailOutbox,
   onCreateEmailInputChange,
   onCreateFullNameInputChange,
@@ -83,9 +97,13 @@ export function UserAccountManagementSection({
   onManagedResetPassword,
   onManagedResendActivation,
   onManagedUsersRefresh,
+  onManagedUsersQueryChange,
   onPendingResetRequestsRefresh,
+  onPendingResetRequestsQueryChange,
   pendingResetRequests,
   pendingResetRequestsLoading,
+  pendingResetRequestsPagination,
+  pendingResetRequestsQuery,
 }: UserAccountManagementSectionProps) {
   const [activeTab, setActiveTab] = useState<UserAccountManagementTabId>("create-closed-account");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -117,12 +135,12 @@ export function UserAccountManagementSection({
           <UserAccountManagementNav
             activeTab={activeTab}
             collapsed={navCollapsed}
-            managedUserCount={managedUsers.length}
+            managedUserCount={managedUsersPagination.total}
             mobileOpen={mobileNavOpen}
             outboxCount={devMailOutboxPagination.total}
             onCollapsedChange={setNavCollapsed}
             onMobileOpenChange={setMobileNavOpen}
-            pendingResetCount={pendingResetRequests.length}
+            pendingResetCount={pendingResetRequestsPagination.total}
             onSelect={(tab) => {
               startTransition(() => {
                 setActiveTab(tab);
@@ -167,9 +185,12 @@ export function UserAccountManagementSection({
                 deletingManagedUserId={deletingManagedUserId}
                 loading={managedUsersLoading}
                 managedUsers={managedUsers}
+                pagination={managedUsersPagination}
+                query={managedUsersQuery}
                 onBanToggle={onManagedBanToggle}
                 onDeleteUser={onDeleteManagedUser}
                 onEditUser={onEditManagedUser}
+                onQueryChange={onManagedUsersQueryChange}
                 onRefresh={onManagedUsersRefresh}
                 onResetPassword={onManagedResetPassword}
                 onResendActivation={onManagedResendActivation}
@@ -179,6 +200,9 @@ export function UserAccountManagementSection({
             {activeTab === "pending-password-reset-requests" ? (
               <PendingPasswordResetSection
                 loading={pendingResetRequestsLoading}
+                pagination={pendingResetRequestsPagination}
+                query={pendingResetRequestsQuery}
+                onQueryChange={onPendingResetRequestsQueryChange}
                 onRefresh={onPendingResetRequestsRefresh}
                 requests={pendingResetRequests}
               />

@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { RefreshCw, Search, UserCog, Users } from "lucide-react";
 import {
   AlertDialog,
@@ -16,18 +16,21 @@ import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { SideTabDataPanel } from "@/components/layout/SideTabDataPanel";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { usePaginatedItems } from "@/hooks/usePaginatedItems";
 import { ManagedAccountRow } from "@/pages/settings/account-management/ManagedAccountRow";
 import { normalizeSearchValue } from "@/pages/settings/account-management/utils";
 import type { ManagedUser } from "@/pages/settings/types";
+import type { ManagedUsersPaginationState, ManagedUsersQueryState } from "@/pages/settings/useSettingsManagedUserData";
 
 interface ManagedAccountsSectionProps {
   deletingManagedUserId: string | null;
   loading: boolean;
   managedUsers: ManagedUser[];
+  pagination: ManagedUsersPaginationState;
+  query: ManagedUsersQueryState;
   onBanToggle: (user: ManagedUser) => void;
   onDeleteUser: (user: ManagedUser) => void;
   onEditUser: (user: ManagedUser) => void;
+  onQueryChange: (query: Partial<ManagedUsersQueryState>) => void;
   onRefresh: () => void;
   onResetPassword: (user: ManagedUser) => void;
   onResendActivation: (user: ManagedUser) => void;
@@ -37,48 +40,63 @@ export function ManagedAccountsSection({
   deletingManagedUserId,
   loading,
   managedUsers,
+  pagination,
+  query,
   onBanToggle,
   onDeleteUser,
   onEditUser,
+  onQueryChange,
   onRefresh,
   onResetPassword,
   onResendActivation,
 }: ManagedAccountsSectionProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
+  const [searchQuery, setSearchQuery] = useState(query.search);
+  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">(query.role);
   const [statusFilter, setStatusFilter] = useState<
     "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned"
-  >("all");
+  >(query.status);
   const [userToDelete, setUserToDelete] = useState<ManagedUser | null>(null);
   const deferredSearchQuery = useDeferredValue(searchQuery);
+  const normalizedDeferredSearch = useMemo(
+    () => normalizeSearchValue(deferredSearchQuery),
+    [deferredSearchQuery],
+  );
+  const hasActiveFilters = normalizedDeferredSearch.length > 0 || roleFilter !== "all" || statusFilter !== "all";
 
-  const filteredUsers = useMemo(() => {
-    const normalizedSearch = normalizeSearchValue(deferredSearchQuery);
-    return managedUsers.filter((user) => {
-      const combinedText = [
-        user.username,
-        user.fullName || "",
-        user.email || "",
-      ]
-        .join(" ")
-        .toLowerCase();
+  useEffect(() => {
+    const normalizedSearchFromQuery = normalizeSearchValue(query.search);
+    if (normalizeSearchValue(searchQuery) !== normalizedSearchFromQuery) {
+      setSearchQuery(query.search);
+    }
+  }, [query.search, searchQuery]);
 
-      const matchesSearch = !normalizedSearch || combinedText.includes(normalizedSearch);
-      const matchesRole = roleFilter === "all" || user.role === roleFilter;
-      const effectiveStatus = user.isBanned ? "banned" : user.status;
-      const matchesStatus = statusFilter === "all" || effectiveStatus === statusFilter;
-      return matchesSearch && matchesRole && matchesStatus;
+  useEffect(() => {
+    if (roleFilter !== query.role) {
+      setRoleFilter(query.role);
+    }
+  }, [query.role, roleFilter]);
+
+  useEffect(() => {
+    if (statusFilter !== query.status) {
+      setStatusFilter(query.status);
+    }
+  }, [query.status, statusFilter]);
+
+  useEffect(() => {
+    if (normalizedDeferredSearch === normalizeSearchValue(query.search)) {
+      return;
+    }
+    onQueryChange({
+      page: 1,
+      search: normalizedDeferredSearch,
     });
-  }, [deferredSearchQuery, managedUsers, roleFilter, statusFilter]);
+  }, [normalizedDeferredSearch, onQueryChange, query.search]);
 
   const emptyMessage = loading
     ? "Loading users..."
-    : managedUsers.length === 0
+    : pagination.total === 0 && !hasActiveFilters
       ? "No managed accounts found."
       : "No managed accounts match the current filters.";
-  const pagination = usePaginatedItems(filteredUsers, {
-    resetKey: `${deferredSearchQuery}::${roleFilter}::${statusFilter}`,
-  });
 
   return (
     <>
@@ -113,11 +131,16 @@ export function ManagedAccountsSection({
               <select
                 id="managed-accounts-role-filter"
                 value={roleFilter}
-                onChange={(event) =>
-                  setRoleFilter(event.target.value === "admin" || event.target.value === "user"
+                onChange={(event) => {
+                  const nextRole = event.target.value === "admin" || event.target.value === "user"
                     ? event.target.value
-                    : "all")
-                }
+                    : "all";
+                  setRoleFilter(nextRole);
+                  onQueryChange({
+                    page: 1,
+                    role: nextRole,
+                  });
+                }}
                 className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               >
                 <option value="all">All roles</option>
@@ -132,17 +155,21 @@ export function ManagedAccountsSection({
               <select
                 id="managed-accounts-status-filter"
                 value={statusFilter}
-                onChange={(event) =>
-                  setStatusFilter(
+                onChange={(event) => {
+                  const nextStatus =
                     event.target.value === "active"
                     || event.target.value === "pending_activation"
                     || event.target.value === "suspended"
                     || event.target.value === "disabled"
                     || event.target.value === "banned"
                       ? event.target.value
-                      : "all",
-                  )
-                }
+                      : "all";
+                  setStatusFilter(nextStatus);
+                  onQueryChange({
+                    page: 1,
+                    status: nextStatus,
+                  });
+                }}
                 className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               >
                 <option value="all">All statuses</option>
@@ -159,9 +186,9 @@ export function ManagedAccountsSection({
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm">
             <div className="flex items-center gap-2 font-medium">
               <Users className="h-4 w-4 text-muted-foreground" />
-              Total users: {managedUsers.length}
+              Total users: {pagination.total}
             </div>
-            <Badge variant="secondary">Filtered {filteredUsers.length}</Badge>
+            <Badge variant="secondary">Current page {managedUsers.length}</Badge>
           </div>
         }
         pagination={
@@ -170,10 +197,17 @@ export function ManagedAccountsSection({
             page={pagination.page}
             totalPages={pagination.totalPages}
             pageSize={pagination.pageSize}
-            totalItems={filteredUsers.length}
+            totalItems={pagination.total}
             itemLabel="users"
-            onPageChange={pagination.setPage}
-            onPageSizeChange={pagination.setPageSize}
+            onPageChange={(page) => {
+              onQueryChange({ page });
+            }}
+            onPageSizeChange={(pageSize) => {
+              onQueryChange({
+                page: 1,
+                pageSize,
+              });
+            }}
           />
         }
       >
@@ -188,14 +222,14 @@ export function ManagedAccountsSection({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading || filteredUsers.length === 0 ? (
+            {loading || managedUsers.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
                   {emptyMessage}
                 </TableCell>
               </TableRow>
             ) : (
-              pagination.paginatedItems.map((user) => (
+              managedUsers.map((user) => (
                 <ManagedAccountRow
                   key={user.id}
                   deletingManagedUserId={deletingManagedUserId}

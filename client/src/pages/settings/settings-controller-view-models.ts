@@ -3,6 +3,12 @@ import type { ManagedSecretDialogProps } from "@/pages/settings/ManagedSecretDia
 import type { ManagedUserDialogProps } from "@/pages/settings/ManagedUserDialog";
 import type { ManagedUser } from "@/pages/settings/types";
 import type { DevMailOutboxPaginationState, DevMailOutboxQueryState } from "@/pages/settings/useSettingsDevMailOutbox";
+import type {
+  ManagedUsersPaginationState,
+  ManagedUsersQueryState,
+  PendingResetRequestsPaginationState,
+  PendingResetRequestsQueryState,
+} from "@/pages/settings/useSettingsManagedUserData";
 
 type SecurityViewModelArgs = {
   clearingDevMailOutbox: boolean;
@@ -24,6 +30,8 @@ type SecurityViewModelArgs = {
   isSuperuser: boolean;
   managedUsers: ManagedUser[];
   managedUsersLoading: boolean;
+  managedUsersPagination: ManagedUsersPaginationState;
+  managedUsersQuery: ManagedUsersQueryState;
   newPasswordInput: string;
   onChangePassword: () => void;
   onChangeUsername: () => void;
@@ -44,12 +52,16 @@ type SecurityViewModelArgs = {
   onManagedResetPassword: (user: ManagedUser) => void;
   onManagedResendActivation: (user: ManagedUser) => void;
   onManagedUsersRefresh: () => void;
+  onManagedUsersQueryChange: (query: Partial<ManagedUsersQueryState>) => void;
   onNewPasswordInputChange: (value: string) => void;
   onPendingResetRequestsRefresh: () => void;
+  onPendingResetRequestsQueryChange: (query: Partial<PendingResetRequestsQueryState>) => void;
   onUsernameInputChange: (value: string) => void;
   passwordSaving: boolean;
   pendingResetRequests: AccountSecuritySectionProps["pendingResetRequests"];
   pendingResetRequestsLoading: boolean;
+  pendingResetRequestsPagination: PendingResetRequestsPaginationState;
+  pendingResetRequestsQuery: PendingResetRequestsQueryState;
   usernameInput: string;
   usernameSaving: boolean;
 };
@@ -104,6 +116,8 @@ export function buildSettingsSecurityViewModel(
     isSuperuser: args.isSuperuser,
     managedUsers: args.managedUsers,
     managedUsersLoading: args.managedUsersLoading,
+    managedUsersPagination: args.managedUsersPagination,
+    managedUsersQuery: args.managedUsersQuery,
     newPasswordInput: args.newPasswordInput,
     onChangePassword: args.onChangePassword,
     onChangeUsername: args.onChangeUsername,
@@ -124,12 +138,16 @@ export function buildSettingsSecurityViewModel(
     onManagedResetPassword: args.onManagedResetPassword,
     onManagedResendActivation: args.onManagedResendActivation,
     onManagedUsersRefresh: args.onManagedUsersRefresh,
+    onManagedUsersQueryChange: args.onManagedUsersQueryChange,
     onNewPasswordInputChange: args.onNewPasswordInputChange,
     onPendingResetRequestsRefresh: args.onPendingResetRequestsRefresh,
+    onPendingResetRequestsQueryChange: args.onPendingResetRequestsQueryChange,
     onUsernameInputChange: args.onUsernameInputChange,
     passwordSaving: args.passwordSaving,
     pendingResetRequests: args.pendingResetRequests,
     pendingResetRequestsLoading: args.pendingResetRequestsLoading,
+    pendingResetRequestsPagination: args.pendingResetRequestsPagination,
+    pendingResetRequestsQuery: args.pendingResetRequestsQuery,
     usernameInput: args.usernameInput,
     usernameSaving: args.usernameSaving,
   };

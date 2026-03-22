@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { getMe } from "@/lib/api";
 import type { CurrentUser } from "@/pages/settings/types";
 import { normalizeSettingsErrorPayload } from "@/pages/settings/utils";
@@ -20,6 +20,12 @@ type UseSettingsBootstrapArgs = {
   toast: ToastFn;
 };
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : error instanceof Error && error.name === "AbortError";
+}
+
 export function useSettingsBootstrap({
   clearSettingsState,
   hydrateCurrentUser,
@@ -31,22 +37,38 @@ export function useSettingsBootstrap({
   toast,
 }: UseSettingsBootstrapArgs) {
   const bootstrapRequestIdRef = useRef(0);
+  const bootstrapAbortControllerRef = useRef<AbortController | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
+
+  const abortBootstrapRequest = useCallback(() => {
+    if (bootstrapAbortControllerRef.current) {
+      bootstrapAbortControllerRef.current.abort();
+      bootstrapAbortControllerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
       bootstrapRequestIdRef.current += 1;
+      abortBootstrapRequest();
     };
-  }, []);
+  }, [abortBootstrapRequest]);
 
   useEffect(() => {
     const requestId = ++bootstrapRequestIdRef.current;
+    abortBootstrapRequest();
+    const controller = new AbortController();
+    bootstrapAbortControllerRef.current = controller;
 
     const bootstrap = async () => {
       setProfileLoading(true);
       try {
-        const me = await getMe();
-        if (!isMountedRef.current || requestId !== bootstrapRequestIdRef.current) return;
+        const me = await getMe({ signal: controller.signal });
+        if (
+          controller.signal.aborted ||
+          !isMountedRef.current ||
+          requestId !== bootstrapRequestIdRef.current
+        ) return;
 
         hydrateCurrentUser(me);
 
@@ -76,7 +98,12 @@ export function useSettingsBootstrap({
           }
         }
       } catch (error: unknown) {
-        if (!isMountedRef.current || requestId !== bootstrapRequestIdRef.current) return;
+        if (
+          controller.signal.aborted ||
+          isAbortError(error) ||
+          !isMountedRef.current ||
+          requestId !== bootstrapRequestIdRef.current
+        ) return;
         const parsed = normalizeSettingsErrorPayload(error);
         toast({
           title: "Failed to Load Profile",
@@ -84,13 +111,21 @@ export function useSettingsBootstrap({
           variant: "destructive",
         });
       } finally {
-        if (!isMountedRef.current || requestId !== bootstrapRequestIdRef.current) return;
+        if (bootstrapAbortControllerRef.current === controller) {
+          bootstrapAbortControllerRef.current = null;
+        }
+        if (
+          controller.signal.aborted ||
+          !isMountedRef.current ||
+          requestId !== bootstrapRequestIdRef.current
+        ) return;
         setProfileLoading(false);
       }
     };
 
     void bootstrap();
   }, [
+    abortBootstrapRequest,
     clearSettingsState,
     hydrateCurrentUser,
     isMountedRef,
