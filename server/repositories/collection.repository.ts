@@ -899,7 +899,7 @@ export class CollectionRepository {
     const whereClauses = [sql`id = ${id}::uuid`];
     if (expectedUpdatedAt) {
       whereClauses.push(
-        sql`date_trunc('milliseconds', updated_at) = date_trunc('milliseconds', ${expectedUpdatedAt})`,
+        sql`date_trunc('milliseconds', updated_at) = date_trunc('milliseconds', CAST(${expectedUpdatedAt} AS timestamp))`,
       );
     }
 
@@ -953,7 +953,7 @@ export class CollectionRepository {
     const whereClauses = [sql`id = ${id}::uuid`];
     if (expectedUpdatedAt) {
       whereClauses.push(
-        sql`date_trunc('milliseconds', updated_at) = date_trunc('milliseconds', ${expectedUpdatedAt})`,
+        sql`date_trunc('milliseconds', updated_at) = date_trunc('milliseconds', CAST(${expectedUpdatedAt} AS timestamp))`,
       );
     }
 
