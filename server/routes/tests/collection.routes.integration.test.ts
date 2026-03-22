@@ -1285,3 +1285,394 @@ test("GET /api/collection/list returns an empty payload for admins without nickn
     await stopTestServer(server);
   }
 });
+
+test("PATCH /api/collection/:id keeps daily, summary, and nickname totals aligned after reassignment and month move", async () => {
+  const records = new Map<string, CollectionRecordShape>([
+    [
+      "alpha-jan-1",
+      {
+        id: "alpha-jan-1",
+        customerName: "Alpha January Customer",
+        icNumber: "900101050001",
+        customerPhone: "0161111111",
+        accountNumber: "ACC-SA1",
+        batch: "P10",
+        paymentDate: "2026-01-10",
+        amount: "1000.00",
+        receiptFile: null,
+        receipts: [],
+        createdByLogin: "alpha.user",
+        collectionStaffNickname: "Collector Alpha",
+        createdAt: new Date("2026-01-10T09:00:00.000Z"),
+      },
+    ],
+    [
+      "beta-jan-1",
+      {
+        id: "beta-jan-1",
+        customerName: "Beta January Customer",
+        icNumber: "900101050002",
+        customerPhone: "0162222222",
+        accountNumber: "ACC-SB1",
+        batch: "P25",
+        paymentDate: "2026-01-11",
+        amount: "200.00",
+        receiptFile: null,
+        receipts: [],
+        createdByLogin: "beta.user",
+        collectionStaffNickname: "Collector Beta",
+        createdAt: new Date("2026-01-11T09:00:00.000Z"),
+      },
+    ],
+    [
+      "alpha-feb-1",
+      {
+        id: "alpha-feb-1",
+        customerName: "Alpha February Customer",
+        icNumber: "900101050003",
+        customerPhone: "0163333333",
+        accountNumber: "ACC-SA2",
+        batch: "P10",
+        paymentDate: "2026-02-01",
+        amount: "700.00",
+        receiptFile: null,
+        receipts: [],
+        createdByLogin: "alpha.user",
+        collectionStaffNickname: "Collector Alpha",
+        createdAt: new Date("2026-02-01T09:00:00.000Z"),
+      },
+    ],
+  ]);
+
+  const nicknameProfiles = [
+    {
+      id: "nickname-alpha",
+      nickname: "Collector Alpha",
+      isActive: true,
+      roleScope: "both",
+      createdBy: "superuser",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+    {
+      id: "nickname-beta",
+      nickname: "Collector Beta",
+      isActive: true,
+      roleScope: "both",
+      createdBy: "superuser",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+  ];
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+
+  const normalizeNicknameSet = (values?: string[]) =>
+    new Set(
+      (Array.isArray(values) ? values : [])
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter(Boolean),
+    );
+
+  const filterRecords = (filters?: {
+    from?: string;
+    to?: string;
+    search?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+    limit?: number;
+    offset?: number;
+  }) => {
+    const from = String(filters?.from || "");
+    const to = String(filters?.to || "");
+    const createdByLogin = String(filters?.createdByLogin || "").toLowerCase();
+    const search = String(filters?.search || "").trim().toLowerCase();
+    const nicknameSet = normalizeNicknameSet(filters?.nicknames);
+    const rows = Array.from(records.values()).filter((record) => {
+      if (from && record.paymentDate < from) return false;
+      if (to && record.paymentDate > to) return false;
+      if (createdByLogin && String(record.createdByLogin || "").toLowerCase() !== createdByLogin) {
+        return false;
+      }
+      if (nicknameSet.size > 0 && !nicknameSet.has(record.collectionStaffNickname.toLowerCase())) {
+        return false;
+      }
+      if (search) {
+        const haystack = [
+          record.customerName,
+          record.accountNumber,
+          record.icNumber,
+          record.customerPhone,
+          record.collectionStaffNickname,
+          record.createdByLogin,
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(search)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    rows.sort((left, right) => {
+      const byDate = left.paymentDate.localeCompare(right.paymentDate);
+      if (byDate !== 0) return byDate;
+      return left.id.localeCompare(right.id);
+    });
+
+    return rows;
+  };
+
+  const summarizeRows = (rows: CollectionRecordShape[]) => ({
+    totalRecords: rows.length,
+    totalAmount:
+      Math.round((rows.reduce((sum, row) => sum + Number(row.amount || 0), 0) + Number.EPSILON) * 100) / 100,
+  });
+
+  const storage = {
+    getCollectionNicknameSessionByActivity: async () => null,
+    getCollectionStaffNicknames: async () => nicknameProfiles,
+    getCollectionStaffNicknameByName: async (nickname: string) =>
+      nicknameProfiles.find((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase()) || null,
+    isCollectionStaffNicknameActive: async (nickname: string) =>
+      nicknameProfiles.some((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase() && item.isActive),
+    getCollectionDailyTarget: async (params: { username: string; year: number; month: number }) => {
+      if (params.year !== 2026 || (params.month !== 1 && params.month !== 2)) return null;
+      return {
+        id: `target-${params.username}-${params.year}-${params.month}`,
+        username: String(params.username || "").toLowerCase(),
+        year: params.year,
+        month: params.month,
+        monthlyTarget: 5000,
+        createdBy: "superuser",
+        updatedBy: "superuser",
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      };
+    },
+    listCollectionDailyCalendar: async () => [],
+    getCollectionMonthlySummary: async (filters: {
+      year: number;
+      createdByLogin?: string;
+      nicknames?: string[];
+    }) => {
+      const nicknameSet = normalizeNicknameSet(filters.nicknames);
+      const createdByLogin = String(filters.createdByLogin || "").toLowerCase();
+      const rows = Array.from(records.values()).filter((record) => {
+        const paymentYear = Number.parseInt(record.paymentDate.slice(0, 4), 10);
+        if (paymentYear !== filters.year) return false;
+        if (nicknameSet.size > 0 && !nicknameSet.has(record.collectionStaffNickname.toLowerCase())) {
+          return false;
+        }
+        if (createdByLogin && String(record.createdByLogin || "").toLowerCase() !== createdByLogin) {
+          return false;
+        }
+        return true;
+      });
+
+      const byMonth = new Map<number, { totalRecords: number; totalAmount: number }>();
+      for (const row of rows) {
+        const month = Number.parseInt(row.paymentDate.slice(5, 7), 10);
+        const current = byMonth.get(month) || { totalRecords: 0, totalAmount: 0 };
+        current.totalRecords += 1;
+        current.totalAmount += Number(row.amount || 0);
+        byMonth.set(month, current);
+      }
+
+      return Array.from(byMonth.entries())
+        .sort((left, right) => left[0] - right[0])
+        .map(([month, aggregate]) => ({
+          month,
+          monthName: monthNames[month - 1] || `Month ${month}`,
+          totalRecords: aggregate.totalRecords,
+          totalAmount: Math.round((aggregate.totalAmount + Number.EPSILON) * 100) / 100,
+        }));
+    },
+    summarizeCollectionRecords: async (filters?: {
+      from?: string;
+      to?: string;
+      search?: string;
+      createdByLogin?: string;
+      nicknames?: string[];
+    }) => summarizeRows(filterRecords(filters)),
+    summarizeCollectionRecordsByNickname: async (filters?: {
+      from?: string;
+      to?: string;
+      search?: string;
+      createdByLogin?: string;
+      nicknames?: string[];
+    }) => {
+      const rows = filterRecords(filters);
+      const byNickname = new Map<string, { totalRecords: number; totalAmount: number }>();
+      for (const row of rows) {
+        const key = row.collectionStaffNickname;
+        const current = byNickname.get(key) || { totalRecords: 0, totalAmount: 0 };
+        current.totalRecords += 1;
+        current.totalAmount += Number(row.amount || 0);
+        byNickname.set(key, current);
+      }
+
+      return Array.from(byNickname.entries())
+        .sort((left, right) => left[0].localeCompare(right[0]))
+        .map(([nickname, aggregate]) => ({
+          nickname,
+          totalRecords: aggregate.totalRecords,
+          totalAmount: Math.round((aggregate.totalAmount + Number.EPSILON) * 100) / 100,
+        }));
+    },
+    listCollectionRecords: async (filters?: {
+      from?: string;
+      to?: string;
+      search?: string;
+      createdByLogin?: string;
+      nicknames?: string[];
+      limit?: number;
+      offset?: number;
+    }) => {
+      const rows = filterRecords(filters);
+      const limit = Number.isFinite(Number(filters?.limit)) ? Math.max(1, Number(filters?.limit)) : rows.length;
+      const offset = Number.isFinite(Number(filters?.offset)) ? Math.max(0, Number(filters?.offset)) : 0;
+      return rows.slice(offset, offset + limit);
+    },
+    getCollectionRecordById: async (id: string) => records.get(id) || null,
+    updateCollectionRecord: async (id: string, data: Record<string, unknown>) => {
+      const existing = records.get(id);
+      if (!existing) return null;
+      const updated: CollectionRecordShape = {
+        ...existing,
+        customerName:
+          data.customerName !== undefined ? String(data.customerName) : existing.customerName,
+        icNumber: data.icNumber !== undefined ? String(data.icNumber) : existing.icNumber,
+        customerPhone:
+          data.customerPhone !== undefined ? String(data.customerPhone) : existing.customerPhone,
+        accountNumber:
+          data.accountNumber !== undefined ? String(data.accountNumber) : existing.accountNumber,
+        batch: data.batch !== undefined ? String(data.batch) : existing.batch,
+        paymentDate:
+          data.paymentDate !== undefined ? String(data.paymentDate) : existing.paymentDate,
+        amount:
+          data.amount !== undefined ? Number(data.amount || 0).toFixed(2) : existing.amount,
+        collectionStaffNickname:
+          data.collectionStaffNickname !== undefined
+            ? String(data.collectionStaffNickname)
+            : existing.collectionStaffNickname,
+      };
+      records.set(id, updated);
+      return updated;
+    },
+    createAuditLog: async (_entry: AuditEntry) => ({ id: "audit-mutation-1" }),
+  } as unknown as PostgresStorage;
+
+  const app = createJsonTestApp();
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "superuser-1",
+      username: "superuser",
+      role: "superuser",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const beforeSummaryResponse = await fetch(`${baseUrl}/api/collection/summary?year=2026`);
+    assert.equal(beforeSummaryResponse.status, 200);
+    const beforeSummaryPayload = await beforeSummaryResponse.json();
+    assert.equal(beforeSummaryPayload.ok, true);
+    const beforeJanuarySummary = beforeSummaryPayload.summary.find((entry: any) => entry.month === 1);
+    const beforeFebruarySummary = beforeSummaryPayload.summary.find((entry: any) => entry.month === 2);
+    assert.equal(beforeJanuarySummary?.totalAmount, 1200);
+    assert.equal(beforeFebruarySummary?.totalAmount, 700);
+
+    const beforeDailyResponse = await fetch(
+      `${baseUrl}/api/collection/daily/overview?year=2026&month=1&usernames=Collector%20Alpha,Collector%20Beta`,
+    );
+    assert.equal(beforeDailyResponse.status, 200);
+    const beforeDailyPayload = await beforeDailyResponse.json();
+    assert.equal(beforeDailyPayload.ok, true);
+    assert.equal(beforeDailyPayload.summary.collectedAmount, 1200);
+
+    const beforeNicknameResponse = await fetch(
+      `${baseUrl}/api/collection/nickname-summary?from=2026-01-01&to=2026-01-31&nicknames=Collector%20Alpha,Collector%20Beta&summaryOnly=1`,
+    );
+    assert.equal(beforeNicknameResponse.status, 200);
+    const beforeNicknamePayload = await beforeNicknameResponse.json();
+    const beforeAlphaNickname = beforeNicknamePayload.nicknameTotals.find((item: any) => item.nickname === "Collector Alpha");
+    const beforeBetaNickname = beforeNicknamePayload.nicknameTotals.find((item: any) => item.nickname === "Collector Beta");
+    assert.equal(beforeNicknamePayload.totalAmount, 1200);
+    assert.equal(beforeAlphaNickname?.totalAmount, 1000);
+    assert.equal(beforeBetaNickname?.totalAmount, 200);
+
+    const updateResponse = await fetch(`${baseUrl}/api/collection/alpha-jan-1`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        collectionStaffNickname: "Collector Beta",
+        paymentDate: "2026-02-02",
+        amount: "1500",
+      }),
+    });
+    assert.equal(updateResponse.status, 200);
+
+    const afterSummaryResponse = await fetch(`${baseUrl}/api/collection/summary?year=2026`);
+    assert.equal(afterSummaryResponse.status, 200);
+    const afterSummaryPayload = await afterSummaryResponse.json();
+    const afterJanuarySummary = afterSummaryPayload.summary.find((entry: any) => entry.month === 1);
+    const afterFebruarySummary = afterSummaryPayload.summary.find((entry: any) => entry.month === 2);
+    assert.equal(afterJanuarySummary?.totalAmount, 200);
+    assert.equal(afterFebruarySummary?.totalAmount, 2200);
+
+    const afterJanuaryDailyResponse = await fetch(
+      `${baseUrl}/api/collection/daily/overview?year=2026&month=1&usernames=Collector%20Alpha,Collector%20Beta`,
+    );
+    assert.equal(afterJanuaryDailyResponse.status, 200);
+    const afterJanuaryDailyPayload = await afterJanuaryDailyResponse.json();
+    assert.equal(afterJanuaryDailyPayload.summary.collectedAmount, 200);
+
+    const afterFebruaryDailyResponse = await fetch(
+      `${baseUrl}/api/collection/daily/overview?year=2026&month=2&usernames=Collector%20Alpha,Collector%20Beta`,
+    );
+    assert.equal(afterFebruaryDailyResponse.status, 200);
+    const afterFebruaryDailyPayload = await afterFebruaryDailyResponse.json();
+    assert.equal(afterFebruaryDailyPayload.summary.collectedAmount, 2200);
+
+    const afterJanuaryNicknameResponse = await fetch(
+      `${baseUrl}/api/collection/nickname-summary?from=2026-01-01&to=2026-01-31&nicknames=Collector%20Alpha,Collector%20Beta&summaryOnly=1`,
+    );
+    assert.equal(afterJanuaryNicknameResponse.status, 200);
+    const afterJanuaryNicknamePayload = await afterJanuaryNicknameResponse.json();
+    const afterJanuaryAlpha = afterJanuaryNicknamePayload.nicknameTotals.find((item: any) => item.nickname === "Collector Alpha");
+    const afterJanuaryBeta = afterJanuaryNicknamePayload.nicknameTotals.find((item: any) => item.nickname === "Collector Beta");
+    assert.equal(afterJanuaryNicknamePayload.totalAmount, 200);
+    assert.equal(afterJanuaryAlpha?.totalAmount, 0);
+    assert.equal(afterJanuaryBeta?.totalAmount, 200);
+
+    const afterFebruaryNicknameResponse = await fetch(
+      `${baseUrl}/api/collection/nickname-summary?from=2026-02-01&to=2026-02-28&nicknames=Collector%20Alpha,Collector%20Beta&summaryOnly=1`,
+    );
+    assert.equal(afterFebruaryNicknameResponse.status, 200);
+    const afterFebruaryNicknamePayload = await afterFebruaryNicknameResponse.json();
+    const afterFebruaryAlpha = afterFebruaryNicknamePayload.nicknameTotals.find((item: any) => item.nickname === "Collector Alpha");
+    const afterFebruaryBeta = afterFebruaryNicknamePayload.nicknameTotals.find((item: any) => item.nickname === "Collector Beta");
+    assert.equal(afterFebruaryNicknamePayload.totalAmount, 2200);
+    assert.equal(afterFebruaryAlpha?.totalAmount, 700);
+    assert.equal(afterFebruaryBeta?.totalAmount, 1500);
+  } finally {
+    await stopTestServer(server);
+  }
+});
