@@ -16,8 +16,8 @@ import { SideTabDataPanel } from "@/components/layout/SideTabDataPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { usePaginatedItems } from "@/hooks/usePaginatedItems";
 import type { DevMailOutboxPreview } from "@/pages/settings/types";
+import type { DevMailOutboxPaginationState, DevMailOutboxQueryState } from "@/pages/settings/useSettingsDevMailOutbox";
 import { formatDateTime, normalizeSearchValue } from "@/pages/settings/account-management/utils";
 
 interface LocalMailOutboxSectionProps {
@@ -26,8 +26,11 @@ interface LocalMailOutboxSectionProps {
   enabled: boolean;
   entries: DevMailOutboxPreview[];
   loading: boolean;
+  pagination: DevMailOutboxPaginationState;
+  query: DevMailOutboxQueryState;
   onClear: () => void;
   onDeleteEntry: (previewId: string) => void;
+  onQueryChange: (query: Partial<DevMailOutboxQueryState>) => void;
   onRefresh: () => void;
 }
 
@@ -37,54 +40,82 @@ export function LocalMailOutboxSection({
   enabled,
   entries,
   loading,
+  pagination,
+  query,
   onClear,
   onDeleteEntry,
+  onQueryChange,
   onRefresh,
 }: LocalMailOutboxSectionProps) {
-  const [emailQuery, setEmailQuery] = useState("");
-  const [subjectQuery, setSubjectQuery] = useState("");
-  const [sortDirection, setSortDirection] = useState<"desc" | "asc">("desc");
+  const [emailQuery, setEmailQuery] = useState(query.searchEmail);
+  const [subjectQuery, setSubjectQuery] = useState(query.searchSubject);
+  const [sortDirection, setSortDirection] = useState<"desc" | "asc">(query.sortDirection);
   const [previewToDelete, setPreviewToDelete] = useState<DevMailOutboxPreview | null>(null);
   const [clearAllOpen, setClearAllOpen] = useState(false);
   const [previewEntry, setPreviewEntry] = useState<DevMailOutboxPreview | null>(null);
   const deferredEmailQuery = useDeferredValue(emailQuery);
   const deferredSubjectQuery = useDeferredValue(subjectQuery);
 
-  const filteredEntries = useMemo(() => {
-    const normalizedEmail = normalizeSearchValue(deferredEmailQuery);
-    const normalizedSubject = normalizeSearchValue(deferredSubjectQuery);
-
-    return [...entries]
-      .filter((entry) => {
-        const matchesEmail =
-          !normalizedEmail || normalizeSearchValue(entry.to).includes(normalizedEmail);
-        const matchesSubject =
-          !normalizedSubject || normalizeSearchValue(entry.subject).includes(normalizedSubject);
-        return matchesEmail && matchesSubject;
-      })
-      .sort((left, right) => {
-        const leftTime = new Date(left.createdAt).getTime();
-        const rightTime = new Date(right.createdAt).getTime();
-        const safeLeft = Number.isFinite(leftTime) ? leftTime : 0;
-        const safeRight = Number.isFinite(rightTime) ? rightTime : 0;
-        return sortDirection === "asc" ? safeLeft - safeRight : safeRight - safeLeft;
-      });
-  }, [deferredEmailQuery, deferredSubjectQuery, entries, sortDirection]);
-
+  const normalizedDeferredEmailQuery = useMemo(
+    () => normalizeSearchValue(deferredEmailQuery),
+    [deferredEmailQuery],
+  );
+  const normalizedDeferredSubjectQuery = useMemo(
+    () => normalizeSearchValue(deferredSubjectQuery),
+    [deferredSubjectQuery],
+  );
+  const hasSearchFilter = normalizedDeferredEmailQuery.length > 0 || normalizedDeferredSubjectQuery.length > 0;
   const emptyMessage = loading
     ? "Loading local mail previews..."
-    : entries.length === 0
+    : pagination.total === 0 && !hasSearchFilter
       ? "No local email previews captured yet."
       : "No email previews match the current filters.";
-  const pagination = usePaginatedItems(filteredEntries, {
-    resetKey: `${deferredEmailQuery}::${deferredSubjectQuery}::${sortDirection}`,
-  });
 
   useEffect(() => {
     if (!previewEntry) return;
     if (entries.some((entry) => entry.id === previewEntry.id)) return;
     setPreviewEntry(null);
   }, [entries, previewEntry]);
+
+  useEffect(() => {
+    const normalizedEmailFromQuery = normalizeSearchValue(query.searchEmail);
+    if (normalizeSearchValue(emailQuery) !== normalizedEmailFromQuery) {
+      setEmailQuery(query.searchEmail);
+    }
+  }, [emailQuery, query.searchEmail]);
+
+  useEffect(() => {
+    const normalizedSubjectFromQuery = normalizeSearchValue(query.searchSubject);
+    if (normalizeSearchValue(subjectQuery) !== normalizedSubjectFromQuery) {
+      setSubjectQuery(query.searchSubject);
+    }
+  }, [query.searchSubject, subjectQuery]);
+
+  useEffect(() => {
+    if (sortDirection !== query.sortDirection) {
+      setSortDirection(query.sortDirection);
+    }
+  }, [query.sortDirection, sortDirection]);
+
+  useEffect(() => {
+    if (
+      normalizedDeferredEmailQuery === normalizeSearchValue(query.searchEmail)
+      && normalizedDeferredSubjectQuery === normalizeSearchValue(query.searchSubject)
+    ) {
+      return;
+    }
+    onQueryChange({
+      page: 1,
+      searchEmail: normalizedDeferredEmailQuery,
+      searchSubject: normalizedDeferredSubjectQuery,
+    });
+  }, [
+    normalizedDeferredEmailQuery,
+    normalizedDeferredSubjectQuery,
+    onQueryChange,
+    query.searchEmail,
+    query.searchSubject,
+  ]);
 
   return (
     <>
@@ -150,9 +181,14 @@ export function LocalMailOutboxSection({
                 aria-labelledby="local-mail-outbox-sort-direction-label"
                 title="Sort by date"
                 value={sortDirection}
-                onChange={(event) =>
-                  setSortDirection(event.target.value === "asc" ? "asc" : "desc")
-                }
+                onChange={(event) => {
+                  const nextSortDirection = event.target.value === "asc" ? "asc" : "desc";
+                  setSortDirection(nextSortDirection);
+                  onQueryChange({
+                    page: 1,
+                    sortDirection: nextSortDirection,
+                  });
+                }}
                 className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               >
                 <option value="desc">Newest first</option>
@@ -163,8 +199,8 @@ export function LocalMailOutboxSection({
         }
         summary={
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm">
-            <span className="font-medium">Total previews: {entries.length}</span>
-            <span className="text-muted-foreground">Filtered: {filteredEntries.length}</span>
+            <span className="font-medium">Total previews: {pagination.total}</span>
+            <span className="text-muted-foreground">Current page: {entries.length}</span>
             <span className="text-muted-foreground">Dev outbox: {enabled ? "Enabled" : "Disabled"}</span>
           </div>
         }
@@ -174,14 +210,18 @@ export function LocalMailOutboxSection({
             page={pagination.page}
             totalPages={pagination.totalPages}
             pageSize={pagination.pageSize}
-            totalItems={filteredEntries.length}
+            totalItems={pagination.total}
             itemLabel="emails"
-            onPageChange={pagination.setPage}
-            onPageSizeChange={pagination.setPageSize}
+            onPageChange={(page) => {
+              onQueryChange({ page });
+            }}
+            onPageSizeChange={(pageSize) => {
+              onQueryChange({ page: 1, pageSize });
+            }}
           />
         }
       >
-        {!enabled && entries.length === 0 ? (
+        {!enabled && pagination.total === 0 ? (
           <div className="flex h-full min-h-[240px] items-center justify-center p-6 text-sm text-muted-foreground">
             Local development mail outbox is disabled.
           </div>
@@ -196,14 +236,14 @@ export function LocalMailOutboxSection({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading || filteredEntries.length === 0 ? (
+              {loading || entries.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center text-muted-foreground">
                     {emptyMessage}
                   </TableCell>
                 </TableRow>
               ) : (
-                pagination.paginatedItems.map((entry) => (
+                entries.map((entry) => (
                   <TableRow key={entry.id}>
                     <TableCell className="font-medium">{entry.to}</TableCell>
                     <TableCell>{entry.subject}</TableCell>

@@ -301,6 +301,19 @@ type CategoryRule = {
     isBanned: boolean | null;
   }>>;
   getManagedUsers(): Promise<ManagedUserAccount[]>;
+  listManagedUsersPage(params?: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    role?: "all" | "admin" | "user";
+    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned";
+  }): Promise<{
+    users: ManagedUserAccount[];
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  }>;
   deleteManagedUserAccount(userId: string): Promise<boolean>;
   updateActivitiesUsername(oldUsername: string, newUsername: string): Promise<void>;
   updateUserBan(username: string, isBanned: boolean): Promise<User | undefined>;
@@ -347,6 +360,18 @@ type CategoryRule = {
     now?: Date;
   }): Promise<boolean>;
   listPendingPasswordResetRequests(): Promise<PendingPasswordResetRequestSummary[]>;
+  listPendingPasswordResetRequestsPage(params?: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned";
+  }): Promise<{
+    requests: PendingPasswordResetRequestSummary[];
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  }>;
   getAccounts(): Promise<Array<{
     username: string;
     role: string;
@@ -960,6 +985,22 @@ export class PostgresStorage implements IStorage {
     return this.authRepository.getManagedUsers();
   }
 
+  async listManagedUsersPage(params?: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    role?: "all" | "admin" | "user";
+    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned";
+  }): Promise<{
+    users: ManagedUserAccount[];
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  }> {
+    return this.authRepository.listManagedUsersPage(params);
+  }
+
   async deleteManagedUserAccount(userId: string): Promise<boolean> {
     return this.authRepository.deleteManagedUserAccount(userId);
   }
@@ -1065,6 +1106,21 @@ export class PostgresStorage implements IStorage {
 
   async listPendingPasswordResetRequests(): Promise<PendingPasswordResetRequestSummary[]> {
     return this.authRepository.listPendingPasswordResetRequests();
+  }
+
+  async listPendingPasswordResetRequestsPage(params?: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned";
+  }): Promise<{
+    requests: PendingPasswordResetRequestSummary[];
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  }> {
+    return this.authRepository.listPendingPasswordResetRequestsPage(params);
   }
 
   async createImport(data: InsertImport & { createdBy?: string }): Promise<Import> {

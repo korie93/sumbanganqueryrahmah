@@ -122,7 +122,7 @@ export async function getCollectionRecords(filters?: {
   nicknames?: string[];
   limit?: number;
   offset?: number;
-}) {
+}, options?: { signal?: AbortSignal }) {
   const params = new URLSearchParams();
   if (filters?.from) params.set("from", filters.from);
   if (filters?.to) params.set("to", filters.to);
@@ -141,7 +141,12 @@ export async function getCollectionRecords(filters?: {
     params.set("offset", String(filters.offset));
   }
   const query = params.toString();
-  const response = await apiRequest("GET", query ? `/api/collection/list?${query}` : "/api/collection/list");
+  const response = await apiRequest(
+    "GET",
+    query ? `/api/collection/list?${query}` : "/api/collection/list",
+    undefined,
+    { signal: options?.signal },
+  );
   return response.json() as Promise<CollectionRecordListResponse>;
 }
 

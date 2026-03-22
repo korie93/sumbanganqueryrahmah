@@ -13,6 +13,12 @@ import {
 import type { CollectionRecordFilters } from "@/pages/collection-records/types";
 import { parseApiError } from "@/pages/collection/utils";
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : error instanceof Error && error.name === "AbortError";
+}
+
 type UseCollectionViewAllRecordsArgs = {
   buildCurrentFilters: (
     searchValue?: string,
@@ -29,6 +35,7 @@ export function useCollectionViewAllRecords({
   const { toast } = useToast();
   const isMountedRef = useRef(true);
   const viewAllRequestIdRef = useRef(0);
+  const viewAllAbortControllerRef = useRef<AbortController | null>(null);
 
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [viewAllLoading, setViewAllLoading] = useState(false);
@@ -45,8 +52,16 @@ export function useCollectionViewAllRecords({
     [viewAllPageSize, viewAllTotalRecords],
   );
 
+  const abortViewAllRequest = useCallback(() => {
+    if (viewAllAbortControllerRef.current) {
+      viewAllAbortControllerRef.current.abort();
+      viewAllAbortControllerRef.current = null;
+    }
+  }, []);
+
   const closeViewAll = useCallback(() => {
     viewAllRequestIdRef.current += 1;
+    abortViewAllRequest();
     setViewAllOpen(false);
     setViewAllLoading(false);
     setViewAllRecords([]);
@@ -55,7 +70,7 @@ export function useCollectionViewAllRecords({
     setViewAllPageSize(10);
     setViewAllTotalRecords(0);
     setViewAllTotalAmount(0);
-  }, []);
+  }, [abortViewAllRequest]);
 
   const handleOpenViewAll = useCallback(() => {
     if (viewAllLoading) return;
@@ -68,14 +83,18 @@ export function useCollectionViewAllRecords({
     return () => {
       isMountedRef.current = false;
       viewAllRequestIdRef.current += 1;
+      abortViewAllRequest();
     };
-  }, []);
+  }, [abortViewAllRequest]);
 
   useEffect(() => {
     if (!viewAllOpen || !viewAllFiltersSnapshot) return;
 
     const requestId = ++viewAllRequestIdRef.current;
     setViewAllLoading(true);
+    abortViewAllRequest();
+    const controller = new AbortController();
+    viewAllAbortControllerRef.current = controller;
 
     const loadViewAllPage = async () => {
       try {
@@ -83,13 +102,22 @@ export function useCollectionViewAllRecords({
           ...viewAllFiltersSnapshot,
           limit: viewAllPageSize,
           offset: (viewAllPage - 1) * viewAllPageSize,
-        });
-        if (!isMountedRef.current || requestId !== viewAllRequestIdRef.current) return;
+        }, { signal: controller.signal });
+        if (
+          controller.signal.aborted ||
+          !isMountedRef.current ||
+          requestId !== viewAllRequestIdRef.current
+        ) return;
         setViewAllRecords(Array.isArray(response?.records) ? response.records : []);
         setViewAllTotalRecords(Number(response?.total || 0));
         setViewAllTotalAmount(Number(response?.totalAmount || 0));
       } catch (error: unknown) {
-        if (!isMountedRef.current || requestId !== viewAllRequestIdRef.current) return;
+        if (
+          controller.signal.aborted ||
+          isAbortError(error) ||
+          !isMountedRef.current ||
+          requestId !== viewAllRequestIdRef.current
+        ) return;
         setViewAllRecords([]);
         setViewAllTotalRecords(0);
         setViewAllTotalAmount(0);
@@ -99,13 +127,20 @@ export function useCollectionViewAllRecords({
           variant: "destructive",
         });
       } finally {
-        if (!isMountedRef.current || requestId !== viewAllRequestIdRef.current) return;
+        if (viewAllAbortControllerRef.current === controller) {
+          viewAllAbortControllerRef.current = null;
+        }
+        if (
+          controller.signal.aborted ||
+          !isMountedRef.current ||
+          requestId !== viewAllRequestIdRef.current
+        ) return;
         setViewAllLoading(false);
       }
     };
 
     void loadViewAllPage();
-  }, [toast, viewAllFiltersSnapshot, viewAllOpen, viewAllPage, viewAllPageSize]);
+  }, [abortViewAllRequest, toast, viewAllFiltersSnapshot, viewAllOpen, viewAllPage, viewAllPageSize]);
 
   return {
     handleOpenViewAll,

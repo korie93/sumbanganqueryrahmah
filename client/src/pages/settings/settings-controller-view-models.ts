@@ -2,6 +2,13 @@ import type { AccountSecuritySectionProps } from "@/pages/settings/AccountSecuri
 import type { ManagedSecretDialogProps } from "@/pages/settings/ManagedSecretDialog";
 import type { ManagedUserDialogProps } from "@/pages/settings/ManagedUserDialog";
 import type { ManagedUser } from "@/pages/settings/types";
+import type { DevMailOutboxPaginationState, DevMailOutboxQueryState } from "@/pages/settings/useSettingsDevMailOutbox";
+import type {
+  ManagedUsersPaginationState,
+  ManagedUsersQueryState,
+  PendingResetRequestsPaginationState,
+  PendingResetRequestsQueryState,
+} from "@/pages/settings/useSettingsManagedUserData";
 
 type SecurityViewModelArgs = {
   clearingDevMailOutbox: boolean;
@@ -18,9 +25,13 @@ type SecurityViewModelArgs = {
   devMailOutboxEnabled: boolean;
   devMailOutboxEntries: AccountSecuritySectionProps["devMailOutboxEntries"];
   devMailOutboxLoading: boolean;
+  devMailOutboxPagination: DevMailOutboxPaginationState;
+  devMailOutboxQuery: DevMailOutboxQueryState;
   isSuperuser: boolean;
   managedUsers: ManagedUser[];
   managedUsersLoading: boolean;
+  managedUsersPagination: ManagedUsersPaginationState;
+  managedUsersQuery: ManagedUsersQueryState;
   newPasswordInput: string;
   onChangePassword: () => void;
   onChangeUsername: () => void;
@@ -35,17 +46,22 @@ type SecurityViewModelArgs = {
   onDeleteDevMailOutboxEntry: (previewId: string) => void;
   onDeleteManagedUser: (user: ManagedUser) => void;
   onDevMailOutboxRefresh: () => void;
+  onDevMailOutboxQueryChange: (query: Partial<DevMailOutboxQueryState>) => void;
   onEditManagedUser: (user: ManagedUser) => void;
   onManagedBanToggle: (user: ManagedUser) => void;
   onManagedResetPassword: (user: ManagedUser) => void;
   onManagedResendActivation: (user: ManagedUser) => void;
   onManagedUsersRefresh: () => void;
+  onManagedUsersQueryChange: (query: Partial<ManagedUsersQueryState>) => void;
   onNewPasswordInputChange: (value: string) => void;
   onPendingResetRequestsRefresh: () => void;
+  onPendingResetRequestsQueryChange: (query: Partial<PendingResetRequestsQueryState>) => void;
   onUsernameInputChange: (value: string) => void;
   passwordSaving: boolean;
   pendingResetRequests: AccountSecuritySectionProps["pendingResetRequests"];
   pendingResetRequestsLoading: boolean;
+  pendingResetRequestsPagination: PendingResetRequestsPaginationState;
+  pendingResetRequestsQuery: PendingResetRequestsQueryState;
   usernameInput: string;
   usernameSaving: boolean;
 };
@@ -95,9 +111,13 @@ export function buildSettingsSecurityViewModel(
     devMailOutboxEnabled: args.devMailOutboxEnabled,
     devMailOutboxEntries: args.devMailOutboxEntries,
     devMailOutboxLoading: args.devMailOutboxLoading,
+    devMailOutboxPagination: args.devMailOutboxPagination,
+    devMailOutboxQuery: args.devMailOutboxQuery,
     isSuperuser: args.isSuperuser,
     managedUsers: args.managedUsers,
     managedUsersLoading: args.managedUsersLoading,
+    managedUsersPagination: args.managedUsersPagination,
+    managedUsersQuery: args.managedUsersQuery,
     newPasswordInput: args.newPasswordInput,
     onChangePassword: args.onChangePassword,
     onChangeUsername: args.onChangeUsername,
@@ -112,17 +132,22 @@ export function buildSettingsSecurityViewModel(
     onDeleteDevMailOutboxEntry: args.onDeleteDevMailOutboxEntry,
     onDeleteManagedUser: args.onDeleteManagedUser,
     onDevMailOutboxRefresh: args.onDevMailOutboxRefresh,
+    onDevMailOutboxQueryChange: args.onDevMailOutboxQueryChange,
     onEditManagedUser: args.onEditManagedUser,
     onManagedBanToggle: args.onManagedBanToggle,
     onManagedResetPassword: args.onManagedResetPassword,
     onManagedResendActivation: args.onManagedResendActivation,
     onManagedUsersRefresh: args.onManagedUsersRefresh,
+    onManagedUsersQueryChange: args.onManagedUsersQueryChange,
     onNewPasswordInputChange: args.onNewPasswordInputChange,
     onPendingResetRequestsRefresh: args.onPendingResetRequestsRefresh,
+    onPendingResetRequestsQueryChange: args.onPendingResetRequestsQueryChange,
     onUsernameInputChange: args.onUsernameInputChange,
     passwordSaving: args.passwordSaving,
     pendingResetRequests: args.pendingResetRequests,
     pendingResetRequestsLoading: args.pendingResetRequestsLoading,
+    pendingResetRequestsPagination: args.pendingResetRequestsPagination,
+    pendingResetRequestsQuery: args.pendingResetRequestsQuery,
     usernameInput: args.usernameInput,
     usernameSaving: args.usernameSaving,
   };

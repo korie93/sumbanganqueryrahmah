@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type {
   AccountActivationToken,
   InsertUser,
@@ -23,6 +23,10 @@ import {
 import { hashPassword } from "../auth/passwords";
 
 const QUERY_PAGE_LIMIT = 1000;
+const MANAGED_USERS_DEFAULT_PAGE_SIZE = 50;
+const MANAGED_USERS_MAX_PAGE_SIZE = 100;
+const PENDING_PASSWORD_RESET_DEFAULT_PAGE_SIZE = 50;
+const PENDING_PASSWORD_RESET_MAX_PAGE_SIZE = 100;
 
 export type ManagedUserRecord = {
   id: string;
@@ -88,6 +92,63 @@ export type PasswordResetTokenRecord = {
   usedAt: Date | null;
   createdAt: Date;
 };
+
+type ManagedUserListStatusFilter =
+  | "all"
+  | "active"
+  | "pending_activation"
+  | "suspended"
+  | "disabled"
+  | "banned";
+
+type ManagedUserListPageParams = {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  role?: "all" | "admin" | "user";
+  status?: ManagedUserListStatusFilter;
+};
+
+type ManagedUserListPageResult = {
+  users: ManagedUserRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+type PendingPasswordResetListPageParams = {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  status?: ManagedUserListStatusFilter;
+};
+
+type PendingPasswordResetListPageResult = {
+  requests: PendingPasswordResetRequestRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+function resolvePageAndPageSize(
+  pageRaw: number | undefined,
+  pageSizeRaw: number | undefined,
+  defaults: { pageSize: number; maxPageSize: number },
+) {
+  const safePage = Number.isFinite(pageRaw)
+    ? Math.max(1, Math.floor(Number(pageRaw)))
+    : 1;
+  const safePageSize = Number.isFinite(pageSizeRaw)
+    ? Math.max(1, Math.min(defaults.maxPageSize, Math.floor(Number(pageSizeRaw))))
+    : defaults.pageSize;
+  return {
+    page: safePage,
+    pageSize: safePageSize,
+    offset: (safePage - 1) * safePageSize,
+  };
+}
 
 export class AuthRepository {
   async getUser(id: string): Promise<User | undefined> {
@@ -345,40 +406,104 @@ export class AuthRepository {
 
   async getManagedUsers(): Promise<ManagedUserRecord[]> {
     const rows: ManagedUserRecord[] = [];
-    let offset = 0;
-
+    let page = 1;
     while (true) {
-      const chunk = await db
-        .select({
-          id: users.id,
-          username: users.username,
-          fullName: users.fullName,
-          email: users.email,
-          role: users.role,
-          status: users.status,
-          mustChangePassword: users.mustChangePassword,
-          passwordResetBySuperuser: users.passwordResetBySuperuser,
-          createdBy: users.createdBy,
-          createdAt: users.createdAt,
-          updatedAt: users.updatedAt,
-          activatedAt: users.activatedAt,
-          lastLoginAt: users.lastLoginAt,
-          passwordChangedAt: users.passwordChangedAt,
-          isBanned: users.isBanned,
-        })
-        .from(users)
-        .where(inArray(users.role, ["admin", "user"]))
-        .orderBy(users.role, users.username)
-        .limit(QUERY_PAGE_LIMIT)
-        .offset(offset);
+      const pageResult = await this.listManagedUsersPage({
+        page,
+        pageSize: MANAGED_USERS_MAX_PAGE_SIZE,
+      });
+      rows.push(...pageResult.users);
+      if (rows.length >= pageResult.total || pageResult.users.length < pageResult.pageSize) {
+        break;
+      }
+      page += 1;
+    }
+    return rows;
+  }
 
-      if (!chunk.length) break;
-      rows.push(...chunk);
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
-      offset += chunk.length;
+  async listManagedUsersPage(
+    params: ManagedUserListPageParams = {},
+  ): Promise<ManagedUserListPageResult> {
+    const { page, pageSize, offset } = resolvePageAndPageSize(
+      params.page,
+      params.pageSize,
+      {
+        pageSize: MANAGED_USERS_DEFAULT_PAGE_SIZE,
+        maxPageSize: MANAGED_USERS_MAX_PAGE_SIZE,
+      },
+    );
+
+    const whereClauses: any[] = [sql`role IN ('admin', 'user')`];
+    const search = String(params.search || "").trim();
+    if (search) {
+      whereClauses.push(sql`(
+        username ILIKE ${`%${search}%`}
+        OR COALESCE(full_name, '') ILIKE ${`%${search}%`}
+        OR COALESCE(email, '') ILIKE ${`%${search}%`}
+      )`);
     }
 
-    return rows;
+    const roleFilter = String(params.role || "all").trim().toLowerCase();
+    if (roleFilter === "admin" || roleFilter === "user") {
+      whereClauses.push(sql`role = ${roleFilter}`);
+    }
+
+    const statusFilter = String(params.status || "all").trim().toLowerCase();
+    if (statusFilter === "banned") {
+      whereClauses.push(sql`COALESCE(is_banned, false) = true`);
+    } else if (
+      statusFilter === "active"
+      || statusFilter === "pending_activation"
+      || statusFilter === "suspended"
+      || statusFilter === "disabled"
+    ) {
+      whereClauses.push(sql`status = ${statusFilter}`);
+      whereClauses.push(sql`COALESCE(is_banned, false) = false`);
+    }
+
+    const whereSql = sql`WHERE ${sql.join(whereClauses, sql` AND `)}`;
+
+    const [countResult, rowsResult] = await Promise.all([
+      db.execute(sql`
+        SELECT COUNT(*)::int AS total
+        FROM public.users
+        ${whereSql}
+      `),
+      db.execute(sql`
+        SELECT
+          id,
+          username,
+          full_name as "fullName",
+          email,
+          role,
+          status,
+          must_change_password as "mustChangePassword",
+          password_reset_by_superuser as "passwordResetBySuperuser",
+          created_by as "createdBy",
+          created_at as "createdAt",
+          updated_at as "updatedAt",
+          activated_at as "activatedAt",
+          last_login_at as "lastLoginAt",
+          password_changed_at as "passwordChangedAt",
+          is_banned as "isBanned"
+        FROM public.users
+        ${whereSql}
+        ORDER BY role ASC, username ASC
+        LIMIT ${pageSize}
+        OFFSET ${offset}
+      `),
+    ]);
+
+    const total = Number((countResult.rows?.[0] as { total?: number } | undefined)?.total || 0);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+    return {
+      users: (rowsResult.rows || []) as ManagedUserRecord[],
+      page,
+      pageSize,
+      total,
+      totalPages,
+    };
   }
 
   async deleteManagedUserAccount(userId: string): Promise<boolean> {
@@ -645,30 +770,106 @@ export class AuthRepository {
   }
 
   async listPendingPasswordResetRequests(): Promise<PendingPasswordResetRequestRecord[]> {
-    const result = await db.execute(sql`
-      SELECT
-        r.id,
-        r.user_id as "userId",
-        r.requested_by_user as "requestedByUser",
-        r.approved_by as "approvedBy",
-        r.reset_type as "resetType",
-        r.created_at as "createdAt",
-        r.expires_at as "expiresAt",
-        r.used_at as "usedAt",
-        u.username,
-        u.full_name as "fullName",
-        u.email,
-        u.role,
-        u.status,
-        u.is_banned as "isBanned"
-      FROM public.password_reset_requests r
-      INNER JOIN public.users u ON u.id = r.user_id
-      WHERE r.approved_by IS NULL
-        AND r.used_at IS NULL
-      ORDER BY r.created_at DESC
-    `);
+    const rows: PendingPasswordResetRequestRecord[] = [];
+    let page = 1;
+    while (true) {
+      const pageResult = await this.listPendingPasswordResetRequestsPage({
+        page,
+        pageSize: PENDING_PASSWORD_RESET_MAX_PAGE_SIZE,
+      });
+      rows.push(...pageResult.requests);
+      if (rows.length >= pageResult.total || pageResult.requests.length < pageResult.pageSize) {
+        break;
+      }
+      page += 1;
+    }
+    return rows;
+  }
 
-    return (result.rows || []) as PendingPasswordResetRequestRecord[];
+  async listPendingPasswordResetRequestsPage(
+    params: PendingPasswordResetListPageParams = {},
+  ): Promise<PendingPasswordResetListPageResult> {
+    const { page, pageSize, offset } = resolvePageAndPageSize(
+      params.page,
+      params.pageSize,
+      {
+        pageSize: PENDING_PASSWORD_RESET_DEFAULT_PAGE_SIZE,
+        maxPageSize: PENDING_PASSWORD_RESET_MAX_PAGE_SIZE,
+      },
+    );
+
+    const whereClauses: any[] = [
+      sql`r.approved_by IS NULL`,
+      sql`r.used_at IS NULL`,
+    ];
+
+    const search = String(params.search || "").trim();
+    if (search) {
+      whereClauses.push(sql`(
+        u.username ILIKE ${`%${search}%`}
+        OR COALESCE(u.full_name, '') ILIKE ${`%${search}%`}
+        OR COALESCE(u.email, '') ILIKE ${`%${search}%`}
+        OR COALESCE(r.requested_by_user, '') ILIKE ${`%${search}%`}
+      )`);
+    }
+
+    const statusFilter = String(params.status || "all").trim().toLowerCase();
+    if (statusFilter === "banned") {
+      whereClauses.push(sql`COALESCE(u.is_banned, false) = true`);
+    } else if (
+      statusFilter === "active"
+      || statusFilter === "pending_activation"
+      || statusFilter === "suspended"
+      || statusFilter === "disabled"
+    ) {
+      whereClauses.push(sql`u.status = ${statusFilter}`);
+      whereClauses.push(sql`COALESCE(u.is_banned, false) = false`);
+    }
+
+    const whereSql = sql`WHERE ${sql.join(whereClauses, sql` AND `)}`;
+
+    const [countResult, rowsResult] = await Promise.all([
+      db.execute(sql`
+        SELECT COUNT(*)::int AS total
+        FROM public.password_reset_requests r
+        INNER JOIN public.users u ON u.id = r.user_id
+        ${whereSql}
+      `),
+      db.execute(sql`
+        SELECT
+          r.id,
+          r.user_id as "userId",
+          r.requested_by_user as "requestedByUser",
+          r.approved_by as "approvedBy",
+          r.reset_type as "resetType",
+          r.created_at as "createdAt",
+          r.expires_at as "expiresAt",
+          r.used_at as "usedAt",
+          u.username,
+          u.full_name as "fullName",
+          u.email,
+          u.role,
+          u.status,
+          u.is_banned as "isBanned"
+        FROM public.password_reset_requests r
+        INNER JOIN public.users u ON u.id = r.user_id
+        ${whereSql}
+        ORDER BY r.created_at DESC, r.id DESC
+        LIMIT ${pageSize}
+        OFFSET ${offset}
+      `),
+    ]);
+
+    const total = Number((countResult.rows?.[0] as { total?: number } | undefined)?.total || 0);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+    return {
+      requests: (rowsResult.rows || []) as PendingPasswordResetRequestRecord[],
+      page,
+      pageSize,
+      total,
+      totalPages,
+    };
   }
 
   async getAccounts(): Promise<Array<{

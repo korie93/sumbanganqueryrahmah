@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Brain, PencilLine, Search, type LucideIcon } from "lucide-react";
 import { type AIChatMessage, useAIContext } from "@/context/AIContext";
 import { AI_CANCEL_EVENT, AI_RESET_EVENT, type AIChatStatus } from "@/lib/ai-chat";
+import { getCsrfHeader } from "@/lib/api/shared";
 
 export interface AIPageStatusContent {
   icon: LucideIcon;
@@ -232,7 +233,10 @@ export function useAIPageController({
       let waitingNextRetry = false;
 
       try {
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          ...(getCsrfHeader() as Record<string, string>),
+        };
 
         const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
         const response = await fetch("/api/ai/search", {

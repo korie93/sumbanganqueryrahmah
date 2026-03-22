@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { LifeBuoy, RefreshCw, Search } from "lucide-react";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { SideTabDataPanel } from "@/components/layout/SideTabDataPanel";
@@ -6,54 +6,69 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { usePaginatedItems } from "@/hooks/usePaginatedItems";
 import { formatDateTime, getStatusVariant, normalizeSearchValue } from "@/pages/settings/account-management/utils";
 import type { PendingPasswordResetRequest } from "@/pages/settings/types";
+import type {
+  PendingResetRequestsPaginationState,
+  PendingResetRequestsQueryState,
+} from "@/pages/settings/useSettingsManagedUserData";
 
 interface PendingPasswordResetSectionProps {
   loading: boolean;
+  pagination: PendingResetRequestsPaginationState;
+  query: PendingResetRequestsQueryState;
+  onQueryChange: (query: Partial<PendingResetRequestsQueryState>) => void;
   onRefresh: () => void;
   requests: PendingPasswordResetRequest[];
 }
 
 export function PendingPasswordResetSection({
   loading,
+  pagination,
+  query,
+  onQueryChange,
   onRefresh,
   requests,
 }: PendingPasswordResetSectionProps) {
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(query.search);
   const [statusFilter, setStatusFilter] = useState<
     "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned"
-  >("all");
+  >(query.status);
   const deferredSearchQuery = useDeferredValue(searchQuery);
+  const normalizedDeferredSearch = useMemo(
+    () => normalizeSearchValue(deferredSearchQuery),
+    [deferredSearchQuery],
+  );
+  const hasActiveFilters = normalizedDeferredSearch.length > 0 || statusFilter !== "all";
 
-  const filteredRequests = useMemo(() => {
-    const normalizedSearch = normalizeSearchValue(deferredSearchQuery);
+  useEffect(() => {
+    const normalizedSearchFromQuery = normalizeSearchValue(query.search);
+    if (normalizeSearchValue(searchQuery) !== normalizedSearchFromQuery) {
+      setSearchQuery(query.search);
+    }
+  }, [query.search, searchQuery]);
 
-    return requests.filter((request) => {
-      const combinedText = [
-        request.username,
-        request.fullName || "",
-        request.email || "",
-        request.requestedByUser || "",
-      ]
-        .join(" ")
-        .toLowerCase();
-      const matchesSearch = !normalizedSearch || combinedText.includes(normalizedSearch);
-      const effectiveStatus = request.isBanned ? "banned" : request.status;
-      const matchesStatus = statusFilter === "all" || effectiveStatus === statusFilter;
-      return matchesSearch && matchesStatus;
+  useEffect(() => {
+    if (statusFilter !== query.status) {
+      setStatusFilter(query.status);
+    }
+  }, [query.status, statusFilter]);
+
+  useEffect(() => {
+    if (normalizedDeferredSearch === normalizeSearchValue(query.search)) {
+      return;
+    }
+    onQueryChange({
+      page: 1,
+      search: normalizedDeferredSearch,
     });
-  }, [deferredSearchQuery, requests, statusFilter]);
+  }, [normalizedDeferredSearch, onQueryChange, query.search]);
 
   const emptyMessage = loading
     ? "Loading reset requests..."
-    : requests.length === 0
+    : pagination.total === 0 && !hasActiveFilters
       ? "No pending reset requests."
       : "No reset requests match the current filters.";
-  const pagination = usePaginatedItems(filteredRequests, {
-    resetKey: `${deferredSearchQuery}::${statusFilter}`,
-  });
 
   return (
     <SideTabDataPanel
@@ -87,17 +102,21 @@ export function PendingPasswordResetSection({
             <select
               id="pending-reset-status-filter"
               value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(
+              onChange={(event) => {
+                const nextStatus =
                   event.target.value === "active"
                   || event.target.value === "pending_activation"
                   || event.target.value === "suspended"
                   || event.target.value === "disabled"
                   || event.target.value === "banned"
                     ? event.target.value
-                    : "all",
-                )
-              }
+                    : "all";
+                setStatusFilter(nextStatus);
+                onQueryChange({
+                  page: 1,
+                  status: nextStatus,
+                });
+              }}
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             >
               <option value="all">All statuses</option>
@@ -112,8 +131,8 @@ export function PendingPasswordResetSection({
       }
       summary={
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm">
-          <span className="font-medium">Total requests: {requests.length}</span>
-          <span className="text-muted-foreground">Filtered: {filteredRequests.length}</span>
+          <span className="font-medium">Total requests: {pagination.total}</span>
+          <span className="text-muted-foreground">Current page: {requests.length}</span>
         </div>
       }
       pagination={
@@ -122,10 +141,17 @@ export function PendingPasswordResetSection({
           page={pagination.page}
           totalPages={pagination.totalPages}
           pageSize={pagination.pageSize}
-          totalItems={filteredRequests.length}
+          totalItems={pagination.total}
           itemLabel="requests"
-          onPageChange={pagination.setPage}
-          onPageSizeChange={pagination.setPageSize}
+          onPageChange={(page) => {
+            onQueryChange({ page });
+          }}
+          onPageSizeChange={(pageSize) => {
+            onQueryChange({
+              page: 1,
+              pageSize,
+            });
+          }}
         />
       }
     >
@@ -139,14 +165,14 @@ export function PendingPasswordResetSection({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {loading || filteredRequests.length === 0 ? (
+          {loading || requests.length === 0 ? (
             <TableRow>
               <TableCell colSpan={4} className="text-center text-muted-foreground">
                 {emptyMessage}
               </TableCell>
             </TableRow>
           ) : (
-            pagination.paginatedItems.map((request) => (
+            requests.map((request) => (
               <TableRow key={request.id}>
                 <TableCell>
                   <div className="space-y-1">
