@@ -206,6 +206,13 @@ export type UpdateCollectionRecordInput = {
 
 export type UpdateCollectionRecordOptions = {
   expectedUpdatedAt?: Date;
+  removeAllReceipts?: boolean;
+  removeReceiptIds?: string[];
+  newReceipts?: CreateCollectionRecordReceiptInput[];
+};
+
+export type DeleteCollectionRecordOptions = {
+  expectedUpdatedAt?: Date;
 };
 
 export type CreateCollectionStaffNicknameInput = {
@@ -485,7 +492,7 @@ type CategoryRule = {
     data: UpdateCollectionRecordInput,
     options?: UpdateCollectionRecordOptions,
   ): Promise<CollectionRecord | undefined>;
-  deleteCollectionRecord(id: string): Promise<boolean>;
+  deleteCollectionRecord(id: string, options?: DeleteCollectionRecordOptions): Promise<boolean>;
 
   createImport(data: InsertImport & { createdBy?: string }): Promise<Import>;
   getImports(): Promise<Import[]>;

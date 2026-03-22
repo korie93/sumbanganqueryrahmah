@@ -97,7 +97,9 @@ export function useCollectionRecordsActions({
     if (!pendingDeleteRecord || deletingId) return;
     setDeletingId(pendingDeleteRecord.id);
     try {
-      await deleteCollectionRecord(pendingDeleteRecord.id);
+      await deleteCollectionRecord(pendingDeleteRecord.id, {
+        expectedUpdatedAt: pendingDeleteRecord.updatedAt || pendingDeleteRecord.createdAt,
+      });
       toast({
         title: "Record Deleted",
         description: "Rekod collection berjaya dipadam.",

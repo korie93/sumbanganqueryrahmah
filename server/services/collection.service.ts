@@ -131,7 +131,7 @@ export class CollectionService {
     return this.recordService.updateRecord(user, idRaw, bodyRaw);
   }
 
-  deleteRecord(user: AuthenticatedUser | undefined, idRaw: unknown) {
-    return this.recordService.deleteRecord(user, idRaw);
+  deleteRecord(user: AuthenticatedUser | undefined, idRaw: unknown, bodyRaw?: unknown) {
+    return this.recordService.deleteRecord(user, idRaw, bodyRaw);
   }
 }

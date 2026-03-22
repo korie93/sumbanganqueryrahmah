@@ -96,6 +96,10 @@ function createCoreCollectionStorageDouble(options?: {
     data: Record<string, unknown>;
     options?: { expectedUpdatedAt?: Date };
   }> = [];
+  const deleteCalls: Array<{
+    id: string;
+    options?: { expectedUpdatedAt?: Date };
+  }> = [];
   const activeNickname = {
     id: "nickname-1",
     nickname: "Collector Alpha",
@@ -219,6 +223,25 @@ function createCoreCollectionStorageDouble(options?: {
       records.set(id, updated);
       return updated;
     },
+    deleteCollectionRecord: async (
+      id: string,
+      options?: { expectedUpdatedAt?: Date },
+    ) => {
+      deleteCalls.push({ id, options });
+      const existing = records.get(id);
+      if (!existing) {
+        return false;
+      }
+      if (
+        options?.expectedUpdatedAt
+        && existing.updatedAt
+        && existing.updatedAt.getTime() !== options.expectedUpdatedAt.getTime()
+      ) {
+        return false;
+      }
+      records.delete(id);
+      return true;
+    },
   } as unknown as PostgresStorage;
 
   return {
@@ -228,6 +251,7 @@ function createCoreCollectionStorageDouble(options?: {
     listCalls,
     summaryCalls,
     updateCalls,
+    deleteCalls,
   };
 }
 
@@ -854,6 +878,44 @@ test("PATCH /api/collection/:id rejects stale expectedUpdatedAt values with 409 
   }
 });
 
+test("DELETE /api/collection/:id rejects stale expectedUpdatedAt values with 409 conflict", async () => {
+  const { storage, deleteCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        expectedUpdatedAt: "2026-02-01T00:00:00.000Z",
+      }),
+    });
+
+    assert.equal(response.status, 409);
+    const payload = await response.json();
+    assert.equal(payload.ok, false);
+    assert.match(String(payload.message), /changed since you opened/i);
+    assert.equal(deleteCalls.length, 0);
+    assert.equal(auditLogs.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("PATCH /api/collection/:id rejects user updates when the active staff nickname no longer owns the record", async () => {
   const { storage, updateCalls, auditLogs } = createCoreCollectionStorageDouble({
     sessionNickname: "Collector Beta",
@@ -1344,7 +1406,7 @@ test("GET /api/collection/list returns an empty payload for admins without nickn
   }
 });
 
-test("PATCH /api/collection/:id keeps daily, summary, and nickname totals aligned after reassignment and month move", async () => {
+test("PATCH /api/collection/:id rejects a stale rapid second edit and keeps daily, summary, and nickname totals aligned", async () => {
   const records = new Map<string, CollectionRecordShape>([
     [
       "alpha-jan-1",
@@ -1362,6 +1424,7 @@ test("PATCH /api/collection/:id keeps daily, summary, and nickname totals aligne
         createdByLogin: "alpha.user",
         collectionStaffNickname: "Collector Alpha",
         createdAt: new Date("2026-01-10T09:00:00.000Z"),
+        updatedAt: new Date("2026-01-10T09:00:00.000Z"),
       },
     ],
     [
@@ -1380,6 +1443,7 @@ test("PATCH /api/collection/:id keeps daily, summary, and nickname totals aligne
         createdByLogin: "beta.user",
         collectionStaffNickname: "Collector Beta",
         createdAt: new Date("2026-01-11T09:00:00.000Z"),
+        updatedAt: new Date("2026-01-11T09:00:00.000Z"),
       },
     ],
     [
@@ -1398,9 +1462,11 @@ test("PATCH /api/collection/:id keeps daily, summary, and nickname totals aligne
         createdByLogin: "alpha.user",
         collectionStaffNickname: "Collector Alpha",
         createdAt: new Date("2026-02-01T09:00:00.000Z"),
+        updatedAt: new Date("2026-02-01T09:00:00.000Z"),
       },
     ],
   ]);
+  let updateSequence = 0;
 
   const nicknameProfiles = [
     {
@@ -1604,9 +1670,19 @@ test("PATCH /api/collection/:id keeps daily, summary, and nickname totals aligne
       return rows.slice(offset, offset + limit);
     },
     getCollectionRecordById: async (id: string) => records.get(id) || null,
-    updateCollectionRecord: async (id: string, data: Record<string, unknown>) => {
+    updateCollectionRecord: async (
+      id: string,
+      data: Record<string, unknown>,
+      options?: { expectedUpdatedAt?: Date },
+    ) => {
       const existing = records.get(id);
       if (!existing) return null;
+      if (
+        options?.expectedUpdatedAt
+        && (existing.updatedAt || existing.createdAt).getTime() !== options.expectedUpdatedAt.getTime()
+      ) {
+        return null;
+      }
       const updated: CollectionRecordShape = {
         ...existing,
         customerName:
@@ -1625,6 +1701,7 @@ test("PATCH /api/collection/:id keeps daily, summary, and nickname totals aligne
           data.collectionStaffNickname !== undefined
             ? String(data.collectionStaffNickname)
             : existing.collectionStaffNickname,
+        updatedAt: new Date(Date.UTC(2026, 1, 15, 8, 0, updateSequence++)),
       };
       records.set(id, updated);
       return updated;
@@ -1683,9 +1760,25 @@ test("PATCH /api/collection/:id keeps daily, summary, and nickname totals aligne
         collectionStaffNickname: "Collector Beta",
         paymentDate: "2026-02-02",
         amount: "1500",
+        expectedUpdatedAt: "2026-01-10T09:00:00.000Z",
       }),
     });
     assert.equal(updateResponse.status, 200);
+
+    const staleRapidUpdateResponse = await fetch(`${baseUrl}/api/collection/alpha-jan-1`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        amount: "1700",
+        expectedUpdatedAt: "2026-01-10T09:00:00.000Z",
+      }),
+    });
+    assert.equal(staleRapidUpdateResponse.status, 409);
+    const staleRapidUpdatePayload = await staleRapidUpdateResponse.json();
+    assert.equal(staleRapidUpdatePayload.ok, false);
+    assert.match(String(staleRapidUpdatePayload.message), /changed since you opened/i);
 
     const afterSummaryResponse = await fetch(`${baseUrl}/api/collection/summary?year=2026`);
     assert.equal(afterSummaryResponse.status, 200);

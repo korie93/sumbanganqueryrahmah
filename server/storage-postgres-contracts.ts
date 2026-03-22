@@ -20,6 +20,7 @@ export type {
   CreateCollectionRecordInput,
   CreateCollectionRecordReceiptInput,
   CreateCollectionStaffNicknameInput,
+  DeleteCollectionRecordOptions,
   IStorage,
   ManagedUserAccount,
   PasswordResetTokenSummary,
