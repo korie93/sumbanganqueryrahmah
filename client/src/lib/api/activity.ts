@@ -1,4 +1,5 @@
 import { apiRequest } from "../queryClient";
+import { getCsrfHeader } from "./shared";
 
 export type ActivityLoginPayload = {
   username: string;
@@ -38,6 +39,7 @@ export async function activityHeartbeat(payload?: {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...(getCsrfHeader() as Record<string, string>),
     },
     credentials: "include",
     body: JSON.stringify(payload || {}),
@@ -47,6 +49,9 @@ export async function activityHeartbeat(payload?: {
 export async function activityHeartbeatLight() {
   return fetch("/api/activity/heartbeat", {
     method: "POST",
+    headers: {
+      ...(getCsrfHeader() as Record<string, string>),
+    },
     credentials: "include",
   });
 }

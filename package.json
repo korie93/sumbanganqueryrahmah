@@ -2,13 +2,18 @@
   "name": "sqr-local",
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20 <21"
+  },
   "scripts": {
+    "verify:node-version": "node scripts/verify-node-version.mjs",
     "verify:repo-hygiene": "node scripts/verify-repo-hygiene.mjs",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:generate:custom": "drizzle-kit generate --config drizzle.config.ts --custom",
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:migrate:cli": "drizzle-kit migrate --config drizzle.config.ts",
+    "db:check": "drizzle-kit check --config drizzle.config.ts",
     "db:studio": "drizzle-kit studio --config drizzle.config.ts",
     "db:introspect": "drizzle-kit introspect --config drizzle.config.ts",
     "test:client": "node scripts/run-client-tests.mjs",
@@ -19,6 +24,8 @@
     "test:ws": "tsx --test server/ws/tests/*.test.ts",
     "test:intelligence": "tsx --test server/intelligence/tests/*.test.ts",
     "test": "npm run test:client && npm run test:http && npm run test:services && npm run test:repositories && npm run test:routes && npm run test:ws && npm run test:intelligence",
+    "perf:collection:baseline": "node scripts/perf-collection-baseline.mjs",
+    "dr:drill": "node scripts/disaster-recovery-drill.mjs",
     "smoke:preflight": "node scripts/smoke-preflight.mjs",
     "smoke:ui": "node scripts/ui-smoke.mjs",
     "smoke:ci-local": "node scripts/smoke-ci-local.mjs",

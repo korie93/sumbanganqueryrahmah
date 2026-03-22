@@ -107,11 +107,15 @@ export function registerAuthRecoveryRoutes(context: AuthRouteContext) {
     requireRole("superuser"),
     rateLimiters.adminAction,
     jsonRoute(async (req) => {
-      const result = await authAccountService.listDevMailOutbox(req.user);
+      const result = await authAccountService.listDevMailOutbox(
+        req.user,
+        req.query as Record<string, unknown>,
+      );
       return {
         ok: true,
         enabled: result.enabled,
         previews: result.previews,
+        pagination: result.pagination,
       };
     }),
   );

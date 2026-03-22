@@ -10,6 +10,12 @@ import { buildMonthRange, toDisplayDate } from "@/pages/collection-summary/utils
 
 const MONTH_DIALOG_PAGE_SIZE = 10;
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : error instanceof Error && error.name === "AbortError";
+}
+
 type UseCollectionSummaryMonthDialogArgs = {
   canFilterByNickname: boolean;
   selectedYear: string;
@@ -26,6 +32,7 @@ export function useCollectionSummaryMonthDialog({
   const { toast } = useToast();
   const isMountedRef = useRef(true);
   const monthRecordsRequestIdRef = useRef(0);
+  const monthRecordsAbortControllerRef = useRef<AbortController | null>(null);
 
   const [monthDialogOpen, setMonthDialogOpen] = useState(false);
   const [activeMonth, setActiveMonth] = useState<number | null>(null);
@@ -36,15 +43,24 @@ export function useCollectionSummaryMonthDialog({
   const [monthRecordsTotal, setMonthRecordsTotal] = useState(0);
   const [loadingMonthRecords, setLoadingMonthRecords] = useState(false);
 
+  const abortMonthRecordsRequest = useCallback(() => {
+    if (monthRecordsAbortControllerRef.current) {
+      monthRecordsAbortControllerRef.current.abort();
+      monthRecordsAbortControllerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
       monthRecordsRequestIdRef.current += 1;
+      abortMonthRecordsRequest();
     };
-  }, []);
+  }, [abortMonthRecordsRequest]);
 
   const resetMonthDialog = useCallback(() => {
     monthRecordsRequestIdRef.current += 1;
+    abortMonthRecordsRequest();
     setMonthDialogOpen(false);
     setActiveMonth(null);
     setMonthDialogPage(1);
@@ -52,7 +68,7 @@ export function useCollectionSummaryMonthDialog({
     setMonthRecords([]);
     setMonthRecordsTotal(0);
     setLoadingMonthRecords(false);
-  }, []);
+  }, [abortMonthRecordsRequest]);
 
   const loadMonthRecords = useCallback(
     async (
@@ -73,6 +89,9 @@ export function useCollectionSummaryMonthDialog({
 
       setLoadingMonthRecords(true);
       setMonthRecords([]);
+      abortMonthRecordsRequest();
+      const controller = new AbortController();
+      monthRecordsAbortControllerRef.current = controller;
 
       try {
         const response = await getCollectionRecords({
@@ -82,14 +101,23 @@ export function useCollectionSummaryMonthDialog({
           nicknames: normalizedFilters.length > 1 ? normalizedFilters : undefined,
           limit: pageSize,
           offset: (page - 1) * pageSize,
-        });
+        }, { signal: controller.signal });
 
-        if (!isMountedRef.current || requestId !== monthRecordsRequestIdRef.current) return;
+        if (
+          controller.signal.aborted ||
+          !isMountedRef.current ||
+          requestId !== monthRecordsRequestIdRef.current
+        ) return;
 
         setMonthRecords(Array.isArray(response?.records) ? response.records : []);
         setMonthRecordsTotal(Number(response?.total || 0));
       } catch (error: unknown) {
-        if (!isMountedRef.current || requestId !== monthRecordsRequestIdRef.current) return;
+        if (
+          controller.signal.aborted ||
+          isAbortError(error) ||
+          !isMountedRef.current ||
+          requestId !== monthRecordsRequestIdRef.current
+        ) return;
         setMonthRecords([]);
         setMonthRecordsTotal(0);
         toast({
@@ -98,11 +126,18 @@ export function useCollectionSummaryMonthDialog({
           variant: "destructive",
         });
       } finally {
-        if (!isMountedRef.current || requestId !== monthRecordsRequestIdRef.current) return;
+        if (monthRecordsAbortControllerRef.current === controller) {
+          monthRecordsAbortControllerRef.current = null;
+        }
+        if (
+          controller.signal.aborted ||
+          !isMountedRef.current ||
+          requestId !== monthRecordsRequestIdRef.current
+        ) return;
         setLoadingMonthRecords(false);
       }
     },
-    [toast],
+    [abortMonthRecordsRequest, toast],
   );
 
   useEffect(() => {

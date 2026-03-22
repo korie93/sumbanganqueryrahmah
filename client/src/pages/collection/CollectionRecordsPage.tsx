@@ -34,15 +34,25 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
         </CardContent>
       </Card>
 
-      <ReceiptPreviewDialog {...viewModel.receiptPreview} />
+      {viewModel.receiptPreview.open ? (
+        <ReceiptPreviewDialog {...viewModel.receiptPreview} />
+      ) : null}
 
-      <EditCollectionRecordDialog {...viewModel.editDialog} />
+      {viewModel.editDialog.open ? (
+        <EditCollectionRecordDialog {...viewModel.editDialog} />
+      ) : null}
 
-      <DeleteCollectionRecordDialog {...viewModel.deleteDialog} />
+      {viewModel.deleteDialog.open ? (
+        <DeleteCollectionRecordDialog {...viewModel.deleteDialog} />
+      ) : null}
 
-      <PurgeCollectionRecordsDialog {...viewModel.purgeDialog} />
+      {viewModel.purgeDialog.open ? (
+        <PurgeCollectionRecordsDialog {...viewModel.purgeDialog} />
+      ) : null}
 
-      <ViewAllRecordsDialog {...viewModel.viewAll} />
+      {viewModel.viewAll.open ? (
+        <ViewAllRecordsDialog {...viewModel.viewAll} />
+      ) : null}
     </div>
   );
 }

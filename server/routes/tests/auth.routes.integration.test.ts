@@ -11,6 +11,8 @@ import { writeDevMailPreview } from "../../mail/dev-mail-outbox";
 import { registerAuthRoutes } from "../auth.routes";
 import type { PostgresStorage } from "../../storage-postgres";
 import {
+  createTestAuthenticateToken,
+  createTestRequireRole,
   createJsonTestApp,
   startTestServer,
   stopTestServer,
@@ -506,6 +508,123 @@ function createDevMailAdminStorageDouble() {
   };
 }
 
+function createManagedUsersPageStorageDouble() {
+  const actor = {
+    id: "superuser-managed-1",
+    username: "managed.admin",
+    fullName: "Managed Admin",
+    email: "managed.admin@example.com",
+    role: "superuser",
+    status: "active",
+    passwordHash: null,
+    mustChangePassword: false,
+    passwordResetBySuperuser: false,
+    isBanned: false,
+    activatedAt: new Date("2026-03-01T00:00:00.000Z"),
+    passwordChangedAt: null,
+    lastLoginAt: null,
+  };
+  const listPageCalls: Array<Record<string, unknown>> = [];
+
+  const storage = {
+    getUser: async (userId: string) => (userId === actor.id ? actor : null),
+    getUserByUsername: async (username: string) => (username === actor.username ? actor : null),
+    getManagedUsers: async () => [],
+    listManagedUsersPage: async (params: Record<string, unknown>) => {
+      listPageCalls.push(params);
+      return {
+        users: [
+          {
+            id: "managed-1",
+            username: "alpha.admin",
+            fullName: "Alpha Admin",
+            email: "alpha.admin@example.com",
+            role: "admin",
+            status: "active",
+            mustChangePassword: false,
+            passwordResetBySuperuser: false,
+            createdBy: "system",
+            createdAt: new Date("2026-03-01T00:00:00.000Z"),
+            updatedAt: new Date("2026-03-02T00:00:00.000Z"),
+            activatedAt: new Date("2026-03-01T00:00:00.000Z"),
+            lastLoginAt: null,
+            passwordChangedAt: null,
+            isBanned: false,
+          },
+        ],
+        page: Number(params.page || 1),
+        pageSize: Number(params.pageSize || 50),
+        total: 31,
+        totalPages: 3,
+      };
+    },
+  } as unknown as PostgresStorage;
+
+  return {
+    storage,
+    actor,
+    listPageCalls,
+  };
+}
+
+function createPendingResetPageStorageDouble() {
+  const actor = {
+    id: "superuser-reset-1",
+    username: "reset.admin",
+    fullName: "Reset Admin",
+    email: "reset.admin@example.com",
+    role: "superuser",
+    status: "active",
+    passwordHash: null,
+    mustChangePassword: false,
+    passwordResetBySuperuser: false,
+    isBanned: false,
+    activatedAt: new Date("2026-03-01T00:00:00.000Z"),
+    passwordChangedAt: null,
+    lastLoginAt: null,
+  };
+  const listPageCalls: Array<Record<string, unknown>> = [];
+
+  const storage = {
+    getUser: async (userId: string) => (userId === actor.id ? actor : null),
+    getUserByUsername: async (username: string) => (username === actor.username ? actor : null),
+    listPendingPasswordResetRequests: async () => [],
+    listPendingPasswordResetRequestsPage: async (params: Record<string, unknown>) => {
+      listPageCalls.push(params);
+      return {
+        requests: [
+          {
+            id: "reset-1",
+            userId: "user-1",
+            username: "user.alpha",
+            fullName: "User Alpha",
+            email: "user.alpha@example.com",
+            role: "user",
+            status: "active",
+            isBanned: false,
+            requestedByUser: "user.alpha",
+            approvedBy: null,
+            resetType: "email_link",
+            createdAt: new Date("2026-03-20T00:00:00.000Z"),
+            expiresAt: new Date("2026-03-21T00:00:00.000Z"),
+            usedAt: null,
+          },
+        ],
+        page: Number(params.page || 1),
+        pageSize: Number(params.pageSize || 50),
+        total: 7,
+        totalPages: 2,
+      };
+    },
+  } as unknown as PostgresStorage;
+
+  return {
+    storage,
+    actor,
+    listPageCalls,
+  };
+}
+
 async function withDevMailOutboxFixture(
   run: (context: { outboxDir: string }) => Promise<void>,
 ) {
@@ -596,6 +715,81 @@ test("GET /api/accounts returns account summaries for the authenticated superuse
       ok: true,
       accounts,
     });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/admin/users returns paginated managed users and forwards filters", async () => {
+  const { storage, actor, listPageCalls } = createManagedUsersPageStorageDouble();
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: authenticateAs(actor),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/admin/users?page=2&pageSize=15&search=alpha&role=admin&status=active`,
+    );
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.users.length, 1);
+    assert.deepEqual(payload.pagination, {
+      page: 2,
+      pageSize: 15,
+      total: 31,
+      totalPages: 3,
+    });
+    assert.equal(listPageCalls.length, 1);
+    assert.equal(listPageCalls[0].page, 2);
+    assert.equal(listPageCalls[0].pageSize, 15);
+    assert.equal(listPageCalls[0].search, "alpha");
+    assert.equal(listPageCalls[0].role, "admin");
+    assert.equal(listPageCalls[0].status, "active");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/admin/password-reset-requests returns paginated rows and forwards filters", async () => {
+  const { storage, actor, listPageCalls } = createPendingResetPageStorageDouble();
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: authenticateAs(actor),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/admin/password-reset-requests?page=1&pageSize=20&search=user&status=banned`,
+    );
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.requests.length, 1);
+    assert.deepEqual(payload.pagination, {
+      page: 1,
+      pageSize: 20,
+      total: 7,
+      totalPages: 2,
+    });
+    assert.equal(listPageCalls.length, 1);
+    assert.equal(listPageCalls[0].page, 1);
+    assert.equal(listPageCalls[0].pageSize, 20);
+    assert.equal(listPageCalls[0].search, "user");
+    assert.equal(listPageCalls[0].status, "banned");
   } finally {
     await stopTestServer(server);
   }
@@ -700,6 +894,85 @@ test("GET /api/admin/dev-mail-outbox returns recent preview entries", { concurre
       assert.equal(payload.previews.length, 1);
       assert.equal(payload.previews[0].id, preview.messageId);
       assert.match(payload.previews[0].previewUrl, new RegExp(`/dev/mail-preview/${preview.messageId}$`));
+    } finally {
+      await stopTestServer(server);
+    }
+  });
+});
+
+test("GET /api/admin/dev-mail-outbox supports pagination and subject filter", { concurrency: false }, async () => {
+  await withDevMailOutboxFixture(async () => {
+    await writeDevMailPreview({
+      to: "mail.one@example.com",
+      subject: "Alpha Subject",
+      text: "Alpha",
+      html: "<p>Alpha</p>",
+    });
+    const betaPreview = await writeDevMailPreview({
+      to: "mail.two@example.com",
+      subject: "Beta Subject",
+      text: "Beta",
+      html: "<p>Beta</p>",
+    });
+    await writeDevMailPreview({
+      to: "mail.three@example.com",
+      subject: "Gamma Subject",
+      text: "Gamma",
+      html: "<p>Gamma</p>",
+    });
+
+    const { storage, actor } = createDevMailAdminStorageDouble();
+    const app = createJsonTestApp();
+
+    registerAuthRoutes(app, {
+      storage,
+      authenticateToken: authenticateAs(actor),
+      requireRole: () => (_req, _res, next) => next(),
+      connectedClients: new Map(),
+    });
+
+    const { server, baseUrl } = await startTestServer(app);
+    try {
+      const response = await fetch(
+        `${baseUrl}/api/admin/dev-mail-outbox?page=1&pageSize=1&searchSubject=Beta`,
+      );
+      assert.equal(response.status, 200);
+      const payload = await response.json();
+      assert.equal(payload.ok, true);
+      assert.equal(payload.previews.length, 1);
+      assert.equal(payload.previews[0].id, betaPreview.messageId);
+      assert.deepEqual(payload.pagination, {
+        page: 1,
+        pageSize: 1,
+        total: 1,
+        totalPages: 1,
+      });
+    } finally {
+      await stopTestServer(server);
+    }
+  });
+});
+
+test("GET /api/admin/dev-mail-outbox requires superuser role", { concurrency: false }, async () => {
+  await withDevMailOutboxFixture(async () => {
+    const { storage } = createDevMailAdminStorageDouble();
+    const app = createJsonTestApp();
+
+    registerAuthRoutes(app, {
+      storage,
+      authenticateToken: createTestAuthenticateToken({
+        userId: "admin-1",
+        username: "admin.user",
+        role: "admin",
+      }),
+      requireRole: createTestRequireRole(),
+      connectedClients: new Map(),
+    });
+
+    const { server, baseUrl } = await startTestServer(app);
+    try {
+      const response = await fetch(`${baseUrl}/api/admin/dev-mail-outbox`);
+      assert.equal(response.status, 403);
     } finally {
       await stopTestServer(server);
     }

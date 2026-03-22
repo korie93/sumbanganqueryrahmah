@@ -5,6 +5,13 @@ import type {
   ManagedUser,
   PendingPasswordResetRequest,
 } from "@/pages/settings/types";
+import type { DevMailOutboxPaginationState, DevMailOutboxQueryState } from "@/pages/settings/useSettingsDevMailOutbox";
+import type {
+  ManagedUsersPaginationState,
+  ManagedUsersQueryState,
+  PendingResetRequestsPaginationState,
+  PendingResetRequestsQueryState,
+} from "@/pages/settings/useSettingsManagedUserData";
 
 export interface AccountSecuritySectionProps {
   clearingDevMailOutbox: boolean;
@@ -21,9 +28,13 @@ export interface AccountSecuritySectionProps {
   devMailOutboxEnabled: boolean;
   devMailOutboxEntries: DevMailOutboxPreview[];
   devMailOutboxLoading: boolean;
+  devMailOutboxPagination: DevMailOutboxPaginationState;
+  devMailOutboxQuery: DevMailOutboxQueryState;
   isSuperuser: boolean;
   managedUsers: ManagedUser[];
   managedUsersLoading: boolean;
+  managedUsersPagination: ManagedUsersPaginationState;
+  managedUsersQuery: ManagedUsersQueryState;
   newPasswordInput: string;
   onChangePassword: () => void;
   onChangeUsername: () => void;
@@ -38,17 +49,22 @@ export interface AccountSecuritySectionProps {
   onDeleteDevMailOutboxEntry: (previewId: string) => void;
   onDeleteManagedUser: (user: ManagedUser) => void;
   onDevMailOutboxRefresh: () => void;
+  onDevMailOutboxQueryChange: (query: Partial<DevMailOutboxQueryState>) => void;
   onEditManagedUser: (user: ManagedUser) => void;
   onManagedBanToggle: (user: ManagedUser) => void;
   onManagedResetPassword: (user: ManagedUser) => void;
   onManagedResendActivation: (user: ManagedUser) => void;
   onManagedUsersRefresh: () => void;
+  onManagedUsersQueryChange: (query: Partial<ManagedUsersQueryState>) => void;
   onNewPasswordInputChange: (value: string) => void;
   onPendingResetRequestsRefresh: () => void;
+  onPendingResetRequestsQueryChange: (query: Partial<PendingResetRequestsQueryState>) => void;
   onUsernameInputChange: (value: string) => void;
   passwordSaving: boolean;
   pendingResetRequests: PendingPasswordResetRequest[];
   pendingResetRequestsLoading: boolean;
+  pendingResetRequestsPagination: PendingResetRequestsPaginationState;
+  pendingResetRequestsQuery: PendingResetRequestsQueryState;
   usernameInput: string;
   usernameSaving: boolean;
   showAccountManagement?: boolean;
@@ -86,9 +102,13 @@ export function AccountSecuritySection(props: AccountSecuritySectionProps) {
           devMailOutboxEnabled={props.devMailOutboxEnabled}
           devMailOutboxEntries={props.devMailOutboxEntries}
           devMailOutboxLoading={props.devMailOutboxLoading}
+          devMailOutboxPagination={props.devMailOutboxPagination}
+          devMailOutboxQuery={props.devMailOutboxQuery}
           isSuperuser={props.isSuperuser}
           managedUsers={props.managedUsers}
           managedUsersLoading={props.managedUsersLoading}
+          managedUsersPagination={props.managedUsersPagination}
+          managedUsersQuery={props.managedUsersQuery}
           onClearDevMailOutbox={props.onClearDevMailOutbox}
           onCreateEmailInputChange={props.onCreateEmailInputChange}
           onCreateFullNameInputChange={props.onCreateFullNameInputChange}
@@ -98,14 +118,19 @@ export function AccountSecuritySection(props: AccountSecuritySectionProps) {
           onDeleteDevMailOutboxEntry={props.onDeleteDevMailOutboxEntry}
           onDeleteManagedUser={props.onDeleteManagedUser}
           onDevMailOutboxRefresh={props.onDevMailOutboxRefresh}
+          onDevMailOutboxQueryChange={props.onDevMailOutboxQueryChange}
           onEditManagedUser={props.onEditManagedUser}
           onManagedBanToggle={props.onManagedBanToggle}
           onManagedResetPassword={props.onManagedResetPassword}
           onManagedResendActivation={props.onManagedResendActivation}
           onManagedUsersRefresh={props.onManagedUsersRefresh}
+          onManagedUsersQueryChange={props.onManagedUsersQueryChange}
           onPendingResetRequestsRefresh={props.onPendingResetRequestsRefresh}
+          onPendingResetRequestsQueryChange={props.onPendingResetRequestsQueryChange}
           pendingResetRequests={props.pendingResetRequests}
           pendingResetRequestsLoading={props.pendingResetRequestsLoading}
+          pendingResetRequestsPagination={props.pendingResetRequestsPagination}
+          pendingResetRequestsQuery={props.pendingResetRequestsQuery}
         />
       ) : null}
     </div>

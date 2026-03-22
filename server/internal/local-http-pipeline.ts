@@ -1,4 +1,8 @@
+import { randomUUID } from "node:crypto";
 import express, { type Express, type RequestHandler } from "express";
+import { logger } from "../lib/logger";
+import { runWithRequestContext } from "../lib/request-context";
+import { createCsrfProtectionMiddleware } from "../http/csrf";
 import { createCorsMiddleware } from "../http/cors";
 
 type LocalHttpPipelineOptions = {
@@ -7,7 +11,7 @@ type LocalHttpPipelineOptions = {
   defaultBodyLimit: string;
   uploadsRootDir: string;
   recordRequestStarted: () => void;
-  recordRequestFinished: (elapsedMs: number) => void;
+  recordRequestFinished: (elapsedMs: number, statusCode: number) => void;
   adaptiveRateLimit: RequestHandler;
   systemProtectionMiddleware: RequestHandler;
   maintenanceGuard: RequestHandler;
@@ -43,17 +47,42 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
   app.use("/uploads", express.static(uploadsRootDir));
 
   app.use((req, res, next) => {
-    const start = process.hrtime.bigint();
-    recordRequestStarted();
+    const incomingRequestId = String(req.headers["x-request-id"] || "").trim();
+    const requestId = incomingRequestId || randomUUID();
+    res.setHeader("x-request-id", requestId);
 
-    res.on("finish", () => {
-      const elapsedMs = Number(process.hrtime.bigint() - start) / 1_000_000;
-      recordRequestFinished(elapsedMs);
+    runWithRequestContext({ requestId }, () => {
+      const start = process.hrtime.bigint();
+      recordRequestStarted();
+
+      res.on("finish", () => {
+        const elapsedMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+        recordRequestFinished(elapsedMs, Number(res.statusCode || 0));
+
+        if (res.statusCode >= 500) {
+          logger.error("HTTP request completed with server error", {
+            requestId,
+            method: req.method,
+            path: req.path,
+            statusCode: res.statusCode,
+            elapsedMs: Number(elapsedMs.toFixed(2)),
+          });
+        } else if (res.statusCode >= 400) {
+          logger.warn("HTTP request completed with client error", {
+            requestId,
+            method: req.method,
+            path: req.path,
+            statusCode: res.statusCode,
+            elapsedMs: Number(elapsedMs.toFixed(2)),
+          });
+        }
+      });
+
+      next();
     });
-
-    next();
   });
 
+  app.use(createCsrfProtectionMiddleware());
   app.use(adaptiveRateLimit);
   app.use(systemProtectionMiddleware);
   app.use(maintenanceGuard);
