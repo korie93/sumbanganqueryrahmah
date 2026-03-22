@@ -161,7 +161,7 @@ test("deleteCollectionAdminGroupInTransaction short-circuits blank ids and delet
   assert.match(collectSqlText(queries[1]), /DELETE FROM public\.admin_groups/i);
 });
 
-test("attachCollectionReceipts groups receipts by record and keeps the first receipt as primary", async () => {
+test("attachCollectionReceipts groups receipts by record and only keeps legacy receipt_file fallback for records without relation rows", async () => {
   const { executor } = createSequenceExecutor<CollectionReceiptExecutor>([
     {
       rows: [
@@ -210,7 +210,7 @@ test("attachCollectionReceipts groups receipts by record and keeps the first rec
     } as any,
   ]);
 
-  assert.equal(records[0]?.receiptFile, "uploads/one.png");
+  assert.equal(records[0]?.receiptFile, null);
   assert.equal(records[0]?.receipts.length, 2);
   assert.equal(records[1]?.receiptFile, "uploads/existing.pdf");
   assert.deepEqual(records[1]?.receipts, []);

@@ -64,6 +64,8 @@ export function useCollectionRecordsActions({
   const { toast } = useToast();
   const isMountedRef = useRef(true);
   const purgeSummaryRequestIdRef = useRef(0);
+  const deleteMutationInFlightRef = useRef(false);
+  const purgeMutationInFlightRef = useRef(false);
 
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
@@ -125,7 +127,8 @@ export function useCollectionRecordsActions({
   }, []);
 
   const handleConfirmDelete = useCallback(async () => {
-    if (!pendingDeleteRecord || deletingId) return;
+    if (!pendingDeleteRecord || deletingId || deleteMutationInFlightRef.current) return;
+    deleteMutationInFlightRef.current = true;
     setDeletingId(pendingDeleteRecord.id);
     try {
       await deleteCollectionRecord(pendingDeleteRecord.id, {
@@ -170,6 +173,7 @@ export function useCollectionRecordsActions({
         variant: "destructive",
       });
     } finally {
+      deleteMutationInFlightRef.current = false;
       if (!isMountedRef.current) return;
       setDeletingId(null);
     }
@@ -183,7 +187,7 @@ export function useCollectionRecordsActions({
   ]);
 
   const handleConfirmPurgeOldRecords = useCallback(async () => {
-    if (!canPurgeOldRecords || purgingOldRecords) return;
+    if (!canPurgeOldRecords || purgingOldRecords || purgeMutationInFlightRef.current) return;
     if (!purgePasswordInput) {
       toast({
         title: "Password Required",
@@ -193,6 +197,7 @@ export function useCollectionRecordsActions({
       return;
     }
 
+    purgeMutationInFlightRef.current = true;
     setPurgingOldRecords(true);
     try {
       const response = await purgeOldCollectionRecords(purgePasswordInput);
@@ -216,6 +221,7 @@ export function useCollectionRecordsActions({
         variant: "destructive",
       });
     } finally {
+      purgeMutationInFlightRef.current = false;
       if (!isMountedRef.current) return;
       setPurgingOldRecords(false);
     }
