@@ -12,6 +12,10 @@ interface CollectionRecordsExportParams {
   nicknameFilter: string;
 }
 
+function hasReceiptAttachment(record: CollectionRecord): boolean {
+  return (record.receipts?.length || 0) > 0 || Boolean(record.receiptFile);
+}
+
 export async function exportCollectionRecordsToExcel({
   visibleRecords,
   fromDate,
@@ -26,7 +30,7 @@ export async function exportCollectionRecordsToExcel({
     record.customerPhone,
     Number(record.amount),
     record.paymentDate,
-    record.receiptFile ? "Available" : "-",
+    hasReceiptAttachment(record) ? "Available" : "-",
     record.collectionStaffNickname,
   ]);
 
@@ -153,7 +157,7 @@ export async function exportCollectionRecordsToPdf({
       fitCollectionRecordText(record.customerPhone, 15),
       fitCollectionRecordText(formatAmountRM(record.amount), 12),
       fitCollectionRecordText(formatIsoDateToDDMMYYYY(record.paymentDate), 10),
-      record.receiptFile ? "Yes" : "-",
+      hasReceiptAttachment(record) ? "Yes" : "-",
       fitCollectionRecordText(record.collectionStaffNickname, 18),
     ];
 

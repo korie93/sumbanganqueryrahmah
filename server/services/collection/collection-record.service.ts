@@ -32,8 +32,13 @@ import {
   getCollectionDailyStatusMessage,
 } from "./collection-daily-utils";
 import { CollectionServiceSupport, type ListQuery, type SummaryQuery } from "./collection-service-support";
-
-const COLLECTION_PURGE_RETENTION_MONTHS = 6;
+import {
+  buildCollectionPurgeCutoffDate,
+  COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE,
+  getCollectionPurgeRetentionMonths,
+  parseRecordVersionTimestamp,
+  resolveRecordVersionTimestamp,
+} from "./collection-record-runtime-utils";
 
 type DailyResolvedUser = {
   id: string;
@@ -88,54 +93,6 @@ type DailyOverviewComputation = {
 
 function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
-function parseRecordVersionTimestamp(value: unknown): Date | null {
-  const normalized = normalizeCollectionText(value);
-  if (!normalized) return null;
-
-  const parsed = new Date(normalized);
-  if (!Number.isFinite(parsed.getTime())) {
-    throw badRequest("expectedUpdatedAt must be a valid ISO date-time.");
-  }
-
-  return parsed;
-}
-
-function resolveRecordVersionTimestamp(record: { updatedAt?: Date; createdAt: Date }): Date | null {
-  const updatedAt = record.updatedAt instanceof Date
-    ? record.updatedAt
-    : record.updatedAt
-      ? new Date(record.updatedAt)
-      : null;
-  if (updatedAt && Number.isFinite(updatedAt.getTime())) {
-    return updatedAt;
-  }
-  const createdAt = record.createdAt instanceof Date ? record.createdAt : new Date(record.createdAt);
-  return Number.isFinite(createdAt.getTime()) ? createdAt : null;
-}
-
-const COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE =
-  "Collection record has changed since you opened it. Refresh and try again.";
-
-function buildCollectionPurgeCutoffDate(referenceDate = new Date()): string {
-  const utcYear = referenceDate.getUTCFullYear();
-  const utcMonth = referenceDate.getUTCMonth();
-  const utcDay = referenceDate.getUTCDate();
-
-  const monthAnchor = new Date(Date.UTC(utcYear, utcMonth, 1));
-  monthAnchor.setUTCMonth(monthAnchor.getUTCMonth() - COLLECTION_PURGE_RETENTION_MONTHS);
-
-  const maxDayInTargetMonth = new Date(
-    Date.UTC(monthAnchor.getUTCFullYear(), monthAnchor.getUTCMonth() + 1, 0),
-  ).getUTCDate();
-  const safeDay = Math.min(utcDay, maxDayInTargetMonth);
-
-  return new Date(
-    Date.UTC(monthAnchor.getUTCFullYear(), monthAnchor.getUTCMonth(), safeDay),
-  )
-    .toISOString()
-    .slice(0, 10);
 }
 
 export class CollectionRecordService extends CollectionServiceSupport {
@@ -672,7 +629,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
 
     return {
       ok: true as const,
-      retentionMonths: COLLECTION_PURGE_RETENTION_MONTHS,
+      retentionMonths: getCollectionPurgeRetentionMonths(),
       cutoffDate,
       eligibleRecords: aggregate.totalRecords,
       totalAmount: aggregate.totalAmount,
@@ -998,6 +955,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
         receiptFile: record.receiptFile,
         receipts: (record.receipts || []).map((receipt) => ({
           id: receipt.id,
+          storagePath: receipt.storagePath,
           originalFileName: receipt.originalFileName,
           originalMimeType: receipt.originalMimeType,
           fileSize: receipt.fileSize,
@@ -1057,7 +1015,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
 
     return {
       ok: true as const,
-      retentionMonths: COLLECTION_PURGE_RETENTION_MONTHS,
+      retentionMonths: getCollectionPurgeRetentionMonths(),
       cutoffDate,
       deletedRecords: purged.totalRecords,
       totalAmount: purged.totalAmount,

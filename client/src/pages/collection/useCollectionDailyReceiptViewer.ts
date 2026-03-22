@@ -41,7 +41,7 @@ function mapDailyReceiptToCollectionReceipt(
   return {
     id: receipt.id,
     collectionRecordId: recordId,
-    storagePath: receiptPath || "",
+    storagePath: receipt.storagePath || receiptPath || "",
     originalFileName: receipt.originalFileName,
     originalMimeType: receipt.originalMimeType,
     originalExtension: inferReceiptExtension(receipt.originalFileName),
