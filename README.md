@@ -78,6 +78,7 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - System architecture overview
 - [docs/DATABASE_MIGRATIONS.md](./docs/DATABASE_MIGRATIONS.md) - Drizzle and legacy migration workflow
 - [docs/QA_FINAL_CHECKLIST.md](./docs/QA_FINAL_CHECKLIST.md) - Final QA and smoke gate checklist
+- [docs/GO_LIVE_LAUNCH_CHECKLIST.md](./docs/GO_LIVE_LAUNCH_CHECKLIST.md) - Final go-live launch gate checklist
 - [docs/PRODUCTION_PROMOTION_PLAYBOOK.md](./docs/PRODUCTION_PROMOTION_PLAYBOOK.md) - Staging soak, canary, monitor, and rollback playbook
 - [docs/DISASTER_RECOVERY_DRILL.md](./docs/DISASTER_RECOVERY_DRILL.md) - Backup and restore drill guide
 - [README_CLIENT_MANUAL.md](./README_CLIENT_MANUAL.md) - Client user manual
