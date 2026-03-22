@@ -6,6 +6,7 @@ import {
   type CollectionRecord,
   type CollectionRecordReceipt,
 } from "@/lib/api";
+import { downloadBlob } from "@/lib/download";
 import type { ReceiptPreviewDialogProps } from "@/pages/collection-records/ReceiptPreviewDialog";
 import { optimizeImageBlobForPreview } from "@/pages/collection-records/preview";
 import { inferReceiptMimeTypeFromName, resolveReceiptPreviewKind } from "@/pages/collection-records/utils";
@@ -64,7 +65,7 @@ function mapDailyRecordToCollectionRecord(record: CollectionDailyDayRecord): Col
     batch: record.batch as CollectionRecord["batch"],
     paymentDate: record.paymentDate,
     amount: String(record.amount),
-    receiptFile: record.receiptFile,
+    receiptFile: receipts.length === 0 ? record.receiptFile : null,
     receipts,
     createdByLogin: record.username,
     collectionStaffNickname: record.collectionStaffNickname,
@@ -270,18 +271,13 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
         "download",
         selectedPreviewReceipt?.id,
       );
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download =
+      downloadBlob(
+        blob,
         fileName ||
-        selectedPreviewReceipt?.originalFileName ||
-        receiptPreviewRecord.receiptFile ||
-        "receipt";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+          selectedPreviewReceipt?.originalFileName ||
+          receiptPreviewRecord.receiptFile ||
+          "receipt",
+      );
     } catch (error: unknown) {
       toast({
         title: "Download Failed",
@@ -299,7 +295,7 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
       resolveReceiptPreviewKind({
         mimeType: receiptPreviewMimeType || selectedPreviewReceipt?.originalMimeType || "",
         fileName: receiptPreviewFileName || selectedPreviewReceipt?.originalFileName || "",
-        receiptPath: receiptPreviewRecord?.receiptFile || "",
+        receiptPath: selectedPreviewReceipt?.storagePath || receiptPreviewRecord?.receiptFile || "",
       }),
     [
       receiptPreviewFileName,
@@ -307,6 +303,7 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
       receiptPreviewRecord?.receiptFile,
       selectedPreviewReceipt?.originalFileName,
       selectedPreviewReceipt?.originalMimeType,
+      selectedPreviewReceipt?.storagePath,
     ],
   );
 
