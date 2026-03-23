@@ -13,7 +13,7 @@ interface CollectionRecordsExportParams {
 }
 
 function hasReceiptAttachment(record: CollectionRecord): boolean {
-  return (record.receipts?.length || 0) > 0 || Boolean(record.receiptFile);
+  return (record.receipts?.length || 0) > 0;
 }
 
 export async function exportCollectionRecordsToExcel({

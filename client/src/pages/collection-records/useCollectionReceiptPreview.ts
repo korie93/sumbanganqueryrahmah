@@ -58,12 +58,11 @@ export function useCollectionReceiptPreview() {
       resolveReceiptPreviewKind({
         mimeType: receiptPreviewMimeType || selectedPreviewReceipt?.originalMimeType || "",
         fileName: receiptPreviewFileName || selectedPreviewReceipt?.originalFileName || "",
-        receiptPath: selectedPreviewReceipt?.storagePath || receiptPreviewRecord?.receiptFile || "",
+        receiptPath: selectedPreviewReceipt?.storagePath || "",
       }),
     [
       receiptPreviewFileName,
       receiptPreviewMimeType,
-      receiptPreviewRecord?.receiptFile,
       selectedPreviewReceipt?.originalFileName,
       selectedPreviewReceipt?.originalMimeType,
       selectedPreviewReceipt?.storagePath,
@@ -176,7 +175,6 @@ export function useCollectionReceiptPreview() {
         setReceiptPreviewFileName(
           fileName ||
             selectedPreviewReceipt?.originalFileName ||
-            receiptPreviewRecord.receiptFile ||
             "",
         );
       } catch (error: unknown) {
@@ -194,7 +192,7 @@ export function useCollectionReceiptPreview() {
             inferReceiptMimeTypeFromName(selectedPreviewReceipt?.originalFileName || ""),
         );
         setReceiptPreviewFileName(
-          selectedPreviewReceipt?.originalFileName || receiptPreviewRecord.receiptFile || "",
+          selectedPreviewReceipt?.originalFileName || "",
         );
         setReceiptPreviewError(parseApiError(error));
       } finally {
@@ -234,7 +232,6 @@ export function useCollectionReceiptPreview() {
         blob,
         fileName ||
           selectedPreviewReceipt?.originalFileName ||
-          receiptPreviewRecord.receiptFile ||
           "receipt",
       );
     } catch (error: unknown) {
