@@ -1,6 +1,6 @@
 import process from "node:process";
 
-const supportedMajor = 20;
+const supportedMajor = 24;
 const version = String(process.version || "").trim();
 const parsed = /^v(\d+)\.(\d+)\.(\d+)$/.exec(version);
 
