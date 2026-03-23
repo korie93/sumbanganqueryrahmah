@@ -265,6 +265,7 @@ async function resolveSelectedReceipt(
   record: {
     id: string;
     receiptFile?: string | null;
+    receipts?: CollectionRecordReceipt[] | null;
     createdAt?: Date | string | null;
   },
   receiptIdRaw?: string | null,
@@ -272,8 +273,18 @@ async function resolveSelectedReceipt(
   const recordId = normalizeCollectionText(record.id);
   if (!recordId) return null;
   const receiptId = normalizeCollectionText(receiptIdRaw);
+  const hydratedReceipts = Array.isArray(record.receipts) ? record.receipts : [];
+
   if (receiptId) {
+    const hydratedMatch = hydratedReceipts.find((receipt) => normalizeCollectionText(receipt.id) === receiptId);
+    if (hydratedMatch) {
+      return hydratedMatch;
+    }
     return (await storage.getCollectionRecordReceiptById(recordId, receiptId)) || null;
+  }
+
+  if (hydratedReceipts[0]) {
+    return hydratedReceipts[0];
   }
 
   const receipts = await storage.listCollectionRecordReceipts(recordId);

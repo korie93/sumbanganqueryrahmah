@@ -80,7 +80,7 @@ export function ReceiptPreviewDialog({
         <DialogHeader>
           <DialogTitle>Receipt Preview</DialogTitle>
           <DialogDescription>
-            {fileName || selectedReceipt?.originalFileName || record?.receiptFile || "Preview fail resit yang dimuat naik."}
+            {fileName || selectedReceipt?.originalFileName || "Preview fail resit yang dimuat naik."}
           </DialogDescription>
         </DialogHeader>
 

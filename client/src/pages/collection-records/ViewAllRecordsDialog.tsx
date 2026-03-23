@@ -174,7 +174,7 @@ export function ViewAllRecordsDialog({
                         </TableCell>
                         <TableCell className="py-2">{formatIsoDateToDDMMYYYY(record.paymentDate)}</TableCell>
                         <TableCell className="py-2">
-                          {(record.receipts?.length || 0) > 0 || record.receiptFile ? (
+                          {(record.receipts?.length || 0) > 0 ? (
                             <Button
                               type="button"
                               variant="link"

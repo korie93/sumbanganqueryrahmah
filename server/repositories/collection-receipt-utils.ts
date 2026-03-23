@@ -1,3 +1,4 @@
+import path from "path";
 import { randomUUID } from "crypto";
 import { sql } from "drizzle-orm";
 import type { CollectionRepositoryExecutor, CollectionRepositoryQueryResult } from "./collection-nickname-utils";
@@ -73,6 +74,15 @@ function normalizeCollectionDate(value: unknown): Date {
   return new Date();
 }
 
+function inferLegacyReceiptMimeType(storagePath: string): string {
+  const extension = path.extname(String(storagePath || "").trim()).toLowerCase();
+  if (extension === ".pdf") return "application/pdf";
+  if (extension === ".png") return "image/png";
+  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  if (extension === ".webp") return "image/webp";
+  return "application/octet-stream";
+}
+
 function readRows<TRow>(result: CollectionRepositoryQueryResult): TRow[] {
   return Array.isArray(result.rows) ? (result.rows as TRow[]) : [];
 }
@@ -92,6 +102,47 @@ export function mapCollectionRecordReceiptRow(row: CollectionRecordReceiptDbRow)
     fileSize: Number(row.file_size ?? row.fileSize ?? 0),
     createdAt: normalizeCollectionDate(row.created_at ?? row.createdAt),
   };
+}
+
+async function promoteLegacyReceiptRelationRow(
+  executor: CollectionReceiptExecutor,
+  record: Pick<CollectionRecord, "id" | "receiptFile" | "createdAt">,
+): Promise<void> {
+  const normalizedRecordId = String(record.id || "").trim();
+  const legacyStoragePath = String(record.receiptFile || "").trim();
+  if (!normalizedRecordId || !legacyStoragePath) {
+    return;
+  }
+
+  const originalFileName = path.basename(legacyStoragePath) || "receipt";
+  const originalExtension = path.extname(originalFileName).toLowerCase();
+  const createdAt = normalizeCollectionDate(record.createdAt);
+
+  await executor.execute(sql`
+    INSERT INTO public.collection_record_receipts (
+      id,
+      collection_record_id,
+      storage_path,
+      original_file_name,
+      original_mime_type,
+      original_extension,
+      file_size,
+      created_at
+    )
+    VALUES (
+      ${randomUUID()}::uuid,
+      ${normalizedRecordId}::uuid,
+      ${legacyStoragePath},
+      ${originalFileName},
+      ${inferLegacyReceiptMimeType(legacyStoragePath)},
+      ${originalExtension},
+      0,
+      ${createdAt}
+    )
+    ON CONFLICT (collection_record_id, storage_path) DO NOTHING
+  `);
+
+  await syncCollectionRecordLegacyReceiptCache(executor, normalizedRecordId);
 }
 
 export async function loadCollectionReceiptMapByRecordIds(
@@ -138,13 +189,31 @@ export async function attachCollectionReceipts(
     records.map((record) => record.id),
   );
 
+  const legacyOnlyRecords = records.filter((record) => {
+    const receipts = receiptMap.get(record.id) || [];
+    return receipts.length === 0 && Boolean(String(record.receiptFile || "").trim());
+  });
+
+  if (legacyOnlyRecords.length > 0) {
+    for (const record of legacyOnlyRecords) {
+      await promoteLegacyReceiptRelationRow(executor, record);
+    }
+
+    const refreshedReceiptMap = await loadCollectionReceiptMapByRecordIds(
+      executor,
+      legacyOnlyRecords.map((record) => record.id),
+    );
+    for (const [recordId, receipts] of refreshedReceiptMap.entries()) {
+      receiptMap.set(recordId, receipts);
+    }
+  }
+
   return records.map((record) => {
     const receipts = receiptMap.get(record.id) || [];
-    const legacyReceiptPath = receipts.length === 0 ? (record.receiptFile || null) : null;
     return {
       ...record,
-      // Relation rows are authoritative; receiptFile remains transitional fallback only for legacy rows.
-      receiptFile: legacyReceiptPath,
+      // collection_record_receipts is the active runtime source of truth.
+      receiptFile: null,
       receipts,
     };
   });

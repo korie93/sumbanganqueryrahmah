@@ -73,7 +73,7 @@ export function CollectionRecordsTable({
                 <TableCell className="py-1.5 whitespace-nowrap">{formatAmountRM(record.amount)}</TableCell>
                 <TableCell className="py-1.5 whitespace-nowrap">{formatIsoDateToDDMMYYYY(record.paymentDate)}</TableCell>
                 <TableCell className="py-1.5 whitespace-nowrap">
-                  {(record.receipts?.length || 0) > 0 || record.receiptFile ? (
+                  {(record.receipts?.length || 0) > 0 ? (
                     <Button
                       type="button"
                       variant="link"
