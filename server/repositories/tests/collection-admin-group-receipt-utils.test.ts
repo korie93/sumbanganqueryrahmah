@@ -161,8 +161,8 @@ test("deleteCollectionAdminGroupInTransaction short-circuits blank ids and delet
   assert.match(collectSqlText(queries[1]), /DELETE FROM public\.admin_groups/i);
 });
 
-test("attachCollectionReceipts groups receipts by record and only keeps legacy receipt_file fallback for records without relation rows", async () => {
-  const { executor } = createSequenceExecutor<CollectionReceiptExecutor>([
+test("attachCollectionReceipts promotes legacy receipt_file rows into relation-backed receipts", async () => {
+  const { executor, queries } = createSequenceExecutor<CollectionReceiptExecutor>([
     {
       rows: [
         {
@@ -183,6 +183,25 @@ test("attachCollectionReceipts groups receipts by record and only keeps legacy r
           original_mime_type: "image/png",
           original_extension: ".png",
           file_size: 456,
+          created_at: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+    },
+    { rows: [] },
+    {
+      rows: [{ storage_path: "uploads/existing.pdf" }],
+    },
+    { rows: [] },
+    {
+      rows: [
+        {
+          id: "receipt-legacy",
+          collection_record_id: "record-2",
+          storage_path: "uploads/existing.pdf",
+          original_file_name: "existing.pdf",
+          original_mime_type: "application/pdf",
+          original_extension: ".pdf",
+          file_size: 0,
           created_at: "2026-03-02T00:00:00.000Z",
         },
       ],
@@ -212,8 +231,13 @@ test("attachCollectionReceipts groups receipts by record and only keeps legacy r
 
   assert.equal(records[0]?.receiptFile, null);
   assert.equal(records[0]?.receipts.length, 2);
-  assert.equal(records[1]?.receiptFile, "uploads/existing.pdf");
-  assert.deepEqual(records[1]?.receipts, []);
+  assert.equal(records[1]?.receiptFile, null);
+  assert.equal(records[1]?.receipts.length, 1);
+  assert.equal(records[1]?.receipts[0]?.storagePath, "uploads/existing.pdf");
+  assert.equal(queries.length, 5);
+  assert.match(collectSqlText(queries[1]), /INSERT INTO public\.collection_record_receipts/i);
+  assert.match(collectSqlText(queries[2]), /SELECT storage_path/i);
+  assert.match(collectSqlText(queries[3]), /UPDATE public\.collection_records/i);
 });
 
 test("createCollectionRecordReceiptRows inserts receipts and reloads them by generated ids", async () => {

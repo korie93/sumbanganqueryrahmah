@@ -135,7 +135,7 @@ export function CollectionDailyDayDetailsDialog({
                       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         Stored Receipts
                       </div>
-                      {record.receipts.length === 0 && !record.receiptFile ? (
+                      {record.receipts.length === 0 ? (
                         <div className="text-xs text-muted-foreground">No stored receipt.</div>
                       ) : (
                         <div className="flex flex-wrap gap-2">
@@ -159,22 +159,6 @@ export function CollectionDailyDayDetailsDialog({
                               </Button>
                             );
                           })}
-                          {record.receipts.length === 0 && record.receiptFile ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              disabled={loadingReceiptKey === buildCollectionDailyReceiptKey(record.id)}
-                              onClick={() => onViewReceipt(record)}
-                            >
-                              {loadingReceiptKey === buildCollectionDailyReceiptKey(record.id) ? (
-                                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Eye className="mr-2 h-3.5 w-3.5" />
-                              )}
-                              View Receipt
-                            </Button>
-                          ) : null}
                         </div>
                       )}
                     </div>

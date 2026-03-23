@@ -36,13 +36,12 @@ function inferReceiptExtension(fileName: string) {
 
 function mapDailyReceiptToCollectionReceipt(
   recordId: string,
-  receiptPath: string | null,
   receipt: CollectionDailyDayRecord["receipts"][number],
 ): CollectionRecordReceipt {
   return {
     id: receipt.id,
     collectionRecordId: recordId,
-    storagePath: receipt.storagePath || receiptPath || "",
+    storagePath: receipt.storagePath || "",
     originalFileName: receipt.originalFileName,
     originalMimeType: receipt.originalMimeType,
     originalExtension: inferReceiptExtension(receipt.originalFileName),
@@ -53,7 +52,7 @@ function mapDailyReceiptToCollectionReceipt(
 
 function mapDailyRecordToCollectionRecord(record: CollectionDailyDayRecord): CollectionRecord {
   const receipts = (record.receipts || []).map((receipt) =>
-    mapDailyReceiptToCollectionReceipt(record.id, record.receiptFile, receipt),
+    mapDailyReceiptToCollectionReceipt(record.id, receipt),
   );
 
   return {
@@ -65,7 +64,7 @@ function mapDailyRecordToCollectionRecord(record: CollectionDailyDayRecord): Col
     batch: record.batch as CollectionRecord["batch"],
     paymentDate: record.paymentDate,
     amount: String(record.amount),
-    receiptFile: receipts.length === 0 ? record.receiptFile : null,
+    receiptFile: null,
     receipts,
     createdByLogin: record.username,
     collectionStaffNickname: record.collectionStaffNickname,
@@ -216,7 +215,6 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
         setReceiptPreviewFileName(
           fileName ||
             selectedPreviewReceipt?.originalFileName ||
-            receiptPreviewRecord.receiptFile ||
             "",
         );
       } catch (error: unknown) {
@@ -234,7 +232,7 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
             inferReceiptMimeTypeFromName(selectedPreviewReceipt?.originalFileName || ""),
         );
         setReceiptPreviewFileName(
-          selectedPreviewReceipt?.originalFileName || receiptPreviewRecord.receiptFile || "",
+          selectedPreviewReceipt?.originalFileName || "",
         );
         setReceiptPreviewError(parseApiError(error));
       } finally {
@@ -275,7 +273,6 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
         blob,
         fileName ||
           selectedPreviewReceipt?.originalFileName ||
-          receiptPreviewRecord.receiptFile ||
           "receipt",
       );
     } catch (error: unknown) {
@@ -295,12 +292,11 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
       resolveReceiptPreviewKind({
         mimeType: receiptPreviewMimeType || selectedPreviewReceipt?.originalMimeType || "",
         fileName: receiptPreviewFileName || selectedPreviewReceipt?.originalFileName || "",
-        receiptPath: selectedPreviewReceipt?.storagePath || receiptPreviewRecord?.receiptFile || "",
+        receiptPath: selectedPreviewReceipt?.storagePath || "",
       }),
     [
       receiptPreviewFileName,
       receiptPreviewMimeType,
-      receiptPreviewRecord?.receiptFile,
       selectedPreviewReceipt?.originalFileName,
       selectedPreviewReceipt?.originalMimeType,
       selectedPreviewReceipt?.storagePath,
