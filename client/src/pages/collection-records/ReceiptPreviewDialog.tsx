@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import type { CollectionRecord, CollectionRecordReceipt } from "@/lib/api";
 import type { ReceiptPreviewKind } from "@/pages/collection-records/types";
+import "./receipt-preview-dialog.css";
 
 export interface ReceiptPreviewDialogProps {
   open: boolean;
@@ -28,6 +29,16 @@ export interface ReceiptPreviewDialogProps {
   onSelectReceipt: (receiptId: string) => void;
   onDownload: () => void;
   onClose: () => void;
+}
+
+function clampReceiptPreviewZoom(zoom: number): number {
+  return Math.min(3, Math.max(0.5, Number(zoom.toFixed(2))));
+}
+
+function getReceiptPreviewZoomClass(zoom: number): string {
+  const clamped = clampReceiptPreviewZoom(zoom);
+  const zoomStep = Math.round(clamped * 10);
+  return `receipt-preview-zoom-${zoomStep}`;
 }
 
 export function ReceiptPreviewDialog({
@@ -57,6 +68,7 @@ export function ReceiptPreviewDialog({
   const selectedReceipt =
     receipts.find((receipt) => receipt.id === selectedReceiptId) || receipts[0] || null;
   const canZoom = Boolean(source) && (kind === "image" || kind === "pdf");
+  const zoomClassName = getReceiptPreviewZoomClass(zoom);
 
   if (!open && !record && !loading && !source && !error) {
     return null;
@@ -68,7 +80,7 @@ export function ReceiptPreviewDialog({
         <DialogHeader>
           <DialogTitle>Receipt Preview</DialogTitle>
           <DialogDescription>
-            {fileName || selectedReceipt?.originalFileName || record?.receiptFile || "Preview fail resit yang dimuat naik."}
+            {fileName || selectedReceipt?.originalFileName || "Preview fail resit yang dimuat naik."}
           </DialogDescription>
         </DialogHeader>
 
@@ -155,13 +167,7 @@ export function ReceiptPreviewDialog({
           ) : kind === "pdf" ? (
             <div className="h-full overflow-auto">
               <div
-                className="mx-auto"
-                style={{
-                  transform: `scale(${zoom})`,
-                  transformOrigin: "top center",
-                  width: `${Math.max(40, Math.round(100 / zoom))}%`,
-                  height: "72vh",
-                }}
+                className={`mx-auto h-[72vh] w-full ${zoomClassName}`}
               >
                 <iframe
                   src={source}
@@ -175,11 +181,7 @@ export function ReceiptPreviewDialog({
               <img
                 src={source}
                 alt={fileName || "Receipt preview"}
-                className="max-w-none rounded-sm object-contain"
-                style={{
-                  transform: `scale(${zoom})`,
-                  transformOrigin: "top center",
-                }}
+                className={`max-w-none rounded-sm object-contain ${zoomClassName}`}
               />
             </div>
           ) : (
