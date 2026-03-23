@@ -5,7 +5,6 @@ import {
   LogOut,
   Menu,
   Moon,
-  ShieldCheck,
   Sun,
 } from "lucide-react";
 import {
@@ -30,6 +29,7 @@ import {
   resolveNavigationTarget,
 } from "@/app/navigation";
 import type { TabVisibility } from "@/app/types";
+import { BrandLogo } from "@/components/BrandLogo";
 import { useTheme } from "@/components/useTheme";
 
 interface NavbarProps {
@@ -82,8 +82,13 @@ function NavbarImpl({
       <div className="mx-auto flex min-h-16 max-w-[1440px] items-center gap-3 px-3 py-2 md:px-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex items-center gap-2 rounded-full border border-border/70 bg-card/75 px-2.5 py-1.5 shadow-sm">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
-              <ShieldCheck className="h-4 w-4 text-primary" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/10">
+              <BrandLogo
+                decorative
+                priority
+                className="block h-5 w-5"
+                imageClassName="h-full w-full"
+              />
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-foreground">{systemName || "SQR System"}</p>

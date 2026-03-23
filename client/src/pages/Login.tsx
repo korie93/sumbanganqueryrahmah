@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
-import { Eye, EyeOff, LogIn, Lock } from "lucide-react";
+import { Eye, EyeOff, LogIn } from "lucide-react";
 import type { User } from "@/app/types";
+import { BrandLogo } from "@/components/BrandLogo";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { login, generateFingerprint } from "@/lib/api";
@@ -136,7 +137,12 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           <div className="login-card px-8 py-10">
             <div className="flex flex-col items-center mb-8">
               <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center mb-4 shadow-xl border border-white/30">
-                <Lock className="w-10 h-10 text-white" />
+                <BrandLogo
+                  decorative
+                  priority
+                  className="block h-11 w-11"
+                  imageClassName="h-full w-full"
+                />
               </div>
               <h2 className="text-2xl font-bold text-white tracking-tight text-center">
                 Log In SQR System
