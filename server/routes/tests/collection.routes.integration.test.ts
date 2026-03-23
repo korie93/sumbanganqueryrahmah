@@ -38,6 +38,17 @@ type CollectionRecordShape = {
   updatedAt?: Date;
 };
 
+type CollectionReceiptShape = {
+  id: string;
+  collectionRecordId: string;
+  storagePath: string;
+  originalFileName: string;
+  originalMimeType: string;
+  originalExtension: string;
+  fileSize: number;
+  createdAt: Date;
+};
+
 function createCollectionStorageDouble(options: {
   actorPasswordHash: string;
 }) {
@@ -199,6 +210,40 @@ function createCoreCollectionStorageDouble(options?: {
     listCollectionRecordReceipts: async (recordId: string) => receiptRowsByRecordId.get(recordId) || [],
     getCollectionRecordReceiptById: async (recordId: string, receiptId: string) =>
       (receiptRowsByRecordId.get(recordId) || []).find((receipt) => receipt.id === receiptId) || null,
+    createCollectionRecordReceipts: async (
+      recordId: string,
+      receipts: Array<{
+        storagePath: string;
+        originalFileName: string;
+        originalMimeType: string;
+        originalExtension: string;
+        fileSize: number;
+      }>,
+    ) => {
+      const current = receiptRowsByRecordId.get(recordId) || [];
+      const insertedRows: CollectionReceiptShape[] = [];
+      for (const receipt of receipts || []) {
+        const duplicate = current.find((item) => item.storagePath === receipt.storagePath);
+        if (duplicate) {
+          insertedRows.push(duplicate);
+          continue;
+        }
+        const created: CollectionReceiptShape = {
+          id: `receipt-${recordId}-${current.length + insertedRows.length + 1}`,
+          collectionRecordId: recordId,
+          storagePath: String(receipt.storagePath || ""),
+          originalFileName: String(receipt.originalFileName || ""),
+          originalMimeType: String(receipt.originalMimeType || "application/octet-stream"),
+          originalExtension: String(receipt.originalExtension || ""),
+          fileSize: Number(receipt.fileSize || 0),
+          createdAt: new Date("2026-03-16T10:00:00.000Z"),
+        };
+        current.push(created);
+        insertedRows.push(created);
+      }
+      receiptRowsByRecordId.set(recordId, current);
+      return insertedRows;
+    },
     updateCollectionRecord: async (
       id: string,
       data: Record<string, unknown>,
@@ -1056,6 +1101,50 @@ test("GET /api/collection/:id/receipt/download returns 404 when receipt file is 
     assert.match(String(payload.message), /receipt file not found/i);
   } finally {
     await stopTestServer(server);
+  }
+});
+
+test("GET /api/collection/:id/receipt/view promotes legacy receipt_file into relation-backed receipts", async () => {
+  const uploadsDir = path.resolve(process.cwd(), "uploads", "collection-receipts");
+  const storedFileName = `route-test-legacy-receipt-${Date.now()}-${Math.random().toString(16).slice(2)}.pdf`;
+  const storedReceiptPath = `/uploads/collection-receipts/${storedFileName}`;
+  await fs.mkdir(uploadsDir, { recursive: true });
+  await fs.writeFile(path.join(uploadsDir, storedFileName), Buffer.from("%PDF-1.7\n%legacy\n"));
+
+  const { storage } = createCoreCollectionStorageDouble({
+    sessionNickname: "Collector Alpha",
+    seedRecordOverrides: {
+      receiptFile: storedReceiptPath,
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+      activityId: "activity-user-collection-receipt-legacy",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const primaryResponse = await fetch(`${baseUrl}/api/collection/collection-1/receipt/view`);
+    assert.equal(primaryResponse.status, 200);
+    assert.equal(primaryResponse.headers.get("content-type"), "application/pdf");
+
+    const promotedResponse = await fetch(
+      `${baseUrl}/api/collection/collection-1/receipts/receipt-collection-1-1/view`,
+    );
+    assert.equal(promotedResponse.status, 200);
+    assert.equal(promotedResponse.headers.get("content-type"), "application/pdf");
+  } finally {
+    await stopTestServer(server);
+    await fs.unlink(path.join(uploadsDir, storedFileName)).catch(() => undefined);
   }
 });
 

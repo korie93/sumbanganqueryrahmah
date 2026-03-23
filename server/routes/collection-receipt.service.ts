@@ -262,16 +262,84 @@ function resolveCollectionReceiptFile(
 
 async function resolveSelectedReceipt(
   storage: PostgresStorage,
-  recordId: string,
+  record: {
+    id: string;
+    receiptFile?: string | null;
+    createdAt?: Date | string | null;
+  },
   receiptIdRaw?: string | null,
 ): Promise<CollectionRecordReceipt | null> {
+  const recordId = normalizeCollectionText(record.id);
+  if (!recordId) return null;
   const receiptId = normalizeCollectionText(receiptIdRaw);
   if (receiptId) {
     return (await storage.getCollectionRecordReceiptById(recordId, receiptId)) || null;
   }
 
   const receipts = await storage.listCollectionRecordReceipts(recordId);
-  return receipts[0] || null;
+  if (receipts[0]) {
+    return receipts[0];
+  }
+
+  // Transitional compatibility bridge:
+  // promote legacy collection_records.receipt_file into collection_record_receipts when possible.
+  const legacyPath = normalizeCollectionText(record.receiptFile);
+  if (!legacyPath) {
+    return null;
+  }
+
+  const resolvedLegacyFile = resolveCollectionReceiptFile(legacyPath);
+  if (!resolvedLegacyFile) {
+    return null;
+  }
+
+  const compatibilityCreatedAt =
+    record.createdAt instanceof Date
+      ? record.createdAt
+      : record.createdAt
+        ? new Date(record.createdAt)
+        : new Date();
+  const safeCreatedAt = Number.isFinite(compatibilityCreatedAt.getTime())
+    ? compatibilityCreatedAt
+    : new Date();
+  const fallbackFileName = path.basename(resolvedLegacyFile.storedFileName) || "receipt";
+  const fallbackExtension = path.extname(fallbackFileName).toLowerCase() || "";
+  let fallbackFileSize = 0;
+  try {
+    const stats = await fs.promises.stat(resolvedLegacyFile.absolutePath);
+    fallbackFileSize = Number.isFinite(stats.size) ? stats.size : 0;
+  } catch {
+    fallbackFileSize = 0;
+  }
+
+  try {
+    await storage.createCollectionRecordReceipts(recordId, [
+      {
+        storagePath: legacyPath,
+        originalFileName: fallbackFileName,
+        originalMimeType: resolvedLegacyFile.mimeType,
+        originalExtension: fallbackExtension,
+        fileSize: fallbackFileSize,
+      },
+    ]);
+    const refreshedReceipts = await storage.listCollectionRecordReceipts(recordId);
+    if (refreshedReceipts[0]) {
+      return refreshedReceipts[0];
+    }
+  } catch {
+    // Compatibility-only fallback: do not block preview/download if auto-promotion fails.
+  }
+
+  return {
+    id: `legacy-${recordId}`,
+    collectionRecordId: recordId,
+    storagePath: legacyPath,
+    originalFileName: fallbackFileName,
+    originalMimeType: resolvedLegacyFile.mimeType,
+    originalExtension: fallbackExtension,
+    fileSize: fallbackFileSize,
+    createdAt: safeCreatedAt,
+  };
 }
 
 export async function serveCollectionReceipt(
@@ -309,18 +377,13 @@ export async function serveCollectionReceipt(
     );
     const selectedReceipt = await resolveSelectedReceipt(
       storage,
-      id,
+      record,
       requestedReceiptId,
     );
     if (requestedReceiptId && !selectedReceipt) {
       return res.status(404).json({ ok: false, message: "Receipt file not found." });
     }
-    // Legacy fallback for records created before collection_record_receipts became authoritative.
-    const legacyReceiptPath =
-      !requestedReceiptId && !selectedReceipt && record.receiptFile ? record.receiptFile : null;
-    const resolved = resolveCollectionReceiptFile(
-      selectedReceipt?.storagePath ?? legacyReceiptPath,
-    );
+    const resolved = resolveCollectionReceiptFile(selectedReceipt?.storagePath ?? null);
 
     if (!resolved) {
       return res.status(404).json({ ok: false, message: "Receipt file not found." });

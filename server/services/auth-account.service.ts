@@ -1,7 +1,6 @@
 import type { AuthenticatedUser } from "../auth/guards";
 import { buildActivationUrl } from "../auth/activation-links";
 import {
-  buildCredentialAuditDetails,
   CREDENTIAL_EMAIL_REGEX,
   CREDENTIAL_USERNAME_REGEX,
   normalizeEmailInput,
@@ -25,7 +24,6 @@ import type {
 } from "../storage-postgres";
 import {
   assertConfirmedStrongPassword,
-  assertStrongPasswordInput,
   assertUsableActivationTokenRecord,
   assertUsablePasswordResetTokenRecord,
   createActivationTokenPayload,
@@ -43,6 +41,11 @@ import {
   type UpdateManagedStatusInput,
   type UpdateManagedUserInput,
 } from "./auth-account-managed-operations";
+import {
+  AuthAccountSelfOperations,
+  type ChangePasswordInput,
+  type UpdateOwnCredentialsInput,
+} from "./auth-account-self-operations";
 export {
   type ActivationTokenValidationResult,
   type ManagedAccountActivationDelivery,
@@ -59,21 +62,6 @@ type LoginInput = {
   pcName?: string | null;
   ipAddress?: string | null;
 };
-
-type ChangePasswordInput = {
-  currentPassword: string;
-  newPassword: string;
-};
-
-type UpdateOwnCredentialsInput = {
-  hasUsernameField: boolean;
-  hasPasswordField: boolean;
-  newUsername?: string;
-  currentPassword: string;
-  newPassword: string;
-};
-
-type AuthAccountUser = NonNullable<Awaited<ReturnType<PostgresStorage["getUser"]>>>;
 
 type AuthAccountStorage = Pick<
   PostgresStorage,
@@ -111,6 +99,7 @@ type AuthAccountStorage = Pick<
 
 export class AuthAccountService {
   private readonly managedOperations: AuthAccountManagedOperations;
+  private readonly selfOperations: AuthAccountSelfOperations;
 
   constructor(private readonly storage: AuthAccountStorage) {
     this.managedOperations = new AuthAccountManagedOperations({
@@ -123,6 +112,12 @@ export class AuthAccountService {
       sendActivationEmail: this.sendActivationEmail.bind(this),
       sendPasswordResetEmail: this.sendPasswordResetEmail.bind(this),
       validateEmail: this.validateEmail.bind(this),
+      validateUsername: this.validateUsername.bind(this),
+    });
+    this.selfOperations = new AuthAccountSelfOperations({
+      storage: this.storage,
+      ensureUniqueIdentity: this.ensureUniqueIdentity.bind(this),
+      requireActor: this.requireActor.bind(this),
       validateUsername: this.validateUsername.bind(this),
     });
   }
@@ -379,89 +374,6 @@ export class AuthAccountService {
     const activeSessions = await this.storage.getActiveActivitiesByUsername(username);
     await this.storage.deactivateUserActivities(username, reason);
     return activeSessions.map((activity) => activity.id);
-  }
-
-  private async updateOwnPassword(actor: AuthAccountUser, input: ChangePasswordInput) {
-    const currentPassword = String(input.currentPassword || "");
-    const newPassword = String(input.newPassword || "");
-
-    if (!currentPassword) {
-      throw new AuthAccountError(400, "INVALID_CURRENT_PASSWORD", "Current password is required.");
-    }
-
-    const currentPasswordMatch = await verifyPassword(currentPassword, actor.passwordHash);
-    if (!currentPasswordMatch) {
-      throw new AuthAccountError(400, "INVALID_CURRENT_PASSWORD", "Current password is invalid.");
-    }
-
-    assertStrongPasswordInput(newPassword);
-
-    const sameAsCurrent = await verifyPassword(newPassword, actor.passwordHash);
-    if (sameAsCurrent) {
-      throw new AuthAccountError(
-        400,
-        "INVALID_PASSWORD",
-        "New password must be different from current password.",
-      );
-    }
-
-    const nextPasswordHash = await hashPassword(newPassword);
-    const updatedUser = await this.storage.updateUserCredentials({
-      userId: actor.id,
-      newPasswordHash: nextPasswordHash,
-      passwordChangedAt: new Date(),
-      mustChangePassword: false,
-      passwordResetBySuperuser: false,
-    });
-
-    const closedSessionIds = await this.invalidateUserSessions(actor.username, "PASSWORD_CHANGED");
-
-    await this.storage.createAuditLog({
-      action: "USER_PASSWORD_CHANGED",
-      performedBy: actor.id,
-      targetUser: actor.id,
-      details: buildCredentialAuditDetails({
-        actor_user_id: actor.id,
-        target_user_id: actor.id,
-        changedField: "password",
-      }),
-    });
-
-    return {
-      user: updatedUser ?? actor,
-      closedSessionIds,
-    };
-  }
-
-  private async updateOwnUsername(actor: AuthAccountUser, newUsernameRaw: string) {
-    const newUsername = normalizeUsernameInput(newUsernameRaw);
-    const previousUsername = actor.username;
-
-    this.validateUsername(newUsername);
-    await this.ensureUniqueIdentity({ username: newUsername, ignoreUserId: actor.id });
-
-    if (newUsername === previousUsername) {
-      return actor;
-    }
-
-    const updatedUser = await this.storage.updateUserCredentials({
-      userId: actor.id,
-      newUsername,
-    });
-
-    await this.storage.updateActivitiesUsername(previousUsername, newUsername);
-    await this.storage.createAuditLog({
-      action: "USER_USERNAME_CHANGED",
-      performedBy: actor.id,
-      targetUser: actor.id,
-      details: buildCredentialAuditDetails({
-        actor_user_id: actor.id,
-        target_user_id: actor.id,
-        changedField: "username",
-      }),
-    });
-
-    return updatedUser ?? actor;
   }
 
   async login(input: LoginInput) {
@@ -810,64 +722,22 @@ export class AuthAccountService {
   }
 
   async changeOwnPassword(authUser: AuthenticatedUser | undefined, input: ChangePasswordInput) {
-    const actor = await this.requireActor(authUser);
-    return this.updateOwnPassword(actor, input);
+    return this.selfOperations.changeOwnPassword(authUser, input);
   }
 
   async changeOwnUsername(authUser: AuthenticatedUser | undefined, newUsernameRaw: string) {
-    const actor = await this.requireActor(authUser);
-    return this.updateOwnUsername(actor, newUsernameRaw);
+    return this.selfOperations.changeOwnUsername(authUser, newUsernameRaw);
   }
 
   async getCurrentUser(authUser: AuthenticatedUser | undefined) {
-    return this.requireActor(authUser);
+    return this.selfOperations.getCurrentUser(authUser);
   }
 
   async updateOwnCredentials(
     authUser: AuthenticatedUser | undefined,
     input: UpdateOwnCredentialsInput,
   ) {
-    const actor = await this.requireActor(authUser);
-
-    if (!input.hasUsernameField && !input.hasPasswordField) {
-      return {
-        user: actor,
-        forceLogout: false,
-        closedSessionIds: [] as string[],
-      };
-    }
-
-    if (actor.mustChangePassword && !input.hasPasswordField) {
-      throw new AuthAccountError(
-        403,
-        "PASSWORD_CHANGE_REQUIRED",
-        "Password change is required before other account updates.",
-      );
-    }
-
-    let updatedUser: AuthAccountUser = actor;
-    let forceLogout = false;
-    let closedSessionIds: string[] = [];
-
-    if (input.hasUsernameField) {
-      updatedUser = await this.updateOwnUsername(updatedUser, input.newUsername ?? "");
-    }
-
-    if (input.hasPasswordField) {
-      const passwordResult = await this.updateOwnPassword(updatedUser, {
-        currentPassword: input.currentPassword,
-        newPassword: input.newPassword,
-      });
-      updatedUser = passwordResult.user;
-      forceLogout = true;
-      closedSessionIds = passwordResult.closedSessionIds;
-    }
-
-    return {
-      user: updatedUser,
-      forceLogout,
-      closedSessionIds,
-    };
+    return this.selfOperations.updateOwnCredentials(authUser, input);
   }
 
   async getManagedUsers(
