@@ -36,9 +36,11 @@ export default function Viewer({
   userRole,
   viewerRowsPerPage,
 }: ViewerProps) {
-  const isLowSpecMode =
-    typeof document !== "undefined" &&
-    document.documentElement.classList.contains("low-spec");
+  // Checked once at mount; low-spec mode is set before the app renders and does not change during a session.
+  const isLowSpecMode = useMemo(
+    () => typeof document !== "undefined" && document.documentElement.classList.contains("low-spec"),
+    [],
+  );
   const configuredRowsPerPage = useMemo(() => {
     const parsed = Number(viewerRowsPerPage);
     if (!Number.isFinite(parsed)) return isLowSpecMode ? 40 : 100;
@@ -210,10 +212,6 @@ export default function Viewer({
     () => headers.filter((header) => selectedColumns.has(header)),
     [headers, selectedColumns],
   );
-  const exportHeaders = useMemo(
-    () => headers.filter((header) => selectedColumns.has(header)),
-    [headers, selectedColumns],
-  );
   const isSearchBelowMinLength =
     debouncedSearch.length > 0 && debouncedSearch.length < MIN_SEARCH_LENGTH;
   const isServerSearchActive = debouncedSearch.length >= MIN_SEARCH_LENGTH;
@@ -370,7 +368,7 @@ export default function Viewer({
     if (dataToExport.length === 0) return;
 
     exportViewerRowsToCsv({
-      headers: exportHeaders,
+      headers: visibleHeaders,
       rows: dataToExport,
       importName,
       exportFiltered,
@@ -385,7 +383,7 @@ export default function Viewer({
     setExportingPdf(true);
     try {
       await exportViewerRowsToPdf({
-        headers: exportHeaders,
+        headers: visibleHeaders,
         rows: dataToExport,
         importName,
         exportFiltered,
@@ -409,7 +407,7 @@ export default function Viewer({
 
     try {
       await exportViewerRowsToExcel({
-        headers: exportHeaders,
+        headers: visibleHeaders,
         rows: dataToExport,
         importName,
         exportFiltered,

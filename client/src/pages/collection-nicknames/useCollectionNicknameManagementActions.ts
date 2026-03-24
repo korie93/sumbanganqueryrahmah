@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
   createCollectionAdminGroup,
@@ -48,8 +48,20 @@ export function useCollectionNicknameManagementActions({
   const { toast } = useToast();
   const [savingAssignment, setSavingAssignment] = useState(false);
 
+  // In-flight refs guard against the React closure race where two rapid clicks
+  // both read the state flag as false before the first state update is committed.
+  const saveAssignmentRef = useRef(false);
+  const createGroupRef = useRef(false);
+  const saveLeaderRef = useRef(false);
+  const confirmDeleteGroupRef = useRef(false);
+  const createNicknameRef = useRef(false);
+  const saveEditNicknameRef = useRef(false);
+  const confirmResetPasswordRef = useRef(false);
+  const confirmUngroupRef = useRef(false);
+
   const saveAssignment = async () => {
-    if (!nicknameData.selectedGroup || savingAssignment) return;
+    if (!nicknameData.selectedGroup || savingAssignment || saveAssignmentRef.current) return;
+    saveAssignmentRef.current = true;
     setSavingAssignment(true);
     try {
       const leaderId = nicknameData.selectedGroup.leaderNicknameId || "";
@@ -81,12 +93,14 @@ export function useCollectionNicknameManagementActions({
         variant: "destructive",
       });
     } finally {
+      saveAssignmentRef.current = false;
       setSavingAssignment(false);
     }
   };
 
   const createGroup = async () => {
-    if (!dialogs.createLeaderId || dialogs.creatingGroup) return;
+    if (!dialogs.createLeaderId || dialogs.creatingGroup || createGroupRef.current) return;
+    createGroupRef.current = true;
     dialogs.setCreatingGroup(true);
     try {
       const response = await createCollectionAdminGroup({
@@ -109,6 +123,7 @@ export function useCollectionNicknameManagementActions({
         variant: "destructive",
       });
     } finally {
+      createGroupRef.current = false;
       dialogs.setCreatingGroup(false);
     }
   };
@@ -119,7 +134,8 @@ export function useCollectionNicknameManagementActions({
   };
 
   const saveLeader = async () => {
-    if (!nicknameData.selectedGroup || !dialogs.changeLeaderId || dialogs.savingLeader) return;
+    if (!nicknameData.selectedGroup || !dialogs.changeLeaderId || dialogs.savingLeader || saveLeaderRef.current) return;
+    saveLeaderRef.current = true;
     dialogs.setSavingLeader(true);
     try {
       const nextMembers = normalizeCollectionNicknameIds(
@@ -153,12 +169,14 @@ export function useCollectionNicknameManagementActions({
         variant: "destructive",
       });
     } finally {
+      saveLeaderRef.current = false;
       dialogs.setSavingLeader(false);
     }
   };
 
   const confirmDeleteGroup = async () => {
-    if (!dialogs.pendingDeleteGroup || dialogs.deletingGroup) return;
+    if (!dialogs.pendingDeleteGroup || dialogs.deletingGroup || confirmDeleteGroupRef.current) return;
+    confirmDeleteGroupRef.current = true;
     dialogs.setDeletingGroup(true);
     try {
       await deleteCollectionAdminGroup(dialogs.pendingDeleteGroup.id);
@@ -176,11 +194,13 @@ export function useCollectionNicknameManagementActions({
         variant: "destructive",
       });
     } finally {
+      confirmDeleteGroupRef.current = false;
       dialogs.setDeletingGroup(false);
     }
   };
 
   const createNickname = async () => {
+    if (dialogs.addingNickname || createNicknameRef.current) return;
     const nickname = dialogs.newNickname.trim();
     if (nickname.length < 2) {
       toast({
@@ -190,6 +210,7 @@ export function useCollectionNicknameManagementActions({
       });
       return;
     }
+    createNicknameRef.current = true;
     dialogs.setAddingNickname(true);
     try {
       await createCollectionNickname({ nickname, roleScope: dialogs.newRoleScope });
@@ -209,12 +230,13 @@ export function useCollectionNicknameManagementActions({
         variant: "destructive",
       });
     } finally {
+      createNicknameRef.current = false;
       dialogs.setAddingNickname(false);
     }
   };
 
   const saveEditNickname = async () => {
-    if (!dialogs.editingNickname || dialogs.savingEdit) return;
+    if (!dialogs.editingNickname || dialogs.savingEdit || saveEditNicknameRef.current) return;
     const nickname = dialogs.editValue.trim();
     if (nickname.length < 2) {
       toast({
@@ -224,6 +246,7 @@ export function useCollectionNicknameManagementActions({
       });
       return;
     }
+    saveEditNicknameRef.current = true;
     dialogs.setSavingEdit(true);
     try {
       await updateCollectionNickname(dialogs.editingNickname.id, {
@@ -244,6 +267,7 @@ export function useCollectionNicknameManagementActions({
         variant: "destructive",
       });
     } finally {
+      saveEditNicknameRef.current = false;
       dialogs.setSavingEdit(false);
     }
   };
@@ -296,8 +320,9 @@ export function useCollectionNicknameManagementActions({
   };
 
   const confirmResetPassword = async () => {
-    if (!dialogs.pendingResetPassword || dialogs.resettingNicknameId) return;
+    if (!dialogs.pendingResetPassword || dialogs.resettingNicknameId || confirmResetPasswordRef.current) return;
     const target = dialogs.pendingResetPassword;
+    confirmResetPasswordRef.current = true;
     dialogs.setResettingNicknameId(target.id);
     try {
       await resetCollectionNicknamePassword(target.id);
@@ -313,18 +338,20 @@ export function useCollectionNicknameManagementActions({
         variant: "destructive",
       });
     } finally {
+      confirmResetPasswordRef.current = false;
       dialogs.setResettingNicknameId(null);
     }
   };
 
   const confirmUngroup = async () => {
     const pendingUngroup = dialogs.pendingUngroup;
-    if (!pendingUngroup || dialogs.ungrouping) return;
+    if (!pendingUngroup || dialogs.ungrouping || confirmUngroupRef.current) return;
     const group = nicknameData.groups.find((item) => item.id === pendingUngroup.groupId);
     if (!group) {
       dialogs.setPendingUngroup(null);
       return;
     }
+    confirmUngroupRef.current = true;
     dialogs.setUngrouping(true);
     try {
       const nextMembers = normalizeCollectionNicknameIds(
@@ -351,6 +378,7 @@ export function useCollectionNicknameManagementActions({
         variant: "destructive",
       });
     } finally {
+      confirmUngroupRef.current = false;
       dialogs.setUngrouping(false);
     }
   };
