@@ -1,5 +1,6 @@
 import type { AuthenticatedRequest } from "../../auth/guards";
 import { serveCollectionReceipt } from "../collection-receipt.service";
+import { createCollectionMultipartRoute } from "./collection-multipart-routes";
 import type { CollectionRouteContext } from "./collection-route-shared";
 
 export function registerCollectionReportRoutes(context: CollectionRouteContext) {
@@ -12,10 +13,12 @@ export function registerCollectionReportRoutes(context: CollectionRouteContext) 
     adminSummaryAccess,
     jsonRoute,
   } = context;
+  const collectionMultipartRoute = createCollectionMultipartRoute();
 
   app.post(
     "/api/collection",
     ...reportAccess,
+    collectionMultipartRoute,
     jsonRoute("Failed to create collection record.", (req) => collectionService.createRecord(req.user, req.body)),
   );
 
@@ -125,12 +128,14 @@ export function registerCollectionReportRoutes(context: CollectionRouteContext) 
   app.patch(
     "/api/collection/:id",
     ...reportAccess,
+    collectionMultipartRoute,
     handleUpdateCollectionRecord,
   );
 
   app.put(
     "/api/collection/:id",
     ...reportAccess,
+    collectionMultipartRoute,
     handleUpdateCollectionRecord,
   );
 

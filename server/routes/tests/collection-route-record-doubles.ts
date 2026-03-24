@@ -93,7 +93,28 @@ export function createCoreCollectionStorageDouble(options?: {
   const updateCalls: Array<{
     id: string;
     data: Record<string, unknown>;
-    options?: { expectedUpdatedAt?: Date };
+    options?: {
+      expectedUpdatedAt?: Date;
+      removeAllReceipts?: boolean;
+      removeReceiptIds?: string[];
+      newReceipts?: Array<{
+        storagePath: string;
+        originalFileName: string;
+        originalMimeType: string;
+        originalExtension: string;
+        fileSize: number;
+      }>;
+    };
+  }> = [];
+  const createReceiptCalls: Array<{
+    recordId: string;
+    receipts: Array<{
+      storagePath: string;
+      originalFileName: string;
+      originalMimeType: string;
+      originalExtension: string;
+      fileSize: number;
+    }>;
   }> = [];
   const deleteCalls: Array<{
     id: string;
@@ -214,6 +235,16 @@ export function createCoreCollectionStorageDouble(options?: {
         fileSize: number;
       }>,
     ) => {
+      createReceiptCalls.push({
+        recordId,
+        receipts: receipts.map((receipt) => ({
+          storagePath: String(receipt.storagePath || ""),
+          originalFileName: String(receipt.originalFileName || ""),
+          originalMimeType: String(receipt.originalMimeType || "application/octet-stream"),
+          originalExtension: String(receipt.originalExtension || ""),
+          fileSize: Number(receipt.fileSize || 0),
+        })),
+      });
       const current = receiptRowsByRecordId.get(recordId) || [];
       const insertedRows: CollectionReceiptShape[] = [];
       for (const receipt of receipts || []) {
@@ -259,7 +290,18 @@ export function createCoreCollectionStorageDouble(options?: {
     updateCollectionRecord: async (
       id: string,
       data: Record<string, unknown>,
-      options?: { expectedUpdatedAt?: Date },
+      options?: {
+        expectedUpdatedAt?: Date;
+        removeAllReceipts?: boolean;
+        removeReceiptIds?: string[];
+        newReceipts?: Array<{
+          storagePath: string;
+          originalFileName: string;
+          originalMimeType: string;
+          originalExtension: string;
+          fileSize: number;
+        }>;
+      },
     ) => {
       updateCalls.push({ id, data, options });
       const existing = records.get(id);
@@ -280,6 +322,21 @@ export function createCoreCollectionStorageDouble(options?: {
         updatedAt: new Date("2026-03-16T10:00:00.000Z"),
       };
       records.set(id, updated);
+      if (options?.newReceipts?.length) {
+        const current = receiptRowsByRecordId.get(id) || [];
+        const appendedRows = options.newReceipts.map((receipt, index) => ({
+          id: `receipt-${id}-update-${current.length + index + 1}`,
+          collectionRecordId: id,
+          storagePath: String(receipt.storagePath || ""),
+          originalFileName: String(receipt.originalFileName || ""),
+          originalMimeType: String(receipt.originalMimeType || "application/octet-stream"),
+          originalExtension: String(receipt.originalExtension || ""),
+          fileSize: Number(receipt.fileSize || 0),
+          createdAt: new Date("2026-03-16T10:00:00.000Z"),
+        }));
+        receiptRowsByRecordId.set(id, [...current, ...appendedRows]);
+        syncRecordReceiptFile(id);
+      }
       return updated;
     },
     deleteCollectionRecord: async (
@@ -310,6 +367,7 @@ export function createCoreCollectionStorageDouble(options?: {
     listCalls,
     summaryCalls,
     updateCalls,
+    createReceiptCalls,
     deleteCalls,
     deleteReceiptCalls,
   };

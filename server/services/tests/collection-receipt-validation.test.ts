@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { Readable } from "node:stream";
 import test from "node:test";
 import {
   detectCollectionReceiptSignature,
   removeCollectionReceiptFile,
+  saveMultipartCollectionReceipt,
   saveCollectionReceipt,
 } from "../../routes/collection-receipt.service";
 
@@ -91,6 +93,22 @@ test("saveCollectionReceipt accepts image/jfif declarations when signature and e
   assert.equal(saved.originalExtension, ".jpg");
   assert.equal(saved.originalMimeType, "image/jpeg");
   assert.match(saved.storagePath, /\/uploads\/collection-receipts\/.+\.jpg$/);
+
+  await removeCollectionReceiptFile(saved.storagePath);
+});
+
+test("saveMultipartCollectionReceipt streams files to disk with canonical metadata", async () => {
+  const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+
+  const saved = await saveMultipartCollectionReceipt({
+    fileName: "stream-upload.png",
+    mimeType: "image/png",
+    stream: Readable.from([pngBytes]),
+  });
+
+  assert.equal(saved.originalExtension, ".png");
+  assert.equal(saved.originalMimeType, "image/png");
+  assert.match(saved.storagePath, /\/uploads\/collection-receipts\/.+\.png$/);
 
   await removeCollectionReceiptFile(saved.storagePath);
 });

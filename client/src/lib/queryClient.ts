@@ -84,6 +84,9 @@ export async function apiRequest(
   data?: unknown | undefined,
   options?: ApiRequestOptions,
 ): Promise<Response> {
+  const isFormDataPayload =
+    typeof FormData !== "undefined"
+    && data instanceof FormData;
   const headers: Record<string, string> = {
     ...(String(method || "").toUpperCase() === "GET"
       || String(method || "").toUpperCase() === "HEAD"
@@ -91,12 +94,16 @@ export async function apiRequest(
       ? {}
       : (getCsrfHeader() as Record<string, string>)),
   };
-  if (data) headers["Content-Type"] = "application/json";
+  if (data && !isFormDataPayload) headers["Content-Type"] = "application/json";
 
   const res = await fetch(url, {
     method,
     headers,
-    body: data ? JSON.stringify(data) : undefined,
+    body: data
+      ? isFormDataPayload
+        ? data as FormData
+        : JSON.stringify(data)
+      : undefined,
     credentials: "include",
     signal: options?.signal,
   });

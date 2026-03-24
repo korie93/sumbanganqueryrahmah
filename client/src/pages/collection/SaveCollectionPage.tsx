@@ -5,7 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { createCollectionRecord, type CollectionBatch } from "@/lib/api";
+import { type CollectionBatch } from "@/lib/api";
+import {
+  buildCollectionRecordFormData,
+  createCollectionRecord,
+} from "@/lib/api/collection-records";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
 import {
   COLLECTION_BATCH_OPTIONS,
@@ -16,7 +20,6 @@ import {
   isValidDate,
   emitCollectionDataChanged,
   parseApiError,
-  toReceiptPayloads,
   validateReceiptFile,
 } from "./utils";
 
@@ -112,12 +115,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     submitInFlightRef.current = true;
     setSubmitting(true);
     try {
-      const receipts =
-        receiptFiles.length > 0
-          ? await toReceiptPayloads(receiptFiles)
-          : [];
-
-      await createCollectionRecord({
+      await createCollectionRecord(buildCollectionRecordFormData({
         customerName: customerName.trim(),
         icNumber: icNumber.trim(),
         customerPhone: customerPhone.trim(),
@@ -126,8 +124,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         paymentDate,
         amount: Number(amount),
         collectionStaffNickname: staffNickname.trim(),
-        receipts,
-      });
+      }, receiptFiles));
 
       toast({
         title: "Collection Saved",

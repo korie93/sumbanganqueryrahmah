@@ -7,7 +7,51 @@ import type {
   UpdateCollectionPayload,
 } from "./collection-types";
 
-export async function createCollectionRecord(payload: CreateCollectionPayload) {
+type CollectionMultipartPayload = Omit<UpdateCollectionPayload, "receipt" | "receipts">;
+
+function appendCollectionFormValue(formData: FormData, key: string, value: unknown) {
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  formData.append(key, String(value));
+}
+
+export function buildCollectionRecordFormData(
+  payload: CollectionMultipartPayload,
+  receiptFiles: readonly File[] = [],
+): FormData {
+  const formData = new FormData();
+
+  appendCollectionFormValue(formData, "customerName", payload.customerName);
+  appendCollectionFormValue(formData, "icNumber", payload.icNumber);
+  appendCollectionFormValue(formData, "customerPhone", payload.customerPhone);
+  appendCollectionFormValue(formData, "accountNumber", payload.accountNumber);
+  appendCollectionFormValue(formData, "batch", payload.batch);
+  appendCollectionFormValue(formData, "paymentDate", payload.paymentDate);
+  appendCollectionFormValue(formData, "amount", payload.amount);
+  appendCollectionFormValue(formData, "collectionStaffNickname", payload.collectionStaffNickname);
+  appendCollectionFormValue(formData, "expectedUpdatedAt", payload.expectedUpdatedAt);
+
+  if (typeof payload.removeReceipt === "boolean") {
+    formData.append("removeReceipt", payload.removeReceipt ? "true" : "false");
+  }
+
+  for (const receiptId of payload.removeReceiptIds || []) {
+    const normalizedReceiptId = String(receiptId || "").trim();
+    if (normalizedReceiptId) {
+      formData.append("removeReceiptIds", normalizedReceiptId);
+    }
+  }
+
+  for (const file of receiptFiles) {
+    formData.append("receipts", file);
+  }
+
+  return formData;
+}
+
+export async function createCollectionRecord(payload: CreateCollectionPayload | FormData) {
   const response = await apiRequest("POST", "/api/collection", payload);
   return response.json();
 }
@@ -100,7 +144,7 @@ export async function fetchCollectionReceiptBlob(
   return { blob, mimeType, fileName };
 }
 
-export async function updateCollectionRecord(id: string, payload: UpdateCollectionPayload) {
+export async function updateCollectionRecord(id: string, payload: UpdateCollectionPayload | FormData) {
   const response = await apiRequest("PATCH", `/api/collection/${encodeURIComponent(id)}`, payload);
   return response.json();
 }
