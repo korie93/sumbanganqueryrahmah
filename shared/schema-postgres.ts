@@ -122,6 +122,28 @@ export const auditLogs = pgTable("audit_logs", {
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
+export const mutationIdempotencyKeys = pgTable("mutation_idempotency_keys", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  scope: text("scope").notNull(),
+  actor: text("actor").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  requestFingerprint: text("request_fingerprint"),
+  state: text("state").notNull().default("pending"),
+  responseStatus: integer("response_status"),
+  responseBody: jsonb("response_body"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+}, (table) => ({
+  scopeActorKeyUnique: uniqueIndex("idx_mutation_idempotency_scope_actor_key_unique").on(
+    table.scope,
+    table.actor,
+    table.idempotencyKey,
+  ),
+  updatedAtIdx: index("idx_mutation_idempotency_updated_at").on(table.updatedAt),
+  stateIdx: index("idx_mutation_idempotency_state").on(table.state),
+}));
+
 export const backups = pgTable("backups", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),

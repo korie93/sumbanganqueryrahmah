@@ -11,6 +11,8 @@ export class CoreSchemaBootstrap {
   private userActivityInitPromise: Promise<void> | null = null;
   private auditLogsReady = false;
   private auditLogsInitPromise: Promise<void> | null = null;
+  private mutationIdempotencyReady = false;
+  private mutationIdempotencyInitPromise: Promise<void> | null = null;
   private performanceIndexesReady = false;
   private performanceIndexesInitPromise: Promise<void> | null = null;
   private bannedSessionsReady = false;
@@ -245,6 +247,79 @@ export class CoreSchemaBootstrap {
       await this.auditLogsInitPromise;
     } finally {
       this.auditLogsInitPromise = null;
+    }
+  }
+
+  async ensureMutationIdempotencyTable(): Promise<void> {
+    if (this.mutationIdempotencyReady) return;
+    if (this.mutationIdempotencyInitPromise) {
+      await this.mutationIdempotencyInitPromise;
+      return;
+    }
+
+    this.mutationIdempotencyInitPromise = (async () => {
+      try {
+        await db.execute(sql`SET search_path TO public`);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS public.mutation_idempotency_keys (
+            id uuid PRIMARY KEY,
+            scope text NOT NULL,
+            actor text NOT NULL,
+            idempotency_key text NOT NULL,
+            request_fingerprint text,
+            state text NOT NULL DEFAULT 'pending',
+            response_status integer,
+            response_body jsonb,
+            created_at timestamp DEFAULT now() NOT NULL,
+            updated_at timestamp DEFAULT now() NOT NULL,
+            completed_at timestamp
+          )
+        `);
+        await db.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS scope text`);
+        await db.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS actor text`);
+        await db.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS idempotency_key text`);
+        await db.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS request_fingerprint text`);
+        await db.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS state text DEFAULT 'pending'`);
+        await db.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS response_status integer`);
+        await db.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS response_body jsonb`);
+        await db.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+        await db.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+        await db.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS completed_at timestamp`);
+        await db.execute(sql`
+          UPDATE public.mutation_idempotency_keys
+          SET
+            state = COALESCE(NULLIF(state, ''), 'pending'),
+            created_at = COALESCE(created_at, now()),
+            updated_at = COALESCE(updated_at, created_at, now())
+        `);
+        await db.execute(sql`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_mutation_idempotency_scope_actor_key_unique
+          ON public.mutation_idempotency_keys(scope, actor, idempotency_key)
+        `);
+        await db.execute(sql`
+          CREATE INDEX IF NOT EXISTS idx_mutation_idempotency_updated_at
+          ON public.mutation_idempotency_keys(updated_at DESC)
+        `);
+        await db.execute(sql`
+          CREATE INDEX IF NOT EXISTS idx_mutation_idempotency_state
+          ON public.mutation_idempotency_keys(state)
+        `);
+        await db.execute(sql`
+          DELETE FROM public.mutation_idempotency_keys
+          WHERE (state = 'pending' AND updated_at < now() - interval '15 minutes')
+             OR (state = 'completed' AND updated_at < now() - interval '1 day')
+        `);
+        this.mutationIdempotencyReady = true;
+      } catch (err: any) {
+        logger.error("Failed to ensure mutation idempotency table", { error: err });
+        throw err;
+      }
+    })();
+
+    try {
+      await this.mutationIdempotencyInitPromise;
+    } finally {
+      this.mutationIdempotencyInitPromise = null;
     }
   }
 

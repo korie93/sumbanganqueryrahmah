@@ -13,7 +13,9 @@ import {
   type CollectionStaffNickname,
 } from "@/lib/api";
 import {
+  buildCollectionMutationFingerprint,
   buildCollectionRecordFormData,
+  createCollectionMutationIdempotencyKey,
   updateCollectionRecord,
 } from "@/lib/api/collection-records";
 import {
@@ -50,6 +52,7 @@ export function useCollectionRecordEdit({
   const isMountedRef = useRef(true);
   const savingEditInFlightRef = useRef(false);
   const editReceiptInputRef = useRef<HTMLInputElement | null>(null);
+  const editMutationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<CollectionRecord | null>(null);
@@ -84,6 +87,7 @@ export function useCollectionRecordEdit({
     setEditStaffNickname(record.collectionStaffNickname);
     setEditNewReceiptFiles([]);
     setEditRemovedReceiptIds([]);
+    editMutationIntentRef.current = null;
     if (editReceiptInputRef.current) {
       editReceiptInputRef.current.value = "";
     }
@@ -222,9 +226,26 @@ export function useCollectionRecordEdit({
         payload.removeReceipt = true;
       }
 
+      const mutationFingerprint = buildCollectionMutationFingerprint({
+        operation: "update",
+        payload,
+        receiptFiles: editNewReceiptFiles,
+        recordId: editingRecord.id,
+      });
+      if (editMutationIntentRef.current?.fingerprint !== mutationFingerprint) {
+        editMutationIntentRef.current = {
+          fingerprint: mutationFingerprint,
+          key: createCollectionMutationIdempotencyKey(),
+        };
+      }
+
       await updateCollectionRecord(
         editingRecord.id,
         buildCollectionRecordFormData(payload, editNewReceiptFiles),
+        {
+          idempotencyFingerprint: editMutationIntentRef.current.fingerprint,
+          idempotencyKey: editMutationIntentRef.current.key,
+        },
       );
       toast({
         title: "Record Updated",
@@ -236,6 +257,7 @@ export function useCollectionRecordEdit({
       setEditingRecord(null);
       setEditNewReceiptFiles([]);
       setEditRemovedReceiptIds([]);
+      editMutationIntentRef.current = null;
       await onRefresh();
     } catch (error: unknown) {
       if (!isMountedRef.current) return;
@@ -261,6 +283,7 @@ export function useCollectionRecordEdit({
         setEditingRecord(null);
         setEditNewReceiptFiles([]);
         setEditRemovedReceiptIds([]);
+        editMutationIntentRef.current = null;
         if (editReceiptInputRef.current) {
           editReceiptInputRef.current.value = "";
         }

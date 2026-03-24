@@ -8,6 +8,10 @@ import type {
 } from "./collection-types";
 
 type CollectionMultipartPayload = Omit<UpdateCollectionPayload, "receipt" | "receipts">;
+type CollectionMutationRequestOptions = {
+  idempotencyFingerprint?: string;
+  idempotencyKey?: string;
+};
 
 function appendCollectionFormValue(formData: FormData, key: string, value: unknown) {
   if (value === undefined || value === null) {
@@ -51,8 +55,71 @@ export function buildCollectionRecordFormData(
   return formData;
 }
 
-export async function createCollectionRecord(payload: CreateCollectionPayload | FormData) {
-  const response = await apiRequest("POST", "/api/collection", payload);
+function sortFingerprintValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => sortFingerprintValue(item));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nested]) => [key, sortFingerprintValue(nested)]),
+    );
+  }
+
+  return value ?? null;
+}
+
+function buildCollectionMutationHeaders(options?: CollectionMutationRequestOptions) {
+  const headers: Record<string, string> = {};
+  const idempotencyKey = String(options?.idempotencyKey || "").trim();
+  const idempotencyFingerprint = String(options?.idempotencyFingerprint || "").trim();
+
+  if (idempotencyKey) {
+    headers["x-idempotency-key"] = idempotencyKey;
+  }
+  if (idempotencyFingerprint) {
+    headers["x-idempotency-fingerprint"] = idempotencyFingerprint;
+  }
+
+  return headers;
+}
+
+export function createCollectionMutationIdempotencyKey() {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `collection-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+export function buildCollectionMutationFingerprint(params: {
+  operation: "create" | "delete" | "update";
+  payload?: Record<string, unknown>;
+  receiptFiles?: readonly Pick<File, "lastModified" | "name" | "size" | "type">[];
+  recordId?: string;
+}) {
+  return JSON.stringify(sortFingerprintValue({
+    operation: params.operation,
+    payload: params.payload || {},
+    receiptFiles: (params.receiptFiles || []).map((file) => ({
+      lastModified: Number(file.lastModified || 0),
+      name: String(file.name || ""),
+      size: Number(file.size || 0),
+      type: String(file.type || ""),
+    })),
+    recordId: String(params.recordId || ""),
+  }));
+}
+
+export async function createCollectionRecord(
+  payload: CreateCollectionPayload | FormData,
+  options?: CollectionMutationRequestOptions,
+) {
+  const response = await apiRequest("POST", "/api/collection", payload, {
+    headers: buildCollectionMutationHeaders(options),
+  });
   return response.json();
 }
 
@@ -144,8 +211,14 @@ export async function fetchCollectionReceiptBlob(
   return { blob, mimeType, fileName };
 }
 
-export async function updateCollectionRecord(id: string, payload: UpdateCollectionPayload | FormData) {
-  const response = await apiRequest("PATCH", `/api/collection/${encodeURIComponent(id)}`, payload);
+export async function updateCollectionRecord(
+  id: string,
+  payload: UpdateCollectionPayload | FormData,
+  options?: CollectionMutationRequestOptions,
+) {
+  const response = await apiRequest("PATCH", `/api/collection/${encodeURIComponent(id)}`, payload, {
+    headers: buildCollectionMutationHeaders(options),
+  });
   return response.json();
 }
 
@@ -154,7 +227,10 @@ export async function deleteCollectionRecord(
   payload?: {
     expectedUpdatedAt?: string;
   },
+  options?: CollectionMutationRequestOptions,
 ) {
-  const response = await apiRequest("DELETE", `/api/collection/${encodeURIComponent(id)}`, payload);
+  const response = await apiRequest("DELETE", `/api/collection/${encodeURIComponent(id)}`, payload, {
+    headers: buildCollectionMutationHeaders(options),
+  });
   return response.json();
 }

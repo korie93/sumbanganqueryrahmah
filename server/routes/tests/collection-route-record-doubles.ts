@@ -1,4 +1,8 @@
 import type { PostgresStorage } from "../../storage-postgres";
+import type {
+  MutationIdempotencyAcquireInput,
+  MutationIdempotencyCompleteInput,
+} from "../../storage-postgres";
 
 export type AuditEntry = {
   action: string;
@@ -35,11 +39,83 @@ type CollectionReceiptShape = {
   createdAt: Date;
 };
 
+type MutationIdempotencyEntry = {
+  actor: string;
+  idempotencyKey: string;
+  requestFingerprint: string | null;
+  responseBody?: unknown;
+  responseStatus?: number;
+  scope: string;
+  state: "completed" | "pending";
+};
+
+function createMutationIdempotencyDouble() {
+  const entries = new Map<string, MutationIdempotencyEntry>();
+
+  const buildEntryKey = (params: {
+    scope: string;
+    actor: string;
+    idempotencyKey: string;
+  }) => `${params.scope}::${params.actor}::${params.idempotencyKey}`;
+
+  return {
+    acquire(params: MutationIdempotencyAcquireInput) {
+      const key = buildEntryKey(params);
+      const existing = entries.get(key);
+      if (!existing) {
+        entries.set(key, {
+          actor: params.actor,
+          idempotencyKey: params.idempotencyKey,
+          requestFingerprint: params.requestFingerprint ?? null,
+          scope: params.scope,
+          state: "pending",
+        });
+        return { status: "acquired" as const };
+      }
+
+      if (
+        params.requestFingerprint
+        && existing.requestFingerprint
+        && params.requestFingerprint !== existing.requestFingerprint
+      ) {
+        return { status: "payload_mismatch" as const };
+      }
+
+      if (existing.state === "completed") {
+        return {
+          status: "replay" as const,
+          responseStatus: existing.responseStatus || 200,
+          responseBody: existing.responseBody,
+        };
+      }
+
+      return { status: "in_progress" as const };
+    },
+    complete(params: MutationIdempotencyCompleteInput) {
+      const key = buildEntryKey(params);
+      const existing = entries.get(key);
+      if (!existing) {
+        return;
+      }
+      entries.set(key, {
+        ...existing,
+        responseBody: params.responseBody,
+        responseStatus: params.responseStatus,
+        state: "completed",
+      });
+    },
+    release(params: Pick<MutationIdempotencyAcquireInput, "actor" | "idempotencyKey" | "scope">) {
+      entries.delete(buildEntryKey(params));
+    },
+  };
+}
+
 export function createCollectionStorageDouble(options: {
   actorPasswordHash: string;
 }) {
   const auditLogs: AuditEntry[] = [];
   let purgeCallCount = 0;
+  const idempotency = createMutationIdempotencyDouble();
 
   const actor = {
     id: "superuser-1",
@@ -54,6 +130,16 @@ export function createCollectionStorageDouble(options: {
     createAuditLog: async (entry: AuditEntry) => {
       auditLogs.push(entry);
       return { id: `audit-${auditLogs.length}`, ...entry };
+    },
+    acquireMutationIdempotency: async (params: MutationIdempotencyAcquireInput) =>
+      idempotency.acquire(params),
+    completeMutationIdempotency: async (params: MutationIdempotencyCompleteInput) => {
+      idempotency.complete(params);
+    },
+    releaseMutationIdempotency: async (
+      params: Pick<MutationIdempotencyAcquireInput, "actor" | "idempotencyKey" | "scope">,
+    ) => {
+      idempotency.release(params);
     },
     purgeCollectionRecordsOlderThan: async (_cutoffDate: string) => {
       purgeCallCount += 1;
@@ -87,6 +173,7 @@ export function createCoreCollectionStorageDouble(options?: {
   }>>;
 }) {
   const auditLogs: AuditEntry[] = [];
+  const idempotency = createMutationIdempotencyDouble();
   const createCalls: Array<Record<string, unknown>> = [];
   const listCalls: Array<Record<string, unknown>> = [];
   const summaryCalls: Array<Record<string, unknown>> = [];
@@ -210,6 +297,16 @@ export function createCoreCollectionStorageDouble(options?: {
     createAuditLog: async (entry: AuditEntry) => {
       auditLogs.push(entry);
       return { id: `audit-${auditLogs.length}`, ...entry };
+    },
+    acquireMutationIdempotency: async (params: MutationIdempotencyAcquireInput) =>
+      idempotency.acquire(params),
+    completeMutationIdempotency: async (params: MutationIdempotencyCompleteInput) => {
+      idempotency.complete(params);
+    },
+    releaseMutationIdempotency: async (
+      params: Pick<MutationIdempotencyAcquireInput, "actor" | "idempotencyKey" | "scope">,
+    ) => {
+      idempotency.release(params);
     },
     summarizeCollectionRecords: async (filters: Record<string, unknown>) => {
       summaryCalls.push(filters);

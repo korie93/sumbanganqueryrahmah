@@ -215,6 +215,31 @@ export type DeleteCollectionRecordOptions = {
   expectedUpdatedAt?: Date;
 };
 
+export type MutationIdempotencyAcquireInput = {
+  scope: string;
+  actor: string;
+  idempotencyKey: string;
+  requestFingerprint?: string | null;
+};
+
+export type MutationIdempotencyAcquireResult =
+  | { status: "acquired" }
+  | {
+      status: "replay";
+      responseStatus: number;
+      responseBody: unknown;
+    }
+  | { status: "in_progress" }
+  | { status: "payload_mismatch" };
+
+export type MutationIdempotencyCompleteInput = {
+  scope: string;
+  actor: string;
+  idempotencyKey: string;
+  responseStatus: number;
+  responseBody: unknown;
+};
+
 export type CreateCollectionStaffNicknameInput = {
   nickname: string;
   createdBy: string;

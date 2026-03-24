@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildCollectionRecordFormData } from "./collection-records";
+import {
+  buildCollectionMutationFingerprint,
+  buildCollectionRecordFormData,
+} from "./collection-records";
 
 test("buildCollectionRecordFormData appends scalar fields and repeated receipt ids", () => {
   const formData = buildCollectionRecordFormData({
@@ -30,4 +33,84 @@ test("buildCollectionRecordFormData appends receipt files for multipart uploads"
   const appendedFiles = formData.getAll("receipts");
   assert.equal(appendedFiles.length, 1);
   assert.equal((appendedFiles[0] as File).name, "receipt.png");
+});
+
+test("buildCollectionMutationFingerprint stays stable for the same logical payload", () => {
+  const left = buildCollectionMutationFingerprint({
+    operation: "update",
+    recordId: "collection-1",
+    payload: {
+      amount: 10,
+      customerName: "Alice",
+      nested: {
+        batch: "P10",
+        paymentDate: "2026-03-24",
+      },
+    },
+    receiptFiles: [
+      {
+        lastModified: 1,
+        name: "receipt-a.png",
+        size: 123,
+        type: "image/png",
+      },
+    ],
+  });
+  const right = buildCollectionMutationFingerprint({
+    operation: "update",
+    recordId: "collection-1",
+    payload: {
+      customerName: "Alice",
+      nested: {
+        paymentDate: "2026-03-24",
+        batch: "P10",
+      },
+      amount: 10,
+    },
+    receiptFiles: [
+      {
+        lastModified: 1,
+        name: "receipt-a.png",
+        size: 123,
+        type: "image/png",
+      },
+    ],
+  });
+
+  assert.equal(left, right);
+});
+
+test("buildCollectionMutationFingerprint changes when receipt metadata changes", () => {
+  const base = buildCollectionMutationFingerprint({
+    operation: "create",
+    payload: {
+      customerName: "Alice",
+      amount: 10,
+    },
+    receiptFiles: [
+      {
+        lastModified: 1,
+        name: "receipt-a.png",
+        size: 123,
+        type: "image/png",
+      },
+    ],
+  });
+  const changed = buildCollectionMutationFingerprint({
+    operation: "create",
+    payload: {
+      customerName: "Alice",
+      amount: 10,
+    },
+    receiptFiles: [
+      {
+        lastModified: 1,
+        name: "receipt-b.png",
+        size: 123,
+        type: "image/png",
+      },
+    ],
+  });
+
+  assert.notEqual(base, changed);
 });

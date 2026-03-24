@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
+  buildCollectionMutationFingerprint,
+  createCollectionMutationIdempotencyKey,
   deleteCollectionRecord,
   getCollectionPurgeSummary,
   purgeOldCollectionRecords,
@@ -66,6 +68,7 @@ export function useCollectionRecordsActions({
   const purgeSummaryRequestIdRef = useRef(0);
   const deleteMutationInFlightRef = useRef(false);
   const purgeMutationInFlightRef = useRef(false);
+  const deleteMutationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
@@ -131,8 +134,26 @@ export function useCollectionRecordsActions({
     deleteMutationInFlightRef.current = true;
     setDeletingId(pendingDeleteRecord.id);
     try {
+      const deletePayload = {
+        expectedUpdatedAt: pendingDeleteRecord.updatedAt || pendingDeleteRecord.createdAt,
+      };
+      const mutationFingerprint = buildCollectionMutationFingerprint({
+        operation: "delete",
+        payload: deletePayload,
+        recordId: pendingDeleteRecord.id,
+      });
+      if (deleteMutationIntentRef.current?.fingerprint !== mutationFingerprint) {
+        deleteMutationIntentRef.current = {
+          fingerprint: mutationFingerprint,
+          key: createCollectionMutationIdempotencyKey(),
+        };
+      }
+
       await deleteCollectionRecord(pendingDeleteRecord.id, {
         expectedUpdatedAt: pendingDeleteRecord.updatedAt || pendingDeleteRecord.createdAt,
+      }, {
+        idempotencyFingerprint: deleteMutationIntentRef.current.fingerprint,
+        idempotencyKey: deleteMutationIntentRef.current.key,
       });
       toast({
         title: "Record Deleted",
@@ -141,6 +162,7 @@ export function useCollectionRecordsActions({
       emitCollectionDataChanged();
       if (!isMountedRef.current) return;
       setPendingDeleteRecord(null);
+      deleteMutationIntentRef.current = null;
       await Promise.all([
         onRefreshRecords(),
         canPurgeOldRecords ? loadPurgeSummary() : Promise.resolve(),
@@ -156,6 +178,7 @@ export function useCollectionRecordsActions({
         });
         emitCollectionDataChanged();
         setPendingDeleteRecord(null);
+        deleteMutationIntentRef.current = null;
         try {
           await Promise.all([
             onRefreshRecords(),

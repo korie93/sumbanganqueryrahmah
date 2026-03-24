@@ -75,6 +75,7 @@ async function throwIfResNotOk(res: Response) {
 }
 
 type ApiRequestOptions = {
+  headers?: Record<string, string>;
   signal?: AbortSignal;
 };
 
@@ -93,6 +94,7 @@ export async function apiRequest(
       || String(method || "").toUpperCase() === "OPTIONS"
       ? {}
       : (getCsrfHeader() as Record<string, string>)),
+    ...(options?.headers || {}),
   };
   if (data && !isFormDataPayload) headers["Content-Type"] = "application/json";
 
