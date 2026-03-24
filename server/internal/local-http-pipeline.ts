@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import express, { type Express, type RequestHandler } from "express";
+import helmet from "helmet";
 import { logger } from "../lib/logger";
 import { runWithRequestContext } from "../lib/request-context";
 import { createCsrfProtectionMiddleware } from "../http/csrf";
@@ -29,6 +30,8 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     systemProtectionMiddleware,
     maintenanceGuard,
   } = options;
+
+  app.use(helmet());
 
   // Keep default parser small; enable larger payload only for import endpoints.
   app.use("/api/imports", express.json({ limit: importBodyLimit }));

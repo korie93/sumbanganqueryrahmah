@@ -337,6 +337,9 @@ export async function updateCollectionRecord(
     updateChunks.push(sql`amount = ${data.amount}`);
   }
   if (Object.prototype.hasOwnProperty.call(data, "receiptFile")) {
+    // collection_records.receipt_file is a compatibility cache only.
+    // The mutation layer must only ever set this to null (transitional legacy cleanup).
+    // New receipt files must be written through collection_record_receipts, not this field.
     updateChunks.push(sql`receipt_file = ${data.receiptFile ?? null}`);
   }
   if (data.collectionStaffNickname !== undefined) {
