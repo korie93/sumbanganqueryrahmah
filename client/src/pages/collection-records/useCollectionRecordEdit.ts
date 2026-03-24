@@ -23,7 +23,7 @@ import {
   isValidDate,
   parseCollectionApiErrorDetails,
   parseApiError,
-  toReceiptPayload,
+  toReceiptPayloads,
   validateReceiptFile,
 } from "@/pages/collection/utils";
 
@@ -220,9 +220,7 @@ export function useCollectionRecordEdit({
         payload.removeReceipt = true;
       }
       if (editNewReceiptFiles.length > 0) {
-        payload.receipts = await Promise.all(
-          editNewReceiptFiles.map((file) => toReceiptPayload(file)),
-        );
+        payload.receipts = await toReceiptPayloads(editNewReceiptFiles);
       }
 
       await updateCollectionRecord(editingRecord.id, payload);

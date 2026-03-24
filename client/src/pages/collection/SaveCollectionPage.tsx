@@ -16,7 +16,7 @@ import {
   isValidDate,
   emitCollectionDataChanged,
   parseApiError,
-  toReceiptPayload,
+  toReceiptPayloads,
   validateReceiptFile,
 } from "./utils";
 
@@ -114,7 +114,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     try {
       const receipts =
         receiptFiles.length > 0
-          ? await Promise.all(receiptFiles.map((file) => toReceiptPayload(file)))
+          ? await toReceiptPayloads(receiptFiles)
           : [];
 
       await createCollectionRecord({

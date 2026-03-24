@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateReceiptFile } from "./utils";
+import { toReceiptPayloads, validateReceiptFile } from "./utils";
 
 function createFileLike(input: {
   name: string;
@@ -52,4 +52,57 @@ test("validateReceiptFile rejects unsupported files even when MIME type is missi
   });
 
   assert.match(String(validateReceiptFile(file)), /must be JPG, PNG, WebP, or PDF/i);
+});
+
+test("toReceiptPayloads reads receipts sequentially to avoid memory spikes", async () => {
+  const originalFileReader = globalThis.FileReader;
+  let activeReads = 0;
+  let maxConcurrentReads = 0;
+  let completedReads = 0;
+
+  class MockFileReader {
+    public result: string | ArrayBuffer | null = null;
+
+    public onerror: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
+
+    public onload: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
+
+    readAsDataURL(file: Blob) {
+      activeReads += 1;
+      maxConcurrentReads = Math.max(maxConcurrentReads, activeReads);
+      const payloadIndex = completedReads + 1;
+
+      setTimeout(() => {
+        completedReads += 1;
+        activeReads -= 1;
+        this.result = `data:${(file as File).type || "application/octet-stream"};base64,receipt-${payloadIndex}`;
+        this.onload?.call(this as unknown as FileReader, {} as ProgressEvent<FileReader>);
+      }, 0);
+    }
+  }
+
+  Object.defineProperty(globalThis, "FileReader", {
+    value: MockFileReader,
+    configurable: true,
+    writable: true,
+  });
+
+  try {
+    const payloads = await toReceiptPayloads([
+      createFileLike({ name: "first.png", type: "image/png", size: 120_000 }),
+      createFileLike({ name: "second.jpg", type: "image/jpeg", size: 140_000 }),
+      createFileLike({ name: "third.webp", type: "image/webp", size: 160_000 }),
+    ]);
+
+    assert.equal(payloads.length, 3);
+    assert.equal(maxConcurrentReads, 1);
+    assert.match(payloads[0]?.contentBase64 || "", /^data:image\/png;base64,/);
+    assert.match(payloads[2]?.contentBase64 || "", /^data:image\/webp;base64,/);
+  } finally {
+    Object.defineProperty(globalThis, "FileReader", {
+      value: originalFileReader,
+      configurable: true,
+      writable: true,
+    });
+  }
 });
