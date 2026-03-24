@@ -1,26 +1,3 @@
-async function loadImageElementFromBlob(blob: Blob): Promise<HTMLImageElement> {
-  const objectUrl = URL.createObjectURL(blob);
-
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const image = new Image();
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error("Failed to load receipt image."));
-      image.src = objectUrl;
-    });
-
-    const image = new Image();
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error("Failed to decode receipt image."));
-      image.src = objectUrl;
-    });
-    return image;
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
-}
-
 export async function optimizeImageBlobForPreview(blob: Blob): Promise<Blob> {
   if (!blob.type.startsWith("image/") || blob.type === "image/webp") {
     return blob;
@@ -29,7 +6,22 @@ export async function optimizeImageBlobForPreview(blob: Blob): Promise<Blob> {
     return blob;
   }
   try {
-    const image = await loadImageElementFromBlob(blob);
+    const objectUrl = URL.createObjectURL(blob);
+    let image: HTMLImageElement | null = null;
+    try {
+      image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const draftImage = new Image();
+        draftImage.onload = () => resolve(draftImage);
+        draftImage.onerror = () => reject(new Error("Failed to decode receipt image."));
+        draftImage.src = objectUrl;
+      });
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+
+    if (!image) {
+      return blob;
+    }
     const width = image.naturalWidth || image.width;
     const height = image.naturalHeight || image.height;
     if (!width || !height) {

@@ -78,3 +78,19 @@ test("saveCollectionReceipt accepts image/jpg alias MIME and stores canonical jp
 
   await removeCollectionReceiptFile(saved.storagePath);
 });
+
+test("saveCollectionReceipt accepts image/jfif declarations when signature and extension are valid", async () => {
+  const jpgBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46]);
+
+  const saved = await saveCollectionReceipt({
+    fileName: "camera-export.jpeg",
+    mimeType: "image/jfif",
+    contentBase64: asBase64(jpgBytes),
+  });
+
+  assert.equal(saved.originalExtension, ".jpg");
+  assert.equal(saved.originalMimeType, "image/jpeg");
+  assert.match(saved.storagePath, /\/uploads\/collection-receipts\/.+\.jpg$/);
+
+  await removeCollectionReceiptFile(saved.storagePath);
+});

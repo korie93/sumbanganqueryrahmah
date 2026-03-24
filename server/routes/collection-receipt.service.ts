@@ -18,6 +18,8 @@ const COLLECTION_RECEIPT_INLINE_MIME = new Set(["application/pdf", "image/png", 
 const COLLECTION_RECEIPT_MIME_ALIASES: Record<string, string> = {
   "image/jpg": "image/jpeg",
   "image/pjpeg": "image/jpeg",
+  "image/jfif": "image/jpeg",
+  "image/jpe": "image/jpeg",
   "image/x-png": "image/png",
   "application/x-pdf": "application/pdf",
 };
@@ -148,9 +150,7 @@ export async function saveCollectionReceipt(
   receipt: CollectionReceiptPayload,
 ): Promise<StoredCollectionReceiptFile> {
   const declaredMimeType = normalizeCollectionReceiptMimeType(receipt.mimeType || "");
-  if (declaredMimeType && !COLLECTION_RECEIPT_ALLOWED_MIME.has(declaredMimeType)) {
-    throw new Error("Receipt file type is not allowed.");
-  }
+  const declaredMimeTypeAccepted = COLLECTION_RECEIPT_ALLOWED_MIME.has(declaredMimeType);
 
   const buffer = extractReceiptBuffer(receipt);
   if (!buffer) {
@@ -175,10 +175,9 @@ export async function saveCollectionReceipt(
     throw new Error("Receipt file content does not match file extension.");
   }
 
-  const mimeTypeResolved = declaredMimeType ? mapCollectionReceiptMimeToType(declaredMimeType) : null;
-  if (declaredMimeType && !mimeTypeResolved) {
-    throw new Error("Receipt file type is not allowed.");
-  }
+  const mimeTypeResolved = declaredMimeTypeAccepted
+    ? mapCollectionReceiptMimeToType(declaredMimeType)
+    : null;
   if (mimeTypeResolved && mimeTypeResolved !== signatureType) {
     throw new Error("Receipt file content does not match declared MIME type.");
   }

@@ -24,6 +24,16 @@ test("validateReceiptFile accepts image/jpg MIME alias", () => {
   assert.equal(validateReceiptFile(file), null);
 });
 
+test("validateReceiptFile accepts image/jfif MIME via canonical JPEG normalization", () => {
+  const file = createFileLike({
+    name: "receipt.jpeg",
+    type: "image/jfif",
+    size: 120_000,
+  });
+
+  assert.equal(validateReceiptFile(file), null);
+});
+
 test("validateReceiptFile falls back to extension when browser omits MIME type", () => {
   const file = createFileLike({
     name: "receipt.png",
