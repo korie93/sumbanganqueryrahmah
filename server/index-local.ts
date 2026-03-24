@@ -55,7 +55,9 @@ function gracefulShutdown(signal: string) {
   logger.info("Received shutdown signal, closing gracefully", { signal });
 
   for (const [id, ws] of connectedClients.entries()) {
-    try { ws.close(); } catch { /* already closed */ }
+    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+      ws.close();
+    }
     connectedClients.delete(id);
   }
 
