@@ -27,7 +27,6 @@ export function BrandLogo({
         height={128}
         decoding="async"
         loading={priority ? "eager" : "lazy"}
-        fetchPriority={priority ? "high" : "auto"}
       />
     </picture>
   );
