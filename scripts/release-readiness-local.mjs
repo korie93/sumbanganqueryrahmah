@@ -131,6 +131,7 @@ const run = async () => {
 
   console.log("Release readiness: building runtime bundle...");
   await runNpm(["run", "build"], { env });
+  await runNpm(["run", "verify:bundle-budgets"], { env });
 
   const serverProcess = spawn(
     npmCommand,
@@ -152,11 +153,19 @@ const run = async () => {
     await runNpm(["run", "smoke:preflight"], { env });
     await runNpm(["run", "smoke:ui"], { env });
 
+    console.log("Release readiness: capturing collection performance baseline...");
+    await runNpm(["run", "perf:collection:baseline"], { env });
+
     console.log("Release readiness: running backup integrity drill...");
     await runNpm(["run", "dr:drill"], { env });
 
     console.log("Release readiness: capturing stale-conflict and 429 monitor snapshot...");
-    await runNpm(["run", "monitor:stale-conflicts"], { env });
+    await runNpm(["run", "monitor:stale-conflicts"], {
+      env: {
+        ...env,
+        MONITOR_OUTPUT_FILE: path.join(artifactsDir, "monitor-stale-conflicts.json"),
+      },
+    });
   } finally {
     await stopServer(serverProcess);
     serverLogStream.end();

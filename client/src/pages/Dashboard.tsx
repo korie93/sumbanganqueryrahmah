@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Download, RefreshCw } from "lucide-react";
 import {
@@ -9,11 +9,30 @@ import {
   getTopActiveUsers,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { DashboardChartsGrid } from "@/pages/dashboard/DashboardChartsGrid";
 import { DashboardSummaryCards } from "@/pages/dashboard/DashboardSummaryCards";
-import { DashboardUserInsightsGrid } from "@/pages/dashboard/DashboardUserInsightsGrid";
 import type { LoginTrend, PeakHour, RoleData, SummaryData, TopUser } from "@/pages/dashboard/types";
 import { buildSummaryCards, exportDashboardToPdf } from "@/pages/dashboard/utils";
+
+const DashboardChartsGrid = lazy(() =>
+  import("@/pages/dashboard/DashboardChartsGrid").then((module) => ({ default: module.DashboardChartsGrid })),
+);
+const DashboardUserInsightsGrid = lazy(() =>
+  import("@/pages/dashboard/DashboardUserInsightsGrid").then((module) => ({ default: module.DashboardUserInsightsGrid })),
+);
+
+function DashboardSectionFallback({ label }: { label: string }) {
+  return (
+    <div
+      className="min-h-[320px] rounded-2xl border border-border/60 bg-white/70 p-6 shadow-sm dark:bg-slate-900/70"
+      role="status"
+      aria-live="polite"
+      aria-label={label}
+    >
+      <div className="h-6 w-40 animate-pulse rounded bg-slate-200/80 dark:bg-slate-700/80" />
+      <div className="mt-6 h-[220px] animate-pulse rounded-xl bg-slate-200/60 dark:bg-slate-800/70" />
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const [trendDays, setTrendDays] = useState(7);
@@ -109,20 +128,24 @@ export default function Dashboard() {
 
         <div ref={dashboardRef} className="space-y-6">
           <DashboardSummaryCards items={summaryCards} summaryLoading={summaryLoading} />
-          <DashboardChartsGrid
-            onTrendDaysChange={setTrendDays}
-            peakHours={peakHours}
-            peakHoursLoading={peakHoursLoading}
-            trendDays={trendDays}
-            trends={trends}
-            trendsLoading={trendsLoading}
-          />
-          <DashboardUserInsightsGrid
-            roleDistribution={roleDistribution}
-            roleLoading={roleLoading}
-            topUsers={topUsers}
-            topUsersLoading={topUsersLoading}
-          />
+          <Suspense fallback={<DashboardSectionFallback label="Loading dashboard charts" />}>
+            <DashboardChartsGrid
+              onTrendDaysChange={setTrendDays}
+              peakHours={peakHours}
+              peakHoursLoading={peakHoursLoading}
+              trendDays={trendDays}
+              trends={trends}
+              trendsLoading={trendsLoading}
+            />
+          </Suspense>
+          <Suspense fallback={<DashboardSectionFallback label="Loading dashboard user insights" />}>
+            <DashboardUserInsightsGrid
+              roleDistribution={roleDistribution}
+              roleLoading={roleLoading}
+              topUsers={topUsers}
+              topUsersLoading={topUsersLoading}
+            />
+          </Suspense>
         </div>
       </div>
     </div>
