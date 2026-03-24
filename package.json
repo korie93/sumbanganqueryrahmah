@@ -8,6 +8,7 @@
   "scripts": {
     "verify:node-version": "node scripts/verify-node-version.mjs",
     "verify:repo-hygiene": "node scripts/verify-repo-hygiene.mjs",
+    "verify:bundle-budgets": "node scripts/verify-client-bundle-budgets.mjs",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:generate:custom": "drizzle-kit generate --config drizzle.config.ts --custom",

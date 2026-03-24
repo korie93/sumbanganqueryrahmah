@@ -53,6 +53,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Verify client bundle budgets
+        run: npm run verify:bundle-budgets
+
   smoke-ui:
     needs: build-and-test
     runs-on: ubuntu-latest

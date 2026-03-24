@@ -1,17 +1,10 @@
 import crypto from "crypto";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type {
-  AccountActivationToken,
   InsertUser,
-  PasswordResetRequest,
   User,
 } from "../../shared/schema-postgres";
-import {
-  accountActivationTokens,
-  passwordResetRequests,
-  users,
-  userActivity,
-} from "../../shared/schema-postgres";
+import { users } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
 import {
   type AccountStatus,
@@ -21,134 +14,43 @@ import {
   normalizeUserRole,
 } from "../auth/account-lifecycle";
 import { hashPassword } from "../auth/passwords";
+import {
+  deleteManagedUserAccount,
+  getAccounts,
+  getManagedUsers,
+  getUsersByRoles,
+  listManagedUsersPage,
+  listPendingPasswordResetRequests,
+  listPendingPasswordResetRequestsPage,
+  touchLastLogin,
+  updateActivitiesUsername,
+  updateUserBan,
+} from "./auth-managed-user-utils";
+import {
+  consumeActivationTokenById,
+  consumePasswordResetRequestById,
+  createActivationToken,
+  createPasswordResetRequest,
+  getActivationTokenRecordByHash,
+  getPasswordResetTokenRecordByHash,
+  invalidateUnusedActivationTokens,
+  invalidateUnusedPasswordResetTokens,
+  resolvePendingPasswordResetRequestsForUser,
+  updatePasswordResetRequest,
+} from "./auth-token-repository-utils";
+import type {
+  ActivationTokenRecord,
+  ManagedUserRecord,
+  PasswordResetTokenRecord,
+  PendingPasswordResetRequestRecord,
+} from "./auth-repository-types";
 
-const QUERY_PAGE_LIMIT = 1000;
-const MANAGED_USERS_DEFAULT_PAGE_SIZE = 50;
-const MANAGED_USERS_MAX_PAGE_SIZE = 100;
-const PENDING_PASSWORD_RESET_DEFAULT_PAGE_SIZE = 50;
-const PENDING_PASSWORD_RESET_MAX_PAGE_SIZE = 100;
-
-export type ManagedUserRecord = {
-  id: string;
-  username: string;
-  fullName: string | null;
-  email: string | null;
-  role: string;
-  status: string;
-  mustChangePassword: boolean;
-  passwordResetBySuperuser: boolean;
-  createdBy: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  activatedAt: Date | null;
-  lastLoginAt: Date | null;
-  passwordChangedAt: Date | null;
-  isBanned: boolean | null;
-};
-
-export type PendingPasswordResetRequestRecord = {
-  id: string;
-  userId: string;
-  username: string;
-  fullName: string | null;
-  email: string | null;
-  role: string;
-  status: string;
-  isBanned: boolean | null;
-  requestedByUser: string | null;
-  approvedBy: string | null;
-  resetType: string;
-  createdAt: Date;
-  expiresAt: Date | null;
-  usedAt: Date | null;
-};
-
-export type ActivationTokenRecord = {
-  tokenId: string;
-  userId: string;
-  username: string;
-  fullName: string | null;
-  email: string | null;
-  role: string;
-  status: string;
-  isBanned: boolean | null;
-  activatedAt: Date | null;
-  expiresAt: Date;
-  usedAt: Date | null;
-  createdAt: Date;
-};
-
-export type PasswordResetTokenRecord = {
-  requestId: string;
-  userId: string;
-  username: string;
-  fullName: string | null;
-  email: string | null;
-  role: string;
-  status: string;
-  isBanned: boolean | null;
-  activatedAt: Date | null;
-  expiresAt: Date;
-  usedAt: Date | null;
-  createdAt: Date;
-};
-
-type ManagedUserListStatusFilter =
-  | "all"
-  | "active"
-  | "pending_activation"
-  | "suspended"
-  | "disabled"
-  | "banned";
-
-type ManagedUserListPageParams = {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  role?: "all" | "admin" | "user";
-  status?: ManagedUserListStatusFilter;
-};
-
-type ManagedUserListPageResult = {
-  users: ManagedUserRecord[];
-  page: number;
-  pageSize: number;
-  total: number;
-  totalPages: number;
-};
-
-type PendingPasswordResetListPageParams = {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  status?: ManagedUserListStatusFilter;
-};
-
-type PendingPasswordResetListPageResult = {
-  requests: PendingPasswordResetRequestRecord[];
-  page: number;
-  pageSize: number;
-  total: number;
-  totalPages: number;
-};
-
-function resolvePageAndPageSize(
-  pageRaw: number | undefined,
-  pageSizeRaw: number | undefined,
-  defaults: { pageSize: number; maxPageSize: number },
-) {
-  const safePage = Number.isFinite(pageRaw)
-    ? Math.max(1, Math.floor(Number(pageRaw)))
-    : 1;
-  const safePageSize = Number.isFinite(pageSizeRaw)
-    ? Math.max(1, Math.min(defaults.maxPageSize, Math.floor(Number(pageSizeRaw))))
-    : defaults.pageSize;
-  return {
-    page: safePage,
-    pageSize: safePageSize,
-    offset: (safePage - 1) * safePageSize,
-  };
-}
+export type {
+  ActivationTokenRecord,
+  ManagedUserRecord,
+  PasswordResetTokenRecord,
+  PendingPasswordResetRequestRecord,
+} from "./auth-repository-types";
 
 export class AuthRepository {
   async getUser(id: string): Promise<User | undefined> {
@@ -356,197 +258,32 @@ export class AuthRepository {
     return this.getUser(params.userId);
   }
 
-  async getUsersByRoles(roles: string[]): Promise<Array<{
-    id: string;
-    username: string;
-    role: string;
-    createdAt: Date;
-    updatedAt: Date;
-    passwordChangedAt: Date | null;
-    isBanned: boolean | null;
-  }>> {
-    if (!Array.isArray(roles) || roles.length === 0) return [];
-
-    const results: Array<{
-      id: string;
-      username: string;
-      role: string;
-      createdAt: Date;
-      updatedAt: Date;
-      passwordChangedAt: Date | null;
-      isBanned: boolean | null;
-    }> = [];
-
-    let offset = 0;
-    while (true) {
-      const chunk = await db
-        .select({
-          id: users.id,
-          username: users.username,
-          role: users.role,
-          createdAt: users.createdAt,
-          updatedAt: users.updatedAt,
-          passwordChangedAt: users.passwordChangedAt,
-          isBanned: users.isBanned,
-        })
-        .from(users)
-        .where(inArray(users.role, roles))
-        .orderBy(users.role, users.username)
-        .limit(QUERY_PAGE_LIMIT)
-        .offset(offset);
-
-      if (!chunk.length) break;
-      results.push(...chunk);
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
-      offset += chunk.length;
-    }
-
-    return results;
+  async getUsersByRoles(roles: string[]) {
+    return getUsersByRoles(roles);
   }
 
   async getManagedUsers(): Promise<ManagedUserRecord[]> {
-    const rows: ManagedUserRecord[] = [];
-    let page = 1;
-    while (true) {
-      const pageResult = await this.listManagedUsersPage({
-        page,
-        pageSize: MANAGED_USERS_MAX_PAGE_SIZE,
-      });
-      rows.push(...pageResult.users);
-      if (rows.length >= pageResult.total || pageResult.users.length < pageResult.pageSize) {
-        break;
-      }
-      page += 1;
-    }
-    return rows;
+    return getManagedUsers();
   }
 
-  async listManagedUsersPage(
-    params: ManagedUserListPageParams = {},
-  ): Promise<ManagedUserListPageResult> {
-    const { page, pageSize, offset } = resolvePageAndPageSize(
-      params.page,
-      params.pageSize,
-      {
-        pageSize: MANAGED_USERS_DEFAULT_PAGE_SIZE,
-        maxPageSize: MANAGED_USERS_MAX_PAGE_SIZE,
-      },
-    );
-
-    const whereClauses: any[] = [sql`role IN ('admin', 'user')`];
-    const search = String(params.search || "").trim();
-    if (search) {
-      whereClauses.push(sql`(
-        username ILIKE ${`%${search}%`}
-        OR COALESCE(full_name, '') ILIKE ${`%${search}%`}
-        OR COALESCE(email, '') ILIKE ${`%${search}%`}
-      )`);
-    }
-
-    const roleFilter = String(params.role || "all").trim().toLowerCase();
-    if (roleFilter === "admin" || roleFilter === "user") {
-      whereClauses.push(sql`role = ${roleFilter}`);
-    }
-
-    const statusFilter = String(params.status || "all").trim().toLowerCase();
-    if (statusFilter === "banned") {
-      whereClauses.push(sql`COALESCE(is_banned, false) = true`);
-    } else if (
-      statusFilter === "active"
-      || statusFilter === "pending_activation"
-      || statusFilter === "suspended"
-      || statusFilter === "disabled"
-    ) {
-      whereClauses.push(sql`status = ${statusFilter}`);
-      whereClauses.push(sql`COALESCE(is_banned, false) = false`);
-    }
-
-    const whereSql = sql`WHERE ${sql.join(whereClauses, sql` AND `)}`;
-
-    const [countResult, rowsResult] = await Promise.all([
-      db.execute(sql`
-        SELECT COUNT(*)::int AS total
-        FROM public.users
-        ${whereSql}
-      `),
-      db.execute(sql`
-        SELECT
-          id,
-          username,
-          full_name as "fullName",
-          email,
-          role,
-          status,
-          must_change_password as "mustChangePassword",
-          password_reset_by_superuser as "passwordResetBySuperuser",
-          created_by as "createdBy",
-          created_at as "createdAt",
-          updated_at as "updatedAt",
-          activated_at as "activatedAt",
-          last_login_at as "lastLoginAt",
-          password_changed_at as "passwordChangedAt",
-          is_banned as "isBanned"
-        FROM public.users
-        ${whereSql}
-        ORDER BY role ASC, username ASC
-        LIMIT ${pageSize}
-        OFFSET ${offset}
-      `),
-    ]);
-
-    const total = Number((countResult.rows?.[0] as { total?: number } | undefined)?.total || 0);
-    const totalPages = Math.max(1, Math.ceil(total / pageSize));
-
-    return {
-      users: (rowsResult.rows || []) as ManagedUserRecord[],
-      page,
-      pageSize,
-      total,
-      totalPages,
-    };
+  async listManagedUsersPage(params = {}) {
+    return listManagedUsersPage(params);
   }
 
   async deleteManagedUserAccount(userId: string): Promise<boolean> {
-    const normalizedId = String(userId || "").trim();
-    if (!normalizedId) {
-      return false;
-    }
-
-    await db.delete(accountActivationTokens).where(eq(accountActivationTokens.userId, normalizedId));
-    await db.delete(passwordResetRequests).where(eq(passwordResetRequests.userId, normalizedId));
-
-    const deleted = await db
-      .delete(users)
-      .where(and(eq(users.id, normalizedId), inArray(users.role, ["admin", "user"])))
-      .returning({ id: users.id });
-
-    return deleted.length > 0;
+    return deleteManagedUserAccount(userId);
   }
 
   async updateActivitiesUsername(oldUsername: string, newUsername: string): Promise<void> {
-    await db
-      .update(userActivity)
-      .set({ username: newUsername })
-      .where(sql`${userActivity.username} = ${oldUsername}`);
+    return updateActivitiesUsername(oldUsername, newUsername);
   }
 
   async updateUserBan(username: string, isBanned: boolean): Promise<User | undefined> {
-    await db
-      .update(users)
-      .set({ isBanned, updatedAt: new Date() })
-      .where(sql`${users.username} = ${username}`);
-
-    return this.getUserByUsername(username);
+    return updateUserBan(username, isBanned);
   }
 
   async touchLastLogin(userId: string, timestamp = new Date()): Promise<void> {
-    await db
-      .update(users)
-      .set({
-        lastLoginAt: timestamp,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, userId));
+    return touchLastLogin(userId, timestamp);
   }
 
   async createActivationToken(params: {
@@ -554,85 +291,25 @@ export class AuthRepository {
     tokenHash: string;
     expiresAt: Date;
     createdBy: string;
-  }): Promise<AccountActivationToken> {
-    const record = {
-      id: crypto.randomUUID(),
-      userId: params.userId,
-      tokenHash: params.tokenHash,
-      expiresAt: params.expiresAt,
-      usedAt: null,
-      createdBy: params.createdBy,
-      createdAt: new Date(),
-    };
-
-    await db.insert(accountActivationTokens).values(record);
-    return record;
+  }) {
+    return createActivationToken(params);
   }
 
   async invalidateUnusedActivationTokens(userId: string): Promise<void> {
-    await db
-      .update(accountActivationTokens)
-      .set({ usedAt: new Date() })
-      .where(
-        and(
-          eq(accountActivationTokens.userId, userId),
-          isNull(accountActivationTokens.usedAt),
-        ),
-      );
+    return invalidateUnusedActivationTokens(userId);
   }
 
   async getActivationTokenRecordByHash(
     tokenHash: string,
   ): Promise<ActivationTokenRecord | undefined> {
-    const normalizedHash = String(tokenHash || "").trim();
-    if (!normalizedHash) {
-      return undefined;
-    }
-
-    const result = await db.execute(sql`
-      SELECT
-        t.id as "tokenId",
-        t.expires_at as "expiresAt",
-        t.used_at as "usedAt",
-        t.created_at as "createdAt",
-        u.id as "userId",
-        u.username,
-        u.full_name as "fullName",
-        u.email,
-        u.role,
-        u.status,
-        u.is_banned as "isBanned",
-        u.activated_at as "activatedAt"
-      FROM public.account_activation_tokens t
-      INNER JOIN public.users u ON u.id = t.user_id
-      WHERE t.token_hash = ${normalizedHash}
-      ORDER BY t.created_at DESC
-      LIMIT 1
-    `);
-
-    return result.rows[0] as ActivationTokenRecord | undefined;
+    return getActivationTokenRecordByHash(tokenHash);
   }
 
   async consumeActivationTokenById(params: {
     tokenId: string;
     now?: Date;
   }): Promise<boolean> {
-    const tokenId = String(params.tokenId || "").trim();
-    if (!tokenId) {
-      return false;
-    }
-
-    const now = params.now ?? new Date();
-    const result = await db.execute(sql`
-      UPDATE public.account_activation_tokens
-      SET used_at = ${now}
-      WHERE id = ${tokenId}
-        AND used_at IS NULL
-        AND expires_at > ${now}
-      RETURNING id
-    `);
-
-    return (result.rows || []).length > 0;
+    return consumeActivationTokenById(params);
   }
 
   async createPasswordResetRequest(params: {
@@ -643,21 +320,8 @@ export class AuthRepository {
     tokenHash?: string | null;
     expiresAt?: Date | null;
     usedAt?: Date | null;
-  }): Promise<PasswordResetRequest> {
-    const record = {
-      id: crypto.randomUUID(),
-      userId: params.userId,
-      requestedByUser: params.requestedByUser,
-      approvedBy: params.approvedBy ?? null,
-      resetType: params.resetType ?? "email_link",
-      tokenHash: params.tokenHash ?? null,
-      expiresAt: params.expiresAt ?? null,
-      usedAt: params.usedAt ?? null,
-      createdAt: new Date(),
-    };
-
-    await db.insert(passwordResetRequests).values(record);
-    return record;
+  }) {
+    return createPasswordResetRequest(params);
   }
 
   async updatePasswordResetRequest(params: {
@@ -668,16 +332,7 @@ export class AuthRepository {
     tokenHash?: string | null;
     expiresAt?: Date | null;
   }): Promise<void> {
-    await db
-      .update(passwordResetRequests)
-      .set({
-        approvedBy: params.approvedBy,
-        resetType: params.resetType,
-        tokenHash: params.tokenHash ?? null,
-        expiresAt: params.expiresAt ?? null,
-        usedAt: params.usedAt ?? null,
-      })
-      .where(eq(passwordResetRequests.id, params.requestId));
+    return updatePasswordResetRequest(params);
   }
 
   async resolvePendingPasswordResetRequestsForUser(params: {
@@ -686,222 +341,35 @@ export class AuthRepository {
     resetType: string;
     usedAt?: Date | null;
   }): Promise<void> {
-    await db
-      .update(passwordResetRequests)
-      .set({
-        approvedBy: params.approvedBy,
-        resetType: params.resetType,
-        usedAt: params.usedAt ?? new Date(),
-      })
-      .where(
-        and(
-          eq(passwordResetRequests.userId, params.userId),
-          isNull(passwordResetRequests.approvedBy),
-          isNull(passwordResetRequests.usedAt),
-        ),
-      );
+    return resolvePendingPasswordResetRequestsForUser(params);
   }
 
   async invalidateUnusedPasswordResetTokens(userId: string, now = new Date()): Promise<void> {
-    await db
-      .update(passwordResetRequests)
-      .set({ usedAt: now })
-      .where(
-        and(
-          eq(passwordResetRequests.userId, userId),
-          isNull(passwordResetRequests.usedAt),
-          sql`${passwordResetRequests.tokenHash} IS NOT NULL`,
-        ),
-      );
+    return invalidateUnusedPasswordResetTokens(userId, now);
   }
 
   async getPasswordResetTokenRecordByHash(
     tokenHash: string,
   ): Promise<PasswordResetTokenRecord | undefined> {
-    const normalizedHash = String(tokenHash || "").trim();
-    if (!normalizedHash) {
-      return undefined;
-    }
-
-    const result = await db.execute(sql`
-      SELECT
-        r.id as "requestId",
-        r.user_id as "userId",
-        r.expires_at as "expiresAt",
-        r.used_at as "usedAt",
-        r.created_at as "createdAt",
-        u.username,
-        u.full_name as "fullName",
-        u.email,
-        u.role,
-        u.status,
-        u.is_banned as "isBanned",
-        u.activated_at as "activatedAt"
-      FROM public.password_reset_requests r
-      INNER JOIN public.users u ON u.id = r.user_id
-      WHERE r.token_hash = ${normalizedHash}
-      ORDER BY r.created_at DESC
-      LIMIT 1
-    `);
-
-    return (result.rows?.[0] || undefined) as PasswordResetTokenRecord | undefined;
+    return getPasswordResetTokenRecordByHash(tokenHash);
   }
 
   async consumePasswordResetRequestById(params: {
     requestId: string;
     now?: Date;
   }): Promise<boolean> {
-    const requestId = String(params.requestId || "").trim();
-    if (!requestId) {
-      return false;
-    }
-
-    const now = params.now ?? new Date();
-    const result = await db.execute(sql`
-      UPDATE public.password_reset_requests
-      SET used_at = ${now}
-      WHERE id = ${requestId}
-        AND used_at IS NULL
-        AND expires_at > ${now}
-      RETURNING id
-    `);
-
-    return (result.rows || []).length > 0;
+    return consumePasswordResetRequestById(params);
   }
 
   async listPendingPasswordResetRequests(): Promise<PendingPasswordResetRequestRecord[]> {
-    const rows: PendingPasswordResetRequestRecord[] = [];
-    let page = 1;
-    while (true) {
-      const pageResult = await this.listPendingPasswordResetRequestsPage({
-        page,
-        pageSize: PENDING_PASSWORD_RESET_MAX_PAGE_SIZE,
-      });
-      rows.push(...pageResult.requests);
-      if (rows.length >= pageResult.total || pageResult.requests.length < pageResult.pageSize) {
-        break;
-      }
-      page += 1;
-    }
-    return rows;
+    return listPendingPasswordResetRequests();
   }
 
-  async listPendingPasswordResetRequestsPage(
-    params: PendingPasswordResetListPageParams = {},
-  ): Promise<PendingPasswordResetListPageResult> {
-    const { page, pageSize, offset } = resolvePageAndPageSize(
-      params.page,
-      params.pageSize,
-      {
-        pageSize: PENDING_PASSWORD_RESET_DEFAULT_PAGE_SIZE,
-        maxPageSize: PENDING_PASSWORD_RESET_MAX_PAGE_SIZE,
-      },
-    );
-
-    const whereClauses: any[] = [
-      sql`r.approved_by IS NULL`,
-      sql`r.used_at IS NULL`,
-    ];
-
-    const search = String(params.search || "").trim();
-    if (search) {
-      whereClauses.push(sql`(
-        u.username ILIKE ${`%${search}%`}
-        OR COALESCE(u.full_name, '') ILIKE ${`%${search}%`}
-        OR COALESCE(u.email, '') ILIKE ${`%${search}%`}
-        OR COALESCE(r.requested_by_user, '') ILIKE ${`%${search}%`}
-      )`);
-    }
-
-    const statusFilter = String(params.status || "all").trim().toLowerCase();
-    if (statusFilter === "banned") {
-      whereClauses.push(sql`COALESCE(u.is_banned, false) = true`);
-    } else if (
-      statusFilter === "active"
-      || statusFilter === "pending_activation"
-      || statusFilter === "suspended"
-      || statusFilter === "disabled"
-    ) {
-      whereClauses.push(sql`u.status = ${statusFilter}`);
-      whereClauses.push(sql`COALESCE(u.is_banned, false) = false`);
-    }
-
-    const whereSql = sql`WHERE ${sql.join(whereClauses, sql` AND `)}`;
-
-    const [countResult, rowsResult] = await Promise.all([
-      db.execute(sql`
-        SELECT COUNT(*)::int AS total
-        FROM public.password_reset_requests r
-        INNER JOIN public.users u ON u.id = r.user_id
-        ${whereSql}
-      `),
-      db.execute(sql`
-        SELECT
-          r.id,
-          r.user_id as "userId",
-          r.requested_by_user as "requestedByUser",
-          r.approved_by as "approvedBy",
-          r.reset_type as "resetType",
-          r.created_at as "createdAt",
-          r.expires_at as "expiresAt",
-          r.used_at as "usedAt",
-          u.username,
-          u.full_name as "fullName",
-          u.email,
-          u.role,
-          u.status,
-          u.is_banned as "isBanned"
-        FROM public.password_reset_requests r
-        INNER JOIN public.users u ON u.id = r.user_id
-        ${whereSql}
-        ORDER BY r.created_at DESC, r.id DESC
-        LIMIT ${pageSize}
-        OFFSET ${offset}
-      `),
-    ]);
-
-    const total = Number((countResult.rows?.[0] as { total?: number } | undefined)?.total || 0);
-    const totalPages = Math.max(1, Math.ceil(total / pageSize));
-
-    return {
-      requests: (rowsResult.rows || []) as PendingPasswordResetRequestRecord[],
-      page,
-      pageSize,
-      total,
-      totalPages,
-    };
+  async listPendingPasswordResetRequestsPage(params = {}) {
+    return listPendingPasswordResetRequestsPage(params);
   }
 
-  async getAccounts(): Promise<Array<{
-    username: string;
-    role: string;
-    isBanned: boolean | null;
-  }>> {
-    const rows: Array<{
-      username: string;
-      role: string;
-      isBanned: boolean | null;
-    }> = [];
-
-    let offset = 0;
-    while (true) {
-      const chunk = await db
-        .select({
-          username: users.username,
-          role: users.role,
-          isBanned: users.isBanned,
-        })
-        .from(users)
-        .orderBy(users.role, users.username)
-        .limit(QUERY_PAGE_LIMIT)
-        .offset(offset);
-
-      if (!chunk.length) break;
-      rows.push(...chunk);
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
-      offset += chunk.length;
-    }
-
-    return rows;
+  async getAccounts() {
+    return getAccounts();
   }
 }

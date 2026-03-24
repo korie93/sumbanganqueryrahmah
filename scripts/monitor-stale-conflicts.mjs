@@ -1,4 +1,6 @@
 import process from "node:process";
+import fs from "node:fs/promises";
+import path from "node:path";
 import "dotenv/config";
 
 const baseUrl = String(
@@ -28,6 +30,7 @@ const requestTimeoutMs = Math.max(
   2_000,
   Number.parseInt(String(process.env.MONITOR_TIMEOUT_MS || "15000"), 10) || 15_000,
 );
+const outputFile = String(process.env.MONITOR_OUTPUT_FILE || "").trim();
 
 function assert(condition, message) {
   if (!condition) {
@@ -249,6 +252,11 @@ async function run() {
               },
         status,
       };
+
+      if (outputFile) {
+        await fs.mkdir(path.dirname(outputFile), { recursive: true });
+        await fs.writeFile(outputFile, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+      }
 
       console.log(JSON.stringify(payload, null, 2));
       if (!loopMode) {

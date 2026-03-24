@@ -62,9 +62,26 @@ For final release verification in one command:
 
 - `npm run release:verify:local`
 
+Release artifacts produced by that flow:
+
+- `artifacts/release-readiness-local/server.log`
+- `artifacts/release-readiness-local/monitor-stale-conflicts.json`
+- `artifacts/release-readiness-local/smoke-ui/`
+- `var/perf/collection-baseline-*.json`
+- `var/perf/collection-baseline-*.md`
+
 For stale-tab/429 health snapshots:
 
 - `npm run monitor:stale-conflicts`
+
+To persist the monitor snapshot to disk during staging or CI:
+
+- set `MONITOR_OUTPUT_FILE`
+- run `npm run monitor:stale-conflicts`
+
+For scheduled/manual release verification in GitHub Actions:
+
+- `.github/workflows/release-verification.yml`
 
 For authenticated smoke:
 

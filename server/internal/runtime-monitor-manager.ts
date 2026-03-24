@@ -1,10 +1,7 @@
 import { PerformanceObserver, monitorEventLoopDelay } from "node:perf_hooks";
-import os from "node:os";
-import type { Pool } from "pg";
 import { logger } from "../lib/logger";
-import { CircuitBreaker, type CircuitSnapshot } from "./circuitBreaker";
+import { CircuitBreaker } from "./circuitBreaker";
 import type {
-  EvaluateSystemResult,
   SystemHistory,
   SystemSnapshot,
 } from "../intelligence/types";
@@ -12,120 +9,36 @@ import {
   isControlStateMessage,
   isGracefulShutdownMessage,
   type WorkerControlState,
-  type WorkerMetricsPayload,
-  type WorkerToMasterMessage,
 } from "./worker-ipc";
+import { buildInternalMonitorAlerts } from "./runtime-monitor-alerts";
+import {
+  clamp,
+  getRamPercent,
+  percentile,
+  roundMetric,
+  sendWorkerMessage,
+} from "./runtime-monitor-metrics";
+import type {
+  AttachProcessHandlersOptions,
+  GcCapableGlobal,
+  InternalMonitorSnapshot,
+  IpcCapableProcess,
+  LocalCircuitSnapshots,
+  PoolWithOptions,
+  RuntimeMonitorManagerOptions,
+  StartRuntimeLoopsOptions,
+} from "./runtime-monitor-types";
 
 export type { WorkerControlState } from "./worker-ipc";
-
-export type InternalMonitorSnapshot = {
-  score: number;
-  mode: "NORMAL" | "DEGRADED" | "PROTECTION";
-  cpuPercent: number;
-  ramPercent: number;
-  p95LatencyMs: number;
-  errorRate: number;
-  dbLatencyMs: number;
-  aiLatencyMs: number;
-  eventLoopLagMs: number;
-  requestRate: number;
-  activeRequests: number;
-  queueLength: number;
-  workerCount: number;
-  maxWorkers: number;
-  dbProtection: boolean;
-  slowQueryCount: number;
-  dbConnections: number;
-  aiFailRate: number;
-  status401Count: number;
-  status403Count: number;
-  status429Count: number;
-  localOpenCircuitCount: number;
-  clusterOpenCircuitCount: number;
-  bottleneckType: string;
-  updatedAt: number;
-};
-
-export type InternalMonitorAlert = {
-  id: string;
-  severity: "CRITICAL" | "WARNING" | "INFO";
-  message: string;
-  timestamp: string;
-  source: string;
-};
-
-type LocalCircuitSnapshots = {
-  ai: CircuitSnapshot;
-  db: CircuitSnapshot;
-  export: CircuitSnapshot;
-};
-
-type PoolWithOptions = Pool & {
-  options?: {
-    max?: number;
-  };
-};
-
-type IpcCapableProcess = NodeJS.Process & {
-  send?: (message: WorkerToMasterMessage) => void;
-};
-
-type GcCapableGlobal = typeof globalThis & {
-  gc?: () => void;
-};
-
-type RuntimeMonitorManagerOptions = {
-  pool: Pool;
-  apiDebugLogs: boolean;
-  lowMemoryMode: boolean;
-  pgPoolWarnCooldownMs: number;
-  aiLatencyStaleAfterMs: number;
-  aiLatencyDecayHalfLifeMs: number;
-  getSearchQueueLength: () => number;
-  evaluateSystem: (snapshot: SystemSnapshot, history: SystemHistory) => Promise<EvaluateSystemResult>;
-};
-
-type AttachProcessHandlersOptions = {
-  onGracefulShutdown: () => void;
-};
-
-type StartRuntimeLoopsOptions = {
-  clearSearchCache: () => void;
-};
+export type {
+  InternalMonitorAlert,
+  InternalMonitorSnapshot,
+} from "./runtime-monitor-types";
 
 const LATENCY_WINDOW = 400;
 const MAX_INTELLIGENCE_HISTORY = 300;
 const ipcProcess = process as IpcCapableProcess;
 const runtimeGlobal = globalThis as GcCapableGlobal;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function percentile(values: number[], p: number): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.floor((clamp(p, 0, 100) / 100) * (sorted.length - 1));
-  return sorted[index];
-}
-
-function roundMetric(value: number, digits = 2): number {
-  if (!Number.isFinite(value)) return 0;
-  const precision = 10 ** digits;
-  return Math.round(value * precision) / precision;
-}
-
-function getRamPercent(): number {
-  const total = Number(os.totalmem() || 0);
-  const free = Number(os.freemem() || 0);
-  if (total <= 0) return 0;
-  return roundMetric(((total - free) / total) * 100, 2);
-}
-
-function sendWorkerMessage(message: WorkerToMasterMessage) {
-  if (typeof ipcProcess.send !== "function") return;
-  ipcProcess.send(message);
-}
 
 export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOptions) {
   const defaultControlState: WorkerControlState = {
@@ -424,101 +337,6 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     };
   }
 
-  function buildInternalMonitorAlerts(snapshot: InternalMonitorSnapshot): InternalMonitorAlert[] {
-    const alerts: InternalMonitorAlert[] = [];
-    const timestamp = new Date(snapshot.updatedAt || Date.now()).toISOString();
-
-    const pushAlert = (
-      severity: InternalMonitorAlert["severity"],
-      source: string,
-      message: string,
-    ) => {
-      alerts.push({
-        id: `${source.toLowerCase().replace(/[^a-z0-9_]/g, "_")}_${severity.toLowerCase()}`,
-        severity,
-        source,
-        message,
-        timestamp,
-      });
-    };
-
-    if (snapshot.mode === "PROTECTION") {
-      pushAlert("CRITICAL", "MODE", "System is in PROTECTION mode. Heavy routes are restricted.");
-    } else if (snapshot.mode === "DEGRADED") {
-      pushAlert("WARNING", "MODE", "System is in DEGRADED mode. Throughput throttling is active.");
-    }
-
-    if (snapshot.cpuPercent >= 88) {
-      pushAlert("CRITICAL", "CPU", `CPU usage is critically high at ${snapshot.cpuPercent.toFixed(1)}%.`);
-    } else if (snapshot.cpuPercent >= 75) {
-      pushAlert("WARNING", "CPU", `CPU usage is elevated at ${snapshot.cpuPercent.toFixed(1)}%.`);
-    }
-
-    if (snapshot.ramPercent >= 92) {
-      pushAlert("CRITICAL", "RAM", `RAM usage is critically high at ${snapshot.ramPercent.toFixed(1)}%.`);
-    } else if (snapshot.ramPercent >= 80) {
-      pushAlert("WARNING", "RAM", `RAM usage is elevated at ${snapshot.ramPercent.toFixed(1)}%.`);
-    }
-
-    if (snapshot.dbLatencyMs >= 1000) {
-      pushAlert("CRITICAL", "DB", `Database latency is critical (${snapshot.dbLatencyMs.toFixed(0)} ms).`);
-    } else if (snapshot.dbLatencyMs >= 400) {
-      pushAlert("WARNING", "DB", `Database latency is elevated (${snapshot.dbLatencyMs.toFixed(0)} ms).`);
-    }
-
-    if (snapshot.aiLatencyMs >= 1400) {
-      pushAlert("CRITICAL", "AI", `AI latency is critical (${snapshot.aiLatencyMs.toFixed(0)} ms).`);
-    } else if (snapshot.aiLatencyMs >= 700) {
-      pushAlert("WARNING", "AI", `AI latency is elevated (${snapshot.aiLatencyMs.toFixed(0)} ms).`);
-    }
-
-    if (snapshot.eventLoopLagMs >= 170) {
-      pushAlert("CRITICAL", "EVENT_LOOP", `Event loop lag is critical (${snapshot.eventLoopLagMs.toFixed(1)} ms).`);
-    } else if (snapshot.eventLoopLagMs >= 90) {
-      pushAlert("WARNING", "EVENT_LOOP", `Event loop lag is elevated (${snapshot.eventLoopLagMs.toFixed(1)} ms).`);
-    }
-
-    if (snapshot.errorRate >= 5) {
-      pushAlert("CRITICAL", "ERRORS", `Runtime failure rate is high (${snapshot.errorRate.toFixed(2)}%).`);
-    } else if (snapshot.errorRate >= 2) {
-      pushAlert("WARNING", "ERRORS", `Runtime failure rate is elevated (${snapshot.errorRate.toFixed(2)}%).`);
-    }
-
-    if (snapshot.status429Count >= 40) {
-      pushAlert("CRITICAL", "RATE_LIMIT", `High rate-limit pressure detected (${snapshot.status429Count} x 429 in 5s).`);
-    } else if (snapshot.status429Count >= 15) {
-      pushAlert("WARNING", "RATE_LIMIT", `Elevated rate-limit pressure (${snapshot.status429Count} x 429 in 5s).`);
-    }
-
-    if (snapshot.status401Count + snapshot.status403Count >= 40) {
-      pushAlert(
-        "WARNING",
-        "AUTH",
-        `Authentication/authorization spikes detected (401=${snapshot.status401Count}, 403=${snapshot.status403Count} in 5s).`,
-      );
-    }
-
-    if (snapshot.localOpenCircuitCount > 0 || snapshot.clusterOpenCircuitCount > 0) {
-      pushAlert(
-        snapshot.localOpenCircuitCount > 0 ? "CRITICAL" : "WARNING",
-        "CIRCUITS",
-        `Circuit protection is active (local open=${snapshot.localOpenCircuitCount}, cluster open=${snapshot.clusterOpenCircuitCount}).`,
-      );
-    }
-
-    if (snapshot.queueLength >= 10) {
-      pushAlert("CRITICAL", "QUEUE", `Request queue is saturated (${snapshot.queueLength} pending).`);
-    } else if (snapshot.queueLength >= 5) {
-      pushAlert("WARNING", "QUEUE", `Request queue is growing (${snapshot.queueLength} pending).`);
-    }
-
-    if (snapshot.workerCount >= snapshot.maxWorkers && snapshot.maxWorkers > 0) {
-      pushAlert("WARNING", "WORKERS", `Worker capacity reached (${snapshot.workerCount}/${snapshot.maxWorkers}).`);
-    }
-
-    return alerts;
-  }
-
   function appendIntelligenceValue(key: keyof SystemHistory, value: number) {
     if (!Number.isFinite(value)) return;
     const series = intelligenceHistory[key];
@@ -677,7 +495,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
 
       if (typeof ipcProcess.send === "function") {
         const mem = process.memoryUsage();
-        sendWorkerMessage({
+        sendWorkerMessage(ipcProcess, {
           type: "worker-metrics",
           payload: {
             workerId: Number(process.env.NODE_UNIQUE_ID || 0),
@@ -708,7 +526,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
       const heapRatio = mem.heapTotal > 0 ? mem.heapUsed / mem.heapTotal : 0;
       if (heapRatio > 0.88) {
         clearSearchCache();
-        sendWorkerMessage({ type: "worker-event", payload: { kind: "memory-pressure" } });
+        sendWorkerMessage(ipcProcess, { type: "worker-event", payload: { kind: "memory-pressure" } });
         if (typeof runtimeGlobal.gc === "function" && activeRequests === 0) {
           try {
             runtimeGlobal.gc();
