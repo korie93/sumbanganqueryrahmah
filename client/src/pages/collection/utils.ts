@@ -19,6 +19,7 @@ const COLLECTION_RECEIPT_MIME_ALIASES: Record<string, string> = {
 export type CollectionApiErrorDetails = {
   status: number | null;
   code: string | null;
+  requestId: string | null;
   message: string;
 };
 
@@ -38,15 +39,23 @@ export function parseCollectionApiErrorDetails(error: unknown): CollectionApiErr
         : typeof parsed?.error?.code === "string"
           ? parsed.error.code
           : null;
+    const requestId =
+      typeof parsed?.requestId === "string"
+        ? parsed.requestId
+        : typeof parsed?.error?.requestId === "string"
+          ? parsed.error.requestId
+          : null;
     return {
       status: Number.isFinite(Number(status)) ? Number(status) : null,
       code,
+      requestId,
       message: String(parsed?.message || parsed?.error?.message || raw),
     };
   } catch {
     return {
       status: fallbackStatus,
       code: null,
+      requestId: null,
       message: raw,
     };
   }

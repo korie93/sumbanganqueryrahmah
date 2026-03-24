@@ -78,6 +78,32 @@ export function createTestRequireRole(): (...roles: string[]) => RequestHandler 
   };
 }
 
+export function createTestRequireTabAccess(): (tabId: string) => RequestHandler {
+  return (tabId: string) => (req: AuthenticatedRequest, res, next) => {
+    if (!req.user) {
+      res.status(401).json({ message: "Unauthenticated" });
+      return;
+    }
+
+    if (req.user.role === "superuser") {
+      next();
+      return;
+    }
+
+    const deniedTabs = String(req.headers["x-test-deny-tabs"] || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    if (deniedTabs.includes(tabId)) {
+      res.status(403).json({ message: `Tab '${tabId}' is disabled for role '${req.user.role}'` });
+      return;
+    }
+
+    next();
+  };
+}
+
 export function allowAllTabs(): RequestHandler {
   return (_req, _res, next) => next();
 }

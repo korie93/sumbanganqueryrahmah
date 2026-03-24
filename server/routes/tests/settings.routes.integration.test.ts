@@ -7,6 +7,7 @@ import {
   createJsonTestApp,
   createTestAuthenticateToken,
   createTestRequireRole,
+  createTestRequireTabAccess,
   startTestServer,
   stopTestServer,
 } from "./http-test-utils";
@@ -110,6 +111,7 @@ function createSettingsRouteHarness(options?: {
       role: "admin",
     }),
     requireRole: createTestRequireRole(),
+    requireTabAccess: createTestRequireTabAccess(),
     clearTabVisibilityCache: () => {
       clearTabVisibilityCacheCount += 1;
     },
@@ -216,6 +218,28 @@ test("PATCH /api/settings validates the key before service work begins", async (
       message: "Invalid setting key",
     });
     assert.equal(updateCalls.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/settings denies admin access when the settings tab is disabled", async () => {
+  const { app } = createSettingsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/settings`, {
+      headers: {
+        "x-test-username": "admin.user",
+        "x-test-role": "admin",
+        "x-test-deny-tabs": "settings",
+      },
+    });
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), {
+      message: "Tab 'settings' is disabled for role 'admin'",
+    });
   } finally {
     await stopTestServer(server);
   }

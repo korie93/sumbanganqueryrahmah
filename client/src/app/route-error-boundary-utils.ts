@@ -1,6 +1,30 @@
+const ROUTE_LABELS: Record<string, string> = {
+  activity: "Activity",
+  ai: "AI Assistant",
+  analysis: "Analysis",
+  audit: "Audit Logs",
+  "audit-logs": "Audit Logs",
+  backup: "Backup & Restore",
+  banned: "Account Access",
+  "change-password": "Change Password",
+  "collection-report": "Collection",
+  dashboard: "Dashboard",
+  "forgot-password": "Forgot Password",
+  "general-search": "General Search",
+  home: "Home",
+  import: "Import",
+  login: "Login",
+  maintenance: "Maintenance Mode",
+  monitor: "System Monitor",
+  saved: "Saved Imports",
+  settings: "Settings",
+  viewer: "Viewer",
+};
+
 export function resolveRouteErrorTitle(routeLabel?: string | null): string {
   const normalized = String(routeLabel || "").trim();
-  return normalized ? `${normalized} Ran Into a Problem` : "This Page Ran Into a Problem";
+  const humanLabel = ROUTE_LABELS[normalized] || normalized;
+  return humanLabel ? `${humanLabel} Ran Into a Problem` : "This Page Ran Into a Problem";
 }
 
 export function resolveRouteErrorDescription(error: unknown): string {

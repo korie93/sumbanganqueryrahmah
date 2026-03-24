@@ -258,12 +258,13 @@ test("buildCollectionDailyReceiptKey normalizes primary and specific receipt key
 test("parseCollectionApiErrorDetails extracts status, code, and message from API error payloads", () => {
   const parsed = parseCollectionApiErrorDetails(
     new Error(
-      '409: {"ok":false,"message":"Collection record has changed since you opened it. Refresh and try again.","error":{"code":"COLLECTION_RECORD_VERSION_CONFLICT","message":"Collection record has changed since you opened it. Refresh and try again."}}',
+      '409: {"ok":false,"message":"Collection record has changed since you opened it. Refresh and try again.","requestId":"req-409","error":{"code":"COLLECTION_RECORD_VERSION_CONFLICT","message":"Collection record has changed since you opened it. Refresh and try again."}}',
     ),
   );
 
   assert.equal(parsed.status, 409);
   assert.equal(parsed.code, "COLLECTION_RECORD_VERSION_CONFLICT");
+  assert.equal(parsed.requestId, "req-409");
   assert.match(parsed.message, /changed since you opened/i);
   const parsedTopLevelCode = parseCollectionApiErrorDetails(
     new Error('409: {"ok":false,"message":"Conflict happened","code":"COLLECTION_RECORD_VERSION_CONFLICT"}'),
@@ -276,5 +277,6 @@ test("parseCollectionApiErrorDetails falls back safely for non-JSON errors", () 
   const parsed = parseCollectionApiErrorDetails(new Error("Network Error"));
   assert.equal(parsed.status, null);
   assert.equal(parsed.code, null);
+  assert.equal(parsed.requestId, null);
   assert.equal(parsed.message, "Network Error");
 });

@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import {
+  buildMutationErrorToast,
+  buildMutationSuccessToast,
+} from "@/lib/mutation-feedback";
+import {
   clearDevMailOutboxPreviews,
   deleteDevMailOutboxPreview,
   getDevMailOutboxPreviews,
@@ -180,11 +184,11 @@ export function useSettingsDevMailOutbox({
         };
       }
       const parsed = normalizeSettingsErrorPayload(error);
-      toast({
+      toast(buildMutationErrorToast({
         title: "Failed to Load Mail Outbox",
-        description: parsed.message,
-        variant: "destructive",
-      });
+        error,
+        fallbackDescription: parsed.message,
+      }));
       setDevMailOutboxEntries([]);
       setDevMailOutboxPagination({
         page: query.page,
@@ -226,18 +230,18 @@ export function useSettingsDevMailOutbox({
     setDeletingDevMailOutboxId(normalizedId);
     try {
       await deleteDevMailOutboxPreview(normalizedId);
-      toast({
+      toast(buildMutationSuccessToast({
         title: "Email Preview Deleted",
         description: "The local mail preview has been removed.",
-      });
+      }));
       await loadDevMailOutbox(devMailOutboxQueryRef.current);
     } catch (error: unknown) {
       const parsed = normalizeSettingsErrorPayload(error);
-      toast({
+      toast(buildMutationErrorToast({
         title: parsed.code || "Delete Failed",
-        description: parsed.message,
-        variant: "destructive",
-      });
+        error,
+        fallbackDescription: parsed.message,
+      }));
     } finally {
       deleteDevMailPreviewLocksRef.current.delete(normalizedId);
       if (isMountedRef.current) {
@@ -252,18 +256,18 @@ export function useSettingsDevMailOutbox({
     setClearingDevMailOutbox(true);
     try {
       const response = await clearDevMailOutboxPreviews();
-      toast({
+      toast(buildMutationSuccessToast({
         title: "Mail Outbox Cleared",
         description: `${response?.deletedCount ?? 0} email preview(s) removed.`,
-      });
+      }));
       await loadDevMailOutbox(devMailOutboxQueryRef.current);
     } catch (error: unknown) {
       const parsed = normalizeSettingsErrorPayload(error);
-      toast({
+      toast(buildMutationErrorToast({
         title: parsed.code || "Clear Failed",
-        description: parsed.message,
-        variant: "destructive",
-      });
+        error,
+        fallbackDescription: parsed.message,
+      }));
     } finally {
       if (isMountedRef.current) {
         setClearingDevMailOutbox(false);

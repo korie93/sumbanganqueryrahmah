@@ -1,6 +1,10 @@
 import { useCallback, useState, type MutableRefObject } from "react";
 import { updateMyCredentials } from "@/lib/api";
 import { clearAuthenticatedUserStorage, persistAuthenticatedUser } from "@/lib/auth-session";
+import {
+  buildMutationErrorToast,
+  buildMutationSuccessToast,
+} from "@/lib/mutation-feedback";
 import type { CurrentUser } from "@/pages/settings/types";
 import {
   CREDENTIAL_USERNAME_REGEX,
@@ -100,17 +104,17 @@ export function useSettingsMyAccount({
       setUsernameInput(nextUser.username);
       syncLocalUser(nextUser);
 
-      toast({
+      toast(buildMutationSuccessToast({
         title: "Username Updated",
         description: "Your username has been updated successfully.",
-      });
+      }));
     } catch (error: unknown) {
       const parsed = normalizeSettingsErrorPayload(error);
-      toast({
+      toast(buildMutationErrorToast({
         title: parsed.code || "Update Failed",
-        description: parsed.message,
-        variant: "destructive",
-      });
+        error,
+        fallbackDescription: parsed.message,
+      }));
     } finally {
       if (!isMountedRef.current) return;
       setUsernameSaving(false);
@@ -160,21 +164,21 @@ export function useSettingsMyAccount({
       setNewPasswordInput("");
       setConfirmPasswordInput("");
 
-      toast({
+      toast(buildMutationSuccessToast({
         title: "Password Updated",
         description: "Password changed successfully. You will need to login again.",
-      });
+      }));
 
       if (response?.forceLogout) {
         forceLogoutAfterPasswordChange();
       }
     } catch (error: unknown) {
       const parsed = normalizeSettingsErrorPayload(error);
-      toast({
+      toast(buildMutationErrorToast({
         title: parsed.code || "Update Failed",
-        description: parsed.message,
-        variant: "destructive",
-      });
+        error,
+        fallbackDescription: parsed.message,
+      }));
     } finally {
       if (!isMountedRef.current) return;
       setPasswordSaving(false);

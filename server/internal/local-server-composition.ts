@@ -342,6 +342,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     storage,
     authenticateToken,
     requireRole,
+    requireTabAccess,
     clearTabVisibilityCache,
     invalidateRuntimeSettingsCache,
     invalidateMaintenanceCache,

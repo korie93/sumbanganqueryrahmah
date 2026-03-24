@@ -7,6 +7,10 @@ import {
 } from "@/lib/api";
 import type { ManagedUser } from "@/pages/settings/types";
 import {
+  buildMutationErrorToast,
+  buildMutationSuccessToast,
+} from "@/lib/mutation-feedback";
+import {
   formatActivationExpiry,
   isDevOutboxActivation,
   type ManagedSecretDialogParams,
@@ -54,20 +58,20 @@ export function useSettingsManagedUserLifecycleActions({
       const previewUrl = String(reset?.previewUrl || "");
 
       if (isDevOutboxActivation(reset)) {
-        toast({
+        toast(buildMutationSuccessToast({
           title: "Password Reset Email Sent",
           description: `Password reset email for ${user.username} was captured in the local development outbox.`,
-        });
+        }));
         openManagedSecretDialog({
           title: "Local Password Reset Email Preview",
           description: `SMTP is not configured, so the password reset email was written to the local development outbox instead. Open this preview URL and follow the reset link before ${expiresAt}.`,
           value: previewUrl,
         });
       } else if (reset?.sent) {
-        toast({
+        toast(buildMutationSuccessToast({
           title: "Password Reset Email Sent",
           description: `Password reset email sent to ${recipientEmail}.`,
-        });
+        }));
       } else {
         openManagedSecretDialog({
           title: "Password Reset Email Not Sent",
@@ -77,11 +81,10 @@ export function useSettingsManagedUserLifecycleActions({
               : "The password reset email could not be sent. No account login state was changed, so you can retry after fixing delivery.",
           value: previewUrl || undefined,
         });
-        toast({
+        toast(buildMutationErrorToast({
           title: "Password Reset Pending",
           description: `${user.username} will need a delivered reset email before choosing a new password.`,
-          variant: "destructive",
-        });
+        }));
       }
 
       if (previewUrl && reset?.sent && reset?.deliveryMode === "smtp") {
@@ -95,11 +98,11 @@ export function useSettingsManagedUserLifecycleActions({
       await Promise.all([loadManagedUsers(), loadPendingResetRequests(), loadDevMailOutbox()]);
     } catch (error: unknown) {
       const parsed = normalizeSettingsErrorPayload(error);
-      toast({
+      toast(buildMutationErrorToast({
         title: parsed.code || "Reset Failed",
-        description: parsed.message,
-        variant: "destructive",
-      });
+        error,
+        fallbackDescription: parsed.message,
+      }));
     } finally {
       resetPasswordLocksRef.current.delete(user.id);
     }
@@ -117,20 +120,20 @@ export function useSettingsManagedUserLifecycleActions({
       const previewUrl = String(activation?.previewUrl || "");
 
       if (isDevOutboxActivation(activation)) {
-        toast({
+        toast(buildMutationSuccessToast({
           title: "Activation Reissued",
           description: `Activation email for ${user.username} was captured in the local development outbox.`,
-        });
+        }));
         openManagedSecretDialog({
           title: "Local Activation Email Preview",
           description: `SMTP is not configured, so the reissued activation email was written to the local development outbox instead. Open this preview URL and follow the activation link before ${expiresAt}.`,
           value: previewUrl,
         });
       } else if (activation?.sent) {
-        toast({
+        toast(buildMutationSuccessToast({
           title: "Activation Reissued",
           description: `Activation email resent to ${recipientEmail || user.username}.`,
-        });
+        }));
       } else {
         openManagedSecretDialog({
           title: "Activation Email Not Sent",
@@ -140,11 +143,10 @@ export function useSettingsManagedUserLifecycleActions({
               : "The activation email could not be resent. The account remains pending activation until delivery succeeds.",
           value: previewUrl || undefined,
         });
-        toast({
+        toast(buildMutationErrorToast({
           title: "Activation Still Pending",
           description: `${user.username} remains pending activation until the email is delivered.`,
-          variant: "destructive",
-        });
+        }));
       }
 
       if (previewUrl && activation?.sent && activation?.deliveryMode === "smtp") {
@@ -158,11 +160,11 @@ export function useSettingsManagedUserLifecycleActions({
       await Promise.all([loadManagedUsers(), loadDevMailOutbox()]);
     } catch (error: unknown) {
       const parsed = normalizeSettingsErrorPayload(error);
-      toast({
+      toast(buildMutationErrorToast({
         title: parsed.code || "Activation Failed",
-        description: parsed.message,
-        variant: "destructive",
-      });
+        error,
+        fallbackDescription: parsed.message,
+      }));
     } finally {
       resendActivationLocksRef.current.delete(user.id);
     }
@@ -176,18 +178,18 @@ export function useSettingsManagedUserLifecycleActions({
       await updateManagedUserStatus(user.id, {
         isBanned: nextIsBanned,
       });
-      toast({
+      toast(buildMutationSuccessToast({
         title: nextIsBanned ? "Account Banned" : "Account Unbanned",
         description: `${user.username} has been ${nextIsBanned ? "banned" : "unbanned"}.`,
-      });
+      }));
       await Promise.all([loadManagedUsers(), loadPendingResetRequests()]);
     } catch (error: unknown) {
       const parsed = normalizeSettingsErrorPayload(error);
-      toast({
+      toast(buildMutationErrorToast({
         title: parsed.code || "Status Update Failed",
-        description: parsed.message,
-        variant: "destructive",
-      });
+        error,
+        fallbackDescription: parsed.message,
+      }));
     }
   }, [loadManagedUsers, loadPendingResetRequests, toast]);
 
@@ -201,18 +203,18 @@ export function useSettingsManagedUserLifecycleActions({
       if (managedSelectedUser?.id === user.id) {
         onManagedDialogOpenChange(false);
       }
-      toast({
+      toast(buildMutationSuccessToast({
         title: "Account Deleted",
         description: `${user.username} has been deleted safely.`,
-      });
+      }));
       await Promise.all([loadManagedUsers(), loadPendingResetRequests()]);
     } catch (error: unknown) {
       const parsed = normalizeSettingsErrorPayload(error);
-      toast({
+      toast(buildMutationErrorToast({
         title: parsed.code || "Delete Failed",
-        description: parsed.message,
-        variant: "destructive",
-      });
+        error,
+        fallbackDescription: parsed.message,
+      }));
     } finally {
       deleteManagedUserLocksRef.current.delete(user.id);
       if (isMountedRef.current) {

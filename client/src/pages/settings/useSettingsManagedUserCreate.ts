@@ -1,5 +1,9 @@
 import { useCallback, useRef, useState, type MutableRefObject } from "react";
 import { createManagedUserAccount } from "@/lib/api";
+import {
+  buildMutationErrorToast,
+  buildMutationSuccessToast,
+} from "@/lib/mutation-feedback";
 import type { ManagedUser } from "@/pages/settings/types";
 import {
   formatActivationExpiry,
@@ -74,20 +78,20 @@ export function useSettingsManagedUserCreate({
       const previewUrl = String(activation?.previewUrl || "");
 
       if (isDevOutboxActivation(activation)) {
-        toast({
+        toast(buildMutationSuccessToast({
           title: "Account Created",
           description: `Created ${createRoleInput} account for ${normalizedUsername}. Activation email was captured in the local development outbox.`,
-        });
+        }));
         openManagedSecretDialog({
           title: "Local Activation Email Preview",
           description: `SMTP is not configured, so the activation email was written to the local development outbox instead. Open this preview URL and follow the activation link before ${expiresAt}.`,
           value: previewUrl,
         });
       } else if (activation?.sent) {
-        toast({
+        toast(buildMutationSuccessToast({
           title: "Account Created",
           description: `Created ${createRoleInput} account for ${normalizedUsername}. Activation email sent to ${recipientEmail}.`,
-        });
+        }));
       } else {
         openManagedSecretDialog({
           title: "Activation Email Not Sent",
@@ -97,10 +101,10 @@ export function useSettingsManagedUserCreate({
               : "The account was created and remains pending activation, but the activation email could not be sent. Configure SMTP and use Resend Activation.",
           value: previewUrl || undefined,
         });
-        toast({
+        toast(buildMutationSuccessToast({
           title: "Account Created",
           description: `${normalizedUsername} remains pending activation until the email is delivered.`,
-        });
+        }));
       }
 
       if (previewUrl && activation?.sent && activation?.deliveryMode === "smtp") {
@@ -141,11 +145,11 @@ export function useSettingsManagedUserCreate({
         }
       }
 
-      toast({
+      toast(buildMutationErrorToast({
         title: parsed.code || "Create Failed",
-        description: parsed.message,
-        variant: "destructive",
-      });
+        error,
+        fallbackDescription: parsed.message,
+      }));
     } finally {
       createManagedUserLockRef.current = false;
       if (!isMountedRef.current) return;
