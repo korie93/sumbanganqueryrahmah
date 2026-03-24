@@ -112,6 +112,8 @@ function createOperationsRouteHarness(options?: {
       totalImports: 2,
       bannedUsers: 0,
       collectionRecordVersionConflicts24h: 4,
+      loginFailures24h: 6,
+      backupActions24h: 3,
     }),
     getLoginTrends: async (days: number) => [{ date: "2026-03-20", logins: days, logouts: 0 }],
     getTopActiveUsers: async (limit: number) => {
@@ -303,6 +305,8 @@ test("GET /api/analytics/summary includes stale-record conflict frequency for mo
     assert.equal(response.status, 200);
     const payload = await response.json();
     assert.equal(payload.collectionRecordVersionConflicts24h, 4);
+    assert.equal(payload.loginFailures24h, 6);
+    assert.equal(payload.backupActions24h, 3);
   } finally {
     await stopTestServer(server);
   }

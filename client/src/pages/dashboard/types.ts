@@ -6,6 +6,8 @@ export interface SummaryData {
   totalImports: number;
   bannedUsers: number;
   collectionRecordVersionConflicts24h?: number;
+  loginFailures24h?: number;
+  backupActions24h?: number;
 }
 
 export interface LoginTrend {

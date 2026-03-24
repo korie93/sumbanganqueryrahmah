@@ -70,6 +70,11 @@ Release artifacts produced by that flow:
 - `var/perf/collection-baseline-*.json`
 - `var/perf/collection-baseline-*.md`
 
+These directories are generated runtime output and are intentionally gitignored:
+
+- `artifacts/`
+- `var/perf/`
+
 For stale-tab/429 health snapshots:
 
 - `npm run monitor:stale-conflicts`

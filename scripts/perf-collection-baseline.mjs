@@ -47,6 +47,8 @@ const nickname = String(
   process.env.PERF_COLLECTION_NICKNAME || process.env.SMOKE_TEST_USERNAME || "Collector Alpha",
 ).trim();
 const { startDate, endDate } = toMonthRange(year, month);
+const yearStartDate = `${year}-01-01`;
+const yearEndDate = `${year}-12-31`;
 const limit = Math.max(1, Math.min(500, readInt("PERF_COLLECTION_LIMIT", 200)));
 const offset = Math.max(0, readInt("PERF_COLLECTION_OFFSET", 0));
 
@@ -126,6 +128,36 @@ const queries = [
     `,
     values: [year, month, nickname],
   },
+  {
+    name: "monthly_summary_by_year",
+    sql: `
+      SELECT
+        EXTRACT(MONTH FROM payment_date)::int AS month,
+        COUNT(*)::int AS total_records,
+        COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
+      FROM public.collection_records
+      WHERE payment_date BETWEEN $1::date AND $2::date
+        AND ($3::text = '' OR lower(collection_staff_nickname) = lower($3))
+      GROUP BY 1
+      ORDER BY 1
+      LIMIT 12
+    `,
+    values: [yearStartDate, yearEndDate, nickname],
+  },
+  {
+    name: "nickname_summary_by_range",
+    sql: `
+      SELECT
+        collection_staff_nickname AS nickname,
+        COUNT(*)::int AS total_records,
+        COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
+      FROM public.collection_records
+      WHERE payment_date BETWEEN $1::date AND $2::date
+      GROUP BY collection_staff_nickname
+      ORDER BY lower(collection_staff_nickname) ASC
+    `,
+    values: [startDate, endDate],
+  },
 ];
 
 async function runExplain(query) {
@@ -178,7 +210,7 @@ async function run() {
   );
 
   const markdownLines = [
-    "# Collection Daily Performance Baseline",
+    "# Collection Report Performance Baseline",
     "",
     `Generated at: ${startedAt}`,
     "",
@@ -188,6 +220,7 @@ async function run() {
     `- Month: ${month}`,
     `- Nickname: ${nickname}`,
     `- Date range: ${startDate} to ${endDate}`,
+    `- Year summary range: ${yearStartDate} to ${yearEndDate}`,
     `- Limit/Offset: ${limit}/${offset}`,
     "",
     "## Query Summary",
