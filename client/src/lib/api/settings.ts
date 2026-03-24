@@ -1,4 +1,4 @@
-import { apiRequest } from "../queryClient";
+import { apiRequest, createApiHeaders } from "../queryClient";
 import { getAuthHeader } from "./shared";
 
 export async function getSettings() {
@@ -28,9 +28,9 @@ export async function updateSetting(payload: {
 export async function getMaintenanceStatus() {
   const response = await fetch("/api/maintenance-status", {
     credentials: "include",
-    headers: {
+    headers: createApiHeaders({
       ...getAuthHeader(),
-    },
+    }),
   });
   return response.json();
 }

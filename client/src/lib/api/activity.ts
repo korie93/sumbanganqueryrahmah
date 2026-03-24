@@ -1,4 +1,4 @@
-import { apiRequest } from "../queryClient";
+import { apiRequest, createApiHeaders } from "../queryClient";
 import { getCsrfHeader } from "./shared";
 
 export type ActivityLoginPayload = {
@@ -37,10 +37,10 @@ export async function activityHeartbeat(payload?: {
 }) {
   return fetch("/api/activity/heartbeat", {
     method: "POST",
-    headers: {
+    headers: createApiHeaders({
       "Content-Type": "application/json",
       ...(getCsrfHeader() as Record<string, string>),
-    },
+    }),
     credentials: "include",
     body: JSON.stringify(payload || {}),
   });
@@ -49,9 +49,9 @@ export async function activityHeartbeat(payload?: {
 export async function activityHeartbeatLight() {
   return fetch("/api/activity/heartbeat", {
     method: "POST",
-    headers: {
+    headers: createApiHeaders({
       ...(getCsrfHeader() as Record<string, string>),
-    },
+    }),
     credentials: "include",
   });
 }

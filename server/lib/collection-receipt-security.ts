@@ -26,9 +26,21 @@ const DANGEROUS_PDF_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /\/submitform\b/i, reason: "contains submit-form actions" },
   { pattern: /\/importdata\b/i, reason: "contains import-data actions" },
 ];
+const PNG_METADATA_CHUNK_TYPES = new Set(["tEXt", "zTXt", "iTXt", "eXIf", "iCCP", "tIME"]);
+const WEBP_METADATA_CHUNK_TYPES = new Set(["EXIF", "XMP ", "ICCP"]);
+const JPEG_STRIPPABLE_MARKERS = new Set([0xe1, 0xe2, 0xed, 0xfe]);
 
 export const COLLECTION_RECEIPT_MAX_IMAGE_EDGE = 10_000;
 export const COLLECTION_RECEIPT_MAX_IMAGE_PIXELS = 40_000_000;
+
+type ImageDimensions = { width: number; height: number };
+export type CollectionReceiptSecurityResult = {
+  buffer: Buffer;
+  strippedMetadata: boolean;
+  removedMetadataKinds: string[];
+  imageWidth?: number;
+  imageHeight?: number;
+};
 
 function readUInt24LE(buffer: Buffer, offset: number): number | null {
   if (offset < 0 || offset + 2 >= buffer.length) {
@@ -227,6 +239,198 @@ function validatePdfBuffer(buffer: Buffer) {
   }
 }
 
+function uniqueValues(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function describeJpegMarker(marker: number, segmentData: Buffer): string {
+  if (marker === 0xe1) {
+    const header = segmentData.subarray(0, 32).toString("latin1");
+    if (header.startsWith("Exif\0\0")) return "jpeg-exif";
+    if (header.includes("http://ns.adobe.com/xap/1.0/")) return "jpeg-xmp";
+    return "jpeg-app1";
+  }
+  if (marker === 0xe2) return "jpeg-icc";
+  if (marker === 0xed) return "jpeg-iptc";
+  if (marker === 0xfe) return "jpeg-comment";
+  return "jpeg-metadata";
+}
+
+function stripJpegMetadata(buffer: Buffer): { buffer: Buffer; removedMetadataKinds: string[] } {
+  if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) {
+    return { buffer, removedMetadataKinds: [] };
+  }
+
+  const output: Buffer[] = [buffer.subarray(0, 2)];
+  const removedMetadataKinds: string[] = [];
+  let offset = 2;
+
+  while (offset + 1 < buffer.length) {
+    while (offset < buffer.length && buffer[offset] === 0xff) {
+      offset += 1;
+    }
+    if (offset >= buffer.length) {
+      return { buffer, removedMetadataKinds: [] };
+    }
+
+    const marker = buffer[offset];
+    const markerStart = offset - 1;
+    offset += 1;
+
+    if (marker === 0xd9) {
+      output.push(buffer.subarray(markerStart, Math.min(markerStart + 2, buffer.length)));
+      break;
+    }
+
+    if (marker === 0xda) {
+      if (offset + 1 >= buffer.length) {
+        return { buffer, removedMetadataKinds: [] };
+      }
+      output.push(buffer.subarray(markerStart, buffer.length));
+      return {
+        buffer: Buffer.concat(output),
+        removedMetadataKinds: uniqueValues(removedMetadataKinds),
+      };
+    }
+
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      output.push(buffer.subarray(markerStart, Math.min(markerStart + 2, buffer.length)));
+      continue;
+    }
+
+    if (offset + 1 >= buffer.length) {
+      return { buffer, removedMetadataKinds: [] };
+    }
+
+    const segmentLength = buffer.readUInt16BE(offset);
+    const segmentEnd = offset + segmentLength;
+    if (segmentLength < 2 || segmentEnd > buffer.length) {
+      return { buffer, removedMetadataKinds: [] };
+    }
+
+    const segmentData = buffer.subarray(offset + 2, segmentEnd);
+    if (JPEG_STRIPPABLE_MARKERS.has(marker)) {
+      removedMetadataKinds.push(describeJpegMarker(marker, segmentData));
+    } else {
+      output.push(buffer.subarray(markerStart, segmentEnd));
+    }
+
+    offset = segmentEnd;
+  }
+
+  return {
+    buffer: removedMetadataKinds.length ? Buffer.concat(output) : buffer,
+    removedMetadataKinds: uniqueValues(removedMetadataKinds),
+  };
+}
+
+function stripPngMetadata(buffer: Buffer): { buffer: Buffer; removedMetadataKinds: string[] } {
+  if (buffer.length < 8) {
+    return { buffer, removedMetadataKinds: [] };
+  }
+
+  const output: Buffer[] = [buffer.subarray(0, 8)];
+  const removedMetadataKinds: string[] = [];
+  let offset = 8;
+
+  while (offset + 12 <= buffer.length) {
+    const chunkLength = buffer.readUInt32BE(offset);
+    const chunkType = buffer.toString("ascii", offset + 4, offset + 8);
+    const chunkTotal = 12 + chunkLength;
+    const chunkEnd = offset + chunkTotal;
+    if (chunkEnd > buffer.length) {
+      return { buffer, removedMetadataKinds: [] };
+    }
+
+    if (PNG_METADATA_CHUNK_TYPES.has(chunkType)) {
+      removedMetadataKinds.push(`png-${chunkType.toLowerCase()}`);
+    } else {
+      output.push(buffer.subarray(offset, chunkEnd));
+    }
+
+    offset = chunkEnd;
+    if (chunkType === "IEND") {
+      break;
+    }
+  }
+
+  return {
+    buffer: removedMetadataKinds.length ? Buffer.concat(output) : buffer,
+    removedMetadataKinds: uniqueValues(removedMetadataKinds),
+  };
+}
+
+function stripWebpMetadata(buffer: Buffer): { buffer: Buffer; removedMetadataKinds: string[] } {
+  if (
+    buffer.length < 12
+    || buffer.toString("ascii", 0, 4) !== "RIFF"
+    || buffer.toString("ascii", 8, 12) !== "WEBP"
+  ) {
+    return { buffer, removedMetadataKinds: [] };
+  }
+
+  const keptChunks: Buffer[] = [];
+  const removedMetadataKinds: string[] = [];
+  let offset = 12;
+
+  while (offset + 8 <= buffer.length) {
+    const chunkType = buffer.toString("ascii", offset, offset + 4);
+    const chunkSize = buffer.readUInt32LE(offset + 4);
+    const chunkTotal = 8 + chunkSize + (chunkSize % 2);
+    const chunkEnd = offset + chunkTotal;
+    if (chunkEnd > buffer.length) {
+      return { buffer, removedMetadataKinds: [] };
+    }
+
+    if (WEBP_METADATA_CHUNK_TYPES.has(chunkType)) {
+      removedMetadataKinds.push(`webp-${chunkType.trim().toLowerCase()}`);
+    } else {
+      keptChunks.push(buffer.subarray(offset, chunkEnd));
+    }
+
+    offset = chunkEnd;
+  }
+
+  if (!removedMetadataKinds.length) {
+    return { buffer, removedMetadataKinds: [] };
+  }
+
+  const riffSize = 4 + keptChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const header = Buffer.alloc(12);
+  header.write("RIFF", 0, "ascii");
+  header.writeUInt32LE(riffSize, 4);
+  header.write("WEBP", 8, "ascii");
+
+  return {
+    buffer: Buffer.concat([header, ...keptChunks]),
+    removedMetadataKinds: uniqueValues(removedMetadataKinds),
+  };
+}
+
+function sanitizeCollectionReceiptImageBuffer(
+  buffer: Buffer,
+  signatureType: Exclude<CollectionReceiptFileType, "pdf">,
+): { buffer: Buffer; removedMetadataKinds: string[]; dimensions: ImageDimensions } {
+  const stripped = signatureType === "png"
+    ? stripPngMetadata(buffer)
+    : signatureType === "jpg"
+      ? stripJpegMetadata(buffer)
+      : stripWebpMetadata(buffer);
+  const sanitizedBuffer = stripped.buffer;
+  const dimensions = signatureType === "png"
+    ? extractPngDimensions(sanitizedBuffer)
+    : signatureType === "jpg"
+      ? extractJpegDimensions(sanitizedBuffer)
+      : extractWebpDimensions(sanitizedBuffer);
+  const validated = validateImageDimensions(dimensions);
+
+  return {
+    buffer: sanitizedBuffer,
+    removedMetadataKinds: stripped.removedMetadataKinds,
+    dimensions: validated,
+  };
+}
+
 export function detectCollectionReceiptSignature(buffer: Buffer): CollectionReceiptFileType | null {
   if (!buffer || buffer.length < 4) {
     return null;
@@ -287,20 +491,33 @@ export function validateCollectionReceiptSecurity(
   buffer: Buffer,
   signatureType: CollectionReceiptFileType,
 ): { imageWidth?: number; imageHeight?: number } {
+  const result = sanitizeCollectionReceiptBuffer(buffer, signatureType);
+  return {
+    imageWidth: result.imageWidth,
+    imageHeight: result.imageHeight,
+  };
+}
+
+export function sanitizeCollectionReceiptBuffer(
+  buffer: Buffer,
+  signatureType: CollectionReceiptFileType,
+): CollectionReceiptSecurityResult {
   if (signatureType === "pdf") {
     validatePdfBuffer(buffer);
-    return {};
+    return {
+      buffer,
+      strippedMetadata: false,
+      removedMetadataKinds: [],
+    };
   }
 
-  const dimensions = signatureType === "png"
-    ? extractPngDimensions(buffer)
-    : signatureType === "jpg"
-      ? extractJpegDimensions(buffer)
-      : extractWebpDimensions(buffer);
-  const validated = validateImageDimensions(dimensions);
+  const sanitized = sanitizeCollectionReceiptImageBuffer(buffer, signatureType);
 
   return {
-    imageWidth: validated.width,
-    imageHeight: validated.height,
+    buffer: sanitized.buffer,
+    strippedMetadata: sanitized.removedMetadataKinds.length > 0,
+    removedMetadataKinds: sanitized.removedMetadataKinds,
+    imageWidth: sanitized.dimensions.width,
+    imageHeight: sanitized.dimensions.height,
   };
 }

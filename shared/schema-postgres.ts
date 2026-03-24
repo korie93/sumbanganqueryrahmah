@@ -116,11 +116,17 @@ export const auditLogs = pgTable("audit_logs", {
   id: text("id").primaryKey(),
   action: text("action").notNull(),
   performedBy: text("performed_by").notNull(),
+  requestId: text("request_id"),
   targetUser: text("target_user"),
   targetResource: text("target_resource"),
   details: text("details"),
   timestamp: timestamp("timestamp").defaultNow(),
-});
+}, (table) => ({
+  timestampIdx: index("idx_audit_logs_timestamp").on(table.timestamp),
+  actionIdx: index("idx_audit_logs_action").on(table.action),
+  performedByIdx: index("idx_audit_logs_performed_by").on(table.performedBy),
+  requestIdIdx: index("idx_audit_logs_request_id").on(table.requestId),
+}));
 
 export const mutationIdempotencyKeys = pgTable("mutation_idempotency_keys", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -549,6 +555,7 @@ export const insertUserActivitySchema = createInsertSchema(userActivity).pick({
 export const insertAuditLogSchema = createInsertSchema(auditLogs).pick({
   action: true,
   performedBy: true,
+  requestId: true,
   targetUser: true,
   targetResource: true,
   details: true,

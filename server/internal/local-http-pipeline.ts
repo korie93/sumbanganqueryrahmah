@@ -6,6 +6,17 @@ import { runWithRequestContext } from "../lib/request-context";
 import { createCsrfProtectionMiddleware } from "../http/csrf";
 import { createCorsMiddleware } from "../http/cors";
 
+const HTTP_SLOW_REQUEST_MS = Math.max(250, Number(process.env.HTTP_SLOW_REQUEST_MS || 1500) || 1500);
+
+function normalizeRequestUserAgent(rawUserAgent: unknown): string | undefined {
+  const normalized = String(rawUserAgent || "").trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return undefined;
+  }
+
+  return normalized.slice(0, 180);
+}
+
 type LocalHttpPipelineOptions = {
   importBodyLimit: string;
   collectionBodyLimit: string;
@@ -60,31 +71,43 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
   app.use((req, res, next) => {
     const incomingRequestId = String(req.headers["x-request-id"] || "").trim();
     const requestId = incomingRequestId || randomUUID();
+    const clientIp = String(req.ip || req.socket.remoteAddress || "").trim() || undefined;
+    const userAgent = normalizeRequestUserAgent(req.headers["user-agent"]);
     res.setHeader("x-request-id", requestId);
 
-    runWithRequestContext({ requestId }, () => {
+    runWithRequestContext({
+      requestId,
+      httpMethod: req.method,
+      httpPath: req.path,
+      clientIp,
+      userAgent,
+    }, () => {
       const start = process.hrtime.bigint();
       recordRequestStarted();
 
       res.on("finish", () => {
         const elapsedMs = Number(process.hrtime.bigint() - start) / 1_000_000;
         recordRequestFinished(elapsedMs, Number(res.statusCode || 0));
+        const requestMeta = {
+          requestId,
+          method: req.method,
+          path: req.path,
+          statusCode: res.statusCode,
+          elapsedMs: Number(elapsedMs.toFixed(2)),
+          contentLength: Number(req.headers["content-length"] || 0) || 0,
+          responseSize: Number(res.getHeader("content-length") || 0) || 0,
+          clientIp,
+          userAgent,
+        };
 
         if (res.statusCode >= 500) {
-          logger.error("HTTP request completed with server error", {
-            requestId,
-            method: req.method,
-            path: req.path,
-            statusCode: res.statusCode,
-            elapsedMs: Number(elapsedMs.toFixed(2)),
-          });
+          logger.error("HTTP request completed with server error", requestMeta);
         } else if (res.statusCode >= 400) {
-          logger.warn("HTTP request completed with client error", {
-            requestId,
-            method: req.method,
-            path: req.path,
-            statusCode: res.statusCode,
-            elapsedMs: Number(elapsedMs.toFixed(2)),
+          logger.warn("HTTP request completed with client error", requestMeta);
+        } else if (elapsedMs >= HTTP_SLOW_REQUEST_MS) {
+          logger.warn("HTTP request completed slowly", {
+            ...requestMeta,
+            slowRequestThresholdMs: HTTP_SLOW_REQUEST_MS,
           });
         }
       });

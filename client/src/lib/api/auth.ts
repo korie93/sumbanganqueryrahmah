@@ -1,4 +1,4 @@
-import { apiRequest } from "../queryClient";
+import { apiRequest, createApiHeaders } from "../queryClient";
 import { API_BASE, getCsrfHeader } from "./shared";
 
 export type CurrentUser = {
@@ -164,10 +164,10 @@ export async function login(
 ): Promise<LoginResponse | { banned: true }> {
   const res = await fetch("/api/login", {
     method: "POST",
-    headers: {
+    headers: createApiHeaders({
       "Content-Type": "application/json",
       ...(getCsrfHeader() as Record<string, string>),
-    },
+    }),
     body: JSON.stringify({
       username: username.toLowerCase().trim(),
       password,
@@ -189,7 +189,9 @@ export async function login(
 }
 
 export async function checkHealth() {
-  const response = await fetch(`${API_BASE}/api/health`);
+  const response = await fetch(`${API_BASE}/api/health`, {
+    headers: createApiHeaders(),
+  });
   return response.json();
 }
 

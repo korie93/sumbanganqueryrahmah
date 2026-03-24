@@ -33,3 +33,34 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     await stopTestServer(server);
   }
 });
+
+test("registerLocalHttpPipeline preserves caller-provided request ids", async () => {
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+  app.get("/request-id", (_req, res) => {
+    res.json({ ok: true });
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/request-id`, {
+      headers: {
+        "x-request-id": "req-test-123",
+      },
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("x-request-id"), "req-test-123");
+  } finally {
+    await stopTestServer(server);
+  }
+});

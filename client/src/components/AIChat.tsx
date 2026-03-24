@@ -10,6 +10,7 @@ import {
   type AIChatStatus as SharedAIChatStatus,
 } from "@/lib/ai-chat";
 import { getCsrfHeader } from "@/lib/api/shared";
+import { createApiHeaders } from "@/lib/queryClient";
 import "@/styles/ai.css";
 
 type AIChatProps = {
@@ -184,8 +185,10 @@ export default function AIChat({ timeoutMs, aiEnabled, onCancelAISearchReady, on
 
     try {
       const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        ...(getCsrfHeader() as Record<string, string>),
+        ...createApiHeaders({
+          "Content-Type": "application/json",
+          ...(getCsrfHeader() as Record<string, string>),
+        }),
       };
 
       const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);

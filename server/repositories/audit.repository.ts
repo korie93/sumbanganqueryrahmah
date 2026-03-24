@@ -3,6 +3,7 @@ import { desc, gte, sql } from "drizzle-orm";
 import type { AuditLog, InsertAuditLog } from "../../shared/schema-postgres";
 import { auditLogs } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
+import { getRequestIdFromContext } from "../lib/request-context";
 
 const QUERY_PAGE_LIMIT = 1000;
 const AUDIT_LIST_DEFAULT_PAGE_SIZE = 50;
@@ -38,6 +39,7 @@ export class AuditRepository {
         id: crypto.randomUUID(),
         action: data.action,
         performedBy: data.performedBy,
+        requestId: data.requestId || getRequestIdFromContext() || null,
         targetUser: data.targetUser ?? null,
         targetResource: data.targetResource ?? null,
         details: data.details ?? null,
@@ -139,6 +141,7 @@ export class AuditRepository {
           id,
           action,
           performed_by as "performedBy",
+          request_id as "requestId",
           target_user as "targetUser",
           target_resource as "targetResource",
           details,

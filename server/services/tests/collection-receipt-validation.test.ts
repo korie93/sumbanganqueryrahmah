@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import test from "node:test";
+import { sanitizeCollectionReceiptBuffer } from "../../lib/collection-receipt-security";
 import {
   detectCollectionReceiptSignature,
   removeCollectionReceiptFile,
@@ -55,6 +56,45 @@ function createTinyWebpBuffer(width = 1, height = 1) {
     0x00, 0x00, 0x00, 0x00,
     (width - 1) & 0xff, ((width - 1) >> 8) & 0xff, ((width - 1) >> 16) & 0xff,
     (height - 1) & 0xff, ((height - 1) >> 8) & 0xff, ((height - 1) >> 16) & 0xff,
+  ]);
+}
+
+function createJpegWithExifMetadata() {
+  return Buffer.from([
+    0xff, 0xd8,
+    0xff, 0xe1, 0x00, 0x16, 0x45, 0x78, 0x69, 0x66, 0x00, 0x00, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61,
+    0x2d, 0x54, 0x65, 0x73, 0x74, 0x21,
+    0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00,
+    0xff, 0xc0, 0x00, 0x11, 0x08,
+    0x00, 0x01,
+    0x00, 0x01,
+    0x03, 0x01, 0x11, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01,
+    0xff, 0xd9,
+  ]);
+}
+
+function createPngWithTextMetadata() {
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.from([
+      0x00, 0x00, 0x00, 0x0d,
+      0x49, 0x48, 0x44, 0x52,
+      0x00, 0x00, 0x00, 0x01,
+      0x00, 0x00, 0x00, 0x01,
+      0x08, 0x06, 0x00, 0x00, 0x00,
+      0x1f, 0x15, 0xc4, 0x89,
+    ]),
+    Buffer.from([
+      0x00, 0x00, 0x00, 0x09,
+      0x74, 0x45, 0x58, 0x74,
+      0x43, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x00, 0x58,
+      0x00, 0x00, 0x00, 0x00,
+    ]),
+    Buffer.from([
+      0x00, 0x00, 0x00, 0x00,
+      0x49, 0x45, 0x4e, 0x44,
+      0xae, 0x42, 0x60, 0x82,
+    ]),
   ]);
 }
 
@@ -147,6 +187,32 @@ test("saveMultipartCollectionReceipt streams files to disk with canonical metada
   assert.match(saved.storagePath, /\/uploads\/collection-receipts\/.+\.png$/);
 
   await removeCollectionReceiptFile(saved.storagePath);
+});
+
+test("sanitizeCollectionReceiptBuffer strips JPEG EXIF metadata before storage", () => {
+  const source = createJpegWithExifMetadata();
+
+  const sanitized = sanitizeCollectionReceiptBuffer(source, "jpg");
+
+  assert.equal(sanitized.strippedMetadata, true);
+  assert.match(sanitized.removedMetadataKinds.join(","), /jpeg-exif/i);
+  assert.equal(sanitized.imageWidth, 1);
+  assert.equal(sanitized.imageHeight, 1);
+  assert.ok(sanitized.buffer.length < source.length);
+  assert.equal(sanitized.buffer.includes(Buffer.from("Exif\0\0", "latin1")), false);
+});
+
+test("sanitizeCollectionReceiptBuffer strips PNG text metadata before storage", () => {
+  const source = createPngWithTextMetadata();
+
+  const sanitized = sanitizeCollectionReceiptBuffer(source, "png");
+
+  assert.equal(sanitized.strippedMetadata, true);
+  assert.match(sanitized.removedMetadataKinds.join(","), /png-text/i);
+  assert.equal(sanitized.imageWidth, 1);
+  assert.equal(sanitized.imageHeight, 1);
+  assert.ok(sanitized.buffer.length < source.length);
+  assert.equal(sanitized.buffer.includes(Buffer.from("tEXt", "ascii")), false);
 });
 
 test("saveCollectionReceipt rejects PDF payloads that contain dangerous automatic actions", async () => {
