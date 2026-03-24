@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { SideTabNavigation } from "@/components/navigation/SideTabNavigation";
+import { LazySideTabNavigation } from "@/components/navigation/LazySideTabNavigation";
 import { getSettingsCategoryIcon } from "@/pages/settings/settings-sidebar-icons";
 import type { SettingCategory } from "@/pages/settings/types";
 
@@ -37,7 +37,7 @@ export function SettingsSidebar({
   );
 
   return (
-    <SideTabNavigation
+    <LazySideTabNavigation
       items={items}
       selectedKey={selectedCategory}
       onSelect={onSelectCategory}

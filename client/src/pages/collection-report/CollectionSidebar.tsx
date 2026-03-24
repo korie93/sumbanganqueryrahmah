@@ -1,4 +1,4 @@
-import { SideTabNavigation } from "@/components/navigation/SideTabNavigation";
+import { LazySideTabNavigation } from "@/components/navigation/LazySideTabNavigation";
 import type { CollectionSidebarItem, CollectionSubPage } from "@/pages/collection-report/types";
 
 export interface CollectionSidebarProps {
@@ -21,7 +21,7 @@ export function CollectionSidebar({
   onSidebarCollapsedChange,
 }: CollectionSidebarProps) {
   return (
-    <SideTabNavigation
+    <LazySideTabNavigation
       items={items}
       selectedKey={selectedSubPage}
       onSelect={(key) => onSelectSubPage(key as CollectionSubPage)}
