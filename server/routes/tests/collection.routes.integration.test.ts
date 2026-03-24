@@ -1424,3 +1424,254 @@ test("PATCH /api/collection/:id rejects a stale rapid second edit and keeps dail
     await stopTestServer(server);
   }
 });
+
+test("PATCH /api/collection/:id correctly reassigns the staff nickname on the record", async () => {
+  // Verify that a nickname reassignment PATCH reaches the storage layer with the correct
+  // collectionStaffNickname value and that the returned record reflects the new owner.
+  const nicknameProfiles = [
+    {
+      id: "nickname-alpha",
+      nickname: "Collector Alpha",
+      isActive: true,
+      roleScope: "both",
+      createdBy: "superuser",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+    {
+      id: "nickname-bravo",
+      nickname: "Collector Bravo",
+      isActive: true,
+      roleScope: "both",
+      createdBy: "superuser",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+  ];
+
+  const updateCalls: Array<{ id: string; data: Record<string, unknown> }> = [];
+  const auditLogs: Array<{ action: string }> = [];
+  const record = {
+    id: "rec-nickname-test",
+    customerName: "Customer X",
+    icNumber: "900101050099",
+    customerPhone: "0123456789",
+    accountNumber: "ACC-NR1",
+    batch: "P10",
+    paymentDate: "2026-03-01",
+    amount: "500.00",
+    receiptFile: null,
+    receipts: [],
+    createdByLogin: "superuser",
+    collectionStaffNickname: "Collector Alpha",
+    createdAt: new Date("2026-03-01T09:00:00.000Z"),
+    updatedAt: new Date("2026-03-01T09:00:00.000Z"),
+  };
+
+  const storage = {
+    getCollectionNicknameSessionByActivity: async () => null,
+    getCollectionStaffNicknameByName: async (nickname: string) =>
+      nicknameProfiles.find((n) => n.nickname === nickname) ?? null,
+    getCollectionRecordById: async (id: string) => (id === record.id ? { ...record } : null),
+    updateCollectionRecord: async (id: string, data: Record<string, unknown>) => {
+      updateCalls.push({ id, data });
+      return { ...record, ...data, amount: record.amount, updatedAt: new Date("2026-03-02T10:00:00.000Z") };
+    },
+    createAuditLog: async (entry: { action: string }) => {
+      auditLogs.push(entry);
+      return { id: "audit-1", ...entry };
+    },
+    listCollectionRecordReceipts: async () => [],
+    getCollectionRecordReceiptById: async () => null,
+    createCollectionRecordReceipts: async () => [],
+    canUserAccessCollection: async () => true,
+    getCollectionNicknameByValue: async () => null,
+    getCollectionAdminGroupForNickname: async () => null,
+  } as unknown as import("../../storage-postgres").PostgresStorage;
+
+  const { registerCollectionRoutes } = await import("../collection.routes");
+  const app = createJsonTestApp();
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "superuser-1",
+      username: "superuser",
+      role: "superuser",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/${record.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ collectionStaffNickname: "Collector Bravo" }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(updateCalls.length, 1);
+    assert.equal(updateCalls[0].id, record.id);
+    assert.equal(updateCalls[0].data.collectionStaffNickname, "Collector Bravo");
+    assert.equal(auditLogs.length, 1);
+    assert.equal(auditLogs[0].action, "COLLECTION_RECORD_UPDATED");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/collection/:id correctly updates the payment date on the record", async () => {
+  // Verify that a payment-date PATCH reaches the storage layer with the normalised ISO date
+  // so that the on-demand daily-overview computation will reflect the new date immediately.
+  const updateCalls: Array<{ id: string; data: Record<string, unknown> }> = [];
+  const auditLogs: Array<{ action: string }> = [];
+  const record = {
+    id: "rec-date-test",
+    customerName: "Customer Y",
+    icNumber: "900101050088",
+    customerPhone: "0123456789",
+    accountNumber: "ACC-DR1",
+    batch: "P10",
+    paymentDate: "2026-03-01",
+    amount: "300.00",
+    receiptFile: null,
+    receipts: [],
+    createdByLogin: "superuser",
+    collectionStaffNickname: "Collector Alpha",
+    createdAt: new Date("2026-03-01T09:00:00.000Z"),
+    updatedAt: new Date("2026-03-01T09:00:00.000Z"),
+  };
+
+  const storage = {
+    getCollectionNicknameSessionByActivity: async () => null,
+    getCollectionStaffNicknameByName: async () => null,
+    getCollectionRecordById: async (id: string) => (id === record.id ? { ...record } : null),
+    updateCollectionRecord: async (id: string, data: Record<string, unknown>) => {
+      updateCalls.push({ id, data });
+      return { ...record, ...data, amount: record.amount, updatedAt: new Date("2026-03-02T10:00:00.000Z") };
+    },
+    createAuditLog: async (entry: { action: string }) => {
+      auditLogs.push(entry);
+      return { id: "audit-1", ...entry };
+    },
+    listCollectionRecordReceipts: async () => [],
+    getCollectionRecordReceiptById: async () => null,
+    createCollectionRecordReceipts: async () => [],
+    canUserAccessCollection: async () => true,
+    getCollectionNicknameByValue: async () => null,
+    getCollectionAdminGroupForNickname: async () => null,
+  } as unknown as import("../../storage-postgres").PostgresStorage;
+
+  const { registerCollectionRoutes } = await import("../collection.routes");
+  const app = createJsonTestApp();
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "superuser-1",
+      username: "superuser",
+      role: "superuser",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/${record.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentDate: "2026-03-15" }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(updateCalls.length, 1);
+    assert.equal(updateCalls[0].id, record.id);
+    assert.equal(String(updateCalls[0].data.paymentDate), "2026-03-15");
+    assert.equal(auditLogs.length, 1);
+    assert.equal(auditLogs[0].action, "COLLECTION_RECORD_UPDATED");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("DELETE /api/collection/:id removes the record so it no longer appears in subsequent reads", async () => {
+  // Confirm that a successful DELETE removes the record from the in-memory store,
+  // meaning any subsequent daily-overview query would not include the deleted record's amount.
+  const deleteCalls: Array<{ id: string }> = [];
+  const auditLogs: Array<{ action: string }> = [];
+  const record = {
+    id: "rec-delete-test",
+    customerName: "Customer Z",
+    icNumber: "900101050077",
+    customerPhone: "0123456789",
+    accountNumber: "ACC-DEL1",
+    batch: "P10",
+    paymentDate: "2026-03-05",
+    amount: "250.00",
+    receiptFile: null,
+    receipts: [],
+    createdByLogin: "superuser",
+    collectionStaffNickname: "Collector Alpha",
+    createdAt: new Date("2026-03-05T09:00:00.000Z"),
+    updatedAt: new Date("2026-03-05T09:00:00.000Z"),
+  };
+  let recordStore: typeof record | null = record;
+
+  const storage = {
+    getCollectionNicknameSessionByActivity: async () => null,
+    getCollectionRecordById: async (id: string) => (id === record.id ? recordStore : null),
+    deleteCollectionRecord: async (id: string, opts?: { expectedUpdatedAt?: Date }) => {
+      deleteCalls.push({ id });
+      if (opts?.expectedUpdatedAt && record.updatedAt.getTime() !== opts.expectedUpdatedAt.getTime()) {
+        return false;
+      }
+      recordStore = null;
+      return true;
+    },
+    createAuditLog: async (entry: { action: string }) => {
+      auditLogs.push(entry);
+      return { id: "audit-1", ...entry };
+    },
+    listCollectionRecordReceipts: async () => [],
+    canUserAccessCollection: async () => true,
+    getCollectionNicknameByValue: async () => null,
+    getCollectionAdminGroupForNickname: async () => null,
+  } as unknown as import("../../storage-postgres").PostgresStorage;
+
+  const { registerCollectionRoutes } = await import("../collection.routes");
+  const app = createJsonTestApp();
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "superuser-1",
+      username: "superuser",
+      role: "superuser",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const deleteResponse = await fetch(`${baseUrl}/api/collection/${record.id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+
+    assert.equal(deleteResponse.status, 200);
+    const deletePayload = await deleteResponse.json();
+    assert.equal(deletePayload.ok, true);
+    assert.equal(deleteCalls.length, 1);
+    assert.equal(deleteCalls[0].id, record.id);
+    // The record no longer exists in the store after deletion.
+    assert.equal(recordStore, null);
+    assert.equal(auditLogs.length, 1);
+    assert.equal(auditLogs[0].action, "COLLECTION_RECORD_DELETED");
+  } finally {
+    await stopTestServer(server);
+  }
+});

@@ -16,6 +16,12 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 - **AI Integration:** Ollama (llama3 / nomic-embed-text)
 - **Real-time:** WebSocket (ws)
 
+## Prerequisites
+
+- **Node.js** >= 24 (see `.nvmrc` or `engines` field in `package.json`)
+- **PostgreSQL** database (local or remote)
+- Optional: **Ollama** running locally for AI search features
+
 ## Setup Instructions
 
 1. **Clone and install:**
@@ -32,12 +38,17 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
    Edit `.env` and fill in your PostgreSQL credentials and session secret.
    See [.env.example](./.env.example) for all available options.
 
-3. **Development mode:**
+3. **Run database migrations:**
    ```bash
-   npm run dev:server
+   npm run db:migrate
    ```
 
-4. **Production build and start:**
+4. **Development mode:**
+   ```bash
+   npm run dev
+   ```
+
+5. **Production build and start:**
    ```bash
    npm run build
    npm start
@@ -47,6 +58,7 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 
 | Command | Description |
 |---------|-------------|
+| `npm run dev` | Start development server (alias for `dev:server`) |
 | `npm run dev:server` | Start development server with hot reload |
 | `npm run build` | Build client and server bundles |
 | `npm start` | Start the built production server |
@@ -62,6 +74,28 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 | `npm run dr:drill` | Execute backup disaster-recovery drill (create/export/checksum/optional restore) |
 | `npm run release:verify:local` | Run final local release gate (tests + smoke + backup drill) |
 | `npm run monitor:stale-conflicts` | Snapshot stale-conflict/429 runtime monitor signals |
+
+## Project Structure
+
+```
+sumbanganqueryrahmah/
+├── client/          # React + TypeScript frontend (Vite)
+├── server/          # Express + TypeScript backend
+│   ├── controllers/ # Request/response logic
+│   ├── services/    # Business logic
+│   ├── repositories/# Database query layer
+│   ├── middleware/  # Express middleware
+│   ├── routes/      # API route definitions
+│   ├── config/      # Runtime configuration
+│   ├── utils/       # Shared utility functions
+│   └── db/          # Database connection setup
+├── shared/          # Types and schemas shared between client and server
+├── drizzle/         # Drizzle ORM migration files
+├── scripts/         # Build, CI, and maintenance scripts
+└── docs/            # Additional documentation
+```
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for a detailed architecture overview.
 
 ## Features
 
