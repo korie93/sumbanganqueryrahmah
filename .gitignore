@@ -30,3 +30,7 @@ Thumbs.db
 
 # Old database artifacts
 *.db
+
+# Temporary files
+*.tmp
+response.json
