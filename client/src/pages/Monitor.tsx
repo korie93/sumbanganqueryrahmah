@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { MonitorAccessDenied } from "@/components/monitor/MonitorAccessDenied";
 import { MonitorAlertsSection } from "@/components/monitor/MonitorAlertsSection";
 import { MonitorChaosSection } from "@/components/monitor/MonitorChaosSection";
@@ -6,7 +6,6 @@ import { MonitorInsightsSection } from "@/components/monitor/MonitorInsightsSect
 import { MonitorMetricsSection } from "@/components/monitor/MonitorMetricsSection";
 import { MonitorOverviewSection } from "@/components/monitor/MonitorOverviewSection";
 import { MonitorStatusBanners } from "@/components/monitor/MonitorStatusBanners";
-import { MonitorTechnicalChartsSection } from "@/components/monitor/MonitorTechnicalChartsSection";
 import {
   CHAOS_OPTIONS,
   buildAnomalyRows,
@@ -23,6 +22,33 @@ import {
 import { useSystemMetrics } from "@/hooks/useSystemMetrics";
 import { useToast } from "@/hooks/use-toast";
 import { type ChaosType, injectChaos } from "@/lib/api";
+
+const MonitorTechnicalChartsSection = lazy(() =>
+  import("@/components/monitor/MonitorTechnicalChartsSection").then((module) => ({
+    default: module.MonitorTechnicalChartsSection,
+  })),
+);
+
+function MonitorChartsFallback() {
+  return (
+    <section
+      className="rounded-2xl border border-border/60 bg-slate-200/40 p-4 dark:bg-slate-900/60"
+      role="status"
+      aria-live="polite"
+      aria-label="Loading technical charts"
+    >
+      <div className="mb-3 h-6 w-48 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div
+            key={index}
+            className="h-64 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export default function Monitor() {
   const [alertsOpen, setAlertsOpen] = useState(true);
@@ -199,7 +225,9 @@ export default function Monitor() {
           onChaosDurationChange={setChaosDurationMs}
           onSubmit={submitChaos}
         />
-        <MonitorTechnicalChartsSection chartSeries={chartSeries} />
+        <Suspense fallback={<MonitorChartsFallback />}>
+          <MonitorTechnicalChartsSection chartSeries={chartSeries} />
+        </Suspense>
 
         <p className="text-right text-xs text-muted-foreground">
           {isLoading ? "Loading..." : `Last updated: ${lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : "-"}`}
