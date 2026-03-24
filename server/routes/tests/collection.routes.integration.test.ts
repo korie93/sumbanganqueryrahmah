@@ -652,6 +652,70 @@ test("GET /api/collection/:id/receipts/:receiptId/view does not fallback to lega
   }
 });
 
+test("GET /api/collection/:id/receipt/view prunes a missing relation receipt and falls back to the next valid receipt", async () => {
+  const uploadsDir = path.resolve(process.cwd(), "uploads", "collection-receipts");
+  const storedFileName = `route-test-fallback-receipt-${Date.now()}-${Math.random().toString(16).slice(2)}.png`;
+  const storedReceiptPath = `/uploads/collection-receipts/${storedFileName}`;
+  await fs.mkdir(uploadsDir, { recursive: true });
+  await fs.writeFile(path.join(uploadsDir, storedFileName), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+
+  const { storage, deleteReceiptCalls } = createCoreCollectionStorageDouble({
+    sessionNickname: "Collector Alpha",
+    receiptRowsByRecordId: {
+      "collection-1": [
+        {
+          id: "receipt-missing",
+          collectionRecordId: "collection-1",
+          storagePath: "/uploads/collection-receipts/missing-preview.png",
+          originalFileName: "missing-preview.png",
+          originalMimeType: "image/png",
+          originalExtension: ".png",
+          fileSize: 10,
+          createdAt: new Date("2026-03-01T00:00:00.000Z"),
+        },
+        {
+          id: "receipt-valid",
+          collectionRecordId: "collection-1",
+          storagePath: storedReceiptPath,
+          originalFileName: storedFileName,
+          originalMimeType: "image/png",
+          originalExtension: ".png",
+          fileSize: 4,
+          createdAt: new Date("2026-03-02T00:00:00.000Z"),
+        },
+      ],
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+      activityId: "activity-user-collection-receipt-fallback",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1/receipt/view`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "image/png");
+    assert.equal(deleteReceiptCalls.length, 1);
+    assert.deepEqual(deleteReceiptCalls[0], {
+      recordId: "collection-1",
+      receiptIds: ["receipt-missing"],
+    });
+  } finally {
+    await stopTestServer(server);
+    await fs.unlink(path.join(uploadsDir, storedFileName)).catch(() => undefined);
+  }
+});
+
 test("GET /api/collection/summary passes year and nickname filters to the summary query", async () => {
   const { storage, monthlySummaryCalls } = createCollectionSummaryStorageDouble();
   const app = createJsonTestApp();

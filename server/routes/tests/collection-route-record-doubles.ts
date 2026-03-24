@@ -99,6 +99,10 @@ export function createCoreCollectionStorageDouble(options?: {
     id: string;
     options?: { expectedUpdatedAt?: Date };
   }> = [];
+  const deleteReceiptCalls: Array<{
+    recordId: string;
+    receiptIds: string[];
+  }> = [];
   const activeNickname = {
     id: "nickname-1",
     nickname: "Collector Alpha",
@@ -130,6 +134,19 @@ export function createCoreCollectionStorageDouble(options?: {
   for (const [recordId, receipts] of Object.entries(options?.receiptRowsByRecordId || {})) {
     receiptRowsByRecordId.set(recordId, receipts);
   }
+
+  const syncRecordReceiptFile = (recordId: string) => {
+    const existing = records.get(recordId);
+    if (!existing) {
+      return;
+    }
+
+    const receipts = receiptRowsByRecordId.get(recordId) || [];
+    records.set(recordId, {
+      ...existing,
+      receiptFile: receipts[0]?.storagePath || null,
+    });
+  };
 
   const storage = {
     getCollectionNicknameSessionByActivity: async (activityId: string) => {
@@ -219,7 +236,25 @@ export function createCoreCollectionStorageDouble(options?: {
         insertedRows.push(created);
       }
       receiptRowsByRecordId.set(recordId, current);
+      syncRecordReceiptFile(recordId);
       return insertedRows;
+    },
+    deleteCollectionRecordReceipts: async (recordId: string, receiptIds: string[]) => {
+      const normalizedReceiptIds = Array.from(
+        new Set((receiptIds || []).map((value) => String(value || "").trim()).filter(Boolean)),
+      );
+      deleteReceiptCalls.push({
+        recordId,
+        receiptIds: normalizedReceiptIds,
+      });
+      const current = receiptRowsByRecordId.get(recordId) || [];
+      const deletedRows = current.filter((receipt) => normalizedReceiptIds.includes(receipt.id));
+      receiptRowsByRecordId.set(
+        recordId,
+        current.filter((receipt) => !normalizedReceiptIds.includes(receipt.id)),
+      );
+      syncRecordReceiptFile(recordId);
+      return deletedRows;
     },
     updateCollectionRecord: async (
       id: string,
@@ -276,5 +311,6 @@ export function createCoreCollectionStorageDouble(options?: {
     summaryCalls,
     updateCalls,
     deleteCalls,
+    deleteReceiptCalls,
   };
 }

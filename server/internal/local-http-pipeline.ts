@@ -31,7 +31,15 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     maintenanceGuard,
   } = options;
 
-  app.use(helmet());
+  app.use(helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        imgSrc: ["'self'", "data:", "blob:"],
+        frameSrc: ["'self'", "blob:"],
+      },
+    },
+  }));
 
   // Keep default parser small; enable larger payload only for import endpoints.
   app.use("/api/imports", express.json({ limit: importBodyLimit }));
