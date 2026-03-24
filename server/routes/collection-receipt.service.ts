@@ -3,6 +3,7 @@ import path from "path";
 import { randomUUID } from "node:crypto";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
+import { logger } from "../lib/logger";
 import type {
   CollectionRecordReceipt,
   CreateCollectionRecordReceiptInput,
@@ -260,6 +261,24 @@ function resolveCollectionReceiptFile(
   };
 }
 
+function logCollectionReceiptWarning(
+  req: AuthenticatedRequest,
+  mode: "view" | "download",
+  statusCode: number,
+  reason: string,
+  meta?: Record<string, unknown>,
+) {
+  logger.warn("Collection receipt request failed", {
+    mode,
+    statusCode,
+    reason,
+    username: req.user?.username || null,
+    recordId: req.params.id || null,
+    receiptId: req.params.receiptId || null,
+    ...meta,
+  });
+}
+
 async function resolveSelectedReceipt(
   storage: PostgresStorage,
   record: {
@@ -362,16 +381,19 @@ export async function serveCollectionReceipt(
 ) {
   try {
     if (!req.user) {
+      logCollectionReceiptWarning(req, mode, 401, "unauthenticated");
       return res.status(401).json({ ok: false, message: "Unauthenticated" });
     }
 
     const id = normalizeCollectionText(req.params.id);
     if (!id) {
+      logCollectionReceiptWarning(req, mode, 400, "missing_collection_id");
       return res.status(400).json({ ok: false, message: "Collection id is required." });
     }
 
     const record = await storage.getCollectionRecordById(id);
     if (!record) {
+      logCollectionReceiptWarning(req, mode, 404, "record_not_found", { recordId: id });
       return res.status(404).json({ ok: false, message: "Collection record not found." });
     }
 
@@ -380,6 +402,7 @@ export async function serveCollectionReceipt(
       collectionStaffNickname: record.collectionStaffNickname,
     });
     if (!canAccessRecord) {
+      logCollectionReceiptWarning(req, mode, 403, "forbidden", { recordId: record.id });
       return res.status(403).json({ ok: false, message: "Forbidden" });
     }
 
@@ -392,22 +415,39 @@ export async function serveCollectionReceipt(
       requestedReceiptId,
     );
     if (requestedReceiptId && !selectedReceipt) {
+      logCollectionReceiptWarning(req, mode, 404, "receipt_row_not_found", {
+        recordId: record.id,
+        requestedReceiptId,
+      });
       return res.status(404).json({ ok: false, message: "Receipt file not found." });
     }
     const resolved = resolveCollectionReceiptFile(selectedReceipt?.storagePath ?? null);
 
     if (!resolved) {
+      logCollectionReceiptWarning(req, mode, 404, "receipt_storage_path_invalid", {
+        recordId: record.id,
+        requestedReceiptId,
+      });
       return res.status(404).json({ ok: false, message: "Receipt file not found." });
     }
 
     try {
       await fs.promises.access(resolved.absolutePath, fs.constants.R_OK);
     } catch {
+      logCollectionReceiptWarning(req, mode, 404, "receipt_storage_missing", {
+        recordId: record.id,
+        requestedReceiptId,
+      });
       return res.status(404).json({ ok: false, message: "Receipt file not found." });
     }
 
     const responseMimeType = selectedReceipt?.originalMimeType || resolved.mimeType;
     if (mode === "view" && !COLLECTION_RECEIPT_INLINE_MIME.has(responseMimeType)) {
+      logCollectionReceiptWarning(req, mode, 415, "preview_not_supported", {
+        recordId: record.id,
+        requestedReceiptId,
+        mimeType: responseMimeType,
+      });
       return res.status(415).json({ ok: false, message: "Preview not available for this file type." });
     }
 
@@ -426,9 +466,21 @@ export async function serveCollectionReceipt(
       const sendErr = err as NodeJS.ErrnoException;
       const status = sendErr.code === "ENOENT" ? 404 : 500;
       const message = status === 404 ? "Receipt file not found." : "Failed to serve receipt file.";
+      logCollectionReceiptWarning(req, mode, status, status === 404 ? "send_file_missing" : "send_file_failed", {
+        recordId: record.id,
+        requestedReceiptId,
+        errorCode: sendErr.code || null,
+      });
       res.status(status).json({ ok: false, message });
     });
   } catch (err: any) {
+    logger.error("Collection receipt request crashed", {
+      mode,
+      username: req.user?.username || null,
+      recordId: req.params.id || null,
+      receiptId: req.params.receiptId || null,
+      error: err,
+    });
     return res.status(500).json({ ok: false, message: err?.message || "Failed to load receipt file." });
   }
 }

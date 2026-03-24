@@ -1,6 +1,7 @@
-# Collection Daily Performance Baseline
+# Collection Report Performance Baseline
 
-Use this baseline to track query performance for Collection Daily data paths after schema/query changes.
+Use this baseline to track query performance for Collection Daily, Collection Summary, and
+Nickname Summary data paths after schema/query changes.
 
 ## Command
 
@@ -36,6 +37,14 @@ The script writes:
 
 - Markdown summary: `var/perf/collection-baseline-*.md`
 - Raw plan JSON: `var/perf/collection-baseline-*.json`
+
+The baseline currently captures:
+
+- Collection Daily paginated record listing
+- Collection Daily totals and grouped-by-date queries
+- Monthly target lookup
+- Collection Summary month aggregation
+- Nickname Summary range aggregation
 
 Track these values between commits:
 
