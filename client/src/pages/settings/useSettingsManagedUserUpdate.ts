@@ -10,6 +10,10 @@ import type {
   ToastFn,
 } from "@/pages/settings/useSettingsManagedUserMutationShared";
 import {
+  buildMutationErrorToast,
+  buildMutationSuccessToast,
+} from "@/lib/mutation-feedback";
+import {
   CREDENTIAL_USERNAME_REGEX,
   normalizeSettingsErrorPayload,
 } from "@/pages/settings/utils";
@@ -98,20 +102,20 @@ export function useSettingsManagedUserUpdate({
         });
       }
 
-      toast({
+      toast(buildMutationSuccessToast({
         title: "Account Updated",
         description: `Updated account settings for ${managedSelectedUser.username}.`,
-      });
+      }));
       if (!isMountedRef.current) return;
       onManagedDialogOpenChange(false);
       await Promise.all([loadManagedUsers(), loadPendingResetRequests()]);
     } catch (error: unknown) {
       const parsed = normalizeSettingsErrorPayload(error);
-      toast({
+      toast(buildMutationErrorToast({
         title: parsed.code || "Update Failed",
-        description: parsed.message,
-        variant: "destructive",
-      });
+        error,
+        fallbackDescription: parsed.message,
+      }));
     } finally {
       if (!isMountedRef.current) return;
       setManagedSaving(false);

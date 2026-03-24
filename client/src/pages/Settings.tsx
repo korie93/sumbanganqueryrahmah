@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { ACTIVE_SETTINGS_SECTION_KEY } from "@/app/constants";
 import { replaceHistory } from "@/app/routing";
 import type { TabVisibility } from "@/app/types";
@@ -129,27 +130,33 @@ export default function SettingsPage({
               />
 
               <div className="min-w-0 flex-1 space-y-4">
-                {controller.isBackupCategory ? (
-                  <Suspense fallback={<SettingsSectionFallback label="Loading backup tools..." />}>
-                    <BackupRestore userRole={controller.currentUserRole} embedded />
-                  </Suspense>
-                ) : controller.isSecurityCategory &&
-                  controller.canAccessAccountSecurity ? (
-                    <AccountSecuritySection {...controller.security} showAccountManagement={false} />
-                  ) : controller.isAccountManagementCategory ? (
-                    <Suspense fallback={<SettingsSectionFallback label="Loading account management..." />}>
-                      <UserAccountManagementSection {...controller.accountManagement} />
+                <AppRouteErrorBoundary
+                  routeKey={`settings:${controller.selectedCategory}`}
+                  routeLabel={controller.currentCategory?.name || "settings"}
+                  fullscreen={false}
+                >
+                  {controller.isBackupCategory ? (
+                    <Suspense fallback={<SettingsSectionFallback label="Loading backup tools..." />}>
+                      <BackupRestore userRole={controller.currentUserRole} embedded />
                     </Suspense>
-                  ) : controller.isRolePermissionCategory ? (
-                    <SettingsRoleSections
-                      renderSettingCard={controller.renderSettingCard}
-                      roleSections={controller.roleSections}
-                    />
-                  ) : (
-                    (controller.currentCategory?.settings || []).map(
-                      controller.renderSettingCard,
-                    )
-                  )}
+                  ) : controller.isSecurityCategory &&
+                    controller.canAccessAccountSecurity ? (
+                      <AccountSecuritySection {...controller.security} showAccountManagement={false} />
+                    ) : controller.isAccountManagementCategory ? (
+                      <Suspense fallback={<SettingsSectionFallback label="Loading account management..." />}>
+                        <UserAccountManagementSection {...controller.accountManagement} />
+                      </Suspense>
+                    ) : controller.isRolePermissionCategory ? (
+                      <SettingsRoleSections
+                        renderSettingCard={controller.renderSettingCard}
+                        roleSections={controller.roleSections}
+                      />
+                    ) : (
+                      (controller.currentCategory?.settings || []).map(
+                        controller.renderSettingCard,
+                      )
+                    )}
+                </AppRouteErrorBoundary>
 
                 {!controller.isAccountManagementCategory && !controller.isBackupCategory ? (
                   <SettingsSaveBar {...controller.saveBar} />

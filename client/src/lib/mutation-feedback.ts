@@ -25,8 +25,15 @@ export function resolveMutationErrorMessage(
   error: unknown,
   fallbackDescription = "Request failed. Please try again.",
 ): string {
-  const parsedMessage = parseCollectionApiErrorDetails(error).message.trim();
-  return parsedMessage || fallbackDescription;
+  const details = parseCollectionApiErrorDetails(error);
+  const parsedMessage = details.message.trim();
+  const baseMessage = parsedMessage || fallbackDescription;
+  const requestId = String(details.requestId || "").trim();
+  if (!requestId || baseMessage.includes(requestId)) {
+    return baseMessage;
+  }
+
+  return `${baseMessage} Reference ID: ${requestId}.`;
 }
 
 export function buildMutationSuccessToast(

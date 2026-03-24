@@ -4,6 +4,7 @@ import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
@@ -55,6 +56,7 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
   const [activeBackupJobId, setActiveBackupJobId] = useState<string | null>(null);
   const handledBackupJobIdRef = useRef<string | null>(null);
   const { toast } = useToast();
+  const { notifyMutationError, notifyMutationSuccess } = useMutationFeedback();
   const deferredSearchName = useDeferredValue(searchName.trim());
   const dateRange = useMemo(
     () => getBackupDateRange(datePreset, dateFrom, dateTo),
@@ -129,17 +131,17 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
       setActiveBackupJobId(result.job.id);
       setShowCreateDialog(false);
       setBackupName("");
-      toast({
+      notifyMutationSuccess({
         title: "Backup Queued",
         description: "Backup creation is running in the background.",
       });
     },
     onError: (error) => {
       console.error("Failed to create backup:", error);
-      toast({
-        title: "Error",
-        description: "Failed to create backup.",
-        variant: "destructive",
+      notifyMutationError({
+        title: "Backup Failed",
+        error,
+        fallbackDescription: "Failed to create backup.",
       });
     },
   });
@@ -150,7 +152,7 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
       handledBackupJobIdRef.current = null;
       setActiveBackupJobId(result.job.id);
       setShowRestoreDialog(null);
-      toast({
+      notifyMutationSuccess({
         title: "Restore Queued",
         description: "Backup restore is running in the background.",
         duration: 8000,
@@ -158,10 +160,10 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
     },
     onError: (error) => {
       console.error("Failed to restore backup:", error);
-      toast({
-        title: "Error",
-        description: "Failed to restore backup.",
-        variant: "destructive",
+      notifyMutationError({
+        title: "Restore Failed",
+        error,
+        fallbackDescription: "Failed to restore backup.",
       });
       setRestoringId(null);
     },
@@ -197,18 +199,18 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
         ? ` Duration: ${(result.durationMs / 1000).toFixed(1)}s.`
         : "";
 
-      toast({
+      notifyMutationSuccess({
         title: totalRestored > 0 ? "Restore Successful" : "Restore Complete",
         description: `${summary}${duration}`,
         duration: 8000,
       });
       setLastRestoreResult(result);
-  }, [toast]);
+  }, [notifyMutationSuccess]);
 
   const deleteBackupMutation = useMutation({
     mutationFn: (backupId: string) => deleteBackup(backupId),
     onSuccess: async () => {
-      toast({
+      notifyMutationSuccess({
         title: "Success",
         description: "Backup has been successfully deleted.",
       });
@@ -218,10 +220,10 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
     },
     onError: (error) => {
       console.error("Failed to delete backup:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete backup.",
-        variant: "destructive",
+      notifyMutationError({
+        title: "Delete Failed",
+        error,
+        fallbackDescription: "Failed to delete backup.",
       });
       setDeletingId(null);
     },
@@ -260,7 +262,7 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
     const finalizeBackupJob = async () => {
       if (activeBackupJob.status === "completed") {
         if (activeBackupJob.type === "create") {
-          toast({
+          notifyMutationSuccess({
             title: "Success",
             description: "Backup has been successfully created.",
           });
@@ -275,7 +277,7 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
           if (restoreResult) {
             notifyRestoreSuccess(restoreResult);
           } else {
-            toast({
+            notifyMutationSuccess({
               title: "Restore Complete",
               description: "Backup restore has completed.",
               duration: 8000,
@@ -284,10 +286,9 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
           await queryClient.invalidateQueries({ queryKey: ["/api/backups"] });
         }
       } else {
-        toast({
+        notifyMutationError({
           title: activeBackupJob.type === "restore" ? "Restore Failed" : "Backup Failed",
           description: activeBackupJob.error?.message || "Background backup job failed.",
-          variant: "destructive",
           duration: 8000,
         });
       }
@@ -303,16 +304,15 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
     return () => {
       cancelled = true;
     };
-  }, [activeBackupJob, activeBackupJobId, clearAllFilters, notifyRestoreSuccess, refetch, toast]);
+  }, [activeBackupJob, activeBackupJobId, clearAllFilters, notifyMutationError, notifyMutationSuccess, notifyRestoreSuccess, refetch]);
 
   const loading = isLoading || isRefetching;
 
   const handleCreateBackup = () => {
     if (!backupName.trim()) {
-      toast({
-        title: "Error",
+      notifyMutationError({
+        title: "Backup Name Required",
         description: "Please enter a backup name.",
-        variant: "destructive",
       });
       return;
     }
@@ -338,10 +338,10 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
       await exportBackupsToPdf(visibleBackups);
     } catch (error: unknown) {
       console.error("Failed to export PDF:", error);
-      toast({
+      notifyMutationError({
         title: "Export Failed",
-        description: error instanceof Error ? error.message : "Failed to export PDF",
-        variant: "destructive",
+        error,
+        fallbackDescription: error instanceof Error ? error.message : "Failed to export PDF",
       });
     } finally {
       setExportingPdf(false);

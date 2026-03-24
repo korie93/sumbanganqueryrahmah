@@ -10,6 +10,7 @@ type SettingsRouteDeps = {
   storage: PostgresStorage;
   authenticateToken: RequestHandler;
   requireRole: (...roles: string[]) => RequestHandler;
+  requireTabAccess: (tabId: string) => RequestHandler;
   clearTabVisibilityCache: () => void;
   invalidateRuntimeSettingsCache: () => void;
   invalidateMaintenanceCache: () => void;
@@ -22,6 +23,7 @@ export function registerSettingsRoutes(app: Express, deps: SettingsRouteDeps) {
     storage,
     authenticateToken,
     requireRole,
+    requireTabAccess,
     clearTabVisibilityCache,
     invalidateRuntimeSettingsCache,
     invalidateMaintenanceCache,
@@ -52,14 +54,14 @@ export function registerSettingsRoutes(app: Express, deps: SettingsRouteDeps) {
     });
   }));
 
-  app.get("/api/settings", authenticateToken, requireRole("admin", "superuser"), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  app.get("/api/settings", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("settings"), asyncHandler(async (req: AuthenticatedRequest, res) => {
     const role = req.user?.role || "user";
     return res.json({
       categories: await settingsService.getSettingsForRole(role),
     });
   }));
 
-  app.patch("/api/settings", authenticateToken, requireRole("admin", "superuser"), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  app.patch("/api/settings", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("settings"), asyncHandler(async (req: AuthenticatedRequest, res) => {
     const body = ensureObject(req.body) || {};
     const key = readNonEmptyString(body.key);
     if (!key) {
