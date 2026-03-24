@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { AppPageRenderer } from "@/app/AppPageRenderer";
 import { AppProviders } from "@/app/AppProviders";
 import {
@@ -37,56 +38,54 @@ function AppContent() {
     user,
   } = useAppShellState();
 
+  const navigateHome = () => {
+    if (!user) {
+      handleNavigate("login");
+      return;
+    }
+
+    handleNavigate(user.role === "user" ? "general-search" : "home");
+  };
+
+  const renderRoutePage = (routeKey: string, node: React.ReactNode, fullscreen = true) => (
+    <AppRouteErrorBoundary
+      routeKey={routeKey}
+      routeLabel={routeKey}
+      fullscreen={fullscreen}
+      onNavigateHome={navigateHome}
+    >
+      <Suspense fallback={<PageSpinner fullscreen={fullscreen} />}>
+        {node}
+      </Suspense>
+    </AppRouteErrorBoundary>
+  );
+
   if (!isInitialized) {
     return <PageSpinner fullscreen />;
   }
 
   if (localStorage.getItem("banned") === "1") {
-    return (
-      <Suspense fallback={<PageSpinner fullscreen />}>
-        <BannedPage />
-      </Suspense>
-    );
+    return renderRoutePage("banned", <BannedPage />);
   }
 
   if (!user) {
     if (currentPage === "maintenance") {
-      return (
-        <Suspense fallback={<PageSpinner fullscreen />}>
-          <MaintenanceRoutePage />
-        </Suspense>
-      );
+      return renderRoutePage("maintenance", <MaintenanceRoutePage />);
     }
 
     if (currentPage === "forgot-password") {
-      return (
-        <Suspense fallback={<PageSpinner fullscreen />}>
-          <ForgotPasswordPage />
-        </Suspense>
-      );
+      return renderRoutePage("forgot-password", <ForgotPasswordPage />);
     }
 
     if (currentPage === "activate-account") {
-      return (
-        <Suspense fallback={<PageSpinner fullscreen />}>
-          <ActivateAccountPage />
-        </Suspense>
-      );
+      return renderRoutePage("activate-account", <ActivateAccountPage />);
     }
 
     if (currentPage === "reset-password") {
-      return (
-        <Suspense fallback={<PageSpinner fullscreen />}>
-          <ResetPasswordPage />
-        </Suspense>
-      );
+      return renderRoutePage("reset-password", <ResetPasswordPage />);
     }
 
-    return (
-      <Suspense fallback={<PageSpinner fullscreen />}>
-        <LoginPage onLoginSuccess={handleLoginSuccess} />
-      </Suspense>
-    );
+    return renderRoutePage("login", <LoginPage onLoginSuccess={handleLoginSuccess} />);
   }
 
   if (user.mustChangePassword) {
@@ -99,22 +98,19 @@ function AppContent() {
           heartbeatIntervalMinutes={runtimeConfig.heartbeatIntervalMinutes}
           username={user.username}
         />
-        <Suspense fallback={<PageSpinner fullscreen />}>
+        {renderRoutePage(
+          "change-password",
           <ChangePasswordPage
             forced
             username={user.username}
-          />
-        </Suspense>
+          />,
+        )}
       </div>
     );
   }
 
   if (currentPage === "maintenance" && user.role === "user") {
-    return (
-      <Suspense fallback={<PageSpinner fullscreen />}>
-        <MaintenanceRoutePage />
-      </Suspense>
-    );
+    return renderRoutePage("maintenance", <MaintenanceRoutePage />);
   }
 
   return (
@@ -137,23 +133,29 @@ function AppContent() {
         tabVisibility={tabVisibility}
         featureLockdown={featureLockdown}
       />
-      <Suspense fallback={<PageSpinner />}>
-        <main className="min-h-[calc(100vh-3.5rem)]">
-          <AppPageRenderer
-            user={user}
-            currentPage={currentPage}
-            monitorSection={monitorSection}
-            selectedImportId={selectedImportId}
-            runtimeConfig={runtimeConfig}
-            tabVisibility={tabVisibility}
-            tabVisibilityLoaded={tabVisibilityLoaded}
-            monitorVisibility={monitorVisibility}
-            featureLockdown={featureLockdown}
-            onNavigate={handleNavigate}
-            onMonitorSectionChange={handleMonitorSectionChange}
-          />
-        </main>
-      </Suspense>
+      <AppRouteErrorBoundary
+        routeKey={`${currentPage}:${monitorSection}:${selectedImportId || ""}`}
+        routeLabel={currentPage}
+        onNavigateHome={navigateHome}
+      >
+        <Suspense fallback={<PageSpinner />}>
+          <main className="min-h-[calc(100vh-3.5rem)]">
+            <AppPageRenderer
+              user={user}
+              currentPage={currentPage}
+              monitorSection={monitorSection}
+              selectedImportId={selectedImportId}
+              runtimeConfig={runtimeConfig}
+              tabVisibility={tabVisibility}
+              tabVisibilityLoaded={tabVisibilityLoaded}
+              monitorVisibility={monitorVisibility}
+              featureLockdown={featureLockdown}
+              onNavigate={handleNavigate}
+              onMonitorSectionChange={handleMonitorSectionChange}
+            />
+          </main>
+        </Suspense>
+      </AppRouteErrorBoundary>
       {runtimeConfig.aiEnabled ? (
         <FloatingAI
           timeoutMs={runtimeConfig.aiTimeoutMs}

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import { type CollectionBatch } from "@/lib/api";
 import {
   buildCollectionMutationFingerprint,
@@ -21,7 +21,6 @@ import {
   isPositiveAmount,
   isValidDate,
   emitCollectionDataChanged,
-  parseApiError,
   validateReceiptFile,
 } from "./utils";
 
@@ -31,7 +30,7 @@ type SaveCollectionPageProps = {
 };
 
 function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps) {
-  const { toast } = useToast();
+  const { notifyMutationError, notifyMutationSuccess } = useMutationFeedback();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const submitInFlightRef = useRef(false);
   const submitMutationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
@@ -70,10 +69,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
 
     const error = validateReceiptFile(file);
     if (error) {
-      toast({
+      notifyMutationError({
         title: "Validation Error",
         description: error,
-        variant: "destructive",
       });
       return;
     }
@@ -108,10 +106,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
 
     const validationError = validateForm();
     if (validationError) {
-      toast({
+      notifyMutationError({
         title: "Validation Error",
         description: validationError,
-        variant: "destructive",
       });
       return;
     }
@@ -149,7 +146,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         },
       );
 
-      toast({
+      notifyMutationSuccess({
         title: "Collection Saved",
         description: "Rekod collection berjaya disimpan.",
       });
@@ -157,10 +154,10 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       clearForm();
       onSaved?.();
     } catch (error: unknown) {
-      toast({
+      notifyMutationError({
         title: "Failed to Save Collection",
-        description: parseApiError(error),
-        variant: "destructive",
+        error,
+        fallbackDescription: "Failed to save collection.",
       });
     } finally {
       submitInFlightRef.current = false;
