@@ -41,8 +41,12 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
   const heartbeatHandle = setInterval(() => {
     for (const [activityId, ws] of connectedClients.entries()) {
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
+      if (!ws || (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING)) {
         connectedClients.delete(activityId);
+        continue;
+      }
+
+      if (ws.readyState !== WebSocket.OPEN) {
         continue;
       }
 
@@ -58,17 +62,8 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   }, HEARTBEAT_INTERVAL_MS);
   heartbeatHandle.unref();
 
-  const staleSocketSweepHandle = setInterval(() => {
-    for (const [activityId, ws] of connectedClients.entries()) {
-      if (!ws || (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING)) {
-        connectedClients.delete(activityId);
-      }
-    }
-  }, 30_000);
-  staleSocketSweepHandle.unref();
   wss.once("close", () => {
     clearInterval(heartbeatHandle);
-    clearInterval(staleSocketSweepHandle);
   });
 
   wss.on("connection", async (ws, req) => {
