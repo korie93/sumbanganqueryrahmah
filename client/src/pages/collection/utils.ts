@@ -10,6 +10,8 @@ export const COLLECTION_PHONE_REGEX = /^[0-9+\-\s]{8,20}$/;
 const COLLECTION_RECEIPT_MIME_ALIASES: Record<string, string> = {
   "image/jpg": "image/jpeg",
   "image/pjpeg": "image/jpeg",
+  "image/jfif": "image/jpeg",
+  "image/jpe": "image/jpeg",
   "image/x-png": "image/png",
   "application/x-pdf": "application/pdf",
 };
@@ -139,6 +141,21 @@ function inferCollectionReceiptMimeTypeFromFileName(fileName: string): string {
   return "";
 }
 
+function resolveCollectionAcceptedReceiptMimeType(input: {
+  fileName: string;
+  mimeType: string;
+}): string {
+  const normalizedMimeType = normalizeCollectionReceiptMimeType(input.mimeType);
+  if (COLLECTION_ACCEPTED_FILE_TYPES.includes(normalizedMimeType)) {
+    return normalizedMimeType;
+  }
+  const inferredMimeType = inferCollectionReceiptMimeTypeFromFileName(input.fileName);
+  if (COLLECTION_ACCEPTED_FILE_TYPES.includes(inferredMimeType)) {
+    return inferredMimeType;
+  }
+  return normalizedMimeType || inferredMimeType;
+}
+
 export async function toReceiptPayload(file: File): Promise<CollectionReceiptPayload> {
   const contentBase64 = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -147,8 +164,10 @@ export async function toReceiptPayload(file: File): Promise<CollectionReceiptPay
     reader.readAsDataURL(file);
   });
   const mimeType =
-    normalizeCollectionReceiptMimeType(file.type)
-    || inferCollectionReceiptMimeTypeFromFileName(file.name)
+    resolveCollectionAcceptedReceiptMimeType({
+      fileName: file.name,
+      mimeType: file.type,
+    })
     || "application/octet-stream";
 
   return {
@@ -159,9 +178,10 @@ export async function toReceiptPayload(file: File): Promise<CollectionReceiptPay
 }
 
 export function validateReceiptFile(file: File): string | null {
-  const normalizedMimeType = normalizeCollectionReceiptMimeType(file.type);
-  const inferredMimeType = inferCollectionReceiptMimeTypeFromFileName(file.name);
-  const effectiveMimeType = normalizedMimeType || inferredMimeType;
+  const effectiveMimeType = resolveCollectionAcceptedReceiptMimeType({
+    fileName: file.name,
+    mimeType: file.type,
+  });
   if (!COLLECTION_ACCEPTED_FILE_TYPES.includes(effectiveMimeType)) {
     return "Receipt file must be JPG, PNG, WebP, or PDF.";
   }
