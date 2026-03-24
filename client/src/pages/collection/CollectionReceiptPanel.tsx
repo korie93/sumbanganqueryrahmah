@@ -1,4 +1,4 @@
-import type { ChangeEvent, MutableRefObject } from "react";
+import { useId, type ChangeEvent, type MutableRefObject } from "react";
 import { FileImage, FileText, RotateCcw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,8 @@ export function CollectionReceiptPanel({
   uploadLabel = "Upload Receipt",
   helperText = "Upload one receipt at a time. JPG, PNG, and PDF up to 5MB.",
 }: CollectionReceiptPanelProps) {
+  const inputId = useId();
+  const helperTextId = `${inputId}-help`;
   const draftPreviews = useCollectionReceiptDraftPreviews(pendingFiles);
   const removedSet = new Set(removedReceiptIds);
   const summary = buildCollectionReceiptPanelSummary({
@@ -50,13 +52,18 @@ export function CollectionReceiptPanel({
 
   return (
     <div className="space-y-3">
+      <label htmlFor={inputId} className="sr-only">
+        {uploadLabel}
+      </label>
       <input
+        id={inputId}
         ref={inputRef}
         type="file"
         accept={accept}
         className="hidden"
         onChange={onFileChange}
         disabled={disabled}
+        aria-describedby={helperText ? helperTextId : undefined}
       />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -81,7 +88,9 @@ export function CollectionReceiptPanel({
         ) : null}
       </div>
 
-      <p className="text-xs text-muted-foreground">{helperText}</p>
+      <p id={helperTextId} className="text-xs text-muted-foreground">
+        {helperText}
+      </p>
       <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
           {summary.existingCount > 0 ? (
