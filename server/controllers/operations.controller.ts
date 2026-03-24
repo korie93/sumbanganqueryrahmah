@@ -95,15 +95,10 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
   const createBackup = async (req: AuthenticatedRequest, res: Response) => {
     const body = ensureObject(req.body) || {};
     if (isAsyncJobRequested(req.query.async)) {
-      const job = backupJobQueueService.enqueue({
+      const job = await backupJobQueueService.enqueue({
         type: "create",
         requestedBy: req.user!.username,
         backupName: String(body.name || ""),
-        execute: () =>
-          backupOperationsService.createBackup({
-            name: String(body.name || ""),
-            username: req.user!.username,
-          }),
       });
       return res.status(202).json({
         message: "Backup creation queued.",
@@ -124,7 +119,7 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
   };
 
   const getBackupJob = async (req: AuthenticatedRequest, res: Response) => {
-    const job = backupJobQueueService.getJob(req.params.jobId);
+    const job = await backupJobQueueService.getJob(req.params.jobId);
     if (!job) {
       return res.status(404).json({ message: "Backup job not found" });
     }
@@ -145,15 +140,10 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
 
   const restoreBackup = async (req: AuthenticatedRequest, res: Response) => {
     if (isAsyncJobRequested(req.query.async)) {
-      const job = backupJobQueueService.enqueue({
+      const job = await backupJobQueueService.enqueue({
         type: "restore",
         requestedBy: req.user!.username,
         backupId: req.params.id,
-        execute: () =>
-          backupOperationsService.restoreBackup({
-            backupId: req.params.id,
-            username: req.user!.username,
-          }),
       });
       return res.status(202).json({
         message: "Backup restore queued.",

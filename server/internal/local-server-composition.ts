@@ -8,10 +8,12 @@ import { createSearchController } from "../controllers/search.controller";
 import type { MaintenanceState } from "../config/system-settings";
 import { pool } from "../db-postgres";
 import { injectChaos, getIntelligenceExplainability } from "../intelligence";
+import { logger } from "../lib/logger";
 import { errorHandler } from "../middleware/error-handler";
 import { searchRateLimiter } from "../middleware/rate-limit";
 import { AnalyticsRepository } from "../repositories/analytics.repository";
 import { AuditRepository } from "../repositories/audit.repository";
+import { BackupJobRepository } from "../repositories/backup-job.repository";
 import { BackupsRepository } from "../repositories/backups.repository";
 import { ImportsRepository } from "../repositories/imports.repository";
 import { SearchRepository } from "../repositories/search.repository";
@@ -236,7 +238,20 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     getLatencyP95,
     getLocalCircuitSnapshots,
   } = runtimeMonitor;
-  const backupJobQueueService = new BackupJobQueueService();
+  const backupOperationsService = new BackupOperationsService(
+    storage,
+    backupsRepository,
+    withExportCircuit,
+    (error) => error instanceof CircuitOpenError,
+  );
+  const backupJobQueueService = new BackupJobQueueService({
+    repository: new BackupJobRepository(),
+    executeCreate: (params) => backupOperationsService.createBackup(params),
+    executeRestore: (params) => backupOperationsService.restoreBackup(params),
+  });
+  void backupJobQueueService.start().catch((error) => {
+    logger.error("Failed to start backup background job queue", { error });
+  });
 
   registerSystemRoutes(app, {
     authenticateToken,
@@ -337,12 +352,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
   registerOperationsRoutes(app, {
     operationsController: createOperationsController({
       auditLogOperationsService: new AuditLogOperationsService(storage, auditRepository),
-      backupOperationsService: new BackupOperationsService(
-        storage,
-        backupsRepository,
-        withExportCircuit,
-        (error) => error instanceof CircuitOpenError,
-      ),
+      backupOperationsService,
       backupJobQueueService,
       operationsAnalyticsService: new OperationsAnalyticsService(analyticsRepository),
       connectedClients,

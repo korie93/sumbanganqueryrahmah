@@ -5,6 +5,7 @@ import { AuditLogOperationsService } from "../../services/audit-log-operations.s
 import { BackupJobQueueService } from "../../services/backup-job-queue.service";
 import { BackupOperationsService } from "../../services/backup-operations.service";
 import { OperationsAnalyticsService } from "../../services/operations-analytics.service";
+import { createInMemoryBackupJobRepository } from "../../test-support/backup-job-queue-test-double";
 import { registerOperationsRoutes } from "../operations.routes";
 import {
   allowAllTabs,
@@ -195,18 +196,24 @@ function createOperationsRouteHarness(options?: {
     }
     return fn();
   };
+  const backupOperationsService = new BackupOperationsService(
+    storage,
+    backupsRepository,
+    withExportCircuit,
+    (error) => (error as Error)?.message === "circuit-open",
+  );
+  const backupJobQueueService = new BackupJobQueueService({
+    repository: createInMemoryBackupJobRepository(),
+    executeCreate: (params) => backupOperationsService.createBackup(params),
+    executeRestore: (params) => backupOperationsService.restoreBackup(params),
+  });
 
   const app = createJsonTestApp();
   registerOperationsRoutes(app, {
     operationsController: createOperationsController({
       auditLogOperationsService: new AuditLogOperationsService(storage, auditRepository),
-      backupOperationsService: new BackupOperationsService(
-        storage,
-        backupsRepository,
-        withExportCircuit,
-        (error) => (error as Error)?.message === "circuit-open",
-      ),
-      backupJobQueueService: new BackupJobQueueService(),
+      backupOperationsService,
+      backupJobQueueService,
       operationsAnalyticsService: new OperationsAnalyticsService(analyticsRepository),
       connectedClients: new Map([
         ["activity-1", {} as any],

@@ -153,6 +153,24 @@ export const backups = pgTable("backups", {
   metadata: text("metadata"),
 });
 
+export const backupJobs = pgTable("backup_jobs", {
+  id: uuid("id").primaryKey(),
+  type: text("type").notNull(),
+  status: text("status").notNull().default("queued"),
+  requestedBy: text("requested_by").notNull(),
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  startedAt: timestamp("started_at"),
+  finishedAt: timestamp("finished_at"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  backupId: text("backup_id"),
+  backupName: text("backup_name"),
+  result: jsonb("result"),
+  error: jsonb("error").$type<{ message: string; statusCode: number } | null>(),
+}, (table) => ({
+  statusRequestedAtIdx: index("idx_backup_jobs_status_requested_at").on(table.status, table.requestedAt),
+  updatedAtIdx: index("idx_backup_jobs_updated_at").on(table.updatedAt),
+}));
+
 export const settingCategories = pgTable("setting_categories", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
@@ -650,6 +668,7 @@ export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertBackup = z.infer<typeof insertBackupSchema>;
 export type Backup = typeof backups.$inferSelect;
+export type BackupJobRow = typeof backupJobs.$inferSelect;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type AccountActivationToken = typeof accountActivationTokens.$inferSelect;
 export type PasswordResetRequest = typeof passwordResetRequests.$inferSelect;

@@ -41,6 +41,48 @@ export class BackupsBootstrap {
         await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS created_by text`);
         await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS backup_data text`);
         await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS metadata text`);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS public.backup_jobs (
+            id uuid PRIMARY KEY,
+            type text NOT NULL,
+            status text NOT NULL DEFAULT 'queued',
+            requested_by text NOT NULL,
+            requested_at timestamp DEFAULT now() NOT NULL,
+            started_at timestamp,
+            finished_at timestamp,
+            updated_at timestamp DEFAULT now() NOT NULL,
+            backup_id text,
+            backup_name text,
+            result jsonb,
+            error jsonb
+          )
+        `);
+        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS type text`);
+        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS status text DEFAULT 'queued'`);
+        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS requested_by text`);
+        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS requested_at timestamp DEFAULT now()`);
+        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS started_at timestamp`);
+        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS finished_at timestamp`);
+        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS backup_id text`);
+        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS backup_name text`);
+        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS result jsonb`);
+        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS error jsonb`);
+        await db.execute(sql`
+          UPDATE public.backup_jobs
+          SET
+            status = COALESCE(NULLIF(status, ''), 'queued'),
+            requested_at = COALESCE(requested_at, now()),
+            updated_at = COALESCE(updated_at, requested_at, now())
+        `);
+        await db.execute(sql`
+          CREATE INDEX IF NOT EXISTS idx_backup_jobs_status_requested_at
+          ON public.backup_jobs(status, requested_at)
+        `);
+        await db.execute(sql`
+          CREATE INDEX IF NOT EXISTS idx_backup_jobs_updated_at
+          ON public.backup_jobs(updated_at DESC)
+        `);
 
         const idTypeResult = await db.execute(sql`
           SELECT data_type
