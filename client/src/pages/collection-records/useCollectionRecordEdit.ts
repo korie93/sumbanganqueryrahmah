@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import {
   type CollectionBatch,
   type CollectionRecord,
@@ -27,7 +27,6 @@ import {
   isValidCustomerPhone,
   isValidDate,
   parseCollectionApiErrorDetails,
-  parseApiError,
   validateReceiptFile,
 } from "@/pages/collection/utils";
 
@@ -48,7 +47,7 @@ export function useCollectionRecordEdit({
   onRefresh,
   onViewReceipt,
 }: UseCollectionRecordEditArgs) {
-  const { toast } = useToast();
+  const { notifyMutationError, notifyMutationSuccess } = useMutationFeedback();
   const isMountedRef = useRef(true);
   const savingEditInFlightRef = useRef(false);
   const editReceiptInputRef = useRef<HTMLInputElement | null>(null);
@@ -101,10 +100,9 @@ export function useCollectionRecordEdit({
 
     const error = validateReceiptFile(file);
     if (error) {
-      toast({
+      notifyMutationError({
         title: "Validation Error",
         description: error,
-        variant: "destructive",
       });
       return;
     }
@@ -116,66 +114,58 @@ export function useCollectionRecordEdit({
     if (!editingRecord || savingEdit || savingEditInFlightRef.current) return;
 
     if (!editCustomerName.trim()) {
-      toast({
+      notifyMutationError({
         title: "Validation Error",
         description: "Customer Name is required.",
-        variant: "destructive",
       });
       return;
     }
     if (!editIcNumber.trim()) {
-      toast({
+      notifyMutationError({
         title: "Validation Error",
         description: "IC Number is required.",
-        variant: "destructive",
       });
       return;
     }
     if (!isValidCustomerPhone(editCustomerPhone)) {
-      toast({
+      notifyMutationError({
         title: "Validation Error",
         description: "Customer Phone Number is invalid.",
-        variant: "destructive",
       });
       return;
     }
     if (!editAccountNumber.trim()) {
-      toast({
+      notifyMutationError({
         title: "Validation Error",
         description: "Account Number is required.",
-        variant: "destructive",
       });
       return;
     }
     if (!COLLECTION_BATCH_OPTIONS.includes(editBatch)) {
-      toast({
+      notifyMutationError({
         title: "Validation Error",
         description: "Batch is not valid.",
-        variant: "destructive",
       });
       return;
     }
     if (!isValidDate(editPaymentDate)) {
-      toast({
+      notifyMutationError({
         title: "Validation Error",
         description: "Payment Date is invalid.",
-        variant: "destructive",
       });
       return;
     }
     if (isFutureDate(editPaymentDate)) {
-      toast({
+      notifyMutationError({
         title: "Validation Error",
         description: "Payment Date cannot be in the future.",
-        variant: "destructive",
       });
       return;
     }
     if (!isPositiveAmount(editAmount)) {
-      toast({
+      notifyMutationError({
         title: "Validation Error",
         description: "Amount must be greater than 0.",
-        variant: "destructive",
       });
       return;
     }
@@ -188,10 +178,9 @@ export function useCollectionRecordEdit({
         (item) => item.nickname === normalizedEditNickname && item.isActive,
       );
       if (!isOfficialNickname) {
-        toast({
+        notifyMutationError({
           title: "Validation Error",
           description: "Sila pilih Staff Nickname rasmi daripada senarai.",
-          variant: "destructive",
         });
         return;
       }
@@ -247,7 +236,7 @@ export function useCollectionRecordEdit({
           idempotencyKey: editMutationIntentRef.current.key,
         },
       );
-      toast({
+      notifyMutationSuccess({
         title: "Record Updated",
         description: "Rekod collection berjaya dikemaskini.",
       });
@@ -266,11 +255,10 @@ export function useCollectionRecordEdit({
         apiErrorDetails.status === 409
         && apiErrorDetails.code === "COLLECTION_RECORD_VERSION_CONFLICT"
       ) {
-        toast({
+        notifyMutationError({
           title: "Record Updated Elsewhere",
           description:
             "This record changed in another session. The list has been refreshed. Reopen the record and apply your changes again.",
-          variant: "destructive",
         });
         emitCollectionDataChanged();
         try {
@@ -290,10 +278,11 @@ export function useCollectionRecordEdit({
         return;
       }
 
-      toast({
+      notifyMutationError({
         title: "Failed to Update Record",
-        description: apiErrorDetails.message || parseApiError(error),
-        variant: "destructive",
+        description: apiErrorDetails.message,
+        error,
+        fallbackDescription: "Failed to update record.",
       });
     } finally {
       savingEditInFlightRef.current = false;
@@ -316,7 +305,8 @@ export function useCollectionRecordEdit({
     onRefresh,
     savingEdit,
     savingEditInFlightRef,
-    toast,
+    notifyMutationError,
+    notifyMutationSuccess,
   ]);
 
   return {
