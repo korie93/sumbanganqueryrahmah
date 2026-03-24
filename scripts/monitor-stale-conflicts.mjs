@@ -95,6 +95,8 @@ function countAlertSeverities(alertsPayload) {
 
 function formatMonitorStatus(metrics) {
   const staleConflicts = Number(metrics.summary?.collectionRecordVersionConflicts24h || 0);
+  const loginFailures = Number(metrics.summary?.loginFailures24h || 0);
+  const backupActions = Number(metrics.summary?.backupActions24h || 0);
   const status429Count = Number(metrics.system?.status429Count || 0);
   const errorRate = Number(metrics.system?.errorRate || 0);
   const activeAlertCount = Number(metrics.system?.activeAlertCount || 0);
@@ -103,6 +105,7 @@ function formatMonitorStatus(metrics) {
 
   const warnings = [];
   if (staleConflicts >= 20) warnings.push("stale_conflicts_high");
+  if (loginFailures >= 25) warnings.push("login_failures_high");
   if (status429Count >= 30) warnings.push("rate_limit_pressure_high");
   if (errorRate >= 0.05) warnings.push("error_rate_high");
   if (criticalAlerts >= 1) warnings.push("runtime_alerts_critical");
@@ -110,6 +113,8 @@ function formatMonitorStatus(metrics) {
 
   return {
     staleConflicts24h: staleConflicts,
+    loginFailures24h: loginFailures,
+    backupActions24h: backupActions,
     status429Count5s: status429Count,
     errorRate,
     activeAlertCount,
@@ -225,6 +230,8 @@ async function run() {
         baseUrl,
         summary: {
           collectionRecordVersionConflicts24h: Number(summary.collectionRecordVersionConflicts24h || 0),
+          loginFailures24h: Number(summary.loginFailures24h || 0),
+          backupActions24h: Number(summary.backupActions24h || 0),
           activeSessions: Number(summary.activeSessions || 0),
         },
         system: system

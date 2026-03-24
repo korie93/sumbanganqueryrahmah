@@ -12,6 +12,13 @@ const requiredGitignoreEntries = [
   ".env",
   ".env.*",
   "!.env.example",
+  "artifacts/",
+  "var/perf/",
+];
+
+const generatedOutputPaths = [
+  "artifacts",
+  "var/perf",
 ];
 
 const failures = [];
@@ -50,6 +57,29 @@ if (trackedFilesResult.error) {
 
   if (trackedFiles.length > 0) {
     failures.push(`Forbidden env files are tracked by git: ${trackedFiles.join(", ")}`);
+  }
+}
+
+const trackedGeneratedOutputsResult = spawnSync(
+  gitCommand,
+  ["ls-files", "--", ...generatedOutputPaths],
+  { encoding: "utf8" },
+);
+
+if (trackedGeneratedOutputsResult.error) {
+  failures.push(`Unable to inspect generated output paths: ${trackedGeneratedOutputsResult.error.message}`);
+} else if (trackedGeneratedOutputsResult.status !== 0) {
+  failures.push(`git ls-files for generated output paths exited with status ${trackedGeneratedOutputsResult.status}.`);
+} else {
+  const trackedGeneratedOutputs = trackedGeneratedOutputsResult.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (trackedGeneratedOutputs.length > 0) {
+    failures.push(
+      `Generated output should not be tracked by git: ${trackedGeneratedOutputs.join(", ")}`,
+    );
   }
 }
 

@@ -4,6 +4,23 @@ import { db } from "../db-postgres";
 
 const ANALYTICS_TZ = process.env.ANALYTICS_TZ || "Asia/Kuala_Lumpur";
 const COLLECTION_RECORD_VERSION_CONFLICT_ACTION = "COLLECTION_RECORD_VERSION_CONFLICT";
+const LOGIN_FAILURE_ACTIONS = [
+  "LOGIN_FAILED",
+  "LOGIN_FAILED_BANNED",
+  "LOGIN_FAILED_ACCOUNT_STATE",
+  "LOGIN_BLOCKED_SINGLE_SESSION",
+] as const;
+const BACKUP_ACTIVITY_ACTIONS = [
+  "CREATE_BACKUP",
+  "VIEW_BACKUP_METADATA",
+  "DOWNLOAD_BACKUP_EXPORT",
+  "RESTORE_BACKUP",
+  "DELETE_BACKUP",
+] as const;
+
+function buildAuditActionList(actions: readonly string[]) {
+  return sql.join(actions.map((action) => sql`${action}`), sql`, `);
+}
 
 type TopActiveUserRow = {
   username: string;
@@ -21,6 +38,8 @@ export class AnalyticsRepository {
     totalImports: number;
     bannedUsers: number;
     collectionRecordVersionConflicts24h: number;
+    loginFailures24h: number;
+    backupActions24h: number;
   }> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -33,6 +52,8 @@ export class AnalyticsRepository {
       totalImports,
       bannedUsers,
       collectionRecordVersionConflicts24h,
+      loginFailures24h,
+      backupActions24h,
     ] = await Promise.all([
       db.select({ value: count() }).from(users),
       db.select({ value: count() }).from(userActivity).where(eq(userActivity.isActive, true)),
@@ -42,6 +63,14 @@ export class AnalyticsRepository {
       db.select({ value: count() }).from(users).where(eq(users.isBanned, true)),
       db.select({ value: count() }).from(auditLogs).where(sql`
         action = ${COLLECTION_RECORD_VERSION_CONFLICT_ACTION}
+        AND timestamp >= NOW() - INTERVAL '24 hours'
+      `),
+      db.select({ value: count() }).from(auditLogs).where(sql`
+        action IN (${buildAuditActionList(LOGIN_FAILURE_ACTIONS)})
+        AND timestamp >= NOW() - INTERVAL '24 hours'
+      `),
+      db.select({ value: count() }).from(auditLogs).where(sql`
+        action IN (${buildAuditActionList(BACKUP_ACTIVITY_ACTIONS)})
         AND timestamp >= NOW() - INTERVAL '24 hours'
       `),
     ]);
@@ -54,6 +83,8 @@ export class AnalyticsRepository {
       totalImports: totalImports[0]?.value || 0,
       bannedUsers: bannedUsers[0]?.value || 0,
       collectionRecordVersionConflicts24h: collectionRecordVersionConflicts24h[0]?.value || 0,
+      loginFailures24h: loginFailures24h[0]?.value || 0,
+      backupActions24h: backupActions24h[0]?.value || 0,
     };
   }
 

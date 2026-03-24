@@ -1,5 +1,5 @@
+import { Suspense, lazy } from "react";
 import { MyAccountSecurityCard } from "@/pages/settings/MyAccountSecurityCard";
-import { UserAccountManagementSection } from "@/pages/settings/UserAccountManagementSection";
 import type {
   DevMailOutboxPreview,
   ManagedUser,
@@ -12,6 +12,12 @@ import type {
   PendingResetRequestsPaginationState,
   PendingResetRequestsQueryState,
 } from "@/pages/settings/useSettingsManagedUserData";
+
+const UserAccountManagementSection = lazy(() =>
+  import("@/pages/settings/UserAccountManagementSection").then((module) => ({
+    default: module.UserAccountManagementSection,
+  })),
+);
 
 export interface AccountSecuritySectionProps {
   clearingDevMailOutbox: boolean;
@@ -90,48 +96,50 @@ export function AccountSecuritySection(props: AccountSecuritySectionProps) {
       />
 
       {props.showAccountManagement ? (
-        <UserAccountManagementSection
-          clearingDevMailOutbox={props.clearingDevMailOutbox}
-          createEmailInput={props.createEmailInput}
-          createFullNameInput={props.createFullNameInput}
-          createRoleInput={props.createRoleInput}
-          createUsernameInput={props.createUsernameInput}
-          creatingManagedUser={props.creatingManagedUser}
-          deletingDevMailOutboxId={props.deletingDevMailOutboxId}
-          deletingManagedUserId={props.deletingManagedUserId}
-          devMailOutboxEnabled={props.devMailOutboxEnabled}
-          devMailOutboxEntries={props.devMailOutboxEntries}
-          devMailOutboxLoading={props.devMailOutboxLoading}
-          devMailOutboxPagination={props.devMailOutboxPagination}
-          devMailOutboxQuery={props.devMailOutboxQuery}
-          isSuperuser={props.isSuperuser}
-          managedUsers={props.managedUsers}
-          managedUsersLoading={props.managedUsersLoading}
-          managedUsersPagination={props.managedUsersPagination}
-          managedUsersQuery={props.managedUsersQuery}
-          onClearDevMailOutbox={props.onClearDevMailOutbox}
-          onCreateEmailInputChange={props.onCreateEmailInputChange}
-          onCreateFullNameInputChange={props.onCreateFullNameInputChange}
-          onCreateManagedUser={props.onCreateManagedUser}
-          onCreateRoleInputChange={props.onCreateRoleInputChange}
-          onCreateUsernameInputChange={props.onCreateUsernameInputChange}
-          onDeleteDevMailOutboxEntry={props.onDeleteDevMailOutboxEntry}
-          onDeleteManagedUser={props.onDeleteManagedUser}
-          onDevMailOutboxRefresh={props.onDevMailOutboxRefresh}
-          onDevMailOutboxQueryChange={props.onDevMailOutboxQueryChange}
-          onEditManagedUser={props.onEditManagedUser}
-          onManagedBanToggle={props.onManagedBanToggle}
-          onManagedResetPassword={props.onManagedResetPassword}
-          onManagedResendActivation={props.onManagedResendActivation}
-          onManagedUsersRefresh={props.onManagedUsersRefresh}
-          onManagedUsersQueryChange={props.onManagedUsersQueryChange}
-          onPendingResetRequestsRefresh={props.onPendingResetRequestsRefresh}
-          onPendingResetRequestsQueryChange={props.onPendingResetRequestsQueryChange}
-          pendingResetRequests={props.pendingResetRequests}
-          pendingResetRequestsLoading={props.pendingResetRequestsLoading}
-          pendingResetRequestsPagination={props.pendingResetRequestsPagination}
-          pendingResetRequestsQuery={props.pendingResetRequestsQuery}
-        />
+        <Suspense fallback={<div className="rounded-lg border border-border/60 bg-background/70 p-6 text-sm text-muted-foreground">Loading account management...</div>}>
+          <UserAccountManagementSection
+            clearingDevMailOutbox={props.clearingDevMailOutbox}
+            createEmailInput={props.createEmailInput}
+            createFullNameInput={props.createFullNameInput}
+            createRoleInput={props.createRoleInput}
+            createUsernameInput={props.createUsernameInput}
+            creatingManagedUser={props.creatingManagedUser}
+            deletingDevMailOutboxId={props.deletingDevMailOutboxId}
+            deletingManagedUserId={props.deletingManagedUserId}
+            devMailOutboxEnabled={props.devMailOutboxEnabled}
+            devMailOutboxEntries={props.devMailOutboxEntries}
+            devMailOutboxLoading={props.devMailOutboxLoading}
+            devMailOutboxPagination={props.devMailOutboxPagination}
+            devMailOutboxQuery={props.devMailOutboxQuery}
+            isSuperuser={props.isSuperuser}
+            managedUsers={props.managedUsers}
+            managedUsersLoading={props.managedUsersLoading}
+            managedUsersPagination={props.managedUsersPagination}
+            managedUsersQuery={props.managedUsersQuery}
+            onClearDevMailOutbox={props.onClearDevMailOutbox}
+            onCreateEmailInputChange={props.onCreateEmailInputChange}
+            onCreateFullNameInputChange={props.onCreateFullNameInputChange}
+            onCreateManagedUser={props.onCreateManagedUser}
+            onCreateRoleInputChange={props.onCreateRoleInputChange}
+            onCreateUsernameInputChange={props.onCreateUsernameInputChange}
+            onDeleteDevMailOutboxEntry={props.onDeleteDevMailOutboxEntry}
+            onDeleteManagedUser={props.onDeleteManagedUser}
+            onDevMailOutboxRefresh={props.onDevMailOutboxRefresh}
+            onDevMailOutboxQueryChange={props.onDevMailOutboxQueryChange}
+            onEditManagedUser={props.onEditManagedUser}
+            onManagedBanToggle={props.onManagedBanToggle}
+            onManagedResetPassword={props.onManagedResetPassword}
+            onManagedResendActivation={props.onManagedResendActivation}
+            onManagedUsersRefresh={props.onManagedUsersRefresh}
+            onManagedUsersQueryChange={props.onManagedUsersQueryChange}
+            onPendingResetRequestsRefresh={props.onPendingResetRequestsRefresh}
+            onPendingResetRequestsQueryChange={props.onPendingResetRequestsQueryChange}
+            pendingResetRequests={props.pendingResetRequests}
+            pendingResetRequestsLoading={props.pendingResetRequestsLoading}
+            pendingResetRequestsPagination={props.pendingResetRequestsPagination}
+            pendingResetRequestsQuery={props.pendingResetRequestsQuery}
+          />
+        </Suspense>
       ) : null}
     </div>
   );

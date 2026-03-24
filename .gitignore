@@ -6,6 +6,8 @@ server.log
 tmp-smoke-server.out
 tmp-smoke-server.err
 var/dev-mail-outbox/
+artifacts/
+var/perf/
 .env
 .env.*
 !.env.example
