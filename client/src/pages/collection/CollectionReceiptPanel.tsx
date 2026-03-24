@@ -28,7 +28,7 @@ export function CollectionReceiptPanel({
   pendingFiles,
   inputRef,
   disabled = false,
-  accept = ".jpg,.jpeg,.png,.pdf",
+  accept = ".jpg,.jpeg,.png,.webp,.pdf",
   existingReceipts = [],
   removedReceiptIds = [],
   onFileChange,
