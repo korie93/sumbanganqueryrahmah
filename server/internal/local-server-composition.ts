@@ -6,6 +6,7 @@ import { createImportsController } from "../controllers/imports.controller";
 import { createOperationsController } from "../controllers/operations.controller";
 import { createSearchController } from "../controllers/search.controller";
 import type { MaintenanceState } from "../config/system-settings";
+import { pool } from "../db-postgres";
 import { injectChaos, getIntelligenceExplainability } from "../intelligence";
 import { errorHandler } from "../middleware/error-handler";
 import { searchRateLimiter } from "../middleware/rate-limit";
@@ -249,6 +250,15 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     getIntelligenceExplainability,
     injectChaos,
     createAuditLog: (data) => storage.createAuditLog(data),
+    checkDbConnectivity: async () => {
+      try {
+        const client = await pool.connect();
+        client.release();
+        return true;
+      } catch {
+        return false;
+      }
+    },
   });
 
   registerAuthRoutes(app, {
