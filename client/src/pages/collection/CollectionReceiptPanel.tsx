@@ -3,6 +3,7 @@ import { FileImage, FileText, RotateCcw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { CollectionRecordReceipt } from "@/lib/api";
+import { buildCollectionReceiptPanelSummary } from "@/pages/collection/collection-receipt-panel-utils";
 import {
   formatCollectionReceiptFileSize,
   useCollectionReceiptDraftPreviews,
@@ -41,6 +42,11 @@ export function CollectionReceiptPanel({
 }: CollectionReceiptPanelProps) {
   const draftPreviews = useCollectionReceiptDraftPreviews(pendingFiles);
   const removedSet = new Set(removedReceiptIds);
+  const summary = buildCollectionReceiptPanelSummary({
+    existingCount: existingReceipts.length,
+    removedExistingCount: removedReceiptIds.length,
+    pendingCount: pendingFiles.length,
+  });
 
   return (
     <div className="space-y-3">
@@ -76,6 +82,23 @@ export function CollectionReceiptPanel({
       </div>
 
       <p className="text-xs text-muted-foreground">{helperText}</p>
+      <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {summary.existingCount > 0 ? (
+            <Badge variant="secondary">Existing {summary.existingCount}</Badge>
+          ) : null}
+          {summary.removedExistingCount > 0 ? (
+            <Badge variant="destructive">Will Remove {summary.removedExistingCount}</Badge>
+          ) : null}
+          {summary.pendingCount > 0 ? (
+            <Badge variant="outline">Pending Upload {summary.pendingCount}</Badge>
+          ) : null}
+          {summary.willReplace ? (
+            <Badge variant="secondary">Replacement Pending</Badge>
+          ) : null}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">{summary.message}</p>
+      </div>
 
       {existingReceipts.length > 0 ? (
         <div className="space-y-2">
@@ -93,7 +116,12 @@ export function CollectionReceiptPanel({
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{receipt.originalFileName}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-sm font-medium">{receipt.originalFileName}</p>
+                      <Badge variant={markedForRemoval ? "destructive" : "secondary"}>
+                        {markedForRemoval ? "Will Remove" : "Existing"}
+                      </Badge>
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       {receipt.originalMimeType} | {formatCollectionReceiptFileSize(receipt.fileSize)}
                     </p>
@@ -174,7 +202,13 @@ export function CollectionReceiptPanel({
                 </div>
                 <div className="space-y-2 p-3">
                   <div className="space-y-1">
-                    <p className="truncate text-sm font-medium">{preview.file.name}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-sm font-medium">{preview.file.name}</p>
+                      <Badge variant="outline">Pending Upload</Badge>
+                      {summary.willReplace ? (
+                        <Badge variant="secondary">Replacement</Badge>
+                      ) : null}
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       {preview.file.type || "application/octet-stream"} |{" "}
                       {formatCollectionReceiptFileSize(preview.file.size)}

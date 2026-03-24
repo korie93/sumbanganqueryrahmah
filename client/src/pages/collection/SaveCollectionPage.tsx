@@ -213,7 +213,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
               onRemovePending={handleRemoveReceipt}
               onClearPending={handleClearPendingReceipts}
               uploadLabel="Upload Receipt One by One"
-              helperText="Tambah satu receipt pada satu masa. Semua receipt ini akan disimpan di bawah customer collection yang sama."
+              helperText="Tambah satu receipt pada satu masa. Status Existing, Pending Upload, dan perubahan simpan/buang akan ditunjukkan di bawah sebelum anda klik Save Collection."
             />
           </div>
         </div>

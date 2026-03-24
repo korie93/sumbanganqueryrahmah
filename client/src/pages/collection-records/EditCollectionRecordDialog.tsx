@@ -212,7 +212,7 @@ export function EditCollectionRecordDialog({
               onViewExisting={onViewExistingReceipt}
               onToggleRemoveExisting={onToggleRemoveExistingReceipt}
               uploadLabel="Add Receipt One by One"
-              helperText="Receipt sedia ada kekal dipautkan sehingga anda pilih untuk membuangnya. Receipt baru akan ditambah pada rekod yang sama."
+              helperText="Receipt sedia ada kekal dipautkan sehingga anda tandakan buang. Receipt baru hanya akan disimpan selepas Save, dan status remove/replace dipaparkan di bawah."
             />
           </div>
         </div>

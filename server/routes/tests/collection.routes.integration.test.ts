@@ -25,6 +25,10 @@ import {
   createCollectionSummaryStorageDouble,
 } from "./collection-route-summary-doubles";
 
+function parseAuditDetails(entry: { details?: string }) {
+  return JSON.parse(String(entry.details || "{}"));
+}
+
 test("DELETE /api/collection/purge-old rejects non-superuser access before service work begins", async () => {
   const actorPasswordHash = await hashPassword("SuperSecret123");
   const { storage, getPurgeCallCount, auditLogs } = createCollectionStorageDouble({
@@ -188,6 +192,14 @@ test("POST /api/collection creates a collection record and writes an audit log",
     assert.equal(createCalls[0].amount, 245.9);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "COLLECTION_RECORD_CREATED");
+    const auditDetails = parseAuditDetails(auditLogs[0]);
+    assert.equal(auditDetails.event, "collection_record_created");
+    assert.equal(auditDetails.snapshot.customerName, "Bob Lee");
+    assert.equal(auditDetails.snapshot.paymentDate, "2026-03-15");
+    assert.equal(auditDetails.snapshot.amount, 245.9);
+    assert.equal(auditDetails.snapshot.collectionStaffNickname, "Collector Alpha");
+    assert.equal(auditDetails.snapshot.activeReceiptCount, 0);
+    assert.equal(auditDetails.snapshot.activeReceiptSource, "none");
   } finally {
     await stopTestServer(server);
   }
@@ -244,6 +256,10 @@ test("POST /api/collection accepts multipart receipt uploads without base64 JSON
     assert.equal(createReceiptCalls[0]?.receipts[0]?.originalMimeType, "image/png");
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "COLLECTION_RECORD_CREATED");
+    const auditDetails = parseAuditDetails(auditLogs[0]);
+    assert.equal(auditDetails.snapshot.activeReceiptCount, 1);
+    assert.equal(auditDetails.snapshot.activeReceiptSource, "relation");
+    assert.equal(auditDetails.receipts.addedCount, 1);
   } finally {
     await stopTestServer(server);
   }
@@ -401,6 +417,16 @@ test("PATCH /api/collection/:id updates a record and writes an audit log", async
     assert.equal(updateCalls[0].data.amount, 55.3);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "COLLECTION_RECORD_UPDATED");
+    const auditDetails = parseAuditDetails(auditLogs[0]);
+    assert.equal(auditDetails.event, "collection_record_updated");
+    assert.equal(auditDetails.before.amount, 120.5);
+    assert.equal(auditDetails.after.amount, 55.3);
+    assert.deepEqual(auditDetails.changes.amount, {
+      from: 120.5,
+      to: 55.3,
+    });
+    assert.equal(auditDetails.receipts.beforeCount, 0);
+    assert.equal(auditDetails.receipts.afterCount, 0);
   } finally {
     await stopTestServer(server);
   }
@@ -451,6 +477,10 @@ test("PATCH /api/collection/:id accepts multipart receipt uploads during edit fl
     assert.match(String(updateCalls[0]?.options?.newReceipts?.[0]?.storagePath || ""), /\/uploads\/collection-receipts\/.+\.jpg$/);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "COLLECTION_RECORD_UPDATED");
+    const auditDetails = parseAuditDetails(auditLogs[0]);
+    assert.equal(auditDetails.receipts.addedCount, 1);
+    assert.equal(auditDetails.receipts.afterCount, 1);
+    assert.equal(auditDetails.receipts.afterSource, "relation");
   } finally {
     await stopTestServer(server);
   }
@@ -1618,7 +1648,7 @@ test("PATCH /api/collection/:id correctly reassigns the staff nickname on the re
   ];
 
   const updateCalls: Array<{ id: string; data: Record<string, unknown> }> = [];
-  const auditLogs: Array<{ action: string }> = [];
+  const auditLogs: Array<{ action: string; details?: string }> = [];
   const record = {
     id: "rec-nickname-test",
     customerName: "Customer X",
@@ -1645,7 +1675,7 @@ test("PATCH /api/collection/:id correctly reassigns the staff nickname on the re
       updateCalls.push({ id, data });
       return { ...record, ...data, amount: record.amount, updatedAt: new Date("2026-03-02T10:00:00.000Z") };
     },
-    createAuditLog: async (entry: { action: string }) => {
+    createAuditLog: async (entry: { action: string; details?: string }) => {
       auditLogs.push(entry);
       return { id: "audit-1", ...entry };
     },
@@ -1686,6 +1716,13 @@ test("PATCH /api/collection/:id correctly reassigns the staff nickname on the re
     assert.equal(updateCalls[0].data.collectionStaffNickname, "Collector Bravo");
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "COLLECTION_RECORD_UPDATED");
+    const auditDetails = parseAuditDetails(auditLogs[0]);
+    assert.deepEqual(auditDetails.changes.collectionStaffNickname, {
+      from: "Collector Alpha",
+      to: "Collector Bravo",
+    });
+    assert.equal(auditDetails.before.collectionStaffNickname, "Collector Alpha");
+    assert.equal(auditDetails.after.collectionStaffNickname, "Collector Bravo");
   } finally {
     await stopTestServer(server);
   }
@@ -1695,7 +1732,7 @@ test("PATCH /api/collection/:id correctly updates the payment date on the record
   // Verify that a payment-date PATCH reaches the storage layer with the normalised ISO date
   // so that the on-demand daily-overview computation will reflect the new date immediately.
   const updateCalls: Array<{ id: string; data: Record<string, unknown> }> = [];
-  const auditLogs: Array<{ action: string }> = [];
+  const auditLogs: Array<{ action: string; details?: string }> = [];
   const record = {
     id: "rec-date-test",
     customerName: "Customer Y",
@@ -1721,7 +1758,7 @@ test("PATCH /api/collection/:id correctly updates the payment date on the record
       updateCalls.push({ id, data });
       return { ...record, ...data, amount: record.amount, updatedAt: new Date("2026-03-02T10:00:00.000Z") };
     },
-    createAuditLog: async (entry: { action: string }) => {
+    createAuditLog: async (entry: { action: string; details?: string }) => {
       auditLogs.push(entry);
       return { id: "audit-1", ...entry };
     },
@@ -1762,6 +1799,13 @@ test("PATCH /api/collection/:id correctly updates the payment date on the record
     assert.equal(String(updateCalls[0].data.paymentDate), "2026-03-15");
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "COLLECTION_RECORD_UPDATED");
+    const auditDetails = parseAuditDetails(auditLogs[0]);
+    assert.deepEqual(auditDetails.changes.paymentDate, {
+      from: "2026-03-01",
+      to: "2026-03-15",
+    });
+    assert.equal(auditDetails.before.paymentDate, "2026-03-01");
+    assert.equal(auditDetails.after.paymentDate, "2026-03-15");
   } finally {
     await stopTestServer(server);
   }
@@ -1771,7 +1815,7 @@ test("DELETE /api/collection/:id removes the record so it no longer appears in s
   // Confirm that a successful DELETE removes the record from the in-memory store,
   // meaning any subsequent daily-overview query would not include the deleted record's amount.
   const deleteCalls: Array<{ id: string }> = [];
-  const auditLogs: Array<{ action: string }> = [];
+  const auditLogs: Array<{ action: string; details?: string }> = [];
   const record = {
     id: "rec-delete-test",
     customerName: "Customer Z",
@@ -1801,7 +1845,7 @@ test("DELETE /api/collection/:id removes the record so it no longer appears in s
       recordStore = null;
       return true;
     },
-    createAuditLog: async (entry: { action: string }) => {
+    createAuditLog: async (entry: { action: string; details?: string }) => {
       auditLogs.push(entry);
       return { id: "audit-1", ...entry };
     },
@@ -1841,6 +1885,12 @@ test("DELETE /api/collection/:id removes the record so it no longer appears in s
     assert.equal(recordStore, null);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "COLLECTION_RECORD_DELETED");
+    const auditDetails = parseAuditDetails(auditLogs[0]);
+    assert.equal(auditDetails.deleted.customerName, "Customer Z");
+    assert.equal(auditDetails.deleted.paymentDate, "2026-03-05");
+    assert.equal(auditDetails.deleted.amount, 250);
+    assert.equal(auditDetails.deleted.collectionStaffNickname, "Collector Alpha");
+    assert.equal(auditDetails.deleted.activeReceiptCount, 0);
   } finally {
     await stopTestServer(server);
   }

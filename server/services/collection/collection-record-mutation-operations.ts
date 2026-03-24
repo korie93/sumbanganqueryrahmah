@@ -40,6 +40,105 @@ type MultipartCollectionPayload = Record<string, unknown> & {
   uploadedReceipts?: CreateCollectionRecordReceiptInput[] | null;
 };
 
+type CollectionRecordAuditSource = "relation" | "legacy" | "none";
+
+type CollectionRecordAuditSnapshot = {
+  customerName: string;
+  paymentDate: string;
+  amount: number;
+  collectionStaffNickname: string;
+  activeReceiptCount: number;
+  activeReceiptSource: CollectionRecordAuditSource;
+};
+
+function toCollectionAuditAmount(value: unknown) {
+  const parsed = Number(value || 0);
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  return Math.round((parsed + Number.EPSILON) * 100) / 100;
+}
+
+function resolveCollectionAuditReceiptState(params: {
+  relationCount: number;
+  legacyReceiptFile?: string | null;
+}): {
+  count: number;
+  source: CollectionRecordAuditSource;
+} {
+  const relationCount = Math.max(0, Number(params.relationCount) || 0);
+  if (relationCount > 0) {
+    return {
+      count: relationCount,
+      source: "relation",
+    };
+  }
+
+  if (normalizeCollectionText(params.legacyReceiptFile)) {
+    return {
+      count: 1,
+      source: "legacy",
+    };
+  }
+
+  return {
+    count: 0,
+    source: "none",
+  };
+}
+
+function buildCollectionAuditSnapshot(params: {
+  customerName: unknown;
+  paymentDate: unknown;
+  amount: unknown;
+  collectionStaffNickname: unknown;
+  activeReceiptCount: number;
+  activeReceiptSource: CollectionRecordAuditSource;
+}): CollectionRecordAuditSnapshot {
+  return {
+    customerName: String(params.customerName || "").trim(),
+    paymentDate: String(params.paymentDate || "").trim(),
+    amount: toCollectionAuditAmount(params.amount),
+    collectionStaffNickname: String(params.collectionStaffNickname || "").trim(),
+    activeReceiptCount: Math.max(0, Number(params.activeReceiptCount) || 0),
+    activeReceiptSource: params.activeReceiptSource,
+  };
+}
+
+function buildCollectionAuditFieldChanges(
+  before: CollectionRecordAuditSnapshot,
+  after: CollectionRecordAuditSnapshot,
+) {
+  const changes: Record<string, { from: string | number; to: string | number }> = {};
+
+  if (before.customerName !== after.customerName) {
+    changes.customerName = {
+      from: before.customerName,
+      to: after.customerName,
+    };
+  }
+  if (before.paymentDate !== after.paymentDate) {
+    changes.paymentDate = {
+      from: before.paymentDate,
+      to: after.paymentDate,
+    };
+  }
+  if (before.amount !== after.amount) {
+    changes.amount = {
+      from: before.amount,
+      to: after.amount,
+    };
+  }
+  if (before.collectionStaffNickname !== after.collectionStaffNickname) {
+    changes.collectionStaffNickname = {
+      from: before.collectionStaffNickname,
+      to: after.collectionStaffNickname,
+    };
+  }
+
+  return changes;
+}
+
 function readUploadedReceiptRows(body: MultipartCollectionPayload): CreateCollectionRecordReceiptInput[] {
   if (!Array.isArray(body.uploadedReceipts)) {
     return [];
@@ -171,12 +270,33 @@ export class CollectionRecordMutationOperations {
       }
       const hydratedRecord = await this.storage.getCollectionRecordById(record.id);
       const finalRecord = hydratedRecord || record;
+      const finalReceiptState = resolveCollectionAuditReceiptState({
+        relationCount: uploadedReceipts.length,
+        legacyReceiptFile: null,
+      });
 
       await this.storage.createAuditLog({
         action: "COLLECTION_RECORD_CREATED",
         performedBy: user.username,
         targetResource: finalRecord.id,
-        details: `Collection record created by ${user.username}`,
+        details: JSON.stringify({
+          event: "collection_record_created",
+          actor: user.username,
+          recordId: finalRecord.id,
+          snapshot: buildCollectionAuditSnapshot({
+            customerName: finalRecord.customerName,
+            paymentDate: finalRecord.paymentDate,
+            amount: finalRecord.amount,
+            collectionStaffNickname: finalRecord.collectionStaffNickname,
+            activeReceiptCount: finalReceiptState.count,
+            activeReceiptSource: finalReceiptState.source,
+          }),
+          receipts: {
+            addedCount: uploadedReceipts.length,
+            afterCount: finalReceiptState.count,
+            afterSource: finalReceiptState.source,
+          },
+        }),
       });
 
       return { ok: true as const, record: finalRecord };
@@ -364,6 +484,10 @@ export class CollectionRecordMutationOperations {
       }
 
       const existingReceipts = Array.isArray(existing.receipts) ? existing.receipts : [];
+      const beforeReceiptState = resolveCollectionAuditReceiptState({
+        relationCount: existingReceipts.length,
+        legacyReceiptFile: existing.receiptFile,
+      });
       const removedReceipts = shouldRemoveReceipt
         ? existingReceipts
         : removeReceiptIds.length > 0
@@ -411,12 +535,65 @@ export class CollectionRecordMutationOperations {
       if (shouldClearLegacyReceiptFallback && existing.receiptFile) {
         await removeCollectionReceiptFile(existing.receiptFile);
       }
+      const remainingRelationReceiptCount = shouldRemoveReceipt
+        ? 0
+        : Math.max(0, existingReceipts.length - removedReceipts.length);
+      const afterReceiptState =
+        remainingRelationReceiptCount + uploadedReceipts.length > 0
+          ? resolveCollectionAuditReceiptState({
+              relationCount: remainingRelationReceiptCount + uploadedReceipts.length,
+              legacyReceiptFile: null,
+            })
+          : existingReceipts.length === 0 && !shouldClearLegacyReceiptFallback
+            ? resolveCollectionAuditReceiptState({
+                relationCount: 0,
+                legacyReceiptFile: existing.receiptFile,
+              })
+            : resolveCollectionAuditReceiptState({
+                relationCount: 0,
+                legacyReceiptFile: null,
+              });
+      const beforeSnapshot = buildCollectionAuditSnapshot({
+        customerName: existing.customerName,
+        paymentDate: existing.paymentDate,
+        amount: existing.amount,
+        collectionStaffNickname: existing.collectionStaffNickname,
+        activeReceiptCount: beforeReceiptState.count,
+        activeReceiptSource: beforeReceiptState.source,
+      });
+      const afterSnapshot = buildCollectionAuditSnapshot({
+        customerName: updated.customerName,
+        paymentDate: updated.paymentDate,
+        amount: updated.amount,
+        collectionStaffNickname: updated.collectionStaffNickname,
+        activeReceiptCount: afterReceiptState.count,
+        activeReceiptSource: afterReceiptState.source,
+      });
 
       await this.storage.createAuditLog({
         action: "COLLECTION_RECORD_UPDATED",
         performedBy: user.username,
         targetResource: id,
-        details: `Collection record updated by ${user.username}`,
+        details: JSON.stringify({
+          event: "collection_record_updated",
+          actor: user.username,
+          recordId: id,
+          before: beforeSnapshot,
+          after: afterSnapshot,
+          changes: buildCollectionAuditFieldChanges(beforeSnapshot, afterSnapshot),
+          receipts: {
+            beforeCount: beforeReceiptState.count,
+            afterCount: afterReceiptState.count,
+            beforeSource: beforeReceiptState.source,
+            afterSource: afterReceiptState.source,
+            addedCount: uploadedReceipts.length,
+            removedCount: shouldRemoveReceipt ? beforeReceiptState.count : removedReceipts.length,
+            removedReceiptIds: removedReceipts.map((receipt) => receipt.id),
+            replaced: (shouldRemoveReceipt ? beforeReceiptState.count : removedReceipts.length) > 0
+              && uploadedReceipts.length > 0,
+            clearedLegacyFallback: shouldClearLegacyReceiptFallback,
+          },
+        }),
       });
 
       return { ok: true as const, record: updated };
@@ -488,12 +665,33 @@ export class CollectionRecordMutationOperations {
     if (removedReceipts.length === 0 && existing.receiptFile) {
       await removeCollectionReceiptFile(existing.receiptFile);
     }
+    const deletedReceiptState = resolveCollectionAuditReceiptState({
+      relationCount: removedReceipts.length,
+      legacyReceiptFile: removedReceipts.length > 0 ? null : existing.receiptFile,
+    });
 
     await this.storage.createAuditLog({
       action: "COLLECTION_RECORD_DELETED",
       performedBy: user.username,
       targetResource: existing.id,
-      details: `Collection record deleted by ${user.username}`,
+      details: JSON.stringify({
+        event: "collection_record_deleted",
+        actor: user.username,
+        recordId: existing.id,
+        deleted: buildCollectionAuditSnapshot({
+          customerName: existing.customerName,
+          paymentDate: existing.paymentDate,
+          amount: existing.amount,
+          collectionStaffNickname: existing.collectionStaffNickname,
+          activeReceiptCount: deletedReceiptState.count,
+          activeReceiptSource: deletedReceiptState.source,
+        }),
+        receipts: {
+          removedCount: deletedReceiptState.count,
+          removedReceiptIds: removedReceipts.map((receipt) => receipt.id),
+          removedLegacyFallback: removedReceipts.length === 0 && Boolean(existing.receiptFile),
+        },
+      }),
     });
 
     return { ok: true as const };
