@@ -29,6 +29,39 @@ function parseAuditDetails(entry: { details?: string }) {
   return JSON.parse(String(entry.details || "{}"));
 }
 
+function createTinyPdfBuffer() {
+  return Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n", "latin1");
+}
+
+function createDangerousPdfBuffer() {
+  return Buffer.from(
+    "%PDF-1.7\n1 0 obj\n<< /OpenAction 2 0 R >>\nendobj\n2 0 obj\n<< /JavaScript (app.alert('x')) >>\nendobj\ntrailer\n<<>>\n%%EOF\n",
+    "latin1",
+  );
+}
+
+function createTinyPngBuffer(width = 1, height = 1) {
+  const buffer = Buffer.alloc(24);
+  buffer.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+  buffer.set([0x00, 0x00, 0x00, 0x0d], 8);
+  buffer.set([0x49, 0x48, 0x44, 0x52], 12);
+  buffer.writeUInt32BE(width, 16);
+  buffer.writeUInt32BE(height, 20);
+  return buffer;
+}
+
+function createTinyJpegBuffer(width = 1, height = 1) {
+  return Buffer.from([
+    0xff, 0xd8,
+    0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00,
+    0xff, 0xc0, 0x00, 0x11, 0x08,
+    (height >> 8) & 0xff, height & 0xff,
+    (width >> 8) & 0xff, width & 0xff,
+    0x03, 0x01, 0x11, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01,
+    0xff, 0xd9,
+  ]);
+}
+
 test("DELETE /api/collection/purge-old rejects non-superuser access before service work begins", async () => {
   const actorPasswordHash = await hashPassword("SuperSecret123");
   const { storage, getPurgeCallCount, auditLogs } = createCollectionStorageDouble({
@@ -355,7 +388,7 @@ test("POST /api/collection accepts multipart receipt uploads without base64 JSON
   formData.append(
     "receipts",
     new File(
-      [Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00])],
+      [createTinyPngBuffer()],
       "receipt-upload.png",
       { type: "image/png" },
     ),
@@ -383,6 +416,53 @@ test("POST /api/collection accepts multipart receipt uploads without base64 JSON
     assert.equal(auditDetails.snapshot.activeReceiptCount, 1);
     assert.equal(auditDetails.snapshot.activeReceiptSource, "relation");
     assert.equal(auditDetails.receipts.addedCount, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/collection rejects multipart PDF receipts that contain dangerous actions", async () => {
+  const { storage, createCalls, createReceiptCalls } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const formData = new FormData();
+  formData.set("customerName", "Multipart Dangerous Upload");
+  formData.set("icNumber", "880202026778");
+  formData.set("customerPhone", "0129876543");
+  formData.set("accountNumber", "ACC-2004");
+  formData.set("batch", "P25");
+  formData.set("paymentDate", "2026-03-15");
+  formData.set("amount", "245.90");
+  formData.set("collectionStaffNickname", "Collector Alpha");
+  formData.append(
+    "receipts",
+    new File([createDangerousPdfBuffer()], "dangerous.pdf", { type: "application/pdf" }),
+  );
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      body: formData,
+    });
+
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.equal(payload.ok, false);
+    assert.match(String(payload.message), /embedded JavaScript|automatic open actions/i);
+    assert.equal(createCalls.length, 0);
+    assert.equal(createReceiptCalls.length, 0);
   } finally {
     await stopTestServer(server);
   }
@@ -625,7 +705,7 @@ test("PATCH /api/collection/:id accepts multipart receipt uploads during edit fl
   formData.append(
     "receipts",
     new File(
-      [Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46])],
+      [createTinyJpegBuffer()],
       "edit-upload.jpg",
       { type: "image/jpeg" },
     ),
@@ -881,7 +961,7 @@ test("GET /api/collection/:id/receipt/view promotes legacy receipt_file into rel
   const storedFileName = `route-test-legacy-receipt-${Date.now()}-${Math.random().toString(16).slice(2)}.pdf`;
   const storedReceiptPath = `/uploads/collection-receipts/${storedFileName}`;
   await fs.mkdir(uploadsDir, { recursive: true });
-  await fs.writeFile(path.join(uploadsDir, storedFileName), Buffer.from("%PDF-1.7\n%legacy\n"));
+  await fs.writeFile(path.join(uploadsDir, storedFileName), createTinyPdfBuffer());
 
   const { storage } = createCoreCollectionStorageDouble({
     sessionNickname: "Collector Alpha",
@@ -908,6 +988,10 @@ test("GET /api/collection/:id/receipt/view promotes legacy receipt_file into rel
     const primaryResponse = await fetch(`${baseUrl}/api/collection/collection-1/receipt/view`);
     assert.equal(primaryResponse.status, 200);
     assert.equal(primaryResponse.headers.get("content-type"), "application/pdf");
+    assert.equal(primaryResponse.headers.get("cache-control"), "private, no-store, max-age=0");
+    assert.equal(primaryResponse.headers.get("pragma"), "no-cache");
+    assert.equal(primaryResponse.headers.get("cross-origin-resource-policy"), "same-origin");
+    assert.equal(primaryResponse.headers.get("x-content-type-options"), "nosniff");
 
     const promotedResponse = await fetch(
       `${baseUrl}/api/collection/collection-1/receipts/receipt-collection-1-1/view`,
@@ -925,7 +1009,7 @@ test("GET /api/collection/:id/receipts/:receiptId/view does not fallback to lega
   const storedFileName = `route-test-receipt-${Date.now()}-${Math.random().toString(16).slice(2)}.pdf`;
   const storedReceiptPath = `/uploads/collection-receipts/${storedFileName}`;
   await fs.mkdir(uploadsDir, { recursive: true });
-  await fs.writeFile(path.join(uploadsDir, storedFileName), Buffer.from("%PDF-1.7\n%test\n"));
+  await fs.writeFile(path.join(uploadsDir, storedFileName), createTinyPdfBuffer());
 
   const { storage } = createCoreCollectionStorageDouble({
     sessionNickname: "Collector Alpha",
@@ -965,7 +1049,7 @@ test("GET /api/collection/:id/receipt/view prunes a missing relation receipt and
   const storedFileName = `route-test-fallback-receipt-${Date.now()}-${Math.random().toString(16).slice(2)}.png`;
   const storedReceiptPath = `/uploads/collection-receipts/${storedFileName}`;
   await fs.mkdir(uploadsDir, { recursive: true });
-  await fs.writeFile(path.join(uploadsDir, storedFileName), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  await fs.writeFile(path.join(uploadsDir, storedFileName), createTinyPngBuffer());
 
   const { storage, deleteReceiptCalls } = createCoreCollectionStorageDouble({
     sessionNickname: "Collector Alpha",

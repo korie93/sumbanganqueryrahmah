@@ -12,16 +12,57 @@ function asBase64(buffer: Buffer): string {
   return buffer.toString("base64");
 }
 
-test("detectCollectionReceiptSignature identifies supported signatures", () => {
-  const pdf = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]);
-  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
-  const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46]);
-  const webp = Buffer.from([
-    0x52, 0x49, 0x46, 0x46,
-    0x24, 0x00, 0x00, 0x00,
-    0x57, 0x45, 0x42, 0x50,
-    0x56, 0x50, 0x38, 0x20,
+function createTinyPdfBuffer() {
+  return Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n", "latin1");
+}
+
+function createDangerousPdfBuffer() {
+  return Buffer.from(
+    "%PDF-1.7\n1 0 obj\n<< /OpenAction 2 0 R >>\nendobj\n2 0 obj\n<< /JavaScript (app.alert('x')) >>\nendobj\ntrailer\n<<>>\n%%EOF\n",
+    "latin1",
+  );
+}
+
+function createTinyPngBuffer(width = 1, height = 1) {
+  const buffer = Buffer.alloc(24);
+  buffer.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+  buffer.set([0x00, 0x00, 0x00, 0x0d], 8);
+  buffer.set([0x49, 0x48, 0x44, 0x52], 12);
+  buffer.writeUInt32BE(width, 16);
+  buffer.writeUInt32BE(height, 20);
+  return buffer;
+}
+
+function createTinyJpegBuffer(width = 1, height = 1) {
+  return Buffer.from([
+    0xff, 0xd8,
+    0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00,
+    0xff, 0xc0, 0x00, 0x11, 0x08,
+    (height >> 8) & 0xff, height & 0xff,
+    (width >> 8) & 0xff, width & 0xff,
+    0x03, 0x01, 0x11, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01,
+    0xff, 0xd9,
   ]);
+}
+
+function createTinyWebpBuffer(width = 1, height = 1) {
+  return Buffer.from([
+    0x52, 0x49, 0x46, 0x46,
+    0x16, 0x00, 0x00, 0x00,
+    0x57, 0x45, 0x42, 0x50,
+    0x56, 0x50, 0x38, 0x58,
+    0x0a, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    (width - 1) & 0xff, ((width - 1) >> 8) & 0xff, ((width - 1) >> 16) & 0xff,
+    (height - 1) & 0xff, ((height - 1) >> 8) & 0xff, ((height - 1) >> 16) & 0xff,
+  ]);
+}
+
+test("detectCollectionReceiptSignature identifies supported signatures", () => {
+  const pdf = createTinyPdfBuffer();
+  const png = createTinyPngBuffer();
+  const jpg = createTinyJpegBuffer();
+  const webp = createTinyWebpBuffer();
 
   assert.equal(detectCollectionReceiptSignature(pdf), "pdf");
   assert.equal(detectCollectionReceiptSignature(png), "png");
@@ -31,7 +72,7 @@ test("detectCollectionReceiptSignature identifies supported signatures", () => {
 });
 
 test("saveCollectionReceipt rejects extension-mismatch payloads", async () => {
-  const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+  const pngBytes = createTinyPngBuffer();
 
   await assert.rejects(
     () =>
@@ -45,12 +86,7 @@ test("saveCollectionReceipt rejects extension-mismatch payloads", async () => {
 });
 
 test("saveCollectionReceipt accepts webp payloads and stores canonical metadata", async () => {
-  const webpBytes = Buffer.from([
-    0x52, 0x49, 0x46, 0x46,
-    0x24, 0x00, 0x00, 0x00,
-    0x57, 0x45, 0x42, 0x50,
-    0x56, 0x50, 0x38, 0x20,
-  ]);
+  const webpBytes = createTinyWebpBuffer();
 
   const saved = await saveCollectionReceipt({
     fileName: "scan.webp",
@@ -66,7 +102,7 @@ test("saveCollectionReceipt accepts webp payloads and stores canonical metadata"
 });
 
 test("saveCollectionReceipt accepts image/jpg alias MIME and stores canonical jpeg metadata", async () => {
-  const jpgBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46]);
+  const jpgBytes = createTinyJpegBuffer();
 
   const saved = await saveCollectionReceipt({
     fileName: "mobile-upload.jpg",
@@ -82,7 +118,7 @@ test("saveCollectionReceipt accepts image/jpg alias MIME and stores canonical jp
 });
 
 test("saveCollectionReceipt accepts image/jfif declarations when signature and extension are valid", async () => {
-  const jpgBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46]);
+  const jpgBytes = createTinyJpegBuffer();
 
   const saved = await saveCollectionReceipt({
     fileName: "camera-export.jpeg",
@@ -98,7 +134,7 @@ test("saveCollectionReceipt accepts image/jfif declarations when signature and e
 });
 
 test("saveMultipartCollectionReceipt streams files to disk with canonical metadata", async () => {
-  const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+  const pngBytes = createTinyPngBuffer();
 
   const saved = await saveMultipartCollectionReceipt({
     fileName: "stream-upload.png",
@@ -111,4 +147,28 @@ test("saveMultipartCollectionReceipt streams files to disk with canonical metada
   assert.match(saved.storagePath, /\/uploads\/collection-receipts\/.+\.png$/);
 
   await removeCollectionReceiptFile(saved.storagePath);
+});
+
+test("saveCollectionReceipt rejects PDF payloads that contain dangerous automatic actions", async () => {
+  await assert.rejects(
+    () =>
+      saveCollectionReceipt({
+        fileName: "dangerous.pdf",
+        mimeType: "application/pdf",
+        contentBase64: asBase64(createDangerousPdfBuffer()),
+      }),
+    /embedded JavaScript|automatic open actions/i,
+  );
+});
+
+test("saveCollectionReceipt rejects images whose dimensions exceed the security limits", async () => {
+  await assert.rejects(
+    () =>
+      saveCollectionReceipt({
+        fileName: "oversized.png",
+        mimeType: "image/png",
+        contentBase64: asBase64(createTinyPngBuffer(10001, 1)),
+      }),
+    /maximum edge|maximum pixel/i,
+  );
 });

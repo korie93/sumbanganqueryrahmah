@@ -10,6 +10,11 @@ import {
   COLLECTION_RECEIPT_PUBLIC_PREFIX,
   resolveCollectionReceiptStoragePath,
 } from "../lib/collection-receipt-files";
+import {
+  detectCollectionReceiptSignature,
+  type CollectionReceiptFileType,
+  validateCollectionReceiptSecurity,
+} from "../lib/collection-receipt-security";
 import { logger } from "../lib/logger";
 import type {
   CollectionRecordReceipt,
@@ -18,6 +23,8 @@ import type {
 } from "../storage-postgres";
 import { canUserAccessCollectionRecord } from "./collection-access";
 import { normalizeCollectionText, type CollectionReceiptPayload } from "./collection.validation";
+
+export { detectCollectionReceiptSignature } from "../lib/collection-receipt-security";
 
 const COLLECTION_RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
 const COLLECTION_RECEIPT_ALLOWED_MIME = new Set(["image/jpeg", "image/png", "application/pdf", "image/webp"]);
@@ -30,7 +37,6 @@ const COLLECTION_RECEIPT_MIME_ALIASES: Record<string, string> = {
   "image/x-png": "image/png",
   "application/x-pdf": "application/pdf",
 };
-type CollectionReceiptFileType = "pdf" | "png" | "jpg" | "webp";
 
 const COLLECTION_RECEIPT_TYPE_CONFIG: Record<CollectionReceiptFileType, { extension: string; mimeType: string }> = {
   pdf: { extension: ".pdf", mimeType: "application/pdf" },
@@ -61,64 +67,6 @@ function normalizeCollectionReceiptMimeType(mimeType: string): string {
   const normalized = String(mimeType || "").trim().toLowerCase();
   if (!normalized) return "";
   return COLLECTION_RECEIPT_MIME_ALIASES[normalized] || normalized;
-}
-
-export function detectCollectionReceiptSignature(
-  buffer: Buffer,
-): CollectionReceiptFileType | null {
-  if (!buffer || buffer.length < 4) {
-    return null;
-  }
-
-  if (
-    buffer.length >= 5
-    && buffer[0] === 0x25
-    && buffer[1] === 0x50
-    && buffer[2] === 0x44
-    && buffer[3] === 0x46
-    && buffer[4] === 0x2d
-  ) {
-    return "pdf";
-  }
-
-  if (
-    buffer.length >= 8
-    && buffer[0] === 0x89
-    && buffer[1] === 0x50
-    && buffer[2] === 0x4e
-    && buffer[3] === 0x47
-    && buffer[4] === 0x0d
-    && buffer[5] === 0x0a
-    && buffer[6] === 0x1a
-    && buffer[7] === 0x0a
-  ) {
-    return "png";
-  }
-
-  if (
-    buffer.length >= 3
-    && buffer[0] === 0xff
-    && buffer[1] === 0xd8
-    && buffer[2] === 0xff
-  ) {
-    return "jpg";
-  }
-
-  if (
-    buffer.length >= 12
-    && buffer[0] === 0x52
-    && buffer[1] === 0x49
-    && buffer[2] === 0x46
-    && buffer[3] === 0x46
-    && buffer[8] === 0x57
-    && buffer[9] === 0x45
-    && buffer[10] === 0x42
-    && buffer[11] === 0x50
-  ) {
-    return "webp";
-  }
-
-  return null;
 }
 
 export type StoredCollectionReceiptFile = CreateCollectionRecordReceiptInput;
@@ -214,6 +162,7 @@ export async function saveCollectionReceipt(
   if (mimeTypeResolved && mimeTypeResolved !== signatureType) {
     throw new Error("Receipt file content does not match declared MIME type.");
   }
+  validateCollectionReceiptSecurity(buffer, signatureType);
 
   await fs.promises.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
 
@@ -298,6 +247,8 @@ export async function saveMultipartCollectionReceipt(
     if (mimeTypeResolved && mimeTypeResolved !== signatureType) {
       throw new Error("Receipt file content does not match declared MIME type.");
     }
+    const receiptBytes = await fs.promises.readFile(temporaryFilePath);
+    validateCollectionReceiptSecurity(receiptBytes, signatureType);
 
     const storedReceipt = buildStoredCollectionReceiptMetadata({
       fileName,
@@ -612,6 +563,9 @@ export async function serveCollectionReceipt(
       `${mode === "download" ? "attachment" : "inline"}; filename="${safeFileName}"`,
     );
     res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Cache-Control", "private, no-store, max-age=0");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
 
     return res.sendFile(resolved.absolutePath, (err) => {
       if (!err || res.headersSent) return;
