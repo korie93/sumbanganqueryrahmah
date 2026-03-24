@@ -31,6 +31,7 @@ import { AiIndexOperationsService } from "../services/ai-index-operations.servic
 import { AiInteractionService } from "../services/ai-interaction.service";
 import { AiSearchService } from "../services/ai-search.service";
 import { AuditLogOperationsService } from "../services/audit-log-operations.service";
+import { BackupJobQueueService } from "../services/backup-job-queue.service";
 import { BackupOperationsService } from "../services/backup-operations.service";
 import { CategoryStatsService } from "../services/category-stats.service";
 import { ImportAnalysisService } from "../services/import-analysis.service";
@@ -234,6 +235,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     getLatencyP95,
     getLocalCircuitSnapshots,
   } = runtimeMonitor;
+  const backupJobQueueService = new BackupJobQueueService();
 
   registerSystemRoutes(app, {
     authenticateToken,
@@ -339,6 +341,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
         withExportCircuit,
         (error) => error instanceof CircuitOpenError,
       ),
+      backupJobQueueService,
       operationsAnalyticsService: new OperationsAnalyticsService(analyticsRepository),
       connectedClients,
     }),

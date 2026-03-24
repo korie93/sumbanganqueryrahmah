@@ -98,6 +98,14 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
   );
 
   app.get(
+    "/api/backups/jobs/:jobId",
+    authenticateToken,
+    requireRole("superuser"),
+    requireTabAccess("backup"),
+    asyncHandler(operationsController.getBackupJob),
+  );
+
+  app.get(
     "/api/backups/:id",
     authenticateToken,
     requireRole("superuser"),

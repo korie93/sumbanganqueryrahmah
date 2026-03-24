@@ -8,6 +8,7 @@ import { formatBackupTime } from "@/pages/backup-restore/utils";
 
 interface BackupListProps {
   backupsOpen: boolean;
+  backupJobBusy: boolean;
   canManageBackups: boolean;
   deletingId: string | null;
   filteredBackups: BackupRecord[];
@@ -22,6 +23,7 @@ interface BackupListProps {
 
 export function BackupList({
   backupsOpen,
+  backupJobBusy,
   canManageBackups,
   deletingId,
   filteredBackups,
@@ -134,7 +136,7 @@ export function BackupList({
                           variant="outline"
                           size="sm"
                           onClick={() => onRestoreClick(backup)}
-                          disabled={restoringId === backup.id}
+                          disabled={backupJobBusy || restoringId === backup.id}
                           data-testid={`button-restore-${backup.id}`}
                         >
                           <RotateCcw className={`h-4 w-4 mr-2 ${restoringId === backup.id ? "animate-spin" : ""}`} />
@@ -144,7 +146,7 @@ export function BackupList({
                           variant="destructive"
                           size="sm"
                           onClick={() => onDeleteClick(backup)}
-                          disabled={deletingId === backup.id}
+                          disabled={backupJobBusy || deletingId === backup.id}
                           data-testid={`button-delete-backup-${backup.id}`}
                         >
                           <Trash2 className={`h-4 w-4 mr-2 ${deletingId === backup.id ? "animate-spin" : ""}`} />

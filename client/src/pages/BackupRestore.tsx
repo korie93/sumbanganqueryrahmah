@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Database, Download, FileText, Loader2, Plus, RefreshCw } from "lucide-react";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
@@ -8,13 +8,20 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
-import { createBackup, deleteBackup, getBackups, restoreBackup } from "@/lib/api";
+import {
+  createBackupAsync,
+  deleteBackup,
+  getBackupJob,
+  getBackups,
+  restoreBackupAsync,
+} from "@/lib/api";
 import { BackupDialogs } from "@/pages/backup-restore/BackupDialogs";
 import { BackupFiltersPanel } from "@/pages/backup-restore/BackupFiltersPanel";
 import { BackupList } from "@/pages/backup-restore/BackupList";
 import type {
   BackupRecord,
   BackupsResponse,
+  BackupJobRecord,
   BackupRestoreProps,
   RestoreResponse,
 } from "@/pages/backup-restore/types";
@@ -45,6 +52,8 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
   const [pageSize, setPageSize] = useState(20);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [lastRestoreResult, setLastRestoreResult] = useState<RestoreResponse | null>(null);
+  const [activeBackupJobId, setActiveBackupJobId] = useState<string | null>(null);
+  const handledBackupJobIdRef = useRef<string | null>(null);
   const { toast } = useToast();
   const deferredSearchName = useDeferredValue(searchName.trim());
   const dateRange = useMemo(
@@ -82,6 +91,19 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
     retry: 1,
   });
 
+  const { data: activeBackupJob } = useQuery<BackupJobRecord>({
+    queryKey: ["/api/backups/jobs", activeBackupJobId],
+    enabled: Boolean(activeBackupJobId),
+    queryFn: async () => getBackupJob(String(activeBackupJobId)),
+    refetchInterval: (query) => {
+      if (!activeBackupJobId) {
+        return false;
+      }
+      const status = query.state.data?.status;
+      return status === "completed" || status === "failed" ? false : 2000;
+    },
+  });
+
   const backups = data?.backups || [];
   const pagination = data?.pagination || {
     page,
@@ -101,22 +123,16 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
   }, []);
 
   const createBackupMutation = useMutation({
-    mutationFn: (name: string) => createBackup(name),
-    onSuccess: async () => {
-      toast({
-        title: "Success",
-        description: "Backup has been successfully created.",
-      });
-
+    mutationFn: (name: string) => createBackupAsync(name),
+    onSuccess: (result) => {
+      handledBackupJobIdRef.current = null;
+      setActiveBackupJobId(result.job.id);
       setShowCreateDialog(false);
       setBackupName("");
-      clearAllFilters();
-      setPage(1);
-
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["/api/backups"] }),
-        refetch(),
-      ]);
+      toast({
+        title: "Backup Queued",
+        description: "Backup creation is running in the background.",
+      });
     },
     onError: (error) => {
       console.error("Failed to create backup:", error);
@@ -129,8 +145,29 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
   });
 
   const restoreBackupMutation = useMutation({
-    mutationFn: (backupId: string) => restoreBackup(backupId) as Promise<RestoreResponse>,
+    mutationFn: (backupId: string) => restoreBackupAsync(backupId),
     onSuccess: (result) => {
+      handledBackupJobIdRef.current = null;
+      setActiveBackupJobId(result.job.id);
+      setShowRestoreDialog(null);
+      toast({
+        title: "Restore Queued",
+        description: "Backup restore is running in the background.",
+        duration: 8000,
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to restore backup:", error);
+      toast({
+        title: "Error",
+        description: "Failed to restore backup.",
+        variant: "destructive",
+      });
+      setRestoringId(null);
+    },
+  });
+
+  const notifyRestoreSuccess = useCallback((result: RestoreResponse) => {
       const stats = result.stats;
       const totalRestored = stats.totalInserted + stats.totalReactivated;
       const parts: string[] = [];
@@ -166,20 +203,7 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
         duration: 8000,
       });
       setLastRestoreResult(result);
-      setShowRestoreDialog(null);
-      setRestoringId(null);
-      void queryClient.invalidateQueries({ queryKey: ["/api/backups"] });
-    },
-    onError: (error) => {
-      console.error("Failed to restore backup:", error);
-      toast({
-        title: "Error",
-        description: "Failed to restore backup.",
-        variant: "destructive",
-      });
-      setRestoringId(null);
-    },
-  });
+  }, [toast]);
 
   const deleteBackupMutation = useMutation({
     mutationFn: (backupId: string) => deleteBackup(backupId),
@@ -203,6 +227,9 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
     },
   });
   const visibleBackups = backups;
+  const activeBackupJobBusy =
+    Boolean(activeBackupJobId)
+    && (!activeBackupJob || activeBackupJob.status === "queued" || activeBackupJob.status === "running");
 
   const hasActiveFilters =
     Boolean(searchName) ||
@@ -215,6 +242,68 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
       setPage(pagination.totalPages);
     }
   }, [page, pagination.totalPages]);
+
+  useEffect(() => {
+    if (!activeBackupJob || !activeBackupJobId) {
+      return;
+    }
+    if (activeBackupJob.status !== "completed" && activeBackupJob.status !== "failed") {
+      return;
+    }
+    if (handledBackupJobIdRef.current === activeBackupJob.id) {
+      return;
+    }
+
+    handledBackupJobIdRef.current = activeBackupJob.id;
+    let cancelled = false;
+
+    const finalizeBackupJob = async () => {
+      if (activeBackupJob.status === "completed") {
+        if (activeBackupJob.type === "create") {
+          toast({
+            title: "Success",
+            description: "Backup has been successfully created.",
+          });
+          clearAllFilters();
+          setPage(1);
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["/api/backups"] }),
+            refetch(),
+          ]);
+        } else {
+          const restoreResult = activeBackupJob.result as RestoreResponse | null;
+          if (restoreResult) {
+            notifyRestoreSuccess(restoreResult);
+          } else {
+            toast({
+              title: "Restore Complete",
+              description: "Backup restore has completed.",
+              duration: 8000,
+            });
+          }
+          await queryClient.invalidateQueries({ queryKey: ["/api/backups"] });
+        }
+      } else {
+        toast({
+          title: activeBackupJob.type === "restore" ? "Restore Failed" : "Backup Failed",
+          description: activeBackupJob.error?.message || "Background backup job failed.",
+          variant: "destructive",
+          duration: 8000,
+        });
+      }
+
+      if (cancelled) {
+        return;
+      }
+      setRestoringId(null);
+      setActiveBackupJobId(null);
+    };
+
+    void finalizeBackupJob();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBackupJob, activeBackupJobId, clearAllFilters, notifyRestoreSuccess, refetch, toast]);
 
   const loading = isLoading || isRefetching;
 
@@ -325,20 +414,51 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
             onClick={() => {
               void refetch();
             }}
-            disabled={loading}
+            disabled={loading || activeBackupJobBusy}
             data-testid="button-refresh-backups"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
           {canManageBackups ? (
-            <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-backup">
+            <Button
+              onClick={() => setShowCreateDialog(true)}
+              disabled={activeBackupJobBusy}
+              data-testid="button-create-backup"
+            >
               <Plus className="h-4 w-4 mr-2" />
               Create Backup
             </Button>
           ) : null}
         </div>
       </div>
+
+      {activeBackupJobBusy && activeBackupJob ? (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="pt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <div className="text-sm font-medium">
+                {activeBackupJob.type === "restore" ? "Restore job in progress" : "Backup job in progress"}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Status: {activeBackupJob.status}
+                {activeBackupJob.queuePosition > 0
+                  ? ` | Queue position ${activeBackupJob.queuePosition}`
+                  : ""}
+                {activeBackupJob.backupName
+                  ? ` | ${activeBackupJob.backupName}`
+                  : activeBackupJob.backupId
+                    ? ` | ${activeBackupJob.backupId}`
+                    : ""}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-primary">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Running in background
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <BackupFiltersPanel
         createdByFilter={createdByFilter}
@@ -440,6 +560,7 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
 
       <BackupList
         backupsOpen={backupsOpen}
+        backupJobBusy={activeBackupJobBusy}
         canManageBackups={canManageBackups}
         deletingId={deletingId}
         filteredBackups={visibleBackups}
@@ -468,7 +589,8 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
 
       <BackupDialogs
         backupName={backupName}
-        createPending={createBackupMutation.isPending}
+        backupJobBusy={activeBackupJobBusy}
+        createPending={createBackupMutation.isPending || activeBackupJobBusy}
         deletingId={deletingId}
         onBackupNameChange={setBackupName}
         onCloseCreateDialog={() => {

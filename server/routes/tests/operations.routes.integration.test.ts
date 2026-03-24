@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createOperationsController } from "../../controllers/operations.controller";
 import { AuditLogOperationsService } from "../../services/audit-log-operations.service";
+import { BackupJobQueueService } from "../../services/backup-job-queue.service";
 import { BackupOperationsService } from "../../services/backup-operations.service";
 import { OperationsAnalyticsService } from "../../services/operations-analytics.service";
 import { registerOperationsRoutes } from "../operations.routes";
@@ -205,6 +206,7 @@ function createOperationsRouteHarness(options?: {
         withExportCircuit,
         (error) => (error as Error)?.message === "circuit-open",
       ),
+      backupJobQueueService: new BackupJobQueueService(),
       operationsAnalyticsService: new OperationsAnalyticsService(analyticsRepository),
       connectedClients: new Map([
         ["activity-1", {} as any],
@@ -230,6 +232,22 @@ function createOperationsRouteHarness(options?: {
     restoreCalls,
     deleteBackupCalls,
   };
+}
+
+async function waitForBackupJob(baseUrl: string, jobId: string) {
+  const deadline = Date.now() + 1500;
+
+  while (Date.now() < deadline) {
+    const response = await fetch(`${baseUrl}/api/backups/jobs/${jobId}`);
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    if (payload.status === "completed" || payload.status === "failed") {
+      return payload;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  assert.fail(`Backup job ${jobId} did not finish before timeout.`);
 }
 
 test("GET /api/audit-logs returns audit log rows", async () => {
@@ -378,6 +396,37 @@ test("POST /api/backups creates a backup and writes an audit log", async () => {
   }
 });
 
+test("POST /api/backups?async=1 queues backup creation and exposes job status", async () => {
+  const { app, createBackupCalls, auditLogs } = createOperationsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/backups?async=1`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: "Queued Backup" }),
+    });
+
+    assert.equal(response.status, 202);
+    const payload = await response.json();
+    assert.equal(payload.message, "Backup creation queued.");
+    assert.equal(payload.job.type, "create");
+    assert.ok(["queued", "running", "completed"].includes(payload.job.status));
+
+    const finalJob = await waitForBackupJob(baseUrl, payload.job.id);
+    assert.equal(finalJob.type, "create");
+    assert.equal(finalJob.status, "completed");
+    assert.equal(finalJob.backupName, "Queued Backup");
+    assert.equal((finalJob.result as Record<string, unknown>).id, "backup-2");
+    assert.equal(createBackupCalls.length, 1);
+    assert.equal(auditLogs.length, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /api/backups/:id/export returns an attachment and audits the download", async () => {
   const { app, auditLogs } = createOperationsRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
@@ -434,6 +483,48 @@ test("POST /api/backups/:id/restore returns restore details and audits the opera
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "RESTORE_BACKUP");
     assert.equal(auditLogs[0].targetResource, "Nightly Backup");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/backups/:id/restore?async=1 queues restore and exposes job status", async () => {
+  const { app, restoreCalls, auditLogs } = createOperationsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/backups/backup-1/restore?async=1`, {
+      method: "POST",
+    });
+
+    assert.equal(response.status, 202);
+    const payload = await response.json();
+    assert.equal(payload.message, "Backup restore queued.");
+    assert.equal(payload.job.type, "restore");
+    assert.ok(["queued", "running", "completed"].includes(payload.job.status));
+
+    const finalJob = await waitForBackupJob(baseUrl, payload.job.id);
+    assert.equal(finalJob.type, "restore");
+    assert.equal(finalJob.status, "completed");
+    assert.equal(finalJob.backupId, "backup-1");
+    assert.equal((finalJob.result as Record<string, unknown>).success, true);
+    assert.equal(restoreCalls.length, 1);
+    assert.equal(auditLogs.length, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/backups/jobs/:jobId returns 404 for unknown background jobs", async () => {
+  const { app } = createOperationsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/backups/jobs/missing-job`);
+    assert.equal(response.status, 404);
+    assert.deepEqual(await response.json(), {
+      message: "Backup job not found",
+    });
   } finally {
     await stopTestServer(server);
   }
