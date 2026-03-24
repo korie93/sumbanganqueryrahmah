@@ -46,6 +46,9 @@ const month = readInt("PERF_COLLECTION_MONTH", now.getUTCMonth() + 1);
 const nickname = String(
   process.env.PERF_COLLECTION_NICKNAME || process.env.SMOKE_TEST_USERNAME || "Collector Alpha",
 ).trim();
+const username = String(
+  process.env.PERF_COLLECTION_USERNAME || process.env.TEST_USERNAME || process.env.SMOKE_TEST_USERNAME || "collector.alpha",
+).trim();
 const { startDate, endDate } = toMonthRange(year, month);
 const yearStartDate = `${year}-01-01`;
 const yearEndDate = `${year}-12-31`;
@@ -129,6 +132,40 @@ const queries = [
     values: [year, month, nickname],
   },
   {
+    name: "daily_paid_customers_by_creator_day",
+    sql: `
+      SELECT
+        id,
+        customer_name,
+        account_number,
+        amount,
+        collection_staff_nickname
+      FROM public.collection_records
+      WHERE lower(created_by_login) = lower($1)
+        AND payment_date = $2::date
+      ORDER BY created_at ASC, id ASC
+    `,
+    values: [username, startDate],
+  },
+  {
+    name: "record_list_by_creator_month",
+    sql: `
+      SELECT
+        id,
+        payment_date,
+        amount,
+        created_by_login,
+        created_at
+      FROM public.collection_records
+      WHERE created_by_login = $1
+        AND payment_date BETWEEN $2::date AND $3::date
+      ORDER BY payment_date ASC, created_at ASC, id ASC
+      LIMIT $4
+      OFFSET $5
+    `,
+    values: [username, startDate, endDate, limit, offset],
+  },
+  {
     name: "monthly_summary_by_year",
     sql: `
       SELECT
@@ -195,10 +232,11 @@ async function run() {
         inputs: {
           year,
           month,
-          nickname,
-          from: startDate,
-          to: endDate,
-          limit,
+        nickname,
+        username,
+        from: startDate,
+        to: endDate,
+        limit,
           offset,
         },
         explainResults,
@@ -219,6 +257,7 @@ async function run() {
     `- Year: ${year}`,
     `- Month: ${month}`,
     `- Nickname: ${nickname}`,
+    `- Username: ${username}`,
     `- Date range: ${startDate} to ${endDate}`,
     `- Year summary range: ${yearStartDate} to ${yearEndDate}`,
     `- Limit/Offset: ${limit}/${offset}`,

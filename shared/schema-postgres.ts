@@ -219,6 +219,31 @@ export const collectionRecords = pgTable("collection_records", {
   createdByLoginIdx: index("idx_collection_records_created_by_login").on(table.createdByLogin),
   staffNicknameIdx: index("idx_collection_records_staff_nickname").on(table.collectionStaffNickname),
   customerPhoneIdx: index("idx_collection_records_customer_phone").on(table.customerPhone),
+  paymentDateCreatedAtIdIdx: index("idx_collection_records_payment_created_id").on(
+    table.paymentDate,
+    table.createdAt,
+    table.id,
+  ),
+  createdByPaymentDateCreatedAtIdIdx: index("idx_collection_records_created_by_payment_created_id").on(
+    table.createdByLogin,
+    table.paymentDate,
+    table.createdAt,
+    table.id,
+  ),
+  staffNicknameLowerPaymentDateCreatedAtIdIdx: index("idx_collection_records_lower_staff_nickname_payment_created_id").using(
+    "btree",
+    sql`lower(${table.collectionStaffNickname})`,
+    table.paymentDate,
+    table.createdAt,
+    table.id,
+  ),
+  createdByLowerPaymentDateCreatedAtIdIdx: index("idx_collection_records_lower_created_by_payment_created_id").using(
+    "btree",
+    sql`lower(${table.createdByLogin})`,
+    table.paymentDate,
+    table.createdAt,
+    table.id,
+  ),
 }));
 
 export const collectionRecordReceipts = pgTable("collection_record_receipts", {
