@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=24"
   },
   "scripts": {
     "verify:node-version": "node scripts/verify-node-version.mjs",
