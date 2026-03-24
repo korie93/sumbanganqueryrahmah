@@ -38,6 +38,7 @@ type SystemRouteDeps = {
   getIntelligenceExplainability: () => ExplainabilityReport;
   injectChaos: (params: InjectChaosInput) => ChaosInjectionResult;
   createAuditLog: (data: InsertAuditLog) => Promise<AuditLog>;
+  checkDbConnectivity: () => Promise<boolean>;
 };
 
 export function registerSystemRoutes(app: Express, deps: SystemRouteDeps) {
@@ -56,11 +57,21 @@ export function registerSystemRoutes(app: Express, deps: SystemRouteDeps) {
     getIntelligenceExplainability,
     injectChaos,
     createAuditLog,
+    checkDbConnectivity,
   } = deps;
 
-  app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", mode: "postgresql" });
-  });
+  app.get("/api/health", asyncHandler(async (_req, res) => {
+    const dbOk = await checkDbConnectivity();
+    const status = dbOk ? "ok" : "degraded";
+    const statusCode = dbOk ? 200 : 503;
+    res.status(statusCode).json({
+      status,
+      mode: "postgresql",
+      database: dbOk ? "connected" : "unreachable",
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+    });
+  }));
 
   app.get("/api/maintenance-status", asyncHandler(async (_req, res) => {
     return res.json(await getMaintenanceStateCached());
