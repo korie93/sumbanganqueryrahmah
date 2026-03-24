@@ -165,6 +165,81 @@ test("runtime config normalizes missing PG_PASSWORD to an empty string in strict
       const runtimeModule = await importRuntimeFresh();
       assert.equal(runtimeModule.runtimeConfig.app.isStrictLocalDevelopment, true);
       assert.equal(runtimeModule.runtimeConfig.database.password, "");
+      assert.equal(runtimeModule.runtimeConfigValidation.warningCount > 0, true);
+    },
+  );
+});
+
+test("runtime config rejects invalid PUBLIC_APP_URL values with a clear startup error", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      PUBLIC_APP_URL: "not-a-url",
+      SESSION_SECRET: "prod-session-secret",
+      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
+      PG_PASSWORD: "prod-db-password",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /PUBLIC_APP_URL must be a valid absolute http:\/\/ or https:\/\/ URL/i,
+      );
+    },
+  );
+});
+
+test("runtime config rejects invalid CORS_ALLOWED_ORIGINS entries with paths", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      CORS_ALLOWED_ORIGINS: "https://sqr.example.com/app",
+      SESSION_SECRET: "prod-session-secret",
+      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
+      PG_PASSWORD: "prod-db-password",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /CORS_ALLOWED_ORIGINS entries must be bare origins without paths/i,
+      );
+    },
+  );
+});
+
+test("runtime config rejects invalid AUTH_COOKIE_SECURE flags", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      AUTH_COOKIE_SECURE: "sometimes",
+      SESSION_SECRET: "prod-session-secret",
+      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
+      PG_PASSWORD: "prod-db-password",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /AUTH_COOKIE_SECURE must be one of: auto, true, false, 1, or 0/i,
+      );
     },
   );
 });

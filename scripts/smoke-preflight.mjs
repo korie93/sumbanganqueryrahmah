@@ -47,6 +47,25 @@ const request = async (path, init = {}) =>
   withTimeout(fetch(`${baseUrl}${path}`, init), `${init.method || "GET"} ${path}`);
 
 const run = async () => {
+  const liveHealth = await request("/api/health/live");
+  const livePayload = await readJsonSafely(liveHealth);
+  assert(
+    liveHealth.ok && livePayload?.live === true,
+    `GET /api/health/live should report a live process, received ${liveHealth.status}`,
+  );
+
+  const readyHealth = await request("/api/health/ready");
+  const readyPayload = await readJsonSafely(readyHealth);
+  assert(
+    readyHealth.ok && readyPayload?.ready === true,
+    [
+      "GET /api/health/ready should report a ready application.",
+      `Status: ${readyHealth.status}`,
+      `Startup check: ${String(readyPayload?.checks?.startup || "(missing)")}`,
+      `Database check: ${String(readyPayload?.checks?.database || "(missing)")}`,
+    ].join("\n"),
+  );
+
   const home = await request("/");
   assert(home.ok, `GET / should be reachable, received ${home.status}`);
 

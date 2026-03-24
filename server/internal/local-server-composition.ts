@@ -49,6 +49,7 @@ import type {
   InternalMonitorSnapshot,
   WorkerControlState,
 } from "./runtime-monitor-manager";
+import { getStartupHealthSnapshot } from "./startup-health";
 
 type AuthGuards = ReturnType<typeof createAuthGuards>;
 type AsyncCircuitWrapper = <T>(fn: () => Promise<T>) => Promise<T>;
@@ -261,6 +262,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
         return false;
       }
     },
+    getStartupHealthSnapshot,
   });
 
   registerAuthRoutes(app, {
