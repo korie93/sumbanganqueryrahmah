@@ -18,9 +18,28 @@ const isLowSpecClient = (() => {
 const QUERY_STALE_TIME = isLowSpecClient ? 10_000 : 30_000;
 const QUERY_GC_TIME = isLowSpecClient ? 45_000 : 2 * 60_000;
 
+export function createApiRequestId() {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `api-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+export function createApiHeaders(headers?: HeadersInit): Record<string, string> {
+  const normalizedHeaders = new Headers(headers || undefined);
+  const existingRequestId = String(normalizedHeaders.get("x-request-id") || "").trim();
+  if (!existingRequestId) {
+    normalizedHeaders.set("x-request-id", createApiRequestId());
+  }
+
+  return Object.fromEntries(normalizedHeaders.entries());
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
+    const requestId = String(res.headers.get("x-request-id") || "").trim();
     let parsed: any = null;
     try {
       parsed = JSON.parse(text);
@@ -68,8 +87,12 @@ async function throwIfResNotOk(res: Response) {
     }
 
     const errorMessage = parsed?.error?.message || parsed?.message || text;
+    const normalizedPayload = parsed || { message: errorMessage };
+    if (requestId && !normalizedPayload.requestId) {
+      normalizedPayload.requestId = requestId;
+    }
     throw new Error(
-      `${res.status}: ${JSON.stringify(parsed || { message: errorMessage })}`,
+      `${res.status}: ${JSON.stringify(normalizedPayload)}`,
     );
   }
 }
@@ -88,14 +111,14 @@ export async function apiRequest(
   const isFormDataPayload =
     typeof FormData !== "undefined"
     && data instanceof FormData;
-  const headers: Record<string, string> = {
+  const headers = createApiHeaders({
     ...(String(method || "").toUpperCase() === "GET"
       || String(method || "").toUpperCase() === "HEAD"
       || String(method || "").toUpperCase() === "OPTIONS"
       ? {}
       : (getCsrfHeader() as Record<string, string>)),
     ...(options?.headers || {}),
-  };
+  });
   if (data && !isFormDataPayload) headers["Content-Type"] = "application/json";
 
   const res = await fetch(url, {
@@ -122,6 +145,7 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const res = await fetch(queryKey.join("/") as string, {
       credentials: "include",
+      headers: createApiHeaders(),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

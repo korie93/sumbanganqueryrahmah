@@ -1,4 +1,4 @@
-import { apiRequest } from "../queryClient";
+import { apiRequest, createApiHeaders } from "../queryClient";
 import { getAuthHeader } from "./shared";
 
 export async function searchData(query: string, page: number = 1, limit: number = 50) {
@@ -6,9 +6,9 @@ export async function searchData(query: string, page: number = 1, limit: number 
     `/api/search/global?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`,
     {
       credentials: "include",
-      headers: {
+      headers: createApiHeaders({
         ...getAuthHeader(),
-      },
+      }),
     },
   );
 

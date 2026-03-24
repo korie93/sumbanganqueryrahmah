@@ -217,6 +217,7 @@ export class CoreSchemaBootstrap {
             id text PRIMARY KEY,
             action text NOT NULL,
             performed_by text NOT NULL,
+            request_id text,
             target_user text,
             target_resource text,
             details text,
@@ -225,6 +226,7 @@ export class CoreSchemaBootstrap {
         `);
         await db.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS action text`);
         await db.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS performed_by text`);
+        await db.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS request_id text`);
         await db.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS target_user text`);
         await db.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS target_resource text`);
         await db.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS details text`);
@@ -236,6 +238,7 @@ export class CoreSchemaBootstrap {
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON public.audit_logs(timestamp DESC)`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON public.audit_logs(action)`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_performed_by ON public.audit_logs(performed_by)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_request_id ON public.audit_logs(request_id)`);
         this.auditLogsReady = true;
       } catch (err: any) {
         logger.error("Failed to ensure audit logs table", { error: err });

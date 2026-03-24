@@ -1,5 +1,5 @@
 import pino from "pino";
-import { getRequestIdFromContext } from "./request-context";
+import { getRequestContext } from "./request-context";
 
 const DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
 const DEFAULT_LOG_LEVEL = process.env.LOG_LEVEL || (DEBUG_LOGS ? "debug" : "info");
@@ -70,24 +70,29 @@ const rootLogger = pino({
 type LogLevel = "info" | "warn" | "error" | "debug";
 
 function write(level: LogLevel, message: string, meta?: Record<string, unknown>) {
-  const requestId = getRequestIdFromContext();
+  const requestContext = getRequestContext();
   const payload = meta ? sanitize(meta) : undefined;
   const hasPayload =
     payload &&
     typeof payload === "object" &&
     !Array.isArray(payload) &&
     Object.keys(payload as Record<string, unknown>).length > 0;
+  const contextPayload = requestContext
+    ? sanitize({
+      requestId: requestContext.requestId,
+      ...(requestContext.httpMethod ? { httpMethod: requestContext.httpMethod } : {}),
+      ...(requestContext.httpPath ? { httpPath: requestContext.httpPath } : {}),
+      ...(requestContext.clientIp ? { clientIp: requestContext.clientIp } : {}),
+      ...(requestContext.userAgent ? { userAgent: requestContext.userAgent } : {}),
+    }) as Record<string, unknown>
+    : null;
+  const hasContextPayload = contextPayload && Object.keys(contextPayload).length > 0;
 
-  if (hasPayload) {
-    const withRequestId = requestId
-      ? { requestId, ...(payload as Record<string, unknown>) }
-      : (payload as Record<string, unknown>);
-    rootLogger[level](withRequestId, message);
-    return;
-  }
-
-  if (requestId) {
-    rootLogger[level]({ requestId }, message);
+  if (hasPayload || hasContextPayload) {
+    rootLogger[level]({
+      ...(contextPayload || {}),
+      ...((payload as Record<string, unknown>) || {}),
+    }, message);
     return;
   }
 

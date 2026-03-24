@@ -1,7 +1,11 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-type RequestContext = {
+export type RequestContext = {
   requestId: string;
+  httpMethod?: string;
+  httpPath?: string;
+  clientIp?: string;
+  userAgent?: string;
 };
 
 const requestContextStorage = new AsyncLocalStorage<RequestContext>();
@@ -12,4 +16,8 @@ export function runWithRequestContext<T>(context: RequestContext, fn: () => T): 
 
 export function getRequestIdFromContext(): string | null {
   return requestContextStorage.getStore()?.requestId || null;
+}
+
+export function getRequestContext(): RequestContext | null {
+  return requestContextStorage.getStore() || null;
 }

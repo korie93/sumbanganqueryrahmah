@@ -1,3 +1,4 @@
+import { createApiHeaders } from "../queryClient";
 import { getAuthHeader, getCsrfHeader } from "./shared";
 
 export type MonitorRequestState = "ok" | "unauthorized" | "forbidden" | "network_error";
@@ -162,9 +163,9 @@ async function fetchMonitorEndpoint<T>(endpoint: string): Promise<MonitorApiResu
   try {
     const response = await fetch(endpoint, {
       method: "GET",
-      headers: {
+      headers: createApiHeaders({
         ...getAuthHeader(),
-      },
+      }),
       credentials: "include",
     });
 
@@ -216,11 +217,11 @@ async function postMonitorEndpoint<T>(endpoint: string, body: unknown): Promise<
   try {
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: {
+      headers: createApiHeaders({
         "Content-Type": "application/json",
         ...getAuthHeader(),
         ...(getCsrfHeader() as Record<string, string>),
-      },
+      }),
       credentials: "include",
       body: JSON.stringify(body ?? {}),
     });
