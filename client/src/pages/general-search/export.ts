@@ -1,4 +1,3 @@
-import jsPDF from "jspdf";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import type { SearchResultRow } from "@/pages/general-search/types";
 import { getCellDisplayText } from "@/pages/general-search/utils";
@@ -18,6 +17,7 @@ export async function exportSearchResultsToPdf({
   query,
   results,
 }: ExportSearchResultsToPdfParams) {
+  const { default: jsPDF } = await import("jspdf");
   const isDark =
     typeof document !== "undefined" &&
     document.documentElement.classList.contains("dark");
