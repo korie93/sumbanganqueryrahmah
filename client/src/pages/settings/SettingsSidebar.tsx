@@ -1,5 +1,6 @@
-import { DatabaseBackup, KeyRound, ShieldCheck, SlidersHorizontal, UserCog } from "lucide-react";
+import { useMemo } from "react";
 import { SideTabNavigation } from "@/components/navigation/SideTabNavigation";
+import { getSettingsCategoryIcon } from "@/pages/settings/settings-sidebar-icons";
 import type { SettingCategory } from "@/pages/settings/types";
 
 interface SettingsSidebarProps {
@@ -13,22 +14,6 @@ interface SettingsSidebarProps {
   sidebarCollapsed: boolean;
 }
 
-function getSettingsCategoryIcon(category: SettingCategory) {
-  if (category.id === "backup-restore") {
-    return DatabaseBackup;
-  }
-  if (category.id === "account-management") {
-    return UserCog;
-  }
-  if (category.id.includes("security")) {
-    return ShieldCheck;
-  }
-  if (category.id.includes("role") || category.id.includes("permission")) {
-    return KeyRound;
-  }
-  return SlidersHorizontal;
-}
-
 export function SettingsSidebar({
   categories,
   categoryDirtyMap,
@@ -39,13 +24,17 @@ export function SettingsSidebar({
   selectedCategory,
   sidebarCollapsed,
 }: SettingsSidebarProps) {
-  const items = categories.map((category) => ({
-    key: category.id,
-    label: category.name,
-    icon: getSettingsCategoryIcon(category),
-    description: category.description,
-    badge: categoryDirtyMap.get(category.id) || null,
-  }));
+  const items = useMemo(
+    () =>
+      categories.map((category) => ({
+        key: category.id,
+        label: category.name,
+        icon: getSettingsCategoryIcon(category),
+        description: category.description,
+        badge: categoryDirtyMap.get(category.id) || null,
+      })),
+    [categories, categoryDirtyMap],
+  );
 
   return (
     <SideTabNavigation
