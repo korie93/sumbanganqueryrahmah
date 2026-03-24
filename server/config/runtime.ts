@@ -30,7 +30,7 @@ type RuntimeConfig = {
     host: string;
     port: number;
     user: string;
-    password?: string;
+    password: string;
     database: string;
     maxConnections: number;
     idleTimeoutMs: number;
@@ -240,7 +240,10 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       if (isProductionLike) {
         throw new Error("PG_PASSWORD is required outside strict local development.");
       }
-      return undefined;
+      // Keep the local-development path passwordless-friendly while ensuring pg
+      // always receives a string and can surface a normal auth failure instead
+      // of throwing on undefined during SCRAM negotiation.
+      return "";
     })(),
     database: readString("PG_DATABASE", "sqr_db"),
     maxConnections: readInt("PG_MAX_CONNECTIONS", 5, { min: 1, max: 50 }),
