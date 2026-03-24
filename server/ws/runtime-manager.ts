@@ -4,6 +4,8 @@ import { logger } from "../lib/logger";
 import type { PostgresStorage } from "../storage-postgres";
 import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
 
+const HEARTBEAT_INTERVAL_MS = 30_000;
+
 type RuntimeManagerOptions = {
   wss: WebSocketServer;
   storage: Pick<PostgresStorage, "getActivityById" | "clearCollectionNicknameSessionByActivity">;
@@ -16,6 +18,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 } {
   const { wss, storage, secret } = options;
   const connectedClients = new Map<string, WebSocket>();
+  const aliveSockets = new WeakSet<WebSocket>();
 
   const broadcastWsMessage = (payload: Record<string, unknown>) => {
     const message = JSON.stringify(payload);
@@ -36,16 +39,31 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     }
   };
 
-  const staleSocketSweepHandle = setInterval(() => {
+  const heartbeatHandle = setInterval(() => {
     for (const [activityId, ws] of connectedClients.entries()) {
       if (!ws || (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING)) {
         connectedClients.delete(activityId);
+        continue;
       }
+
+      if (ws.readyState !== WebSocket.OPEN) {
+        continue;
+      }
+
+      if (!aliveSockets.has(ws)) {
+        connectedClients.delete(activityId);
+        ws.terminate();
+        continue;
+      }
+
+      aliveSockets.delete(ws);
+      ws.ping();
     }
-  }, 30_000);
-  staleSocketSweepHandle.unref();
+  }, HEARTBEAT_INTERVAL_MS);
+  heartbeatHandle.unref();
+
   wss.once("close", () => {
-    clearInterval(staleSocketSweepHandle);
+    clearInterval(heartbeatHandle);
   });
 
   wss.on("connection", async (ws, req) => {
@@ -79,7 +97,12 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
 
       connectedClients.set(activityId, ws);
+      aliveSockets.add(ws);
       logger.debug("WebSocket connected", { activityId });
+
+      ws.on("pong", () => {
+        aliveSockets.add(ws);
+      });
 
       const cleanupSocket = () => {
         if (connectedClients.get(activityId) === ws) {
