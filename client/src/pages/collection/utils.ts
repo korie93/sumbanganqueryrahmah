@@ -1,7 +1,7 @@
 import type { CollectionBatch, CollectionReceiptPayload, CollectionRecord } from "@/lib/api";
 
 export const COLLECTION_BATCH_OPTIONS: CollectionBatch[] = ["P10", "P25", "MDD02", "MDD10", "MDD18", "MDD25"];
-export const COLLECTION_ACCEPTED_FILE_TYPES = ["image/jpeg", "image/png", "application/pdf"];
+export const COLLECTION_ACCEPTED_FILE_TYPES = ["image/jpeg", "image/png", "application/pdf", "image/webp"];
 export const COLLECTION_MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 export const COLLECTION_STAFF_NICKNAME_KEY = "collection_staff_nickname";
 export const COLLECTION_STAFF_NICKNAME_AUTH_KEY = "collection_staff_nickname_auth";
@@ -134,7 +134,7 @@ export async function toReceiptPayload(file: File): Promise<CollectionReceiptPay
 
 export function validateReceiptFile(file: File): string | null {
   if (!COLLECTION_ACCEPTED_FILE_TYPES.includes(file.type)) {
-    return "Receipt file must be JPG, PNG, or PDF.";
+    return "Receipt file must be JPG, PNG, WebP, or PDF.";
   }
   if (file.size > COLLECTION_MAX_RECEIPT_BYTES) {
     return "Receipt file cannot exceed 5MB.";
