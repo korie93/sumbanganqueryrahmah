@@ -1,22 +1,37 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { ACTIVE_SETTINGS_SECTION_KEY } from "@/app/constants";
 import { replaceHistory } from "@/app/routing";
 import type { TabVisibility } from "@/app/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import BackupRestore from "@/pages/BackupRestore";
 import { AccountSecuritySection } from "@/pages/settings/AccountSecuritySection";
 import { ManagedUserDialog } from "@/pages/settings/ManagedUserDialog";
 import { ManagedSecretDialog } from "@/pages/settings/ManagedSecretDialog";
 import { SettingsRoleSections } from "@/pages/settings/SettingsRoleSections";
 import { SettingsSaveBar } from "@/pages/settings/SettingsSaveBar";
 import { SettingsSidebar } from "@/pages/settings/SettingsSidebar";
-import { UserAccountManagementSection } from "@/pages/settings/UserAccountManagementSection";
 import { useSettingsController } from "@/pages/settings/useSettingsController";
 
 type SettingsPageProps = {
   tabVisibility?: TabVisibility;
   initialSectionId?: string;
 };
+
+const BackupRestore = lazy(() => import("@/pages/BackupRestore"));
+const UserAccountManagementSection = lazy(() =>
+  import("@/pages/settings/UserAccountManagementSection").then((module) => ({
+    default: module.UserAccountManagementSection,
+  })),
+);
+
+function SettingsSectionFallback({ label }: { label: string }) {
+  return (
+    <Card className="border-border/60 bg-background/70">
+      <CardContent className="p-10 text-center text-muted-foreground" role="status" aria-live="polite">
+        {label}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function SettingsPage({
   tabVisibility,
@@ -115,12 +130,16 @@ export default function SettingsPage({
 
               <div className="min-w-0 flex-1 space-y-4">
                 {controller.isBackupCategory ? (
-                  <BackupRestore userRole={controller.currentUserRole} embedded />
+                  <Suspense fallback={<SettingsSectionFallback label="Loading backup tools..." />}>
+                    <BackupRestore userRole={controller.currentUserRole} embedded />
+                  </Suspense>
                 ) : controller.isSecurityCategory &&
                   controller.canAccessAccountSecurity ? (
                     <AccountSecuritySection {...controller.security} showAccountManagement={false} />
                   ) : controller.isAccountManagementCategory ? (
-                    <UserAccountManagementSection {...controller.accountManagement} />
+                    <Suspense fallback={<SettingsSectionFallback label="Loading account management..." />}>
+                      <UserAccountManagementSection {...controller.accountManagement} />
+                    </Suspense>
                   ) : controller.isRolePermissionCategory ? (
                     <SettingsRoleSections
                       renderSettingCard={controller.renderSettingCard}

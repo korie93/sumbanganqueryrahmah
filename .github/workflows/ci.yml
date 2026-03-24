@@ -59,6 +59,7 @@ jobs:
   smoke-ui:
     needs: build-and-test
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     services:
       postgres:
         image: postgres:16
@@ -148,19 +149,15 @@ jobs:
           grep -n "Login should establish an authenticated session." scripts/ui-smoke.mjs
           SMOKE_ARTIFACTS_DIR=artifacts/smoke-ui npm run smoke:ui
 
+      - name: Capture smoke monitoring snapshot
+        if: always()
+        continue-on-error: true
+        run: |
+          MONITOR_OUTPUT_FILE=artifacts/smoke-ui/monitor-stale-conflicts.json npm run monitor:stale-conflicts
+
       - name: Print server log on failure
         if: failure()
         run: cat server.log
-
-      - name: Upload smoke artifacts on failure
-        if: failure()
-        uses: actions/upload-artifact@v6
-        with:
-          name: smoke-ui-failure-${{ github.run_id }}-${{ github.run_attempt }}
-          if-no-files-found: warn
-          path: |
-            server.log
-            artifacts/smoke-ui
 
       - name: Stop built server
         if: always()
@@ -169,3 +166,13 @@ jobs:
             kill "$(cat server.pid)" || true
           fi
           pkill -f "dist-local/server/index-local.js" || true
+
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: smoke-ui-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          path: |
+            server.log
+            artifacts/smoke-ui
