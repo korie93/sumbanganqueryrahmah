@@ -193,6 +193,62 @@ test("POST /api/collection creates a collection record and writes an audit log",
   }
 });
 
+test("POST /api/collection accepts multipart receipt uploads without base64 JSON payloads", async () => {
+  const { storage, createCalls, createReceiptCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const formData = new FormData();
+  formData.set("customerName", "Multipart Upload");
+  formData.set("icNumber", "880202026777");
+  formData.set("customerPhone", "0129876543");
+  formData.set("accountNumber", "ACC-2003");
+  formData.set("batch", "P25");
+  formData.set("paymentDate", "2026-03-15");
+  formData.set("amount", "245.90");
+  formData.set("collectionStaffNickname", "Collector Alpha");
+  formData.append(
+    "receipts",
+    new File(
+      [Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00])],
+      "receipt-upload.png",
+      { type: "image/png" },
+    ),
+  );
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      body: formData,
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(createCalls.length, 1);
+    assert.equal(createReceiptCalls.length, 1);
+    assert.equal(createReceiptCalls[0]?.recordId, "collection-2");
+    assert.equal(createReceiptCalls[0]?.receipts.length, 1);
+    assert.match(String(createReceiptCalls[0]?.receipts[0]?.storagePath || ""), /\/uploads\/collection-receipts\/.+\.png$/);
+    assert.equal(createReceiptCalls[0]?.receipts[0]?.originalMimeType, "image/png");
+    assert.equal(auditLogs.length, 1);
+    assert.equal(auditLogs[0].action, "COLLECTION_RECORD_CREATED");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /api/collection rejects future payment dates", async () => {
   const { storage } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
@@ -343,6 +399,56 @@ test("PATCH /api/collection/:id updates a record and writes an audit log", async
     assert.equal(updateCalls.length, 1);
     assert.equal(updateCalls[0].id, "collection-1");
     assert.equal(updateCalls[0].data.amount, 55.3);
+    assert.equal(auditLogs.length, 1);
+    assert.equal(auditLogs[0].action, "COLLECTION_RECORD_UPDATED");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/collection/:id accepts multipart receipt uploads during edit flows", async () => {
+  const { storage, updateCalls, createReceiptCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const formData = new FormData();
+  formData.set("amount", "55.30");
+  formData.set("expectedUpdatedAt", "2026-03-01T09:00:00.000Z");
+  formData.append(
+    "receipts",
+    new File(
+      [Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46])],
+      "edit-upload.jpg",
+      { type: "image/jpeg" },
+    ),
+  );
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "PATCH",
+      body: formData,
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(updateCalls.length, 1);
+    assert.equal(updateCalls[0]?.data.amount, 55.3);
+    assert.equal(createReceiptCalls.length, 0);
+    assert.equal(updateCalls[0]?.options?.newReceipts?.length, 1);
+    assert.equal(updateCalls[0]?.options?.newReceipts?.[0]?.originalMimeType, "image/jpeg");
+    assert.match(String(updateCalls[0]?.options?.newReceipts?.[0]?.storagePath || ""), /\/uploads\/collection-receipts\/.+\.jpg$/);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "COLLECTION_RECORD_UPDATED");
   } finally {

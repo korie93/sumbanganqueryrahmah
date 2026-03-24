@@ -7,12 +7,15 @@ import {
 } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
-  updateCollectionRecord,
   type CollectionBatch,
   type CollectionRecord,
   type CollectionRecordReceipt,
   type CollectionStaffNickname,
 } from "@/lib/api";
+import {
+  buildCollectionRecordFormData,
+  updateCollectionRecord,
+} from "@/lib/api/collection-records";
 import {
   COLLECTION_BATCH_OPTIONS,
   emitCollectionDataChanged,
@@ -23,7 +26,6 @@ import {
   isValidDate,
   parseCollectionApiErrorDetails,
   parseApiError,
-  toReceiptPayloads,
   validateReceiptFile,
 } from "@/pages/collection/utils";
 
@@ -219,11 +221,11 @@ export function useCollectionRecordEdit({
       ) {
         payload.removeReceipt = true;
       }
-      if (editNewReceiptFiles.length > 0) {
-        payload.receipts = await toReceiptPayloads(editNewReceiptFiles);
-      }
 
-      await updateCollectionRecord(editingRecord.id, payload);
+      await updateCollectionRecord(
+        editingRecord.id,
+        buildCollectionRecordFormData(payload, editNewReceiptFiles),
+      );
       toast({
         title: "Record Updated",
         description: "Rekod collection berjaya dikemaskini.",

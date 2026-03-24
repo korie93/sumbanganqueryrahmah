@@ -32,8 +32,31 @@ import {
   parseRecordVersionTimestamp,
   resolveRecordVersionTimestamp,
 } from "./collection-record-runtime-utils";
+import type { CreateCollectionRecordReceiptInput } from "../../storage-postgres";
 
 type RequireUserFn = (user?: AuthenticatedUser) => AuthenticatedUser;
+
+type MultipartCollectionPayload = Record<string, unknown> & {
+  uploadedReceipts?: CreateCollectionRecordReceiptInput[] | null;
+};
+
+function readUploadedReceiptRows(body: MultipartCollectionPayload): CreateCollectionRecordReceiptInput[] {
+  if (!Array.isArray(body.uploadedReceipts)) {
+    return [];
+  }
+
+  return body.uploadedReceipts
+    .map((item) => ensureLooseObject(item))
+    .filter((item): item is Record<string, unknown> => Boolean(item))
+    .map((item) => ({
+      storagePath: normalizeCollectionText(item.storagePath),
+      originalFileName: normalizeCollectionText(item.originalFileName),
+      originalMimeType: normalizeCollectionText(item.originalMimeType) || "application/octet-stream",
+      originalExtension: normalizeCollectionText(item.originalExtension),
+      fileSize: Number(item.fileSize || 0),
+    }))
+    .filter((item) => item.storagePath && item.originalFileName && Number.isFinite(item.fileSize));
+}
 
 export class CollectionRecordMutationOperations {
   constructor(
@@ -82,7 +105,7 @@ export class CollectionRecordMutationOperations {
     const uploadedReceipts: Array<Awaited<ReturnType<typeof saveCollectionReceipt>>> = [];
 
     try {
-      const body = (ensureLooseObject(bodyRaw) || {}) as CollectionCreatePayload;
+      const body = (ensureLooseObject(bodyRaw) || {}) as CollectionCreatePayload & MultipartCollectionPayload;
       const customerName = normalizeCollectionText(body.customerName);
       const icNumber = normalizeCollectionText(body.icNumber);
       const customerPhone = normalizeCollectionText(body.customerPhone);
@@ -126,6 +149,7 @@ export class CollectionRecordMutationOperations {
               .filter((item): item is CollectionReceiptPayload => Boolean(item))
           : []),
       ];
+      uploadedReceipts.push(...readUploadedReceiptRows(body));
       for (const nextReceipt of receiptPayloads) {
         uploadedReceipts.push(await saveCollectionReceipt(nextReceipt));
       }
@@ -242,7 +266,7 @@ export class CollectionRecordMutationOperations {
 
     const uploadedReceipts: Array<Awaited<ReturnType<typeof saveCollectionReceipt>>> = [];
     try {
-      const body = (ensureLooseObject(bodyRaw) || {}) as CollectionUpdatePayload;
+      const body = (ensureLooseObject(bodyRaw) || {}) as CollectionUpdatePayload & MultipartCollectionPayload;
       const expectedUpdatedAt = parseRecordVersionTimestamp(body.expectedUpdatedAt);
       if (expectedUpdatedAt) {
         const currentVersion = resolveRecordVersionTimestamp(existing);
@@ -329,6 +353,7 @@ export class CollectionRecordMutationOperations {
       const removeReceiptIds = Array.isArray(body.removeReceiptIds)
         ? normalizeCollectionStringList(body.removeReceiptIds)
         : [];
+      uploadedReceipts.push(...readUploadedReceiptRows(body));
       for (const nextReceipt of receiptPayloads) {
         uploadedReceipts.push(await saveCollectionReceipt(nextReceipt));
       }
