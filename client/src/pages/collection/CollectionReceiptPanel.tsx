@@ -146,11 +146,20 @@ export function CollectionReceiptPanel({
               >
                 <div className="flex h-36 items-center justify-center bg-muted/20">
                   {preview.kind === "image" ? (
-                    <img
-                      src={preview.url}
-                      alt={preview.file.name}
-                      className="h-full w-full object-cover"
-                    />
+                    preview.url ? (
+                      <img
+                        src={preview.url}
+                        alt={preview.file.name}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <FileImage className="h-8 w-8" />
+                        <Badge variant="secondary">Image</Badge>
+                      </div>
+                    )
                   ) : preview.kind === "pdf" ? (
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <FileText className="h-8 w-8" />

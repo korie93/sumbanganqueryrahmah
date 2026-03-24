@@ -159,8 +159,19 @@ function resolveCollectionAcceptedReceiptMimeType(input: {
 export async function toReceiptPayload(file: File): Promise<CollectionReceiptPayload> {
   const contentBase64 = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Failed to read receipt file."));
-    reader.onload = () => resolve(String(reader.result || ""));
+    const cleanup = () => {
+      reader.onerror = null;
+      reader.onload = null;
+    };
+    reader.onerror = () => {
+      cleanup();
+      reject(new Error("Failed to read receipt file."));
+    };
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      cleanup();
+      resolve(result);
+    };
     reader.readAsDataURL(file);
   });
   const mimeType =
@@ -175,6 +186,16 @@ export async function toReceiptPayload(file: File): Promise<CollectionReceiptPay
     mimeType,
     contentBase64,
   };
+}
+
+export async function toReceiptPayloads(files: File[]): Promise<CollectionReceiptPayload[]> {
+  const payloads: CollectionReceiptPayload[] = [];
+
+  for (const file of files) {
+    payloads.push(await toReceiptPayload(file));
+  }
+
+  return payloads;
 }
 
 export function validateReceiptFile(file: File): string | null {
