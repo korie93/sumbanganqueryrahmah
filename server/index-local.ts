@@ -2,6 +2,7 @@ import "dotenv/config";
 import type { WorkerFatalMessage } from "./internal/worker-ipc";
 import { startLocalServer } from "./internal/server-startup";
 import { createLocalRuntimeEnvironment } from "./internal/local-runtime-environment";
+import { markStartupFailed } from "./internal/startup-health";
 import { pool } from "./db-postgres";
 import { logger } from "./lib/logger";
 
@@ -92,4 +93,17 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer().catch(async (error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  notifyMasterFatalStartup("SERVER_STARTUP_ERROR", message);
+  markStartupFailed("SERVER_STARTUP_ERROR", message);
+  logger.error("Local server failed during startup", { error });
+
+  try {
+    await pool.end();
+  } catch {
+    // best-effort cleanup
+  }
+
+  process.exit(1);
+});

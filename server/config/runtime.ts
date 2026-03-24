@@ -8,6 +8,18 @@ import {
   type RuntimeEnvironment,
 } from "./runtime-environment";
 
+export type RuntimeConfigDiagnostic = {
+  code: string;
+  envNames: string[];
+  message: string;
+  severity: "warning";
+};
+
+export type RuntimeConfigValidation = {
+  warningCount: number;
+  warnings: RuntimeConfigDiagnostic[];
+};
+
 type RuntimeConfig = {
   app: {
     nodeEnv: RuntimeEnvironment;
@@ -90,6 +102,11 @@ type RuntimeConfig = {
   };
 };
 
+const HTTP_PROTOCOLS = new Set(["http:", "https:"]);
+const AUTO_COOKIE_SECURE_VALUES = new Set(["", "auto", "1", "true", "0", "false"]);
+const PLACEHOLDER_SESSION_SECRETS = new Set(["change-this-session-secret"]);
+const PLACEHOLDER_DATABASE_PASSWORDS = new Set(["change-this-db-password"]);
+
 function readOptionalString(name: string): string | null {
   const value = process.env[name];
   if (typeof value !== "string") {
@@ -117,6 +134,44 @@ function readBoolean(name: string, fallback: boolean): boolean {
   return readBooleanEnvFlag(name, fallback);
 }
 
+function normalizeHttpUrl(name: string, rawValue: string | null): string | null {
+  if (!rawValue) {
+    return null;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawValue);
+  } catch {
+    throw new Error(`${name} must be a valid absolute http:// or https:// URL.`);
+  }
+
+  if (!HTTP_PROTOCOLS.has(parsed.protocol)) {
+    throw new Error(`${name} must use http:// or https://.`);
+  }
+
+  return parsed.toString().replace(/\/+$/, "");
+}
+
+function normalizeCorsOrigin(name: string, rawValue: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawValue);
+  } catch {
+    throw new Error(`${name} entries must be valid absolute origins.`);
+  }
+
+  if (!HTTP_PROTOCOLS.has(parsed.protocol)) {
+    throw new Error(`${name} entries must use http:// or https://.`);
+  }
+
+  if ((parsed.pathname && parsed.pathname !== "/") || parsed.search || parsed.hash) {
+    throw new Error(`${name} entries must be bare origins without paths, query strings, or hashes.`);
+  }
+
+  return parsed.origin;
+}
+
 function buildEphemeralSecret(label: string) {
   return `${label.toLowerCase()}-${randomBytes(32).toString("hex")}`;
 }
@@ -138,6 +193,9 @@ function resolveNodeEnv(): RuntimeEnvironment {
 
 function resolveCookieSecure(isProduction: boolean, publicAppUrl: string | null) {
   const explicit = String(readOptionalString("AUTH_COOKIE_SECURE") || "").toLowerCase();
+  if (!AUTO_COOKIE_SECURE_VALUES.has(explicit)) {
+    throw new Error("AUTH_COOKIE_SECURE must be one of: auto, true, false, 1, or 0.");
+  }
   if (explicit === "1" || explicit === "true") {
     return true;
   }
@@ -151,13 +209,14 @@ function resolveCorsAllowedOrigins(publicAppUrl: string | null) {
   const configured = readString("CORS_ALLOWED_ORIGINS", "")
     .split(",")
     .map((entry) => entry.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((entry) => normalizeCorsOrigin("CORS_ALLOWED_ORIGINS", entry));
 
   if (publicAppUrl && !configured.includes(publicAppUrl)) {
-    configured.push(publicAppUrl);
+    configured.push(new URL(publicAppUrl).origin);
   }
 
-  return configured;
+  return Array.from(new Set(configured));
 }
 
 function hasBackupEncryptionKeyConfigured(): boolean {
@@ -202,13 +261,125 @@ function assertRuntimeSafetyGuards(params: {
   }
 }
 
+function buildRuntimeConfigWarnings(params: {
+  isStrictLocalDevelopment: boolean;
+  publicAppUrl: string | null;
+  configuredSessionSecret: string | null;
+  configuredCollectionNicknameTempPassword: string | null;
+  configuredPgPassword: string | null;
+  smtpService: string | null;
+  smtpHost: string | null;
+  smtpUser: string | null;
+  smtpPassword: string | null;
+  mailFrom: string | null;
+}): RuntimeConfigDiagnostic[] {
+  const warnings: RuntimeConfigDiagnostic[] = [];
+  const {
+    isStrictLocalDevelopment,
+    publicAppUrl,
+    configuredSessionSecret,
+    configuredCollectionNicknameTempPassword,
+    configuredPgPassword,
+    smtpService,
+    smtpHost,
+    smtpUser,
+    smtpPassword,
+    mailFrom,
+  } = params;
+
+  if (!publicAppUrl) {
+    warnings.push({
+      code: "PUBLIC_APP_URL_MISSING",
+      envNames: ["PUBLIC_APP_URL"],
+      message: "PUBLIC_APP_URL is not set; generated links and deployment health checks may be less reliable.",
+      severity: "warning",
+    });
+  }
+
+  if (isStrictLocalDevelopment && !configuredPgPassword) {
+    warnings.push({
+      code: "PG_PASSWORD_EMPTY_LOCAL",
+      envNames: ["PG_PASSWORD"],
+      message: "PG_PASSWORD is empty in strict local development. This is allowed locally but will fail against password-protected PostgreSQL servers.",
+      severity: "warning",
+    });
+  }
+
+  if (isStrictLocalDevelopment && !configuredSessionSecret) {
+    warnings.push({
+      code: "SESSION_SECRET_EPHEMERAL_LOCAL",
+      envNames: ["SESSION_SECRET"],
+      message: "SESSION_SECRET is not set, so a temporary in-memory secret will be generated on each boot.",
+      severity: "warning",
+    });
+  }
+
+  if (isStrictLocalDevelopment && !configuredCollectionNicknameTempPassword) {
+    warnings.push({
+      code: "COLLECTION_TEMP_PASSWORD_EPHEMERAL_LOCAL",
+      envNames: ["COLLECTION_NICKNAME_TEMP_PASSWORD"],
+      message: "COLLECTION_NICKNAME_TEMP_PASSWORD is not set, so a temporary value will be generated on each boot.",
+      severity: "warning",
+    });
+  }
+
+  const hasAnyMailInput = Boolean(
+    smtpService
+    || smtpHost
+    || smtpUser
+    || smtpPassword
+    || mailFrom,
+  );
+
+  if (hasAnyMailInput) {
+    const hasValidServiceAuth = Boolean(smtpService && smtpUser && smtpPassword && mailFrom);
+    const hasValidHostConfig = Boolean(smtpHost && mailFrom && (!smtpUser || smtpPassword));
+    if (!hasValidServiceAuth && !hasValidHostConfig) {
+      warnings.push({
+        code: "MAIL_CONFIGURATION_INCOMPLETE",
+        envNames: ["MAIL_FROM", "SMTP_SERVICE", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"],
+        message: "Mail delivery env vars are partially configured. Outbound activation or reset email may silently fall back to 'not configured'.",
+        severity: "warning",
+      });
+    }
+  }
+
+  return warnings;
+}
+
+function assertNoPlaceholderSecrets(params: {
+  isProductionLike: boolean;
+  configuredSessionSecret: string | null;
+  configuredPgPassword: string | null;
+}) {
+  if (!params.isProductionLike) {
+    return;
+  }
+
+  if (params.configuredSessionSecret && PLACEHOLDER_SESSION_SECRETS.has(params.configuredSessionSecret)) {
+    throw new Error("SESSION_SECRET is using the default placeholder value and must be replaced before non-local startup.");
+  }
+
+  if (params.configuredPgPassword && PLACEHOLDER_DATABASE_PASSWORDS.has(params.configuredPgPassword)) {
+    throw new Error("PG_PASSWORD is using the default placeholder value and must be replaced before non-local startup.");
+  }
+}
+
 const nodeEnv = resolveNodeEnv();
 const isProduction = nodeEnv === "production";
 const isStrictLocalDevelopment = isStrictLocalDevelopmentEnvironment();
 const isProductionLike = isProductionLikeEnvironment();
-const publicAppUrl = readOptionalString("PUBLIC_APP_URL");
+const configuredSessionSecret = readOptionalString("SESSION_SECRET");
+const configuredCollectionNicknameTempPassword = readOptionalString("COLLECTION_NICKNAME_TEMP_PASSWORD");
+const configuredPgPassword = readOptionalString("PG_PASSWORD");
+const publicAppUrl = normalizeHttpUrl("PUBLIC_APP_URL", readOptionalString("PUBLIC_APP_URL"));
 const lowMemoryMode = readBoolean("SQR_LOW_MEMORY_MODE", true);
 assertRuntimeSafetyGuards({ isProductionLike, isStrictLocalDevelopment });
+assertNoPlaceholderSecrets({
+  isProductionLike,
+  configuredSessionSecret,
+  configuredPgPassword,
+});
 
 export const runtimeConfig: RuntimeConfig = Object.freeze({
   app: {
@@ -308,4 +479,22 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     maxWorkers: readInt("SQR_MAX_WORKERS", lowMemoryMode ? 1 : 4, { min: 1 }),
     preallocateMb: readInt("SQR_PREALLOCATE_MB", lowMemoryMode ? 0 : 32, { min: 0 }),
   },
+});
+
+const runtimeWarnings = buildRuntimeConfigWarnings({
+  isStrictLocalDevelopment,
+  publicAppUrl,
+  configuredSessionSecret,
+  configuredCollectionNicknameTempPassword,
+  configuredPgPassword,
+  smtpService: readOptionalString("SMTP_SERVICE"),
+  smtpHost: readOptionalString("SMTP_HOST"),
+  smtpUser: readOptionalString("SMTP_USER"),
+  smtpPassword: readOptionalString("SMTP_PASSWORD"),
+  mailFrom: readOptionalString("MAIL_FROM"),
+});
+
+export const runtimeConfigValidation: RuntimeConfigValidation = Object.freeze({
+  warningCount: runtimeWarnings.length,
+  warnings: Object.freeze(runtimeWarnings.map((warning) => Object.freeze({ ...warning }))),
 });
