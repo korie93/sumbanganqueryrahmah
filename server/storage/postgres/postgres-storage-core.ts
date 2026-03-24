@@ -15,6 +15,7 @@ import { AuthRepository } from "../../repositories/auth.repository";
 import { BackupsRepository } from "../../repositories/backups.repository";
 import { CollectionRepository } from "../../repositories/collection.repository";
 import { ImportsRepository } from "../../repositories/imports.repository";
+import { MutationIdempotencyRepository } from "../../repositories/mutation-idempotency.repository";
 import { SearchRepository } from "../../repositories/search.repository";
 import { SettingsRepository } from "../../repositories/settings.repository";
 
@@ -44,6 +45,7 @@ export class PostgresStorageCore {
   });
   protected readonly analyticsRepository = new AnalyticsRepository();
   protected readonly collectionRepository = new CollectionRepository();
+  protected readonly mutationIdempotencyRepository = new MutationIdempotencyRepository();
   protected readonly settingsRepository = new SettingsRepository();
   protected readonly settingsBootstrap = new SettingsBootstrap();
   protected readonly spatialBootstrap = new SpatialBootstrap();
@@ -56,6 +58,7 @@ export class PostgresStorageCore {
     await this.ensureDataRowsTable();
     await this.ensureUserActivityTable();
     await this.ensureAuditLogsTable();
+    await this.ensureMutationIdempotencyTable();
     await this.ensureCollectionRecordsTable();
     await this.ensureCollectionStaffNicknamesTable();
     await this.ensureCollectionAdminGroupsTables();
@@ -91,6 +94,10 @@ export class PostgresStorageCore {
 
   protected async ensureAuditLogsTable() {
     await this.coreSchemaBootstrap.ensureAuditLogsTable();
+  }
+
+  protected async ensureMutationIdempotencyTable() {
+    await this.coreSchemaBootstrap.ensureMutationIdempotencyTable();
   }
 
   protected async ensureCollectionRecordsTable() {

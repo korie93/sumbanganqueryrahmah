@@ -1,6 +1,7 @@
 import { badRequest, conflict, forbidden, notFound } from "../../http/errors";
 import type { AuthenticatedUser } from "../../auth/guards";
 import { verifyPassword } from "../../auth/passwords";
+import { logger } from "../../lib/logger";
 import {
   canUserAccessCollectionRecord,
   getAdminVisibleNicknameValues,
@@ -176,6 +177,29 @@ export class CollectionRecordMutationOperations {
     }
   }
 
+  private async safeCreateAuditLog(params: {
+    action: string;
+    performedBy: string;
+    targetResource: string;
+    details: string;
+  }) {
+    try {
+      await this.storage.createAuditLog({
+        action: params.action,
+        performedBy: params.performedBy,
+        targetResource: params.targetResource,
+        details: params.details,
+      });
+    } catch (error) {
+      logger.warn("Collection mutation audit log write failed", {
+        error,
+        action: params.action,
+        targetResource: params.targetResource,
+        performedBy: params.performedBy,
+      });
+    }
+  }
+
   private async logRecordVersionConflict(params: {
     username: string;
     recordId: string;
@@ -202,6 +226,7 @@ export class CollectionRecordMutationOperations {
   async createRecord(userInput: AuthenticatedUser | undefined, bodyRaw: unknown) {
     const user = this.requireUser(userInput);
     const uploadedReceipts: Array<Awaited<ReturnType<typeof saveCollectionReceipt>>> = [];
+    let createdRecordId: string | null = null;
 
     try {
       const body = (ensureLooseObject(bodyRaw) || {}) as CollectionCreatePayload & MultipartCollectionPayload;
@@ -265,6 +290,7 @@ export class CollectionRecordMutationOperations {
         createdByLogin: user.username,
         collectionStaffNickname,
       });
+      createdRecordId = record.id;
       if (uploadedReceipts.length > 0) {
         await this.storage.createCollectionRecordReceipts(record.id, uploadedReceipts);
       }
@@ -275,7 +301,7 @@ export class CollectionRecordMutationOperations {
         legacyReceiptFile: null,
       });
 
-      await this.storage.createAuditLog({
+      await this.safeCreateAuditLog({
         action: "COLLECTION_RECORD_CREATED",
         performedBy: user.username,
         targetResource: finalRecord.id,
@@ -301,6 +327,17 @@ export class CollectionRecordMutationOperations {
 
       return { ok: true as const, record: finalRecord };
     } catch (err) {
+      if (createdRecordId) {
+        try {
+          await this.storage.deleteCollectionRecord(createdRecordId);
+        } catch (rollbackError) {
+          logger.warn("Collection record create rollback failed after mutation error", {
+            error: rollbackError,
+            recordId: createdRecordId,
+            performedBy: user.username,
+          });
+        }
+      }
       for (const uploadedReceipt of uploadedReceipts) {
         await removeCollectionReceiptFile(uploadedReceipt.storagePath);
       }
@@ -570,7 +607,7 @@ export class CollectionRecordMutationOperations {
         activeReceiptSource: afterReceiptState.source,
       });
 
-      await this.storage.createAuditLog({
+      await this.safeCreateAuditLog({
         action: "COLLECTION_RECORD_UPDATED",
         performedBy: user.username,
         targetResource: id,
@@ -670,7 +707,7 @@ export class CollectionRecordMutationOperations {
       legacyReceiptFile: removedReceipts.length > 0 ? null : existing.receiptFile,
     });
 
-    await this.storage.createAuditLog({
+    await this.safeCreateAuditLog({
       action: "COLLECTION_RECORD_DELETED",
       performedBy: user.username,
       targetResource: existing.id,

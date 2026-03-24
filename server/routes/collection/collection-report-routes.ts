@@ -12,6 +12,7 @@ export function registerCollectionReportRoutes(context: CollectionRouteContext) 
     superuserReportAccess,
     adminSummaryAccess,
     jsonRoute,
+    jsonMutationRoute,
   } = context;
   const collectionMultipartRoute = createCollectionMultipartRoute();
 
@@ -19,7 +20,11 @@ export function registerCollectionReportRoutes(context: CollectionRouteContext) 
     "/api/collection",
     ...reportAccess,
     collectionMultipartRoute,
-    jsonRoute("Failed to create collection record.", (req) => collectionService.createRecord(req.user, req.body)),
+    jsonMutationRoute(
+      "Failed to create collection record.",
+      () => "collection-record:create",
+      (req) => collectionService.createRecord(req.user, req.body),
+    ),
   );
 
   app.get(
@@ -122,8 +127,11 @@ export function registerCollectionReportRoutes(context: CollectionRouteContext) 
     async (req: AuthenticatedRequest, res) => serveCollectionReceipt(storage, req, res, "download"),
   );
 
-  const handleUpdateCollectionRecord = jsonRoute("Failed to update collection record.", (req) =>
-    collectionService.updateRecord(req.user, req.params.id, req.body));
+  const handleUpdateCollectionRecord = jsonMutationRoute(
+    "Failed to update collection record.",
+    (req) => `collection-record:update:${String(req.params.id || "").trim()}`,
+    (req) => collectionService.updateRecord(req.user, req.params.id, req.body),
+  );
 
   app.patch(
     "/api/collection/:id",
@@ -149,7 +157,10 @@ export function registerCollectionReportRoutes(context: CollectionRouteContext) 
   app.delete(
     "/api/collection/:id",
     ...reportAccess,
-    jsonRoute("Failed to delete collection record.", (req) =>
-      collectionService.deleteRecord(req.user, req.params.id, req.body)),
+    jsonMutationRoute(
+      "Failed to delete collection record.",
+      (req) => `collection-record:delete:${String(req.params.id || "").trim()}`,
+      (req) => collectionService.deleteRecord(req.user, req.params.id, req.body),
+    ),
   );
 }

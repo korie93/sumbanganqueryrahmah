@@ -6,9 +6,30 @@ import type {
   InsertAuditLog,
   InsertBackup,
 } from "../../../shared/schema-postgres";
+import type {
+  MutationIdempotencyAcquireInput,
+  MutationIdempotencyAcquireResult,
+  MutationIdempotencyCompleteInput,
+} from "../../storage-postgres";
 import { PostgresCollectionStorage } from "./postgres-collection-storage";
 
 export class PostgresOperationsStorage extends PostgresCollectionStorage {
+  async acquireMutationIdempotency(
+    params: MutationIdempotencyAcquireInput,
+  ): Promise<MutationIdempotencyAcquireResult> {
+    return this.mutationIdempotencyRepository.acquire(params);
+  }
+
+  async completeMutationIdempotency(params: MutationIdempotencyCompleteInput): Promise<void> {
+    return this.mutationIdempotencyRepository.complete(params);
+  }
+
+  async releaseMutationIdempotency(
+    params: Pick<MutationIdempotencyAcquireInput, "scope" | "actor" | "idempotencyKey">,
+  ): Promise<void> {
+    return this.mutationIdempotencyRepository.release(params);
+  }
+
   async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {
     return this.auditRepository.createAuditLog(data);
   }

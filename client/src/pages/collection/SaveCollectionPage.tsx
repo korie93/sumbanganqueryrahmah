@@ -7,7 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { type CollectionBatch } from "@/lib/api";
 import {
+  buildCollectionMutationFingerprint,
   buildCollectionRecordFormData,
+  createCollectionMutationIdempotencyKey,
   createCollectionRecord,
 } from "@/lib/api/collection-records";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
@@ -32,6 +34,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const submitInFlightRef = useRef(false);
+  const submitMutationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const [customerName, setCustomerName] = useState("");
   const [icNumber, setIcNumber] = useState("");
@@ -54,6 +57,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     setPaymentDate("");
     setAmount("");
     setReceiptFiles([]);
+    submitMutationIntentRef.current = null;
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -115,7 +119,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     submitInFlightRef.current = true;
     setSubmitting(true);
     try {
-      await createCollectionRecord(buildCollectionRecordFormData({
+      const mutationPayload = {
         customerName: customerName.trim(),
         icNumber: icNumber.trim(),
         customerPhone: customerPhone.trim(),
@@ -124,7 +128,26 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         paymentDate,
         amount: Number(amount),
         collectionStaffNickname: staffNickname.trim(),
-      }, receiptFiles));
+      };
+      const mutationFingerprint = buildCollectionMutationFingerprint({
+        operation: "create",
+        payload: mutationPayload,
+        receiptFiles,
+      });
+      if (submitMutationIntentRef.current?.fingerprint !== mutationFingerprint) {
+        submitMutationIntentRef.current = {
+          fingerprint: mutationFingerprint,
+          key: createCollectionMutationIdempotencyKey(),
+        };
+      }
+
+      await createCollectionRecord(
+        buildCollectionRecordFormData(mutationPayload, receiptFiles),
+        {
+          idempotencyFingerprint: submitMutationIntentRef.current.fingerprint,
+          idempotencyKey: submitMutationIntentRef.current.key,
+        },
+      );
 
       toast({
         title: "Collection Saved",

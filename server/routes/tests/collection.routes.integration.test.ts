@@ -205,6 +205,129 @@ test("POST /api/collection creates a collection record and writes an audit log",
   }
 });
 
+test("POST /api/collection replays a successful create when the same idempotency key is retried", async () => {
+  const { storage, createCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const headers = {
+      "Content-Type": "application/json",
+      "x-idempotency-key": "create-key-1",
+      "x-idempotency-fingerprint": "{\"amount\":245.9,\"customerName\":\"Bob Lee\"}",
+    };
+    const body = JSON.stringify({
+      customerName: "Bob Lee",
+      icNumber: "880202026666",
+      customerPhone: "0129876543",
+      accountNumber: "ACC-2002",
+      batch: "P25",
+      paymentDate: "2026-03-15",
+      amount: 245.9,
+      collectionStaffNickname: "Collector Alpha",
+    });
+
+    const firstResponse = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      headers,
+      body,
+    });
+    const secondResponse = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      headers,
+      body,
+    });
+
+    assert.equal(firstResponse.status, 200);
+    assert.equal(secondResponse.status, 200);
+    const firstPayload = await firstResponse.json();
+    const secondPayload = await secondResponse.json();
+    assert.equal(firstPayload.record.id, secondPayload.record.id);
+    assert.equal(createCalls.length, 1);
+    assert.equal(auditLogs.length, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/collection rejects reused idempotency keys when the payload fingerprint changes", async () => {
+  const { storage, createCalls } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const baseHeaders = {
+      "Content-Type": "application/json",
+      "x-idempotency-key": "create-key-2",
+    };
+
+    const firstResponse = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      headers: {
+        ...baseHeaders,
+        "x-idempotency-fingerprint": "{\"amount\":245.9}",
+      },
+      body: JSON.stringify({
+        customerName: "Bob Lee",
+        icNumber: "880202026666",
+        customerPhone: "0129876543",
+        accountNumber: "ACC-2002",
+        batch: "P25",
+        paymentDate: "2026-03-15",
+        amount: 245.9,
+        collectionStaffNickname: "Collector Alpha",
+      }),
+    });
+    const secondResponse = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      headers: {
+        ...baseHeaders,
+        "x-idempotency-fingerprint": "{\"amount\":999}",
+      },
+      body: JSON.stringify({
+        customerName: "Different",
+        icNumber: "880202026666",
+        customerPhone: "0129876543",
+        accountNumber: "ACC-2002",
+        batch: "P25",
+        paymentDate: "2026-03-15",
+        amount: 999,
+        collectionStaffNickname: "Collector Alpha",
+      }),
+    });
+
+    assert.equal(firstResponse.status, 200);
+    assert.equal(secondResponse.status, 409);
+    const secondPayload = await secondResponse.json();
+    assert.equal(secondPayload.error.code, "IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
+    assert.equal(createCalls.length, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /api/collection accepts multipart receipt uploads without base64 JSON payloads", async () => {
   const { storage, createCalls, createReceiptCalls, auditLogs } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
@@ -427,6 +550,55 @@ test("PATCH /api/collection/:id updates a record and writes an audit log", async
     });
     assert.equal(auditDetails.receipts.beforeCount, 0);
     assert.equal(auditDetails.receipts.afterCount, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/collection/:id replays a successful update when the same idempotency key is retried", async () => {
+  const { storage, updateCalls } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const headers = {
+      "Content-Type": "application/json",
+      "x-idempotency-key": "update-key-1",
+      "x-idempotency-fingerprint": "{\"amount\":321.45,\"recordId\":\"collection-1\"}",
+    };
+    const body = JSON.stringify({
+      amount: 321.45,
+      expectedUpdatedAt: "2026-03-01T09:00:00.000Z",
+    });
+
+    const firstResponse = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "PATCH",
+      headers,
+      body,
+    });
+    const secondResponse = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "PATCH",
+      headers,
+      body,
+    });
+
+    assert.equal(firstResponse.status, 200);
+    assert.equal(secondResponse.status, 200);
+    assert.equal(updateCalls.length, 1);
+    const firstPayload = await firstResponse.json();
+    const secondPayload = await secondResponse.json();
+    assert.equal(firstPayload.record.amount, secondPayload.record.amount);
   } finally {
     await stopTestServer(server);
   }
@@ -1891,6 +2063,53 @@ test("DELETE /api/collection/:id removes the record so it no longer appears in s
     assert.equal(auditDetails.deleted.amount, 250);
     assert.equal(auditDetails.deleted.collectionStaffNickname, "Collector Alpha");
     assert.equal(auditDetails.deleted.activeReceiptCount, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("DELETE /api/collection/:id replays a successful delete when the same idempotency key is retried", async () => {
+  const { storage, deleteCalls } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const headers = {
+      "Content-Type": "application/json",
+      "x-idempotency-key": "delete-key-1",
+      "x-idempotency-fingerprint": "{\"recordId\":\"collection-1\",\"version\":\"2026-03-01T09:00:00.000Z\"}",
+    };
+    const body = JSON.stringify({
+      expectedUpdatedAt: "2026-03-01T09:00:00.000Z",
+    });
+
+    const firstResponse = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "DELETE",
+      headers,
+      body,
+    });
+    const secondResponse = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "DELETE",
+      headers,
+      body,
+    });
+
+    assert.equal(firstResponse.status, 200);
+    assert.equal(secondResponse.status, 200);
+    assert.equal(deleteCalls.length, 1);
+    assert.deepEqual(await firstResponse.json(), { ok: true });
+    assert.deepEqual(await secondResponse.json(), { ok: true });
   } finally {
     await stopTestServer(server);
   }
