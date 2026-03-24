@@ -62,3 +62,19 @@ test("saveCollectionReceipt accepts webp payloads and stores canonical metadata"
 
   await removeCollectionReceiptFile(saved.storagePath);
 });
+
+test("saveCollectionReceipt accepts image/jpg alias MIME and stores canonical jpeg metadata", async () => {
+  const jpgBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46]);
+
+  const saved = await saveCollectionReceipt({
+    fileName: "mobile-upload.jpg",
+    mimeType: "image/jpg",
+    contentBase64: asBase64(jpgBytes),
+  });
+
+  assert.equal(saved.originalExtension, ".jpg");
+  assert.equal(saved.originalMimeType, "image/jpeg");
+  assert.match(saved.storagePath, /\/uploads\/collection-receipts\/.+\.jpg$/);
+
+  await removeCollectionReceiptFile(saved.storagePath);
+});

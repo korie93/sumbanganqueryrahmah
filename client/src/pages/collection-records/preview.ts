@@ -28,27 +28,31 @@ export async function optimizeImageBlobForPreview(blob: Blob): Promise<Blob> {
   if (typeof document === "undefined") {
     return blob;
   }
+  try {
+    const image = await loadImageElementFromBlob(blob);
+    const width = image.naturalWidth || image.width;
+    const height = image.naturalHeight || image.height;
+    if (!width || !height) {
+      return blob;
+    }
 
-  const image = await loadImageElementFromBlob(blob);
-  const width = image.naturalWidth || image.width;
-  const height = image.naturalHeight || image.height;
-  if (!width || !height) {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return blob;
+    }
+
+    context.drawImage(image, 0, 0, width, height);
+
+    const webpBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/webp", 0.82);
+    });
+
+    return webpBlob || blob;
+  } catch {
+    // Fallback to original blob when browser-side optimization fails.
     return blob;
   }
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext("2d");
-  if (!context) {
-    return blob;
-  }
-
-  context.drawImage(image, 0, 0, width, height);
-
-  const webpBlob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, "image/webp", 0.82);
-  });
-
-  return webpBlob || blob;
 }
