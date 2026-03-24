@@ -3,6 +3,11 @@ import path from "path";
 import { randomUUID } from "node:crypto";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
+import {
+  COLLECTION_RECEIPT_DIR,
+  COLLECTION_RECEIPT_PUBLIC_PREFIX,
+  resolveCollectionReceiptStoragePath,
+} from "../lib/collection-receipt-files";
 import { logger } from "../lib/logger";
 import type {
   CollectionRecordReceipt,
@@ -23,9 +28,6 @@ const COLLECTION_RECEIPT_MIME_ALIASES: Record<string, string> = {
   "image/x-png": "image/png",
   "application/x-pdf": "application/pdf",
 };
-const COLLECTION_RECEIPT_DIR = path.resolve(process.cwd(), "uploads", "collection-receipts");
-const COLLECTION_RECEIPT_PUBLIC_PREFIX = "/uploads/collection-receipts";
-
 type CollectionReceiptFileType = "pdf" | "png" | "jpg" | "webp";
 
 const COLLECTION_RECEIPT_TYPE_CONFIG: Record<CollectionReceiptFileType, { extension: string; mimeType: string }> = {
@@ -210,17 +212,11 @@ export async function saveCollectionReceipt(
 export async function removeCollectionReceiptFile(
   receiptPath: string | null | undefined,
 ): Promise<void> {
-  const normalized = String(receiptPath || "").trim().replace(/\\/g, "/");
-  if (!normalized.startsWith(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`)) return;
-
-  const fileName = normalized.slice(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`.length);
-  if (!fileName || fileName.includes("..") || fileName.includes("/") || fileName.includes("\\")) return;
-
-  const absolutePath = path.resolve(COLLECTION_RECEIPT_DIR, fileName);
-  if (!absolutePath.startsWith(COLLECTION_RECEIPT_DIR)) return;
+  const resolved = resolveCollectionReceiptStoragePath(receiptPath);
+  if (!resolved?.isManagedCollectionReceipt) return;
 
   try {
-    await fs.promises.unlink(absolutePath);
+    await fs.promises.unlink(resolved.absolutePath);
   } catch {
     // best effort only
   }
@@ -258,22 +254,15 @@ function resolveCollectionReceiptFile(
   mimeType: string;
   isInlinePreviewSupported: boolean;
 } | null {
-  const normalized = String(receiptPath || "").trim().replace(/\\/g, "/");
-  if (!normalized.startsWith(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`)) return null;
+  const resolvedStoragePath = resolveCollectionReceiptStoragePath(receiptPath);
+  if (!resolvedStoragePath) return null;
 
-  const storedFileName = normalized.slice(`${COLLECTION_RECEIPT_PUBLIC_PREFIX}/`.length);
-  if (!storedFileName) return null;
-  if (storedFileName.includes("..") || storedFileName.includes("/") || storedFileName.includes("\\")) return null;
-  if (path.basename(storedFileName) !== storedFileName) return null;
-
-  const absolutePath = path.resolve(COLLECTION_RECEIPT_DIR, storedFileName);
-  const relativePath = path.relative(COLLECTION_RECEIPT_DIR, absolutePath);
-  if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) return null;
-
-  const mimeType = resolveCollectionReceiptMimeTypeFromFileName(storedFileName);
+  const mimeType = resolveCollectionReceiptMimeTypeFromFileName(
+    resolvedStoragePath.storedFileName || resolvedStoragePath.relativePath,
+  );
   return {
-    absolutePath,
-    storedFileName,
+    absolutePath: resolvedStoragePath.absolutePath,
+    storedFileName: resolvedStoragePath.storedFileName,
     mimeType,
     isInlinePreviewSupported: COLLECTION_RECEIPT_INLINE_MIME.has(mimeType),
   };
@@ -390,6 +379,23 @@ async function resolveSelectedReceipt(
   };
 }
 
+async function pruneMissingRelationReceipt(
+  storage: PostgresStorage,
+  recordId: string,
+  receipt: CollectionRecordReceipt | null,
+): Promise<void> {
+  const normalizedReceiptId = normalizeCollectionText(receipt?.id);
+  if (!normalizedReceiptId || normalizedReceiptId.startsWith("legacy-")) {
+    return;
+  }
+
+  try {
+    await storage.deleteCollectionRecordReceipts(recordId, [normalizedReceiptId]);
+  } catch {
+    // best effort cleanup only
+  }
+}
+
 export async function serveCollectionReceipt(
   storage: PostgresStorage,
   req: AuthenticatedRequest,
@@ -427,7 +433,7 @@ export async function serveCollectionReceipt(
     const requestedReceiptId = normalizeCollectionText(
       receiptIdRaw ?? req.params.receiptId ?? null,
     );
-    const selectedReceipt = await resolveSelectedReceipt(
+    let selectedReceipt = await resolveSelectedReceipt(
       storage,
       record,
       requestedReceiptId,
@@ -439,19 +445,36 @@ export async function serveCollectionReceipt(
       });
       return res.status(404).json({ ok: false, message: "Receipt file not found." });
     }
-    const resolved = resolveCollectionReceiptFile(selectedReceipt?.storagePath ?? null);
-
-    if (!resolved) {
-      logCollectionReceiptWarning(req, mode, 404, "receipt_storage_path_invalid", {
-        recordId: record.id,
-        requestedReceiptId,
-      });
-      return res.status(404).json({ ok: false, message: "Receipt file not found." });
+    let resolved = resolveCollectionReceiptFile(selectedReceipt?.storagePath ?? null);
+    if (!resolved && selectedReceipt) {
+      await pruneMissingRelationReceipt(storage, record.id, selectedReceipt);
+      if (!requestedReceiptId) {
+        const fallbackReceipt = await resolveSelectedReceipt(storage, record, null);
+        resolved = resolveCollectionReceiptFile(fallbackReceipt?.storagePath ?? null);
+        if (resolved) {
+          selectedReceipt = fallbackReceipt;
+        }
+      }
     }
 
-    try {
-      await fs.promises.access(resolved.absolutePath, fs.constants.R_OK);
-    } catch {
+    if (resolved) {
+      try {
+        await fs.promises.access(resolved.absolutePath, fs.constants.R_OK);
+      } catch {
+        await pruneMissingRelationReceipt(storage, record.id, selectedReceipt);
+        resolved = null;
+        if (!requestedReceiptId) {
+          const fallbackReceipt = await resolveSelectedReceipt(storage, record, null);
+          const fallbackResolved = resolveCollectionReceiptFile(fallbackReceipt?.storagePath ?? null);
+          if (fallbackResolved) {
+            resolved = fallbackResolved;
+            selectedReceipt = fallbackReceipt;
+          }
+        }
+      }
+    }
+
+    if (!resolved) {
       logCollectionReceiptWarning(req, mode, 404, "receipt_storage_missing", {
         recordId: record.id,
         requestedReceiptId,

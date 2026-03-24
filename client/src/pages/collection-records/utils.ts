@@ -11,6 +11,7 @@ export function inferReceiptMimeTypeFromName(fileName: string): string {
   if (normalized.endsWith(".pdf")) return "application/pdf";
   if (normalized.endsWith(".png")) return "image/png";
   if (normalized.endsWith(".jpg") || normalized.endsWith(".jpeg")) return "image/jpeg";
+  if (normalized.endsWith(".webp")) return "image/webp";
   return "";
 }
 

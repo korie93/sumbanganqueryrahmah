@@ -42,6 +42,10 @@ export async function optimizeImageBlobForPreview(blob: Blob): Promise<Blob> {
       canvas.toBlob(resolve, "image/webp", 0.82);
     });
 
+    image.src = "";
+    canvas.width = 0;
+    canvas.height = 0;
+
     return webpBlob || blob;
   } catch {
     // Fallback to original blob when browser-side optimization fails.

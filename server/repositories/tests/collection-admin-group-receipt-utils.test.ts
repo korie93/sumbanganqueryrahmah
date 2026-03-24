@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 import {
   createCollectionAdminGroupInTransaction,
@@ -17,6 +19,22 @@ import {
   type CollectionReceiptExecutor,
 } from "../collection-receipt-utils";
 import { collectBoundValues, collectSqlText, createSequenceExecutor } from "./sql-test-utils";
+
+async function createManagedCollectionReceiptFixture(extension: ".png" | ".pdf" = ".png") {
+  const uploadsDir = path.resolve(process.cwd(), "uploads", "collection-receipts");
+  const storedFileName = `repo-receipt-${Date.now()}-${Math.random().toString(16).slice(2)}${extension}`;
+  const absolutePath = path.join(uploadsDir, storedFileName);
+  const contents =
+    extension === ".pdf"
+      ? Buffer.from("%PDF-1.7\n%fixture\n")
+      : Buffer.from("fixture-image");
+  await fs.mkdir(uploadsDir, { recursive: true });
+  await fs.writeFile(absolutePath, contents);
+  return {
+    absolutePath,
+    publicPath: `/uploads/collection-receipts/${storedFileName}`,
+  };
+}
 
 test("listCollectionAdminGroups builds nickname id mapping and returns normalized groups", async () => {
   const { executor, queries } = createSequenceExecutor<CollectionAdminGroupExecutor>([
@@ -162,13 +180,16 @@ test("deleteCollectionAdminGroupInTransaction short-circuits blank ids and delet
 });
 
 test("attachCollectionReceipts promotes legacy receipt_file rows into relation-backed receipts", async () => {
+  const receiptOne = await createManagedCollectionReceiptFixture(".png");
+  const receiptTwo = await createManagedCollectionReceiptFixture(".png");
+  const legacyReceipt = await createManagedCollectionReceiptFixture(".pdf");
   const { executor, queries } = createSequenceExecutor<CollectionReceiptExecutor>([
     {
       rows: [
         {
           id: "receipt-1",
           collection_record_id: "record-1",
-          storage_path: "uploads/one.png",
+          storage_path: receiptOne.publicPath,
           original_file_name: "one.png",
           original_mime_type: "image/png",
           original_extension: ".png",
@@ -178,7 +199,7 @@ test("attachCollectionReceipts promotes legacy receipt_file rows into relation-b
         {
           id: "receipt-2",
           collection_record_id: "record-1",
-          storage_path: "uploads/two.png",
+          storage_path: receiptTwo.publicPath,
           original_file_name: "two.png",
           original_mime_type: "image/png",
           original_extension: ".png",
@@ -189,7 +210,7 @@ test("attachCollectionReceipts promotes legacy receipt_file rows into relation-b
     },
     { rows: [] },
     {
-      rows: [{ storage_path: "uploads/existing.pdf" }],
+      rows: [{ storage_path: legacyReceipt.publicPath }],
     },
     { rows: [] },
     {
@@ -197,7 +218,7 @@ test("attachCollectionReceipts promotes legacy receipt_file rows into relation-b
         {
           id: "receipt-legacy",
           collection_record_id: "record-2",
-          storage_path: "uploads/existing.pdf",
+          storage_path: legacyReceipt.publicPath,
           original_file_name: "existing.pdf",
           original_mime_type: "application/pdf",
           original_extension: ".pdf",
@@ -208,36 +229,99 @@ test("attachCollectionReceipts promotes legacy receipt_file rows into relation-b
     },
   ]);
 
-  const records = await attachCollectionReceipts(executor, [
+  try {
+    const records = await attachCollectionReceipts(executor, [
+      {
+        id: "record-1",
+        customerName: "Customer One",
+        amount: 100,
+        paymentDate: "2026-03-01",
+        receiptFile: null,
+        createdBy: "staff.user",
+        createdAt: "2026-03-01T00:00:00.000Z",
+      } as any,
+      {
+        id: "record-2",
+        customerName: "Customer Two",
+        amount: 200,
+        paymentDate: "2026-03-02",
+        receiptFile: legacyReceipt.publicPath,
+        createdBy: "staff.user",
+        createdAt: "2026-03-02T00:00:00.000Z",
+      } as any,
+    ]);
+
+    assert.equal(records[0]?.receiptFile, null);
+    assert.equal(records[0]?.receipts.length, 2);
+    assert.equal(records[1]?.receiptFile, null);
+    assert.equal(records[1]?.receipts.length, 1);
+    assert.equal(records[1]?.receipts[0]?.storagePath, legacyReceipt.publicPath);
+    assert.equal(queries.length, 5);
+    assert.match(collectSqlText(queries[1]), /INSERT INTO public\.collection_record_receipts/i);
+    assert.match(collectSqlText(queries[2]), /SELECT storage_path/i);
+    assert.match(collectSqlText(queries[3]), /UPDATE public\.collection_records/i);
+  } finally {
+    await fs.unlink(receiptOne.absolutePath).catch(() => undefined);
+    await fs.unlink(receiptTwo.absolutePath).catch(() => undefined);
+    await fs.unlink(legacyReceipt.absolutePath).catch(() => undefined);
+  }
+});
+
+test("attachCollectionReceipts prunes relation-backed receipts whose files are missing", async () => {
+  const validReceipt = await createManagedCollectionReceiptFixture(".png");
+  const { executor, queries } = createSequenceExecutor<CollectionReceiptExecutor>([
     {
-      id: "record-1",
-      customerName: "Customer One",
-      amount: 100,
-      paymentDate: "2026-03-01",
-      receiptFile: null,
-      createdBy: "staff.user",
-      createdAt: "2026-03-01T00:00:00.000Z",
-    } as any,
-    {
-      id: "record-2",
-      customerName: "Customer Two",
-      amount: 200,
-      paymentDate: "2026-03-02",
-      receiptFile: "uploads/existing.pdf",
-      createdBy: "staff.user",
-      createdAt: "2026-03-02T00:00:00.000Z",
-    } as any,
+      rows: [
+        {
+          id: "receipt-missing",
+          collection_record_id: "record-1",
+          storage_path: "/uploads/collection-receipts/missing-file.png",
+          original_file_name: "missing-file.png",
+          original_mime_type: "image/png",
+          original_extension: ".png",
+          file_size: 50,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+        {
+          id: "receipt-valid",
+          collection_record_id: "record-1",
+          storage_path: validReceipt.publicPath,
+          original_file_name: "valid.png",
+          original_mime_type: "image/png",
+          original_extension: ".png",
+          file_size: 120,
+          created_at: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+    },
+    { rows: [] },
+    { rows: [{ storage_path: validReceipt.publicPath }] },
+    { rows: [] },
   ]);
 
-  assert.equal(records[0]?.receiptFile, null);
-  assert.equal(records[0]?.receipts.length, 2);
-  assert.equal(records[1]?.receiptFile, null);
-  assert.equal(records[1]?.receipts.length, 1);
-  assert.equal(records[1]?.receipts[0]?.storagePath, "uploads/existing.pdf");
-  assert.equal(queries.length, 5);
-  assert.match(collectSqlText(queries[1]), /INSERT INTO public\.collection_record_receipts/i);
-  assert.match(collectSqlText(queries[2]), /SELECT storage_path/i);
-  assert.match(collectSqlText(queries[3]), /UPDATE public\.collection_records/i);
+  try {
+    const [record] = await attachCollectionReceipts(executor, [
+      {
+        id: "record-1",
+        customerName: "Customer One",
+        amount: 100,
+        paymentDate: "2026-03-01",
+        receiptFile: "/uploads/collection-receipts/missing-file.png",
+        createdBy: "staff.user",
+        createdAt: "2026-03-01T00:00:00.000Z",
+      } as any,
+    ]);
+
+    assert.equal(record?.receiptFile, null);
+    assert.equal(record?.receipts.length, 1);
+    assert.equal(record?.receipts[0]?.id, "receipt-valid");
+    assert.equal(queries.length, 4);
+    assert.match(collectSqlText(queries[1]), /DELETE FROM public\.collection_record_receipts/i);
+    assert.match(collectSqlText(queries[2]), /SELECT storage_path/i);
+    assert.match(collectSqlText(queries[3]), /UPDATE public\.collection_records/i);
+  } finally {
+    await fs.unlink(validReceipt.absolutePath).catch(() => undefined);
+  }
 });
 
 test("createCollectionRecordReceiptRows inserts receipts and reloads them by generated ids", async () => {
