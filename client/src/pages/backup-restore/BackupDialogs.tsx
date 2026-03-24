@@ -24,6 +24,7 @@ import type { BackupRecord } from "@/pages/backup-restore/types";
 
 interface BackupDialogsProps {
   backupName: string;
+  backupJobBusy: boolean;
   createPending: boolean;
   deletingId: string | null;
   onBackupNameChange: (value: string) => void;
@@ -41,6 +42,7 @@ interface BackupDialogsProps {
 
 export function BackupDialogs({
   backupName,
+  backupJobBusy,
   createPending,
   deletingId,
   onBackupNameChange,
@@ -83,7 +85,7 @@ export function BackupDialogs({
             </Button>
             <Button
               onClick={onConfirmCreate}
-              disabled={createPending || !backupName.trim()}
+              disabled={backupJobBusy || createPending || !backupName.trim()}
               data-testid="button-confirm-create"
             >
               {createPending ? (
@@ -114,7 +116,7 @@ export function BackupDialogs({
                   onConfirmRestore(showRestoreDialog);
                 }
               }}
-              disabled={restoringId === showRestoreDialog?.id}
+              disabled={backupJobBusy || restoringId === showRestoreDialog?.id}
               data-testid="button-confirm-restore"
             >
               {restoringId === showRestoreDialog?.id ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : null}
@@ -141,7 +143,7 @@ export function BackupDialogs({
                 }
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deletingId === showDeleteDialog?.id}
+              disabled={backupJobBusy || deletingId === showDeleteDialog?.id}
               data-testid="button-confirm-delete"
             >
               {deletingId === showDeleteDialog?.id ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : null}

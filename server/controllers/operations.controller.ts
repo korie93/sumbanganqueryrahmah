@@ -3,6 +3,7 @@ import type { WebSocket } from "ws";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { ensureObject } from "../http/validation";
 import type { AuditLogOperationsService } from "../services/audit-log-operations.service";
+import type { BackupJobQueueService } from "../services/backup-job-queue.service";
 import type { BackupOperationsService } from "../services/backup-operations.service";
 import type { OperationsAnalyticsService } from "../services/operations-analytics.service";
 
@@ -20,6 +21,7 @@ type CreateOperationsControllerDeps = {
     | "listBackups"
     | "restoreBackup"
   >;
+  backupJobQueueService: Pick<BackupJobQueueService, "enqueue" | "getJob">;
   operationsAnalyticsService: Pick<
     OperationsAnalyticsService,
     | "getDashboardSummary"
@@ -37,9 +39,16 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
   const {
     auditLogOperationsService,
     backupOperationsService,
+    backupJobQueueService,
     operationsAnalyticsService,
     connectedClients,
   } = deps;
+
+  const isAsyncJobRequested = (value: unknown) => {
+    const candidate = Array.isArray(value) ? value[0] : value;
+    const normalized = String(candidate ?? "").trim().toLowerCase();
+    return normalized === "1" || normalized === "true" || normalized === "yes";
+  };
 
   const listAuditLogs = async (req: AuthenticatedRequest, res: Response) => {
     return res.json(await auditLogOperationsService.listAuditLogs(req.query as Record<string, unknown>));
@@ -85,6 +94,23 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
 
   const createBackup = async (req: AuthenticatedRequest, res: Response) => {
     const body = ensureObject(req.body) || {};
+    if (isAsyncJobRequested(req.query.async)) {
+      const job = backupJobQueueService.enqueue({
+        type: "create",
+        requestedBy: req.user!.username,
+        backupName: String(body.name || ""),
+        execute: () =>
+          backupOperationsService.createBackup({
+            name: String(body.name || ""),
+            username: req.user!.username,
+          }),
+      });
+      return res.status(202).json({
+        message: "Backup creation queued.",
+        job,
+      });
+    }
+
     const result = await backupOperationsService.createBackup({
       name: String(body.name || ""),
       username: req.user!.username,
@@ -95,6 +121,14 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
   const getBackup = async (req: AuthenticatedRequest, res: Response) => {
     const result = await backupOperationsService.getBackupMetadata(req.params.id, req.user!.username);
     return res.status(result.statusCode).json(result.body);
+  };
+
+  const getBackupJob = async (req: AuthenticatedRequest, res: Response) => {
+    const job = backupJobQueueService.getJob(req.params.jobId);
+    if (!job) {
+      return res.status(404).json({ message: "Backup job not found" });
+    }
+    return res.status(200).json(job);
   };
 
   const exportBackup = async (req: AuthenticatedRequest, res: Response) => {
@@ -110,6 +144,23 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
   };
 
   const restoreBackup = async (req: AuthenticatedRequest, res: Response) => {
+    if (isAsyncJobRequested(req.query.async)) {
+      const job = backupJobQueueService.enqueue({
+        type: "restore",
+        requestedBy: req.user!.username,
+        backupId: req.params.id,
+        execute: () =>
+          backupOperationsService.restoreBackup({
+            backupId: req.params.id,
+            username: req.user!.username,
+          }),
+      });
+      return res.status(202).json({
+        message: "Backup restore queued.",
+        job,
+      });
+    }
+
     const result = await backupOperationsService.restoreBackup({
       backupId: req.params.id,
       username: req.user!.username,
@@ -142,6 +193,7 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
     listBackups,
     createBackup,
     getBackup,
+    getBackupJob,
     exportBackup,
     restoreBackup,
     deleteBackup,

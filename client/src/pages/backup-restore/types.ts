@@ -55,6 +55,34 @@ export interface RestoreDatasetStats {
   reactivated: number;
 }
 
+export type BackupJobType = "create" | "restore";
+export type BackupJobStatus = "queued" | "running" | "completed" | "failed";
+
+export interface BackupJobError {
+  message: string;
+  statusCode: number;
+}
+
+export interface BackupJobRecord {
+  id: string;
+  type: BackupJobType;
+  status: BackupJobStatus;
+  requestedBy: string;
+  requestedAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  backupId: string | null;
+  backupName: string | null;
+  queuePosition: number;
+  result: unknown;
+  error: BackupJobError | null;
+}
+
+export interface BackupJobEnqueueResponse {
+  message: string;
+  job: BackupJobRecord;
+}
+
 export interface BackupFilters {
   createdByFilter: string;
   dateFrom: string;
