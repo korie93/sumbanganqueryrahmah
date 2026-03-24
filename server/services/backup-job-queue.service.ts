@@ -1,171 +1,185 @@
-import crypto from "crypto";
 import { logger } from "../lib/logger";
-
-type BackupJobType = "create" | "restore";
-type BackupJobStatus = "queued" | "running" | "completed" | "failed";
-
-type BackupJobError = {
-  message: string;
-  statusCode: number;
-};
+import type {
+  BackupJobError,
+  BackupJobRecord,
+  BackupJobSnapshot,
+  BackupJobType,
+  CreateBackupJobInput,
+} from "../repositories/backup-job.repository";
 
 type BackupJobOperationResponse = {
   statusCode: number;
   body: unknown;
 };
 
-type StoredBackupJob = {
-  id: string;
-  type: BackupJobType;
-  status: BackupJobStatus;
-  requestedBy: string;
-  requestedAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-  backupId: string | null;
-  backupName: string | null;
-  result: unknown;
-  error: BackupJobError | null;
+type BackupJobRepositoryLike = {
+  createJob(input: CreateBackupJobInput): Promise<BackupJobSnapshot>;
+  getJobSnapshot(jobId: string): Promise<BackupJobSnapshot | null>;
+  claimNextQueuedJob(): Promise<BackupJobRecord | null>;
+  completeJob(params: {
+    jobId: string;
+    result: unknown;
+    backupId?: string | null;
+    backupName?: string | null;
+  }): Promise<void>;
+  failJob(params: {
+    jobId: string;
+    error: BackupJobError;
+  }): Promise<void>;
+  markRunningJobsFailed(message: string): Promise<void>;
+  pruneHistory(maxRetainedJobs: number): Promise<void>;
 };
 
-type EnqueueBackupJobInput = {
-  type: BackupJobType;
-  requestedBy: string;
-  backupId?: string | null;
-  backupName?: string | null;
-  execute: () => Promise<BackupJobOperationResponse>;
+type BackupJobExecutorDeps = {
+  repository: BackupJobRepositoryLike;
+  executeCreate: (params: { name: string; username: string }) => Promise<BackupJobOperationResponse>;
+  executeRestore: (params: { backupId: string; username: string }) => Promise<BackupJobOperationResponse>;
+  maxRetainedJobs?: number;
+  interruptedJobMessage?: string;
 };
 
-export type BackupJobSnapshot = {
-  id: string;
-  type: BackupJobType;
-  status: BackupJobStatus;
-  requestedBy: string;
-  requestedAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-  backupId: string | null;
-  backupName: string | null;
-  queuePosition: number;
-  result: unknown;
-  error: BackupJobError | null;
-};
+export type { BackupJobError, BackupJobSnapshot, BackupJobType } from "../repositories/backup-job.repository";
 
 export class BackupJobQueueService {
-  private readonly jobs = new Map<string, StoredBackupJob>();
-  private readonly queue: Array<{
-    jobId: string;
-    execute: () => Promise<BackupJobOperationResponse>;
-  }> = [];
-  private activeJobId: string | null = null;
+  private readonly maxRetainedJobs: number;
+  private readonly interruptedJobMessage: string;
+  private started = false;
+  private startPromise: Promise<void> | null = null;
+  private runLoopPromise: Promise<void> | null = null;
 
-  constructor(private readonly maxRetainedJobs = 25) {}
-
-  enqueue(input: EnqueueBackupJobInput): BackupJobSnapshot {
-    const jobId = crypto.randomUUID();
-    const job: StoredBackupJob = {
-      id: jobId,
-      type: input.type,
-      status: "queued",
-      requestedBy: input.requestedBy,
-      requestedAt: new Date().toISOString(),
-      startedAt: null,
-      finishedAt: null,
-      backupId: input.backupId ?? null,
-      backupName: input.backupName ?? null,
-      result: null,
-      error: null,
-    };
-
-    this.jobs.set(jobId, job);
-    this.queue.push({
-      jobId,
-      execute: input.execute,
-    });
-    void this.runNext();
-    return this.toSnapshot(job);
+  constructor(private readonly deps: BackupJobExecutorDeps) {
+    this.maxRetainedJobs = Math.max(1, deps.maxRetainedJobs ?? 25);
+    this.interruptedJobMessage =
+      deps.interruptedJobMessage
+      || "Backup job was interrupted by a server restart before completion.";
   }
 
-  getJob(jobId: string): BackupJobSnapshot | null {
-    const job = this.jobs.get(jobId);
-    return job ? this.toSnapshot(job) : null;
+  async start(): Promise<void> {
+    await this.ensureStarted();
+    void this.runQueueLoop();
   }
 
-  private async runNext() {
-    if (this.activeJobId || this.queue.length === 0) {
+  async enqueue(input: CreateBackupJobInput): Promise<BackupJobSnapshot> {
+    await this.ensureStarted();
+    const job = await this.deps.repository.createJob(input);
+    void this.runQueueLoop();
+    return job;
+  }
+
+  async getJob(jobId: string): Promise<BackupJobSnapshot | null> {
+    await this.ensureStarted();
+    return this.deps.repository.getJobSnapshot(jobId);
+  }
+
+  private async ensureStarted(): Promise<void> {
+    if (this.started) {
+      return;
+    }
+    if (this.startPromise) {
+      await this.startPromise;
       return;
     }
 
-    const nextJob = this.queue.shift();
-    if (!nextJob) {
-      return;
-    }
-
-    const job = this.jobs.get(nextJob.jobId);
-    if (!job) {
-      void this.runNext();
-      return;
-    }
-
-    this.activeJobId = job.id;
-    job.status = "running";
-    job.startedAt = new Date().toISOString();
+    this.startPromise = (async () => {
+      await this.deps.repository.markRunningJobsFailed(this.interruptedJobMessage);
+      this.started = true;
+    })();
 
     try {
-      const response = await nextJob.execute();
-      if (response.statusCode >= 400) {
-        job.status = "failed";
-        job.error = {
-          statusCode: response.statusCode,
-          message: this.readFailureMessage(response.body),
-        };
-        job.result = null;
-      } else {
-        job.status = "completed";
-        job.error = null;
-        job.result = response.body;
-        this.updateBackupIdentity(job, response.body);
+      await this.startPromise;
+    } finally {
+      this.startPromise = null;
+    }
+  }
+
+  private async runQueueLoop(): Promise<void> {
+    if (this.runLoopPromise) {
+      return this.runLoopPromise;
+    }
+
+    this.runLoopPromise = (async () => {
+      await this.ensureStarted();
+
+      while (true) {
+        const nextJob = await this.deps.repository.claimNextQueuedJob();
+        if (!nextJob) {
+          break;
+        }
+
+        await this.executeJob(nextJob);
+        await this.deps.repository.pruneHistory(this.maxRetainedJobs);
       }
+    })().finally(() => {
+      this.runLoopPromise = null;
+    });
+
+    return this.runLoopPromise;
+  }
+
+  private async executeJob(job: BackupJobRecord): Promise<void> {
+    try {
+      const response = await this.executeJobByType(job);
+      if (response.statusCode >= 400) {
+        await this.deps.repository.failJob({
+          jobId: job.id,
+          error: {
+            statusCode: response.statusCode,
+            message: this.readFailureMessage(response.body),
+          },
+        });
+        return;
+      }
+
+      const backupIdentity = this.extractBackupIdentity(job.type, response.body);
+      await this.deps.repository.completeJob({
+        jobId: job.id,
+        result: response.body,
+        backupId: backupIdentity.backupId ?? job.backupId,
+        backupName: backupIdentity.backupName ?? job.backupName,
+      });
     } catch (error) {
-      job.status = "failed";
-      job.result = null;
-      job.error = {
-        statusCode: 500,
-        message:
-          error instanceof Error && error.message.trim()
-            ? error.message
-            : "Unexpected backup job failure.",
-      };
+      await this.deps.repository.failJob({
+        jobId: job.id,
+        error: {
+          statusCode: 500,
+          message:
+            error instanceof Error && error.message.trim()
+              ? error.message
+              : "Unexpected backup job failure.",
+        },
+      });
       logger.error("Backup background job failed", {
         jobId: job.id,
         type: job.type,
         error,
       });
-    } finally {
-      job.finishedAt = new Date().toISOString();
-      this.activeJobId = null;
-      this.pruneHistory();
-      void this.runNext();
     }
   }
 
-  private updateBackupIdentity(job: StoredBackupJob, result: unknown) {
-    if (!result || typeof result !== "object") {
-      return;
+  private async executeJobByType(job: BackupJobRecord): Promise<BackupJobOperationResponse> {
+    if (job.type === "create") {
+      return this.deps.executeCreate({
+        name: job.backupName || "",
+        username: job.requestedBy,
+      });
     }
 
-    const resultRecord = result as Record<string, unknown>;
-    const backupId = String(resultRecord.backupId ?? resultRecord.id ?? "").trim();
-    const backupName = String(resultRecord.backupName ?? resultRecord.name ?? "").trim();
-    if (backupId) {
-      job.backupId = backupId;
+    if (!job.backupId) {
+      return {
+        statusCode: 400,
+        body: {
+          message: "Backup restore job is missing the backup id.",
+        },
+      };
     }
-    if (backupName) {
-      job.backupName = backupName;
-    }
+
+    return this.deps.executeRestore({
+      backupId: job.backupId,
+      username: job.requestedBy,
+    });
   }
 
-  private readFailureMessage(body: unknown) {
+  private readFailureMessage(body: unknown): string {
     if (body && typeof body === "object") {
       const message = String((body as Record<string, unknown>).message ?? "").trim();
       if (message) {
@@ -175,53 +189,30 @@ export class BackupJobQueueService {
     return "Backup job failed.";
   }
 
-  private pruneHistory() {
-    if (this.jobs.size <= this.maxRetainedJobs) {
-      return;
+  private extractBackupIdentity(
+    jobType: BackupJobType,
+    result: unknown,
+  ): { backupId: string | null; backupName: string | null } {
+    if (!result || typeof result !== "object") {
+      return { backupId: null, backupName: null };
     }
 
-    const removableJobs = Array.from(this.jobs.values())
-      .filter((job) => job.status === "completed" || job.status === "failed")
-      .sort((left, right) => left.requestedAt.localeCompare(right.requestedAt));
-
-    while (this.jobs.size > this.maxRetainedJobs && removableJobs.length > 0) {
-      const job = removableJobs.shift();
-      if (!job) {
-        break;
-      }
-      this.jobs.delete(job.id);
+    const resultRecord = result as Record<string, unknown>;
+    if (jobType === "create") {
+      return {
+        backupId: this.normalizeOptionalText(resultRecord.id),
+        backupName: this.normalizeOptionalText(resultRecord.name),
+      };
     }
-  }
 
-  private toSnapshot(job: StoredBackupJob): BackupJobSnapshot {
     return {
-      id: job.id,
-      type: job.type,
-      status: job.status,
-      requestedBy: job.requestedBy,
-      requestedAt: job.requestedAt,
-      startedAt: job.startedAt,
-      finishedAt: job.finishedAt,
-      backupId: job.backupId,
-      backupName: job.backupName,
-      queuePosition: this.readQueuePosition(job.id, job.status),
-      result: job.result,
-      error: job.error,
+      backupId: this.normalizeOptionalText(resultRecord.backupId),
+      backupName: this.normalizeOptionalText(resultRecord.backupName),
     };
   }
 
-  private readQueuePosition(jobId: string, status: BackupJobStatus) {
-    if (status === "running") {
-      return 0;
-    }
-    if (status !== "queued") {
-      return -1;
-    }
-
-    const queuedIndex = this.queue.findIndex((entry) => entry.jobId === jobId);
-    if (queuedIndex < 0) {
-      return this.activeJobId ? 1 : 0;
-    }
-    return queuedIndex + (this.activeJobId ? 1 : 0);
+  private normalizeOptionalText(value: unknown): string | null {
+    const normalized = String(value ?? "").trim();
+    return normalized ? normalized : null;
   }
 }
