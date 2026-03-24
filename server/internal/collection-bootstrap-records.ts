@@ -71,6 +71,22 @@ export async function ensureCollectionRecordsTables(): Promise<void> {
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`);
   await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS idx_collection_records_payment_created_id
+    ON public.collection_records(payment_date, created_at, id)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS idx_collection_records_created_by_payment_created_id
+    ON public.collection_records(created_by_login, payment_date, created_at, id)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS idx_collection_records_lower_staff_nickname_payment_created_id
+    ON public.collection_records ((lower(collection_staff_nickname)), payment_date, created_at, id)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS idx_collection_records_lower_created_by_payment_created_id
+    ON public.collection_records ((lower(created_by_login)), payment_date, created_at, id)
+  `);
+  await db.execute(sql`
     CREATE TABLE IF NOT EXISTS public.collection_record_receipts (
       id uuid PRIMARY KEY,
       collection_record_id uuid NOT NULL,
