@@ -7,6 +7,12 @@ export const COLLECTION_STAFF_NICKNAME_KEY = "collection_staff_nickname";
 export const COLLECTION_STAFF_NICKNAME_AUTH_KEY = "collection_staff_nickname_auth";
 export const COLLECTION_DATA_CHANGED_EVENT = "collection:data-changed";
 export const COLLECTION_PHONE_REGEX = /^[0-9+\-\s]{8,20}$/;
+const COLLECTION_RECEIPT_MIME_ALIASES: Record<string, string> = {
+  "image/jpg": "image/jpeg",
+  "image/pjpeg": "image/jpeg",
+  "image/x-png": "image/png",
+  "application/x-pdf": "application/pdf",
+};
 
 export type CollectionApiErrorDetails = {
   status: number | null;
@@ -117,6 +123,22 @@ export function emitCollectionDataChanged() {
   window.dispatchEvent(new Event(COLLECTION_DATA_CHANGED_EVENT));
 }
 
+function normalizeCollectionReceiptMimeType(value: string): string {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return "";
+  return COLLECTION_RECEIPT_MIME_ALIASES[normalized] || normalized;
+}
+
+function inferCollectionReceiptMimeTypeFromFileName(fileName: string): string {
+  const normalized = String(fileName || "").trim().toLowerCase();
+  if (!normalized) return "";
+  if (normalized.endsWith(".jpg") || normalized.endsWith(".jpeg")) return "image/jpeg";
+  if (normalized.endsWith(".png")) return "image/png";
+  if (normalized.endsWith(".webp")) return "image/webp";
+  if (normalized.endsWith(".pdf")) return "application/pdf";
+  return "";
+}
+
 export async function toReceiptPayload(file: File): Promise<CollectionReceiptPayload> {
   const contentBase64 = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -124,16 +146,23 @@ export async function toReceiptPayload(file: File): Promise<CollectionReceiptPay
     reader.onload = () => resolve(String(reader.result || ""));
     reader.readAsDataURL(file);
   });
+  const mimeType =
+    normalizeCollectionReceiptMimeType(file.type)
+    || inferCollectionReceiptMimeTypeFromFileName(file.name)
+    || "application/octet-stream";
 
   return {
     fileName: file.name,
-    mimeType: file.type,
+    mimeType,
     contentBase64,
   };
 }
 
 export function validateReceiptFile(file: File): string | null {
-  if (!COLLECTION_ACCEPTED_FILE_TYPES.includes(file.type)) {
+  const normalizedMimeType = normalizeCollectionReceiptMimeType(file.type);
+  const inferredMimeType = inferCollectionReceiptMimeTypeFromFileName(file.name);
+  const effectiveMimeType = normalizedMimeType || inferredMimeType;
+  if (!COLLECTION_ACCEPTED_FILE_TYPES.includes(effectiveMimeType)) {
     return "Receipt file must be JPG, PNG, WebP, or PDF.";
   }
   if (file.size > COLLECTION_MAX_RECEIPT_BYTES) {
