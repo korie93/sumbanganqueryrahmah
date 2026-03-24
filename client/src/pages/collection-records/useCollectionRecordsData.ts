@@ -13,7 +13,11 @@ import {
   type CollectionStaffNickname,
 } from "@/lib/api";
 import type { CollectionRecordFilters } from "@/pages/collection-records/types";
-import { isValidDate, parseApiError } from "@/pages/collection/utils";
+import {
+  COLLECTION_DATA_CHANGED_EVENT,
+  isValidDate,
+  parseApiError,
+} from "@/pages/collection/utils";
 
 type UseCollectionRecordsDataArgs = {
   canUseNicknameFilter: boolean;
@@ -121,6 +125,16 @@ export function useCollectionRecordsData({
   useEffect(() => {
     void loadNicknames();
   }, [loadNicknames]);
+
+  useEffect(() => {
+    const handleCollectionDataChanged = () => {
+      void loadRecords(buildCurrentFilters());
+    };
+    window.addEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
+    return () => {
+      window.removeEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
+    };
+  }, [buildCurrentFilters, loadRecords]);
 
   useEffect(() => {
     const trimmedSearch = deferredSearchInput.trim();
