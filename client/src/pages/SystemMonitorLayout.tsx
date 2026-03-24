@@ -1,6 +1,6 @@
 import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, ClipboardList, FileText, Server } from "lucide-react";
-import { SideTabNavigation } from "@/components/navigation/SideTabNavigation";
+import { LazySideTabNavigation } from "@/components/navigation/LazySideTabNavigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const DashboardPage = lazy(() => import("@/pages/Dashboard"));
@@ -178,7 +178,7 @@ export default function SystemMonitorLayout({
         </Card>
 
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start">
-          <SideTabNavigation
+          <LazySideTabNavigation
             items={availableSections.map((section) => ({
               key: section,
               label: sectionMeta[section].label,

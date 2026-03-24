@@ -35,12 +35,19 @@ export default defineConfig({
     chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
-        manualChunks: {
-          query: ["@tanstack/react-query"],
-          charts: ["recharts"],
-          excel: ["xlsx"],
-          pdf: ["jspdf"],
-          capture: ["html2canvas"],
+        manualChunks(id) {
+          if (!id.includes("node_modules")) {
+            return undefined;
+          }
+
+          if (id.includes("@tanstack/react-query")) return "query";
+          if (id.includes("recharts")) return "charts";
+          if (id.includes("xlsx")) return "excel";
+          if (id.includes("jspdf")) return "pdf";
+          if (id.includes("html2canvas")) return "capture";
+          if (id.includes("framer-motion")) return "motion";
+
+          return undefined;
         },
       },
     },

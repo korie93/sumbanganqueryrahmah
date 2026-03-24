@@ -13,7 +13,7 @@ export type SideTabNavigationItem = {
   badge?: number | string | null;
 };
 
-type SideTabNavigationProps = {
+export type SideTabNavigationProps = {
   items: SideTabNavigationItem[];
   selectedKey: string;
   onSelect: (key: string) => void;
