@@ -32,7 +32,7 @@ import {
   validateActivationToken,
 } from "@/lib/api/auth";
 import { getCollectionRecords } from "@/lib/api/collection";
-import { analyzeAll, analyzeImport, createImport, deleteImport, getImports, renameImport } from "@/lib/api/imports";
+import { analyzeAll, analyzeImport, createImport, deleteImport, getImportData, getImports, renameImport } from "@/lib/api/imports";
 import {
   autoHealRollupQueue,
   drainRollupQueue,
@@ -256,6 +256,63 @@ test("analysis API wrappers forward AbortSignal", async () => {
   assert.equal(requests[1]?.signal, controller.signal);
   assert.equal(requests[0]?.url, "/api/imports/import-123/analyze");
   assert.equal(requests[1]?.url, "/api/analyze/all");
+});
+
+test("getImportData forwards AbortSignal and rejects on abort", async () => {
+  const controller = new AbortController();
+  const requests: Array<{ url: string; signal: AbortSignal | null }> = [];
+  const restoreFetch = withMockFetch(((_input, init) => {
+    requests.push({
+      url: String(_input),
+      signal: (init?.signal as AbortSignal | undefined) || null,
+    });
+
+    return new Promise<Response>((resolve, reject) => {
+      const signal = init?.signal as AbortSignal | undefined;
+      if (signal?.aborted) {
+        reject(new DOMException("The operation was aborted.", "AbortError"));
+        return;
+      }
+
+      signal?.addEventListener(
+        "abort",
+        () => {
+          reject(new DOMException("The operation was aborted.", "AbortError"));
+        },
+        { once: true },
+      );
+
+      setTimeout(() => {
+        resolve(
+          jsonResponse({
+            rows: [],
+            total: 0,
+          }),
+        );
+      }, 50);
+    });
+  }) as typeof fetch);
+
+  try {
+    const pendingRequest = getImportData("import-123", 2, 50, "alice", {
+      signal: controller.signal,
+    });
+    controller.abort();
+
+    await assert.rejects(
+      pendingRequest,
+      (error: unknown) => error instanceof DOMException && error.name === "AbortError",
+    );
+  } finally {
+    restoreFetch();
+  }
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0]?.signal, controller.signal);
+  const params = new URL(`http://localhost${requests[0]?.url || ""}`).searchParams;
+  assert.equal(params.get("page"), "2");
+  assert.equal(params.get("limit"), "50");
+  assert.equal(params.get("search"), "alice");
 });
 
 test("createImport forwards AbortSignal", async () => {

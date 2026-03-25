@@ -96,7 +96,56 @@ type UseSystemMetricsResult = {
 };
 
 const POLL_INTERVAL_MS = 5000;
+const LOW_SPEC_POLL_INTERVAL_MS = 10000;
+const HIDDEN_POLL_INTERVAL_MS = 15000;
+const LOW_SPEC_HIDDEN_POLL_INTERVAL_MS = 30000;
 const ROLLING_LIMIT = 60;
+const DETAIL_POLL_EVERY = 3;
+
+export function resolveSystemMetricsPollIntervalMs({
+  hidden,
+  lowSpec,
+}: {
+  hidden: boolean;
+  lowSpec: boolean;
+}) {
+  if (hidden) {
+    return lowSpec ? LOW_SPEC_HIDDEN_POLL_INTERVAL_MS : HIDDEN_POLL_INTERVAL_MS;
+  }
+
+  return lowSpec ? LOW_SPEC_POLL_INTERVAL_MS : POLL_INTERVAL_MS;
+}
+
+export function shouldPollSystemMetricsDetails({
+  pollCount,
+  forceDetailed = false,
+}: {
+  pollCount: number;
+  forceDetailed?: boolean;
+}) {
+  if (forceDetailed) {
+    return true;
+  }
+
+  return pollCount === 0 || pollCount % DETAIL_POLL_EVERY === 0;
+}
+
+export function combineOpenCircuitCount({
+  localCount,
+  clusterCount,
+  previous,
+}: {
+  localCount: number | null | undefined;
+  clusterCount: number | null | undefined;
+  previous: number;
+}) {
+  const nextValue = Number(localCount ?? 0) + Number(clusterCount ?? 0);
+  if (!Number.isFinite(nextValue)) {
+    return previous;
+  }
+
+  return nextValue;
+}
 
 const initialSnapshot: MonitorSnapshot = {
   mode: "NORMAL",
@@ -407,6 +456,10 @@ export function useSystemMetrics(): UseSystemMetricsResult {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const isLowSpecMode = useMemo(
+    () => typeof document !== "undefined" && document.documentElement.classList.contains("low-spec"),
+    [],
+  );
   const historyRef = useRef(history);
   const snapshotRef = useRef(snapshot);
   const alertsRef = useRef(alerts);
@@ -416,11 +469,22 @@ export function useSystemMetrics(): UseSystemMetricsResult {
   const inFlightRef = useRef(false);
   const mountedRef = useRef(true);
   const pollControllerRef = useRef<AbortController | null>(null);
+  const scheduledPollRef = useRef<number | null>(null);
+  const pollCycleRef = useRef(0);
+  const visibilityHiddenRef = useRef(
+    typeof document !== "undefined" && document.visibilityState === "hidden",
+  );
+  const scheduleNextPollRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      if (scheduledPollRef.current !== null) {
+        window.clearTimeout(scheduledPollRef.current);
+        scheduledPollRef.current = null;
+      }
+      scheduleNextPollRef.current = null;
       pollControllerRef.current?.abort();
       pollControllerRef.current = null;
     };
@@ -450,21 +514,42 @@ export function useSystemMetrics(): UseSystemMetricsResult {
     endpointStateRef.current = endpointState;
   }, [endpointState]);
 
-  const pollMetrics = useCallback(async () => {
+  const clearScheduledPoll = useCallback(() => {
+    if (scheduledPollRef.current !== null) {
+      window.clearTimeout(scheduledPollRef.current);
+      scheduledPollRef.current = null;
+    }
+  }, []);
+
+  const pollMetrics = useCallback(async ({ forceDetailed = false }: { forceDetailed?: boolean } = {}) => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     const controller = new AbortController();
     pollControllerRef.current = controller;
+    const shouldFetchDetails = shouldPollSystemMetricsDetails({
+      pollCount: pollCycleRef.current,
+      forceDetailed,
+    });
+    pollCycleRef.current += 1;
 
     try {
-      const [healthRes, modeRes, workersRes, alertsRes, alertHistoryRes, explainRes] = await Promise.all([
-        getSystemHealth({ signal: controller.signal }),
-        getSystemMode({ signal: controller.signal }),
-        getWorkers({ signal: controller.signal }),
-        getAlerts({ signal: controller.signal }),
-        getAlertHistory({ signal: controller.signal }),
-        getIntelligenceExplain({ signal: controller.signal }),
+      const [coreResponses, detailResponses] = await Promise.all([
+        Promise.all([
+          getSystemHealth({ signal: controller.signal }),
+          getSystemMode({ signal: controller.signal }),
+          getWorkers({ signal: controller.signal }),
+          getAlerts({ signal: controller.signal }),
+        ]),
+        shouldFetchDetails
+          ? Promise.all([
+              getAlertHistory({ signal: controller.signal }),
+              getIntelligenceExplain({ signal: controller.signal }),
+            ])
+          : Promise.resolve([null, null] as const),
       ]);
+
+      const [healthRes, modeRes, workersRes, alertsRes] = coreResponses;
+      const [alertHistoryRes, explainRes] = detailResponses;
 
       if (controller.signal.aborted || !mountedRef.current) {
         return;
@@ -519,17 +604,17 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       const status403Count = toFixedNumber(Number(healthRes.data?.status403Count ?? previous.status403Count), 2);
       const status429Count = toFixedNumber(Number(healthRes.data?.status429Count ?? previous.status429Count), 2);
       const openCircuitCount = toFixedNumber(
-        Number(
-          (healthRes.data?.localOpenCircuitCount ?? 0)
-          + (healthRes.data?.clusterOpenCircuitCount ?? 0)
-          || previous.openCircuitCount,
-        ),
+        combineOpenCircuitCount({
+          localCount: healthRes.data?.localOpenCircuitCount,
+          clusterCount: healthRes.data?.clusterOpenCircuitCount,
+          previous: previous.openCircuitCount,
+        }),
         2,
       );
       const workerCount = Number(workersRes.data?.count ?? healthRes.data?.workerCount ?? previous.workerCount);
       const maxWorkers = Number(workersRes.data?.maxWorkers ?? healthRes.data?.maxWorkers ?? previous.maxWorkers);
       const nextAlerts = alertsRes.data?.alerts ?? alertsRef.current;
-      const nextAlertHistory = alertHistoryRes.data?.incidents ?? alertHistoryRef.current;
+      const nextAlertHistory = alertHistoryRes?.data?.incidents ?? alertHistoryRef.current;
       const activeAlertCount = Number(healthRes.data?.activeAlertCount ?? nextAlerts.length);
 
       const provisionalSnapshot: MonitorSnapshot = {
@@ -581,7 +666,7 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       const snapshotChanged = !snapshotsEqual(snapshotRef.current, nextSnapshot);
       const alertsChanged = !alertsEqual(alertsRef.current, nextAlerts);
       const alertHistoryChanged = !alertHistoryEqual(alertHistoryRef.current, nextAlertHistory);
-      const nextIntelligence = explainRes.data ?? intelligenceRef.current;
+      const nextIntelligence = explainRes?.data ?? intelligenceRef.current;
       const intelligenceChanged = !explainabilityEqual(intelligenceRef.current, nextIntelligence);
       if (snapshotChanged) {
         if (mountedRef.current) {
@@ -609,8 +694,8 @@ export function useSystemMetrics(): UseSystemMetricsResult {
         mode: modeRes.state,
         workers: workersRes.state,
         alerts: alertsRes.state,
-        alertHistory: alertHistoryRes.state,
-        explain: explainRes.state,
+        alertHistory: alertHistoryRes?.state ?? endpointStateRef.current.alertHistory,
+        explain: explainRes?.state ?? endpointStateRef.current.explain,
       };
       const endpointChanged = !endpointStatesEqual(endpointStateRef.current, nextEndpointState);
       if (endpointChanged) {
@@ -641,12 +726,64 @@ export function useSystemMetrics(): UseSystemMetricsResult {
   }, []);
 
   useEffect(() => {
-    pollMetrics();
-    const timer = window.setInterval(pollMetrics, POLL_INTERVAL_MS);
-    return () => {
-      window.clearInterval(timer);
+    const scheduleNextPoll = () => {
+      clearScheduledPoll();
+      if (!mountedRef.current) {
+        return;
+      }
+
+      const delay = resolveSystemMetricsPollIntervalMs({
+        hidden: visibilityHiddenRef.current,
+        lowSpec: isLowSpecMode,
+      });
+
+      scheduledPollRef.current = window.setTimeout(() => {
+        void pollMetrics();
+      }, delay);
     };
-  }, [pollMetrics]);
+
+    scheduleNextPollRef.current = scheduleNextPoll;
+
+    const runPoll = async (forceDetailed = false) => {
+      await pollMetrics({ forceDetailed });
+      if (!mountedRef.current) {
+        return;
+      }
+
+      scheduleNextPoll();
+    };
+
+    const handleVisibilityChange = () => {
+      visibilityHiddenRef.current = document.visibilityState === "hidden";
+      clearScheduledPoll();
+
+      if (visibilityHiddenRef.current) {
+        scheduleNextPoll();
+        return;
+      }
+
+      void runPoll(true);
+    };
+
+    void runPoll(true);
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+
+    return () => {
+      scheduleNextPollRef.current = null;
+      clearScheduledPoll();
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
+    };
+  }, [clearScheduledPoll, isLowSpecMode, pollMetrics]);
+
+  const refreshNow = useCallback(async () => {
+    clearScheduledPoll();
+    await pollMetrics({ forceDetailed: true });
+    scheduleNextPollRef.current?.();
+  }, [clearScheduledPoll, pollMetrics]);
 
   const accessDenied = useMemo(
     () =>
@@ -687,6 +824,6 @@ export function useSystemMetrics(): UseSystemMetricsResult {
     endpointState,
     accessDenied,
     hasNetworkFailure,
-    refreshNow: pollMetrics,
+    refreshNow,
   };
 }
