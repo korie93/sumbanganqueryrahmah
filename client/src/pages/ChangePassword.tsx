@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { KeyRound, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,13 +22,40 @@ export default function ChangePasswordPage({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const mountedRef = useRef(true);
+  const changePasswordAbortControllerRef = useRef<AbortController | null>(null);
+  const redirectTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      changePasswordAbortControllerRef.current?.abort();
+      changePasswordAbortControllerRef.current = null;
+      if (redirectTimeoutRef.current) {
+        window.clearTimeout(redirectTimeoutRef.current);
+        redirectTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const handleLogout = () => {
+    changePasswordAbortControllerRef.current?.abort();
+    changePasswordAbortControllerRef.current = null;
+    if (redirectTimeoutRef.current) {
+      window.clearTimeout(redirectTimeoutRef.current);
+      redirectTimeoutRef.current = null;
+    }
     clearAuthenticatedUserStorage();
     window.location.href = "/";
   };
 
   const handleSubmit = async () => {
+    if (loading || changePasswordAbortControllerRef.current) {
+      return;
+    }
+
     setError("");
     setSuccessMessage("");
     setLoading(true);
@@ -44,15 +71,27 @@ export default function ChangePasswordPage({
         return;
       }
 
+      const controller = new AbortController();
+      changePasswordAbortControllerRef.current = controller;
+
       const response = await changeMyPassword({
         currentPassword,
         newPassword,
+      }, {
+        signal: controller.signal,
       });
+      if (!mountedRef.current || controller.signal.aborted) {
+        return;
+      }
 
       if (response?.forceLogout) {
         clearAuthenticatedUserStorage();
         setSuccessMessage("Password updated. Please login again.");
-        window.setTimeout(() => {
+        if (redirectTimeoutRef.current) {
+          window.clearTimeout(redirectTimeoutRef.current);
+        }
+        redirectTimeoutRef.current = window.setTimeout(() => {
+          redirectTimeoutRef.current = null;
           window.location.href = "/";
         }, 900);
         return;
@@ -61,9 +100,18 @@ export default function ChangePasswordPage({
       localStorage.removeItem("forcePasswordChange");
       setSuccessMessage("Password updated successfully.");
     } catch (submitError) {
+      if (
+        (submitError instanceof DOMException && submitError.name === "AbortError") ||
+        !mountedRef.current
+      ) {
+        return;
+      }
       setError(getApiErrorMessage(submitError, "Failed to change password."));
     } finally {
-      setLoading(false);
+      changePasswordAbortControllerRef.current = null;
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 

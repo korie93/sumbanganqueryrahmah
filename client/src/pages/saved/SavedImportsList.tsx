@@ -12,6 +12,7 @@ interface SavedImportsListProps {
   imports: ImportItem[];
   isSuperuser: boolean;
   filesOpen: boolean;
+  actionsDisabled: boolean;
   onFilesOpenChange: (open: boolean) => void;
   onView: (item: ImportItem) => void;
   onRename: (item: ImportItem) => void;
@@ -29,6 +30,7 @@ export function SavedImportsList({
   imports,
   isSuperuser,
   filesOpen,
+  actionsDisabled,
   onFilesOpenChange,
   onView,
   onRename,
@@ -84,6 +86,7 @@ export function SavedImportsList({
                   checked={allVisibleSelected || (partiallySelected ? "indeterminate" : false)}
                   onCheckedChange={(checked) => onToggleSelectAllVisible(Boolean(checked))}
                   aria-label="Select all visible imports"
+                  disabled={actionsDisabled}
                 />
                 <span className="text-sm text-muted-foreground">
                   Select all visible files
@@ -103,6 +106,7 @@ export function SavedImportsList({
                       checked={selectedImportIds.has(item.id)}
                       onCheckedChange={(checked) => onToggleSelected(item.id, Boolean(checked))}
                       aria-label={`Select ${item.name}`}
+                      disabled={actionsDisabled}
                     />
                   ) : null}
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -130,6 +134,7 @@ export function SavedImportsList({
                       variant="outline"
                       size="sm"
                       onClick={() => onRename(item)}
+                      disabled={actionsDisabled}
                       data-testid={`button-rename-${item.id}`}
                     >
                       <Edit2 className="w-4 h-4 mr-1" />
@@ -151,6 +156,7 @@ export function SavedImportsList({
                       size="sm"
                       onClick={() => onDelete(item)}
                       className="text-destructive"
+                      disabled={actionsDisabled}
                       data-testid={`button-delete-${item.id}`}
                     >
                       <Trash2 className="w-4 h-4" />

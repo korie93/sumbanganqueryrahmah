@@ -66,6 +66,13 @@ export type CollectionNicknameAggregate = {
   totalAmount: number;
 };
 
+export type CollectionNicknameDailyAggregate = {
+  nickname: string;
+  paymentDate: string;
+  totalRecords: number;
+  totalAmount: number;
+};
+
 export type CollectionMonthlySummary = {
   month: number;
   monthName: string;
@@ -411,6 +418,13 @@ type CategoryRule = {
     createdByLogin?: string;
     nicknames?: string[];
   }): Promise<CollectionNicknameAggregate[]>;
+  summarizeCollectionRecordsByNicknameAndPaymentDate(filters?: {
+    from?: string;
+    to?: string;
+    search?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+  }): Promise<CollectionNicknameDailyAggregate[]>;
   summarizeCollectionRecordsOlderThan(beforeDate: string): Promise<CollectionRecordAggregate>;
   purgeCollectionRecordsOlderThan(beforeDate: string): Promise<{
     totalRecords: number;

@@ -12,6 +12,10 @@ import { AnalysisDuplicatesPanel, AnalysisFilesList } from "@/pages/analysis/Ana
 import type { AllAnalysisResult, AnalysisData, AnalysisMode, AnalysisProps, SingleAnalysisResult } from "@/pages/analysis/types";
 import { getCategoryBarData, getGenderPieData, getPaginatedItems, TABLE_PAGE_SIZE } from "@/pages/analysis/utils";
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export default function Analysis({ onNavigate }: AnalysisProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -25,6 +29,8 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
   const [filesListOpen, setFilesListOpen] = useState(true);
   const [tablePages, setTablePages] = useState<Record<string, number>>({});
   const copyTimersRef = useRef<number[]>([]);
+  const analysisAbortControllerRef = useRef<AbortController | null>(null);
+  const analysisRequestIdRef = useRef(0);
   const { toast } = useToast();
 
   const toggleSection = useCallback((key: string) => {
@@ -41,20 +47,32 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
   }, []);
 
   const fetchAllAnalysis = useCallback(async () => {
+    analysisAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    analysisAbortControllerRef.current = controller;
+    const requestId = ++analysisRequestIdRef.current;
     setLoading(true);
     setError("");
     setMode("all");
     try {
-      const data = await analyzeAll();
+      const data = await analyzeAll({ signal: controller.signal });
+      if (requestId !== analysisRequestIdRef.current) {
+        return;
+      }
       if (data.totalImports === 0) {
         setError("No saved files to analyze. Please import a file first.");
       } else {
         setAllResult(data);
       }
     } catch (fetchError: unknown) {
+      if (isAbortError(fetchError) || requestId !== analysisRequestIdRef.current) {
+        return;
+      }
       setError(fetchError instanceof Error ? fetchError.message : "Failed to analyze data.");
     } finally {
-      setLoading(false);
+      if (requestId === analysisRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -68,16 +86,28 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
       return;
     }
 
+    analysisAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    analysisAbortControllerRef.current = controller;
+    const requestId = ++analysisRequestIdRef.current;
     setLoading(true);
     setError("");
     setMode("single");
     try {
-      const data = await analyzeImport(importId);
+      const data = await analyzeImport(importId, { signal: controller.signal });
+      if (requestId !== analysisRequestIdRef.current) {
+        return;
+      }
       setSingleResult(data);
     } catch (fetchError: unknown) {
+      if (isAbortError(fetchError) || requestId !== analysisRequestIdRef.current) {
+        return;
+      }
       setError(fetchError instanceof Error ? fetchError.message : "Failed to analyze data.");
     } finally {
-      setLoading(false);
+      if (requestId === analysisRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [fetchAllAnalysis]);
 
@@ -87,6 +117,7 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
 
   useEffect(() => {
     return () => {
+      analysisAbortControllerRef.current?.abort();
       copyTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
       copyTimersRef.current = [];
     };

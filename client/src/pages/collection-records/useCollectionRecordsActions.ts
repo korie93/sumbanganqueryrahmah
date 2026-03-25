@@ -21,6 +21,18 @@ export type DeleteRecordErrorFeedback = {
   description: string;
 };
 
+type CollectionRecordsExportModule = typeof import("@/pages/collection-records/export");
+
+let collectionRecordsExportModulePromise: Promise<CollectionRecordsExportModule> | null = null;
+
+function loadCollectionRecordsExportModule() {
+  if (!collectionRecordsExportModulePromise) {
+    collectionRecordsExportModulePromise = import("@/pages/collection-records/export");
+  }
+
+  return collectionRecordsExportModulePromise;
+}
+
 export function buildDeleteRecordErrorFeedback(error: unknown): DeleteRecordErrorFeedback {
   const apiErrorDetails = parseCollectionApiErrorDetails(error);
   if (
@@ -40,6 +52,22 @@ export function buildDeleteRecordErrorFeedback(error: unknown): DeleteRecordErro
     title: "Failed to Delete Record",
     description: apiErrorDetails.message || parseApiError(error),
   };
+}
+
+export function resolveCollectionRecordsExportBlockReason(options: {
+  visibleRecordsLength: number;
+  exportingExcel: boolean;
+  exportingPdf: boolean;
+}) {
+  if (options.visibleRecordsLength === 0) {
+    return "no_data";
+  }
+
+  if (options.exportingExcel || options.exportingPdf) {
+    return "busy";
+  }
+
+  return null;
 }
 
 type UseCollectionRecordsActionsArgs = {
@@ -68,6 +96,7 @@ export function useCollectionRecordsActions({
   const purgeSummaryRequestIdRef = useRef(0);
   const deleteMutationInFlightRef = useRef(false);
   const purgeMutationInFlightRef = useRef(false);
+  const exportMutationInFlightRef = useRef<"excel" | "pdf" | null>(null);
   const deleteMutationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const [exportingExcel, setExportingExcel] = useState(false);
@@ -258,7 +287,17 @@ export function useCollectionRecordsActions({
   ]);
 
   const handleExportExcel = useCallback(async () => {
-    if (visibleRecords.length === 0 || exportingExcel) {
+    const blockReason = resolveCollectionRecordsExportBlockReason({
+      visibleRecordsLength: visibleRecords.length,
+      exportingExcel,
+      exportingPdf,
+    });
+
+    if (blockReason === "busy" || exportMutationInFlightRef.current) {
+      return;
+    }
+
+    if (blockReason === "no_data") {
       toast({
         title: "Tiada Data",
         description: "Tiada rekod untuk diexport.",
@@ -267,11 +306,10 @@ export function useCollectionRecordsActions({
       return;
     }
 
+    exportMutationInFlightRef.current = "excel";
     setExportingExcel(true);
     try {
-      const { exportCollectionRecordsToExcel } = await import(
-        "@/pages/collection-records/export"
-      );
+      const { exportCollectionRecordsToExcel } = await loadCollectionRecordsExportModule();
       await exportCollectionRecordsToExcel({
         visibleRecords,
         fromDate,
@@ -287,12 +325,14 @@ export function useCollectionRecordsActions({
         variant: "destructive",
       });
     } finally {
+      exportMutationInFlightRef.current = null;
       if (!isMountedRef.current) return;
       setExportingExcel(false);
     }
   }, [
     canUseNicknameFilter,
     exportingExcel,
+    exportingPdf,
     fromDate,
     nicknameFilter,
     summary,
@@ -302,7 +342,17 @@ export function useCollectionRecordsActions({
   ]);
 
   const handleExportPdf = useCallback(async () => {
-    if (visibleRecords.length === 0 || exportingPdf) {
+    const blockReason = resolveCollectionRecordsExportBlockReason({
+      visibleRecordsLength: visibleRecords.length,
+      exportingExcel,
+      exportingPdf,
+    });
+
+    if (blockReason === "busy" || exportMutationInFlightRef.current) {
+      return;
+    }
+
+    if (blockReason === "no_data") {
       toast({
         title: "Tiada Data",
         description: "Tiada rekod untuk diexport.",
@@ -311,11 +361,10 @@ export function useCollectionRecordsActions({
       return;
     }
 
+    exportMutationInFlightRef.current = "pdf";
     setExportingPdf(true);
     try {
-      const { exportCollectionRecordsToPdf } = await import(
-        "@/pages/collection-records/export"
-      );
+      const { exportCollectionRecordsToPdf } = await loadCollectionRecordsExportModule();
       await exportCollectionRecordsToPdf({
         visibleRecords,
         fromDate,
@@ -331,11 +380,13 @@ export function useCollectionRecordsActions({
         variant: "destructive",
       });
     } finally {
+      exportMutationInFlightRef.current = null;
       if (!isMountedRef.current) return;
       setExportingPdf(false);
     }
   }, [
     canUseNicknameFilter,
+    exportingExcel,
     exportingPdf,
     fromDate,
     nicknameFilter,

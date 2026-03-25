@@ -14,6 +14,7 @@ import {
 import type { CollectionStoragePort, ListQuery } from "./collection-service-support";
 
 type DailyOverviewTimelineSummary = ReturnType<typeof aggregateCollectionDailyTimelines>["summary"];
+const DAILY_OVERVIEW_FALLBACK_PAGE_SIZE = 1000;
 
 export type DailyResolvedUser = {
   id: string;
@@ -49,6 +50,172 @@ function roundMoney(value: number): number {
 
 export class CollectionDailyOverviewService {
   constructor(private readonly storage: CollectionStoragePort) {}
+
+  private createDailySummaryEntry(): {
+    amountByDate: Map<string, number>;
+    customerCountByDate: Map<string, number>;
+  } {
+    return {
+      amountByDate: new Map<string, number>(),
+      customerCountByDate: new Map<string, number>(),
+    };
+  }
+
+  private async loadDailySummaryFallbackRecords(params: {
+    from: string;
+    to: string;
+    nickname: string;
+  }) {
+    const records: Awaited<ReturnType<CollectionStoragePort["listCollectionRecords"]>> = [];
+    let offset = 0;
+
+    for (;;) {
+      const batch = await this.storage.listCollectionRecords({
+        from: params.from,
+        to: params.to,
+        nicknames: [params.nickname],
+        limit: DAILY_OVERVIEW_FALLBACK_PAGE_SIZE,
+        offset,
+      });
+
+      if (!Array.isArray(batch) || batch.length === 0) {
+        break;
+      }
+
+      records.push(...batch);
+
+      if (batch.length < DAILY_OVERVIEW_FALLBACK_PAGE_SIZE) {
+        break;
+      }
+
+      offset += batch.length;
+    }
+
+    return records;
+  }
+
+  private async buildDailySummaryMaps(params: {
+    from: string;
+    to: string;
+    username: string;
+  }): Promise<{
+    amountByDate: Map<string, number>;
+    customerCountByDate: Map<string, number>;
+  }> {
+    const nickname = String(params.username || "").trim();
+    const summaryRows =
+      typeof this.storage.summarizeCollectionRecordsByNicknameAndPaymentDate === "function"
+        ? await this.storage.summarizeCollectionRecordsByNicknameAndPaymentDate({
+            from: params.from,
+            to: params.to,
+            nicknames: [nickname],
+          })
+        : null;
+
+    const amountByDate = new Map<string, number>();
+    const customerCountByDate = new Map<string, number>();
+
+    if (Array.isArray(summaryRows)) {
+      for (const row of summaryRows) {
+        const key = String(row.paymentDate || "");
+        if (!key) continue;
+        amountByDate.set(key, roundMoney(Number(row.totalAmount || 0)));
+        customerCountByDate.set(key, Number(row.totalRecords || 0));
+      }
+      return {
+        amountByDate,
+        customerCountByDate,
+      };
+    }
+
+    const records = await this.loadDailySummaryFallbackRecords({
+      from: params.from,
+      to: params.to,
+      nickname,
+    });
+
+    for (const record of records) {
+      const key = record.paymentDate;
+      const amount = Number(record.amount || 0);
+      amountByDate.set(key, roundMoney((amountByDate.get(key) || 0) + (Number.isFinite(amount) ? amount : 0)));
+      customerCountByDate.set(key, (customerCountByDate.get(key) || 0) + 1);
+    }
+
+    return {
+      amountByDate,
+      customerCountByDate,
+    };
+  }
+
+  private async buildDailySummaryMapsByUsername(params: {
+    from: string;
+    to: string;
+    usernames: string[];
+  }): Promise<
+    Map<
+      string,
+      {
+        amountByDate: Map<string, number>;
+        customerCountByDate: Map<string, number>;
+      }
+    >
+  > {
+    const normalizedUsernames = Array.from(
+      new Set(
+        params.usernames
+          .map((value) => normalizeCollectionText(value))
+          .filter(Boolean),
+      ),
+    );
+    const summaryByUsername = new Map<
+      string,
+      {
+        amountByDate: Map<string, number>;
+        customerCountByDate: Map<string, number>;
+      }
+    >(
+      normalizedUsernames.map((username) => [
+        username.toLowerCase(),
+        this.createDailySummaryEntry(),
+      ]),
+    );
+
+    if (
+      normalizedUsernames.length > 0
+      && typeof this.storage.summarizeCollectionRecordsByNicknameAndPaymentDate === "function"
+    ) {
+      const summaryRows = await this.storage.summarizeCollectionRecordsByNicknameAndPaymentDate({
+        from: params.from,
+        to: params.to,
+        nicknames: normalizedUsernames,
+      });
+
+      for (const row of summaryRows) {
+        const nicknameKey = normalizeCollectionText(row.nickname).toLowerCase();
+        if (!nicknameKey || !summaryByUsername.has(nicknameKey)) continue;
+        const dateKey = String(row.paymentDate || "");
+        if (!dateKey) continue;
+        const summaryEntry = summaryByUsername.get(nicknameKey)!;
+        summaryEntry.amountByDate.set(dateKey, roundMoney(Number(row.totalAmount || 0)));
+        summaryEntry.customerCountByDate.set(dateKey, Number(row.totalRecords || 0));
+      }
+
+      return summaryByUsername;
+    }
+
+    const fallbackEntries = await Promise.all(
+      normalizedUsernames.map(async (username) => [
+        username.toLowerCase(),
+        await this.buildDailySummaryMaps({
+          from: params.from,
+          to: params.to,
+          username,
+        }),
+      ] as const),
+    );
+
+    return new Map(fallbackEntries);
+  }
 
   private parseRequestedDailyUsernames(query: ListQuery): string[] {
     const rawValues: unknown[] = [];
@@ -237,9 +404,16 @@ export class CollectionDailyOverviewService {
     const daysInMonth = new Date(year, month, 0).getDate();
     const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
     const monthEnd = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
-    const calendarRows = await this.storage.listCollectionDailyCalendar({ year, month });
     const currentNicknameLower = normalizeCollectionText(currentNickname).toLowerCase();
     const currentUsernameLower = normalizeCollectionText(user.username).toLowerCase();
+    const [calendarRows, summariesByUsername] = await Promise.all([
+      this.storage.listCollectionDailyCalendar({ year, month }),
+      this.buildDailySummaryMapsByUsername({
+        from: monthStart,
+        to: monthEnd,
+        usernames: selectedUsers.map((item) => item.username),
+      }),
+    ]);
 
     const bundles: DailyOverviewBundle[] = await Promise.all(
       selectedUsers.map(async (selectedUser) => {
@@ -250,25 +424,15 @@ export class CollectionDailyOverviewService {
           currentNicknameLower !== currentUsernameLower
             ? [currentUsernameLower]
             : [];
-        const [target, records] = await Promise.all([
-          this.getDailyTargetForOwner(selectedUser.username, year, month, fallbackUsernames),
-          this.storage.listCollectionRecords({
-            from: monthStart,
-            to: monthEnd,
-            nicknames: [selectedUser.username],
-            limit: 5000,
-            offset: 0,
-          }),
-        ]);
-
-        const amountByDate = new Map<string, number>();
-        const customerCountByDate = new Map<string, number>();
-        for (const record of records) {
-          const key = record.paymentDate;
-          const amount = Number(record.amount || 0);
-          amountByDate.set(key, roundMoney((amountByDate.get(key) || 0) + (Number.isFinite(amount) ? amount : 0)));
-          customerCountByDate.set(key, (customerCountByDate.get(key) || 0) + 1);
-        }
+        const target = await this.getDailyTargetForOwner(
+          selectedUser.username,
+          year,
+          month,
+          fallbackUsernames,
+        );
+        const records =
+          summariesByUsername.get(selectedUser.username.toLowerCase()) || this.createDailySummaryEntry();
+        const { amountByDate, customerCountByDate } = records;
 
         return {
           user: selectedUser,

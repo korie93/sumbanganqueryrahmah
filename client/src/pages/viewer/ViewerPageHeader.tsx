@@ -12,7 +12,7 @@ interface ViewerPageHeaderProps {
   showFilters: boolean;
   filterCount: number;
   isSuperuser: boolean;
-  exportingPdf: boolean;
+  exportBusy: boolean;
   filteredRowsCount: number;
   selectedRowCount: number;
   hasFilteredSubset: boolean;
@@ -37,7 +37,7 @@ export function ViewerPageHeader({
   showFilters,
   filterCount,
   isSuperuser,
-  exportingPdf,
+  exportBusy,
   filteredRowsCount,
   selectedRowCount,
   hasFilteredSubset,
@@ -100,7 +100,7 @@ export function ViewerPageHeader({
 
         {isSuperuser && rowsCount > 0 ? (
           <ViewerExportMenu
-            exportingPdf={exportingPdf}
+            exportBusy={exportBusy}
             rowsCount={rowsCount}
             filteredRowsCount={filteredRowsCount}
             selectedRowCount={selectedRowCount}

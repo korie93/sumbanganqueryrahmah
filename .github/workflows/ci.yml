@@ -125,6 +125,9 @@ jobs:
       - name: Verify DB schema governance
         run: npm run verify:db-schema-governance
 
+      - name: Run DB bootstrap integration tests
+        run: npm run test:db-integration
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 

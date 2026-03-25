@@ -24,6 +24,7 @@ import {
   listCollectionRecords,
   purgeCollectionRecordsOlderThan,
   summarizeCollectionRecords,
+  summarizeCollectionRecordsByNicknameAndPaymentDate,
   summarizeCollectionRecordsByNickname,
   summarizeCollectionRecordsOlderThan,
   updateCollectionRecord,
@@ -66,6 +67,7 @@ import type {
   CollectionMonthlySummary,
   CollectionNicknameAuthProfile,
   CollectionNicknameSession,
+  CollectionNicknameDailyAggregate,
   CollectionRecord,
   CollectionRecordReceipt,
   CollectionStaffNickname,
@@ -336,6 +338,16 @@ export class CollectionRepository {
     nicknames?: string[];
   }): Promise<Array<{ nickname: string; totalRecords: number; totalAmount: number }>> {
     return summarizeCollectionRecordsByNickname(filters);
+  }
+
+  async summarizeCollectionRecordsByNicknameAndPaymentDate(filters?: {
+    from?: string;
+    to?: string;
+    search?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+  }): Promise<CollectionNicknameDailyAggregate[]> {
+    return summarizeCollectionRecordsByNicknameAndPaymentDate(filters);
   }
 
   async summarizeCollectionRecordsOlderThan(beforeDate: string): Promise<{ totalRecords: number; totalAmount: number }> {

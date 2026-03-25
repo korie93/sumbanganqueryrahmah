@@ -18,10 +18,20 @@ import {
   isValidDate,
   parseApiError,
 } from "@/pages/collection/utils";
+import {
+  buildCollectionRecordsCacheKey,
+  createCollectionRecordsCache,
+} from "@/pages/collection-records/records-query-cache";
 
 type UseCollectionRecordsDataArgs = {
   canUseNicknameFilter: boolean;
 };
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : error instanceof Error && error.name === "AbortError";
+}
 
 export function useCollectionRecordsData({
   canUseNicknameFilter,
@@ -30,6 +40,8 @@ export function useCollectionRecordsData({
   const isMountedRef = useRef(true);
   const recordsRequestIdRef = useRef(0);
   const nicknamesRequestIdRef = useRef(0);
+  const recordsAbortControllerRef = useRef<AbortController | null>(null);
+  const recordsCacheRef = useRef(createCollectionRecordsCache());
   const skipInitialAutoFetchRef = useRef(true);
   const skipNextAutoFetchRef = useRef(false);
 
@@ -63,11 +75,21 @@ export function useCollectionRecordsData({
     [canUseNicknameFilter, fromDate, nicknameFilter, searchInput, toDate],
   );
 
+  const abortRecordsRequest = useCallback(() => {
+    if (recordsAbortControllerRef.current) {
+      recordsAbortControllerRef.current.abort();
+      recordsAbortControllerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
+      recordsRequestIdRef.current += 1;
+      abortRecordsRequest();
+      recordsCacheRef.current.clear();
     };
-  }, []);
+  }, [abortRecordsRequest]);
 
   const loadNicknames = useCallback(async () => {
     const requestId = ++nicknamesRequestIdRef.current;
@@ -98,12 +120,34 @@ export function useCollectionRecordsData({
   const loadRecords = useCallback(
     async (filters?: CollectionRecordFilters) => {
       const requestId = ++recordsRequestIdRef.current;
+      const cacheKey = buildCollectionRecordsCacheKey(filters);
+      const cachedEntry = recordsCacheRef.current.get(cacheKey);
+      if (cachedEntry) {
+        abortRecordsRequest();
+        setRecords(cachedEntry.records);
+        setLoadingRecords(false);
+        return;
+      }
+
       setLoadingRecords(true);
       try {
-        const response = await getCollectionRecords(filters);
-        if (!isMountedRef.current || requestId !== recordsRequestIdRef.current) return;
-        setRecords(Array.isArray(response?.records) ? response.records : []);
+        abortRecordsRequest();
+        const controller = new AbortController();
+        recordsAbortControllerRef.current = controller;
+        const response = await getCollectionRecords(filters, { signal: controller.signal });
+        if (
+          controller.signal.aborted ||
+          !isMountedRef.current ||
+          requestId !== recordsRequestIdRef.current
+        ) return;
+        const nextRecords = Array.isArray(response?.records) ? response.records : [];
+        recordsCacheRef.current.set(cacheKey, { records: nextRecords });
+        setRecords(nextRecords);
       } catch (error: unknown) {
+        if (!isMountedRef.current || requestId !== recordsRequestIdRef.current) return;
+        if (isAbortError(error)) {
+          return;
+        }
         if (!isMountedRef.current || requestId !== recordsRequestIdRef.current) return;
         toast({
           title: "Failed to Load Records",
@@ -111,11 +155,17 @@ export function useCollectionRecordsData({
           variant: "destructive",
         });
       } finally {
+        if (
+          recordsAbortControllerRef.current
+          && requestId === recordsRequestIdRef.current
+        ) {
+          recordsAbortControllerRef.current = null;
+        }
         if (!isMountedRef.current || requestId !== recordsRequestIdRef.current) return;
         setLoadingRecords(false);
       }
     },
-    [toast],
+    [abortRecordsRequest, toast],
   );
 
   useEffect(() => {
@@ -128,6 +178,7 @@ export function useCollectionRecordsData({
 
   useEffect(() => {
     const handleCollectionDataChanged = () => {
+      recordsCacheRef.current.clear();
       void loadRecords(buildCurrentFilters());
     };
     window.addEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);

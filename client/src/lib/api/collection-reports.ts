@@ -20,12 +20,16 @@ export async function getCollectionMonthlySummary(filters: { year: number; nickn
   return response.json() as Promise<{ ok: boolean; year: number; summary: CollectionMonthlySummary[] }>;
 }
 
+type CollectionReportRequestOptions = {
+  signal?: AbortSignal;
+};
+
 export async function getCollectionNicknameSummary(filters: {
   from?: string;
   to?: string;
   nicknames: string[];
   summaryOnly?: boolean;
-}) {
+}, options?: CollectionReportRequestOptions) {
   const params = new URLSearchParams();
   if (filters.from) params.set("from", filters.from);
   if (filters.to) params.set("to", filters.to);
@@ -36,7 +40,12 @@ export async function getCollectionNicknameSummary(filters: {
   if (filters.summaryOnly) {
     params.set("summaryOnly", "1");
   }
-  const response = await apiRequest("GET", `/api/collection/nickname-summary?${params.toString()}`);
+  const response = await apiRequest(
+    "GET",
+    `/api/collection/nickname-summary?${params.toString()}`,
+    undefined,
+    options,
+  );
   return response.json() as Promise<{
     ok: boolean;
     nicknames: string[];

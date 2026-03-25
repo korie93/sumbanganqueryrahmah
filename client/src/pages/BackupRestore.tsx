@@ -32,6 +32,7 @@ import {
   getBackupDateRange,
   normalizeBackup,
 } from "@/pages/backup-restore/utils";
+import { resolveBackupsExportBlockReason } from "@/pages/backup-restore/export-guards";
 
 export default function BackupRestore({ userRole, embedded = false }: BackupRestoreProps) {
   const canManageBackups = userRole === "superuser";
@@ -55,6 +56,7 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
   const [lastRestoreResult, setLastRestoreResult] = useState<RestoreResponse | null>(null);
   const [activeBackupJobId, setActiveBackupJobId] = useState<string | null>(null);
   const handledBackupJobIdRef = useRef<string | null>(null);
+  const exportInFlightRef = useRef(false);
   const { toast } = useToast();
   const { notifyMutationError, notifyMutationSuccess } = useMutationFeedback();
   const deferredSearchName = useDeferredValue(searchName.trim());
@@ -331,8 +333,18 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
   };
 
   const handleExportPdf = async () => {
-    if (visibleBackups.length === 0) return;
+    const blockReason = resolveBackupsExportBlockReason({
+      backupsLength: visibleBackups.length,
+      exportingPdf,
+    });
+    if (blockReason === "busy" || exportInFlightRef.current) {
+      return;
+    }
+    if (blockReason === "no_data") {
+      return;
+    }
 
+    exportInFlightRef.current = true;
     setExportingPdf(true);
     try {
       await exportBackupsToPdf(visibleBackups);
@@ -344,6 +356,7 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
         fallbackDescription: error instanceof Error ? error.message : "Failed to export PDF",
       });
     } finally {
+      exportInFlightRef.current = false;
       setExportingPdf(false);
     }
   };
@@ -391,6 +404,7 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
                   variant="ghost"
                   className="w-full justify-start"
                   onClick={() => exportBackupsToCsv(visibleBackups)}
+                  disabled={exportingPdf}
                   data-testid="button-export-csv"
                 >
                   <Download className="w-4 h-4 mr-2" />

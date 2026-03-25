@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Eye, EyeOff, LogIn } from "lucide-react";
 import type { User } from "@/app/types";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -20,6 +20,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const mountedRef = useRef(true);
+  const loginInFlightRef = useRef(false);
+  const loginAbortControllerRef = useRef<AbortController | null>(null);
+  const loginRequestIdRef = useRef(0);
 
   useEffect(() => {
     const rawNotice = sessionStorage.getItem(AUTH_NOTICE_STORAGE_KEY);
@@ -38,20 +42,52 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     }
   }, []);
 
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      loginAbortControllerRef.current?.abort();
+      loginAbortControllerRef.current = null;
+      loginInFlightRef.current = false;
+    };
+  }, []);
+
   const handleLogin = async () => {
+    if (loginInFlightRef.current) {
+      return;
+    }
+
+    loginInFlightRef.current = true;
+    const requestId = loginRequestIdRef.current + 1;
+    loginRequestIdRef.current = requestId;
     setError("");
     setNotice("");
     setLoading(true);
+    let controller: AbortController | null = null;
 
     try {
       if (!username.trim() || !password) {
-        setError("Please enter username and password.");
-        setLoading(false);
+        if (mountedRef.current && loginRequestIdRef.current === requestId) {
+          setError("Please enter username and password.");
+        }
         return;
       }
 
+      controller = new AbortController();
+      loginAbortControllerRef.current = controller;
       const fingerprint = await generateFingerprint();
-      const response = await login(username, password, fingerprint);
+      if (!mountedRef.current || loginRequestIdRef.current !== requestId || controller.signal.aborted) {
+        return;
+      }
+
+      const response = await login(username, password, fingerprint, {
+        signal: controller.signal,
+      });
+
+      if (!mountedRef.current || loginRequestIdRef.current !== requestId || controller.signal.aborted) {
+        return;
+      }
 
       if ("banned" in response) {
         localStorage.setItem("banned", "1");
@@ -99,6 +135,15 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
       onLoginSuccess(authenticatedUser);
     } catch (err: any) {
+      if (
+        err instanceof DOMException &&
+        err.name === "AbortError"
+      ) {
+        return;
+      }
+      if (!mountedRef.current || loginRequestIdRef.current !== requestId) {
+        return;
+      }
       console.error("Login failed:", err);
       let msg = err?.message || "Login failed. Please try again.";
       if (msg.includes("Account is banned") || msg.includes('"banned":true')) {
@@ -106,7 +151,15 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       }
       setError(msg);
     } finally {
-      setLoading(false);
+      if (loginAbortControllerRef.current === controller) {
+        loginAbortControllerRef.current = null;
+      }
+      if (loginRequestIdRef.current === requestId) {
+        loginInFlightRef.current = false;
+      }
+      if (mountedRef.current && loginRequestIdRef.current === requestId) {
+        setLoading(false);
+      }
     }
   };
 

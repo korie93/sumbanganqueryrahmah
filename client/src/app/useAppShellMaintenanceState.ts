@@ -34,10 +34,14 @@ export function useAppShellMaintenanceState({
   useEffect(() => {
     if (!user || user.role === "admin" || user.role === "superuser") return;
     let cancelled = false;
+    let activeController: AbortController | null = null;
 
     const checkMaintenance = async () => {
       try {
-        const state = await getMaintenanceStatus();
+        activeController?.abort();
+        const controller = new AbortController();
+        activeController = controller;
+        const state = await getMaintenanceStatus({ signal: controller.signal });
         if (cancelled) return;
 
         if (state?.maintenance === true) {
@@ -46,7 +50,10 @@ export function useAppShellMaintenanceState({
         } else if (currentPage === "maintenance") {
           setCurrentPage("general-search");
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
         // Ignore maintenance polling errors.
       }
     };
@@ -55,6 +62,8 @@ export function useAppShellMaintenanceState({
     const timer = window.setInterval(checkMaintenance, 15000);
     return () => {
       cancelled = true;
+      activeController?.abort();
+      activeController = null;
       window.clearInterval(timer);
     };
   }, [currentPage, setCurrentPage, user]);

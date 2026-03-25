@@ -168,30 +168,17 @@ export class CollectionDailyOperations {
       throw badRequest("Date is outside selected month.");
     }
 
-    const recordsByUser = await Promise.all(
-      selectedUsernames.map((username) =>
-        this.storage.listCollectionRecords({
-          from: date,
-          to: date,
-          nicknames: [username],
-          limit: 5000,
-          offset: 0,
-        })),
-    );
-    const mergedRecords = recordsByUser
-      .flat()
-      .sort((left, right) => {
-        const leftTime = left.createdAt instanceof Date ? left.createdAt.getTime() : new Date(left.createdAt).getTime();
-        const rightTime = right.createdAt instanceof Date ? right.createdAt.getTime() : new Date(right.createdAt).getTime();
-        if (leftTime !== rightTime) return leftTime - rightTime;
-        return left.id.localeCompare(right.id);
-      });
-
-    const totalRecords = mergedRecords.length;
+    const totalRecords = Math.max(0, Number(dayOverview.customerCount || 0));
     const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
     const page = Math.min(requestedPage, totalPages);
     const offset = (page - 1) * pageSize;
-    const pagedRecords = mergedRecords.slice(offset, offset + pageSize);
+    const pagedRecords = await this.storage.listCollectionRecords({
+      from: date,
+      to: date,
+      nicknames: selectedUsernames,
+      limit: pageSize,
+      offset,
+    });
     const pagedCustomers = pagedRecords.map((record) => ({
       id: record.id,
       customerName: record.customerName,

@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/popover";
 
 interface ViewerExportMenuProps {
-  exportingPdf: boolean;
+  exportBusy: boolean;
   rowsCount: number;
   filteredRowsCount: number;
   selectedRowCount: number;
@@ -20,7 +20,7 @@ interface ViewerExportMenuProps {
 }
 
 export function ViewerExportMenu({
-  exportingPdf,
+  exportBusy,
   rowsCount,
   filteredRowsCount,
   selectedRowCount,
@@ -34,8 +34,8 @@ export function ViewerExportMenu({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" disabled={exportingPdf} data-testid="button-export-menu">
-          {exportingPdf ? (
+        <Button variant="outline" disabled={exportBusy} data-testid="button-export-menu">
+          {exportBusy ? (
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
           ) : (
             <Download className="w-4 h-4 mr-2" />
@@ -83,7 +83,7 @@ export function ViewerExportMenu({
             variant="ghost"
             className="w-full justify-start"
             onClick={() => onExportPdf(false, false)}
-            disabled={exportingPdf}
+            disabled={exportBusy}
             data-testid="button-export-pdf-all"
           >
             <FileText className="w-4 h-4 mr-2" />
@@ -94,7 +94,7 @@ export function ViewerExportMenu({
               variant="ghost"
               className="w-full justify-start"
               onClick={() => onExportPdf(true, false)}
-              disabled={exportingPdf}
+              disabled={exportBusy}
               data-testid="button-export-pdf-filtered"
             >
               <FileText className="w-4 h-4 mr-2" />
@@ -106,7 +106,7 @@ export function ViewerExportMenu({
               variant="ghost"
               className="w-full justify-start"
               onClick={() => onExportPdf(true, true)}
-              disabled={exportingPdf}
+              disabled={exportBusy}
               data-testid="button-export-pdf-selected"
             >
               <FileText className="w-4 h-4 mr-2" />
@@ -119,6 +119,7 @@ export function ViewerExportMenu({
             variant="ghost"
             className="w-full justify-start"
             onClick={() => onExportExcel(false, false)}
+            disabled={exportBusy}
             data-testid="button-export-excel-all"
           >
             <Download className="w-4 h-4 mr-2" />
@@ -129,6 +130,7 @@ export function ViewerExportMenu({
               variant="ghost"
               className="w-full justify-start"
               onClick={() => onExportExcel(true, false)}
+              disabled={exportBusy}
               data-testid="button-export-excel-filtered"
             >
               <Download className="w-4 h-4 mr-2" />
@@ -140,6 +142,7 @@ export function ViewerExportMenu({
               variant="ghost"
               className="w-full justify-start"
               onClick={() => onExportExcel(true, true)}
+              disabled={exportBusy}
               data-testid="button-export-excel-selected"
             >
               <Download className="w-4 h-4 mr-2" />

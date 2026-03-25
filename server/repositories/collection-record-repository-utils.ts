@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
 import type {
   CollectionMonthlySummary,
+  CollectionNicknameDailyAggregate,
   CollectionRecord,
   CollectionRecordReceipt,
   CreateCollectionRecordInput,
@@ -17,6 +18,7 @@ import {
   collectCollectionReceiptPaths,
   extractCollectionRecordIds,
   mapCollectionAggregateRow,
+  mapCollectionNicknameDailyAggregateRows,
   mapCollectionMonthlySummaryRows,
   sumCollectionRowAmounts,
 } from "./collection-record-query-utils";
@@ -162,6 +164,31 @@ export async function summarizeCollectionRecordsByNickname(filters?: {
     totalRecords: Number(row.total_records || 0),
     totalAmount: Number(row.total_amount || 0),
   }));
+}
+
+export async function summarizeCollectionRecordsByNicknameAndPaymentDate(filters?: {
+  from?: string;
+  to?: string;
+  search?: string;
+  createdByLogin?: string;
+  nicknames?: string[];
+}): Promise<CollectionNicknameDailyAggregate[]> {
+  const whereSql = buildCollectionRecordWhereSql(filters);
+
+  const result = await db.execute(sql`
+    SELECT
+      lower(collection_staff_nickname) AS nickname_key,
+      MIN(collection_staff_nickname) AS nickname,
+      payment_date,
+      COUNT(*)::int AS total_records,
+      COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
+    FROM public.collection_records
+    ${whereSql}
+    GROUP BY lower(collection_staff_nickname), payment_date
+    ORDER BY lower(collection_staff_nickname) ASC, payment_date ASC
+  `);
+
+  return mapCollectionNicknameDailyAggregateRows(result.rows || []);
 }
 
 export async function summarizeCollectionRecordsOlderThan(

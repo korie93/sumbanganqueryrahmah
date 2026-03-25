@@ -29,45 +29,45 @@ const runtimeTransitional = (notes) => ({
 export const schemaGovernanceManifest = {
   version: 1,
   tables: {
-    account_activation_tokens: hybridManaged(
-      ["drizzle-schema", "legacy-sql", "runtime-ddl"],
-      "Auth lifecycle remains bootstrapped for backward-compatible normalization.",
+    account_activation_tokens: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "legacy-sql", "runtime-ddl"],
+      "Account activation tokens now have a reviewed Drizzle migration while runtime bootstrap remains additive for backward-compatible cleanup and foreign-key enforcement.",
     ),
-    admin_group_members: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "Collection access tables are modeled in Drizzle but still normalized at runtime.",
-    ),
-    admin_groups: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "Collection access tables are modeled in Drizzle but still normalized at runtime.",
-    ),
-    admin_visible_nicknames: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "Collection access tables are modeled in Drizzle but still normalized at runtime.",
-    ),
-    aeon_branch_postcodes: hybridManaged(
-      ["drizzle-schema", "runtime-ddl", "maintenance-script"],
-      "Spatial lookup tables are shared between typed schema, bootstrap, and import utilities.",
-    ),
-    aeon_branches: hybridManaged(
-      ["drizzle-schema", "runtime-ddl", "maintenance-script"],
-      "Spatial lookup tables are shared between typed schema, bootstrap, and import utilities.",
-    ),
-    ai_category_rules: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "AI support tables are typed in Drizzle while runtime bootstrap keeps older environments aligned.",
-    ),
-    ai_category_stats: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "AI support tables are typed in Drizzle while runtime bootstrap keeps older environments aligned.",
-    ),
-    ai_conversations: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "AI support tables are typed in Drizzle while runtime bootstrap keeps older environments aligned.",
-    ),
-    ai_messages: hybridManaged(
+    admin_group_members: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
-      "The conversation ordering index is already Drizzle-reviewed while the base table remains bootstrapped.",
+      "Collection access membership now has a reviewed Drizzle migration while runtime bootstrap remains additive for cleanup and compatibility.",
+    ),
+    admin_groups: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Collection access groups now have a reviewed Drizzle migration while runtime bootstrap remains additive for cleanup and compatibility.",
+    ),
+    admin_visible_nicknames: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Admin nickname visibility now has a reviewed Drizzle migration while runtime bootstrap remains additive for cleanup and seeding compatibility.",
+    ),
+    aeon_branch_postcodes: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl", "maintenance-script"],
+      "Spatial postcode lookup tables now have a reviewed Drizzle migration while runtime bootstrap and import utilities remain additive compatibility paths.",
+    ),
+    aeon_branches: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl", "maintenance-script"],
+      "Spatial branch lookup tables now have a reviewed Drizzle migration while runtime bootstrap and import utilities remain additive compatibility paths.",
+    ),
+    ai_category_rules: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "AI support rules now have a reviewed Drizzle migration while runtime bootstrap keeps older environments aligned and seeds defaults.",
+    ),
+    ai_category_stats: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "AI support stats now have a reviewed Drizzle migration while runtime bootstrap keeps older environments aligned.",
+    ),
+    ai_conversations: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "AI support conversations now have a reviewed Drizzle migration while runtime bootstrap keeps older environments aligned.",
+    ),
+    ai_messages: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "AI support messages now have a reviewed Drizzle migration while runtime bootstrap keeps older environments aligned.",
     ),
     audit_logs: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
@@ -88,41 +88,41 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Session-ban persistence now has a reviewed Drizzle migration while runtime bootstrap stays idempotent.",
     ),
-    collection_daily_calendar: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "Daily collection calendar remains bootstrapped while still modeled in Drizzle.",
+    collection_daily_calendar: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Daily collection calendar now has a reviewed Drizzle migration while runtime bootstrap remains additive for compatibility.",
     ),
-    collection_daily_targets: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "Daily collection targets remain bootstrapped while still modeled in Drizzle.",
+    collection_daily_targets: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Daily collection targets now have a reviewed Drizzle migration while runtime bootstrap remains additive for compatibility.",
     ),
-    collection_nickname_sessions: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "Nickname session state remains bootstrapped while still modeled in Drizzle.",
+    collection_nickname_sessions: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Nickname session state now has a reviewed Drizzle migration while runtime bootstrap remains additive for cleanup and compatibility.",
     ),
-    collection_record_receipts: hybridManaged(
-      ["drizzle-schema", "legacy-sql", "runtime-ddl"],
-      "Collection record receipts are already represented in typed schema and reviewed SQL, with runtime normalization retained.",
+    collection_record_receipts: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "legacy-sql", "runtime-ddl"],
+      "Collection record receipts now have a reviewed Drizzle migration while runtime bootstrap remains additive for normalization and legacy receipt promotion compatibility.",
     ),
-    collection_records: hybridManaged(
-      ["drizzle-schema", "legacy-sql", "runtime-ddl"],
-      "Collection records are already represented in typed schema and reviewed SQL, with runtime normalization retained.",
+    collection_records: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "legacy-sql", "runtime-ddl"],
+      "Collection records now have a reviewed Drizzle migration while runtime bootstrap remains additive for normalization and legacy receipt compatibility caching.",
     ),
-    collection_staff_nicknames: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "Collection access tables are modeled in Drizzle but still normalized at runtime.",
+    collection_staff_nicknames: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Collection staff nickname access now has a reviewed Drizzle migration while runtime bootstrap remains additive for cleanup and seeding compatibility.",
     ),
-    data_embeddings: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "Embedding tables remain bootstrapped because vector-extension setup still happens at runtime.",
+    data_embeddings: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Embedding tables now have a reviewed Drizzle migration while runtime bootstrap still handles pgvector extension availability and compatibility setup.",
     ),
     data_rows: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Data-row storage now has a reviewed Drizzle migration while runtime bootstrap remains additive for compatibility.",
     ),
-    feature_flags: hybridManaged(
-      ["drizzle-schema", "legacy-sql", "runtime-ddl"],
-      "Enterprise settings tables have reviewed legacy SQL and runtime normalization during the transition to full Drizzle governance.",
+    feature_flags: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "legacy-sql", "runtime-ddl"],
+      "Feature flags now have a reviewed Drizzle migration while runtime bootstrap remains additive for seeding and normalization compatibility.",
     ),
     imports: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
@@ -132,29 +132,29 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Mutation idempotency now has a reviewed Drizzle migration while runtime bootstrap remains the compatibility path.",
     ),
-    password_reset_requests: hybridManaged(
-      ["drizzle-schema", "legacy-sql", "runtime-ddl"],
-      "Auth lifecycle remains bootstrapped for backward-compatible normalization.",
+    password_reset_requests: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "legacy-sql", "runtime-ddl"],
+      "Password reset requests now have a reviewed Drizzle migration while runtime bootstrap remains additive for backward-compatible cleanup and auth-lifecycle normalization.",
     ),
-    role_setting_permissions: hybridManaged(
-      ["drizzle-schema", "legacy-sql", "runtime-ddl"],
-      "Enterprise settings tables have reviewed legacy SQL and runtime normalization during the transition to full Drizzle governance.",
+    role_setting_permissions: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "legacy-sql", "runtime-ddl"],
+      "Role setting permissions now have a reviewed Drizzle migration while runtime bootstrap remains additive for seeding and normalization compatibility.",
     ),
-    setting_categories: hybridManaged(
-      ["drizzle-schema", "legacy-sql", "runtime-ddl"],
-      "Enterprise settings tables have reviewed legacy SQL and runtime normalization during the transition to full Drizzle governance.",
+    setting_categories: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "legacy-sql", "runtime-ddl"],
+      "Setting categories now have a reviewed Drizzle migration while runtime bootstrap remains additive for seeding and normalization compatibility.",
     ),
-    setting_options: hybridManaged(
-      ["drizzle-schema", "legacy-sql", "runtime-ddl"],
-      "Enterprise settings tables have reviewed legacy SQL and runtime normalization during the transition to full Drizzle governance.",
+    setting_options: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "legacy-sql", "runtime-ddl"],
+      "Setting options now have a reviewed Drizzle migration while runtime bootstrap remains additive for dedupe, seeding, and normalization compatibility.",
     ),
-    setting_versions: hybridManaged(
-      ["drizzle-schema", "legacy-sql", "runtime-ddl"],
-      "Enterprise settings tables have reviewed legacy SQL and runtime normalization during the transition to full Drizzle governance.",
+    setting_versions: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "legacy-sql", "runtime-ddl"],
+      "Setting versions now have a reviewed Drizzle migration while runtime bootstrap remains additive for normalization compatibility.",
     ),
-    system_settings: hybridManaged(
-      ["drizzle-schema", "legacy-sql", "runtime-ddl"],
-      "Enterprise settings tables have reviewed legacy SQL and runtime normalization during the transition to full Drizzle governance.",
+    system_settings: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "legacy-sql", "runtime-ddl"],
+      "System settings now have a reviewed Drizzle migration while runtime bootstrap remains additive for seeding and normalization compatibility.",
     ),
     system_stability_patterns: runtimeManaged(
       "Adaptive system-learning storage still belongs to runtime DDL because it is not yet part of the shared application schema.",
@@ -163,9 +163,9 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "User activity now has a reviewed Drizzle migration while runtime bootstrap remains additive for compatibility and cleanup.",
     ),
-    users: hybridManaged(
-      ["drizzle-schema", "legacy-sql", "runtime-ddl"],
-      "User accounts remain bootstrapped for backward-compatible normalization while typed schema and reviewed SQL cover the main shape.",
+    users: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "legacy-sql", "runtime-ddl"],
+      "User accounts now have a reviewed Drizzle migration while runtime bootstrap remains additive for legacy password-hash remediation and backward-compatible normalization.",
     ),
   },
 };

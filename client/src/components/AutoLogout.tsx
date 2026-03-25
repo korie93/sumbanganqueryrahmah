@@ -18,6 +18,7 @@ export default function AutoLogout({
 }: AutoLogoutProps) {
   const timeoutRef = useRef<number | null>(null);
   const heartbeatRef = useRef<number | null>(null);
+  const heartbeatAbortControllerRef = useRef<AbortController | null>(null);
   const reconnectRef = useRef<number | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
   const lastResetByEventRef = useRef<number>(0);
@@ -50,6 +51,11 @@ export default function AutoLogout({
     }
   }, []);
 
+  const clearHeartbeatRequest = useCallback(() => {
+    heartbeatAbortControllerRef.current?.abort();
+    heartbeatAbortControllerRef.current = null;
+  }, []);
+
   const cleanupSocket = useCallback(() => {
     clearReconnect();
 
@@ -70,9 +76,10 @@ export default function AutoLogout({
     reconnectEnabledRef.current = false;
     clearIdleTimeout();
     clearHeartbeat();
+    clearHeartbeatRequest();
     cleanupSocket();
     await onLogout();
-  }, [cleanupSocket, clearHeartbeat, clearIdleTimeout, onLogout]);
+  }, [cleanupSocket, clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout, onLogout]);
 
   const runClientLogout = useCallback(async () => {
     if (logoutStartedRef.current) return;
@@ -80,9 +87,10 @@ export default function AutoLogout({
     reconnectEnabledRef.current = false;
     clearIdleTimeout();
     clearHeartbeat();
+    clearHeartbeatRequest();
     cleanupSocket();
     await onClientLogout();
-  }, [cleanupSocket, clearHeartbeat, clearIdleTimeout, onClientLogout]);
+  }, [cleanupSocket, clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout, onClientLogout]);
 
   const resetTimeout = useCallback(() => {
     lastActivityRef.current = Date.now();
@@ -96,11 +104,15 @@ export default function AutoLogout({
 
   const sendHeartbeat = useCallback(async () => {
     if (logoutStartedRef.current) return;
+    if (heartbeatAbortControllerRef.current) return;
 
     const activityId = localStorage.getItem("activityId");
     const fingerprint = localStorage.getItem("fingerprint");
 
     if (!activityId) return;
+
+    const controller = new AbortController();
+    heartbeatAbortControllerRef.current = controller;
 
     try {
       await activityHeartbeat({
@@ -108,9 +120,22 @@ export default function AutoLogout({
         pcName: navigator.platform || "Unknown",
         browser: navigator.userAgent,
         fingerprint: fingerprint || undefined,
+      }, {
+        signal: controller.signal,
       });
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        !mountedRef.current ||
+        logoutStartedRef.current
+      ) {
+        return;
+      }
       console.warn("Heartbeat failed:", error);
+    } finally {
+      if (heartbeatAbortControllerRef.current === controller) {
+        heartbeatAbortControllerRef.current = null;
+      }
     }
   }, []);
 
@@ -124,9 +149,10 @@ export default function AutoLogout({
       reconnectEnabledRef.current = false;
       clearIdleTimeout();
       clearHeartbeat();
+      clearHeartbeatRequest();
       cleanupSocket();
     };
-  }, [cleanupSocket, clearHeartbeat, clearIdleTimeout]);
+  }, [cleanupSocket, clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout]);
 
   useEffect(() => {
     const events = ["mousedown", "keydown", "touchstart", "click"];
@@ -151,8 +177,9 @@ export default function AutoLogout({
       });
       clearIdleTimeout();
       clearHeartbeat();
+      clearHeartbeatRequest();
     };
-  }, [clearHeartbeat, clearIdleTimeout, heartbeatMs, resetTimeout, sendHeartbeat]);
+  }, [clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout, heartbeatMs, resetTimeout, sendHeartbeat]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {

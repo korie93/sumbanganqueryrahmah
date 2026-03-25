@@ -6,6 +6,7 @@ import {
   collectCollectionReceiptPaths,
   extractCollectionRecordIds,
   mapCollectionAggregateRow,
+  mapCollectionNicknameDailyAggregateRows,
   mapCollectionMonthlySummaryRows,
   sumCollectionRowAmounts,
 } from "../collection-record-query-utils";
@@ -90,6 +91,39 @@ test("aggregate and receipt helpers normalize values and dedupe paths", () => {
       [{ storage_path: "uploads/b.png" }, { storage_path: "uploads/a.png" }],
     ),
     ["uploads/a.png", "uploads/b.png"],
+  );
+});
+
+test("mapCollectionNicknameDailyAggregateRows normalizes nickname and payment-date aggregates", () => {
+  assert.deepEqual(
+    mapCollectionNicknameDailyAggregateRows([
+      {
+        nickname: "Collector Alpha",
+        payment_date: "2026-03-01",
+        total_records: "2",
+        total_amount: "123.45",
+      },
+      {
+        nickname_key: "collector beta",
+        payment_date: "2026-03-02",
+        total_records: 1,
+        total_amount: 88,
+      },
+    ]),
+    [
+      {
+        nickname: "Collector Alpha",
+        paymentDate: "2026-03-01",
+        totalRecords: 2,
+        totalAmount: 123.45,
+      },
+      {
+        nickname: "collector beta",
+        paymentDate: "2026-03-02",
+        totalRecords: 1,
+        totalAmount: 88,
+      },
+    ],
   );
 });
 

@@ -15,6 +15,10 @@ import {
   normalizeNicknameSelection,
   normalizeSummaryRows,
 } from "@/pages/collection-summary/utils";
+import {
+  buildCollectionSummaryCacheKey,
+  createCollectionSummaryCache,
+} from "@/pages/collection-summary/summary-cache";
 
 type UseCollectionSummaryDataArgs = {
   canFilterByNickname: boolean;
@@ -27,6 +31,7 @@ export function useCollectionSummaryData({
   const isMountedRef = useRef(true);
   const summaryRequestIdRef = useRef(0);
   const nicknamesRequestIdRef = useRef(0);
+  const summaryCacheRef = useRef(createCollectionSummaryCache());
   const currentYear = useMemo(() => new Date().getFullYear(), []);
   const yearOptions = useMemo(() => {
     const years: number[] = [];
@@ -48,6 +53,7 @@ export function useCollectionSummaryData({
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
+      summaryCacheRef.current.clear();
     };
   }, []);
 
@@ -95,11 +101,26 @@ export function useCollectionSummaryData({
   const loadSummary = useCallback(
     async (year: number, nicknames?: string[]) => {
       const requestId = ++summaryRequestIdRef.current;
+      const cacheKey = buildCollectionSummaryCacheKey({
+        year,
+        nicknames,
+      });
+      const cachedEntry = summaryCacheRef.current.get(cacheKey);
+      if (cachedEntry) {
+        setSummaryRows(cachedEntry.summaryRows);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
         const response = await getCollectionMonthlySummary({ year, nicknames });
         if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
-        setSummaryRows(normalizeSummaryRows(response?.summary));
+        const normalizedSummaryRows = normalizeSummaryRows(response?.summary);
+        summaryCacheRef.current.set(cacheKey, {
+          summaryRows: normalizedSummaryRows,
+        });
+        setSummaryRows(normalizedSummaryRows);
       } catch (error: unknown) {
         if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
         setSummaryRows(buildEmptySummary());
@@ -151,6 +172,7 @@ export function useCollectionSummaryData({
     if (typeof window === "undefined") return undefined;
 
     const handleCollectionDataChanged = () => {
+      summaryCacheRef.current.clear();
       const year = Number(selectedYear);
       if (!Number.isInteger(year)) return;
       const nicknames =

@@ -1,0 +1,76 @@
+import type { CollectionRecord } from "@/lib/api";
+import type { CollectionRecordFilters } from "@/pages/collection-records/types";
+
+const DEFAULT_COLLECTION_RECORDS_CACHE_LIMIT = 24;
+
+export type CollectionRecordsCacheEntry = {
+  records: CollectionRecord[];
+  totalRecords?: number;
+  totalAmount?: number;
+};
+
+export function normalizeCollectionRecordFilterValue(value: unknown) {
+  const normalized = String(value || "").trim();
+  return normalized || null;
+}
+
+export function buildCollectionRecordsCacheKey(filters?: CollectionRecordFilters) {
+  return JSON.stringify({
+    from: normalizeCollectionRecordFilterValue(filters?.from),
+    to: normalizeCollectionRecordFilterValue(filters?.to),
+    search: normalizeCollectionRecordFilterValue(filters?.search)?.toLowerCase() || null,
+    nickname: normalizeCollectionRecordFilterValue(filters?.nickname)?.toLowerCase() || null,
+    limit: Number.isFinite(Number(filters?.limit)) ? Number(filters?.limit) : null,
+    offset: Number.isFinite(Number(filters?.offset)) ? Number(filters?.offset) : null,
+  });
+}
+
+export function createCollectionRecordsCache(maxEntries = DEFAULT_COLLECTION_RECORDS_CACHE_LIMIT) {
+  const entries = new Map<string, CollectionRecordsCacheEntry>();
+
+  return {
+    clear() {
+      entries.clear();
+    },
+    get(key: string) {
+      const entry = entries.get(key);
+      if (!entry) {
+        return null;
+      }
+
+      entries.delete(key);
+      entries.set(key, entry);
+      return {
+        records: [...entry.records],
+        totalRecords:
+          typeof entry.totalRecords === "number" ? entry.totalRecords : undefined,
+        totalAmount:
+          typeof entry.totalAmount === "number" ? entry.totalAmount : undefined,
+      } satisfies CollectionRecordsCacheEntry;
+    },
+    set(key: string, entry: CollectionRecordsCacheEntry) {
+      if (entries.has(key)) {
+        entries.delete(key);
+      }
+
+      entries.set(key, {
+        records: [...entry.records],
+        totalRecords:
+          typeof entry.totalRecords === "number" ? entry.totalRecords : undefined,
+        totalAmount:
+          typeof entry.totalAmount === "number" ? entry.totalAmount : undefined,
+      });
+
+      while (entries.size > Math.max(1, Math.floor(maxEntries))) {
+        const oldestKey = entries.keys().next().value;
+        if (typeof oldestKey !== "string") {
+          break;
+        }
+        entries.delete(oldestKey);
+      }
+    },
+    size() {
+      return entries.size;
+    },
+  };
+}

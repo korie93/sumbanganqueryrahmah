@@ -369,11 +369,14 @@ export function useSystemMetrics(): UseSystemMetricsResult {
   const endpointStateRef = useRef(endpointState);
   const inFlightRef = useRef(false);
   const mountedRef = useRef(true);
+  const pollControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      pollControllerRef.current?.abort();
+      pollControllerRef.current = null;
     };
   }, []);
 
@@ -400,15 +403,21 @@ export function useSystemMetrics(): UseSystemMetricsResult {
   const pollMetrics = useCallback(async () => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
+    const controller = new AbortController();
+    pollControllerRef.current = controller;
 
     try {
       const [healthRes, modeRes, workersRes, alertsRes, explainRes] = await Promise.all([
-        getSystemHealth(),
-        getSystemMode(),
-        getWorkers(),
-        getAlerts(),
-        getIntelligenceExplain(),
+        getSystemHealth({ signal: controller.signal }),
+        getSystemMode({ signal: controller.signal }),
+        getWorkers({ signal: controller.signal }),
+        getAlerts({ signal: controller.signal }),
+        getIntelligenceExplain({ signal: controller.signal }),
       ]);
+
+      if (controller.signal.aborted || !mountedRef.current) {
+        return;
+      }
 
       const previous = snapshotRef.current;
       const workers = workersRes.data?.workers ?? [];
@@ -542,6 +551,9 @@ export function useSystemMetrics(): UseSystemMetricsResult {
         setLastUpdated((prev) => (prev === responseTs ? prev : responseTs));
       }
     } finally {
+      if (pollControllerRef.current === controller) {
+        pollControllerRef.current = null;
+      }
       inFlightRef.current = false;
       if (mountedRef.current) {
         setIsLoading(false);

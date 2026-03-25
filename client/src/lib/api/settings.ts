@@ -1,6 +1,10 @@
 import { apiRequest, createApiHeaders } from "../queryClient";
 import { getAuthHeader } from "./shared";
 
+type SettingsRequestOptions = {
+  signal?: AbortSignal;
+};
+
 export async function getSettings() {
   const response = await apiRequest("GET", "/api/settings");
   return response.json();
@@ -25,12 +29,13 @@ export async function updateSetting(payload: {
   return response.json();
 }
 
-export async function getMaintenanceStatus() {
+export async function getMaintenanceStatus(options?: SettingsRequestOptions) {
   const response = await fetch("/api/maintenance-status", {
     credentials: "include",
     headers: createApiHeaders({
       ...getAuthHeader(),
     }),
+    signal: options?.signal,
   });
   return response.json();
 }

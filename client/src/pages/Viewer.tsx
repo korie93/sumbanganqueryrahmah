@@ -7,6 +7,7 @@ import { ViewerFiltersPanel } from "@/pages/viewer/ViewerFiltersPanel";
 import { ViewerFooter } from "@/pages/viewer/ViewerFooter";
 import { ViewerPageHeader } from "@/pages/viewer/ViewerPageHeader";
 import { ViewerSearchBar } from "@/pages/viewer/ViewerSearchBar";
+import { resolveViewerExportBlockReason } from "@/pages/viewer/export-guards";
 import {
   exportViewerRowsToCsv,
   exportViewerRowsToExcel,
@@ -63,6 +64,7 @@ export default function Viewer({
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
   const [selectAllFiltered, setSelectAllFiltered] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [emptyHint, setEmptyHint] = useState("");
   const [isCleared, setIsCleared] = useState(false);
@@ -72,6 +74,7 @@ export default function Viewer({
 
   const rowIdCounterRef = useRef(0);
   const activeRequestIdRef = useRef(0);
+  const exportInFlightRef = useRef<"excel" | "pdf" | null>(null);
   const ROWS_PER_PAGE = configuredRowsPerPage;
   const MAX_ROWS_IN_MEMORY = isLowSpecMode ? 240 : 1200;
   const MIN_SEARCH_LENGTH = 2;
@@ -378,8 +381,15 @@ export default function Viewer({
 
   const exportToPDF = async (exportFiltered = false, exportSelected = false) => {
     const dataToExport = resolveRowsForExport(exportFiltered, exportSelected);
-    if (dataToExport.length === 0) return;
+    const blockReason = resolveViewerExportBlockReason({
+      rowsLength: dataToExport.length,
+      exportingExcel,
+      exportingPdf,
+    });
+    if (blockReason === "busy" || exportInFlightRef.current) return;
+    if (blockReason === "no_data") return;
 
+    exportInFlightRef.current = "pdf";
     setExportingPdf(true);
     try {
       await exportViewerRowsToPdf({
@@ -397,14 +407,23 @@ export default function Viewer({
         }`,
       );
     } finally {
+      exportInFlightRef.current = null;
       setExportingPdf(false);
     }
   };
 
   const exportToExcel = async (exportFiltered = false, exportSelected = false) => {
     const dataToExport = resolveRowsForExport(exportFiltered, exportSelected);
-    if (dataToExport.length === 0) return;
+    const blockReason = resolveViewerExportBlockReason({
+      rowsLength: dataToExport.length,
+      exportingExcel,
+      exportingPdf,
+    });
+    if (blockReason === "busy" || exportInFlightRef.current) return;
+    if (blockReason === "no_data") return;
 
+    exportInFlightRef.current = "excel";
+    setExportingExcel(true);
     try {
       await exportViewerRowsToExcel({
         headers: visibleHeaders,
@@ -421,6 +440,10 @@ export default function Viewer({
         }`,
       );
     }
+    finally {
+      exportInFlightRef.current = null;
+      setExportingExcel(false);
+    }
   };
 
   return (
@@ -435,7 +458,7 @@ export default function Viewer({
           showFilters={showFilters}
           filterCount={columnFilters.length}
           isSuperuser={isSuperuser}
-          exportingPdf={exportingPdf}
+          exportBusy={exportingPdf || exportingExcel}
           filteredRowsCount={filteredRows.length}
           selectedRowCount={selectedRowIds.size}
           hasFilteredSubset={hasFilteredSubset}

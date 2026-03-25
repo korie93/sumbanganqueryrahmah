@@ -4,13 +4,25 @@ import type {
   CollectionStaffNickname,
 } from "./collection-types";
 
-export async function getCollectionNicknames(filters?: { includeInactive?: boolean }) {
+type CollectionNicknameRequestOptions = {
+  signal?: AbortSignal;
+};
+
+export async function getCollectionNicknames(
+  filters?: { includeInactive?: boolean },
+  options?: CollectionNicknameRequestOptions,
+) {
   const params = new URLSearchParams();
   if (filters?.includeInactive) {
     params.set("includeInactive", "1");
   }
   const query = params.toString();
-  const response = await apiRequest("GET", query ? `/api/collection/nicknames?${query}` : "/api/collection/nicknames");
+  const response = await apiRequest(
+    "GET",
+    query ? `/api/collection/nicknames?${query}` : "/api/collection/nicknames",
+    undefined,
+    options,
+  );
   return response.json() as Promise<{ ok: boolean; nicknames: CollectionStaffNickname[] }>;
 }
 

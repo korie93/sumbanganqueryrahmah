@@ -20,6 +20,7 @@ import { CollectionRecordMutationOperations } from "./collection-record-mutation
 import { CollectionDailyOperations } from "./collection-daily-operations";
 
 export class CollectionRecordService extends CollectionServiceSupport {
+  private static readonly NICKNAME_SUMMARY_RECORD_LIMIT = 250;
   private readonly mutationOperations: CollectionRecordMutationOperations;
   private readonly dailyOperations: CollectionDailyOperations;
 
@@ -240,6 +241,14 @@ export class CollectionRecordService extends CollectionServiceSupport {
 
     const summaryOnlyRaw = normalizeCollectionText(query.summaryOnly).toLowerCase();
     const summaryOnly = summaryOnlyRaw === "1" || summaryOnlyRaw === "true" || summaryOnlyRaw === "yes";
+    const limitRaw = Number.parseInt(normalizeCollectionText(query.limit), 10);
+    const offsetRaw = Number.parseInt(normalizeCollectionText(query.offset), 10);
+    const recordLimit = Number.isInteger(limitRaw)
+      ? Math.min(CollectionRecordService.NICKNAME_SUMMARY_RECORD_LIMIT, Math.max(1, limitRaw))
+      : CollectionRecordService.NICKNAME_SUMMARY_RECORD_LIMIT;
+    const recordOffset = Number.isInteger(offsetRaw)
+      ? Math.max(0, offsetRaw)
+      : 0;
 
     let nicknameFilters = normalizeCollectionStringList(requestedNicknameFilters);
     if (user.role === "superuser") {
@@ -257,11 +266,6 @@ export class CollectionRecordService extends CollectionServiceSupport {
       }
     }
 
-    const aggregate = await this.storage.summarizeCollectionRecords({
-      from: from || undefined,
-      to: to || undefined,
-      nicknames: nicknameFilters,
-    });
     const nicknameTotalsRaw = await this.storage.summarizeCollectionRecordsByNickname({
       from: from || undefined,
       to: to || undefined,
@@ -277,20 +281,29 @@ export class CollectionRecordService extends CollectionServiceSupport {
         totalAmount: matched?.totalAmount ?? 0,
       };
     });
+    const totals = nicknameTotals.reduce(
+      (accumulator, item) => {
+        accumulator.totalRecords += Number(item.totalRecords || 0);
+        accumulator.totalAmount += Number(item.totalAmount || 0);
+        return accumulator;
+      },
+      { totalRecords: 0, totalAmount: 0 },
+    );
     const records = summaryOnly
       ? []
       : await this.storage.listCollectionRecords({
           from: from || undefined,
           to: to || undefined,
           nicknames: nicknameFilters,
-          limit: 5000,
+          limit: recordLimit,
+          offset: recordOffset,
         });
 
     return {
       ok: true as const,
       nicknames: nicknameFilters,
-      totalRecords: aggregate.totalRecords,
-      totalAmount: aggregate.totalAmount,
+      totalRecords: totals.totalRecords,
+      totalAmount: totals.totalAmount,
       nicknameTotals,
       records,
     };

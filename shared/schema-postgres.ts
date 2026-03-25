@@ -36,7 +36,24 @@ export const users = pgTable("users", {
   activatedAt: timestamp("activated_at"),
   lastLoginAt: timestamp("last_login_at"),
   isBanned: boolean("is_banned").default(false),
-});
+}, (table) => ({
+  usernameLowerUnique: uniqueIndex("idx_users_username_lower_unique").using(
+    "btree",
+    sql`lower(${table.username})`,
+  ),
+  usernameLowerIdx: index("idx_users_username_lower").using(
+    "btree",
+    sql`lower(${table.username})`,
+  ),
+  roleIdx: index("idx_users_role").on(table.role),
+  statusIdx: index("idx_users_status").on(table.status),
+  mustChangePasswordIdx: index("idx_users_must_change_password").on(table.mustChangePassword),
+  createdByIdx: index("idx_users_created_by").on(table.createdBy),
+  passwordResetBySuperuserIdx: index("idx_users_password_reset_by_superuser").on(table.passwordResetBySuperuser),
+  emailLowerUnique: uniqueIndex("idx_users_email_lower_unique")
+    .using("btree", sql`lower(${table.email})`)
+    .where(sql`${table.email} IS NOT NULL AND trim(${table.email}) <> ''`),
+}));
 
 export const accountActivationTokens = pgTable("account_activation_tokens", {
   id: text("id").primaryKey(),
@@ -68,7 +85,16 @@ export const passwordResetRequests = pgTable("password_reset_requests", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   userIdIdx: index("idx_password_reset_requests_user_id").on(table.userId),
-  createdAtIdx: index("idx_password_reset_requests_created_at").on(table.createdAt),
+  createdAtIdx: index("idx_password_reset_requests_created_at").on(table.createdAt.desc()),
+  tokenHashUnique: uniqueIndex("idx_password_reset_requests_token_hash_unique")
+    .on(table.tokenHash)
+    .where(sql`${table.tokenHash} IS NOT NULL`),
+  expiresAtIdx: index("idx_password_reset_requests_expires_at")
+    .on(table.expiresAt)
+    .where(sql`${table.expiresAt} IS NOT NULL`),
+  pendingReviewIdx: index("idx_password_reset_requests_pending_review")
+    .on(table.userId, table.createdAt.desc())
+    .where(sql`${table.approvedBy} IS NULL AND ${table.usedAt} IS NULL`),
 }));
 
 export const imports = pgTable("imports", {
@@ -252,7 +278,7 @@ export const settingVersions = pgTable("setting_versions", {
   changedBy: text("changed_by").notNull(),
   changedAt: timestamp("changed_at").defaultNow(),
 }, (table) => ({
-  settingKeyChangedAtIdx: index("idx_setting_versions_key_time").on(table.settingKey, table.changedAt),
+  settingKeyChangedAtIdx: index("idx_setting_versions_key_time").on(table.settingKey, table.changedAt.desc()),
 }));
 
 export const featureFlags = pgTable("feature_flags", {
@@ -282,7 +308,7 @@ export const collectionRecords = pgTable("collection_records", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   paymentDateIdx: index("idx_collection_records_payment_date").on(table.paymentDate),
-  createdAtIdx: index("idx_collection_records_created_at").on(table.createdAt),
+  createdAtIdx: index("idx_collection_records_created_at").on(table.createdAt.desc()),
   staffUsernameIdx: index("idx_collection_records_staff_username").on(table.staffUsername),
   createdByLoginIdx: index("idx_collection_records_created_by_login").on(table.createdByLogin),
   staffNicknameIdx: index("idx_collection_records_staff_nickname").on(table.collectionStaffNickname),

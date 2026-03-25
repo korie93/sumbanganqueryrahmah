@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileText, Loader2, RefreshCw } from "lucide-react";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   getAuditDateRange,
   getLogsToDeleteCount,
 } from "@/pages/audit-logs/utils";
+import { resolveAuditLogsExportBlockReason } from "@/pages/audit-logs/export-guards";
 
 export default function AuditLogs() {
   const currentRole = (() => {
@@ -55,6 +56,7 @@ export default function AuditLogs() {
     totalPages: 1,
   });
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const exportInFlightRef = useRef(false);
   const { toast } = useToast();
   const deferredSearchText = useDeferredValue(searchText.trim());
 
@@ -187,8 +189,18 @@ export default function AuditLogs() {
   };
 
   const handleExportPdf = async () => {
-    if (filteredLogs.length === 0) return;
+    const blockReason = resolveAuditLogsExportBlockReason({
+      logsLength: filteredLogs.length,
+      exportingPdf,
+    });
+    if (blockReason === "busy" || exportInFlightRef.current) {
+      return;
+    }
+    if (blockReason === "no_data") {
+      return;
+    }
 
+    exportInFlightRef.current = true;
     setExportingPdf(true);
     try {
       await exportAuditLogsToPdf(filteredLogs);
@@ -200,6 +212,7 @@ export default function AuditLogs() {
         variant: "destructive",
       });
     } finally {
+      exportInFlightRef.current = false;
       setExportingPdf(false);
     }
   };
@@ -239,6 +252,7 @@ export default function AuditLogs() {
                   variant="ghost"
                   className="w-full justify-start"
                   onClick={() => exportAuditLogsToCsv(filteredLogs)}
+                  disabled={exportingPdf}
                   data-testid="button-export-csv"
                 >
                   <Download className="w-4 h-4 mr-2" />

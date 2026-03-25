@@ -36,6 +36,9 @@ export default function MaintenancePage() {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
+    let mounted = true;
+    let activeController: AbortController | null = null;
+
     const cached = localStorage.getItem("maintenanceState");
     if (cached) {
       try {
@@ -48,12 +51,21 @@ export default function MaintenancePage() {
 
     const load = async () => {
       try {
-        const latest = await getMaintenanceStatus();
+        activeController?.abort();
+        const controller = new AbortController();
+        activeController = controller;
+        const latest = await getMaintenanceStatus({ signal: controller.signal });
+        if (!mounted || controller.signal.aborted) {
+          return;
+        }
         if (latest && typeof latest === "object") {
           setState((prev) => ({ ...prev, ...latest }));
           localStorage.setItem("maintenanceState", JSON.stringify(latest));
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
         // keep last known state
       }
     };
@@ -61,6 +73,9 @@ export default function MaintenancePage() {
     const poll = setInterval(load, 15_000);
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => {
+      mounted = false;
+      activeController?.abort();
+      activeController = null;
       clearInterval(poll);
       clearInterval(tick);
     };

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MonitorAccessDenied } from "@/components/monitor/MonitorAccessDenied";
 import { MonitorAlertsSection } from "@/components/monitor/MonitorAlertsSection";
 import { MonitorChaosSection } from "@/components/monitor/MonitorChaosSection";
@@ -57,6 +57,9 @@ export default function Monitor() {
   const [chaosDurationMs, setChaosDurationMs] = useState(String(CHAOS_OPTIONS[0].defaultDurationMs));
   const [chaosLoading, setChaosLoading] = useState(false);
   const [lastChaosMessage, setLastChaosMessage] = useState<string | null>(null);
+  const chaosRequestRef = useRef<AbortController | null>(null);
+  const chaosInFlightRef = useRef(false);
+  const mountedRef = useRef(true);
   const { toast } = useToast();
   const {
     isLoading,
@@ -83,6 +86,16 @@ export default function Monitor() {
   }, []);
 
   const canInjectChaos = userRole === "admin" || userRole === "superuser";
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      chaosRequestRef.current?.abort();
+      chaosRequestRef.current = null;
+      chaosInFlightRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!accessDenied) return;
@@ -124,7 +137,7 @@ export default function Monitor() {
   }, []);
 
   const submitChaos = useCallback(async () => {
-    if (!canInjectChaos) return;
+    if (!canInjectChaos || chaosInFlightRef.current) return;
 
     const magnitude = chaosMagnitude.trim() === "" ? undefined : Number(chaosMagnitude);
     const durationMs = chaosDurationMs.trim() === "" ? undefined : Number(chaosDurationMs);
@@ -147,13 +160,21 @@ export default function Monitor() {
       return;
     }
 
+    chaosRequestRef.current?.abort();
+    const controller = new AbortController();
+    chaosRequestRef.current = controller;
+    chaosInFlightRef.current = true;
     setChaosLoading(true);
     try {
       const result = await injectChaos({
         type: chaosType,
         magnitude,
         durationMs,
-      });
+      }, { signal: controller.signal });
+
+      if (controller.signal.aborted || !mountedRef.current) {
+        return;
+      }
 
       if (result.state === "ok" && result.data?.success) {
         const message = `Injected ${chaosType}. Active chaos events: ${result.data.active.length}.`;
@@ -180,7 +201,13 @@ export default function Monitor() {
         description: result.message || "Request failed.",
       });
     } finally {
-      setChaosLoading(false);
+      if (chaosRequestRef.current === controller) {
+        chaosRequestRef.current = null;
+      }
+      chaosInFlightRef.current = false;
+      if (mountedRef.current) {
+        setChaosLoading(false);
+      }
     }
   }, [canInjectChaos, chaosDurationMs, chaosMagnitude, chaosType, toast]);
 

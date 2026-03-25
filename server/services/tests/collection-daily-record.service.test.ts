@@ -204,20 +204,444 @@ function createCollectionDailyService() {
       from?: string;
       to?: string;
       nicknames?: string[];
+      limit?: number;
+      offset?: number;
     }) => {
-      const nickname = String(filters?.nicknames?.[0] || "").toLowerCase();
-      const records = recordsByNickname.get(nickname) || [];
+      const nicknameSet = new Set(
+        (Array.isArray(filters?.nicknames) ? filters.nicknames : [])
+          .map((value) => String(value || "").toLowerCase()),
+      );
       const from = String(filters?.from || "");
       const to = String(filters?.to || "");
-      return records.filter((record) => {
-        if (from && record.paymentDate < from) return false;
-        if (to && record.paymentDate > to) return false;
-        return true;
-      });
+      const matched = Array.from(recordsByNickname.entries())
+        .filter(([nickname]) => nicknameSet.size === 0 || nicknameSet.has(nickname))
+        .flatMap(([, records]) => records)
+        .filter((record) => {
+          if (from && record.paymentDate < from) return false;
+          if (to && record.paymentDate > to) return false;
+          return true;
+        })
+        .sort((left, right) => {
+          const leftTime = left.createdAt instanceof Date ? left.createdAt.getTime() : new Date(left.createdAt).getTime();
+          const rightTime = right.createdAt instanceof Date ? right.createdAt.getTime() : new Date(right.createdAt).getTime();
+          if (leftTime !== rightTime) return leftTime - rightTime;
+          return left.id.localeCompare(right.id);
+        });
+      const limit = Number.isFinite(Number(filters?.limit)) ? Number(filters?.limit) : matched.length;
+      const offset = Number.isFinite(Number(filters?.offset)) ? Number(filters?.offset) : 0;
+      return matched.slice(offset, offset + limit);
     },
   };
 
   return new CollectionRecordService(storage as any);
+}
+
+function createAggregateOptimizedCollectionDailyService() {
+  const nicknameProfiles = [
+    {
+      id: "nickname-gamma",
+      nickname: "Collector Gamma",
+      isActive: true,
+      roleScope: "user",
+      createdBy: "superuser",
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+    },
+  ];
+
+  let summaryCallCount = 0;
+  let listCallCount = 0;
+
+  const storage = {
+    getCollectionStaffNicknames: async () => nicknameProfiles,
+    getCollectionStaffNicknameByName: async (nickname: string) =>
+      nicknameProfiles.find((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase()) || null,
+    getCollectionDailyTarget: async () => ({
+      id: "target-gamma",
+      username: "collector gamma",
+      year: 2026,
+      month: 3,
+      monthlyTarget: 1000,
+      createdBy: "admin",
+      updatedBy: "admin",
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-03-01T00:00:00.000Z"),
+    }),
+    listCollectionDailyCalendar: async (params: { year: number; month: number }) =>
+      buildCalendarMonth(params.year, params.month, [1, 2]),
+    summarizeCollectionRecordsByNicknameAndPaymentDate: async () => {
+      summaryCallCount += 1;
+      return [
+        {
+          nickname: "Collector Gamma",
+          paymentDate: "2026-03-01",
+          totalRecords: 2,
+          totalAmount: 750,
+        },
+      ];
+    },
+    listCollectionRecords: async () => {
+      listCallCount += 1;
+      return [];
+    },
+  };
+
+  return {
+    service: new CollectionRecordService(storage as any),
+    getSummaryCallCount: () => summaryCallCount,
+    getListCallCount: () => listCallCount,
+  };
+}
+
+function createBatchedAggregateCollectionDailyService() {
+  const nicknameProfiles = [
+    {
+      id: "nickname-alpha",
+      nickname: "Collector Alpha",
+      isActive: true,
+      roleScope: "user",
+      createdBy: "superuser",
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+    },
+    {
+      id: "nickname-beta",
+      nickname: "Collector Beta",
+      isActive: true,
+      roleScope: "user",
+      createdBy: "superuser",
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+    },
+  ];
+
+  const summaryCalls: Array<{ from?: string; to?: string; nicknames?: string[] }> = [];
+  let listCallCount = 0;
+
+  const storage = {
+    getCollectionStaffNicknames: async () => nicknameProfiles,
+    getCollectionStaffNicknameByName: async (nickname: string) =>
+      nicknameProfiles.find((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase()) || null,
+    getCollectionDailyTarget: async (params: { username: string }) => ({
+      id: `target-${String(params.username).toLowerCase().replace(/\s+/g, "-")}`,
+      username: String(params.username).toLowerCase(),
+      year: 2026,
+      month: 3,
+      monthlyTarget: 1000,
+      createdBy: "admin",
+      updatedBy: "admin",
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-03-01T00:00:00.000Z"),
+    }),
+    listCollectionDailyCalendar: async (params: { year: number; month: number }) =>
+      buildCalendarMonth(params.year, params.month, [1, 2]),
+    summarizeCollectionRecordsByNicknameAndPaymentDate: async (filters?: {
+      from?: string;
+      to?: string;
+      nicknames?: string[];
+    }) => {
+      summaryCalls.push({
+        from: filters?.from,
+        to: filters?.to,
+        nicknames: Array.isArray(filters?.nicknames) ? [...filters.nicknames] : [],
+      });
+      return [
+        {
+          nickname: "Collector Alpha",
+          paymentDate: "2026-03-01",
+          totalRecords: 1,
+          totalAmount: 300,
+        },
+        {
+          nickname: "Collector Beta",
+          paymentDate: "2026-03-02",
+          totalRecords: 2,
+          totalAmount: 900,
+        },
+      ];
+    },
+    listCollectionRecords: async () => {
+      listCallCount += 1;
+      return [];
+    },
+  };
+
+  return {
+    service: new CollectionRecordService(storage as any),
+    getSummaryCalls: () => summaryCalls,
+    getListCallCount: () => listCallCount,
+  };
+}
+
+function createPaginatedDayDetailsCollectionDailyService() {
+  const nicknameProfiles = [
+    {
+      id: "nickname-alpha",
+      nickname: "Collector Alpha",
+      isActive: true,
+      roleScope: "user",
+      createdBy: "superuser",
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+    },
+    {
+      id: "nickname-beta",
+      nickname: "Collector Beta",
+      isActive: true,
+      roleScope: "user",
+      createdBy: "superuser",
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+    },
+  ];
+
+  const listCalls: Array<{
+    from?: string;
+    to?: string;
+    nicknames?: string[];
+    limit?: number;
+    offset?: number;
+  }> = [];
+
+  const records: RecordShape[] = [
+    {
+      id: "alpha-day-1",
+      customerName: "Alpha Day Customer",
+      icNumber: "900101060001",
+      customerPhone: "0171111111",
+      accountNumber: "ACC-DA1",
+      batch: "P10",
+      paymentDate: "2026-03-01",
+      amount: "200.00",
+      receiptFile: null,
+      receipts: [],
+      createdByLogin: "alpha.user",
+      collectionStaffNickname: "Collector Alpha",
+      createdAt: new Date("2026-03-01T09:00:00.000Z"),
+    },
+    {
+      id: "beta-day-1",
+      customerName: "Beta Day Customer",
+      icNumber: "900101060002",
+      customerPhone: "0172222222",
+      accountNumber: "ACC-DB1",
+      batch: "P25",
+      paymentDate: "2026-03-01",
+      amount: "300.00",
+      receiptFile: null,
+      receipts: [],
+      createdByLogin: "beta.user",
+      collectionStaffNickname: "Collector Beta",
+      createdAt: new Date("2026-03-01T10:00:00.000Z"),
+    },
+  ];
+
+  const storage = {
+    getCollectionStaffNicknames: async () => nicknameProfiles,
+    getCollectionStaffNicknameByName: async (nickname: string) =>
+      nicknameProfiles.find((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase()) || null,
+    getCollectionDailyTarget: async (params: { username: string }) => ({
+      id: `target-${String(params.username).toLowerCase().replace(/\s+/g, "-")}`,
+      username: String(params.username).toLowerCase(),
+      year: 2026,
+      month: 3,
+      monthlyTarget: 1000,
+      createdBy: "admin",
+      updatedBy: "admin",
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-03-01T00:00:00.000Z"),
+    }),
+    listCollectionDailyCalendar: async (params: { year: number; month: number }) =>
+      buildCalendarMonth(params.year, params.month, [1, 2]),
+    summarizeCollectionRecordsByNicknameAndPaymentDate: async () => [
+      {
+        nickname: "Collector Alpha",
+        paymentDate: "2026-03-01",
+        totalRecords: 1,
+        totalAmount: 200,
+      },
+      {
+        nickname: "Collector Beta",
+        paymentDate: "2026-03-01",
+        totalRecords: 1,
+        totalAmount: 300,
+      },
+    ],
+    listCollectionRecords: async (filters?: {
+      from?: string;
+      to?: string;
+      nicknames?: string[];
+      limit?: number;
+      offset?: number;
+    }) => {
+      listCalls.push({
+        from: filters?.from,
+        to: filters?.to,
+        nicknames: Array.isArray(filters?.nicknames) ? [...filters.nicknames] : [],
+        limit: filters?.limit,
+        offset: filters?.offset,
+      });
+
+      const allowedNicknames = new Set(
+        (Array.isArray(filters?.nicknames) ? filters.nicknames : [])
+          .map((value) => String(value || "").toLowerCase()),
+      );
+      const matched = records.filter((record) =>
+        record.paymentDate === filters?.from
+        && record.paymentDate === filters?.to
+        && (allowedNicknames.size === 0 || allowedNicknames.has(record.collectionStaffNickname.toLowerCase())),
+      );
+      const limit = Number.isFinite(Number(filters?.limit)) ? Number(filters?.limit) : matched.length;
+      const offset = Number.isFinite(Number(filters?.offset)) ? Number(filters?.offset) : 0;
+      return matched.slice(offset, offset + limit);
+    },
+  };
+
+  return {
+    service: new CollectionRecordService(storage as any),
+    getListCalls: () => listCalls,
+  };
+}
+
+function createFallbackPagedDailyOverviewService() {
+  const nicknameProfiles = [
+    {
+      id: "nickname-fallback",
+      nickname: "Collector Fallback",
+      isActive: true,
+      roleScope: "user",
+      createdBy: "superuser",
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+    },
+  ];
+
+  const records: RecordShape[] = Array.from({ length: 1005 }, (_, index) => ({
+    id: `fallback-${index + 1}`,
+    customerName: `Fallback Customer ${index + 1}`,
+    icNumber: `90010108${String(index + 1).padStart(4, "0")}`,
+    customerPhone: `019${String(index + 1).padStart(7, "0")}`,
+    accountNumber: `ACC-FB-${index + 1}`,
+    batch: "P10",
+    paymentDate: "2026-03-01",
+    amount: "1.00",
+    receiptFile: null,
+    receipts: [],
+    createdByLogin: "fallback.user",
+    collectionStaffNickname: "Collector Fallback",
+    createdAt: new Date(`2026-03-01T${String(Math.floor(index / 60)).padStart(2, "0")}:${String(index % 60).padStart(2, "0")}:00.000Z`),
+  }));
+  const listCalls: Array<{
+    from?: string;
+    to?: string;
+    nicknames?: string[];
+    limit?: number;
+    offset?: number;
+  }> = [];
+
+  const storage = {
+    getCollectionStaffNicknames: async () => nicknameProfiles,
+    getCollectionStaffNicknameByName: async (nickname: string) =>
+      nicknameProfiles.find((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase()) || null,
+    getCollectionDailyTarget: async () => ({
+      id: "target-fallback",
+      username: "collector fallback",
+      year: 2026,
+      month: 3,
+      monthlyTarget: 2000,
+      createdBy: "admin",
+      updatedBy: "admin",
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-03-01T00:00:00.000Z"),
+    }),
+    listCollectionDailyCalendar: async (params: { year: number; month: number }) =>
+      buildCalendarMonth(params.year, params.month, [1, 2]),
+    listCollectionRecords: async (filters?: {
+      from?: string;
+      to?: string;
+      nicknames?: string[];
+      limit?: number;
+      offset?: number;
+    }) => {
+      listCalls.push({
+        from: filters?.from,
+        to: filters?.to,
+        nicknames: Array.isArray(filters?.nicknames) ? [...filters?.nicknames] : [],
+        limit: filters?.limit,
+        offset: filters?.offset,
+      });
+      const allowedNicknames = new Set(
+        (Array.isArray(filters?.nicknames) ? filters.nicknames : [])
+          .map((value) => String(value || "").toLowerCase()),
+      );
+      const matched = records.filter((record) =>
+        (!filters?.from || record.paymentDate >= filters.from)
+        && (!filters?.to || record.paymentDate <= filters.to)
+        && (allowedNicknames.size === 0 || allowedNicknames.has(record.collectionStaffNickname.toLowerCase())),
+      );
+      const limit = Number.isFinite(Number(filters?.limit)) ? Number(filters?.limit) : matched.length;
+      const offset = Number.isFinite(Number(filters?.offset)) ? Number(filters?.offset) : 0;
+      return matched.slice(offset, offset + limit);
+    },
+  };
+
+  return {
+    service: new CollectionRecordService(storage as any),
+    getListCalls: () => listCalls,
+  };
+}
+
+function createNicknameSummaryPaginationService() {
+  const listCalls: Array<{
+    from?: string;
+    to?: string;
+    nicknames?: string[];
+    limit?: number;
+    offset?: number;
+  }> = [];
+  const records: RecordShape[] = Array.from({ length: 300 }, (_, index) => ({
+    id: `nickname-summary-${index + 1}`,
+    customerName: `Summary Customer ${index + 1}`,
+    icNumber: `90010107${String(index + 1).padStart(4, "0")}`,
+    customerPhone: `018${String(index + 1).padStart(7, "0")}`,
+    accountNumber: `ACC-NS-${index + 1}`,
+    batch: "P10",
+    paymentDate: "2026-03-01",
+    amount: "10.00",
+    receiptFile: null,
+    receipts: [],
+    createdByLogin: "alpha.user",
+    collectionStaffNickname: "Collector Alpha",
+    createdAt: new Date(`2026-03-01T${String(Math.floor(index / 60)).padStart(2, "0")}:${String(index % 60).padStart(2, "0")}:00.000Z`),
+  }));
+
+  const storage = {
+    isCollectionStaffNicknameActive: async (nickname: string) => String(nickname).toLowerCase() === "collector alpha",
+    summarizeCollectionRecordsByNickname: async () => [
+      {
+        nickname: "Collector Alpha",
+        totalRecords: 300,
+        totalAmount: 3000,
+      },
+    ],
+    listCollectionRecords: async (filters?: {
+      from?: string;
+      to?: string;
+      nicknames?: string[];
+      limit?: number;
+      offset?: number;
+    }) => {
+      listCalls.push({
+        from: filters?.from,
+        to: filters?.to,
+        nicknames: Array.isArray(filters?.nicknames) ? [...filters.nicknames] : [],
+        limit: filters?.limit,
+        offset: filters?.offset,
+      });
+      const limit = Number.isFinite(Number(filters?.limit)) ? Number(filters?.limit) : records.length;
+      const offset = Number.isFinite(Number(filters?.offset)) ? Number(filters?.offset) : 0;
+      return records.slice(offset, offset + limit);
+    },
+  };
+
+  return {
+    service: new CollectionRecordService(storage as any),
+    getListCalls: () => listCalls,
+  };
 }
 
 function createMutableCollectionDailyService() {
@@ -738,6 +1162,95 @@ test("Collection daily day-details returns paginated records with receipt metada
   assert.equal(pageTwo.records[0].receipts.length, 0);
 });
 
+test("Collection daily overview prefers aggregate summaries over full record loading when available", async () => {
+  const { service, getListCallCount, getSummaryCallCount } = createAggregateOptimizedCollectionDailyService();
+
+  const response = await service.getDailyOverview(
+    { username: "superuser", role: "superuser", userId: "superuser-1" } as any,
+    { year: "2026", month: "3", usernames: "Collector Gamma" },
+  );
+
+  assert.equal(response.ok, true);
+  assert.equal(getSummaryCallCount(), 1);
+  assert.equal(getListCallCount(), 0);
+  assert.equal(response.summary.collectedAmount, 750);
+  assert.equal(response.days.find((day) => day.date === "2026-03-01")?.amount, 750);
+  assert.equal(response.days.find((day) => day.date === "2026-03-01")?.customerCount, 2);
+});
+
+test("Collection daily overview batches aggregate summary loading across multiple selected staff", async () => {
+  const { service, getSummaryCalls, getListCallCount } = createBatchedAggregateCollectionDailyService();
+
+  const response = await service.getDailyOverview(
+    { username: "superuser", role: "superuser", userId: "superuser-1" } as any,
+    { year: "2026", month: "3", usernames: "Collector Alpha,Collector Beta" },
+  );
+
+  assert.equal(response.ok, true);
+  assert.equal(getListCallCount(), 0);
+  assert.equal(getSummaryCalls().length, 1);
+  assert.deepEqual(getSummaryCalls()[0], {
+    from: "2026-03-01",
+    to: "2026-03-31",
+    nicknames: ["Collector Alpha", "Collector Beta"],
+  });
+  assert.equal(response.summary.collectedAmount, 1200);
+  assert.equal(response.days.find((day) => day.date === "2026-03-01")?.amount, 300);
+  assert.equal(response.days.find((day) => day.date === "2026-03-02")?.amount, 900);
+});
+
+test("Collection daily day-details paginates with a single combined record query", async () => {
+  const { service, getListCalls } = createPaginatedDayDetailsCollectionDailyService();
+
+  const response = await service.getDailyDayDetails(
+    { username: "superuser", role: "superuser", userId: "superuser-1" } as any,
+    { date: "2026-03-01", usernames: "Collector Alpha,Collector Beta", page: "2", pageSize: "1" },
+  );
+
+  assert.equal(response.ok, true);
+  assert.equal(getListCalls().length, 1);
+  assert.deepEqual(getListCalls()[0], {
+    from: "2026-03-01",
+    to: "2026-03-01",
+    nicknames: ["Collector Alpha", "Collector Beta"],
+    limit: 1,
+    offset: 1,
+  });
+  assert.equal(response.pagination.totalRecords, 2);
+  assert.equal(response.pagination.totalPages, 2);
+  assert.equal(response.records.length, 1);
+  assert.equal(response.records[0].id, "beta-day-1");
+});
+
+test("Collection daily overview fallback paginates record loading when aggregate summaries are unavailable", async () => {
+  const { service, getListCalls } = createFallbackPagedDailyOverviewService();
+
+  const response = await service.getDailyOverview(
+    { username: "superuser", role: "superuser", userId: "superuser-1" } as any,
+    { year: "2026", month: "3", usernames: "Collector Fallback" },
+  );
+
+  assert.equal(response.ok, true);
+  assert.equal(getListCalls().length, 2);
+  assert.deepEqual(getListCalls()[0], {
+    from: "2026-03-01",
+    to: "2026-03-31",
+    nicknames: ["Collector Fallback"],
+    limit: 1000,
+    offset: 0,
+  });
+  assert.deepEqual(getListCalls()[1], {
+    from: "2026-03-01",
+    to: "2026-03-31",
+    nicknames: ["Collector Fallback"],
+    limit: 1000,
+    offset: 1000,
+  });
+  assert.equal(response.summary.collectedAmount, 1005);
+  assert.equal(response.days.find((day) => day.date === "2026-03-01")?.amount, 1005);
+  assert.equal(response.days.find((day) => day.date === "2026-03-01")?.customerCount, 1005);
+});
+
 test("Collection daily user role cannot request other staff nicknames", async () => {
   const service = createCollectionDailyService();
 
@@ -985,6 +1498,33 @@ test("Collection list pagination keeps month totals stable and month-scoped", as
   assert.equal(pageTwo.totalAmount, 1200);
   assert.equal(pageTwo.records.length, 1);
   assert.notEqual(pageOne.records[0].id, pageTwo.records[0].id);
+});
+
+test("Nickname summary detail rows clamp pagination to a safer record cap", async () => {
+  const { service, getListCalls } = createNicknameSummaryPaginationService();
+  const authUser = { username: "superuser", role: "superuser", userId: "superuser-1" } as any;
+
+  const response = await service.getNicknameSummary(authUser, {
+    from: "2026-03-01",
+    to: "2026-03-31",
+    nicknames: "Collector Alpha",
+    limit: "9999",
+    offset: "25",
+  } as any);
+
+  assert.equal(response.ok, true);
+  assert.equal(response.totalRecords, 300);
+  assert.equal(response.totalAmount, 3000);
+  assert.equal(getListCalls().length, 1);
+  assert.deepEqual(getListCalls()[0], {
+    from: "2026-03-01",
+    to: "2026-03-31",
+    nicknames: ["Collector Alpha"],
+    limit: 250,
+    offset: 25,
+  });
+  assert.equal(response.records.length, 250);
+  assert.equal(response.records[0].id, "nickname-summary-26");
 });
 
 test("Collection record update clears legacy receipt_file when removeReceipt is requested on legacy-only rows", async () => {

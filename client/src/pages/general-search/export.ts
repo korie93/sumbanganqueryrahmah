@@ -10,6 +10,16 @@ interface ExportSearchResultsToPdfParams {
   results: SearchResultRow[];
 }
 
+let generalSearchJsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
+
+function loadGeneralSearchJsPdfModule() {
+  if (!generalSearchJsPdfModulePromise) {
+    generalSearchJsPdfModulePromise = import("jspdf");
+  }
+
+  return generalSearchJsPdfModulePromise;
+}
+
 export async function exportSearchResultsToPdf({
   advancedMode,
   activeFiltersCount,
@@ -17,7 +27,7 @@ export async function exportSearchResultsToPdf({
   query,
   results,
 }: ExportSearchResultsToPdfParams) {
-  const { default: jsPDF } = await import("jspdf");
+  const { default: jsPDF } = await loadGeneralSearchJsPdfModule();
   const isDark =
     typeof document !== "undefined" &&
     document.documentElement.classList.contains("dark");

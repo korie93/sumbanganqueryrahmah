@@ -11,6 +11,7 @@ export type {
   CollectionDailyUser,
   CollectionMonthlySummary,
   CollectionNicknameAggregate,
+  CollectionNicknameDailyAggregate,
   CollectionNicknameAuthProfile,
   CollectionNicknameSession,
   CollectionRecord,

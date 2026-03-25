@@ -52,14 +52,35 @@ export default function Activity() {
   const [logsOpen, setLogsOpen] = useState(true);
 
   const filtersRef = useRef<ActivityFilters>(filters);
+  const activeRequestIdRef = useRef(0);
+  const fetchControllerRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      activeRequestIdRef.current += 1;
+      fetchControllerRef.current?.abort();
+      fetchControllerRef.current = null;
+    };
+  }, []);
 
   const fetchActivities = useCallback(async (useFilters = false) => {
+    const requestId = ++activeRequestIdRef.current;
+    fetchControllerRef.current?.abort();
+    const controller = new AbortController();
+    fetchControllerRef.current = controller;
     setLoading(true);
     try {
       const currentFilters = filtersRef.current;
       const activityResponse = useFilters && hasActiveActivityFilters(currentFilters)
-        ? await getFilteredActivity(currentFilters)
-        : await getAllActivity();
+        ? await getFilteredActivity(currentFilters, { signal: controller.signal })
+        : await getAllActivity({ signal: controller.signal });
+
+      if (controller.signal.aborted || !mountedRef.current || requestId !== activeRequestIdRef.current) {
+        return;
+      }
 
       const nextActivities = activityResponse.activities || [];
       setActivities(nextActivities);
@@ -79,15 +100,26 @@ export default function Activity() {
       });
 
       if (canModerateActivity) {
-        const bannedResponse = await getBannedUsers();
+        const bannedResponse = await getBannedUsers({ signal: controller.signal });
+        if (controller.signal.aborted || !mountedRef.current || requestId !== activeRequestIdRef.current) {
+          return;
+        }
         setBannedUsers(bannedResponse.users || []);
       } else {
         setBannedUsers([]);
       }
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
       console.error("Failed to fetch activities:", error);
     } finally {
-      setLoading(false);
+      if (fetchControllerRef.current === controller) {
+        fetchControllerRef.current = null;
+      }
+      if (mountedRef.current && requestId === activeRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [canModerateActivity]);
 

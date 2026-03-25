@@ -1303,6 +1303,48 @@ test("GET /api/collection/nickname-summary honors summaryOnly and avoids loading
   }
 });
 
+test("GET /api/collection/nickname-summary clamps detail-row loading to a safer pagination cap", async () => {
+  const { storage, nicknameActiveChecks, nicknameSummaryCalls, nicknameListCalls } = createCollectionSummaryStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "superuser-1",
+      username: "superuser",
+      role: "superuser",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/collection/nickname-summary?from=2026-03-01&to=2026-03-31&nicknames=Collector%20Alpha&limit=9999&offset=12`,
+    );
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.totalRecords, 3);
+    assert.equal(payload.totalAmount, 450.5);
+    assert.equal(payload.records.length, 1);
+    assert.deepEqual(nicknameActiveChecks, ["Collector Alpha"]);
+    assert.equal(nicknameSummaryCalls.length, 1);
+    assert.equal(nicknameListCalls.length, 1);
+    assert.deepEqual(nicknameListCalls[0], {
+      from: "2026-03-01",
+      to: "2026-03-31",
+      nicknames: ["Collector Alpha"],
+      limit: 250,
+      offset: 12,
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /api/collection/nickname-summary returns an empty payload immediately when no nicknames are selected", async () => {
   const { storage, nicknameActiveChecks, nicknameSummaryCalls, nicknameListCalls } = createCollectionSummaryStorageDouble();
   const app = createJsonTestApp();
