@@ -248,6 +248,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     repository: new BackupJobRepository(),
     executeCreate: (params) => backupOperationsService.createBackup(params),
     executeRestore: (params) => backupOperationsService.restoreBackup(params),
+    ensureReady: () => storage.ensureBackupsReady(),
   });
   void backupJobQueueService.start().catch((error) => {
     logger.error("Failed to start backup background job queue", { error });
