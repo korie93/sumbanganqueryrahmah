@@ -1,3 +1,8 @@
+.floatingRoot {
+  bottom: 24px;
+  right: 24px;
+}
+
 .aiThinkingRing {
   box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
   animation: pulseRing 1.5s infinite;

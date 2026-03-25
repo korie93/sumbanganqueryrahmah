@@ -37,6 +37,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     hasBlockingDialog: false,
   });
   const [location] = useLocation();
+  const floatingRootRef = useRef<HTMLDivElement | null>(null);
   const cancelAISearchRef = useRef<(() => void) | null>(null);
   const {
     messages,
@@ -68,6 +69,13 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     }
     lastAssistantCountRef.current = assistantCount;
   }, [assistantCount, isOpen, setUnreadCount]);
+
+  useEffect(() => {
+    const node = floatingRootRef.current;
+    if (!node) return;
+    node.style.bottom = `${safePosition.bottom}px`;
+    node.style.right = `${safePosition.right}px`;
+  }, [safePosition.bottom, safePosition.right]);
 
   const handleMinimize = useCallback(() => {
     setIsOpen(false);
@@ -178,11 +186,12 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
 
   return (
     <div
+      ref={floatingRootRef}
       className={cn(
         "pointer-events-none fixed z-[9999] flex flex-col items-end gap-3 transition-[bottom,right,opacity,transform] duration-200",
+        styles.floatingRoot,
         safePosition.hasBlockingDialog ? "opacity-0 translate-y-2" : "opacity-100",
       )}
-      style={{ bottom: safePosition.bottom, right: safePosition.right }}
       aria-hidden={safePosition.hasBlockingDialog}
       hidden={safePosition.hasBlockingDialog}
     >

@@ -1,7 +1,8 @@
-import { useCallback, useMemo } from "react";
+import { memo, useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { FixedSizeList, type ListChildComponentProps } from "react-window";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { DataRowWithId, ViewerVirtualRowData } from "@/pages/viewer/types";
+import styles from "./ViewerDataTable.module.css";
 
 interface ViewerDataTableProps {
   debouncedSearch: string;
@@ -19,6 +20,50 @@ interface ViewerDataTableProps {
   visibleHeaders: string[];
 }
 
+type PositionedRowShellProps = {
+  positionStyle: React.CSSProperties;
+  children: React.ReactNode;
+};
+
+const PositionedRowShell = memo(function PositionedRowShell({
+  positionStyle,
+  children,
+}: PositionedRowShellProps) {
+  const shellRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    const node = shellRef.current;
+    if (!node) return;
+    Object.assign(node.style, positionStyle);
+  }, [positionStyle]);
+
+  return <div ref={shellRef}>{children}</div>;
+});
+
+type ViewerGridShellProps = {
+  gridTemplateColumns: string;
+  className: string;
+  children: React.ReactNode;
+};
+
+const ViewerGridShell = memo(function ViewerGridShell({
+  gridTemplateColumns,
+  className,
+  children,
+}: ViewerGridShellProps) {
+  const gridRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    gridRef.current?.style.setProperty("--viewer-grid-template-columns", gridTemplateColumns);
+  }, [gridTemplateColumns]);
+
+  return (
+    <div ref={gridRef} className={`${styles.viewerGrid} ${className}`}>
+      {children}
+    </div>
+  );
+});
+
 export function ViewerDataTable({
   debouncedSearch,
   enableVirtualRows,
@@ -34,6 +79,15 @@ export function ViewerDataTable({
   viewportHeightPx,
   visibleHeaders,
 }: ViewerDataTableProps) {
+  const virtualTableWidthRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    virtualTableWidthRef.current?.style.setProperty(
+      "--viewer-table-min-width",
+      `${virtualTableMinWidth}px`,
+    );
+  }, [virtualTableMinWidth]);
+
   const virtualRowData = useMemo<ViewerVirtualRowData>(
     () => ({
       rows: filteredRows,
@@ -51,10 +105,10 @@ export function ViewerDataTable({
       const selected = data.selectedRowIds.has(row.__rowId);
 
       return (
-        <div style={style}>
-          <div
-            className={`grid h-[48px] items-center border-t border-border px-0 hover:bg-muted/50 ${selected ? "bg-primary/10" : ""}`}
-            style={{ gridTemplateColumns: data.gridTemplateColumns }}
+        <PositionedRowShell positionStyle={style}>
+          <ViewerGridShell
+            gridTemplateColumns={data.gridTemplateColumns}
+            className={`h-[48px] items-center border-t border-border px-0 hover:bg-muted/50 ${selected ? "bg-primary/10" : ""}`}
           >
             <div className="px-3">
               <Checkbox checked={selected} onCheckedChange={() => data.onToggleRowSelection(row.__rowId)} />
@@ -69,8 +123,8 @@ export function ViewerDataTable({
                 {String(row[header] ?? "-")}
               </div>
             ))}
-          </div>
-        </div>
+          </ViewerGridShell>
+        </PositionedRowShell>
       );
     },
     [],
@@ -79,9 +133,9 @@ export function ViewerDataTable({
   return (
     <div className="ops-table-shell overflow-x-auto">
       {enableVirtualRows ? (
-        <div style={{ minWidth: `${virtualTableMinWidth}px` }}>
+        <div ref={virtualTableWidthRef} className={styles.virtualTableWidth}>
           <div className="sticky top-0 z-10 border-b border-border bg-muted">
-            <div className="grid h-12 items-center" style={{ gridTemplateColumns }}>
+            <ViewerGridShell gridTemplateColumns={gridTemplateColumns} className="h-12 items-center">
               <div className="px-3">
                 <Checkbox
                   checked={selectAllFiltered && filteredRows.length > 0}
@@ -95,7 +149,7 @@ export function ViewerDataTable({
                   {header}
                 </div>
               ))}
-            </div>
+            </ViewerGridShell>
           </div>
           <FixedSizeList
             height={viewportHeightPx}
