@@ -19,6 +19,7 @@ import {
 import { BackupDialogs } from "@/pages/backup-restore/BackupDialogs";
 import { BackupFiltersPanel } from "@/pages/backup-restore/BackupFiltersPanel";
 import { BackupList } from "@/pages/backup-restore/BackupList";
+import { resolveBackupMutationResponse } from "@/pages/backup-restore/backup-mutation-response";
 import type {
   BackupRecord,
   BackupsResponse,
@@ -127,16 +128,35 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
   }, []);
 
   const createBackupMutation = useMutation({
-    mutationFn: (name: string) => createBackupAsync(name),
-    onSuccess: (result) => {
+    mutationFn: async (name: string) =>
+      resolveBackupMutationResponse(
+        await createBackupAsync(name),
+        "Backup creation queued.",
+      ),
+    onSuccess: async (result) => {
       handledBackupJobIdRef.current = null;
-      setActiveBackupJobId(result.job.id);
       setShowCreateDialog(false);
       setBackupName("");
+
+      if (result.mode === "queued") {
+        setActiveBackupJobId(result.job.id);
+        notifyMutationSuccess({
+          title: "Backup Queued",
+          description: "Backup creation is running in the background.",
+        });
+        return;
+      }
+
+      clearAllFilters();
+      setPage(1);
       notifyMutationSuccess({
-        title: "Backup Queued",
-        description: "Backup creation is running in the background.",
+        title: "Success",
+        description: result.message || "Backup has been successfully created.",
       });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/backups"] }),
+        refetch(),
+      ]);
     },
     onError: (error) => {
       console.error("Failed to create backup:", error);
@@ -149,16 +169,36 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
   });
 
   const restoreBackupMutation = useMutation({
-    mutationFn: (backupId: string) => restoreBackupAsync(backupId),
-    onSuccess: (result) => {
+    mutationFn: async (backupId: string) =>
+      resolveBackupMutationResponse(
+        await restoreBackupAsync(backupId),
+        "Backup restore queued.",
+      ),
+    onSuccess: async (result) => {
       handledBackupJobIdRef.current = null;
-      setActiveBackupJobId(result.job.id);
       setShowRestoreDialog(null);
-      notifyMutationSuccess({
-        title: "Restore Queued",
-        description: "Backup restore is running in the background.",
-        duration: 8000,
-      });
+
+      if (result.mode === "queued") {
+        setActiveBackupJobId(result.job.id);
+        notifyMutationSuccess({
+          title: "Restore Queued",
+          description: "Backup restore is running in the background.",
+          duration: 8000,
+        });
+        return;
+      }
+
+      if (result.restoreResult) {
+        notifyRestoreSuccess(result.restoreResult);
+      } else {
+        notifyMutationSuccess({
+          title: "Restore Complete",
+          description: result.message || "Backup restore has completed.",
+          duration: 8000,
+        });
+      }
+      setRestoringId(null);
+      await queryClient.invalidateQueries({ queryKey: ["/api/backups"] });
     },
     onError: (error) => {
       console.error("Failed to restore backup:", error);
