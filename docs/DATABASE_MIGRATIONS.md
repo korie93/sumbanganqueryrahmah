@@ -17,8 +17,26 @@ That means Drizzle is ready to manage new schema work, but it is not yet the com
 - `npm run db:generate:custom -- --name <migration_name>`
 - `npm run db:migrate`
 - `npm run db:migrate:cli`
+- `npm run verify:db-schema-governance`
 - `npm run db:studio`
 - `npm run db:introspect`
+
+## Governance Manifest
+
+Schema ownership now lives in [scripts/db-schema-governance.manifest.mjs](../scripts/db-schema-governance.manifest.mjs).
+
+Each discovered table must be classified as one of:
+
+- `drizzle-reviewed`
+- `hybrid-managed`
+- `runtime-managed`
+- `runtime-transitional`
+
+`npm run verify:db-schema-governance` scans `shared/`, `server/`, `scripts/`, and `drizzle/` for table definitions and fails if:
+
+- a discovered table is missing from the manifest
+- a table starts using an undeclared schema source
+- a `drizzle-reviewed` table no longer has both typed schema coverage and a reviewed Drizzle SQL migration
 
 ## Recommended Workflow
 
@@ -33,7 +51,8 @@ For schema work that still touches legacy bootstrap-managed areas:
 
 1. Prefer `npm run db:generate:custom -- --name <migration_name>`.
 2. Keep the related bootstrap module idempotent until that table/domain is fully modeled in Drizzle.
-3. If needed, use `npm run db:introspect` to help map legacy tables into typed schema definitions incrementally.
+3. Update [scripts/db-schema-governance.manifest.mjs](../scripts/db-schema-governance.manifest.mjs) if a table changes governance mode or starts using a new schema source.
+4. If needed, use `npm run db:introspect` to help map legacy tables into typed schema definitions incrementally.
 
 ## Important Caveat
 

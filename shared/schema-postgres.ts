@@ -112,6 +112,21 @@ export const userActivity = pgTable("user_activity", {
   ipAddressIdx: index("idx_user_activity_ip_address").on(table.ipAddress),
 }));
 
+export const bannedSessions = pgTable("banned_sessions", {
+  id: text("id").primaryKey(),
+  username: text("username").notNull(),
+  role: text("role").notNull(),
+  activityId: text("activity_id").notNull(),
+  fingerprint: text("fingerprint"),
+  ipAddress: text("ip_address"),
+  browser: text("browser"),
+  pcName: text("pc_name"),
+  bannedAt: timestamp("banned_at").defaultNow(),
+}, (table) => ({
+  fingerprintIdx: index("idx_banned_sessions_fingerprint").on(table.fingerprint),
+  ipAddressIdx: index("idx_banned_sessions_ip").on(table.ipAddress),
+}));
+
 export const auditLogs = pgTable("audit_logs", {
   id: text("id").primaryKey(),
   action: text("action").notNull(),
@@ -671,6 +686,7 @@ export type InsertDataRow = z.infer<typeof insertDataRowSchema>;
 export type DataRow = typeof dataRows.$inferSelect;
 export type InsertUserActivity = z.infer<typeof insertUserActivitySchema>;
 export type UserActivity = typeof userActivity.$inferSelect;
+export type BannedSessionRow = typeof bannedSessions.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertBackup = z.infer<typeof insertBackupSchema>;

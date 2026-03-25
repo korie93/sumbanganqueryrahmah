@@ -74,11 +74,12 @@ test("getQueryFn injects x-request-id headers for query fetches", async () => {
 
   try {
     const queryFn = getQueryFn<{ ok: boolean }>({ on401: "throw" });
+    const controller = new AbortController();
     const payload = await queryFn({
       queryKey: ["/api/health"],
       client: undefined as never,
       meta: undefined,
-      signal: undefined,
+      signal: controller.signal,
       pageParam: undefined,
       direction: undefined,
     });

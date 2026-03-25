@@ -118,6 +118,7 @@ const run = async () => {
     SMOKE_ARTIFACTS_DIR: artifactsDir,
   };
 
+  await runNpm(["run", "verify:db-schema-governance"], { env });
   await runNpm(["run", "build"], { env });
 
   const serverProcess = spawn(

@@ -8,6 +8,13 @@
       "when": 1773995928165,
       "tag": "0000_ai_messages_conversation_created_at_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1774396251121,
+      "tag": "0001_banned_sessions_and_schema_governance",
+      "breakpoints": true
     }
   ]
 }
