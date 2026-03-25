@@ -19,6 +19,14 @@ function normalizeOptionalNumber(value: unknown): number {
   return Number.isFinite(normalized) ? normalized : 0;
 }
 
+function isRestoreResponse(value: unknown): value is RestoreResponse {
+  if (!isRecord(value) || typeof value.success !== "boolean" || !isRecord(value.stats)) {
+    return false;
+  }
+
+  return typeof value.message === "string";
+}
+
 function normalizeBackupJobRecord(
   value: unknown,
   options?: { allowMinimalShape?: boolean },
@@ -104,10 +112,8 @@ export function resolveBackupMutationResponse(
     };
   }
 
-  const restoreCandidate = isRecord(raw)
-    && (typeof raw.success === "boolean" || isRecord(raw.stats));
-  if (restoreCandidate) {
-    const restoreResult = raw as RestoreResponse;
+  if (isRestoreResponse(raw)) {
+    const restoreResult = raw;
     return {
       mode: "completed",
       message,
