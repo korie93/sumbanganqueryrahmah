@@ -424,8 +424,25 @@ const ensureCollectionSmokeNicknames = async (context) => {
   return selected.slice(0, 2);
 };
 
-const getCollectionSmokeAssetPath = (fileName) =>
-  path.resolve(process.cwd(), "artifacts", fileName);
+const smokeFixtureDir = artifactsDir
+  ? path.join(artifactsDir, "_fixtures")
+  : path.resolve(process.cwd(), "var", "smoke-ui-fixtures");
+
+const createSmokeReceiptPngBuffer = () =>
+  Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+lmioAAAAASUVORK5CYII=",
+    "base64",
+  );
+
+const ensureCollectionSmokeAsset = async (fileName) => {
+  const normalizedName = String(fileName || "").trim();
+  assert(normalizedName, "collection smoke asset file name is required");
+
+  await mkdir(smokeFixtureDir, { recursive: true });
+  const filePath = path.join(smokeFixtureDir, normalizedName);
+  await writeFile(filePath, createSmokeReceiptPngBuffer());
+  return filePath;
+};
 
 const getInputByLabel = (page, labelText) =>
   page
@@ -570,8 +587,8 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
   const accountNumber = `SMOKE-RCPT-${uniqueSuffix}`;
   const saveReceiptName = "receipt-smoke-save.png";
   const replaceReceiptName = "receipt-replace.png";
-  const saveReceiptPath = getCollectionSmokeAssetPath(saveReceiptName);
-  const replaceReceiptPath = getCollectionSmokeAssetPath(replaceReceiptName);
+  const saveReceiptPath = await ensureCollectionSmokeAsset(saveReceiptName);
+  const replaceReceiptPath = await ensureCollectionSmokeAsset(replaceReceiptName);
   let recordId = "";
   let expectedUpdatedAt = "";
   let recordDeleted = false;
