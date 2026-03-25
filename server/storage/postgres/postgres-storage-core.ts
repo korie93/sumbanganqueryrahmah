@@ -59,6 +59,7 @@ export class PostgresStorageCore {
     await this.ensureUserActivityTable();
     await this.ensureAuditLogsTable();
     await this.ensureMutationIdempotencyTable();
+    await this.ensureMonitorAlertHistoryTable();
     await this.ensureCollectionRecordsTable();
     await this.ensureCollectionStaffNicknamesTable();
     await this.ensureCollectionAdminGroupsTables();
@@ -98,6 +99,10 @@ export class PostgresStorageCore {
 
   protected async ensureMutationIdempotencyTable() {
     await this.coreSchemaBootstrap.ensureMutationIdempotencyTable();
+  }
+
+  protected async ensureMonitorAlertHistoryTable() {
+    await this.coreSchemaBootstrap.ensureMonitorAlertHistoryTable();
   }
 
   protected async ensureCollectionRecordsTable() {

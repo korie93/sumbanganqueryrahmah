@@ -28,6 +28,8 @@ type CollectionRecordFilters = {
   nicknames?: string[];
 };
 
+export type CollectionRollupFilters = Omit<CollectionRecordFilters, "search">;
+
 function normalizeCollectionNicknameFilters(nicknameSource?: string[]): string[] {
   return Array.isArray(nicknameSource)
     ? nicknameSource
@@ -106,6 +108,35 @@ export function buildCollectionRecordDailyRollupWhereSql(filters?: CollectionRec
   return conditions.length
     ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
     : sql``;
+}
+
+export function buildCollectionRecordMonthlyRollupWhereSql(filters: {
+  year: number;
+  nicknames?: string[];
+  createdByLogin?: string;
+}): { safeYear: number; whereSql: SQL } {
+  const safeYear = Number.isFinite(filters.year)
+    ? Math.min(2100, Math.max(2000, Math.floor(filters.year)))
+    : new Date().getFullYear();
+  const conditions: SQL[] = [
+    sql`year = ${safeYear}`,
+  ];
+
+  const nicknames = normalizeCollectionNicknameFilters(filters.nicknames);
+  if (nicknames.length > 0) {
+    const nicknameSql = sql.join(nicknames.map((value) => sql`${value}`), sql`, `);
+    conditions.push(sql`lower(collection_staff_nickname) IN (${nicknameSql})`);
+  }
+
+  const createdByLogin = String(filters.createdByLogin || "").trim();
+  if (createdByLogin) {
+    conditions.push(sql`created_by_login = ${createdByLogin}`);
+  }
+
+  return {
+    safeYear,
+    whereSql: sql`WHERE ${sql.join(conditions, sql` AND `)}`,
+  };
 }
 
 export function buildCollectionMonthlySummaryWhereSql(filters: {

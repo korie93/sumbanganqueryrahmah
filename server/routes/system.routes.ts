@@ -6,6 +6,7 @@ import type { ChaosEvent, InjectChaosInput } from "../intelligence/chaos/ChaosEn
 import type { ChaosType, ExplainabilityReport } from "../intelligence/types";
 import type { StartupHealthSnapshot } from "../internal/startup-health";
 import type { CircuitSnapshot } from "../internal/circuitBreaker";
+import type { MonitorAlertIncident } from "../repositories/monitor-alert-history.repository";
 import type {
   InternalMonitorAlert,
   InternalMonitorSnapshot,
@@ -38,6 +39,17 @@ type SystemRouteDeps = {
   getLocalCircuitSnapshots: () => LocalCircuitSnapshots;
   getIntelligenceExplainability: () => ExplainabilityReport;
   injectChaos: (params: InjectChaosInput) => ChaosInjectionResult;
+  getCollectionRollupQueueStatus: () => Promise<{
+    pendingCount: number;
+    runningCount: number;
+    retryCount: number;
+    oldestPendingAgeMs: number;
+  }>;
+  drainCollectionRollupQueue: () => Promise<Record<string, unknown>>;
+  retryCollectionRollupFailures: () => Promise<Record<string, unknown>>;
+  autoHealCollectionRollupQueue: () => Promise<Record<string, unknown>>;
+  rebuildCollectionRollups: () => Promise<Record<string, unknown>>;
+  listMonitorAlertHistory: () => Promise<MonitorAlertIncident[]>;
   createAuditLog: (data: InsertAuditLog) => Promise<AuditLog>;
   checkDbConnectivity: () => Promise<boolean>;
   getStartupHealthSnapshot: () => StartupHealthSnapshot;
@@ -58,6 +70,12 @@ export function registerSystemRoutes(app: Express, deps: SystemRouteDeps) {
     getLocalCircuitSnapshots,
     getIntelligenceExplainability,
     injectChaos,
+    getCollectionRollupQueueStatus,
+    drainCollectionRollupQueue,
+    retryCollectionRollupFailures,
+    autoHealCollectionRollupQueue,
+    rebuildCollectionRollups,
+    listMonitorAlertHistory,
     createAuditLog,
     checkDbConnectivity,
     getStartupHealthSnapshot,
@@ -197,6 +215,20 @@ export function registerSystemRoutes(app: Express, deps: SystemRouteDeps) {
   );
 
   app.get(
+    "/internal/alerts/history",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireMonitorAccess,
+    asyncHandler(async (_req, res) => {
+      const incidents = await listMonitorAlertHistory();
+      res.json({
+        incidents,
+        updatedAt: new Date().toISOString(),
+      });
+    }),
+  );
+
+  app.get(
     "/internal/load-trend",
     authenticateToken,
     requireRole("user", "admin", "superuser"),
@@ -245,6 +277,80 @@ export function registerSystemRoutes(app: Express, deps: SystemRouteDeps) {
         decisionReason: explain.decisionReason,
       });
     },
+  );
+
+  app.post(
+    "/internal/rollup-refresh/status",
+    authenticateToken,
+    requireRole("superuser"),
+    requireMonitorAccess,
+    asyncHandler(async (_req, res) => {
+      const snapshot = await getCollectionRollupQueueStatus();
+      res.json({
+        ok: true,
+        snapshot,
+      });
+    }),
+  );
+
+  app.post(
+    "/internal/rollup-refresh/drain",
+    authenticateToken,
+    requireRole("superuser"),
+    requireMonitorAccess,
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
+      await createAuditLog({
+        action: "COLLECTION_ROLLUP_QUEUE_DRAIN_REQUESTED",
+        performedBy: req.user?.username || "system",
+        details: "Superuser requested an immediate collection rollup queue drain.",
+      });
+      res.json(await drainCollectionRollupQueue());
+    }),
+  );
+
+  app.post(
+    "/internal/rollup-refresh/retry-failures",
+    authenticateToken,
+    requireRole("superuser"),
+    requireMonitorAccess,
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
+      await createAuditLog({
+        action: "COLLECTION_ROLLUP_QUEUE_RETRY_REQUESTED",
+        performedBy: req.user?.username || "system",
+        details: "Superuser requested retry of failed collection rollup refresh slices.",
+      });
+      res.json(await retryCollectionRollupFailures());
+    }),
+  );
+
+  app.post(
+    "/internal/rollup-refresh/auto-heal",
+    authenticateToken,
+    requireRole("superuser"),
+    requireMonitorAccess,
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
+      await createAuditLog({
+        action: "COLLECTION_ROLLUP_QUEUE_AUTO_HEAL_REQUESTED",
+        performedBy: req.user?.username || "system",
+        details: "Superuser requested rollup queue auto-heal for interrupted slices.",
+      });
+      res.json(await autoHealCollectionRollupQueue());
+    }),
+  );
+
+  app.post(
+    "/internal/rollup-refresh/rebuild",
+    authenticateToken,
+    requireRole("superuser"),
+    requireMonitorAccess,
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
+      await createAuditLog({
+        action: "COLLECTION_ROLLUP_REBUILD_REQUESTED",
+        performedBy: req.user?.username || "system",
+        details: "Superuser requested a full collection report rollup rebuild.",
+      });
+      res.json(await rebuildCollectionRollups());
+    }),
   );
 
   app.post(

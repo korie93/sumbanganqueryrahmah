@@ -315,6 +315,13 @@ export function createCoreCollectionStorageDouble(options?: {
         totalAmount: 120.5,
       };
     },
+    getCollectionRecordDailyRollupFreshness: async () => ({
+      status: "fresh" as const,
+      pendingCount: 0,
+      runningCount: 0,
+      retryCount: 0,
+      oldestPendingAgeMs: 0,
+    }),
     listCollectionRecords: async (filters: Record<string, unknown>) => {
       listCalls.push(filters);
       return Array.from(records.values());

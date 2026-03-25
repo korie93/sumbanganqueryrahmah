@@ -14,6 +14,7 @@ import type {
 } from "../storage-postgres";
 import {
   buildCollectionMonthlySummaryWhereSql,
+  buildCollectionRecordMonthlyRollupWhereSql,
   buildCollectionRecordDailyRollupWhereSql,
   buildCollectionRecordWhereSql,
   canUseCollectionRecordDailyRollups,
@@ -45,6 +46,12 @@ export type CollectionRecordDailyRollupRefreshQueueSnapshot = {
   runningCount: number;
   retryCount: number;
   oldestPendingAgeMs: number;
+};
+
+export type CollectionRollupFreshnessStatus = "fresh" | "warming" | "stale";
+
+export type CollectionRollupFreshnessSnapshot = CollectionRecordDailyRollupRefreshQueueSnapshot & {
+  status: CollectionRollupFreshnessStatus;
 };
 
 export function normalizeCollectionRecordDailyRollupSlice(
@@ -101,6 +108,7 @@ export async function refreshCollectionRecordDailyRollupSlice(
         AND created_by_login = ${normalized.createdByLogin}
         AND collection_staff_nickname = ${normalized.collectionStaffNickname}
     `);
+    await refreshCollectionRecordMonthlyRollupSlice(executor, normalized);
     return;
   }
 
@@ -127,6 +135,7 @@ export async function refreshCollectionRecordDailyRollupSlice(
       total_amount = EXCLUDED.total_amount,
       updated_at = now()
   `);
+  await refreshCollectionRecordMonthlyRollupSlice(executor, normalized);
 }
 
 export async function refreshCollectionRecordDailyRollupSlices(
@@ -180,6 +189,115 @@ export async function rebuildCollectionRecordDailyRollups(
     FROM public.collection_records
     GROUP BY payment_date, created_by_login, collection_staff_nickname
     ON CONFLICT (payment_date, created_by_login, collection_staff_nickname)
+    DO UPDATE SET
+      total_records = EXCLUDED.total_records,
+      total_amount = EXCLUDED.total_amount,
+      updated_at = now()
+  `);
+  await rebuildCollectionRecordMonthlyRollups(executor);
+}
+
+export async function refreshCollectionRecordMonthlyRollupSlice(
+  executor: CollectionRepositoryExecutor,
+  slice: CollectionRecordDailyRollupSlice | null | undefined,
+): Promise<void> {
+  const normalized = normalizeCollectionRecordDailyRollupSlice(slice);
+  if (!normalized) {
+    return;
+  }
+
+  const paymentDate = new Date(`${normalized.paymentDate}T00:00:00.000Z`);
+  if (Number.isNaN(paymentDate.getTime())) {
+    return;
+  }
+  const year = paymentDate.getUTCFullYear();
+  const month = paymentDate.getUTCMonth() + 1;
+
+  const aggregateResult = await executor.execute(sql`
+    SELECT
+      COALESCE(SUM(total_records), 0)::int AS total_records,
+      COALESCE(SUM(total_amount), 0)::numeric(14,2) AS total_amount
+    FROM public.collection_record_daily_rollups
+    WHERE payment_date >= make_date(${year}, ${month}, 1)
+      AND payment_date < (make_date(${year}, ${month}, 1) + interval '1 month')
+      AND created_by_login = ${normalized.createdByLogin}
+      AND collection_staff_nickname = ${normalized.collectionStaffNickname}
+  `);
+  const aggregate = mapCollectionAggregateRow(aggregateResult.rows?.[0]);
+
+  if (aggregate.totalRecords <= 0) {
+    await executor.execute(sql`
+      DELETE FROM public.collection_record_monthly_rollups
+      WHERE year = ${year}
+        AND month = ${month}
+        AND created_by_login = ${normalized.createdByLogin}
+        AND collection_staff_nickname = ${normalized.collectionStaffNickname}
+    `);
+    return;
+  }
+
+  await executor.execute(sql`
+    INSERT INTO public.collection_record_monthly_rollups (
+      year,
+      month,
+      created_by_login,
+      collection_staff_nickname,
+      total_records,
+      total_amount,
+      updated_at
+    )
+    VALUES (
+      ${year},
+      ${month},
+      ${normalized.createdByLogin},
+      ${normalized.collectionStaffNickname},
+      ${aggregate.totalRecords},
+      ${aggregate.totalAmount},
+      now()
+    )
+    ON CONFLICT (year, month, created_by_login, collection_staff_nickname)
+    DO UPDATE SET
+      total_records = EXCLUDED.total_records,
+      total_amount = EXCLUDED.total_amount,
+      updated_at = now()
+  `);
+}
+
+export async function rebuildCollectionRecordMonthlyRollups(
+  executor: CollectionRepositoryExecutor,
+): Promise<void> {
+  await executor.execute(sql`
+    DELETE FROM public.collection_record_monthly_rollups rollup
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM public.collection_record_daily_rollups daily
+      WHERE daily.created_by_login = rollup.created_by_login
+        AND daily.collection_staff_nickname = rollup.collection_staff_nickname
+        AND EXTRACT(YEAR FROM daily.payment_date)::int = rollup.year
+        AND EXTRACT(MONTH FROM daily.payment_date)::int = rollup.month
+    )
+  `);
+  await executor.execute(sql`
+    INSERT INTO public.collection_record_monthly_rollups (
+      year,
+      month,
+      created_by_login,
+      collection_staff_nickname,
+      total_records,
+      total_amount,
+      updated_at
+    )
+    SELECT
+      EXTRACT(YEAR FROM payment_date)::int AS year,
+      EXTRACT(MONTH FROM payment_date)::int AS month,
+      created_by_login,
+      collection_staff_nickname,
+      COALESCE(SUM(total_records), 0)::int,
+      COALESCE(SUM(total_amount), 0)::numeric(14,2),
+      now()
+    FROM public.collection_record_daily_rollups
+    GROUP BY 1, 2, 3, 4
+    ON CONFLICT (year, month, created_by_login, collection_staff_nickname)
     DO UPDATE SET
       total_records = EXCLUDED.total_records,
       total_amount = EXCLUDED.total_amount,
@@ -264,6 +382,68 @@ export async function getCollectionRecordDailyRollupRefreshQueueSnapshot(
   };
 }
 
+function resolveCollectionRollupFreshnessStatus(
+  snapshot: CollectionRecordDailyRollupRefreshQueueSnapshot,
+): CollectionRollupFreshnessStatus {
+  if (
+    snapshot.retryCount > 0
+    || snapshot.oldestPendingAgeMs >= 120_000
+    || snapshot.pendingCount >= 15
+  ) {
+    return "stale";
+  }
+  if (
+    snapshot.pendingCount > 0
+    || snapshot.oldestPendingAgeMs >= 30_000
+  ) {
+    return "warming";
+  }
+  return "fresh";
+}
+
+export async function getCollectionRecordDailyRollupFreshnessSnapshot(
+  filters?: {
+    from?: string;
+    to?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+  },
+  now: Date = new Date(),
+): Promise<CollectionRollupFreshnessSnapshot> {
+  const whereSql = buildCollectionRecordDailyRollupWhereSql(filters);
+  const result = await db.execute(sql`
+    SELECT
+      COUNT(*)::int AS pending_count,
+      COUNT(*) FILTER (WHERE status = 'running')::int AS running_count,
+      COUNT(*) FILTER (WHERE NULLIF(BTRIM(COALESCE(last_error, '')), '') IS NOT NULL)::int AS retry_count,
+      COALESCE(
+        MAX(
+          GREATEST(
+            0,
+            FLOOR(EXTRACT(EPOCH FROM (${now}::timestamptz - requested_at)) * 1000)
+          )::bigint
+        ),
+        0
+      )::bigint AS oldest_pending_age_ms
+    FROM public.collection_record_daily_rollup_refresh_queue
+    ${whereSql}
+  `);
+  const baseSnapshot = {
+    pendingCount: Number((result.rows?.[0] as Record<string, unknown> | undefined)?.pending_count || 0),
+    runningCount: Number((result.rows?.[0] as Record<string, unknown> | undefined)?.running_count || 0),
+    retryCount: Number((result.rows?.[0] as Record<string, unknown> | undefined)?.retry_count || 0),
+    oldestPendingAgeMs: Math.max(
+      0,
+      Number((result.rows?.[0] as Record<string, unknown> | undefined)?.oldest_pending_age_ms || 0),
+    ),
+  };
+
+  return {
+    ...baseSnapshot,
+    status: resolveCollectionRollupFreshnessStatus(baseSnapshot),
+  };
+}
+
 async function hasPendingCollectionRecordDailyRollupSlices(filters?: {
   from?: string;
   to?: string;
@@ -291,6 +471,27 @@ export async function markRunningCollectionRecordDailyRollupRefreshSlicesQueued(
       last_error = COALESCE(last_error, 'Rollup refresh was interrupted by a server restart before completion.')
     WHERE status = 'running'
   `);
+}
+
+export async function requeueCollectionRecordDailyRollupRefreshFailures(): Promise<number> {
+  const result = await db.execute(sql`
+    WITH updated AS (
+      UPDATE public.collection_record_daily_rollup_refresh_queue
+      SET
+        status = 'queued',
+        updated_at = now(),
+        next_attempt_at = now()
+      WHERE NULLIF(BTRIM(COALESCE(last_error, '')), '') IS NOT NULL
+      RETURNING 1
+    )
+    SELECT COUNT(*)::int AS affected_count
+    FROM updated
+  `);
+  return Number((result.rows?.[0] as Record<string, unknown> | undefined)?.affected_count || 0);
+}
+
+export async function clearCollectionRecordDailyRollupRefreshQueue(): Promise<void> {
+  await db.execute(sql`DELETE FROM public.collection_record_daily_rollup_refresh_queue`);
 }
 
 export async function claimNextCollectionRecordDailyRollupRefreshSlice(
@@ -720,6 +921,7 @@ export async function purgeCollectionRecordsOlderThan(beforeDate: string): Promi
       DELETE FROM public.collection_record_daily_rollups
       WHERE payment_date < ${normalizedBeforeDate}::date
     `);
+    await rebuildCollectionRecordMonthlyRollups(tx);
     await tx.execute(sql`
       DELETE FROM public.collection_record_daily_rollup_refresh_queue
       WHERE payment_date < ${normalizedBeforeDate}::date
@@ -765,15 +967,16 @@ export async function getCollectionMonthlySummary(filters: {
     return mapCollectionMonthlySummaryRows(fallbackResult.rows || []);
   }
 
+  const monthlyWhere = buildCollectionRecordMonthlyRollupWhereSql(filters);
   const result = await db.execute(sql`
     SELECT
-      EXTRACT(MONTH FROM payment_date)::int AS month,
+      month,
       COALESCE(SUM(total_records), 0)::int AS total_records,
       COALESCE(SUM(total_amount), 0)::numeric(14,2) AS total_amount
-    FROM public.collection_record_daily_rollups
-    ${whereSql}
-    GROUP BY 1
-    ORDER BY 1
+    FROM public.collection_record_monthly_rollups
+    ${monthlyWhere.whereSql}
+    GROUP BY month
+    ORDER BY month
     LIMIT 12
   `);
 

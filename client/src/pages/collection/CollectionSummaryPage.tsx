@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollectionMonthDetailsDialog } from "@/pages/collection-summary/CollectionMonthDetailsDialog";
 import { buildCollectionSummaryPageViewModels } from "@/pages/collection-summary/collection-summary-page-view-models";
@@ -35,7 +36,13 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
   return (
     <Card className="border-border/60 bg-background/70">
       <CardHeader className="pb-4">
-        <CardTitle className="text-xl">Collection Summary</CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardTitle className="text-xl">Collection Summary</CardTitle>
+          <CollectionReportFreshnessBadge freshness={summaryData.freshness} />
+        </div>
+        {summaryData.freshness ? (
+          <p className="text-xs text-muted-foreground">{summaryData.freshness.message}</p>
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
         <CollectionSummaryFilters {...viewModels.filters} />

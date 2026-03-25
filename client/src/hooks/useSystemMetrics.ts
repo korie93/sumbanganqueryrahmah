@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type IntelligenceExplainPayload,
   type MonitorAlert,
+  type MonitorAlertIncident,
   type MonitorRequestState,
+  getAlertHistory,
   getAlerts,
   getIntelligenceExplain,
   getSystemHealth,
@@ -45,6 +47,7 @@ type EndpointState = {
   mode: MonitorRequestState;
   workers: MonitorRequestState;
   alerts: MonitorRequestState;
+  alertHistory: MonitorRequestState;
   explain: MonitorRequestState;
 };
 
@@ -84,10 +87,12 @@ type UseSystemMetricsResult = {
   snapshot: MonitorSnapshot;
   history: MonitorHistory;
   alerts: MonitorAlert[];
+  alertHistory: MonitorAlertIncident[];
   intelligence: IntelligenceExplainPayload;
   endpointState: EndpointState;
   accessDenied: boolean;
   hasNetworkFailure: boolean;
+  refreshNow: () => Promise<void>;
 };
 
 const POLL_INTERVAL_MS = 5000;
@@ -271,6 +276,7 @@ const endpointStatesEqual = (a: EndpointState, b: EndpointState) =>
   a.mode === b.mode &&
   a.workers === b.workers &&
   a.alerts === b.alerts &&
+  a.alertHistory === b.alertHistory &&
   a.explain === b.explain;
 
 const alertsEqual = (a: MonitorAlert[], b: MonitorAlert[]) => {
@@ -281,6 +287,22 @@ const alertsEqual = (a: MonitorAlert[], b: MonitorAlert[]) => {
       a[i].severity !== b[i].severity ||
       a[i].message !== b[i].message ||
       a[i].timestamp !== b[i].timestamp
+    ) {
+      return false;
+    }
+  }
+  return true;
+};
+
+const alertHistoryEqual = (a: MonitorAlertIncident[], b: MonitorAlertIncident[]) => {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (
+      a[i].id !== b[i].id ||
+      a[i].severity !== b[i].severity ||
+      a[i].status !== b[i].status ||
+      a[i].message !== b[i].message ||
+      a[i].updatedAt !== b[i].updatedAt
     ) {
       return false;
     }
@@ -373,12 +395,14 @@ export function useSystemMetrics(): UseSystemMetricsResult {
   const [snapshot, setSnapshot] = useState<MonitorSnapshot>(initialSnapshot);
   const [history, setHistory] = useState<MonitorHistory>(initialHistory);
   const [alerts, setAlerts] = useState<MonitorAlert[]>([]);
+  const [alertHistory, setAlertHistory] = useState<MonitorAlertIncident[]>([]);
   const [intelligence, setIntelligence] = useState<IntelligenceExplainPayload>(initialIntelligence);
   const [endpointState, setEndpointState] = useState<EndpointState>({
     health: "ok",
     mode: "ok",
     workers: "ok",
     alerts: "ok",
+    alertHistory: "ok",
     explain: "ok",
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -386,6 +410,7 @@ export function useSystemMetrics(): UseSystemMetricsResult {
   const historyRef = useRef(history);
   const snapshotRef = useRef(snapshot);
   const alertsRef = useRef(alerts);
+  const alertHistoryRef = useRef(alertHistory);
   const intelligenceRef = useRef(intelligence);
   const endpointStateRef = useRef(endpointState);
   const inFlightRef = useRef(false);
@@ -414,6 +439,10 @@ export function useSystemMetrics(): UseSystemMetricsResult {
   }, [alerts]);
 
   useEffect(() => {
+    alertHistoryRef.current = alertHistory;
+  }, [alertHistory]);
+
+  useEffect(() => {
     intelligenceRef.current = intelligence;
   }, [intelligence]);
 
@@ -428,11 +457,12 @@ export function useSystemMetrics(): UseSystemMetricsResult {
     pollControllerRef.current = controller;
 
     try {
-      const [healthRes, modeRes, workersRes, alertsRes, explainRes] = await Promise.all([
+      const [healthRes, modeRes, workersRes, alertsRes, alertHistoryRes, explainRes] = await Promise.all([
         getSystemHealth({ signal: controller.signal }),
         getSystemMode({ signal: controller.signal }),
         getWorkers({ signal: controller.signal }),
         getAlerts({ signal: controller.signal }),
+        getAlertHistory({ signal: controller.signal }),
         getIntelligenceExplain({ signal: controller.signal }),
       ]);
 
@@ -499,6 +529,7 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       const workerCount = Number(workersRes.data?.count ?? healthRes.data?.workerCount ?? previous.workerCount);
       const maxWorkers = Number(workersRes.data?.maxWorkers ?? healthRes.data?.maxWorkers ?? previous.maxWorkers);
       const nextAlerts = alertsRes.data?.alerts ?? alertsRef.current;
+      const nextAlertHistory = alertHistoryRes.data?.incidents ?? alertHistoryRef.current;
       const activeAlertCount = Number(healthRes.data?.activeAlertCount ?? nextAlerts.length);
 
       const provisionalSnapshot: MonitorSnapshot = {
@@ -549,6 +580,7 @@ export function useSystemMetrics(): UseSystemMetricsResult {
 
       const snapshotChanged = !snapshotsEqual(snapshotRef.current, nextSnapshot);
       const alertsChanged = !alertsEqual(alertsRef.current, nextAlerts);
+      const alertHistoryChanged = !alertHistoryEqual(alertHistoryRef.current, nextAlertHistory);
       const nextIntelligence = explainRes.data ?? intelligenceRef.current;
       const intelligenceChanged = !explainabilityEqual(intelligenceRef.current, nextIntelligence);
       if (snapshotChanged) {
@@ -559,6 +591,11 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       if (alertsChanged) {
         if (mountedRef.current) {
           setAlerts(nextAlerts);
+        }
+      }
+      if (alertHistoryChanged) {
+        if (mountedRef.current) {
+          setAlertHistory(nextAlertHistory);
         }
       }
       if (intelligenceChanged) {
@@ -572,6 +609,7 @@ export function useSystemMetrics(): UseSystemMetricsResult {
         mode: modeRes.state,
         workers: workersRes.state,
         alerts: alertsRes.state,
+        alertHistory: alertHistoryRes.state,
         explain: explainRes.state,
       };
       const endpointChanged = !endpointStatesEqual(endpointStateRef.current, nextEndpointState);
@@ -581,7 +619,7 @@ export function useSystemMetrics(): UseSystemMetricsResult {
         }
       }
 
-      if (mountedRef.current && (snapshotChanged || alertsChanged || intelligenceChanged || endpointChanged || historyChanged)) {
+      if (mountedRef.current && (snapshotChanged || alertsChanged || alertHistoryChanged || intelligenceChanged || endpointChanged || historyChanged)) {
         const responseTs = Number(
           healthRes.data?.updatedAt ??
             modeRes.data?.updatedAt ??
@@ -616,11 +654,13 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       endpointState.mode === "forbidden" ||
       endpointState.workers === "forbidden" ||
       endpointState.alerts === "forbidden" ||
+      endpointState.alertHistory === "forbidden" ||
       endpointState.explain === "forbidden" ||
       endpointState.health === "unauthorized" ||
       endpointState.mode === "unauthorized" ||
       endpointState.workers === "unauthorized" ||
       endpointState.alerts === "unauthorized" ||
+      endpointState.alertHistory === "unauthorized" ||
       endpointState.explain === "unauthorized",
     [endpointState],
   );
@@ -631,6 +671,7 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       endpointState.mode === "network_error" ||
       endpointState.workers === "network_error" ||
       endpointState.alerts === "network_error" ||
+      endpointState.alertHistory === "network_error" ||
       endpointState.explain === "network_error",
     [endpointState],
   );
@@ -641,9 +682,11 @@ export function useSystemMetrics(): UseSystemMetricsResult {
     snapshot,
     history,
     alerts,
+    alertHistory,
     intelligence,
     endpointState,
     accessDenied,
     hasNetworkFailure,
+    refreshNow: pollMetrics,
   };
 }

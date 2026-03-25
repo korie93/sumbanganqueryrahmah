@@ -544,6 +544,12 @@ function createSystemPermissionHarness() {
     systemHealth: 0,
     explain: 0,
     chaos: 0,
+    alertHistory: 0,
+    rollupStatus: 0,
+    rollupDrain: 0,
+    rollupRetry: 0,
+    rollupAutoHeal: 0,
+    rollupRebuild: 0,
   };
   const app = createJsonTestApp();
   const requireMonitorAccess: RequestHandler = (req: any, res, next) => {
@@ -611,6 +617,75 @@ function createSystemPermissionHarness() {
         injected: {} as any,
         active: [],
       };
+    },
+    getCollectionRollupQueueStatus: async () => {
+      calls.rollupStatus += 1;
+      return {
+        pendingCount: 0,
+        runningCount: 0,
+        retryCount: 0,
+        oldestPendingAgeMs: 0,
+      };
+    },
+    drainCollectionRollupQueue: async () => {
+      calls.rollupDrain += 1;
+      return {
+        ok: true,
+        action: "drain",
+        message: "Drain requested.",
+        snapshot: {
+          pendingCount: 0,
+          runningCount: 0,
+          retryCount: 0,
+          oldestPendingAgeMs: 0,
+        },
+      };
+    },
+    retryCollectionRollupFailures: async () => {
+      calls.rollupRetry += 1;
+      return {
+        ok: true,
+        action: "retry-failures",
+        message: "Retry requested.",
+        snapshot: {
+          pendingCount: 0,
+          runningCount: 0,
+          retryCount: 0,
+          oldestPendingAgeMs: 0,
+        },
+      };
+    },
+    autoHealCollectionRollupQueue: async () => {
+      calls.rollupAutoHeal += 1;
+      return {
+        ok: true,
+        action: "auto-heal",
+        message: "Auto-heal requested.",
+        snapshot: {
+          pendingCount: 0,
+          runningCount: 0,
+          retryCount: 0,
+          oldestPendingAgeMs: 0,
+        },
+      };
+    },
+    rebuildCollectionRollups: async () => {
+      calls.rollupRebuild += 1;
+      return {
+        ok: true,
+        action: "rebuild",
+        message: "Rebuild requested.",
+        snapshot: {
+          pendingCount: 0,
+          runningCount: 0,
+          retryCount: 0,
+          oldestPendingAgeMs: 0,
+        },
+      };
+    },
+    listMonitorAlertHistory: async () => {
+      calls.alertHistory += 1;
+      return [];
     },
     createAuditLog: async (data) => ({
       id: "audit-1",
@@ -1016,12 +1091,42 @@ test("system monitor routes enforce monitor-access and chaos role boundaries con
     );
     await assertRoleMatrix(
       baseUrl,
+      { method: "GET", path: "/internal/alerts/history" },
+      { anonymous: 401, user: 200, admin: 200, superuser: 200 },
+    );
+    await assertRoleMatrix(
+      baseUrl,
       {
         method: "POST",
         path: "/internal/chaos/inject",
         body: { type: "cpu_spike", magnitude: 1.2, durationMs: 5000 },
       },
       { anonymous: 401, user: 403, admin: 200, superuser: 200 },
+    );
+    await assertRoleMatrix(
+      baseUrl,
+      { method: "POST", path: "/internal/rollup-refresh/status" },
+      { anonymous: 401, user: 403, admin: 403, superuser: 200 },
+    );
+    await assertRoleMatrix(
+      baseUrl,
+      { method: "POST", path: "/internal/rollup-refresh/drain" },
+      { anonymous: 401, user: 403, admin: 403, superuser: 200 },
+    );
+    await assertRoleMatrix(
+      baseUrl,
+      { method: "POST", path: "/internal/rollup-refresh/retry-failures" },
+      { anonymous: 401, user: 403, admin: 403, superuser: 200 },
+    );
+    await assertRoleMatrix(
+      baseUrl,
+      { method: "POST", path: "/internal/rollup-refresh/auto-heal" },
+      { anonymous: 401, user: 403, admin: 403, superuser: 200 },
+    );
+    await assertRoleMatrix(
+      baseUrl,
+      { method: "POST", path: "/internal/rollup-refresh/rebuild" },
+      { anonymous: 401, user: 403, admin: 403, superuser: 200 },
     );
 
     for (const role of ["user", "admin", "superuser"] as const) {
@@ -1044,7 +1149,13 @@ test("system monitor routes enforce monitor-access and chaos role boundaries con
 
     assert.equal(calls.systemHealth, 3);
     assert.equal(calls.explain, 3);
+    assert.equal(calls.alertHistory, 3);
     assert.equal(calls.chaos, 2);
+    assert.equal(calls.rollupStatus, 1);
+    assert.equal(calls.rollupDrain, 1);
+    assert.equal(calls.rollupRetry, 1);
+    assert.equal(calls.rollupAutoHeal, 1);
+    assert.equal(calls.rollupRebuild, 1);
   } finally {
     await stopTestServer(server);
   }

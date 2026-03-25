@@ -13,6 +13,8 @@ export class CoreSchemaBootstrap {
   private auditLogsInitPromise: Promise<void> | null = null;
   private mutationIdempotencyReady = false;
   private mutationIdempotencyInitPromise: Promise<void> | null = null;
+  private monitorAlertHistoryReady = false;
+  private monitorAlertHistoryInitPromise: Promise<void> | null = null;
   private performanceIndexesReady = false;
   private performanceIndexesInitPromise: Promise<void> | null = null;
   private bannedSessionsReady = false;
@@ -323,6 +325,76 @@ export class CoreSchemaBootstrap {
       await this.mutationIdempotencyInitPromise;
     } finally {
       this.mutationIdempotencyInitPromise = null;
+    }
+  }
+
+  async ensureMonitorAlertHistoryTable(): Promise<void> {
+    if (this.monitorAlertHistoryReady) return;
+    if (this.monitorAlertHistoryInitPromise) {
+      await this.monitorAlertHistoryInitPromise;
+      return;
+    }
+
+    this.monitorAlertHistoryInitPromise = (async () => {
+      try {
+        await db.execute(sql`SET search_path TO public`);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS public.monitor_alert_incidents (
+            id uuid PRIMARY KEY,
+            alert_key text NOT NULL,
+            severity text NOT NULL,
+            source text,
+            message text NOT NULL,
+            status text NOT NULL DEFAULT 'open',
+            first_seen_at timestamp NOT NULL DEFAULT now(),
+            last_seen_at timestamp NOT NULL DEFAULT now(),
+            resolved_at timestamp,
+            updated_at timestamp NOT NULL DEFAULT now()
+          )
+        `);
+        await db.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS alert_key text`);
+        await db.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS severity text`);
+        await db.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS source text`);
+        await db.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS message text`);
+        await db.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS status text DEFAULT 'open'`);
+        await db.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS first_seen_at timestamp DEFAULT now()`);
+        await db.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS last_seen_at timestamp DEFAULT now()`);
+        await db.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS resolved_at timestamp`);
+        await db.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+        await db.execute(sql`
+          UPDATE public.monitor_alert_incidents
+          SET
+            severity = COALESCE(NULLIF(severity, ''), 'INFO'),
+            message = COALESCE(NULLIF(message, ''), 'Monitor alert'),
+            status = COALESCE(NULLIF(status, ''), 'open'),
+            first_seen_at = COALESCE(first_seen_at, now()),
+            last_seen_at = COALESCE(last_seen_at, first_seen_at, now()),
+            updated_at = COALESCE(updated_at, last_seen_at, first_seen_at, now())
+        `);
+        await db.execute(sql`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_monitor_alert_incidents_open_key_unique
+          ON public.monitor_alert_incidents(alert_key)
+          WHERE status = 'open'
+        `);
+        await db.execute(sql`
+          CREATE INDEX IF NOT EXISTS idx_monitor_alert_incidents_status_updated_at
+          ON public.monitor_alert_incidents(status, updated_at DESC)
+        `);
+        await db.execute(sql`
+          CREATE INDEX IF NOT EXISTS idx_monitor_alert_incidents_resolved_at
+          ON public.monitor_alert_incidents(resolved_at DESC)
+        `);
+        this.monitorAlertHistoryReady = true;
+      } catch (err: any) {
+        logger.error("Failed to ensure monitor alert incidents table", { error: err });
+        throw err;
+      }
+    })();
+
+    try {
+      await this.monitorAlertHistoryInitPromise;
+    } finally {
+      this.monitorAlertHistoryInitPromise = null;
     }
   }
 

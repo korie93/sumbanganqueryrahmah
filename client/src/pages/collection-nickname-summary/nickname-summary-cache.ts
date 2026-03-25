@@ -1,3 +1,4 @@
+import type { CollectionReportFreshness } from "@/lib/api";
 import type { NicknameTotalSummary } from "@/pages/collection-nickname-summary/utils";
 
 const DEFAULT_COLLECTION_NICKNAME_SUMMARY_CACHE_LIMIT = 12;
@@ -6,6 +7,7 @@ export type CollectionNicknameSummaryCacheEntry = {
   nicknameTotals: NicknameTotalSummary[];
   totalAmount: number;
   totalRecords: number;
+  freshness: CollectionReportFreshness | null;
 };
 
 export function normalizeCollectionNicknameSummaryNicknames(nicknames?: string[]) {
@@ -51,6 +53,7 @@ export function createCollectionNicknameSummaryCache(
         nicknameTotals: [...entry.nicknameTotals],
         totalAmount: entry.totalAmount,
         totalRecords: entry.totalRecords,
+        freshness: entry.freshness ? { ...entry.freshness } : null,
       } satisfies CollectionNicknameSummaryCacheEntry;
     },
     set(key: string, entry: CollectionNicknameSummaryCacheEntry) {
@@ -62,6 +65,7 @@ export function createCollectionNicknameSummaryCache(
         nicknameTotals: [...entry.nicknameTotals],
         totalAmount: Number(entry.totalAmount || 0),
         totalRecords: Number(entry.totalRecords || 0),
+        freshness: entry.freshness ? { ...entry.freshness } : null,
       });
 
       while (entries.size > Math.max(1, Math.floor(maxEntries))) {

@@ -27,6 +27,10 @@ const collectionRecordDailyRollupQueueMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", "0015_reviewed_collection_record_daily_rollup_refresh_queue.sql"),
   "utf8",
 );
+const monitorAndMonthlyRollupsMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", "0016_reviewed_monitor_and_monthly_rollups.sql"),
+  "utf8",
+);
 const usersMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", "0012_reviewed_users_table.sql"),
   "utf8",
@@ -404,6 +408,7 @@ test(
       await applySql(pool, collectionRecordMigrationSql);
       await applySql(pool, collectionRecordDailyRollupMigrationSql);
       await applySql(pool, collectionRecordDailyRollupQueueMigrationSql);
+      await applySql(pool, monitorAndMonthlyRollupsMigrationSql);
       await ensureCollectionRecordsTables(drizzle(pool));
 
       const recordResult = await pool.query<{
@@ -452,6 +457,19 @@ test(
       `);
       assert.equal(rollupResult.rows[0]?.total_records, 1);
       assert.equal(Number(rollupResult.rows[0]?.total_amount || 0), 50);
+      const monthlyRollupResult = await pool.query<{
+        total_records: number;
+        total_amount: string;
+      }>(`
+        SELECT total_records, total_amount
+        FROM public.collection_record_monthly_rollups
+        WHERE year = 2026
+          AND month = 3
+          AND created_by_login = 'unknown'
+          AND collection_staff_nickname = 'unknown'
+      `);
+      assert.equal(monthlyRollupResult.rows[0]?.total_records, 1);
+      assert.equal(Number(monthlyRollupResult.rows[0]?.total_amount || 0), 50);
       assert.equal(
         await pool.query(`SELECT COUNT(*)::int AS count FROM public.collection_record_receipts WHERE collection_record_id = '33333333-3333-3333-3333-333333333333'::uuid`).then((result) => result.rows[0]?.count),
         0,
@@ -460,6 +478,7 @@ test(
       assert.equal(await indexExists(pool, "idx_collection_record_receipts_record_storage_unique"), true);
       assert.equal(await indexExists(pool, "idx_collection_record_daily_rollups_slice_unique"), true);
       assert.equal(await indexExists(pool, "idx_collection_rollup_refresh_queue_slice_unique"), true);
+      assert.equal(await indexExists(pool, "idx_collection_record_monthly_rollups_slice_unique"), true);
     });
   },
 );
@@ -520,6 +539,7 @@ test(
       await applySql(pool, collectionRecordMigrationSql);
       await applySql(pool, collectionRecordDailyRollupMigrationSql);
       await applySql(pool, collectionRecordDailyRollupQueueMigrationSql);
+      await applySql(pool, monitorAndMonthlyRollupsMigrationSql);
 
       const receiptCount = await pool.query<{ count: number }>(
         `
@@ -555,11 +575,21 @@ test(
           AND created_by_login = 'unknown'
           AND collection_staff_nickname = 'unknown'
       `);
+      const monthlyRollupCount = await pool.query<{ count: number }>(`
+        SELECT COUNT(*)::int AS count
+        FROM public.collection_record_monthly_rollups
+        WHERE year = 2026
+          AND month = 3
+          AND created_by_login = 'unknown'
+          AND collection_staff_nickname = 'unknown'
+      `);
       assert.equal(rollupCount.rows[0]?.count, 1);
+      assert.equal(monthlyRollupCount.rows[0]?.count, 1);
       assert.equal(await constraintExists(pool, "fk_collection_record_receipts_record_id"), true);
       assert.equal(await indexExists(pool, "idx_collection_records_lower_created_by_payment_created_id"), true);
       assert.equal(await indexExists(pool, "idx_collection_record_daily_rollups_slice_unique"), true);
       assert.equal(await indexExists(pool, "idx_collection_rollup_refresh_queue_slice_unique"), true);
+      assert.equal(await indexExists(pool, "idx_collection_record_monthly_rollups_slice_unique"), true);
     });
   },
 );

@@ -17,6 +17,7 @@ export type {
   CollectionRecord,
   CollectionRecordAggregate,
   CollectionRecordReceipt,
+  CollectionRollupFreshnessSnapshot,
   CollectionStaffNickname,
   CreateCollectionRecordInput,
   CreateCollectionRecordReceiptInput,

@@ -1,3 +1,4 @@
+import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { CollectionDailyOverviewResponse } from "@/lib/api";
 import { formatAmountRM } from "@/pages/collection/utils";
@@ -19,6 +20,15 @@ export function CollectionDailySummaryCard({ overview }: CollectionDailySummaryC
   return (
     <Card className="border-border/60 bg-background/70">
       <CardContent className="space-y-3 pt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold">Report Freshness</p>
+            <p className="text-xs text-muted-foreground">
+              {overview.freshness?.message || "Collection daily summary is using the latest available rollups."}
+            </p>
+          </div>
+          <CollectionReportFreshnessBadge freshness={overview.freshness} />
+        </div>
         <div className="grid gap-2 text-sm md:grid-cols-2 lg:grid-cols-4" data-testid="collection-daily-summary">
           <div>
             Monthly Target: <span className="font-semibold">{formatAmountRM(overview.summary.monthlyTarget)}</span>

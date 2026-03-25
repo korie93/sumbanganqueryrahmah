@@ -9,6 +9,7 @@ import {
 import { getCollectionDailyStatusMessage } from "./collection-daily-utils";
 import { CollectionDailyOverviewService } from "./collection-daily-overview.service";
 import type { CollectionStoragePort, ListQuery } from "./collection-service-support";
+import { getCollectionReportFreshness } from "./collection-report-freshness";
 
 type RequireUserFn = (user?: AuthenticatedUser) => AuthenticatedUser;
 
@@ -130,6 +131,11 @@ export class CollectionDailyOperations {
     const computation = await this.dailyOverviewService.buildDailyOverviewComputation(user, year, month, query);
     const selectedUsernames = computation.selectedUsers.map((item) => item.username);
     const currentNickname = await resolveCurrentCollectionNicknameFromSession(this.storage, user as any);
+    const freshness = await getCollectionReportFreshness(this.storage, {
+      from: `${year}-${String(month).padStart(2, "0")}-01`,
+      to: `${year}-${String(month).padStart(2, "0")}-${String(computation.daysInMonth).padStart(2, "0")}`,
+      nicknames: selectedUsernames,
+    });
 
     return {
       ok: true as const,
@@ -145,6 +151,7 @@ export class CollectionDailyOperations {
       days: computation.days,
       carryForwardRule:
         "Daily requirement is calculated from remaining target divided by remaining working days, capped by the monthly target.",
+      freshness,
     };
   }
 
@@ -189,6 +196,11 @@ export class CollectionDailyOperations {
 
     const status = dayOverview.status;
     const message = getCollectionDailyStatusMessage(status);
+    const freshness = await getCollectionReportFreshness(this.storage, {
+      from: date,
+      to: date,
+      nicknames: selectedUsernames,
+    });
 
     return {
       ok: true as const,
@@ -238,6 +250,7 @@ export class CollectionDailyOperations {
           createdAt: receipt.createdAt instanceof Date ? receipt.createdAt.toISOString() : String(receipt.createdAt),
         })),
       })),
+      freshness,
     };
   }
 }

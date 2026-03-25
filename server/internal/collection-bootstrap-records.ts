@@ -276,6 +276,85 @@ export async function ensureCollectionRecordsTables(
   `);
 
   await database.execute(sql`
+    CREATE TABLE IF NOT EXISTS public.collection_record_monthly_rollups (
+      year integer NOT NULL,
+      month integer NOT NULL,
+      created_by_login text NOT NULL,
+      collection_staff_nickname text NOT NULL,
+      total_records integer NOT NULL DEFAULT 0,
+      total_amount numeric(14,2) NOT NULL,
+      updated_at timestamp NOT NULL DEFAULT now()
+    )
+  `);
+  await database.execute(sql`ALTER TABLE public.collection_record_monthly_rollups ADD COLUMN IF NOT EXISTS year integer`);
+  await database.execute(sql`ALTER TABLE public.collection_record_monthly_rollups ADD COLUMN IF NOT EXISTS month integer`);
+  await database.execute(sql`ALTER TABLE public.collection_record_monthly_rollups ADD COLUMN IF NOT EXISTS created_by_login text`);
+  await database.execute(sql`ALTER TABLE public.collection_record_monthly_rollups ADD COLUMN IF NOT EXISTS collection_staff_nickname text`);
+  await database.execute(sql`ALTER TABLE public.collection_record_monthly_rollups ADD COLUMN IF NOT EXISTS total_records integer DEFAULT 0`);
+  await database.execute(sql`ALTER TABLE public.collection_record_monthly_rollups ADD COLUMN IF NOT EXISTS total_amount numeric(14,2)`);
+  await database.execute(sql`ALTER TABLE public.collection_record_monthly_rollups ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+  await database.execute(sql`
+    UPDATE public.collection_record_monthly_rollups
+    SET
+      total_records = COALESCE(total_records, 0),
+      total_amount = COALESCE(total_amount, 0),
+      updated_at = COALESCE(updated_at, now())
+  `);
+  await database.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_record_monthly_rollups_slice_unique
+    ON public.collection_record_monthly_rollups(year, month, created_by_login, collection_staff_nickname)
+  `);
+  await database.execute(sql`
+    CREATE INDEX IF NOT EXISTS idx_collection_record_monthly_rollups_year_month
+    ON public.collection_record_monthly_rollups(year, month)
+  `);
+  await database.execute(sql`
+    CREATE INDEX IF NOT EXISTS idx_collection_record_monthly_rollups_created_by_year_month
+    ON public.collection_record_monthly_rollups(created_by_login, year, month)
+  `);
+  await database.execute(sql`
+    CREATE INDEX IF NOT EXISTS idx_collection_record_monthly_rollups_lower_nickname_year_month
+    ON public.collection_record_monthly_rollups((lower(collection_staff_nickname)), year, month)
+  `);
+  await database.execute(sql`
+    DELETE FROM public.collection_record_monthly_rollups rollup
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM public.collection_record_daily_rollups daily
+      WHERE daily.created_by_login = rollup.created_by_login
+        AND daily.collection_staff_nickname = rollup.collection_staff_nickname
+        AND EXTRACT(YEAR FROM daily.payment_date)::int = rollup.year
+        AND EXTRACT(MONTH FROM daily.payment_date)::int = rollup.month
+    )
+  `);
+  await database.execute(sql`
+    INSERT INTO public.collection_record_monthly_rollups (
+      year,
+      month,
+      created_by_login,
+      collection_staff_nickname,
+      total_records,
+      total_amount,
+      updated_at
+    )
+    SELECT
+      EXTRACT(YEAR FROM payment_date)::int AS year,
+      EXTRACT(MONTH FROM payment_date)::int AS month,
+      created_by_login,
+      collection_staff_nickname,
+      COALESCE(SUM(total_records), 0)::int,
+      COALESCE(SUM(total_amount), 0)::numeric(14,2),
+      now()
+    FROM public.collection_record_daily_rollups
+    GROUP BY 1, 2, 3, 4
+    ON CONFLICT (year, month, created_by_login, collection_staff_nickname)
+    DO UPDATE SET
+      total_records = EXCLUDED.total_records,
+      total_amount = EXCLUDED.total_amount,
+      updated_at = now()
+  `);
+
+  await database.execute(sql`
     CREATE TABLE IF NOT EXISTS public.collection_record_daily_rollup_refresh_queue (
       payment_date date NOT NULL,
       created_by_login text NOT NULL,

@@ -108,6 +108,10 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Collection reporting rollups now have a reviewed Drizzle migration while runtime bootstrap remains additive for backfill and compatibility refreshes.",
     ),
+    collection_record_monthly_rollups: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Second-level collection monthly rollups now have a reviewed Drizzle migration while runtime bootstrap remains additive for backfill and compatibility refreshes.",
+    ),
     collection_record_daily_rollup_refresh_queue: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Collection rollup refresh queue now has a reviewed Drizzle migration while runtime bootstrap remains additive for recovery and compatibility.",
@@ -139,6 +143,10 @@ export const schemaGovernanceManifest = {
     mutation_idempotency_keys: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Mutation idempotency now has a reviewed Drizzle migration while runtime bootstrap remains the compatibility path.",
+    ),
+    monitor_alert_incidents: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Persistent monitor alert history now has a reviewed Drizzle migration while runtime bootstrap remains additive for backfill and compatibility.",
     ),
     password_reset_requests: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "legacy-sql", "runtime-ddl"],

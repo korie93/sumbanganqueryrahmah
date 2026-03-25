@@ -69,6 +69,13 @@ export function createCollectionSummaryStorageDouble(options?: {
         },
       ];
     },
+    getCollectionRecordDailyRollupFreshness: async () => ({
+      status: "fresh" as const,
+      pendingCount: 0,
+      runningCount: 0,
+      retryCount: 0,
+      oldestPendingAgeMs: 0,
+    }),
     listCollectionRecords: async (filters: Record<string, unknown>) => {
       nicknameListCalls.push(filters);
       return [
@@ -160,6 +167,13 @@ export function createAdminCollectionSummaryStorageDouble() {
         },
       ];
     },
+    getCollectionRecordDailyRollupFreshness: async () => ({
+      status: "fresh" as const,
+      pendingCount: 0,
+      runningCount: 0,
+      retryCount: 0,
+      oldestPendingAgeMs: 0,
+    }),
     listCollectionRecords: async (filters: Record<string, unknown>) => {
       nicknameListCalls.push(filters);
       return [
@@ -226,6 +240,13 @@ export function createAdminCollectionNoVisibilityStorageDouble() {
         totalAmount: 9999,
       };
     },
+    getCollectionRecordDailyRollupFreshness: async () => ({
+      status: "fresh" as const,
+      pendingCount: 0,
+      runningCount: 0,
+      retryCount: 0,
+      oldestPendingAgeMs: 0,
+    }),
     listCollectionRecords: async (filters: Record<string, unknown>) => {
       nicknameListCalls.push(filters);
       return [

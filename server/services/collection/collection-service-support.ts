@@ -45,6 +45,7 @@ export type CollectionStoragePort = Pick<
   | "setCollectionNicknamePassword"
   | "setCollectionNicknameSession"
   | "summarizeCollectionRecords"
+  | "getCollectionRecordDailyRollupFreshness"
   | "summarizeCollectionRecordsByNicknameAndPaymentDate"
   | "summarizeCollectionRecordsByNickname"
   | "summarizeCollectionRecordsOlderThan"

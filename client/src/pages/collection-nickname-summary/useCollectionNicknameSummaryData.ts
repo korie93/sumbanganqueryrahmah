@@ -3,6 +3,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   getCollectionNicknameSummary,
   getCollectionNicknames,
+  type CollectionReportFreshness,
   type CollectionStaffNickname,
 } from "@/lib/api";
 import {
@@ -47,6 +48,7 @@ type UseCollectionNicknameSummaryDataValue = {
   totalAmount: number;
   totalRecords: number;
   hasApplied: boolean;
+  freshness: CollectionReportFreshness | null;
   allSelected: boolean;
   partiallySelected: boolean;
   nicknameTotals: NicknameTotalSummary[];
@@ -82,6 +84,7 @@ export function useCollectionNicknameSummaryData({
   const [totalAmount, setTotalAmount] = useState(0);
   const [totalRecords, setTotalRecords] = useState(0);
   const [hasApplied, setHasApplied] = useState(false);
+  const [freshness, setFreshness] = useState<CollectionReportFreshness | null>(null);
 
   const abortNicknamesRequest = useCallback(() => {
     if (nicknamesAbortControllerRef.current) {
@@ -221,6 +224,7 @@ export function useCollectionNicknameSummaryData({
         setNicknameTotals(cachedEntry.nicknameTotals);
         setTotalAmount(cachedEntry.totalAmount);
         setTotalRecords(cachedEntry.totalRecords);
+        setFreshness(cachedEntry.freshness);
         setHasApplied(true);
         setLoadingSummary(false);
         return;
@@ -247,10 +251,12 @@ export function useCollectionNicknameSummaryData({
           nicknameTotals: normalizedNicknameTotals,
           totalAmount: normalizedTotalAmount,
           totalRecords: normalizedTotalRecords,
+          freshness: response?.freshness || null,
         });
         setNicknameTotals(normalizedNicknameTotals);
         setTotalAmount(normalizedTotalAmount);
         setTotalRecords(normalizedTotalRecords);
+        setFreshness(response?.freshness || null);
         setHasApplied(true);
       } catch (error: unknown) {
         if (controller.signal.aborted || isAbortError(error)) return;
@@ -258,6 +264,7 @@ export function useCollectionNicknameSummaryData({
         setNicknameTotals([]);
         setTotalAmount(0);
         setTotalRecords(0);
+        setFreshness(null);
         setHasApplied(false);
         toast({
           title: "Failed to Load Nickname Summary",
@@ -330,6 +337,7 @@ export function useCollectionNicknameSummaryData({
     setNicknameTotals([]);
     setTotalAmount(0);
     setTotalRecords(0);
+    setFreshness(null);
     setHasApplied(false);
   }, [abortSummaryRequest]);
 
@@ -346,6 +354,7 @@ export function useCollectionNicknameSummaryData({
     totalAmount,
     totalRecords,
     hasApplied,
+    freshness,
     allSelected,
     partiallySelected,
     nicknameTotals,

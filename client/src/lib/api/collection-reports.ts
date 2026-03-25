@@ -2,6 +2,7 @@ import { apiRequest } from "../queryClient";
 import type {
   CollectionMonthlySummary,
   CollectionRecord,
+  CollectionReportFreshness,
 } from "./collection-types";
 
 export async function getCollectionMonthlySummary(filters: { year: number; nickname?: string; nicknames?: string[] }) {
@@ -17,7 +18,12 @@ export async function getCollectionMonthlySummary(filters: { year: number; nickn
     params.set("nickname", filters.nickname.trim());
   }
   const response = await apiRequest("GET", `/api/collection/summary?${params.toString()}`);
-  return response.json() as Promise<{ ok: boolean; year: number; summary: CollectionMonthlySummary[] }>;
+  return response.json() as Promise<{
+    ok: boolean;
+    year: number;
+    summary: CollectionMonthlySummary[];
+    freshness?: CollectionReportFreshness;
+  }>;
 }
 
 type CollectionReportRequestOptions = {
@@ -57,5 +63,6 @@ export async function getCollectionNicknameSummary(filters: {
       totalAmount: number;
     }>;
     records: CollectionRecord[];
+    freshness?: CollectionReportFreshness;
   }>;
 }

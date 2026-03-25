@@ -13,6 +13,7 @@ import type {
   CollectionRecord,
   CollectionRecordAggregate,
   CollectionRecordReceipt,
+  CollectionRollupFreshnessSnapshot,
   CollectionStaffNickname,
   CreateCollectionRecordInput,
   CreateCollectionRecordReceiptInput,
@@ -248,6 +249,15 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
     nicknames?: string[];
   }): Promise<CollectionNicknameAggregate[]> {
     return this.collectionRepository.summarizeCollectionRecordsByNickname(filters);
+  }
+
+  async getCollectionRecordDailyRollupFreshness(filters?: {
+    from?: string;
+    to?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+  }): Promise<CollectionRollupFreshnessSnapshot> {
+    return this.collectionRepository.getCollectionRecordDailyRollupFreshness(filters);
   }
 
   async summarizeCollectionRecordsByNicknameAndPaymentDate(filters?: {
