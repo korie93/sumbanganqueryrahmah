@@ -49,22 +49,35 @@ export function useSettingsController({
     confirmPasswordInput,
     currentPasswordInput,
     currentUser,
+    handleDisableTwoFactor,
+    handleEnableTwoFactor,
     handleChangePassword,
     handleChangeUsername,
+    handleStartTwoFactorSetup,
     hydrateCurrentUser,
     newPasswordInput,
     passwordSaving,
     setConfirmPasswordInput,
     setCurrentPasswordInput,
     setNewPasswordInput,
+    setTwoFactorCodeInput,
+    setTwoFactorPasswordInput,
     setUsernameInput,
+    twoFactorCodeInput,
+    twoFactorLoading,
+    twoFactorPasswordInput,
+    twoFactorSetupAccountName,
+    twoFactorSetupIssuer,
+    twoFactorSetupSecret,
+    twoFactorSetupUri,
     usernameInput,
     usernameSaving,
   } = myAccount;
   const canEditSystemSettings =
     currentUser?.role === "admin" || currentUser?.role === "superuser";
   const isSuperuser = currentUser?.role === "superuser";
-  const canAccessAccountSecurity = currentUser?.role === "superuser";
+  const canAccessAccountSecurity =
+    currentUser?.role === "superuser" || currentUser?.role === "admin";
   const canAccessAccountManagement = currentUser?.role === "superuser";
   const currentUserRole = currentUser?.role ?? "";
   const canAccessBackupSection = canAccessBackupCategory(currentUser?.role, tabVisibility);
@@ -199,6 +212,8 @@ export function useSettingsController({
     managedUsersPagination,
     managedUsersQuery,
     newPasswordInput,
+    onDisableTwoFactor: () => void handleDisableTwoFactor(),
+    onEnableTwoFactor: () => void handleEnableTwoFactor(),
     onChangePassword: () => void handleChangePassword(),
     onChangeUsername: () => void handleChangeUsername(),
     onClearDevMailOutbox: () => void handleClearDevMailOutbox(),
@@ -222,6 +237,9 @@ export function useSettingsController({
     onManagedUsersRefresh: () => void refreshManagedUsersSection(),
     onManagedUsersQueryChange: (query) => void updateManagedUsersQuery(query),
     onNewPasswordInputChange: setNewPasswordInput,
+    onStartTwoFactorSetup: () => void handleStartTwoFactorSetup(),
+    onTwoFactorCodeInputChange: setTwoFactorCodeInput,
+    onTwoFactorPasswordInputChange: setTwoFactorPasswordInput,
     onPendingResetRequestsRefresh: () => void refreshPendingResetRequestsSection(),
     onPendingResetRequestsQueryChange: (query) => void updatePendingResetRequestsQuery(query),
     onUsernameInputChange: setUsernameInput,
@@ -230,6 +248,15 @@ export function useSettingsController({
     pendingResetRequestsLoading,
     pendingResetRequestsPagination,
     pendingResetRequestsQuery,
+    twoFactorCodeInput,
+    twoFactorEnabled: currentUser?.twoFactorEnabled === true,
+    twoFactorLoading,
+    twoFactorPasswordInput,
+    twoFactorPendingSetup: currentUser?.twoFactorPendingSetup === true,
+    twoFactorSetupAccountName,
+    twoFactorSetupIssuer,
+    twoFactorSetupSecret,
+    twoFactorSetupUri,
     usernameInput,
     usernameSaving,
   });

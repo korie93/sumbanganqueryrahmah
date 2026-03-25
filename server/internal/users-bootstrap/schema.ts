@@ -31,6 +31,9 @@ export async function ensureUsersBootstrapSchema(
       status text NOT NULL DEFAULT 'active',
       must_change_password boolean NOT NULL DEFAULT false,
       password_reset_by_superuser boolean NOT NULL DEFAULT false,
+      two_factor_enabled boolean NOT NULL DEFAULT false,
+      two_factor_secret_encrypted text,
+      two_factor_configured_at timestamp,
       created_by text,
       is_banned boolean DEFAULT false,
       created_at timestamp DEFAULT now(),
@@ -71,6 +74,9 @@ export async function ensureUsersBootstrapSchema(
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS status text DEFAULT 'active'`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS must_change_password boolean DEFAULT false`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_reset_by_superuser boolean DEFAULT false`);
+  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS two_factor_enabled boolean DEFAULT false`);
+  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS two_factor_secret_encrypted text`);
+  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS two_factor_configured_at timestamp`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_by text`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_banned boolean DEFAULT false`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
@@ -161,6 +167,11 @@ export async function ensureUsersBootstrapSchema(
       END,
       must_change_password = COALESCE(must_change_password, false),
       password_reset_by_superuser = COALESCE(password_reset_by_superuser, false),
+      two_factor_enabled = COALESCE(two_factor_enabled, false),
+      two_factor_configured_at = CASE
+        WHEN COALESCE(two_factor_enabled, false) = false THEN NULL
+        ELSE two_factor_configured_at
+      END,
       created_at = COALESCE(created_at, now()),
       updated_at = COALESCE(updated_at, now()),
       activated_at = CASE
@@ -235,6 +246,7 @@ export async function ensureUsersBootstrapSchema(
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_must_change_password ON public.users (must_change_password)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_created_by ON public.users (created_by)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_password_reset_by_superuser ON public.users (password_reset_by_superuser)`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_two_factor_enabled ON public.users (two_factor_enabled)`);
   await database.execute(sql`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower_unique
     ON public.users (lower(email))

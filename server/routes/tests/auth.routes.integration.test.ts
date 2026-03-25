@@ -3,7 +3,12 @@ import test from "node:test";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import { createAuthGuards } from "../../auth/guards";
-import { verifyPassword } from "../../auth/passwords";
+import { hashPassword, verifyPassword } from "../../auth/passwords";
+import {
+  encryptTwoFactorSecret,
+  generateCurrentTwoFactorCode,
+  generateTwoFactorSecret,
+} from "../../auth/two-factor";
 import { writeDevMailPreview } from "../../mail/dev-mail-outbox";
 import { registerAuthRoutes } from "../auth.routes";
 import type { PostgresStorage } from "../../storage-postgres";
@@ -716,6 +721,190 @@ test("POST /api/auth/login scopes visitor-ban lookup to the target username", as
       typeof lookup.ipAddress === "string" && lookup.ipAddress.includes("127.0.0.1"),
       "expected login IP to be forwarded to visitor-ban lookup",
     );
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/auth/login returns a 2FA challenge for enabled admin accounts and verifies it", async () => {
+  const secret = generateTwoFactorSecret();
+  const { storage, user, activity, auditLogs } = await createLoginStorageDouble({
+    user: {
+      role: "admin",
+      twoFactorEnabled: true,
+      twoFactorSecretEncrypted: encryptTwoFactorSecret(secret),
+      twoFactorConfiguredAt: new Date("2026-03-20T00:00:00.000Z"),
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: (_req, _res, next) => next(),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const loginResponse = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: user.username,
+        password: "StrongPass123!",
+        fingerprint: "fingerprint-login",
+        browser: "Mozilla/5.0",
+      }),
+    });
+
+    assert.equal(loginResponse.status, 200);
+    const loginPayload = await loginResponse.json();
+    assert.equal(loginPayload.ok, true);
+    assert.equal(loginPayload.twoFactorRequired, true);
+    assert.equal(typeof loginPayload.challengeToken, "string");
+    const initialSetCookie = loginResponse.headers.get("set-cookie") || "";
+    assert.equal(initialSetCookie.includes("sqr_auth="), false);
+
+    const code = generateCurrentTwoFactorCode(secret);
+
+    const verifyResponse = await fetch(`${baseUrl}/api/auth/verify-two-factor-login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        challengeToken: loginPayload.challengeToken,
+        code,
+      }),
+    });
+
+    assert.equal(verifyResponse.status, 200);
+    const verifyPayload = await verifyResponse.json();
+    assert.equal(verifyPayload.ok, true);
+    assert.equal(verifyPayload.activityId, activity.id);
+    const setCookie = verifyResponse.headers.get("set-cookie") || "";
+    assert.match(setCookie, /sqr_auth=/);
+    assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_SECOND_FACTOR_REQUIRED"), true);
+    assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_SUCCESS"), true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("authenticated users can set up, enable, and disable 2FA through auth routes", async () => {
+  const passwordHash = await hashPassword("Password123!");
+  const auditLogs: Array<{ action: string }> = [];
+  const user = {
+    id: "admin-two-factor-1",
+    username: "admin.twofactor",
+    fullName: "Admin Two Factor",
+    email: "admin.twofactor@example.com",
+    role: "admin",
+    status: "active",
+    passwordHash,
+    mustChangePassword: false,
+    passwordResetBySuperuser: false,
+    createdBy: null,
+    createdAt: new Date("2026-03-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-03-01T00:00:00.000Z"),
+    passwordChangedAt: new Date("2026-03-01T00:00:00.000Z"),
+    activatedAt: new Date("2026-03-01T00:00:00.000Z"),
+    lastLoginAt: null,
+    isBanned: false,
+    twoFactorEnabled: false,
+    twoFactorSecretEncrypted: null as string | null,
+    twoFactorConfiguredAt: null as Date | null,
+  };
+
+  const storage = {
+    getUser: async (userId: string) => (userId === user.id ? user : null),
+    getUserByUsername: async (username: string) => (username === user.username ? user : null),
+    updateUserCredentials: async () => user,
+    updateActivitiesUsername: async () => undefined,
+    getActiveActivitiesByUsername: async () => [],
+    deactivateUserActivities: async () => undefined,
+    updateUserAccount: async (params: Record<string, unknown>) => {
+      Object.assign(user, {
+        twoFactorEnabled: params.twoFactorEnabled ?? user.twoFactorEnabled,
+        twoFactorSecretEncrypted:
+          params.twoFactorSecretEncrypted === undefined
+            ? user.twoFactorSecretEncrypted
+            : params.twoFactorSecretEncrypted,
+        twoFactorConfiguredAt:
+          params.twoFactorConfiguredAt === undefined
+            ? user.twoFactorConfiguredAt
+            : params.twoFactorConfiguredAt,
+      });
+      return user;
+    },
+    createAuditLog: async (entry: any) => {
+      auditLogs.push({ action: String(entry?.action || "") });
+      return entry;
+    },
+  } as unknown as PostgresStorage;
+
+  const app = createJsonTestApp();
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: authenticateAs(user),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const setupResponse = await fetch(`${baseUrl}/api/auth/two-factor/setup`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        currentPassword: "Password123!",
+      }),
+    });
+
+    assert.equal(setupResponse.status, 200);
+    const setupPayload = await setupResponse.json();
+    assert.equal(typeof setupPayload.setup.secret, "string");
+    assert.equal(user.twoFactorEnabled, false);
+    assert.equal(typeof user.twoFactorSecretEncrypted, "string");
+
+    const code = generateCurrentTwoFactorCode(setupPayload.setup.secret);
+    const enableResponse = await fetch(`${baseUrl}/api/auth/two-factor/enable`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        code,
+      }),
+    });
+
+    assert.equal(enableResponse.status, 200);
+    assert.equal(user.twoFactorEnabled, true);
+    assert.ok(user.twoFactorConfiguredAt instanceof Date);
+
+    const disableResponse = await fetch(`${baseUrl}/api/auth/two-factor/disable`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        currentPassword: "Password123!",
+        code: generateCurrentTwoFactorCode(setupPayload.setup.secret),
+      }),
+    });
+
+    assert.equal(disableResponse.status, 200);
+    assert.equal(user.twoFactorEnabled, false);
+    assert.equal(user.twoFactorSecretEncrypted, null);
+    assert.equal(user.twoFactorConfiguredAt, null);
+    assert.equal(auditLogs.some((entry) => entry.action === "TWO_FACTOR_SETUP_INITIATED"), true);
+    assert.equal(auditLogs.some((entry) => entry.action === "TWO_FACTOR_ENABLED"), true);
+    assert.equal(auditLogs.some((entry) => entry.action === "TWO_FACTOR_DISABLED"), true);
   } finally {
     await stopTestServer(server);
   }

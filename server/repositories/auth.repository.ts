@@ -110,6 +110,9 @@ export class AuthRepository {
       passwordChangedAt: now,
       activatedAt: now,
       isBanned: false,
+      twoFactorEnabled: false,
+      twoFactorSecretEncrypted: null,
+      twoFactorConfiguredAt: null,
     });
 
     return (await this.getUser(id))!;
@@ -147,6 +150,9 @@ export class AuthRepository {
       passwordChangedAt: params.passwordChangedAt ?? null,
       activatedAt: params.activatedAt ?? null,
       isBanned: false,
+      twoFactorEnabled: false,
+      twoFactorSecretEncrypted: null,
+      twoFactorConfiguredAt: null,
     });
 
     return (await this.getUser(id))!;
@@ -201,6 +207,9 @@ export class AuthRepository {
     passwordChangedAt?: Date | null;
     activatedAt?: Date | null;
     lastLoginAt?: Date | null;
+    twoFactorEnabled?: boolean;
+    twoFactorSecretEncrypted?: string | null;
+    twoFactorConfiguredAt?: Date | null;
   }): Promise<User | undefined> {
     const next: Partial<typeof users.$inferInsert> = {
       updatedAt: new Date(),
@@ -252,6 +261,18 @@ export class AuthRepository {
 
     if (params.lastLoginAt !== undefined) {
       next.lastLoginAt = params.lastLoginAt;
+    }
+
+    if (params.twoFactorEnabled !== undefined) {
+      next.twoFactorEnabled = params.twoFactorEnabled;
+    }
+
+    if (params.twoFactorSecretEncrypted !== undefined) {
+      next.twoFactorSecretEncrypted = params.twoFactorSecretEncrypted;
+    }
+
+    if (params.twoFactorConfiguredAt !== undefined) {
+      next.twoFactorConfiguredAt = params.twoFactorConfiguredAt;
     }
 
     await db.update(users).set(next).where(eq(users.id, params.userId));

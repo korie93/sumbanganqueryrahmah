@@ -4,7 +4,7 @@ import type { User } from "@/app/types";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { login, generateFingerprint } from "@/lib/api";
+import { login, generateFingerprint, verifyTwoFactorLogin } from "@/lib/api";
 import { persistAuthenticatedUser } from "@/lib/auth-session";
 
 interface LoginProps {
@@ -20,6 +20,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [twoFactorChallengeToken, setTwoFactorChallengeToken] = useState("");
+  const [twoFactorCode, setTwoFactorCode] = useState("");
   const mountedRef = useRef(true);
   const loginInFlightRef = useRef(false);
   const loginAbortControllerRef = useRef<AbortController | null>(null);
@@ -95,26 +97,38 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         return;
       }
 
-      const { username: responseUsername, role, activityId } = response;
+      if ("twoFactorRequired" in response && response.twoFactorRequired === true) {
+        localStorage.setItem("fingerprint", fingerprint);
+        setTwoFactorChallengeToken(String(response.challengeToken || ""));
+        setTwoFactorCode("");
+        setNotice("Enter the 6-digit authenticator code to complete sign-in.");
+        return;
+      }
+
+      const loginSuccessResponse = response as Exclude<typeof response, { twoFactorRequired: true }>;
+      const { username: responseUsername, role, activityId } = loginSuccessResponse;
 
       if (!responseUsername || !role) {
         throw new Error("Incomplete login information from server.");
       }
 
       const authenticatedUser: User = {
-        id: response?.user?.id,
-        username: String(response?.user?.username || responseUsername).toLowerCase(),
-        fullName: response?.user?.fullName ?? null,
-        email: response?.user?.email ?? null,
-        role: String(response?.user?.role || role),
-        status: String(response?.user?.status || response?.status || "active"),
+        id: loginSuccessResponse?.user?.id,
+        username: String(loginSuccessResponse?.user?.username || responseUsername).toLowerCase(),
+        fullName: loginSuccessResponse?.user?.fullName ?? null,
+        email: loginSuccessResponse?.user?.email ?? null,
+        role: String(loginSuccessResponse?.user?.role || role),
+        status: String(loginSuccessResponse?.user?.status || loginSuccessResponse?.status || "active"),
         mustChangePassword: Boolean(
-          response?.user?.mustChangePassword ?? response?.mustChangePassword ?? false,
+          loginSuccessResponse?.user?.mustChangePassword ?? loginSuccessResponse?.mustChangePassword ?? false,
         ),
         passwordResetBySuperuser: Boolean(
-          response?.user?.passwordResetBySuperuser ?? false,
+          loginSuccessResponse?.user?.passwordResetBySuperuser ?? false,
         ),
-        isBanned: response?.user?.isBanned ?? null,
+        isBanned: loginSuccessResponse?.user?.isBanned ?? null,
+        twoFactorEnabled: Boolean(loginSuccessResponse?.user?.twoFactorEnabled ?? false),
+        twoFactorPendingSetup: Boolean(loginSuccessResponse?.user?.twoFactorPendingSetup ?? false),
+        twoFactorConfiguredAt: loginSuccessResponse?.user?.twoFactorConfiguredAt ?? null,
       };
 
       localStorage.removeItem("banned");
@@ -163,15 +177,118 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     }
   };
 
+  const handleVerifyTwoFactor = async () => {
+    if (loginInFlightRef.current) {
+      return;
+    }
+
+    loginInFlightRef.current = true;
+    const requestId = loginRequestIdRef.current + 1;
+    loginRequestIdRef.current = requestId;
+    setError("");
+    setNotice("");
+    setLoading(true);
+    let controller: AbortController | null = null;
+
+    try {
+      if (!twoFactorChallengeToken.trim()) {
+        throw new Error("Two-factor login challenge is missing. Please sign in again.");
+      }
+
+      const normalizedCode = twoFactorCode.replace(/\D/g, "").slice(0, 6);
+      if (normalizedCode.length !== 6) {
+        throw new Error("Please enter the 6-digit authenticator code.");
+      }
+
+      controller = new AbortController();
+      loginAbortControllerRef.current = controller;
+      const response = await verifyTwoFactorLogin(
+        {
+          challengeToken: twoFactorChallengeToken,
+          code: normalizedCode,
+        },
+        { signal: controller.signal },
+      );
+
+      if (!mountedRef.current || loginRequestIdRef.current !== requestId || controller.signal.aborted) {
+        return;
+      }
+
+      const { username: responseUsername, role, activityId } = response;
+
+      if (!responseUsername || !role) {
+        throw new Error("Incomplete login information from server.");
+      }
+
+      const authenticatedUser: User = {
+        id: response?.user?.id,
+        username: String(response?.user?.username || responseUsername).toLowerCase(),
+        fullName: response?.user?.fullName ?? null,
+        email: response?.user?.email ?? null,
+        role: String(response?.user?.role || role),
+        status: String(response?.user?.status || response?.status || "active"),
+        mustChangePassword: Boolean(
+          response?.user?.mustChangePassword ?? response?.mustChangePassword ?? false,
+        ),
+        passwordResetBySuperuser: Boolean(response?.user?.passwordResetBySuperuser ?? false),
+        isBanned: response?.user?.isBanned ?? null,
+        twoFactorEnabled: Boolean(response?.user?.twoFactorEnabled ?? false),
+        twoFactorPendingSetup: Boolean(response?.user?.twoFactorPendingSetup ?? false),
+        twoFactorConfiguredAt: response?.user?.twoFactorConfiguredAt ?? null,
+      };
+
+      localStorage.removeItem("banned");
+      persistAuthenticatedUser(authenticatedUser);
+
+      if (activityId) {
+        localStorage.setItem("activityId", String(activityId));
+      }
+
+      const defaultTab = authenticatedUser.mustChangePassword
+        ? "change-password"
+        : role === "admin" || role === "superuser"
+          ? "home"
+          : "general-search";
+      localStorage.setItem("activeTab", defaultTab);
+      localStorage.setItem("lastPage", defaultTab);
+      setTwoFactorChallengeToken("");
+      setTwoFactorCode("");
+
+      onLoginSuccess(authenticatedUser);
+    } catch (err: any) {
+      if (
+        err instanceof DOMException &&
+        err.name === "AbortError"
+      ) {
+        return;
+      }
+      if (!mountedRef.current || loginRequestIdRef.current !== requestId) {
+        return;
+      }
+      console.error("Two-factor verification failed:", err);
+      setError(err?.message || "Two-factor verification failed. Please try again.");
+    } finally {
+      if (loginAbortControllerRef.current === controller) {
+        loginAbortControllerRef.current = null;
+      }
+      if (loginRequestIdRef.current === requestId) {
+        loginInFlightRef.current = false;
+      }
+      if (mountedRef.current && loginRequestIdRef.current === requestId) {
+        setLoading(false);
+      }
+    }
+  };
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    void handleLogin();
+    void (twoFactorChallengeToken ? handleVerifyTwoFactor() : handleLogin());
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      void handleLogin();
+      void (twoFactorChallengeToken ? handleVerifyTwoFactor() : handleLogin());
     }
   };
 
@@ -216,31 +333,50 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   autoComplete="username"
                   data-testid="input-username"
                   autoFocus
+                  disabled={loading || Boolean(twoFactorChallengeToken)}
                 />
               </div>
 
-              <div className="relative">
-                <Input
-                  className="w-full px-4 py-3 pr-12 rounded-xl bg-white/90 border-0 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-400 transition-all"
-                  placeholder="Password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={onKeyDown}
-                  autoComplete="current-password"
-                  data-testid="input-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 transition-colors"
-                  data-testid="button-toggle-password"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  title={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
+              {twoFactorChallengeToken ? (
+                <div className="space-y-2">
+                  <Input
+                    className="w-full px-4 py-3 rounded-xl bg-white/90 border-0 text-center tracking-[0.45em] text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-400 transition-all"
+                    placeholder="000000"
+                    inputMode="numeric"
+                    value={twoFactorCode}
+                    onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    onKeyDown={onKeyDown}
+                    autoComplete="one-time-code"
+                    data-testid="input-two-factor-code"
+                  />
+                  <p className="text-center text-xs text-white/70">
+                    Enter the 6-digit code from your authenticator app.
+                  </p>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Input
+                    className="w-full px-4 py-3 pr-12 rounded-xl bg-white/90 border-0 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-400 transition-all"
+                    placeholder="Password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={onKeyDown}
+                    autoComplete="current-password"
+                    data-testid="input-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 transition-colors"
+                    data-testid="button-toggle-password"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    title={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              )}
 
               <Button
                 type="submit"
@@ -251,16 +387,31 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 {loading ? (
                   <div className="flex items-center gap-2">
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Signing in...
+                    {twoFactorChallengeToken ? "Verifying..." : "Signing in..."}
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
                     <LogIn className="w-5 h-5" />
-                    Log In
+                    {twoFactorChallengeToken ? "Verify Code" : "Log In"}
                   </div>
                 )}
               </Button>
             </form>
+
+            {twoFactorChallengeToken ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setTwoFactorChallengeToken("");
+                  setTwoFactorCode("");
+                  setNotice("");
+                  setError("");
+                }}
+                className="mt-3 w-full text-center text-sm text-white/75 transition-colors hover:text-white"
+              >
+                Back to password login
+              </button>
+            ) : null}
 
             <button
               type="button"

@@ -24,6 +24,9 @@ import {
 import {
   AuthAccountSelfOperations,
   type ChangePasswordInput,
+  type ConfirmTwoFactorSetupInput,
+  type DisableTwoFactorInput,
+  type StartTwoFactorSetupInput,
   type UpdateOwnCredentialsInput,
 } from "./auth-account-self-operations";
 import { AuthAccountAuthenticationOperations } from "./auth-account-authentication-operations";
@@ -205,6 +208,17 @@ export class AuthAccountService {
     return this.authenticationOperations.login(input);
   }
 
+  async verifyTwoFactorLogin(input: {
+    userId: string;
+    code: string;
+    fingerprint?: string | null;
+    browserName: string;
+    pcName?: string | null;
+    ipAddress?: string | null;
+  }) {
+    return this.authenticationOperations.verifyTwoFactorLogin(input);
+  }
+
   async validateActivationToken(rawTokenInput: string): Promise<ActivationTokenValidationResult> {
     return this.authenticationOperations.validateActivationToken(rawTokenInput);
   }
@@ -246,6 +260,27 @@ export class AuthAccountService {
 
   async getCurrentUser(authUser: AuthenticatedUser | undefined) {
     return this.selfOperations.getCurrentUser(authUser);
+  }
+
+  async startTwoFactorSetup(
+    authUser: AuthenticatedUser | undefined,
+    input: StartTwoFactorSetupInput,
+  ) {
+    return this.selfOperations.startTwoFactorSetup(authUser, input);
+  }
+
+  async confirmTwoFactorSetup(
+    authUser: AuthenticatedUser | undefined,
+    input: ConfirmTwoFactorSetupInput,
+  ) {
+    return this.selfOperations.confirmTwoFactorSetup(authUser, input);
+  }
+
+  async disableTwoFactor(
+    authUser: AuthenticatedUser | undefined,
+    input: DisableTwoFactorInput,
+  ) {
+    return this.selfOperations.disableTwoFactor(authUser, input);
   }
 
   async updateOwnCredentials(

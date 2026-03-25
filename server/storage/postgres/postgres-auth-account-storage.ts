@@ -70,6 +70,9 @@ export class PostgresAuthAccountStorage extends PostgresStorageCore {
     passwordChangedAt?: Date | null;
     activatedAt?: Date | null;
     lastLoginAt?: Date | null;
+    twoFactorEnabled?: boolean;
+    twoFactorSecretEncrypted?: string | null;
+    twoFactorConfiguredAt?: Date | null;
   }): Promise<User | undefined> {
     return this.authRepository.updateUserAccount(params);
   }

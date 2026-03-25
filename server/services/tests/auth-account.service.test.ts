@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { hashPassword } from "../../auth/passwords";
+import { encryptTwoFactorSecret, generateCurrentTwoFactorCode } from "../../auth/two-factor";
 import { AuthAccountService, AuthAccountError } from "../auth-account.service";
 
 function buildSuperuser(passwordHash: string) {
@@ -22,6 +23,9 @@ function buildSuperuser(passwordHash: string) {
     activatedAt: now,
     lastLoginAt: now,
     isBanned: false,
+    twoFactorEnabled: false,
+    twoFactorSecretEncrypted: null,
+    twoFactorConfiguredAt: null,
   };
 }
 
@@ -90,6 +94,7 @@ test("AuthAccountService.login clears stale superuser sessions before issuing a 
     pcName: "pc",
   });
 
+  assert.equal(result.kind, "authenticated");
   assert.equal(result.user.username, "superuser");
   assert.equal(result.activity.id, "activity-new-1");
   assert.equal(deactivated, true);
@@ -131,4 +136,122 @@ test("AuthAccountService.login blocks superuser when another recent session is s
       && error.statusCode === 409
       && error.code === "SUPERUSER_SINGLE_SESSION_ENFORCED",
   );
+});
+
+test("AuthAccountService.login requires second factor for admin accounts with 2FA enabled", async () => {
+  const passwordHash = await hashPassword("Password123!");
+  const user = {
+    ...buildSuperuser(passwordHash),
+    id: "admin-1",
+    username: "admin.user",
+    role: "admin",
+    twoFactorEnabled: true,
+    twoFactorSecretEncrypted: encryptTwoFactorSecret("JBSWY3DPEHPK3PXP"),
+    twoFactorConfiguredAt: new Date("2026-03-20T00:00:00.000Z"),
+  };
+  let createActivityCalled = false;
+  const auditActions: string[] = [];
+
+  const service = new AuthAccountService({
+    getUserByUsername: async () => user,
+    isVisitorBanned: async () => false,
+    deactivateUserSessionsByFingerprint: async () => undefined,
+    createActivity: async () => {
+      createActivityCalled = true;
+      return { id: "activity-unexpected" };
+    },
+    touchLastLogin: async () => undefined,
+    createAuditLog: async (entry: any) => {
+      auditActions.push(String(entry?.action || ""));
+      return entry;
+    },
+  } as any);
+
+  const result = await service.login({
+    username: "admin.user",
+    password: "Password123!",
+    browserName: "chrome",
+    fingerprint: "fp-2",
+    ipAddress: "127.0.0.1",
+    pcName: "pc",
+  });
+
+  assert.equal(result.kind, "two_factor_required");
+  assert.equal(result.user.username, "admin.user");
+  assert.equal(createActivityCalled, false);
+  assert.ok(auditActions.includes("LOGIN_SECOND_FACTOR_REQUIRED"));
+});
+
+test("AuthAccountService supports starting, confirming, and disabling 2FA for admin accounts", async () => {
+  const passwordHash = await hashPassword("Password123!");
+  const auditActions: string[] = [];
+  const user = {
+    ...buildSuperuser(passwordHash),
+    id: "admin-2",
+    username: "admin.2",
+    role: "admin",
+  };
+
+  const service = new AuthAccountService({
+    getUser: async () => user,
+    getUserByUsername: async () => user,
+    createAuditLog: async (entry: any) => {
+      auditActions.push(String(entry?.action || ""));
+      return entry;
+    },
+    updateUserAccount: async (params: any) => {
+      Object.assign(user, {
+        twoFactorEnabled:
+          params.twoFactorEnabled === undefined ? user.twoFactorEnabled : params.twoFactorEnabled,
+        twoFactorSecretEncrypted:
+          params.twoFactorSecretEncrypted === undefined
+            ? user.twoFactorSecretEncrypted
+            : params.twoFactorSecretEncrypted,
+        twoFactorConfiguredAt:
+          params.twoFactorConfiguredAt === undefined
+            ? user.twoFactorConfiguredAt
+            : params.twoFactorConfiguredAt,
+      });
+      return user;
+    },
+    updateUserCredentials: async () => user,
+    getActiveActivitiesByUsername: async () => [],
+    deactivateUserActivities: async () => undefined,
+    updateActivitiesUsername: async () => undefined,
+  } as any);
+
+  const authUser = {
+    userId: user.id,
+    username: user.username,
+    role: user.role,
+    activityId: "activity-self-1",
+  };
+
+  const setupResult = await service.startTwoFactorSetup(authUser, {
+    currentPassword: "Password123!",
+  });
+
+  assert.equal(typeof setupResult.setup.secret, "string");
+  assert.equal(setupResult.setup.secret.length > 10, true);
+  assert.equal(typeof user.twoFactorSecretEncrypted, "string");
+  assert.equal(user.twoFactorEnabled, false);
+
+  const enabledUser = await service.confirmTwoFactorSetup(authUser, {
+    code: generateCurrentTwoFactorCode(setupResult.setup.secret),
+  });
+
+  assert.equal(enabledUser.twoFactorEnabled, true);
+  assert.ok(enabledUser.twoFactorConfiguredAt instanceof Date);
+
+  const disabledUser = await service.disableTwoFactor(authUser, {
+    currentPassword: "Password123!",
+    code: generateCurrentTwoFactorCode(setupResult.setup.secret),
+  });
+
+  assert.equal(disabledUser.twoFactorEnabled, false);
+  assert.equal(disabledUser.twoFactorSecretEncrypted, null);
+  assert.equal(disabledUser.twoFactorConfiguredAt, null);
+  assert.ok(auditActions.includes("TWO_FACTOR_SETUP_INITIATED"));
+  assert.ok(auditActions.includes("TWO_FACTOR_ENABLED"));
+  assert.ok(auditActions.includes("TWO_FACTOR_DISABLED"));
 });

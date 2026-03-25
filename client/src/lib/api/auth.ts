@@ -11,6 +11,9 @@ export type CurrentUser = {
   mustChangePassword: boolean;
   passwordResetBySuperuser?: boolean;
   isBanned?: boolean | null;
+  twoFactorEnabled?: boolean;
+  twoFactorPendingSetup?: boolean;
+  twoFactorConfiguredAt?: string | null;
 };
 
 export type ActivationTokenValidationPayload = {
@@ -91,7 +94,7 @@ export type PendingPasswordResetRequestSummary = {
   usedAt: string | null;
 };
 
-export type LoginResponse = AuthOkResponse<{
+export type LoginSuccessResponse = AuthOkResponse<{
   username: string;
   role: string;
   activityId: string;
@@ -99,6 +102,18 @@ export type LoginResponse = AuthOkResponse<{
   status: string;
   user: CurrentUser | null;
 }>;
+
+export type LoginTwoFactorChallengeResponse = AuthOkResponse<{
+  twoFactorRequired: true;
+  challengeToken: string;
+  username: string;
+  role: string;
+  mustChangePassword: boolean;
+  status: string;
+  user: CurrentUser | null;
+}>;
+
+export type LoginResponse = LoginSuccessResponse | LoginTwoFactorChallengeResponse;
 
 export type AuthUserResponse = AuthOkResponse<{
   user: CurrentUser | null;
@@ -111,6 +126,25 @@ export type AuthUserForceLogoutResponse = AuthOkResponse<{
 
 export type AuthMessageResponse = AuthOkResponse<{
   message: string;
+}>;
+
+export type TwoFactorStatusResponse = AuthOkResponse<{
+  twoFactor: {
+    enabled: boolean;
+    pendingSetup: boolean;
+    configuredAt: string | null;
+  };
+  user: CurrentUser | null;
+}>;
+
+export type TwoFactorSetupResponse = AuthOkResponse<{
+  setup: {
+    accountName: string;
+    issuer: string;
+    otpauthUrl: string;
+    secret: string;
+  };
+  user: CurrentUser | null;
 }>;
 
 export type ManagedUsersResponse = AuthOkResponse<{
@@ -190,6 +224,16 @@ export async function login(
   return data as LoginResponse;
 }
 
+export async function verifyTwoFactorLogin(
+  payload: { challengeToken: string; code: string },
+  options?: RequestOptions,
+) {
+  const response = await apiRequest("POST", "/api/auth/verify-two-factor-login", payload, {
+    signal: options?.signal,
+  });
+  return response.json() as Promise<LoginSuccessResponse>;
+}
+
 export async function checkHealth(options?: RequestOptions) {
   const response = await fetch(`${API_BASE}/api/health`, {
     headers: createApiHeaders(),
@@ -266,6 +310,43 @@ export async function changeMyPassword(payload: {
     signal: options?.signal,
   });
   return response.json() as Promise<AuthUserForceLogoutResponse>;
+}
+
+export async function getTwoFactorStatus(options?: RequestOptions) {
+  const response = await apiRequest("GET", "/api/auth/two-factor", undefined, {
+    signal: options?.signal,
+  });
+  return response.json() as Promise<TwoFactorStatusResponse>;
+}
+
+export async function startTwoFactorSetup(
+  payload: { currentPassword: string },
+  options?: RequestOptions,
+) {
+  const response = await apiRequest("POST", "/api/auth/two-factor/setup", payload, {
+    signal: options?.signal,
+  });
+  return response.json() as Promise<TwoFactorSetupResponse>;
+}
+
+export async function enableTwoFactor(
+  payload: { code: string },
+  options?: RequestOptions,
+) {
+  const response = await apiRequest("POST", "/api/auth/two-factor/enable", payload, {
+    signal: options?.signal,
+  });
+  return response.json() as Promise<AuthUserResponse>;
+}
+
+export async function disableTwoFactor(
+  payload: { currentPassword: string; code: string },
+  options?: RequestOptions,
+) {
+  const response = await apiRequest("POST", "/api/auth/two-factor/disable", payload, {
+    signal: options?.signal,
+  });
+  return response.json() as Promise<AuthUserResponse>;
 }
 
 export async function updateMyCredentials(payload: {

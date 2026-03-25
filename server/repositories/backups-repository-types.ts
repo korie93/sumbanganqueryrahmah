@@ -28,6 +28,9 @@ export type BackupUserRecord = {
   role: string;
   isBanned: boolean | null;
   passwordHash?: string;
+  twoFactorEnabled?: boolean;
+  twoFactorSecretEncrypted?: string | null;
+  twoFactorConfiguredAt?: string | Date | null;
 };
 
 export type BackupCollectionRecord = {

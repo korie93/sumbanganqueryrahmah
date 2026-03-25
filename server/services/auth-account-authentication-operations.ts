@@ -13,6 +13,10 @@ import {
   hashPassword,
   verifyPassword,
 } from "../auth/passwords";
+import {
+  decryptTwoFactorSecret,
+  verifyTwoFactorCode,
+} from "../auth/two-factor";
 import { buildAccountActivationEmail } from "../mail/account-activation-email";
 import { buildPasswordResetEmail } from "../mail/password-reset-email";
 import { sendMail } from "../mail/mailer";
@@ -34,6 +38,15 @@ import {
 type LoginInput = {
   username: string;
   password: string;
+  fingerprint?: string | null;
+  browserName: string;
+  pcName?: string | null;
+  ipAddress?: string | null;
+};
+
+type TwoFactorLoginInput = {
+  userId: string;
+  code: string;
   fingerprint?: string | null;
   browserName: string;
   pcName?: string | null;
@@ -73,6 +86,14 @@ type AuthAccountAuthenticationDeps = {
 
 export class AuthAccountAuthenticationOperations {
   constructor(private readonly deps: AuthAccountAuthenticationDeps) {}
+
+  private requiresTwoFactor(user: Awaited<ReturnType<PostgresStorage["getUser"]>>) {
+    return (
+      (user?.role === "superuser" || user?.role === "admin")
+      && user?.twoFactorEnabled === true
+      && Boolean(String(user?.twoFactorSecretEncrypted || "").trim())
+    );
+  }
 
   private async getSuperuserSessionIdleWindowMs(): Promise<number> {
     const fallbackMinutes = 30;
@@ -239,58 +260,11 @@ export class AuthAccountAuthenticationOperations {
     return activeSessions.map((activity) => activity.id);
   }
 
-  async login(input: LoginInput) {
-    const username = normalizeUsernameInput(input.username);
-    const password = String(input.password ?? "");
-    const user = await this.deps.storage.getUserByUsername(username);
-
-    if (!user) {
-      await this.deps.storage.createAuditLog({
-        action: "LOGIN_FAILED",
-        performedBy: username || "unknown",
-        details: "User not found",
-      });
-      throw new AuthAccountError(401, "INVALID_CREDENTIALS", "Invalid credentials");
-    }
-
-    const visitorBanned = await this.deps.storage.isVisitorBanned(
-      input.fingerprint ?? null,
-      input.ipAddress ?? null,
-      user.username,
-    );
-
-    if (visitorBanned || user.isBanned) {
-      await this.deps.storage.createAuditLog({
-        action: "LOGIN_FAILED_BANNED",
-        performedBy: user.username,
-        details: visitorBanned ? "Visitor is banned" : "User is banned",
-      });
-      throw new AuthAccountError(403, "ACCOUNT_BANNED", "Account is banned", {
-        banned: true,
-      });
-    }
-
-    const blockReason = getAccountAccessBlockReason(user);
-    if (blockReason && blockReason !== "banned") {
-      await this.deps.storage.createAuditLog({
-        action: "LOGIN_FAILED_ACCOUNT_STATE",
-        performedBy: user.username,
-        targetUser: user.id,
-        details: `Login blocked due to account state: ${blockReason}`,
-      });
-      throw new AuthAccountError(401, "INVALID_CREDENTIALS", "Invalid credentials");
-    }
-
-    const validPassword = await verifyPassword(password, user.passwordHash);
-    if (!validPassword) {
-      await this.deps.storage.createAuditLog({
-        action: "LOGIN_FAILED",
-        performedBy: user.username,
-        details: "Invalid password",
-      });
-      throw new AuthAccountError(401, "INVALID_CREDENTIALS", "Invalid credentials");
-    }
-
+  private async createAuthenticatedSession(
+    user: NonNullable<Awaited<ReturnType<PostgresStorage["getUser"]>>>,
+    input: Omit<LoginInput, "password" | "username">,
+    details: string,
+  ) {
     if (user.role === "superuser") {
       const enforceSingleSession = await this.deps.storage.getBooleanSystemSetting(
         "enforce_superuser_single_session",
@@ -347,8 +321,164 @@ export class AuthAccountAuthenticationOperations {
       action: "LOGIN_SUCCESS",
       performedBy: user.username,
       targetUser: user.id,
-      details: `Login from ${input.browserName}`,
+      details,
     });
+
+    return activity;
+  }
+
+  async login(input: LoginInput) {
+    const username = normalizeUsernameInput(input.username);
+    const password = String(input.password ?? "");
+    const user = await this.deps.storage.getUserByUsername(username);
+
+    if (!user) {
+      await this.deps.storage.createAuditLog({
+        action: "LOGIN_FAILED",
+        performedBy: username || "unknown",
+        details: "User not found",
+      });
+      throw new AuthAccountError(401, "INVALID_CREDENTIALS", "Invalid credentials");
+    }
+
+    const visitorBanned = await this.deps.storage.isVisitorBanned(
+      input.fingerprint ?? null,
+      input.ipAddress ?? null,
+      user.username,
+    );
+
+    if (visitorBanned || user.isBanned) {
+      await this.deps.storage.createAuditLog({
+        action: "LOGIN_FAILED_BANNED",
+        performedBy: user.username,
+        details: visitorBanned ? "Visitor is banned" : "User is banned",
+      });
+      throw new AuthAccountError(403, "ACCOUNT_BANNED", "Account is banned", {
+        banned: true,
+      });
+    }
+
+    const blockReason = getAccountAccessBlockReason(user);
+    if (blockReason && blockReason !== "banned") {
+      await this.deps.storage.createAuditLog({
+        action: "LOGIN_FAILED_ACCOUNT_STATE",
+        performedBy: user.username,
+        targetUser: user.id,
+        details: `Login blocked due to account state: ${blockReason}`,
+      });
+      throw new AuthAccountError(401, "INVALID_CREDENTIALS", "Invalid credentials");
+    }
+
+    const validPassword = await verifyPassword(password, user.passwordHash);
+    if (!validPassword) {
+      await this.deps.storage.createAuditLog({
+        action: "LOGIN_FAILED",
+        performedBy: user.username,
+        details: "Invalid password",
+      });
+      throw new AuthAccountError(401, "INVALID_CREDENTIALS", "Invalid credentials");
+    }
+
+    if (this.requiresTwoFactor(user)) {
+      await this.deps.storage.createAuditLog({
+        action: "LOGIN_SECOND_FACTOR_REQUIRED",
+        performedBy: user.username,
+        targetUser: user.id,
+        details: `Second factor required from ${input.browserName}`,
+      });
+
+      return {
+        kind: "two_factor_required" as const,
+        user,
+      };
+    }
+
+    const activity = await this.createAuthenticatedSession(
+      user,
+      input,
+      `Login from ${input.browserName}`,
+    );
+
+    return {
+      kind: "authenticated" as const,
+      user,
+      activity,
+    };
+  }
+
+  async verifyTwoFactorLogin(input: TwoFactorLoginInput) {
+    const user = await this.deps.storage.getUser(input.userId);
+    if (!user) {
+      throw new AuthAccountError(404, "USER_NOT_FOUND", "User not found.");
+    }
+
+    const visitorBanned = await this.deps.storage.isVisitorBanned(
+      input.fingerprint ?? null,
+      input.ipAddress ?? null,
+      user.username,
+    );
+
+    if (visitorBanned || user.isBanned) {
+      await this.deps.storage.createAuditLog({
+        action: "LOGIN_2FA_FAILED_BANNED",
+        performedBy: user.username,
+        targetUser: user.id,
+        details: visitorBanned ? "Visitor is banned" : "User is banned",
+      });
+      throw new AuthAccountError(403, "ACCOUNT_BANNED", "Account is banned", {
+        banned: true,
+      });
+    }
+
+    const blockReason = getAccountAccessBlockReason(user);
+    if (blockReason && blockReason !== "banned") {
+      await this.deps.storage.createAuditLog({
+        action: "LOGIN_2FA_FAILED_ACCOUNT_STATE",
+        performedBy: user.username,
+        targetUser: user.id,
+        details: `Second-factor login blocked due to account state: ${blockReason}`,
+      });
+      throw new AuthAccountError(401, "INVALID_CREDENTIALS", "Invalid credentials");
+    }
+
+    if (!this.requiresTwoFactor(user)) {
+      throw new AuthAccountError(409, "TWO_FACTOR_NOT_ENABLED", "Two-factor authentication is not enabled.");
+    }
+
+    const encryptedSecret = String(user.twoFactorSecretEncrypted || "").trim();
+    let secret = "";
+    try {
+      secret = decryptTwoFactorSecret(encryptedSecret);
+    } catch {
+      await this.deps.storage.createAuditLog({
+        action: "LOGIN_2FA_FAILED_SECRET",
+        performedBy: user.username,
+        targetUser: user.id,
+        details: "Stored two-factor secret could not be decrypted.",
+      });
+      throw new AuthAccountError(500, "TWO_FACTOR_SECRET_INVALID", "Two-factor authentication is unavailable.");
+    }
+
+    if (!verifyTwoFactorCode(secret, input.code)) {
+      await this.deps.storage.createAuditLog({
+        action: "LOGIN_2FA_FAILED",
+        performedBy: user.username,
+        targetUser: user.id,
+        details: `Invalid authenticator code from ${input.browserName}`,
+      });
+      throw new AuthAccountError(401, "TWO_FACTOR_INVALID_CODE", "Authenticator code is invalid.");
+    }
+
+    const activity = await this.createAuthenticatedSession(
+      user,
+      {
+        fingerprint: input.fingerprint,
+        browserName: input.browserName,
+        pcName: input.pcName,
+        ipAddress: input.ipAddress,
+      },
+      `Login with 2FA from ${input.browserName}`,
+    );
 
     return {
       user,

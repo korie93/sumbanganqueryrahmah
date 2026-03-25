@@ -264,7 +264,9 @@ export function createCookieAuthStorageDouble() {
   return { storage, user, activity };
 }
 
-export async function createLoginStorageDouble() {
+export async function createLoginStorageDouble(options?: {
+  user?: Record<string, any>;
+}) {
   const passwordHash = await hashPassword("StrongPass123!");
   const auditLogs: AuditEntry[] = [];
   const user = {
@@ -281,6 +283,10 @@ export async function createLoginStorageDouble() {
     activatedAt: new Date("2026-03-01T00:00:00.000Z"),
     passwordChangedAt: new Date("2026-03-01T00:00:00.000Z"),
     lastLoginAt: null,
+    twoFactorEnabled: false,
+    twoFactorSecretEncrypted: null,
+    twoFactorConfiguredAt: null,
+    ...options?.user,
   };
   const activity = {
     id: "activity-login-1",
@@ -294,8 +300,12 @@ export async function createLoginStorageDouble() {
   };
 
   const storage = {
+    getUser: async (userId: string) => (userId === user.id ? user : null),
     getUserByUsername: async (username: string) => (username === user.username ? user : null),
     isVisitorBanned: async () => false,
+    getBooleanSystemSetting: async () => false,
+    getActiveActivitiesByUsername: async () => [],
+    deactivateUserSessionsByFingerprint: async () => undefined,
     createAuditLog: async (entry: AuditEntry) => {
       auditLogs.push(entry);
       return { id: `audit-${auditLogs.length}`, ...entry };

@@ -278,6 +278,9 @@ export class ActivityRepository {
       activatedAt: row.activated_at ?? null,
       lastLoginAt: row.last_login_at ?? null,
       isBanned: row.is_banned,
+      twoFactorEnabled: Boolean(row.two_factor_enabled ?? false),
+      twoFactorSecretEncrypted: row.two_factor_secret_encrypted ?? null,
+      twoFactorConfiguredAt: row.two_factor_configured_at ?? null,
       banInfo: row.banLogoutTime
         ? {
           ipAddress: row.banIpAddress ?? null,

@@ -8,6 +8,9 @@ export interface User {
   mustChangePassword?: boolean;
   passwordResetBySuperuser?: boolean;
   isBanned?: boolean | null;
+  twoFactorEnabled?: boolean;
+  twoFactorPendingSetup?: boolean;
+  twoFactorConfiguredAt?: string | null;
 }
 
 export type MonitorSection = "dashboard" | "activity" | "monitor" | "analysis" | "audit";
