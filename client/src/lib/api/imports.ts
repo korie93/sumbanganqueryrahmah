@@ -44,6 +44,7 @@ export async function getImportData(
   page: number = 1,
   limit: number = 100,
   search?: string,
+  options?: ImportRequestOptions,
 ) {
   const params = new URLSearchParams({
     page: String(page),
@@ -57,6 +58,8 @@ export async function getImportData(
   const response = await apiRequest(
     "GET",
     `/api/imports/${id}/data?${params.toString()}`,
+    undefined,
+    options,
   );
 
   return response.json();

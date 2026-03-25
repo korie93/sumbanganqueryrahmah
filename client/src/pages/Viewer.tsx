@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getImportData } from "@/lib/api";
@@ -72,13 +72,30 @@ export default function Viewer({
   const [totalRows, setTotalRows] = useState(0);
   const [hasMore, setHasMore] = useState(false);
 
+  const mountedRef = useRef(true);
   const rowIdCounterRef = useRef(0);
   const activeRequestIdRef = useRef(0);
   const exportInFlightRef = useRef<"excel" | "pdf" | null>(null);
+  const fetchAbortControllerRef = useRef<AbortController | null>(null);
+  const headersLockedRef = useRef(headersLocked);
   const ROWS_PER_PAGE = configuredRowsPerPage;
   const MAX_ROWS_IN_MEMORY = isLowSpecMode ? 240 : 1200;
   const MIN_SEARCH_LENGTH = 2;
   const SEARCH_DEBOUNCE_MS = 300;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      activeRequestIdRef.current += 1;
+      fetchAbortControllerRef.current?.abort();
+      fetchAbortControllerRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    headersLockedRef.current = headersLocked;
+  }, [headersLocked]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -88,10 +105,23 @@ export default function Viewer({
     return () => window.clearTimeout(timer);
   }, [search]);
 
-  const fetchData = async (id: string, page = 1, append = false) => {
+  const cancelActiveFetch = useCallback(() => {
+    fetchAbortControllerRef.current?.abort();
+    fetchAbortControllerRef.current = null;
+  }, []);
+
+  const clearSelectionState = useCallback(() => {
+    setSelectedRowIds((previous) => (previous.size === 0 ? previous : new Set<number>()));
+    setSelectAllFiltered((previous) => (previous ? false : previous));
+  }, []);
+
+  const fetchData = useCallback(async (id: string, page = 1, append = false) => {
     if (!id) return;
 
+    cancelActiveFetch();
     const requestId = ++activeRequestIdRef.current;
+    const controller = new AbortController();
+    fetchAbortControllerRef.current = controller;
 
     if (page === 1) {
       setLoading(true);
@@ -102,8 +132,14 @@ export default function Viewer({
     setError("");
 
     try {
-      const response = await getImportData(id, page, ROWS_PER_PAGE, debouncedSearch);
-      if (requestId !== activeRequestIdRef.current) {
+      const response = await getImportData(id, page, ROWS_PER_PAGE, debouncedSearch, {
+        signal: controller.signal,
+      });
+      if (
+        controller.signal.aborted ||
+        !mountedRef.current ||
+        requestId !== activeRequestIdRef.current
+      ) {
         return;
       }
 
@@ -121,11 +157,12 @@ export default function Viewer({
         }),
       );
 
-      if (page === 1 && parsedRows.length > 0 && !headersLocked) {
+      if (page === 1 && parsedRows.length > 0 && !headersLockedRef.current) {
         const detectedHeaders = extractHeadersFromRows(parsedRows);
         if (detectedHeaders.length > 0) {
           setHeaders(detectedHeaders);
           setSelectedColumns(new Set(detectedHeaders));
+          headersLockedRef.current = true;
           setHeadersLocked(true);
         }
       }
@@ -149,24 +186,33 @@ export default function Viewer({
       setTotalRows(total);
       setHasMore(nextLoadedRowsCount < total);
     } catch (fetchError) {
-      if (requestId !== activeRequestIdRef.current) {
+      if (
+        controller.signal.aborted ||
+        !mountedRef.current ||
+        requestId !== activeRequestIdRef.current
+      ) {
         return;
       }
 
       setError(fetchError instanceof Error ? fetchError.message : "Failed to fetch data");
     } finally {
-      if (requestId === activeRequestIdRef.current) {
+      if (fetchAbortControllerRef.current === controller) {
+        fetchAbortControllerRef.current = null;
+      }
+      if (mountedRef.current && requestId === activeRequestIdRef.current) {
         setLoading(false);
         setLoadingMore(false);
       }
     }
-  };
+  }, [ROWS_PER_PAGE, MAX_ROWS_IN_MEMORY, cancelActiveFetch, debouncedSearch]);
 
   useEffect(() => {
     if (importId) {
+      cancelActiveFetch();
       setImportName(resolveViewerImportName());
       setHeaders([]);
       setHeadersLocked(false);
+      headersLockedRef.current = false;
       rowIdCounterRef.current = 0;
       setEmptyHint("");
       setIsCleared(false);
@@ -174,32 +220,38 @@ export default function Viewer({
       return;
     }
 
+    cancelActiveFetch();
     activeRequestIdRef.current += 1;
     setRows([]);
     setHeaders([]);
+    setHeadersLocked(false);
+    headersLockedRef.current = false;
     setSelectedColumns(new Set());
     setColumnFilters([]);
     setSearch("");
-    setSelectedRowIds(new Set());
-    setSelectAllFiltered(false);
+    clearSelectionState();
     setImportName("Data Viewer");
     setEmptyHint("Open file in Saved tab first to view.");
     setIsCleared(true);
     setLoading(false);
     setLoadingMore(false);
-  }, [importId]);
+  }, [cancelActiveFetch, clearSelectionState, importId]);
+
+  useEffect(() => {
+    clearSelectionState();
+  }, [clearSelectionState, columnFilters]);
 
   useEffect(() => {
     setCurrentPage(1);
     setHasMore(false);
-    setSelectedRowIds(new Set());
-    setSelectAllFiltered(false);
+    clearSelectionState();
 
     if (isCleared || !importId) {
       return;
     }
 
     if (debouncedSearch && debouncedSearch.length < MIN_SEARCH_LENGTH) {
+      cancelActiveFetch();
       activeRequestIdRef.current += 1;
       setRows([]);
       setTotalRows(0);
@@ -209,7 +261,16 @@ export default function Viewer({
     }
 
     void fetchData(importId, 1, false);
-  }, [ROWS_PER_PAGE, columnFilters, debouncedSearch, importId, isCleared]);
+  }, [ROWS_PER_PAGE, cancelActiveFetch, clearSelectionState, debouncedSearch, fetchData, importId, isCleared]);
+
+  const activeColumnFilters = useMemo(
+    () =>
+      columnFilters.filter((filter) => {
+        const normalizedValue = filter.value.trim();
+        return filter.column.trim() !== "" && normalizedValue !== "";
+      }),
+    [columnFilters],
+  );
 
   const visibleHeaders = useMemo(
     () => headers.filter((header) => selectedColumns.has(header)),
@@ -219,8 +280,11 @@ export default function Viewer({
     debouncedSearch.length > 0 && debouncedSearch.length < MIN_SEARCH_LENGTH;
   const isServerSearchActive = debouncedSearch.length >= MIN_SEARCH_LENGTH;
   const hasAnySearchTerm = debouncedSearch.length > 0;
-  const isFiltering = isServerSearchActive || columnFilters.length > 0;
-  const filteredRows = useMemo(() => filterViewerRows(rows, columnFilters), [columnFilters, rows]);
+  const isFiltering = isServerSearchActive || activeColumnFilters.length > 0;
+  const filteredRows = useMemo(
+    () => filterViewerRows(rows, activeColumnFilters),
+    [activeColumnFilters, rows],
+  );
   const hasFilteredSubset = isFiltering && filteredRows.length !== rows.length;
   const enableVirtualRows = filteredRows.length > (isLowSpecMode ? 60 : 120);
   const rowHeightPx = 48;
@@ -285,15 +349,16 @@ export default function Viewer({
   };
 
   const clearAllData = () => {
+    cancelActiveFetch();
     activeRequestIdRef.current += 1;
     setRows([]);
     setHeaders([]);
     setHeadersLocked(false);
+    headersLockedRef.current = false;
     setSelectedColumns(new Set());
     setColumnFilters([]);
     setSearch("");
-    setSelectedRowIds(new Set());
-    setSelectAllFiltered(false);
+    clearSelectionState();
     setImportName("Data Viewer");
     setEmptyHint("Open file in Saved tab first to view.");
     setTotalRows(0);
@@ -329,7 +394,7 @@ export default function Viewer({
     }
   };
 
-  const toggleRowSelection = (rowId: number) => {
+  const toggleRowSelection = useCallback((rowId: number) => {
     setSelectedRowIds((previous) => {
       const next = new Set(previous);
       if (next.has(rowId)) {
@@ -340,9 +405,9 @@ export default function Viewer({
       return next;
     });
     setSelectAllFiltered(false);
-  };
+  }, []);
 
-  const toggleSelectAllFiltered = () => {
+  const toggleSelectAllFiltered = useCallback(() => {
     if (selectAllFiltered) {
       setSelectedRowIds(new Set());
       setSelectAllFiltered(false);
@@ -351,7 +416,7 @@ export default function Viewer({
 
     setSelectedRowIds(new Set(filteredRows.map((row) => row.__rowId)));
     setSelectAllFiltered(true);
-  };
+  }, [filteredRows, selectAllFiltered]);
 
   const resolveRowsForExport = (exportFiltered = false, exportSelected = false) => {
     let dataToExport = rows;
@@ -557,10 +622,7 @@ export default function Viewer({
               isServerSearchActive={isServerSearchActive}
               hasMore={hasMore}
               loadingMore={loadingMore}
-              onClearSelection={() => {
-                setSelectedRowIds(new Set());
-                setSelectAllFiltered(false);
-              }}
+              onClearSelection={clearSelectionState}
               onLoadMore={loadMore}
             />
           </div>
