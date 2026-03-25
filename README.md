@@ -65,6 +65,7 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 | `npm run db:generate -- --name <migration_name>` | Generate a reviewed Drizzle SQL migration |
 | `npm run db:migrate` | Apply Drizzle migrations through the repo migration wrapper |
 | `npm run db:migrate:cli` | Run the raw Drizzle CLI migrate command for debugging |
+| `npm run verify:db-schema-governance` | Verify every discovered table is classified under the repo DB governance manifest |
 | `npm run db:studio` | Open Drizzle Studio |
 | `npm run typecheck` | Run TypeScript type checking |
 | `npm test` | Run all test suites |
@@ -111,6 +112,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for a detailed architecture overview.
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - System architecture overview
 - [docs/DATABASE_MIGRATIONS.md](./docs/DATABASE_MIGRATIONS.md) - Drizzle and legacy migration workflow
+- [scripts/db-schema-governance.manifest.mjs](./scripts/db-schema-governance.manifest.mjs) - Table-by-table schema ownership and migration governance manifest
 - [docs/QA_FINAL_CHECKLIST.md](./docs/QA_FINAL_CHECKLIST.md) - Final QA and smoke gate checklist
 - [docs/GO_LIVE_LAUNCH_CHECKLIST.md](./docs/GO_LIVE_LAUNCH_CHECKLIST.md) - Final go-live launch gate checklist
 - [docs/PRODUCTION_PROMOTION_PLAYBOOK.md](./docs/PRODUCTION_PROMOTION_PLAYBOOK.md) - Staging soak, canary, monitor, and rollback playbook

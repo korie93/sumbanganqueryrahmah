@@ -35,11 +35,17 @@ jobs:
       - name: Verify migration drift
         run: npm run db:check
 
+      - name: Verify DB schema governance
+        run: npm run verify:db-schema-governance
+
       - name: Typecheck
         run: npm run typecheck
 
       - name: Run client tests
         run: npm run test:client
+
+      - name: Run script tests
+        run: npm run test:scripts
 
       - name: Run http tests
         run: npm run test:http
@@ -115,6 +121,9 @@ jobs:
 
       - name: Verify migration drift
         run: npm run db:check
+
+      - name: Verify DB schema governance
+        run: npm run verify:db-schema-governance
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium

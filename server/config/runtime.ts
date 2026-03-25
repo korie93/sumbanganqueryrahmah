@@ -17,7 +17,7 @@ export type RuntimeConfigDiagnostic = {
 
 export type RuntimeConfigValidation = {
   warningCount: number;
-  warnings: RuntimeConfigDiagnostic[];
+  warnings: readonly RuntimeConfigDiagnostic[];
 };
 
 type RuntimeConfig = {

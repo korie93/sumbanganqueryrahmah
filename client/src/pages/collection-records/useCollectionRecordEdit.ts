@@ -108,7 +108,7 @@ export function useCollectionRecordEdit({
     }
 
     setEditNewReceiptFiles((previous) => [...previous, file]);
-  }, [toast]);
+  }, [notifyMutationError]);
 
   const handleSaveEdit = useCallback(async () => {
     if (!editingRecord || savingEdit || savingEditInFlightRef.current) return;

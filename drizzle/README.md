@@ -12,6 +12,7 @@ Safe workflow:
 2. Run `npm run db:generate -- --name <migration_name>`.
 3. Review the generated SQL before applying it.
 4. Run `npm run db:migrate`.
+5. Run `npm run verify:db-schema-governance` if the change affects table ownership or introduces new schema sources.
 
 Until more of the schema is moved into Drizzle:
 - Prefer `npm run db:generate:custom -- --name <migration_name>` for custom SQL when a change still depends on legacy bootstrap-managed tables.
@@ -20,3 +21,4 @@ Until more of the schema is moved into Drizzle:
 Notes:
 - `npm run db:migrate` uses the repo's Node wrapper around Drizzle's runtime migrator.
 - `npm run db:migrate:cli` keeps the raw Drizzle CLI available for debugging.
+- Schema ownership is tracked in `scripts/db-schema-governance.manifest.mjs`.

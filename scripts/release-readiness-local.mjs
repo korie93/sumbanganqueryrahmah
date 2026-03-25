@@ -125,7 +125,9 @@ const run = async () => {
   };
 
   console.log("Release readiness: running fast regression gates...");
+  await runNpm(["run", "verify:db-schema-governance"], { env });
   await runNpm(["run", "test:client"], { env });
+  await runNpm(["run", "test:scripts"], { env });
   await runNpm(["run", "test:routes"], { env });
   await runNpm(["run", "test:services"], { env });
 
