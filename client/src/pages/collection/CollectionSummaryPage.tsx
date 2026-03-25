@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { CollectionMonthDetailsDialog } from "@/pages/collection-summary/CollectionMonthDetailsDialog";
 import { buildCollectionSummaryPageViewModels } from "@/pages/collection-summary/collection-summary-page-view-models";
 import { CollectionSummaryFilters } from "@/pages/collection-summary/CollectionSummaryFilters";
@@ -34,26 +34,22 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
   });
 
   return (
-    <Card className="border-border/60 bg-background/70">
-      <CardHeader className="pb-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle className="text-xl">Collection Summary</CardTitle>
-          <CollectionReportFreshnessBadge freshness={summaryData.freshness} />
-        </div>
-        {summaryData.freshness ? (
-          <p className="text-xs text-muted-foreground">{summaryData.freshness.message}</p>
-        ) : null}
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <OperationalSectionCard
+      title="Collection Summary"
+      description={summaryData.freshness?.message || "Review monthly totals with a cleaner month-by-month drill-down flow."}
+      badge={<CollectionReportFreshnessBadge freshness={summaryData.freshness} />}
+      contentClassName="space-y-4"
+    >
+      <div className="ops-toolbar">
         <CollectionSummaryFilters {...viewModels.filters} />
+      </div>
 
-        <CollectionSummaryTable {...viewModels.table} />
+      <CollectionSummaryTable {...viewModels.table} />
 
-        <CollectionSummaryTotals {...viewModels.totals} />
-      </CardContent>
+      <CollectionSummaryTotals {...viewModels.totals} />
 
       {viewModels.monthDialog ? <CollectionMonthDetailsDialog {...viewModels.monthDialog} /> : null}
-    </Card>
+    </OperationalSectionCard>
   );
 }
 

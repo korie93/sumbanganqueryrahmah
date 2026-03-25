@@ -27,7 +27,7 @@ export function SavedFiltersBar({
   onClearFilters,
 }: SavedFiltersBarProps) {
   return (
-    <div className="glass-wrapper p-4 mb-6">
+    <div className="ops-toolbar">
       <div className="flex items-center gap-4 flex-wrap">
         <div className="relative flex-1 min-w-48 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

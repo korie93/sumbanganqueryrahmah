@@ -45,7 +45,7 @@ export function SavedImportsList({
 }: SavedImportsListProps) {
   if (imports.length === 0) {
     return (
-      <div className="glass-wrapper p-12 text-center">
+      <div className="ops-empty-state">
         <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
           <Search className="w-8 h-8 text-muted-foreground" />
         </div>
@@ -59,7 +59,7 @@ export function SavedImportsList({
 
   return (
     <Collapsible open={filesOpen} onOpenChange={onFilesOpenChange}>
-      <div className="glass-wrapper p-4">
+      <div className="rounded-xl border border-border/70 bg-background/80 p-4 shadow-sm">
         <CollapsibleTrigger asChild>
           <Button
             variant="ghost"
@@ -97,7 +97,7 @@ export function SavedImportsList({
             {imports.map((item) => (
               <div
                 key={item.id}
-                className="p-4 rounded-lg border bg-muted/30 flex items-center justify-between gap-4"
+                className="flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-background/70 p-4 shadow-sm"
                 data-testid={`card-import-${item.id}`}
               >
                 <div className="flex items-center gap-4 flex-1 min-w-0">

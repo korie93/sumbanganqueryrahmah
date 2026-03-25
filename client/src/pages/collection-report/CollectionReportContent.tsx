@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
+import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { CollectionSubPage } from "@/pages/collection-report/types";
 
 const SaveCollectionPage = lazy(() => import("@/pages/collection/SaveCollectionPage"));
@@ -30,11 +30,9 @@ type CollectionReportContentProps = {
 
 function CollectionSectionFallback() {
   return (
-    <Card className="border-border/60 bg-background/70">
-      <CardContent className="flex min-h-[320px] items-center justify-center p-8">
+    <OperationalSectionCard contentClassName="flex min-h-[320px] items-center justify-center p-8">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
-      </CardContent>
-    </Card>
+    </OperationalSectionCard>
   );
 }
 
@@ -47,11 +45,10 @@ export function CollectionReportContent({
 }: CollectionReportContentProps) {
   if (!canAccessCollection) {
     return (
-      <Card className="border-border/60 bg-background/75 shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xl">Pengesahan Nickname Diperlukan</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <OperationalSectionCard
+        title="Pengesahan Nickname Diperlukan"
+        description="Lengkapkan pengesahan nickname dahulu sebelum meneruskan ke Collection Report."
+      >
           <p className="text-sm text-muted-foreground">
             Sila lengkapkan pengesahan nickname dahulu sebelum meneruskan ke
             Collection Report.
@@ -59,8 +56,7 @@ export function CollectionReportContent({
           <Button onClick={onOpenNicknameDialog}>
             Buka Pengesahan Nickname
           </Button>
-        </CardContent>
-      </Card>
+      </OperationalSectionCard>
     );
   }
 

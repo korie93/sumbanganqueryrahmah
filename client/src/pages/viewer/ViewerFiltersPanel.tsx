@@ -28,9 +28,14 @@ export function ViewerFiltersPanel({
   onRemoveFilter,
 }: ViewerFiltersPanelProps) {
   return (
-    <div className="glass-wrapper p-4 mb-6">
+    <div className="ops-toolbar mb-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-medium text-foreground">Column Filters</h3>
+        <div>
+          <h3 className="font-medium text-foreground">Column Filters</h3>
+          <p className="text-xs text-muted-foreground">
+            Narrow the loaded rows without leaving the viewer.
+          </p>
+        </div>
         <div className="flex gap-2">
           {columnFilters.length > 0 ? (
             <Button

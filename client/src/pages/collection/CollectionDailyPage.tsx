@@ -13,7 +13,7 @@ export default function CollectionDailyPage({ role }: CollectionDailyPageProps) 
   const model = useCollectionDailyPageModel({ role });
 
   return (
-    <div className="space-y-4" data-testid="collection-daily-page">
+    <div className="space-y-5" data-testid="collection-daily-page">
       <CollectionDailyFiltersCard {...model.filtersCardProps} />
 
       {model.overview ? <CollectionDailySummaryCard overview={model.overview} /> : null}

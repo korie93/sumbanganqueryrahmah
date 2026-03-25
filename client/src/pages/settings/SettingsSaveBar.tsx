@@ -10,7 +10,7 @@ interface SettingsSaveBarProps {
 
 export function SettingsSaveBar({ dirtyCount, onSave, saving }: SettingsSaveBarProps) {
   return (
-    <Card className="border-primary/40 bg-background/95">
+    <Card className="border-primary/40 bg-background/95 shadow-sm" data-floating-ai-avoid="true">
       <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-2 text-sm">
           {dirtyCount > 0 ? (

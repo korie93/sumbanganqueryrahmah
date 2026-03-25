@@ -24,7 +24,7 @@ export function CollectionSummaryTable({
   }
 
   return (
-    <div className="rounded-md border border-border/60 p-3">
+    <div className="ops-table-shell p-3">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold">Monthly Navigation</p>
@@ -42,7 +42,7 @@ export function CollectionSummaryTable({
               key={row.month}
               type="button"
               variant={active ? "default" : "outline"}
-              className="h-auto items-start justify-between gap-3 px-3 py-3 text-left"
+              className="h-auto items-start justify-between gap-3 rounded-xl px-3 py-3 text-left"
               onClick={() => onSelectMonth(row.month)}
             >
               <div className="space-y-1">

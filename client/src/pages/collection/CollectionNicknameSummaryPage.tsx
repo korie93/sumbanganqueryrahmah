@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
+import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CollectionNicknameBatchSections } from "@/pages/collection-nickname-summary/CollectionNicknameBatchSections";
@@ -18,26 +18,20 @@ function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPagePr
 
   if (!canAccess) {
     return (
-      <Card className="border-border/60 bg-background/70">
-        <CardContent className="py-10 text-center text-sm text-muted-foreground">
+      <OperationalSectionCard contentClassName="py-10 text-center text-sm text-muted-foreground">
           Nickname Summary hanya tersedia untuk admin dan superuser.
-        </CardContent>
-      </Card>
+      </OperationalSectionCard>
     );
   }
 
   return (
-    <Card className="border-border/60 bg-background/70">
-      <CardHeader className="pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle className="text-xl">Nickname Summary</CardTitle>
-          <CollectionReportFreshnessBadge freshness={summaryData.freshness} />
-        </div>
-        {summaryData.freshness ? (
-          <p className="text-xs text-muted-foreground">{summaryData.freshness.message}</p>
-        ) : null}
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <OperationalSectionCard
+      title="Nickname Summary"
+      description={summaryData.freshness?.message || "Compare selected staff nicknames over a chosen date range."}
+      badge={<CollectionReportFreshnessBadge freshness={summaryData.freshness} />}
+      contentClassName="space-y-4"
+    >
+      <div className="ops-toolbar">
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px_180px_auto] xl:items-end">
           <CollectionNicknameMultiSelect
             label="Staff Nickname"
@@ -89,19 +83,19 @@ function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPagePr
             </Button>
           </div>
         </div>
+      </div>
 
-        <CollectionNicknameBatchSections
-          loading={summaryData.loadingSummary}
-          hasApplied={summaryData.hasApplied}
-          selectedNicknames={summaryData.selectedNicknames}
-          fromDate={summaryData.fromDate}
-          toDate={summaryData.toDate}
-          totalAmount={summaryData.totalAmount}
-          totalRecords={summaryData.totalRecords}
-          nicknameTotals={summaryData.nicknameTotals}
-        />
-      </CardContent>
-    </Card>
+      <CollectionNicknameBatchSections
+        loading={summaryData.loadingSummary}
+        hasApplied={summaryData.hasApplied}
+        selectedNicknames={summaryData.selectedNicknames}
+        fromDate={summaryData.fromDate}
+        toDate={summaryData.toDate}
+        totalAmount={summaryData.totalAmount}
+        totalRecords={summaryData.totalRecords}
+        nicknameTotals={summaryData.nicknameTotals}
+      />
+    </OperationalSectionCard>
   );
 }
 

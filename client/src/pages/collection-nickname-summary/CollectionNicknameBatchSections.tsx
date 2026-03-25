@@ -1,5 +1,9 @@
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  OperationalMetric,
+  OperationalSectionCard,
+  OperationalSummaryStrip,
+} from "@/components/layout/OperationalPage";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { NicknameTotalSummary } from "@/pages/collection-nickname-summary/utils";
 import { formatAmountRM } from "@/pages/collection/utils";
@@ -44,25 +48,27 @@ export function CollectionNicknameBatchSections({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-md border border-border/60 bg-background/70 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Nickname Summary Report
-            </p>
-            <p className="mt-1 text-2xl font-semibold">Aggregate by Nickname Only</p>
-            <p className="mt-2 text-sm font-semibold text-red-600">
-              {fromDate && toDate
-                ? `${formatIsoDateToDDMMYYYY(fromDate)} - ${formatIsoDateToDDMMYYYY(toDate)}`
-                : "Julat tarikh dipilih"}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">Grand Total Collection</p>
-            <p className="text-3xl font-bold">{formatAmountRM(totalAmount)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{totalRecords} record(s)</p>
-          </div>
-        </div>
+      <OperationalSectionCard
+        title="Aggregate by Nickname"
+        description={
+          fromDate && toDate
+            ? `${formatIsoDateToDDMMYYYY(fromDate)} - ${formatIsoDateToDDMMYYYY(toDate)}`
+            : "Julat tarikh dipilih"
+        }
+      >
+        <OperationalSummaryStrip className="grid gap-3 md:grid-cols-2">
+          <OperationalMetric
+            label="Grand Total Collection"
+            value={formatAmountRM(totalAmount)}
+            supporting={`${totalRecords} record(s)`}
+            tone="success"
+          />
+          <OperationalMetric
+            label="Selected Nicknames"
+            value={selectedNicknames.length}
+            supporting={selectedNicknames.length === 1 ? "1 nickname" : `${selectedNicknames.length} nicknames`}
+          />
+        </OperationalSummaryStrip>
 
         <div className="mt-4 flex flex-wrap gap-2">
           {selectedNicknames.map((nickname) => (
@@ -71,11 +77,11 @@ export function CollectionNicknameBatchSections({
             </Badge>
           ))}
         </div>
-      </div>
+      </OperationalSectionCard>
 
-      <div className="overflow-hidden rounded-md border border-border/60 bg-background/70">
+      <div className="ops-table-shell overflow-hidden">
         <div className="overflow-auto">
-          <Table className="min-w-[760px] text-sm">
+          <Table className="ops-data-table min-w-[760px] text-sm">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[72px]">No.</TableHead>
@@ -100,10 +106,10 @@ export function CollectionNicknameBatchSections({
                     <TableCell className="text-right font-medium">
                       {formatAmountRM(item.totalAmount)}
                     </TableCell>
-                  </TableRow>
+                    </TableRow>
                 ))
               )}
-              <TableRow className="border-t-2 border-border bg-slate-950/90 text-amber-300 hover:bg-slate-950/90">
+              <TableRow className="border-t-2 border-border bg-amber-50/80 hover:bg-amber-50/80 dark:bg-amber-950/35 dark:hover:bg-amber-950/35">
                 <TableCell colSpan={3} className="font-semibold uppercase">
                   Total
                 </TableCell>
