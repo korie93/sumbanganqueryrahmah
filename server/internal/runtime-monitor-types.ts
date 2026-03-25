@@ -32,6 +32,10 @@ export type InternalMonitorSnapshot = {
   localOpenCircuitCount: number;
   clusterOpenCircuitCount: number;
   bottleneckType: string;
+  rollupRefreshPendingCount: number;
+  rollupRefreshRunningCount: number;
+  rollupRefreshRetryCount: number;
+  rollupRefreshOldestPendingAgeMs: number;
   updatedAt: number;
 };
 
@@ -71,6 +75,12 @@ export type RuntimeMonitorManagerOptions = {
   aiLatencyStaleAfterMs: number;
   aiLatencyDecayHalfLifeMs: number;
   getSearchQueueLength: () => number;
+  getCollectionRollupRefreshQueueSnapshot?: () => Promise<{
+    pendingCount: number;
+    runningCount: number;
+    retryCount: number;
+    oldestPendingAgeMs: number;
+  }>;
   evaluateSystem: (snapshot: SystemSnapshot, history: SystemHistory) => Promise<EvaluateSystemResult>;
 };
 

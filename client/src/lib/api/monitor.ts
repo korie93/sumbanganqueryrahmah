@@ -46,6 +46,10 @@ export type SystemHealthPayload = {
   localOpenCircuitCount: number;
   clusterOpenCircuitCount: number;
   bottleneckType: string;
+  rollupRefreshPendingCount: number;
+  rollupRefreshRunningCount: number;
+  rollupRefreshRetryCount: number;
+  rollupRefreshOldestPendingAgeMs: number;
   activeAlertCount: number;
   updatedAt: number;
 };

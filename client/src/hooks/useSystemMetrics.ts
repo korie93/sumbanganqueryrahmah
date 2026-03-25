@@ -24,6 +24,9 @@ export type HistoryKey =
   | "connections"
   | "aiLatencyMs"
   | "queueSize"
+  | "rollupRefreshPendingCount"
+  | "rollupRefreshRetryCount"
+  | "rollupRefreshOldestPendingAgeMs"
   | "aiFailRate"
   | "status401Count"
   | "status403Count"
@@ -64,6 +67,10 @@ export type MonitorSnapshot = {
   connections: number;
   aiLatencyMs: number;
   queueSize: number;
+  rollupRefreshPendingCount: number;
+  rollupRefreshRunningCount: number;
+  rollupRefreshRetryCount: number;
+  rollupRefreshOldestPendingAgeMs: number;
   aiFailRate: number;
   status401Count: number;
   status403Count: number;
@@ -105,6 +112,10 @@ const initialSnapshot: MonitorSnapshot = {
   connections: 0,
   aiLatencyMs: 0,
   queueSize: 0,
+  rollupRefreshPendingCount: 0,
+  rollupRefreshRunningCount: 0,
+  rollupRefreshRetryCount: 0,
+  rollupRefreshOldestPendingAgeMs: 0,
   aiFailRate: 0,
   status401Count: 0,
   status403Count: 0,
@@ -126,6 +137,9 @@ const initialHistory: MonitorHistory = {
   connections: [],
   aiLatencyMs: [],
   queueSize: [],
+  rollupRefreshPendingCount: [],
+  rollupRefreshRetryCount: [],
+  rollupRefreshOldestPendingAgeMs: [],
   aiFailRate: [],
   status401Count: [],
   status403Count: [],
@@ -147,6 +161,9 @@ const HISTORY_KEYS: HistoryKey[] = [
   "connections",
   "aiLatencyMs",
   "queueSize",
+  "rollupRefreshPendingCount",
+  "rollupRefreshRetryCount",
+  "rollupRefreshOldestPendingAgeMs",
   "aiFailRate",
   "status401Count",
   "status403Count",
@@ -238,6 +255,10 @@ const snapshotsEqual = (a: MonitorSnapshot, b: MonitorSnapshot) => (
   a.connections === b.connections &&
   a.aiLatencyMs === b.aiLatencyMs &&
   a.queueSize === b.queueSize &&
+  a.rollupRefreshPendingCount === b.rollupRefreshPendingCount &&
+  a.rollupRefreshRunningCount === b.rollupRefreshRunningCount &&
+  a.rollupRefreshRetryCount === b.rollupRefreshRetryCount &&
+  a.rollupRefreshOldestPendingAgeMs === b.rollupRefreshOldestPendingAgeMs &&
   a.aiFailRate === b.aiFailRate &&
   a.status401Count === b.status401Count &&
   a.status403Count === b.status403Count &&
@@ -448,6 +469,22 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       );
       const aiLatencyMs = toFixedNumber(Number(healthRes.data?.aiLatencyMs ?? previous.aiLatencyMs), 2);
       const queueSize = toFixedNumber(Number(healthRes.data?.queueLength ?? previous.queueSize), 2);
+      const rollupRefreshPendingCount = toFixedNumber(
+        Number(healthRes.data?.rollupRefreshPendingCount ?? previous.rollupRefreshPendingCount),
+        0,
+      );
+      const rollupRefreshRunningCount = toFixedNumber(
+        Number(healthRes.data?.rollupRefreshRunningCount ?? previous.rollupRefreshRunningCount),
+        0,
+      );
+      const rollupRefreshRetryCount = toFixedNumber(
+        Number(healthRes.data?.rollupRefreshRetryCount ?? previous.rollupRefreshRetryCount),
+        0,
+      );
+      const rollupRefreshOldestPendingAgeMs = toFixedNumber(
+        Number(healthRes.data?.rollupRefreshOldestPendingAgeMs ?? previous.rollupRefreshOldestPendingAgeMs),
+        0,
+      );
       const status401Count = toFixedNumber(Number(healthRes.data?.status401Count ?? previous.status401Count), 2);
       const status403Count = toFixedNumber(Number(healthRes.data?.status403Count ?? previous.status403Count), 2);
       const status429Count = toFixedNumber(Number(healthRes.data?.status429Count ?? previous.status429Count), 2);
@@ -483,6 +520,10 @@ export function useSystemMetrics(): UseSystemMetricsResult {
         connections,
         aiLatencyMs,
         queueSize,
+        rollupRefreshPendingCount,
+        rollupRefreshRunningCount,
+        rollupRefreshRetryCount,
+        rollupRefreshOldestPendingAgeMs,
         aiFailRate,
         status401Count,
         status403Count,

@@ -91,6 +91,48 @@ export function buildInternalMonitorAlerts(snapshot: InternalMonitorSnapshot): I
     pushAlert("WARNING", "QUEUE", `Request queue is growing (${snapshot.queueLength} pending).`);
   }
 
+  if (snapshot.rollupRefreshPendingCount >= 30) {
+    pushAlert(
+      "CRITICAL",
+      "ROLLUP_QUEUE",
+      `Collection rollup refresh backlog is saturated (${snapshot.rollupRefreshPendingCount} pending slices).`,
+    );
+  } else if (snapshot.rollupRefreshPendingCount >= 10) {
+    pushAlert(
+      "WARNING",
+      "ROLLUP_QUEUE",
+      `Collection rollup refresh backlog is growing (${snapshot.rollupRefreshPendingCount} pending slices).`,
+    );
+  }
+
+  if (snapshot.rollupRefreshOldestPendingAgeMs >= 5 * 60 * 1000) {
+    pushAlert(
+      "CRITICAL",
+      "ROLLUP_LAG",
+      `Collection rollup refresh lag is critical (${snapshot.rollupRefreshOldestPendingAgeMs.toFixed(0)} ms oldest pending).`,
+    );
+  } else if (snapshot.rollupRefreshOldestPendingAgeMs >= 60 * 1000) {
+    pushAlert(
+      "WARNING",
+      "ROLLUP_LAG",
+      `Collection rollup refresh lag is elevated (${snapshot.rollupRefreshOldestPendingAgeMs.toFixed(0)} ms oldest pending).`,
+    );
+  }
+
+  if (snapshot.rollupRefreshRetryCount >= 5) {
+    pushAlert(
+      "CRITICAL",
+      "ROLLUP_RETRY",
+      `Collection rollup refresh retries are accumulating (${snapshot.rollupRefreshRetryCount} slices need retry).`,
+    );
+  } else if (snapshot.rollupRefreshRetryCount >= 1) {
+    pushAlert(
+      "WARNING",
+      "ROLLUP_RETRY",
+      `Collection rollup refresh encountered retryable failures (${snapshot.rollupRefreshRetryCount} slices pending retry).`,
+    );
+  }
+
   if (snapshot.workerCount >= snapshot.maxWorkers && snapshot.maxWorkers > 0) {
     pushAlert("WARNING", "WORKERS", `Worker capacity reached (${snapshot.workerCount}/${snapshot.maxWorkers}).`);
   }

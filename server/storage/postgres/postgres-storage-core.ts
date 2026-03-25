@@ -160,6 +160,10 @@ export class PostgresStorageCore {
     await this.ensureBackupsTable();
   }
 
+  async ensureCollectionRecordsReady(): Promise<void> {
+    await this.ensureCollectionRecordsTable();
+  }
+
   protected async seedDefaultUsers() {
     await this.usersBootstrap.seedDefaultUsers();
   }
