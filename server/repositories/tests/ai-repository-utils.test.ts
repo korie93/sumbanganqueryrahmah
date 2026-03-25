@@ -12,7 +12,7 @@ import {
   normalizeImportedBranchPostcode,
 } from "../ai-branch-import-utils";
 import { mapBranchRow, mapSearchRow, normalizeJsonPayload, readRows } from "../ai-repository-mappers";
-import { resolveAiKeywordFields, tokenizeAiFuzzyQuery } from "../ai-search-record-utils";
+import { resolveAiKeywordFields, serializeEmbeddingVector, tokenizeAiFuzzyQuery } from "../ai-search-record-utils";
 
 test("readRows and normalizeJsonPayload handle empty and JSON payloads safely", () => {
   assert.deepEqual(readRows<{ id: string }>({ rows: null }), []);
@@ -124,6 +124,13 @@ test("AI search record helpers normalize keyword field selection and fuzzy token
     "jalan",
   ]);
   assert.deepEqual(tokenizeAiFuzzyQuery("a @ 12"), []);
+});
+
+test("AI embedding helper serializes only finite numeric vectors", () => {
+  assert.equal(serializeEmbeddingVector([0.1, -2, 3.5]), "[0.1,-2,3.5]");
+  assert.throws(() => serializeEmbeddingVector([]), /required/i);
+  assert.throws(() => serializeEmbeddingVector([1, Number.NaN]), /invalid numeric value/i);
+  assert.throws(() => serializeEmbeddingVector([1, Number.POSITIVE_INFINITY]), /invalid numeric value/i);
 });
 
 test("AI branch lookup helpers clamp limits and normalize postcode/address inputs", () => {

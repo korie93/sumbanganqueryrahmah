@@ -41,13 +41,29 @@ export function tokenizeAiFuzzyQuery(query: string): string[] {
     .filter((token) => token.length >= 3);
 }
 
+export function serializeEmbeddingVector(embedding: number[]): string {
+  if (!Array.isArray(embedding) || embedding.length === 0) {
+    throw new Error("Embedding vector is required.");
+  }
+
+  const normalized = embedding.map((value) => {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new Error("Embedding vector contains an invalid numeric value.");
+    }
+
+    return String(value);
+  });
+
+  return `[${normalized.join(",")}]`;
+}
+
 export async function saveAiEmbeddingRow(params: {
   importId: string;
   rowId: string;
   content: string;
   embedding: number[];
 }): Promise<void> {
-  const embeddingLiteral = sql.raw(`'[${params.embedding.join(",")}]'`);
+  const embeddingLiteral = serializeEmbeddingVector(params.embedding);
   await db.execute(sql`
     INSERT INTO public.data_embeddings (id, import_id, row_id, content, embedding, created_at)
     VALUES (${crypto.randomUUID()}, ${params.importId}, ${params.rowId}, ${params.content}, ${embeddingLiteral}::vector, ${new Date()})
@@ -63,7 +79,7 @@ export async function semanticSearchRows(params: {
   limit: number;
   importId?: string | null;
 }): Promise<AiSemanticSearchRow[]> {
-  const embeddingLiteral = sql.raw(`'[${params.embedding.join(",")}]'`);
+  const embeddingLiteral = serializeEmbeddingVector(params.embedding);
   const importFilter = params.importId ? sql`AND e.import_id = ${params.importId}` : sql``;
 
   try {
