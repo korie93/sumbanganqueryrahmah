@@ -5,8 +5,17 @@ import type {
   CollectionDailyUser,
 } from "./collection-types";
 
-export async function getCollectionDailyUsers() {
-  const response = await apiRequest("GET", "/api/collection/daily/users");
+type CollectionDailyRequestOptions = {
+  signal?: AbortSignal;
+};
+
+export async function getCollectionDailyUsers(options?: CollectionDailyRequestOptions) {
+  const response = await apiRequest(
+    "GET",
+    "/api/collection/daily/users",
+    undefined,
+    options,
+  );
   return response.json() as Promise<{ ok: boolean; users: CollectionDailyUser[] }>;
 }
 
@@ -48,7 +57,7 @@ export async function getCollectionDailyOverview(filters: {
   month: number;
   username?: string;
   usernames?: string[];
-}) {
+}, options?: CollectionDailyRequestOptions) {
   const params = new URLSearchParams();
   params.set("year", String(filters.year));
   params.set("month", String(filters.month));
@@ -61,7 +70,12 @@ export async function getCollectionDailyOverview(filters: {
   if (filters.username) {
     params.set("username", filters.username);
   }
-  const response = await apiRequest("GET", `/api/collection/daily/overview?${params.toString()}`);
+  const response = await apiRequest(
+    "GET",
+    `/api/collection/daily/overview?${params.toString()}`,
+    undefined,
+    options,
+  );
   return response.json() as Promise<CollectionDailyOverviewResponse>;
 }
 
@@ -71,7 +85,7 @@ export async function getCollectionDailyDayDetails(filters: {
   usernames?: string[];
   page?: number;
   pageSize?: number;
-}) {
+}, options?: CollectionDailyRequestOptions) {
   const params = new URLSearchParams();
   params.set("date", filters.date);
   if (Array.isArray(filters.usernames) && filters.usernames.length > 0) {
@@ -89,6 +103,11 @@ export async function getCollectionDailyDayDetails(filters: {
   if (typeof filters.pageSize === "number" && Number.isFinite(filters.pageSize)) {
     params.set("pageSize", String(filters.pageSize));
   }
-  const response = await apiRequest("GET", `/api/collection/daily/day-details?${params.toString()}`);
+  const response = await apiRequest(
+    "GET",
+    `/api/collection/daily/day-details?${params.toString()}`,
+    undefined,
+    options,
+  );
   return response.json() as Promise<CollectionDailyDayDetailsResponse>;
 }

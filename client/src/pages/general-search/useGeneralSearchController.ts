@@ -8,6 +8,7 @@ import {
 } from "react";
 import { advancedSearchData, getSearchColumns, searchData } from "@/lib/api";
 import type { FilterRow, SearchResultRow } from "@/pages/general-search/types";
+import { resolveGeneralSearchExportBlockReason } from "@/pages/general-search/export-guards";
 import {
   collectSearchHeaders,
   createEmptyFilterRow,
@@ -27,6 +28,9 @@ export function useGeneralSearchController({
   const isMountedRef = useRef(true);
   const searchRequestIdRef = useRef(0);
   const columnsRequestIdRef = useRef(0);
+  const exportInFlightRef = useRef(false);
+  const searchAbortControllerRef = useRef<AbortController | null>(null);
+  const columnsAbortControllerRef = useRef<AbortController | null>(null);
 
   const isLowSpecMode =
     typeof document !== "undefined" &&
@@ -76,6 +80,10 @@ export function useGeneralSearchController({
       isMountedRef.current = false;
       searchRequestIdRef.current += 1;
       columnsRequestIdRef.current += 1;
+      searchAbortControllerRef.current?.abort();
+      searchAbortControllerRef.current = null;
+      columnsAbortControllerRef.current?.abort();
+      columnsAbortControllerRef.current = null;
     };
   }, []);
 
@@ -107,15 +115,24 @@ export function useGeneralSearchController({
 
   const loadColumns = useCallback(async () => {
     const requestId = ++columnsRequestIdRef.current;
+    columnsAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    columnsAbortControllerRef.current = controller;
     setLoadingColumns(true);
     try {
-      const response = await getSearchColumns();
+      const response = await getSearchColumns({ signal: controller.signal });
       if (!isMountedRef.current || requestId !== columnsRequestIdRef.current) return;
       setColumns(Array.isArray(response) ? response : []);
     } catch (loadError) {
+      if (loadError instanceof DOMException && loadError.name === "AbortError") {
+        return;
+      }
       if (!isMountedRef.current || requestId !== columnsRequestIdRef.current) return;
       console.error("Failed to load columns:", loadError);
     } finally {
+      if (columnsAbortControllerRef.current === controller) {
+        columnsAbortControllerRef.current = null;
+      }
       if (!isMountedRef.current || requestId !== columnsRequestIdRef.current) return;
       setLoadingColumns(false);
     }
@@ -138,12 +155,17 @@ export function useGeneralSearchController({
       );
 
       const requestId = ++searchRequestIdRef.current;
+      searchAbortControllerRef.current?.abort();
+      const controller = new AbortController();
+      searchAbortControllerRef.current = controller;
       setLoading(true);
       setError("");
       setSearched(true);
 
       try {
-        const response = await searchData(trimmedQuery, pageNumber, effectiveLimit);
+        const response = await searchData(trimmedQuery, pageNumber, effectiveLimit, {
+          signal: controller.signal,
+        });
         if (!isMountedRef.current || requestId !== searchRequestIdRef.current) return;
         const nextResults = (response.results || response.rows || []) as SearchResultRow[];
         const cappedTotal = Math.min(
@@ -153,6 +175,9 @@ export function useGeneralSearchController({
 
         updateSearchResults(nextResults, cappedTotal, pageNumber, effectiveLimit);
       } catch (searchError) {
+        if (searchError instanceof DOMException && searchError.name === "AbortError") {
+          return;
+        }
         if (!isMountedRef.current || requestId !== searchRequestIdRef.current) return;
         setError(
           searchError instanceof Error
@@ -162,6 +187,9 @@ export function useGeneralSearchController({
         setResults([]);
         setHeaders([]);
       } finally {
+        if (searchAbortControllerRef.current === controller) {
+          searchAbortControllerRef.current = null;
+        }
         if (!isMountedRef.current || requestId !== searchRequestIdRef.current) return;
         setLoading(false);
       }
@@ -193,6 +221,9 @@ export function useGeneralSearchController({
       );
 
       const requestId = ++searchRequestIdRef.current;
+      searchAbortControllerRef.current?.abort();
+      const controller = new AbortController();
+      searchAbortControllerRef.current = controller;
       setLoading(true);
       setError("");
       setSearched(true);
@@ -203,6 +234,7 @@ export function useGeneralSearchController({
           logic,
           pageNumber,
           effectiveLimit,
+          { signal: controller.signal },
         );
         if (!isMountedRef.current || requestId !== searchRequestIdRef.current) return;
         const nextResults = (response.results || response.rows || []) as SearchResultRow[];
@@ -213,6 +245,9 @@ export function useGeneralSearchController({
 
         updateSearchResults(nextResults, cappedTotal, pageNumber, effectiveLimit);
       } catch (searchError) {
+        if (searchError instanceof DOMException && searchError.name === "AbortError") {
+          return;
+        }
         if (!isMountedRef.current || requestId !== searchRequestIdRef.current) return;
         setError(
           searchError instanceof Error
@@ -222,6 +257,9 @@ export function useGeneralSearchController({
         setResults([]);
         setHeaders([]);
       } finally {
+        if (searchAbortControllerRef.current === controller) {
+          searchAbortControllerRef.current = null;
+        }
         if (!isMountedRef.current || requestId !== searchRequestIdRef.current) return;
         setLoading(false);
       }
@@ -267,6 +305,8 @@ export function useGeneralSearchController({
     setQuery(value);
     if (value.trim().length === 0) {
       searchRequestIdRef.current += 1;
+      searchAbortControllerRef.current?.abort();
+      searchAbortControllerRef.current = null;
       setResults([]);
       setHeaders([]);
       setSearched(false);
@@ -301,8 +341,14 @@ export function useGeneralSearchController({
   }, [advancedMode, headers, query, results]);
 
   const exportToPDF = useCallback(async () => {
-    if (results.length === 0 || exportingPdf) return;
+    const blockReason = resolveGeneralSearchExportBlockReason({
+      resultsLength: results.length,
+      exportingPdf,
+    });
+    if (blockReason === "busy" || exportInFlightRef.current) return;
+    if (blockReason === "no_data") return;
 
+    exportInFlightRef.current = true;
     setExportingPdf(true);
     try {
       const { exportSearchResultsToPdf } = await import(
@@ -322,6 +368,7 @@ export function useGeneralSearchController({
         }`,
       );
     } finally {
+      exportInFlightRef.current = false;
       if (!isMountedRef.current) return;
       setExportingPdf(false);
     }
@@ -329,6 +376,8 @@ export function useGeneralSearchController({
 
   const handleReset = useCallback(() => {
     searchRequestIdRef.current += 1;
+    searchAbortControllerRef.current?.abort();
+    searchAbortControllerRef.current = null;
     setQuery("");
     setResults([]);
     setHeaders([]);

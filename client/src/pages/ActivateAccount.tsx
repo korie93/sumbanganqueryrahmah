@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +31,21 @@ export default function ActivateAccountPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(token ? "" : "Activation link is invalid.");
+  const mountedRef = useRef(true);
+  const validationAbortControllerRef = useRef<AbortController | null>(null);
+  const activationAbortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      validationAbortControllerRef.current?.abort();
+      validationAbortControllerRef.current = null;
+      activationAbortControllerRef.current?.abort();
+      activationAbortControllerRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (phase !== "success" || !activation) return;
@@ -53,41 +68,56 @@ export default function ActivateAccountPage() {
   }, [activation, phase]);
 
   useEffect(() => {
-    let cancelled = false;
-
     if (!token) {
       setPhase("invalid");
       setError("Activation link is invalid.");
-      return () => {
-        cancelled = true;
-      };
+      return undefined;
     }
+
+    validationAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    validationAbortControllerRef.current = controller;
 
     const runValidation = async () => {
       setPhase("validating");
       setError("");
 
       try {
-        const response = await validateActivationToken({ token });
-        if (cancelled) return;
+        const response = await validateActivationToken({ token }, {
+          signal: controller.signal,
+        });
+        if (!mountedRef.current || controller.signal.aborted) return;
         setActivation(response.activation);
         setPhase("ready");
       } catch (validationError) {
-        if (cancelled) return;
+        if (
+          (validationError instanceof DOMException && validationError.name === "AbortError") ||
+          !mountedRef.current ||
+          controller.signal.aborted
+        ) {
+          return;
+        }
         setActivation(null);
         setPhase("invalid");
         setError(getApiErrorMessage(validationError, "Activation link is invalid or expired."));
+      } finally {
+        if (validationAbortControllerRef.current === controller) {
+          validationAbortControllerRef.current = null;
+        }
       }
     };
 
     void runValidation();
     return () => {
-      cancelled = true;
+      controller.abort();
+      if (validationAbortControllerRef.current === controller) {
+        validationAbortControllerRef.current = null;
+      }
     };
   }, [token]);
 
   const handleActivate = async () => {
-    if (!activation || loading || phase !== "ready") return;
+    if (!activation || loading || phase !== "ready" || activationAbortControllerRef.current) return;
 
     if (newPassword !== confirmPassword) {
       setError("Confirm password does not match.");
@@ -96,6 +126,8 @@ export default function ActivateAccountPage() {
 
     setError("");
     setLoading(true);
+    const controller = new AbortController();
+    activationAbortControllerRef.current = controller;
 
     try {
       await activateAccount({
@@ -103,14 +135,31 @@ export default function ActivateAccountPage() {
         token,
         newPassword,
         confirmPassword,
+      }, {
+        signal: controller.signal,
       });
+      if (!mountedRef.current || controller.signal.aborted) {
+        return;
+      }
       setNewPassword("");
       setConfirmPassword("");
       setPhase("success");
     } catch (activationError) {
+      if (
+        (activationError instanceof DOMException && activationError.name === "AbortError") ||
+        !mountedRef.current ||
+        controller.signal.aborted
+      ) {
+        return;
+      }
       setError(getApiErrorMessage(activationError, "Activation failed."));
     } finally {
-      setLoading(false);
+      if (activationAbortControllerRef.current === controller) {
+        activationAbortControllerRef.current = null;
+      }
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 

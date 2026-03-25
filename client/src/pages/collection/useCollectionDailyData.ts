@@ -8,12 +8,18 @@ import {
   type CollectionDailyOverviewResponse,
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import type { EditableCalendarDay } from "@/pages/collection/CollectionDailyShared";
+import {
+  buildCollectionDailyDayDetailsCacheKey,
+  buildCollectionDailyOverviewCacheKey,
+  createCollectionDailyDayDetailsCache,
+  createCollectionDailyOverviewCache,
+} from "@/pages/collection/collection-daily-cache";
 import { useCollectionDailyReceiptViewer } from "@/pages/collection/useCollectionDailyReceiptViewer";
 import {
   COLLECTION_DATA_CHANGED_EVENT,
   parseApiError,
 } from "@/pages/collection/utils";
-import type { EditableCalendarDay } from "@/pages/collection/CollectionDailyShared";
 
 const DAY_DETAILS_PAGE_SIZE = 10;
 
@@ -30,6 +36,12 @@ type UseCollectionDailyDataOptions = {
 type LoadCollectionDailyOverviewOptions = {
   preserveSelection?: boolean;
 };
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : error instanceof Error && error.name === "AbortError";
+}
 
 export function shouldLoadCollectionDailyOverview(options: {
   canManage: boolean;
@@ -101,6 +113,10 @@ export function useCollectionDailyData({
   const { toast } = useToast();
   const overviewRequestRef = useRef(0);
   const dayDetailsRequestRef = useRef(0);
+  const overviewAbortControllerRef = useRef<AbortController | null>(null);
+  const dayDetailsAbortControllerRef = useRef<AbortController | null>(null);
+  const overviewCacheRef = useRef(createCollectionDailyOverviewCache());
+  const dayDetailsCacheRef = useRef(createCollectionDailyDayDetailsCache());
 
   const [overview, setOverview] = useState<CollectionDailyOverviewResponse | null>(null);
   const [loadingOverview, setLoadingOverview] = useState(false);
@@ -117,6 +133,33 @@ export function useCollectionDailyData({
     closeReceiptViewer,
     receiptPreviewDialogProps,
   } = useCollectionDailyReceiptViewer();
+
+  const abortOverviewRequest = useCallback(() => {
+    if (overviewAbortControllerRef.current) {
+      overviewAbortControllerRef.current.abort();
+      overviewAbortControllerRef.current = null;
+    }
+  }, []);
+
+  const abortDayDetailsRequest = useCallback(() => {
+    if (dayDetailsAbortControllerRef.current) {
+      dayDetailsAbortControllerRef.current.abort();
+      dayDetailsAbortControllerRef.current = null;
+    }
+  }, []);
+
+  const clearCachedDailyViews = useCallback(() => {
+    overviewCacheRef.current.clear();
+    dayDetailsCacheRef.current.clear();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      abortOverviewRequest();
+      abortDayDetailsRequest();
+      clearCachedDailyViews();
+    };
+  }, [abortDayDetailsRequest, abortOverviewRequest, clearCachedDailyViews]);
 
   const loadOverview = useCallback(async (
     options: LoadCollectionDailyOverviewOptions = {},
@@ -140,14 +183,47 @@ export function useCollectionDailyData({
 
     const requestId = overviewRequestRef.current + 1;
     overviewRequestRef.current = requestId;
+    const cacheKey = buildCollectionDailyOverviewCacheKey({
+      year,
+      month,
+      usernames: selectedQueryUsers,
+    });
+    const cachedEntry = overviewCacheRef.current.get(cacheKey);
+
+    if (cachedEntry) {
+      abortOverviewRequest();
+      setOverview(cachedEntry.overview);
+      if (canEditTarget) {
+        setMonthlyTargetInput(String(cachedEntry.overview.summary.monthlyTarget || 0));
+      }
+      setCalendarDays(mapCollectionDailyEditableCalendarDays(cachedEntry.overview));
+      if (!preserveSelection) {
+        setSelectedDate(null);
+        setDayDetails(null);
+        closeReceiptViewer();
+      }
+      setLoadingOverview(false);
+      return true;
+    }
+
+    abortOverviewRequest();
+    const controller = new AbortController();
+    overviewAbortControllerRef.current = controller;
     setLoadingOverview(true);
+
     try {
-      const response = await getCollectionDailyOverview({
-        year,
-        month,
-        usernames: selectedQueryUsers,
-      });
-      if (overviewRequestRef.current !== requestId) return false;
+      const response = await getCollectionDailyOverview(
+        {
+          year,
+          month,
+          usernames: selectedQueryUsers,
+        },
+        {
+          signal: controller.signal,
+        },
+      );
+      if (controller.signal.aborted || overviewRequestRef.current !== requestId) return false;
+      overviewCacheRef.current.set(cacheKey, { overview: response });
       setOverview(response);
       if (canEditTarget) {
         setMonthlyTargetInput(String(response.summary.monthlyTarget || 0));
@@ -160,6 +236,7 @@ export function useCollectionDailyData({
       }
       return true;
     } catch (error: unknown) {
+      if (controller.signal.aborted || isAbortError(error)) return false;
       if (overviewRequestRef.current !== requestId) return false;
       setOverview(null);
       toast({
@@ -169,18 +246,22 @@ export function useCollectionDailyData({
       });
       return false;
     } finally {
+      if (overviewAbortControllerRef.current === controller) {
+        overviewAbortControllerRef.current = null;
+      }
       if (overviewRequestRef.current === requestId) {
         setLoadingOverview(false);
       }
     }
   }, [
+    abortOverviewRequest,
     canEditTarget,
     canManage,
     closeReceiptViewer,
     currentUsername,
     month,
     selectedQueryUsers,
-    selectedUsernames.length,
+    selectedUsernames,
     toast,
     year,
   ]);
@@ -202,18 +283,45 @@ export function useCollectionDailyData({
     async (date: string, page = 1) => {
       const requestId = dayDetailsRequestRef.current + 1;
       dayDetailsRequestRef.current = requestId;
+      const cacheKey = buildCollectionDailyDayDetailsCacheKey({
+        date,
+        usernames: selectedQueryUsers,
+        page,
+        pageSize: DAY_DETAILS_PAGE_SIZE,
+      });
+      const cachedEntry = dayDetailsCacheRef.current.get(cacheKey);
+
       setSelectedDate(date);
+
+      if (cachedEntry) {
+        abortDayDetailsRequest();
+        setDayDetails(cachedEntry.dayDetails);
+        setLoadingDayDetails(false);
+        return;
+      }
+
+      abortDayDetailsRequest();
+      const controller = new AbortController();
+      dayDetailsAbortControllerRef.current = controller;
       setLoadingDayDetails(true);
+
       try {
-        const response = await getCollectionDailyDayDetails({
-          date,
-          usernames: selectedQueryUsers,
-          page,
-          pageSize: DAY_DETAILS_PAGE_SIZE,
-        });
-        if (dayDetailsRequestRef.current !== requestId) return;
+        const response = await getCollectionDailyDayDetails(
+          {
+            date,
+            usernames: selectedQueryUsers,
+            page,
+            pageSize: DAY_DETAILS_PAGE_SIZE,
+          },
+          {
+            signal: controller.signal,
+          },
+        );
+        if (controller.signal.aborted || dayDetailsRequestRef.current !== requestId) return;
+        dayDetailsCacheRef.current.set(cacheKey, { dayDetails: response });
         setDayDetails(response);
       } catch (error: unknown) {
+        if (controller.signal.aborted || isAbortError(error)) return;
         if (dayDetailsRequestRef.current !== requestId) return;
         setDayDetails(null);
         toast({
@@ -222,12 +330,15 @@ export function useCollectionDailyData({
           variant: "destructive",
         });
       } finally {
+        if (dayDetailsAbortControllerRef.current === controller) {
+          dayDetailsAbortControllerRef.current = null;
+        }
         if (dayDetailsRequestRef.current === requestId) {
           setLoadingDayDetails(false);
         }
       }
     },
-    [selectedQueryUsers, toast],
+    [abortDayDetailsRequest, selectedQueryUsers, toast],
   );
 
   const refreshCurrentView = useCallback(async () => {
@@ -245,6 +356,7 @@ export function useCollectionDailyData({
     if (typeof window === "undefined") return undefined;
 
     const handleCollectionDataChanged = () => {
+      clearCachedDailyViews();
       if (
         !shouldLoadCollectionDailyOverview({
           canManage,
@@ -264,6 +376,7 @@ export function useCollectionDailyData({
     };
   }, [
     canManage,
+    clearCachedDailyViews,
     currentUsername,
     refreshCurrentView,
     selectedUsernames,
@@ -300,6 +413,7 @@ export function useCollectionDailyData({
         title: "Target Saved",
         description: "Monthly target has been updated.",
       });
+      clearCachedDailyViews();
       await refreshCurrentView();
     } catch (error: unknown) {
       toast({
@@ -310,7 +424,17 @@ export function useCollectionDailyData({
     } finally {
       setSavingTarget(false);
     }
-  }, [canEditTarget, canManage, month, monthlyTargetInput, refreshCurrentView, selectedUsernames, toast, year]);
+  }, [
+    canEditTarget,
+    canManage,
+    clearCachedDailyViews,
+    month,
+    monthlyTargetInput,
+    refreshCurrentView,
+    selectedUsernames,
+    toast,
+    year,
+  ]);
 
   const saveCalendar = useCallback(async () => {
     if (!calendarDays.length) return;
@@ -325,6 +449,7 @@ export function useCollectionDailyData({
         title: "Calendar Saved",
         description: "Working days and holiday settings have been updated.",
       });
+      clearCachedDailyViews();
       await refreshCurrentView();
     } catch (error: unknown) {
       toast({
@@ -335,7 +460,7 @@ export function useCollectionDailyData({
     } finally {
       setSavingCalendar(false);
     }
-  }, [calendarDays, month, refreshCurrentView, toast, year]);
+  }, [calendarDays, clearCachedDailyViews, month, refreshCurrentView, toast, year]);
 
   const updateEditableDay = useCallback((dayNumber: number, patch: Partial<EditableCalendarDay>) => {
     setCalendarDays((previous) =>
@@ -344,10 +469,11 @@ export function useCollectionDailyData({
   }, []);
 
   const closeDayDetails = useCallback(() => {
+    abortDayDetailsRequest();
     setSelectedDate(null);
     setDayDetails(null);
     closeReceiptViewer();
-  }, [closeReceiptViewer]);
+  }, [abortDayDetailsRequest, closeReceiptViewer]);
 
   const viewReceipt = useCallback(
     (record: CollectionDailyDayDetailsResponse["records"][number], receiptId?: string) => {

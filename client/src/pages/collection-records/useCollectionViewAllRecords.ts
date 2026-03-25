@@ -15,11 +15,22 @@ import {
   COLLECTION_DATA_CHANGED_EVENT,
   parseApiError,
 } from "@/pages/collection/utils";
+import {
+  buildCollectionRecordsCacheKey,
+  createCollectionRecordsCache,
+} from "@/pages/collection-records/records-query-cache";
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException
     ? error.name === "AbortError"
     : error instanceof Error && error.name === "AbortError";
+}
+
+function getCachedRecordTotalAmount(records: CollectionRecord[]) {
+  return records.reduce((total, record) => {
+    const nextAmount = Number(record.amount);
+    return Number.isFinite(nextAmount) ? total + nextAmount : total;
+  }, 0);
 }
 
 type UseCollectionViewAllRecordsArgs = {
@@ -39,6 +50,7 @@ export function useCollectionViewAllRecords({
   const isMountedRef = useRef(true);
   const viewAllRequestIdRef = useRef(0);
   const viewAllAbortControllerRef = useRef<AbortController | null>(null);
+  const viewAllCacheRef = useRef(createCollectionRecordsCache(12));
 
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [viewAllLoading, setViewAllLoading] = useState(false);
@@ -88,6 +100,7 @@ export function useCollectionViewAllRecords({
       isMountedRef.current = false;
       viewAllRequestIdRef.current += 1;
       abortViewAllRequest();
+      viewAllCacheRef.current.clear();
     };
   }, [abortViewAllRequest]);
 
@@ -95,6 +108,31 @@ export function useCollectionViewAllRecords({
     if (!viewAllOpen || !viewAllFiltersSnapshot) return;
 
     const requestId = ++viewAllRequestIdRef.current;
+    const requestFilters = {
+      ...viewAllFiltersSnapshot,
+      limit: viewAllPageSize,
+      offset: (viewAllPage - 1) * viewAllPageSize,
+    };
+    const cacheKey = buildCollectionRecordsCacheKey(requestFilters);
+    const cachedEntry = viewAllCacheRef.current.get(cacheKey);
+
+    if (cachedEntry) {
+      abortViewAllRequest();
+      setViewAllRecords(cachedEntry.records);
+      setViewAllTotalRecords(
+        typeof cachedEntry.totalRecords === "number"
+          ? cachedEntry.totalRecords
+          : cachedEntry.records.length,
+      );
+      setViewAllTotalAmount(
+        typeof cachedEntry.totalAmount === "number"
+          ? cachedEntry.totalAmount
+          : getCachedRecordTotalAmount(cachedEntry.records),
+      );
+      setViewAllLoading(false);
+      return;
+    }
+
     setViewAllLoading(true);
     abortViewAllRequest();
     const controller = new AbortController();
@@ -102,19 +140,23 @@ export function useCollectionViewAllRecords({
 
     const loadViewAllPage = async () => {
       try {
-        const response = await getCollectionRecords({
-          ...viewAllFiltersSnapshot,
-          limit: viewAllPageSize,
-          offset: (viewAllPage - 1) * viewAllPageSize,
-        }, { signal: controller.signal });
+        const response = await getCollectionRecords(requestFilters, { signal: controller.signal });
         if (
           controller.signal.aborted ||
           !isMountedRef.current ||
           requestId !== viewAllRequestIdRef.current
         ) return;
-        setViewAllRecords(Array.isArray(response?.records) ? response.records : []);
-        setViewAllTotalRecords(Number(response?.total || 0));
-        setViewAllTotalAmount(Number(response?.totalAmount || 0));
+        const nextRecords = Array.isArray(response?.records) ? response.records : [];
+        const nextTotalRecords = Number(response?.total || 0);
+        const nextTotalAmount = Number(response?.totalAmount || 0);
+        viewAllCacheRef.current.set(cacheKey, {
+          records: nextRecords,
+          totalRecords: nextTotalRecords,
+          totalAmount: nextTotalAmount,
+        });
+        setViewAllRecords(nextRecords);
+        setViewAllTotalRecords(nextTotalRecords);
+        setViewAllTotalAmount(nextTotalAmount);
       } catch (error: unknown) {
         if (
           controller.signal.aborted ||
@@ -158,6 +200,7 @@ export function useCollectionViewAllRecords({
     if (typeof window === "undefined") return undefined;
 
     const handleCollectionDataChanged = () => {
+      viewAllCacheRef.current.clear();
       if (!viewAllOpen || !viewAllFiltersSnapshot) return;
       setViewAllRefreshToken((previous) => previous + 1);
     };

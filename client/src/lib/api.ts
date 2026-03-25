@@ -1,6 +1,7 @@
 import { apiRequest } from "./queryClient";
 
 export * from "./api/activity";
+export * from "./api/ai";
 export * from "./api/analytics";
 export * from "./api/auth";
 export * from "./api/audit";

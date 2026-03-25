@@ -15,14 +15,24 @@ export function useCollectionDailyUsersData({ canManage }: UseCollectionDailyUse
   useEffect(() => {
     if (!canManage) return;
     let cancelled = false;
+    const controller = new AbortController();
     const run = async () => {
       setLoadingUsers(true);
       try {
-        const response = await getCollectionDailyUsers();
+        const response = await getCollectionDailyUsers({
+          signal: controller.signal,
+        });
         if (cancelled) return;
         setUsers(Array.isArray(response?.users) ? response.users : []);
       } catch (error: unknown) {
-        if (cancelled) return;
+        if (
+          cancelled ||
+          (error instanceof DOMException
+            ? error.name === "AbortError"
+            : error instanceof Error && error.name === "AbortError")
+        ) {
+          return;
+        }
         toast({
           title: "Failed to Load Staff Nicknames",
           description: parseApiError(error),
@@ -37,6 +47,7 @@ export function useCollectionDailyUsersData({ canManage }: UseCollectionDailyUse
     void run();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [canManage, toast]);
 

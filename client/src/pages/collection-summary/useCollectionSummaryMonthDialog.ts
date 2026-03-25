@@ -10,6 +10,10 @@ import {
   parseApiError,
 } from "@/pages/collection/utils";
 import { buildMonthRange, toDisplayDate } from "@/pages/collection-summary/utils";
+import {
+  buildCollectionMonthDialogCacheKey,
+  createCollectionMonthDialogCache,
+} from "@/pages/collection-summary/month-dialog-cache";
 
 const MONTH_DIALOG_PAGE_SIZE = 10;
 
@@ -36,6 +40,7 @@ export function useCollectionSummaryMonthDialog({
   const isMountedRef = useRef(true);
   const monthRecordsRequestIdRef = useRef(0);
   const monthRecordsAbortControllerRef = useRef<AbortController | null>(null);
+  const monthRecordsCacheRef = useRef(createCollectionMonthDialogCache());
 
   const [monthDialogOpen, setMonthDialogOpen] = useState(false);
   const [activeMonth, setActiveMonth] = useState<number | null>(null);
@@ -58,6 +63,7 @@ export function useCollectionSummaryMonthDialog({
       isMountedRef.current = false;
       monthRecordsRequestIdRef.current += 1;
       abortMonthRecordsRequest();
+      monthRecordsCacheRef.current.clear();
     };
   }, [abortMonthRecordsRequest]);
 
@@ -89,9 +95,24 @@ export function useCollectionSummaryMonthDialog({
               new Set(nicknames.map((value) => String(value || "").trim()).filter(Boolean)),
             )
           : [];
+      const cacheKey = buildCollectionMonthDialogCacheKey({
+        year,
+        month,
+        page,
+        pageSize,
+        nicknames: normalizedFilters,
+      });
+      const cachedEntry = monthRecordsCacheRef.current.get(cacheKey);
+
+      if (cachedEntry) {
+        abortMonthRecordsRequest();
+        setMonthRecords(cachedEntry.records);
+        setMonthRecordsTotal(cachedEntry.totalRecords);
+        setLoadingMonthRecords(false);
+        return;
+      }
 
       setLoadingMonthRecords(true);
-      setMonthRecords([]);
       abortMonthRecordsRequest();
       const controller = new AbortController();
       monthRecordsAbortControllerRef.current = controller;
@@ -112,8 +133,13 @@ export function useCollectionSummaryMonthDialog({
           requestId !== monthRecordsRequestIdRef.current
         ) return;
 
-        setMonthRecords(Array.isArray(response?.records) ? response.records : []);
-        setMonthRecordsTotal(Number(response?.total || 0));
+        const cacheEntry = {
+          records: Array.isArray(response?.records) ? response.records : [],
+          totalRecords: Number(response?.total || 0),
+        };
+        monthRecordsCacheRef.current.set(cacheKey, cacheEntry);
+        setMonthRecords(cacheEntry.records);
+        setMonthRecordsTotal(cacheEntry.totalRecords);
       } catch (error: unknown) {
         if (
           controller.signal.aborted ||
@@ -181,6 +207,7 @@ export function useCollectionSummaryMonthDialog({
     if (typeof window === "undefined") return undefined;
 
     const handleCollectionDataChanged = () => {
+      monthRecordsCacheRef.current.clear();
       if (!monthDialogOpen || activeMonth === null) {
         return;
       }

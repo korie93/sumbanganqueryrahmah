@@ -1,6 +1,10 @@
 import { apiRequest, createApiHeaders } from "../queryClient";
 import { getCsrfHeader } from "./shared";
 
+type ActivityRequestOptions = {
+  signal?: AbortSignal;
+};
+
 export type ActivityLoginPayload = {
   username: string;
   role: string;
@@ -34,7 +38,7 @@ export async function activityHeartbeat(payload?: {
   pcName?: string;
   browser?: string;
   fingerprint?: string;
-}) {
+}, options?: ActivityRequestOptions) {
   return fetch("/api/activity/heartbeat", {
     method: "POST",
     headers: createApiHeaders({
@@ -43,25 +47,27 @@ export async function activityHeartbeat(payload?: {
     }),
     credentials: "include",
     body: JSON.stringify(payload || {}),
+    signal: options?.signal,
   });
 }
 
-export async function activityHeartbeatLight() {
+export async function activityHeartbeatLight(options?: ActivityRequestOptions) {
   return fetch("/api/activity/heartbeat", {
     method: "POST",
     headers: createApiHeaders({
       ...(getCsrfHeader() as Record<string, string>),
     }),
     credentials: "include",
+    signal: options?.signal,
   });
 }
 
-export async function getAllActivity() {
-  const response = await apiRequest("GET", "/api/activity/all");
+export async function getAllActivity(options?: ActivityRequestOptions) {
+  const response = await apiRequest("GET", "/api/activity/all", undefined, options);
   return response.json();
 }
 
-export async function getFilteredActivity(filters: ActivityFilters) {
+export async function getFilteredActivity(filters: ActivityFilters, options?: ActivityRequestOptions) {
   const params = new URLSearchParams();
   if (filters.status && filters.status.length > 0) {
     params.set("status", filters.status.join(","));
@@ -74,7 +80,7 @@ export async function getFilteredActivity(filters: ActivityFilters) {
 
   const queryString = params.toString();
   const url = queryString ? `/api/activity/filter?${queryString}` : "/api/activity/filter";
-  const response = await apiRequest("GET", url);
+  const response = await apiRequest("GET", url, undefined, options);
   return response.json();
 }
 
@@ -112,7 +118,7 @@ export async function unbanUser(banId: string) {
   return response.json();
 }
 
-export async function getBannedUsers() {
-  const response = await apiRequest("GET", "/api/users/banned");
+export async function getBannedUsers(options?: ActivityRequestOptions) {
+  const response = await apiRequest("GET", "/api/users/banned", undefined, options);
   return response.json();
 }

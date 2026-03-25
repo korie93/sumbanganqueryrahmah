@@ -1,7 +1,16 @@
 import { apiRequest, createApiHeaders } from "../queryClient";
 import { getAuthHeader } from "./shared";
 
-export async function searchData(query: string, page: number = 1, limit: number = 50) {
+type SearchRequestOptions = {
+  signal?: AbortSignal;
+};
+
+export async function searchData(
+  query: string,
+  page: number = 1,
+  limit: number = 50,
+  options?: SearchRequestOptions,
+) {
   const res = await fetch(
     `/api/search/global?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`,
     {
@@ -9,6 +18,7 @@ export async function searchData(query: string, page: number = 1, limit: number 
       headers: createApiHeaders({
         ...getAuthHeader(),
       }),
+      signal: options?.signal,
     },
   );
 
@@ -31,12 +41,18 @@ export async function advancedSearchData(
   logic: "AND" | "OR",
   page: number = 1,
   limit: number = 50,
+  options?: SearchRequestOptions,
 ) {
-  const response = await apiRequest("POST", "/api/search/advanced", { filters, logic, page, limit });
+  const response = await apiRequest(
+    "POST",
+    "/api/search/advanced",
+    { filters, logic, page, limit },
+    options,
+  );
   return response.json();
 }
 
-export async function getSearchColumns() {
-  const response = await apiRequest("GET", "/api/search/columns");
+export async function getSearchColumns(options?: SearchRequestOptions) {
+  const response = await apiRequest("GET", "/api/search/columns", undefined, options);
   return response.json();
 }

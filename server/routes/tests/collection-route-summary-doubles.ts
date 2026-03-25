@@ -53,14 +53,14 @@ export function createCollectionSummaryStorageDouble(options?: {
       nicknameActiveChecks.push(nickname);
       return nicknameSet.has(String(nickname).toLowerCase());
     },
-    summarizeCollectionRecords: async (filters: Record<string, unknown>) => {
-      nicknameSummaryCalls.push(filters);
+    summarizeCollectionRecords: async (_filters: Record<string, unknown>) => {
       return {
         totalRecords: 3,
         totalAmount: 450.5,
       };
     },
-    summarizeCollectionRecordsByNickname: async (_filters: Record<string, unknown>) => {
+    summarizeCollectionRecordsByNickname: async (filters: Record<string, unknown>) => {
+      nicknameSummaryCalls.push(filters);
       return [
         {
           nickname: "Collector Alpha",
@@ -144,14 +144,14 @@ export function createAdminCollectionSummaryStorageDouble() {
       monthlySummaryCalls.push(filters);
       return [{ month: 3, monthName: "March", totalRecords: 2, totalAmount: 420.75 }];
     },
-    summarizeCollectionRecords: async (filters: Record<string, unknown>) => {
-      nicknameSummaryCalls.push(filters);
+    summarizeCollectionRecords: async (_filters: Record<string, unknown>) => {
       return {
         totalRecords: 2,
         totalAmount: 420.75,
       };
     },
-    summarizeCollectionRecordsByNickname: async (_filters: Record<string, unknown>) => {
+    summarizeCollectionRecordsByNickname: async (filters: Record<string, unknown>) => {
+      nicknameSummaryCalls.push(filters);
       return [
         {
           nickname: "Collector Beta",

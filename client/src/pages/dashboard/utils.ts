@@ -2,6 +2,9 @@ import { Activity, AlertTriangle, Database, FileText, LogIn, ShieldOff, Users } 
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import type { SummaryCardItem, SummaryData } from "@/pages/dashboard/types";
 
+let html2canvasLoader: Promise<typeof import("html2canvas")["default"]> | null = null;
+let jsPdfLoader: Promise<typeof import("jspdf")["default"]> | null = null;
+
 export const ROLE_COLORS: Record<string, string> = {
   superuser: "hsl(var(--chart-1))",
   admin: "hsl(var(--chart-2))",
@@ -66,10 +69,24 @@ export function buildSummaryCards(summary: SummaryData | undefined): SummaryCard
   ];
 }
 
+function loadHtml2Canvas() {
+  if (!html2canvasLoader) {
+    html2canvasLoader = import("html2canvas").then((module) => module.default);
+  }
+  return html2canvasLoader;
+}
+
+function loadJsPdf() {
+  if (!jsPdfLoader) {
+    jsPdfLoader = import("jspdf").then((module) => module.default);
+  }
+  return jsPdfLoader;
+}
+
 export async function exportDashboardToPdf(element: HTMLDivElement) {
-  const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-    import("html2canvas"),
-    import("jspdf"),
+  const [html2canvas, jsPDF] = await Promise.all([
+    loadHtml2Canvas(),
+    loadJsPdf(),
   ]);
 
   const isDark = document.documentElement.classList.contains("dark");
@@ -100,47 +117,52 @@ export async function exportDashboardToPdf(element: HTMLDivElement) {
     },
   });
 
-  const imageData = canvas.toDataURL("image/png", 1.0);
-  const pdf = new jsPDF({
-    orientation: "landscape",
-    unit: "mm",
-    format: "a4",
-  });
+  try {
+    const imageData = canvas.toDataURL("image/png", 1.0);
+    const pdf = new jsPDF({
+      orientation: "landscape",
+      unit: "mm",
+      format: "a4",
+    });
 
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
 
-  pdf.setFillColor(isDark ? 30 : 255, isDark ? 41 : 255, isDark ? 59 : 255);
-  pdf.rect(0, 0, pageWidth, pageHeight, "F");
+    pdf.setFillColor(isDark ? 30 : 255, isDark ? 41 : 255, isDark ? 59 : 255);
+    pdf.rect(0, 0, pageWidth, pageHeight, "F");
 
-  pdf.setFontSize(20);
-  pdf.setFont("helvetica", "bold");
-  pdf.setTextColor(isDark ? 255 : 30);
-  pdf.text("SQR Dashboard Analytics Report", 14, 18);
+    pdf.setFontSize(20);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(isDark ? 255 : 30);
+    pdf.text("SQR Dashboard Analytics Report", 14, 18);
 
-  pdf.setFontSize(11);
-  pdf.setFont("helvetica", "normal");
-  pdf.setTextColor(isDark ? 180 : 100);
-  pdf.text(`Generated: ${formatDateTimeDDMMYYYY(new Date(), { includeSeconds: true })}`, 14, 26);
+    pdf.setFontSize(11);
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(isDark ? 180 : 100);
+    pdf.text(`Generated: ${formatDateTimeDDMMYYYY(new Date(), { includeSeconds: true })}`, 14, 26);
 
-  pdf.setDrawColor(isDark ? 100 : 200);
-  pdf.setLineWidth(0.5);
-  pdf.line(14, 30, pageWidth - 14, 30);
+    pdf.setDrawColor(isDark ? 100 : 200);
+    pdf.setLineWidth(0.5);
+    pdf.line(14, 30, pageWidth - 14, 30);
 
-  const margin = 14;
-  const headerHeight = 35;
-  const availableWidth = pageWidth - margin * 2;
-  const availableHeight = pageHeight - headerHeight - margin;
-  const ratio = Math.min(availableWidth / canvas.width, availableHeight / canvas.height);
-  const finalWidth = canvas.width * ratio;
-  const finalHeight = canvas.height * ratio;
-  const imageX = margin + (availableWidth - finalWidth) / 2;
-  const imageY = headerHeight;
+    const margin = 14;
+    const headerHeight = 35;
+    const availableWidth = pageWidth - margin * 2;
+    const availableHeight = pageHeight - headerHeight - margin;
+    const ratio = Math.min(availableWidth / canvas.width, availableHeight / canvas.height);
+    const finalWidth = canvas.width * ratio;
+    const finalHeight = canvas.height * ratio;
+    const imageX = margin + (availableWidth - finalWidth) / 2;
+    const imageY = headerHeight;
 
-  pdf.addImage(imageData, "PNG", imageX, imageY, finalWidth, finalHeight);
-  pdf.setFontSize(8);
-  pdf.setTextColor(isDark ? 120 : 150);
-  pdf.text("Sumbangan Query Rahmah (SQR) System", margin, pageHeight - 5);
-  pdf.text("Page 1 of 1", pageWidth - margin - 20, pageHeight - 5);
-  pdf.save(`SQR-Dashboard-Report-${new Date().toISOString().split("T")[0]}.pdf`);
+    pdf.addImage(imageData, "PNG", imageX, imageY, finalWidth, finalHeight);
+    pdf.setFontSize(8);
+    pdf.setTextColor(isDark ? 120 : 150);
+    pdf.text("Sumbangan Query Rahmah (SQR) System", margin, pageHeight - 5);
+    pdf.text("Page 1 of 1", pageWidth - margin - 20, pageHeight - 5);
+    pdf.save(`SQR-Dashboard-Report-${new Date().toISOString().split("T")[0]}.pdf`);
+  } finally {
+    canvas.width = 0;
+    canvas.height = 0;
+  }
 }

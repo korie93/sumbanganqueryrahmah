@@ -10,6 +10,7 @@ import type {
 } from "@/pages/audit-logs/types";
 
 type AuditBadgeVariant = "default" | "secondary" | "destructive" | "outline";
+let auditLogsJsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
 
 export const auditActionLabels: Record<string, { label: string; variant: AuditBadgeVariant }> = {
   KICK_USER: { label: "Force Logout", variant: "secondary" },
@@ -184,10 +185,18 @@ export function exportAuditLogsToCsv(logs: AuditLogRecord[]) {
   downloadBlob(blob, `SQR-audit-logs-${new Date().toISOString().split("T")[0]}.csv`);
 }
 
+function loadAuditLogsJsPdfModule() {
+  if (!auditLogsJsPdfModulePromise) {
+    auditLogsJsPdfModulePromise = import("jspdf");
+  }
+
+  return auditLogsJsPdfModulePromise;
+}
+
 export async function exportAuditLogsToPdf(logs: AuditLogRecord[]) {
   if (logs.length === 0) return;
 
-  const { default: jsPDF } = await import("jspdf");
+  const { default: jsPDF } = await loadAuditLogsJsPdfModule();
   const isDark = document.documentElement.classList.contains("dark");
 
   const pdf = new jsPDF({

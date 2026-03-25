@@ -8,6 +8,10 @@ import { parseImportFileForBulk, parseImportPreview, stripImportExtension } from
 import { SingleImportPanel } from "@/pages/import/SingleImportPanel";
 import type { BulkFileResult, ImportProps, ImportRow } from "@/pages/import/types";
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export default function Import({ onNavigate }: ImportProps) {
   const [activeTab, setActiveTab] = useState<"single" | "bulk">("single");
   const [file, setFile] = useState<File | null>(null);
@@ -23,6 +27,12 @@ export default function Import({ onNavigate }: ImportProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
   const singleParseRequestIdRef = useRef(0);
+  const singleSaveInFlightRef = useRef(false);
+  const singleSaveAbortControllerRef = useRef<AbortController | null>(null);
+  const bulkImportInFlightRef = useRef(false);
+  const bulkImportAbortControllerRef = useRef<AbortController | null>(null);
+  const bulkImportRequestIdRef = useRef(0);
+  const isMountedRef = useRef(true);
   const { toast } = useToast();
 
   const resetSingleImport = () => {
@@ -90,6 +100,10 @@ export default function Import({ onNavigate }: ImportProps) {
   };
 
   const handleSave = async () => {
+    if (loading || singleSaveInFlightRef.current) {
+      return;
+    }
+
     if (!importName.trim()) {
       setError("Please enter an import name.");
       return;
@@ -102,11 +116,23 @@ export default function Import({ onNavigate }: ImportProps) {
 
     setLoading(true);
     setError("");
+    singleSaveInFlightRef.current = true;
+    singleSaveAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    singleSaveAbortControllerRef.current = controller;
 
     try {
       const rowCount = parsedData.length;
       const savedName = importName.trim();
-      await createImport(savedName, file?.name || "unknown.csv", parsedData);
+      await createImport(
+        savedName,
+        file?.name || "unknown.csv",
+        parsedData,
+        { signal: controller.signal },
+      );
+      if (controller.signal.aborted || !isMountedRef.current) {
+        return;
+      }
       // Clear heavy state before navigating to release memory
       resetSingleImport();
       toast({
@@ -115,9 +141,18 @@ export default function Import({ onNavigate }: ImportProps) {
       });
       onNavigate("saved");
     } catch (saveError: unknown) {
+      if (isAbortError(saveError) || !isMountedRef.current) {
+        return;
+      }
       setError(saveError instanceof Error ? saveError.message : "Failed to save data.");
     } finally {
-      setLoading(false);
+      if (singleSaveAbortControllerRef.current === controller) {
+        singleSaveAbortControllerRef.current = null;
+      }
+      singleSaveInFlightRef.current = false;
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -143,20 +178,30 @@ export default function Import({ onNavigate }: ImportProps) {
   };
 
   const handleBulkImport = async () => {
-    if (bulkFiles.length === 0) return;
+    if (bulkFiles.length === 0 || bulkProcessing || bulkImportInFlightRef.current) return;
 
+    const requestId = ++bulkImportRequestIdRef.current;
+    bulkImportAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    bulkImportAbortControllerRef.current = controller;
+    bulkImportInFlightRef.current = true;
     setBulkProcessing(true);
     setBulkProgress(0);
 
     const results: BulkFileResult[] = [];
 
     for (let index = 0; index < bulkFiles.length; index += 1) {
+      if (controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {
+        break;
+      }
       const currentFile = bulkFiles[index];
       const nextPending: BulkFileResult = { filename: currentFile.name, status: "processing" };
 
-      setBulkResults((previous) => previous.map((result, resultIndex) => (
-        resultIndex === index ? { ...result, status: "processing" } : result
-      )));
+      if (isMountedRef.current) {
+        setBulkResults((previous) => previous.map((result, resultIndex) => (
+          resultIndex === index ? { ...result, status: "processing" } : result
+        )));
+      }
 
       try {
         let parsedRows: ImportRow[] | null = null;
@@ -167,6 +212,13 @@ export default function Import({ onNavigate }: ImportProps) {
           parseErrorMessage = parsed.error;
         }
 
+        if (controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {
+          if (parsedRows) {
+            parsedRows.length = 0;
+          }
+          break;
+        }
+
         if (parseErrorMessage) {
           nextPending.status = "error";
           nextPending.error = parseErrorMessage;
@@ -174,7 +226,16 @@ export default function Import({ onNavigate }: ImportProps) {
           nextPending.status = "error";
           nextPending.error = "No data found in file";
         } else {
-          await createImport(stripImportExtension(currentFile.name), currentFile.name, parsedRows);
+          await createImport(
+            stripImportExtension(currentFile.name),
+            currentFile.name,
+            parsedRows,
+            { signal: controller.signal },
+          );
+          if (controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {
+            parsedRows.length = 0;
+            break;
+          }
           nextPending.status = "success";
           nextPending.rowCount = parsedRows.length;
         }
@@ -183,15 +244,31 @@ export default function Import({ onNavigate }: ImportProps) {
           parsedRows.length = 0;
         }
       } catch (bulkError: unknown) {
+        if (isAbortError(bulkError) || controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {
+          break;
+        }
         nextPending.status = "error";
         nextPending.error = bulkError instanceof Error ? bulkError.message : "Failed to import";
       }
 
       results.push(nextPending);
-      setBulkResults((previous) => previous.map((result, resultIndex) => (
-        resultIndex === index ? nextPending : result
-      )));
-      setBulkProgress(((index + 1) / bulkFiles.length) * 100);
+      if (isMountedRef.current) {
+        setBulkResults((previous) => previous.map((result, resultIndex) => (
+          resultIndex === index ? nextPending : result
+        )));
+        setBulkProgress(((index + 1) / bulkFiles.length) * 100);
+      }
+    }
+
+    if (bulkImportAbortControllerRef.current === controller) {
+      bulkImportAbortControllerRef.current = null;
+    }
+    bulkImportInFlightRef.current = false;
+    if (!isMountedRef.current || controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {
+      if (isMountedRef.current) {
+        setBulkProcessing(false);
+      }
+      return;
     }
 
     setBulkProcessing(false);
@@ -216,6 +293,7 @@ export default function Import({ onNavigate }: ImportProps) {
   };
 
   useEffect(() => {
+    isMountedRef.current = true;
     if (activeTab === "bulk") {
       singleParseRequestIdRef.current += 1;
       resetSingleImport();
@@ -226,6 +304,16 @@ export default function Import({ onNavigate }: ImportProps) {
       handleClearBulk();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      singleSaveAbortControllerRef.current?.abort();
+      bulkImportAbortControllerRef.current?.abort();
+      singleParseRequestIdRef.current += 1;
+      bulkImportRequestIdRef.current += 1;
+    };
+  }, []);
 
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">

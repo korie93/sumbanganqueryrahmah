@@ -1,6 +1,9 @@
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import type { CollectionMonthlySummary } from "../storage-postgres";
+import type {
+  CollectionMonthlySummary,
+  CollectionNicknameDailyAggregate,
+} from "../storage-postgres";
 
 const COLLECTION_MONTH_NAMES = [
   "January",
@@ -139,6 +142,15 @@ export function mapCollectionMonthlySummaryRows(rows: any[]): CollectionMonthlyS
       totalAmount: data?.totalAmount ?? 0,
     };
   });
+}
+
+export function mapCollectionNicknameDailyAggregateRows(rows: any[]): CollectionNicknameDailyAggregate[] {
+  return (rows || []).map((row) => ({
+    nickname: String(row?.nickname || row?.nickname_key || "Unknown"),
+    paymentDate: String(row?.payment_date || ""),
+    totalRecords: Number(row?.total_records ?? 0),
+    totalAmount: Number(row?.total_amount ?? 0),
+  }));
 }
 
 export function extractCollectionRecordIds(rows: any[]): string[] {

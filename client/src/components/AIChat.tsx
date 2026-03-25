@@ -9,8 +9,7 @@ import {
   AI_RESET_EVENT,
   type AIChatStatus as SharedAIChatStatus,
 } from "@/lib/ai-chat";
-import { getCsrfHeader } from "@/lib/api/shared";
-import { createApiHeaders } from "@/lib/queryClient";
+import { searchAI } from "@/lib/api";
 import "@/styles/ai.css";
 
 type AIChatProps = {
@@ -54,6 +53,14 @@ export default function AIChat({ timeoutMs, aiEnabled, onCancelAISearchReady, on
   const sessionRef = useRef(0);
   const processingRef = useRef(false);
   const typingRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const clearRetryTimers = useCallback(() => {
     retryTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
@@ -73,7 +80,9 @@ export default function AIChat({ timeoutMs, aiEnabled, onCancelAISearchReady, on
       typingIntervalRef.current = null;
     }
     typingRef.current = false;
-    setIsTyping(false);
+    if (isMountedRef.current) {
+      setIsTyping(false);
+    }
   }, []);
 
   const appendMessage = useCallback((msg: AIChatMessage) => {
@@ -97,12 +106,16 @@ export default function AIChat({ timeoutMs, aiEnabled, onCancelAISearchReady, on
     clearRetryTimers();
     clearSlowNoticeTimer();
     stopTyping();
-    setStreamingText("");
-    setSlowNotice(false);
+    if (isMountedRef.current) {
+      setStreamingText("");
+      setSlowNotice(false);
+    }
     processingRef.current = false;
-    setIsProcessing(false);
-    setIsThinking(false);
-    setAiStatus("IDLE");
+    if (isMountedRef.current) {
+      setIsProcessing(false);
+      setIsThinking(false);
+      setAiStatus("IDLE");
+    }
   }, [clearRetryTimers, clearSlowNoticeTimer, setIsThinking, stopTyping]);
 
   const resetSession = useCallback(() => {
@@ -147,17 +160,21 @@ export default function AIChat({ timeoutMs, aiEnabled, onCancelAISearchReady, on
       if (index >= text.length) {
         stopTyping();
         if (sessionId !== sessionRef.current) return;
-        setStreamingText("");
+        if (isMountedRef.current) {
+          setStreamingText("");
+        }
         appendMessage({
           role: "assistant",
           content: text,
           timestamp: new Date().toISOString(),
         });
         processingRef.current = false;
-        setIsProcessing(false);
-        setIsThinking(false);
-        setAiStatus("IDLE");
-        setSlowNotice(false);
+        if (isMountedRef.current) {
+          setIsProcessing(false);
+          setIsThinking(false);
+          setAiStatus("IDLE");
+          setSlowNotice(false);
+        }
         clearSlowNoticeTimer();
       }
     }, typingDelayMs);
@@ -182,24 +199,11 @@ export default function AIChat({ timeoutMs, aiEnabled, onCancelAISearchReady, on
     requestControllerRef.current = controller;
     let waitingRetry = false;
     let startedTyping = false;
+    let timeoutId: number | null = null;
 
     try {
-      const headers: Record<string, string> = {
-        ...createApiHeaders({
-          "Content-Type": "application/json",
-          ...(getCsrfHeader() as Record<string, string>),
-        }),
-      };
-
-      const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
-      const response = await fetch("/api/ai/search", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ query: text }),
-        credentials: "include",
-        signal: controller.signal,
-      });
-      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+      const response = await searchAI(text, { signal: controller.signal });
 
       if (sessionId !== sessionRef.current) return;
 
@@ -256,6 +260,7 @@ export default function AIChat({ timeoutMs, aiEnabled, onCancelAISearchReady, on
 
         waitingRetry = true;
         const timerId = window.setTimeout(() => {
+          retryTimersRef.current = retryTimersRef.current.filter((existingId) => existingId !== timerId);
           void executeSearch(text, sessionId, retryCount + 1);
         }, RETRY_MS + retryCount * 500);
         retryTimersRef.current.push(timerId);
@@ -279,21 +284,28 @@ export default function AIChat({ timeoutMs, aiEnabled, onCancelAISearchReady, on
         timestamp: new Date().toISOString(),
       });
       processingRef.current = false;
-      setIsProcessing(false);
-      setIsThinking(false);
-      setAiStatus("IDLE");
-      setSlowNotice(false);
+      if (isMountedRef.current) {
+        setIsProcessing(false);
+        setIsThinking(false);
+        setAiStatus("IDLE");
+        setSlowNotice(false);
+      }
       clearSlowNoticeTimer();
     } finally {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
       if (requestControllerRef.current === controller) {
         requestControllerRef.current = null;
       }
       if (!waitingRetry && !startedTyping && sessionId === sessionRef.current) {
         processingRef.current = false;
-        setIsProcessing(false);
-        setIsThinking(false);
-        setAiStatus("IDLE");
-        setSlowNotice(false);
+        if (isMountedRef.current) {
+          setIsProcessing(false);
+          setIsThinking(false);
+          setAiStatus("IDLE");
+          setSlowNotice(false);
+        }
         clearSlowNoticeTimer();
       }
     }

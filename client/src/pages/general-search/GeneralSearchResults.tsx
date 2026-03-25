@@ -186,6 +186,7 @@ export function GeneralSearchResults({
                     variant="ghost"
                     className="w-full justify-start"
                     onClick={onExportCsv}
+                    disabled={exportingPdf}
                     data-testid="button-export-csv"
                   >
                     <Download className="w-4 h-4 mr-2" />

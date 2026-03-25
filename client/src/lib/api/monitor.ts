@@ -2,6 +2,9 @@ import { createApiHeaders } from "../queryClient";
 import { getAuthHeader, getCsrfHeader } from "./shared";
 
 export type MonitorRequestState = "ok" | "unauthorized" | "forbidden" | "network_error";
+type MonitorRequestOptions = {
+  signal?: AbortSignal;
+};
 
 export type MonitorApiResult<T> = {
   state: MonitorRequestState;
@@ -159,7 +162,10 @@ async function parseMonitorErrorMessage(response: Response): Promise<string> {
   }
 }
 
-async function fetchMonitorEndpoint<T>(endpoint: string): Promise<MonitorApiResult<T>> {
+async function fetchMonitorEndpoint<T>(
+  endpoint: string,
+  options?: MonitorRequestOptions,
+): Promise<MonitorApiResult<T>> {
   try {
     const response = await fetch(endpoint, {
       method: "GET",
@@ -167,6 +173,7 @@ async function fetchMonitorEndpoint<T>(endpoint: string): Promise<MonitorApiResu
         ...getAuthHeader(),
       }),
       credentials: "include",
+      signal: options?.signal,
     });
 
     if (response.status === 401) {
@@ -213,7 +220,11 @@ async function fetchMonitorEndpoint<T>(endpoint: string): Promise<MonitorApiResu
   }
 }
 
-async function postMonitorEndpoint<T>(endpoint: string, body: unknown): Promise<MonitorApiResult<T>> {
+async function postMonitorEndpoint<T>(
+  endpoint: string,
+  body: unknown,
+  options?: MonitorRequestOptions,
+): Promise<MonitorApiResult<T>> {
   try {
     const response = await fetch(endpoint, {
       method: "POST",
@@ -224,6 +235,7 @@ async function postMonitorEndpoint<T>(endpoint: string, body: unknown): Promise<
       }),
       credentials: "include",
       body: JSON.stringify(body ?? {}),
+      signal: options?.signal,
     });
 
     if (response.status === 401) {
@@ -270,28 +282,28 @@ async function postMonitorEndpoint<T>(endpoint: string, body: unknown): Promise<
   }
 }
 
-export async function getSystemHealth() {
-  return fetchMonitorEndpoint<SystemHealthPayload>("/internal/system-health");
+export async function getSystemHealth(options?: MonitorRequestOptions) {
+  return fetchMonitorEndpoint<SystemHealthPayload>("/internal/system-health", options);
 }
 
-export async function getSystemMode() {
-  return fetchMonitorEndpoint<SystemModePayload>("/internal/system-mode");
+export async function getSystemMode(options?: MonitorRequestOptions) {
+  return fetchMonitorEndpoint<SystemModePayload>("/internal/system-mode", options);
 }
 
-export async function getWorkers() {
-  return fetchMonitorEndpoint<WorkersPayload>("/internal/workers");
+export async function getWorkers(options?: MonitorRequestOptions) {
+  return fetchMonitorEndpoint<WorkersPayload>("/internal/workers", options);
 }
 
-export async function getAlerts() {
-  return fetchMonitorEndpoint<AlertsPayload>("/internal/alerts");
+export async function getAlerts(options?: MonitorRequestOptions) {
+  return fetchMonitorEndpoint<AlertsPayload>("/internal/alerts", options);
 }
 
-export async function getIntelligenceExplain() {
-  return fetchMonitorEndpoint<IntelligenceExplainPayload>("/internal/intelligence/explain");
+export async function getIntelligenceExplain(options?: MonitorRequestOptions) {
+  return fetchMonitorEndpoint<IntelligenceExplainPayload>("/internal/intelligence/explain", options);
 }
 
-export async function injectChaos(payload: ChaosInjectPayload) {
-  return postMonitorEndpoint<ChaosInjectResponse>("/internal/chaos/inject", payload);
+export async function injectChaos(payload: ChaosInjectPayload, options?: MonitorRequestOptions) {
+  return postMonitorEndpoint<ChaosInjectResponse>("/internal/chaos/inject", payload, options);
 }
 
 export async function generateFingerprint(): Promise<string> {

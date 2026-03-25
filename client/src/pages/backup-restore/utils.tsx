@@ -3,6 +3,7 @@ import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import type { BackupFilters, BackupOption, BackupRecord } from "@/pages/backup-restore/types";
 
 type BackupRecordLike = Record<string, unknown>;
+let backupJsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
 
 export const backupDatePresets: BackupOption[] = [
   { value: "today", label: "Today" },
@@ -175,10 +176,18 @@ export function exportBackupsToCsv(backups: BackupRecord[]) {
   downloadBlob(blob, `SQR-backups-${new Date().toISOString().split("T")[0]}.csv`);
 }
 
+function loadBackupsJsPdfModule() {
+  if (!backupJsPdfModulePromise) {
+    backupJsPdfModulePromise = import("jspdf");
+  }
+
+  return backupJsPdfModulePromise;
+}
+
 export async function exportBackupsToPdf(backups: BackupRecord[]) {
   if (backups.length === 0) return;
 
-  const { default: jsPDF } = await import("jspdf");
+  const { default: jsPDF } = await loadBackupsJsPdfModule();
   const isDark = document.documentElement.classList.contains("dark");
 
   const pdf = new jsPDF({

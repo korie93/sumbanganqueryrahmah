@@ -10,9 +10,19 @@ import {
   type NicknameTotalSummary,
 } from "@/pages/collection-nickname-summary/utils";
 import {
+  buildCollectionNicknameSummaryCacheKey,
+  createCollectionNicknameSummaryCache,
+} from "@/pages/collection-nickname-summary/nickname-summary-cache";
+import {
   COLLECTION_DATA_CHANGED_EVENT,
   parseApiError,
 } from "@/pages/collection/utils";
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : error instanceof Error && error.name === "AbortError";
+}
 
 function normalizeNicknameSelection(values: string[]) {
   return Array.from(
@@ -57,6 +67,9 @@ export function useCollectionNicknameSummaryData({
   const isMountedRef = useRef(true);
   const nicknamesRequestIdRef = useRef(0);
   const summaryRequestIdRef = useRef(0);
+  const nicknamesAbortControllerRef = useRef<AbortController | null>(null);
+  const summaryAbortControllerRef = useRef<AbortController | null>(null);
+  const summaryCacheRef = useRef(createCollectionNicknameSummaryCache());
 
   const [nicknameOptions, setNicknameOptions] = useState<CollectionStaffNickname[]>([]);
   const [nicknameDropdownOpen, setNicknameDropdownOpen] = useState(false);
@@ -70,11 +83,28 @@ export function useCollectionNicknameSummaryData({
   const [totalRecords, setTotalRecords] = useState(0);
   const [hasApplied, setHasApplied] = useState(false);
 
+  const abortNicknamesRequest = useCallback(() => {
+    if (nicknamesAbortControllerRef.current) {
+      nicknamesAbortControllerRef.current.abort();
+      nicknamesAbortControllerRef.current = null;
+    }
+  }, []);
+
+  const abortSummaryRequest = useCallback(() => {
+    if (summaryAbortControllerRef.current) {
+      summaryAbortControllerRef.current.abort();
+      summaryAbortControllerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
+      abortNicknamesRequest();
+      abortSummaryRequest();
+      summaryCacheRef.current.clear();
     };
-  }, []);
+  }, [abortNicknamesRequest, abortSummaryRequest]);
 
   const visibleNicknameOptions = useMemo(() => {
     const byLower = new Map<string, CollectionStaffNickname>();
@@ -113,13 +143,19 @@ export function useCollectionNicknameSummaryData({
   const loadNicknames = useCallback(async () => {
     if (!canAccess) return;
     const requestId = ++nicknamesRequestIdRef.current;
+    abortNicknamesRequest();
+    const controller = new AbortController();
+    nicknamesAbortControllerRef.current = controller;
     setLoadingNicknames(true);
     try {
-      const response = await getCollectionNicknames();
+      const response = await getCollectionNicknames(undefined, {
+        signal: controller.signal,
+      });
       if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
       const nextOptions = Array.isArray(response?.nicknames) ? response.nicknames : [];
       setNicknameOptions(nextOptions.filter((item) => item.isActive));
     } catch (error: unknown) {
+      if (controller.signal.aborted || isAbortError(error)) return;
       if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
       toast({
         title: "Failed to Load Nicknames",
@@ -127,10 +163,13 @@ export function useCollectionNicknameSummaryData({
         variant: "destructive",
       });
     } finally {
+      if (nicknamesAbortControllerRef.current === controller) {
+        nicknamesAbortControllerRef.current = null;
+      }
       if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
       setLoadingNicknames(false);
     }
-  }, [canAccess, toast]);
+  }, [abortNicknamesRequest, canAccess, toast]);
 
   useEffect(() => {
     void loadNicknames();
@@ -171,6 +210,25 @@ export function useCollectionNicknameSummaryData({
   const loadSummary = useCallback(
     async (from: string, to: string, nicknames: string[]) => {
       const requestId = ++summaryRequestIdRef.current;
+      const cacheKey = buildCollectionNicknameSummaryCacheKey({
+        from,
+        to,
+        nicknames,
+      });
+      const cachedEntry = summaryCacheRef.current.get(cacheKey);
+      if (cachedEntry) {
+        abortSummaryRequest();
+        setNicknameTotals(cachedEntry.nicknameTotals);
+        setTotalAmount(cachedEntry.totalAmount);
+        setTotalRecords(cachedEntry.totalRecords);
+        setHasApplied(true);
+        setLoadingSummary(false);
+        return;
+      }
+
+      abortSummaryRequest();
+      const controller = new AbortController();
+      summaryAbortControllerRef.current = controller;
       setLoadingSummary(true);
       try {
         const response = await getCollectionNicknameSummary({
@@ -178,13 +236,24 @@ export function useCollectionNicknameSummaryData({
           to,
           nicknames,
           summaryOnly: true,
+        }, {
+          signal: controller.signal,
         });
         if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
-        setNicknameTotals(normalizeNicknameTotals(response?.nicknameTotals));
-        setTotalAmount(Number(response?.totalAmount || 0));
-        setTotalRecords(Number(response?.totalRecords || 0));
+        const normalizedNicknameTotals = normalizeNicknameTotals(response?.nicknameTotals);
+        const normalizedTotalAmount = Number(response?.totalAmount || 0);
+        const normalizedTotalRecords = Number(response?.totalRecords || 0);
+        summaryCacheRef.current.set(cacheKey, {
+          nicknameTotals: normalizedNicknameTotals,
+          totalAmount: normalizedTotalAmount,
+          totalRecords: normalizedTotalRecords,
+        });
+        setNicknameTotals(normalizedNicknameTotals);
+        setTotalAmount(normalizedTotalAmount);
+        setTotalRecords(normalizedTotalRecords);
         setHasApplied(true);
       } catch (error: unknown) {
+        if (controller.signal.aborted || isAbortError(error)) return;
         if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
         setNicknameTotals([]);
         setTotalAmount(0);
@@ -196,11 +265,14 @@ export function useCollectionNicknameSummaryData({
           variant: "destructive",
         });
       } finally {
+        if (summaryAbortControllerRef.current === controller) {
+          summaryAbortControllerRef.current = null;
+        }
         if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
         setLoadingSummary(false);
       }
     },
-    [toast],
+    [abortSummaryRequest, toast],
   );
 
   const apply = useCallback(async () => {
@@ -236,6 +308,7 @@ export function useCollectionNicknameSummaryData({
     if (typeof window === "undefined") return undefined;
 
     const handleCollectionDataChanged = () => {
+      summaryCacheRef.current.clear();
       if (!hasApplied || !fromDate || !toDate || selectedNicknames.length === 0) {
         return;
       }
@@ -250,6 +323,7 @@ export function useCollectionNicknameSummaryData({
 
   const reset = useCallback(() => {
     summaryRequestIdRef.current += 1;
+    abortSummaryRequest();
     setSelectedNicknames([]);
     setFromDate("");
     setToDate("");
@@ -257,7 +331,7 @@ export function useCollectionNicknameSummaryData({
     setTotalAmount(0);
     setTotalRecords(0);
     setHasApplied(false);
-  }, []);
+  }, [abortSummaryRequest]);
 
   return {
     nicknameOptions: visibleNicknameOptions,

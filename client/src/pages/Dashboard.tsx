@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Download, RefreshCw } from "lucide-react";
 import {
@@ -10,6 +10,7 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { DashboardSummaryCards } from "@/pages/dashboard/DashboardSummaryCards";
+import { resolveDashboardExportBlockReason } from "@/pages/dashboard/export-guards";
 import type { LoginTrend, PeakHour, RoleData, SummaryData, TopUser } from "@/pages/dashboard/types";
 import { buildSummaryCards, exportDashboardToPdf } from "@/pages/dashboard/utils";
 
@@ -37,53 +38,82 @@ function DashboardSectionFallback({ label }: { label: string }) {
 export default function Dashboard() {
   const [trendDays, setTrendDays] = useState(7);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const dashboardRef = useRef<HTMLDivElement>(null);
+  const exportInFlightRef = useRef(false);
+  const refreshInFlightRef = useRef(false);
+  const mountedRef = useRef(true);
 
   const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useQuery<SummaryData>({
     queryKey: ["/api/analytics/summary"],
-    queryFn: getAnalyticsSummary,
+    queryFn: ({ signal }) => getAnalyticsSummary({ signal }),
     refetchInterval: 30000,
   });
 
   const { data: trends, isLoading: trendsLoading, refetch: refetchTrends } = useQuery<LoginTrend[]>({
     queryKey: ["/api/analytics/login-trends", trendDays],
-    queryFn: () => getLoginTrends(trendDays),
+    queryFn: ({ signal }) => getLoginTrends(trendDays, { signal }),
     refetchInterval: 30000,
   });
 
   const { data: topUsers, isLoading: topUsersLoading, refetch: refetchTopUsers } = useQuery<TopUser[]>({
     queryKey: ["/api/analytics/top-users"],
-    queryFn: () => getTopActiveUsers(10),
+    queryFn: ({ signal }) => getTopActiveUsers(10, { signal }),
     refetchInterval: 30000,
   });
 
   const { data: peakHours, isLoading: peakHoursLoading, refetch: refetchPeakHours } = useQuery<PeakHour[]>({
     queryKey: ["/api/analytics/peak-hours"],
-    queryFn: getPeakHours,
+    queryFn: ({ signal }) => getPeakHours({ signal }),
     refetchInterval: 60000,
   });
 
   const { data: roleDistribution, isLoading: roleLoading, refetch: refetchRoles } = useQuery<RoleData[]>({
     queryKey: ["/api/analytics/role-distribution"],
-    queryFn: getRoleDistribution,
+    queryFn: ({ signal }) => getRoleDistribution({ signal }),
     refetchInterval: 60000,
   });
 
   const summaryCards = useMemo(() => buildSummaryCards(summary), [summary]);
+  const exportBlockReason = useMemo(
+    () => resolveDashboardExportBlockReason({ exportingPdf, refreshing }),
+    [exportingPdf, refreshing],
+  );
 
-  const handleRefreshAll = () => {
-    void Promise.all([
-      refetchSummary(),
-      refetchTrends(),
-      refetchTopUsers(),
-      refetchPeakHours(),
-      refetchRoles(),
-    ]);
-  };
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      exportInFlightRef.current = false;
+      refreshInFlightRef.current = false;
+    };
+  }, []);
 
-  const handleExportPdf = async () => {
-    if (!dashboardRef.current) return;
+  const handleRefreshAll = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
 
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        refetchSummary(),
+        refetchTrends(),
+        refetchTopUsers(),
+        refetchPeakHours(),
+        refetchRoles(),
+      ]);
+    } finally {
+      refreshInFlightRef.current = false;
+      if (mountedRef.current) {
+        setRefreshing(false);
+      }
+    }
+  }, [refetchPeakHours, refetchRoles, refetchSummary, refetchTopUsers, refetchTrends]);
+
+  const handleExportPdf = useCallback(async () => {
+    if (!dashboardRef.current || exportBlockReason || exportInFlightRef.current) return;
+
+    exportInFlightRef.current = true;
     setExportingPdf(true);
     try {
       await exportDashboardToPdf(dashboardRef.current);
@@ -91,9 +121,12 @@ export default function Dashboard() {
       console.error("Failed to export PDF:", error instanceof Error ? error.message : error);
       alert(`Failed to export PDF: ${error instanceof Error ? error.message : "Unknown error. Try on desktop browser."}`);
     } finally {
-      setExportingPdf(false);
+      exportInFlightRef.current = false;
+      if (mountedRef.current) {
+        setExportingPdf(false);
+      }
     }
-  };
+  }, [exportBlockReason]);
 
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
@@ -109,7 +142,7 @@ export default function Dashboard() {
             <Button
               onClick={handleExportPdf}
               variant="outline"
-              disabled={exportingPdf}
+              disabled={exportBlockReason !== null}
               data-testid="button-export-pdf"
             >
               {exportingPdf ? (
@@ -119,8 +152,15 @@ export default function Dashboard() {
               )}
               Export PDF
             </Button>
-            <Button onClick={handleRefreshAll} variant="outline" data-testid="button-refresh-dashboard">
-              <RefreshCw className="w-4 h-4 mr-2" />
+            <Button
+              onClick={() => {
+                void handleRefreshAll();
+              }}
+              variant="outline"
+              disabled={refreshing}
+              data-testid="button-refresh-dashboard"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2${refreshing ? " animate-spin" : ""}`} />
               Refresh
             </Button>
           </div>

@@ -29,6 +29,69 @@
       "when": 1774397325641,
       "tag": "0003_reviewed_storage_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774399258318,
+      "tag": "0004_reviewed_collection_access_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774399523610,
+      "tag": "0005_reviewed_collection_daily_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1774399674642,
+      "tag": "0006_reviewed_ai_support_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1774400431062,
+      "tag": "0007_reviewed_spatial_lookup_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1774400594930,
+      "tag": "0008_reviewed_data_embeddings",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1774400766829,
+      "tag": "0009_reviewed_auth_lifecycle_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1774400934812,
+      "tag": "0010_reviewed_settings_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1774401139387,
+      "tag": "0011_reviewed_collection_record_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1774401324182,
+      "tag": "0012_reviewed_users_table",
+      "breakpoints": true
     }
   ]
 }

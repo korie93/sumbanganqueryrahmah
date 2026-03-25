@@ -10,6 +10,25 @@ interface ViewerExportParams {
   exportSelected?: boolean;
 }
 
+let viewerJsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
+let viewerXlsxModulePromise: Promise<typeof import("xlsx")> | null = null;
+
+function loadViewerJsPdfModule() {
+  if (!viewerJsPdfModulePromise) {
+    viewerJsPdfModulePromise = import("jspdf");
+  }
+
+  return viewerJsPdfModulePromise;
+}
+
+function loadViewerXlsxModule() {
+  if (!viewerXlsxModulePromise) {
+    viewerXlsxModulePromise = import("xlsx");
+  }
+
+  return viewerXlsxModulePromise;
+}
+
 function buildViewerExportFilename(
   importName: string,
   extension: "csv" | "pdf" | "xlsx",
@@ -47,7 +66,7 @@ export async function exportViewerRowsToPdf({
 }: ViewerExportParams) {
   if (rows.length === 0) return;
 
-  const { default: jsPDF } = await import("jspdf");
+  const { default: jsPDF } = await loadViewerJsPdfModule();
   const isDark = document.documentElement.classList.contains("dark");
   const useLandscape = headers.length > 4;
   const pdf = new jsPDF({
@@ -195,7 +214,7 @@ export async function exportViewerRowsToExcel({
     return rowData;
   });
 
-  const XLSX = await import("xlsx");
+  const XLSX = await loadViewerXlsxModule();
   const worksheet = XLSX.utils.json_to_sheet(worksheetData);
   const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1");
 

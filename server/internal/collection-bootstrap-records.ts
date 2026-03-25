@@ -3,6 +3,8 @@ import path from "path";
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
 
+type BootstrapSqlExecutor = Pick<typeof db, "execute">;
+
 function inferMimeTypeFromReceiptPath(receiptPath: string): string {
   const extension = path.extname(String(receiptPath || "").trim()).toLowerCase();
   if (extension === ".pdf") return "application/pdf";
@@ -11,9 +13,11 @@ function inferMimeTypeFromReceiptPath(receiptPath: string): string {
   return "application/octet-stream";
 }
 
-export async function ensureCollectionRecordsTables(): Promise<void> {
-  await db.execute(sql`SET search_path TO public`);
-  await db.execute(sql`
+export async function ensureCollectionRecordsTables(
+  database: BootstrapSqlExecutor = db,
+): Promise<void> {
+  await database.execute(sql`SET search_path TO public`);
+  await database.execute(sql`
     CREATE TABLE IF NOT EXISTS public.collection_records (
       id uuid PRIMARY KEY,
       customer_name text NOT NULL,
@@ -31,62 +35,62 @@ export async function ensureCollectionRecordsTables(): Promise<void> {
       updated_at timestamp DEFAULT now() NOT NULL
     )
   `);
-  await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name text`);
-  await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number text`);
-  await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_phone text`);
-  await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number text`);
-  await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS batch text`);
-  await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS payment_date date`);
-  await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS amount numeric(14,2)`);
-  await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_file text`);
-  await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_by_login text`);
-  await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS collection_staff_nickname text`);
-  await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS staff_username text`);
-  await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-  await db.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
-  await db.execute(sql`
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name text`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number text`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_phone text`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number text`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS batch text`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS payment_date date`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS amount numeric(14,2)`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_file text`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_by_login text`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS collection_staff_nickname text`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS staff_username text`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+  await database.execute(sql`
     UPDATE public.collection_records
     SET customer_phone = COALESCE(NULLIF(customer_phone, ''), '-')
   `);
-  await db.execute(sql`
+  await database.execute(sql`
     UPDATE public.collection_records
     SET created_by_login = COALESCE(NULLIF(created_by_login, ''), NULLIF(staff_username, ''), 'unknown')
   `);
-  await db.execute(sql`
+  await database.execute(sql`
     UPDATE public.collection_records
     SET collection_staff_nickname = COALESCE(NULLIF(collection_staff_nickname, ''), NULLIF(staff_username, ''), NULLIF(created_by_login, ''), 'unknown')
   `);
-  await db.execute(sql`
+  await database.execute(sql`
     UPDATE public.collection_records
     SET staff_username = COALESCE(NULLIF(staff_username, ''), NULLIF(collection_staff_nickname, ''), NULLIF(created_by_login, ''), 'unknown')
   `);
-  await db.execute(sql`
+  await database.execute(sql`
     UPDATE public.collection_records
     SET updated_at = COALESCE(updated_at, created_at, now())
   `);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_payment_date ON public.collection_records(payment_date)`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_at ON public.collection_records(created_at DESC)`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_username ON public.collection_records(staff_username)`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_by_login ON public.collection_records(created_by_login)`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`);
-  await db.execute(sql`
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_payment_date ON public.collection_records(payment_date)`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_at ON public.collection_records(created_at DESC)`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_username ON public.collection_records(staff_username)`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_by_login ON public.collection_records(created_by_login)`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`);
+  await database.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_collection_records_payment_created_id
     ON public.collection_records(payment_date, created_at, id)
   `);
-  await db.execute(sql`
+  await database.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_collection_records_created_by_payment_created_id
     ON public.collection_records(created_by_login, payment_date, created_at, id)
   `);
-  await db.execute(sql`
+  await database.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_collection_records_lower_staff_nickname_payment_created_id
     ON public.collection_records ((lower(collection_staff_nickname)), payment_date, created_at, id)
   `);
-  await db.execute(sql`
+  await database.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_collection_records_lower_created_by_payment_created_id
     ON public.collection_records ((lower(created_by_login)), payment_date, created_at, id)
   `);
-  await db.execute(sql`
+  await database.execute(sql`
     CREATE TABLE IF NOT EXISTS public.collection_record_receipts (
       id uuid PRIMARY KEY,
       collection_record_id uuid NOT NULL,
@@ -98,14 +102,14 @@ export async function ensureCollectionRecordsTables(): Promise<void> {
       created_at timestamp NOT NULL DEFAULT now()
     )
   `);
-  await db.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS collection_record_id uuid`);
-  await db.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS storage_path text`);
-  await db.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS original_file_name text`);
-  await db.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS original_mime_type text`);
-  await db.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS original_extension text DEFAULT ''`);
-  await db.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS file_size bigint DEFAULT 0`);
-  await db.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-  await db.execute(sql`
+  await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS collection_record_id uuid`);
+  await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS storage_path text`);
+  await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS original_file_name text`);
+  await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS original_mime_type text`);
+  await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS original_extension text DEFAULT ''`);
+  await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS file_size bigint DEFAULT 0`);
+  await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+  await database.execute(sql`
     UPDATE public.collection_record_receipts
     SET
       original_file_name = COALESCE(NULLIF(trim(COALESCE(original_file_name, '')), ''), 'receipt'),
@@ -114,8 +118,8 @@ export async function ensureCollectionRecordsTables(): Promise<void> {
       file_size = COALESCE(file_size, 0),
       created_at = COALESCE(created_at, now())
   `);
-  await db.execute(sql`DELETE FROM public.collection_record_receipts WHERE collection_record_id IS NULL OR trim(COALESCE(storage_path, '')) = ''`);
-  await db.execute(sql`
+  await database.execute(sql`DELETE FROM public.collection_record_receipts WHERE collection_record_id IS NULL OR trim(COALESCE(storage_path, '')) = ''`);
+  await database.execute(sql`
     DELETE FROM public.collection_record_receipts receipt
     WHERE NOT EXISTS (
       SELECT 1
@@ -123,7 +127,7 @@ export async function ensureCollectionRecordsTables(): Promise<void> {
       WHERE record.id = receipt.collection_record_id
     )
   `);
-  await db.execute(sql`
+  await database.execute(sql`
     DO $$
     BEGIN
       IF NOT EXISTS (
@@ -140,16 +144,16 @@ export async function ensureCollectionRecordsTables(): Promise<void> {
       END IF;
     END $$;
   `);
-  await db.execute(sql`
+  await database.execute(sql`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_record_receipts_record_storage_unique
     ON public.collection_record_receipts (collection_record_id, storage_path)
   `);
-  await db.execute(sql`
+  await database.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_collection_record_receipts_record_created_at
     ON public.collection_record_receipts (collection_record_id, created_at ASC)
   `);
 
-  const legacyReceiptRows = await db.execute(sql`
+  const legacyReceiptRows = await database.execute(sql`
     SELECT
       id,
       receipt_file,
@@ -172,7 +176,7 @@ export async function ensureCollectionRecordsTables(): Promise<void> {
     const fileName = path.basename(storagePath);
     const createdAt = row.created_at ? new Date(row.created_at) : new Date();
     const extension = path.extname(fileName).toLowerCase();
-    await db.execute(sql`
+    await database.execute(sql`
       INSERT INTO public.collection_record_receipts (
         id,
         collection_record_id,

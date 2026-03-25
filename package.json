@@ -20,6 +20,7 @@
     "db:introspect": "drizzle-kit introspect --config drizzle.config.ts",
     "test:client": "node scripts/run-client-tests.mjs",
     "test:scripts": "node --test scripts/tests/*.test.mjs",
+    "test:db-integration": "tsx --test server/http/tests/bootstrap-migration.integration.test.ts",
     "test:http": "tsx --test server/http/tests/*.test.ts",
     "test:services": "tsx --test server/services/tests/*.test.ts",
     "test:repositories": "tsx --test server/repositories/tests/*.test.ts",

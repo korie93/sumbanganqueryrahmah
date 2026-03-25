@@ -115,6 +115,22 @@ const queries = [
     values: [startDate, endDate, nickname],
   },
   {
+    name: "daily_grouped_amounts_by_nickname_and_date",
+    sql: `
+      SELECT
+        lower(collection_staff_nickname) AS nickname_key,
+        payment_date,
+        COUNT(*)::int AS total_records,
+        COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
+      FROM public.collection_records
+      WHERE payment_date BETWEEN $1::date AND $2::date
+        AND lower(collection_staff_nickname) = ANY($3::text[])
+      GROUP BY lower(collection_staff_nickname), payment_date
+      ORDER BY lower(collection_staff_nickname) ASC, payment_date ASC
+    `,
+    values: [startDate, endDate, [nickname.toLowerCase()]],
+  },
+  {
     name: "target_lookup_for_month",
     sql: `
       SELECT

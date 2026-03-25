@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Brain, PencilLine, Search, type LucideIcon } from "lucide-react";
 import { type AIChatMessage, useAIContext } from "@/context/AIContext";
 import { AI_CANCEL_EVENT, AI_RESET_EVENT, type AIChatStatus } from "@/lib/ai-chat";
-import { getCsrfHeader } from "@/lib/api/shared";
-import { createApiHeaders } from "@/lib/queryClient";
+import { searchAI } from "@/lib/api";
 
 export interface AIPageStatusContent {
   icon: LucideIcon;
@@ -63,6 +62,9 @@ export function useAIPageController({
       window.clearInterval(typingTimerRef.current);
       typingTimerRef.current = null;
     }
+    if (isMountedRef.current) {
+      setIsTyping(false);
+    }
   }, []);
 
   const abortActiveRequest = useCallback(() => {
@@ -75,11 +77,13 @@ export function useAIPageController({
   const stopProcessingState = useCallback(() => {
     processingRef.current = false;
     pendingSendRef.current = false;
-    setIsProcessing(false);
-    setIsTyping(false);
-    setIsThinking(false);
-    setAiStatus("IDLE");
-    setSlowNotice(false);
+    if (isMountedRef.current) {
+      setIsProcessing(false);
+      setIsTyping(false);
+      setIsThinking(false);
+      setAiStatus("IDLE");
+      setSlowNotice(false);
+    }
   }, [setIsThinking]);
 
   const appendMessage = useCallback(
@@ -99,7 +103,9 @@ export function useAIPageController({
     clearRetryTimers();
     clearSlowNoticeTimer();
     abortActiveRequest();
-    setStreamingText("");
+    if (isMountedRef.current) {
+      setStreamingText("");
+    }
     stopProcessingState();
   }, [abortActiveRequest, clearRetryTimers, clearSlowNoticeTimer, stopProcessingState, stopTyping]);
 
@@ -232,24 +238,11 @@ export function useAIPageController({
       requestControllerRef.current = controller;
       let shouldStopProcessing = false;
       let waitingNextRetry = false;
+      let timeoutId: number | null = null;
 
       try {
-        const headers: Record<string, string> = {
-          ...createApiHeaders({
-            "Content-Type": "application/json",
-            ...(getCsrfHeader() as Record<string, string>),
-          }),
-        };
-
-        const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
-        const response = await fetch("/api/ai/search", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ query: text }),
-          credentials: "include",
-          signal: controller.signal,
-        });
-        window.clearTimeout(timeoutId);
+        timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+        const response = await searchAI(text, { signal: controller.signal });
 
         if (sessionRef.current !== sessionId) return;
 
@@ -317,6 +310,7 @@ export function useAIPageController({
 
           waitingNextRetry = true;
           const timerId = window.setTimeout(() => {
+            retryTimersRef.current = retryTimersRef.current.filter((existingId) => existingId !== timerId);
             void sendQuery(text, true, retryCount + 1, sessionId);
           }, RETRY_MS + retryCount * 500);
           retryTimersRef.current.push(timerId);
@@ -338,6 +332,9 @@ export function useAIPageController({
         });
         shouldStopProcessing = true;
       } finally {
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
         if (requestControllerRef.current === controller) {
           requestControllerRef.current = null;
         }

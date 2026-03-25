@@ -128,6 +128,7 @@ const run = async () => {
   await runNpm(["run", "verify:db-schema-governance"], { env });
   await runNpm(["run", "test:client"], { env });
   await runNpm(["run", "test:scripts"], { env });
+  await runNpm(["run", "test:db-integration"], { env });
   await runNpm(["run", "test:routes"], { env });
   await runNpm(["run", "test:services"], { env });
 

@@ -57,6 +57,8 @@ export function CollectionRecordsToolbar({
   onPrevPage,
   onNextPage,
 }: CollectionRecordsToolbarProps) {
+  const exportBusy = exportingExcel || exportingPdf;
+
   return (
     <>
       <div className="grid gap-3 md:grid-cols-2">
@@ -115,11 +117,11 @@ export function CollectionRecordsToolbar({
         <Button variant="secondary" onClick={onOpenViewAll} disabled={loadingRecords || viewAllLoading}>
           {viewAllLoading ? "Loading..." : "View All"}
         </Button>
-        <Button variant="outline" onClick={onExportExcel} disabled={loadingRecords || exportingExcel}>
+        <Button variant="outline" onClick={onExportExcel} disabled={loadingRecords || exportBusy}>
           <Download className="w-4 h-4 mr-2" />
           {exportingExcel ? "Exporting..." : "Export Excel"}
         </Button>
-        <Button variant="outline" onClick={onExportPdf} disabled={loadingRecords || exportingPdf}>
+        <Button variant="outline" onClick={onExportPdf} disabled={loadingRecords || exportBusy}>
           <FileText className="w-4 h-4 mr-2" />
           {exportingPdf ? "Exporting..." : "Export PDF"}
         </Button>

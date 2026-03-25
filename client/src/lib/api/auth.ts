@@ -161,6 +161,7 @@ export async function login(
   username: string,
   password: string,
   fingerprint?: string,
+  options?: RequestOptions,
 ): Promise<LoginResponse | { banned: true }> {
   const res = await fetch("/api/login", {
     method: "POST",
@@ -175,6 +176,7 @@ export async function login(
       browser: navigator.userAgent,
     }),
     credentials: "include",
+    signal: options?.signal,
   });
 
   const data = await res.json();
@@ -188,9 +190,10 @@ export async function login(
   return data as LoginResponse;
 }
 
-export async function checkHealth() {
+export async function checkHealth(options?: RequestOptions) {
   const response = await fetch(`${API_BASE}/api/health`, {
     headers: createApiHeaders(),
+    signal: options?.signal,
   });
   return response.json();
 }
@@ -206,8 +209,13 @@ export async function getMe(options?: RequestOptions): Promise<CurrentUser> {
   return payload.user;
 }
 
-export async function validateActivationToken(payload: { token: string }) {
-  const response = await apiRequest("POST", "/api/auth/validate-activation-token", payload);
+export async function validateActivationToken(
+  payload: { token: string },
+  options?: RequestOptions,
+) {
+  const response = await apiRequest("POST", "/api/auth/validate-activation-token", payload, {
+    signal: options?.signal,
+  });
   return response.json() as Promise<{
     ok: boolean;
     activation: ActivationTokenValidationPayload;
@@ -219,8 +227,10 @@ export async function activateAccount(payload: {
   token: string;
   newPassword: string;
   confirmPassword: string;
-}) {
-  const response = await apiRequest("POST", "/api/auth/activate-account", payload);
+}, options?: RequestOptions) {
+  const response = await apiRequest("POST", "/api/auth/activate-account", payload, {
+    signal: options?.signal,
+  });
   return response.json() as Promise<AuthUserResponse>;
 }
 
@@ -251,8 +261,10 @@ export async function resetPasswordWithToken(payload: {
 export async function changeMyPassword(payload: {
   currentPassword: string;
   newPassword: string;
-}) {
-  const response = await apiRequest("POST", "/api/auth/change-password", payload);
+}, options?: RequestOptions) {
+  const response = await apiRequest("POST", "/api/auth/change-password", payload, {
+    signal: options?.signal,
+  });
   return response.json() as Promise<AuthUserForceLogoutResponse>;
 }
 

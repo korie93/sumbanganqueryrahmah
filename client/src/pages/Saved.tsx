@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, BookMarked, RefreshCw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getImports, deleteImport, renameImport } from "@/lib/api";
@@ -8,6 +8,10 @@ import { SavedFiltersBar } from "@/pages/saved/SavedFiltersBar";
 import { SavedImportsList } from "@/pages/saved/SavedImportsList";
 import type { ImportItem, SavedProps } from "@/pages/saved/types";
 import { filterSavedImports, formatSavedImportDate } from "@/pages/saved/utils";
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
 
 export default function Saved({ onNavigate, userRole }: SavedProps) {
   const isSuperuser = userRole === "superuser";
@@ -26,6 +30,13 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
   const [filesOpen, setFilesOpen] = useState(true);
+  const mountedRef = useRef(true);
+  const fetchAbortControllerRef = useRef<AbortController | null>(null);
+  const fetchRequestIdRef = useRef(0);
+  const renameAbortControllerRef = useRef<AbortController | null>(null);
+  const deleteAbortControllerRef = useRef<AbortController | null>(null);
+  const bulkDeleteAbortControllerRef = useRef<AbortController | null>(null);
+  const mutationRequestIdRef = useRef(0);
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const { toast } = useToast();
 
@@ -64,21 +75,45 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
   };
 
   const fetchImports = async () => {
+    fetchAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    fetchAbortControllerRef.current = controller;
+    const requestId = ++fetchRequestIdRef.current;
     setLoading(true);
     setError("");
 
     try {
-      const data = await getImports();
+      const data = await getImports({ signal: controller.signal });
+      if (controller.signal.aborted || requestId !== fetchRequestIdRef.current || !mountedRef.current) {
+        return;
+      }
       setImports(data.imports || []);
     } catch (err: any) {
+      if (isAbortError(err) || requestId !== fetchRequestIdRef.current || !mountedRef.current) {
+        return;
+      }
       setError(err?.message || "Failed to load data.");
     } finally {
-      setLoading(false);
+      if (fetchAbortControllerRef.current === controller) {
+        fetchAbortControllerRef.current = null;
+      }
+      if (requestId === fetchRequestIdRef.current && mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     void fetchImports();
+    return () => {
+      mountedRef.current = false;
+      fetchAbortControllerRef.current?.abort();
+      renameAbortControllerRef.current?.abort();
+      deleteAbortControllerRef.current?.abort();
+      bulkDeleteAbortControllerRef.current?.abort();
+      fetchRequestIdRef.current += 1;
+      mutationRequestIdRef.current += 1;
+    };
   }, []);
 
   const handleView = (importItem: ImportItem) => {
@@ -99,31 +134,47 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
   };
 
   const handleRenameConfirm = async () => {
-    if (!selectedImport || !newName.trim()) return;
+    if (!selectedImport || !newName.trim() || renaming || deleting || bulkDeleting) return;
 
     setRenaming(true);
+    renameAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    renameAbortControllerRef.current = controller;
+    const requestId = ++mutationRequestIdRef.current;
     try {
-      await renameImport(selectedImport.id, newName.trim());
+      const trimmedName = newName.trim();
+      await renameImport(selectedImport.id, trimmedName, { signal: controller.signal });
+      if (controller.signal.aborted || requestId !== mutationRequestIdRef.current || !mountedRef.current) {
+        return;
+      }
       toast({
         title: "Success",
-        description: `Name has been updated to "${newName.trim()}".`,
+        description: `Name has been updated to "${trimmedName}".`,
       });
       setImports((previous) =>
         previous.map((item) =>
-          item.id === selectedImport.id ? { ...item, name: newName.trim() } : item,
+          item.id === selectedImport.id ? { ...item, name: trimmedName } : item,
         ),
       );
     } catch (err: any) {
+      if (isAbortError(err) || requestId !== mutationRequestIdRef.current || !mountedRef.current) {
+        return;
+      }
       toast({
         title: "Failed",
         description: err?.message || "Failed to update name.",
         variant: "destructive",
       });
     } finally {
-      setRenaming(false);
-      setRenameDialogOpen(false);
-      setSelectedImport(null);
-      setNewName("");
+      if (renameAbortControllerRef.current === controller) {
+        renameAbortControllerRef.current = null;
+      }
+      if (mountedRef.current) {
+        setRenaming(false);
+        setRenameDialogOpen(false);
+        setSelectedImport(null);
+        setNewName("");
+      }
     }
   };
 
@@ -134,42 +185,67 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
   };
 
   const handleDeleteConfirm = async () => {
-    if (!selectedImport) return;
+    if (!selectedImport || deleting || renaming || bulkDeleting) return;
 
     setDeleting(true);
+    deleteAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    deleteAbortControllerRef.current = controller;
+    const requestId = ++mutationRequestIdRef.current;
     try {
-      await deleteImport(selectedImport.id);
+      const targetImport = selectedImport;
+      await deleteImport(targetImport.id, { signal: controller.signal });
+      if (controller.signal.aborted || requestId !== mutationRequestIdRef.current || !mountedRef.current) {
+        return;
+      }
       toast({
         title: "Success",
-        description: `"${selectedImport.name}" has been deleted.`,
+        description: `"${targetImport.name}" has been deleted.`,
       });
-      setImports((previous) => previous.filter((item) => item.id !== selectedImport.id));
+      setImports((previous) => previous.filter((item) => item.id !== targetImport.id));
       setSelectedImportIds((previous) => {
-        if (!previous.has(selectedImport.id)) return previous;
+        if (!previous.has(targetImport.id)) return previous;
         const next = new Set(previous);
-        next.delete(selectedImport.id);
+        next.delete(targetImport.id);
         return next;
       });
     } catch (err: any) {
+      if (isAbortError(err) || requestId !== mutationRequestIdRef.current || !mountedRef.current) {
+        return;
+      }
       toast({
         title: "Failed",
         description: err?.message || "Failed to delete data.",
         variant: "destructive",
       });
     } finally {
-      setDeleting(false);
-      setDeleteDialogOpen(false);
-      setSelectedImport(null);
+      if (deleteAbortControllerRef.current === controller) {
+        deleteAbortControllerRef.current = null;
+      }
+      if (mountedRef.current) {
+        setDeleting(false);
+        setDeleteDialogOpen(false);
+        setSelectedImport(null);
+      }
     }
   };
 
   const handleBulkDeleteConfirm = async () => {
     const ids = Array.from(selectedImportIds);
-    if (ids.length === 0) return;
+    if (ids.length === 0 || bulkDeleting || deleting || renaming) return;
 
     setBulkDeleting(true);
+    bulkDeleteAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    bulkDeleteAbortControllerRef.current = controller;
+    const requestId = ++mutationRequestIdRef.current;
     try {
-      const results = await Promise.allSettled(ids.map((id) => deleteImport(id)));
+      const results = await Promise.allSettled(
+        ids.map((id) => deleteImport(id, { signal: controller.signal })),
+      );
+      if (controller.signal.aborted || requestId !== mutationRequestIdRef.current || !mountedRef.current) {
+        return;
+      }
       const deletedIds: string[] = [];
       let failedCount = 0;
 
@@ -204,11 +280,27 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
           variant: "destructive",
         });
       }
+    } catch (err: any) {
+      if (isAbortError(err) || requestId !== mutationRequestIdRef.current || !mountedRef.current) {
+        return;
+      }
+      toast({
+        title: "Failed",
+        description: err?.message || "Failed to delete selected files.",
+        variant: "destructive",
+      });
     } finally {
-      setBulkDeleting(false);
-      setBulkDeleteDialogOpen(false);
+      if (bulkDeleteAbortControllerRef.current === controller) {
+        bulkDeleteAbortControllerRef.current = null;
+      }
+      if (mountedRef.current) {
+        setBulkDeleting(false);
+        setBulkDeleteDialogOpen(false);
+      }
     }
   };
+
+  const adminActionsDisabled = loading || deleting || bulkDeleting || renaming;
 
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
@@ -235,6 +327,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
               <Button
                 variant="destructive"
                 onClick={() => setBulkDeleteDialogOpen(true)}
+                disabled={adminActionsDisabled}
                 data-testid="button-bulk-delete"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
@@ -244,7 +337,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             <Button
               variant="outline"
               onClick={() => void fetchImports()}
-              disabled={loading}
+              disabled={adminActionsDisabled}
               data-testid="button-refresh"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
@@ -305,6 +398,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             imports={filteredImports}
             isSuperuser={isSuperuser}
             filesOpen={filesOpen}
+            actionsDisabled={adminActionsDisabled}
             onFilesOpenChange={setFilesOpen}
             onView={handleView}
             onRename={handleRenameClick}
