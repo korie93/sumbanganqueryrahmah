@@ -1,4 +1,7 @@
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  OperationalMetric,
+  OperationalSummaryStrip,
+} from "@/components/layout/OperationalPage";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 export interface CollectionSummaryTotalsProps {
@@ -7,19 +10,13 @@ export interface CollectionSummaryTotalsProps {
 
 export function CollectionSummaryTotals({ grandTotal }: CollectionSummaryTotalsProps) {
   return (
-    <div className="grid gap-3 md:grid-cols-2">
-      <Card className="border-border/60 bg-background/60">
-        <CardContent className="p-3">
-          <p className="text-xs text-muted-foreground">Grand Total Records</p>
-          <p className="text-xl font-semibold">{grandTotal.totalRecords}</p>
-        </CardContent>
-      </Card>
-      <Card className="border-border/60 bg-background/60">
-        <CardContent className="p-3">
-          <p className="text-xs text-muted-foreground">Grand Total Amount</p>
-          <p className="text-xl font-semibold">{formatAmountRM(grandTotal.totalAmount)}</p>
-        </CardContent>
-      </Card>
-    </div>
+    <OperationalSummaryStrip className="grid gap-3 md:grid-cols-2">
+      <OperationalMetric label="Grand Total Records" value={grandTotal.totalRecords} />
+      <OperationalMetric
+        label="Grand Total Amount"
+        value={formatAmountRM(grandTotal.totalAmount)}
+        tone="success"
+      />
+    </OperationalSummaryStrip>
   );
 }

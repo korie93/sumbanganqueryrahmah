@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, CircleSlash, Loader2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import type { CollectionDailyOverviewDay, CollectionDailyOverviewResponse } from "@/lib/api";
 import { formatDateDDMMYYYY } from "@/lib/date-format";
 import {
@@ -41,25 +41,26 @@ export function CollectionDailyCalendarCard({
   onUpdateEditableDay,
 }: CollectionDailyCalendarCardProps) {
   return (
-    <Card className="border-border/60 bg-background/70" data-testid="collection-daily-calendar">
-      <CardHeader>
-        <CardTitle className="text-lg">Monthly Daily Status</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <div data-testid="collection-daily-calendar">
+      <OperationalSectionCard
+        title="Monthly Daily Status"
+        description="Scan the month quickly, then click a day to inspect collection details."
+        contentClassName="space-y-4"
+      >
         <div className="grid gap-2 text-xs md:grid-cols-2 xl:grid-cols-4" data-testid="collection-daily-legend">
-          <div className="flex items-center gap-2 rounded border border-rose-300/60 bg-rose-50/70 px-2 py-1.5">
+          <div className="flex items-center gap-2 rounded-xl border border-rose-300/60 bg-rose-50/70 px-3 py-2">
             <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
             <span>Red: No collection</span>
           </div>
-          <div className="flex items-center gap-2 rounded border border-amber-300/60 bg-amber-50/70 px-2 py-1.5">
+          <div className="flex items-center gap-2 rounded-xl border border-amber-300/60 bg-amber-50/70 px-3 py-2">
             <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
             <span>Yellow: Collection recorded but daily target not achieved</span>
           </div>
-          <div className="flex items-center gap-2 rounded border border-green-300/60 bg-green-50/70 px-2 py-1.5">
+          <div className="flex items-center gap-2 rounded-xl border border-green-300/60 bg-green-50/70 px-3 py-2">
             <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
             <span>Green: Daily target achieved</span>
           </div>
-          <div className="flex items-center gap-2 rounded border border-slate-300/60 bg-slate-100/80 px-2 py-1.5">
+          <div className="flex items-center gap-2 rounded-xl border border-slate-300/60 bg-slate-100/80 px-3 py-2">
             <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
             <span>Grey: Holiday / non-working day</span>
           </div>
@@ -93,7 +94,7 @@ export function CollectionDailyCalendarCard({
                 return (
                   <div
                     key={day.date}
-                    className={`rounded-md border text-xs ${isSelected ? "ring-2 ring-ring ring-offset-1" : ""} ${statusCardClass(day.status)}`}
+                    className={`rounded-xl border text-xs shadow-sm ${isSelected ? "ring-2 ring-ring ring-offset-1" : ""} ${statusCardClass(day.status)}`}
                   >
                     <button
                       type="button"
@@ -117,7 +118,7 @@ export function CollectionDailyCalendarCard({
                       ) : null}
                     </button>
                     {canManage && editable ? (
-                      <div className="space-y-1 border-t border-border/40 px-2 pb-2 pt-1">
+                      <div className="space-y-1 border-t border-border/40 px-2 pb-2 pt-1.5">
                         <label className="flex items-center gap-1">
                           <input
                             type="checkbox"
@@ -146,7 +147,7 @@ export function CollectionDailyCalendarCard({
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </OperationalSectionCard>
+    </div>
   );
 }

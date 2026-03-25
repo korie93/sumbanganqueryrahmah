@@ -77,7 +77,7 @@ export function ViewerDataTable({
   );
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
+    <div className="ops-table-shell overflow-x-auto">
       {enableVirtualRows ? (
         <div style={{ minWidth: `${virtualTableMinWidth}px` }}>
           <div className="sticky top-0 z-10 border-b border-border bg-muted">
@@ -110,7 +110,7 @@ export function ViewerDataTable({
         </div>
       ) : (
         <div className="max-h-[560px] overflow-y-auto">
-          <table className="w-full text-sm">
+          <table className="ops-data-table w-full text-sm">
             <thead className="sticky top-0 z-10 bg-muted">
               <tr>
                 <th className="w-10 p-3 text-left font-medium text-muted-foreground">

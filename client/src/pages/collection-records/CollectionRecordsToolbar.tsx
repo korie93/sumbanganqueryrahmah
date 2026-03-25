@@ -1,4 +1,8 @@
 import { Download, FileText } from "lucide-react";
+import {
+  OperationalMetric,
+  OperationalSummaryStrip,
+} from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -61,20 +65,14 @@ export function CollectionRecordsToolbar({
 
   return (
     <>
-      <div className="grid gap-3 md:grid-cols-2">
-        <Card className="border-border/60 bg-background/60">
-          <CardContent className="px-3 py-2">
-            <p className="text-xs text-muted-foreground">Total Records</p>
-            <p className="text-lg font-semibold leading-tight">{summary.totalRecords}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-border/60 bg-background/60">
-          <CardContent className="px-3 py-2">
-            <p className="text-xs text-muted-foreground">Total Collection Amount</p>
-            <p className="text-lg font-semibold leading-tight">{formatAmountRM(summary.totalAmount)}</p>
-          </CardContent>
-        </Card>
-      </div>
+      <OperationalSummaryStrip className="grid gap-3 md:grid-cols-2">
+        <OperationalMetric label="Total Records" value={summary.totalRecords} />
+        <OperationalMetric
+          label="Total Collection Amount"
+          value={formatAmountRM(summary.totalAmount)}
+          tone="success"
+        />
+      </OperationalSummaryStrip>
 
       {canPurgeOldRecords ? (
         <Card className="border-amber-500/40 bg-amber-500/5">
@@ -127,7 +125,10 @@ export function CollectionRecordsToolbar({
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/50 px-3 py-2">
+      <div
+        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/50 px-3 py-2"
+        data-floating-ai-avoid="true"
+      >
         <p className="text-xs text-muted-foreground">
           Showing {pagedStart}-{pagedEnd} of {visibleRecordsLength} records
         </p>

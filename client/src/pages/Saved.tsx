@@ -1,5 +1,11 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, BookMarked, RefreshCw, Search, Trash2 } from "lucide-react";
+import {
+  OperationalPage,
+  OperationalPageHeader,
+  OperationalSectionCard,
+} from "@/components/layout/OperationalPage";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getImports, deleteImport, renameImport } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -303,26 +309,26 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
   const adminActionsDisabled = loading || deleting || bulkDeleting || renaming;
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold text-foreground">Saved Imports</h1>
-              {!loading && imports.length > 0 ? (
-                <span
-                  className="text-sm bg-primary/10 text-primary px-2.5 py-1 rounded-full font-medium"
-                  data-testid="text-import-count"
-                >
-                  {hasActiveFilters
-                    ? `${filteredImports.length} of ${imports.length}`
-                    : `${imports.length} files`}
-                </span>
-              ) : null}
-            </div>
-            <p className="text-muted-foreground">List of all imported data</p>
-          </div>
-          <div className="flex gap-2">
+    <OperationalPage width="content">
+      <OperationalPageHeader
+        title="Saved Imports"
+        eyebrow="Imported Data"
+        description="Review imported files, reopen Viewer or Analysis quickly, and keep operational datasets organized."
+        badge={
+          !loading && imports.length > 0 ? (
+            <Badge
+              variant="secondary"
+              className="rounded-full px-2.5 py-1 text-xs font-medium"
+              data-testid="text-import-count"
+            >
+              {hasActiveFilters
+                ? `${filteredImports.length} of ${imports.length}`
+                : `${imports.length} files`}
+            </Badge>
+          ) : null
+        }
+        actions={
+          <>
             {isSuperuser && selectedImportIds.size > 0 ? (
               <Button
                 variant="destructive"
@@ -343,10 +349,16 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
               Refresh
             </Button>
-          </div>
-        </div>
+          </>
+        }
+      />
 
-        {!loading && imports.length > 0 ? (
+      {!loading && imports.length > 0 ? (
+        <OperationalSectionCard
+          title="Search and Filter"
+          description="Narrow the list without losing your current page context."
+          contentClassName="space-y-0"
+        >
           <SavedFiltersBar
             searchTerm={searchTerm}
             dateFilter={dateFilter}
@@ -355,22 +367,23 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             onDateFilterChange={setDateFilter}
             onClearFilters={clearFilters}
           />
-        ) : null}
+        </OperationalSectionCard>
+      ) : null}
 
-        {error ? (
-          <div className="glass-wrapper p-4 mb-6 flex items-center gap-2 text-destructive">
+      {error ? (
+        <OperationalSectionCard className="border-destructive/35 bg-destructive/5" contentClassName="flex items-center gap-2 text-destructive">
             <AlertCircle className="w-5 h-5" />
             <span>{error}</span>
-          </div>
-        ) : null}
+        </OperationalSectionCard>
+      ) : null}
 
-        {loading ? (
-          <div className="glass-wrapper p-12 text-center">
+      {loading ? (
+        <OperationalSectionCard contentClassName="ops-empty-state">
             <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-4" />
             <p className="text-muted-foreground">Loading data...</p>
-          </div>
-        ) : imports.length === 0 ? (
-          <div className="glass-wrapper p-12 text-center">
+        </OperationalSectionCard>
+      ) : imports.length === 0 ? (
+        <OperationalSectionCard contentClassName="ops-empty-state">
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
               <BookMarked className="w-8 h-8 text-muted-foreground" />
             </div>
@@ -379,9 +392,9 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             <Button onClick={() => onNavigate("import")} data-testid="button-import-new">
               Import Data
             </Button>
-          </div>
-        ) : filteredImports.length === 0 ? (
-          <div className="glass-wrapper p-12 text-center">
+        </OperationalSectionCard>
+      ) : filteredImports.length === 0 ? (
+        <OperationalSectionCard contentClassName="ops-empty-state">
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
               <Search className="w-8 h-8 text-muted-foreground" />
             </div>
@@ -392,8 +405,13 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             <Button variant="outline" onClick={clearFilters} data-testid="button-clear-filters-empty">
               Clear Filters
             </Button>
-          </div>
-        ) : (
+        </OperationalSectionCard>
+      ) : (
+        <OperationalSectionCard
+          title="Saved Files"
+          description="Use Viewer for inspection, open Analysis when needed, and keep destructive actions separate."
+          contentClassName="space-y-0"
+        >
           <SavedImportsList
             imports={filteredImports}
             isSuperuser={isSuperuser}
@@ -433,8 +451,8 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             partiallySelected={partiallySelected}
             formatDate={formatSavedImportDate}
           />
-        )}
-      </div>
+        </OperationalSectionCard>
+      )}
 
       <SavedDialogs
         deleteDialogOpen={deleteDialogOpen}
@@ -454,6 +472,6 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
         onRenameConfirm={handleRenameConfirm}
         onBulkDeleteConfirm={() => void handleBulkDeleteConfirm()}
       />
-    </div>
+    </OperationalPage>
   );
 }

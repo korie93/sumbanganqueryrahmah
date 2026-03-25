@@ -32,8 +32,11 @@ export function AppPaginationBar({
   const end = totalItems === 0 ? 0 : Math.min(totalItems, safePage * pageSize);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/60 bg-background/60 px-3 py-2">
-      <p className="text-xs text-muted-foreground">
+    <div
+      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-background/70 px-3.5 py-2.5"
+      data-floating-ai-avoid="true"
+    >
+      <p className="text-xs font-medium text-muted-foreground">
         Showing {start}-{end} of {totalItems} {itemLabel}
       </p>
 
@@ -63,7 +66,7 @@ export function AppPaginationBar({
         >
           Prev
         </Button>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-xs font-medium text-muted-foreground">
           Page {safePage} / {safeTotalPages}
         </span>
         <Button

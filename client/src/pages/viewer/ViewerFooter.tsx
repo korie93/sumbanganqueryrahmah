@@ -31,7 +31,10 @@ export function ViewerFooter({
   }
 
   return (
-    <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground flex-wrap gap-2">
+    <div
+      className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/60 bg-background/70 px-3.5 py-2.5 text-sm text-muted-foreground"
+      data-floating-ai-avoid="true"
+    >
       <span>
         Showing {isFiltering ? filteredRowsCount : rowsCount} of {totalRows} rows
         {selectedRowCount > 0 ? ` (${selectedRowCount} selected)` : ""}

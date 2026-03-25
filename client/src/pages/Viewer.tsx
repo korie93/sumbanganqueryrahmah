@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Eye } from "lucide-react";
+import {
+  OperationalMetric,
+  OperationalPage,
+  OperationalSectionCard,
+  OperationalSummaryStrip,
+} from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
 import { getImportData } from "@/lib/api";
 import { ViewerDataTable } from "@/pages/viewer/ViewerDataTable";
@@ -512,8 +518,7 @@ export default function Viewer({
   };
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
-      <div className="max-w-7xl mx-auto">
+    <OperationalPage width="content">
         <ViewerPageHeader
           importName={importName}
           rowsCount={rows.length}
@@ -543,6 +548,26 @@ export default function Viewer({
           }}
         />
 
+        {rows.length > 0 ? (
+          <OperationalSummaryStrip>
+            <OperationalMetric
+              label="Loaded rows"
+              value={rows.length}
+              supporting={`${totalRows} total available`}
+            />
+            <OperationalMetric
+              label="Visible columns"
+              value={`${visibleHeaders.length}/${headers.length || visibleHeaders.length}`}
+              supporting="Current table layout"
+            />
+            <OperationalMetric
+              label="Selected rows"
+              value={selectedRowIds.size}
+              supporting={selectedRowIds.size > 0 ? "Ready for focused export" : "No rows selected"}
+            />
+          </OperationalSummaryStrip>
+        ) : null}
+
         {rows.length > 0 && showFilters ? (
           <ViewerFiltersPanel
             headers={headers}
@@ -555,22 +580,24 @@ export default function Viewer({
         ) : null}
 
         {error ? (
-          <div className="glass-wrapper p-4 mb-6 flex items-center gap-2 text-destructive">
-            <AlertCircle className="w-5 h-5" />
-            <span>{error}</span>
-            <Button variant="ghost" onClick={() => onNavigate("saved")} className="ml-auto">
-              Back to Saved Imports
-            </Button>
-          </div>
+          <OperationalSectionCard className="border-destructive/35 bg-destructive/5" contentClassName="space-y-0">
+            <div className="flex flex-wrap items-center gap-3 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              <span className="text-sm font-medium">{error}</span>
+              <Button variant="ghost" onClick={() => onNavigate("saved")} className="ml-auto text-destructive">
+                Back to Saved Imports
+              </Button>
+            </div>
+          </OperationalSectionCard>
         ) : null}
 
         {loading ? (
-          <div className="glass-wrapper p-12 text-center">
+          <div className="ops-empty-state">
             <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-4" />
             <p className="text-muted-foreground">Loading data...</p>
           </div>
         ) : rows.length === 0 && !error ? (
-          <div className="glass-wrapper p-12 text-center">
+          <div className="ops-empty-state">
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
               <Eye className="w-8 h-8 text-muted-foreground" />
             </div>
@@ -583,7 +610,11 @@ export default function Viewer({
             ) : null}
           </div>
         ) : (
-          <div className="glass-wrapper p-6">
+          <OperationalSectionCard
+            title="Dataset rows"
+            description="Search the loaded dataset, scan visible columns, and export only what you need."
+            contentClassName="space-y-4"
+          >
             {rows.length > 0 ? (
               <ViewerSearchBar
                 search={search}
@@ -625,9 +656,8 @@ export default function Viewer({
               onClearSelection={clearSelectionState}
               onLoadMore={loadMore}
             />
-          </div>
+          </OperationalSectionCard>
         )}
-      </div>
-    </div>
+    </OperationalPage>
   );
 }

@@ -3,7 +3,11 @@ import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { ACTIVE_SETTINGS_SECTION_KEY } from "@/app/constants";
 import { replaceHistory } from "@/app/routing";
 import type { TabVisibility } from "@/app/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  OperationalPage,
+  OperationalPageHeader,
+  OperationalSectionCard,
+} from "@/components/layout/OperationalPage";
 import { AccountSecuritySection } from "@/pages/settings/AccountSecuritySection";
 import { ManagedUserDialog } from "@/pages/settings/ManagedUserDialog";
 import { ManagedSecretDialog } from "@/pages/settings/ManagedSecretDialog";
@@ -26,11 +30,11 @@ const UserAccountManagementSection = lazy(() =>
 
 function SettingsSectionFallback({ label }: { label: string }) {
   return (
-    <Card className="border-border/60 bg-background/70">
-      <CardContent className="p-10 text-center text-muted-foreground" role="status" aria-live="polite">
+    <OperationalSectionCard contentClassName="p-10 text-center text-muted-foreground">
+      <div role="status" aria-live="polite">
         {label}
-      </CardContent>
-    </Card>
+      </div>
+    </OperationalSectionCard>
   );
 }
 
@@ -66,56 +70,42 @@ export default function SettingsPage({
     ((controller.canEditSystemSettings || controller.canAccessBackupSection) && controller.loadingState.loading)
   ) {
     return (
-      <div className="min-h-[calc(100vh-3.5rem)] bg-background p-6">
-        <div className="mx-auto max-w-7xl">
-          <Card className="border-border/60 bg-background/70">
-            <CardContent className="p-10 text-center text-muted-foreground">
+      <OperationalPage width="content">
+        <OperationalSectionCard contentClassName="p-10 text-center text-muted-foreground">
               {controller.loadingState.profileLoading
                 ? "Loading account profile..."
                 : "Loading system settings..."}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+        </OperationalSectionCard>
+      </OperationalPage>
     );
   }
 
   if (!controller.currentUser) {
     return (
-      <div className="min-h-[calc(100vh-3.5rem)] bg-background p-6">
-        <div className="mx-auto max-w-7xl">
-          <Card className="border-border/60 bg-background/70">
-            <CardContent className="p-10 text-center text-muted-foreground">
+      <OperationalPage width="content">
+        <OperationalSectionCard contentClassName="p-10 text-center text-muted-foreground">
               Unable to load account profile.
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+        </OperationalSectionCard>
+      </OperationalPage>
     );
   }
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-background px-4 py-4 lg:px-6">
-      <div className="mx-auto max-w-[1680px] space-y-4">
+    <OperationalPage width="wide">
         {!controller.canEditSystemSettings && !controller.canAccessBackupSection ? (
-          <Card className="border-border/60 bg-background/70">
-            <CardContent className="p-10 text-center text-muted-foreground">
+          <OperationalSectionCard contentClassName="p-10 text-center text-muted-foreground">
               No settings or backup tools are available for this account.
-            </CardContent>
-          </Card>
+          </OperationalSectionCard>
         ) : (
           <>
-            <Card className="border-border/60 bg-background/75 shadow-sm">
-              <CardHeader className="py-4">
-                <CardTitle className="text-2xl">
-                  {controller.currentCategory?.name || "System Settings"}
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {controller.currentCategory?.description ||
-                    "Enterprise system configuration with role-based access and audit."}
-                </p>
-              </CardHeader>
-            </Card>
+            <OperationalPageHeader
+              title={controller.currentCategory?.name || "System Settings"}
+              eyebrow="Administration"
+              description={
+                controller.currentCategory?.description ||
+                "Enterprise system configuration with role-based access and audit."
+              }
+            />
 
             <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start">
               <SettingsSidebar
@@ -165,10 +155,9 @@ export default function SettingsPage({
             </div>
           </>
         )}
-      </div>
 
       <ManagedUserDialog {...controller.managedDialog} />
       <ManagedSecretDialog {...controller.managedSecretDialog} />
-    </div>
+    </OperationalPage>
   );
 }

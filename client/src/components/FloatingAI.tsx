@@ -10,6 +10,16 @@ import styles from "./FloatingAI.module.css";
 
 const AI_RESET_EVENT = "ai-chat-reset";
 const AIChat = lazy(() => import("@/components/AIChat"));
+const AVOID_SELECTOR = "[data-floating-ai-avoid='true']";
+const DIALOG_SELECTOR = "[role='dialog'], [data-radix-dialog-content]";
+
+function isVisibleElement(element: Element | null): element is HTMLElement {
+  if (!(element instanceof HTMLElement)) return false;
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return false;
+  const style = window.getComputedStyle(element);
+  return style.display !== "none" && style.visibility !== "hidden";
+}
 
 type FloatingAIProps = {
   timeoutMs: number;
@@ -21,6 +31,11 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
   const [isOpen, setIsOpen] = useState(false);
   const [hasActivated, setHasActivated] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIChatStatus>("IDLE");
+  const [safePosition, setSafePosition] = useState({
+    bottom: 24,
+    right: 24,
+    hasBlockingDialog: false,
+  });
   const [location] = useLocation();
   const cancelAISearchRef = useRef<(() => void) | null>(null);
   const {
@@ -70,6 +85,88 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
   }, [resetSession]);
 
   const hiddenForAiPage = activePage === "ai" || location.toLowerCase() === "/ai";
+  const syncSafePosition = useCallback(() => {
+    if (typeof window === "undefined") return;
+
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const compactViewport = viewportWidth < 640;
+    const baseRight = compactViewport ? 16 : 24;
+    const baseBottom = compactViewport ? 16 : 24;
+    const overlayWidth = isOpen
+      ? Math.max(56, Math.min(380, viewportWidth - (compactViewport ? 24 : 48)))
+      : 56;
+    const rightBoundary = viewportWidth - overlayWidth - baseRight - 8;
+    let requiredBottom = baseBottom;
+
+    document.querySelectorAll(AVOID_SELECTOR).forEach((element) => {
+      if (!isVisibleElement(element)) return;
+      const rect = element.getBoundingClientRect();
+      const nearViewportBottom = rect.bottom > viewportHeight - 220;
+      const overlapsAiColumn = rect.right > rightBoundary;
+      if (!nearViewportBottom || !overlapsAiColumn) return;
+      requiredBottom = Math.max(
+        requiredBottom,
+        Math.max(baseBottom, viewportHeight - rect.top + 12),
+      );
+    });
+
+    const hasBlockingDialog = Array.from(document.querySelectorAll(DIALOG_SELECTOR)).some((element) =>
+      isVisibleElement(element),
+    );
+
+    const nextPosition = {
+      bottom: Math.min(requiredBottom, Math.max(baseBottom, viewportHeight - 96)),
+      right: baseRight,
+      hasBlockingDialog,
+    };
+
+    setSafePosition((previous) =>
+      previous.bottom === nextPosition.bottom &&
+      previous.right === nextPosition.right &&
+      previous.hasBlockingDialog === nextPosition.hasBlockingDialog
+        ? previous
+        : nextPosition,
+    );
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (hiddenForAiPage || typeof window === "undefined") return;
+
+    let frame = 0;
+    let scheduled = false;
+    const scheduleSync = () => {
+      if (scheduled) return;
+      scheduled = true;
+      frame = window.requestAnimationFrame(() => {
+        scheduled = false;
+        syncSafePosition();
+      });
+    };
+
+    scheduleSync();
+
+    const observer = new MutationObserver(scheduleSync);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class", "style", "data-state", "aria-hidden", "open"],
+    });
+
+    window.addEventListener("resize", scheduleSync, { passive: true });
+    window.addEventListener("scroll", scheduleSync, { passive: true });
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", scheduleSync);
+      window.removeEventListener("scroll", scheduleSync);
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+    };
+  }, [hiddenForAiPage, location, syncSafePosition]);
+
   if (hiddenForAiPage) return null;
 
   const minimizedStatus = useMemo(() => {
@@ -80,12 +177,22 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
   }, [aiStatus]);
 
   return (
-    <div className="pointer-events-none fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3">
+    <div
+      className={cn(
+        "pointer-events-none fixed z-[9999] flex flex-col items-end gap-3 transition-[bottom,right,opacity,transform] duration-200",
+        safePosition.hasBlockingDialog ? "opacity-0 translate-y-2" : "opacity-100",
+      )}
+      style={{ bottom: safePosition.bottom, right: safePosition.right }}
+      aria-hidden={safePosition.hasBlockingDialog}
+      hidden={safePosition.hasBlockingDialog}
+    >
       {hasActivated ? (
         <div
           className={cn(
             "pointer-events-auto transition-all duration-200",
-            isOpen ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-2 opacity-0",
+            isOpen && !safePosition.hasBlockingDialog
+              ? "translate-y-0 opacity-100"
+              : "pointer-events-none translate-y-2 opacity-0",
           )}
         >
           <section
@@ -148,9 +255,9 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
         title="AI SQR"
         className={cn(
           "pointer-events-auto relative flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-[1.03]",
+          safePosition.hasBlockingDialog ? "pointer-events-none scale-95" : "",
           !isOpen && isThinking ? styles.aiThinkingRing : "",
         )}
-        style={{ bottom: 24, right: 24, zIndex: 9999 }}
         aria-label="AI SQR"
         data-testid="floating-ai-toggle"
       >
@@ -164,7 +271,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           </Badge>
         ) : null}
       </button>
-      {!isOpen && isThinking ? (
+      {!isOpen && isThinking && !safePosition.hasBlockingDialog ? (
         <div className="pointer-events-none max-w-[220px] rounded-lg border border-blue-500/35 bg-blue-500/10 px-3 py-1.5 text-[11px] text-blue-200 shadow-sm">
           {minimizedStatus}
         </div>

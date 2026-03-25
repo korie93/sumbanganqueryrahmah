@@ -2,7 +2,10 @@ import {
   useCallback,
   useMemo,
 } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  OperationalPage,
+  OperationalPageHeader,
+} from "@/components/layout/OperationalPage";
 import {
   COLLECTION_STAFF_NICKNAME_KEY,
   getCurrentRole,
@@ -65,56 +68,36 @@ export default function CollectionReport() {
       : nicknameAccess.dialogStep === "login"
         ? "Signing In..."
         : "Checking...";
+  const sectionLabel = navigation.activeSidebarItem?.label || "Choose a section";
+  const subtitle = `Staff Nickname: ${nicknameAccess.staffNickname || "-"} | Section: ${sectionLabel}`;
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-background px-4 py-4 lg:px-6">
-      <div className="mx-auto max-w-[1680px] space-y-4">
-        <Card className="border-border/60 bg-background/75 shadow-sm">
-          <CardHeader className="py-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-2xl leading-tight">
-                  Collection Report
-                </CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Staff Nickname:{" "}
-                  <span className="font-medium">
-                    {nicknameAccess.staffNickname || "-"}
-                  </span>
-                  {navigation.activeSidebarItem ? (
-                    <span>
-                      {" | "}Section:{" "}
-                      <span className="font-medium">
-                        {navigation.activeSidebarItem.label}
-                      </span>
-                    </span>
-                  ) : null}
-                </p>
-              </div>
-            </div>
-          </CardHeader>
-        </Card>
+    <OperationalPage width="wide">
+      <OperationalPageHeader
+        title="Collection Report"
+        eyebrow="Operational Workspace"
+        description={subtitle}
+      />
 
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start">
-          <CollectionSidebar
-            items={navigation.sidebarItems}
-            mobileOpen={navigation.mobileSidebarOpen}
-            onMobileOpenChange={navigation.setMobileSidebarOpen}
-            onSelectSubPage={navigation.handleSelectSubPage}
-            onSidebarCollapsedChange={navigation.setSidebarCollapsed}
-            selectedSubPage={navigation.subPage}
-            sidebarCollapsed={navigation.sidebarCollapsed}
+      <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start">
+        <CollectionSidebar
+          items={navigation.sidebarItems}
+          mobileOpen={navigation.mobileSidebarOpen}
+          onMobileOpenChange={navigation.setMobileSidebarOpen}
+          onSelectSubPage={navigation.handleSelectSubPage}
+          onSidebarCollapsedChange={navigation.setSidebarCollapsed}
+          selectedSubPage={navigation.subPage}
+          sidebarCollapsed={navigation.sidebarCollapsed}
+        />
+
+        <div className="min-w-0 flex-1">
+          <CollectionReportContent
+            canAccessCollection={nicknameAccess.canAccessCollection}
+            role={role}
+            staffNickname={nicknameAccess.staffNickname}
+            subPage={navigation.subPage}
+            onOpenNicknameDialog={() => nicknameAccess.setNicknameDialogOpen(true)}
           />
-
-          <div className="min-w-0 flex-1">
-            <CollectionReportContent
-              canAccessCollection={nicknameAccess.canAccessCollection}
-              role={role}
-              staffNickname={nicknameAccess.staffNickname}
-              subPage={navigation.subPage}
-              onOpenNicknameDialog={() => nicknameAccess.setNicknameDialogOpen(true)}
-            />
-          </div>
         </div>
       </div>
 
@@ -172,6 +155,6 @@ export default function CollectionReport() {
         showSetupPassword={nicknameAccess.showSetupPassword}
         submittingNicknameAuth={nicknameAccess.submittingNicknameAuth}
       />
-    </div>
+    </OperationalPage>
   );
 }

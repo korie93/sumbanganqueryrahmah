@@ -1,6 +1,6 @@
 import { CalendarDays, ChevronDown, Loader2, Save } from "lucide-react";
+import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -78,14 +78,26 @@ export function CollectionDailyFiltersCard({
   calendarDays,
 }: CollectionDailyFiltersCardProps) {
   return (
-    <Card className="border-border/60 bg-background/70">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xl" data-testid="collection-daily-title">
+    <OperationalSectionCard
+      title={
+        <span className="flex items-center gap-2" data-testid="collection-daily-title">
           <CalendarDays className="h-5 w-5" />
           Collection Daily
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+        </span>
+      }
+      description="Set month, selected staff nicknames, and working-day targets from one place."
+      actions={
+        <Button
+          variant="outline"
+          onClick={onRefresh}
+          disabled={loadingOverview}
+          data-testid="collection-daily-refresh"
+        >
+          {loadingOverview ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Refresh
+        </Button>
+      }
+    >
         <div className="grid gap-3 md:grid-cols-4">
           <div className="space-y-1">
             <Label>Year</Label>
@@ -205,21 +217,10 @@ export function CollectionDailyFiltersCard({
               <Input value={currentUsername} readOnly />
             )}
           </div>
-          <div className="flex items-end">
-            <Button
-              variant="outline"
-              onClick={onRefresh}
-              disabled={loadingOverview}
-              data-testid="collection-daily-refresh"
-            >
-              {loadingOverview ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Refresh
-            </Button>
-          </div>
         </div>
 
         {canManage ? (
-          <div className="grid gap-3 rounded-md border border-border/60 bg-background/60 p-3 md:grid-cols-[220px_auto] md:items-end">
+          <div className="grid gap-3 rounded-xl border border-border/70 bg-background/70 p-4 md:grid-cols-[220px_auto] md:items-end">
             <div className="space-y-1">
               <Label>Monthly Target (RM)</Label>
               <Input
@@ -260,7 +261,6 @@ export function CollectionDailyFiltersCard({
             </div>
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+    </OperationalSectionCard>
   );
 }

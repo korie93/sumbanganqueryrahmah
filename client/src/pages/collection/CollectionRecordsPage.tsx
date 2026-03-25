@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { CollectionRecordsFilters } from "@/pages/collection-records/CollectionRecordsFilters";
 import { CollectionRecordsTable } from "@/pages/collection-records/CollectionRecordsTable";
 import { DeleteCollectionRecordDialog } from "@/pages/collection-records/DeleteCollectionRecordDialog";
@@ -21,18 +21,19 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
 
   return (
     <div className="space-y-3">
-      <Card className="border-border/60 bg-background/70">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-xl">View Rekod Collection</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <OperationalSectionCard
+        title="View Rekod Collection"
+        description="Search, review, export, and maintain collection records from one calmer workspace."
+        contentClassName="space-y-3"
+      >
+        <div className="ops-toolbar">
           <CollectionRecordsFilters {...viewModel.filters} />
+        </div>
 
-          <CollectionRecordsToolbar {...viewModel.toolbar} />
+        <CollectionRecordsToolbar {...viewModel.toolbar} />
 
-          <CollectionRecordsTable {...viewModel.table} />
-        </CardContent>
-      </Card>
+        <CollectionRecordsTable {...viewModel.table} />
+      </OperationalSectionCard>
 
       {viewModel.receiptPreview.open ? (
         <ReceiptPreviewDialog {...viewModel.receiptPreview} />
