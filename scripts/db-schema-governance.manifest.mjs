@@ -77,9 +77,9 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Backup queue persistence now has a reviewed Drizzle migration while runtime bootstrap keeps legacy installs compatible.",
     ),
-    backups: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "Backup storage remains bootstrapped because legacy installs may need text-id normalization.",
+    backups: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Backup storage now has a reviewed Drizzle migration while runtime bootstrap still handles rare legacy id normalization.",
     ),
     backups_new: runtimeTransitional(
       "Temporary swap table used only during runtime backup id normalization; not part of the steady-state schema.",
@@ -116,17 +116,17 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "runtime-ddl"],
       "Embedding tables remain bootstrapped because vector-extension setup still happens at runtime.",
     ),
-    data_rows: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "Data-row storage remains bootstrapped while typed schema covers the steady-state table shape.",
+    data_rows: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Data-row storage now has a reviewed Drizzle migration while runtime bootstrap remains additive for compatibility.",
     ),
     feature_flags: hybridManaged(
       ["drizzle-schema", "legacy-sql", "runtime-ddl"],
       "Enterprise settings tables have reviewed legacy SQL and runtime normalization during the transition to full Drizzle governance.",
     ),
-    imports: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "Import storage remains bootstrapped while typed schema covers the steady-state table shape.",
+    imports: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Import storage now has a reviewed Drizzle migration while runtime bootstrap remains additive for compatibility.",
     ),
     mutation_idempotency_keys: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
@@ -159,9 +159,9 @@ export const schemaGovernanceManifest = {
     system_stability_patterns: runtimeManaged(
       "Adaptive system-learning storage still belongs to runtime DDL because it is not yet part of the shared application schema.",
     ),
-    user_activity: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "User activity remains bootstrapped while typed schema covers the steady-state table shape.",
+    user_activity: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "User activity now has a reviewed Drizzle migration while runtime bootstrap remains additive for compatibility and cleanup.",
     ),
     users: hybridManaged(
       ["drizzle-schema", "legacy-sql", "runtime-ddl"],
