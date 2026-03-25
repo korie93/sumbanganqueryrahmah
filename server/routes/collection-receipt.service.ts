@@ -8,13 +8,17 @@ import type { AuthenticatedRequest } from "../auth/guards";
 import {
   COLLECTION_RECEIPT_DIR,
   COLLECTION_RECEIPT_PUBLIC_PREFIX,
+  getCollectionReceiptQuarantineDir,
+  isCollectionReceiptQuarantineEnabled,
   resolveCollectionReceiptStoragePath,
 } from "../lib/collection-receipt-files";
 import {
+  CollectionReceiptSecurityError,
   detectCollectionReceiptSignature,
   type CollectionReceiptFileType,
   sanitizeCollectionReceiptBuffer,
 } from "../lib/collection-receipt-security";
+import { scanCollectionReceiptWithExternalScanner } from "../lib/collection-receipt-external-scan";
 import { logger } from "../lib/logger";
 import type {
   CollectionRecordReceipt,
@@ -75,6 +79,15 @@ export type MultipartCollectionReceiptInput = {
   mimeType?: string | null;
   stream: NodeJS.ReadableStream;
 };
+type QuarantineCollectionReceiptInput = {
+  source: "base64" | "multipart";
+  fileName?: string | null;
+  mimeType?: string | null;
+  signatureType?: CollectionReceiptFileType | null;
+  rejectionError: CollectionReceiptSecurityError;
+  buffer?: Buffer | null;
+  filePath?: string | null;
+};
 
 function extractReceiptBuffer(receipt: CollectionReceiptPayload): Buffer | null {
   const rawBase64 = String(receipt.contentBase64 || "").trim();
@@ -101,6 +114,80 @@ function sanitizeOriginalFileName(fileName: string, fallbackExtension: string): 
     .slice(0, 80) || "receipt";
   const safeExtension = ext || fallbackExtension || "";
   return `${stem}${safeExtension}`.slice(0, 140);
+}
+
+async function quarantineRejectedCollectionReceipt(
+  params: QuarantineCollectionReceiptInput,
+): Promise<void> {
+  if (!isCollectionReceiptQuarantineEnabled()) {
+    return;
+  }
+
+  let payloadBuffer = params.buffer || null;
+  if (!payloadBuffer && params.filePath) {
+    try {
+      payloadBuffer = await fs.promises.readFile(params.filePath);
+    } catch {
+      payloadBuffer = null;
+    }
+  }
+
+  if (!payloadBuffer?.length || payloadBuffer.length > COLLECTION_RECEIPT_MAX_BYTES) {
+    return;
+  }
+
+  try {
+    const quarantineDir = getCollectionReceiptQuarantineDir();
+    await fs.promises.mkdir(quarantineDir, { recursive: true });
+
+    const quarantineId = `${Date.now()}-${randomUUID()}`;
+    const fallbackExtension = params.signatureType
+      ? COLLECTION_RECEIPT_TYPE_CONFIG[params.signatureType].extension
+      : path.extname(String(params.fileName || "").trim()) || ".bin";
+    const originalFileName = sanitizeOriginalFileName(
+      String(params.fileName || "receipt"),
+      fallbackExtension,
+    );
+    const storedExtension = path.extname(originalFileName) || fallbackExtension || ".bin";
+    const payloadFileName = `${quarantineId}${storedExtension}`;
+    const metadataFileName = `${quarantineId}.json`;
+    const payloadPath = path.join(quarantineDir, payloadFileName);
+    const metadataPath = path.join(quarantineDir, metadataFileName);
+
+    await fs.promises.writeFile(payloadPath, payloadBuffer);
+    await fs.promises.writeFile(metadataPath, JSON.stringify({
+      quarantineId,
+      quarantinedAt: new Date().toISOString(),
+      source: params.source,
+      originalFileName,
+      declaredMimeType: normalizeCollectionReceiptMimeType(params.mimeType || ""),
+      signatureType: params.signatureType || null,
+      fileSize: payloadBuffer.length,
+      sha256: createHash("sha256").update(payloadBuffer).digest("hex"),
+      reason: params.rejectionError.message,
+      reasonCode: params.rejectionError.reasonCode,
+      payloadFileName,
+      metadataFileName,
+    }, null, 2), "utf8");
+
+    logger.warn("Collection receipt quarantined after security rejection", {
+      quarantineId,
+      source: params.source,
+      fileName: originalFileName,
+      signatureType: params.signatureType || null,
+      bytes: payloadBuffer.length,
+      reasonCode: params.rejectionError.reasonCode,
+      quarantineDir,
+      sha256Prefix: buildReceiptLogFingerprint(payloadBuffer),
+    });
+  } catch (error) {
+    logger.error("Failed to quarantine rejected collection receipt", {
+      source: params.source,
+      fileName: params.fileName || null,
+      reasonCode: params.rejectionError.reasonCode,
+      error,
+    });
+  }
 }
 
 function buildStoredCollectionReceiptMetadata(params: {
@@ -171,51 +258,114 @@ export async function saveCollectionReceipt(
     throw new Error("Receipt file exceeds 5MB.");
   }
 
-  const signatureType = detectCollectionReceiptSignature(buffer);
-  if (!signatureType) {
-    throw new Error("Receipt file signature is not allowed.");
-  }
+  let signatureType: CollectionReceiptFileType | null = null;
+  let stagedFilePath: string | null = null;
+  try {
+    signatureType = detectCollectionReceiptSignature(buffer);
+    if (!signatureType) {
+      throw new CollectionReceiptSecurityError(
+        "Receipt file signature is not allowed.",
+        "receipt-signature-not-allowed",
+      );
+    }
 
-  const extFromName = path.extname(String(receipt.fileName || "").trim()).toLowerCase();
-  const extensionType = extFromName ? mapCollectionReceiptExtensionToType(extFromName) : null;
-  if (extFromName && !extensionType) {
-    throw new Error("Receipt file extension is not allowed.");
-  }
-  if (extensionType && extensionType !== signatureType) {
-    throw new Error("Receipt file content does not match file extension.");
-  }
+    const extFromName = path.extname(String(receipt.fileName || "").trim()).toLowerCase();
+    const extensionType = extFromName ? mapCollectionReceiptExtensionToType(extFromName) : null;
+    if (extFromName && !extensionType) {
+      throw new CollectionReceiptSecurityError(
+        "Receipt file extension is not allowed.",
+        "receipt-extension-not-allowed",
+      );
+    }
+    if (extensionType && extensionType !== signatureType) {
+      throw new CollectionReceiptSecurityError(
+        "Receipt file content does not match file extension.",
+        "receipt-extension-mismatch",
+      );
+    }
 
-  const mimeTypeResolved = declaredMimeTypeAccepted
-    ? mapCollectionReceiptMimeToType(declaredMimeType)
-    : null;
-  if (mimeTypeResolved && mimeTypeResolved !== signatureType) {
-    throw new Error("Receipt file content does not match declared MIME type.");
-  }
-  const sanitized = sanitizeCollectionReceiptBuffer(buffer, signatureType);
-  logCollectionReceiptSanitization({
-    fileName: String(receipt.fileName || "receipt"),
-    signatureType,
-    sanitizedBuffer: sanitized.buffer,
-    originalBytes: buffer.length,
-    removedMetadataKinds: sanitized.removedMetadataKinds,
-    imageWidth: sanitized.imageWidth,
-    imageHeight: sanitized.imageHeight,
-  });
+    const mimeTypeResolved = declaredMimeTypeAccepted
+      ? mapCollectionReceiptMimeToType(declaredMimeType)
+      : null;
+    if (mimeTypeResolved && mimeTypeResolved !== signatureType) {
+      throw new CollectionReceiptSecurityError(
+        "Receipt file content does not match declared MIME type.",
+        "receipt-mime-mismatch",
+      );
+    }
 
+    const sanitized = sanitizeCollectionReceiptBuffer(buffer, signatureType);
+    logCollectionReceiptSanitization({
+      fileName: String(receipt.fileName || "receipt"),
+      signatureType,
+      sanitizedBuffer: sanitized.buffer,
+      originalBytes: buffer.length,
+      removedMetadataKinds: sanitized.removedMetadataKinds,
+      imageWidth: sanitized.imageWidth,
+      imageHeight: sanitized.imageHeight,
+    });
+
+    const persisted = await persistCollectionReceiptFile({
+      fileName: String(receipt.fileName || "receipt"),
+      signatureType,
+      buffer: sanitized.buffer,
+    });
+
+    return {
+      storagePath: persisted.storedReceipt.storagePath,
+      originalFileName: persisted.storedReceipt.originalFileName,
+      originalMimeType: persisted.storedReceipt.canonicalType.mimeType,
+      originalExtension: persisted.storedReceipt.canonicalType.extension,
+      fileSize: sanitized.buffer.length,
+    };
+  } catch (error) {
+    stagedFilePath = (error as Error & { receiptTemporaryFilePath?: string }).receiptTemporaryFilePath || null;
+    if (error instanceof CollectionReceiptSecurityError) {
+      await quarantineRejectedCollectionReceipt({
+        source: "base64",
+        fileName: receipt.fileName,
+        mimeType: receipt.mimeType,
+        signatureType,
+        rejectionError: error,
+        buffer: stagedFilePath ? null : buffer,
+        filePath: stagedFilePath,
+      });
+    }
+    if (stagedFilePath) {
+      await fs.promises.rm(stagedFilePath, { force: true }).catch(() => undefined);
+    }
+    throw error;
+  }
+}
+
+async function persistCollectionReceiptFile(params: {
+  fileName: string;
+  signatureType: CollectionReceiptFileType;
+  buffer: Buffer;
+}): Promise<{
+  storedReceipt: ReturnType<typeof buildStoredCollectionReceiptMetadata>;
+  temporaryFilePath: string;
+}> {
   await fs.promises.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
 
   const storedReceipt = buildStoredCollectionReceiptMetadata({
-    fileName: String(receipt.fileName || "receipt"),
-    signatureType,
+    fileName: params.fileName,
+    signatureType: params.signatureType,
   });
-  await fs.promises.writeFile(storedReceipt.absolutePath, sanitized.buffer);
+  const temporaryFilePath = path.join(COLLECTION_RECEIPT_DIR, `${Date.now()}-${randomUUID()}.scan`);
+  await fs.promises.writeFile(temporaryFilePath, params.buffer, { flag: "wx" });
+  try {
+    await scanCollectionReceiptWithExternalScanner(temporaryFilePath);
+    await fs.promises.rename(temporaryFilePath, storedReceipt.absolutePath);
+  } catch (error) {
+    const enriched = error as Error & { receiptTemporaryFilePath?: string };
+    enriched.receiptTemporaryFilePath = temporaryFilePath;
+    throw enriched;
+  }
 
   return {
-    storagePath: storedReceipt.storagePath,
-    originalFileName: storedReceipt.originalFileName,
-    originalMimeType: storedReceipt.canonicalType.mimeType,
-    originalExtension: storedReceipt.canonicalType.extension,
-    fileSize: sanitized.buffer.length,
+    storedReceipt,
+    temporaryFilePath,
   };
 }
 
@@ -239,6 +389,7 @@ export async function saveMultipartCollectionReceipt(
   const signatureChunks: Buffer[] = [];
   let signatureBytesCaptured = 0;
   let fileSize = 0;
+  let signatureType: CollectionReceiptFileType | null = null;
 
   const captureAndValidate = new Transform({
     transform(chunk, _encoding, callback) {
@@ -270,21 +421,31 @@ export async function saveMultipartCollectionReceipt(
       throw new Error("Invalid receipt payload.");
     }
 
-    const signatureType = detectCollectionReceiptSignature(Buffer.concat(signatureChunks));
+    signatureType = detectCollectionReceiptSignature(Buffer.concat(signatureChunks));
     if (!signatureType) {
-      throw new Error("Receipt file signature is not allowed.");
+      throw new CollectionReceiptSecurityError(
+        "Receipt file signature is not allowed.",
+        "receipt-signature-not-allowed",
+      );
     }
 
     if (extensionType && extensionType !== signatureType) {
-      throw new Error("Receipt file content does not match file extension.");
+      throw new CollectionReceiptSecurityError(
+        "Receipt file content does not match file extension.",
+        "receipt-extension-mismatch",
+      );
     }
 
     const mimeTypeResolved = declaredMimeTypeAccepted
       ? mapCollectionReceiptMimeToType(declaredMimeType)
       : null;
     if (mimeTypeResolved && mimeTypeResolved !== signatureType) {
-      throw new Error("Receipt file content does not match declared MIME type.");
+      throw new CollectionReceiptSecurityError(
+        "Receipt file content does not match declared MIME type.",
+        "receipt-mime-mismatch",
+      );
     }
+
     const receiptBytes = await fs.promises.readFile(temporaryFilePath);
     const sanitized = sanitizeCollectionReceiptBuffer(receiptBytes, signatureType);
     logCollectionReceiptSanitization({
@@ -300,6 +461,8 @@ export async function saveMultipartCollectionReceipt(
       await fs.promises.writeFile(temporaryFilePath, sanitized.buffer);
     }
 
+    await scanCollectionReceiptWithExternalScanner(temporaryFilePath);
+
     const storedReceipt = buildStoredCollectionReceiptMetadata({
       fileName,
       signatureType,
@@ -314,6 +477,16 @@ export async function saveMultipartCollectionReceipt(
       fileSize: sanitized.buffer.length,
     };
   } catch (error) {
+    if (error instanceof CollectionReceiptSecurityError) {
+      await quarantineRejectedCollectionReceipt({
+        source: "multipart",
+        fileName,
+        mimeType: receipt.mimeType,
+        signatureType,
+        rejectionError: error,
+        filePath: temporaryFilePath,
+      });
+    }
     await fs.promises.rm(temporaryFilePath, { force: true }).catch(() => undefined);
     throw error;
   }

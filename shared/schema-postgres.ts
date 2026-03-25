@@ -366,6 +366,31 @@ export const collectionRecordReceipts = pgTable("collection_record_receipts", {
   ),
 }));
 
+export const collectionRecordDailyRollups = pgTable("collection_record_daily_rollups", {
+  paymentDate: date("payment_date", { mode: "string" }).notNull(),
+  createdByLogin: text("created_by_login").notNull(),
+  collectionStaffNickname: text("collection_staff_nickname").notNull(),
+  totalRecords: integer("total_records").notNull().default(0),
+  totalAmount: numeric("total_amount", { precision: 14, scale: 2 }).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  sliceUnique: uniqueIndex("idx_collection_record_daily_rollups_slice_unique").on(
+    table.paymentDate,
+    table.createdByLogin,
+    table.collectionStaffNickname,
+  ),
+  paymentDateIdx: index("idx_collection_record_daily_rollups_payment_date").on(table.paymentDate),
+  createdByPaymentDateIdx: index("idx_collection_record_daily_rollups_created_by_payment_date").on(
+    table.createdByLogin,
+    table.paymentDate,
+  ),
+  nicknameLowerPaymentDateIdx: index("idx_collection_record_daily_rollups_lower_nickname_payment_date").using(
+    "btree",
+    sql`lower(${table.collectionStaffNickname})`,
+    table.paymentDate,
+  ),
+}));
+
 export const collectionStaffNicknames = pgTable("collection_staff_nicknames", {
   id: uuid("id").primaryKey(),
   nickname: text("nickname").notNull(),

@@ -25,6 +25,80 @@ import {
   createCollectionSummaryStorageDouble,
 } from "./collection-route-summary-doubles";
 
+const originalQuarantineEnabled = process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED;
+const originalQuarantineDir = process.env.COLLECTION_RECEIPT_QUARANTINE_DIR;
+const originalExternalScanEnabled = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED;
+const originalExternalScanCommand = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND;
+const originalExternalScanArgsJson = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON;
+const originalExternalScanTimeoutMs = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS;
+const originalExternalScanFailClosed = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED;
+const originalExternalScanCleanExitCodes = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_CLEAN_EXIT_CODES;
+const originalExternalScanRejectExitCodes = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES;
+process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED = "0";
+delete process.env.COLLECTION_RECEIPT_QUARANTINE_DIR;
+process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "0";
+delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND;
+delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON;
+delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS;
+delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED;
+delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_CLEAN_EXIT_CODES;
+delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES;
+
+test.after(async () => {
+  if (originalQuarantineEnabled === undefined) {
+    delete process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED;
+  } else {
+    process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED = originalQuarantineEnabled;
+  }
+
+  if (originalQuarantineDir === undefined) {
+    delete process.env.COLLECTION_RECEIPT_QUARANTINE_DIR;
+  } else {
+    process.env.COLLECTION_RECEIPT_QUARANTINE_DIR = originalQuarantineDir;
+  }
+
+  if (originalExternalScanEnabled === undefined) {
+    delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED;
+  } else {
+    process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = originalExternalScanEnabled;
+  }
+  if (originalExternalScanCommand === undefined) {
+    delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND;
+  } else {
+    process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = originalExternalScanCommand;
+  }
+  if (originalExternalScanArgsJson === undefined) {
+    delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON;
+  } else {
+    process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = originalExternalScanArgsJson;
+  }
+  if (originalExternalScanTimeoutMs === undefined) {
+    delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS;
+  } else {
+    process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS = originalExternalScanTimeoutMs;
+  }
+  if (originalExternalScanFailClosed === undefined) {
+    delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED;
+  } else {
+    process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = originalExternalScanFailClosed;
+  }
+  if (originalExternalScanCleanExitCodes === undefined) {
+    delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_CLEAN_EXIT_CODES;
+  } else {
+    process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_CLEAN_EXIT_CODES = originalExternalScanCleanExitCodes;
+  }
+  if (originalExternalScanRejectExitCodes === undefined) {
+    delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES;
+  } else {
+    process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES = originalExternalScanRejectExitCodes;
+  }
+
+  await fs.rm(path.resolve(process.cwd(), "var", "collection-receipt-quarantine"), {
+    recursive: true,
+    force: true,
+  });
+});
+
 function parseAuditDetails(entry: { details?: string }) {
   return JSON.parse(String(entry.details || "{}"));
 }
@@ -41,13 +115,22 @@ function createDangerousPdfBuffer() {
 }
 
 function createTinyPngBuffer(width = 1, height = 1) {
-  const buffer = Buffer.alloc(24);
-  buffer.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
-  buffer.set([0x00, 0x00, 0x00, 0x0d], 8);
-  buffer.set([0x49, 0x48, 0x44, 0x52], 12);
-  buffer.writeUInt32BE(width, 16);
-  buffer.writeUInt32BE(height, 20);
-  return buffer;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.from([
+      0x00, 0x00, 0x00, 0x0d,
+      0x49, 0x48, 0x44, 0x52,
+      (width >>> 24) & 0xff, (width >>> 16) & 0xff, (width >>> 8) & 0xff, width & 0xff,
+      (height >>> 24) & 0xff, (height >>> 16) & 0xff, (height >>> 8) & 0xff, height & 0xff,
+      0x08, 0x06, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00,
+    ]),
+    Buffer.from([
+      0x00, 0x00, 0x00, 0x00,
+      0x49, 0x45, 0x4e, 0x44,
+      0xae, 0x42, 0x60, 0x82,
+    ]),
+  ]);
 }
 
 function createTinyJpegBuffer(width = 1, height = 1) {

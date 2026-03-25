@@ -79,6 +79,35 @@ export function buildCollectionRecordWhereSql(filters?: CollectionRecordFilters)
     : sql``;
 }
 
+export function canUseCollectionRecordDailyRollups(filters?: CollectionRecordFilters): boolean {
+  return String(filters?.search || "").trim().length === 0;
+}
+
+export function buildCollectionRecordDailyRollupWhereSql(filters?: CollectionRecordFilters): SQL {
+  const conditions: SQL[] = [];
+  if (filters?.from) {
+    conditions.push(sql`payment_date >= ${filters.from}::date`);
+  }
+  if (filters?.to) {
+    conditions.push(sql`payment_date <= ${filters.to}::date`);
+  }
+
+  const createdByLogin = String(filters?.createdByLogin || "").trim();
+  if (createdByLogin) {
+    conditions.push(sql`created_by_login = ${createdByLogin}`);
+  }
+
+  const nicknames = normalizeCollectionNicknameFilters(filters?.nicknames);
+  if (nicknames.length > 0) {
+    const nicknameSql = sql.join(nicknames.map((value) => sql`${value}`), sql`, `);
+    conditions.push(sql`lower(collection_staff_nickname) IN (${nicknameSql})`);
+  }
+
+  return conditions.length
+    ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
+    : sql``;
+}
+
 export function buildCollectionMonthlySummaryWhereSql(filters: {
   year: number;
   nicknames?: string[];
