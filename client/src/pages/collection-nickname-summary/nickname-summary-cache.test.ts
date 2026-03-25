@@ -41,11 +41,13 @@ test("createCollectionNicknameSummaryCache evicts least-recently-used entries", 
     nicknameTotals: [{ nickname: "Alpha", totalAmount: 10, totalRecords: 1 }],
     totalAmount: 10,
     totalRecords: 1,
+    freshness: null,
   });
   cache.set("summary-2", {
     nicknameTotals: [{ nickname: "Beta", totalAmount: 20, totalRecords: 2 }],
     totalAmount: 20,
     totalRecords: 2,
+    freshness: null,
   });
   assert.equal(cache.size(), 2);
 
@@ -55,6 +57,7 @@ test("createCollectionNicknameSummaryCache evicts least-recently-used entries", 
     nicknameTotals: [{ nickname: "Gamma", totalAmount: 30, totalRecords: 3 }],
     totalAmount: 30,
     totalRecords: 3,
+    freshness: null,
   });
 
   assert.equal(cache.get("summary-2"), null);
@@ -69,6 +72,7 @@ test("createCollectionNicknameSummaryCache clear removes cached summaries", () =
     nicknameTotals: [{ nickname: "Alpha", totalAmount: 10, totalRecords: 1 }],
     totalAmount: 10,
     totalRecords: 1,
+    freshness: null,
   });
   cache.clear();
 

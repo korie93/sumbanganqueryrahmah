@@ -21,6 +21,7 @@ import {
   deleteCollectionRecord,
   getCollectionMonthlySummary,
   getCollectionRecordById,
+  getCollectionRecordDailyRollupFreshnessSnapshot,
   listCollectionRecords,
   purgeCollectionRecordsOlderThan,
   summarizeCollectionRecords,
@@ -338,6 +339,15 @@ export class CollectionRepository {
     nicknames?: string[];
   }): Promise<Array<{ nickname: string; totalRecords: number; totalAmount: number }>> {
     return summarizeCollectionRecordsByNickname(filters);
+  }
+
+  async getCollectionRecordDailyRollupFreshness(filters?: {
+    from?: string;
+    to?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+  }) {
+    return getCollectionRecordDailyRollupFreshnessSnapshot(filters);
   }
 
   async summarizeCollectionRecordsByNicknameAndPaymentDate(filters?: {

@@ -81,6 +81,11 @@ export type RuntimeMonitorManagerOptions = {
     retryCount: number;
     oldestPendingAgeMs: number;
   }>;
+  syncAlertHistory?: (
+    snapshot: InternalMonitorSnapshot,
+    alerts: InternalMonitorAlert[],
+    observedAt: Date,
+  ) => Promise<void>;
   evaluateSystem: (snapshot: SystemSnapshot, history: SystemHistory) => Promise<EvaluateSystemResult>;
 };
 

@@ -1,9 +1,10 @@
-import type { CollectionMonthlySummary } from "@/lib/api";
+import type { CollectionMonthlySummary, CollectionReportFreshness } from "@/lib/api";
 
 const DEFAULT_COLLECTION_SUMMARY_CACHE_LIMIT = 12;
 
 export type CollectionSummaryCacheEntry = {
   summaryRows: CollectionMonthlySummary[];
+  freshness: CollectionReportFreshness | null;
 };
 
 export function normalizeCollectionSummaryNicknames(nicknames?: string[]) {
@@ -43,6 +44,7 @@ export function createCollectionSummaryCache(maxEntries = DEFAULT_COLLECTION_SUM
       entries.set(key, entry);
       return {
         summaryRows: [...entry.summaryRows],
+        freshness: entry.freshness ? { ...entry.freshness } : null,
       } satisfies CollectionSummaryCacheEntry;
     },
     set(key: string, entry: CollectionSummaryCacheEntry) {
@@ -52,6 +54,7 @@ export function createCollectionSummaryCache(maxEntries = DEFAULT_COLLECTION_SUM
 
       entries.set(key, {
         summaryRows: [...entry.summaryRows],
+        freshness: entry.freshness ? { ...entry.freshness } : null,
       });
 
       while (entries.size > Math.max(1, Math.floor(maxEntries))) {

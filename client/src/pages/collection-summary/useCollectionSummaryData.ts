@@ -4,6 +4,7 @@ import {
   getCollectionMonthlySummary,
   getCollectionNicknames,
   type CollectionMonthlySummary,
+  type CollectionReportFreshness,
   type CollectionStaffNickname,
 } from "@/lib/api";
 import {
@@ -49,6 +50,7 @@ export function useCollectionSummaryData({
   const [summaryRows, setSummaryRows] = useState<CollectionMonthlySummary[]>(() =>
     buildEmptySummary(),
   );
+  const [freshness, setFreshness] = useState<CollectionReportFreshness | null>(null);
 
   useEffect(() => {
     return () => {
@@ -108,6 +110,7 @@ export function useCollectionSummaryData({
       const cachedEntry = summaryCacheRef.current.get(cacheKey);
       if (cachedEntry) {
         setSummaryRows(cachedEntry.summaryRows);
+        setFreshness(cachedEntry.freshness);
         setLoading(false);
         return;
       }
@@ -119,11 +122,14 @@ export function useCollectionSummaryData({
         const normalizedSummaryRows = normalizeSummaryRows(response?.summary);
         summaryCacheRef.current.set(cacheKey, {
           summaryRows: normalizedSummaryRows,
+          freshness: response?.freshness || null,
         });
         setSummaryRows(normalizedSummaryRows);
+        setFreshness(response?.freshness || null);
       } catch (error: unknown) {
         if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
         setSummaryRows(buildEmptySummary());
+        setFreshness(null);
         toast({
           title: "Failed to Load Summary",
           description: parseApiError(error),
@@ -253,6 +259,7 @@ export function useCollectionSummaryData({
     partiallySelected,
     selectedNicknames,
     grandTotal,
+    freshness,
     setSelectedYear,
     setNicknameDropdownOpen,
     toggleNickname,

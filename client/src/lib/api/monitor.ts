@@ -21,6 +21,19 @@ export type MonitorAlert = {
   source?: string;
 };
 
+export type MonitorAlertIncident = {
+  id: string;
+  alertKey: string;
+  severity: "CRITICAL" | "WARNING" | "INFO";
+  source: string | null;
+  message: string;
+  status: "open" | "resolved";
+  firstSeenAt: string;
+  lastSeenAt: string;
+  resolvedAt: string | null;
+  updatedAt: string;
+};
+
 export type SystemHealthPayload = {
   score: number;
   mode: string;
@@ -90,6 +103,11 @@ export type AlertsPayload = {
   updatedAt: number;
 };
 
+export type AlertHistoryPayload = {
+  incidents: MonitorAlertIncident[];
+  updatedAt: string;
+};
+
 export type GovernanceState =
   | "IDLE"
   | "PROPOSED"
@@ -149,6 +167,19 @@ export type ChaosInjectResponse = {
   success: boolean;
   injected: ChaosEventPayload;
   active: ChaosEventPayload[];
+};
+
+export type RollupQueueActionPayload = {
+  ok: boolean;
+  action: string;
+  message: string;
+  requeuedCount?: number;
+  snapshot: {
+    pendingCount: number;
+    runningCount: number;
+    retryCount: number;
+    oldestPendingAgeMs: number;
+  };
 };
 
 async function parseMonitorErrorMessage(response: Response): Promise<string> {
@@ -302,12 +333,32 @@ export async function getAlerts(options?: MonitorRequestOptions) {
   return fetchMonitorEndpoint<AlertsPayload>("/internal/alerts", options);
 }
 
+export async function getAlertHistory(options?: MonitorRequestOptions) {
+  return fetchMonitorEndpoint<AlertHistoryPayload>("/internal/alerts/history", options);
+}
+
 export async function getIntelligenceExplain(options?: MonitorRequestOptions) {
   return fetchMonitorEndpoint<IntelligenceExplainPayload>("/internal/intelligence/explain", options);
 }
 
 export async function injectChaos(payload: ChaosInjectPayload, options?: MonitorRequestOptions) {
   return postMonitorEndpoint<ChaosInjectResponse>("/internal/chaos/inject", payload, options);
+}
+
+export async function drainRollupQueue(options?: MonitorRequestOptions) {
+  return postMonitorEndpoint<RollupQueueActionPayload>("/internal/rollup-refresh/drain", {}, options);
+}
+
+export async function retryRollupFailures(options?: MonitorRequestOptions) {
+  return postMonitorEndpoint<RollupQueueActionPayload>("/internal/rollup-refresh/retry-failures", {}, options);
+}
+
+export async function autoHealRollupQueue(options?: MonitorRequestOptions) {
+  return postMonitorEndpoint<RollupQueueActionPayload>("/internal/rollup-refresh/auto-heal", {}, options);
+}
+
+export async function rebuildCollectionRollups(options?: MonitorRequestOptions) {
+  return postMonitorEndpoint<RollupQueueActionPayload>("/internal/rollup-refresh/rebuild", {}, options);
 }
 
 export async function generateFingerprint(): Promise<string> {

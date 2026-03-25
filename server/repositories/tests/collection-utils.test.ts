@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildCollectionMonthlySummaryWhereSql,
   buildCollectionRecordDailyRollupWhereSql,
+  buildCollectionRecordMonthlyRollupWhereSql,
   buildCollectionRecordConditions,
   canUseCollectionRecordDailyRollups,
   collectCollectionReceiptPaths,
@@ -44,6 +45,17 @@ test("buildCollectionMonthlySummaryWhereSql clamps out-of-range years", () => {
   });
 
   assert.equal(safeYear, 2100);
+  assert.ok(whereSql);
+});
+
+test("buildCollectionRecordMonthlyRollupWhereSql clamps years and normalizes duplicate nicknames", () => {
+  const { safeYear, whereSql } = buildCollectionRecordMonthlyRollupWhereSql({
+    year: 1999,
+    nicknames: [" Collector Alpha ", "collector alpha", "Collector Beta"],
+    createdByLogin: "staff.user",
+  });
+
+  assert.equal(safeYear, 2000);
   assert.ok(whereSql);
 });
 

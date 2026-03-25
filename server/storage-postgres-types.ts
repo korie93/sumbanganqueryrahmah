@@ -80,6 +80,14 @@ export type CollectionMonthlySummary = {
   totalAmount: number;
 };
 
+export type CollectionRollupFreshnessSnapshot = {
+  status: "fresh" | "warming" | "stale";
+  pendingCount: number;
+  runningCount: number;
+  retryCount: number;
+  oldestPendingAgeMs: number;
+};
+
 export type CollectionStaffNickname = {
   id: string;
   nickname: string;
@@ -421,6 +429,12 @@ type CategoryRule = {
     createdByLogin?: string;
     nicknames?: string[];
   }): Promise<CollectionNicknameAggregate[]>;
+  getCollectionRecordDailyRollupFreshness(filters?: {
+    from?: string;
+    to?: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+  }): Promise<CollectionRollupFreshnessSnapshot>;
   summarizeCollectionRecordsByNicknameAndPaymentDate(filters?: {
     from?: string;
     to?: string;

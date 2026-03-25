@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,7 +29,13 @@ function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPagePr
   return (
     <Card className="border-border/60 bg-background/70">
       <CardHeader className="pb-3">
-        <CardTitle className="text-xl">Nickname Summary</CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardTitle className="text-xl">Nickname Summary</CardTitle>
+          <CollectionReportFreshnessBadge freshness={summaryData.freshness} />
+        </div>
+        {summaryData.freshness ? (
+          <p className="text-xs text-muted-foreground">{summaryData.freshness.message}</p>
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px_180px_auto] xl:items-end">

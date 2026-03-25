@@ -229,6 +229,28 @@ export const backupJobs = pgTable("backup_jobs", {
   updatedAtIdx: index("idx_backup_jobs_updated_at").on(table.updatedAt),
 }));
 
+export const monitorAlertIncidents = pgTable("monitor_alert_incidents", {
+  id: uuid("id").primaryKey(),
+  alertKey: text("alert_key").notNull(),
+  severity: text("severity").notNull(),
+  source: text("source"),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("open"),
+  firstSeenAt: timestamp("first_seen_at").defaultNow().notNull(),
+  lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  openAlertKeyUnique: uniqueIndex("idx_monitor_alert_incidents_open_key_unique")
+    .on(table.alertKey)
+    .where(sql`${table.status} = 'open'`),
+  statusUpdatedAtIdx: index("idx_monitor_alert_incidents_status_updated_at").on(
+    table.status,
+    table.updatedAt.desc(),
+  ),
+  resolvedAtIdx: index("idx_monitor_alert_incidents_resolved_at").on(table.resolvedAt.desc()),
+}));
+
 export const settingCategories = pgTable("setting_categories", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
@@ -388,6 +410,35 @@ export const collectionRecordDailyRollups = pgTable("collection_record_daily_rol
     "btree",
     sql`lower(${table.collectionStaffNickname})`,
     table.paymentDate,
+  ),
+}));
+
+export const collectionRecordMonthlyRollups = pgTable("collection_record_monthly_rollups", {
+  year: integer("year").notNull(),
+  month: integer("month").notNull(),
+  createdByLogin: text("created_by_login").notNull(),
+  collectionStaffNickname: text("collection_staff_nickname").notNull(),
+  totalRecords: integer("total_records").notNull().default(0),
+  totalAmount: numeric("total_amount", { precision: 14, scale: 2 }).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  sliceUnique: uniqueIndex("idx_collection_record_monthly_rollups_slice_unique").on(
+    table.year,
+    table.month,
+    table.createdByLogin,
+    table.collectionStaffNickname,
+  ),
+  yearMonthIdx: index("idx_collection_record_monthly_rollups_year_month").on(table.year, table.month),
+  createdByYearMonthIdx: index("idx_collection_record_monthly_rollups_created_by_year_month").on(
+    table.createdByLogin,
+    table.year,
+    table.month,
+  ),
+  nicknameLowerYearMonthIdx: index("idx_collection_record_monthly_rollups_lower_nickname_year_month").using(
+    "btree",
+    sql`lower(${table.collectionStaffNickname})`,
+    table.year,
+    table.month,
   ),
 }));
 
@@ -782,6 +833,7 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertBackup = z.infer<typeof insertBackupSchema>;
 export type Backup = typeof backups.$inferSelect;
 export type BackupJobRow = typeof backupJobs.$inferSelect;
+export type MonitorAlertIncidentRow = typeof monitorAlertIncidents.$inferSelect;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type AccountActivationToken = typeof accountActivationTokens.$inferSelect;
 export type PasswordResetRequest = typeof passwordResetRequests.$inferSelect;
@@ -793,6 +845,7 @@ export type SettingVersionRow = typeof settingVersions.$inferSelect;
 export type FeatureFlagRow = typeof featureFlags.$inferSelect;
 export type CollectionRecordRow = typeof collectionRecords.$inferSelect;
 export type CollectionRecordReceiptRow = typeof collectionRecordReceipts.$inferSelect;
+export type CollectionRecordMonthlyRollupRow = typeof collectionRecordMonthlyRollups.$inferSelect;
 export type CollectionStaffNicknameRow = typeof collectionStaffNicknames.$inferSelect;
 export type AdminGroupRow = typeof adminGroups.$inferSelect;
 export type AdminGroupMemberRow = typeof adminGroupMembers.$inferSelect;

@@ -57,6 +57,11 @@ export class CollectionRollupRefreshQueueService {
     this.scheduleRun(0);
   }
 
+  async wake(): Promise<void> {
+    await this.ensureStarted();
+    this.scheduleRun(0);
+  }
+
   private async ensureStarted(): Promise<void> {
     if (this.started) {
       return;

@@ -32,6 +32,52 @@ function allowAll(): RequestHandler {
   return (_req, _res, next) => next();
 }
 
+function createRollupQueueSnapshot(overrides?: Partial<{
+  pendingCount: number;
+  runningCount: number;
+  retryCount: number;
+  oldestPendingAgeMs: number;
+}>) {
+  return {
+    pendingCount: 0,
+    runningCount: 0,
+    retryCount: 0,
+    oldestPendingAgeMs: 0,
+    ...overrides,
+  };
+}
+
+function createSystemRouteExtraDeps() {
+  return {
+    getCollectionRollupQueueStatus: async () => createRollupQueueSnapshot(),
+    drainCollectionRollupQueue: async () => ({
+      ok: true,
+      action: "drain",
+      message: "Drain requested.",
+      snapshot: createRollupQueueSnapshot(),
+    }),
+    retryCollectionRollupFailures: async () => ({
+      ok: true,
+      action: "retry-failures",
+      message: "Retry requested.",
+      snapshot: createRollupQueueSnapshot(),
+    }),
+    autoHealCollectionRollupQueue: async () => ({
+      ok: true,
+      action: "auto-heal",
+      message: "Auto-heal requested.",
+      snapshot: createRollupQueueSnapshot(),
+    }),
+    rebuildCollectionRollups: async () => ({
+      ok: true,
+      action: "rebuild",
+      message: "Rebuild requested.",
+      snapshot: createRollupQueueSnapshot(),
+    }),
+    listMonitorAlertHistory: async () => [],
+  };
+}
+
 function createSystemRouteHarness(options?: {
   dbOk?: boolean;
   startup?: Partial<StartupHealthSnapshot>;
@@ -90,6 +136,7 @@ function createSystemRouteHarness(options?: {
       injected: {} as any,
       active: [],
     }),
+    ...createSystemRouteExtraDeps(),
     createAuditLog: async (data) => ({
       id: "audit-1",
       ...data,
@@ -317,6 +364,7 @@ test("GET /internal/system-health exposes rollup refresh queue metrics alongside
       injected: {} as any,
       active: [],
     }),
+    ...createSystemRouteExtraDeps(),
     createAuditLog: async (data) => ({
       id: "audit-1",
       ...data,
@@ -342,6 +390,250 @@ test("GET /internal/system-health exposes rollup refresh queue metrics alongside
     assert.equal(payload.rollupRefreshRetryCount, 1);
     assert.equal(payload.rollupRefreshOldestPendingAgeMs, 91_000);
     assert.equal(payload.activeAlertCount, 2);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /internal/alerts/history returns recent monitor alert incidents", async () => {
+  const app = createJsonTestApp();
+  registerSystemRoutes(app, {
+    authenticateToken: createTestAuthenticateToken({
+      userId: "monitor-1",
+      username: "monitor.user",
+      role: "admin",
+    }),
+    requireRole: createTestRequireRole(),
+    requireMonitorAccess: allowAll(),
+    getMaintenanceStateCached: async () => ({
+      maintenance: false,
+      message: "",
+      type: "soft",
+      startTime: null,
+      endTime: null,
+    }),
+    computeInternalMonitorSnapshot: () => createMonitorSnapshot() as any,
+    buildInternalMonitorAlerts: () => [],
+    getControlState: () => ({
+      mode: "NORMAL",
+      throttleFactor: 1,
+      rejectHeavyRoutes: false,
+      preAllocateMB: 0,
+      workerCount: 1,
+      maxWorkers: 1,
+      workers: [],
+      circuits: {},
+      predictor: null,
+      queueLength: 0,
+      updatedAt: Date.parse("2026-03-24T00:00:00.000Z"),
+    } as any),
+    getDbProtection: () => false,
+    getRequestRate: () => 0,
+    getLatencyP95: () => 0,
+    getLocalCircuitSnapshots: () => ({
+      ai: {} as any,
+      db: {} as any,
+      export: {} as any,
+    }),
+    getIntelligenceExplainability: () => ({
+      anomalyBreakdown: [],
+      correlationMatrix: [],
+      slopeValues: [],
+      forecastProjection: [],
+      governanceState: {},
+      chosenStrategy: null,
+      decisionReason: "n/a",
+    } as any),
+    injectChaos: () => ({
+      injected: {} as any,
+      active: [],
+    }),
+    ...createSystemRouteExtraDeps(),
+    listMonitorAlertHistory: async () => [
+      {
+        id: "incident-1",
+        alertKey: "rollup_queue_warning",
+        severity: "WARNING",
+        source: "ROLLUP_QUEUE",
+        message: "Collection rollup refresh backlog is growing.",
+        status: "open",
+        firstSeenAt: new Date("2026-03-24T00:00:00.000Z"),
+        lastSeenAt: new Date("2026-03-24T00:05:00.000Z"),
+        resolvedAt: null,
+        updatedAt: new Date("2026-03-24T00:05:00.000Z"),
+      },
+    ],
+    createAuditLog: async (data) => ({
+      id: "audit-1",
+      ...data,
+    } as any),
+    checkDbConnectivity: async () => true,
+    getStartupHealthSnapshot: () => createStartupSnapshot(),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/internal/alerts/history`, {
+      headers: {
+        "x-test-username": "monitor.user",
+        "x-test-role": "admin",
+        "x-test-userid": "monitor-1",
+      },
+    });
+    assert.equal(response.status, 200);
+
+    const payload = await response.json();
+    assert.equal(Array.isArray(payload.incidents), true);
+    assert.equal(payload.incidents.length, 1);
+    assert.equal(payload.incidents[0]?.alertKey, "rollup_queue_warning");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("rollup refresh control routes remain superuser-only and return snapshots", async () => {
+  const app = createJsonTestApp();
+  registerSystemRoutes(app, {
+    authenticateToken: createTestAuthenticateToken({
+      userId: "superuser-1",
+      username: "superuser.user",
+      role: "superuser",
+    }),
+    requireRole: createTestRequireRole(),
+    requireMonitorAccess: allowAll(),
+    getMaintenanceStateCached: async () => ({
+      maintenance: false,
+      message: "",
+      type: "soft",
+      startTime: null,
+      endTime: null,
+    }),
+    computeInternalMonitorSnapshot: () => createMonitorSnapshot() as any,
+    buildInternalMonitorAlerts: () => [],
+    getControlState: () => ({
+      mode: "NORMAL",
+      throttleFactor: 1,
+      rejectHeavyRoutes: false,
+      preAllocateMB: 0,
+      workerCount: 1,
+      maxWorkers: 1,
+      workers: [],
+      circuits: {},
+      predictor: null,
+      queueLength: 0,
+      updatedAt: Date.parse("2026-03-24T00:00:00.000Z"),
+    } as any),
+    getDbProtection: () => false,
+    getRequestRate: () => 0,
+    getLatencyP95: () => 0,
+    getLocalCircuitSnapshots: () => ({
+      ai: {} as any,
+      db: {} as any,
+      export: {} as any,
+    }),
+    getIntelligenceExplainability: () => ({
+      anomalyBreakdown: [],
+      correlationMatrix: [],
+      slopeValues: [],
+      forecastProjection: [],
+      governanceState: {},
+      chosenStrategy: null,
+      decisionReason: "n/a",
+    } as any),
+    injectChaos: () => ({
+      injected: {} as any,
+      active: [],
+    }),
+    getCollectionRollupQueueStatus: async () => createRollupQueueSnapshot({
+      pendingCount: 3,
+      runningCount: 1,
+      retryCount: 1,
+      oldestPendingAgeMs: 12_000,
+    }),
+    drainCollectionRollupQueue: async () => ({
+      ok: true,
+      action: "drain",
+      message: "Drain requested.",
+      snapshot: createRollupQueueSnapshot({
+        pendingCount: 3,
+        runningCount: 1,
+        retryCount: 1,
+        oldestPendingAgeMs: 12_000,
+      }),
+    }),
+    retryCollectionRollupFailures: async () => ({
+      ok: true,
+      action: "retry-failures",
+      message: "Retry requested.",
+      snapshot: createRollupQueueSnapshot({
+        pendingCount: 2,
+        runningCount: 1,
+        retryCount: 0,
+        oldestPendingAgeMs: 9_000,
+      }),
+    }),
+    autoHealCollectionRollupQueue: async () => ({
+      ok: true,
+      action: "auto-heal",
+      message: "Auto-heal requested.",
+      snapshot: createRollupQueueSnapshot({
+        pendingCount: 1,
+        runningCount: 0,
+        retryCount: 0,
+        oldestPendingAgeMs: 1_000,
+      }),
+    }),
+    rebuildCollectionRollups: async () => ({
+      ok: true,
+      action: "rebuild",
+      message: "Rebuild requested.",
+      snapshot: createRollupQueueSnapshot(),
+    }),
+    listMonitorAlertHistory: async () => [],
+    createAuditLog: async (data) => ({
+      id: "audit-1",
+      ...data,
+    } as any),
+    checkDbConnectivity: async () => true,
+    getStartupHealthSnapshot: () => createStartupSnapshot(),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const forbiddenResponse = await fetch(`${baseUrl}/internal/rollup-refresh/drain`, {
+      method: "POST",
+      headers: {
+        "x-test-username": "admin.user",
+        "x-test-role": "admin",
+        "x-test-userid": "admin-1",
+      },
+    });
+    assert.equal(forbiddenResponse.status, 403);
+
+    const statusResponse = await fetch(`${baseUrl}/internal/rollup-refresh/status`, {
+      method: "POST",
+      headers: {
+        "x-test-username": "superuser.user",
+        "x-test-role": "superuser",
+        "x-test-userid": "superuser-1",
+      },
+    });
+    assert.equal(statusResponse.status, 200);
+    const statusPayload = await statusResponse.json();
+    assert.equal(statusPayload.snapshot.pendingCount, 3);
+
+    const rebuildResponse = await fetch(`${baseUrl}/internal/rollup-refresh/rebuild`, {
+      method: "POST",
+      headers: {
+        "x-test-username": "superuser.user",
+        "x-test-role": "superuser",
+        "x-test-userid": "superuser-1",
+      },
+    });
+    assert.equal(rebuildResponse.status, 200);
+    const rebuildPayload = await rebuildResponse.json();
+    assert.equal(rebuildPayload.action, "rebuild");
+    assert.equal(rebuildPayload.snapshot.pendingCount, 0);
   } finally {
     await stopTestServer(server);
   }

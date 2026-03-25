@@ -5,6 +5,7 @@ import { MonitorChaosSection } from "@/components/monitor/MonitorChaosSection";
 import { MonitorInsightsSection } from "@/components/monitor/MonitorInsightsSection";
 import { MonitorMetricsSection } from "@/components/monitor/MonitorMetricsSection";
 import { MonitorOverviewSection } from "@/components/monitor/MonitorOverviewSection";
+import { MonitorRollupQueueControlsSection } from "@/components/monitor/MonitorRollupQueueControlsSection";
 import { MonitorStatusBanners } from "@/components/monitor/MonitorStatusBanners";
 import {
   CHAOS_OPTIONS,
@@ -25,7 +26,14 @@ import {
 } from "@/components/monitor/monitorData";
 import { useSystemMetrics } from "@/hooks/useSystemMetrics";
 import { useToast } from "@/hooks/use-toast";
-import { type ChaosType, injectChaos } from "@/lib/api";
+import {
+  autoHealRollupQueue,
+  drainRollupQueue,
+  type ChaosType,
+  injectChaos,
+  rebuildCollectionRollups,
+  retryRollupFailures,
+} from "@/lib/api";
 
 const MonitorTechnicalChartsSection = lazy(() =>
   import("@/components/monitor/MonitorTechnicalChartsSection").then((module) => ({
@@ -61,8 +69,12 @@ export default function Monitor() {
   const [chaosDurationMs, setChaosDurationMs] = useState(String(CHAOS_OPTIONS[0].defaultDurationMs));
   const [chaosLoading, setChaosLoading] = useState(false);
   const [lastChaosMessage, setLastChaosMessage] = useState<string | null>(null);
+  const [queueActionBusy, setQueueActionBusy] = useState<"drain" | "retry-failures" | "auto-heal" | "rebuild" | null>(null);
+  const [lastQueueActionMessage, setLastQueueActionMessage] = useState<string | null>(null);
   const chaosRequestRef = useRef<AbortController | null>(null);
   const chaosInFlightRef = useRef(false);
+  const queueActionRequestRef = useRef<AbortController | null>(null);
+  const queueActionInFlightRef = useRef(false);
   const mountedRef = useRef(true);
   const { toast } = useToast();
   const {
@@ -70,10 +82,12 @@ export default function Monitor() {
     snapshot,
     history,
     alerts,
+    alertHistory,
     intelligence,
     accessDenied,
     hasNetworkFailure,
     lastUpdated,
+    refreshNow,
   } = useSystemMetrics();
 
   const userRole = useMemo(() => {
@@ -90,6 +104,7 @@ export default function Monitor() {
   }, []);
 
   const canInjectChaos = userRole === "admin" || userRole === "superuser";
+  const canManageRollups = userRole === "superuser";
 
   useEffect(() => {
     mountedRef.current = true;
@@ -98,6 +113,9 @@ export default function Monitor() {
       chaosRequestRef.current?.abort();
       chaosRequestRef.current = null;
       chaosInFlightRef.current = false;
+      queueActionRequestRef.current?.abort();
+      queueActionRequestRef.current = null;
+      queueActionInFlightRef.current = false;
     };
   }, []);
 
@@ -225,6 +243,66 @@ export default function Monitor() {
     }
   }, [canInjectChaos, chaosDurationMs, chaosMagnitude, chaosType, toast]);
 
+  const runRollupAction = useCallback(async (
+    action: "drain" | "retry-failures" | "auto-heal" | "rebuild",
+  ) => {
+    if (!canManageRollups || queueActionInFlightRef.current) return;
+
+    queueActionRequestRef.current?.abort();
+    const controller = new AbortController();
+    queueActionRequestRef.current = controller;
+    queueActionInFlightRef.current = true;
+    setQueueActionBusy(action);
+
+    try {
+      const result = action === "drain"
+        ? await drainRollupQueue({ signal: controller.signal })
+        : action === "retry-failures"
+          ? await retryRollupFailures({ signal: controller.signal })
+          : action === "auto-heal"
+            ? await autoHealRollupQueue({ signal: controller.signal })
+            : await rebuildCollectionRollups({ signal: controller.signal });
+
+      if (controller.signal.aborted || !mountedRef.current) {
+        return;
+      }
+
+      if (result.state === "ok" && result.data?.ok) {
+        const message = result.data.message || "Rollup queue action completed.";
+        setLastQueueActionMessage(message);
+        toast({
+          title: "Rollup queue updated",
+          description: message,
+        });
+        await refreshNow();
+        return;
+      }
+
+      if (result.state === "forbidden" || result.state === "unauthorized") {
+        toast({
+          variant: "destructive",
+          title: "Permission denied",
+          description: "Only superuser can control collection rollup recovery actions.",
+        });
+        return;
+      }
+
+      toast({
+        variant: "destructive",
+        title: "Rollup action failed",
+        description: result.message || "Request failed.",
+      });
+    } finally {
+      if (queueActionRequestRef.current === controller) {
+        queueActionRequestRef.current = null;
+      }
+      queueActionInFlightRef.current = false;
+      if (mountedRef.current) {
+        setQueueActionBusy(null);
+      }
+    }
+  }, [canManageRollups, refreshNow, toast]);
+
   if (accessDenied) {
     return <MonitorAccessDenied />;
   }
@@ -248,10 +326,21 @@ export default function Monitor() {
           rollupFreshnessAgeLabel={rollupFreshnessAgeLabel}
         />
         <MonitorMetricsSection metricGroups={metricGroups} />
+        <MonitorRollupQueueControlsSection
+          canManageRollups={canManageRollups}
+          snapshot={snapshot}
+          busyAction={queueActionBusy}
+          lastMessage={lastQueueActionMessage}
+          onDrain={() => void runRollupAction("drain")}
+          onRetryFailures={() => void runRollupAction("retry-failures")}
+          onAutoHeal={() => void runRollupAction("auto-heal")}
+          onRebuild={() => void runRollupAction("rebuild")}
+        />
         <MonitorAlertsSection
           alertsOpen={alertsOpen}
           onAlertsOpenChange={setAlertsOpen}
           alerts={alerts}
+          alertHistory={alertHistory}
         />
         <MonitorInsightsSection
           intelligence={intelligence}

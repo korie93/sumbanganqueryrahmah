@@ -1833,6 +1833,13 @@ test("PATCH /api/collection/:id rejects a stale rapid second edit and keeps dail
           totalAmount: Math.round((aggregate.totalAmount + Number.EPSILON) * 100) / 100,
         }));
     },
+    getCollectionRecordDailyRollupFreshness: async () => ({
+      status: "fresh" as const,
+      pendingCount: 0,
+      runningCount: 0,
+      retryCount: 0,
+      oldestPendingAgeMs: 0,
+    }),
     listCollectionRecords: async (filters?: {
       from?: string;
       to?: string;

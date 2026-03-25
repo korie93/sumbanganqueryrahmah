@@ -113,6 +113,13 @@
       "when": 1774503000000,
       "tag": "0015_reviewed_collection_record_daily_rollup_refresh_queue",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1774442178361,
+      "tag": "0016_reviewed_monitor_and_monthly_rollups",
+      "breakpoints": true
     }
   ]
 }

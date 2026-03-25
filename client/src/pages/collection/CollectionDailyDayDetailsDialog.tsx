@@ -1,4 +1,5 @@
 import { Eye, Loader2 } from "lucide-react";
+import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -61,6 +62,12 @@ export function CollectionDailyDayDetailsDialog({
         ) : (
           <div className="flex flex-1 flex-col gap-3 overflow-hidden">
             <div className="grid gap-2 rounded-md border border-border/60 bg-background/70 p-3 text-sm md:grid-cols-2 lg:grid-cols-4">
+              <div className="md:col-span-2 lg:col-span-4 flex flex-wrap items-center justify-between gap-2">
+                <div className="text-muted-foreground">
+                  {dayDetails.freshness?.message || "Day details are using the latest available rollups."}
+                </div>
+                <CollectionReportFreshnessBadge freshness={dayDetails.freshness} />
+              </div>
               <div>
                 Status:{" "}
                 <span className={`font-semibold ${statusTextClass(dayDetails.status)}`}>

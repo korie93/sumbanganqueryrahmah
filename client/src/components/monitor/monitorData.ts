@@ -1,6 +1,11 @@
 import type { MetricStatus, MetricTrend } from "@/components/monitor/MetricPanel";
 import type { MonitorHistory, MonitorSnapshot, SeriesPoint } from "@/hooks/useSystemMetrics";
 import type { ChaosType, IntelligenceExplainPayload } from "@/lib/api";
+import {
+  getCollectionRollupFreshnessBadgeClass as getSharedCollectionRollupFreshnessBadgeClass,
+  getCollectionRollupFreshnessStatus as getSharedCollectionRollupFreshnessStatus,
+  type CollectionRollupFreshnessStatus as SharedCollectionRollupFreshnessStatus,
+} from "@/lib/collection-rollup-freshness";
 
 export type ChaosOption = {
   type: ChaosType;
@@ -55,7 +60,7 @@ export type SlopeRow = {
   value: number;
 };
 
-export type RollupFreshnessStatus = "fresh" | "warming" | "stale";
+export type RollupFreshnessStatus = SharedCollectionRollupFreshnessStatus;
 
 export const CHAOS_OPTIONS: ChaosOption[] = [
   {
@@ -156,28 +161,15 @@ export const getRollupFreshnessStatus = (snapshot: Pick<
   MonitorSnapshot,
   "rollupRefreshPendingCount" | "rollupRefreshRetryCount" | "rollupRefreshOldestPendingAgeMs"
 >): RollupFreshnessStatus => {
-  if (
-    snapshot.rollupRefreshRetryCount > 0 ||
-    snapshot.rollupRefreshOldestPendingAgeMs >= 120_000 ||
-    snapshot.rollupRefreshPendingCount >= 15
-  ) {
-    return "stale";
-  }
-
-  if (
-    snapshot.rollupRefreshPendingCount > 0 ||
-    snapshot.rollupRefreshOldestPendingAgeMs >= 30_000
-  ) {
-    return "warming";
-  }
-
-  return "fresh";
+  return getSharedCollectionRollupFreshnessStatus({
+    pendingCount: snapshot.rollupRefreshPendingCount,
+    retryCount: snapshot.rollupRefreshRetryCount,
+    oldestPendingAgeMs: snapshot.rollupRefreshOldestPendingAgeMs,
+  });
 };
 
 export const getRollupFreshnessBadgeClass = (status: RollupFreshnessStatus) => {
-  if (status === "fresh") return "border-emerald-500/30 bg-emerald-500/15 text-emerald-500";
-  if (status === "warming") return "border-amber-500/30 bg-amber-500/15 text-amber-500";
-  return "border-red-500/30 bg-red-500/15 text-red-500";
+  return getSharedCollectionRollupFreshnessBadgeClass(status);
 };
 
 export const formatMonitorDurationCompact = (durationMs: number) => {

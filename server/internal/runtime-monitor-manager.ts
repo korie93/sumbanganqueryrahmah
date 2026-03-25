@@ -103,6 +103,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
   let rollupRefreshSnapshot = {
     ...EMPTY_ROLLUP_REFRESH_SNAPSHOT,
   };
+  let alertHistorySyncInFlight = false;
 
   const intelligenceHistory: SystemHistory = {
     cpuPercent: [],
@@ -429,6 +430,25 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     }
   }
 
+  async function syncAlertHistoryIfNeeded(): Promise<void> {
+    if (!options.syncAlertHistory || alertHistorySyncInFlight) {
+      return;
+    }
+
+    alertHistorySyncInFlight = true;
+    try {
+      const snapshot = computeInternalMonitorSnapshot();
+      const alerts = buildInternalMonitorAlerts(snapshot);
+      await options.syncAlertHistory(snapshot, alerts, new Date());
+    } catch (err) {
+      if (options.apiDebugLogs) {
+        logger.warn("Monitor alert history sync failed", { error: err });
+      }
+    } finally {
+      alertHistorySyncInFlight = false;
+    }
+  }
+
   function getRequestRate(): number {
     return reqRatePerSec;
   }
@@ -570,11 +590,13 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
       }
 
       void refreshCollectionRollupRefreshQueueSnapshot();
+      void syncAlertHistoryIfNeeded();
       void runIntelligenceCycle();
     }, 5_000);
 
     runtimeLoopHandle.unref();
     void refreshCollectionRollupRefreshQueueSnapshot();
+    void syncAlertHistoryIfNeeded();
     void runIntelligenceCycle();
   }
 

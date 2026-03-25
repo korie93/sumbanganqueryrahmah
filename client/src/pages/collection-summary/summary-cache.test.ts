@@ -34,13 +34,13 @@ test("buildCollectionSummaryCacheKey normalizes nickname casing and order", () =
 test("createCollectionSummaryCache evicts least-recently-used entries", () => {
   const cache = createCollectionSummaryCache(2);
 
-  cache.set("2026-a", { summaryRows: [{ month: 1 } as any] });
-  cache.set("2026-b", { summaryRows: [{ month: 2 } as any] });
+  cache.set("2026-a", { summaryRows: [{ month: 1 } as any], freshness: null });
+  cache.set("2026-b", { summaryRows: [{ month: 2 } as any], freshness: null });
   assert.equal(cache.size(), 2);
 
   assert.equal(cache.get("2026-a")?.summaryRows[0]?.month, 1);
 
-  cache.set("2026-c", { summaryRows: [{ month: 3 } as any] });
+  cache.set("2026-c", { summaryRows: [{ month: 3 } as any], freshness: null });
 
   assert.equal(cache.get("2026-b"), null);
   assert.equal(cache.get("2026-a")?.summaryRows[0]?.month, 1);
@@ -50,8 +50,8 @@ test("createCollectionSummaryCache evicts least-recently-used entries", () => {
 test("createCollectionSummaryCache clear removes cached summary rows", () => {
   const cache = createCollectionSummaryCache(3);
 
-  cache.set("2026-a", { summaryRows: [{ month: 1 } as any] });
-  cache.set("2026-b", { summaryRows: [{ month: 2 } as any] });
+  cache.set("2026-a", { summaryRows: [{ month: 1 } as any], freshness: null });
+  cache.set("2026-b", { summaryRows: [{ month: 2 } as any], freshness: null });
   cache.clear();
 
   assert.equal(cache.size(), 0);

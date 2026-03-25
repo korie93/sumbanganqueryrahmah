@@ -16,6 +16,7 @@ import { AuditRepository } from "../repositories/audit.repository";
 import { BackupJobRepository } from "../repositories/backup-job.repository";
 import { BackupsRepository } from "../repositories/backups.repository";
 import { ImportsRepository } from "../repositories/imports.repository";
+import { MonitorAlertHistoryRepository } from "../repositories/monitor-alert-history.repository";
 import { SearchRepository } from "../repositories/search.repository";
 import { createAiController } from "../controllers/ai.controller";
 import { registerActivityRoutes } from "../routes/activity.routes";
@@ -36,6 +37,7 @@ import { AuditLogOperationsService } from "../services/audit-log-operations.serv
 import { BackupJobQueueService } from "../services/backup-job-queue.service";
 import { BackupOperationsService } from "../services/backup-operations.service";
 import { CategoryStatsService } from "../services/category-stats.service";
+import { CollectionRollupOperationsService } from "../services/collection-rollup-operations.service";
 import { CollectionRollupRefreshQueueService } from "../services/collection-rollup-refresh-queue.service";
 import { ImportAnalysisService } from "../services/import-analysis.service";
 import { ImportsService } from "../services/imports.service";
@@ -260,6 +262,11 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
   void collectionRollupRefreshQueueService.start().catch((error) => {
     logger.error("Failed to start collection rollup refresh queue", { error });
   });
+  const collectionRollupOperationsService = new CollectionRollupOperationsService({
+    ensureReady: () => storage.ensureCollectionRecordsReady(),
+    queueService: collectionRollupRefreshQueueService,
+  });
+  const monitorAlertHistoryRepository = new MonitorAlertHistoryRepository();
 
   registerSystemRoutes(app, {
     authenticateToken,
@@ -275,6 +282,12 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     getLocalCircuitSnapshots,
     getIntelligenceExplainability,
     injectChaos,
+    getCollectionRollupQueueStatus: () => collectionRollupOperationsService.getStatus(),
+    drainCollectionRollupQueue: () => collectionRollupOperationsService.drainQueueNow(),
+    retryCollectionRollupFailures: () => collectionRollupOperationsService.retryFailedSlices(),
+    autoHealCollectionRollupQueue: () => collectionRollupOperationsService.autoHealRunningSlices(),
+    rebuildCollectionRollups: () => collectionRollupOperationsService.rebuildAllRollups(),
+    listMonitorAlertHistory: () => monitorAlertHistoryRepository.listRecent(),
     createAuditLog: (data) => storage.createAuditLog(data),
     checkDbConnectivity: async () => {
       try {

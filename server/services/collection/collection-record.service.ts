@@ -18,6 +18,7 @@ import {
 } from "./collection-record-runtime-utils";
 import { CollectionRecordMutationOperations } from "./collection-record-mutation-operations";
 import { CollectionDailyOperations } from "./collection-daily-operations";
+import { getCollectionReportFreshness } from "./collection-report-freshness";
 
 export class CollectionRecordService extends CollectionServiceSupport {
   private static readonly NICKNAME_SUMMARY_RECORD_LIMIT = 250;
@@ -96,7 +97,14 @@ export class CollectionRecordService extends CollectionServiceSupport {
         }
         nicknameFilters = requestedNicknameFilters;
       } else if (allowedNicknames.length === 0) {
-        return this.buildEmptySummary(parsedYear);
+        const emptySummary = this.buildEmptySummary(parsedYear);
+        return {
+          ...emptySummary,
+          freshness: await getCollectionReportFreshness(this.storage, {
+            from: `${parsedYear}-01-01`,
+            to: `${parsedYear}-12-31`,
+          }),
+        };
       } else {
         nicknameFilters = allowedNicknames;
       }
@@ -107,11 +115,18 @@ export class CollectionRecordService extends CollectionServiceSupport {
       nicknames: user.role === "user" ? userOwnedRecordFilters.nicknames : nicknameFilters,
       createdByLogin: user.role === "user" ? userOwnedRecordFilters.createdByLogin : undefined,
     });
+    const freshness = await getCollectionReportFreshness(this.storage, {
+      from: `${parsedYear}-01-01`,
+      to: `${parsedYear}-12-31`,
+      createdByLogin: user.role === "user" ? userOwnedRecordFilters.createdByLogin : undefined,
+      nicknames: user.role === "user" ? userOwnedRecordFilters.nicknames : nicknameFilters,
+    });
 
     return {
       ok: true as const,
       year: parsedYear,
       summary,
+      freshness,
     };
   }
 
@@ -236,6 +251,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
         totalAmount: 0,
         nicknameTotals: [],
         records: [],
+        freshness: await getCollectionReportFreshness(this.storage),
       };
     }
 
@@ -298,6 +314,11 @@ export class CollectionRecordService extends CollectionServiceSupport {
           limit: recordLimit,
           offset: recordOffset,
         });
+    const freshness = await getCollectionReportFreshness(this.storage, {
+      from: from || undefined,
+      to: to || undefined,
+      nicknames: nicknameFilters,
+    });
 
     return {
       ok: true as const,
@@ -306,6 +327,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
       totalAmount: totals.totalAmount,
       nicknameTotals,
       records,
+      freshness,
     };
   }
 

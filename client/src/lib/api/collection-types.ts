@@ -116,6 +116,15 @@ export type CollectionMonthlySummary = {
   totalAmount: number;
 };
 
+export type CollectionReportFreshness = {
+  status: "fresh" | "warming" | "stale";
+  pendingCount: number;
+  runningCount: number;
+  retryCount: number;
+  oldestPendingAgeMs: number;
+  message: string;
+};
+
 export type CollectionDailyUser = {
   id: string;
   username: string;
@@ -170,6 +179,7 @@ export type CollectionDailyOverviewResponse = {
   };
   days: CollectionDailyOverviewDay[];
   carryForwardRule?: string;
+  freshness?: CollectionReportFreshness;
 };
 
 export type CollectionDailyDayDetailsResponse = {
@@ -224,6 +234,7 @@ export type CollectionDailyDayDetailsResponse = {
       createdAt: string;
     }>;
   }>;
+  freshness?: CollectionReportFreshness;
 };
 
 export type CollectionNicknameAuthCheckResult = {

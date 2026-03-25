@@ -7,6 +7,7 @@ import { pool } from "../db-postgres";
 import { evaluateSystem } from "../intelligence";
 import { logger } from "../lib/logger";
 import { getCollectionRecordDailyRollupRefreshQueueSnapshot } from "../repositories/collection-record-repository-utils";
+import { MonitorAlertHistoryRepository } from "../repositories/monitor-alert-history.repository";
 import { PostgresStorage } from "../storage-postgres";
 import { createAiConcurrencyGate } from "./aiConcurrencyGate";
 import { createApiProtectionMiddleware } from "./apiProtection";
@@ -58,6 +59,9 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     aiLatencyDecayHalfLifeMs: runtimeConfig.ai.latency.decayHalfLifeMs,
     getSearchQueueLength: () => getSearchQueueLength(),
     getCollectionRollupRefreshQueueSnapshot: () => getCollectionRecordDailyRollupRefreshQueueSnapshot(),
+    syncAlertHistory: async (_snapshot, alerts, observedAt) => {
+      await new MonitorAlertHistoryRepository().syncCurrentAlerts(alerts, observedAt);
+    },
     evaluateSystem,
   });
   const {
