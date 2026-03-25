@@ -16,6 +16,29 @@ type CategoryStatRow = {
   updatedAt: Date | null;
 };
 
+function parseJsonObject(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : {};
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
+function buildTextInList(values: string[]) {
+  return sql.join(values.map((value) => sql`${value}`), sql`, `);
+}
+
 function normalizeRuleArray(value: any): string[] {
   if (Array.isArray(value)) {
     return value.map((entry) => String(entry)).filter((entry) => entry.trim().length > 0);
@@ -125,7 +148,7 @@ export class AiCategoryRepository {
       if (matchMode === "complement") continue;
 
       if (terms.length === 0 || fields.length === 0) {
-        countSqls.push(sql`0::int as "${sql.raw(group.key)}"`);
+        countSqls.push(sql`jsonb_build_object(${group.key}, 0::int)`);
         continue;
       }
 
@@ -152,7 +175,7 @@ export class AiCategoryRepository {
           );
 
       matchSqlByKey.set(group.key, termSql);
-      countSqls.push(sql`COUNT(*) FILTER (WHERE (${termSql}))::int as "${sql.raw(group.key)}"`);
+      countSqls.push(sql`jsonb_build_object(${group.key}, COUNT(*) FILTER (WHERE (${termSql}))::int)`);
     }
 
     const complementGroups = groups.filter((group) => String(group.matchMode || "").toLowerCase() === "complement");
@@ -160,20 +183,20 @@ export class AiCategoryRepository {
       if (matchSqlByKey.size > 0) {
         const combined = sql.join(Array.from(matchSqlByKey.values()).map((value) => sql`(${value})`), sql` OR `);
         for (const group of complementGroups) {
-          countSqls.push(sql`COUNT(*) FILTER (WHERE NOT (${combined}))::int as "${sql.raw(group.key)}"`);
+          countSqls.push(sql`jsonb_build_object(${group.key}, COUNT(*) FILTER (WHERE NOT (${combined}))::int)`);
         }
       } else {
         for (const group of complementGroups) {
-          countSqls.push(sql`COUNT(*)::int as "${sql.raw(group.key)}"`);
+          countSqls.push(sql`jsonb_build_object(${group.key}, COUNT(*)::int)`);
         }
       }
     }
 
-    const selectParts = countSqls.length > 0 ? sql.join(countSqls, sql`, `) : sql``;
+    const selectParts = countSqls.length > 0 ? sql.join(countSqls, sql` || `) : sql`'{}'::jsonb`;
     const result = await db.execute(sql`
       SELECT
         COUNT(*)::int as "total",
-        ${selectParts}
+        (${selectParts}) as "counts"
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id
       WHERE i.is_deleted = false
@@ -181,10 +204,11 @@ export class AiCategoryRepository {
 
     const row = (result.rows as any[])[0] || {};
     const totalRows = Number(row.total ?? 0);
+    const countsRecord = parseJsonObject(row.counts);
     const counts: Record<string, number> = {};
 
     for (const group of groups) {
-      counts[group.key] = Number(row[group.key] ?? 0);
+      counts[group.key] = Number(countsRecord[group.key] ?? 0);
     }
 
     return { totalRows, counts };
@@ -224,11 +248,10 @@ export class AiCategoryRepository {
   async getCategoryStats(keys: string[]): Promise<CategoryStatRow[]> {
     if (!keys.length) return [];
 
-    const quoted = keys.map((key) => `'${key.replace(/'/g, "''")}'`).join(",");
     const result = await db.execute(sql`
       SELECT key, total, samples, updated_at
       FROM public.ai_category_stats
-      WHERE key IN (${sql.raw(quoted)})
+      WHERE key IN (${buildTextInList(keys)})
     `);
 
     return (result.rows as any[]).map((row) => ({

@@ -12,6 +12,10 @@ import {
 
 const TRUTHY_SETTING_VALUES = new Set(["true", "1", "yes", "on"]);
 
+function buildTextInList(values: string[]) {
+  return sql.join(values.map((value) => sql`${value}`), sql`, `);
+}
+
 export class SettingsRepository {
   private parseSettingType(raw: unknown): SettingInputType {
     const normalized = String(raw || "text").toLowerCase();
@@ -140,11 +144,10 @@ export class SettingsRepository {
     const optionsMap = new Map<string, SettingsOption[]>();
 
     if (settingIds.length > 0) {
-      const quoted = settingIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
       const optionsRows = await db.execute(sql`
         SELECT DISTINCT ON (setting_id, value) setting_id, value, label
         FROM public.setting_options
-        WHERE setting_id IN (${sql.raw(quoted)})
+        WHERE setting_id IN (${buildTextInList(settingIds)})
         ORDER BY setting_id, value, label
       `);
 
@@ -244,11 +247,10 @@ export class SettingsRepository {
       return visibility;
     }
 
-    const keyList = keys.map((key) => `'${key.replace(/'/g, "''")}'`).join(",");
     const rows = await db.execute(sql`
       SELECT key, value
       FROM public.system_settings
-      WHERE key IN (${sql.raw(keyList)})
+      WHERE key IN (${buildTextInList(keys)})
     `);
 
     const pageIdByKey = new Map<string, string>();
