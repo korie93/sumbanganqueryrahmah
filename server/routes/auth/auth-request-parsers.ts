@@ -43,6 +43,36 @@ export function readPasswordChangeBody(bodyRaw: unknown) {
   };
 }
 
+export function readTwoFactorChallengeBody(bodyRaw: unknown) {
+  const body = ensureObject(bodyRaw) || {};
+  return {
+    challengeToken: String(body.challengeToken ?? ""),
+    code: String(body.code ?? ""),
+  };
+}
+
+export function readTwoFactorSetupBody(bodyRaw: unknown) {
+  const body = ensureObject(bodyRaw) || {};
+  return {
+    currentPassword: String(body.currentPassword ?? ""),
+  };
+}
+
+export function readTwoFactorCodeBody(bodyRaw: unknown) {
+  const body = ensureObject(bodyRaw) || {};
+  return {
+    code: String(body.code ?? ""),
+  };
+}
+
+export function readTwoFactorDisableBody(bodyRaw: unknown) {
+  const body = ensureObject(bodyRaw) || {};
+  return {
+    currentPassword: String(body.currentPassword ?? ""),
+    code: String(body.code ?? ""),
+  };
+}
+
 export function readOwnCredentialPatchBody(bodyRaw: unknown) {
   const body = ensureObject(bodyRaw) || {};
   return {

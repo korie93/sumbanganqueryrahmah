@@ -307,6 +307,9 @@ type CategoryRule = {
     passwordChangedAt?: Date | null;
     activatedAt?: Date | null;
     lastLoginAt?: Date | null;
+    twoFactorEnabled?: boolean;
+    twoFactorSecretEncrypted?: string | null;
+    twoFactorConfiguredAt?: Date | null;
   }): Promise<User | undefined>;
   getUsersByRoles(roles: string[]): Promise<Array<{
     id: string;
@@ -724,7 +727,15 @@ type CategoryRule = {
   getBackupDataForExport(): Promise<{
     imports: Import[];
     dataRows: DataRow[];
-    users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash?: string }>;
+    users: Array<{
+      username: string;
+      role: string;
+      isBanned: boolean | null;
+      passwordHash?: string;
+      twoFactorEnabled?: boolean;
+      twoFactorSecretEncrypted?: string | null;
+      twoFactorConfiguredAt?: string | Date | null;
+    }>;
     auditLogs: AuditLog[];
     collectionRecords?: Array<{
       id: string;
@@ -755,7 +766,15 @@ type CategoryRule = {
   restoreFromBackup(backupData: {
     imports: Import[];
     dataRows: DataRow[];
-    users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash?: string }>;
+    users: Array<{
+      username: string;
+      role: string;
+      isBanned: boolean | null;
+      passwordHash?: string;
+      twoFactorEnabled?: boolean;
+      twoFactorSecretEncrypted?: string | null;
+      twoFactorConfiguredAt?: string | Date | null;
+    }>;
     auditLogs: AuditLog[];
     collectionRecords?: Array<{
       id: string;

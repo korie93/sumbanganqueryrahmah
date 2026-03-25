@@ -42,6 +42,8 @@ export interface AccountSecuritySectionProps {
   managedUsersPagination: ManagedUsersPaginationState;
   managedUsersQuery: ManagedUsersQueryState;
   newPasswordInput: string;
+  onDisableTwoFactor: () => void;
+  onEnableTwoFactor: () => void;
   onChangePassword: () => void;
   onChangeUsername: () => void;
   onClearDevMailOutbox: () => void;
@@ -63,6 +65,9 @@ export interface AccountSecuritySectionProps {
   onManagedUsersRefresh: () => void;
   onManagedUsersQueryChange: (query: Partial<ManagedUsersQueryState>) => void;
   onNewPasswordInputChange: (value: string) => void;
+  onStartTwoFactorSetup: () => void;
+  onTwoFactorCodeInputChange: (value: string) => void;
+  onTwoFactorPasswordInputChange: (value: string) => void;
   onPendingResetRequestsRefresh: () => void;
   onPendingResetRequestsQueryChange: (query: Partial<PendingResetRequestsQueryState>) => void;
   onUsernameInputChange: (value: string) => void;
@@ -71,6 +76,15 @@ export interface AccountSecuritySectionProps {
   pendingResetRequestsLoading: boolean;
   pendingResetRequestsPagination: PendingResetRequestsPaginationState;
   pendingResetRequestsQuery: PendingResetRequestsQueryState;
+  twoFactorCodeInput: string;
+  twoFactorEnabled: boolean;
+  twoFactorLoading: boolean;
+  twoFactorPasswordInput: string;
+  twoFactorPendingSetup: boolean;
+  twoFactorSetupAccountName: string;
+  twoFactorSetupIssuer: string;
+  twoFactorSetupSecret: string;
+  twoFactorSetupUri: string;
   usernameInput: string;
   usernameSaving: boolean;
   showAccountManagement?: boolean;
@@ -84,13 +98,27 @@ export function AccountSecuritySection(props: AccountSecuritySectionProps) {
         currentPasswordInput={props.currentPasswordInput}
         currentUserRole={props.currentUserRole}
         newPasswordInput={props.newPasswordInput}
+        onDisableTwoFactor={props.onDisableTwoFactor}
+        onEnableTwoFactor={props.onEnableTwoFactor}
         onChangePassword={props.onChangePassword}
         onChangeUsername={props.onChangeUsername}
         onConfirmPasswordInputChange={props.onConfirmPasswordInputChange}
         onCurrentPasswordInputChange={props.onCurrentPasswordInputChange}
         onNewPasswordInputChange={props.onNewPasswordInputChange}
+        onStartTwoFactorSetup={props.onStartTwoFactorSetup}
+        onTwoFactorCodeInputChange={props.onTwoFactorCodeInputChange}
+        onTwoFactorPasswordInputChange={props.onTwoFactorPasswordInputChange}
         onUsernameInputChange={props.onUsernameInputChange}
         passwordSaving={props.passwordSaving}
+        twoFactorCodeInput={props.twoFactorCodeInput}
+        twoFactorEnabled={props.twoFactorEnabled}
+        twoFactorLoading={props.twoFactorLoading}
+        twoFactorPasswordInput={props.twoFactorPasswordInput}
+        twoFactorPendingSetup={props.twoFactorPendingSetup}
+        twoFactorSetupAccountName={props.twoFactorSetupAccountName}
+        twoFactorSetupIssuer={props.twoFactorSetupIssuer}
+        twoFactorSetupSecret={props.twoFactorSetupSecret}
+        twoFactorSetupUri={props.twoFactorSetupUri}
         usernameInput={props.usernameInput}
         usernameSaving={props.usernameSaving}
       />

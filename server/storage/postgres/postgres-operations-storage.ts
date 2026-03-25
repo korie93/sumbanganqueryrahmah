@@ -57,7 +57,15 @@ export class PostgresOperationsStorage extends PostgresCollectionStorage {
   async getBackupDataForExport(): Promise<{
     imports: Import[];
     dataRows: DataRow[];
-    users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash?: string }>;
+    users: Array<{
+      username: string;
+      role: string;
+      isBanned: boolean | null;
+      passwordHash?: string;
+      twoFactorEnabled?: boolean;
+      twoFactorSecretEncrypted?: string | null;
+      twoFactorConfiguredAt?: string | Date | null;
+    }>;
     auditLogs: AuditLog[];
     collectionRecords?: Array<{
       id: string;
@@ -91,7 +99,15 @@ export class PostgresOperationsStorage extends PostgresCollectionStorage {
   async restoreFromBackup(backupData: {
     imports: Import[];
     dataRows: DataRow[];
-    users: Array<{ username: string; role: string; isBanned: boolean | null; passwordHash?: string }>;
+    users: Array<{
+      username: string;
+      role: string;
+      isBanned: boolean | null;
+      passwordHash?: string;
+      twoFactorEnabled?: boolean;
+      twoFactorSecretEncrypted?: string | null;
+      twoFactorConfiguredAt?: string | Date | null;
+    }>;
     auditLogs: AuditLog[];
     collectionRecords?: Array<{
       id: string;

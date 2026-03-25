@@ -36,6 +36,9 @@ export const users = pgTable("users", {
   activatedAt: timestamp("activated_at"),
   lastLoginAt: timestamp("last_login_at"),
   isBanned: boolean("is_banned").default(false),
+  twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
+  twoFactorSecretEncrypted: text("two_factor_secret_encrypted"),
+  twoFactorConfiguredAt: timestamp("two_factor_configured_at"),
 }, (table) => ({
   usernameLowerUnique: uniqueIndex("idx_users_username_lower_unique").using(
     "btree",
@@ -50,6 +53,7 @@ export const users = pgTable("users", {
   mustChangePasswordIdx: index("idx_users_must_change_password").on(table.mustChangePassword),
   createdByIdx: index("idx_users_created_by").on(table.createdBy),
   passwordResetBySuperuserIdx: index("idx_users_password_reset_by_superuser").on(table.passwordResetBySuperuser),
+  twoFactorEnabledIdx: index("idx_users_two_factor_enabled").on(table.twoFactorEnabled),
   emailLowerUnique: uniqueIndex("idx_users_email_lower_unique")
     .using("btree", sql`lower(${table.email})`)
     .where(sql`${table.email} IS NOT NULL AND trim(${table.email}) <> ''`),

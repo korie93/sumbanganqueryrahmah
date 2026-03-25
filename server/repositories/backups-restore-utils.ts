@@ -124,6 +124,9 @@ export async function getBackupDataForExport(): Promise<BackupDataPayload> {
       role: user.role,
       isBanned: user.isBanned,
       passwordHash: user.passwordHash,
+      twoFactorEnabled: user.twoFactorEnabled ?? false,
+      twoFactorSecretEncrypted: user.twoFactorSecretEncrypted ?? null,
+      twoFactorConfiguredAt: user.twoFactorConfiguredAt ?? null,
     })) as BackupUserRecord[],
     auditLogs: allAuditLogs as AuditLog[],
     collectionRecords,
@@ -202,6 +205,9 @@ export async function restoreFromBackup(backupDataRaw: BackupDataPayload): Promi
           updatedAt: now,
           passwordChangedAt: now,
           isBanned: user.isBanned ?? false,
+          twoFactorEnabled: user.twoFactorEnabled === true,
+          twoFactorSecretEncrypted: user.twoFactorSecretEncrypted ?? null,
+          twoFactorConfiguredAt: toDate(user.twoFactorConfiguredAt) ?? null,
         }))
         .filter((user) => user.username !== "");
       stats.users.processed += rows.length;

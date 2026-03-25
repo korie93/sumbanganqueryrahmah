@@ -92,6 +92,13 @@
       "when": 1774401324182,
       "tag": "0012_reviewed_users_table",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1774413000000,
+      "tag": "0013_reviewed_users_two_factor",
+      "breakpoints": true
     }
   ]
 }

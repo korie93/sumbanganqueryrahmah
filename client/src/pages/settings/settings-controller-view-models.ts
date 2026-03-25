@@ -33,6 +33,8 @@ type SecurityViewModelArgs = {
   managedUsersPagination: ManagedUsersPaginationState;
   managedUsersQuery: ManagedUsersQueryState;
   newPasswordInput: string;
+  onDisableTwoFactor: () => void;
+  onEnableTwoFactor: () => void;
   onChangePassword: () => void;
   onChangeUsername: () => void;
   onClearDevMailOutbox: () => void;
@@ -54,6 +56,9 @@ type SecurityViewModelArgs = {
   onManagedUsersRefresh: () => void;
   onManagedUsersQueryChange: (query: Partial<ManagedUsersQueryState>) => void;
   onNewPasswordInputChange: (value: string) => void;
+  onStartTwoFactorSetup: () => void;
+  onTwoFactorCodeInputChange: (value: string) => void;
+  onTwoFactorPasswordInputChange: (value: string) => void;
   onPendingResetRequestsRefresh: () => void;
   onPendingResetRequestsQueryChange: (query: Partial<PendingResetRequestsQueryState>) => void;
   onUsernameInputChange: (value: string) => void;
@@ -62,6 +67,15 @@ type SecurityViewModelArgs = {
   pendingResetRequestsLoading: boolean;
   pendingResetRequestsPagination: PendingResetRequestsPaginationState;
   pendingResetRequestsQuery: PendingResetRequestsQueryState;
+  twoFactorCodeInput: string;
+  twoFactorEnabled: boolean;
+  twoFactorLoading: boolean;
+  twoFactorPasswordInput: string;
+  twoFactorPendingSetup: boolean;
+  twoFactorSetupAccountName: string;
+  twoFactorSetupIssuer: string;
+  twoFactorSetupSecret: string;
+  twoFactorSetupUri: string;
   usernameInput: string;
   usernameSaving: boolean;
 };
@@ -119,6 +133,8 @@ export function buildSettingsSecurityViewModel(
     managedUsersPagination: args.managedUsersPagination,
     managedUsersQuery: args.managedUsersQuery,
     newPasswordInput: args.newPasswordInput,
+    onDisableTwoFactor: args.onDisableTwoFactor,
+    onEnableTwoFactor: args.onEnableTwoFactor,
     onChangePassword: args.onChangePassword,
     onChangeUsername: args.onChangeUsername,
     onClearDevMailOutbox: args.onClearDevMailOutbox,
@@ -140,6 +156,9 @@ export function buildSettingsSecurityViewModel(
     onManagedUsersRefresh: args.onManagedUsersRefresh,
     onManagedUsersQueryChange: args.onManagedUsersQueryChange,
     onNewPasswordInputChange: args.onNewPasswordInputChange,
+    onStartTwoFactorSetup: args.onStartTwoFactorSetup,
+    onTwoFactorCodeInputChange: args.onTwoFactorCodeInputChange,
+    onTwoFactorPasswordInputChange: args.onTwoFactorPasswordInputChange,
     onPendingResetRequestsRefresh: args.onPendingResetRequestsRefresh,
     onPendingResetRequestsQueryChange: args.onPendingResetRequestsQueryChange,
     onUsernameInputChange: args.onUsernameInputChange,
@@ -148,6 +167,15 @@ export function buildSettingsSecurityViewModel(
     pendingResetRequestsLoading: args.pendingResetRequestsLoading,
     pendingResetRequestsPagination: args.pendingResetRequestsPagination,
     pendingResetRequestsQuery: args.pendingResetRequestsQuery,
+    twoFactorCodeInput: args.twoFactorCodeInput,
+    twoFactorEnabled: args.twoFactorEnabled,
+    twoFactorLoading: args.twoFactorLoading,
+    twoFactorPasswordInput: args.twoFactorPasswordInput,
+    twoFactorPendingSetup: args.twoFactorPendingSetup,
+    twoFactorSetupAccountName: args.twoFactorSetupAccountName,
+    twoFactorSetupIssuer: args.twoFactorSetupIssuer,
+    twoFactorSetupSecret: args.twoFactorSetupSecret,
+    twoFactorSetupUri: args.twoFactorSetupUri,
     usernameInput: args.usernameInput,
     usernameSaving: args.usernameSaving,
   };

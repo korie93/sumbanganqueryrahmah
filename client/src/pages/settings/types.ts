@@ -38,6 +38,9 @@ export type CurrentUser = {
   mustChangePassword: boolean;
   passwordResetBySuperuser?: boolean;
   isBanned?: boolean | null;
+  twoFactorEnabled?: boolean;
+  twoFactorPendingSetup?: boolean;
+  twoFactorConfiguredAt?: string | null;
 };
 
 export type ManagedUser = {

@@ -53,6 +53,9 @@ export type AuthRouteContext = {
     mustChangePassword: boolean | null;
     passwordResetBySuperuser: boolean | null;
     isBanned: boolean | null;
+    twoFactorEnabled: boolean | null;
+    twoFactorPendingSetup: boolean | null;
+    twoFactorConfiguredAt: Date | null;
     activatedAt: Date | null;
     passwordChangedAt: Date | null;
     lastLoginAt: Date | null;
@@ -63,7 +66,28 @@ export type AuthRouteContext = {
   ) => Record<string, unknown>;
   buildOkPayload: <T extends Record<string, unknown>>(payload: T) => T & { ok: true };
   signSessionToken: (payload: { userId: string; username: string; role: string; activityId: string }, res?: Response | null) => string;
-    parseBrowserName: (browserHeader: string | string[] | null | undefined, userAgentHeader: string | string[] | undefined) => string;
+  signTwoFactorChallengeToken: (payload: {
+    userId: string;
+    username: string;
+    role: string;
+    fingerprint?: string | null;
+    browserName: string;
+    pcName?: string | null;
+    ipAddress?: string | null;
+  }) => string;
+  verifyTwoFactorChallengeToken: (token: string) => {
+    purpose: "two_factor_login";
+    userId: string;
+    username: string;
+    role: string;
+    fingerprint?: string | null;
+    browserName: string;
+    pcName?: string | null;
+    ipAddress?: string | null;
+    iat?: number;
+    exp?: number;
+  };
+  parseBrowserName: (browserHeader: string | string[] | null | undefined, userAgentHeader: string | string[] | undefined) => string;
 };
 
 function buildManagedUserPayload(user: Awaited<ReturnType<PostgresStorage["getManagedUsers"]>>[number]) {
@@ -98,6 +122,9 @@ function buildUserPayload(user: Awaited<ReturnType<PostgresStorage["getUser"]>>)
     mustChangePassword: user.mustChangePassword,
     passwordResetBySuperuser: user.passwordResetBySuperuser,
     isBanned: user.isBanned,
+    twoFactorEnabled: user.twoFactorEnabled,
+    twoFactorPendingSetup: Boolean(user.twoFactorSecretEncrypted) && user.twoFactorEnabled !== true,
+    twoFactorConfiguredAt: user.twoFactorConfiguredAt,
     activatedAt: user.activatedAt,
     passwordChangedAt: user.passwordChangedAt,
     lastLoginAt: user.lastLoginAt,
@@ -191,6 +218,62 @@ export function createAuthRouteContext(app: Express, deps: AuthRouteDeps): AuthR
         setAuthSessionCookie(res, token);
       }
       return token;
+    },
+    signTwoFactorChallengeToken(payload) {
+      return jwt.sign(
+        {
+          ...payload,
+          purpose: "two_factor_login",
+        },
+        runtimeConfig.auth.sessionSecret,
+        {
+          algorithm: "HS256",
+          expiresIn: "5m",
+        },
+      );
+    },
+    verifyTwoFactorChallengeToken(token) {
+      const decoded = jwt.verify(token, runtimeConfig.auth.sessionSecret, {
+        algorithms: ["HS256"],
+      }) as {
+        purpose?: string;
+        userId?: string;
+        username?: string;
+        role?: string;
+        fingerprint?: string | null;
+        browserName?: string;
+        pcName?: string | null;
+        ipAddress?: string | null;
+        iat?: number;
+        exp?: number;
+      };
+
+      if (
+        decoded.purpose !== "two_factor_login"
+        || !decoded.userId
+        || !decoded.username
+        || !decoded.role
+        || !decoded.browserName
+      ) {
+        throw new AuthAccountError(
+          401,
+          "TWO_FACTOR_CHALLENGE_INVALID",
+          "Two-factor login challenge is invalid or expired.",
+        );
+      }
+
+      return {
+        purpose: "two_factor_login" as const,
+        userId: decoded.userId,
+        username: decoded.username,
+        role: decoded.role,
+        fingerprint: decoded.fingerprint ?? null,
+        browserName: decoded.browserName,
+        pcName: decoded.pcName ?? null,
+        ipAddress: decoded.ipAddress ?? null,
+        iat: decoded.iat,
+        exp: decoded.exp,
+      };
     },
     parseBrowserName(browserHeader, userAgentHeader) {
       const firstHeaderValue = (value: string | string[] | null | undefined) =>
