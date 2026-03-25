@@ -181,3 +181,38 @@ test("BackupJobQueueService marks interrupted running jobs as failed and resumes
   assert.equal(resumedQueuedResult.status, "completed");
   assert.equal(restoreCallCount, 1);
 });
+
+test("BackupJobQueueService waits for ensureReady before touching the repository", async () => {
+  const repository = createInMemoryBackupJobRepository();
+  const callOrder: string[] = [];
+  const queue = new BackupJobQueueService({
+    repository: {
+      ...repository,
+      async markRunningJobsFailed(message: string) {
+        callOrder.push(`mark:${message}`);
+        await repository.markRunningJobsFailed(message);
+      },
+    },
+    ensureReady: async () => {
+      callOrder.push("ensure-ready:start");
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      callOrder.push("ensure-ready:end");
+    },
+    executeCreate: async () => ({
+      statusCode: 200,
+      body: { id: "backup-1", name: "Ready Backup" },
+    }),
+    executeRestore: async () => ({
+      statusCode: 200,
+      body: { backupId: "backup-1", backupName: "Ready Backup", success: true },
+    }),
+  });
+
+  await queue.start();
+
+  assert.deepEqual(callOrder, [
+    "ensure-ready:start",
+    "ensure-ready:end",
+    "mark:Backup job was interrupted by a server restart before completion.",
+  ]);
+});

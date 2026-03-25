@@ -34,6 +34,7 @@ type BackupJobExecutorDeps = {
   repository: BackupJobRepositoryLike;
   executeCreate: (params: { name: string; username: string }) => Promise<BackupJobOperationResponse>;
   executeRestore: (params: { backupId: string; username: string }) => Promise<BackupJobOperationResponse>;
+  ensureReady?: () => Promise<void>;
   maxRetainedJobs?: number;
   interruptedJobMessage?: string;
 };
@@ -81,6 +82,9 @@ export class BackupJobQueueService {
     }
 
     this.startPromise = (async () => {
+      if (this.deps.ensureReady) {
+        await this.deps.ensureReady();
+      }
       await this.deps.repository.markRunningJobsFailed(this.interruptedJobMessage);
       this.started = true;
     })();
