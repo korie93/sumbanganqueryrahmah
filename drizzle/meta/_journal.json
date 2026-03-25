@@ -15,6 +15,13 @@
       "when": 1774396251121,
       "tag": "0001_banned_sessions_and_schema_governance",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774396914423,
+      "tag": "0002_reviewed_ops_tables",
+      "breakpoints": true
     }
   ]
 }

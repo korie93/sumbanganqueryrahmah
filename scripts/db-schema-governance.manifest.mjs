@@ -69,13 +69,13 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "The conversation ordering index is already Drizzle-reviewed while the base table remains bootstrapped.",
     ),
-    audit_logs: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "Audit logs are typed in Drizzle while runtime bootstrap still applies additive normalization.",
+    audit_logs: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Audit logs now have a reviewed Drizzle migration while runtime bootstrap stays additive for backward-compatible normalization.",
     ),
-    backup_jobs: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "Backup queue persistence is typed in Drizzle while runtime bootstrap keeps legacy installs compatible.",
+    backup_jobs: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Backup queue persistence now has a reviewed Drizzle migration while runtime bootstrap keeps legacy installs compatible.",
     ),
     backups: hybridManaged(
       ["drizzle-schema", "runtime-ddl"],
@@ -128,9 +128,9 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "runtime-ddl"],
       "Import storage remains bootstrapped while typed schema covers the steady-state table shape.",
     ),
-    mutation_idempotency_keys: hybridManaged(
-      ["drizzle-schema", "runtime-ddl"],
-      "Mutation idempotency is typed in Drizzle while runtime bootstrap remains the compatibility path.",
+    mutation_idempotency_keys: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Mutation idempotency now has a reviewed Drizzle migration while runtime bootstrap remains the compatibility path.",
     ),
     password_reset_requests: hybridManaged(
       ["drizzle-schema", "legacy-sql", "runtime-ddl"],
@@ -169,4 +169,3 @@ export const schemaGovernanceManifest = {
     ),
   },
 };
-
