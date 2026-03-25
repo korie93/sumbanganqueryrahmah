@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildCollectionMonthlySummaryWhereSql,
+  buildCollectionRecordDailyRollupWhereSql,
   buildCollectionRecordConditions,
+  canUseCollectionRecordDailyRollups,
   collectCollectionReceiptPaths,
   extractCollectionRecordIds,
   mapCollectionAggregateRow,
@@ -42,6 +44,33 @@ test("buildCollectionMonthlySummaryWhereSql clamps out-of-range years", () => {
   });
 
   assert.equal(safeYear, 2100);
+  assert.ok(whereSql);
+});
+
+test("collection daily rollups are only used for summary-safe filters", () => {
+  assert.equal(
+    canUseCollectionRecordDailyRollups({
+      from: "2026-03-01",
+      to: "2026-03-31",
+      createdByLogin: "staff.user",
+      nicknames: ["Collector Alpha"],
+    }),
+    true,
+  );
+  assert.equal(
+    canUseCollectionRecordDailyRollups({
+      from: "2026-03-01",
+      search: "Alice",
+    }),
+    false,
+  );
+
+  const whereSql = buildCollectionRecordDailyRollupWhereSql({
+    from: "2026-03-01",
+    to: "2026-03-31",
+    createdByLogin: "staff.user",
+    nicknames: ["Collector Alpha", "collector alpha"],
+  });
   assert.ok(whereSql);
 });
 

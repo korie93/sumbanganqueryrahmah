@@ -5,6 +5,11 @@ import path from "node:path";
 export const COLLECTION_UPLOADS_ROOT_DIR = path.resolve(process.cwd(), "uploads");
 export const COLLECTION_RECEIPT_DIR = path.resolve(COLLECTION_UPLOADS_ROOT_DIR, "collection-receipts");
 export const COLLECTION_RECEIPT_PUBLIC_PREFIX = "/uploads/collection-receipts";
+const DEFAULT_COLLECTION_RECEIPT_QUARANTINE_DIR = path.resolve(
+  process.cwd(),
+  "var",
+  "collection-receipt-quarantine",
+);
 
 function normalizeReceiptPath(receiptPath: string | null | undefined): string {
   return String(receiptPath || "").trim().replace(/\\/g, "/");
@@ -63,4 +68,17 @@ export async function collectionReceiptFileExists(
   } catch {
     return false;
   }
+}
+
+export function isCollectionReceiptQuarantineEnabled(): boolean {
+  return String(process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED || "1").trim() !== "0";
+}
+
+export function getCollectionReceiptQuarantineDir(): string {
+  const configured = String(process.env.COLLECTION_RECEIPT_QUARANTINE_DIR || "").trim();
+  if (!configured) {
+    return DEFAULT_COLLECTION_RECEIPT_QUARANTINE_DIR;
+  }
+
+  return path.resolve(process.cwd(), configured);
 }

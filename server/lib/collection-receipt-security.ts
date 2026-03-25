@@ -1,4 +1,13 @@
 export type CollectionReceiptFileType = "pdf" | "png" | "jpg" | "webp";
+export class CollectionReceiptSecurityError extends Error {
+  reasonCode: string;
+
+  constructor(message: string, reasonCode = "receipt-security-rejected") {
+    super(message);
+    this.name = "CollectionReceiptSecurityError";
+    this.reasonCode = reasonCode;
+  }
+}
 
 const JPEG_START_OF_FRAME_MARKERS = new Set([
   0xc0,
@@ -41,6 +50,10 @@ export type CollectionReceiptSecurityResult = {
   imageWidth?: number;
   imageHeight?: number;
 };
+
+function securityError(message: string, reasonCode: string): CollectionReceiptSecurityError {
+  return new CollectionReceiptSecurityError(message, reasonCode);
+}
 
 function readUInt24LE(buffer: Buffer, offset: number): number | null {
   if (offset < 0 || offset + 2 >= buffer.length) {
@@ -197,22 +210,26 @@ function validateImageDimensions(
   dimensions: { width: number; height: number } | null,
 ): { width: number; height: number } {
   if (!dimensions) {
-    throw new Error("Receipt image dimensions could not be verified.");
+    throw securityError("Receipt image dimensions could not be verified.", "image-dimensions-unverified");
   }
 
   const { width, height } = dimensions;
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-    throw new Error("Receipt image dimensions are invalid.");
+    throw securityError("Receipt image dimensions are invalid.", "image-dimensions-invalid");
   }
 
   if (width > COLLECTION_RECEIPT_MAX_IMAGE_EDGE || height > COLLECTION_RECEIPT_MAX_IMAGE_EDGE) {
-    throw new Error(
+    throw securityError(
       `Receipt image dimensions exceed the ${COLLECTION_RECEIPT_MAX_IMAGE_EDGE}px maximum edge.`,
+      "image-dimensions-edge-exceeded",
     );
   }
 
   if (width * height > COLLECTION_RECEIPT_MAX_IMAGE_PIXELS) {
-    throw new Error("Receipt image dimensions exceed the maximum pixel allowance.");
+    throw securityError(
+      "Receipt image dimensions exceed the maximum pixel allowance.",
+      "image-dimensions-pixel-exceeded",
+    );
   }
 
   return { width, height };
@@ -220,21 +237,24 @@ function validateImageDimensions(
 
 function validatePdfBuffer(buffer: Buffer) {
   if (buffer.length < 8 || buffer.toString("latin1", 0, 5) !== "%PDF-") {
-    throw new Error("Receipt PDF header is invalid.");
-  }
-
-  const trailerSample = buffer
-    .subarray(Math.max(0, buffer.length - 2048))
-    .toString("latin1")
-    .toLowerCase();
-  if (!trailerSample.includes("%%eof")) {
-    throw new Error("Receipt PDF appears incomplete.");
+    throw securityError("Receipt PDF header is invalid.", "pdf-header-invalid");
   }
 
   const source = buffer.toString("latin1");
+  const loweredSource = source.toLowerCase();
+  const eofIndex = loweredSource.lastIndexOf("%%eof");
+  if (eofIndex < 0) {
+    throw securityError("Receipt PDF appears incomplete.", "pdf-eof-missing");
+  }
+
+  const trailingSource = source.slice(eofIndex + 5);
+  if (/\S/.test(trailingSource)) {
+    throw securityError("Receipt PDF contains trailing data after the EOF marker.", "pdf-trailing-data");
+  }
+
   for (const rule of DANGEROUS_PDF_PATTERNS) {
     if (rule.pattern.test(source)) {
-      throw new Error(`Receipt PDF ${rule.reason}.`);
+      throw securityError(`Receipt PDF ${rule.reason}.`, "pdf-dangerous-content");
     }
   }
 }
@@ -324,6 +344,154 @@ function stripJpegMetadata(buffer: Buffer): { buffer: Buffer; removedMetadataKin
   };
 }
 
+function validatePngStructure(buffer: Buffer) {
+  if (buffer.length < 8) {
+    throw securityError("Receipt PNG header is invalid.", "png-header-invalid");
+  }
+
+  let offset = 8;
+  let sawIend = false;
+  while (offset + 12 <= buffer.length) {
+    const chunkLength = buffer.readUInt32BE(offset);
+    const chunkType = buffer.toString("ascii", offset + 4, offset + 8);
+    const chunkTotal = 12 + chunkLength;
+    const chunkEnd = offset + chunkTotal;
+    if (chunkEnd > buffer.length) {
+      throw securityError("Receipt PNG appears incomplete.", "png-incomplete");
+    }
+
+    offset = chunkEnd;
+    if (chunkType === "IEND") {
+      sawIend = true;
+      break;
+    }
+  }
+
+  if (!sawIend) {
+    throw securityError("Receipt PNG appears incomplete.", "png-iend-missing");
+  }
+
+  if (offset !== buffer.length) {
+    throw securityError("Receipt PNG contains trailing data after the IEND chunk.", "png-trailing-data");
+  }
+}
+
+function validateJpegStructure(buffer: Buffer) {
+  if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) {
+    throw securityError("Receipt JPEG header is invalid.", "jpeg-header-invalid");
+  }
+
+  let offset = 2;
+  while (offset < buffer.length) {
+    while (offset < buffer.length && buffer[offset] === 0xff) {
+      offset += 1;
+    }
+
+    if (offset >= buffer.length) {
+      break;
+    }
+
+    const marker = buffer[offset];
+    offset += 1;
+
+    if (marker === 0xd9) {
+      if (offset !== buffer.length) {
+        throw securityError("Receipt JPEG contains trailing data after the EOI marker.", "jpeg-trailing-data");
+      }
+      return;
+    }
+
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      continue;
+    }
+
+    if (offset + 1 >= buffer.length) {
+      throw securityError("Receipt JPEG appears incomplete.", "jpeg-incomplete");
+    }
+
+    const segmentLength = buffer.readUInt16BE(offset);
+    if (segmentLength < 2 || offset + segmentLength > buffer.length) {
+      throw securityError("Receipt JPEG segment structure is invalid.", "jpeg-segment-invalid");
+    }
+
+    if (marker === 0xda) {
+      let scanOffset = offset + segmentLength;
+      while (scanOffset + 1 < buffer.length) {
+        if (buffer[scanOffset] !== 0xff) {
+          scanOffset += 1;
+          continue;
+        }
+
+        const next = buffer[scanOffset + 1];
+        if (next === 0x00 || (next >= 0xd0 && next <= 0xd7)) {
+          scanOffset += 2;
+          continue;
+        }
+
+        if (next === 0xd9) {
+          scanOffset += 2;
+          if (scanOffset !== buffer.length) {
+            throw securityError(
+              "Receipt JPEG contains trailing data after the EOI marker.",
+              "jpeg-trailing-data",
+            );
+          }
+          return;
+        }
+
+        throw securityError("Receipt JPEG scan data is malformed.", "jpeg-scan-malformed");
+      }
+
+      throw securityError("Receipt JPEG appears incomplete.", "jpeg-eoi-missing");
+    }
+
+    offset += segmentLength;
+  }
+
+  throw securityError("Receipt JPEG appears incomplete.", "jpeg-eoi-missing");
+}
+
+function validateWebpStructure(buffer: Buffer) {
+  if (
+    buffer.length < 30
+    || buffer.toString("ascii", 0, 4) !== "RIFF"
+    || buffer.toString("ascii", 8, 12) !== "WEBP"
+  ) {
+    throw securityError("Receipt WebP header is invalid.", "webp-header-invalid");
+  }
+
+  const riffSize = buffer.readUInt32LE(4);
+  const expectedLength = riffSize + 8;
+  if (expectedLength > buffer.length) {
+    throw securityError("Receipt WebP appears incomplete.", "webp-incomplete");
+  }
+  if (expectedLength < buffer.length) {
+    throw securityError("Receipt WebP contains trailing data after the RIFF payload.", "webp-trailing-data");
+  }
+
+  let offset = 12;
+  let sawImageChunk = false;
+  while (offset + 8 <= buffer.length) {
+    const chunkType = buffer.toString("ascii", offset, offset + 4);
+    const chunkSize = buffer.readUInt32LE(offset + 4);
+    const payloadOffset = offset + 8;
+    const nextOffset = payloadOffset + chunkSize + (chunkSize % 2);
+    if (nextOffset > buffer.length) {
+      throw securityError("Receipt WebP chunk structure is invalid.", "webp-chunk-invalid");
+    }
+
+    if (chunkType === "VP8X" || chunkType === "VP8 " || chunkType === "VP8L") {
+      sawImageChunk = true;
+    }
+
+    offset = nextOffset;
+  }
+
+  if (!sawImageChunk) {
+    throw securityError("Receipt WebP image payload is missing.", "webp-image-missing");
+  }
+}
+
 function stripPngMetadata(buffer: Buffer): { buffer: Buffer; removedMetadataKinds: string[] } {
   if (buffer.length < 8) {
     return { buffer, removedMetadataKinds: [] };
@@ -411,12 +579,27 @@ function sanitizeCollectionReceiptImageBuffer(
   buffer: Buffer,
   signatureType: Exclude<CollectionReceiptFileType, "pdf">,
 ): { buffer: Buffer; removedMetadataKinds: string[]; dimensions: ImageDimensions } {
+  if (signatureType === "png") {
+    validatePngStructure(buffer);
+  } else if (signatureType === "jpg") {
+    validateJpegStructure(buffer);
+  } else {
+    validateWebpStructure(buffer);
+  }
+
   const stripped = signatureType === "png"
     ? stripPngMetadata(buffer)
     : signatureType === "jpg"
       ? stripJpegMetadata(buffer)
       : stripWebpMetadata(buffer);
   const sanitizedBuffer = stripped.buffer;
+  if (signatureType === "png") {
+    validatePngStructure(sanitizedBuffer);
+  } else if (signatureType === "jpg") {
+    validateJpegStructure(sanitizedBuffer);
+  } else {
+    validateWebpStructure(sanitizedBuffer);
+  }
   const dimensions = signatureType === "png"
     ? extractPngDimensions(sanitizedBuffer)
     : signatureType === "jpg"

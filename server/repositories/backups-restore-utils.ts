@@ -407,6 +407,41 @@ export async function restoreFromBackup(backupDataRaw: BackupDataPayload): Promi
         WHERE record.id = first_receipt.collection_record_id
       `);
     }
+
+    await tx.execute(sql`
+      DELETE FROM public.collection_record_daily_rollups rollup
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM public.collection_records record
+        WHERE record.payment_date = rollup.payment_date
+          AND record.created_by_login = rollup.created_by_login
+          AND record.collection_staff_nickname = rollup.collection_staff_nickname
+      )
+    `);
+    await tx.execute(sql`
+      INSERT INTO public.collection_record_daily_rollups (
+        payment_date,
+        created_by_login,
+        collection_staff_nickname,
+        total_records,
+        total_amount,
+        updated_at
+      )
+      SELECT
+        payment_date,
+        created_by_login,
+        collection_staff_nickname,
+        COUNT(*)::int,
+        COALESCE(SUM(amount), 0)::numeric(14,2),
+        now()
+      FROM public.collection_records
+      GROUP BY payment_date, created_by_login, collection_staff_nickname
+      ON CONFLICT (payment_date, created_by_login, collection_staff_nickname)
+      DO UPDATE SET
+        total_records = EXCLUDED.total_records,
+        total_amount = EXCLUDED.total_amount,
+        updated_at = now()
+    `);
   });
 
   updateRestoreTotals(stats);

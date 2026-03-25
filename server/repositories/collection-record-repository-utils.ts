@@ -14,7 +14,9 @@ import type {
 } from "../storage-postgres";
 import {
   buildCollectionMonthlySummaryWhereSql,
+  buildCollectionRecordDailyRollupWhereSql,
   buildCollectionRecordWhereSql,
+  canUseCollectionRecordDailyRollups,
   collectCollectionReceiptPaths,
   extractCollectionRecordIds,
   mapCollectionAggregateRow,
@@ -30,47 +32,187 @@ import {
 } from "./collection-receipt-utils";
 import { mapCollectionRecordRow } from "./collection-repository-mappers";
 
-export async function createCollectionRecord(data: CreateCollectionRecordInput): Promise<CollectionRecord> {
-  const id = randomUUID();
-  await db.execute(sql`
-    INSERT INTO public.collection_records (
-      id,
-      customer_name,
-      ic_number,
-      customer_phone,
-      account_number,
-      batch,
+type CollectionRepositoryExecutor = Pick<typeof db, "execute">;
+
+type CollectionRecordDailyRollupSlice = {
+  paymentDate?: string | null;
+  createdByLogin?: string | null;
+  collectionStaffNickname?: string | null;
+};
+
+function normalizeCollectionRecordDailyRollupSlice(
+  slice: CollectionRecordDailyRollupSlice | null | undefined,
+): Required<CollectionRecordDailyRollupSlice> | null {
+  const paymentDate = String(slice?.paymentDate || "").trim();
+  const createdByLogin = String(slice?.createdByLogin || "").trim();
+  const collectionStaffNickname = String(slice?.collectionStaffNickname || "").trim();
+  if (!paymentDate || !createdByLogin || !collectionStaffNickname) {
+    return null;
+  }
+
+  return {
+    paymentDate,
+    createdByLogin,
+    collectionStaffNickname,
+  };
+}
+
+function mapCollectionRecordRowToDailyRollupSlice(
+  row: Record<string, unknown> | null | undefined,
+): Required<CollectionRecordDailyRollupSlice> | null {
+  return normalizeCollectionRecordDailyRollupSlice({
+    paymentDate: String(row?.payment_date || row?.paymentDate || ""),
+    createdByLogin: String(row?.created_by_login || row?.createdByLogin || ""),
+    collectionStaffNickname: String(row?.collection_staff_nickname || row?.collectionStaffNickname || ""),
+  });
+}
+
+async function refreshCollectionRecordDailyRollupSlice(
+  executor: CollectionRepositoryExecutor,
+  slice: CollectionRecordDailyRollupSlice | null | undefined,
+): Promise<void> {
+  const normalized = normalizeCollectionRecordDailyRollupSlice(slice);
+  if (!normalized) {
+    return;
+  }
+
+  const aggregateResult = await executor.execute(sql`
+    SELECT
+      COUNT(*)::int AS total_records,
+      COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
+    FROM public.collection_records
+    WHERE payment_date = ${normalized.paymentDate}::date
+      AND created_by_login = ${normalized.createdByLogin}
+      AND collection_staff_nickname = ${normalized.collectionStaffNickname}
+  `);
+  const aggregate = mapCollectionAggregateRow(aggregateResult.rows?.[0]);
+
+  if (aggregate.totalRecords <= 0) {
+    await executor.execute(sql`
+      DELETE FROM public.collection_record_daily_rollups
+      WHERE payment_date = ${normalized.paymentDate}::date
+        AND created_by_login = ${normalized.createdByLogin}
+        AND collection_staff_nickname = ${normalized.collectionStaffNickname}
+    `);
+    return;
+  }
+
+  await executor.execute(sql`
+    INSERT INTO public.collection_record_daily_rollups (
       payment_date,
-      amount,
-      receipt_file,
       created_by_login,
       collection_staff_nickname,
-      staff_username,
-      created_at,
+      total_records,
+      total_amount,
       updated_at
     )
     VALUES (
-      ${id}::uuid,
-      ${data.customerName},
-      ${data.icNumber},
-      ${data.customerPhone},
-      ${data.accountNumber},
-      ${data.batch},
-      ${data.paymentDate}::date,
-      ${data.amount},
-      ${null},
-      ${data.createdByLogin},
-      ${data.collectionStaffNickname},
-      ${data.collectionStaffNickname},
-      now(),
-      date_trunc('milliseconds', now())
+      ${normalized.paymentDate}::date,
+      ${normalized.createdByLogin},
+      ${normalized.collectionStaffNickname},
+      ${aggregate.totalRecords},
+      ${aggregate.totalAmount},
+      now()
     )
+    ON CONFLICT (payment_date, created_by_login, collection_staff_nickname)
+    DO UPDATE SET
+      total_records = EXCLUDED.total_records,
+      total_amount = EXCLUDED.total_amount,
+      updated_at = now()
   `);
-  const created = await getCollectionRecordById(id);
-  if (!created) {
-    throw new Error("Failed to load created collection record.");
+}
+
+async function refreshCollectionRecordDailyRollupSlices(
+  executor: CollectionRepositoryExecutor,
+  slices: Array<CollectionRecordDailyRollupSlice | null | undefined>,
+): Promise<void> {
+  const pending = new Map<string, Required<CollectionRecordDailyRollupSlice>>();
+  for (const slice of slices) {
+    const normalized = normalizeCollectionRecordDailyRollupSlice(slice);
+    if (!normalized) continue;
+    pending.set(
+      `${normalized.paymentDate}::${normalized.createdByLogin}::${normalized.collectionStaffNickname}`,
+      normalized,
+    );
   }
-  return created;
+
+  for (const slice of pending.values()) {
+    await refreshCollectionRecordDailyRollupSlice(executor, slice);
+  }
+}
+
+export async function createCollectionRecord(data: CreateCollectionRecordInput): Promise<CollectionRecord> {
+  const id = randomUUID();
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`
+      INSERT INTO public.collection_records (
+        id,
+        customer_name,
+        ic_number,
+        customer_phone,
+        account_number,
+        batch,
+        payment_date,
+        amount,
+        receipt_file,
+        created_by_login,
+        collection_staff_nickname,
+        staff_username,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        ${id}::uuid,
+        ${data.customerName},
+        ${data.icNumber},
+        ${data.customerPhone},
+        ${data.accountNumber},
+        ${data.batch},
+        ${data.paymentDate}::date,
+        ${data.amount},
+        ${null},
+        ${data.createdByLogin},
+        ${data.collectionStaffNickname},
+        ${data.collectionStaffNickname},
+        now(),
+        date_trunc('milliseconds', now())
+      )
+    `);
+
+    await refreshCollectionRecordDailyRollupSlices(tx, [{
+      paymentDate: data.paymentDate,
+      createdByLogin: data.createdByLogin,
+      collectionStaffNickname: data.collectionStaffNickname,
+    }]);
+
+    const result = await tx.execute(sql`
+      SELECT
+        id,
+        customer_name,
+        ic_number,
+        customer_phone,
+        account_number,
+        batch,
+        payment_date,
+        amount,
+        receipt_file,
+        created_by_login,
+        collection_staff_nickname,
+        staff_username,
+        created_at,
+        updated_at
+      FROM public.collection_records
+      WHERE id = ${id}::uuid
+      LIMIT 1
+    `);
+    const row = result.rows?.[0];
+    if (!row) {
+      throw new Error("Failed to load created collection record.");
+    }
+
+    const [created] = await attachCollectionReceipts(tx, [mapCollectionRecordRow(row)]);
+    return created || mapCollectionRecordRow(row);
+  });
 }
 
 export async function listCollectionRecords(filters?: {
@@ -126,6 +268,19 @@ export async function summarizeCollectionRecords(filters?: {
   createdByLogin?: string;
   nicknames?: string[];
 }): Promise<{ totalRecords: number; totalAmount: number }> {
+  if (canUseCollectionRecordDailyRollups(filters)) {
+    const whereSql = buildCollectionRecordDailyRollupWhereSql(filters);
+    const result = await db.execute(sql`
+      SELECT
+        COALESCE(SUM(total_records), 0)::int AS total_records,
+        COALESCE(SUM(total_amount), 0)::numeric(14,2) AS total_amount
+      FROM public.collection_record_daily_rollups
+      ${whereSql}
+    `);
+
+    return mapCollectionAggregateRow(result.rows?.[0]);
+  }
+
   const whereSql = buildCollectionRecordWhereSql(filters);
 
   const result = await db.execute(sql`
@@ -146,6 +301,27 @@ export async function summarizeCollectionRecordsByNickname(filters?: {
   createdByLogin?: string;
   nicknames?: string[];
 }): Promise<Array<{ nickname: string; totalRecords: number; totalAmount: number }>> {
+  if (canUseCollectionRecordDailyRollups(filters)) {
+    const whereSql = buildCollectionRecordDailyRollupWhereSql(filters);
+
+    const result = await db.execute(sql`
+      SELECT
+        collection_staff_nickname as nickname,
+        COALESCE(SUM(total_records), 0)::int AS total_records,
+        COALESCE(SUM(total_amount), 0)::numeric(14,2) AS total_amount
+      FROM public.collection_record_daily_rollups
+      ${whereSql}
+      GROUP BY collection_staff_nickname
+      ORDER BY lower(collection_staff_nickname) ASC
+    `);
+
+    return (result.rows || []).map((row: any) => ({
+      nickname: String(row.nickname || "Unknown"),
+      totalRecords: Number(row.total_records || 0),
+      totalAmount: Number(row.total_amount || 0),
+    }));
+  }
+
   const whereSql = buildCollectionRecordWhereSql(filters);
 
   const result = await db.execute(sql`
@@ -173,6 +349,25 @@ export async function summarizeCollectionRecordsByNicknameAndPaymentDate(filters
   createdByLogin?: string;
   nicknames?: string[];
 }): Promise<CollectionNicknameDailyAggregate[]> {
+  if (canUseCollectionRecordDailyRollups(filters)) {
+    const whereSql = buildCollectionRecordDailyRollupWhereSql(filters);
+
+    const result = await db.execute(sql`
+      SELECT
+        lower(collection_staff_nickname) AS nickname_key,
+        MIN(collection_staff_nickname) AS nickname,
+        payment_date,
+        COALESCE(SUM(total_records), 0)::int AS total_records,
+        COALESCE(SUM(total_amount), 0)::numeric(14,2) AS total_amount
+      FROM public.collection_record_daily_rollups
+      ${whereSql}
+      GROUP BY lower(collection_staff_nickname), payment_date
+      ORDER BY lower(collection_staff_nickname) ASC, payment_date ASC
+    `);
+
+    return mapCollectionNicknameDailyAggregateRows(result.rows || []);
+  }
+
   const whereSql = buildCollectionRecordWhereSql(filters);
 
   const result = await db.execute(sql`
@@ -204,9 +399,9 @@ export async function summarizeCollectionRecordsOlderThan(
 
   const result = await db.execute(sql`
     SELECT
-      COUNT(*)::int AS total_records,
-      COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
-    FROM public.collection_records
+      COALESCE(SUM(total_records), 0)::int AS total_records,
+      COALESCE(SUM(total_amount), 0)::numeric(14,2) AS total_amount
+    FROM public.collection_record_daily_rollups
     WHERE payment_date < ${normalizedBeforeDate}::date
   `);
 
@@ -273,6 +468,11 @@ export async function purgeCollectionRecordsOlderThan(beforeDate: string): Promi
       WHERE id IN (${recordIdSql})
     `);
 
+    await tx.execute(sql`
+      DELETE FROM public.collection_record_daily_rollups
+      WHERE payment_date < ${normalizedBeforeDate}::date
+    `);
+
     const receiptPaths = collectCollectionReceiptPaths(
       oldRecordRows,
       Array.isArray(receiptRowsResult.rows) ? receiptRowsResult.rows : [],
@@ -295,9 +495,9 @@ export async function getCollectionMonthlySummary(filters: {
   const result = await db.execute(sql`
     SELECT
       EXTRACT(MONTH FROM payment_date)::int AS month,
-      COUNT(*)::int AS total_records,
-      COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
-    FROM public.collection_records
+      COALESCE(SUM(total_records), 0)::int AS total_records,
+      COALESCE(SUM(total_amount), 0)::numeric(14,2) AS total_amount
+    FROM public.collection_record_daily_rollups
     ${whereSql}
     GROUP BY 1
     ORDER BY 1
@@ -417,6 +617,16 @@ export async function updateCollectionRecord(
   }
 
   return db.transaction(async (tx) => {
+    const existingSliceResult = await tx.execute(sql`
+      SELECT payment_date, created_by_login, collection_staff_nickname
+      FROM public.collection_records
+      WHERE id = ${id}::uuid
+      LIMIT 1
+    `);
+    const existingSlice = mapCollectionRecordRowToDailyRollupSlice(
+      (existingSliceResult.rows?.[0] || null) as Record<string, unknown> | null,
+    );
+
     const result = await tx.execute(sql`
       UPDATE public.collection_records
       SET ${sql.join(updateChunks, sql`, `)}
@@ -451,6 +661,11 @@ export async function updateCollectionRecord(
       await createCollectionRecordReceiptRows(tx, id, newReceipts);
     }
 
+    await refreshCollectionRecordDailyRollupSlices(tx, [
+      existingSlice,
+      mapCollectionRecordRowToDailyRollupSlice((row || null) as Record<string, unknown> | null),
+    ]);
+
     const [hydrated] = await attachCollectionReceipts(tx, [mapCollectionRecordRow(row)]);
     return hydrated || mapCollectionRecordRow(row);
   });
@@ -474,6 +689,16 @@ export async function deleteCollectionRecord(
   }
 
   return db.transaction(async (tx) => {
+    const existingSliceResult = await tx.execute(sql`
+      SELECT payment_date, created_by_login, collection_staff_nickname
+      FROM public.collection_records
+      WHERE id = ${id}::uuid
+      LIMIT 1
+    `);
+    const existingSlice = mapCollectionRecordRowToDailyRollupSlice(
+      (existingSliceResult.rows?.[0] || null) as Record<string, unknown> | null,
+    );
+
     const deletedRecord = await tx.execute(sql`
       DELETE FROM public.collection_records
       WHERE ${sql.join(whereClauses, sql` AND `)}
@@ -488,6 +713,8 @@ export async function deleteCollectionRecord(
       DELETE FROM public.collection_record_receipts
       WHERE collection_record_id = ${deletedId}::uuid
     `);
+
+    await refreshCollectionRecordDailyRollupSlices(tx, [existingSlice]);
     return true;
   });
 }

@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
 import { sanitizeCollectionReceiptBuffer } from "../../lib/collection-receipt-security";
@@ -8,6 +11,80 @@ import {
   saveMultipartCollectionReceipt,
   saveCollectionReceipt,
 } from "../../routes/collection-receipt.service";
+
+const originalQuarantineEnabled = process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED;
+const originalQuarantineDir = process.env.COLLECTION_RECEIPT_QUARANTINE_DIR;
+const originalExternalScanEnabled = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED;
+const originalExternalScanCommand = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND;
+const originalExternalScanArgsJson = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON;
+const originalExternalScanTimeoutMs = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS;
+const originalExternalScanFailClosed = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED;
+const originalExternalScanCleanExitCodes = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_CLEAN_EXIT_CODES;
+const originalExternalScanRejectExitCodes = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES;
+process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED = "0";
+delete process.env.COLLECTION_RECEIPT_QUARANTINE_DIR;
+process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "0";
+delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND;
+delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON;
+delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS;
+delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED;
+delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_CLEAN_EXIT_CODES;
+delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES;
+
+test.after(async () => {
+  if (originalQuarantineEnabled === undefined) {
+    delete process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED;
+  } else {
+    process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED = originalQuarantineEnabled;
+  }
+
+  if (originalQuarantineDir === undefined) {
+    delete process.env.COLLECTION_RECEIPT_QUARANTINE_DIR;
+  } else {
+    process.env.COLLECTION_RECEIPT_QUARANTINE_DIR = originalQuarantineDir;
+  }
+
+  if (originalExternalScanEnabled === undefined) {
+    delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED;
+  } else {
+    process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = originalExternalScanEnabled;
+  }
+  if (originalExternalScanCommand === undefined) {
+    delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND;
+  } else {
+    process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = originalExternalScanCommand;
+  }
+  if (originalExternalScanArgsJson === undefined) {
+    delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON;
+  } else {
+    process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = originalExternalScanArgsJson;
+  }
+  if (originalExternalScanTimeoutMs === undefined) {
+    delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS;
+  } else {
+    process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS = originalExternalScanTimeoutMs;
+  }
+  if (originalExternalScanFailClosed === undefined) {
+    delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED;
+  } else {
+    process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = originalExternalScanFailClosed;
+  }
+  if (originalExternalScanCleanExitCodes === undefined) {
+    delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_CLEAN_EXIT_CODES;
+  } else {
+    process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_CLEAN_EXIT_CODES = originalExternalScanCleanExitCodes;
+  }
+  if (originalExternalScanRejectExitCodes === undefined) {
+    delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES;
+  } else {
+    process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES = originalExternalScanRejectExitCodes;
+  }
+
+  await fs.rm(path.resolve(process.cwd(), "var", "collection-receipt-quarantine"), {
+    recursive: true,
+    force: true,
+  });
+});
 
 function asBase64(buffer: Buffer): string {
   return buffer.toString("base64");
@@ -24,14 +101,30 @@ function createDangerousPdfBuffer() {
   );
 }
 
+function createScannablePdfBuffer(marker = "SAFE") {
+  return Buffer.from(
+    `%PDF-1.7\n1 0 obj\n<< /Producer (${marker}) >>\nendobj\ntrailer\n<<>>\n%%EOF\n`,
+    "latin1",
+  );
+}
+
 function createTinyPngBuffer(width = 1, height = 1) {
-  const buffer = Buffer.alloc(24);
-  buffer.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
-  buffer.set([0x00, 0x00, 0x00, 0x0d], 8);
-  buffer.set([0x49, 0x48, 0x44, 0x52], 12);
-  buffer.writeUInt32BE(width, 16);
-  buffer.writeUInt32BE(height, 20);
-  return buffer;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.from([
+      0x00, 0x00, 0x00, 0x0d,
+      0x49, 0x48, 0x44, 0x52,
+      (width >>> 24) & 0xff, (width >>> 16) & 0xff, (width >>> 8) & 0xff, width & 0xff,
+      (height >>> 24) & 0xff, (height >>> 16) & 0xff, (height >>> 8) & 0xff, height & 0xff,
+      0x08, 0x06, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00,
+    ]),
+    Buffer.from([
+      0x00, 0x00, 0x00, 0x00,
+      0x49, 0x45, 0x4e, 0x44,
+      0xae, 0x42, 0x60, 0x82,
+    ]),
+  ]);
 }
 
 function createTinyJpegBuffer(width = 1, height = 1) {
@@ -237,4 +330,208 @@ test("saveCollectionReceipt rejects images whose dimensions exceed the security 
       }),
     /maximum edge|maximum pixel/i,
   );
+});
+
+test("saveCollectionReceipt rejects PNG payloads with trailing data and quarantines the file", async () => {
+  const quarantineDir = await fs.mkdtemp(path.join(os.tmpdir(), "receipt-quarantine-"));
+  const previousEnabled = process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED;
+  const previousDir = process.env.COLLECTION_RECEIPT_QUARANTINE_DIR;
+  process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_QUARANTINE_DIR = quarantineDir;
+
+  try {
+    const suspicious = Buffer.concat([
+      createTinyPngBuffer(),
+      Buffer.from("MZ-suspicious-trailer", "latin1"),
+    ]);
+
+    await assert.rejects(
+      () =>
+        saveCollectionReceipt({
+          fileName: "polyglot.png",
+          mimeType: "image/png",
+          contentBase64: asBase64(suspicious),
+        }),
+      /trailing data/i,
+    );
+
+    const quarantineEntries = await fs.readdir(quarantineDir);
+    assert.equal(quarantineEntries.some((entry) => entry.endsWith(".png")), true);
+    assert.equal(quarantineEntries.some((entry) => entry.endsWith(".json")), true);
+  } finally {
+    if (previousEnabled === undefined) {
+      delete process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED;
+    } else {
+      process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED = previousEnabled;
+    }
+    if (previousDir === undefined) {
+      delete process.env.COLLECTION_RECEIPT_QUARANTINE_DIR;
+    } else {
+      process.env.COLLECTION_RECEIPT_QUARANTINE_DIR = previousDir;
+    }
+    await fs.rm(quarantineDir, { recursive: true, force: true });
+  }
+});
+
+test("saveMultipartCollectionReceipt quarantines suspicious files rejected by the security scan", async () => {
+  const quarantineDir = await fs.mkdtemp(path.join(os.tmpdir(), "receipt-quarantine-multipart-"));
+  const previousEnabled = process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED;
+  const previousDir = process.env.COLLECTION_RECEIPT_QUARANTINE_DIR;
+  process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_QUARANTINE_DIR = quarantineDir;
+
+  try {
+    const suspicious = Buffer.concat([
+      createTinyWebpBuffer(),
+      Buffer.from("appended-payload", "latin1"),
+    ]);
+
+    await assert.rejects(
+      () =>
+        saveMultipartCollectionReceipt({
+          fileName: "polyglot.webp",
+          mimeType: "image/webp",
+          stream: Readable.from([suspicious]),
+        }),
+      /trailing data/i,
+    );
+
+    const quarantineEntries = await fs.readdir(quarantineDir);
+    assert.equal(quarantineEntries.some((entry) => entry.endsWith(".webp")), true);
+    assert.equal(quarantineEntries.some((entry) => entry.endsWith(".json")), true);
+  } finally {
+    if (previousEnabled === undefined) {
+      delete process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED;
+    } else {
+      process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED = previousEnabled;
+    }
+    if (previousDir === undefined) {
+      delete process.env.COLLECTION_RECEIPT_QUARANTINE_DIR;
+    } else {
+      process.env.COLLECTION_RECEIPT_QUARANTINE_DIR = previousDir;
+    }
+    await fs.rm(quarantineDir, { recursive: true, force: true });
+  }
+});
+
+test("saveCollectionReceipt rejects files flagged by the external malware scanner and quarantines them", async () => {
+  const quarantineDir = await fs.mkdtemp(path.join(os.tmpdir(), "receipt-external-scan-"));
+  const previousQuarantineEnabled = process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED;
+  const previousQuarantineDir = process.env.COLLECTION_RECEIPT_QUARANTINE_DIR;
+  const previousExternalScanEnabled = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED;
+  const previousExternalScanCommand = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND;
+  const previousExternalScanArgsJson = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON;
+  const previousExternalScanFailClosed = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED;
+  const previousExternalScanRejectExitCodes = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES;
+
+  process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_QUARANTINE_DIR = quarantineDir;
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = process.execPath;
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = JSON.stringify([
+    "-e",
+    "const fs = require('node:fs'); const filePath = process.argv[1]; const source = fs.readFileSync(filePath, 'latin1'); process.exit(source.includes('MALWARE-SCAN-MARKER') ? 1 : 0);",
+    "{file}",
+  ]);
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES = "1";
+
+  try {
+    await assert.rejects(
+      () =>
+        saveCollectionReceipt({
+          fileName: "scanner.pdf",
+          mimeType: "application/pdf",
+          contentBase64: asBase64(createScannablePdfBuffer("MALWARE-SCAN-MARKER")),
+        }),
+      /external malware scan rejected/i,
+    );
+
+    const quarantineEntries = await fs.readdir(quarantineDir);
+    assert.equal(quarantineEntries.some((entry) => entry.endsWith(".pdf")), true);
+    assert.equal(quarantineEntries.some((entry) => entry.endsWith(".json")), true);
+  } finally {
+    if (previousQuarantineEnabled === undefined) {
+      delete process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED;
+    } else {
+      process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED = previousQuarantineEnabled;
+    }
+    if (previousQuarantineDir === undefined) {
+      delete process.env.COLLECTION_RECEIPT_QUARANTINE_DIR;
+    } else {
+      process.env.COLLECTION_RECEIPT_QUARANTINE_DIR = previousQuarantineDir;
+    }
+    if (previousExternalScanEnabled === undefined) {
+      delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED;
+    } else {
+      process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = previousExternalScanEnabled;
+    }
+    if (previousExternalScanCommand === undefined) {
+      delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND;
+    } else {
+      process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = previousExternalScanCommand;
+    }
+    if (previousExternalScanArgsJson === undefined) {
+      delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON;
+    } else {
+      process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = previousExternalScanArgsJson;
+    }
+    if (previousExternalScanFailClosed === undefined) {
+      delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED;
+    } else {
+      process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = previousExternalScanFailClosed;
+    }
+    if (previousExternalScanRejectExitCodes === undefined) {
+      delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES;
+    } else {
+      process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES = previousExternalScanRejectExitCodes;
+    }
+    await fs.rm(quarantineDir, { recursive: true, force: true });
+  }
+});
+
+test("saveCollectionReceipt can fail open when the external malware scanner is unavailable", async () => {
+  const previousExternalScanEnabled = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED;
+  const previousExternalScanCommand = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND;
+  const previousExternalScanArgsJson = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON;
+  const previousExternalScanFailClosed = process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED;
+
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = `${process.execPath}-missing`;
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = JSON.stringify(["{file}"]);
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = "0";
+
+  try {
+    const saved = await saveCollectionReceipt({
+      fileName: "scanner-fail-open.pdf",
+      mimeType: "application/pdf",
+      contentBase64: asBase64(createScannablePdfBuffer("SAFE-SCAN-MARKER")),
+    });
+
+    assert.equal(saved.originalExtension, ".pdf");
+    assert.equal(saved.originalMimeType, "application/pdf");
+
+    await removeCollectionReceiptFile(saved.storagePath);
+  } finally {
+    if (previousExternalScanEnabled === undefined) {
+      delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED;
+    } else {
+      process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = previousExternalScanEnabled;
+    }
+    if (previousExternalScanCommand === undefined) {
+      delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND;
+    } else {
+      process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = previousExternalScanCommand;
+    }
+    if (previousExternalScanArgsJson === undefined) {
+      delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON;
+    } else {
+      process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = previousExternalScanArgsJson;
+    }
+    if (previousExternalScanFailClosed === undefined) {
+      delete process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED;
+    } else {
+      process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = previousExternalScanFailClosed;
+    }
+  }
 });
