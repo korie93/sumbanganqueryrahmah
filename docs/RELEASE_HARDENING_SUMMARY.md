@@ -88,6 +88,86 @@ Optional continuous watch during canary:
 MONITOR_LOOP=1 MONITOR_INTERVAL_MS=60000 npm run monitor:stale-conflicts
 ```
 
+## 3A. Exact Staging Command Sequence
+
+Use this as the shortest practical release path for the current build.
+
+### Local pre-push gate
+
+```bash
+npm install
+npm run typecheck
+npm run test:client
+npm run build
+npm run db:migrate
+npm run release:verify:local
+```
+
+### Staging deploy host
+
+```bash
+npm install
+npm run db:migrate
+npm run build
+npm start
+```
+
+### Staging health checks
+
+Replace the host below with the real staging URL.
+
+```bash
+curl https://staging.example.com/api/health/live
+curl https://staging.example.com/api/health/ready
+curl https://staging.example.com/api/health
+```
+
+Expected result:
+
+- `live` should report healthy process status
+- `ready` should report ready state after startup completes
+- combined health should not show startup failure detail
+
+## 3B. Exact Post-Deploy Smoke Order
+
+Run these manually in order on staging before canary or production promotion.
+
+1. login with an existing admin account
+2. open Collection Records and create one record without receipt
+3. create one record with receipt
+4. preview the receipt
+5. edit the same record and replace the receipt
+6. edit amount and verify Daily, Summary, and Nickname Summary
+7. move payment date across month and verify old bucket drops while new bucket increases
+8. reassign nickname/staff and verify both old and new totals
+9. remove the receipt and verify old receipt is no longer shown
+10. delete the test record if delete is enabled
+11. open Backup & Restore and create a backup job
+12. confirm backup job status moves through queued/running/completed
+13. logout and login again
+
+## 3C. Exact Early-Canary Monitoring Commands
+
+Single snapshot:
+
+```bash
+npm run monitor:stale-conflicts
+```
+
+Continuous watch:
+
+```bash
+MONITOR_LOOP=1 MONITOR_INTERVAL_MS=60000 npm run monitor:stale-conflicts
+```
+
+If you are on Windows PowerShell:
+
+```powershell
+$env:MONITOR_LOOP="1"
+$env:MONITOR_INTERVAL_MS="60000"
+npm run monitor:stale-conflicts
+```
+
 ## 4. High-Risk Areas To Watch First
 
 These are the first places to inspect if production behavior looks wrong.
