@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { InfoHint } from "@/components/monitor/InfoHint";
+import type { RollupFreshnessStatus } from "@/components/monitor/monitorData";
 import type { MetricStatus } from "@/components/monitor/MetricPanel";
 import type { MonitorSnapshot } from "@/hooks/useSystemMetrics";
 
@@ -9,12 +10,20 @@ type MonitorOverviewSectionProps = {
   snapshot: MonitorSnapshot;
   scoreStatus: MetricStatus;
   modeBadgeClass: string;
+  rollupFreshnessStatus: RollupFreshnessStatus;
+  rollupFreshnessBadgeClass: string;
+  rollupFreshnessSummary: string;
+  rollupFreshnessAgeLabel: string;
 };
 
 function MonitorOverviewSectionImpl({
   snapshot,
   scoreStatus,
   modeBadgeClass,
+  rollupFreshnessStatus,
+  rollupFreshnessBadgeClass,
+  rollupFreshnessSummary,
+  rollupFreshnessAgeLabel,
 }: MonitorOverviewSectionProps) {
   return (
     <section className="glass-wrapper p-6">
@@ -46,6 +55,10 @@ function MonitorOverviewSectionImpl({
               {snapshot.mode}
             </Badge>
             <InfoHint text="Current protection mode driven by runtime pressure and safety rules." />
+            <Badge variant="outline" className={rollupFreshnessBadgeClass}>
+              Rollup SLA {rollupFreshnessStatus.toUpperCase()}
+            </Badge>
+            <InfoHint text="Freshness signal for background collection report rollup updates." />
           </div>
         </div>
         <div className="text-left lg:text-right">
@@ -94,8 +107,9 @@ function MonitorOverviewSectionImpl({
               <InfoHint text="Pending background refresh slices keeping collection report rollups up to date." />
             </div>
             <p className="mt-2 text-2xl font-semibold">{snapshot.rollupRefreshPendingCount}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{rollupFreshnessSummary}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {snapshot.rollupRefreshRunningCount} running, {snapshot.rollupRefreshRetryCount} retry
+              {snapshot.rollupRefreshRunningCount} running, {snapshot.rollupRefreshRetryCount} retry, oldest {rollupFreshnessAgeLabel}
             </p>
           </CardContent>
         </Card>

@@ -55,6 +55,8 @@ export type SlopeRow = {
   value: number;
 };
 
+export type RollupFreshnessStatus = "fresh" | "warming" | "stale";
+
 export const CHAOS_OPTIONS: ChaosOption[] = [
   {
     type: "cpu_spike",
@@ -148,6 +150,76 @@ export const getModeBadgeClass = (mode: string) => {
   if (mode === "NORMAL") return "border-emerald-500/30 bg-emerald-500/15 text-emerald-500";
   if (mode === "DEGRADED") return "border-amber-500/30 bg-amber-500/15 text-amber-500";
   return "border-red-500/30 bg-red-500/15 text-red-500";
+};
+
+export const getRollupFreshnessStatus = (snapshot: Pick<
+  MonitorSnapshot,
+  "rollupRefreshPendingCount" | "rollupRefreshRetryCount" | "rollupRefreshOldestPendingAgeMs"
+>): RollupFreshnessStatus => {
+  if (
+    snapshot.rollupRefreshRetryCount > 0 ||
+    snapshot.rollupRefreshOldestPendingAgeMs >= 120_000 ||
+    snapshot.rollupRefreshPendingCount >= 15
+  ) {
+    return "stale";
+  }
+
+  if (
+    snapshot.rollupRefreshPendingCount > 0 ||
+    snapshot.rollupRefreshOldestPendingAgeMs >= 30_000
+  ) {
+    return "warming";
+  }
+
+  return "fresh";
+};
+
+export const getRollupFreshnessBadgeClass = (status: RollupFreshnessStatus) => {
+  if (status === "fresh") return "border-emerald-500/30 bg-emerald-500/15 text-emerald-500";
+  if (status === "warming") return "border-amber-500/30 bg-amber-500/15 text-amber-500";
+  return "border-red-500/30 bg-red-500/15 text-red-500";
+};
+
+export const formatMonitorDurationCompact = (durationMs: number) => {
+  const safeMs = Math.max(0, Math.round(Number(durationMs || 0)));
+  if (safeMs >= 3_600_000) {
+    const hours = Math.floor(safeMs / 3_600_000);
+    const minutes = Math.floor((safeMs % 3_600_000) / 60_000);
+    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  }
+  if (safeMs >= 60_000) {
+    const minutes = Math.floor(safeMs / 60_000);
+    const seconds = Math.floor((safeMs % 60_000) / 1000);
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  }
+  if (safeMs >= 1000) {
+    return `${(safeMs / 1000).toFixed(safeMs >= 10_000 ? 0 : 1)}s`;
+  }
+  return `${safeMs}ms`;
+};
+
+export const buildRollupFreshnessSummary = (snapshot: Pick<
+  MonitorSnapshot,
+  | "rollupRefreshPendingCount"
+  | "rollupRefreshRunningCount"
+  | "rollupRefreshRetryCount"
+  | "rollupRefreshOldestPendingAgeMs"
+>) => {
+  const status = getRollupFreshnessStatus(snapshot);
+  if (status === "fresh") {
+    return "Fresh: collection report rollups are keeping up with current mutations.";
+  }
+
+  const oldestAge = formatMonitorDurationCompact(snapshot.rollupRefreshOldestPendingAgeMs);
+  const retryText = snapshot.rollupRefreshRetryCount > 0
+    ? ` ${snapshot.rollupRefreshRetryCount} slice(s) waiting to retry.`
+    : "";
+
+  if (status === "warming") {
+    return `Warming: ${snapshot.rollupRefreshPendingCount} pending slice(s), ${snapshot.rollupRefreshRunningCount} running, oldest ${oldestAge}.${retryText}`;
+  }
+
+  return `Stale: ${snapshot.rollupRefreshPendingCount} pending slice(s), oldest ${oldestAge}.${retryText}`;
 };
 
 export const getGovernanceClass = (governanceState: string) => {

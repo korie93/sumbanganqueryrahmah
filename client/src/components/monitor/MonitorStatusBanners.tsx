@@ -1,14 +1,22 @@
 import { memo } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import type { RollupFreshnessStatus } from "@/components/monitor/monitorData";
 
 type MonitorStatusBannersProps = {
   mode: string;
   hasNetworkFailure: boolean;
+  rollupFreshnessStatus: RollupFreshnessStatus;
+  rollupFreshnessSummary: string;
 };
 
-function MonitorStatusBannersImpl({ mode, hasNetworkFailure }: MonitorStatusBannersProps) {
-  if (mode === "NORMAL" && !hasNetworkFailure) {
+function MonitorStatusBannersImpl({
+  mode,
+  hasNetworkFailure,
+  rollupFreshnessStatus,
+  rollupFreshnessSummary,
+}: MonitorStatusBannersProps) {
+  if (mode === "NORMAL" && !hasNetworkFailure && rollupFreshnessStatus === "fresh") {
     return null;
   }
 
@@ -27,6 +35,21 @@ function MonitorStatusBannersImpl({ mode, hasNetworkFailure }: MonitorStatusBann
         <Card className="border-amber-500/30 bg-amber-500/10">
           <CardContent className="p-3 text-sm text-amber-700 dark:text-amber-400">
             Partial telemetry unavailable due to network or endpoint failure. Showing last known values.
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {rollupFreshnessStatus !== "fresh" ? (
+        <Card className={rollupFreshnessStatus === "stale" ? "border-red-500/30 bg-red-500/10" : "border-amber-500/30 bg-amber-500/10"}>
+          <CardContent
+            className={
+              rollupFreshnessStatus === "stale"
+                ? "flex items-center gap-2 p-3 text-sm text-red-600 dark:text-red-400"
+                : "flex items-center gap-2 p-3 text-sm text-amber-700 dark:text-amber-400"
+            }
+          >
+            <AlertTriangle className="h-4 w-4" />
+            {rollupFreshnessSummary}
           </CardContent>
         </Card>
       ) : null}
