@@ -13,9 +13,13 @@ import {
   buildCorrelationRows,
   buildForecastSeries,
   buildMetricGroups,
+  buildRollupFreshnessSummary,
+  formatMonitorDurationCompact,
   buildSlopeRows,
   getGovernanceClass,
   getModeBadgeClass,
+  getRollupFreshnessBadgeClass,
+  getRollupFreshnessStatus,
   getScoreStatus,
   normalizeBoostedKey,
 } from "@/components/monitor/monitorData";
@@ -110,6 +114,16 @@ export default function Monitor() {
   );
   const scoreStatus = useMemo(() => getScoreStatus(snapshot.score), [snapshot.score]);
   const modeBadgeClass = useMemo(() => getModeBadgeClass(snapshot.mode), [snapshot.mode]);
+  const rollupFreshnessStatus = useMemo(() => getRollupFreshnessStatus(snapshot), [snapshot]);
+  const rollupFreshnessBadgeClass = useMemo(
+    () => getRollupFreshnessBadgeClass(rollupFreshnessStatus),
+    [rollupFreshnessStatus],
+  );
+  const rollupFreshnessSummary = useMemo(() => buildRollupFreshnessSummary(snapshot), [snapshot]);
+  const rollupFreshnessAgeLabel = useMemo(
+    () => formatMonitorDurationCompact(snapshot.rollupRefreshOldestPendingAgeMs),
+    [snapshot.rollupRefreshOldestPendingAgeMs],
+  );
   const governanceClass = useMemo(
     () => getGovernanceClass(intelligence.governanceState),
     [intelligence.governanceState],
@@ -218,11 +232,20 @@ export default function Monitor() {
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-6 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       <div className="mx-auto max-w-7xl space-y-6">
-        <MonitorStatusBanners mode={snapshot.mode} hasNetworkFailure={hasNetworkFailure} />
+        <MonitorStatusBanners
+          mode={snapshot.mode}
+          hasNetworkFailure={hasNetworkFailure}
+          rollupFreshnessStatus={rollupFreshnessStatus}
+          rollupFreshnessSummary={rollupFreshnessSummary}
+        />
         <MonitorOverviewSection
           snapshot={snapshot}
           scoreStatus={scoreStatus}
           modeBadgeClass={modeBadgeClass}
+          rollupFreshnessStatus={rollupFreshnessStatus}
+          rollupFreshnessBadgeClass={rollupFreshnessBadgeClass}
+          rollupFreshnessSummary={rollupFreshnessSummary}
+          rollupFreshnessAgeLabel={rollupFreshnessAgeLabel}
         />
         <MonitorMetricsSection metricGroups={metricGroups} />
         <MonitorAlertsSection
