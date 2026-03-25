@@ -78,13 +78,19 @@ export const imports = pgTable("imports", {
   createdAt: timestamp("created_at").defaultNow(),
   isDeleted: boolean("is_deleted").default(false),
   createdBy: text("created_by"),
-});
+}, (table) => ({
+  createdAtIdx: index("idx_imports_created_at").on(table.createdAt),
+  isDeletedIdx: index("idx_imports_is_deleted").on(table.isDeleted),
+  createdByIdx: index("idx_imports_created_by").on(table.createdBy),
+}));
 
 export const dataRows = pgTable("data_rows", {
   id: text("id").primaryKey(),
   importId: text("import_id").notNull(),
   jsonDataJsonb: jsonb("json_data").notNull(), // guna satu column sahaja
-});
+}, (table) => ({
+  importIdIdx: index("idx_data_rows_import_id").on(table.importId),
+}));
 
 export const userActivity = pgTable("user_activity", {
   id: text("id").primaryKey(),
@@ -107,6 +113,7 @@ export const userActivity = pgTable("user_activity", {
   usernameIdx: index("idx_user_activity_username").on(table.username),
   isActiveIdx: index("idx_user_activity_is_active").on(table.isActive),
   loginTimeIdx: index("idx_user_activity_login_time").on(table.loginTime),
+  logoutTimeIdx: index("idx_user_activity_logout_time").on(table.logoutTime),
   lastActivityTimeIdx: index("idx_user_activity_last_activity_time").on(table.lastActivityTime),
   fingerprintIdx: index("idx_user_activity_fingerprint").on(table.fingerprint),
   ipAddressIdx: index("idx_user_activity_ip_address").on(table.ipAddress),
