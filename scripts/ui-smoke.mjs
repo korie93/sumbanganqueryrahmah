@@ -363,8 +363,13 @@ const checkCollectionDailyPage = async (page, tracker) => {
       for (let cycle = 1; cycle <= 2; cycle += 1) {
         await receiptTrigger.click();
         await page.getByRole("heading", { name: "Receipt Preview" }).waitFor();
-        await page.getByRole("button", { name: "Close" }).waitFor();
-        await page.getByRole("button", { name: "Close" }).click();
+        const closeButton = page
+          .getByRole("dialog")
+          .locator("button")
+          .filter({ hasText: /^Close$/ })
+          .first();
+        await closeButton.waitFor();
+        await closeButton.click();
         await page.waitForTimeout(100);
         assert(
           await page.getByRole("heading", { name: "Receipt Preview" }).count() === 0,
@@ -417,6 +422,331 @@ const ensureCollectionSmokeNicknames = async (context) => {
   }
 
   return selected.slice(0, 2);
+};
+
+const getCollectionSmokeAssetPath = (fileName) =>
+  path.resolve(process.cwd(), "artifacts", fileName);
+
+const getInputByLabel = (page, labelText) =>
+  page
+    .locator("label", { hasText: labelText })
+    .locator("xpath=..")
+    .locator("input")
+    .first();
+
+const applySmokeCollectionNicknameSession = async (page, nickname) => {
+  await page.evaluate((staffNickname) => {
+    let username = String(localStorage.getItem("username") || "").trim().toLowerCase();
+    let role = String(localStorage.getItem("role") || "user").trim().toLowerCase();
+
+    try {
+      const rawUser = localStorage.getItem("user");
+      const parsedUser = rawUser ? JSON.parse(rawUser) : null;
+      username = String(parsedUser?.username || username).trim().toLowerCase();
+      role = String(parsedUser?.role || role).trim().toLowerCase();
+    } catch {
+      // Ignore stale localStorage shape differences during smoke.
+    }
+
+    sessionStorage.setItem("collection_staff_nickname", staffNickname);
+    sessionStorage.setItem(
+      "collection_staff_nickname_auth",
+      JSON.stringify({
+        nickname: staffNickname,
+        username,
+        role,
+        verifiedAt: Date.now(),
+      }),
+    );
+  }, nickname);
+};
+
+const filterCollectionRecordsBySearch = async (page, searchValue) => {
+  const searchInput = page.getByPlaceholder("Cari nama / IC / akaun / batch / telefon / jumlah bayaran");
+  await searchInput.fill(searchValue);
+  await page.getByRole("button", { name: "Filter" }).click();
+  const targetRow = page.locator("tr", { hasText: searchValue }).first();
+  await targetRow.waitFor({ state: "visible", timeout: 20_000 });
+  return targetRow;
+};
+
+const closeReceiptPreviewDialog = async (page) => {
+  const previewHeading = page.getByRole("heading", { name: "Receipt Preview" });
+  await previewHeading.waitFor({ timeout: 15_000 });
+  await page
+    .getByRole("dialog")
+    .locator("button")
+    .filter({ hasText: /^Close$/ })
+    .first()
+    .click();
+  await previewHeading.waitFor({ state: "hidden", timeout: 15_000 });
+};
+
+const cleanupCollectionReceiptSmokeRecord = async (context, {
+  recordId,
+  accountNumber,
+  expectedUpdatedAt,
+}) => {
+  let targetRecordId = String(recordId || "").trim();
+  let targetVersion = String(expectedUpdatedAt || "").trim();
+
+  if (!targetRecordId && accountNumber) {
+    const params = new URLSearchParams();
+    params.set("search", accountNumber);
+    params.set("limit", "10");
+    const listResponse = await apiJsonRequestWithRetry(
+      context,
+      "GET",
+      `/api/collection/list?${params.toString()}`,
+      undefined,
+      [200],
+    );
+    const records = Array.isArray(listResponse.payload?.records)
+      ? listResponse.payload.records
+      : [];
+    const matchedRecord = records.find(
+      (record) => String(record?.accountNumber || "").trim() === accountNumber,
+    );
+    if (matchedRecord) {
+      targetRecordId = String(matchedRecord.id || "").trim();
+      targetVersion = String(
+        matchedRecord.updatedAt || matchedRecord.createdAt || targetVersion || "",
+      ).trim();
+    }
+  }
+
+  if (!targetRecordId) {
+    return;
+  }
+
+  await apiJsonRequest(
+    context,
+    "DELETE",
+    `/api/collection/${encodeURIComponent(targetRecordId)}`,
+    targetVersion ? { expectedUpdatedAt: targetVersion } : undefined,
+    [200, 404],
+  );
+};
+
+const cleanupBackupByName = async (context, backupName) => {
+  const normalizedName = String(backupName || "").trim();
+  if (!normalizedName) {
+    return;
+  }
+
+  const params = new URLSearchParams();
+  params.set("searchName", normalizedName);
+  params.set("pageSize", "25");
+  const listResponse = await apiJsonRequestWithRetry(
+    context,
+    "GET",
+    `/api/backups?${params.toString()}`,
+    undefined,
+    [200],
+  );
+  const backups = Array.isArray(listResponse.payload?.backups)
+    ? listResponse.payload.backups
+    : [];
+
+  for (const backup of backups) {
+    if (String(backup?.name || "").trim() !== normalizedName) {
+      continue;
+    }
+
+    await apiJsonRequest(
+      context,
+      "DELETE",
+      `/api/backups/${encodeURIComponent(String(backup.id || "").trim())}`,
+      undefined,
+      [200, 404],
+    );
+  }
+};
+
+const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
+  const [nickname] = await ensureCollectionSmokeNicknames(context);
+  const uniqueSuffix = `${Date.now()}`;
+  const customerName = `Smoke Receipt ${uniqueSuffix}`;
+  const accountNumber = `SMOKE-RCPT-${uniqueSuffix}`;
+  const saveReceiptName = "receipt-smoke-save.png";
+  const replaceReceiptName = "receipt-replace.png";
+  const saveReceiptPath = getCollectionSmokeAssetPath(saveReceiptName);
+  const replaceReceiptPath = getCollectionSmokeAssetPath(replaceReceiptName);
+  let recordId = "";
+  let expectedUpdatedAt = "";
+  let recordDeleted = false;
+
+  try {
+    await applySmokeCollectionNicknameSession(page, nickname);
+    await page.goto(`${baseUrl}/collection/save`, { waitUntil: "networkidle" });
+    await page.getByText("Simpan Collection Individual").first().waitFor();
+
+    await getInputByLabel(page, "Customer Name").fill(customerName);
+    await getInputByLabel(page, "IC Number").fill(`900101${uniqueSuffix.slice(-6)}`);
+    await getInputByLabel(page, "Customer Phone Number").fill(`012${uniqueSuffix.slice(-7)}`);
+    await getInputByLabel(page, "Account Number").fill(accountNumber);
+    await getInputByLabel(page, "Payment Date").fill(getLocalIsoDate());
+    await getInputByLabel(page, "Amount (RM)").fill("12.34");
+    await page.locator('input[type="file"]').setInputFiles(saveReceiptPath);
+    await page.getByText(saveReceiptName).first().waitFor({ timeout: 15_000 });
+
+    const createResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST"
+        && response.url().includes("/api/collection")
+        && response.status() === 200,
+    );
+    await page.getByRole("button", { name: "Save Collection" }).click();
+    const createResponse = await createResponsePromise;
+    const createPayload = await createResponse.json();
+    recordId = String(createPayload?.record?.id || "").trim();
+    expectedUpdatedAt = String(
+      createPayload?.record?.updatedAt || createPayload?.record?.createdAt || "",
+    ).trim();
+    assert(recordId, "collection receipt UI smoke should receive a created record id");
+    assert(expectedUpdatedAt, "collection receipt UI smoke should capture the created record version");
+    await page.waitForTimeout(250);
+
+    await page.goto(`${baseUrl}/collection/records`, { waitUntil: "networkidle" });
+    await page.getByText("View Rekod Collection").first().waitFor();
+    let targetRow = await filterCollectionRecordsBySearch(page, accountNumber);
+
+    await targetRow.getByRole("button", { name: /View/ }).click();
+    await page.getByText(saveReceiptName).first().waitFor({ timeout: 15_000 });
+    await closeReceiptPreviewDialog(page);
+
+    await targetRow.getByRole("button", { name: "Edit" }).click();
+    const editDialog = page.getByRole("dialog").filter({
+      has: page.getByRole("heading", { name: "Edit Collection Record" }),
+    }).first();
+    await editDialog.waitFor({ timeout: 15_000 });
+    await editDialog.getByText(saveReceiptName).first().waitFor({ timeout: 15_000 });
+    await editDialog.getByRole("button", { name: "Remove" }).first().click();
+    await editDialog.locator('input[type="file"]').setInputFiles(replaceReceiptPath);
+    await editDialog.getByText(replaceReceiptName).first().waitFor({ timeout: 15_000 });
+    await editDialog.getByText("Replacement Pending").first().waitFor({ timeout: 15_000 });
+
+    const updateResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH"
+        && response.url().includes(`/api/collection/${recordId}`)
+        && response.status() === 200,
+    );
+    await editDialog.getByRole("button", { name: /^Save$/ }).click();
+    const firstUpdateResponse = await updateResponsePromise;
+    const firstUpdatePayload = await firstUpdateResponse.json();
+    expectedUpdatedAt = String(
+      firstUpdatePayload?.record?.updatedAt || firstUpdatePayload?.record?.createdAt || expectedUpdatedAt,
+    ).trim();
+    await editDialog.waitFor({ state: "hidden", timeout: 15_000 });
+
+    targetRow = await filterCollectionRecordsBySearch(page, accountNumber);
+    await targetRow.getByRole("button", { name: /View/ }).click();
+    await page.getByText(replaceReceiptName).first().waitFor({ timeout: 15_000 });
+    await closeReceiptPreviewDialog(page);
+
+    await targetRow.getByRole("button", { name: "Edit" }).click();
+    const removeDialog = page.getByRole("dialog").filter({
+      has: page.getByRole("heading", { name: "Edit Collection Record" }),
+    }).first();
+    await removeDialog.waitFor({ timeout: 15_000 });
+    await removeDialog.getByText(replaceReceiptName).first().waitFor({ timeout: 15_000 });
+    await removeDialog.getByRole("button", { name: "Remove" }).first().click();
+
+    const removeResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH"
+        && response.url().includes(`/api/collection/${recordId}`)
+        && response.status() === 200,
+    );
+    await removeDialog.getByRole("button", { name: /^Save$/ }).click();
+    const removeResponse = await removeResponsePromise;
+    const removePayload = await removeResponse.json();
+    expectedUpdatedAt = String(
+      removePayload?.record?.updatedAt || removePayload?.record?.createdAt || expectedUpdatedAt,
+    ).trim();
+    await removeDialog.waitFor({ state: "hidden", timeout: 15_000 });
+
+    await page.waitForTimeout(1_500);
+    const postRemoveParams = new URLSearchParams();
+    postRemoveParams.set("search", accountNumber);
+    postRemoveParams.set("limit", "10");
+    const postRemoveResponse = await apiJsonRequestWithRetry(
+      context,
+      "GET",
+      `/api/collection/list?${postRemoveParams.toString()}`,
+      undefined,
+      [200],
+    );
+    const postRemoveRecords = Array.isArray(postRemoveResponse.payload?.records)
+      ? postRemoveResponse.payload.records
+      : [];
+    const postRemoveRecord = postRemoveRecords.find(
+      (record) => String(record?.accountNumber || "").trim() === accountNumber,
+    );
+    assert(postRemoveRecord, "collection receipt UI smoke should still find the edited record after receipt removal");
+    assert(
+      Array.isArray(postRemoveRecord.receipts) && postRemoveRecord.receipts.length === 0,
+      "collection receipt UI smoke should leave the record without any linked receipts after removal",
+    );
+    expectedUpdatedAt = String(
+      postRemoveRecord.updatedAt || postRemoveRecord.createdAt || expectedUpdatedAt,
+    ).trim();
+
+    consumeExpectedCollectionPurgeSummaryRateLimit(tracker);
+    consumeExpectedCollectionListRateLimit(tracker, accountNumber);
+    tracker.assertClean("collection receipt UI flow");
+    tracker.clear();
+  } finally {
+    if (!recordDeleted) {
+      await cleanupCollectionReceiptSmokeRecord(context, {
+        recordId,
+        accountNumber,
+        expectedUpdatedAt,
+      }).catch(() => {});
+    }
+  }
+};
+
+const checkBackupRestoreUiFlow = async (page, context, tracker) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${baseUrl}/settings?section=backup-restore`, { waitUntil: "networkidle" });
+  await page.getByText("Backup & Restore").first().waitFor();
+
+  if (await page.getByTestId("button-create-backup").count() === 0) {
+    tracker.assertClean("backup restore UI flow");
+    tracker.clear();
+    return;
+  }
+
+  const backupName = `Smoke UI Backup ${Date.now()}`;
+  let backupDeleted = false;
+
+  try {
+    await page.getByTestId("button-create-backup").click();
+    await page.getByText("Create New Backup").first().waitFor({ timeout: 15_000 });
+    await page.getByTestId("input-backup-name").fill(backupName);
+    await page.getByTestId("button-confirm-create").click();
+
+    const createdBackupItem = page
+      .locator('[data-testid^="backup-item-"]')
+      .filter({ hasText: backupName })
+      .first();
+    await createdBackupItem.waitFor({ state: "visible", timeout: 120_000 });
+
+    await createdBackupItem.getByRole("button", { name: "Delete" }).click();
+    await page.getByText("Delete Backup?").first().waitFor({ timeout: 15_000 });
+    await page.getByTestId("button-confirm-delete").click();
+    await createdBackupItem.waitFor({ state: "hidden", timeout: 60_000 });
+    backupDeleted = true;
+
+    tracker.assertClean("backup restore UI flow");
+    tracker.clear();
+  } finally {
+    if (!backupDeleted) {
+      await cleanupBackupByName(context, backupName).catch(() => {});
+    }
+  }
 };
 
 const fetchCollectionSummaryYear = async (context, year, nicknames) => {
@@ -1092,6 +1422,26 @@ const consumeExpectedCollectionPurgeSummaryRateLimit = (tracker) => {
   return consumed;
 };
 
+const consumeExpectedCollectionListRateLimit = (tracker, searchValue = "") => {
+  const pattern = "/api/collection/list";
+  const normalizedSearchValue = String(searchValue || "").trim();
+  let consumed = 0;
+
+  for (let index = tracker.failedRequests.length - 1; index >= 0; index -= 1) {
+    const entry = String(tracker.failedRequests[index] || "");
+    if (!entry.includes("GET") || !entry.includes(pattern) || !entry.includes(":: 429")) {
+      continue;
+    }
+    if (normalizedSearchValue && !entry.includes(normalizedSearchValue)) {
+      continue;
+    }
+    tracker.failedRequests.splice(index, 1);
+    consumed += 1;
+  }
+
+  return consumed;
+};
+
 const consumeExpectedPostLogoutRateLimitNoise = (tracker) => {
   const expectedPaths = ["/api/imports", "/api/app-config"];
   let consumed = 0;
@@ -1260,6 +1610,8 @@ const run = async () => {
       await checkCollectionDailyPage(page, tracker);
       await checkCollectionMutationConsistency(context);
       await checkCollectionRecordsStaleDeleteConflict(page, context, tracker);
+      await checkCollectionReceiptUiFlow(page, context, tracker);
+      await checkBackupRestoreUiFlow(page, context, tracker);
 
       await checkLogoutFlow(page, context, tracker);
     } else {
