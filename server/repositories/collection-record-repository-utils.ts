@@ -34,13 +34,20 @@ import { mapCollectionRecordRow } from "./collection-repository-mappers";
 
 type CollectionRepositoryExecutor = Pick<typeof db, "execute">;
 
-type CollectionRecordDailyRollupSlice = {
+export type CollectionRecordDailyRollupSlice = {
   paymentDate?: string | null;
   createdByLogin?: string | null;
   collectionStaffNickname?: string | null;
 };
 
-function normalizeCollectionRecordDailyRollupSlice(
+export type CollectionRecordDailyRollupRefreshQueueSnapshot = {
+  pendingCount: number;
+  runningCount: number;
+  retryCount: number;
+  oldestPendingAgeMs: number;
+};
+
+export function normalizeCollectionRecordDailyRollupSlice(
   slice: CollectionRecordDailyRollupSlice | null | undefined,
 ): Required<CollectionRecordDailyRollupSlice> | null {
   const paymentDate = String(slice?.paymentDate || "").trim();
@@ -57,7 +64,7 @@ function normalizeCollectionRecordDailyRollupSlice(
   };
 }
 
-function mapCollectionRecordRowToDailyRollupSlice(
+export function mapCollectionRecordRowToDailyRollupSlice(
   row: Record<string, unknown> | null | undefined,
 ): Required<CollectionRecordDailyRollupSlice> | null {
   return normalizeCollectionRecordDailyRollupSlice({
@@ -67,7 +74,7 @@ function mapCollectionRecordRowToDailyRollupSlice(
   });
 }
 
-async function refreshCollectionRecordDailyRollupSlice(
+export async function refreshCollectionRecordDailyRollupSlice(
   executor: CollectionRepositoryExecutor,
   slice: CollectionRecordDailyRollupSlice | null | undefined,
 ): Promise<void> {
@@ -122,7 +129,7 @@ async function refreshCollectionRecordDailyRollupSlice(
   `);
 }
 
-async function refreshCollectionRecordDailyRollupSlices(
+export async function refreshCollectionRecordDailyRollupSlices(
   executor: CollectionRepositoryExecutor,
   slices: Array<CollectionRecordDailyRollupSlice | null | undefined>,
 ): Promise<void> {
@@ -139,6 +146,220 @@ async function refreshCollectionRecordDailyRollupSlices(
   for (const slice of pending.values()) {
     await refreshCollectionRecordDailyRollupSlice(executor, slice);
   }
+}
+
+export async function rebuildCollectionRecordDailyRollups(
+  executor: CollectionRepositoryExecutor,
+): Promise<void> {
+  await executor.execute(sql`
+    DELETE FROM public.collection_record_daily_rollups rollup
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM public.collection_records record
+      WHERE record.payment_date = rollup.payment_date
+        AND record.created_by_login = rollup.created_by_login
+        AND record.collection_staff_nickname = rollup.collection_staff_nickname
+    )
+  `);
+  await executor.execute(sql`
+    INSERT INTO public.collection_record_daily_rollups (
+      payment_date,
+      created_by_login,
+      collection_staff_nickname,
+      total_records,
+      total_amount,
+      updated_at
+    )
+    SELECT
+      payment_date,
+      created_by_login,
+      collection_staff_nickname,
+      COUNT(*)::int,
+      COALESCE(SUM(amount), 0)::numeric(14,2),
+      now()
+    FROM public.collection_records
+    GROUP BY payment_date, created_by_login, collection_staff_nickname
+    ON CONFLICT (payment_date, created_by_login, collection_staff_nickname)
+    DO UPDATE SET
+      total_records = EXCLUDED.total_records,
+      total_amount = EXCLUDED.total_amount,
+      updated_at = now()
+  `);
+}
+
+export async function enqueueCollectionRecordDailyRollupSlices(
+  executor: CollectionRepositoryExecutor,
+  slices: Array<CollectionRecordDailyRollupSlice | null | undefined>,
+): Promise<void> {
+  const pending = new Map<string, Required<CollectionRecordDailyRollupSlice>>();
+  for (const slice of slices) {
+    const normalized = normalizeCollectionRecordDailyRollupSlice(slice);
+    if (!normalized) continue;
+    pending.set(
+      `${normalized.paymentDate}::${normalized.createdByLogin}::${normalized.collectionStaffNickname}`,
+      normalized,
+    );
+  }
+
+  for (const slice of pending.values()) {
+    await executor.execute(sql`
+      INSERT INTO public.collection_record_daily_rollup_refresh_queue (
+        payment_date,
+        created_by_login,
+        collection_staff_nickname,
+        status,
+        requested_at,
+        updated_at,
+        next_attempt_at,
+        attempt_count,
+        last_error
+      )
+      VALUES (
+        ${slice.paymentDate}::date,
+        ${slice.createdByLogin},
+        ${slice.collectionStaffNickname},
+        'queued',
+        now(),
+        now(),
+        now(),
+        0,
+        null
+      )
+      ON CONFLICT (payment_date, created_by_login, collection_staff_nickname)
+      DO UPDATE SET
+        status = 'queued',
+        updated_at = now(),
+        next_attempt_at = now(),
+        last_error = null
+    `);
+  }
+}
+
+export async function getCollectionRecordDailyRollupRefreshQueueSnapshot(
+  now: Date = new Date(),
+): Promise<CollectionRecordDailyRollupRefreshQueueSnapshot> {
+  const result = await db.execute(sql`
+    SELECT
+      COUNT(*)::int AS pending_count,
+      COUNT(*) FILTER (WHERE status = 'running')::int AS running_count,
+      COUNT(*) FILTER (WHERE NULLIF(BTRIM(COALESCE(last_error, '')), '') IS NOT NULL)::int AS retry_count,
+      COALESCE(
+        MAX(
+          GREATEST(
+            0,
+            FLOOR(EXTRACT(EPOCH FROM (${now}::timestamptz - requested_at)) * 1000)
+          )::bigint
+        ),
+        0
+      )::bigint AS oldest_pending_age_ms
+    FROM public.collection_record_daily_rollup_refresh_queue
+  `);
+  const row = (result.rows?.[0] || null) as Record<string, unknown> | null;
+
+  return {
+    pendingCount: Number(row?.pending_count || 0),
+    runningCount: Number(row?.running_count || 0),
+    retryCount: Number(row?.retry_count || 0),
+    oldestPendingAgeMs: Math.max(0, Number(row?.oldest_pending_age_ms || 0)),
+  };
+}
+
+async function hasPendingCollectionRecordDailyRollupSlices(filters?: {
+  from?: string;
+  to?: string;
+  createdByLogin?: string;
+  nicknames?: string[];
+}): Promise<boolean> {
+  const whereSql = buildCollectionRecordDailyRollupWhereSql(filters);
+  const result = await db.execute(sql`
+    SELECT EXISTS (
+      SELECT 1
+      FROM public.collection_record_daily_rollup_refresh_queue
+      ${whereSql}
+    ) AS has_pending
+  `);
+  return Boolean((result.rows?.[0] as { has_pending?: boolean } | undefined)?.has_pending);
+}
+
+export async function markRunningCollectionRecordDailyRollupRefreshSlicesQueued(): Promise<void> {
+  await db.execute(sql`
+    UPDATE public.collection_record_daily_rollup_refresh_queue
+    SET
+      status = 'queued',
+      updated_at = now(),
+      next_attempt_at = now(),
+      last_error = COALESCE(last_error, 'Rollup refresh was interrupted by a server restart before completion.')
+    WHERE status = 'running'
+  `);
+}
+
+export async function claimNextCollectionRecordDailyRollupRefreshSlice(
+  now: Date = new Date(),
+): Promise<Required<CollectionRecordDailyRollupSlice> | null> {
+  const result = await db.execute(sql`
+    WITH next_slice AS (
+      SELECT payment_date, created_by_login, collection_staff_nickname
+      FROM public.collection_record_daily_rollup_refresh_queue
+      WHERE status = 'queued'
+        AND next_attempt_at <= ${now}
+      ORDER BY updated_at ASC, requested_at ASC
+      LIMIT 1
+      FOR UPDATE SKIP LOCKED
+    )
+    UPDATE public.collection_record_daily_rollup_refresh_queue queue
+    SET
+      status = 'running',
+      updated_at = now(),
+      attempt_count = COALESCE(queue.attempt_count, 0) + 1,
+      last_error = null
+    FROM next_slice
+    WHERE queue.payment_date = next_slice.payment_date
+      AND queue.created_by_login = next_slice.created_by_login
+      AND queue.collection_staff_nickname = next_slice.collection_staff_nickname
+    RETURNING
+      queue.payment_date,
+      queue.created_by_login,
+      queue.collection_staff_nickname
+  `);
+
+  return mapCollectionRecordRowToDailyRollupSlice(
+    (result.rows?.[0] || null) as Record<string, unknown> | null,
+  );
+}
+
+export async function completeCollectionRecordDailyRollupRefreshSlice(
+  slice: CollectionRecordDailyRollupSlice | null | undefined,
+): Promise<void> {
+  const normalized = normalizeCollectionRecordDailyRollupSlice(slice);
+  if (!normalized) return;
+
+  await db.execute(sql`
+    DELETE FROM public.collection_record_daily_rollup_refresh_queue
+    WHERE payment_date = ${normalized.paymentDate}::date
+      AND created_by_login = ${normalized.createdByLogin}
+      AND collection_staff_nickname = ${normalized.collectionStaffNickname}
+  `);
+}
+
+export async function failCollectionRecordDailyRollupRefreshSlice(params: {
+  slice: CollectionRecordDailyRollupSlice | null | undefined;
+  errorMessage: string;
+  nextAttemptAt: Date;
+}): Promise<void> {
+  const normalized = normalizeCollectionRecordDailyRollupSlice(params.slice);
+  if (!normalized) return;
+
+  await db.execute(sql`
+    UPDATE public.collection_record_daily_rollup_refresh_queue
+    SET
+      status = 'queued',
+      updated_at = now(),
+      next_attempt_at = ${params.nextAttemptAt},
+      last_error = ${params.errorMessage}
+    WHERE payment_date = ${normalized.paymentDate}::date
+      AND created_by_login = ${normalized.createdByLogin}
+      AND collection_staff_nickname = ${normalized.collectionStaffNickname}
+  `);
 }
 
 export async function createCollectionRecord(data: CreateCollectionRecordInput): Promise<CollectionRecord> {
@@ -179,7 +400,7 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
       )
     `);
 
-    await refreshCollectionRecordDailyRollupSlices(tx, [{
+    await enqueueCollectionRecordDailyRollupSlices(tx, [{
       paymentDate: data.paymentDate,
       createdByLogin: data.createdByLogin,
       collectionStaffNickname: data.collectionStaffNickname,
@@ -268,7 +489,10 @@ export async function summarizeCollectionRecords(filters?: {
   createdByLogin?: string;
   nicknames?: string[];
 }): Promise<{ totalRecords: number; totalAmount: number }> {
-  if (canUseCollectionRecordDailyRollups(filters)) {
+  if (
+    canUseCollectionRecordDailyRollups(filters)
+    && !(await hasPendingCollectionRecordDailyRollupSlices(filters))
+  ) {
     const whereSql = buildCollectionRecordDailyRollupWhereSql(filters);
     const result = await db.execute(sql`
       SELECT
@@ -301,7 +525,10 @@ export async function summarizeCollectionRecordsByNickname(filters?: {
   createdByLogin?: string;
   nicknames?: string[];
 }): Promise<Array<{ nickname: string; totalRecords: number; totalAmount: number }>> {
-  if (canUseCollectionRecordDailyRollups(filters)) {
+  if (
+    canUseCollectionRecordDailyRollups(filters)
+    && !(await hasPendingCollectionRecordDailyRollupSlices(filters))
+  ) {
     const whereSql = buildCollectionRecordDailyRollupWhereSql(filters);
 
     const result = await db.execute(sql`
@@ -349,7 +576,10 @@ export async function summarizeCollectionRecordsByNicknameAndPaymentDate(filters
   createdByLogin?: string;
   nicknames?: string[];
 }): Promise<CollectionNicknameDailyAggregate[]> {
-  if (canUseCollectionRecordDailyRollups(filters)) {
+  if (
+    canUseCollectionRecordDailyRollups(filters)
+    && !(await hasPendingCollectionRecordDailyRollupSlices(filters))
+  ) {
     const whereSql = buildCollectionRecordDailyRollupWhereSql(filters);
 
     const result = await db.execute(sql`
@@ -395,6 +625,24 @@ export async function summarizeCollectionRecordsOlderThan(
       totalRecords: 0,
       totalAmount: 0,
     };
+  }
+
+  const hasPending = await db.execute(sql`
+    SELECT EXISTS (
+      SELECT 1
+      FROM public.collection_record_daily_rollup_refresh_queue
+      WHERE payment_date < ${normalizedBeforeDate}::date
+    ) AS has_pending
+  `);
+  if (Boolean((hasPending.rows?.[0] as { has_pending?: boolean } | undefined)?.has_pending)) {
+    const fallbackResult = await db.execute(sql`
+      SELECT
+        COUNT(*)::int AS total_records,
+        COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
+      FROM public.collection_records
+      WHERE payment_date < ${normalizedBeforeDate}::date
+    `);
+    return mapCollectionAggregateRow(fallbackResult.rows?.[0]);
   }
 
   const result = await db.execute(sql`
@@ -472,6 +720,10 @@ export async function purgeCollectionRecordsOlderThan(beforeDate: string): Promi
       DELETE FROM public.collection_record_daily_rollups
       WHERE payment_date < ${normalizedBeforeDate}::date
     `);
+    await tx.execute(sql`
+      DELETE FROM public.collection_record_daily_rollup_refresh_queue
+      WHERE payment_date < ${normalizedBeforeDate}::date
+    `);
 
     const receiptPaths = collectCollectionReceiptPaths(
       oldRecordRows,
@@ -492,6 +744,27 @@ export async function getCollectionMonthlySummary(filters: {
   createdByLogin?: string;
 }): Promise<CollectionMonthlySummary[]> {
   const { whereSql } = buildCollectionMonthlySummaryWhereSql(filters);
+  if (await hasPendingCollectionRecordDailyRollupSlices({
+    from: `${filters.year}-01-01`,
+    to: `${filters.year}-12-31`,
+    createdByLogin: filters.createdByLogin,
+    nicknames: filters.nicknames,
+  })) {
+    const fallbackResult = await db.execute(sql`
+      SELECT
+        EXTRACT(MONTH FROM payment_date)::int AS month,
+        COUNT(*)::int AS total_records,
+        COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
+      FROM public.collection_records
+      ${whereSql}
+      GROUP BY 1
+      ORDER BY 1
+      LIMIT 12
+    `);
+
+    return mapCollectionMonthlySummaryRows(fallbackResult.rows || []);
+  }
+
   const result = await db.execute(sql`
     SELECT
       EXTRACT(MONTH FROM payment_date)::int AS month,
@@ -661,7 +934,7 @@ export async function updateCollectionRecord(
       await createCollectionRecordReceiptRows(tx, id, newReceipts);
     }
 
-    await refreshCollectionRecordDailyRollupSlices(tx, [
+    await enqueueCollectionRecordDailyRollupSlices(tx, [
       existingSlice,
       mapCollectionRecordRowToDailyRollupSlice((row || null) as Record<string, unknown> | null),
     ]);
@@ -714,7 +987,7 @@ export async function deleteCollectionRecord(
       WHERE collection_record_id = ${deletedId}::uuid
     `);
 
-    await refreshCollectionRecordDailyRollupSlices(tx, [existingSlice]);
+    await enqueueCollectionRecordDailyRollupSlices(tx, [existingSlice]);
     return true;
   });
 }

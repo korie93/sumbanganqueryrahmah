@@ -37,6 +37,12 @@ export type {
 
 const LATENCY_WINDOW = 400;
 const MAX_INTELLIGENCE_HISTORY = 300;
+const EMPTY_ROLLUP_REFRESH_SNAPSHOT = {
+  pendingCount: 0,
+  runningCount: 0,
+  retryCount: 0,
+  oldestPendingAgeMs: 0,
+};
 const ipcProcess = process as IpcCapableProcess;
 const runtimeGlobal = globalThis as GcCapableGlobal;
 
@@ -94,6 +100,9 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
   let intelligenceInFlight = false;
   let lastPgPoolWarningAt = 0;
   let lastPgPoolWarningSignature = "";
+  let rollupRefreshSnapshot = {
+    ...EMPTY_ROLLUP_REFRESH_SNAPSHOT,
+  };
 
   const intelligenceHistory: SystemHistory = {
     cpuPercent: [],
@@ -259,6 +268,26 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     return controlState.dbProtection || lastDbLatencyMs > 1000;
   }
 
+  async function refreshCollectionRollupRefreshQueueSnapshot(): Promise<void> {
+    if (!options.getCollectionRollupRefreshQueueSnapshot) {
+      return;
+    }
+
+    try {
+      const nextSnapshot = await options.getCollectionRollupRefreshQueueSnapshot();
+      rollupRefreshSnapshot = {
+        pendingCount: Math.max(0, Number(nextSnapshot?.pendingCount || 0)),
+        runningCount: Math.max(0, Number(nextSnapshot?.runningCount || 0)),
+        retryCount: Math.max(0, Number(nextSnapshot?.retryCount || 0)),
+        oldestPendingAgeMs: Math.max(0, Number(nextSnapshot?.oldestPendingAgeMs || 0)),
+      };
+    } catch (error) {
+      if (options.apiDebugLogs) {
+        logger.warn("Collection rollup queue snapshot refresh failed", { error });
+      }
+    }
+  }
+
   function computeInternalMonitorSnapshot(): InternalMonitorSnapshot {
     const workerSamples = controlState.workers || [];
     const maxWorkerP95 = workerSamples.reduce(
@@ -333,6 +362,10 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
       localOpenCircuitCount,
       clusterOpenCircuitCount,
       bottleneckType,
+      rollupRefreshPendingCount: rollupRefreshSnapshot.pendingCount,
+      rollupRefreshRunningCount: rollupRefreshSnapshot.runningCount,
+      rollupRefreshRetryCount: rollupRefreshSnapshot.retryCount,
+      rollupRefreshOldestPendingAgeMs: roundMetric(rollupRefreshSnapshot.oldestPendingAgeMs, 0),
       updatedAt: controlState.updatedAt,
     };
   }
@@ -536,10 +569,12 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
         }
       }
 
+      void refreshCollectionRollupRefreshQueueSnapshot();
       void runIntelligenceCycle();
     }, 5_000);
 
     runtimeLoopHandle.unref();
+    void refreshCollectionRollupRefreshQueueSnapshot();
     void runIntelligenceCycle();
   }
 

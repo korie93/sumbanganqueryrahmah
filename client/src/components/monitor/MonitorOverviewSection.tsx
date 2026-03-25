@@ -57,7 +57,7 @@ function MonitorOverviewSectionImpl({
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Card className="border-border/60 bg-background/45">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
@@ -84,6 +84,18 @@ function MonitorOverviewSectionImpl({
             </div>
             <p className="mt-2 text-2xl font-semibold">
               {snapshot.workerCount} / {snapshot.maxWorkers}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/60 bg-background/45">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Rollup Queue</p>
+              <InfoHint text="Pending background refresh slices keeping collection report rollups up to date." />
+            </div>
+            <p className="mt-2 text-2xl font-semibold">{snapshot.rollupRefreshPendingCount}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {snapshot.rollupRefreshRunningCount} running, {snapshot.rollupRefreshRetryCount} retry
             </p>
           </CardContent>
         </Card>

@@ -6,6 +6,7 @@ import { runtimeConfig } from "../config/runtime";
 import { pool } from "../db-postgres";
 import { evaluateSystem } from "../intelligence";
 import { logger } from "../lib/logger";
+import { getCollectionRecordDailyRollupRefreshQueueSnapshot } from "../repositories/collection-record-repository-utils";
 import { PostgresStorage } from "../storage-postgres";
 import { createAiConcurrencyGate } from "./aiConcurrencyGate";
 import { createApiProtectionMiddleware } from "./apiProtection";
@@ -56,6 +57,7 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     aiLatencyStaleAfterMs: runtimeConfig.ai.latency.staleAfterMs,
     aiLatencyDecayHalfLifeMs: runtimeConfig.ai.latency.decayHalfLifeMs,
     getSearchQueueLength: () => getSearchQueueLength(),
+    getCollectionRollupRefreshQueueSnapshot: () => getCollectionRecordDailyRollupRefreshQueueSnapshot(),
     evaluateSystem,
   });
   const {

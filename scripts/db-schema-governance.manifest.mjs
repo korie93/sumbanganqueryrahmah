@@ -108,6 +108,10 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Collection reporting rollups now have a reviewed Drizzle migration while runtime bootstrap remains additive for backfill and compatibility refreshes.",
     ),
+    collection_record_daily_rollup_refresh_queue: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Collection rollup refresh queue now has a reviewed Drizzle migration while runtime bootstrap remains additive for recovery and compatibility.",
+    ),
     collection_records: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "legacy-sql", "runtime-ddl"],
       "Collection records now have a reviewed Drizzle migration while runtime bootstrap remains additive for normalization and legacy receipt compatibility caching.",

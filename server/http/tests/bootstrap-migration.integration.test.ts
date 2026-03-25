@@ -23,6 +23,10 @@ const collectionRecordDailyRollupMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", "0014_reviewed_collection_record_daily_rollups.sql"),
   "utf8",
 );
+const collectionRecordDailyRollupQueueMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", "0015_reviewed_collection_record_daily_rollup_refresh_queue.sql"),
+  "utf8",
+);
 const usersMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", "0012_reviewed_users_table.sql"),
   "utf8",
@@ -399,6 +403,7 @@ test(
 
       await applySql(pool, collectionRecordMigrationSql);
       await applySql(pool, collectionRecordDailyRollupMigrationSql);
+      await applySql(pool, collectionRecordDailyRollupQueueMigrationSql);
       await ensureCollectionRecordsTables(drizzle(pool));
 
       const recordResult = await pool.query<{
@@ -454,6 +459,7 @@ test(
       assert.equal(await constraintExists(pool, "fk_collection_record_receipts_record_id"), true);
       assert.equal(await indexExists(pool, "idx_collection_record_receipts_record_storage_unique"), true);
       assert.equal(await indexExists(pool, "idx_collection_record_daily_rollups_slice_unique"), true);
+      assert.equal(await indexExists(pool, "idx_collection_rollup_refresh_queue_slice_unique"), true);
     });
   },
 );
@@ -513,6 +519,7 @@ test(
       await ensureCollectionRecordsTables(drizzle(pool));
       await applySql(pool, collectionRecordMigrationSql);
       await applySql(pool, collectionRecordDailyRollupMigrationSql);
+      await applySql(pool, collectionRecordDailyRollupQueueMigrationSql);
 
       const receiptCount = await pool.query<{ count: number }>(
         `
@@ -552,6 +559,7 @@ test(
       assert.equal(await constraintExists(pool, "fk_collection_record_receipts_record_id"), true);
       assert.equal(await indexExists(pool, "idx_collection_records_lower_created_by_payment_created_id"), true);
       assert.equal(await indexExists(pool, "idx_collection_record_daily_rollups_slice_unique"), true);
+      assert.equal(await indexExists(pool, "idx_collection_rollup_refresh_queue_slice_unique"), true);
     });
   },
 );

@@ -391,6 +391,34 @@ export const collectionRecordDailyRollups = pgTable("collection_record_daily_rol
   ),
 }));
 
+export const collectionRecordDailyRollupRefreshQueue = pgTable("collection_record_daily_rollup_refresh_queue", {
+  paymentDate: date("payment_date", { mode: "string" }).notNull(),
+  createdByLogin: text("created_by_login").notNull(),
+  collectionStaffNickname: text("collection_staff_nickname").notNull(),
+  status: text("status").notNull().default("queued"),
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  nextAttemptAt: timestamp("next_attempt_at").defaultNow().notNull(),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  lastError: text("last_error"),
+}, (table) => ({
+  sliceUnique: uniqueIndex("idx_collection_rollup_refresh_queue_slice_unique").on(
+    table.paymentDate,
+    table.createdByLogin,
+    table.collectionStaffNickname,
+  ),
+  statusNextAttemptIdx: index("idx_collection_rollup_refresh_queue_status_next_attempt").on(
+    table.status,
+    table.nextAttemptAt,
+  ),
+  updatedAtIdx: index("idx_collection_rollup_refresh_queue_updated_at").on(table.updatedAt),
+  nicknameLowerPaymentDateIdx: index("idx_collection_rollup_refresh_queue_lower_nickname_payment_date").using(
+    "btree",
+    sql`lower(${table.collectionStaffNickname})`,
+    table.paymentDate,
+  ),
+}));
+
 export const collectionStaffNicknames = pgTable("collection_staff_nicknames", {
   id: uuid("id").primaryKey(),
   nickname: text("nickname").notNull(),

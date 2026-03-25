@@ -36,6 +36,7 @@ import { AuditLogOperationsService } from "../services/audit-log-operations.serv
 import { BackupJobQueueService } from "../services/backup-job-queue.service";
 import { BackupOperationsService } from "../services/backup-operations.service";
 import { CategoryStatsService } from "../services/category-stats.service";
+import { CollectionRollupRefreshQueueService } from "../services/collection-rollup-refresh-queue.service";
 import { ImportAnalysisService } from "../services/import-analysis.service";
 import { ImportsService } from "../services/imports.service";
 import { OperationsAnalyticsService } from "../services/operations-analytics.service";
@@ -252,6 +253,12 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
   });
   void backupJobQueueService.start().catch((error) => {
     logger.error("Failed to start backup background job queue", { error });
+  });
+  const collectionRollupRefreshQueueService = new CollectionRollupRefreshQueueService({
+    ensureReady: () => storage.ensureCollectionRecordsReady(),
+  });
+  void collectionRollupRefreshQueueService.start().catch((error) => {
+    logger.error("Failed to start collection rollup refresh queue", { error });
   });
 
   registerSystemRoutes(app, {
