@@ -69,6 +69,18 @@ const closeMenus = async (page) => {
   await page.waitForTimeout(100);
 };
 
+const clickAndAcceptDialogIfShown = async (page, clickAction, timeoutMs = 2_000) => {
+  const dialogPromise = page
+    .waitForEvent("dialog", { timeout: timeoutMs })
+    .then(async (dialog) => {
+      await dialog.accept();
+    })
+    .catch(() => undefined);
+
+  await clickAction();
+  await dialogPromise;
+};
+
 const getNavGroupTrigger = (page, groupId) =>
   page.locator(`[data-testid^="nav-group-${groupId}"]`).first();
 
@@ -663,7 +675,10 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
         response.request().method() === "PATCH"
         && response.url().includes(`/api/collection/${recordId}`),
     );
-    await editDialog.getByRole("button", { name: /^Save$/ }).click();
+    await clickAndAcceptDialogIfShown(
+      page,
+      () => editDialog.getByRole("button", { name: /^Save$/ }).click(),
+    );
     const firstUpdateResponse = await updateResponsePromise;
     const firstUpdateRawText = await firstUpdateResponse.text();
     const firstUpdatePayload = firstUpdateRawText ? JSON.parse(firstUpdateRawText) : {};
@@ -697,7 +712,10 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
         response.request().method() === "PATCH"
         && response.url().includes(`/api/collection/${recordId}`),
     );
-    await removeDialog.getByRole("button", { name: /^Save$/ }).click();
+    await clickAndAcceptDialogIfShown(
+      page,
+      () => removeDialog.getByRole("button", { name: /^Save$/ }).click(),
+    );
     const removeResponse = await removeResponsePromise;
     const removeRawText = await removeResponse.text();
     const removePayload = removeRawText ? JSON.parse(removeRawText) : {};
