@@ -481,7 +481,7 @@ const applySmokeCollectionNicknameSession = async (page, nickname) => {
 const filterCollectionRecordsBySearch = async (page, searchValue) => {
   const searchInput = page.getByPlaceholder("Cari nama / IC / akaun / batch / telefon / jumlah bayaran");
   await searchInput.fill(searchValue);
-  await page.getByRole("button", { name: "Filter" }).click();
+  await page.getByRole("button", { name: "Filter", exact: true }).click();
   const targetRow = page.locator("tr", { hasText: searchValue }).first();
   await targetRow.waitFor({ state: "visible", timeout: 20_000 });
   return targetRow;
@@ -1078,7 +1078,7 @@ const checkCollectionRecordsStaleDeleteConflict = async (page, context, tracker)
 
     const searchInput = page.getByPlaceholder("Cari nama / IC / akaun / batch / telefon / jumlah bayaran");
     await searchInput.fill(smokeRecord.customerName);
-    await page.getByRole("button", { name: "Filter" }).click();
+    await page.getByRole("button", { name: "Filter", exact: true }).click();
     await page.waitForLoadState("networkidle");
 
     const targetRow = page.locator("tr", { hasText: smokeRecord.customerName }).first();
