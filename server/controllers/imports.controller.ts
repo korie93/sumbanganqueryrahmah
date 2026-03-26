@@ -1,8 +1,9 @@
 import type { Response } from "express";
+import { z } from "zod";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { badRequest } from "../http/errors";
 import { readInteger, readNonEmptyString } from "../http/validation";
-import type { ImportsService } from "../services/imports.service";
+import type { ImportDataColumnFilter, ImportsService } from "../services/imports.service";
 
 type RuntimeSettings = {
   viewerRowsPerPage: number;
@@ -15,6 +16,35 @@ type CreateImportsControllerDeps = {
 };
 
 export type ImportsController = ReturnType<typeof createImportsController>;
+
+const viewerColumnFilterSchema = z.object({
+  column: z.string().trim().min(1).max(120),
+  operator: z.enum(["contains", "equals", "startsWith", "endsWith", "notEquals"]),
+  value: z.string().trim().min(1).max(500),
+});
+
+const viewerColumnFiltersSchema = z.array(viewerColumnFilterSchema).max(10);
+
+function parseViewerColumnFiltersQuery(value: unknown): ImportDataColumnFilter[] {
+  const normalized = readNonEmptyString(value);
+  if (!normalized) {
+    return [];
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(normalized);
+  } catch {
+    throw badRequest("Invalid viewer column filters.");
+  }
+
+  const result = viewerColumnFiltersSchema.safeParse(parsed);
+  if (!result.success) {
+    throw badRequest("Invalid viewer column filters.");
+  }
+
+  return result.data;
+}
 
 export function createImportsController(deps: CreateImportsControllerDeps) {
   const {
@@ -110,6 +140,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     const page = Math.max(1, readInteger(req.query.page, 1));
     const requestedLimit = readInteger(req.query.limit, runtimeSettings.viewerRowsPerPage);
     const search = String(req.query.search || "").trim();
+    const columnFilters = parseViewerColumnFiltersQuery(req.query.columnFilters);
 
     if (!importId) {
       return res.status(400).json({ message: "importId is required" });
@@ -122,6 +153,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
       viewerRowsPerPage: runtimeSettings.viewerRowsPerPage,
       isDbProtected: isDbProtected(),
       search,
+      columnFilters,
     });
 
     return res.json(result);

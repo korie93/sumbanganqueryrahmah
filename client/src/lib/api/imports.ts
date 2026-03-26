@@ -8,6 +8,16 @@ type ImportRequestOptions = {
   signal?: AbortSignal;
 };
 
+export type ImportDataColumnFilter = {
+  column: string;
+  operator: "contains" | "equals" | "startsWith" | "endsWith" | "notEquals";
+  value: string;
+};
+
+type ImportDataRequestOptions = ImportRequestOptions & {
+  columnFilters?: ImportDataColumnFilter[];
+};
+
 export async function getImports(options?: ImportRequestOptions) {
   const params = new URLSearchParams();
   if (options?.cursor) params.set("cursor", options.cursor);
@@ -56,7 +66,7 @@ export async function getImportData(
   page: number = 1,
   limit: number = 100,
   search?: string,
-  options?: ImportRequestOptions,
+  options?: ImportDataRequestOptions,
 ) {
   const params = new URLSearchParams({
     page: String(page),
@@ -65,6 +75,9 @@ export async function getImportData(
 
   if (search && search.trim() !== "") {
     params.set("search", search.trim());
+  }
+  if (Array.isArray(options?.columnFilters) && options.columnFilters.length > 0) {
+    params.set("columnFilters", JSON.stringify(options.columnFilters));
   }
 
   const response = await apiRequest(
