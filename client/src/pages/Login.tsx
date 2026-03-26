@@ -344,15 +344,15 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   return (
     <div className="relative w-full min-h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
-      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMyMDNhNTUiIGZpbGwtb3BhY2l0eT0iMC40Ij48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-30" />
+      <div className="login-bg-effect absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMyMDNhNTUiIGZpbGwtb3BhY2l0eT0iMC40Ij48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-30" />
       
-      <div className="absolute top-20 left-20 w-72 h-72 bg-blue-500/20 rounded-full blur-3xl floating-slow" />
-      <div className="absolute bottom-20 right-20 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl floating-slow delay-150" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-400/10 rounded-full blur-3xl floating-slow delay-300" />
+      <div className="login-bg-effect absolute top-20 left-20 h-56 w-56 rounded-full bg-blue-500/15 blur-3xl floating-slow" />
+      <div className="login-bg-effect absolute bottom-20 right-20 h-72 w-72 rounded-full bg-purple-500/15 blur-3xl floating-slow delay-150" />
+      <div className="login-bg-effect absolute top-1/2 left-1/2 h-[360px] w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-400/8 blur-3xl floating-slow delay-300" />
 
       <div className="relative z-10 flex items-center justify-center min-h-screen px-4 login-content">
         <div className="relative w-full max-w-md">
-          <div className="absolute -inset-6 rounded-[2.5rem] bg-blue-400/20 blur-3xl pointer-events-none" />
+          <div className="login-bg-effect pointer-events-none absolute -inset-4 rounded-[2rem] bg-blue-400/12 blur-2xl" />
 
           <div className="login-card px-8 py-10">
             <div className="flex flex-col items-center mb-8">
