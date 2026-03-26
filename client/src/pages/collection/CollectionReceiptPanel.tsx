@@ -2,8 +2,10 @@ import { useId, type ChangeEvent, type MutableRefObject } from "react";
 import { FileImage, FileText, RotateCcw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { CollectionRecordReceipt } from "@/lib/api";
 import { buildCollectionReceiptPanelSummary } from "@/pages/collection/collection-receipt-panel-utils";
+import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
 import {
   formatCollectionReceiptFileSize,
   useCollectionReceiptDraftPreviews,
@@ -15,12 +17,16 @@ interface CollectionReceiptPanelProps {
   disabled?: boolean;
   accept?: string;
   existingReceipts?: CollectionRecordReceipt[];
+  existingReceiptDrafts?: CollectionReceiptDraftInput[];
   removedReceiptIds?: string[];
+  pendingReceiptDrafts?: CollectionReceiptDraftInput[];
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onRemovePending: (index: number) => void;
   onClearPending?: () => void;
   onViewExisting?: (receipt: CollectionRecordReceipt) => void;
   onToggleRemoveExisting?: (receiptId: string) => void;
+  onExistingDraftChange?: (receiptId: string, patch: Partial<CollectionReceiptDraftInput>) => void;
+  onPendingDraftChange?: (index: number, patch: Partial<CollectionReceiptDraftInput>) => void;
   uploadLabel?: string;
   helperText?: string;
 }
@@ -31,12 +37,16 @@ export function CollectionReceiptPanel({
   disabled = false,
   accept = ".jpg,.jpeg,.png,.webp,.pdf",
   existingReceipts = [],
+  existingReceiptDrafts = [],
   removedReceiptIds = [],
+  pendingReceiptDrafts = [],
   onFileChange,
   onRemovePending,
   onClearPending,
   onViewExisting,
   onToggleRemoveExisting,
+  onExistingDraftChange,
+  onPendingDraftChange,
   uploadLabel = "Upload Receipt",
   helperText = "Upload one receipt at a time. JPG, PNG, and PDF up to 5MB.",
 }: CollectionReceiptPanelProps) {
@@ -44,6 +54,11 @@ export function CollectionReceiptPanel({
   const helperTextId = `${inputId}-help`;
   const draftPreviews = useCollectionReceiptDraftPreviews(pendingFiles);
   const removedSet = new Set(removedReceiptIds);
+  const existingDraftMap = new Map(
+    existingReceiptDrafts
+      .filter((draft) => Boolean(String(draft.receiptId || "").trim()))
+      .map((draft) => [String(draft.receiptId), draft]),
+  );
   const summary = buildCollectionReceiptPanelSummary({
     existingCount: existingReceipts.length,
     removedExistingCount: removedReceiptIds.length,
@@ -134,6 +149,40 @@ export function CollectionReceiptPanel({
                     <p className="text-xs text-muted-foreground">
                       {receipt.originalMimeType} | {formatCollectionReceiptFileSize(receipt.fileSize)}
                     </p>
+                    {receipt.extractedAmount ? (
+                      <p className="text-xs text-muted-foreground">
+                        OCR suggestion: RM {receipt.extractedAmount}
+                        {typeof receipt.extractionConfidence === "number"
+                          ? ` (${Math.round(receipt.extractionConfidence * 100)}% confidence)`
+                          : ""}
+                      </p>
+                    ) : null}
+                    {existingDraftMap.get(receipt.id) ? (
+                      <div className="mt-3 grid gap-2 md:grid-cols-3">
+                        <Input
+                          value={existingDraftMap.get(receipt.id)?.receiptAmount || ""}
+                          onChange={(event) =>
+                            onExistingDraftChange?.(receipt.id, { receiptAmount: event.target.value })}
+                          placeholder="Receipt Amount (RM)"
+                          disabled={disabled || markedForRemoval}
+                          inputMode="decimal"
+                        />
+                        <Input
+                          type="date"
+                          value={existingDraftMap.get(receipt.id)?.receiptDate || ""}
+                          onChange={(event) =>
+                            onExistingDraftChange?.(receipt.id, { receiptDate: event.target.value })}
+                          disabled={disabled || markedForRemoval}
+                        />
+                        <Input
+                          value={existingDraftMap.get(receipt.id)?.receiptReference || ""}
+                          onChange={(event) =>
+                            onExistingDraftChange?.(receipt.id, { receiptReference: event.target.value })}
+                          placeholder="Receipt Reference"
+                          disabled={disabled || markedForRemoval}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {onViewExisting ? (
@@ -223,6 +272,34 @@ export function CollectionReceiptPanel({
                       {formatCollectionReceiptFileSize(preview.file.size)}
                     </p>
                   </div>
+                  {pendingReceiptDrafts[index] ? (
+                    <div className="grid gap-2">
+                      <Input
+                        value={pendingReceiptDrafts[index]?.receiptAmount || ""}
+                        onChange={(event) =>
+                          onPendingDraftChange?.(index, { receiptAmount: event.target.value })}
+                        placeholder="Receipt Amount (RM)"
+                        disabled={disabled}
+                        inputMode="decimal"
+                      />
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <Input
+                          type="date"
+                          value={pendingReceiptDrafts[index]?.receiptDate || ""}
+                          onChange={(event) =>
+                            onPendingDraftChange?.(index, { receiptDate: event.target.value })}
+                          disabled={disabled}
+                        />
+                        <Input
+                          value={pendingReceiptDrafts[index]?.receiptReference || ""}
+                          onChange={(event) =>
+                            onPendingDraftChange?.(index, { receiptReference: event.target.value })}
+                          placeholder="Receipt Reference"
+                          disabled={disabled}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="flex justify-end">
                     <Button
                       type="button"

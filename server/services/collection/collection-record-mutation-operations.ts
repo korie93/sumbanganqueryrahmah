@@ -11,6 +11,7 @@ import { removeCollectionReceiptFile, saveCollectionReceipt } from "../../routes
 import {
   COLLECTION_BATCHES,
   COLLECTION_STAFF_NICKNAME_MIN_LENGTH,
+  type CollectionReceiptMetadataPayload,
   ensureLooseObject,
   isFutureCollectionDate,
   isNicknameScopeAllowedForRole,
@@ -33,7 +34,20 @@ import {
   parseRecordVersionTimestamp,
   resolveRecordVersionTimestamp,
 } from "./collection-record-runtime-utils";
-import type { CreateCollectionRecordReceiptInput } from "../../storage-postgres";
+import {
+  buildCollectionReceiptValidationResult,
+  findDuplicateCollectionReceiptHashes,
+  formatCollectionCurrencyLabelFromCents,
+  normalizeCollectionReceiptDate,
+  normalizeCollectionReceiptReference,
+  parseCollectionAmountToCents,
+  type CollectionReceiptValidationDraft,
+} from "./collection-receipt-validation";
+import type {
+  CollectionRecordReceipt,
+  CreateCollectionRecordReceiptInput,
+  UpdateCollectionRecordReceiptInput,
+} from "../../storage-postgres";
 
 type RequireUserFn = (user?: AuthenticatedUser) => AuthenticatedUser;
 
@@ -158,6 +172,193 @@ function readUploadedReceiptRows(body: MultipartCollectionPayload): CreateCollec
     .filter((item) => item.storagePath && item.originalFileName && Number.isFinite(item.fileSize));
 }
 
+type NormalizedCollectionReceiptMetadata = {
+  receiptId: string | null;
+  receiptAmountCents: number | null;
+  extractedAmountCents: number | null;
+  extractionConfidence: number | null;
+  receiptDate: string | null;
+  receiptReference: string | null;
+  fileHash: string | null;
+};
+
+type CollectionReceiptValidationDecision = {
+  validation: ReturnType<typeof buildCollectionReceiptValidationResult>;
+  usingOverride: boolean;
+  overrideReason: string | null;
+  blocked: boolean;
+  errorCode: string | null;
+};
+
+function readCollectionReceiptMetadataList(raw: unknown): CollectionReceiptMetadataPayload[] {
+  if (!raw) {
+    return [];
+  }
+
+  if (typeof raw === "string") {
+    const normalized = raw.trim();
+    if (!normalized) {
+      return [];
+    }
+    try {
+      const parsed = JSON.parse(normalized);
+      return Array.isArray(parsed)
+        ? parsed
+            .map((item) => ensureLooseObject(item))
+            .filter((item): item is Record<string, unknown> => Boolean(item))
+        : [];
+    } catch {
+      throw badRequest("Receipt metadata payload is invalid.", "COLLECTION_RECEIPT_METADATA_INVALID");
+    }
+  }
+
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((item) => ensureLooseObject(item))
+    .filter((item): item is Record<string, unknown> => Boolean(item));
+}
+
+function normalizeExtractionConfidence(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+  if (parsed <= 1) {
+    return parsed;
+  }
+  if (parsed <= 100) {
+    return parsed / 100;
+  }
+  return null;
+}
+
+function normalizeCollectionReceiptMetadata(
+  raw: CollectionReceiptMetadataPayload,
+): NormalizedCollectionReceiptMetadata {
+  return {
+    receiptId: normalizeCollectionText(raw.receiptId) || null,
+    receiptAmountCents: parseCollectionAmountToCents(raw.receiptAmount, { allowZero: true }),
+    extractedAmountCents: parseCollectionAmountToCents(raw.extractedAmount, { allowZero: true, allowEmpty: true }),
+    extractionConfidence: normalizeExtractionConfidence(raw.extractionConfidence),
+    receiptDate: normalizeCollectionReceiptDate(raw.receiptDate),
+    receiptReference: normalizeCollectionReceiptReference(raw.receiptReference),
+    fileHash: normalizeCollectionText(raw.fileHash).toLowerCase() || null,
+  };
+}
+
+function buildValidationDraftFromExistingReceipt(
+  receipt: CollectionRecordReceipt,
+): CollectionReceiptValidationDraft {
+  return {
+    receiptId: receipt.id,
+    fileHash: normalizeCollectionText(receipt.fileHash).toLowerCase() || null,
+    originalFileName: receipt.originalFileName,
+    receiptAmountCents: parseCollectionAmountToCents(receipt.receiptAmount, { allowZero: true, allowEmpty: true }),
+    extractedAmountCents: parseCollectionAmountToCents(receipt.extractedAmount, { allowZero: true, allowEmpty: true }),
+    extractionConfidence:
+      receipt.extractionConfidence === null || receipt.extractionConfidence === undefined
+        ? null
+        : Number(receipt.extractionConfidence),
+    receiptDate: normalizeCollectionReceiptDate(receipt.receiptDate),
+    receiptReference: normalizeCollectionReceiptReference(receipt.receiptReference),
+  };
+}
+
+function buildValidationDraftFromMetadata(params: {
+  metadata: NormalizedCollectionReceiptMetadata;
+  originalFileName?: string | null;
+}): CollectionReceiptValidationDraft {
+  return {
+    receiptId: params.metadata.receiptId,
+    fileHash: params.metadata.fileHash,
+    originalFileName: params.originalFileName || null,
+    receiptAmountCents: params.metadata.receiptAmountCents,
+    extractedAmountCents: params.metadata.extractedAmountCents,
+    extractionConfidence: params.metadata.extractionConfidence,
+    receiptDate: params.metadata.receiptDate,
+    receiptReference: params.metadata.receiptReference,
+  };
+}
+
+function buildCreateReceiptInput(
+  uploadedReceipt: CreateCollectionRecordReceiptInput,
+  metadata: NormalizedCollectionReceiptMetadata,
+): CreateCollectionRecordReceiptInput {
+  return {
+    ...uploadedReceipt,
+    receiptAmountCents: metadata.receiptAmountCents,
+    extractedAmountCents: metadata.extractedAmountCents,
+    extractionConfidence: metadata.extractionConfidence,
+    receiptDate: metadata.receiptDate,
+    receiptReference: metadata.receiptReference,
+    fileHash: metadata.fileHash || normalizeCollectionText(uploadedReceipt.fileHash).toLowerCase() || null,
+  };
+}
+
+function buildReceiptUpdateInput(
+  receiptId: string,
+  draft: CollectionReceiptValidationDraft,
+): UpdateCollectionRecordReceiptInput {
+  return {
+    receiptId,
+    receiptAmountCents: draft.receiptAmountCents ?? null,
+    extractedAmountCents: draft.extractedAmountCents ?? null,
+    extractionConfidence: draft.extractionConfidence ?? null,
+    receiptDate: draft.receiptDate ?? null,
+    receiptReference: draft.receiptReference ?? null,
+  };
+}
+
+function decideCollectionReceiptValidation(params: {
+  user: AuthenticatedUser;
+  totalPaidCents: number;
+  receipts: CollectionReceiptValidationDraft[];
+  overrideReasonRaw: unknown;
+}): CollectionReceiptValidationDecision {
+  const validation = buildCollectionReceiptValidationResult({
+    totalPaidCents: params.totalPaidCents,
+    receipts: params.receipts,
+  });
+  const overrideReason = normalizeCollectionText(params.overrideReasonRaw) || null;
+  const canOverride = params.user.role === "admin" || params.user.role === "superuser";
+
+  if (!validation.requiresOverride) {
+    return {
+      validation,
+      usingOverride: false,
+      overrideReason: null,
+      blocked: false,
+      errorCode: null,
+    };
+  }
+
+  if (canOverride && overrideReason) {
+    return {
+      validation,
+      usingOverride: true,
+      overrideReason,
+      blocked: false,
+      errorCode: null,
+    };
+  }
+
+  return {
+    validation,
+    usingOverride: false,
+    overrideReason,
+    blocked: true,
+    errorCode: canOverride
+      ? "COLLECTION_RECEIPT_VALIDATION_OVERRIDE_REQUIRED"
+      : "COLLECTION_RECEIPT_VALIDATION_BLOCKED",
+  };
+}
+
 export class CollectionRecordMutationOperations {
   constructor(
     private readonly storage: CollectionStoragePort,
@@ -200,6 +401,36 @@ export class CollectionRecordMutationOperations {
     }
   }
 
+  private async safeCreateReceiptValidationAudit(params: {
+    action: string;
+    performedBy: string;
+    targetResource: string;
+    recordId?: string | null;
+    amountCents: number;
+    receiptTotalAmountCents: number;
+    receiptCount: number;
+    status: ReturnType<typeof buildCollectionReceiptValidationResult>["status"];
+    message: string;
+    overrideReason?: string | null;
+  }) {
+    await this.safeCreateAuditLog({
+      action: params.action,
+      performedBy: params.performedBy,
+      targetResource: params.targetResource,
+      details: JSON.stringify({
+        event: "collection_receipt_validation",
+        actor: params.performedBy,
+        recordId: params.recordId || null,
+        totalPaid: formatCollectionCurrencyLabelFromCents(params.amountCents),
+        receiptTotal: formatCollectionCurrencyLabelFromCents(params.receiptTotalAmountCents),
+        receiptCount: params.receiptCount,
+        status: params.status,
+        message: params.message,
+        overrideReason: params.overrideReason || null,
+      }),
+    });
+  }
+
   private async logRecordVersionConflict(params: {
     username: string;
     recordId: string;
@@ -238,6 +469,7 @@ export class CollectionRecordMutationOperations {
       const paymentDate = normalizeCollectionText(body.paymentDate);
       const collectionStaffNickname = normalizeCollectionText(body.collectionStaffNickname);
       const amount = parseCollectionAmount(body.amount);
+      const amountCents = parseCollectionAmountToCents(body.amount);
 
       if (!customerName) throw badRequest("Customer Name is required.");
       if (!icNumber) throw badRequest("IC Number is required.");
@@ -246,7 +478,7 @@ export class CollectionRecordMutationOperations {
       if (!COLLECTION_BATCHES.has(batch)) throw badRequest("Invalid batch value.");
       if (!paymentDate || !isValidCollectionDate(paymentDate)) throw badRequest("Invalid payment date.");
       if (isFutureCollectionDate(paymentDate)) throw badRequest("Payment date cannot be in the future.");
-      if (amount === null) throw badRequest("Amount must be a positive number.");
+      if (amount === null || amountCents === null) throw badRequest("Amount must be a positive number.");
       if (collectionStaffNickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
         throw badRequest("Staff nickname must be at least 2 characters.");
       }
@@ -277,6 +509,71 @@ export class CollectionRecordMutationOperations {
       for (const nextReceipt of receiptPayloads) {
         uploadedReceipts.push(await saveCollectionReceipt(nextReceipt));
       }
+      const newReceiptMetadata = readCollectionReceiptMetadataList(body.newReceiptMetadata)
+        .map((item) => normalizeCollectionReceiptMetadata(item));
+      if (uploadedReceipts.length !== newReceiptMetadata.length) {
+        throw badRequest(
+          uploadedReceipts.length > 0
+            ? "Setiap resit baru mesti mempunyai jumlah resit yang disahkan."
+            : "Receipt metadata tidak selaras dengan fail yang dimuat naik.",
+          "COLLECTION_RECEIPT_METADATA_COUNT_MISMATCH",
+        );
+      }
+      const newReceiptInputs = uploadedReceipts.map((receipt, index) =>
+        buildCreateReceiptInput(receipt, newReceiptMetadata[index] as NormalizedCollectionReceiptMetadata));
+      const validationReceipts = newReceiptInputs.map((receipt) =>
+        buildValidationDraftFromMetadata({
+          metadata: {
+            receiptId: null,
+            receiptAmountCents: receipt.receiptAmountCents ?? null,
+            extractedAmountCents: receipt.extractedAmountCents ?? null,
+            extractionConfidence: receipt.extractionConfidence ?? null,
+            receiptDate: receipt.receiptDate ?? null,
+            receiptReference: receipt.receiptReference ?? null,
+            fileHash: receipt.fileHash ?? null,
+          },
+          originalFileName: receipt.originalFileName,
+        }));
+      const duplicateReceipts = findDuplicateCollectionReceiptHashes(validationReceipts);
+      if (duplicateReceipts.length > 0) {
+        await this.safeCreateAuditLog({
+          action: "COLLECTION_RECEIPT_DUPLICATE_REJECTED",
+          performedBy: user.username,
+          targetResource: "collection-records",
+          details: JSON.stringify({
+            event: "collection_receipt_duplicate_rejected",
+            actor: user.username,
+            customerName,
+            duplicates: duplicateReceipts,
+          }),
+        });
+        throw badRequest(
+          "Duplicate receipt upload detected for this collection record.",
+          "COLLECTION_RECEIPT_DUPLICATE_DETECTED",
+        );
+      }
+      const receiptValidation = decideCollectionReceiptValidation({
+        user,
+        totalPaidCents: amountCents,
+        receipts: validationReceipts,
+        overrideReasonRaw: body.receiptValidationOverrideReason,
+      });
+      if (receiptValidation.blocked) {
+        await this.safeCreateReceiptValidationAudit({
+          action: "COLLECTION_RECEIPT_VALIDATION_REJECTED",
+          performedBy: user.username,
+          targetResource: "collection-records",
+          amountCents,
+          receiptTotalAmountCents: receiptValidation.validation.receiptTotalAmountCents,
+          receiptCount: receiptValidation.validation.receiptCount,
+          status: receiptValidation.validation.status,
+          message: receiptValidation.validation.message,
+        });
+        throw conflict(
+          receiptValidation.validation.message,
+          receiptValidation.errorCode || "COLLECTION_RECEIPT_VALIDATION_BLOCKED",
+        );
+      }
 
       const record = await this.storage.createCollectionRecord({
         customerName,
@@ -291,15 +588,31 @@ export class CollectionRecordMutationOperations {
         collectionStaffNickname,
       });
       createdRecordId = record.id;
-      if (uploadedReceipts.length > 0) {
-        await this.storage.createCollectionRecordReceipts(record.id, uploadedReceipts);
+      if (newReceiptInputs.length > 0) {
+        await this.storage.createCollectionRecordReceipts(record.id, newReceiptInputs);
       }
-      const hydratedRecord = await this.storage.getCollectionRecordById(record.id);
+      const syncedRecord = await this.storage.syncCollectionRecordReceiptValidation(record.id);
+      const hydratedRecord = syncedRecord || await this.storage.getCollectionRecordById(record.id);
       const finalRecord = hydratedRecord || record;
       const finalReceiptState = resolveCollectionAuditReceiptState({
-        relationCount: uploadedReceipts.length,
+        relationCount: newReceiptInputs.length,
         legacyReceiptFile: null,
       });
+
+      if (receiptValidation.usingOverride) {
+        await this.safeCreateReceiptValidationAudit({
+          action: "COLLECTION_RECEIPT_VALIDATION_OVERRIDDEN",
+          performedBy: user.username,
+          targetResource: finalRecord.id,
+          recordId: finalRecord.id,
+          amountCents,
+          receiptTotalAmountCents: receiptValidation.validation.receiptTotalAmountCents,
+          receiptCount: receiptValidation.validation.receiptCount,
+          status: receiptValidation.validation.status,
+          message: receiptValidation.validation.message,
+          overrideReason: receiptValidation.overrideReason,
+        });
+      }
 
       await this.safeCreateAuditLog({
         action: "COLLECTION_RECORD_CREATED",
@@ -318,9 +631,15 @@ export class CollectionRecordMutationOperations {
             activeReceiptSource: finalReceiptState.source,
           }),
           receipts: {
-            addedCount: uploadedReceipts.length,
+            addedCount: newReceiptInputs.length,
             afterCount: finalReceiptState.count,
             afterSource: finalReceiptState.source,
+          },
+          receiptValidation: {
+            status: receiptValidation.validation.status,
+            message: receiptValidation.validation.message,
+            receiptTotal: formatCollectionCurrencyLabelFromCents(receiptValidation.validation.receiptTotalAmountCents),
+            overrideReason: receiptValidation.overrideReason,
           },
         }),
       });
@@ -448,6 +767,10 @@ export class CollectionRecordMutationOperations {
       const paymentDate = normalizeCollectionText(body.paymentDate);
       const collectionStaffNickname = normalizeCollectionText(body.collectionStaffNickname);
       const amount = body.amount !== undefined ? parseCollectionAmount(body.amount) : null;
+      const nextAmountCents =
+        body.amount !== undefined
+          ? parseCollectionAmountToCents(body.amount)
+          : parseCollectionAmountToCents(existing.amount, { allowZero: true });
 
       if (body.customerName !== undefined) {
         if (!customerName) throw badRequest("Customer Name cannot be empty.");
@@ -475,7 +798,7 @@ export class CollectionRecordMutationOperations {
         updatePayload.paymentDate = paymentDate;
       }
       if (body.amount !== undefined) {
-        if (amount === null) throw badRequest("Amount must be a positive number.");
+        if (amount === null || nextAmountCents === null) throw badRequest("Amount must be a positive number.");
         updatePayload.amount = amount;
       }
       if (body.collectionStaffNickname !== undefined) {
@@ -514,8 +837,24 @@ export class CollectionRecordMutationOperations {
       for (const nextReceipt of receiptPayloads) {
         uploadedReceipts.push(await saveCollectionReceipt(nextReceipt));
       }
+      const existingReceiptMetadata = readCollectionReceiptMetadataList(body.existingReceiptMetadata)
+        .map((item) => normalizeCollectionReceiptMetadata(item));
+      const newReceiptMetadata = readCollectionReceiptMetadataList(body.newReceiptMetadata)
+        .map((item) => normalizeCollectionReceiptMetadata(item));
+      if (uploadedReceipts.length !== newReceiptMetadata.length) {
+        throw badRequest(
+          uploadedReceipts.length > 0
+            ? "Setiap resit baru mesti mempunyai jumlah resit yang disahkan."
+            : "Receipt metadata tidak selaras dengan fail yang dimuat naik.",
+          "COLLECTION_RECEIPT_METADATA_COUNT_MISMATCH",
+        );
+      }
 
-      const hasReceiptMutation = shouldRemoveReceipt || removeReceiptIds.length > 0 || uploadedReceipts.length > 0;
+      const hasReceiptMutation =
+        shouldRemoveReceipt
+        || removeReceiptIds.length > 0
+        || uploadedReceipts.length > 0
+        || existingReceiptMetadata.length > 0;
       if (Object.keys(updatePayload).length === 0 && !hasReceiptMutation) {
         return { ok: true as const, record: existing };
       }
@@ -530,6 +869,85 @@ export class CollectionRecordMutationOperations {
         : removeReceiptIds.length > 0
           ? existingReceipts.filter((receipt) => removeReceiptIds.includes(receipt.id))
           : [];
+      const activeExistingReceipts = shouldRemoveReceipt
+        ? []
+        : existingReceipts.filter((receipt) => !removeReceiptIds.includes(receipt.id));
+      const activeExistingDrafts = activeExistingReceipts.map((receipt) =>
+        buildValidationDraftFromExistingReceipt(receipt));
+      for (const metadata of existingReceiptMetadata) {
+        if (!metadata.receiptId) {
+          continue;
+        }
+        const targetDraft = activeExistingDrafts.find((draft) => draft.receiptId === metadata.receiptId);
+        if (!targetDraft) {
+          continue;
+        }
+        targetDraft.receiptAmountCents = metadata.receiptAmountCents;
+        targetDraft.extractedAmountCents = metadata.extractedAmountCents;
+        targetDraft.extractionConfidence = metadata.extractionConfidence;
+        targetDraft.receiptDate = metadata.receiptDate;
+        targetDraft.receiptReference = metadata.receiptReference;
+        targetDraft.fileHash = metadata.fileHash || targetDraft.fileHash || null;
+      }
+      const newReceiptInputs = uploadedReceipts.map((receipt, index) =>
+        buildCreateReceiptInput(receipt, newReceiptMetadata[index] as NormalizedCollectionReceiptMetadata));
+      const validationReceipts = [
+        ...activeExistingDrafts,
+        ...newReceiptInputs.map((receipt) =>
+          buildValidationDraftFromMetadata({
+            metadata: {
+              receiptId: null,
+              receiptAmountCents: receipt.receiptAmountCents ?? null,
+              extractedAmountCents: receipt.extractedAmountCents ?? null,
+              extractionConfidence: receipt.extractionConfidence ?? null,
+              receiptDate: receipt.receiptDate ?? null,
+              receiptReference: receipt.receiptReference ?? null,
+              fileHash: receipt.fileHash ?? null,
+            },
+            originalFileName: receipt.originalFileName,
+          })),
+      ];
+      const duplicateReceipts = findDuplicateCollectionReceiptHashes(validationReceipts);
+      if (duplicateReceipts.length > 0) {
+        await this.safeCreateAuditLog({
+          action: "COLLECTION_RECEIPT_DUPLICATE_REJECTED",
+          performedBy: user.username,
+          targetResource: id,
+          details: JSON.stringify({
+            event: "collection_receipt_duplicate_rejected",
+            actor: user.username,
+            recordId: id,
+            duplicates: duplicateReceipts,
+          }),
+        });
+        throw badRequest(
+          "Duplicate receipt upload detected for this collection record.",
+          "COLLECTION_RECEIPT_DUPLICATE_DETECTED",
+        );
+      }
+      const receiptValidation = decideCollectionReceiptValidation({
+        user,
+        totalPaidCents: nextAmountCents ?? 0,
+        receipts: validationReceipts,
+        overrideReasonRaw: body.receiptValidationOverrideReason,
+      });
+      if (receiptValidation.blocked) {
+        await this.safeCreateReceiptValidationAudit({
+          action: "COLLECTION_RECEIPT_VALIDATION_REJECTED",
+          performedBy: user.username,
+          targetResource: id,
+          recordId: id,
+          amountCents: nextAmountCents ?? 0,
+          receiptTotalAmountCents: receiptValidation.validation.receiptTotalAmountCents,
+          receiptCount: receiptValidation.validation.receiptCount,
+          status: receiptValidation.validation.status,
+          message: receiptValidation.validation.message,
+        });
+        throw conflict(
+          receiptValidation.validation.message,
+          receiptValidation.errorCode || "COLLECTION_RECEIPT_VALIDATION_BLOCKED",
+        );
+      }
 
       const shouldClearLegacyReceiptFallback =
         shouldRemoveReceipt
@@ -545,7 +963,9 @@ export class CollectionRecordMutationOperations {
         expectedUpdatedAt: expectedUpdatedAt ?? undefined,
         removeAllReceipts: shouldRemoveReceipt,
         removeReceiptIds: shouldRemoveReceipt ? [] : removeReceiptIds,
-        newReceipts: uploadedReceipts,
+        newReceipts: newReceiptInputs,
+        receiptUpdates: activeExistingDrafts.map((draft) =>
+          buildReceiptUpdateInput(String(draft.receiptId || ""), draft)),
       });
       if (!updated) {
         for (const uploadedReceipt of uploadedReceipts) {
@@ -574,11 +994,11 @@ export class CollectionRecordMutationOperations {
       }
       const remainingRelationReceiptCount = shouldRemoveReceipt
         ? 0
-        : Math.max(0, existingReceipts.length - removedReceipts.length);
+        : Math.max(0, activeExistingReceipts.length);
       const afterReceiptState =
-        remainingRelationReceiptCount + uploadedReceipts.length > 0
+        remainingRelationReceiptCount + newReceiptInputs.length > 0
           ? resolveCollectionAuditReceiptState({
-              relationCount: remainingRelationReceiptCount + uploadedReceipts.length,
+              relationCount: remainingRelationReceiptCount + newReceiptInputs.length,
               legacyReceiptFile: null,
             })
           : existingReceipts.length === 0 && !shouldClearLegacyReceiptFallback
@@ -623,15 +1043,36 @@ export class CollectionRecordMutationOperations {
             afterCount: afterReceiptState.count,
             beforeSource: beforeReceiptState.source,
             afterSource: afterReceiptState.source,
-            addedCount: uploadedReceipts.length,
+            addedCount: newReceiptInputs.length,
             removedCount: shouldRemoveReceipt ? beforeReceiptState.count : removedReceipts.length,
             removedReceiptIds: removedReceipts.map((receipt) => receipt.id),
             replaced: (shouldRemoveReceipt ? beforeReceiptState.count : removedReceipts.length) > 0
-              && uploadedReceipts.length > 0,
+              && newReceiptInputs.length > 0,
             clearedLegacyFallback: shouldClearLegacyReceiptFallback,
+          },
+          receiptValidation: {
+            status: receiptValidation.validation.status,
+            message: receiptValidation.validation.message,
+            receiptTotal: formatCollectionCurrencyLabelFromCents(receiptValidation.validation.receiptTotalAmountCents),
+            overrideReason: receiptValidation.overrideReason,
           },
         }),
       });
+
+      if (receiptValidation.usingOverride) {
+        await this.safeCreateReceiptValidationAudit({
+          action: "COLLECTION_RECEIPT_VALIDATION_OVERRIDDEN",
+          performedBy: user.username,
+          targetResource: id,
+          recordId: id,
+          amountCents: nextAmountCents ?? 0,
+          receiptTotalAmountCents: receiptValidation.validation.receiptTotalAmountCents,
+          receiptCount: receiptValidation.validation.receiptCount,
+          status: receiptValidation.validation.status,
+          message: receiptValidation.validation.message,
+          overrideReason: receiptValidation.overrideReason,
+        });
+      }
 
       return { ok: true as const, record: updated };
     } catch (err) {

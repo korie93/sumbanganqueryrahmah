@@ -26,6 +26,7 @@ import {
   type PasswordResetTokenRecord,
 } from "./repositories/auth.repository";
 type CollectionBatch = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
+export type CollectionReceiptValidationStatus = "matched" | "mismatch" | "needs_review";
 
 export type CollectionRecordReceipt = {
   id: string;
@@ -35,6 +36,12 @@ export type CollectionRecordReceipt = {
   originalMimeType: string;
   originalExtension: string;
   fileSize: number;
+  receiptAmount: string | null;
+  extractedAmount: string | null;
+  extractionConfidence: number | null;
+  receiptDate: string | null;
+  receiptReference: string | null;
+  fileHash: string | null;
   createdAt: Date;
 };
 
@@ -49,6 +56,10 @@ export type CollectionRecord = {
   amount: string;
   receiptFile: string | null;
   receipts: CollectionRecordReceipt[];
+  receiptTotalAmount: string;
+  receiptValidationStatus: CollectionReceiptValidationStatus;
+  receiptValidationMessage: string | null;
+  receiptCount: number;
   createdByLogin: string;
   collectionStaffNickname: string;
   createdAt: Date;
@@ -204,6 +215,21 @@ export type CreateCollectionRecordReceiptInput = {
   originalMimeType: string;
   originalExtension: string;
   fileSize: number;
+  receiptAmountCents?: number | null;
+  extractedAmountCents?: number | null;
+  extractionConfidence?: number | null;
+  receiptDate?: string | null;
+  receiptReference?: string | null;
+  fileHash?: string | null;
+};
+
+export type UpdateCollectionRecordReceiptInput = {
+  receiptId: string;
+  receiptAmountCents?: number | null;
+  extractedAmountCents?: number | null;
+  extractionConfidence?: number | null;
+  receiptDate?: string | null;
+  receiptReference?: string | null;
 };
 
 export type UpdateCollectionRecordInput = {
@@ -224,6 +250,7 @@ export type UpdateCollectionRecordOptions = {
   removeAllReceipts?: boolean;
   removeReceiptIds?: string[];
   newReceipts?: CreateCollectionRecordReceiptInput[];
+  receiptUpdates?: UpdateCollectionRecordReceiptInput[];
 };
 
 export type DeleteCollectionRecordOptions = {
@@ -556,8 +583,13 @@ type CategoryRule = {
     recordId: string,
     receipts: CreateCollectionRecordReceiptInput[],
   ): Promise<CollectionRecordReceipt[]>;
+  updateCollectionRecordReceipts(
+    recordId: string,
+    updates: UpdateCollectionRecordReceiptInput[],
+  ): Promise<CollectionRecordReceipt[]>;
   deleteCollectionRecordReceipts(recordId: string, receiptIds: string[]): Promise<CollectionRecordReceipt[]>;
   deleteAllCollectionRecordReceipts(recordId: string): Promise<CollectionRecordReceipt[]>;
+  syncCollectionRecordReceiptValidation(recordId: string): Promise<CollectionRecord | undefined>;
   updateCollectionRecord(
     id: string,
     data: UpdateCollectionRecordInput,

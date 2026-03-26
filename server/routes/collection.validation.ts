@@ -28,6 +28,16 @@ export type CollectionReceiptPayload = {
   contentBase64?: string;
 };
 
+export type CollectionReceiptMetadataPayload = {
+  receiptId?: string;
+  receiptAmount?: number | string | null;
+  extractedAmount?: number | string | null;
+  extractionConfidence?: number | string | null;
+  receiptDate?: string | null;
+  receiptReference?: string | null;
+  fileHash?: string | null;
+};
+
 export type CollectionCreatePayload = {
   customerName?: string;
   icNumber?: string;
@@ -39,12 +49,15 @@ export type CollectionCreatePayload = {
   collectionStaffNickname?: string;
   receipt?: CollectionReceiptPayload | null;
   receipts?: CollectionReceiptPayload[] | null;
+  newReceiptMetadata?: CollectionReceiptMetadataPayload[] | string | null;
+  receiptValidationOverrideReason?: string | null;
 };
 
 export type CollectionUpdatePayload = Partial<CollectionCreatePayload> & {
   removeReceipt?: boolean;
   removeReceiptIds?: unknown;
   expectedUpdatedAt?: string;
+  existingReceiptMetadata?: CollectionReceiptMetadataPayload[] | string | null;
 };
 
 export type CollectionDeletePayload = {

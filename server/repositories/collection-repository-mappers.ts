@@ -3,6 +3,7 @@ import type {
   CollectionDailyTarget,
   CollectionRecord,
 } from "../storage-postgres";
+import { formatCollectionAmountFromCents } from "../services/collection/collection-receipt-validation";
 
 type CollectionBatch = CollectionRecord["batch"];
 
@@ -35,6 +36,15 @@ export function mapCollectionRecordRow(row: any): CollectionRecord {
     amount: String(row.amount ?? "0"),
     receiptFile: row.receipt_file ?? row.receiptFile ?? null,
     receipts: [],
+    receiptTotalAmount: formatCollectionAmountFromCents(row.receipt_total_amount ?? row.receiptTotalAmount ?? 0),
+    receiptValidationStatus: String(
+      row.receipt_validation_status
+      ?? row.receiptValidationStatus
+      ?? "needs_review",
+    ) as CollectionRecord["receiptValidationStatus"],
+    receiptValidationMessage:
+      (row.receipt_validation_message ?? row.receiptValidationMessage ?? null) as string | null,
+    receiptCount: Math.max(0, Number(row.receipt_count ?? row.receiptCount ?? 0) || 0),
     createdByLogin: String(row.created_by_login ?? row.createdByLogin ?? row.staff_username ?? row.staffUsername ?? ""),
     collectionStaffNickname: String(row.collection_staff_nickname ?? row.collectionStaffNickname ?? row.staff_username ?? row.staffUsername ?? ""),
     createdAt,

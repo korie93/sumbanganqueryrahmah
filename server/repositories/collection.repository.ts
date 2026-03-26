@@ -44,6 +44,8 @@ import {
   deleteCollectionRecordReceiptRows,
   getCollectionRecordReceiptByIdForRecord,
   listCollectionRecordReceiptsByRecordId,
+  syncCollectionRecordReceiptValidation,
+  updateCollectionRecordReceiptRows,
 } from "./collection-receipt-utils";
 import {
   clearCollectionNicknameSessionValueByActivity,
@@ -76,6 +78,7 @@ import type {
   CreateCollectionRecordReceiptInput,
   CreateCollectionStaffNicknameInput,
   DeleteCollectionRecordOptions,
+  UpdateCollectionRecordReceiptInput,
   UpdateCollectionRecordInput,
   UpdateCollectionRecordOptions,
   UpdateCollectionStaffNicknameInput,
@@ -402,6 +405,13 @@ export class CollectionRepository {
     return createCollectionRecordReceiptRows(db, recordId, receipts);
   }
 
+  async updateCollectionRecordReceipts(
+    recordId: string,
+    updates: UpdateCollectionRecordReceiptInput[],
+  ): Promise<CollectionRecordReceipt[]> {
+    return updateCollectionRecordReceiptRows(db, recordId, updates);
+  }
+
   async deleteCollectionRecordReceipts(
     recordId: string,
     receiptIds: string[],
@@ -411,6 +421,10 @@ export class CollectionRepository {
 
   async deleteAllCollectionRecordReceipts(recordId: string): Promise<CollectionRecordReceipt[]> {
     return deleteAllCollectionRecordReceiptRows(db, recordId);
+  }
+
+  async syncCollectionRecordReceiptValidation(recordId: string): Promise<CollectionRecord | undefined> {
+    return syncCollectionRecordReceiptValidation(db, recordId);
   }
 
   async updateCollectionRecord(

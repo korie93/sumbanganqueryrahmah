@@ -22,6 +22,10 @@ export type CollectionRecordShape = {
   amount: string;
   receiptFile: string | null;
   receipts: unknown[];
+  receiptTotalAmount: string;
+  receiptValidationStatus: "matched" | "mismatch" | "needs_review";
+  receiptValidationMessage: string | null;
+  receiptCount: number;
   createdByLogin: string;
   collectionStaffNickname: string;
   createdAt: Date;
@@ -36,8 +40,38 @@ type CollectionReceiptShape = {
   originalMimeType: string;
   originalExtension: string;
   fileSize: number;
+  receiptAmount: string | null;
+  extractedAmount: string | null;
+  extractionConfidence: number | null;
+  receiptDate: string | null;
+  receiptReference: string | null;
+  fileHash: string | null;
   createdAt: Date;
 };
+
+function parseAmountToCents(value: unknown): number {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    return 0;
+  }
+
+  const normalized = raw.replace(/,/g, "");
+  const [wholeRaw, fractionRaw = ""] = normalized.split(".");
+  const whole = Number.parseInt(wholeRaw, 10);
+  const fraction = Number.parseInt(`${fractionRaw}00`.slice(0, 2), 10);
+  if (!Number.isFinite(whole) || !Number.isFinite(fraction)) {
+    return 0;
+  }
+
+  return (whole * 100) + fraction;
+}
+
+function formatAmountFromCents(value: number | null | undefined): string {
+  const cents = Number.isFinite(value) ? Math.max(0, Math.trunc(value || 0)) : 0;
+  const whole = Math.floor(cents / 100);
+  const fraction = String(cents % 100).padStart(2, "0");
+  return `${whole}.${fraction}`;
+}
 
 type MutationIdempotencyEntry = {
   actor: string;
@@ -169,6 +203,12 @@ export function createCoreCollectionStorageDouble(options?: {
     originalMimeType: string;
     originalExtension: string;
     fileSize: number;
+    receiptAmount?: string | null;
+    extractedAmount?: string | null;
+    extractionConfidence?: number | null;
+    receiptDate?: string | null;
+    receiptReference?: string | null;
+    fileHash?: string | null;
     createdAt: Date;
   }>>;
 }) {
@@ -190,6 +230,20 @@ export function createCoreCollectionStorageDouble(options?: {
         originalMimeType: string;
         originalExtension: string;
         fileSize: number;
+        receiptAmountCents?: number | null;
+        extractedAmountCents?: number | null;
+        extractionConfidence?: number | null;
+        receiptDate?: string | null;
+        receiptReference?: string | null;
+        fileHash?: string | null;
+      }>;
+      receiptUpdates?: Array<{
+        receiptId: string;
+        receiptAmountCents?: number | null;
+        extractedAmountCents?: number | null;
+        extractionConfidence?: number | null;
+        receiptDate?: string | null;
+        receiptReference?: string | null;
       }>;
     };
   }> = [];
@@ -201,6 +255,12 @@ export function createCoreCollectionStorageDouble(options?: {
       originalMimeType: string;
       originalExtension: string;
       fileSize: number;
+      receiptAmountCents?: number | null;
+      extractedAmountCents?: number | null;
+      extractionConfidence?: number | null;
+      receiptDate?: string | null;
+      receiptReference?: string | null;
+      fileHash?: string | null;
     }>;
   }> = [];
   const deleteCalls: Array<{
@@ -231,6 +291,10 @@ export function createCoreCollectionStorageDouble(options?: {
     amount: "120.50",
     receiptFile: null,
     receipts: [],
+    receiptTotalAmount: "0.00",
+    receiptValidationStatus: "needs_review",
+    receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
+    receiptCount: 0,
     createdByLogin: "staff.user",
     collectionStaffNickname: "Collector Alpha",
     createdAt: new Date("2026-03-01T09:00:00.000Z"),
@@ -240,21 +304,67 @@ export function createCoreCollectionStorageDouble(options?: {
   records.set(seedRecord.id, seedRecord);
   const receiptRowsByRecordId = new Map<string, CollectionReceiptShape[]>();
   for (const [recordId, receipts] of Object.entries(options?.receiptRowsByRecordId || {})) {
-    receiptRowsByRecordId.set(recordId, receipts);
+    receiptRowsByRecordId.set(
+      recordId,
+      receipts.map((receipt) => ({
+        ...receipt,
+        receiptAmount: receipt.receiptAmount ?? null,
+        extractedAmount: receipt.extractedAmount ?? null,
+        extractionConfidence: receipt.extractionConfidence ?? null,
+        receiptDate: receipt.receiptDate ?? null,
+        receiptReference: receipt.receiptReference ?? null,
+        fileHash: receipt.fileHash ?? null,
+      })),
+    );
   }
 
-  const syncRecordReceiptFile = (recordId: string) => {
+  const hydrateRecord = (record: CollectionRecordShape): CollectionRecordShape => ({
+    ...record,
+    receipts: receiptRowsByRecordId.get(record.id) || [],
+  });
+
+  const syncRecordReceiptState = (recordId: string) => {
     const existing = records.get(recordId);
     if (!existing) {
       return;
     }
 
     const receipts = receiptRowsByRecordId.get(recordId) || [];
+    const totalPaidCents = parseAmountToCents(existing.amount);
+    const receiptTotalAmountCents = receipts.reduce(
+      (sum, receipt) => sum + parseAmountToCents(receipt.receiptAmount),
+      0,
+    );
+    const missingReceiptAmount = receipts.some((receipt) => !String(receipt.receiptAmount || "").trim());
+    const receiptValidationStatus =
+      receipts.length === 0
+        ? "needs_review"
+        : missingReceiptAmount
+          ? "needs_review"
+          : receiptTotalAmountCents === totalPaidCents
+            ? "matched"
+            : "mismatch";
+    const receiptValidationMessage =
+      receipts.length === 0
+        ? "Tiada resit dilampirkan untuk semakan jumlah."
+        : missingReceiptAmount
+          ? "Setiap resit perlu disahkan jumlahnya sebelum rekod boleh disimpan."
+          : receiptTotalAmountCents === totalPaidCents
+            ? "Jumlah resit sepadan dengan jumlah bayaran yang dimasukkan."
+            : `Jumlah resit RM ${formatAmountFromCents(receiptTotalAmountCents)} tidak sepadan dengan jumlah bayaran RM ${formatAmountFromCents(totalPaidCents)}.`;
     records.set(recordId, {
       ...existing,
-      receiptFile: receipts[0]?.storagePath || null,
+      receiptFile: receipts[0]?.storagePath || existing.receiptFile || null,
+      receiptTotalAmount: formatAmountFromCents(receiptTotalAmountCents),
+      receiptValidationStatus,
+      receiptValidationMessage,
+      receiptCount: receipts.length,
     });
   };
+
+  for (const recordId of records.keys()) {
+    syncRecordReceiptState(recordId);
+  }
 
   const storage = {
     getCollectionNicknameSessionByActivity: async (activityId: string) => {
@@ -285,15 +395,22 @@ export function createCoreCollectionStorageDouble(options?: {
         amount: Number(data.amount).toFixed(2),
         receiptFile: (data.receiptFile as string | null | undefined) ?? null,
         receipts: [],
+        receiptTotalAmount: "0.00",
+        receiptValidationStatus: "needs_review",
+        receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
+        receiptCount: 0,
         createdByLogin: String(data.createdByLogin),
         collectionStaffNickname: String(data.collectionStaffNickname),
         createdAt: new Date("2026-03-15T10:00:00.000Z"),
         updatedAt: new Date("2026-03-15T10:00:00.000Z"),
       };
       records.set(created.id, created);
-      return created;
+      return hydrateRecord(created);
     },
-    getCollectionRecordById: async (id: string) => records.get(id) ?? null,
+    getCollectionRecordById: async (id: string) => {
+      const record = records.get(id);
+      return record ? hydrateRecord(record) : null;
+    },
     createAuditLog: async (entry: AuditEntry) => {
       auditLogs.push(entry);
       return { id: `audit-${auditLogs.length}`, ...entry };
@@ -324,7 +441,7 @@ export function createCoreCollectionStorageDouble(options?: {
     }),
     listCollectionRecords: async (filters: Record<string, unknown>) => {
       listCalls.push(filters);
-      return Array.from(records.values());
+      return Array.from(records.values()).map((record) => hydrateRecord(record));
     },
     listCollectionRecordReceipts: async (recordId: string) => receiptRowsByRecordId.get(recordId) || [],
     getCollectionRecordReceiptById: async (recordId: string, receiptId: string) =>
@@ -337,6 +454,12 @@ export function createCoreCollectionStorageDouble(options?: {
         originalMimeType: string;
         originalExtension: string;
         fileSize: number;
+        receiptAmountCents?: number | null;
+        extractedAmountCents?: number | null;
+        extractionConfidence?: number | null;
+        receiptDate?: string | null;
+        receiptReference?: string | null;
+        fileHash?: string | null;
       }>,
     ) => {
       createReceiptCalls.push({
@@ -347,6 +470,12 @@ export function createCoreCollectionStorageDouble(options?: {
           originalMimeType: String(receipt.originalMimeType || "application/octet-stream"),
           originalExtension: String(receipt.originalExtension || ""),
           fileSize: Number(receipt.fileSize || 0),
+          receiptAmountCents: receipt.receiptAmountCents ?? null,
+          extractedAmountCents: receipt.extractedAmountCents ?? null,
+          extractionConfidence: receipt.extractionConfidence ?? null,
+          receiptDate: String(receipt.receiptDate || "").trim() || null,
+          receiptReference: String(receipt.receiptReference || "").trim() || null,
+          fileHash: String(receipt.fileHash || "").trim().toLowerCase() || null,
         })),
       });
       const current = receiptRowsByRecordId.get(recordId) || [];
@@ -365,14 +494,60 @@ export function createCoreCollectionStorageDouble(options?: {
           originalMimeType: String(receipt.originalMimeType || "application/octet-stream"),
           originalExtension: String(receipt.originalExtension || ""),
           fileSize: Number(receipt.fileSize || 0),
+          receiptAmount: receipt.receiptAmountCents == null ? null : formatAmountFromCents(receipt.receiptAmountCents),
+          extractedAmount: receipt.extractedAmountCents == null ? null : formatAmountFromCents(receipt.extractedAmountCents),
+          extractionConfidence:
+            receipt.extractionConfidence === undefined || receipt.extractionConfidence === null
+              ? null
+              : Number(receipt.extractionConfidence),
+          receiptDate: String(receipt.receiptDate || "").trim() || null,
+          receiptReference: String(receipt.receiptReference || "").trim() || null,
+          fileHash: String(receipt.fileHash || "").trim().toLowerCase() || null,
           createdAt: new Date("2026-03-16T10:00:00.000Z"),
         };
         current.push(created);
         insertedRows.push(created);
       }
       receiptRowsByRecordId.set(recordId, current);
-      syncRecordReceiptFile(recordId);
+      syncRecordReceiptState(recordId);
       return insertedRows;
+    },
+    updateCollectionRecordReceipts: async (
+      recordId: string,
+      updates: Array<{
+        receiptId: string;
+        receiptAmountCents?: number | null;
+        extractedAmountCents?: number | null;
+        extractionConfidence?: number | null;
+        receiptDate?: string | null;
+        receiptReference?: string | null;
+      }>,
+    ) => {
+      const current = receiptRowsByRecordId.get(recordId) || [];
+      const updatedRows: CollectionReceiptShape[] = [];
+      for (const update of updates || []) {
+        const receipt = current.find((item) => item.id === update.receiptId);
+        if (!receipt) {
+          continue;
+        }
+        receipt.receiptAmount =
+          update.receiptAmountCents === undefined || update.receiptAmountCents === null
+            ? null
+            : formatAmountFromCents(update.receiptAmountCents);
+        receipt.extractedAmount =
+          update.extractedAmountCents === undefined || update.extractedAmountCents === null
+            ? null
+            : formatAmountFromCents(update.extractedAmountCents);
+        receipt.extractionConfidence =
+          update.extractionConfidence === undefined || update.extractionConfidence === null
+            ? null
+            : Number(update.extractionConfidence);
+        receipt.receiptDate = String(update.receiptDate || "").trim() || null;
+        receipt.receiptReference = String(update.receiptReference || "").trim() || null;
+        updatedRows.push(receipt);
+      }
+      syncRecordReceiptState(recordId);
+      return updatedRows;
     },
     deleteCollectionRecordReceipts: async (recordId: string, receiptIds: string[]) => {
       const normalizedReceiptIds = Array.from(
@@ -388,8 +563,12 @@ export function createCoreCollectionStorageDouble(options?: {
         recordId,
         current.filter((receipt) => !normalizedReceiptIds.includes(receipt.id)),
       );
-      syncRecordReceiptFile(recordId);
+      syncRecordReceiptState(recordId);
       return deletedRows;
+    },
+    syncCollectionRecordReceiptValidation: async (recordId: string) => {
+      syncRecordReceiptState(recordId);
+      return records.get(recordId) || null;
     },
     updateCollectionRecord: async (
       id: string,
@@ -404,6 +583,20 @@ export function createCoreCollectionStorageDouble(options?: {
           originalMimeType: string;
           originalExtension: string;
           fileSize: number;
+          receiptAmountCents?: number | null;
+          extractedAmountCents?: number | null;
+          extractionConfidence?: number | null;
+          receiptDate?: string | null;
+          receiptReference?: string | null;
+          fileHash?: string | null;
+        }>;
+        receiptUpdates?: Array<{
+          receiptId: string;
+          receiptAmountCents?: number | null;
+          extractedAmountCents?: number | null;
+          extractionConfidence?: number | null;
+          receiptDate?: string | null;
+          receiptReference?: string | null;
         }>;
       },
     ) => {
@@ -426,22 +619,70 @@ export function createCoreCollectionStorageDouble(options?: {
         updatedAt: new Date("2026-03-16T10:00:00.000Z"),
       };
       records.set(id, updated);
+      const current = receiptRowsByRecordId.get(id) || [];
+      let nextRows = current.slice();
+      if (options?.removeAllReceipts) {
+        nextRows = [];
+      } else if (options?.removeReceiptIds?.length) {
+        const removedIds = new Set(options.removeReceiptIds.map((value) => String(value || "").trim()).filter(Boolean));
+        nextRows = nextRows.filter((receipt) => !removedIds.has(receipt.id));
+      }
+      if (options?.receiptUpdates?.length) {
+        nextRows = nextRows.map((receipt) => {
+          const update = options.receiptUpdates?.find((item) => item.receiptId === receipt.id);
+          if (!update) {
+            return receipt;
+          }
+          return {
+            ...receipt,
+            receiptAmount:
+              update.receiptAmountCents === undefined || update.receiptAmountCents === null
+                ? null
+                : formatAmountFromCents(update.receiptAmountCents),
+            extractedAmount:
+              update.extractedAmountCents === undefined || update.extractedAmountCents === null
+                ? null
+                : formatAmountFromCents(update.extractedAmountCents),
+            extractionConfidence:
+              update.extractionConfidence === undefined || update.extractionConfidence === null
+                ? null
+                : Number(update.extractionConfidence),
+            receiptDate: String(update.receiptDate || "").trim() || null,
+            receiptReference: String(update.receiptReference || "").trim() || null,
+          };
+        });
+      }
       if (options?.newReceipts?.length) {
-        const current = receiptRowsByRecordId.get(id) || [];
         const appendedRows = options.newReceipts.map((receipt, index) => ({
-          id: `receipt-${id}-update-${current.length + index + 1}`,
+          id: `receipt-${id}-update-${nextRows.length + index + 1}`,
           collectionRecordId: id,
           storagePath: String(receipt.storagePath || ""),
           originalFileName: String(receipt.originalFileName || ""),
           originalMimeType: String(receipt.originalMimeType || "application/octet-stream"),
           originalExtension: String(receipt.originalExtension || ""),
           fileSize: Number(receipt.fileSize || 0),
+          receiptAmount:
+            receipt.receiptAmountCents === undefined || receipt.receiptAmountCents === null
+              ? null
+              : formatAmountFromCents(receipt.receiptAmountCents),
+          extractedAmount:
+            receipt.extractedAmountCents === undefined || receipt.extractedAmountCents === null
+              ? null
+              : formatAmountFromCents(receipt.extractedAmountCents),
+          extractionConfidence:
+            receipt.extractionConfidence === undefined || receipt.extractionConfidence === null
+              ? null
+              : Number(receipt.extractionConfidence),
+          receiptDate: String(receipt.receiptDate || "").trim() || null,
+          receiptReference: String(receipt.receiptReference || "").trim() || null,
+          fileHash: String(receipt.fileHash || "").trim().toLowerCase() || null,
           createdAt: new Date("2026-03-16T10:00:00.000Z"),
         }));
-        receiptRowsByRecordId.set(id, [...current, ...appendedRows]);
-        syncRecordReceiptFile(id);
+        nextRows = [...nextRows, ...appendedRows];
       }
-      return updated;
+      receiptRowsByRecordId.set(id, nextRows);
+      syncRecordReceiptState(id);
+      return hydrateRecord(updated);
     },
     deleteCollectionRecord: async (
       id: string,
@@ -460,6 +701,7 @@ export function createCoreCollectionStorageDouble(options?: {
         return false;
       }
       records.delete(id);
+      receiptRowsByRecordId.delete(id);
       return true;
     },
   } as unknown as PostgresStorage;

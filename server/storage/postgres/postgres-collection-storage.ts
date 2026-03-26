@@ -19,6 +19,7 @@ import type {
   CreateCollectionRecordReceiptInput,
   CreateCollectionStaffNicknameInput,
   DeleteCollectionRecordOptions,
+  UpdateCollectionRecordReceiptInput,
   UpdateCollectionRecordInput,
   UpdateCollectionRecordOptions,
   UpdateCollectionStaffNicknameInput,
@@ -312,6 +313,13 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
     return this.collectionRepository.createCollectionRecordReceipts(recordId, receipts);
   }
 
+  async updateCollectionRecordReceipts(
+    recordId: string,
+    updates: UpdateCollectionRecordReceiptInput[],
+  ): Promise<CollectionRecordReceipt[]> {
+    return this.collectionRepository.updateCollectionRecordReceipts(recordId, updates);
+  }
+
   async deleteCollectionRecordReceipts(
     recordId: string,
     receiptIds: string[],
@@ -321,6 +329,10 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
 
   async deleteAllCollectionRecordReceipts(recordId: string): Promise<CollectionRecordReceipt[]> {
     return this.collectionRepository.deleteAllCollectionRecordReceipts(recordId);
+  }
+
+  async syncCollectionRecordReceiptValidation(recordId: string): Promise<CollectionRecord | undefined> {
+    return this.collectionRepository.syncCollectionRecordReceiptValidation(recordId);
   }
 
   async updateCollectionRecord(

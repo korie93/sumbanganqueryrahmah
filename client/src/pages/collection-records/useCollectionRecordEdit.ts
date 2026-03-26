@@ -2,6 +2,7 @@ import {
   type ChangeEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -19,6 +20,14 @@ import {
   updateCollectionRecord,
 } from "@/lib/api/collection-records";
 import {
+  buildCollectionReceiptMetadataPayload,
+  buildCollectionReceiptValidationPreview,
+  createCollectionReceiptDraftFromReceipt,
+  createEmptyCollectionReceiptDraft,
+  shouldBlockCollectionReceiptSave,
+  type CollectionReceiptDraftInput,
+} from "@/pages/collection/receipt-validation";
+import {
   COLLECTION_BATCH_OPTIONS,
   emitCollectionDataChanged,
   getTodayIsoDate,
@@ -35,6 +44,7 @@ function cloneReceiptIds(receiptIds: string[]) {
 }
 
 type UseCollectionRecordEditArgs = {
+  role: string;
   loadingNicknames: boolean;
   nicknameOptions: CollectionStaffNickname[];
   onRefresh: () => Promise<unknown>;
@@ -42,6 +52,7 @@ type UseCollectionRecordEditArgs = {
 };
 
 export function useCollectionRecordEdit({
+  role,
   loadingNicknames,
   nicknameOptions,
   onRefresh,
@@ -64,14 +75,56 @@ export function useCollectionRecordEdit({
   const [editAmount, setEditAmount] = useState("");
   const [editStaffNickname, setEditStaffNickname] = useState("");
   const [editNewReceiptFiles, setEditNewReceiptFiles] = useState<File[]>([]);
+  const [editExistingReceiptDrafts, setEditExistingReceiptDrafts] = useState<CollectionReceiptDraftInput[]>([]);
+  const [editPendingReceiptDrafts, setEditPendingReceiptDrafts] = useState<CollectionReceiptDraftInput[]>([]);
   const [editRemovedReceiptIds, setEditRemovedReceiptIds] = useState<string[]>([]);
+  const [editReceiptValidationOverrideReason, setEditReceiptValidationOverrideReason] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const maxPaymentDate = getTodayIsoDate();
+  const canOverrideReceiptValidation = role === "admin" || role === "superuser";
+  const activeExistingReceiptDrafts = useMemo(
+    () => {
+      const removed = new Set(editRemovedReceiptIds);
+      return editExistingReceiptDrafts.filter((draft) => !removed.has(String(draft.receiptId || "")));
+    },
+    [editExistingReceiptDrafts, editRemovedReceiptIds],
+  );
+  const editReceiptValidation = useMemo(
+    () =>
+      buildCollectionReceiptValidationPreview({
+        totalPaid: editAmount,
+        receipts: [...activeExistingReceiptDrafts, ...editPendingReceiptDrafts],
+      }),
+    [activeExistingReceiptDrafts, editAmount, editPendingReceiptDrafts],
+  );
+  const isEditReceiptSaveBlocked = shouldBlockCollectionReceiptSave({
+    validation: editReceiptValidation,
+    role,
+    overrideReason: editReceiptValidationOverrideReason,
+  });
 
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
     };
+  }, []);
+
+  const handleEditDialogOpenChange = useCallback((open: boolean) => {
+    setEditOpen(open);
+    if (open) {
+      return;
+    }
+
+    setEditingRecord(null);
+    setEditNewReceiptFiles([]);
+    setEditExistingReceiptDrafts([]);
+    setEditPendingReceiptDrafts([]);
+    setEditRemovedReceiptIds([]);
+    setEditReceiptValidationOverrideReason("");
+    editMutationIntentRef.current = null;
+    if (editReceiptInputRef.current) {
+      editReceiptInputRef.current.value = "";
+    }
   }, []);
 
   const openEditDialog = useCallback((record: CollectionRecord) => {
@@ -85,7 +138,10 @@ export function useCollectionRecordEdit({
     setEditAmount(String(record.amount));
     setEditStaffNickname(record.collectionStaffNickname);
     setEditNewReceiptFiles([]);
+    setEditExistingReceiptDrafts(record.receipts.map((receipt) => createCollectionReceiptDraftFromReceipt(receipt)));
+    setEditPendingReceiptDrafts([]);
     setEditRemovedReceiptIds([]);
+    setEditReceiptValidationOverrideReason("");
     editMutationIntentRef.current = null;
     if (editReceiptInputRef.current) {
       editReceiptInputRef.current.value = "";
@@ -108,6 +164,7 @@ export function useCollectionRecordEdit({
     }
 
     setEditNewReceiptFiles((previous) => [...previous, file]);
+    setEditPendingReceiptDrafts((previous) => [...previous, createEmptyCollectionReceiptDraft()]);
   }, [notifyMutationError]);
 
   const handleSaveEdit = useCallback(async () => {
@@ -185,10 +242,25 @@ export function useCollectionRecordEdit({
         return;
       }
     }
+    if (isEditReceiptSaveBlocked) {
+      notifyMutationError({
+        title: "Receipt Validation Required",
+        description: canOverrideReceiptValidation && editReceiptValidation.requiresOverride
+          ? editReceiptValidationOverrideReason.trim()
+            ? editReceiptValidation.message
+            : "Sila masukkan sebab override sebelum simpan."
+          : editReceiptValidation.message,
+      });
+      return;
+    }
 
     savingEditInFlightRef.current = true;
     setSavingEdit(true);
     try {
+      const existingReceiptMetadata = activeExistingReceiptDrafts.map((draft) =>
+        buildCollectionReceiptMetadataPayload(draft));
+      const newReceiptMetadata = editPendingReceiptDrafts.map((draft) =>
+        buildCollectionReceiptMetadataPayload(draft));
       const payload: Record<string, unknown> = {
         customerName: editCustomerName.trim(),
         icNumber: editIcNumber.trim(),
@@ -198,6 +270,11 @@ export function useCollectionRecordEdit({
         paymentDate: editPaymentDate,
         amount: Number(editAmount),
         expectedUpdatedAt: editingRecord.updatedAt || editingRecord.createdAt,
+        existingReceiptMetadata,
+        newReceiptMetadata,
+        receiptValidationOverrideReason: editReceiptValidation.requiresOverride
+          ? editReceiptValidationOverrideReason.trim()
+          : undefined,
       };
 
       if (staffNicknameChanged) {
@@ -245,7 +322,10 @@ export function useCollectionRecordEdit({
       setEditOpen(false);
       setEditingRecord(null);
       setEditNewReceiptFiles([]);
+      setEditExistingReceiptDrafts([]);
+      setEditPendingReceiptDrafts([]);
       setEditRemovedReceiptIds([]);
+      setEditReceiptValidationOverrideReason("");
       editMutationIntentRef.current = null;
       await onRefresh();
     } catch (error: unknown) {
@@ -270,7 +350,10 @@ export function useCollectionRecordEdit({
         setEditOpen(false);
         setEditingRecord(null);
         setEditNewReceiptFiles([]);
+        setEditExistingReceiptDrafts([]);
+        setEditPendingReceiptDrafts([]);
         setEditRemovedReceiptIds([]);
+        setEditReceiptValidationOverrideReason("");
         editMutationIntentRef.current = null;
         if (editReceiptInputRef.current) {
           editReceiptInputRef.current.value = "";
@@ -295,12 +378,19 @@ export function useCollectionRecordEdit({
     editBatch,
     editCustomerName,
     editCustomerPhone,
+    editExistingReceiptDrafts,
     editIcNumber,
     editNewReceiptFiles,
+    editPendingReceiptDrafts,
     editPaymentDate,
     editRemovedReceiptIds,
+    editReceiptValidation,
+    editReceiptValidationOverrideReason,
     editStaffNickname,
     editingRecord,
+    activeExistingReceiptDrafts,
+    canOverrideReceiptValidation,
+    isEditReceiptSaveBlocked,
     nicknameOptions,
     onRefresh,
     savingEdit,
@@ -328,9 +418,15 @@ export function useCollectionRecordEdit({
       editStaffNickname,
       maxPaymentDate,
       editNewReceiptFiles,
+      editExistingReceiptDrafts,
+      editPendingReceiptDrafts,
+      editReceiptValidation,
+      editReceiptValidationOverrideReason,
+      canOverrideReceiptValidation,
+      isEditReceiptSaveBlocked,
       editRemovedReceiptIds,
       editReceiptInputRef,
-      onOpenChange: setEditOpen,
+      onOpenChange: handleEditDialogOpenChange,
       onCustomerNameChange: setEditCustomerName,
       onIcNumberChange: setEditIcNumber,
       onCustomerPhoneChange: setEditCustomerPhone,
@@ -339,15 +435,29 @@ export function useCollectionRecordEdit({
       onPaymentDateChange: setEditPaymentDate,
       onAmountChange: setEditAmount,
       onStaffNicknameChange: setEditStaffNickname,
+      onReceiptValidationOverrideReasonChange: setEditReceiptValidationOverrideReason,
       onReceiptChange: handleEditReceiptChange,
-      onRemovePendingReceipt: (index: number) =>
-        setEditNewReceiptFiles((previous) => previous.filter((_, itemIndex) => itemIndex !== index)),
+      onRemovePendingReceipt: (index: number) => {
+        setEditNewReceiptFiles((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
+        setEditPendingReceiptDrafts((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
+      },
       onClearPendingReceipts: () => {
         setEditNewReceiptFiles([]);
+        setEditPendingReceiptDrafts([]);
         if (editReceiptInputRef.current) {
           editReceiptInputRef.current.value = "";
         }
       },
+      onExistingReceiptDraftChange: (receiptId: string, patch: Partial<CollectionReceiptDraftInput>) =>
+        setEditExistingReceiptDrafts((previous) =>
+          previous.map((draft) =>
+            draft.receiptId === receiptId ? { ...draft, ...patch } : draft,
+          )),
+      onPendingReceiptDraftChange: (index: number, patch: Partial<CollectionReceiptDraftInput>) =>
+        setEditPendingReceiptDrafts((previous) =>
+          previous.map((draft, draftIndex) =>
+            draftIndex === index ? { ...draft, ...patch } : draft,
+          )),
       onToggleRemoveExistingReceipt: (receiptId: string) =>
         setEditRemovedReceiptIds((previous) => {
           const normalized = cloneReceiptIds(previous);

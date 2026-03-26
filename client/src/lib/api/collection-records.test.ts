@@ -12,6 +12,9 @@ test("buildCollectionRecordFormData appends scalar fields and repeated receipt i
     removeReceipt: true,
     removeReceiptIds: ["receipt-1", "receipt-2"],
     expectedUpdatedAt: "2026-03-01T09:00:00.000Z",
+    newReceiptMetadata: [{ receiptAmount: "55.30", receiptReference: "R-1" }],
+    existingReceiptMetadata: [{ receiptId: "receipt-1", receiptAmount: "25.00" }],
+    receiptValidationOverrideReason: "Verified manually",
   });
 
   assert.equal(formData.get("customerName"), "Collector Test");
@@ -19,6 +22,15 @@ test("buildCollectionRecordFormData appends scalar fields and repeated receipt i
   assert.equal(formData.get("removeReceipt"), "true");
   assert.deepEqual(formData.getAll("removeReceiptIds"), ["receipt-1", "receipt-2"]);
   assert.equal(formData.get("expectedUpdatedAt"), "2026-03-01T09:00:00.000Z");
+  assert.equal(formData.get("receiptValidationOverrideReason"), "Verified manually");
+  assert.equal(
+    formData.get("newReceiptMetadata"),
+    JSON.stringify([{ receiptAmount: "55.30", receiptReference: "R-1" }]),
+  );
+  assert.equal(
+    formData.get("existingReceiptMetadata"),
+    JSON.stringify([{ receiptId: "receipt-1", receiptAmount: "25.00" }]),
+  );
 });
 
 test("buildCollectionRecordFormData appends receipt files for multipart uploads", () => {

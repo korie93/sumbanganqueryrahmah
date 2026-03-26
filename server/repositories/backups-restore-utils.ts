@@ -8,6 +8,7 @@ import type {
 import { auditLogs, dataRows, imports, users } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
 import { rebuildCollectionRecordDailyRollups } from "./collection-record-repository-utils";
+import { parseCollectionAmountToCents } from "../services/collection/collection-receipt-validation";
 import {
   BACKUP_CHUNK_SIZE,
   type BackupCollectionReceipt,
@@ -97,6 +98,10 @@ export async function getBackupDataForExport(): Promise<BackupDataPayload> {
         payment_date as "paymentDate",
         amount,
         receipt_file as "receiptFile",
+        receipt_total_amount as "receiptTotalAmount",
+        receipt_validation_status as "receiptValidationStatus",
+        receipt_validation_message as "receiptValidationMessage",
+        receipt_count as "receiptCount",
         created_by_login as "createdByLogin",
         collection_staff_nickname as "collectionStaffNickname",
         staff_username as "staffUsername",
@@ -112,6 +117,12 @@ export async function getBackupDataForExport(): Promise<BackupDataPayload> {
         original_mime_type as "originalMimeType",
         original_extension as "originalExtension",
         file_size as "fileSize",
+        receipt_amount as "receiptAmount",
+        extracted_amount as "extractedAmount",
+        extraction_confidence as "extractionConfidence",
+        receipt_date as "receiptDate",
+        receipt_reference as "receiptReference",
+        file_hash as "fileHash",
         created_at as "createdAt"
       FROM public.collection_record_receipts
     `),
@@ -282,6 +293,10 @@ export async function restoreFromBackup(backupDataRaw: BackupDataPayload): Promi
             paymentDate,
             amount: Number(record.amount || 0),
             receiptFile: record.receiptFile || null,
+            receiptTotalAmount: parseCollectionAmountToCents(record.receiptTotalAmount, { allowZero: true }) ?? 0,
+            receiptValidationStatus: String(record.receiptValidationStatus || "needs_review"),
+            receiptValidationMessage: String(record.receiptValidationMessage || "").trim() || null,
+            receiptCount: Math.max(0, Number(record.receiptCount || 0) || 0),
             createdByLogin: String(record.createdByLogin || "system"),
             collectionStaffNickname: String(record.collectionStaffNickname || record.staffUsername || "unknown"),
             staffUsername: String(record.staffUsername || record.collectionStaffNickname || "unknown"),
@@ -307,6 +322,10 @@ export async function restoreFromBackup(backupDataRaw: BackupDataPayload): Promi
           ${row.paymentDate}::date,
           ${row.amount},
           ${row.receiptFile},
+          ${row.receiptTotalAmount},
+          ${row.receiptValidationStatus},
+          ${row.receiptValidationMessage},
+          ${row.receiptCount},
           ${row.createdByLogin},
           ${row.collectionStaffNickname},
           ${row.staffUsername},
@@ -326,6 +345,10 @@ export async function restoreFromBackup(backupDataRaw: BackupDataPayload): Promi
           payment_date,
           amount,
           receipt_file,
+          receipt_total_amount,
+          receipt_validation_status,
+          receipt_validation_message,
+          receipt_count,
           created_by_login,
           collection_staff_nickname,
           staff_username,
@@ -356,6 +379,18 @@ export async function restoreFromBackup(backupDataRaw: BackupDataPayload): Promi
             originalMimeType: String(receipt.originalMimeType || "application/octet-stream"),
             originalExtension: String(receipt.originalExtension || ""),
             fileSize: Number(receipt.fileSize || 0),
+            receiptAmount: parseCollectionAmountToCents(receipt.receiptAmount, { allowZero: true, allowEmpty: true }),
+            extractedAmount: parseCollectionAmountToCents(receipt.extractedAmount, { allowZero: true, allowEmpty: true }),
+            extractionConfidence:
+              receipt.extractionConfidence === null || receipt.extractionConfidence === undefined || receipt.extractionConfidence === ""
+                ? null
+                : Number(receipt.extractionConfidence),
+            receiptDate:
+              typeof receipt.receiptDate === "string"
+                ? receipt.receiptDate.slice(0, 10)
+                : toDate(receipt.receiptDate)?.toISOString().slice(0, 10) || null,
+            receiptReference: String(receipt.receiptReference || "").trim() || null,
+            fileHash: String(receipt.fileHash || "").trim().toLowerCase() || null,
             createdAt: toDate(receipt.createdAt) ?? new Date(),
           };
         })
@@ -373,6 +408,12 @@ export async function restoreFromBackup(backupDataRaw: BackupDataPayload): Promi
           ${row.originalMimeType},
           ${row.originalExtension},
           ${row.fileSize},
+          ${row.receiptAmount},
+          ${row.extractedAmount},
+          ${row.extractionConfidence},
+          ${row.receiptDate},
+          ${row.receiptReference},
+          ${row.fileHash},
           ${row.createdAt}
         )`),
         sql`, `,
@@ -386,6 +427,12 @@ export async function restoreFromBackup(backupDataRaw: BackupDataPayload): Promi
           original_mime_type,
           original_extension,
           file_size,
+          receipt_amount,
+          extracted_amount,
+          extraction_confidence,
+          receipt_date,
+          receipt_reference,
+          file_hash,
           created_at
         )
         VALUES ${valuesSql}

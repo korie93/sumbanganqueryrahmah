@@ -8,8 +8,16 @@ export type CollectionRecordReceipt = {
   originalMimeType: string;
   originalExtension: string;
   fileSize: number;
+  receiptAmount: string | null;
+  extractedAmount: string | null;
+  extractionConfidence: number | null;
+  receiptDate: string | null;
+  receiptReference: string | null;
+  fileHash: string | null;
   createdAt: string;
 };
+
+export type CollectionReceiptValidationStatus = "matched" | "mismatch" | "needs_review";
 
 export type CollectionRecord = {
   id: string;
@@ -22,6 +30,10 @@ export type CollectionRecord = {
   amount: string;
   receiptFile: string | null;
   receipts: CollectionRecordReceipt[];
+  receiptTotalAmount: string;
+  receiptValidationStatus: CollectionReceiptValidationStatus;
+  receiptValidationMessage: string | null;
+  receiptCount: number;
   createdByLogin: string;
   collectionStaffNickname: string;
   createdAt: string;
@@ -65,6 +77,16 @@ export type CollectionReceiptPayload = {
   contentBase64: string;
 };
 
+export type CollectionReceiptMetadata = {
+  receiptId?: string;
+  receiptAmount?: number | string | null;
+  extractedAmount?: number | string | null;
+  extractionConfidence?: number | string | null;
+  receiptDate?: string | null;
+  receiptReference?: string | null;
+  fileHash?: string | null;
+};
+
 export type CreateCollectionPayload = {
   customerName: string;
   icNumber: string;
@@ -76,12 +98,15 @@ export type CreateCollectionPayload = {
   collectionStaffNickname: string;
   receipt?: CollectionReceiptPayload | null;
   receipts?: CollectionReceiptPayload[] | null;
+  newReceiptMetadata?: CollectionReceiptMetadata[] | null;
+  receiptValidationOverrideReason?: string | null;
 };
 
 export type UpdateCollectionPayload = Partial<CreateCollectionPayload> & {
   removeReceipt?: boolean;
   removeReceiptIds?: string[];
   expectedUpdatedAt?: string;
+  existingReceiptMetadata?: CollectionReceiptMetadata[] | null;
 };
 
 export type CollectionRecordListResponse = {
