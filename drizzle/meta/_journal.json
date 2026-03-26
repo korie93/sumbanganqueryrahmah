@@ -141,6 +141,13 @@
       "when": 1774498562963,
       "tag": "0019_reviewed_collection_receipt_extraction_status",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1774516200000,
+      "tag": "0020_reviewed_collection_receipt_soft_delete",
+      "breakpoints": true
     }
   ]
 }

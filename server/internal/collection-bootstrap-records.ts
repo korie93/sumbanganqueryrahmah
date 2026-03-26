@@ -124,6 +124,7 @@ export async function ensureCollectionRecordsTables(
       receipt_date date,
       receipt_reference text,
       file_hash text,
+      deleted_at timestamp,
       created_at timestamp NOT NULL DEFAULT now()
     )
   `);
@@ -140,6 +141,7 @@ export async function ensureCollectionRecordsTables(
   await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS receipt_date date`);
   await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS receipt_reference text`);
   await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS file_hash text`);
+  await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS deleted_at timestamp`);
   await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
   await database.execute(sql`
     UPDATE public.collection_record_receipts
@@ -181,9 +183,11 @@ export async function ensureCollectionRecordsTables(
     CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_record_receipts_record_storage_unique
     ON public.collection_record_receipts (collection_record_id, storage_path)
   `);
+  await database.execute(sql`DROP INDEX IF EXISTS idx_collection_record_receipts_record_file_hash_unique`);
   await database.execute(sql`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_record_receipts_record_file_hash_unique
     ON public.collection_record_receipts (collection_record_id, file_hash)
+    WHERE file_hash IS NOT NULL AND deleted_at IS NULL
   `);
   await database.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_collection_record_receipts_file_hash
@@ -203,10 +207,11 @@ export async function ensureCollectionRecordsTables(
     FROM public.collection_records cr
     WHERE trim(COALESCE(cr.receipt_file, '')) <> ''
       AND NOT EXISTS (
-        SELECT 1
-        FROM public.collection_record_receipts crr
-        WHERE crr.collection_record_id = cr.id
-          AND crr.storage_path = cr.receipt_file
+      SELECT 1
+      FROM public.collection_record_receipts crr
+      WHERE crr.collection_record_id = cr.id
+        AND crr.storage_path = cr.receipt_file
+        AND crr.deleted_at IS NULL
       )
     LIMIT 10000
   `);
@@ -275,9 +280,11 @@ export async function ensureCollectionRecordsTables(
         SELECT file_hash, COUNT(*)::int AS match_count
         FROM public.collection_record_receipts
         WHERE NULLIF(trim(COALESCE(file_hash, '')), '') IS NOT NULL
+          AND deleted_at IS NULL
         GROUP BY file_hash
       ) hash_stats
         ON hash_stats.file_hash = public.collection_record_receipts.file_hash
+      WHERE public.collection_record_receipts.deleted_at IS NULL
       GROUP BY collection_record_id
     ) stats
     WHERE record.id = stats.collection_record_id
@@ -294,6 +301,7 @@ export async function ensureCollectionRecordsTables(
       SELECT 1
       FROM public.collection_record_receipts receipt
       WHERE receipt.collection_record_id = public.collection_records.id
+        AND receipt.deleted_at IS NULL
     )
   `);
 

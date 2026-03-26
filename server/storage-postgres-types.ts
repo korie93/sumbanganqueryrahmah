@@ -68,6 +68,7 @@ export type CollectionRecordReceipt = {
   receiptReference: string | null;
   fileHash: string | null;
   createdAt: Date;
+  deletedAt?: Date | null;
 };
 
 export type CollectionRecord = {
@@ -81,6 +82,7 @@ export type CollectionRecord = {
   amount: string;
   receiptFile: string | null;
   receipts: CollectionRecordReceipt[];
+  archivedReceipts?: CollectionRecordReceipt[];
   receiptTotalAmount: string;
   receiptValidationStatus: CollectionReceiptValidationStatus;
   receiptValidationMessage: string | null;

@@ -48,6 +48,8 @@ type CollectionRecordReceiptDbRow = {
   fileHash?: unknown;
   created_at?: unknown;
   createdAt?: unknown;
+  deleted_at?: unknown;
+  deletedAt?: unknown;
 };
 
 export type CollectionReceiptExecutor = CollectionRepositoryExecutor;
@@ -65,6 +67,7 @@ async function syncCollectionRecordLegacyReceiptCache(
     SELECT storage_path
     FROM public.collection_record_receipts
     WHERE collection_record_id = ${normalizedRecordId}::uuid
+      AND deleted_at IS NULL
     ORDER BY created_at ASC, id ASC
     LIMIT 1
   `);
@@ -149,6 +152,10 @@ export function mapCollectionRecordReceiptRow(row: CollectionRecordReceiptDbRow)
     receiptReference: String(row.receipt_reference ?? row.receiptReference ?? "").trim() || null,
     fileHash: String(row.file_hash ?? row.fileHash ?? "").trim() || null,
     createdAt: normalizeCollectionDate(row.created_at ?? row.createdAt),
+    deletedAt:
+      row.deleted_at === null || row.deletedAt === null || row.deleted_at === undefined || row.deletedAt === undefined
+        ? null
+        : normalizeCollectionDate(row.deleted_at ?? row.deletedAt),
   };
 }
 
@@ -234,10 +241,21 @@ async function pruneMissingCollectionReceiptRelations(
 export async function loadCollectionReceiptMapByRecordIds(
   executor: CollectionReceiptExecutor,
   recordIds: string[],
+  options?: {
+    includeDeleted?: boolean;
+    deletedOnly?: boolean;
+  },
 ): Promise<Map<string, CollectionRecordReceipt[]>> {
   const normalizedIds = normalizeUniqueValues(recordIds);
   const receiptMap = new Map<string, CollectionRecordReceipt[]>();
   if (!normalizedIds.length) return receiptMap;
+  const includeDeleted = options?.includeDeleted === true;
+  const deletedOnly = options?.deletedOnly === true;
+  const deletedWhereSql = deletedOnly
+    ? sql`AND deleted_at IS NOT NULL`
+    : includeDeleted
+      ? sql``
+      : sql`AND deleted_at IS NULL`;
 
   const idSql = sql.join(normalizedIds.map((value) => sql`${value}::uuid`), sql`, `);
   const result = await executor.execute(sql`
@@ -257,8 +275,10 @@ export async function loadCollectionReceiptMapByRecordIds(
       receipt_reference,
       file_hash,
       created_at
+      , deleted_at
     FROM public.collection_record_receipts
     WHERE collection_record_id IN (${idSql})
+      ${deletedWhereSql}
     ORDER BY created_at ASC, id ASC
   `);
 
@@ -277,14 +297,14 @@ export async function attachCollectionReceipts(
   records: CollectionRecord[],
 ): Promise<CollectionRecord[]> {
   if (!records.length) return records;
-  const receiptMap = await loadCollectionReceiptMapByRecordIds(
+  const activeReceiptMap = await loadCollectionReceiptMapByRecordIds(
     executor,
     records.map((record) => record.id),
   );
-  await pruneMissingCollectionReceiptRelations(executor, receiptMap);
+  await pruneMissingCollectionReceiptRelations(executor, activeReceiptMap);
 
   const legacyOnlyRecords = records.filter((record) => {
-    const receipts = receiptMap.get(record.id) || [];
+    const receipts = activeReceiptMap.get(record.id) || [];
     return receipts.length === 0 && Boolean(String(record.receiptFile || "").trim());
   });
 
@@ -298,17 +318,25 @@ export async function attachCollectionReceipts(
       legacyOnlyRecords.map((record) => record.id),
     );
     for (const [recordId, receipts] of refreshedReceiptMap.entries()) {
-      receiptMap.set(recordId, receipts);
+      activeReceiptMap.set(recordId, receipts);
     }
   }
 
+  const archivedReceiptMap = await loadCollectionReceiptMapByRecordIds(
+    executor,
+    records.map((record) => record.id),
+    { deletedOnly: true },
+  );
+
   return records.map((record) => {
-    const receipts = receiptMap.get(record.id) || [];
+    const receipts = activeReceiptMap.get(record.id) || [];
+    const archivedReceipts = archivedReceiptMap.get(record.id) || [];
     return {
       ...record,
       // collection_record_receipts is the active runtime source of truth.
       receiptFile: null,
       receipts,
+      archivedReceipts,
     };
   });
 }
@@ -336,9 +364,11 @@ export async function listCollectionRecordReceiptsByRecordId(
       receipt_date,
       receipt_reference,
       file_hash,
-      created_at
+      created_at,
+      deleted_at
     FROM public.collection_record_receipts
     WHERE collection_record_id = ${normalizedRecordId}::uuid
+      AND deleted_at IS NULL
     ORDER BY created_at ASC, id ASC
   `);
 
@@ -370,7 +400,8 @@ export async function getCollectionRecordReceiptByIdForRecord(
       receipt_date,
       receipt_reference,
       file_hash,
-      created_at
+      created_at,
+      deleted_at
     FROM public.collection_record_receipts
     WHERE collection_record_id = ${normalizedRecordId}::uuid
       AND id = ${normalizedReceiptId}::uuid
@@ -405,7 +436,8 @@ export async function listCollectionRecordReceiptsByIds(
       receipt_date,
       receipt_reference,
       file_hash,
-      created_at
+      created_at,
+      deleted_at
     FROM public.collection_record_receipts
     WHERE id IN (${idSql})
     ORDER BY created_at ASC, id ASC
@@ -437,6 +469,7 @@ export async function findCollectionReceiptDuplicateSummariesByHash(
       created_at
     FROM public.collection_record_receipts
     WHERE file_hash IN (${hashSql})
+      AND deleted_at IS NULL
       ${excludeSql}
     ORDER BY created_at DESC, id DESC
   `);
@@ -565,6 +598,7 @@ export async function updateCollectionRecordReceiptRows(
         receipt_reference = ${update.receiptReference}
       WHERE collection_record_id = ${normalizedRecordId}::uuid
         AND id = ${update.receiptId}::uuid
+        AND deleted_at IS NULL
     `);
   }
 
@@ -602,10 +636,12 @@ export async function listCollectionRecordReceiptsForDeletion(
       receipt_date,
       receipt_reference,
       file_hash,
-      created_at
+      created_at,
+      deleted_at
     FROM public.collection_record_receipts
     WHERE collection_record_id = ${normalizedRecordId}::uuid
       AND id IN (${idSql})
+      AND deleted_at IS NULL
   `);
   return readRows<CollectionRecordReceiptDbRow>(existing).map((row) => mapCollectionRecordReceiptRow(row));
 }
@@ -626,11 +662,13 @@ export async function deleteCollectionRecordReceiptRows(
     return [];
   }
 
-  const idSql = sql.join(normalizedReceiptIds.map((value) => sql`${value}::uuid`), sql`, `);
+  const idSql = sql.join(receipts.map((receipt) => sql`${receipt.id}::uuid`), sql`, `);
   await executor.execute(sql`
-    DELETE FROM public.collection_record_receipts
+    UPDATE public.collection_record_receipts
+    SET deleted_at = now()
     WHERE collection_record_id = ${normalizedRecordId}::uuid
       AND id IN (${idSql})
+      AND deleted_at IS NULL
   `);
   await syncCollectionRecordLegacyReceiptCache(executor, normalizedRecordId);
   return receipts;
@@ -646,8 +684,10 @@ export async function deleteAllCollectionRecordReceiptRows(
   }
   const idSql = sql.join(receipts.map((receipt) => sql`${receipt.id}::uuid`), sql`, `);
   await executor.execute(sql`
-    DELETE FROM public.collection_record_receipts
+    UPDATE public.collection_record_receipts
+    SET deleted_at = now()
     WHERE id IN (${idSql})
+      AND deleted_at IS NULL
   `);
   await syncCollectionRecordLegacyReceiptCache(executor, String(recordId || "").trim());
   return receipts;

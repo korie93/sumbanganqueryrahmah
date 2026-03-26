@@ -1474,6 +1474,71 @@ test("GET /api/collection/:id/receipts/:receiptId/view does not fallback to lega
   }
 });
 
+test("PATCH /api/collection/:id keeps removed receipts viewable via receipt id for recovery", async () => {
+  const uploadsDir = path.resolve(process.cwd(), "uploads", "collection-receipts");
+  const storedFileName = `route-test-recoverable-receipt-${Date.now()}-${Math.random().toString(16).slice(2)}.pdf`;
+  const storedReceiptPath = `/uploads/collection-receipts/${storedFileName}`;
+  await fs.mkdir(uploadsDir, { recursive: true });
+  await fs.writeFile(path.join(uploadsDir, storedFileName), createTinyPdfBuffer());
+
+  const { storage } = createCoreCollectionStorageDouble({
+    sessionNickname: "Collector Alpha",
+    receiptRowsByRecordId: {
+      "collection-1": [
+        {
+          id: "receipt-recoverable",
+          collectionRecordId: "collection-1",
+          storagePath: storedReceiptPath,
+          originalFileName: storedFileName,
+          originalMimeType: "application/pdf",
+          originalExtension: ".pdf",
+          fileSize: 128,
+          createdAt: new Date("2026-03-01T00:00:00.000Z"),
+        },
+      ],
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+      activityId: "activity-user-collection-receipt-recoverable",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const updateResponse = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        removeReceiptIds: ["receipt-recoverable"],
+      }),
+    });
+    assert.equal(updateResponse.status, 200);
+
+    const archivedReceiptResponse = await fetch(
+      `${baseUrl}/api/collection/collection-1/receipts/receipt-recoverable/view`,
+    );
+    assert.equal(archivedReceiptResponse.status, 200);
+    assert.equal(archivedReceiptResponse.headers.get("content-type"), "application/pdf");
+
+    const primaryResponse = await fetch(`${baseUrl}/api/collection/collection-1/receipt/view`);
+    assert.equal(primaryResponse.status, 404);
+  } finally {
+    await stopTestServer(server);
+    await fs.unlink(path.join(uploadsDir, storedFileName)).catch(() => undefined);
+  }
+});
+
 test("GET /api/collection/:id/receipt/view prunes a missing relation receipt and falls back to the next valid receipt", async () => {
   const uploadsDir = path.resolve(process.cwd(), "uploads", "collection-receipts");
   const storedFileName = `route-test-fallback-receipt-${Date.now()}-${Math.random().toString(16).slice(2)}.png`;
