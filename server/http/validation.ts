@@ -1,8 +1,43 @@
+import { z } from "zod";
+import { ERROR_CODES } from "../../shared/error-codes";
+import { badRequest } from "./errors";
+
 export function ensureObject(value: unknown): Record<string, any> | null {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, any>;
   }
   return null;
+}
+
+export type RequestValidationIssue = {
+  code: string;
+  message: string;
+  path: string;
+};
+
+function buildRequestValidationIssues(error: z.ZodError): RequestValidationIssue[] {
+  return error.issues.map((issue) => ({
+    code: issue.code,
+    message: issue.message,
+    path: issue.path.length > 0 ? issue.path.map(String).join(".") : "body",
+  }));
+}
+
+export function parseRequestBody<TSchema extends z.ZodTypeAny>(
+  schema: TSchema,
+  value: unknown,
+): z.infer<TSchema> {
+  const parsed = schema.safeParse(value);
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  const details = buildRequestValidationIssues(parsed.error);
+  throw badRequest(
+    details[0]?.message || "Request body is invalid.",
+    ERROR_CODES.REQUEST_BODY_INVALID,
+    details,
+  );
 }
 
 export function readNonEmptyString(value: unknown): string {

@@ -1,5 +1,6 @@
 import { apiRequest, createApiHeaders } from "../queryClient";
 import { API_BASE, getCsrfHeader } from "./shared";
+import { ERROR_CODES } from "@shared/error-codes";
 
 export type CurrentUser = {
   id: string;
@@ -230,6 +231,9 @@ export async function login(
     };
     error.code = typeof data?.error?.code === "string" ? data.error.code : undefined;
     error.locked = data?.locked === true;
+    if (error.code === ERROR_CODES.ACCOUNT_LOCKED) {
+      error.locked = true;
+    }
     error.status = res.status;
     error.requestId = res.headers.get("x-request-id");
     throw error;

@@ -1,5 +1,6 @@
 import type { Request, RequestHandler } from "express";
 import rateLimit from "express-rate-limit";
+import { ERROR_CODES } from "../../shared/error-codes";
 
 type RateLimitPayload = {
   ok: false;
@@ -74,7 +75,7 @@ function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler 
 export const searchRateLimiter = createJsonRateLimiter({
   windowMs: 10 * 1000,
   max: 10,
-  code: "SEARCH_RATE_LIMITED",
+  code: ERROR_CODES.SEARCH_RATE_LIMITED,
   message: "Too many search requests. Please slow down.",
 });
 
@@ -83,14 +84,14 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
     login: createJsonRateLimiter({
       windowMs: 10 * 60 * 1000,
       max: 15,
-      code: "AUTH_RATE_LIMITED",
+      code: ERROR_CODES.AUTH_RATE_LIMITED,
       message: "Too many login attempts. Please try again shortly.",
       keyGenerator: (req) => buildRateLimitKey(req, "auth-login", req.body?.username),
     }),
     publicRecovery: createJsonRateLimiter({
       windowMs: 10 * 60 * 1000,
       max: 20,
-      code: "AUTH_RECOVERY_RATE_LIMITED",
+      code: ERROR_CODES.AUTH_RECOVERY_RATE_LIMITED,
       message: "Too many activation or password reset attempts. Please try again shortly.",
       keyGenerator: (req) => buildRateLimitKey(
         req,
@@ -103,7 +104,7 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
     authenticatedAuth: createJsonRateLimiter({
       windowMs: 10 * 60 * 1000,
       max: 12,
-      code: "AUTH_MUTATION_RATE_LIMITED",
+      code: ERROR_CODES.AUTH_MUTATION_RATE_LIMITED,
       message: "Too many account security updates. Please wait before trying again.",
       keyGenerator: (req) => {
         const authReq = req as AuthenticatedLikeRequest;
@@ -113,7 +114,7 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
     adminAction: createJsonRateLimiter({
       windowMs: 10 * 60 * 1000,
       max: 30,
-      code: "ADMIN_ACTION_RATE_LIMITED",
+      code: ERROR_CODES.ADMIN_ACTION_RATE_LIMITED,
       message: "Too many admin account actions. Please slow down and try again.",
       keyGenerator: (req) => {
         const authReq = req as AuthenticatedLikeRequest;

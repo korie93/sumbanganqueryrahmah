@@ -28,6 +28,7 @@ import {
   createOwnCredentialsStorageDouble,
   createPasswordResetStorageDouble,
 } from "./auth-route-auth-flow-doubles";
+import { ERROR_CODES } from "../../../shared/error-codes";
 import {
   createAccountsStorageDouble,
   createDevMailAdminStorageDouble,
@@ -675,6 +676,52 @@ test("POST /api/auth/login keeps unknown usernames generic without leaking accou
       performedBy: "missing.user",
       details: "User not found",
     }]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/auth/login rejects malformed request bodies with a validation error code", async () => {
+  const { storage, auditLogs } = await createLoginStorageDouble();
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: (_req, _res, next) => next(),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: 123,
+        password: "StrongPass123!",
+      }),
+    });
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "Expected string, received number",
+      error: {
+        code: ERROR_CODES.REQUEST_BODY_INVALID,
+        message: "Expected string, received number",
+        details: [
+          {
+            code: "invalid_type",
+            message: "Expected string, received number",
+            path: "username",
+          },
+        ],
+      },
+    });
+    assert.equal(auditLogs.length, 0);
   } finally {
     await stopTestServer(server);
   }

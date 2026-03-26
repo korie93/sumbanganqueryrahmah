@@ -2,8 +2,6 @@ import type { NextFunction, Request, Response } from "express";
 import { HttpError } from "../http/errors";
 import { logger } from "../lib/logger";
 
-const isProduction = process.env.NODE_ENV === "production";
-
 export function errorHandler(err: unknown, req: Request, res: Response, next: NextFunction) {
   if (res.headersSent) {
     return next(err);
@@ -13,7 +11,15 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
     return res.status(err.statusCode).json({
       ok: false,
       message: err.message,
-      ...(err.code && !isProduction ? { error: { code: err.code, message: err.message } } : {}),
+      ...((err.code || err.details !== undefined)
+        ? {
+            error: {
+              ...(err.code ? { code: err.code } : {}),
+              message: err.message,
+              ...(err.details !== undefined ? { details: err.details } : {}),
+            },
+          }
+        : {}),
     });
   }
 

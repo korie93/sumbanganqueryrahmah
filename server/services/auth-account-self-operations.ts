@@ -9,6 +9,7 @@ import {
   verifyTwoFactorCode,
 } from "../auth/two-factor";
 import type { PostgresStorage } from "../storage-postgres";
+import { ERROR_CODES } from "../../shared/error-codes";
 import { assertStrongPasswordInput } from "./auth-account-token-utils";
 import { AuthAccountError } from "./auth-account-types";
 
@@ -257,13 +258,13 @@ export class AuthAccountSelfOperations {
     } catch {
       throw new AuthAccountError(
         500,
-        "TWO_FACTOR_SECRET_INVALID",
+        ERROR_CODES.TWO_FACTOR_SECRET_INVALID,
         "Two-factor authentication is unavailable. Start setup again.",
       );
     }
 
     if (!verifyTwoFactorCode(secret, input.code)) {
-      throw new AuthAccountError(400, "TWO_FACTOR_INVALID_CODE", "Authenticator code is invalid.");
+      throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
     }
 
     const now = new Date();
@@ -300,7 +301,7 @@ export class AuthAccountSelfOperations {
     if (!actor.twoFactorEnabled || !encryptedSecret) {
       throw new AuthAccountError(
         409,
-        "TWO_FACTOR_NOT_ENABLED",
+        ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
         "Two-factor authentication is not enabled.",
       );
     }
@@ -311,13 +312,13 @@ export class AuthAccountSelfOperations {
     } catch {
       throw new AuthAccountError(
         500,
-        "TWO_FACTOR_SECRET_INVALID",
+        ERROR_CODES.TWO_FACTOR_SECRET_INVALID,
         "Two-factor authentication is unavailable.",
       );
     }
 
     if (!verifyTwoFactorCode(secret, input.code)) {
-      throw new AuthAccountError(400, "TWO_FACTOR_INVALID_CODE", "Authenticator code is invalid.");
+      throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
     }
 
     const updatedUser = await this.deps.storage.updateUserAccount({

@@ -21,6 +21,7 @@ import { buildAccountActivationEmail } from "../mail/account-activation-email";
 import { buildPasswordResetEmail } from "../mail/password-reset-email";
 import { sendMail } from "../mail/mailer";
 import type { PostgresStorage } from "../storage-postgres";
+import { ERROR_CODES } from "../../shared/error-codes";
 import {
   assertConfirmedStrongPassword,
   assertUsableActivationTokenRecord,
@@ -367,7 +368,7 @@ export class AuthAccountAuthenticationOperations {
     });
     throw new AuthAccountError(
       423,
-      "ACCOUNT_LOCKED",
+      ERROR_CODES.ACCOUNT_LOCKED,
       AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_MESSAGE,
       {
         locked: true,
@@ -422,7 +423,7 @@ export class AuthAccountAuthenticationOperations {
     if (result.locked) {
       throw new AuthAccountError(
         423,
-        "ACCOUNT_LOCKED",
+        ERROR_CODES.ACCOUNT_LOCKED,
         AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_MESSAGE,
         {
           locked: true,
@@ -430,7 +431,7 @@ export class AuthAccountAuthenticationOperations {
       );
     }
 
-    throw new AuthAccountError(401, "INVALID_CREDENTIALS", "Invalid credentials");
+    throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
   }
 
   async login(input: LoginInput) {
@@ -444,7 +445,7 @@ export class AuthAccountAuthenticationOperations {
         performedBy: username || "unknown",
         details: "User not found",
       });
-      throw new AuthAccountError(401, "INVALID_CREDENTIALS", "Invalid credentials");
+      throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
     }
 
     const visitorBanned = await this.deps.storage.isVisitorBanned(
@@ -480,7 +481,7 @@ export class AuthAccountAuthenticationOperations {
         targetUser: user.id,
         details: `Login blocked due to account state: ${blockReason}`,
       });
-      throw new AuthAccountError(401, "INVALID_CREDENTIALS", "Invalid credentials");
+      throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
     }
 
     const validPassword = await verifyPassword(password, user.passwordHash);
@@ -563,11 +564,11 @@ export class AuthAccountAuthenticationOperations {
         targetUser: user.id,
         details: `Second-factor login blocked due to account state: ${blockReason}`,
       });
-      throw new AuthAccountError(401, "INVALID_CREDENTIALS", "Invalid credentials");
+      throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
     }
 
     if (!this.requiresTwoFactor(user)) {
-      throw new AuthAccountError(409, "TWO_FACTOR_NOT_ENABLED", "Two-factor authentication is not enabled.");
+      throw new AuthAccountError(409, ERROR_CODES.TWO_FACTOR_NOT_ENABLED, "Two-factor authentication is not enabled.");
     }
 
     const encryptedSecret = String(user.twoFactorSecretEncrypted || "").trim();
@@ -581,7 +582,7 @@ export class AuthAccountAuthenticationOperations {
         targetUser: user.id,
         details: "Stored two-factor secret could not be decrypted.",
       });
-      throw new AuthAccountError(500, "TWO_FACTOR_SECRET_INVALID", "Two-factor authentication is unavailable.");
+      throw new AuthAccountError(500, ERROR_CODES.TWO_FACTOR_SECRET_INVALID, "Two-factor authentication is unavailable.");
     }
 
     if (!verifyTwoFactorCode(secret, input.code)) {
@@ -591,7 +592,7 @@ export class AuthAccountAuthenticationOperations {
         targetUser: user.id,
         details: `Invalid authenticator code from ${input.browserName}`,
       });
-      throw new AuthAccountError(401, "TWO_FACTOR_INVALID_CODE", "Authenticator code is invalid.");
+      throw new AuthAccountError(401, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
     }
 
     const activity = await this.createAuthenticatedSession(

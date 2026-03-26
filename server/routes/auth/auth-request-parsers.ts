@@ -1,80 +1,137 @@
-import { ensureObject } from "../../http/validation";
+import { z } from "zod";
+import { parseRequestBody } from "../../http/validation";
+
+const nullableString = z.union([z.string(), z.null(), z.undefined()]);
+const optionalString = z.union([z.string(), z.undefined()]);
+
+const loginBodySchema = z.object({
+  username: z.string().default(""),
+  password: z.string().default(""),
+  fingerprint: nullableString.transform((value) => (typeof value === "string" ? value : null)),
+  pcName: nullableString.transform((value) => (typeof value === "string" ? value : null)),
+  browser: nullableString.transform((value) => (typeof value === "string" ? value : null)),
+});
+
+const activationBodySchema = z.object({
+  username: optionalString.transform((value) => (typeof value === "string" ? value : undefined)),
+  token: z.string().default(""),
+  newPassword: z.string().default(""),
+  confirmPassword: z.string().default(""),
+});
+
+const tokenBodySchema = z.object({
+  token: z.string().default(""),
+});
+
+const passwordResetRequestBodySchema = z.object({
+  identifier: optionalString,
+  username: optionalString,
+  email: optionalString,
+});
+
+const passwordChangeBodySchema = z.object({
+  currentPassword: z.string().default(""),
+  newPassword: z.string().default(""),
+});
+
+const twoFactorChallengeBodySchema = z.object({
+  challengeToken: z.string().default(""),
+  code: z.string().default(""),
+});
+
+const twoFactorSetupBodySchema = z.object({
+  currentPassword: z.string().default(""),
+});
+
+const twoFactorCodeBodySchema = z.object({
+  code: z.string().default(""),
+});
+
+const twoFactorDisableBodySchema = z.object({
+  currentPassword: z.string().default(""),
+  code: z.string().default(""),
+});
+
+const ownCredentialPatchBodySchema = z.object({
+  newUsername: optionalString,
+  currentPassword: optionalString,
+  newPassword: optionalString,
+}).passthrough();
+
+const managedUserBodySchema = z.object({
+  username: z.string().default(""),
+  fullName: nullableString.transform((value) => (typeof value === "string" ? value : null)),
+  email: nullableString.transform((value) => (typeof value === "string" ? value : null)),
+  role: z.string().default("user"),
+});
+
+const managedUserPatchBodySchema = z.object({
+  username: optionalString,
+  fullName: nullableString,
+  email: nullableString,
+});
+
+const managedUserRoleBodySchema = z.object({
+  role: z.string().default(""),
+});
+
+const managedUserStatusBodySchema = z.object({
+  status: optionalString,
+  isBanned: z.union([z.boolean(), z.undefined()]),
+});
+
+const managedCredentialsBodySchema = z.object({
+  newPassword: z.string().default(""),
+  newUsername: optionalString,
+});
 
 export function readLoginBody(bodyRaw: unknown) {
-  const body = ensureObject(bodyRaw) || {};
-  return {
-    username: String(body.username ?? ""),
-    password: String(body.password ?? ""),
-    fingerprint: typeof body.fingerprint === "string" ? body.fingerprint : null,
-    pcName: typeof body.pcName === "string" ? body.pcName : null,
-    browser: typeof body.browser === "string" ? body.browser : null,
-  };
+  return parseRequestBody(loginBodySchema, bodyRaw);
 }
 
 export function readActivationBody(bodyRaw: unknown) {
-  const body = ensureObject(bodyRaw) || {};
+  const body = parseRequestBody(activationBodySchema, bodyRaw);
   return {
-    username: body.username == null ? undefined : String(body.username),
-    token: String(body.token ?? ""),
-    newPassword: String(body.newPassword ?? ""),
-    confirmPassword: String(body.confirmPassword ?? ""),
+    username: body.username,
+    token: body.token,
+    newPassword: body.newPassword,
+    confirmPassword: body.confirmPassword,
   };
 }
 
 export function readTokenBody(bodyRaw: unknown) {
-  const body = ensureObject(bodyRaw) || {};
-  return {
-    token: String(body.token ?? ""),
-  };
+  return parseRequestBody(tokenBodySchema, bodyRaw);
 }
 
 export function readPasswordResetRequestBody(bodyRaw: unknown) {
-  const body = ensureObject(bodyRaw) || {};
+  const body = parseRequestBody(passwordResetRequestBodySchema, bodyRaw);
   return {
     identifier: String(body.identifier ?? body.username ?? body.email ?? ""),
   };
 }
 
 export function readPasswordChangeBody(bodyRaw: unknown) {
-  const body = ensureObject(bodyRaw) || {};
-  return {
-    currentPassword: String(body.currentPassword ?? ""),
-    newPassword: String(body.newPassword ?? ""),
-  };
+  return parseRequestBody(passwordChangeBodySchema, bodyRaw);
 }
 
 export function readTwoFactorChallengeBody(bodyRaw: unknown) {
-  const body = ensureObject(bodyRaw) || {};
-  return {
-    challengeToken: String(body.challengeToken ?? ""),
-    code: String(body.code ?? ""),
-  };
+  return parseRequestBody(twoFactorChallengeBodySchema, bodyRaw);
 }
 
 export function readTwoFactorSetupBody(bodyRaw: unknown) {
-  const body = ensureObject(bodyRaw) || {};
-  return {
-    currentPassword: String(body.currentPassword ?? ""),
-  };
+  return parseRequestBody(twoFactorSetupBodySchema, bodyRaw);
 }
 
 export function readTwoFactorCodeBody(bodyRaw: unknown) {
-  const body = ensureObject(bodyRaw) || {};
-  return {
-    code: String(body.code ?? ""),
-  };
+  return parseRequestBody(twoFactorCodeBodySchema, bodyRaw);
 }
 
 export function readTwoFactorDisableBody(bodyRaw: unknown) {
-  const body = ensureObject(bodyRaw) || {};
-  return {
-    currentPassword: String(body.currentPassword ?? ""),
-    code: String(body.code ?? ""),
-  };
+  return parseRequestBody(twoFactorDisableBodySchema, bodyRaw);
 }
 
 export function readOwnCredentialPatchBody(bodyRaw: unknown) {
-  const body = ensureObject(bodyRaw) || {};
+  const body = parseRequestBody(ownCredentialPatchBodySchema, bodyRaw);
   return {
     body,
     hasUsernameField: Object.prototype.hasOwnProperty.call(body, "newUsername"),
@@ -88,17 +145,11 @@ export function readOwnCredentialPatchBody(bodyRaw: unknown) {
 }
 
 export function readManagedUserBody(bodyRaw: unknown) {
-  const body = ensureObject(bodyRaw) || {};
-  return {
-    username: String(body.username ?? ""),
-    fullName: body.fullName == null ? null : String(body.fullName),
-    email: body.email == null ? null : String(body.email),
-    role: String(body.role ?? "user"),
-  };
+  return parseRequestBody(managedUserBodySchema, bodyRaw);
 }
 
 export function readManagedUserPatchBody(bodyRaw: unknown) {
-  const body = ensureObject(bodyRaw) || {};
+  const body = parseRequestBody(managedUserPatchBodySchema, bodyRaw);
   return {
     username: body.username !== undefined ? String(body.username) : undefined,
     fullName: body.fullName !== undefined ? String(body.fullName ?? "") : undefined,
@@ -107,24 +158,17 @@ export function readManagedUserPatchBody(bodyRaw: unknown) {
 }
 
 export function readManagedUserRoleBody(bodyRaw: unknown) {
-  const body = ensureObject(bodyRaw) || {};
-  return {
-    role: String(body.role ?? ""),
-  };
+  return parseRequestBody(managedUserRoleBodySchema, bodyRaw);
 }
 
 export function readManagedUserStatusBody(bodyRaw: unknown) {
-  const body = ensureObject(bodyRaw) || {};
+  const body = parseRequestBody(managedUserStatusBodySchema, bodyRaw);
   return {
     status: body.status !== undefined ? String(body.status) : undefined,
-    isBanned: body.isBanned === undefined ? undefined : Boolean(body.isBanned),
+    isBanned: body.isBanned,
   };
 }
 
 export function readManagedCredentialsBody(bodyRaw: unknown) {
-  const body = ensureObject(bodyRaw) || {};
-  return {
-    newPassword: String(body.newPassword ?? ""),
-    newUsername: body.newUsername !== undefined ? String(body.newUsername) : undefined,
-  };
+  return parseRequestBody(managedCredentialsBodySchema, bodyRaw);
 }

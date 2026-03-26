@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { activityHeartbeat } from "@/lib/api";
+import { resolveAutoLogoutReconnectDelayMs } from "@/components/auto-logout-websocket";
 
 interface AutoLogoutProps {
   onClientLogout: () => void | Promise<void>;
@@ -22,6 +23,7 @@ export default function AutoLogout({
   const reconnectRef = useRef<number | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
   const lastResetByEventRef = useRef<number>(0);
+  const reconnectAttemptRef = useRef(0);
   const wsRef = useRef<WebSocket | null>(null);
   const mountedRef = useRef(true);
   const reconnectEnabledRef = useRef(true);
@@ -74,6 +76,7 @@ export default function AutoLogout({
     if (logoutStartedRef.current) return;
     logoutStartedRef.current = true;
     reconnectEnabledRef.current = false;
+    reconnectAttemptRef.current = 0;
     clearIdleTimeout();
     clearHeartbeat();
     clearHeartbeatRequest();
@@ -85,6 +88,7 @@ export default function AutoLogout({
     if (logoutStartedRef.current) return;
     logoutStartedRef.current = true;
     reconnectEnabledRef.current = false;
+    reconnectAttemptRef.current = 0;
     clearIdleTimeout();
     clearHeartbeat();
     clearHeartbeatRequest();
@@ -143,10 +147,12 @@ export default function AutoLogout({
     mountedRef.current = true;
     reconnectEnabledRef.current = true;
     logoutStartedRef.current = false;
+    reconnectAttemptRef.current = 0;
 
     return () => {
       mountedRef.current = false;
       reconnectEnabledRef.current = false;
+      reconnectAttemptRef.current = 0;
       clearIdleTimeout();
       clearHeartbeat();
       clearHeartbeatRequest();
@@ -234,6 +240,7 @@ export default function AutoLogout({
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
     reconnectEnabledRef.current = true;
+    reconnectAttemptRef.current = 0;
 
     const scheduleReconnect = () => {
       const nextUsername = username || localStorage.getItem("username");
@@ -242,19 +249,34 @@ export default function AutoLogout({
       }
 
       clearReconnect();
+      const attempt = reconnectAttemptRef.current;
+      const delayMs = resolveAutoLogoutReconnectDelayMs(attempt);
       reconnectRef.current = window.setTimeout(() => {
         reconnectRef.current = null;
+        reconnectAttemptRef.current = attempt + 1;
         connectWebSocket();
-      }, 5000);
+      }, delayMs);
     };
 
     const connectWebSocket = () => {
       if (!mountedRef.current || !reconnectEnabledRef.current) return;
+      if (
+        wsRef.current
+        && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)
+      ) {
+        return;
+      }
 
       try {
         const wsUrl = `${protocol}//${host}/ws`;
         const socket = new WebSocket(wsUrl);
         wsRef.current = socket;
+
+        socket.onopen = () => {
+          if (wsRef.current === socket) {
+            reconnectAttemptRef.current = 0;
+          }
+        };
 
         socket.onmessage = (event) => {
           try {
@@ -321,6 +343,7 @@ export default function AutoLogout({
 
     return () => {
       reconnectEnabledRef.current = false;
+      reconnectAttemptRef.current = 0;
       cleanupSocket();
     };
   }, [cleanupSocket, clearReconnect, runClientLogout, username]);
