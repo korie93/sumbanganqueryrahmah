@@ -25,7 +25,7 @@ export type ManagedUsersQueryState = {
   pageSize: number;
   search: string;
   role: "all" | "admin" | "user";
-  status: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned";
+  status: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned";
 };
 
 export type ManagedUsersPaginationState = {
@@ -39,7 +39,7 @@ export type PendingResetRequestsQueryState = {
   page: number;
   pageSize: number;
   search: string;
-  status: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned";
+  status: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned";
 };
 
 export type PendingResetRequestsPaginationState = {
@@ -108,6 +108,7 @@ function normalizeManagedUsersQuery(
       || status === "pending_activation"
       || status === "suspended"
       || status === "disabled"
+      || status === "locked"
       || status === "banned"
         ? status
         : "all",
@@ -131,6 +132,7 @@ function normalizePendingResetRequestsQuery(
       || status === "pending_activation"
       || status === "suspended"
       || status === "disabled"
+      || status === "locked"
       || status === "banned"
         ? status
         : "all",

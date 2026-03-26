@@ -120,6 +120,13 @@
       "when": 1774442178361,
       "tag": "0016_reviewed_monitor_and_monthly_rollups",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1774485512169,
+      "tag": "0017_reviewed_users_login_lockout",
+      "breakpoints": true
     }
   ]
 }

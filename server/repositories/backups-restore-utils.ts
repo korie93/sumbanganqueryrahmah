@@ -128,6 +128,10 @@ export async function getBackupDataForExport(): Promise<BackupDataPayload> {
       twoFactorEnabled: user.twoFactorEnabled ?? false,
       twoFactorSecretEncrypted: user.twoFactorSecretEncrypted ?? null,
       twoFactorConfiguredAt: user.twoFactorConfiguredAt ?? null,
+      failedLoginAttempts: user.failedLoginAttempts ?? 0,
+      lockedAt: user.lockedAt ?? null,
+      lockedReason: user.lockedReason ?? null,
+      lockedBySystem: user.lockedBySystem ?? false,
     })) as BackupUserRecord[],
     auditLogs: allAuditLogs as AuditLog[],
     collectionRecords,
@@ -209,6 +213,10 @@ export async function restoreFromBackup(backupDataRaw: BackupDataPayload): Promi
           twoFactorEnabled: user.twoFactorEnabled === true,
           twoFactorSecretEncrypted: user.twoFactorSecretEncrypted ?? null,
           twoFactorConfiguredAt: toDate(user.twoFactorConfiguredAt) ?? null,
+          failedLoginAttempts: Math.max(0, Number(user.failedLoginAttempts || 0)),
+          lockedAt: toDate(user.lockedAt) ?? null,
+          lockedReason: String(user.lockedReason || "").trim() || null,
+          lockedBySystem: user.lockedBySystem === true,
         }))
         .filter((user) => user.username !== "");
       stats.users.processed += rows.length;

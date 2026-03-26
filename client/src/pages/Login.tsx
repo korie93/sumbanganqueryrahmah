@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { login, generateFingerprint, verifyTwoFactorLogin } from "@/lib/api";
 import { persistAuthenticatedUser } from "@/lib/auth-session";
+import { isLockedAccountFlow, normalizeLoginIdentity } from "@/pages/login-lock-state";
 
 interface LoginProps {
   onLoginSuccess: (user: User) => void;
@@ -18,6 +19,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [lockedAccountMessage, setLockedAccountMessage] = useState("");
+  const [lockedUsername, setLockedUsername] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [twoFactorChallengeToken, setTwoFactorChallengeToken] = useState("");
@@ -26,6 +29,23 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const loginInFlightRef = useRef(false);
   const loginAbortControllerRef = useRef<AbortController | null>(null);
   const loginRequestIdRef = useRef(0);
+  const lockedFlow = isLockedAccountFlow({
+    lockedUsername,
+    currentUsername: username,
+    twoFactorChallengeToken,
+  });
+
+  const handleUsernameChange = (value: string) => {
+    setUsername(value);
+    if (!isLockedAccountFlow({
+      lockedUsername,
+      currentUsername: value,
+      twoFactorChallengeToken,
+    })) {
+      setError("");
+      setNotice("");
+    }
+  };
 
   useEffect(() => {
     const rawNotice = sessionStorage.getItem(AUTH_NOTICE_STORAGE_KEY);
@@ -59,12 +79,16 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     if (loginInFlightRef.current) {
       return;
     }
+    if (lockedFlow) {
+      return;
+    }
 
     loginInFlightRef.current = true;
     const requestId = loginRequestIdRef.current + 1;
     loginRequestIdRef.current = requestId;
     setError("");
     setNotice("");
+    setLockedAccountMessage("");
     setLoading(true);
     let controller: AbortController | null = null;
 
@@ -99,6 +123,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
       if ("twoFactorRequired" in response && response.twoFactorRequired === true) {
         localStorage.setItem("fingerprint", fingerprint);
+        setLockedUsername("");
+        setLockedAccountMessage("");
         setTwoFactorChallengeToken(String(response.challengeToken || ""));
         setTwoFactorCode("");
         setNotice("Enter the 6-digit authenticator code to complete sign-in.");
@@ -134,6 +160,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       localStorage.removeItem("banned");
       localStorage.setItem("fingerprint", fingerprint);
       persistAuthenticatedUser(authenticatedUser);
+      setLockedUsername("");
+      setLockedAccountMessage("");
 
       if (activityId) {
         localStorage.setItem("activityId", String(activityId));
@@ -160,6 +188,12 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       }
       console.error("Login failed:", err);
       let msg = err?.message || "Login failed. Please try again.";
+      if (err?.code === "ACCOUNT_LOCKED" || err?.locked === true) {
+        setLockedUsername(normalizeLoginIdentity(username));
+        setLockedAccountMessage(msg);
+        setError("");
+        return;
+      }
       if (msg.includes("Account is banned") || msg.includes('"banned":true')) {
         msg = "Your account has been banned. Please contact administrator.";
       }
@@ -239,6 +273,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
       localStorage.removeItem("banned");
       persistAuthenticatedUser(authenticatedUser);
+      setLockedUsername("");
+      setLockedAccountMessage("");
 
       if (activityId) {
         localStorage.setItem("activityId", String(activityId));
@@ -266,6 +302,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         return;
       }
       console.error("Two-factor verification failed:", err);
+      if (err?.code === "ACCOUNT_LOCKED" || err?.locked === true) {
+        setTwoFactorChallengeToken("");
+        setTwoFactorCode("");
+        setLockedUsername(normalizeLoginIdentity(username));
+        setLockedAccountMessage(err?.message || "Your account has been locked due to too many incorrect login attempts.");
+        setError("");
+        return;
+      }
       setError(err?.message || "Two-factor verification failed. Please try again.");
     } finally {
       if (loginAbortControllerRef.current === controller) {
@@ -282,12 +326,18 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (lockedFlow) {
+      return;
+    }
     void (twoFactorChallengeToken ? handleVerifyTwoFactor() : handleLogin());
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
+      if (lockedFlow) {
+        return;
+      }
       void (twoFactorChallengeToken ? handleVerifyTwoFactor() : handleLogin());
     }
   };
@@ -328,7 +378,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   className="w-full px-4 py-3 rounded-xl bg-white/90 border-0 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-400 transition-all"
                   placeholder="Username"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  onChange={(e) => handleUsernameChange(e.target.value)}
                   onKeyDown={onKeyDown}
                   autoComplete="username"
                   data-testid="input-username"
@@ -381,7 +431,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               <Button
                 type="submit"
                 className="mt-6 w-full h-12 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold shadow-lg shadow-blue-500/30 transition-all"
-                disabled={loading}
+                disabled={loading || lockedFlow}
                 data-testid="button-login"
               >
                 {loading ? (
@@ -392,11 +442,22 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 ) : (
                   <div className="flex items-center gap-2">
                     <LogIn className="w-5 h-5" />
-                    {twoFactorChallengeToken ? "Verify Code" : "Log In"}
+                    {lockedFlow ? "Account Locked" : twoFactorChallengeToken ? "Verify Code" : "Log In"}
                   </div>
                 )}
               </Button>
             </form>
+
+            {lockedFlow ? (
+              <div className="mt-4 rounded-xl border border-amber-400/40 bg-amber-500/20 px-4 py-3 text-center text-sm text-amber-50">
+                <div className="font-medium">
+                  {lockedAccountMessage || "Your account has been locked due to too many incorrect login attempts."}
+                </div>
+                <div className="mt-1 text-xs text-amber-100/90">
+                  Please contact the system administrator to reactivate your account.
+                </div>
+              </div>
+            ) : null}
 
             {twoFactorChallengeToken ? (
               <button
@@ -406,6 +467,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   setTwoFactorCode("");
                   setNotice("");
                   setError("");
+                  setLockedAccountMessage("");
                 }}
                 className="mt-3 w-full text-center text-sm text-white/75 transition-colors hover:text-white"
               >
@@ -423,7 +485,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               Forgot password?
             </button>
 
-            {error && (
+            {error && !lockedFlow && (
               <div className="mt-4 p-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-200 text-center text-sm">
                 {error}
               </div>

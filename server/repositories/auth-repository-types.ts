@@ -14,6 +14,10 @@ export type ManagedUserRecord = {
   lastLoginAt: Date | null;
   passwordChangedAt: Date | null;
   isBanned: boolean | null;
+  failedLoginAttempts: number;
+  lockedAt: Date | null;
+  lockedReason: string | null;
+  lockedBySystem: boolean;
 };
 
 export type PendingPasswordResetRequestRecord = {
@@ -69,6 +73,7 @@ export type ManagedUserListStatusFilter =
   | "pending_activation"
   | "suspended"
   | "disabled"
+  | "locked"
   | "banned";
 
 export type ManagedUserListPageParams = {

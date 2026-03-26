@@ -31,6 +31,10 @@ export type BackupUserRecord = {
   twoFactorEnabled?: boolean;
   twoFactorSecretEncrypted?: string | null;
   twoFactorConfiguredAt?: string | Date | null;
+  failedLoginAttempts?: number;
+  lockedAt?: string | Date | null;
+  lockedReason?: string | null;
+  lockedBySystem?: boolean;
 };
 
 export type BackupCollectionRecord = {

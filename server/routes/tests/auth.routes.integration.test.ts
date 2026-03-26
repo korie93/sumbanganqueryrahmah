@@ -627,6 +627,59 @@ test("PATCH /api/me/credentials updates the current username without forcing log
   }
 });
 
+test("POST /api/auth/login keeps unknown usernames generic without leaking account existence", async () => {
+  const auditLogs: Array<{ action: string; performedBy?: string; details?: string }> = [];
+  const storage = {
+    getUserByUsername: async () => null,
+    isVisitorBanned: async () => false,
+    createAuditLog: async (entry: { action: string; performedBy?: string; details?: string }) => {
+      auditLogs.push(entry);
+      return { id: `audit-${auditLogs.length}`, ...entry };
+    },
+  } as unknown as PostgresStorage;
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: (_req, _res, next) => next(),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: "missing.user",
+        password: "WrongPassword!",
+        fingerprint: "fingerprint-missing",
+        browser: "Mozilla/5.0",
+      }),
+    });
+
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "Invalid credentials",
+      error: {
+        code: "INVALID_CREDENTIALS",
+        message: "Invalid credentials",
+      },
+    });
+    assert.deepEqual(auditLogs, [{
+      action: "LOGIN_FAILED",
+      performedBy: "missing.user",
+      details: "User not found",
+    }]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /api/auth/login sets the auth cookie without exposing the JWT in JSON", async () => {
   const { storage, user, activity, auditLogs } = await createLoginStorageDouble();
   const app = createJsonTestApp();
@@ -664,6 +717,96 @@ test("POST /api/auth/login sets the auth cookie without exposing the JWT in JSON
     assert.match(setCookie, /sqr_auth=/);
     assert.match(setCookie, /sqr_auth_hint=1/);
     assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_SUCCESS"), true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/auth/login locks valid accounts after more than three failed password attempts", async () => {
+  const { storage, user, auditLogs } = await createLoginStorageDouble();
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: (_req, _res, next) => next(),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    for (const _attempt of [1, 2, 3]) {
+      const response = await fetch(`${baseUrl}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: user.username,
+          password: "WrongPassword!",
+          fingerprint: "fingerprint-login",
+          browser: "Mozilla/5.0",
+        }),
+      });
+
+      assert.equal(response.status, 401);
+      assert.deepEqual(await response.json(), {
+        ok: false,
+        message: "Invalid credentials",
+        error: {
+          code: "INVALID_CREDENTIALS",
+          message: "Invalid credentials",
+        },
+      });
+    }
+
+    const lockedResponse = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: user.username,
+        password: "WrongPassword!",
+        fingerprint: "fingerprint-login",
+        browser: "Mozilla/5.0",
+      }),
+    });
+
+    assert.equal(lockedResponse.status, 423);
+    assert.deepEqual(await lockedResponse.json(), {
+      ok: false,
+      message: "Your account has been locked due to too many incorrect login attempts. Please contact the system administrator.",
+      error: {
+        code: "ACCOUNT_LOCKED",
+        message: "Your account has been locked due to too many incorrect login attempts. Please contact the system administrator.",
+      },
+      locked: true,
+    });
+    assert.equal(user.failedLoginAttempts, 4);
+    assert.ok(user.lockedAt instanceof Date);
+    assert.equal(user.lockedReason, "too_many_failed_password_attempts");
+    assert.equal(user.lockedBySystem, true);
+    assert.equal(auditLogs.some((entry) => entry.action === "ACCOUNT_LOCKED_TOO_MANY_FAILED_LOGINS"), true);
+
+    const blockedResponse = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: user.username,
+        password: "StrongPass123!",
+        fingerprint: "fingerprint-login",
+        browser: "Mozilla/5.0",
+      }),
+    });
+
+    assert.equal(blockedResponse.status, 423);
+    const blockedPayload = await blockedResponse.json();
+    assert.equal(blockedPayload.locked, true);
+    assert.equal(blockedPayload.error?.code, "ACCOUNT_LOCKED");
+    assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_BLOCKED_LOCKED_ACCOUNT"), true);
   } finally {
     await stopTestServer(server);
   }

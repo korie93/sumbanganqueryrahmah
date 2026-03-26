@@ -34,6 +34,10 @@ export async function ensureUsersBootstrapSchema(
       two_factor_enabled boolean NOT NULL DEFAULT false,
       two_factor_secret_encrypted text,
       two_factor_configured_at timestamp,
+      failed_login_attempts integer NOT NULL DEFAULT 0,
+      locked_at timestamp,
+      locked_reason text,
+      locked_by_system boolean NOT NULL DEFAULT false,
       created_by text,
       is_banned boolean DEFAULT false,
       created_at timestamp DEFAULT now(),
@@ -77,6 +81,10 @@ export async function ensureUsersBootstrapSchema(
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS two_factor_enabled boolean DEFAULT false`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS two_factor_secret_encrypted text`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS two_factor_configured_at timestamp`);
+  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS failed_login_attempts integer DEFAULT 0`);
+  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS locked_at timestamp`);
+  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS locked_reason text`);
+  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS locked_by_system boolean DEFAULT false`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_by text`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_banned boolean DEFAULT false`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
@@ -172,6 +180,19 @@ export async function ensureUsersBootstrapSchema(
         WHEN COALESCE(two_factor_enabled, false) = false THEN NULL
         ELSE two_factor_configured_at
       END,
+      failed_login_attempts = GREATEST(COALESCE(failed_login_attempts, 0), 0),
+      locked_at = CASE
+        WHEN locked_at IS NULL THEN NULL
+        ELSE locked_at
+      END,
+      locked_reason = CASE
+        WHEN locked_at IS NULL THEN NULL
+        ELSE NULLIF(trim(COALESCE(locked_reason, '')), '')
+      END,
+      locked_by_system = CASE
+        WHEN locked_at IS NULL THEN false
+        ELSE COALESCE(locked_by_system, false)
+      END,
       created_at = COALESCE(created_at, now()),
       updated_at = COALESCE(updated_at, now()),
       activated_at = CASE
@@ -247,6 +268,9 @@ export async function ensureUsersBootstrapSchema(
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_created_by ON public.users (created_by)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_password_reset_by_superuser ON public.users (password_reset_by_superuser)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_two_factor_enabled ON public.users (two_factor_enabled)`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_failed_login_attempts ON public.users (failed_login_attempts)`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_locked_at ON public.users (locked_at)`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_locked_by_system ON public.users (locked_by_system)`);
   await database.execute(sql`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower_unique
     ON public.users (lower(email))

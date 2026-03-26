@@ -116,6 +116,9 @@ export async function listManagedUsersPage(
   const statusFilter = String(params.status || "all").trim().toLowerCase();
   if (statusFilter === "banned") {
     whereClauses.push(sql`COALESCE(is_banned, false) = true`);
+  } else if (statusFilter === "locked") {
+    whereClauses.push(sql`locked_at IS NOT NULL`);
+    whereClauses.push(sql`COALESCE(is_banned, false) = false`);
   } else if (
     statusFilter === "active"
     || statusFilter === "pending_activation"
@@ -150,7 +153,11 @@ export async function listManagedUsersPage(
         activated_at as "activatedAt",
         last_login_at as "lastLoginAt",
         password_changed_at as "passwordChangedAt",
-        is_banned as "isBanned"
+        is_banned as "isBanned",
+        failed_login_attempts as "failedLoginAttempts",
+        locked_at as "lockedAt",
+        locked_reason as "lockedReason",
+        locked_by_system as "lockedBySystem"
       FROM public.users
       ${whereSql}
       ORDER BY role ASC, username ASC

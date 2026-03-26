@@ -73,8 +73,26 @@ export class PostgresAuthAccountStorage extends PostgresStorageCore {
     twoFactorEnabled?: boolean;
     twoFactorSecretEncrypted?: string | null;
     twoFactorConfiguredAt?: Date | null;
+    failedLoginAttempts?: number;
+    lockedAt?: Date | null;
+    lockedReason?: string | null;
+    lockedBySystem?: boolean;
   }): Promise<User | undefined> {
     return this.authRepository.updateUserAccount(params);
+  }
+
+  async recordFailedLoginAttempt(params: {
+    userId: string;
+    maxAllowedAttempts: number;
+    lockedReason: string;
+    now?: Date;
+  }): Promise<{
+    user: User | undefined;
+    failedLoginAttempts: number;
+    locked: boolean;
+    newlyLocked: boolean;
+  }> {
+    return this.authRepository.recordFailedLoginAttempt(params);
   }
 
   async getUsersByRoles(roles: string[]): Promise<
@@ -100,7 +118,7 @@ export class PostgresAuthAccountStorage extends PostgresStorageCore {
     pageSize?: number;
     search?: string;
     role?: "all" | "admin" | "user";
-    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned";
+    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned";
   }): Promise<{
     users: ManagedUserAccount[];
     page: number;
@@ -207,7 +225,7 @@ export class PostgresAuthAccountStorage extends PostgresStorageCore {
     page?: number;
     pageSize?: number;
     search?: string;
-    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned";
+    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned";
   }): Promise<{
     requests: PendingPasswordResetRequestSummary[];
     page: number;

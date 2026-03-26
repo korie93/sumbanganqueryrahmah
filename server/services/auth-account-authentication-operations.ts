@@ -73,6 +73,7 @@ type AuthAccountAuthenticationStorage = Pick<
   | "invalidateUnusedActivationTokens"
   | "invalidateUnusedPasswordResetTokens"
   | "isVisitorBanned"
+  | "recordFailedLoginAttempt"
   | "touchLastLogin"
   | "updateUserAccount"
 > & {
@@ -85,6 +86,11 @@ type AuthAccountAuthenticationDeps = {
 };
 
 export class AuthAccountAuthenticationOperations {
+  private static readonly MAX_ALLOWED_FAILED_PASSWORD_ATTEMPTS = 3;
+  private static readonly LOCKED_ACCOUNT_REASON = "too_many_failed_password_attempts";
+  private static readonly LOCKED_ACCOUNT_MESSAGE =
+    "Your account has been locked due to too many incorrect login attempts. Please contact the system administrator.";
+
   constructor(private readonly deps: AuthAccountAuthenticationDeps) {}
 
   private requiresTwoFactor(user: Awaited<ReturnType<PostgresStorage["getUser"]>>) {
@@ -327,6 +333,106 @@ export class AuthAccountAuthenticationOperations {
     return activity;
   }
 
+  private async clearFailedLoginState(
+    user: NonNullable<Awaited<ReturnType<PostgresStorage["getUser"]>>>,
+  ) {
+    if (
+      Number(user.failedLoginAttempts || 0) <= 0
+      && !user.lockedAt
+      && user.lockedBySystem !== true
+      && !String(user.lockedReason || "").trim()
+    ) {
+      return user;
+    }
+
+    return (await this.deps.storage.updateUserAccount({
+      userId: user.id,
+      failedLoginAttempts: 0,
+      lockedAt: null,
+      lockedReason: null,
+      lockedBySystem: false,
+    })) ?? user;
+  }
+
+  private async failLockedLogin(
+    user: NonNullable<Awaited<ReturnType<PostgresStorage["getUser"]>>>,
+    action: string,
+    details: string,
+  ): Promise<never> {
+    await this.deps.storage.createAuditLog({
+      action,
+      performedBy: user.username,
+      targetUser: user.id,
+      details,
+    });
+    throw new AuthAccountError(
+      423,
+      "ACCOUNT_LOCKED",
+      AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_MESSAGE,
+      {
+        locked: true,
+      },
+    );
+  }
+
+  private async handleFailedPasswordAttempt(
+    user: NonNullable<Awaited<ReturnType<PostgresStorage["getUser"]>>>,
+    input: Omit<LoginInput, "password">,
+  ): Promise<never> {
+    const result = await this.deps.storage.recordFailedLoginAttempt({
+      userId: user.id,
+      maxAllowedAttempts: AuthAccountAuthenticationOperations.MAX_ALLOWED_FAILED_PASSWORD_ATTEMPTS,
+      lockedReason: AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_REASON,
+    });
+
+    await this.deps.storage.createAuditLog({
+      action: result.locked ? "LOGIN_FAILED_PASSWORD_LOCKED" : "LOGIN_FAILED_PASSWORD",
+      performedBy: user.username,
+      targetUser: user.id,
+      details: JSON.stringify({
+        metadata: {
+          browser: input.browserName,
+          failed_login_attempts: result.failedLoginAttempts,
+          locked: result.locked,
+        },
+      }),
+    });
+
+    if (result.newlyLocked) {
+      const closedSessionIds = await this.invalidateUserSessions(
+        user.username,
+        "ACCOUNT_LOCKED_FAILED_LOGINS",
+      );
+      await this.deps.storage.createAuditLog({
+        action: "ACCOUNT_LOCKED_TOO_MANY_FAILED_LOGINS",
+        performedBy: user.username,
+        targetUser: user.id,
+        details: JSON.stringify({
+          metadata: {
+            browser: input.browserName,
+            failed_login_attempts: result.failedLoginAttempts,
+            locked_reason: AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_REASON,
+            locked_by_system: true,
+            closed_session_ids: closedSessionIds,
+          },
+        }),
+      });
+    }
+
+    if (result.locked) {
+      throw new AuthAccountError(
+        423,
+        "ACCOUNT_LOCKED",
+        AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_MESSAGE,
+        {
+          locked: true,
+        },
+      );
+    }
+
+    throw new AuthAccountError(401, "INVALID_CREDENTIALS", "Invalid credentials");
+  }
+
   async login(input: LoginInput) {
     const username = normalizeUsernameInput(input.username);
     const password = String(input.password ?? "");
@@ -360,6 +466,14 @@ export class AuthAccountAuthenticationOperations {
 
     const blockReason = getAccountAccessBlockReason(user);
     if (blockReason && blockReason !== "banned") {
+      if (blockReason === "locked") {
+        await this.failLockedLogin(
+          user,
+          "LOGIN_BLOCKED_LOCKED_ACCOUNT",
+          "Login blocked because the account is locked after repeated failed password attempts.",
+        );
+      }
+
       await this.deps.storage.createAuditLog({
         action: "LOGIN_FAILED_ACCOUNT_STATE",
         performedBy: user.username,
@@ -371,37 +485,40 @@ export class AuthAccountAuthenticationOperations {
 
     const validPassword = await verifyPassword(password, user.passwordHash);
     if (!validPassword) {
-      await this.deps.storage.createAuditLog({
-        action: "LOGIN_FAILED",
-        performedBy: user.username,
-        details: "Invalid password",
+      await this.handleFailedPasswordAttempt(user, {
+        username: user.username,
+        fingerprint: input.fingerprint,
+        browserName: input.browserName,
+        pcName: input.pcName,
+        ipAddress: input.ipAddress,
       });
-      throw new AuthAccountError(401, "INVALID_CREDENTIALS", "Invalid credentials");
     }
 
-    if (this.requiresTwoFactor(user)) {
+    const unlockedUser = await this.clearFailedLoginState(user);
+
+    if (this.requiresTwoFactor(unlockedUser)) {
       await this.deps.storage.createAuditLog({
         action: "LOGIN_SECOND_FACTOR_REQUIRED",
-        performedBy: user.username,
-        targetUser: user.id,
+        performedBy: unlockedUser.username,
+        targetUser: unlockedUser.id,
         details: `Second factor required from ${input.browserName}`,
       });
 
       return {
         kind: "two_factor_required" as const,
-        user,
+        user: unlockedUser,
       };
     }
 
     const activity = await this.createAuthenticatedSession(
-      user,
+      unlockedUser,
       input,
       `Login from ${input.browserName}`,
     );
 
     return {
       kind: "authenticated" as const,
-      user,
+      user: unlockedUser,
       activity,
     };
   }
@@ -432,6 +549,14 @@ export class AuthAccountAuthenticationOperations {
 
     const blockReason = getAccountAccessBlockReason(user);
     if (blockReason && blockReason !== "banned") {
+      if (blockReason === "locked") {
+        await this.failLockedLogin(
+          user,
+          "LOGIN_2FA_BLOCKED_LOCKED_ACCOUNT",
+          "Second-factor login blocked because the account is locked after repeated failed password attempts.",
+        );
+      }
+
       await this.deps.storage.createAuditLog({
         action: "LOGIN_2FA_FAILED_ACCOUNT_STATE",
         performedBy: user.username,
@@ -569,6 +694,10 @@ export class AuthAccountAuthenticationOperations {
       status: "active",
       mustChangePassword: false,
       passwordResetBySuperuser: false,
+      failedLoginAttempts: 0,
+      lockedAt: null,
+      lockedReason: null,
+      lockedBySystem: false,
     });
 
     await this.deps.storage.invalidateUnusedActivationTokens(target.id);
@@ -696,6 +825,10 @@ export class AuthAccountAuthenticationOperations {
       mustChangePassword: false,
       passwordResetBySuperuser: false,
       activatedAt: target.activatedAt ?? now,
+      failedLoginAttempts: 0,
+      lockedAt: null,
+      lockedReason: null,
+      lockedBySystem: false,
     });
 
     await this.deps.storage.invalidateUnusedPasswordResetTokens(target.id, now);
@@ -707,6 +840,7 @@ export class AuthAccountAuthenticationOperations {
       details: JSON.stringify({
         metadata: {
           reset_type: "email_link",
+          lock_cleared: Boolean(target.lockedAt),
         },
       }),
     });

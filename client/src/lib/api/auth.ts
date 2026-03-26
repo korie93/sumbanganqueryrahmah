@@ -75,6 +75,10 @@ export type ManagedUserSummary = Omit<
   activatedAt: string | null;
   lastLoginAt: string | null;
   passwordChangedAt: string | null;
+  failedLoginAttempts: number;
+  lockedAt: string | null;
+  lockedReason: string | null;
+  lockedBySystem: boolean;
 };
 
 export type PendingPasswordResetRequestSummary = {
@@ -218,7 +222,17 @@ export async function login(
     return { banned: true };
   }
   if (!res.ok) {
-    throw new Error(data.message || "Login failed");
+    const error = new Error(data?.message || data?.error?.message || "Login failed") as Error & {
+      code?: string;
+      locked?: boolean;
+      status?: number;
+      requestId?: string | null;
+    };
+    error.code = typeof data?.error?.code === "string" ? data.error.code : undefined;
+    error.locked = data?.locked === true;
+    error.status = res.status;
+    error.requestId = res.headers.get("x-request-id");
+    throw error;
   }
 
   return data as LoginResponse;
@@ -363,7 +377,7 @@ export async function getSuperuserManagedUsers(query?: {
   pageSize?: number;
   search?: string;
   role?: "all" | "admin" | "user";
-  status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned";
+  status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned";
 }, options?: RequestOptions): Promise<ManagedUsersResponse> {
   const params = new URLSearchParams();
   if (query?.page) params.set("page", String(query.page));
@@ -438,7 +452,7 @@ export async function getPendingPasswordResetRequests(query?: {
   page?: number;
   pageSize?: number;
   search?: string;
-  status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned";
+  status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned";
 }, options?: RequestOptions): Promise<PendingPasswordResetRequestsResponse> {
   const params = new URLSearchParams();
   if (query?.page) params.set("page", String(query.page));

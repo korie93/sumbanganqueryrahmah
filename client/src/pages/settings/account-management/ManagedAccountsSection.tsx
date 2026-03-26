@@ -53,7 +53,7 @@ export function ManagedAccountsSection({
   const [searchQuery, setSearchQuery] = useState(query.search);
   const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">(query.role);
   const [statusFilter, setStatusFilter] = useState<
-    "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned"
+    "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned"
   >(query.status);
   const [userToDelete, setUserToDelete] = useState<ManagedUser | null>(null);
   const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -161,6 +161,7 @@ export function ManagedAccountsSection({
                     || event.target.value === "pending_activation"
                     || event.target.value === "suspended"
                     || event.target.value === "disabled"
+                    || event.target.value === "locked"
                     || event.target.value === "banned"
                       ? event.target.value
                       : "all";
@@ -177,6 +178,7 @@ export function ManagedAccountsSection({
                 <option value="pending_activation">pending_activation</option>
                 <option value="suspended">suspended</option>
                 <option value="disabled">disabled</option>
+                <option value="locked">locked</option>
                 <option value="banned">banned</option>
               </select>
             </div>

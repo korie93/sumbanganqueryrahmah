@@ -39,6 +39,10 @@ export const users = pgTable("users", {
   twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
   twoFactorSecretEncrypted: text("two_factor_secret_encrypted"),
   twoFactorConfiguredAt: timestamp("two_factor_configured_at"),
+  failedLoginAttempts: integer("failed_login_attempts").default(0).notNull(),
+  lockedAt: timestamp("locked_at"),
+  lockedReason: text("locked_reason"),
+  lockedBySystem: boolean("locked_by_system").default(false).notNull(),
 }, (table) => ({
   usernameLowerUnique: uniqueIndex("idx_users_username_lower_unique").using(
     "btree",
@@ -54,6 +58,9 @@ export const users = pgTable("users", {
   createdByIdx: index("idx_users_created_by").on(table.createdBy),
   passwordResetBySuperuserIdx: index("idx_users_password_reset_by_superuser").on(table.passwordResetBySuperuser),
   twoFactorEnabledIdx: index("idx_users_two_factor_enabled").on(table.twoFactorEnabled),
+  failedLoginAttemptsIdx: index("idx_users_failed_login_attempts").on(table.failedLoginAttempts),
+  lockedAtIdx: index("idx_users_locked_at").on(table.lockedAt),
+  lockedBySystemIdx: index("idx_users_locked_by_system").on(table.lockedBySystem),
   emailLowerUnique: uniqueIndex("idx_users_email_lower_unique")
     .using("btree", sql`lower(${table.email})`)
     .where(sql`${table.email} IS NOT NULL AND trim(${table.email}) <> ''`),

@@ -41,12 +41,14 @@ export function parseManageableStatusFilter(raw: unknown):
   | "pending_activation"
   | "suspended"
   | "disabled"
+  | "locked"
   | "banned" {
   const value = String(readOptionalString(raw) || "all").toLowerCase();
   return value === "active"
     || value === "pending_activation"
     || value === "suspended"
     || value === "disabled"
+    || value === "locked"
     || value === "banned"
     ? value
     : "all";

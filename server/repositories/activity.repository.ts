@@ -281,6 +281,10 @@ export class ActivityRepository {
       twoFactorEnabled: Boolean(row.two_factor_enabled ?? false),
       twoFactorSecretEncrypted: row.two_factor_secret_encrypted ?? null,
       twoFactorConfiguredAt: row.two_factor_configured_at ?? null,
+      failedLoginAttempts: Number(row.failed_login_attempts ?? 0),
+      lockedAt: row.locked_at ?? null,
+      lockedReason: row.locked_reason ?? null,
+      lockedBySystem: Boolean(row.locked_by_system ?? false),
       banInfo: row.banLogoutTime
         ? {
           ipAddress: row.banIpAddress ?? null,
