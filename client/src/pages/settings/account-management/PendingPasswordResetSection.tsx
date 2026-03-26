@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { LifeBuoy, RefreshCw, Search } from "lucide-react";
+import { ActiveFilterChips } from "@/components/data/ActiveFilterChips";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { SideTabDataPanel } from "@/components/layout/SideTabDataPanel";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +41,32 @@ export function PendingPasswordResetSection({
     [deferredSearchQuery],
   );
   const hasActiveFilters = normalizedDeferredSearch.length > 0 || statusFilter !== "all";
+  const activeFilters = useMemo(
+    () =>
+      [
+        normalizedDeferredSearch
+          ? {
+              id: "pending-reset-search",
+              label: `Search: ${deferredSearchQuery.trim()}`,
+              onRemove: () => setSearchQuery(""),
+            }
+          : null,
+        statusFilter !== "all"
+          ? {
+              id: "pending-reset-status",
+              label: `Status: ${statusFilter}`,
+              onRemove: () => {
+                setStatusFilter("all");
+                onQueryChange({
+                  page: 1,
+                  status: "all",
+                });
+              },
+            }
+          : null,
+      ].filter((item): item is NonNullable<typeof item> => item !== null),
+    [deferredSearchQuery, normalizedDeferredSearch, onQueryChange, statusFilter],
+  );
 
   useEffect(() => {
     const normalizedSearchFromQuery = normalizeSearchValue(query.search);
@@ -82,53 +109,71 @@ export function PendingPasswordResetSection({
         </Button>
       }
       filters={
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_220px]">
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Search by user</p>
-            <div className="relative">
-              <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search user, username, email, or requester"
-                className="pl-9"
-              />
+        <div className="space-y-3">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_220px]">
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Search by user</p>
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search user, username, email, or requester"
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="pending-reset-status-filter" className="text-sm font-medium">
+                Status
+              </label>
+              <select
+                id="pending-reset-status-filter"
+                value={statusFilter}
+                onChange={(event) => {
+                  const nextStatus =
+                    event.target.value === "active"
+                    || event.target.value === "pending_activation"
+                    || event.target.value === "suspended"
+                    || event.target.value === "disabled"
+                    || event.target.value === "locked"
+                    || event.target.value === "banned"
+                      ? event.target.value
+                      : "all";
+                  setStatusFilter(nextStatus);
+                  onQueryChange({
+                    page: 1,
+                    status: nextStatus,
+                  });
+                }}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="all">All statuses</option>
+                <option value="active">active</option>
+                <option value="pending_activation">pending_activation</option>
+                <option value="suspended">suspended</option>
+                <option value="disabled">disabled</option>
+                <option value="locked">locked</option>
+                <option value="banned">banned</option>
+              </select>
             </div>
           </div>
-          <div className="space-y-2">
-            <label htmlFor="pending-reset-status-filter" className="text-sm font-medium">
-              Status
-            </label>
-            <select
-              id="pending-reset-status-filter"
-              value={statusFilter}
-              onChange={(event) => {
-                const nextStatus =
-                  event.target.value === "active"
-                  || event.target.value === "pending_activation"
-                  || event.target.value === "suspended"
-                  || event.target.value === "disabled"
-                  || event.target.value === "locked"
-                  || event.target.value === "banned"
-                    ? event.target.value
-                    : "all";
-                setStatusFilter(nextStatus);
-                onQueryChange({
-                  page: 1,
-                  status: nextStatus,
-                });
-              }}
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="all">All statuses</option>
-              <option value="active">active</option>
-              <option value="pending_activation">pending_activation</option>
-              <option value="suspended">suspended</option>
-              <option value="disabled">disabled</option>
-              <option value="locked">locked</option>
-              <option value="banned">banned</option>
-            </select>
-          </div>
+          <ActiveFilterChips
+            items={activeFilters}
+            onClearAll={
+              hasActiveFilters
+                ? () => {
+                    setSearchQuery("");
+                    setStatusFilter("all");
+                    onQueryChange({
+                      page: 1,
+                      search: "",
+                      status: "all",
+                    });
+                  }
+                : undefined
+            }
+          />
         </div>
       }
       summary={

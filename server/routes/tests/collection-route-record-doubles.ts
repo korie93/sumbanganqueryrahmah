@@ -644,6 +644,7 @@ export function createCoreCollectionStorageDouble(options?: {
           fileSize: number;
           receiptAmountCents?: number | null;
           extractedAmountCents?: number | null;
+          extractionStatus?: string | null;
           extractionConfidence?: number | null;
           receiptDate?: string | null;
           receiptReference?: string | null;
@@ -653,6 +654,7 @@ export function createCoreCollectionStorageDouble(options?: {
           receiptId: string;
           receiptAmountCents?: number | null;
           extractedAmountCents?: number | null;
+          extractionStatus?: string | null;
           extractionConfidence?: number | null;
           receiptDate?: string | null;
           receiptReference?: string | null;

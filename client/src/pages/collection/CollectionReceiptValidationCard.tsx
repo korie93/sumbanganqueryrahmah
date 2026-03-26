@@ -1,9 +1,8 @@
 import { AlertTriangle } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { CollectionReceiptValidationBadge } from "@/pages/collection/CollectionReceiptValidationBadge";
 import type { CollectionReceiptValidationPreview } from "@/pages/collection/receipt-validation";
-
 type CollectionReceiptValidationCardProps = {
   validation: CollectionReceiptValidationPreview;
   canOverride: boolean;
@@ -11,32 +10,6 @@ type CollectionReceiptValidationCardProps = {
   onOverrideReasonChange: (value: string) => void;
   disabled?: boolean;
 };
-
-function resolveBadgeVariant(status: CollectionReceiptValidationPreview["status"]) {
-  if (status === "matched") {
-    return "secondary" as const;
-  }
-  if (status === "needs_review" || status === "unverified") {
-    return "outline" as const;
-  }
-  return "destructive" as const;
-}
-
-function resolveStatusLabel(status: CollectionReceiptValidationPreview["status"]) {
-  if (status === "matched") {
-    return "Matched";
-  }
-  if (status === "underpaid") {
-    return "Underpaid";
-  }
-  if (status === "overpaid") {
-    return "Overpaid";
-  }
-  if (status === "unverified") {
-    return "Unverified";
-  }
-  return "Needs Review";
-}
 
 function resolveStatusTone(status: CollectionReceiptValidationPreview["status"]) {
   if (status === "matched") {
@@ -66,16 +39,10 @@ export function CollectionReceiptValidationCard({
             Bandingkan jumlah bayaran utama dengan jumlah semua resit yang aktif sebelum simpan.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={resolveBadgeVariant(validation.status)}>
-            {resolveStatusLabel(validation.status)}
-          </Badge>
-          {validation.duplicateWarningCount > 0 ? (
-            <Badge variant="outline" className="border-amber-500/50 text-amber-700">
-              Duplicate Warning
-            </Badge>
-          ) : null}
-        </div>
+        <CollectionReceiptValidationBadge
+          status={validation.status}
+          duplicateFlag={validation.duplicateWarningCount > 0}
+        />
       </div>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-4">

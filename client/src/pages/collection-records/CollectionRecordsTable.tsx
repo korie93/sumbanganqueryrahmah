@@ -2,6 +2,7 @@ import { Edit3, Eye, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { CollectionRecord } from "@/lib/api";
+import { CollectionReceiptValidationBadge } from "@/pages/collection/CollectionReceiptValidationBadge";
 import { formatAmountRM } from "@/pages/collection/utils";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 
@@ -30,7 +31,7 @@ export function CollectionRecordsTable({
 }: CollectionRecordsTableProps) {
   return (
     <div className="rounded-md border border-border/60 min-h-[420px] max-h-[64vh] overflow-auto">
-      <Table className="min-w-[1220px] text-sm">
+      <Table className="min-w-[1420px] text-sm">
         <TableHeader>
           <TableRow>
             <TableHead className="sticky top-0 bg-background z-10 w-[72px]">No.</TableHead>
@@ -41,6 +42,7 @@ export function CollectionRecordsTable({
             <TableHead className="sticky top-0 bg-background z-10">Batch</TableHead>
             <TableHead className="sticky top-0 bg-background z-10">Amount</TableHead>
             <TableHead className="sticky top-0 bg-background z-10">Payment Date</TableHead>
+            <TableHead className="sticky top-0 bg-background z-10">Receipt Validation</TableHead>
             <TableHead className="sticky top-0 bg-background z-10">Receipt</TableHead>
             <TableHead className="sticky top-0 bg-background z-10">Staff Nickname</TableHead>
             <TableHead className="sticky top-0 bg-background z-10 text-right">Actions</TableHead>
@@ -49,13 +51,13 @@ export function CollectionRecordsTable({
         <TableBody>
           {loadingRecords ? (
             <TableRow>
-              <TableCell colSpan={11} className="text-center text-muted-foreground py-6">
+              <TableCell colSpan={12} className="text-center text-muted-foreground py-6">
                 Loading records...
               </TableCell>
             </TableRow>
           ) : visibleRecords.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={11} className="text-center text-muted-foreground py-6">
+              <TableCell colSpan={12} className="text-center text-muted-foreground py-6">
                 No collection records found.
               </TableCell>
             </TableRow>
@@ -72,6 +74,20 @@ export function CollectionRecordsTable({
                 <TableCell className="py-1.5 whitespace-nowrap">{record.batch}</TableCell>
                 <TableCell className="py-1.5 whitespace-nowrap">{formatAmountRM(record.amount)}</TableCell>
                 <TableCell className="py-1.5 whitespace-nowrap">{formatIsoDateToDDMMYYYY(record.paymentDate)}</TableCell>
+                <TableCell className="py-1.5 align-top">
+                  <CollectionReceiptValidationBadge
+                    status={record.receiptValidationStatus}
+                    duplicateFlag={record.duplicateReceiptFlag}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {record.receiptCount} receipt(s) · {formatAmountRM(record.receiptTotalAmount)}
+                  </p>
+                  {record.receiptValidationMessage ? (
+                    <p className="mt-1 max-w-[280px] text-xs leading-5 text-muted-foreground">
+                      {record.receiptValidationMessage}
+                    </p>
+                  ) : null}
+                </TableCell>
                 <TableCell className="py-1.5 whitespace-nowrap">
                   {(record.receipts?.length || 0) > 0 ? (
                     <Button

@@ -162,7 +162,12 @@ test("admin list API wrappers forward query params and AbortSignal", async () =>
 
 test("getCollectionRecords forwards AbortSignal and rejects on abort", async () => {
   const controller = new AbortController();
+  const requests: Array<{ url: string; signal: AbortSignal | null }> = [];
   const restoreFetch = withMockFetch(((_input, init) => {
+    requests.push({
+      url: String(_input),
+      signal: (init?.signal as AbortSignal | undefined) || null,
+    });
     return new Promise<Response>((resolve, reject) => {
       const signal = init?.signal as AbortSignal | undefined;
       if (signal?.aborted) {
@@ -199,6 +204,8 @@ test("getCollectionRecords forwards AbortSignal and rejects on abort", async () 
         from: "2026-03-01",
         to: "2026-03-31",
         search: "test",
+        receiptValidationStatus: "flagged",
+        duplicateOnly: true,
         limit: 10,
         offset: 0,
       },
@@ -213,6 +220,12 @@ test("getCollectionRecords forwards AbortSignal and rejects on abort", async () 
   } finally {
     restoreFetch();
   }
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0]?.signal, controller.signal);
+  const params = new URL(`http://localhost${requests[0]?.url || ""}`).searchParams;
+  assert.equal(params.get("receiptValidationStatus"), "flagged");
+  assert.equal(params.get("duplicateOnly"), "1");
 });
 
 test("analysis API wrappers forward AbortSignal", async () => {

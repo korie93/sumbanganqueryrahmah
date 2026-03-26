@@ -36,12 +36,16 @@ export function useCollectionRecordsController({
     toDate,
     searchInput,
     nicknameFilter,
+    reviewFilter,
+    duplicateFilter,
     nicknameOptions,
     loadingNicknames,
     setFromDate,
     setToDate,
     setSearchInput,
     setNicknameFilter,
+    setReviewFilter,
+    setDuplicateFilter,
     buildCurrentFilters,
     loadRecords,
     handleFilter,
@@ -53,7 +57,7 @@ export function useCollectionRecordsController({
   const summary = useMemo(() => computeSummary(records), [records]);
   const tableState = useCollectionRecordsTableState({
     visibleRecords,
-    resetKey: [fromDate, toDate, searchInput, nicknameFilter].join("|"),
+    resetKey: [fromDate, toDate, searchInput, nicknameFilter, reviewFilter, duplicateFilter].join("|"),
   });
   const {
     handleOpenViewAll,
@@ -179,6 +183,8 @@ export function useCollectionRecordsController({
       toDate,
       searchInput,
       nicknameFilter,
+      reviewFilter,
+      duplicateFilter,
       nicknameOptions,
       loadingNicknames,
       loadingRecords,
@@ -186,6 +192,8 @@ export function useCollectionRecordsController({
       onToDateChange: setToDate,
       onSearchInputChange: setSearchInput,
       onNicknameFilterChange: setNicknameFilter,
+      onReviewFilterChange: setReviewFilter,
+      onDuplicateFilterChange: setDuplicateFilter,
       onFilter: () => void handleFilter(),
       onReset: () => void handleResetFilter(),
     },

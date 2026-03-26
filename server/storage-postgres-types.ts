@@ -97,6 +97,23 @@ export type CollectionRecordAggregate = {
   totalAmount: number;
 };
 
+export type CollectionRecordListFilters = {
+  from?: string;
+  to?: string;
+  search?: string;
+  createdByLogin?: string;
+  nicknames?: string[];
+  receiptValidationStatus?: CollectionReceiptValidationStatus | "flagged";
+  duplicateOnly?: boolean;
+  limit?: number;
+  offset?: number;
+};
+
+export type CollectionRecordAggregateFilters = Omit<
+  CollectionRecordListFilters,
+  "limit" | "offset"
+>;
+
 export type CollectionNicknameAggregate = {
   nickname: string;
   totalRecords: number;
@@ -476,42 +493,18 @@ type CategoryRule = {
     isBanned: boolean | null;
   }>>;
   createCollectionRecord(data: CreateCollectionRecordInput): Promise<CollectionRecord>;
-  listCollectionRecords(filters?: {
-    from?: string;
-    to?: string;
-    search?: string;
-    createdByLogin?: string;
-    nicknames?: string[];
-    limit?: number;
-    offset?: number;
-  }): Promise<CollectionRecord[]>;
-  summarizeCollectionRecords(filters?: {
-    from?: string;
-    to?: string;
-    search?: string;
-    createdByLogin?: string;
-    nicknames?: string[];
-  }): Promise<CollectionRecordAggregate>;
-  summarizeCollectionRecordsByNickname(filters?: {
-    from?: string;
-    to?: string;
-    search?: string;
-    createdByLogin?: string;
-    nicknames?: string[];
-  }): Promise<CollectionNicknameAggregate[]>;
+  listCollectionRecords(filters?: CollectionRecordListFilters): Promise<CollectionRecord[]>;
+  summarizeCollectionRecords(filters?: CollectionRecordAggregateFilters): Promise<CollectionRecordAggregate>;
+  summarizeCollectionRecordsByNickname(filters?: CollectionRecordAggregateFilters): Promise<CollectionNicknameAggregate[]>;
   getCollectionRecordDailyRollupFreshness(filters?: {
     from?: string;
     to?: string;
     createdByLogin?: string;
     nicknames?: string[];
   }): Promise<CollectionRollupFreshnessSnapshot>;
-  summarizeCollectionRecordsByNicknameAndPaymentDate(filters?: {
-    from?: string;
-    to?: string;
-    search?: string;
-    createdByLogin?: string;
-    nicknames?: string[];
-  }): Promise<CollectionNicknameDailyAggregate[]>;
+  summarizeCollectionRecordsByNicknameAndPaymentDate(
+    filters?: CollectionRecordAggregateFilters,
+  ): Promise<CollectionNicknameDailyAggregate[]>;
   summarizeCollectionRecordsOlderThan(beforeDate: string): Promise<CollectionRecordAggregate>;
   purgeCollectionRecordsOlderThan(beforeDate: string): Promise<{
     totalRecords: number;

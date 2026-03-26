@@ -5,6 +5,8 @@ import type {
   CollectionMonthlySummary,
   CollectionNicknameDailyAggregate,
   CollectionRecord,
+  CollectionRecordAggregateFilters,
+  CollectionRecordListFilters,
   CollectionRecordReceipt,
   CreateCollectionRecordInput,
   CreateCollectionRecordReceiptInput,
@@ -644,15 +646,9 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
   });
 }
 
-export async function listCollectionRecords(filters?: {
-  from?: string;
-  to?: string;
-  search?: string;
-  createdByLogin?: string;
-  nicknames?: string[];
-  limit?: number;
-  offset?: number;
-}): Promise<CollectionRecord[]> {
+export async function listCollectionRecords(
+  filters?: CollectionRecordListFilters,
+): Promise<CollectionRecord[]> {
   const whereSql = buildCollectionRecordWhereSql(filters);
   const parsedLimit = Number(filters?.limit);
   const safeLimit = Number.isFinite(parsedLimit)
@@ -695,13 +691,9 @@ export async function listCollectionRecords(filters?: {
   return attachCollectionReceipts(db, records);
 }
 
-export async function summarizeCollectionRecords(filters?: {
-  from?: string;
-  to?: string;
-  search?: string;
-  createdByLogin?: string;
-  nicknames?: string[];
-}): Promise<{ totalRecords: number; totalAmount: number }> {
+export async function summarizeCollectionRecords(
+  filters?: CollectionRecordAggregateFilters,
+): Promise<{ totalRecords: number; totalAmount: number }> {
   if (
     canUseCollectionRecordDailyRollups(filters)
     && !(await hasPendingCollectionRecordDailyRollupSlices(filters))
@@ -731,13 +723,9 @@ export async function summarizeCollectionRecords(filters?: {
   return mapCollectionAggregateRow(result.rows?.[0]);
 }
 
-export async function summarizeCollectionRecordsByNickname(filters?: {
-  from?: string;
-  to?: string;
-  search?: string;
-  createdByLogin?: string;
-  nicknames?: string[];
-}): Promise<Array<{ nickname: string; totalRecords: number; totalAmount: number }>> {
+export async function summarizeCollectionRecordsByNickname(
+  filters?: CollectionRecordAggregateFilters,
+): Promise<Array<{ nickname: string; totalRecords: number; totalAmount: number }>> {
   if (
     canUseCollectionRecordDailyRollups(filters)
     && !(await hasPendingCollectionRecordDailyRollupSlices(filters))
@@ -782,13 +770,9 @@ export async function summarizeCollectionRecordsByNickname(filters?: {
   }));
 }
 
-export async function summarizeCollectionRecordsByNicknameAndPaymentDate(filters?: {
-  from?: string;
-  to?: string;
-  search?: string;
-  createdByLogin?: string;
-  nicknames?: string[];
-}): Promise<CollectionNicknameDailyAggregate[]> {
+export async function summarizeCollectionRecordsByNicknameAndPaymentDate(
+  filters?: CollectionRecordAggregateFilters,
+): Promise<CollectionNicknameDailyAggregate[]> {
   if (
     canUseCollectionRecordDailyRollups(filters)
     && !(await hasPendingCollectionRecordDailyRollupSlices(filters))

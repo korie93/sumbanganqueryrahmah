@@ -12,7 +12,11 @@ import {
   type CollectionRecord,
   type CollectionStaffNickname,
 } from "@/lib/api";
-import type { CollectionRecordFilters } from "@/pages/collection-records/types";
+import type {
+  CollectionRecordDuplicateFilter,
+  CollectionRecordFilters,
+  CollectionRecordReviewFilter,
+} from "@/pages/collection-records/types";
 import {
   COLLECTION_DATA_CHANGED_EVENT,
   isValidDate,
@@ -52,6 +56,8 @@ export function useCollectionRecordsData({
   const [searchInput, setSearchInput] = useState("");
   const [nicknameOptions, setNicknameOptions] = useState<CollectionStaffNickname[]>([]);
   const [nicknameFilter, setNicknameFilter] = useState<string>("all");
+  const [reviewFilter, setReviewFilter] = useState<CollectionRecordReviewFilter>("all");
+  const [duplicateFilter, setDuplicateFilter] = useState<CollectionRecordDuplicateFilter>("all");
   const [loadingNicknames, setLoadingNicknames] = useState(false);
 
   const deferredSearchInput = useDeferredValue(searchInput);
@@ -69,10 +75,23 @@ export function useCollectionRecordsData({
         canUseNicknameFilter && nicknameFilter !== "all"
           ? nicknameFilter
           : undefined,
+      receiptValidationStatus:
+        reviewFilter !== "all"
+          ? reviewFilter
+          : undefined,
+      duplicateOnly: duplicateFilter === "duplicates" ? true : undefined,
       limit,
       offset,
     }),
-    [canUseNicknameFilter, fromDate, nicknameFilter, searchInput, toDate],
+    [
+      canUseNicknameFilter,
+      duplicateFilter,
+      fromDate,
+      nicknameFilter,
+      reviewFilter,
+      searchInput,
+      toDate,
+    ],
   );
 
   const abortRecordsRequest = useCallback(() => {
@@ -206,7 +225,7 @@ export function useCollectionRecordsData({
     }, 300);
 
     return () => window.clearTimeout(timer);
-  }, [buildCurrentFilters, deferredSearchInput, fromDate, loadRecords, toDate]);
+  }, [buildCurrentFilters, deferredSearchInput, fromDate, loadRecords, nicknameFilter, toDate]);
 
   const handleFilter = useCallback(async () => {
     if (fromDate && !isValidDate(fromDate)) {
@@ -243,6 +262,8 @@ export function useCollectionRecordsData({
     setToDate("");
     setSearchInput("");
     setNicknameFilter("all");
+    setReviewFilter("all");
+    setDuplicateFilter("all");
     void loadRecords();
   }, [loadRecords]);
 
@@ -253,12 +274,16 @@ export function useCollectionRecordsData({
     toDate,
     searchInput,
     nicknameFilter,
+    reviewFilter,
+    duplicateFilter,
     nicknameOptions,
     loadingNicknames,
     setFromDate,
     setToDate,
     setSearchInput,
     setNicknameFilter,
+    setReviewFilter,
+    setDuplicateFilter,
     buildCurrentFilters,
     loadRecords,
     handleFilter,

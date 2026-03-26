@@ -19,6 +19,8 @@ test("buildCollectionRecordsCacheKey normalizes filter casing and whitespace", (
     to: "2026-03-31",
     search: " Alice Tan ",
     nickname: " Collector Alpha ",
+    receiptValidationStatus: "flagged",
+    duplicateOnly: true,
     limit: 1000,
     offset: 0,
   });
@@ -27,6 +29,8 @@ test("buildCollectionRecordsCacheKey normalizes filter casing and whitespace", (
     to: "2026-03-31",
     search: "alice tan",
     nickname: "collector alpha",
+    receiptValidationStatus: "flagged",
+    duplicateOnly: true,
     limit: 1000,
     offset: 0,
   });

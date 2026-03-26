@@ -25,6 +25,37 @@ import {
   normalizeCollectionReceiptExtractionStatus,
 } from "./collection-receipt-validation";
 
+function parseCollectionBooleanQueryValue(value: unknown): boolean | undefined {
+  const normalized = normalizeCollectionText(value).toLowerCase();
+  if (!normalized || normalized === "all" || normalized === "0" || normalized === "false" || normalized === "no") {
+    return false;
+  }
+  if (normalized === "1" || normalized === "true" || normalized === "yes") {
+    return true;
+  }
+  return undefined;
+}
+
+function parseCollectionReceiptValidationFilter(
+  value: unknown,
+): "matched" | "underpaid" | "overpaid" | "unverified" | "needs_review" | "flagged" | undefined {
+  const normalized = normalizeCollectionText(value).toLowerCase();
+  if (!normalized || normalized === "all") {
+    return undefined;
+  }
+  if (
+    normalized === "matched"
+    || normalized === "underpaid"
+    || normalized === "overpaid"
+    || normalized === "unverified"
+    || normalized === "needs_review"
+    || normalized === "flagged"
+  ) {
+    return normalized;
+  }
+  return undefined;
+}
+
 export class CollectionRecordService extends CollectionServiceSupport {
   private static readonly NICKNAME_SUMMARY_RECORD_LIMIT = 250;
   private readonly mutationOperations: CollectionRecordMutationOperations;
@@ -189,6 +220,8 @@ export class CollectionRecordService extends CollectionServiceSupport {
     const from = normalizeCollectionText(query.from);
     const to = normalizeCollectionText(query.to);
     const search = normalizeCollectionText(query.search);
+    const receiptValidationStatus = parseCollectionReceiptValidationFilter(query.receiptValidationStatus);
+    const duplicateOnly = parseCollectionBooleanQueryValue(query.duplicateOnly);
     const requestedNicknameFilters = readNicknameFiltersFromQuery(query);
     const limitRaw = Number.parseInt(normalizeCollectionText(query.limit), 10);
     const offsetRaw = Number.parseInt(normalizeCollectionText(query.offset), 10);
@@ -203,6 +236,17 @@ export class CollectionRecordService extends CollectionServiceSupport {
     if (from && !isValidCollectionDate(from)) throw badRequest("Invalid from date.");
     if (to && !isValidCollectionDate(to)) throw badRequest("Invalid to date.");
     if (from && to && from > to) throw badRequest("From date cannot be later than To date.");
+    const normalizedReceiptValidationStatus = normalizeCollectionText(query.receiptValidationStatus).toLowerCase();
+    if (
+      normalizedReceiptValidationStatus
+      && normalizedReceiptValidationStatus !== "all"
+      && !receiptValidationStatus
+    ) {
+      throw badRequest("Invalid receipt validation filter.");
+    }
+    if (normalizeCollectionText(query.duplicateOnly) && duplicateOnly === undefined) {
+      throw badRequest("Invalid duplicate receipt filter.");
+    }
 
     let nicknameFilters: string[] | undefined;
     if (user.role === "superuser") {
@@ -241,6 +285,8 @@ export class CollectionRecordService extends CollectionServiceSupport {
       from: from || undefined,
       to: to || undefined,
       search: search || undefined,
+      receiptValidationStatus,
+      duplicateOnly,
       createdByLogin: user.role === "user" ? userOwnedRecordFilters.createdByLogin : undefined,
       nicknames: user.role === "user" ? userOwnedRecordFilters.nicknames : nicknameFilters,
     };

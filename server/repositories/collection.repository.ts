@@ -73,7 +73,9 @@ import type {
   CollectionNicknameSession,
   CollectionNicknameDailyAggregate,
   CollectionRecord,
+  CollectionRecordAggregateFilters,
   CollectionRecordReceipt,
+  CollectionRecordListFilters,
   CollectionReceiptDuplicateSummary,
   CollectionStaffNickname,
   CreateCollectionRecordInput,
@@ -314,35 +316,17 @@ export class CollectionRepository {
     return createCollectionRecord(data);
   }
 
-  async listCollectionRecords(filters?: {
-    from?: string;
-    to?: string;
-    search?: string;
-    createdByLogin?: string;
-    nicknames?: string[];
-    limit?: number;
-    offset?: number;
-  }): Promise<CollectionRecord[]> {
+  async listCollectionRecords(filters?: CollectionRecordListFilters): Promise<CollectionRecord[]> {
     return listCollectionRecords(filters);
   }
 
-  async summarizeCollectionRecords(filters?: {
-    from?: string;
-    to?: string;
-    search?: string;
-    createdByLogin?: string;
-    nicknames?: string[];
-  }): Promise<{ totalRecords: number; totalAmount: number }> {
+  async summarizeCollectionRecords(filters?: CollectionRecordAggregateFilters): Promise<{ totalRecords: number; totalAmount: number }> {
     return summarizeCollectionRecords(filters);
   }
 
-  async summarizeCollectionRecordsByNickname(filters?: {
-    from?: string;
-    to?: string;
-    search?: string;
-    createdByLogin?: string;
-    nicknames?: string[];
-  }): Promise<Array<{ nickname: string; totalRecords: number; totalAmount: number }>> {
+  async summarizeCollectionRecordsByNickname(
+    filters?: CollectionRecordAggregateFilters,
+  ): Promise<Array<{ nickname: string; totalRecords: number; totalAmount: number }>> {
     return summarizeCollectionRecordsByNickname(filters);
   }
 
@@ -355,13 +339,9 @@ export class CollectionRepository {
     return getCollectionRecordDailyRollupFreshnessSnapshot(filters);
   }
 
-  async summarizeCollectionRecordsByNicknameAndPaymentDate(filters?: {
-    from?: string;
-    to?: string;
-    search?: string;
-    createdByLogin?: string;
-    nicknames?: string[];
-  }): Promise<CollectionNicknameDailyAggregate[]> {
+  async summarizeCollectionRecordsByNicknameAndPaymentDate(
+    filters?: CollectionRecordAggregateFilters,
+  ): Promise<CollectionNicknameDailyAggregate[]> {
     return summarizeCollectionRecordsByNicknameAndPaymentDate(filters);
   }
 
