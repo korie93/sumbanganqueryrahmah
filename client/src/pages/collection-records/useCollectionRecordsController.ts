@@ -3,6 +3,7 @@ import {
   useMemo,
 } from "react";
 import {
+  getCollectionRecords,
   type CollectionRecord,
 } from "@/lib/api";
 import {
@@ -13,13 +14,13 @@ import { useCollectionRecordsActions } from "@/pages/collection-records/useColle
 import { useCollectionRecordEdit } from "@/pages/collection-records/useCollectionRecordEdit";
 import { useCollectionRecordsData } from "@/pages/collection-records/useCollectionRecordsData";
 import { useCollectionReceiptPreview } from "@/pages/collection-records/useCollectionReceiptPreview";
-import { useCollectionRecordsTableState } from "@/pages/collection-records/useCollectionRecordsTableState";
 import { useCollectionViewAllRecords } from "@/pages/collection-records/useCollectionViewAllRecords";
-import { computeSummary } from "@/pages/collection/utils";
 
 type UseCollectionRecordsControllerParams = {
   role: string;
 };
+
+const COLLECTION_RECORDS_EXPORT_BATCH_SIZE = 200;
 
 export function useCollectionRecordsController({
   role,
@@ -38,6 +39,16 @@ export function useCollectionRecordsController({
     nicknameFilter,
     nicknameOptions,
     loadingNicknames,
+    page,
+    pageSize,
+    pageOffset,
+    pagedStart,
+    pagedEnd,
+    totalPages,
+    totalRecords,
+    totalAmount,
+    hasNextPage,
+    hasPreviousPage,
     setFromDate,
     setToDate,
     setSearchInput,
@@ -46,15 +57,21 @@ export function useCollectionRecordsController({
     loadRecords,
     handleFilter,
     handleResetFilter,
+    handlePrevPage,
+    handleNextPage,
+    handlePageSizeChange,
+    getAppliedFilters,
   } = useCollectionRecordsData({ canUseNicknameFilter });
   const { handleViewReceipt, receiptPreview } = useCollectionReceiptPreview();
 
   const visibleRecords = records;
-  const summary = useMemo(() => computeSummary(records), [records]);
-  const tableState = useCollectionRecordsTableState({
-    visibleRecords,
-    resetKey: [fromDate, toDate, searchInput, nicknameFilter].join("|"),
-  });
+  const summary = useMemo(
+    () => ({
+      totalRecords,
+      totalAmount,
+    }),
+    [totalAmount, totalRecords],
+  );
   const {
     handleOpenViewAll,
     viewAll,
@@ -64,17 +81,39 @@ export function useCollectionRecordsController({
     searchInput,
   });
   const refreshRecords = useCallback(
-    () => loadRecords(buildCurrentFilters()),
-    [buildCurrentFilters, loadRecords],
+    () => loadRecords(getAppliedFilters()),
+    [getAppliedFilters, loadRecords],
   );
+  const loadExportRecords = useCallback(async () => {
+    const appliedFilters = getAppliedFilters();
+    if (summary.totalRecords <= 0) {
+      return [];
+    }
+
+    const allRecords: CollectionRecord[] = [];
+    let nextCursor: string | null = null;
+
+    do {
+      const response = await getCollectionRecords({
+        ...appliedFilters,
+        limit: COLLECTION_RECORDS_EXPORT_BATCH_SIZE,
+        cursor: nextCursor,
+      });
+      const pageRecords = Array.isArray(response?.records) ? response.records : [];
+      allRecords.push(...pageRecords);
+      nextCursor = typeof response?.nextCursor === "string" ? response.nextCursor : null;
+    } while (nextCursor);
+
+    return allRecords;
+  }, [getAppliedFilters, summary.totalRecords]);
   const actions = useCollectionRecordsActions({
     canPurgeOldRecords,
     canUseNicknameFilter,
     fromDate,
     toDate,
     nicknameFilter,
-    visibleRecords,
     summary,
+    loadExportRecords,
     onRefreshRecords: refreshRecords,
   });
   const refreshAfterMutation = useCallback(
@@ -95,8 +134,8 @@ export function useCollectionRecordsController({
     () =>
       buildCollectionRecordsTableViewModel({
         visibleRecords,
-        paginatedRecords: tableState.paginatedRecords,
-        pageOffset: tableState.pageOffset,
+        paginatedRecords: visibleRecords,
+        pageOffset,
         loadingRecords,
         canEdit,
         canDeleteGlobal,
@@ -111,8 +150,7 @@ export function useCollectionRecordsController({
       handleViewReceipt,
       loadingRecords,
       openEditDialog,
-      tableState.pageOffset,
-      tableState.paginatedRecords,
+      pageOffset,
       visibleRecords,
     ],
   );
@@ -128,19 +166,21 @@ export function useCollectionRecordsController({
         purgeSummaryLoading: actions.toolbar.purgeSummaryLoading,
         purgingOldRecords: actions.toolbar.purgingOldRecords,
         purgeSummary: actions.toolbar.purgeSummary,
-        pagedStart: tableState.pagedStart,
-        pagedEnd: tableState.pagedEnd,
-        visibleRecordsLength: visibleRecords.length,
-        tablePage: tableState.tablePage,
-        totalPages: tableState.totalPages,
-        tablePageSize: tableState.tablePageSize,
+        pagedStart,
+        pagedEnd,
+        totalRecords,
+        tablePage: page,
+        totalPages,
+        tablePageSize: pageSize,
+        hasNextPage,
+        hasPreviousPage,
         onOpenViewAll: () => void handleOpenViewAll(),
         onOpenPurgeDialog: () => void actions.toolbar.onOpenPurgeDialog(),
         onExportExcel: () => void actions.toolbar.onExportExcel(),
         onExportPdf: () => void actions.toolbar.onExportPdf(),
-        onTablePageSizeChange: tableState.setTablePageSize,
-        onPrevPage: tableState.handlePrevPage,
-        onNextPage: tableState.handleNextPage,
+        onTablePageSizeChange: handlePageSizeChange,
+        onPrevPage: handlePrevPage,
+        onNextPage: handleNextPage,
       }),
     [
       actions.toolbar.exportingExcel,
@@ -152,19 +192,21 @@ export function useCollectionRecordsController({
       actions.toolbar.purgeSummaryLoading,
       actions.toolbar.purgingOldRecords,
       canPurgeOldRecords,
+      handleNextPage,
       handleOpenViewAll,
+      handlePageSizeChange,
+      handlePrevPage,
+      hasNextPage,
+      hasPreviousPage,
       loadingRecords,
+      page,
+      pageSize,
+      pagedEnd,
+      pagedStart,
+      totalPages,
+      totalRecords,
       summary,
-      tableState.handleNextPage,
-      tableState.handlePrevPage,
-      tableState.pagedEnd,
-      tableState.pagedStart,
-      tableState.setTablePageSize,
-      tableState.tablePage,
-      tableState.tablePageSize,
-      tableState.totalPages,
       viewAllLoading,
-      visibleRecords.length,
     ],
   );
 

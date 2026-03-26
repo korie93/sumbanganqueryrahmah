@@ -37,10 +37,12 @@ type BuildCollectionRecordsToolbarViewModelArgs = {
   purgeSummary: PurgeSummary;
   pagedStart: number;
   pagedEnd: number;
-  visibleRecordsLength: number;
+  totalRecords: number;
   tablePage: number;
   totalPages: number;
   tablePageSize: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
   onOpenViewAll: () => void;
   onOpenPurgeDialog: () => void;
   onExportExcel: () => void;
@@ -89,10 +91,12 @@ export function buildCollectionRecordsToolbarViewModel({
   purgeSummary,
   pagedStart,
   pagedEnd,
-  visibleRecordsLength,
+  totalRecords,
   tablePage,
   totalPages,
   tablePageSize,
+  hasNextPage,
+  hasPreviousPage,
   onOpenViewAll,
   onOpenPurgeDialog,
   onExportExcel,
@@ -113,10 +117,12 @@ export function buildCollectionRecordsToolbarViewModel({
     purgeSummary,
     pagedStart,
     pagedEnd,
-    visibleRecordsLength,
+    totalRecords,
     tablePage,
     totalPages,
     tablePageSize,
+    hasNextPage,
+    hasPreviousPage,
     onOpenViewAll,
     onOpenPurgeDialog,
     onExportExcel,

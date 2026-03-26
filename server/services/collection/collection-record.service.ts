@@ -20,6 +20,32 @@ import { CollectionRecordMutationOperations } from "./collection-record-mutation
 import { CollectionDailyOperations } from "./collection-daily-operations";
 import { getCollectionReportFreshness } from "./collection-report-freshness";
 
+type CollectionListCursor = {
+  offset: number;
+};
+
+function encodeCollectionListCursor(cursor: CollectionListCursor) {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function parseCollectionListCursor(rawCursor: unknown): CollectionListCursor | null {
+  const normalized = normalizeCollectionText(rawCursor);
+  if (!normalized) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(Buffer.from(normalized, "base64url").toString("utf8")) as Partial<CollectionListCursor>;
+    const offset = Number(parsed.offset);
+    if (!Number.isInteger(offset) || offset < 0) {
+      return null;
+    }
+    return { offset };
+  } catch {
+    return null;
+  }
+}
+
 function parseCollectionBooleanQueryValue(value: unknown): boolean | undefined {
   const normalized = normalizeCollectionText(value).toLowerCase();
   if (!normalized || normalized === "all" || normalized === "0" || normalized === "false" || normalized === "no") {
@@ -166,6 +192,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
     const from = normalizeCollectionText(query.from);
     const to = normalizeCollectionText(query.to);
     const search = normalizeCollectionText(query.search);
+    const cursor = parseCollectionListCursor(query.cursor);
     const receiptValidationStatus = parseCollectionReceiptValidationFilter(query.receiptValidationStatus);
     const duplicateOnly = parseCollectionBooleanQueryValue(query.duplicateOnly);
     const requestedNicknameFilters = readNicknameFiltersFromQuery(query);
@@ -174,14 +201,18 @@ export class CollectionRecordService extends CollectionServiceSupport {
     const limit = Number.isInteger(limitRaw)
       ? Math.min(5000, Math.max(1, limitRaw))
       : 1000;
-    const offset = Number.isInteger(offsetRaw)
+    const requestedOffset = Number.isInteger(offsetRaw)
       ? Math.max(0, offsetRaw)
       : 0;
+    const offset = cursor?.offset ?? requestedOffset;
     const userOwnedRecordFilters = await this.resolveUserOwnedRecordFilters(user);
 
     if (from && !isValidCollectionDate(from)) throw badRequest("Invalid from date.");
     if (to && !isValidCollectionDate(to)) throw badRequest("Invalid to date.");
     if (from && to && from > to) throw badRequest("From date cannot be later than To date.");
+    if (normalizeCollectionText(query.cursor) && !cursor) {
+      throw badRequest("Invalid collection cursor.");
+    }
     const normalizedReceiptValidationStatus = normalizeCollectionText(query.receiptValidationStatus).toLowerCase();
     if (
       normalizedReceiptValidationStatus
@@ -221,6 +252,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
           totalAmount: 0,
           limit,
           offset,
+          nextCursor: null,
         };
       } else {
         nicknameFilters = allowedNicknames;
@@ -252,6 +284,10 @@ export class CollectionRecordService extends CollectionServiceSupport {
       totalAmount: aggregate.totalAmount,
       limit,
       offset,
+      nextCursor:
+        offset + records.length < aggregate.totalRecords
+          ? encodeCollectionListCursor({ offset: offset + records.length })
+          : null,
     };
   }
 

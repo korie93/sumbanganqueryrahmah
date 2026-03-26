@@ -47,6 +47,13 @@ function createSetting(value: string, overrides: Partial<SystemSettingItem> = {}
   };
 }
 
+function toJsonSetting(setting: SystemSettingItem) {
+  return {
+    ...setting,
+    updatedAt: setting.updatedAt?.toISOString() ?? null,
+  };
+}
+
 function createSettingsRouteHarness(options?: {
   updateResult?: UpdateSettingResult;
   maintenanceState?: {
@@ -200,6 +207,34 @@ test("GET /api/settings/tab-visibility returns role-scoped tab visibility", asyn
   }
 });
 
+test("GET /api/settings returns admin-visible categories", async () => {
+  const { app } = createSettingsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/settings`, {
+      headers: {
+        "x-test-username": "admin.user",
+        "x-test-role": "admin",
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      categories: [
+        {
+          id: "general",
+          name: "General",
+          description: null,
+          settings: [toJsonSetting(createSetting("SQR"))],
+        },
+      ],
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("PATCH /api/settings validates the key before service work begins", async () => {
   const { app, updateCalls } = createSettingsRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
@@ -311,6 +346,44 @@ test("PATCH /api/settings updates a non-critical setting and broadcasts a settin
   }
 });
 
+test("PATCH /api/settings returns success for unchanged values without extra broadcasts", async () => {
+  const { app, auditLogs, broadcasts, updateCalls } = createSettingsRouteHarness({
+    updateResult: {
+      status: "unchanged",
+      message: "No changes detected.",
+      setting: createSetting("SQR"),
+      shouldBroadcast: false,
+    },
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/settings`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        key: "system_name",
+        value: "SQR",
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      success: true,
+      status: "unchanged",
+      message: "No changes detected.",
+      setting: toJsonSetting(createSetting("SQR")),
+    });
+    assert.equal(updateCalls.length, 1);
+    assert.equal(auditLogs.length, 0);
+    assert.equal(broadcasts.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("PATCH /api/settings broadcasts maintenance changes for broadcast-worthy updates", async () => {
   const { app, auditLogs, broadcasts, getInvalidateMaintenanceCacheCount, getMaintenanceStateCachedCount } =
     createSettingsRouteHarness({
@@ -396,6 +469,102 @@ test("PATCH /api/settings maps confirmation-required updates to HTTP 409", async
     assert.deepEqual(await response.json(), {
       message: "Confirmation required.",
       requiresConfirmation: true,
+    });
+    assert.equal(auditLogs.length, 0);
+    assert.equal(broadcasts.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/settings maps missing settings to HTTP 404", async () => {
+  const { app, auditLogs, broadcasts } = createSettingsRouteHarness({
+    updateResult: {
+      status: "not_found",
+      message: "Setting not found.",
+    },
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/settings`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        key: "missing_setting",
+        value: "ignored",
+      }),
+    });
+
+    assert.equal(response.status, 404);
+    assert.deepEqual(await response.json(), {
+      message: "Setting not found.",
+    });
+    assert.equal(auditLogs.length, 0);
+    assert.equal(broadcasts.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/settings maps forbidden updates to HTTP 403", async () => {
+  const { app, auditLogs, broadcasts } = createSettingsRouteHarness({
+    updateResult: {
+      status: "forbidden",
+      message: "Forbidden setting update.",
+    },
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/settings`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        key: "system_name",
+        value: "blocked",
+      }),
+    });
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), {
+      message: "Forbidden setting update.",
+    });
+    assert.equal(auditLogs.length, 0);
+    assert.equal(broadcasts.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/settings maps invalid setting values to HTTP 400", async () => {
+  const { app, auditLogs, broadcasts } = createSettingsRouteHarness({
+    updateResult: {
+      status: "invalid",
+      message: "Invalid setting value.",
+    },
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/settings`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        key: "system_name",
+        value: "invalid",
+      }),
+    });
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      message: "Invalid setting value.",
     });
     assert.equal(auditLogs.length, 0);
     assert.equal(broadcasts.length, 0);

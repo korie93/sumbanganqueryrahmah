@@ -7,6 +7,7 @@ export type CollectionRecordsCacheEntry = {
   records: CollectionRecord[];
   totalRecords?: number;
   totalAmount?: number;
+  nextCursor?: string | null;
 };
 
 export function normalizeCollectionRecordFilterValue(value: unknown) {
@@ -22,6 +23,7 @@ export function buildCollectionRecordsCacheKey(filters?: CollectionRecordFilters
     nickname: normalizeCollectionRecordFilterValue(filters?.nickname)?.toLowerCase() || null,
     limit: Number.isFinite(Number(filters?.limit)) ? Number(filters?.limit) : null,
     offset: Number.isFinite(Number(filters?.offset)) ? Number(filters?.offset) : null,
+    cursor: normalizeCollectionRecordFilterValue(filters?.cursor),
   });
 }
 
@@ -46,6 +48,10 @@ export function createCollectionRecordsCache(maxEntries = DEFAULT_COLLECTION_REC
           typeof entry.totalRecords === "number" ? entry.totalRecords : undefined,
         totalAmount:
           typeof entry.totalAmount === "number" ? entry.totalAmount : undefined,
+        nextCursor:
+          entry.nextCursor === null || typeof entry.nextCursor === "string"
+            ? entry.nextCursor
+            : undefined,
       } satisfies CollectionRecordsCacheEntry;
     },
     set(key: string, entry: CollectionRecordsCacheEntry) {
@@ -59,6 +65,10 @@ export function createCollectionRecordsCache(maxEntries = DEFAULT_COLLECTION_REC
           typeof entry.totalRecords === "number" ? entry.totalRecords : undefined,
         totalAmount:
           typeof entry.totalAmount === "number" ? entry.totalAmount : undefined,
+        nextCursor:
+          entry.nextCursor === null || typeof entry.nextCursor === "string"
+            ? entry.nextCursor
+            : undefined,
       });
 
       while (entries.size > Math.max(1, Math.floor(maxEntries))) {

@@ -55,11 +55,11 @@ export function buildDeleteRecordErrorFeedback(error: unknown): DeleteRecordErro
 }
 
 export function resolveCollectionRecordsExportBlockReason(options: {
-  visibleRecordsLength: number;
+  totalRecords: number;
   exportingExcel: boolean;
   exportingPdf: boolean;
 }) {
-  if (options.visibleRecordsLength === 0) {
+  if (options.totalRecords === 0) {
     return "no_data";
   }
 
@@ -76,8 +76,8 @@ type UseCollectionRecordsActionsArgs = {
   fromDate: string;
   toDate: string;
   nicknameFilter: string;
-  visibleRecords: CollectionRecord[];
   summary: { totalRecords: number; totalAmount: number };
+  loadExportRecords: () => Promise<CollectionRecord[]>;
   onRefreshRecords: () => Promise<unknown>;
 };
 
@@ -87,8 +87,8 @@ export function useCollectionRecordsActions({
   fromDate,
   toDate,
   nicknameFilter,
-  visibleRecords,
   summary,
+  loadExportRecords,
   onRefreshRecords,
 }: UseCollectionRecordsActionsArgs) {
   const { toast } = useToast();
@@ -288,7 +288,7 @@ export function useCollectionRecordsActions({
 
   const handleExportExcel = useCallback(async () => {
     const blockReason = resolveCollectionRecordsExportBlockReason({
-      visibleRecordsLength: visibleRecords.length,
+      totalRecords: summary.totalRecords,
       exportingExcel,
       exportingPdf,
     });
@@ -309,9 +309,18 @@ export function useCollectionRecordsActions({
     exportMutationInFlightRef.current = "excel";
     setExportingExcel(true);
     try {
+      const exportRecords = await loadExportRecords();
+      if (exportRecords.length === 0) {
+        toast({
+          title: "Tiada Data",
+          description: "Tiada rekod untuk diexport.",
+          variant: "destructive",
+        });
+        return;
+      }
       const { exportCollectionRecordsToExcel } = await loadCollectionRecordsExportModule();
       await exportCollectionRecordsToExcel({
-        visibleRecords,
+        visibleRecords: exportRecords,
         fromDate,
         toDate,
         summary,
@@ -334,16 +343,16 @@ export function useCollectionRecordsActions({
     exportingExcel,
     exportingPdf,
     fromDate,
+    loadExportRecords,
     nicknameFilter,
     summary,
     toDate,
     toast,
-    visibleRecords,
   ]);
 
   const handleExportPdf = useCallback(async () => {
     const blockReason = resolveCollectionRecordsExportBlockReason({
-      visibleRecordsLength: visibleRecords.length,
+      totalRecords: summary.totalRecords,
       exportingExcel,
       exportingPdf,
     });
@@ -364,9 +373,18 @@ export function useCollectionRecordsActions({
     exportMutationInFlightRef.current = "pdf";
     setExportingPdf(true);
     try {
+      const exportRecords = await loadExportRecords();
+      if (exportRecords.length === 0) {
+        toast({
+          title: "Tiada Data",
+          description: "Tiada rekod untuk diexport.",
+          variant: "destructive",
+        });
+        return;
+      }
       const { exportCollectionRecordsToPdf } = await loadCollectionRecordsExportModule();
       await exportCollectionRecordsToPdf({
-        visibleRecords,
+        visibleRecords: exportRecords,
         fromDate,
         toDate,
         summary,
@@ -389,11 +407,11 @@ export function useCollectionRecordsActions({
     exportingExcel,
     exportingPdf,
     fromDate,
+    loadExportRecords,
     nicknameFilter,
     summary,
     toDate,
     toast,
-    visibleRecords,
   ]);
 
   return {

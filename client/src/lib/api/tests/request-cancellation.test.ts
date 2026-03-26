@@ -192,6 +192,7 @@ test("getCollectionRecords forwards AbortSignal and rejects on abort", async () 
             totalAmount: 0,
             limit: 10,
             offset: 0,
+            nextCursor: null,
           }),
         );
       }, 50);
@@ -208,6 +209,7 @@ test("getCollectionRecords forwards AbortSignal and rejects on abort", async () 
         duplicateOnly: true,
         limit: 10,
         offset: 0,
+        cursor: "cursor-1",
       },
       { signal: controller.signal },
     );
@@ -226,6 +228,7 @@ test("getCollectionRecords forwards AbortSignal and rejects on abort", async () 
   const params = new URL(`http://localhost${requests[0]?.url || ""}`).searchParams;
   assert.equal(params.get("receiptValidationStatus"), "flagged");
   assert.equal(params.get("duplicateOnly"), "1");
+  assert.equal(params.get("cursor"), "cursor-1");
 });
 
 test("analysis API wrappers forward AbortSignal", async () => {

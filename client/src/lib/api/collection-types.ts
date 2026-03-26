@@ -131,6 +131,7 @@ export type CollectionRecordListResponse = {
   totalAmount: number;
   limit: number;
   offset: number;
+  nextCursor: string | null;
 };
 
 export type CollectionPurgeSummaryResponse = {

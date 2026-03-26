@@ -30,7 +30,7 @@ test("buildDeleteRecordErrorFeedback keeps non-conflict delete failures generic"
 test("resolveCollectionRecordsExportBlockReason prioritizes empty exports", () => {
   assert.equal(
     resolveCollectionRecordsExportBlockReason({
-      visibleRecordsLength: 0,
+      totalRecords: 0,
       exportingExcel: false,
       exportingPdf: false,
     }),
@@ -41,7 +41,7 @@ test("resolveCollectionRecordsExportBlockReason prioritizes empty exports", () =
 test("resolveCollectionRecordsExportBlockReason blocks concurrent exports", () => {
   assert.equal(
     resolveCollectionRecordsExportBlockReason({
-      visibleRecordsLength: 10,
+      totalRecords: 10,
       exportingExcel: true,
       exportingPdf: false,
     }),
@@ -49,7 +49,7 @@ test("resolveCollectionRecordsExportBlockReason blocks concurrent exports", () =
   );
   assert.equal(
     resolveCollectionRecordsExportBlockReason({
-      visibleRecordsLength: 10,
+      totalRecords: 10,
       exportingExcel: false,
       exportingPdf: true,
     }),
@@ -60,7 +60,7 @@ test("resolveCollectionRecordsExportBlockReason blocks concurrent exports", () =
 test("resolveCollectionRecordsExportBlockReason allows exports when data is ready", () => {
   assert.equal(
     resolveCollectionRecordsExportBlockReason({
-      visibleRecordsLength: 10,
+      totalRecords: 10,
       exportingExcel: false,
       exportingPdf: false,
     }),
