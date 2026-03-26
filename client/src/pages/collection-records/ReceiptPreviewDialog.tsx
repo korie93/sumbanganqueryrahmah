@@ -60,12 +60,19 @@ export function ReceiptPreviewDialog({
   onClose,
 }: ReceiptPreviewDialogProps) {
   const [zoom, setZoom] = useState(1);
+  const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
     if (open) {
       setZoom(1);
     }
   }, [fileName, open, selectedReceiptId, source]);
+
+  useEffect(() => {
+    if (!open) {
+      setShowDetails(false);
+    }
+  }, [open, selectedReceiptId, source]);
 
   const selectedReceipt =
     receipts.find((receipt) => receipt.id === selectedReceiptId) || receipts[0] || null;
@@ -108,15 +115,27 @@ export function ReceiptPreviewDialog({
 
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-3 py-2">
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            {selectedReceipt ? (
+            {showDetails && selectedReceipt ? (
               <>
                 <Badge variant="secondary">{selectedReceipt.originalMimeType}</Badge>
                 <span>{selectedReceipt.originalFileName}</span>
               </>
-            ) : null}
+            ) : (
+              <span>Receipt info hidden. Click Show more to view details.</span>
+            )}
           </div>
-          {canZoom ? (
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setShowDetails((previous) => !previous)}
+              aria-expanded={showDetails}
+            >
+              {showDetails ? "Show less" : "Show more"}
+            </Button>
+            {canZoom ? (
+              <>
               <Button
                 type="button"
                 size="sm"
@@ -147,11 +166,12 @@ export function ReceiptPreviewDialog({
                 <ZoomIn className="mr-2 h-4 w-4" />
                 Zoom In
               </Button>
-            </div>
-          ) : null}
+              </>
+            ) : null}
+          </div>
         </div>
 
-        {record ? (
+        {record && showDetails ? (
           <div className="rounded-md border border-border/60 bg-background/40 px-3 py-3">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <div>
