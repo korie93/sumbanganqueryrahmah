@@ -148,6 +148,7 @@ export async function getCollectionRecords(filters?: {
   duplicateOnly?: boolean;
   limit?: number;
   offset?: number;
+  cursor?: string | null;
 }, options?: { signal?: AbortSignal }) {
   const params = new URLSearchParams();
   if (filters?.from) params.set("from", filters.from);
@@ -171,6 +172,9 @@ export async function getCollectionRecords(filters?: {
   }
   if (typeof filters?.offset === "number" && Number.isFinite(filters.offset)) {
     params.set("offset", String(filters.offset));
+  }
+  if (typeof filters?.cursor === "string" && filters.cursor.trim()) {
+    params.set("cursor", filters.cursor.trim());
   }
   const query = params.toString();
   const response = await apiRequest(

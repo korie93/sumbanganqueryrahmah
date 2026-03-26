@@ -24,10 +24,12 @@ export interface CollectionRecordsToolbarProps {
   } | null;
   pagedStart: number;
   pagedEnd: number;
-  visibleRecordsLength: number;
+  totalRecords: number;
   tablePage: number;
   totalPages: number;
   tablePageSize: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
   onOpenViewAll: () => void;
   onOpenPurgeDialog: () => void;
   onExportExcel: () => void;
@@ -49,10 +51,12 @@ export function CollectionRecordsToolbar({
   purgeSummary,
   pagedStart,
   pagedEnd,
-  visibleRecordsLength,
+  totalRecords,
   tablePage,
   totalPages,
   tablePageSize,
+  hasNextPage,
+  hasPreviousPage,
   onOpenViewAll,
   onOpenPurgeDialog,
   onExportExcel,
@@ -130,7 +134,7 @@ export function CollectionRecordsToolbar({
         data-floating-ai-avoid="true"
       >
         <p className="text-xs text-muted-foreground">
-          Showing {pagedStart}-{pagedEnd} of {visibleRecordsLength} records
+          Showing {pagedStart}-{pagedEnd} of {totalRecords} records
         </p>
         <div className="flex items-center gap-2">
           <Select
@@ -146,13 +150,13 @@ export function CollectionRecordsToolbar({
               <SelectItem value="200">200 / page</SelectItem>
             </SelectContent>
           </Select>
-          <Button size="sm" variant="outline" disabled={tablePage <= 1} onClick={onPrevPage}>
+          <Button size="sm" variant="outline" disabled={!hasPreviousPage} onClick={onPrevPage}>
             Prev
           </Button>
           <span className="text-xs text-muted-foreground">
             Page {tablePage} / {totalPages}
           </span>
-          <Button size="sm" variant="outline" disabled={tablePage >= totalPages} onClick={onNextPage}>
+          <Button size="sm" variant="outline" disabled={!hasNextPage} onClick={onNextPage}>
             Next
           </Button>
         </div>

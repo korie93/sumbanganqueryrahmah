@@ -884,6 +884,159 @@ test("GET /api/collection/list applies pagination, receipt review filters, and u
   }
 });
 
+test("GET /api/collection/list returns nextCursor and accepts cursor-based follow-up requests", async () => {
+  const listCalls: Array<Record<string, unknown>> = [];
+  const records = [
+    {
+      id: "collection-1",
+      customerName: "Alice Tan",
+      icNumber: "900101015555",
+      customerPhone: "0123000001",
+      accountNumber: "ACC-1001",
+      batch: "P10",
+      paymentDate: "2026-03-01",
+      amount: "100.00",
+      receiptFile: null,
+      receipts: [],
+      receiptTotalAmount: "0.00",
+      receiptValidationStatus: "unverified" as const,
+      receiptValidationMessage: null,
+      receiptCount: 0,
+      duplicateReceiptFlag: false,
+      createdByLogin: "superuser",
+      collectionStaffNickname: "Collector Alpha",
+      createdAt: "2026-03-01T08:00:00.000Z",
+      updatedAt: "2026-03-01T08:00:00.000Z",
+    },
+    {
+      id: "collection-2",
+      customerName: "Bob Lee",
+      icNumber: "900101015556",
+      customerPhone: "0123000002",
+      accountNumber: "ACC-1002",
+      batch: "P25",
+      paymentDate: "2026-03-02",
+      amount: "200.00",
+      receiptFile: null,
+      receipts: [],
+      receiptTotalAmount: "0.00",
+      receiptValidationStatus: "unverified" as const,
+      receiptValidationMessage: null,
+      receiptCount: 0,
+      duplicateReceiptFlag: false,
+      createdByLogin: "superuser",
+      collectionStaffNickname: "Collector Alpha",
+      createdAt: "2026-03-02T08:00:00.000Z",
+      updatedAt: "2026-03-02T08:00:00.000Z",
+    },
+    {
+      id: "collection-3",
+      customerName: "Carol Ong",
+      icNumber: "900101015557",
+      customerPhone: "0123000003",
+      accountNumber: "ACC-1003",
+      batch: "MDD02",
+      paymentDate: "2026-03-03",
+      amount: "300.00",
+      receiptFile: null,
+      receipts: [],
+      receiptTotalAmount: "0.00",
+      receiptValidationStatus: "unverified" as const,
+      receiptValidationMessage: null,
+      receiptCount: 0,
+      duplicateReceiptFlag: false,
+      createdByLogin: "superuser",
+      collectionStaffNickname: "Collector Alpha",
+      createdAt: "2026-03-03T08:00:00.000Z",
+      updatedAt: "2026-03-03T08:00:00.000Z",
+    },
+  ];
+
+  const storage = {
+    summarizeCollectionRecords: async () => ({
+      totalRecords: records.length,
+      totalAmount: 600,
+    }),
+    listCollectionRecords: async (filters?: { limit?: number; offset?: number }) => {
+      listCalls.push(filters || {});
+      const limit = Number.isFinite(Number(filters?.limit)) ? Number(filters?.limit) : records.length;
+      const offset = Number.isFinite(Number(filters?.offset)) ? Number(filters?.offset) : 0;
+      return records.slice(offset, offset + limit);
+    },
+  } as unknown as PostgresStorage;
+
+  const app = createJsonTestApp();
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "superuser-1",
+      username: "superuser",
+      role: "superuser",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const firstResponse = await fetch(`${baseUrl}/api/collection/list?limit=2`);
+    assert.equal(firstResponse.status, 200);
+    const firstPayload = await firstResponse.json();
+    assert.equal(firstPayload.records.length, 2);
+    assert.equal(firstPayload.offset, 0);
+    assert.equal(firstPayload.total, 3);
+    assert.equal(typeof firstPayload.nextCursor, "string");
+
+    const secondResponse = await fetch(
+      `${baseUrl}/api/collection/list?limit=2&cursor=${encodeURIComponent(firstPayload.nextCursor)}`,
+    );
+    assert.equal(secondResponse.status, 200);
+    const secondPayload = await secondResponse.json();
+    assert.equal(secondPayload.records.length, 1);
+    assert.equal(secondPayload.records[0].id, "collection-3");
+    assert.equal(secondPayload.offset, 2);
+    assert.equal(secondPayload.nextCursor, null);
+
+    assert.equal(listCalls.length, 2);
+    assert.equal(listCalls[0].offset, 0);
+    assert.equal(listCalls[1].offset, 2);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/collection/list rejects invalid cursor values", async () => {
+  const storage = {
+    summarizeCollectionRecords: async () => ({
+      totalRecords: 0,
+      totalAmount: 0,
+    }),
+    listCollectionRecords: async () => [],
+  } as unknown as PostgresStorage;
+
+  const app = createJsonTestApp();
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "superuser-1",
+      username: "superuser",
+      role: "superuser",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/list?cursor=not-a-real-cursor`);
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.match(String(payload.message), /cursor/i);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /api/collection/list rejects invalid receipt review filters", async () => {
   const { storage } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
