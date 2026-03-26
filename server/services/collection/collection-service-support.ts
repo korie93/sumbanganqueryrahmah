@@ -51,8 +51,10 @@ export type CollectionStoragePort = Pick<
   | "summarizeCollectionRecordsOlderThan"
   | "upsertCollectionDailyCalendarDays"
   | "upsertCollectionDailyTarget"
+  | "updateCollectionRecordReceipts"
   | "updateCollectionAdminGroup"
   | "updateCollectionRecord"
+  | "syncCollectionRecordReceiptValidation"
   | "updateCollectionStaffNickname"
 >;
 

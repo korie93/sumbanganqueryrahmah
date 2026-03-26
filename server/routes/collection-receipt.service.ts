@@ -317,6 +317,7 @@ export async function saveCollectionReceipt(
       originalMimeType: persisted.storedReceipt.canonicalType.mimeType,
       originalExtension: persisted.storedReceipt.canonicalType.extension,
       fileSize: sanitized.buffer.length,
+      fileHash: createHash("sha256").update(sanitized.buffer).digest("hex"),
     };
   } catch (error) {
     stagedFilePath = (error as Error & { receiptTemporaryFilePath?: string }).receiptTemporaryFilePath || null;
@@ -475,6 +476,7 @@ export async function saveMultipartCollectionReceipt(
       originalMimeType: storedReceipt.canonicalType.mimeType,
       originalExtension: storedReceipt.canonicalType.extension,
       fileSize: sanitized.buffer.length,
+      fileHash: createHash("sha256").update(sanitized.buffer).digest("hex"),
     };
   } catch (error) {
     if (error instanceof CollectionReceiptSecurityError) {
@@ -658,6 +660,12 @@ async function resolveSelectedReceipt(
     originalMimeType: resolvedLegacyFile.mimeType,
     originalExtension: fallbackExtension,
     fileSize: fallbackFileSize,
+    receiptAmount: null,
+    extractedAmount: null,
+    extractionConfidence: null,
+    receiptDate: null,
+    receiptReference: null,
+    fileHash: null,
     createdAt: safeCreatedAt,
   };
 }
@@ -732,7 +740,8 @@ export async function serveCollectionReceipt(
     if (!resolved && selectedReceipt) {
       await pruneMissingRelationReceipt(storage, record.id, selectedReceipt);
       if (!requestedReceiptId) {
-        const fallbackReceipt = await resolveSelectedReceipt(storage, record, null);
+        const refreshedRecord = await storage.getCollectionRecordById(record.id);
+        const fallbackReceipt = await resolveSelectedReceipt(storage, refreshedRecord || record, null);
         resolved = resolveCollectionReceiptFile(fallbackReceipt?.storagePath ?? null);
         if (resolved) {
           selectedReceipt = fallbackReceipt;
@@ -747,7 +756,8 @@ export async function serveCollectionReceipt(
         await pruneMissingRelationReceipt(storage, record.id, selectedReceipt);
         resolved = null;
         if (!requestedReceiptId) {
-          const fallbackReceipt = await resolveSelectedReceipt(storage, record, null);
+          const refreshedRecord = await storage.getCollectionRecordById(record.id);
+          const fallbackReceipt = await resolveSelectedReceipt(storage, refreshedRecord || record, null);
           const fallbackResolved = resolveCollectionReceiptFile(fallbackReceipt?.storagePath ?? null);
           if (fallbackResolved) {
             resolved = fallbackResolved;

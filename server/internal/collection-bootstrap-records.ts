@@ -28,6 +28,10 @@ export async function ensureCollectionRecordsTables(
       payment_date date NOT NULL,
       amount numeric(14,2) NOT NULL,
       receipt_file text,
+      receipt_total_amount bigint NOT NULL DEFAULT 0,
+      receipt_validation_status text NOT NULL DEFAULT 'needs_review',
+      receipt_validation_message text,
+      receipt_count integer NOT NULL DEFAULT 0,
       created_by_login text NOT NULL,
       collection_staff_nickname text NOT NULL,
       staff_username text NOT NULL,
@@ -43,6 +47,10 @@ export async function ensureCollectionRecordsTables(
   await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS payment_date date`);
   await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS amount numeric(14,2)`);
   await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_file text`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_total_amount bigint DEFAULT 0`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_validation_status text DEFAULT 'needs_review'`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_validation_message text`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_count integer DEFAULT 0`);
   await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_by_login text`);
   await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS collection_staff_nickname text`);
   await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS staff_username text`);
@@ -67,6 +75,13 @@ export async function ensureCollectionRecordsTables(
   await database.execute(sql`
     UPDATE public.collection_records
     SET updated_at = COALESCE(updated_at, created_at, now())
+  `);
+  await database.execute(sql`
+    UPDATE public.collection_records
+    SET
+      receipt_total_amount = COALESCE(receipt_total_amount, 0),
+      receipt_validation_status = COALESCE(NULLIF(trim(COALESCE(receipt_validation_status, '')), ''), 'needs_review'),
+      receipt_count = COALESCE(receipt_count, 0)
   `);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_payment_date ON public.collection_records(payment_date)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_at ON public.collection_records(created_at DESC)`);
@@ -99,6 +114,12 @@ export async function ensureCollectionRecordsTables(
       original_mime_type text NOT NULL,
       original_extension text NOT NULL DEFAULT '',
       file_size bigint NOT NULL DEFAULT 0,
+      receipt_amount bigint,
+      extracted_amount bigint,
+      extraction_confidence numeric(5,4),
+      receipt_date date,
+      receipt_reference text,
+      file_hash text,
       created_at timestamp NOT NULL DEFAULT now()
     )
   `);
@@ -108,6 +129,12 @@ export async function ensureCollectionRecordsTables(
   await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS original_mime_type text`);
   await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS original_extension text DEFAULT ''`);
   await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS file_size bigint DEFAULT 0`);
+  await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS receipt_amount bigint`);
+  await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS extracted_amount bigint`);
+  await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS extraction_confidence numeric(5,4)`);
+  await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS receipt_date date`);
+  await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS receipt_reference text`);
+  await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS file_hash text`);
   await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
   await database.execute(sql`
     UPDATE public.collection_record_receipts
@@ -147,6 +174,10 @@ export async function ensureCollectionRecordsTables(
   await database.execute(sql`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_record_receipts_record_storage_unique
     ON public.collection_record_receipts (collection_record_id, storage_path)
+  `);
+  await database.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_record_receipts_record_file_hash_unique
+    ON public.collection_record_receipts (collection_record_id, file_hash)
   `);
   await database.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_collection_record_receipts_record_created_at
@@ -200,6 +231,48 @@ export async function ensureCollectionRecordsTables(
       ON CONFLICT (collection_record_id, storage_path) DO NOTHING
     `);
   }
+
+  await database.execute(sql`
+    UPDATE public.collection_records record
+    SET
+      receipt_total_amount = COALESCE(stats.receipt_total_amount, 0),
+      receipt_count = COALESCE(stats.receipt_count, 0),
+      receipt_validation_status = CASE
+        WHEN COALESCE(stats.receipt_count, 0) = 0 THEN 'needs_review'
+        WHEN COALESCE(stats.missing_amount_count, 0) > 0 THEN 'needs_review'
+        WHEN COALESCE(stats.receipt_total_amount, 0) = ROUND(record.amount * 100)::bigint THEN 'matched'
+        ELSE 'mismatch'
+      END,
+      receipt_validation_message = CASE
+        WHEN COALESCE(stats.receipt_count, 0) = 0 THEN 'Tiada resit dilampirkan untuk semakan jumlah.'
+        WHEN COALESCE(stats.missing_amount_count, 0) > 0 THEN 'Setiap resit perlu disahkan jumlahnya sebelum rekod boleh disimpan.'
+        WHEN COALESCE(stats.receipt_total_amount, 0) = ROUND(record.amount * 100)::bigint THEN 'Jumlah resit sepadan dengan jumlah bayaran yang dimasukkan.'
+        ELSE 'Jumlah resit tidak sepadan dengan jumlah bayaran yang dimasukkan.'
+      END
+    FROM (
+      SELECT
+        collection_record_id,
+        COUNT(*)::int AS receipt_count,
+        COALESCE(SUM(receipt_amount), 0)::bigint AS receipt_total_amount,
+        COUNT(*) FILTER (WHERE receipt_amount IS NULL)::int AS missing_amount_count
+      FROM public.collection_record_receipts
+      GROUP BY collection_record_id
+    ) stats
+    WHERE record.id = stats.collection_record_id
+  `);
+  await database.execute(sql`
+    UPDATE public.collection_records
+    SET
+      receipt_total_amount = 0,
+      receipt_count = 0,
+      receipt_validation_status = 'needs_review',
+      receipt_validation_message = 'Tiada resit dilampirkan untuk semakan jumlah.'
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM public.collection_record_receipts receipt
+      WHERE receipt.collection_record_id = public.collection_records.id
+    )
+  `);
 
   await database.execute(sql`
     CREATE TABLE IF NOT EXISTS public.collection_record_daily_rollups (

@@ -3,7 +3,17 @@ import { randomUUID } from "crypto";
 import { sql } from "drizzle-orm";
 import type { CollectionRepositoryExecutor, CollectionRepositoryQueryResult } from "./collection-nickname-utils";
 import { collectionReceiptFileExists } from "../lib/collection-receipt-files";
-import type { CollectionRecord, CollectionRecordReceipt, CreateCollectionRecordReceiptInput } from "../storage-postgres";
+import {
+  formatCollectionAmountFromCents,
+  parseCollectionAmountToCents,
+} from "../services/collection/collection-receipt-validation";
+import { mapCollectionRecordRow } from "./collection-repository-mappers";
+import type {
+  CollectionRecord,
+  CollectionRecordReceipt,
+  CreateCollectionRecordReceiptInput,
+  UpdateCollectionRecordReceiptInput,
+} from "../storage-postgres";
 
 type CollectionRecordReceiptDbRow = {
   id?: unknown;
@@ -19,6 +29,18 @@ type CollectionRecordReceiptDbRow = {
   originalExtension?: unknown;
   file_size?: unknown;
   fileSize?: unknown;
+  receipt_amount?: unknown;
+  receiptAmount?: unknown;
+  extracted_amount?: unknown;
+  extractedAmount?: unknown;
+  extraction_confidence?: unknown;
+  extractionConfidence?: unknown;
+  receipt_date?: unknown;
+  receiptDate?: unknown;
+  receipt_reference?: unknown;
+  receiptReference?: unknown;
+  file_hash?: unknown;
+  fileHash?: unknown;
   created_at?: unknown;
   createdAt?: unknown;
 };
@@ -93,6 +115,8 @@ function readFirstRow<TRow>(result: CollectionRepositoryQueryResult): TRow | und
 }
 
 export function mapCollectionRecordReceiptRow(row: CollectionRecordReceiptDbRow): CollectionRecordReceipt {
+  const rawReceiptAmount = row.receipt_amount ?? row.receiptAmount ?? null;
+  const rawExtractedAmount = row.extracted_amount ?? row.extractedAmount ?? null;
   return {
     id: String(row.id ?? ""),
     collectionRecordId: String(row.collection_record_id ?? row.collectionRecordId ?? ""),
@@ -101,6 +125,21 @@ export function mapCollectionRecordReceiptRow(row: CollectionRecordReceiptDbRow)
     originalMimeType: String(row.original_mime_type ?? row.originalMimeType ?? "application/octet-stream"),
     originalExtension: String(row.original_extension ?? row.originalExtension ?? ""),
     fileSize: Number(row.file_size ?? row.fileSize ?? 0),
+    receiptAmount:
+      rawReceiptAmount === null || rawReceiptAmount === undefined || rawReceiptAmount === ""
+        ? null
+        : formatCollectionAmountFromCents(rawReceiptAmount),
+    extractedAmount:
+      rawExtractedAmount === null || rawExtractedAmount === undefined || rawExtractedAmount === ""
+        ? null
+        : formatCollectionAmountFromCents(rawExtractedAmount),
+    extractionConfidence: (() => {
+      const value = Number(row.extraction_confidence ?? row.extractionConfidence);
+      return Number.isFinite(value) ? value : null;
+    })(),
+    receiptDate: String(row.receipt_date ?? row.receiptDate ?? "").trim() || null,
+    receiptReference: String(row.receipt_reference ?? row.receiptReference ?? "").trim() || null,
+    fileHash: String(row.file_hash ?? row.fileHash ?? "").trim() || null,
     createdAt: normalizeCollectionDate(row.created_at ?? row.createdAt),
   };
 }
@@ -202,6 +241,12 @@ export async function loadCollectionReceiptMapByRecordIds(
       original_mime_type,
       original_extension,
       file_size,
+      receipt_amount,
+      extracted_amount,
+      extraction_confidence,
+      receipt_date,
+      receipt_reference,
+      file_hash,
       created_at
     FROM public.collection_record_receipts
     WHERE collection_record_id IN (${idSql})
@@ -275,6 +320,12 @@ export async function listCollectionRecordReceiptsByRecordId(
       original_mime_type,
       original_extension,
       file_size,
+      receipt_amount,
+      extracted_amount,
+      extraction_confidence,
+      receipt_date,
+      receipt_reference,
+      file_hash,
       created_at
     FROM public.collection_record_receipts
     WHERE collection_record_id = ${normalizedRecordId}::uuid
@@ -302,6 +353,12 @@ export async function getCollectionRecordReceiptByIdForRecord(
       original_mime_type,
       original_extension,
       file_size,
+      receipt_amount,
+      extracted_amount,
+      extraction_confidence,
+      receipt_date,
+      receipt_reference,
+      file_hash,
       created_at
     FROM public.collection_record_receipts
     WHERE collection_record_id = ${normalizedRecordId}::uuid
@@ -330,6 +387,12 @@ export async function listCollectionRecordReceiptsByIds(
       original_mime_type,
       original_extension,
       file_size,
+      receipt_amount,
+      extracted_amount,
+      extraction_confidence,
+      receipt_date,
+      receipt_reference,
+      file_hash,
       created_at
     FROM public.collection_record_receipts
     WHERE id IN (${idSql})
@@ -361,6 +424,12 @@ export async function createCollectionRecordReceiptRows(
         original_mime_type,
         original_extension,
         file_size,
+        receipt_amount,
+        extracted_amount,
+        extraction_confidence,
+        receipt_date,
+        receipt_reference,
+        file_hash,
         created_at
       )
       VALUES (
@@ -371,6 +440,12 @@ export async function createCollectionRecordReceiptRows(
         ${receipt.originalMimeType},
         ${receipt.originalExtension},
         ${receipt.fileSize},
+        ${receipt.receiptAmountCents ?? null},
+        ${receipt.extractedAmountCents ?? null},
+        ${receipt.extractionConfidence ?? null},
+        ${receipt.receiptDate ?? null},
+        ${receipt.receiptReference ?? null},
+        ${receipt.fileHash ?? null},
         now()
       )
     `);
@@ -378,6 +453,51 @@ export async function createCollectionRecordReceiptRows(
 
   await syncCollectionRecordLegacyReceiptCache(executor, normalizedRecordId);
   return listCollectionRecordReceiptsByIds(executor, insertedIds);
+}
+
+export async function updateCollectionRecordReceiptRows(
+  executor: CollectionReceiptExecutor,
+  recordId: string,
+  updates: UpdateCollectionRecordReceiptInput[],
+): Promise<CollectionRecordReceipt[]> {
+  const normalizedRecordId = String(recordId || "").trim();
+  const normalizedUpdates = Array.isArray(updates)
+    ? updates
+        .map((update) => ({
+          receiptId: String(update?.receiptId || "").trim(),
+          receiptAmountCents: update?.receiptAmountCents ?? null,
+          extractedAmountCents: update?.extractedAmountCents ?? null,
+          extractionConfidence:
+            update?.extractionConfidence === null || update?.extractionConfidence === undefined
+              ? null
+              : Number(update.extractionConfidence),
+          receiptDate: String(update?.receiptDate || "").trim() || null,
+          receiptReference: String(update?.receiptReference || "").trim() || null,
+        }))
+        .filter((update) => Boolean(update.receiptId))
+    : [];
+  if (!normalizedRecordId || !normalizedUpdates.length) {
+    return [];
+  }
+
+  for (const update of normalizedUpdates) {
+    await executor.execute(sql`
+      UPDATE public.collection_record_receipts
+      SET
+        receipt_amount = ${update.receiptAmountCents},
+        extracted_amount = ${update.extractedAmountCents},
+        extraction_confidence = ${update.extractionConfidence},
+        receipt_date = ${update.receiptDate},
+        receipt_reference = ${update.receiptReference}
+      WHERE collection_record_id = ${normalizedRecordId}::uuid
+        AND id = ${update.receiptId}::uuid
+    `);
+  }
+
+  return listCollectionRecordReceiptsByIds(
+    executor,
+    normalizedUpdates.map((update) => update.receiptId),
+  );
 }
 
 export async function listCollectionRecordReceiptsForDeletion(
@@ -401,6 +521,12 @@ export async function listCollectionRecordReceiptsForDeletion(
       original_mime_type,
       original_extension,
       file_size,
+      receipt_amount,
+      extracted_amount,
+      extraction_confidence,
+      receipt_date,
+      receipt_reference,
+      file_hash,
       created_at
     FROM public.collection_record_receipts
     WHERE collection_record_id = ${normalizedRecordId}::uuid
@@ -450,4 +576,94 @@ export async function deleteAllCollectionRecordReceiptRows(
   `);
   await syncCollectionRecordLegacyReceiptCache(executor, String(recordId || "").trim());
   return receipts;
+}
+
+export async function syncCollectionRecordReceiptValidation(
+  executor: CollectionReceiptExecutor,
+  recordId: string,
+): Promise<CollectionRecord | undefined> {
+  const normalizedRecordId = String(recordId || "").trim();
+  if (!normalizedRecordId) {
+    return undefined;
+  }
+
+  const aggregateResult = await executor.execute(sql`
+    SELECT
+      amount,
+      COUNT(receipt.id)::int AS receipt_count,
+      COALESCE(SUM(receipt.receipt_amount), 0)::bigint AS receipt_total_amount,
+      COUNT(*) FILTER (WHERE receipt.id IS NOT NULL AND receipt.receipt_amount IS NULL)::int AS missing_amount_count
+    FROM public.collection_records record
+    LEFT JOIN public.collection_record_receipts receipt
+      ON receipt.collection_record_id = record.id
+    WHERE record.id = ${normalizedRecordId}::uuid
+    GROUP BY record.amount
+    LIMIT 1
+  `);
+  const aggregateRow = (aggregateResult.rows?.[0] || null) as Record<string, unknown> | null;
+  if (!aggregateRow) {
+    return undefined;
+  }
+
+  const totalPaidCents = parseCollectionAmountToCents(aggregateRow.amount, { allowZero: true }) ?? 0;
+  const receiptCount = Math.max(0, Number(aggregateRow.receipt_count || 0) || 0);
+  const receiptTotalAmountCents = Number(aggregateRow.receipt_total_amount || 0);
+  const missingAmountCount = Math.max(0, Number(aggregateRow.missing_amount_count || 0) || 0);
+  const status =
+    receiptCount === 0
+      ? "needs_review"
+      : missingAmountCount > 0
+        ? "needs_review"
+        : receiptTotalAmountCents === totalPaidCents
+          ? "matched"
+          : "mismatch";
+  const message =
+    receiptCount === 0
+      ? "Tiada resit dilampirkan untuk semakan jumlah."
+      : missingAmountCount > 0
+        ? "Setiap resit perlu disahkan jumlahnya sebelum rekod boleh disimpan."
+        : receiptTotalAmountCents === totalPaidCents
+          ? "Jumlah resit sepadan dengan jumlah bayaran yang dimasukkan."
+          : `Jumlah resit RM ${formatCollectionAmountFromCents(receiptTotalAmountCents)} tidak sepadan dengan jumlah bayaran RM ${formatCollectionAmountFromCents(totalPaidCents)}.`;
+
+  await executor.execute(sql`
+    UPDATE public.collection_records
+    SET
+      receipt_total_amount = ${receiptTotalAmountCents},
+      receipt_validation_status = ${status},
+      receipt_validation_message = ${message},
+      receipt_count = ${receiptCount}
+    WHERE id = ${normalizedRecordId}::uuid
+  `);
+
+  const refreshed = await executor.execute(sql`
+    SELECT
+      id,
+      customer_name,
+      ic_number,
+      customer_phone,
+      account_number,
+      batch,
+      payment_date,
+      amount,
+      receipt_file,
+      receipt_total_amount,
+      receipt_validation_status,
+      receipt_validation_message,
+      receipt_count,
+      created_by_login,
+      collection_staff_nickname,
+      staff_username,
+      created_at,
+      updated_at
+    FROM public.collection_records
+    WHERE id = ${normalizedRecordId}::uuid
+    LIMIT 1
+  `);
+  const row = readFirstRow<Record<string, unknown>>(refreshed);
+  if (!row) {
+    return undefined;
+  }
+  const [hydrated] = await attachCollectionReceipts(executor, [mapCollectionRecordRow(row)]);
+  return hydrated;
 }

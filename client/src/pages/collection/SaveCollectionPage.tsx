@@ -1,11 +1,11 @@
-import { memo, type ChangeEvent, useRef, useState } from "react";
+import { memo, type ChangeEvent, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
-import { type CollectionBatch } from "@/lib/api";
+import { type CollectionBatch, type CollectionReceiptMetadata } from "@/lib/api";
 import {
   buildCollectionMutationFingerprint,
   buildCollectionRecordFormData,
@@ -13,9 +13,18 @@ import {
   createCollectionRecord,
 } from "@/lib/api/collection-records";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
+import { CollectionReceiptValidationCard } from "@/pages/collection/CollectionReceiptValidationCard";
+import {
+  buildCollectionReceiptMetadataPayload,
+  buildCollectionReceiptValidationPreview,
+  createEmptyCollectionReceiptDraft,
+  shouldBlockCollectionReceiptSave,
+  type CollectionReceiptDraftInput,
+} from "@/pages/collection/receipt-validation";
 import {
   COLLECTION_BATCH_OPTIONS,
   getTodayIsoDate,
+  getCurrentRole,
   isFutureDate,
   isValidCustomerPhone,
   isPositiveAmount,
@@ -34,6 +43,8 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const submitInFlightRef = useRef(false);
   const submitMutationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
+  const role = useMemo(() => getCurrentRole(), []);
+  const canOverrideReceiptValidation = role === "admin" || role === "superuser";
 
   const [customerName, setCustomerName] = useState("");
   const [icNumber, setIcNumber] = useState("");
@@ -43,9 +54,24 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const [paymentDate, setPaymentDate] = useState("");
   const [amount, setAmount] = useState("");
   const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
+  const [receiptDrafts, setReceiptDrafts] = useState<CollectionReceiptDraftInput[]>([]);
+  const [receiptValidationOverrideReason, setReceiptValidationOverrideReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const maxPaymentDate = getTodayIsoDate();
   const isPaymentDateInFuture = paymentDate ? isFutureDate(paymentDate) : false;
+  const receiptValidation = useMemo(
+    () =>
+      buildCollectionReceiptValidationPreview({
+        totalPaid: amount,
+        receipts: receiptDrafts,
+      }),
+    [amount, receiptDrafts],
+  );
+  const isReceiptSaveBlocked = shouldBlockCollectionReceiptSave({
+    validation: receiptValidation,
+    role,
+    overrideReason: receiptValidationOverrideReason,
+  });
 
   const clearForm = () => {
     setCustomerName("");
@@ -56,6 +82,8 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     setPaymentDate("");
     setAmount("");
     setReceiptFiles([]);
+    setReceiptDrafts([]);
+    setReceiptValidationOverrideReason("");
     submitMutationIntentRef.current = null;
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -77,14 +105,17 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     }
 
     setReceiptFiles((previous) => [...previous, file]);
+    setReceiptDrafts((previous) => [...previous, createEmptyCollectionReceiptDraft()]);
   };
 
   const handleRemoveReceipt = (index: number) => {
     setReceiptFiles((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
+    setReceiptDrafts((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
   };
 
   const handleClearPendingReceipts = () => {
     setReceiptFiles([]);
+    setReceiptDrafts([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -112,10 +143,23 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       });
       return;
     }
+    if (isReceiptSaveBlocked) {
+      notifyMutationError({
+        title: "Receipt Validation Required",
+        description: canOverrideReceiptValidation && receiptValidation.requiresOverride
+          ? receiptValidationOverrideReason.trim()
+            ? receiptValidation.message
+            : "Sila masukkan sebab override sebelum simpan."
+          : receiptValidation.message,
+      });
+      return;
+    }
 
     submitInFlightRef.current = true;
     setSubmitting(true);
     try {
+      const newReceiptMetadata: CollectionReceiptMetadata[] = receiptDrafts.map((draft) =>
+        buildCollectionReceiptMetadataPayload(draft));
       const mutationPayload = {
         customerName: customerName.trim(),
         icNumber: icNumber.trim(),
@@ -125,6 +169,10 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         paymentDate,
         amount: Number(amount),
         collectionStaffNickname: staffNickname.trim(),
+        newReceiptMetadata,
+        receiptValidationOverrideReason: receiptValidation.requiresOverride
+          ? receiptValidationOverrideReason.trim()
+          : undefined,
       };
       const mutationFingerprint = buildCollectionMutationFingerprint({
         operation: "create",
@@ -227,13 +275,29 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
             <Label>Receipt Upload</Label>
             <CollectionReceiptPanel
               pendingFiles={receiptFiles}
+              pendingReceiptDrafts={receiptDrafts}
               inputRef={fileInputRef}
               disabled={submitting}
               onFileChange={handleReceiptChange}
+              onPendingDraftChange={(index, patch) =>
+                setReceiptDrafts((previous) =>
+                  previous.map((draft, draftIndex) =>
+                    draftIndex === index ? { ...draft, ...patch } : draft,
+                  ),
+                )}
               onRemovePending={handleRemoveReceipt}
               onClearPending={handleClearPendingReceipts}
               uploadLabel="Upload Receipt One by One"
               helperText="Tambah satu receipt pada satu masa. Status Existing, Pending Upload, dan perubahan simpan/buang akan ditunjukkan di bawah sebelum anda klik Save Collection."
+            />
+          </div>
+          <div className="space-y-2 md:col-span-3">
+            <CollectionReceiptValidationCard
+              validation={receiptValidation}
+              canOverride={canOverrideReceiptValidation}
+              overrideReason={receiptValidationOverrideReason}
+              onOverrideReasonChange={setReceiptValidationOverrideReason}
+              disabled={submitting}
             />
           </div>
         </div>
@@ -247,7 +311,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           >
             Reset Form
           </Button>
-          <Button type="button" onClick={handleSubmit} disabled={submitting}>
+          <Button type="button" onClick={handleSubmit} disabled={submitting || isReceiptSaveBlocked}>
             {submitting ? "Saving..." : "Save Collection"}
           </Button>
         </div>

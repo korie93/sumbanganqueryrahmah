@@ -21,6 +21,14 @@ function appendCollectionFormValue(formData: FormData, key: string, value: unkno
   formData.append(key, String(value));
 }
 
+function appendCollectionJsonValue(formData: FormData, key: string, value: unknown) {
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  formData.append(key, JSON.stringify(value));
+}
+
 export function buildCollectionRecordFormData(
   payload: CollectionMultipartPayload,
   receiptFiles: readonly File[] = [],
@@ -36,6 +44,18 @@ export function buildCollectionRecordFormData(
   appendCollectionFormValue(formData, "amount", payload.amount);
   appendCollectionFormValue(formData, "collectionStaffNickname", payload.collectionStaffNickname);
   appendCollectionFormValue(formData, "expectedUpdatedAt", payload.expectedUpdatedAt);
+  appendCollectionFormValue(
+    formData,
+    "receiptValidationOverrideReason",
+    payload.receiptValidationOverrideReason,
+  );
+
+  if (Array.isArray(payload.newReceiptMetadata)) {
+    appendCollectionJsonValue(formData, "newReceiptMetadata", payload.newReceiptMetadata);
+  }
+  if (Array.isArray(payload.existingReceiptMetadata)) {
+    appendCollectionJsonValue(formData, "existingReceiptMetadata", payload.existingReceiptMetadata);
+  }
 
   if (typeof payload.removeReceipt === "boolean") {
     formData.append("removeReceipt", payload.removeReceipt ? "true" : "false");

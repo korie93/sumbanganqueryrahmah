@@ -47,6 +47,10 @@ export type BackupCollectionRecord = {
   paymentDate: string;
   amount: string | number;
   receiptFile: string | null;
+  receiptTotalAmount?: string | number | null;
+  receiptValidationStatus?: "matched" | "mismatch" | "needs_review" | string | null;
+  receiptValidationMessage?: string | null;
+  receiptCount?: number | null;
   createdByLogin: string;
   collectionStaffNickname: string;
   staffUsername?: string | null;
@@ -61,6 +65,12 @@ export type BackupCollectionReceipt = {
   originalMimeType: string;
   originalExtension: string;
   fileSize: number;
+  receiptAmount?: string | number | null;
+  extractedAmount?: string | number | null;
+  extractionConfidence?: number | string | null;
+  receiptDate?: string | Date | null;
+  receiptReference?: string | null;
+  fileHash?: string | null;
   createdAt: string | Date;
 };
 

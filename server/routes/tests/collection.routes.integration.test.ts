@@ -145,6 +145,18 @@ function createTinyJpegBuffer(width = 1, height = 1) {
   ]);
 }
 
+function createJsonReceiptPayload(
+  fileName: string,
+  mimeType: string,
+  content: Buffer,
+) {
+  return {
+    fileName,
+    mimeType,
+    contentBase64: content.toString("base64"),
+  };
+}
+
 test("DELETE /api/collection/purge-old rejects non-superuser access before service work begins", async () => {
   const actorPasswordHash = await hashPassword("SuperSecret123");
   const { storage, getPurgeCallCount, auditLogs } = createCollectionStorageDouble({
@@ -321,6 +333,166 @@ test("POST /api/collection creates a collection record and writes an audit log",
   }
 });
 
+test("POST /api/collection stores matched receipt totals and allows save", async () => {
+  const { storage, createReceiptCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        customerName: "Receipt Match",
+        icNumber: "880202026666",
+        customerPhone: "0129876543",
+        accountNumber: "ACC-2002",
+        batch: "P25",
+        paymentDate: "2026-03-15",
+        amount: 3000,
+        collectionStaffNickname: "Collector Alpha",
+        receipts: [
+          createJsonReceiptPayload("receipt-a.png", "image/png", createTinyPngBuffer(1, 1)),
+          createJsonReceiptPayload("receipt-b.jpg", "image/jpeg", createTinyJpegBuffer(2, 1)),
+        ],
+        newReceiptMetadata: [
+          { receiptAmount: "1500.00", receiptReference: "RCP-A" },
+          { receiptAmount: "1500.00", receiptReference: "RCP-B" },
+        ],
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.record.receiptValidationStatus, "matched");
+    assert.equal(payload.record.receiptTotalAmount, "3000.00");
+    assert.equal(payload.record.receiptCount, 2);
+    assert.equal(createReceiptCalls.length, 1);
+    assert.equal(createReceiptCalls[0]?.receipts.length, 2);
+    assert.equal(createReceiptCalls[0]?.receipts[0]?.receiptAmountCents, 150000);
+    assert.equal(createReceiptCalls[0]?.receipts[1]?.receiptAmountCents, 150000);
+    const auditDetails = parseAuditDetails(auditLogs[0]);
+    assert.equal(auditDetails.receiptValidation.status, "matched");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/collection blocks regular users when receipt total mismatches payment total", async () => {
+  const { storage, createCalls, createReceiptCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        customerName: "Receipt Mismatch",
+        icNumber: "880202026666",
+        customerPhone: "0129876543",
+        accountNumber: "ACC-2003",
+        batch: "P25",
+        paymentDate: "2026-03-15",
+        amount: 1000,
+        collectionStaffNickname: "Collector Alpha",
+        receipt: createJsonReceiptPayload("receipt-a.png", "image/png", createTinyPngBuffer(1, 1)),
+        newReceiptMetadata: [
+          { receiptAmount: "800.00", receiptReference: "RCP-MISMATCH" },
+        ],
+      }),
+    });
+
+    assert.equal(response.status, 409);
+    const payload = await response.json();
+    assert.equal(payload.ok, false);
+    assert.match(String(payload.message), /tidak sepadan/i);
+    assert.equal(createCalls.length, 0);
+    assert.equal(createReceiptCalls.length, 0);
+    assert.equal(auditLogs[0]?.action, "COLLECTION_RECEIPT_VALIDATION_REJECTED");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/collection allows superuser override for receipt mismatch with audit trail", async () => {
+  const { storage, createCalls, createReceiptCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "superuser-1",
+      username: "superuser",
+      role: "superuser",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        customerName: "Receipt Override",
+        icNumber: "880202026667",
+        customerPhone: "0129876543",
+        accountNumber: "ACC-2004",
+        batch: "P25",
+        paymentDate: "2026-03-15",
+        amount: 1000,
+        collectionStaffNickname: "Collector Alpha",
+        receipt: createJsonReceiptPayload("receipt-a.png", "image/png", createTinyPngBuffer(1, 1)),
+        newReceiptMetadata: [
+          { receiptAmount: "800.00", receiptReference: "RCP-OVERRIDE" },
+        ],
+        receiptValidationOverrideReason: "Manual verification approved by supervisor",
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(createCalls.length, 1);
+    assert.equal(createReceiptCalls.length, 1);
+    assert.equal(auditLogs.some((entry) => entry.action === "COLLECTION_RECEIPT_VALIDATION_OVERRIDDEN"), true);
+    assert.equal(payload.record.receiptValidationStatus, "mismatch");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /api/collection replays a successful create when the same idempotency key is retried", async () => {
   const { storage, createCalls, auditLogs } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
@@ -468,6 +640,9 @@ test("POST /api/collection accepts multipart receipt uploads without base64 JSON
   formData.set("paymentDate", "2026-03-15");
   formData.set("amount", "245.90");
   formData.set("collectionStaffNickname", "Collector Alpha");
+  formData.set("newReceiptMetadata", JSON.stringify([
+    { receiptAmount: "245.90", receiptReference: "RCP-UP-1" },
+  ]));
   formData.append(
     "receipts",
     new File(
@@ -785,6 +960,9 @@ test("PATCH /api/collection/:id accepts multipart receipt uploads during edit fl
   const formData = new FormData();
   formData.set("amount", "55.30");
   formData.set("expectedUpdatedAt", "2026-03-01T09:00:00.000Z");
+  formData.set("newReceiptMetadata", JSON.stringify([
+    { receiptAmount: "55.30", receiptReference: "RCP-EDIT-1" },
+  ]));
   formData.append(
     "receipts",
     new File(
@@ -816,6 +994,66 @@ test("PATCH /api/collection/:id accepts multipart receipt uploads during edit fl
     assert.equal(auditDetails.receipts.addedCount, 1);
     assert.equal(auditDetails.receipts.afterCount, 1);
     assert.equal(auditDetails.receipts.afterSource, "relation");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/collection/:id blocks regular users when edited receipt totals mismatch payment total", async () => {
+  const { storage, updateCalls, auditLogs } = createCoreCollectionStorageDouble({
+    receiptRowsByRecordId: {
+      "collection-1": [
+        {
+          id: "receipt-collection-1-1",
+          collectionRecordId: "collection-1",
+          storagePath: "/uploads/collection-receipts/existing-receipt.png",
+          originalFileName: "existing-receipt.png",
+          originalMimeType: "image/png",
+          originalExtension: ".png",
+          fileSize: 1024,
+          receiptAmount: "1000.00",
+          createdAt: new Date("2026-03-01T09:30:00.000Z"),
+        },
+      ],
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        amount: 1000,
+        existingReceiptMetadata: [
+          {
+            receiptId: "receipt-collection-1-1",
+            receiptAmount: "800.00",
+          },
+        ],
+      }),
+    });
+
+    assert.equal(response.status, 409);
+    const payload = await response.json();
+    assert.equal(payload.ok, false);
+    assert.match(String(payload.message), /tidak sepadan/i);
+    assert.equal(updateCalls.length, 0);
+    assert.equal(auditLogs[0]?.action, "COLLECTION_RECEIPT_VALIDATION_REJECTED");
   } finally {
     await stopTestServer(server);
   }
@@ -1599,6 +1837,10 @@ test("PATCH /api/collection/:id rejects a stale rapid second edit and keeps dail
         amount: "1000.00",
         receiptFile: null,
         receipts: [],
+        receiptTotalAmount: "0.00",
+        receiptValidationStatus: "needs_review",
+        receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
+        receiptCount: 0,
         createdByLogin: "alpha.user",
         collectionStaffNickname: "Collector Alpha",
         createdAt: new Date("2026-01-10T09:00:00.000Z"),
@@ -1618,6 +1860,10 @@ test("PATCH /api/collection/:id rejects a stale rapid second edit and keeps dail
         amount: "200.00",
         receiptFile: null,
         receipts: [],
+        receiptTotalAmount: "0.00",
+        receiptValidationStatus: "needs_review",
+        receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
+        receiptCount: 0,
         createdByLogin: "beta.user",
         collectionStaffNickname: "Collector Beta",
         createdAt: new Date("2026-01-11T09:00:00.000Z"),
@@ -1637,6 +1883,10 @@ test("PATCH /api/collection/:id rejects a stale rapid second edit and keeps dail
         amount: "700.00",
         receiptFile: null,
         receipts: [],
+        receiptTotalAmount: "0.00",
+        receiptValidationStatus: "needs_review",
+        receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
+        receiptCount: 0,
         createdByLogin: "alpha.user",
         collectionStaffNickname: "Collector Alpha",
         createdAt: new Date("2026-02-01T09:00:00.000Z"),
@@ -2048,6 +2298,10 @@ test("PATCH /api/collection/:id correctly reassigns the staff nickname on the re
     amount: "500.00",
     receiptFile: null,
     receipts: [],
+    receiptTotalAmount: "0.00",
+    receiptValidationStatus: "needs_review",
+    receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
+    receiptCount: 0,
     createdByLogin: "superuser",
     collectionStaffNickname: "Collector Alpha",
     createdAt: new Date("2026-03-01T09:00:00.000Z"),
@@ -2132,6 +2386,10 @@ test("PATCH /api/collection/:id correctly updates the payment date on the record
     amount: "300.00",
     receiptFile: null,
     receipts: [],
+    receiptTotalAmount: "0.00",
+    receiptValidationStatus: "needs_review",
+    receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
+    receiptCount: 0,
     createdByLogin: "superuser",
     collectionStaffNickname: "Collector Alpha",
     createdAt: new Date("2026-03-01T09:00:00.000Z"),
@@ -2215,6 +2473,10 @@ test("DELETE /api/collection/:id removes the record so it no longer appears in s
     amount: "250.00",
     receiptFile: null,
     receipts: [],
+    receiptTotalAmount: "0.00",
+    receiptValidationStatus: "needs_review",
+    receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
+    receiptCount: 0,
     createdByLogin: "superuser",
     collectionStaffNickname: "Collector Alpha",
     createdAt: new Date("2026-03-05T09:00:00.000Z"),

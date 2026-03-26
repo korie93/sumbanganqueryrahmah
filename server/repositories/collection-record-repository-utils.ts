@@ -30,6 +30,8 @@ import {
   createCollectionRecordReceiptRows,
   deleteAllCollectionRecordReceiptRows,
   deleteCollectionRecordReceiptRows,
+  syncCollectionRecordReceiptValidation,
+  updateCollectionRecordReceiptRows,
 } from "./collection-receipt-utils";
 import { mapCollectionRecordRow } from "./collection-repository-mappers";
 
@@ -618,6 +620,10 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
         payment_date,
         amount,
         receipt_file,
+        receipt_total_amount,
+        receipt_validation_status,
+        receipt_validation_message,
+        receipt_count,
         created_by_login,
         collection_staff_nickname,
         staff_username,
@@ -667,6 +673,10 @@ export async function listCollectionRecords(filters?: {
       payment_date,
       amount,
       receipt_file,
+      receipt_total_amount,
+      receipt_validation_status,
+      receipt_validation_message,
+      receipt_count,
       created_by_login,
       collection_staff_nickname,
       staff_username,
@@ -995,6 +1005,10 @@ export async function getCollectionRecordById(id: string): Promise<CollectionRec
       payment_date,
       amount,
       receipt_file,
+      receipt_total_amount,
+      receipt_validation_status,
+      receipt_validation_message,
+      receipt_count,
       created_by_login,
       collection_staff_nickname,
       staff_username,
@@ -1117,6 +1131,10 @@ export async function updateCollectionRecord(
         payment_date,
         amount,
         receipt_file,
+        receipt_total_amount,
+        receipt_validation_status,
+        receipt_validation_message,
+        receipt_count,
         created_by_login,
         collection_staff_nickname,
         staff_username,
@@ -1136,11 +1154,20 @@ export async function updateCollectionRecord(
     if (newReceipts.length > 0) {
       await createCollectionRecordReceiptRows(tx, id, newReceipts);
     }
+    if (Array.isArray(options?.receiptUpdates) && options.receiptUpdates.length > 0) {
+      await updateCollectionRecordReceiptRows(tx, id, options.receiptUpdates);
+    }
+
+    const syncedRecord = await syncCollectionRecordReceiptValidation(tx, id);
 
     await enqueueCollectionRecordDailyRollupSlices(tx, [
       existingSlice,
       mapCollectionRecordRowToDailyRollupSlice((row || null) as Record<string, unknown> | null),
     ]);
+
+    if (syncedRecord) {
+      return syncedRecord;
+    }
 
     const [hydrated] = await attachCollectionReceipts(tx, [mapCollectionRecordRow(row)]);
     return hydrated || mapCollectionRecordRow(row);

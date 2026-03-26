@@ -86,6 +86,7 @@ export function useCollectionRecordsController({
     [actions, refreshRecords],
   );
   const { editDialog, openEditDialog } = useCollectionRecordEdit({
+    role,
     loadingNicknames,
     nicknameOptions,
     onRefresh: refreshAfterMutation,

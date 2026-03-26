@@ -46,6 +46,12 @@ function mapDailyReceiptToCollectionReceipt(
     originalMimeType: receipt.originalMimeType,
     originalExtension: inferReceiptExtension(receipt.originalFileName),
     fileSize: receipt.fileSize,
+    receiptAmount: null,
+    extractedAmount: null,
+    extractionConfidence: null,
+    receiptDate: null,
+    receiptReference: null,
+    fileHash: null,
     createdAt: receipt.createdAt,
   };
 }
@@ -66,6 +72,13 @@ function mapDailyRecordToCollectionRecord(record: CollectionDailyDayRecord): Col
     amount: String(record.amount),
     receiptFile: null,
     receipts,
+    receiptTotalAmount: "0.00",
+    receiptValidationStatus: receipts.length > 0 ? "needs_review" : "needs_review",
+    receiptValidationMessage:
+      receipts.length > 0
+        ? "Jumlah resit sedang menunggu semakan di skrin harian."
+        : "Tiada resit dilampirkan untuk semakan jumlah.",
+    receiptCount: receipts.length,
     createdByLogin: record.username,
     collectionStaffNickname: record.collectionStaffNickname,
     createdAt: record.createdAt,
