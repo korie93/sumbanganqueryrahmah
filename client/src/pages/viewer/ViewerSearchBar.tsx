@@ -29,7 +29,7 @@ export function ViewerSearchBar({
           <Input
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Search loaded rows..."
+            placeholder="Search all rows..."
             className="pl-9"
             data-testid="input-search-viewer"
           />
@@ -38,7 +38,7 @@ export function ViewerSearchBar({
           <div className="flex items-center gap-2 rounded-full border border-border/60 bg-background/80 px-3 py-2 text-sm text-muted-foreground">
             <Filter className="w-4 h-4" />
             <span>
-              {filteredRowsCount} results of {rowsCount}
+              {filteredRowsCount} shown on this page of {rowsCount}
             </span>
           </div>
         ) : null}
