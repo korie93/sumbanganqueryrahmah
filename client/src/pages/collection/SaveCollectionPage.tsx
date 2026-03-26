@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import { type CollectionBatch, type CollectionReceiptMetadata } from "@/lib/api";
 import {
@@ -18,6 +19,11 @@ import {
   createEmptyCollectionReceiptDraft,
   type CollectionReceiptDraftInput,
 } from "@/pages/collection/receipt-validation";
+import {
+  clearSaveCollectionDraft,
+  persistSaveCollectionDraft,
+  readSaveCollectionDraft,
+} from "@/pages/collection/save-collection-draft";
 import {
   COLLECTION_BATCH_OPTIONS,
   getTodayIsoDate,
@@ -40,6 +46,11 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const submitInFlightRef = useRef(false);
   const submitMutationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const isMountedRef = useRef(true);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const [draftRestoreNotice, setDraftRestoreNotice] = useState<{
+    restoredAt: string;
+    hadPendingReceipts: boolean;
+  } | null>(null);
 
   const [customerName, setCustomerName] = useState("");
   const [icNumber, setIcNumber] = useState("");
@@ -60,6 +71,73 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     };
   }, []);
 
+  useEffect(() => {
+    const restoredDraft = readSaveCollectionDraft(staffNickname);
+    if (restoredDraft) {
+      setCustomerName(restoredDraft.customerName);
+      setIcNumber(restoredDraft.icNumber);
+      setCustomerPhone(restoredDraft.customerPhone);
+      setAccountNumber(restoredDraft.accountNumber);
+      setBatch(restoredDraft.batch);
+      setPaymentDate(restoredDraft.paymentDate);
+      setAmount(restoredDraft.amount);
+      setDraftRestoreNotice({
+        restoredAt: restoredDraft.savedAt,
+        hadPendingReceipts: restoredDraft.hadPendingReceipts,
+      });
+    } else {
+      setDraftRestoreNotice(null);
+    }
+    setDraftHydrated(true);
+  }, [staffNickname]);
+
+  useEffect(() => {
+    if (!draftHydrated) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      persistSaveCollectionDraft(staffNickname, {
+        customerName,
+        icNumber,
+        customerPhone,
+        accountNumber,
+        batch,
+        paymentDate,
+        amount,
+        hadPendingReceipts: receiptFiles.length > 0,
+      });
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    accountNumber,
+    amount,
+    batch,
+    customerName,
+    draftHydrated,
+    icNumber,
+    paymentDate,
+    receiptFiles.length,
+    staffNickname,
+    customerPhone,
+  ]);
+
+  const restoreNoticeLabel = useMemo(() => {
+    if (!draftRestoreNotice?.restoredAt) {
+      return null;
+    }
+
+    const restoredAt = new Date(draftRestoreNotice.restoredAt);
+    if (Number.isNaN(restoredAt.getTime())) {
+      return null;
+    }
+
+    return restoredAt.toLocaleString();
+  }, [draftRestoreNotice?.restoredAt]);
+
   const clearForm = () => {
     setCustomerName("");
     setIcNumber("");
@@ -70,6 +148,8 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     setAmount("");
     setReceiptFiles([]);
     setReceiptDrafts([]);
+    clearSaveCollectionDraft(staffNickname);
+    setDraftRestoreNotice(null);
     submitMutationIntentRef.current = null;
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -186,10 +266,37 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     }
   };
 
+  usePageShortcuts([
+    {
+      key: "s",
+      ctrlOrMeta: true,
+      allowInEditable: true,
+      enabled: !submitting,
+      handler: () => {
+        void handleSubmit();
+      },
+    },
+  ]);
+
   return (
     <Card className="border-border/60 bg-background/70">
-      <CardHeader>
+      <CardHeader className="space-y-3">
         <CardTitle className="text-xl">Simpan Collection Individual</CardTitle>
+        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+          <span>Draft auto-saves in this browser session.</span>
+          <span>
+            Use <span className="font-medium text-foreground">Ctrl/Cmd+S</span> to save quickly.
+          </span>
+        </div>
+        {draftRestoreNotice ? (
+          <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">Draft restored.</span>
+            {restoreNoticeLabel ? ` Last saved ${restoreNoticeLabel}.` : null}
+            {draftRestoreNotice.hadPendingReceipts
+              ? " Pending receipt files need to be uploaded again before saving."
+              : null}
+          </div>
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-3">

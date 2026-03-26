@@ -8,10 +8,12 @@ import {
   OperationalSummaryStrip,
 } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
+import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { getImportData } from "@/lib/api";
 import { ViewerDataTable } from "@/pages/viewer/ViewerDataTable";
 import { ViewerFiltersPanel } from "@/pages/viewer/ViewerFiltersPanel";
 import { ViewerFooter } from "@/pages/viewer/ViewerFooter";
+import { ViewerLoadingSkeleton } from "@/pages/viewer/ViewerLoadingSkeleton";
 import { ViewerPageHeader } from "@/pages/viewer/ViewerPageHeader";
 import { ViewerSearchBar } from "@/pages/viewer/ViewerSearchBar";
 import { resolveViewerExportBlockReason } from "@/pages/viewer/export-guards";
@@ -144,6 +146,7 @@ export default function Viewer({
   const [pageCursorHistory, setPageCursorHistory] = useState<Array<string | null>>([null]);
 
   const mountedRef = useRef(true);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const rowsRef = useRef<DataRowWithId[]>([]);
   const activeRequestIdRef = useRef(0);
   const exportInFlightRef = useRef<"excel" | "pdf" | null>(null);
@@ -173,6 +176,26 @@ export default function Viewer({
   useEffect(() => {
     rowsRef.current = rows;
   }, [rows]);
+
+  usePageShortcuts([
+    {
+      key: "/",
+      enabled: rows.length > 0 && !loading,
+      handler: () => {
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      },
+    },
+    {
+      key: "Escape",
+      enabled: showFilters || showColumnSelector,
+      preventDefault: false,
+      handler: () => {
+        setShowFilters(false);
+        setShowColumnSelector(false);
+      },
+    },
+  ]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -820,10 +843,7 @@ export default function Viewer({
       ) : null}
 
       {loading ? (
-        <div className="ops-empty-state">
-          <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading data...</p>
-        </div>
+        <ViewerLoadingSkeleton />
       ) : rows.length === 0 && !error ? (
         <div className="ops-empty-state">
           <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
@@ -850,6 +870,7 @@ export default function Viewer({
               rowsCount={rows.length}
               showResultsSummary={columnFilters.length > 0 || isServerSearchActive}
               activeFilters={activeFilterChips}
+              searchInputRef={searchInputRef}
               onClearAllFilters={clearAllFilters}
               onSearchChange={(value) => {
                 setSearch(value);

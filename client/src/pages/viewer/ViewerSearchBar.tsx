@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import { Filter, Search } from "lucide-react";
 import { ActiveFilterChips, type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,7 @@ interface ViewerSearchBarProps {
   rowsCount: number;
   showResultsSummary: boolean;
   activeFilters: ActiveFilterChip[];
+  searchInputRef?: RefObject<HTMLInputElement>;
   onClearAllFilters: () => void;
   onSearchChange: (value: string) => void;
 }
@@ -18,6 +20,7 @@ export function ViewerSearchBar({
   rowsCount,
   showResultsSummary,
   activeFilters,
+  searchInputRef,
   onClearAllFilters,
   onSearchChange,
 }: ViewerSearchBarProps) {
@@ -27,6 +30,7 @@ export function ViewerSearchBar({
         <div className="relative min-w-48 max-w-xl flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
+            ref={searchInputRef}
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Search all rows..."
@@ -34,6 +38,9 @@ export function ViewerSearchBar({
             data-testid="input-search-viewer"
           />
         </div>
+        <p className="text-xs text-muted-foreground">
+          Press <span className="font-medium text-foreground">/</span> to focus search
+        </p>
         {showResultsSummary ? (
           <div className="flex items-center gap-2 rounded-full border border-border/60 bg-background/80 px-3 py-2 text-sm text-muted-foreground">
             <Filter className="w-4 h-4" />

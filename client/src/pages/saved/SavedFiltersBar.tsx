@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import { CalendarIcon, Search, X } from "lucide-react";
 import { ActiveFilterChips } from "@/components/data/ActiveFilterChips";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ interface SavedFiltersBarProps {
   searchTerm: string;
   dateFilter?: Date;
   hasActiveFilters: boolean;
+  searchInputRef?: RefObject<HTMLInputElement>;
   onSearchTermChange: (value: string) => void;
   onDateFilterChange: (date?: Date) => void;
   onClearFilters: () => void;
@@ -23,6 +25,7 @@ export function SavedFiltersBar({
   searchTerm,
   dateFilter,
   hasActiveFilters,
+  searchInputRef,
   onSearchTermChange,
   onDateFilterChange,
   onClearFilters,
@@ -50,6 +53,7 @@ export function SavedFiltersBar({
         <div className="relative flex-1 min-w-48 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
+            ref={searchInputRef}
             value={searchTerm}
             onChange={(event) => onSearchTermChange(event.target.value)}
             placeholder="Search by name or filename..."
@@ -57,6 +61,9 @@ export function SavedFiltersBar({
             data-testid="input-search-saved"
           />
         </div>
+        <p className="text-xs text-muted-foreground">
+          Press <span className="font-medium text-foreground">/</span> to focus search
+        </p>
         <Popover>
           <PopoverTrigger asChild>
             <Button

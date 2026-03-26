@@ -1,16 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, BarChart3, FileStack, Plane, RefreshCw, RotateCcw, Shield, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { analyzeAll, analyzeImport } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { AnalysisCategoryCard } from "@/pages/analysis/AnalysisCategoryCard";
-import { AnalysisCharts } from "@/pages/analysis/AnalysisCharts";
+import { AnalysisChartsSkeleton } from "@/pages/analysis/AnalysisChartsSkeleton";
 import { AnalysisExpandableSection } from "@/pages/analysis/AnalysisExpandableSection";
 import { AnalysisLoadingSkeleton } from "@/pages/analysis/AnalysisLoadingSkeleton";
 import { AnalysisDuplicatesPanel, AnalysisFilesList } from "@/pages/analysis/AnalysisTables";
 import type { AllAnalysisResult, AnalysisData, AnalysisMode, AnalysisProps, SingleAnalysisResult } from "@/pages/analysis/types";
 import { getCategoryBarData, getGenderPieData, getPaginatedItems, TABLE_PAGE_SIZE } from "@/pages/analysis/utils";
+
+const AnalysisCharts = lazy(() =>
+  import("@/pages/analysis/AnalysisCharts").then((module) => ({ default: module.AnalysisCharts })),
+);
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
@@ -258,7 +262,9 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
               </div>
             </div>
 
-            <AnalysisCharts categoryBarData={categoryBarData} genderPieData={genderPieData} />
+            <Suspense fallback={<AnalysisChartsSkeleton />}>
+              <AnalysisCharts categoryBarData={categoryBarData} genderPieData={genderPieData} />
+            </Suspense>
 
             <h2 className="text-lg font-semibold text-foreground mb-4">ID Type Detection</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">

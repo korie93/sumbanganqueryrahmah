@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, BookMarked, RefreshCw, Search, Trash2 } from "lucide-react";
+import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import {
   OperationalPage,
   OperationalPageHeader,
@@ -12,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { SavedDialogs } from "@/pages/saved/SavedDialogs";
 import { SavedFiltersBar } from "@/pages/saved/SavedFiltersBar";
 import { SavedImportsList } from "@/pages/saved/SavedImportsList";
+import { SavedLoadingSkeleton } from "@/pages/saved/SavedLoadingSkeleton";
 import type { ImportItem, SavedProps } from "@/pages/saved/types";
 import { formatSavedImportDate } from "@/pages/saved/utils";
 
@@ -40,6 +42,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
   const [filesOpen, setFilesOpen] = useState(true);
   const mountedRef = useRef(true);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const fetchAbortControllerRef = useRef<AbortController | null>(null);
   const fetchRequestIdRef = useRef(0);
   const renameAbortControllerRef = useRef<AbortController | null>(null);
@@ -70,6 +73,17 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
     }
     return `${totalImports} files`;
   }, [hasMoreImports, totalImports, visibleImports.length]);
+
+  usePageShortcuts([
+    {
+      key: "/",
+      enabled: !loading,
+      handler: () => {
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      },
+    },
+  ]);
 
   useEffect(() => {
     setSelectedImportIds((previous) => {
@@ -417,6 +431,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             searchTerm={searchTerm}
             dateFilter={dateFilter}
             hasActiveFilters={hasActiveFilters}
+            searchInputRef={searchInputRef}
             onSearchTermChange={setSearchTerm}
             onDateFilterChange={setDateFilter}
             onClearFilters={clearFilters}
@@ -432,10 +447,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
       ) : null}
 
       {loading ? (
-        <OperationalSectionCard contentClassName="ops-empty-state">
-            <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading data...</p>
-        </OperationalSectionCard>
+        <SavedLoadingSkeleton />
       ) : !hasActiveFilters && totalImports === 0 ? (
         <OperationalSectionCard contentClassName="ops-empty-state">
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
