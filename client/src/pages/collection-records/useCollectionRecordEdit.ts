@@ -41,6 +41,23 @@ function cloneReceiptIds(receiptIds: string[]) {
   return Array.from(new Set(receiptIds.map((value) => String(value || "").trim()).filter(Boolean)));
 }
 
+function confirmExistingReceiptRemoval(removedCount: number) {
+  if (removedCount <= 0) {
+    return true;
+  }
+
+  const confirmFn = globalThis.confirm;
+  if (typeof confirmFn !== "function") {
+    return true;
+  }
+
+  return confirmFn(
+    removedCount === 1
+      ? "1 receipt ditanda untuk dibuang selepas Save. Teruskan?"
+      : `${removedCount} receipts ditanda untuk dibuang selepas Save. Teruskan?`,
+  );
+}
+
 type UseCollectionRecordEditArgs = {
   loadingNicknames: boolean;
   nicknameOptions: CollectionStaffNickname[];
@@ -242,6 +259,11 @@ export function useCollectionRecordEdit({
       }
 
       const removeReceiptIds = cloneReceiptIds(editRemovedReceiptIds);
+      if (!confirmExistingReceiptRemoval(removeReceiptIds.length)) {
+        setSavingEdit(false);
+        savingEditInFlightRef.current = false;
+        return;
+      }
       if (removeReceiptIds.length > 0) {
         payload.removeReceiptIds = removeReceiptIds;
       }

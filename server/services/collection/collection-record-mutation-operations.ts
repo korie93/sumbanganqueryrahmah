@@ -857,9 +857,8 @@ export class CollectionRecordMutationOperations {
         throw notFound("Collection record not found.");
       }
 
-      for (const removedReceipt of removedReceipts) {
-        await removeCollectionReceiptFile(removedReceipt.storagePath);
-      }
+      // Receipt rows are soft-deleted (archived) for recovery safety.
+      // Physical file cleanup is deferred to record purge/delete flows.
       if (shouldClearLegacyReceiptFallback && existing.receiptFile) {
         await removeCollectionReceiptFile(existing.receiptFile);
       }
@@ -982,7 +981,9 @@ export class CollectionRecordMutationOperations {
       }
     }
 
-    const removedReceipts = Array.isArray(existing.receipts) ? existing.receipts : [];
+    const activeReceipts = Array.isArray(existing.receipts) ? existing.receipts : [];
+    const archivedReceipts = Array.isArray(existing.archivedReceipts) ? existing.archivedReceipts : [];
+    const receiptsForFileCleanup = [...activeReceipts, ...archivedReceipts];
     const deleted = await this.storage.deleteCollectionRecord(id, {
       expectedUpdatedAt: expectedUpdatedAt ?? undefined,
     });
@@ -1001,15 +1002,15 @@ export class CollectionRecordMutationOperations {
       }
       throw notFound("Collection record not found.");
     }
-    for (const receipt of removedReceipts) {
+    for (const receipt of receiptsForFileCleanup) {
       await removeCollectionReceiptFile(receipt.storagePath);
     }
-    if (removedReceipts.length === 0 && existing.receiptFile) {
+    if (receiptsForFileCleanup.length === 0 && existing.receiptFile) {
       await removeCollectionReceiptFile(existing.receiptFile);
     }
     const deletedReceiptState = resolveCollectionAuditReceiptState({
-      relationCount: removedReceipts.length,
-      legacyReceiptFile: removedReceipts.length > 0 ? null : existing.receiptFile,
+      relationCount: activeReceipts.length,
+      legacyReceiptFile: activeReceipts.length > 0 ? null : existing.receiptFile,
     });
 
     await this.safeCreateAuditLog({
@@ -1029,9 +1030,10 @@ export class CollectionRecordMutationOperations {
           activeReceiptSource: deletedReceiptState.source,
         }),
         receipts: {
-          removedCount: deletedReceiptState.count,
-          removedReceiptIds: removedReceipts.map((receipt) => receipt.id),
-          removedLegacyFallback: removedReceipts.length === 0 && Boolean(existing.receiptFile),
+          removedCount: receiptsForFileCleanup.length,
+          removedReceiptIds: receiptsForFileCleanup.map((receipt) => receipt.id),
+          removedLegacyFallback: receiptsForFileCleanup.length === 0 && Boolean(existing.receiptFile),
+          removedArchivedCount: archivedReceipts.length,
         },
       }),
     });

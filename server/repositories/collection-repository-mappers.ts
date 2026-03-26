@@ -36,6 +36,7 @@ export function mapCollectionRecordRow(row: any): CollectionRecord {
     amount: String(row.amount ?? "0"),
     receiptFile: row.receipt_file ?? row.receiptFile ?? null,
     receipts: [],
+    archivedReceipts: [],
     receiptTotalAmount: formatCollectionAmountFromCents(row.receipt_total_amount ?? row.receiptTotalAmount ?? 0),
     receiptValidationStatus: String(
       row.receipt_validation_status

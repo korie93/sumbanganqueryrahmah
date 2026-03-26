@@ -26,6 +26,7 @@ export type CollectionRecordShape = {
   amount: string;
   receiptFile: string | null;
   receipts: unknown[];
+  archivedReceipts?: unknown[];
   receiptTotalAmount: string;
   receiptValidationStatus: "matched" | "underpaid" | "overpaid" | "unverified" | "needs_review";
   receiptValidationMessage: string | null;
@@ -53,6 +54,7 @@ type CollectionReceiptShape = {
   receiptReference: string | null;
   fileHash: string | null;
   createdAt: Date;
+  deletedAt: Date | null;
 };
 
 function parseAmountToCents(value: unknown): number {
@@ -217,6 +219,7 @@ export function createCoreCollectionStorageDouble(options?: {
     receiptReference?: string | null;
     fileHash?: string | null;
     createdAt: Date;
+    deletedAt?: Date | null;
   }>>;
 }) {
   const auditLogs: AuditEntry[] = [];
@@ -326,13 +329,21 @@ export function createCoreCollectionStorageDouble(options?: {
         receiptDate: receipt.receiptDate ?? null,
         receiptReference: receipt.receiptReference ?? null,
         fileHash: receipt.fileHash ?? null,
+        deletedAt: receipt.deletedAt ?? null,
       })),
     );
   }
 
+  const getAllReceiptsForRecord = (recordId: string) => receiptRowsByRecordId.get(recordId) || [];
+  const getActiveReceiptsForRecord = (recordId: string) =>
+    getAllReceiptsForRecord(recordId).filter((receipt) => !receipt.deletedAt);
+  const getArchivedReceiptsForRecord = (recordId: string) =>
+    getAllReceiptsForRecord(recordId).filter((receipt) => Boolean(receipt.deletedAt));
+
   const hydrateRecord = (record: CollectionRecordShape): CollectionRecordShape => ({
     ...record,
-    receipts: receiptRowsByRecordId.get(record.id) || [],
+    receipts: getActiveReceiptsForRecord(record.id),
+    archivedReceipts: getArchivedReceiptsForRecord(record.id),
   });
 
   const syncRecordReceiptState = (recordId: string) => {
@@ -341,7 +352,8 @@ export function createCoreCollectionStorageDouble(options?: {
       return;
     }
 
-    const receipts = receiptRowsByRecordId.get(recordId) || [];
+    const receipts = getActiveReceiptsForRecord(recordId);
+    const allReceipts = getAllReceiptsForRecord(recordId);
     const validation = buildCollectionReceiptValidationResult({
       totalPaidCents: parseAmountToCents(existing.amount),
       receipts: receipts.map((receipt) => ({
@@ -377,7 +389,7 @@ export function createCoreCollectionStorageDouble(options?: {
     }
     records.set(recordId, {
       ...existing,
-      receiptFile: receipts[0]?.storagePath || existing.receiptFile || null,
+      receiptFile: receipts[0]?.storagePath || (allReceipts.length === 0 ? existing.receiptFile || null : null),
       receiptTotalAmount: formatAmountFromCents(validation.receiptTotalAmountCents),
       receiptValidationStatus: validation.status,
       receiptValidationMessage: validation.message,
@@ -468,7 +480,7 @@ export function createCoreCollectionStorageDouble(options?: {
       listCalls.push(filters);
       return Array.from(records.values()).map((record) => hydrateRecord(record));
     },
-    listCollectionRecordReceipts: async (recordId: string) => receiptRowsByRecordId.get(recordId) || [],
+    listCollectionRecordReceipts: async (recordId: string) => getActiveReceiptsForRecord(recordId),
     findCollectionReceiptDuplicateSummaries: async (fileHashes: string[], options?: { excludeRecordId?: string }) => {
       const normalizedExcludeRecordId = String(options?.excludeRecordId || "").trim();
       const normalizedHashes = Array.from(
@@ -479,6 +491,7 @@ export function createCoreCollectionStorageDouble(options?: {
         .map((fileHash) => {
           const matches = Array.from(receiptRowsByRecordId.values())
             .flat()
+            .filter((receipt) => !receipt.deletedAt)
             .filter((receipt) => receipt.fileHash === fileHash)
             .filter((receipt) => receipt.collectionRecordId !== normalizedExcludeRecordId)
             .map((receipt) => ({
@@ -499,7 +512,7 @@ export function createCoreCollectionStorageDouble(options?: {
         .filter((summary): summary is NonNullable<typeof summary> => Boolean(summary));
     },
     getCollectionRecordReceiptById: async (recordId: string, receiptId: string) =>
-      (receiptRowsByRecordId.get(recordId) || []).find((receipt) => receipt.id === receiptId) || null,
+      getAllReceiptsForRecord(recordId).find((receipt) => receipt.id === receiptId) || null,
     createCollectionRecordReceipts: async (
       recordId: string,
       receipts: Array<{
@@ -561,6 +574,7 @@ export function createCoreCollectionStorageDouble(options?: {
           receiptReference: String(receipt.receiptReference || "").trim() || null,
           fileHash: String(receipt.fileHash || "").trim().toLowerCase() || null,
           createdAt: new Date("2026-03-16T10:00:00.000Z"),
+          deletedAt: null,
         };
         current.push(created);
         insertedRows.push(created);
@@ -584,7 +598,7 @@ export function createCoreCollectionStorageDouble(options?: {
       const current = receiptRowsByRecordId.get(recordId) || [];
       const updatedRows: CollectionReceiptShape[] = [];
       for (const update of updates || []) {
-        const receipt = current.find((item) => item.id === update.receiptId);
+        const receipt = current.find((item) => item.id === update.receiptId && !item.deletedAt);
         if (!receipt) {
           continue;
         }
@@ -617,11 +631,13 @@ export function createCoreCollectionStorageDouble(options?: {
         receiptIds: normalizedReceiptIds,
       });
       const current = receiptRowsByRecordId.get(recordId) || [];
-      const deletedRows = current.filter((receipt) => normalizedReceiptIds.includes(receipt.id));
-      receiptRowsByRecordId.set(
-        recordId,
-        current.filter((receipt) => !normalizedReceiptIds.includes(receipt.id)),
-      );
+      const deletedRows = current.filter((receipt) => normalizedReceiptIds.includes(receipt.id) && !receipt.deletedAt);
+      const archivedAt = new Date("2026-03-16T10:00:00.000Z");
+      receiptRowsByRecordId.set(recordId, current.map((receipt) => (
+        normalizedReceiptIds.includes(receipt.id) && !receipt.deletedAt
+          ? { ...receipt, deletedAt: archivedAt }
+          : receipt
+      )));
       syncRecordReceiptState(recordId);
       return deletedRows;
     },
@@ -683,13 +699,24 @@ export function createCoreCollectionStorageDouble(options?: {
       const current = receiptRowsByRecordId.get(id) || [];
       let nextRows = current.slice();
       if (options?.removeAllReceipts) {
-        nextRows = [];
+        const archivedAt = new Date("2026-03-16T10:00:00.000Z");
+        nextRows = nextRows.map((receipt) => (
+          receipt.deletedAt ? receipt : { ...receipt, deletedAt: archivedAt }
+        ));
       } else if (options?.removeReceiptIds?.length) {
         const removedIds = new Set(options.removeReceiptIds.map((value) => String(value || "").trim()).filter(Boolean));
-        nextRows = nextRows.filter((receipt) => !removedIds.has(receipt.id));
+        const archivedAt = new Date("2026-03-16T10:00:00.000Z");
+        nextRows = nextRows.map((receipt) => (
+          removedIds.has(receipt.id) && !receipt.deletedAt
+            ? { ...receipt, deletedAt: archivedAt }
+            : receipt
+        ));
       }
       if (options?.receiptUpdates?.length) {
         nextRows = nextRows.map((receipt) => {
+          if (receipt.deletedAt) {
+            return receipt;
+          }
           const update = options.receiptUpdates?.find((item) => item.receiptId === receipt.id);
           if (!update) {
             return receipt;
@@ -740,6 +767,7 @@ export function createCoreCollectionStorageDouble(options?: {
           receiptReference: String(receipt.receiptReference || "").trim() || null,
           fileHash: String(receipt.fileHash || "").trim().toLowerCase() || null,
           createdAt: new Date("2026-03-16T10:00:00.000Z"),
+          deletedAt: null,
         }));
         nextRows = [...nextRows, ...appendedRows];
       }
