@@ -1002,12 +1002,9 @@ export class CollectionRecordMutationOperations {
       }
       throw notFound("Collection record not found.");
     }
-    for (const receipt of receiptsForFileCleanup) {
-      await removeCollectionReceiptFile(receipt.storagePath);
-    }
-    if (receiptsForFileCleanup.length === 0 && existing.receiptFile) {
-      await removeCollectionReceiptFile(existing.receiptFile);
-    }
+    // Keep original receipt files on record deletion so backup restore can recover
+    // both the record row and its receipt preview/download path.
+    // Physical cleanup stays in purge/retention workflows.
     const deletedReceiptState = resolveCollectionAuditReceiptState({
       relationCount: activeReceipts.length,
       legacyReceiptFile: activeReceipts.length > 0 ? null : existing.receiptFile,
