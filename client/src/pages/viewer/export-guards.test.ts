@@ -5,7 +5,9 @@ import { resolveViewerExportBlockReason } from "@/pages/viewer/export-guards";
 test("resolveViewerExportBlockReason blocks empty exports", () => {
   assert.equal(
     resolveViewerExportBlockReason({
-      rowsLength: 0,
+      totalRows: 0,
+      filteredRowsLength: 0,
+      selectedRowsLength: 0,
       exportingExcel: false,
       exportingPdf: false,
     }),
@@ -16,7 +18,9 @@ test("resolveViewerExportBlockReason blocks empty exports", () => {
 test("resolveViewerExportBlockReason blocks concurrent viewer exports", () => {
   assert.equal(
     resolveViewerExportBlockReason({
-      rowsLength: 10,
+      totalRows: 10,
+      filteredRowsLength: 10,
+      selectedRowsLength: 0,
       exportingExcel: true,
       exportingPdf: false,
     }),
@@ -24,7 +28,9 @@ test("resolveViewerExportBlockReason blocks concurrent viewer exports", () => {
   );
   assert.equal(
     resolveViewerExportBlockReason({
-      rowsLength: 10,
+      totalRows: 10,
+      filteredRowsLength: 10,
+      selectedRowsLength: 0,
       exportingExcel: false,
       exportingPdf: true,
     }),
@@ -35,10 +41,40 @@ test("resolveViewerExportBlockReason blocks concurrent viewer exports", () => {
 test("resolveViewerExportBlockReason allows viewer export when data is ready", () => {
   assert.equal(
     resolveViewerExportBlockReason({
-      rowsLength: 10,
+      totalRows: 10,
+      filteredRowsLength: 10,
+      selectedRowsLength: 0,
       exportingExcel: false,
       exportingPdf: false,
     }),
     null,
+  );
+});
+
+test("resolveViewerExportBlockReason allows filtered exports when dataset exists", () => {
+  assert.equal(
+    resolveViewerExportBlockReason({
+      totalRows: 24,
+      filteredRowsLength: 0,
+      selectedRowsLength: 0,
+      exportFiltered: true,
+      exportingExcel: false,
+      exportingPdf: false,
+    }),
+    null,
+  );
+});
+
+test("resolveViewerExportBlockReason blocks selected exports without selections", () => {
+  assert.equal(
+    resolveViewerExportBlockReason({
+      totalRows: 24,
+      filteredRowsLength: 10,
+      selectedRowsLength: 0,
+      exportSelected: true,
+      exportingExcel: false,
+      exportingPdf: false,
+    }),
+    "no_data",
   );
 });

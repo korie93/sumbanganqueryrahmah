@@ -8,7 +8,7 @@ import {
 
 interface ViewerExportMenuProps {
   exportBusy: boolean;
-  rowsCount: number;
+  totalRows: number;
   filteredRowsCount: number;
   selectedRowCount: number;
   selectedColumnsCount: number;
@@ -21,7 +21,7 @@ interface ViewerExportMenuProps {
 
 export function ViewerExportMenu({
   exportBusy,
-  rowsCount,
+  totalRows,
   filteredRowsCount,
   selectedRowCount,
   selectedColumnsCount,
@@ -53,7 +53,7 @@ export function ViewerExportMenu({
             data-testid="button-export-csv-all"
           >
             <Download className="w-4 h-4 mr-2" />
-            All Data ({rowsCount} rows)
+            All Data ({totalRows} rows)
           </Button>
           {hasFilteredSubset ? (
             <Button
@@ -63,7 +63,7 @@ export function ViewerExportMenu({
               data-testid="button-export-csv-filtered"
             >
               <Download className="w-4 h-4 mr-2" />
-              Filtered ({filteredRowsCount} rows)
+              Filtered View ({filteredRowsCount} shown)
             </Button>
           ) : null}
           {selectedRowCount > 0 ? (
@@ -87,7 +87,7 @@ export function ViewerExportMenu({
             data-testid="button-export-pdf-all"
           >
             <FileText className="w-4 h-4 mr-2" />
-            All Data ({rowsCount} rows)
+            All Data ({totalRows} rows)
           </Button>
           {hasFilteredSubset ? (
             <Button
@@ -98,7 +98,7 @@ export function ViewerExportMenu({
               data-testid="button-export-pdf-filtered"
             >
               <FileText className="w-4 h-4 mr-2" />
-              Filtered ({filteredRowsCount} rows)
+              Filtered View ({filteredRowsCount} shown)
             </Button>
           ) : null}
           {selectedRowCount > 0 ? (
@@ -123,7 +123,7 @@ export function ViewerExportMenu({
             data-testid="button-export-excel-all"
           >
             <Download className="w-4 h-4 mr-2" />
-            All Data ({rowsCount} rows)
+            All Data ({totalRows} rows)
           </Button>
           {hasFilteredSubset ? (
             <Button
@@ -134,7 +134,7 @@ export function ViewerExportMenu({
               data-testid="button-export-excel-filtered"
             >
               <Download className="w-4 h-4 mr-2" />
-              Filtered ({filteredRowsCount} rows)
+              Filtered View ({filteredRowsCount} shown)
             </Button>
           ) : null}
           {selectedRowCount > 0 ? (

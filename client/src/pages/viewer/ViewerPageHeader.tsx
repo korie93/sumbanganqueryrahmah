@@ -7,6 +7,9 @@ import { ViewerExportMenu } from "@/pages/viewer/ViewerExportMenu";
 interface ViewerPageHeaderProps {
   importName: string;
   rowsCount: number;
+  totalRows: number;
+  currentPage: number;
+  totalPages: number;
   headers: string[];
   selectedColumns: Set<string>;
   showColumnSelector: boolean;
@@ -32,6 +35,9 @@ interface ViewerPageHeaderProps {
 export function ViewerPageHeader({
   importName,
   rowsCount,
+  totalRows,
+  currentPage,
+  totalPages,
   headers,
   selectedColumns,
   showColumnSelector,
@@ -64,7 +70,7 @@ export function ViewerPageHeader({
           <span className="truncate">{importName}</span>
         </div>
       }
-      description={`${rowsCount} loaded row${rowsCount === 1 ? "" : "s"} ready for inspection, filtering, and export.`}
+      description={`${rowsCount} row${rowsCount === 1 ? "" : "s"} on page ${currentPage} of ${totalPages} (${totalRows} total) ready for inspection, filtering, and export.`}
       actions={
         <div className="flex items-center gap-2 flex-wrap">
           {rowsCount > 0 ? (
@@ -104,7 +110,7 @@ export function ViewerPageHeader({
           {isSuperuser && rowsCount > 0 ? (
             <ViewerExportMenu
               exportBusy={exportBusy}
-              rowsCount={rowsCount}
+              totalRows={totalRows}
               filteredRowsCount={filteredRowsCount}
               selectedRowCount={selectedRowCount}
               selectedColumnsCount={selectedColumns.size}

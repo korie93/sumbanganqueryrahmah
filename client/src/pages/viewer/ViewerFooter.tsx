@@ -1,32 +1,42 @@
-import { Loader2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface ViewerFooterProps {
   filteredRowsCount: number;
-  isFiltering: boolean;
   rowsCount: number;
   totalRows: number;
+  currentPage: number;
+  totalPages: number;
+  pageStart: number;
+  pageEnd: number;
   selectedRowCount: number;
-  isServerSearchActive: boolean;
-  hasMore: boolean;
+  hasPageFilterSubset: boolean;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
   loadingMore: boolean;
   onClearSelection: () => void;
-  onLoadMore: () => void;
+  onPrevPage: () => void;
+  onNextPage: () => void;
 }
 
 export function ViewerFooter({
   filteredRowsCount,
-  isFiltering,
   rowsCount,
   totalRows,
+  currentPage,
+  totalPages,
+  pageStart,
+  pageEnd,
   selectedRowCount,
-  isServerSearchActive,
-  hasMore,
+  hasPageFilterSubset,
+  hasNextPage,
+  hasPreviousPage,
   loadingMore,
   onClearSelection,
-  onLoadMore,
+  onPrevPage,
+  onNextPage,
 }: ViewerFooterProps) {
-  if (filteredRowsCount === 0) {
+  if (rowsCount === 0 && totalRows === 0) {
     return null;
   }
 
@@ -36,7 +46,8 @@ export function ViewerFooter({
       data-floating-ai-avoid="true"
     >
       <span>
-        Showing {isFiltering ? filteredRowsCount : rowsCount} of {totalRows} rows
+        Showing {pageStart}-{pageEnd} of {totalRows} rows
+        {hasPageFilterSubset ? ` (${filteredRowsCount} match current page filters)` : ""}
         {selectedRowCount > 0 ? ` (${selectedRowCount} selected)` : ""}
       </span>
       <div className="flex items-center gap-2">
@@ -51,24 +62,36 @@ export function ViewerFooter({
             Clear Selection
           </Button>
         ) : null}
-        {!isServerSearchActive && hasMore ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onLoadMore}
-            disabled={loadingMore}
-            data-testid="button-load-more"
-          >
-            {loadingMore ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              <>Load More ({totalRows - rowsCount} remaining)</>
-            )}
-          </Button>
-        ) : null}
+        <span className="text-xs text-muted-foreground">Page {currentPage} of {totalPages}</span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onPrevPage}
+          disabled={loadingMore || !hasPreviousPage}
+          data-testid="button-viewer-prev-page"
+        >
+          <ChevronLeft className="w-4 h-4 mr-1" />
+          Prev
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onNextPage}
+          disabled={loadingMore || !hasNextPage}
+          data-testid="button-viewer-next-page"
+        >
+          {loadingMore ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Loading...
+            </>
+          ) : (
+            <>
+              Next
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </>
+          )}
+        </Button>
       </div>
     </div>
   );
