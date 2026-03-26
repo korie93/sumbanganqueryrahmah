@@ -146,6 +146,21 @@ function createTinyJpegBuffer(width = 1, height = 1) {
   ]);
 }
 
+function createMultiScanJpegBuffer(width = 1, height = 1) {
+  return Buffer.from([
+    0xff, 0xd8,
+    0xff, 0xc2, 0x00, 0x0b, 0x08,
+    (height >> 8) & 0xff, height & 0xff,
+    (width >> 8) & 0xff, width & 0xff,
+    0x01, 0x01, 0x11, 0x00,
+    0xff, 0xda, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3f, 0x00,
+    0x11, 0x22, 0x33,
+    0xff, 0xda, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3f, 0x00,
+    0x44, 0x55, 0x66,
+    0xff, 0xd9,
+  ]);
+}
+
 function createJsonReceiptPayload(
   fileName: string,
   mimeType: string,
@@ -680,6 +695,61 @@ test("POST /api/collection accepts multipart receipt uploads without base64 JSON
   }
 });
 
+test("POST /api/collection accepts multipart progressive-style JPEG receipts", async () => {
+  const { storage, createCalls, createReceiptCalls } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const formData = new FormData();
+  formData.set("customerName", "Multipart Progressive JPEG");
+  formData.set("icNumber", "880202026778");
+  formData.set("customerPhone", "0129876543");
+  formData.set("accountNumber", "ACC-2004");
+  formData.set("batch", "P25");
+  formData.set("paymentDate", "2026-03-15");
+  formData.set("amount", "245.90");
+  formData.set("collectionStaffNickname", "Collector Alpha");
+  formData.set("newReceiptMetadata", JSON.stringify([
+    { receiptAmount: "245.90", receiptReference: "RCP-UP-JPEG-MULTI" },
+  ]));
+  formData.append(
+    "receipts",
+    new File(
+      [createMultiScanJpegBuffer()],
+      "receipt-progressive.jpg",
+      { type: "image/jpeg" },
+    ),
+  );
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      body: formData,
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(createCalls.length, 1);
+    assert.equal(createReceiptCalls.length, 1);
+    assert.equal(createReceiptCalls[0]?.receipts[0]?.originalMimeType, "image/jpeg");
+    assert.match(String(createReceiptCalls[0]?.receipts[0]?.storagePath || ""), /\/uploads\/collection-receipts\/.+\.jpg$/);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /api/collection/receipt-inspect returns OCR assist state and duplicate warnings", async () => {
   const duplicateBuffer = createTinyPngBuffer();
   const duplicateHash = createHash("sha256").update(duplicateBuffer).digest("hex");
@@ -737,6 +807,46 @@ test("POST /api/collection/receipt-inspect returns OCR assist state and duplicat
     assert.equal(payload.receipts[0]?.extractionStatus, "unavailable");
     assert.equal(payload.receipts[0]?.duplicateSummary?.matchCount, 1);
     assert.equal(payload.receipts[0]?.duplicateSummary?.matches?.[0]?.receiptId, "receipt-collection-1-1");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/collection/receipt-inspect accepts progressive-style JPEG receipts", async () => {
+  const { storage } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const formData = new FormData();
+    formData.append(
+      "receipts",
+      new Blob([createMultiScanJpegBuffer()], { type: "image/jpeg" }),
+      "progressive-check.jpg",
+    );
+
+    const response = await fetch(`${baseUrl}/api/collection/receipt-inspect`, {
+      method: "POST",
+      body: formData,
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.receipts.length, 1);
+    assert.equal(payload.receipts[0]?.fileName, "progressive-check.jpg");
+    assert.equal(typeof payload.receipts[0]?.extractionStatus, "string");
   } finally {
     await stopTestServer(server);
   }

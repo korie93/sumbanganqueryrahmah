@@ -416,20 +416,29 @@ function validateJpegStructure(buffer: Buffer) {
 
     if (marker === 0xda) {
       let scanOffset = offset + segmentLength;
+      let continueParsingMarkers = false;
       while (scanOffset + 1 < buffer.length) {
         if (buffer[scanOffset] !== 0xff) {
           scanOffset += 1;
           continue;
         }
 
-        const next = buffer[scanOffset + 1];
+        const markerStart = scanOffset;
+        while (scanOffset < buffer.length && buffer[scanOffset] === 0xff) {
+          scanOffset += 1;
+        }
+        if (scanOffset >= buffer.length) {
+          break;
+        }
+
+        const next = buffer[scanOffset];
         if (next === 0x00 || (next >= 0xd0 && next <= 0xd7)) {
-          scanOffset += 2;
+          scanOffset += 1;
           continue;
         }
 
         if (next === 0xd9) {
-          scanOffset += 2;
+          scanOffset += 1;
           if (scanOffset !== buffer.length) {
             throw securityError(
               "Receipt JPEG contains trailing data after the EOI marker.",
@@ -439,9 +448,16 @@ function validateJpegStructure(buffer: Buffer) {
           return;
         }
 
-        throw securityError("Receipt JPEG scan data is malformed.", "jpeg-scan-malformed");
+        // Progressive and multi-scan JPEG files can legitimately introduce
+        // additional marker segments after entropy-coded scan bytes.
+        offset = markerStart;
+        continueParsingMarkers = true;
+        break;
       }
 
+      if (continueParsingMarkers) {
+        continue;
+      }
       throw securityError("Receipt JPEG appears incomplete.", "jpeg-eoi-missing");
     }
 
