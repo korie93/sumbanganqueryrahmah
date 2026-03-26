@@ -3,8 +3,19 @@ import {
   normalizeCollectionText,
 } from "../../routes/collection.validation";
 
-export type CollectionReceiptValidationStatus = "matched" | "mismatch" | "needs_review";
-export type CollectionReceiptValidationBlockingReason = "mismatch" | "missing_amounts" | null;
+export type CollectionReceiptValidationStatus =
+  | "matched"
+  | "underpaid"
+  | "overpaid"
+  | "unverified"
+  | "needs_review";
+export type CollectionReceiptExtractionStatus =
+  | "unprocessed"
+  | "suggested"
+  | "ambiguous"
+  | "unavailable"
+  | "error";
+export type CollectionReceiptValidationBlockingReason = "underpaid" | "overpaid" | "unverified" | null;
 
 export type CollectionReceiptValidationDraft = {
   receiptId?: string | null;
@@ -12,6 +23,7 @@ export type CollectionReceiptValidationDraft = {
   originalFileName?: string | null;
   receiptAmountCents?: number | null;
   extractedAmountCents?: number | null;
+  extractionStatus?: CollectionReceiptExtractionStatus | null;
   extractionConfidence?: number | null;
   receiptDate?: string | null;
   receiptReference?: string | null;
@@ -20,6 +32,7 @@ export type CollectionReceiptValidationDraft = {
 export type CollectionReceiptValidationResult = {
   receiptCount: number;
   receiptTotalAmountCents: number;
+  differenceAmountCents: number;
   status: CollectionReceiptValidationStatus;
   message: string;
   blockingReason: CollectionReceiptValidationBlockingReason;
@@ -42,6 +55,21 @@ export function normalizeCollectionReceiptDate(value: unknown): string | null {
     return null;
   }
   return normalized;
+}
+
+export function normalizeCollectionReceiptExtractionStatus(
+  value: unknown,
+): CollectionReceiptExtractionStatus {
+  const normalized = normalizeCollectionText(value).toLowerCase();
+  if (
+    normalized === "suggested"
+    || normalized === "ambiguous"
+    || normalized === "unavailable"
+    || normalized === "error"
+  ) {
+    return normalized;
+  }
+  return "unprocessed";
 }
 
 export function parseCollectionAmountToCents(
@@ -125,6 +153,30 @@ export function formatCollectionCurrencyLabelFromCents(value: unknown): string {
   });
 }
 
+function hasReceiptOcrReviewSignal(receipt: CollectionReceiptValidationDraft): boolean {
+  const status = normalizeCollectionReceiptExtractionStatus(receipt.extractionStatus);
+  if (status === "ambiguous" || status === "error") {
+    return true;
+  }
+  if (
+    status !== "suggested"
+    || receipt.extractedAmountCents === null
+    || receipt.extractedAmountCents === undefined
+    || receipt.receiptAmountCents === null
+    || receipt.receiptAmountCents === undefined
+  ) {
+    return false;
+  }
+
+  const confidence = Number(receipt.extractionConfidence ?? 0);
+  const isHighConfidence = Number.isFinite(confidence) ? confidence >= 0.85 : false;
+  if (!isHighConfidence) {
+    return false;
+  }
+
+  return Number(receipt.extractedAmountCents) !== Number(receipt.receiptAmountCents);
+}
+
 export function findDuplicateCollectionReceiptHashes(
   receipts: Array<Pick<CollectionReceiptValidationDraft, "fileHash" | "originalFileName">>,
 ): Array<{ fileHash: string; fileNames: string[] }> {
@@ -163,8 +215,9 @@ export function buildCollectionReceiptValidationResult(params: {
     return {
       receiptCount: 0,
       receiptTotalAmountCents: 0,
-      status: "needs_review",
-      message: "Tiada resit dilampirkan untuk semakan jumlah.",
+      differenceAmountCents: 0 - params.totalPaidCents,
+      status: "unverified",
+      message: "Tiada resit dilampirkan. Rekod masih belum disahkan melalui jumlah resit.",
       blockingReason: null,
       requiresOverride: false,
     };
@@ -180,27 +233,54 @@ export function buildCollectionReceiptValidationResult(params: {
     return {
       receiptCount,
       receiptTotalAmountCents,
-      status: "needs_review",
+      differenceAmountCents: receiptTotalAmountCents - params.totalPaidCents,
+      status: "unverified",
       message: "Setiap resit perlu disahkan jumlahnya sebelum rekod boleh disimpan.",
-      blockingReason: "missing_amounts",
+      blockingReason: "unverified",
       requiresOverride: true,
     };
   }
 
-  if (receiptTotalAmountCents !== params.totalPaidCents) {
+  if (receiptTotalAmountCents < params.totalPaidCents) {
     return {
       receiptCount,
       receiptTotalAmountCents,
-      status: "mismatch",
-      message: `Jumlah resit ${formatCollectionCurrencyLabelFromCents(receiptTotalAmountCents)} tidak sepadan dengan jumlah bayaran ${formatCollectionCurrencyLabelFromCents(params.totalPaidCents)}.`,
-      blockingReason: "mismatch",
+      differenceAmountCents: receiptTotalAmountCents - params.totalPaidCents,
+      status: "underpaid",
+      message: `Jumlah resit ${formatCollectionCurrencyLabelFromCents(receiptTotalAmountCents)} masih kurang daripada jumlah bayaran ${formatCollectionCurrencyLabelFromCents(params.totalPaidCents)}.`,
+      blockingReason: "underpaid",
       requiresOverride: true,
+    };
+  }
+
+  if (receiptTotalAmountCents > params.totalPaidCents) {
+    return {
+      receiptCount,
+      receiptTotalAmountCents,
+      differenceAmountCents: receiptTotalAmountCents - params.totalPaidCents,
+      status: "overpaid",
+      message: `Jumlah resit ${formatCollectionCurrencyLabelFromCents(receiptTotalAmountCents)} melebihi jumlah bayaran ${formatCollectionCurrencyLabelFromCents(params.totalPaidCents)}.`,
+      blockingReason: "overpaid",
+      requiresOverride: true,
+    };
+  }
+
+  if (activeReceipts.some((receipt) => hasReceiptOcrReviewSignal(receipt))) {
+    return {
+      receiptCount,
+      receiptTotalAmountCents,
+      differenceAmountCents: 0,
+      status: "needs_review",
+      message: "Jumlah resit sudah sepadan, tetapi bacaan OCR kelihatan lemah atau bercanggah dan perlu semakan manusia.",
+      blockingReason: null,
+      requiresOverride: false,
     };
   }
 
   return {
     receiptCount,
     receiptTotalAmountCents,
+    differenceAmountCents: 0,
     status: "matched",
     message: "Jumlah resit sepadan dengan jumlah bayaran yang dimasukkan.",
     blockingReason: null,

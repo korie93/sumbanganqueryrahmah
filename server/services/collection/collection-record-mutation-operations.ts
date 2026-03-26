@@ -39,6 +39,7 @@ import {
   findDuplicateCollectionReceiptHashes,
   formatCollectionCurrencyLabelFromCents,
   normalizeCollectionReceiptDate,
+  normalizeCollectionReceiptExtractionStatus,
   normalizeCollectionReceiptReference,
   parseCollectionAmountToCents,
   type CollectionReceiptValidationDraft,
@@ -168,6 +169,13 @@ function readUploadedReceiptRows(body: MultipartCollectionPayload): CreateCollec
       originalMimeType: normalizeCollectionText(item.originalMimeType) || "application/octet-stream",
       originalExtension: normalizeCollectionText(item.originalExtension),
       fileSize: Number(item.fileSize || 0),
+      receiptAmountCents: parseCollectionAmountToCents(item.receiptAmountCents, { allowZero: true, allowEmpty: true }),
+      extractedAmountCents: parseCollectionAmountToCents(item.extractedAmountCents, { allowZero: true, allowEmpty: true }),
+      extractionStatus: normalizeCollectionReceiptExtractionStatus(item.extractionStatus ?? null),
+      extractionConfidence: normalizeExtractionConfidence(item.extractionConfidence),
+      receiptDate: normalizeCollectionReceiptDate(item.receiptDate),
+      receiptReference: normalizeCollectionReceiptReference(item.receiptReference),
+      fileHash: normalizeCollectionText(item.fileHash).toLowerCase() || null,
     }))
     .filter((item) => item.storagePath && item.originalFileName && Number.isFinite(item.fileSize));
 }
@@ -176,6 +184,7 @@ type NormalizedCollectionReceiptMetadata = {
   receiptId: string | null;
   receiptAmountCents: number | null;
   extractedAmountCents: number | null;
+  extractionStatus: CreateCollectionRecordReceiptInput["extractionStatus"];
   extractionConfidence: number | null;
   receiptDate: string | null;
   receiptReference: string | null;
@@ -245,6 +254,7 @@ function normalizeCollectionReceiptMetadata(
     receiptId: normalizeCollectionText(raw.receiptId) || null,
     receiptAmountCents: parseCollectionAmountToCents(raw.receiptAmount, { allowZero: true }),
     extractedAmountCents: parseCollectionAmountToCents(raw.extractedAmount, { allowZero: true, allowEmpty: true }),
+    extractionStatus: normalizeCollectionReceiptExtractionStatus(raw.extractionStatus ?? null),
     extractionConfidence: normalizeExtractionConfidence(raw.extractionConfidence),
     receiptDate: normalizeCollectionReceiptDate(raw.receiptDate),
     receiptReference: normalizeCollectionReceiptReference(raw.receiptReference),
@@ -261,6 +271,7 @@ function buildValidationDraftFromExistingReceipt(
     originalFileName: receipt.originalFileName,
     receiptAmountCents: parseCollectionAmountToCents(receipt.receiptAmount, { allowZero: true, allowEmpty: true }),
     extractedAmountCents: parseCollectionAmountToCents(receipt.extractedAmount, { allowZero: true, allowEmpty: true }),
+    extractionStatus: normalizeCollectionReceiptExtractionStatus(receipt.extractionStatus),
     extractionConfidence:
       receipt.extractionConfidence === null || receipt.extractionConfidence === undefined
         ? null
@@ -280,6 +291,7 @@ function buildValidationDraftFromMetadata(params: {
     originalFileName: params.originalFileName || null,
     receiptAmountCents: params.metadata.receiptAmountCents,
     extractedAmountCents: params.metadata.extractedAmountCents,
+    extractionStatus: params.metadata.extractionStatus,
     extractionConfidence: params.metadata.extractionConfidence,
     receiptDate: params.metadata.receiptDate,
     receiptReference: params.metadata.receiptReference,
@@ -294,6 +306,7 @@ function buildCreateReceiptInput(
     ...uploadedReceipt,
     receiptAmountCents: metadata.receiptAmountCents,
     extractedAmountCents: metadata.extractedAmountCents,
+    extractionStatus: metadata.extractionStatus || normalizeCollectionReceiptExtractionStatus(uploadedReceipt.extractionStatus),
     extractionConfidence: metadata.extractionConfidence,
     receiptDate: metadata.receiptDate,
     receiptReference: metadata.receiptReference,
@@ -309,6 +322,7 @@ function buildReceiptUpdateInput(
     receiptId,
     receiptAmountCents: draft.receiptAmountCents ?? null,
     extractedAmountCents: draft.extractedAmountCents ?? null,
+    extractionStatus: draft.extractionStatus ?? null,
     extractionConfidence: draft.extractionConfidence ?? null,
     receiptDate: draft.receiptDate ?? null,
     receiptReference: draft.receiptReference ?? null,
@@ -527,6 +541,7 @@ export class CollectionRecordMutationOperations {
             receiptId: null,
             receiptAmountCents: receipt.receiptAmountCents ?? null,
             extractedAmountCents: receipt.extractedAmountCents ?? null,
+            extractionStatus: receipt.extractionStatus ?? null,
             extractionConfidence: receipt.extractionConfidence ?? null,
             receiptDate: receipt.receiptDate ?? null,
             receiptReference: receipt.receiptReference ?? null,
@@ -611,6 +626,20 @@ export class CollectionRecordMutationOperations {
           status: receiptValidation.validation.status,
           message: receiptValidation.validation.message,
           overrideReason: receiptValidation.overrideReason,
+        });
+      }
+
+      if (finalRecord.duplicateReceiptFlag) {
+        await this.safeCreateAuditLog({
+          action: "COLLECTION_RECEIPT_DUPLICATE_WARNING",
+          performedBy: user.username,
+          targetResource: finalRecord.id,
+          details: JSON.stringify({
+            event: "collection_receipt_duplicate_warning",
+            actor: user.username,
+            recordId: finalRecord.id,
+            receiptCount: finalRecord.receiptCount,
+          }),
         });
       }
 
@@ -884,6 +913,7 @@ export class CollectionRecordMutationOperations {
         }
         targetDraft.receiptAmountCents = metadata.receiptAmountCents;
         targetDraft.extractedAmountCents = metadata.extractedAmountCents;
+        targetDraft.extractionStatus = metadata.extractionStatus;
         targetDraft.extractionConfidence = metadata.extractionConfidence;
         targetDraft.receiptDate = metadata.receiptDate;
         targetDraft.receiptReference = metadata.receiptReference;
@@ -899,6 +929,7 @@ export class CollectionRecordMutationOperations {
               receiptId: null,
               receiptAmountCents: receipt.receiptAmountCents ?? null,
               extractedAmountCents: receipt.extractedAmountCents ?? null,
+              extractionStatus: receipt.extractionStatus ?? null,
               extractionConfidence: receipt.extractionConfidence ?? null,
               receiptDate: receipt.receiptDate ?? null,
               receiptReference: receipt.receiptReference ?? null,
@@ -1026,6 +1057,20 @@ export class CollectionRecordMutationOperations {
         activeReceiptCount: afterReceiptState.count,
         activeReceiptSource: afterReceiptState.source,
       });
+
+      if (updated.duplicateReceiptFlag) {
+        await this.safeCreateAuditLog({
+          action: "COLLECTION_RECEIPT_DUPLICATE_WARNING",
+          performedBy: user.username,
+          targetResource: id,
+          details: JSON.stringify({
+            event: "collection_receipt_duplicate_warning",
+            actor: user.username,
+            recordId: id,
+            receiptCount: updated.receiptCount,
+          }),
+        });
+      }
 
       await this.safeCreateAuditLog({
         action: "COLLECTION_RECORD_UPDATED",

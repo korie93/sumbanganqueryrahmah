@@ -32,6 +32,7 @@ export async function ensureCollectionRecordsTables(
       receipt_validation_status text NOT NULL DEFAULT 'needs_review',
       receipt_validation_message text,
       receipt_count integer NOT NULL DEFAULT 0,
+      duplicate_receipt_flag boolean NOT NULL DEFAULT false,
       created_by_login text NOT NULL,
       collection_staff_nickname text NOT NULL,
       staff_username text NOT NULL,
@@ -51,6 +52,7 @@ export async function ensureCollectionRecordsTables(
   await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_validation_status text DEFAULT 'needs_review'`);
   await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_validation_message text`);
   await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_count integer DEFAULT 0`);
+  await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS duplicate_receipt_flag boolean DEFAULT false`);
   await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_by_login text`);
   await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS collection_staff_nickname text`);
   await database.execute(sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS staff_username text`);
@@ -81,7 +83,8 @@ export async function ensureCollectionRecordsTables(
     SET
       receipt_total_amount = COALESCE(receipt_total_amount, 0),
       receipt_validation_status = COALESCE(NULLIF(trim(COALESCE(receipt_validation_status, '')), ''), 'needs_review'),
-      receipt_count = COALESCE(receipt_count, 0)
+      receipt_count = COALESCE(receipt_count, 0),
+      duplicate_receipt_flag = COALESCE(duplicate_receipt_flag, false)
   `);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_payment_date ON public.collection_records(payment_date)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_at ON public.collection_records(created_at DESC)`);
@@ -116,6 +119,7 @@ export async function ensureCollectionRecordsTables(
       file_size bigint NOT NULL DEFAULT 0,
       receipt_amount bigint,
       extracted_amount bigint,
+      extraction_status text NOT NULL DEFAULT 'unprocessed',
       extraction_confidence numeric(5,4),
       receipt_date date,
       receipt_reference text,
@@ -131,6 +135,7 @@ export async function ensureCollectionRecordsTables(
   await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS file_size bigint DEFAULT 0`);
   await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS receipt_amount bigint`);
   await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS extracted_amount bigint`);
+  await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS extraction_status text DEFAULT 'unprocessed'`);
   await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS extraction_confidence numeric(5,4)`);
   await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS receipt_date date`);
   await database.execute(sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS receipt_reference text`);
@@ -143,6 +148,7 @@ export async function ensureCollectionRecordsTables(
       original_mime_type = COALESCE(NULLIF(trim(COALESCE(original_mime_type, '')), ''), 'application/octet-stream'),
       original_extension = COALESCE(NULLIF(trim(COALESCE(original_extension, '')), ''), ''),
       file_size = COALESCE(file_size, 0),
+      extraction_status = COALESCE(NULLIF(trim(COALESCE(extraction_status, '')), ''), 'unprocessed'),
       created_at = COALESCE(created_at, now())
   `);
   await database.execute(sql`DELETE FROM public.collection_record_receipts WHERE collection_record_id IS NULL OR trim(COALESCE(storage_path, '')) = ''`);
@@ -178,6 +184,11 @@ export async function ensureCollectionRecordsTables(
   await database.execute(sql`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_record_receipts_record_file_hash_unique
     ON public.collection_record_receipts (collection_record_id, file_hash)
+  `);
+  await database.execute(sql`
+    CREATE INDEX IF NOT EXISTS idx_collection_record_receipts_file_hash
+    ON public.collection_record_receipts (file_hash)
+    WHERE file_hash IS NOT NULL
   `);
   await database.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_collection_record_receipts_record_created_at
@@ -237,25 +248,36 @@ export async function ensureCollectionRecordsTables(
     SET
       receipt_total_amount = COALESCE(stats.receipt_total_amount, 0),
       receipt_count = COALESCE(stats.receipt_count, 0),
+      duplicate_receipt_flag = COALESCE(stats.duplicate_receipt_flag, false),
       receipt_validation_status = CASE
-        WHEN COALESCE(stats.receipt_count, 0) = 0 THEN 'needs_review'
-        WHEN COALESCE(stats.missing_amount_count, 0) > 0 THEN 'needs_review'
-        WHEN COALESCE(stats.receipt_total_amount, 0) = ROUND(record.amount * 100)::bigint THEN 'matched'
-        ELSE 'mismatch'
+        WHEN COALESCE(stats.receipt_count, 0) = 0 THEN 'unverified'
+        WHEN COALESCE(stats.missing_amount_count, 0) > 0 THEN 'unverified'
+        WHEN COALESCE(stats.receipt_total_amount, 0) < ROUND(record.amount * 100)::bigint THEN 'underpaid'
+        WHEN COALESCE(stats.receipt_total_amount, 0) > ROUND(record.amount * 100)::bigint THEN 'overpaid'
+        ELSE 'matched'
       END,
       receipt_validation_message = CASE
         WHEN COALESCE(stats.receipt_count, 0) = 0 THEN 'Tiada resit dilampirkan untuk semakan jumlah.'
         WHEN COALESCE(stats.missing_amount_count, 0) > 0 THEN 'Setiap resit perlu disahkan jumlahnya sebelum rekod boleh disimpan.'
-        WHEN COALESCE(stats.receipt_total_amount, 0) = ROUND(record.amount * 100)::bigint THEN 'Jumlah resit sepadan dengan jumlah bayaran yang dimasukkan.'
-        ELSE 'Jumlah resit tidak sepadan dengan jumlah bayaran yang dimasukkan.'
+        WHEN COALESCE(stats.receipt_total_amount, 0) < ROUND(record.amount * 100)::bigint THEN 'Jumlah resit lebih rendah daripada jumlah bayaran yang dimasukkan.'
+        WHEN COALESCE(stats.receipt_total_amount, 0) > ROUND(record.amount * 100)::bigint THEN 'Jumlah resit melebihi jumlah bayaran yang dimasukkan.'
+        ELSE 'Jumlah resit sepadan dengan jumlah bayaran yang dimasukkan.'
       END
     FROM (
       SELECT
         collection_record_id,
         COUNT(*)::int AS receipt_count,
         COALESCE(SUM(receipt_amount), 0)::bigint AS receipt_total_amount,
-        COUNT(*) FILTER (WHERE receipt_amount IS NULL)::int AS missing_amount_count
+        COUNT(*) FILTER (WHERE receipt_amount IS NULL)::int AS missing_amount_count,
+        COALESCE(BOOL_OR(COALESCE(hash_stats.match_count, 0) > 1), false) AS duplicate_receipt_flag
       FROM public.collection_record_receipts
+      LEFT JOIN (
+        SELECT file_hash, COUNT(*)::int AS match_count
+        FROM public.collection_record_receipts
+        WHERE NULLIF(trim(COALESCE(file_hash, '')), '') IS NOT NULL
+        GROUP BY file_hash
+      ) hash_stats
+        ON hash_stats.file_hash = public.collection_record_receipts.file_hash
       GROUP BY collection_record_id
     ) stats
     WHERE record.id = stats.collection_record_id
@@ -265,7 +287,8 @@ export async function ensureCollectionRecordsTables(
     SET
       receipt_total_amount = 0,
       receipt_count = 0,
-      receipt_validation_status = 'needs_review',
+      duplicate_receipt_flag = false,
+      receipt_validation_status = 'unverified',
       receipt_validation_message = 'Tiada resit dilampirkan untuk semakan jumlah.'
     WHERE NOT EXISTS (
       SELECT 1

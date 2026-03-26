@@ -12,8 +12,8 @@ test("buildCollectionRecordFormData appends scalar fields and repeated receipt i
     removeReceipt: true,
     removeReceiptIds: ["receipt-1", "receipt-2"],
     expectedUpdatedAt: "2026-03-01T09:00:00.000Z",
-    newReceiptMetadata: [{ receiptAmount: "55.30", receiptReference: "R-1" }],
-    existingReceiptMetadata: [{ receiptId: "receipt-1", receiptAmount: "25.00" }],
+    newReceiptMetadata: [{ receiptAmount: "55.30", extractionStatus: "suggested", receiptReference: "R-1" }],
+    existingReceiptMetadata: [{ receiptId: "receipt-1", receiptAmount: "25.00", extractionStatus: "ambiguous" }],
     receiptValidationOverrideReason: "Verified manually",
   });
 
@@ -25,11 +25,11 @@ test("buildCollectionRecordFormData appends scalar fields and repeated receipt i
   assert.equal(formData.get("receiptValidationOverrideReason"), "Verified manually");
   assert.equal(
     formData.get("newReceiptMetadata"),
-    JSON.stringify([{ receiptAmount: "55.30", receiptReference: "R-1" }]),
+    JSON.stringify([{ receiptAmount: "55.30", extractionStatus: "suggested", receiptReference: "R-1" }]),
   );
   assert.equal(
     formData.get("existingReceiptMetadata"),
-    JSON.stringify([{ receiptId: "receipt-1", receiptAmount: "25.00" }]),
+    JSON.stringify([{ receiptId: "receipt-1", receiptAmount: "25.00", extractionStatus: "ambiguous" }]),
   );
 });
 

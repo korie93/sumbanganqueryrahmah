@@ -1,4 +1,4 @@
-import { memo, type ChangeEvent, useMemo, useRef, useState } from "react";
+import { memo, type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import {
   shouldBlockCollectionReceiptSave,
   type CollectionReceiptDraftInput,
 } from "@/pages/collection/receipt-validation";
+import { useCollectionReceiptInspection } from "@/pages/collection/useCollectionReceiptInspection";
 import {
   COLLECTION_BATCH_OPTIONS,
   getTodayIsoDate,
@@ -43,8 +44,10 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const submitInFlightRef = useRef(false);
   const submitMutationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
+  const isMountedRef = useRef(true);
   const role = useMemo(() => getCurrentRole(), []);
   const canOverrideReceiptValidation = role === "admin" || role === "superuser";
+  const { inspectReceipt, cancelInspection, cancelAllInspections } = useCollectionReceiptInspection();
 
   const [customerName, setCustomerName] = useState("");
   const [icNumber, setIcNumber] = useState("");
@@ -73,7 +76,26 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     overrideReason: receiptValidationOverrideReason,
   });
 
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      cancelAllInspections();
+    };
+  }, [cancelAllInspections]);
+
+  const applyReceiptDraftPatch = useCallback((
+    draftLocalId: string,
+    patch: Partial<CollectionReceiptDraftInput>,
+  ) => {
+    setReceiptDrafts((previous) =>
+      previous.map((draft) =>
+        draft.draftLocalId === draftLocalId ? { ...draft, ...patch } : draft,
+      ),
+    );
+  }, []);
+
   const clearForm = () => {
+    cancelAllInspections();
     setCustomerName("");
     setIcNumber("");
     setCustomerPhone("");
@@ -104,16 +126,39 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       return;
     }
 
+    const nextDraft = createEmptyCollectionReceiptDraft();
     setReceiptFiles((previous) => [...previous, file]);
-    setReceiptDrafts((previous) => [...previous, createEmptyCollectionReceiptDraft()]);
+    setReceiptDrafts((previous) => [...previous, nextDraft]);
+    void inspectReceipt({
+      file,
+      draftLocalId: nextDraft.draftLocalId,
+      applyDraftPatch: applyReceiptDraftPatch,
+      onError: (error) => {
+        if (!isMountedRef.current) {
+          return;
+        }
+        notifyMutationError({
+          title: "Receipt Analysis Limited",
+          error,
+          fallbackDescription: "Analisis automatik gagal. Sila semak dan isi jumlah resit secara manual.",
+        });
+      },
+    });
   };
 
   const handleRemoveReceipt = (index: number) => {
     setReceiptFiles((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
-    setReceiptDrafts((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
+    setReceiptDrafts((previous) => {
+      const target = previous[index];
+      if (target) {
+        cancelInspection(target.draftLocalId);
+      }
+      return previous.filter((_, itemIndex) => itemIndex !== index);
+    });
   };
 
   const handleClearPendingReceipts = () => {
+    cancelAllInspections();
     setReceiptFiles([]);
     setReceiptDrafts([]);
     if (fileInputRef.current) fileInputRef.current.value = "";

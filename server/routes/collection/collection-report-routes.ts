@@ -1,6 +1,9 @@
 import type { AuthenticatedRequest } from "../../auth/guards";
 import { serveCollectionReceipt } from "../collection-receipt.service";
-import { createCollectionMultipartRoute } from "./collection-multipart-routes";
+import {
+  createCollectionMultipartRoute,
+  createCollectionReceiptInspectRoute,
+} from "./collection-multipart-routes";
 import type { CollectionRouteContext } from "./collection-route-shared";
 
 export function registerCollectionReportRoutes(context: CollectionRouteContext) {
@@ -15,6 +18,15 @@ export function registerCollectionReportRoutes(context: CollectionRouteContext) 
     jsonMutationRoute,
   } = context;
   const collectionMultipartRoute = createCollectionMultipartRoute();
+  const collectionReceiptInspectRoute = createCollectionReceiptInspectRoute();
+
+  app.post(
+    "/api/collection/receipt-inspect",
+    ...reportAccess,
+    collectionReceiptInspectRoute,
+    jsonRoute("Failed to inspect collection receipts.", (req) =>
+      collectionService.inspectReceipts(req.user, req.body)),
+  );
 
   app.post(
     "/api/collection",

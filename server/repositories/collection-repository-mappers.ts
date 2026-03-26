@@ -45,6 +45,11 @@ export function mapCollectionRecordRow(row: any): CollectionRecord {
     receiptValidationMessage:
       (row.receipt_validation_message ?? row.receiptValidationMessage ?? null) as string | null,
     receiptCount: Math.max(0, Number(row.receipt_count ?? row.receiptCount ?? 0) || 0),
+    duplicateReceiptFlag: Boolean(
+      row.duplicate_receipt_flag
+      ?? row.duplicateReceiptFlag
+      ?? false,
+    ),
     createdByLogin: String(row.created_by_login ?? row.createdByLogin ?? row.staff_username ?? row.staffUsername ?? ""),
     collectionStaffNickname: String(row.collection_staff_nickname ?? row.collectionStaffNickname ?? row.staff_username ?? row.staffUsername ?? ""),
     createdAt,

@@ -1,5 +1,5 @@
 import { useId, type ChangeEvent, type MutableRefObject } from "react";
-import { FileImage, FileText, RotateCcw, Trash2 } from "lucide-react";
+import { AlertTriangle, FileImage, FileText, RotateCcw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,80 @@ interface CollectionReceiptPanelProps {
   onPendingDraftChange?: (index: number, patch: Partial<CollectionReceiptDraftInput>) => void;
   uploadLabel?: string;
   helperText?: string;
+}
+
+function resolveExtractionStatusBadge(statusRaw: CollectionReceiptDraftInput["extractionStatus"]) {
+  const status = String(statusRaw || "unprocessed").trim().toLowerCase();
+  if (status === "suggested") {
+    return {
+      label: "OCR Suggested",
+      variant: "secondary" as const,
+    };
+  }
+  if (status === "ambiguous") {
+    return {
+      label: "Needs Review",
+      variant: "outline" as const,
+    };
+  }
+  if (status === "error") {
+    return {
+      label: "Analysis Error",
+      variant: "destructive" as const,
+    };
+  }
+  if (status === "unavailable") {
+    return {
+      label: "No Amount Found",
+      variant: "outline" as const,
+    };
+  }
+  return {
+    label: "Analysing",
+    variant: "outline" as const,
+  };
+}
+
+function renderReceiptAssistiveState(draft: CollectionReceiptDraftInput | undefined) {
+  if (!draft) {
+    return null;
+  }
+
+  const extractionBadge = resolveExtractionStatusBadge(draft.extractionStatus);
+  const duplicateCount = Number(draft.duplicateSummary?.matchCount || 0);
+
+  return (
+    <div className="mt-2 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={extractionBadge.variant}>{extractionBadge.label}</Badge>
+        {duplicateCount > 0 ? (
+          <Badge variant="outline" className="border-amber-500/50 text-amber-700">
+            Possible Duplicate
+          </Badge>
+        ) : null}
+      </div>
+      {draft.extractedAmount ? (
+        <p className="text-xs text-muted-foreground">
+          OCR/PDF suggestion: RM {draft.extractedAmount}
+          {typeof draft.extractionConfidence === "number"
+            ? ` (${Math.round(draft.extractionConfidence * 100)}% confidence)`
+            : ""}
+        </p>
+      ) : null}
+      {draft.extractionMessage ? (
+        <p className="text-xs text-muted-foreground">{draft.extractionMessage}</p>
+      ) : null}
+      {duplicateCount > 0 ? (
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-50 px-2 py-2 text-xs text-amber-800">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <p>
+            Fail ini sepadan dengan {duplicateCount} resit lain yang pernah dimuat naik.
+            Semak sebelum simpan.
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function CollectionReceiptPanel({
@@ -132,6 +206,7 @@ export function CollectionReceiptPanel({
           <div className="space-y-2">
             {existingReceipts.map((receipt) => {
               const markedForRemoval = removedSet.has(receipt.id);
+              const existingDraft = existingDraftMap.get(receipt.id);
               return (
                 <div
                   key={receipt.id}
@@ -149,18 +224,11 @@ export function CollectionReceiptPanel({
                     <p className="text-xs text-muted-foreground">
                       {receipt.originalMimeType} | {formatCollectionReceiptFileSize(receipt.fileSize)}
                     </p>
-                    {receipt.extractedAmount ? (
-                      <p className="text-xs text-muted-foreground">
-                        OCR suggestion: RM {receipt.extractedAmount}
-                        {typeof receipt.extractionConfidence === "number"
-                          ? ` (${Math.round(receipt.extractionConfidence * 100)}% confidence)`
-                          : ""}
-                      </p>
-                    ) : null}
-                    {existingDraftMap.get(receipt.id) ? (
+                    {renderReceiptAssistiveState(existingDraft)}
+                    {existingDraft ? (
                       <div className="mt-3 grid gap-2 md:grid-cols-3">
                         <Input
-                          value={existingDraftMap.get(receipt.id)?.receiptAmount || ""}
+                          value={existingDraft.receiptAmount || ""}
                           onChange={(event) =>
                             onExistingDraftChange?.(receipt.id, { receiptAmount: event.target.value })}
                           placeholder="Receipt Amount (RM)"
@@ -169,13 +237,13 @@ export function CollectionReceiptPanel({
                         />
                         <Input
                           type="date"
-                          value={existingDraftMap.get(receipt.id)?.receiptDate || ""}
+                          value={existingDraft.receiptDate || ""}
                           onChange={(event) =>
                             onExistingDraftChange?.(receipt.id, { receiptDate: event.target.value })}
                           disabled={disabled || markedForRemoval}
                         />
                         <Input
-                          value={existingDraftMap.get(receipt.id)?.receiptReference || ""}
+                          value={existingDraft.receiptReference || ""}
                           onChange={(event) =>
                             onExistingDraftChange?.(receipt.id, { receiptReference: event.target.value })}
                           placeholder="Receipt Reference"
@@ -272,6 +340,7 @@ export function CollectionReceiptPanel({
                       {formatCollectionReceiptFileSize(preview.file.size)}
                     </p>
                   </div>
+                  {renderReceiptAssistiveState(pendingReceiptDrafts[index])}
                   {pendingReceiptDrafts[index] ? (
                     <div className="grid gap-2">
                       <Input

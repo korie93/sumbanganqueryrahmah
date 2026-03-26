@@ -26,7 +26,31 @@ import {
   type PasswordResetTokenRecord,
 } from "./repositories/auth.repository";
 type CollectionBatch = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
-export type CollectionReceiptValidationStatus = "matched" | "mismatch" | "needs_review";
+export type CollectionReceiptValidationStatus =
+  | "matched"
+  | "underpaid"
+  | "overpaid"
+  | "unverified"
+  | "needs_review";
+export type CollectionReceiptExtractionStatus =
+  | "unprocessed"
+  | "suggested"
+  | "ambiguous"
+  | "unavailable"
+  | "error";
+
+export type CollectionReceiptDuplicateMatch = {
+  receiptId: string;
+  collectionRecordId: string;
+  originalFileName: string;
+  createdAt: Date;
+};
+
+export type CollectionReceiptDuplicateSummary = {
+  fileHash: string;
+  matchCount: number;
+  matches: CollectionReceiptDuplicateMatch[];
+};
 
 export type CollectionRecordReceipt = {
   id: string;
@@ -38,6 +62,7 @@ export type CollectionRecordReceipt = {
   fileSize: number;
   receiptAmount: string | null;
   extractedAmount: string | null;
+  extractionStatus: CollectionReceiptExtractionStatus;
   extractionConfidence: number | null;
   receiptDate: string | null;
   receiptReference: string | null;
@@ -60,6 +85,7 @@ export type CollectionRecord = {
   receiptValidationStatus: CollectionReceiptValidationStatus;
   receiptValidationMessage: string | null;
   receiptCount: number;
+  duplicateReceiptFlag: boolean;
   createdByLogin: string;
   collectionStaffNickname: string;
   createdAt: Date;
@@ -217,6 +243,7 @@ export type CreateCollectionRecordReceiptInput = {
   fileSize: number;
   receiptAmountCents?: number | null;
   extractedAmountCents?: number | null;
+  extractionStatus?: CollectionReceiptExtractionStatus | null;
   extractionConfidence?: number | null;
   receiptDate?: string | null;
   receiptReference?: string | null;
@@ -227,6 +254,7 @@ export type UpdateCollectionRecordReceiptInput = {
   receiptId: string;
   receiptAmountCents?: number | null;
   extractedAmountCents?: number | null;
+  extractionStatus?: CollectionReceiptExtractionStatus | null;
   extractionConfidence?: number | null;
   receiptDate?: string | null;
   receiptReference?: string | null;
@@ -579,6 +607,10 @@ type CategoryRule = {
   getCollectionRecordById(id: string): Promise<CollectionRecord | undefined>;
   listCollectionRecordReceipts(recordId: string): Promise<CollectionRecordReceipt[]>;
   getCollectionRecordReceiptById(recordId: string, receiptId: string): Promise<CollectionRecordReceipt | undefined>;
+  findCollectionReceiptDuplicateSummaries(
+    fileHashes: string[],
+    options?: { excludeRecordId?: string },
+  ): Promise<CollectionReceiptDuplicateSummary[]>;
   createCollectionRecordReceipts(
     recordId: string,
     receipts: CreateCollectionRecordReceiptInput[],

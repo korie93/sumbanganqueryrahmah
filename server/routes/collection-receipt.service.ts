@@ -20,6 +20,7 @@ import {
 } from "../lib/collection-receipt-security";
 import { scanCollectionReceiptWithExternalScanner } from "../lib/collection-receipt-external-scan";
 import { logger } from "../lib/logger";
+import { extractCollectionReceiptSuggestion } from "../services/collection/collection-receipt-extraction";
 import type {
   CollectionRecordReceipt,
   CreateCollectionRecordReceiptInput,
@@ -73,7 +74,16 @@ function normalizeCollectionReceiptMimeType(mimeType: string): string {
   return COLLECTION_RECEIPT_MIME_ALIASES[normalized] || normalized;
 }
 
-export type StoredCollectionReceiptFile = CreateCollectionRecordReceiptInput;
+export type StoredCollectionReceiptFile = CreateCollectionRecordReceiptInput & {
+  extractionMessage?: string | null;
+};
+export type CollectionReceiptInspectionResult = {
+  fileHash: string | null;
+  extractedAmountCents: number | null;
+  extractionStatus: CreateCollectionRecordReceiptInput["extractionStatus"];
+  extractionConfidence: number | null;
+  extractionMessage: string | null;
+};
 export type MultipartCollectionReceiptInput = {
   fileName?: string | null;
   mimeType?: string | null;
@@ -243,6 +253,28 @@ function logCollectionReceiptSanitization(params: {
   });
 }
 
+async function inspectCollectionReceiptBuffer(params: {
+  buffer: Buffer;
+  mimeType: string;
+  imageWidth?: number;
+  imageHeight?: number;
+}): Promise<CollectionReceiptInspectionResult> {
+  const extracted = await extractCollectionReceiptSuggestion({
+    buffer: params.buffer,
+    mimeType: params.mimeType,
+    imageWidth: params.imageWidth,
+    imageHeight: params.imageHeight,
+  });
+
+  return {
+    fileHash: createHash("sha256").update(params.buffer).digest("hex"),
+    extractedAmountCents: extracted.extractedAmountCents,
+    extractionStatus: extracted.extractionStatus,
+    extractionConfidence: extracted.extractionConfidence,
+    extractionMessage: extracted.extractionMessage,
+  };
+}
+
 export async function saveCollectionReceipt(
   receipt: CollectionReceiptPayload,
 ): Promise<StoredCollectionReceiptFile> {
@@ -304,6 +336,12 @@ export async function saveCollectionReceipt(
       imageWidth: sanitized.imageWidth,
       imageHeight: sanitized.imageHeight,
     });
+    const inspection = await inspectCollectionReceiptBuffer({
+      buffer: sanitized.buffer,
+      mimeType: COLLECTION_RECEIPT_TYPE_CONFIG[signatureType].mimeType,
+      imageWidth: sanitized.imageWidth,
+      imageHeight: sanitized.imageHeight,
+    });
 
     const persisted = await persistCollectionReceiptFile({
       fileName: String(receipt.fileName || "receipt"),
@@ -317,7 +355,11 @@ export async function saveCollectionReceipt(
       originalMimeType: persisted.storedReceipt.canonicalType.mimeType,
       originalExtension: persisted.storedReceipt.canonicalType.extension,
       fileSize: sanitized.buffer.length,
-      fileHash: createHash("sha256").update(sanitized.buffer).digest("hex"),
+      fileHash: inspection.fileHash,
+      extractedAmountCents: inspection.extractedAmountCents,
+      extractionStatus: inspection.extractionStatus,
+      extractionConfidence: inspection.extractionConfidence,
+      extractionMessage: inspection.extractionMessage,
     };
   } catch (error) {
     stagedFilePath = (error as Error & { receiptTemporaryFilePath?: string }).receiptTemporaryFilePath || null;
@@ -458,6 +500,12 @@ export async function saveMultipartCollectionReceipt(
       imageWidth: sanitized.imageWidth,
       imageHeight: sanitized.imageHeight,
     });
+    const inspection = await inspectCollectionReceiptBuffer({
+      buffer: sanitized.buffer,
+      mimeType: COLLECTION_RECEIPT_TYPE_CONFIG[signatureType].mimeType,
+      imageWidth: sanitized.imageWidth,
+      imageHeight: sanitized.imageHeight,
+    });
     if (sanitized.buffer.length !== receiptBytes.length || sanitized.removedMetadataKinds.length > 0) {
       await fs.promises.writeFile(temporaryFilePath, sanitized.buffer);
     }
@@ -476,7 +524,11 @@ export async function saveMultipartCollectionReceipt(
       originalMimeType: storedReceipt.canonicalType.mimeType,
       originalExtension: storedReceipt.canonicalType.extension,
       fileSize: sanitized.buffer.length,
-      fileHash: createHash("sha256").update(sanitized.buffer).digest("hex"),
+      fileHash: inspection.fileHash,
+      extractedAmountCents: inspection.extractedAmountCents,
+      extractionStatus: inspection.extractionStatus,
+      extractionConfidence: inspection.extractionConfidence,
+      extractionMessage: inspection.extractionMessage,
     };
   } catch (error) {
     if (error instanceof CollectionReceiptSecurityError) {
@@ -491,6 +543,129 @@ export async function saveMultipartCollectionReceipt(
     }
     await fs.promises.rm(temporaryFilePath, { force: true }).catch(() => undefined);
     throw error;
+  }
+}
+
+export async function inspectMultipartCollectionReceipt(
+  receipt: MultipartCollectionReceiptInput,
+): Promise<CollectionReceiptInspectionResult & {
+  fileName: string;
+}> {
+  const fileName = String(receipt.fileName || "receipt").trim();
+  const declaredMimeType = normalizeCollectionReceiptMimeType(receipt.mimeType || "");
+  const declaredMimeTypeAccepted = COLLECTION_RECEIPT_ALLOWED_MIME.has(declaredMimeType);
+
+  const extFromName = path.extname(fileName).toLowerCase();
+  const extensionType = extFromName ? mapCollectionReceiptExtensionToType(extFromName) : null;
+  if (extFromName && !extensionType) {
+    throw new Error("Receipt file extension is not allowed.");
+  }
+
+  await fs.promises.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
+
+  const temporaryFileName = `${Date.now()}-${randomUUID()}.inspect`;
+  const temporaryFilePath = path.join(COLLECTION_RECEIPT_DIR, temporaryFileName);
+  const signatureChunks: Buffer[] = [];
+  let signatureBytesCaptured = 0;
+  let fileSize = 0;
+  let signatureType: CollectionReceiptFileType | null = null;
+
+  const captureAndValidate = new Transform({
+    transform(chunk, _encoding, callback) {
+      const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      fileSize += bufferChunk.length;
+      if (fileSize > COLLECTION_RECEIPT_MAX_BYTES) {
+        callback(new Error("Receipt file exceeds 5MB."));
+        return;
+      }
+
+      if (signatureBytesCaptured < 16) {
+        const remainingBytes = 16 - signatureBytesCaptured;
+        signatureChunks.push(bufferChunk.subarray(0, remainingBytes));
+        signatureBytesCaptured += Math.min(bufferChunk.length, remainingBytes);
+      }
+
+      callback(null, bufferChunk);
+    },
+  });
+
+  try {
+    await pipeline(
+      receipt.stream,
+      captureAndValidate,
+      fs.createWriteStream(temporaryFilePath, { flags: "wx" }),
+    );
+
+    if (!fileSize) {
+      throw new Error("Invalid receipt payload.");
+    }
+
+    signatureType = detectCollectionReceiptSignature(Buffer.concat(signatureChunks));
+    if (!signatureType) {
+      throw new CollectionReceiptSecurityError(
+        "Receipt file signature is not allowed.",
+        "receipt-signature-not-allowed",
+      );
+    }
+
+    if (extensionType && extensionType !== signatureType) {
+      throw new CollectionReceiptSecurityError(
+        "Receipt file content does not match file extension.",
+        "receipt-extension-mismatch",
+      );
+    }
+
+    const mimeTypeResolved = declaredMimeTypeAccepted
+      ? mapCollectionReceiptMimeToType(declaredMimeType)
+      : null;
+    if (mimeTypeResolved && mimeTypeResolved !== signatureType) {
+      throw new CollectionReceiptSecurityError(
+        "Receipt file content does not match declared MIME type.",
+        "receipt-mime-mismatch",
+      );
+    }
+
+    const receiptBytes = await fs.promises.readFile(temporaryFilePath);
+    const sanitized = sanitizeCollectionReceiptBuffer(receiptBytes, signatureType);
+    logCollectionReceiptSanitization({
+      fileName,
+      signatureType,
+      sanitizedBuffer: sanitized.buffer,
+      originalBytes: receiptBytes.length,
+      removedMetadataKinds: sanitized.removedMetadataKinds,
+      imageWidth: sanitized.imageWidth,
+      imageHeight: sanitized.imageHeight,
+    });
+    if (sanitized.buffer.length !== receiptBytes.length || sanitized.removedMetadataKinds.length > 0) {
+      await fs.promises.writeFile(temporaryFilePath, sanitized.buffer);
+    }
+
+    await scanCollectionReceiptWithExternalScanner(temporaryFilePath);
+    const inspection = await inspectCollectionReceiptBuffer({
+      buffer: sanitized.buffer,
+      mimeType: COLLECTION_RECEIPT_TYPE_CONFIG[signatureType].mimeType,
+      imageWidth: sanitized.imageWidth,
+      imageHeight: sanitized.imageHeight,
+    });
+
+    return {
+      fileName,
+      ...inspection,
+    };
+  } catch (error) {
+    if (error instanceof CollectionReceiptSecurityError) {
+      await quarantineRejectedCollectionReceipt({
+        source: "multipart",
+        fileName,
+        mimeType: receipt.mimeType,
+        signatureType,
+        rejectionError: error,
+        filePath: temporaryFilePath,
+      });
+    }
+    throw error;
+  } finally {
+    await fs.promises.rm(temporaryFilePath, { force: true }).catch(() => undefined);
   }
 }
 
@@ -662,6 +837,7 @@ async function resolveSelectedReceipt(
     fileSize: fallbackFileSize,
     receiptAmount: null,
     extractedAmount: null,
+    extractionStatus: "unprocessed",
     extractionConfidence: null,
     receiptDate: null,
     receiptReference: null,
