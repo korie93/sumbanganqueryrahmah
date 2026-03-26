@@ -25,7 +25,108 @@ function buildSuperuser(passwordHash: string) {
     isBanned: false,
     twoFactorEnabled: false,
     twoFactorSecretEncrypted: null,
-    twoFactorConfiguredAt: null,
+    twoFactorConfiguredAt: null as Date | null,
+    failedLoginAttempts: 0,
+    lockedAt: null as Date | null,
+    lockedReason: null as string | null,
+    lockedBySystem: false,
+  };
+}
+
+function buildManagedUser(passwordHash: string, overrides?: Record<string, unknown>) {
+  return {
+    ...buildSuperuser(passwordHash),
+    id: "user-1",
+    username: "managed.user",
+    fullName: "Managed User",
+    email: "managed.user@example.com",
+    role: "user",
+    ...overrides,
+  };
+}
+
+async function createLockoutHarness(overrides?: Record<string, unknown>) {
+  const passwordHash = await hashPassword("Password123!");
+  const user = buildManagedUser(passwordHash, overrides);
+  const auditActions: string[] = [];
+  const updateUserAccountCalls: Array<Record<string, unknown>> = [];
+  const deactivatedReasons: string[] = [];
+  const activity = {
+    id: "activity-lockout-1",
+    userId: user.id,
+    username: user.username,
+    role: user.role,
+    loginTime: new Date("2026-03-20T00:00:00.000Z"),
+    lastActivityTime: new Date("2026-03-20T00:00:00.000Z"),
+    logoutTime: null,
+    isActive: true,
+    logoutReason: null,
+    fingerprint: "fp-lockout",
+    browser: "chrome",
+    pcName: "pc",
+    ipAddress: "127.0.0.1",
+  };
+  let recordFailedLoginAttemptCalls = 0;
+
+  const service = new AuthAccountService({
+    getUserByUsername: async (username: string) => (username === user.username ? user : null),
+    isVisitorBanned: async () => false,
+    getBooleanSystemSetting: async () => false,
+    getActiveActivitiesByUsername: async () => [{
+      id: "activity-existing-1",
+      username: user.username,
+      loginTime: new Date("2026-03-20T00:00:00.000Z"),
+      lastActivityTime: new Date("2026-03-20T00:00:00.000Z"),
+      isActive: true,
+    }],
+    deactivateUserActivities: async (_username: string, reason: string) => {
+      deactivatedReasons.push(reason);
+    },
+    deactivateUserSessionsByFingerprint: async () => undefined,
+    createAuditLog: async (entry: any) => {
+      auditActions.push(String(entry?.action || ""));
+      return entry;
+    },
+    recordFailedLoginAttempt: async (params: any) => {
+      recordFailedLoginAttemptCalls += 1;
+      const wasLocked = Boolean(user.lockedAt);
+      user.failedLoginAttempts = Number(user.failedLoginAttempts || 0) + 1;
+      const locked = wasLocked || user.failedLoginAttempts > Number(params.maxAllowedAttempts || 0);
+      if (locked && !wasLocked) {
+        user.lockedAt = params.now instanceof Date ? params.now : new Date("2026-03-20T00:30:00.000Z");
+        user.lockedReason = String(params.lockedReason || "too_many_failed_password_attempts");
+        user.lockedBySystem = true;
+      }
+      return {
+        user,
+        failedLoginAttempts: user.failedLoginAttempts,
+        locked,
+        newlyLocked: locked && !wasLocked,
+      };
+    },
+    updateUserAccount: async (params: any) => {
+      updateUserAccountCalls.push(params);
+      Object.assign(user, {
+        failedLoginAttempts:
+          params.failedLoginAttempts === undefined ? user.failedLoginAttempts : params.failedLoginAttempts,
+        lockedAt: params.lockedAt === undefined ? user.lockedAt : params.lockedAt,
+        lockedReason: params.lockedReason === undefined ? user.lockedReason : params.lockedReason,
+        lockedBySystem: params.lockedBySystem === undefined ? user.lockedBySystem : params.lockedBySystem,
+      });
+      return user;
+    },
+    createActivity: async () => activity,
+    touchLastLogin: async () => undefined,
+  } as any);
+
+  return {
+    service,
+    user,
+    activity,
+    auditActions,
+    updateUserAccountCalls,
+    deactivatedReasons,
+    getRecordFailedLoginAttemptCalls: () => recordFailedLoginAttemptCalls,
   };
 }
 
@@ -254,4 +355,170 @@ test("AuthAccountService supports starting, confirming, and disabling 2FA for ad
   assert.ok(auditActions.includes("TWO_FACTOR_SETUP_INITIATED"));
   assert.ok(auditActions.includes("TWO_FACTOR_ENABLED"));
   assert.ok(auditActions.includes("TWO_FACTOR_DISABLED"));
+});
+
+test("AuthAccountService.login increments failed password attempts without locking through the third wrong password", async () => {
+  const { service, user, auditActions } = await createLockoutHarness();
+
+  for (const attempt of [1, 2, 3]) {
+    await assert.rejects(
+      service.login({
+        username: user.username,
+        password: "WrongPassword!",
+        browserName: "chrome",
+        fingerprint: "fp-lockout",
+        ipAddress: "127.0.0.1",
+        pcName: "pc",
+      }),
+      (error: unknown) =>
+        error instanceof AuthAccountError
+        && error.statusCode === 401
+        && error.code === "INVALID_CREDENTIALS",
+    );
+
+    assert.equal(user.failedLoginAttempts, attempt);
+    assert.equal(user.lockedAt, null);
+    assert.equal(user.lockedBySystem, false);
+  }
+
+  assert.equal(
+    auditActions.filter((action) => action === "LOGIN_FAILED_PASSWORD").length,
+    3,
+  );
+  assert.equal(auditActions.includes("ACCOUNT_LOCKED_TOO_MANY_FAILED_LOGINS"), false);
+});
+
+test("AuthAccountService.login locks an account after more than three wrong password attempts", async () => {
+  const { service, user, auditActions, deactivatedReasons } = await createLockoutHarness();
+
+  for (const attempt of [1, 2, 3]) {
+    await assert.rejects(
+      service.login({
+        username: user.username,
+        password: `WrongPassword-${attempt}`,
+        browserName: "chrome",
+        fingerprint: "fp-lockout",
+        ipAddress: "127.0.0.1",
+        pcName: "pc",
+      }),
+      (error: unknown) =>
+        error instanceof AuthAccountError
+        && error.statusCode === 401
+        && error.code === "INVALID_CREDENTIALS",
+    );
+  }
+
+  await assert.rejects(
+    service.login({
+      username: user.username,
+      password: "StillWrongPassword!",
+      browserName: "chrome",
+      fingerprint: "fp-lockout",
+      ipAddress: "127.0.0.1",
+      pcName: "pc",
+    }),
+    (error: unknown) =>
+      error instanceof AuthAccountError
+      && error.statusCode === 423
+      && error.code === "ACCOUNT_LOCKED",
+  );
+
+  assert.equal(user.failedLoginAttempts, 4);
+  assert.ok(user.lockedAt instanceof Date);
+  assert.equal(user.lockedReason, "too_many_failed_password_attempts");
+  assert.equal(user.lockedBySystem, true);
+  assert.ok(auditActions.includes("LOGIN_FAILED_PASSWORD_LOCKED"));
+  assert.ok(auditActions.includes("ACCOUNT_LOCKED_TOO_MANY_FAILED_LOGINS"));
+  assert.deepEqual(deactivatedReasons, ["ACCOUNT_LOCKED_FAILED_LOGINS"]);
+
+  await assert.rejects(
+    service.login({
+      username: user.username,
+      password: "Password123!",
+      browserName: "chrome",
+      fingerprint: "fp-lockout",
+      ipAddress: "127.0.0.1",
+      pcName: "pc",
+    }),
+    (error: unknown) =>
+      error instanceof AuthAccountError
+      && error.statusCode === 423
+      && error.code === "ACCOUNT_LOCKED",
+  );
+
+  assert.ok(auditActions.includes("LOGIN_BLOCKED_LOCKED_ACCOUNT"));
+});
+
+test("AuthAccountService.login resets failed attempt counters after a successful login", async () => {
+  const { service, user, activity, auditActions, updateUserAccountCalls } = await createLockoutHarness({
+    failedLoginAttempts: 3,
+    lockedAt: null,
+    lockedReason: null,
+    lockedBySystem: false,
+  });
+
+  const result = await service.login({
+    username: user.username,
+    password: "Password123!",
+    browserName: "chrome",
+    fingerprint: "fp-lockout",
+    ipAddress: "127.0.0.1",
+    pcName: "pc",
+  });
+
+  assert.equal(result.kind, "authenticated");
+  assert.equal(result.activity.id, activity.id);
+  assert.equal(user.failedLoginAttempts, 0);
+  assert.equal(user.lockedAt, null);
+  assert.equal(user.lockedReason, null);
+  assert.equal(user.lockedBySystem, false);
+  assert.deepEqual(updateUserAccountCalls[0], {
+    userId: user.id,
+    failedLoginAttempts: 0,
+    lockedAt: null,
+    lockedReason: null,
+    lockedBySystem: false,
+  });
+  assert.ok(auditActions.includes("LOGIN_SUCCESS"));
+});
+
+test("AuthAccountService.login keeps invalid usernames generic and does not record failed-account lockout state", async () => {
+  const auditActions: string[] = [];
+  let recordFailedLoginAttemptCalled = false;
+
+  const service = new AuthAccountService({
+    getUserByUsername: async () => null,
+    isVisitorBanned: async () => false,
+    createAuditLog: async (entry: any) => {
+      auditActions.push(String(entry?.action || ""));
+      return entry;
+    },
+    recordFailedLoginAttempt: async () => {
+      recordFailedLoginAttemptCalled = true;
+      return {
+        user: undefined,
+        failedLoginAttempts: 0,
+        locked: false,
+        newlyLocked: false,
+      };
+    },
+  } as any);
+
+  await assert.rejects(
+    service.login({
+      username: "missing.user",
+      password: "WrongPassword!",
+      browserName: "chrome",
+      fingerprint: "fp-missing",
+      ipAddress: "127.0.0.1",
+      pcName: "pc",
+    }),
+    (error: unknown) =>
+      error instanceof AuthAccountError
+      && error.statusCode === 401
+      && error.code === "INVALID_CREDENTIALS",
+  );
+
+  assert.equal(recordFailedLoginAttemptCalled, false);
+  assert.deepEqual(auditActions, ["LOGIN_FAILED"]);
 });

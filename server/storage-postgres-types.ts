@@ -318,7 +318,22 @@ type CategoryRule = {
     twoFactorEnabled?: boolean;
     twoFactorSecretEncrypted?: string | null;
     twoFactorConfiguredAt?: Date | null;
+    failedLoginAttempts?: number;
+    lockedAt?: Date | null;
+    lockedReason?: string | null;
+    lockedBySystem?: boolean;
   }): Promise<User | undefined>;
+  recordFailedLoginAttempt(params: {
+    userId: string;
+    maxAllowedAttempts: number;
+    lockedReason: string;
+    now?: Date;
+  }): Promise<{
+    user: User | undefined;
+    failedLoginAttempts: number;
+    locked: boolean;
+    newlyLocked: boolean;
+  }>;
   getUsersByRoles(roles: string[]): Promise<Array<{
     id: string;
     username: string;
@@ -334,7 +349,7 @@ type CategoryRule = {
     pageSize?: number;
     search?: string;
     role?: "all" | "admin" | "user";
-    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned";
+    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned";
   }): Promise<{
     users: ManagedUserAccount[];
     page: number;
@@ -392,7 +407,7 @@ type CategoryRule = {
     page?: number;
     pageSize?: number;
     search?: string;
-    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "banned";
+    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned";
   }): Promise<{
     requests: PendingPasswordResetRequestSummary[];
     page: number;
@@ -749,6 +764,10 @@ type CategoryRule = {
       twoFactorEnabled?: boolean;
       twoFactorSecretEncrypted?: string | null;
       twoFactorConfiguredAt?: string | Date | null;
+      failedLoginAttempts?: number;
+      lockedAt?: string | Date | null;
+      lockedReason?: string | null;
+      lockedBySystem?: boolean;
     }>;
     auditLogs: AuditLog[];
     collectionRecords?: Array<{
@@ -788,6 +807,10 @@ type CategoryRule = {
       twoFactorEnabled?: boolean;
       twoFactorSecretEncrypted?: string | null;
       twoFactorConfiguredAt?: string | Date | null;
+      failedLoginAttempts?: number;
+      lockedAt?: string | Date | null;
+      lockedReason?: string | null;
+      lockedBySystem?: boolean;
     }>;
     auditLogs: AuditLog[];
     collectionRecords?: Array<{

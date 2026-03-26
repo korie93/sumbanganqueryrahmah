@@ -42,8 +42,18 @@ export const ManagedAccountRow = memo(function ManagedAccountRow({
           <Badge variant={getStatusVariant(user.status, user.isBanned)}>
             {user.isBanned ? "banned" : user.status}
           </Badge>
+          {user.lockedAt ? (
+            <Badge variant="destructive" title={user.lockedReason || "Account locked"}>
+              locked
+            </Badge>
+          ) : null}
           {user.mustChangePassword ? <Badge variant="outline">must change password</Badge> : null}
         </div>
+        {user.lockedAt ? (
+          <div className="mt-1 text-xs text-muted-foreground">
+            Locked {formatDateTime(user.lockedAt)}
+          </div>
+        ) : null}
       </TableCell>
       <TableCell>{formatDateTime(user.lastLoginAt)}</TableCell>
       <TableCell className="text-right">

@@ -74,6 +74,7 @@ type AuthAccountStorage = Pick<
   | "listManagedUsersPage"
   | "listPendingPasswordResetRequests"
   | "listPendingPasswordResetRequestsPage"
+  | "recordFailedLoginAttempt"
   | "resolvePendingPasswordResetRequestsForUser"
   | "touchLastLogin"
   | "updateActivitiesUsername"

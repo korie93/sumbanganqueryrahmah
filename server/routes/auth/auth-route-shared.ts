@@ -107,6 +107,10 @@ function buildManagedUserPayload(user: Awaited<ReturnType<PostgresStorage["getMa
     lastLoginAt: user.lastLoginAt,
     passwordChangedAt: user.passwordChangedAt,
     isBanned: user.isBanned,
+    failedLoginAttempts: user.failedLoginAttempts,
+    lockedAt: user.lockedAt,
+    lockedReason: user.lockedReason,
+    lockedBySystem: user.lockedBySystem,
   };
 }
 

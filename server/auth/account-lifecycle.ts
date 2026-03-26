@@ -15,6 +15,7 @@ export type AccountLifecycleState = {
   role: string | null | undefined;
   status: string | null | undefined;
   isBanned: boolean | null | undefined;
+  lockedAt?: Date | string | null | undefined;
   mustChangePassword?: boolean | null | undefined;
 };
 
@@ -69,12 +70,14 @@ export function isBcryptHash(value: unknown): boolean {
 export function getAccountAccessBlockReason(state: AccountLifecycleState):
   | "invalid_role"
   | "banned"
+  | "locked"
   | "pending_activation"
   | "suspended"
   | "disabled"
   | null {
   if (!isValidUserRole(state.role)) return "invalid_role";
   if (state.isBanned === true) return "banned";
+  if (state.lockedAt) return "locked";
 
   const status = normalizeAccountStatus(
     state.status,

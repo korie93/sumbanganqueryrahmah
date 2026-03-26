@@ -285,7 +285,11 @@ export async function createLoginStorageDouble(options?: {
     lastLoginAt: null,
     twoFactorEnabled: false,
     twoFactorSecretEncrypted: null,
-    twoFactorConfiguredAt: null,
+    twoFactorConfiguredAt: null as Date | null,
+    failedLoginAttempts: 0,
+    lockedAt: null as Date | null,
+    lockedReason: null as string | null,
+    lockedBySystem: false,
     ...options?.user,
   };
   const activity = {
@@ -305,6 +309,7 @@ export async function createLoginStorageDouble(options?: {
     isVisitorBanned: async () => false,
     getBooleanSystemSetting: async () => false,
     getActiveActivitiesByUsername: async () => [],
+    deactivateUserActivities: async () => undefined,
     deactivateUserSessionsByFingerprint: async () => undefined,
     createAuditLog: async (entry: AuditEntry) => {
       auditLogs.push(entry);
@@ -312,6 +317,33 @@ export async function createLoginStorageDouble(options?: {
     },
     createActivity: async () => activity,
     touchLastLogin: async () => undefined,
+    updateUserAccount: async (params: Record<string, any>) => {
+      Object.assign(user, {
+        failedLoginAttempts:
+          params.failedLoginAttempts === undefined ? user.failedLoginAttempts : params.failedLoginAttempts,
+        lockedAt: params.lockedAt === undefined ? user.lockedAt : params.lockedAt,
+        lockedReason: params.lockedReason === undefined ? user.lockedReason : params.lockedReason,
+        lockedBySystem: params.lockedBySystem === undefined ? user.lockedBySystem : params.lockedBySystem,
+        lastLoginAt: params.lastLoginAt === undefined ? user.lastLoginAt : params.lastLoginAt,
+      });
+      return user;
+    },
+    recordFailedLoginAttempt: async (params: Record<string, any>) => {
+      user.failedLoginAttempts = Number(user.failedLoginAttempts || 0) + 1;
+      const wasLocked = Boolean(user.lockedAt);
+      const shouldLock = user.failedLoginAttempts > Number(params.maxAllowedAttempts || 0);
+      if (shouldLock) {
+        user.lockedAt = params.now instanceof Date ? params.now : new Date();
+        user.lockedReason = String(params.lockedReason || "too_many_failed_password_attempts");
+        user.lockedBySystem = true;
+      }
+      return {
+        user,
+        failedLoginAttempts: user.failedLoginAttempts,
+        locked: shouldLock || Boolean(user.lockedAt),
+        newlyLocked: shouldLock && !wasLocked,
+      };
+    },
   } as unknown as PostgresStorage;
 
   return { storage, user, activity, auditLogs };

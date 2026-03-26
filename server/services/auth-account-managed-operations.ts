@@ -662,6 +662,10 @@ export class AuthAccountManagedOperations {
       mustChangePassword: true,
       passwordResetBySuperuser: true,
       activatedAt: target.activatedAt ?? now,
+      failedLoginAttempts: 0,
+      lockedAt: null,
+      lockedReason: null,
+      lockedBySystem: false,
     });
     const closedSessionIds = await this.deps.invalidateUserSessions(
       target.username,
@@ -680,6 +684,7 @@ export class AuthAccountManagedOperations {
           recipient_email: recipientEmail,
           expires_at: reset.expiresAt.toISOString(),
           must_change_password: true,
+          lock_cleared: Boolean(target.lockedAt),
         },
       }),
     });

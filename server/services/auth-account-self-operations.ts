@@ -117,12 +117,16 @@ export class AuthAccountSelfOperations {
     }
 
     const nextPasswordHash = await hashPassword(newPassword);
-    const updatedUser = await this.deps.storage.updateUserCredentials({
+    const updatedUser = await this.deps.storage.updateUserAccount({
       userId: actor.id,
-      newPasswordHash: nextPasswordHash,
+      passwordHash: nextPasswordHash,
       passwordChangedAt: new Date(),
       mustChangePassword: false,
       passwordResetBySuperuser: false,
+      failedLoginAttempts: 0,
+      lockedAt: null,
+      lockedReason: null,
+      lockedBySystem: false,
     });
 
     const closedSessionIds = await this.invalidateUserSessions(actor.username, "PASSWORD_CHANGED");

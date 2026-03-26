@@ -65,6 +65,10 @@ export class PostgresOperationsStorage extends PostgresCollectionStorage {
       twoFactorEnabled?: boolean;
       twoFactorSecretEncrypted?: string | null;
       twoFactorConfiguredAt?: string | Date | null;
+      failedLoginAttempts?: number;
+      lockedAt?: string | Date | null;
+      lockedReason?: string | null;
+      lockedBySystem?: boolean;
     }>;
     auditLogs: AuditLog[];
     collectionRecords?: Array<{
@@ -107,6 +111,10 @@ export class PostgresOperationsStorage extends PostgresCollectionStorage {
       twoFactorEnabled?: boolean;
       twoFactorSecretEncrypted?: string | null;
       twoFactorConfiguredAt?: string | Date | null;
+      failedLoginAttempts?: number;
+      lockedAt?: string | Date | null;
+      lockedReason?: string | null;
+      lockedBySystem?: boolean;
     }>;
     auditLogs: AuditLog[];
     collectionRecords?: Array<{

@@ -132,13 +132,21 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           logoutReason: blockReason.toUpperCase(),
         });
         clearAuthSessionCookie(res);
-        return res.status(blockReason === "banned" ? 403 : 401).json({
+        return res.status(blockReason === "banned" ? 403 : blockReason === "locked" ? 423 : 401).json({
           message: blockReason === "banned"
             ? "Account is banned"
-            : "Session expired. Please login again.",
+            : blockReason === "locked"
+              ? "Your account has been locked due to too many incorrect login attempts. Please contact the system administrator."
+              : "Session expired. Please login again.",
           banned: blockReason === "banned",
+          locked: blockReason === "locked",
           forceLogout: true,
-          code: blockReason === "banned" ? "ACCOUNT_BANNED" : "ACCOUNT_UNAVAILABLE",
+          code:
+            blockReason === "banned"
+              ? "ACCOUNT_BANNED"
+              : blockReason === "locked"
+                ? "ACCOUNT_LOCKED"
+                : "ACCOUNT_UNAVAILABLE",
         });
       }
 

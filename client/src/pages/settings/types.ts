@@ -59,6 +59,10 @@ export type ManagedUser = {
   lastLoginAt: string | null;
   passwordChangedAt: string | null;
   isBanned: boolean | null;
+  failedLoginAttempts: number;
+  lockedAt: string | null;
+  lockedReason: string | null;
+  lockedBySystem: boolean;
 };
 
 export type PendingPasswordResetRequest = {

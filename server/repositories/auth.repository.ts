@@ -113,6 +113,10 @@ export class AuthRepository {
       twoFactorEnabled: false,
       twoFactorSecretEncrypted: null,
       twoFactorConfiguredAt: null,
+      failedLoginAttempts: 0,
+      lockedAt: null,
+      lockedReason: null,
+      lockedBySystem: false,
     });
 
     return (await this.getUser(id))!;
@@ -153,6 +157,10 @@ export class AuthRepository {
       twoFactorEnabled: false,
       twoFactorSecretEncrypted: null,
       twoFactorConfiguredAt: null,
+      failedLoginAttempts: 0,
+      lockedAt: null,
+      lockedReason: null,
+      lockedBySystem: false,
     });
 
     return (await this.getUser(id))!;
@@ -210,6 +218,10 @@ export class AuthRepository {
     twoFactorEnabled?: boolean;
     twoFactorSecretEncrypted?: string | null;
     twoFactorConfiguredAt?: Date | null;
+    failedLoginAttempts?: number;
+    lockedAt?: Date | null;
+    lockedReason?: string | null;
+    lockedBySystem?: boolean;
   }): Promise<User | undefined> {
     const next: Partial<typeof users.$inferInsert> = {
       updatedAt: new Date(),
@@ -275,8 +287,87 @@ export class AuthRepository {
       next.twoFactorConfiguredAt = params.twoFactorConfiguredAt;
     }
 
+    if (params.failedLoginAttempts !== undefined) {
+      next.failedLoginAttempts = params.failedLoginAttempts;
+    }
+
+    if (params.lockedAt !== undefined) {
+      next.lockedAt = params.lockedAt;
+    }
+
+    if (params.lockedReason !== undefined) {
+      next.lockedReason = params.lockedReason;
+    }
+
+    if (params.lockedBySystem !== undefined) {
+      next.lockedBySystem = params.lockedBySystem;
+    }
+
     await db.update(users).set(next).where(eq(users.id, params.userId));
     return this.getUser(params.userId);
+  }
+
+  async recordFailedLoginAttempt(params: {
+    userId: string;
+    maxAllowedAttempts: number;
+    lockedReason: string;
+    now?: Date;
+  }): Promise<{
+    user: User | undefined;
+    failedLoginAttempts: number;
+    locked: boolean;
+    newlyLocked: boolean;
+  }> {
+    const now = params.now ?? new Date();
+    const maxAllowedAttempts = Math.max(0, Math.floor(Number(params.maxAllowedAttempts) || 0));
+
+    return db.transaction(async (tx) => {
+      const currentRows = await tx
+        .select({
+          failedLoginAttempts: users.failedLoginAttempts,
+          lockedAt: users.lockedAt,
+        })
+        .from(users)
+        .where(eq(users.id, params.userId))
+        .for("update");
+
+      const current = currentRows[0];
+      if (!current) {
+        return {
+          user: undefined,
+          failedLoginAttempts: 0,
+          locked: false,
+          newlyLocked: false,
+        };
+      }
+
+      const previousAttempts = Math.max(0, Number(current.failedLoginAttempts || 0));
+      const nextAttempts = previousAttempts + 1;
+      const wasLocked = current.lockedAt instanceof Date
+        ? !Number.isNaN(current.lockedAt.getTime())
+        : Boolean(current.lockedAt);
+      const shouldLock = wasLocked || nextAttempts > maxAllowedAttempts;
+      const newlyLocked = !wasLocked && shouldLock;
+
+      const updatedRows = await tx
+        .update(users)
+        .set({
+          failedLoginAttempts: nextAttempts,
+          lockedAt: shouldLock ? (current.lockedAt ?? now) : null,
+          lockedReason: shouldLock ? params.lockedReason : null,
+          lockedBySystem: shouldLock,
+          updatedAt: now,
+        })
+        .where(eq(users.id, params.userId))
+        .returning();
+
+      return {
+        user: updatedRows[0],
+        failedLoginAttempts: nextAttempts,
+        locked: shouldLock,
+        newlyLocked,
+      };
+    });
   }
 
   async getUsersByRoles(roles: string[]) {
