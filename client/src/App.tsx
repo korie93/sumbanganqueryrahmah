@@ -16,6 +16,7 @@ import { useAppShellState } from "@/app/useAppShellState";
 import AutoLogout from "@/components/AutoLogout";
 import FloatingAI from "@/components/FloatingAI";
 import Navbar from "@/components/Navbar";
+import { AIProvider } from "@/context/AIContext";
 
 function AppContent() {
   const {
@@ -114,56 +115,58 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <AutoLogout
-        onClientLogout={handleClientLogout}
-        onLogout={handleLogout}
-        timeoutMinutes={runtimeConfig.sessionTimeoutMinutes}
-        heartbeatIntervalMinutes={runtimeConfig.heartbeatIntervalMinutes}
-        username={user.username}
-      />
-      <Navbar
-        currentPage={currentPage}
-        onNavigate={handleNavigate}
-        onLogout={handleLogout}
-        userRole={user.role}
-        username={user.username}
-        systemName={systemName}
-        savedCount={savedCount}
-        tabVisibility={tabVisibility}
-        featureLockdown={featureLockdown}
-      />
-      <AppRouteErrorBoundary
-        routeKey={`${currentPage}:${monitorSection}:${selectedImportId || ""}`}
-        routeLabel={currentPage}
-        onNavigateHome={navigateHome}
-      >
-        <Suspense fallback={<PageSpinner />}>
-          <main className="min-h-[calc(100vh-3.5rem)]">
-            <AppPageRenderer
-              user={user}
-              currentPage={currentPage}
-              monitorSection={monitorSection}
-              selectedImportId={selectedImportId}
-              runtimeConfig={runtimeConfig}
-              tabVisibility={tabVisibility}
-              tabVisibilityLoaded={tabVisibilityLoaded}
-              monitorVisibility={monitorVisibility}
-              featureLockdown={featureLockdown}
-              onNavigate={handleNavigate}
-              onMonitorSectionChange={handleMonitorSectionChange}
-            />
-          </main>
-        </Suspense>
-      </AppRouteErrorBoundary>
-      {runtimeConfig.aiEnabled ? (
-        <FloatingAI
-          timeoutMs={runtimeConfig.aiTimeoutMs}
-          aiEnabled={runtimeConfig.aiEnabled}
-          activePage={currentPage}
+    <AIProvider>
+      <div className="min-h-screen bg-background">
+        <AutoLogout
+          onClientLogout={handleClientLogout}
+          onLogout={handleLogout}
+          timeoutMinutes={runtimeConfig.sessionTimeoutMinutes}
+          heartbeatIntervalMinutes={runtimeConfig.heartbeatIntervalMinutes}
+          username={user.username}
         />
-      ) : null}
-    </div>
+        <Navbar
+          currentPage={currentPage}
+          onNavigate={handleNavigate}
+          onLogout={handleLogout}
+          userRole={user.role}
+          username={user.username}
+          systemName={systemName}
+          savedCount={savedCount}
+          tabVisibility={tabVisibility}
+          featureLockdown={featureLockdown}
+        />
+        <AppRouteErrorBoundary
+          routeKey={`${currentPage}:${monitorSection}:${selectedImportId || ""}`}
+          routeLabel={currentPage}
+          onNavigateHome={navigateHome}
+        >
+          <Suspense fallback={<PageSpinner />}>
+            <main className="min-h-[calc(100vh-3.5rem)]">
+              <AppPageRenderer
+                user={user}
+                currentPage={currentPage}
+                monitorSection={monitorSection}
+                selectedImportId={selectedImportId}
+                runtimeConfig={runtimeConfig}
+                tabVisibility={tabVisibility}
+                tabVisibilityLoaded={tabVisibilityLoaded}
+                monitorVisibility={monitorVisibility}
+                featureLockdown={featureLockdown}
+                onNavigate={handleNavigate}
+                onMonitorSectionChange={handleMonitorSectionChange}
+              />
+            </main>
+          </Suspense>
+        </AppRouteErrorBoundary>
+        {runtimeConfig.aiEnabled ? (
+          <FloatingAI
+            timeoutMs={runtimeConfig.aiTimeoutMs}
+            aiEnabled={runtimeConfig.aiEnabled}
+            activePage={currentPage}
+          />
+        ) : null}
+      </div>
+    </AIProvider>
   );
 }
 
