@@ -10,6 +10,7 @@ import type { ImportItem } from "@/pages/saved/types";
 
 interface SavedImportsListProps {
   imports: ImportItem[];
+  summaryLabel: string;
   isSuperuser: boolean;
   filesOpen: boolean;
   actionsDisabled: boolean;
@@ -28,6 +29,7 @@ interface SavedImportsListProps {
 
 export function SavedImportsList({
   imports,
+  summaryLabel,
   isSuperuser,
   filesOpen,
   actionsDisabled,
@@ -69,7 +71,7 @@ export function SavedImportsList({
             <div className="flex items-center gap-2">
               <BookMarked className="w-5 h-5 text-primary" />
               <span className="font-semibold text-foreground">Saved Files</span>
-              <span className="text-sm text-muted-foreground">({imports.length} files)</span>
+              <span className="text-sm text-muted-foreground">({summaryLabel})</span>
             </div>
             <ChevronDown
               className={`w-5 h-5 text-muted-foreground transition-transform ${

@@ -1,5 +1,6 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
+import { badRequest } from "../http/errors";
 import { readInteger, readNonEmptyString } from "../http/validation";
 import type { ImportsService } from "../services/imports.service";
 
@@ -43,8 +44,33 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
   };
 
   const listImports = async (_req: AuthenticatedRequest, res: Response) => {
-    const imports = await importsService.listImports();
-    return res.json({ imports });
+    const cursor = readNonEmptyString(_req.query.cursor);
+    const limit = readInteger(_req.query.limit, 100);
+    const search = readNonEmptyString(_req.query.search);
+    const createdOn = readNonEmptyString(_req.query.createdOn);
+
+    try {
+      const result = await importsService.listImports({
+        cursor: cursor || null,
+        limit,
+        search: search || null,
+        createdOn: createdOn || null,
+      });
+      return res.json({
+        imports: result.items,
+        pagination: {
+          limit: result.limit,
+          nextCursor: result.nextCursor,
+          hasMore: result.nextCursor !== null,
+          total: result.total,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Error && /invalid imports cursor/i.test(error.message)) {
+        throw badRequest("Invalid imports cursor.");
+      }
+      throw error;
+    }
   };
 
   const createImport = async (req: AuthenticatedRequest, res: Response) => {

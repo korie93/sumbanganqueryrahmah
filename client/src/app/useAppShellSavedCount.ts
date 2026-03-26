@@ -23,9 +23,13 @@ export function useAppShellSavedCount({
       }
 
       try {
-        const data = await getImports();
+        const data = await getImports({ limit: 1 });
         if (!cancelled) {
-          setSavedCount(data.imports?.length || 0);
+          setSavedCount(
+            typeof data?.pagination?.total === "number"
+              ? data.pagination.total
+              : (data.imports?.length || 0),
+          );
         }
       } catch {
         if (!cancelled) {

@@ -1,10 +1,17 @@
 import type { Express, RequestHandler, Response } from "express";
+import { z } from "zod";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { asyncHandler } from "../http/async-handler";
-import { ensureObject, readNonEmptyString } from "../http/validation";
+import { parseRequestBody } from "../http/validation";
 import { SettingsService } from "../services/settings.service";
 import type { PostgresStorage } from "../storage-postgres";
 import type { MaintenanceState } from "../config/system-settings";
+
+const settingsPatchBodySchema = z.object({
+  key: z.string().trim().min(1, "Invalid setting key"),
+  value: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional(),
+  confirmCritical: z.boolean().optional(),
+});
 
 type SettingsRouteDeps = {
   storage: PostgresStorage;
@@ -62,18 +69,15 @@ export function registerSettingsRoutes(app: Express, deps: SettingsRouteDeps) {
   }));
 
   app.patch("/api/settings", authenticateToken, requireRole("admin", "superuser"), requireTabAccess("settings"), asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const body = ensureObject(req.body) || {};
-    const key = readNonEmptyString(body.key);
-    if (!key) {
-      return res.status(400).json({ message: "Invalid setting key" });
-    }
+    const body = parseRequestBody(settingsPatchBodySchema, req.body);
+    const key = body.key;
 
     const role = req.user?.role || "user";
     const result = await settingsService.updateSetting({
       role,
       key,
       value: body.value,
-      confirmCritical: Boolean(body.confirmCritical),
+      confirmCritical: body.confirmCritical === true,
       updatedBy: req.user?.username || "system",
     });
 

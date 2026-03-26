@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ERROR_CODES } from "../../../shared/error-codes";
 import type { SystemSettingItem } from "../../config/system-settings";
+import { errorHandler } from "../../middleware/error-handler";
 import { registerSettingsRoutes } from "../settings.routes";
 import type { PostgresStorage } from "../../storage-postgres";
 import {
@@ -135,6 +137,7 @@ function createSettingsRouteHarness(options?: {
       broadcasts.push(payload);
     },
   });
+  app.use(errorHandler);
 
   return {
     app,
@@ -215,7 +218,19 @@ test("PATCH /api/settings validates the key before service work begins", async (
 
     assert.equal(response.status, 400);
     assert.deepEqual(await response.json(), {
+      ok: false,
       message: "Invalid setting key",
+      error: {
+        code: ERROR_CODES.REQUEST_BODY_INVALID,
+        message: "Invalid setting key",
+        details: [
+          {
+            code: "too_small",
+            message: "Invalid setting key",
+            path: "key",
+          },
+        ],
+      },
     });
     assert.equal(updateCalls.length, 0);
   } finally {
