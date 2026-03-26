@@ -487,6 +487,12 @@ const filterCollectionRecordsBySearch = async (page, searchValue) => {
   return targetRow;
 };
 
+const fillReceiptAmountInput = async (scope, amountValue) => {
+  const receiptAmountInput = scope.getByPlaceholder("Receipt Amount (RM)").last();
+  await receiptAmountInput.waitFor({ timeout: 15_000 });
+  await receiptAmountInput.fill(amountValue);
+};
+
 const closeReceiptPreviewDialog = async (page) => {
   const previewHeading = page.getByRole("heading", { name: "Receipt Preview" });
   await previewHeading.waitFor({ timeout: 15_000 });
@@ -606,6 +612,7 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     await getInputByLabel(page, "Amount (RM)").fill("12.34");
     await page.locator('input[type="file"]').setInputFiles(saveReceiptPath);
     await page.getByText(saveReceiptName).first().waitFor({ timeout: 15_000 });
+    await fillReceiptAmountInput(page, "12.34");
 
     const createResponsePromise = page.waitForResponse(
       (response) =>
@@ -642,6 +649,7 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     await editDialog.locator('input[type="file"]').setInputFiles(replaceReceiptPath);
     await editDialog.getByText(replaceReceiptName).first().waitFor({ timeout: 15_000 });
     await editDialog.getByText("Replacement Pending").first().waitFor({ timeout: 15_000 });
+    await fillReceiptAmountInput(editDialog, "12.34");
 
     const updateResponsePromise = page.waitForResponse(
       (response) =>
