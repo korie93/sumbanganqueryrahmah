@@ -6,12 +6,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { CollectionReceiptReviewSummary } from "@/pages/collection/collection-receipt-status";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 export interface CollectionRecordsToolbarProps {
   summary: { totalRecords: number; totalAmount: number };
-  reviewSummary?: CollectionReceiptReviewSummary;
   loadingRecords: boolean;
   viewAllLoading: boolean;
   exportingExcel: boolean;
@@ -41,7 +39,6 @@ export interface CollectionRecordsToolbarProps {
 
 export function CollectionRecordsToolbar({
   summary,
-  reviewSummary,
   loadingRecords,
   viewAllLoading,
   exportingExcel,
@@ -68,24 +65,12 @@ export function CollectionRecordsToolbar({
 
   return (
     <>
-      <OperationalSummaryStrip className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <OperationalSummaryStrip className="grid gap-3 md:grid-cols-2">
         <OperationalMetric label="Total Records" value={summary.totalRecords} />
         <OperationalMetric
           label="Total Collection Amount"
           value={formatAmountRM(summary.totalAmount)}
           tone="success"
-        />
-        <OperationalMetric
-          label="Needs Review"
-          value={reviewSummary?.flaggedCount ?? 0}
-          supporting="Flagged in current result set"
-          tone={(reviewSummary?.flaggedCount ?? 0) > 0 ? "warning" : "default"}
-        />
-        <OperationalMetric
-          label="Duplicate Warnings"
-          value={reviewSummary?.duplicateWarningCount ?? 0}
-          supporting="Possible repeated uploads"
-          tone={(reviewSummary?.duplicateWarningCount ?? 0) > 0 ? "warning" : "default"}
         />
       </OperationalSummaryStrip>
 

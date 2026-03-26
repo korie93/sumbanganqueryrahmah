@@ -45,11 +45,6 @@ export function buildCollectionRecordFormData(
   appendCollectionFormValue(formData, "amount", payload.amount);
   appendCollectionFormValue(formData, "collectionStaffNickname", payload.collectionStaffNickname);
   appendCollectionFormValue(formData, "expectedUpdatedAt", payload.expectedUpdatedAt);
-  appendCollectionFormValue(
-    formData,
-    "receiptValidationOverrideReason",
-    payload.receiptValidationOverrideReason,
-  );
 
   if (Array.isArray(payload.newReceiptMetadata)) {
     appendCollectionJsonValue(formData, "newReceiptMetadata", payload.newReceiptMetadata);

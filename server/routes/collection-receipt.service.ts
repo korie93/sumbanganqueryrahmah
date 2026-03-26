@@ -20,7 +20,6 @@ import {
 } from "../lib/collection-receipt-security";
 import { scanCollectionReceiptWithExternalScanner } from "../lib/collection-receipt-external-scan";
 import { logger } from "../lib/logger";
-import { extractCollectionReceiptSuggestion } from "../services/collection/collection-receipt-extraction";
 import type {
   CollectionRecordReceipt,
   CreateCollectionRecordReceiptInput,
@@ -259,19 +258,12 @@ async function inspectCollectionReceiptBuffer(params: {
   imageWidth?: number;
   imageHeight?: number;
 }): Promise<CollectionReceiptInspectionResult> {
-  const extracted = await extractCollectionReceiptSuggestion({
-    buffer: params.buffer,
-    mimeType: params.mimeType,
-    imageWidth: params.imageWidth,
-    imageHeight: params.imageHeight,
-  });
-
   return {
     fileHash: createHash("sha256").update(params.buffer).digest("hex"),
-    extractedAmountCents: extracted.extractedAmountCents,
-    extractionStatus: extracted.extractionStatus,
-    extractionConfidence: extracted.extractionConfidence,
-    extractionMessage: extracted.extractionMessage,
+    extractedAmountCents: null,
+    extractionStatus: "unprocessed",
+    extractionConfidence: null,
+    extractionMessage: null,
   };
 }
 

@@ -21,13 +21,10 @@ import {
 } from "@/lib/api/collection-records";
 import {
   buildCollectionReceiptMetadataPayload,
-  buildCollectionReceiptValidationPreview,
   createCollectionReceiptDraftFromReceipt,
   createEmptyCollectionReceiptDraft,
-  shouldBlockCollectionReceiptSave,
   type CollectionReceiptDraftInput,
 } from "@/pages/collection/receipt-validation";
-import { useCollectionReceiptInspection } from "@/pages/collection/useCollectionReceiptInspection";
 import {
   COLLECTION_BATCH_OPTIONS,
   emitCollectionDataChanged,
@@ -45,7 +42,6 @@ function cloneReceiptIds(receiptIds: string[]) {
 }
 
 type UseCollectionRecordEditArgs = {
-  role: string;
   loadingNicknames: boolean;
   nicknameOptions: CollectionStaffNickname[];
   onRefresh: () => Promise<unknown>;
@@ -53,7 +49,6 @@ type UseCollectionRecordEditArgs = {
 };
 
 export function useCollectionRecordEdit({
-  role,
   loadingNicknames,
   nicknameOptions,
   onRefresh,
@@ -64,7 +59,6 @@ export function useCollectionRecordEdit({
   const savingEditInFlightRef = useRef(false);
   const editReceiptInputRef = useRef<HTMLInputElement | null>(null);
   const editMutationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
-  const { inspectReceipt, cancelInspection, cancelAllInspections } = useCollectionReceiptInspection();
 
   const [editOpen, setEditOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<CollectionRecord | null>(null);
@@ -80,47 +74,13 @@ export function useCollectionRecordEdit({
   const [editExistingReceiptDrafts, setEditExistingReceiptDrafts] = useState<CollectionReceiptDraftInput[]>([]);
   const [editPendingReceiptDrafts, setEditPendingReceiptDrafts] = useState<CollectionReceiptDraftInput[]>([]);
   const [editRemovedReceiptIds, setEditRemovedReceiptIds] = useState<string[]>([]);
-  const [editReceiptValidationOverrideReason, setEditReceiptValidationOverrideReason] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const maxPaymentDate = getTodayIsoDate();
-  const canOverrideReceiptValidation = role === "admin" || role === "superuser";
-  const activeExistingReceiptDrafts = useMemo(
-    () => {
-      const removed = new Set(editRemovedReceiptIds);
-      return editExistingReceiptDrafts.filter((draft) => !removed.has(String(draft.receiptId || "")));
-    },
-    [editExistingReceiptDrafts, editRemovedReceiptIds],
-  );
-  const editReceiptValidation = useMemo(
-    () =>
-      buildCollectionReceiptValidationPreview({
-        totalPaid: editAmount,
-        receipts: [...activeExistingReceiptDrafts, ...editPendingReceiptDrafts],
-      }),
-    [activeExistingReceiptDrafts, editAmount, editPendingReceiptDrafts],
-  );
-  const isEditReceiptSaveBlocked = shouldBlockCollectionReceiptSave({
-    validation: editReceiptValidation,
-    role,
-    overrideReason: editReceiptValidationOverrideReason,
-  });
 
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
-      cancelAllInspections();
     };
-  }, [cancelAllInspections]);
-
-  const applyPendingDraftPatch = useCallback((
-    draftLocalId: string,
-    patch: Partial<CollectionReceiptDraftInput>,
-  ) => {
-    setEditPendingReceiptDrafts((previous) =>
-      previous.map((draft) =>
-        draft.draftLocalId === draftLocalId ? { ...draft, ...patch } : draft,
-      ),
-    );
   }, []);
 
   const handleEditDialogOpenChange = useCallback((open: boolean) => {
@@ -129,21 +89,18 @@ export function useCollectionRecordEdit({
       return;
     }
 
-    cancelAllInspections();
     setEditingRecord(null);
     setEditNewReceiptFiles([]);
     setEditExistingReceiptDrafts([]);
     setEditPendingReceiptDrafts([]);
     setEditRemovedReceiptIds([]);
-    setEditReceiptValidationOverrideReason("");
     editMutationIntentRef.current = null;
     if (editReceiptInputRef.current) {
       editReceiptInputRef.current.value = "";
     }
-  }, [cancelAllInspections]);
+  }, []);
 
   const openEditDialog = useCallback((record: CollectionRecord) => {
-    cancelAllInspections();
     setEditingRecord(record);
     setEditCustomerName(record.customerName);
     setEditIcNumber(record.icNumber);
@@ -157,13 +114,12 @@ export function useCollectionRecordEdit({
     setEditExistingReceiptDrafts(record.receipts.map((receipt) => createCollectionReceiptDraftFromReceipt(receipt)));
     setEditPendingReceiptDrafts([]);
     setEditRemovedReceiptIds([]);
-    setEditReceiptValidationOverrideReason("");
     editMutationIntentRef.current = null;
     if (editReceiptInputRef.current) {
       editReceiptInputRef.current.value = "";
     }
     setEditOpen(true);
-  }, [cancelAllInspections]);
+  }, []);
 
   const handleEditReceiptChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null;
@@ -182,22 +138,7 @@ export function useCollectionRecordEdit({
     const nextDraft = createEmptyCollectionReceiptDraft();
     setEditNewReceiptFiles((previous) => [...previous, file]);
     setEditPendingReceiptDrafts((previous) => [...previous, nextDraft]);
-    void inspectReceipt({
-      file,
-      draftLocalId: nextDraft.draftLocalId,
-      applyDraftPatch: applyPendingDraftPatch,
-      onError: (error) => {
-        if (!isMountedRef.current) {
-          return;
-        }
-        notifyMutationError({
-          title: "Receipt Analysis Limited",
-          error,
-          fallbackDescription: "Analisis automatik gagal. Sila semak dan isi jumlah resit secara manual.",
-        });
-      },
-    });
-  }, [applyPendingDraftPatch, inspectReceipt, notifyMutationError]);
+  }, [notifyMutationError]);
 
   const handleSaveEdit = useCallback(async () => {
     if (!editingRecord || savingEdit || savingEditInFlightRef.current) return;
@@ -274,23 +215,13 @@ export function useCollectionRecordEdit({
         return;
       }
     }
-    if (isEditReceiptSaveBlocked) {
-      notifyMutationError({
-        title: "Receipt Validation Required",
-        description: canOverrideReceiptValidation && editReceiptValidation.requiresOverride
-          ? editReceiptValidationOverrideReason.trim()
-            ? editReceiptValidation.message
-            : "Sila masukkan sebab override sebelum simpan."
-          : editReceiptValidation.message,
-      });
-      return;
-    }
-
     savingEditInFlightRef.current = true;
     setSavingEdit(true);
     try {
-      const existingReceiptMetadata = activeExistingReceiptDrafts.map((draft) =>
-        buildCollectionReceiptMetadataPayload(draft));
+      const removedExistingReceiptIds = new Set(editRemovedReceiptIds);
+      const existingReceiptMetadata = editExistingReceiptDrafts
+        .filter((draft) => !removedExistingReceiptIds.has(String(draft.receiptId || "")))
+        .map((draft) => buildCollectionReceiptMetadataPayload(draft));
       const newReceiptMetadata = editPendingReceiptDrafts.map((draft) =>
         buildCollectionReceiptMetadataPayload(draft));
       const payload: Record<string, unknown> = {
@@ -304,9 +235,6 @@ export function useCollectionRecordEdit({
         expectedUpdatedAt: editingRecord.updatedAt || editingRecord.createdAt,
         existingReceiptMetadata,
         newReceiptMetadata,
-        receiptValidationOverrideReason: editReceiptValidation.requiresOverride
-          ? editReceiptValidationOverrideReason.trim()
-          : undefined,
       };
 
       if (staffNicknameChanged) {
@@ -353,12 +281,10 @@ export function useCollectionRecordEdit({
       if (!isMountedRef.current) return;
       setEditOpen(false);
       setEditingRecord(null);
-      cancelAllInspections();
       setEditNewReceiptFiles([]);
       setEditExistingReceiptDrafts([]);
       setEditPendingReceiptDrafts([]);
       setEditRemovedReceiptIds([]);
-      setEditReceiptValidationOverrideReason("");
       editMutationIntentRef.current = null;
       await onRefresh();
     } catch (error: unknown) {
@@ -382,12 +308,10 @@ export function useCollectionRecordEdit({
         if (!isMountedRef.current) return;
         setEditOpen(false);
         setEditingRecord(null);
-        cancelAllInspections();
         setEditNewReceiptFiles([]);
         setEditExistingReceiptDrafts([]);
         setEditPendingReceiptDrafts([]);
         setEditRemovedReceiptIds([]);
-        setEditReceiptValidationOverrideReason("");
         editMutationIntentRef.current = null;
         if (editReceiptInputRef.current) {
           editReceiptInputRef.current.value = "";
@@ -418,14 +342,8 @@ export function useCollectionRecordEdit({
     editPendingReceiptDrafts,
     editPaymentDate,
     editRemovedReceiptIds,
-    editReceiptValidation,
-    editReceiptValidationOverrideReason,
     editStaffNickname,
     editingRecord,
-    activeExistingReceiptDrafts,
-    canOverrideReceiptValidation,
-    cancelAllInspections,
-    isEditReceiptSaveBlocked,
     nicknameOptions,
     onRefresh,
     savingEdit,
@@ -455,10 +373,6 @@ export function useCollectionRecordEdit({
       editNewReceiptFiles,
       editExistingReceiptDrafts,
       editPendingReceiptDrafts,
-      editReceiptValidation,
-      editReceiptValidationOverrideReason,
-      canOverrideReceiptValidation,
-      isEditReceiptSaveBlocked,
       editRemovedReceiptIds,
       editReceiptInputRef,
       onOpenChange: handleEditDialogOpenChange,
@@ -470,20 +384,13 @@ export function useCollectionRecordEdit({
       onPaymentDateChange: setEditPaymentDate,
       onAmountChange: setEditAmount,
       onStaffNicknameChange: setEditStaffNickname,
-      onReceiptValidationOverrideReasonChange: setEditReceiptValidationOverrideReason,
       onReceiptChange: handleEditReceiptChange,
       onRemovePendingReceipt: (index: number) => {
         setEditNewReceiptFiles((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
-        setEditPendingReceiptDrafts((previous) => {
-          const target = previous[index];
-          if (target) {
-            cancelInspection(target.draftLocalId);
-          }
-          return previous.filter((_, itemIndex) => itemIndex !== index);
-        });
+        setEditPendingReceiptDrafts((previous) =>
+          previous.filter((_, itemIndex) => itemIndex !== index));
       },
       onClearPendingReceipts: () => {
-        cancelAllInspections();
         setEditNewReceiptFiles([]);
         setEditPendingReceiptDrafts([]);
         if (editReceiptInputRef.current) {
