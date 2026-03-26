@@ -2772,3 +2772,60 @@ test("DELETE /api/collection/:id replays a successful delete when the same idemp
     await stopTestServer(server);
   }
 });
+
+test("DELETE /api/collection/:id keeps receipt file for later backup restore recoverability", async () => {
+  const uploadsDir = path.resolve(process.cwd(), "uploads", "collection-receipts");
+  const storedFileName = `route-test-delete-restore-receipt-${Date.now()}-${Math.random().toString(16).slice(2)}.png`;
+  const storedReceiptPath = `/uploads/collection-receipts/${storedFileName}`;
+  const storedAbsolutePath = path.join(uploadsDir, storedFileName);
+  await fs.mkdir(uploadsDir, { recursive: true });
+  await fs.writeFile(storedAbsolutePath, createTinyPngBuffer());
+
+  const { storage } = createCoreCollectionStorageDouble({
+    sessionNickname: "Collector Alpha",
+    receiptRowsByRecordId: {
+      "collection-1": [
+        {
+          id: "receipt-delete-restore",
+          collectionRecordId: "collection-1",
+          storagePath: storedReceiptPath,
+          originalFileName: storedFileName,
+          originalMimeType: "image/png",
+          originalExtension: ".png",
+          fileSize: 128,
+          createdAt: new Date("2026-03-10T00:00:00.000Z"),
+        },
+      ],
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+      activityId: "activity-user-collection-delete-restore",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+
+    assert.equal(response.status, 200);
+    await fs.access(storedAbsolutePath);
+  } finally {
+    await stopTestServer(server);
+    await fs.unlink(storedAbsolutePath).catch(() => undefined);
+  }
+});
