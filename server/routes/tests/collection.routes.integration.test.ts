@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
@@ -392,7 +393,7 @@ test("POST /api/collection stores matched receipt totals and allows save", async
   }
 });
 
-test("POST /api/collection blocks regular users when receipt total mismatches payment total", async () => {
+test("POST /api/collection blocks regular users when receipt total is underpaid", async () => {
   const { storage, createCalls, createReceiptCalls, auditLogs } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
 
@@ -433,7 +434,7 @@ test("POST /api/collection blocks regular users when receipt total mismatches pa
     assert.equal(response.status, 409);
     const payload = await response.json();
     assert.equal(payload.ok, false);
-    assert.match(String(payload.message), /tidak sepadan/i);
+    assert.match(String(payload.message), /kurang/i);
     assert.equal(createCalls.length, 0);
     assert.equal(createReceiptCalls.length, 0);
     assert.equal(auditLogs[0]?.action, "COLLECTION_RECEIPT_VALIDATION_REJECTED");
@@ -442,7 +443,7 @@ test("POST /api/collection blocks regular users when receipt total mismatches pa
   }
 });
 
-test("POST /api/collection allows superuser override for receipt mismatch with audit trail", async () => {
+test("POST /api/collection allows superuser override for receipt amount mismatch with audit trail", async () => {
   const { storage, createCalls, createReceiptCalls, auditLogs } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
 
@@ -487,7 +488,7 @@ test("POST /api/collection allows superuser override for receipt mismatch with a
     assert.equal(createCalls.length, 1);
     assert.equal(createReceiptCalls.length, 1);
     assert.equal(auditLogs.some((entry) => entry.action === "COLLECTION_RECEIPT_VALIDATION_OVERRIDDEN"), true);
-    assert.equal(payload.record.receiptValidationStatus, "mismatch");
+    assert.equal(payload.record.receiptValidationStatus, "underpaid");
   } finally {
     await stopTestServer(server);
   }
@@ -674,6 +675,68 @@ test("POST /api/collection accepts multipart receipt uploads without base64 JSON
     assert.equal(auditDetails.snapshot.activeReceiptCount, 1);
     assert.equal(auditDetails.snapshot.activeReceiptSource, "relation");
     assert.equal(auditDetails.receipts.addedCount, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/collection/receipt-inspect returns OCR assist state and duplicate warnings", async () => {
+  const duplicateBuffer = createTinyPngBuffer();
+  const duplicateHash = createHash("sha256").update(duplicateBuffer).digest("hex");
+  const { storage } = createCoreCollectionStorageDouble({
+    receiptRowsByRecordId: {
+      "collection-1": [
+        {
+          id: "receipt-collection-1-1",
+          collectionRecordId: "collection-1",
+          storagePath: "/uploads/collection-receipts/existing-duplicate.png",
+          originalFileName: "existing-duplicate.png",
+          originalMimeType: "image/png",
+          originalExtension: ".png",
+          fileSize: duplicateBuffer.length,
+          receiptAmount: "100.00",
+          extractionStatus: "suggested",
+          fileHash: duplicateHash,
+          createdAt: new Date("2026-03-01T09:30:00.000Z"),
+        },
+      ],
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const formData = new FormData();
+    formData.append(
+      "receipts",
+      new Blob([duplicateBuffer], { type: "image/png" }),
+      "duplicate-check.png",
+    );
+
+    const response = await fetch(`${baseUrl}/api/collection/receipt-inspect`, {
+      method: "POST",
+      body: formData,
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.receipts.length, 1);
+    assert.equal(payload.receipts[0]?.fileHash, duplicateHash);
+    assert.equal(payload.receipts[0]?.extractionStatus, "unavailable");
+    assert.equal(payload.receipts[0]?.duplicateSummary?.matchCount, 1);
+    assert.equal(payload.receipts[0]?.duplicateSummary?.matches?.[0]?.receiptId, "receipt-collection-1-1");
   } finally {
     await stopTestServer(server);
   }
@@ -999,7 +1062,7 @@ test("PATCH /api/collection/:id accepts multipart receipt uploads during edit fl
   }
 });
 
-test("PATCH /api/collection/:id blocks regular users when edited receipt totals mismatch payment total", async () => {
+test("PATCH /api/collection/:id blocks regular users when edited receipt totals become underpaid", async () => {
   const { storage, updateCalls, auditLogs } = createCoreCollectionStorageDouble({
     receiptRowsByRecordId: {
       "collection-1": [
@@ -1051,7 +1114,7 @@ test("PATCH /api/collection/:id blocks regular users when edited receipt totals 
     assert.equal(response.status, 409);
     const payload = await response.json();
     assert.equal(payload.ok, false);
-    assert.match(String(payload.message), /tidak sepadan/i);
+    assert.match(String(payload.message), /kurang/i);
     assert.equal(updateCalls.length, 0);
     assert.equal(auditLogs[0]?.action, "COLLECTION_RECEIPT_VALIDATION_REJECTED");
   } finally {

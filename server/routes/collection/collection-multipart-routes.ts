@@ -1,13 +1,18 @@
 import Busboy from "busboy";
 import type { RequestHandler } from "express";
-import type { StoredCollectionReceiptFile } from "../collection-receipt.service";
 import {
+  inspectMultipartCollectionReceipt,
   removeCollectionReceiptFile,
   saveMultipartCollectionReceipt,
 } from "../collection-receipt.service";
 
 type MultipartCollectionBody = Record<string, unknown> & {
   uploadedReceipts?: StoredCollectionReceiptFile[];
+};
+type StoredCollectionReceiptFile = Awaited<ReturnType<typeof saveMultipartCollectionReceipt>>;
+type InspectedCollectionReceiptFile = Awaited<ReturnType<typeof inspectMultipartCollectionReceipt>>;
+type MultipartCollectionInspectBody = Record<string, unknown> & {
+  inspectedReceipts?: InspectedCollectionReceiptFile[];
 };
 
 function normalizeMultipartFieldName(rawName: string): string {
@@ -49,6 +54,36 @@ function appendMultipartField(body: MultipartCollectionBody, rawName: string, va
 }
 
 export function createCollectionMultipartRoute(): RequestHandler {
+  return createCollectionReceiptMultipartRoute<StoredCollectionReceiptFile, MultipartCollectionBody>({
+    attachKey: "uploadedReceipts",
+    handleReceipt: saveMultipartCollectionReceipt,
+    cleanupReceipts: async (receipts) => {
+      await Promise.allSettled(
+        receipts.map((receipt) => removeCollectionReceiptFile(receipt.storagePath)),
+      );
+    },
+  });
+}
+
+export function createCollectionReceiptInspectRoute(): RequestHandler {
+  return createCollectionReceiptMultipartRoute<InspectedCollectionReceiptFile, MultipartCollectionInspectBody>({
+    attachKey: "inspectedReceipts",
+    handleReceipt: inspectMultipartCollectionReceipt,
+  });
+}
+
+function createCollectionReceiptMultipartRoute<
+  TReceipt,
+  TBody extends Record<string, unknown>,
+>(params: {
+  attachKey: keyof TBody;
+  handleReceipt: (input: {
+    fileName?: string | null;
+    mimeType?: string | null;
+    stream: NodeJS.ReadableStream;
+  }) => Promise<TReceipt>;
+  cleanupReceipts?: (receipts: TReceipt[]) => Promise<void>;
+}): RequestHandler {
   return (req, res, next) => {
     if (!req.is("multipart/form-data")) {
       next();
@@ -63,8 +98,8 @@ export function createCollectionMultipartRoute(): RequestHandler {
       },
     });
 
-    const body: MultipartCollectionBody = {};
-    const uploadTasks: Array<Promise<StoredCollectionReceiptFile>> = [];
+    const body = {} as TBody;
+    const uploadTasks: Array<Promise<TReceipt>> = [];
     let settled = false;
 
     const fail = async (error: unknown) => {
@@ -73,13 +108,16 @@ export function createCollectionMultipartRoute(): RequestHandler {
       }
       settled = true;
 
-      const completedUploads = await Promise.allSettled(uploadTasks);
-      const savedReceipts = completedUploads
-        .filter((result): result is PromiseFulfilledResult<StoredCollectionReceiptFile> => result.status === "fulfilled")
-        .map((result) => result.value);
-      await Promise.allSettled(
-        savedReceipts.map((receipt) => removeCollectionReceiptFile(receipt.storagePath)),
-      );
+      if (params.cleanupReceipts) {
+        const completedUploads = await Promise.allSettled(uploadTasks);
+        const completedReceipts: TReceipt[] = [];
+        for (const result of completedUploads) {
+          if (result.status === "fulfilled") {
+            completedReceipts.push(result.value as TReceipt);
+          }
+        }
+        await params.cleanupReceipts(completedReceipts);
+      }
 
       const message =
         error instanceof Error && error.message
@@ -103,7 +141,7 @@ export function createCollectionMultipartRoute(): RequestHandler {
       }
 
       uploadTasks.push(
-        saveMultipartCollectionReceipt({
+        params.handleReceipt({
           fileName: info.filename,
           mimeType: info.mimeType,
           stream: file,
@@ -121,7 +159,7 @@ export function createCollectionMultipartRoute(): RequestHandler {
       }
 
       try {
-        body.uploadedReceipts = await Promise.all(uploadTasks);
+        body[params.attachKey] = await Promise.all(uploadTasks) as TBody[keyof TBody];
         settled = true;
         req.body = body;
         next();

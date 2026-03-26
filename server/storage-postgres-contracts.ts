@@ -17,6 +17,8 @@ export type {
   CollectionRecord,
   CollectionRecordAggregate,
   CollectionRecordReceipt,
+  CollectionReceiptDuplicateSummary,
+  CollectionReceiptExtractionStatus,
   CollectionReceiptValidationStatus,
   CollectionRollupFreshnessSnapshot,
   CollectionStaffNickname,

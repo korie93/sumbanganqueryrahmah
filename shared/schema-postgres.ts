@@ -338,6 +338,7 @@ export const collectionRecords = pgTable("collection_records", {
   receiptValidationStatus: text("receipt_validation_status").notNull().default("needs_review"),
   receiptValidationMessage: text("receipt_validation_message"),
   receiptCount: integer("receipt_count").notNull().default(0),
+  duplicateReceiptFlag: boolean("duplicate_receipt_flag").notNull().default(false),
   createdByLogin: text("created_by_login").notNull(),
   collectionStaffNickname: text("collection_staff_nickname").notNull(),
   staffUsername: text("staff_username").notNull(),
@@ -389,6 +390,7 @@ export const collectionRecordReceipts = pgTable("collection_record_receipts", {
   fileSize: bigint("file_size", { mode: "number" }).notNull().default(0),
   receiptAmount: bigint("receipt_amount", { mode: "number" }),
   extractedAmount: bigint("extracted_amount", { mode: "number" }),
+  extractionStatus: text("extraction_status").notNull().default("unprocessed"),
   extractionConfidence: numeric("extraction_confidence", { precision: 5, scale: 4 }),
   receiptDate: date("receipt_date", { mode: "string" }),
   receiptReference: text("receipt_reference"),
@@ -401,6 +403,8 @@ export const collectionRecordReceipts = pgTable("collection_record_receipts", {
   ),
   recordFileHashUnique: uniqueIndex("idx_collection_record_receipts_record_file_hash_unique")
     .on(table.collectionRecordId, table.fileHash),
+  fileHashIdx: index("idx_collection_record_receipts_file_hash")
+    .on(table.fileHash),
   recordCreatedAtIdx: index("idx_collection_record_receipts_record_created_at").on(
     table.collectionRecordId,
     table.createdAt,

@@ -32,6 +32,7 @@ export type CollectionReceiptMetadataPayload = {
   receiptId?: string;
   receiptAmount?: number | string | null;
   extractedAmount?: number | string | null;
+  extractionStatus?: string | null;
   extractionConfidence?: number | string | null;
   receiptDate?: string | null;
   receiptReference?: string | null;

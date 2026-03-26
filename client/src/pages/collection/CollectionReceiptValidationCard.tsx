@@ -1,3 +1,4 @@
+import { AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,20 +16,36 @@ function resolveBadgeVariant(status: CollectionReceiptValidationPreview["status"
   if (status === "matched") {
     return "secondary" as const;
   }
-  if (status === "mismatch") {
-    return "destructive" as const;
+  if (status === "needs_review" || status === "unverified") {
+    return "outline" as const;
   }
-  return "outline" as const;
+  return "destructive" as const;
 }
 
 function resolveStatusLabel(status: CollectionReceiptValidationPreview["status"]) {
   if (status === "matched") {
     return "Matched";
   }
-  if (status === "mismatch") {
-    return "Mismatch";
+  if (status === "underpaid") {
+    return "Underpaid";
+  }
+  if (status === "overpaid") {
+    return "Overpaid";
+  }
+  if (status === "unverified") {
+    return "Unverified";
   }
   return "Needs Review";
+}
+
+function resolveStatusTone(status: CollectionReceiptValidationPreview["status"]) {
+  if (status === "matched") {
+    return "text-foreground";
+  }
+  if (status === "needs_review" || status === "unverified") {
+    return "text-amber-700";
+  }
+  return "text-destructive";
 }
 
 export function CollectionReceiptValidationCard({
@@ -49,12 +66,19 @@ export function CollectionReceiptValidationCard({
             Bandingkan jumlah bayaran utama dengan jumlah semua resit yang aktif sebelum simpan.
           </p>
         </div>
-        <Badge variant={resolveBadgeVariant(validation.status)}>
-          {resolveStatusLabel(validation.status)}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={resolveBadgeVariant(validation.status)}>
+            {resolveStatusLabel(validation.status)}
+          </Badge>
+          {validation.duplicateWarningCount > 0 ? (
+            <Badge variant="outline" className="border-amber-500/50 text-amber-700">
+              Duplicate Warning
+            </Badge>
+          ) : null}
+        </div>
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+      <div className="mt-3 grid gap-3 sm:grid-cols-4">
         <div className="rounded-md border border-border/50 bg-background/70 px-3 py-2">
           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Total Paid</p>
           <p className="text-sm font-semibold">{validation.totalPaidLabel}</p>
@@ -64,18 +88,28 @@ export function CollectionReceiptValidationCard({
           <p className="text-sm font-semibold">{validation.receiptTotalAmountLabel}</p>
         </div>
         <div className="rounded-md border border-border/50 bg-background/70 px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Difference</p>
+          <p className="text-sm font-semibold">{validation.differenceAmountLabel}</p>
+        </div>
+        <div className="rounded-md border border-border/50 bg-background/70 px-3 py-2">
           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Receipt Count</p>
           <p className="text-sm font-semibold">{validation.receiptCount}</p>
         </div>
       </div>
 
-      <p
-        className={`mt-3 text-sm ${
-          validation.status === "matched" ? "text-foreground" : "text-destructive"
-        }`}
-      >
+      <p className={`mt-3 text-sm ${resolveStatusTone(validation.status)}`}>
         {validation.message}
       </p>
+
+      {validation.duplicateWarningCount > 0 ? (
+        <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            Sistem mengesan {validation.duplicateWarningCount} resit yang mungkin pernah dimuat naik sebelum ini.
+            Semak semula nombor rujukan dan fail yang dilampirkan sebelum meneruskan.
+          </p>
+        </div>
+      ) : null}
 
       {showOverrideField ? (
         <div className="mt-3 space-y-2">
@@ -86,7 +120,7 @@ export function CollectionReceiptValidationCard({
             onChange={(event) => onOverrideReasonChange(event.target.value)}
             disabled={disabled}
             rows={3}
-            placeholder="Nyatakan sebab kenapa simpanan mismatch ini dibenarkan."
+            placeholder="Nyatakan sebab kenapa simpanan ini dibenarkan walaupun jumlah resit memerlukan override."
           />
           <p className="text-xs text-muted-foreground">
             Override hanya dibenarkan untuk admin atau superuser, dan sebab ini akan direkodkan dalam audit log.

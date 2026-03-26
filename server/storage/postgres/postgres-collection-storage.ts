@@ -306,6 +306,13 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
     return this.collectionRepository.getCollectionRecordReceiptById(recordId, receiptId);
   }
 
+  async findCollectionReceiptDuplicateSummaries(
+    fileHashes: string[],
+    options?: { excludeRecordId?: string },
+  ) {
+    return this.collectionRepository.findCollectionReceiptDuplicateSummaries(fileHashes, options);
+  }
+
   async createCollectionRecordReceipts(
     recordId: string,
     receipts: CreateCollectionRecordReceiptInput[],

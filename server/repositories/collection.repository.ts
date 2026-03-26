@@ -42,6 +42,7 @@ import {
   createCollectionRecordReceiptRows,
   deleteAllCollectionRecordReceiptRows,
   deleteCollectionRecordReceiptRows,
+  findCollectionReceiptDuplicateSummariesByHash,
   getCollectionRecordReceiptByIdForRecord,
   listCollectionRecordReceiptsByRecordId,
   syncCollectionRecordReceiptValidation,
@@ -73,6 +74,7 @@ import type {
   CollectionNicknameDailyAggregate,
   CollectionRecord,
   CollectionRecordReceipt,
+  CollectionReceiptDuplicateSummary,
   CollectionStaffNickname,
   CreateCollectionRecordInput,
   CreateCollectionRecordReceiptInput,
@@ -396,6 +398,13 @@ export class CollectionRepository {
     receiptId: string,
   ): Promise<CollectionRecordReceipt | undefined> {
     return getCollectionRecordReceiptByIdForRecord(db, recordId, receiptId);
+  }
+
+  async findCollectionReceiptDuplicateSummaries(
+    fileHashes: string[],
+    options?: { excludeRecordId?: string },
+  ): Promise<CollectionReceiptDuplicateSummary[]> {
+    return findCollectionReceiptDuplicateSummariesByHash(db, fileHashes, options);
   }
 
   async createCollectionRecordReceipts(

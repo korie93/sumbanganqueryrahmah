@@ -10,6 +10,7 @@ export type CollectionRecordReceipt = {
   fileSize: number;
   receiptAmount: string | null;
   extractedAmount: string | null;
+  extractionStatus: CollectionReceiptExtractionStatus;
   extractionConfidence: number | null;
   receiptDate: string | null;
   receiptReference: string | null;
@@ -17,7 +18,41 @@ export type CollectionRecordReceipt = {
   createdAt: string;
 };
 
-export type CollectionReceiptValidationStatus = "matched" | "mismatch" | "needs_review";
+export type CollectionReceiptValidationStatus =
+  | "matched"
+  | "underpaid"
+  | "overpaid"
+  | "unverified"
+  | "needs_review";
+export type CollectionReceiptExtractionStatus =
+  | "unprocessed"
+  | "suggested"
+  | "ambiguous"
+  | "unavailable"
+  | "error";
+
+export type CollectionReceiptDuplicateMatch = {
+  receiptId: string;
+  collectionRecordId: string;
+  originalFileName: string;
+  createdAt: string;
+};
+
+export type CollectionReceiptDuplicateSummary = {
+  fileHash: string;
+  matchCount: number;
+  matches: CollectionReceiptDuplicateMatch[];
+};
+
+export type CollectionReceiptInspection = {
+  fileName: string;
+  fileHash: string | null;
+  extractedAmount: string | null;
+  extractionStatus: CollectionReceiptExtractionStatus;
+  extractionConfidence: number | null;
+  extractionMessage: string | null;
+  duplicateSummary: CollectionReceiptDuplicateSummary | null;
+};
 
 export type CollectionRecord = {
   id: string;
@@ -34,6 +69,7 @@ export type CollectionRecord = {
   receiptValidationStatus: CollectionReceiptValidationStatus;
   receiptValidationMessage: string | null;
   receiptCount: number;
+  duplicateReceiptFlag: boolean;
   createdByLogin: string;
   collectionStaffNickname: string;
   createdAt: string;
@@ -81,6 +117,7 @@ export type CollectionReceiptMetadata = {
   receiptId?: string;
   receiptAmount?: number | string | null;
   extractedAmount?: number | string | null;
+  extractionStatus?: CollectionReceiptExtractionStatus | null;
   extractionConfidence?: number | string | null;
   receiptDate?: string | null;
   receiptReference?: string | null;
@@ -107,6 +144,11 @@ export type UpdateCollectionPayload = Partial<CreateCollectionPayload> & {
   removeReceiptIds?: string[];
   expectedUpdatedAt?: string;
   existingReceiptMetadata?: CollectionReceiptMetadata[] | null;
+};
+
+export type CollectionReceiptInspectResponse = {
+  ok: boolean;
+  receipts: CollectionReceiptInspection[];
 };
 
 export type CollectionRecordListResponse = {

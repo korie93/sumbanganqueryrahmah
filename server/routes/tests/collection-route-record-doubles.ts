@@ -3,6 +3,10 @@ import type {
   MutationIdempotencyAcquireInput,
   MutationIdempotencyCompleteInput,
 } from "../../storage-postgres";
+import {
+  buildCollectionReceiptValidationResult,
+  normalizeCollectionReceiptExtractionStatus,
+} from "../../services/collection/collection-receipt-validation";
 
 export type AuditEntry = {
   action: string;
@@ -23,9 +27,10 @@ export type CollectionRecordShape = {
   receiptFile: string | null;
   receipts: unknown[];
   receiptTotalAmount: string;
-  receiptValidationStatus: "matched" | "mismatch" | "needs_review";
+  receiptValidationStatus: "matched" | "underpaid" | "overpaid" | "unverified" | "needs_review";
   receiptValidationMessage: string | null;
   receiptCount: number;
+  duplicateReceiptFlag: boolean;
   createdByLogin: string;
   collectionStaffNickname: string;
   createdAt: Date;
@@ -42,6 +47,7 @@ type CollectionReceiptShape = {
   fileSize: number;
   receiptAmount: string | null;
   extractedAmount: string | null;
+  extractionStatus: "unprocessed" | "suggested" | "ambiguous" | "unavailable" | "error";
   extractionConfidence: number | null;
   receiptDate: string | null;
   receiptReference: string | null;
@@ -205,6 +211,7 @@ export function createCoreCollectionStorageDouble(options?: {
     fileSize: number;
     receiptAmount?: string | null;
     extractedAmount?: string | null;
+    extractionStatus?: string | null;
     extractionConfidence?: number | null;
     receiptDate?: string | null;
     receiptReference?: string | null;
@@ -232,6 +239,7 @@ export function createCoreCollectionStorageDouble(options?: {
         fileSize: number;
         receiptAmountCents?: number | null;
         extractedAmountCents?: number | null;
+        extractionStatus?: string | null;
         extractionConfidence?: number | null;
         receiptDate?: string | null;
         receiptReference?: string | null;
@@ -241,6 +249,7 @@ export function createCoreCollectionStorageDouble(options?: {
         receiptId: string;
         receiptAmountCents?: number | null;
         extractedAmountCents?: number | null;
+        extractionStatus?: string | null;
         extractionConfidence?: number | null;
         receiptDate?: string | null;
         receiptReference?: string | null;
@@ -257,6 +266,7 @@ export function createCoreCollectionStorageDouble(options?: {
       fileSize: number;
       receiptAmountCents?: number | null;
       extractedAmountCents?: number | null;
+      extractionStatus?: string | null;
       extractionConfidence?: number | null;
       receiptDate?: string | null;
       receiptReference?: string | null;
@@ -292,9 +302,10 @@ export function createCoreCollectionStorageDouble(options?: {
     receiptFile: null,
     receipts: [],
     receiptTotalAmount: "0.00",
-    receiptValidationStatus: "needs_review",
+    receiptValidationStatus: "unverified",
     receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
     receiptCount: 0,
+    duplicateReceiptFlag: false,
     createdByLogin: "staff.user",
     collectionStaffNickname: "Collector Alpha",
     createdAt: new Date("2026-03-01T09:00:00.000Z"),
@@ -310,6 +321,7 @@ export function createCoreCollectionStorageDouble(options?: {
         ...receipt,
         receiptAmount: receipt.receiptAmount ?? null,
         extractedAmount: receipt.extractedAmount ?? null,
+        extractionStatus: normalizeCollectionReceiptExtractionStatus(receipt.extractionStatus),
         extractionConfidence: receipt.extractionConfidence ?? null,
         receiptDate: receipt.receiptDate ?? null,
         receiptReference: receipt.receiptReference ?? null,
@@ -330,35 +342,47 @@ export function createCoreCollectionStorageDouble(options?: {
     }
 
     const receipts = receiptRowsByRecordId.get(recordId) || [];
-    const totalPaidCents = parseAmountToCents(existing.amount);
-    const receiptTotalAmountCents = receipts.reduce(
-      (sum, receipt) => sum + parseAmountToCents(receipt.receiptAmount),
-      0,
-    );
-    const missingReceiptAmount = receipts.some((receipt) => !String(receipt.receiptAmount || "").trim());
-    const receiptValidationStatus =
-      receipts.length === 0
-        ? "needs_review"
-        : missingReceiptAmount
-          ? "needs_review"
-          : receiptTotalAmountCents === totalPaidCents
-            ? "matched"
-            : "mismatch";
-    const receiptValidationMessage =
-      receipts.length === 0
-        ? "Tiada resit dilampirkan untuk semakan jumlah."
-        : missingReceiptAmount
-          ? "Setiap resit perlu disahkan jumlahnya sebelum rekod boleh disimpan."
-          : receiptTotalAmountCents === totalPaidCents
-            ? "Jumlah resit sepadan dengan jumlah bayaran yang dimasukkan."
-            : `Jumlah resit RM ${formatAmountFromCents(receiptTotalAmountCents)} tidak sepadan dengan jumlah bayaran RM ${formatAmountFromCents(totalPaidCents)}.`;
+    const validation = buildCollectionReceiptValidationResult({
+      totalPaidCents: parseAmountToCents(existing.amount),
+      receipts: receipts.map((receipt) => ({
+        receiptId: receipt.id,
+        fileHash: receipt.fileHash,
+        originalFileName: receipt.originalFileName,
+        receiptAmountCents:
+          receipt.receiptAmount === null || receipt.receiptAmount === undefined || receipt.receiptAmount === ""
+            ? null
+            : parseAmountToCents(receipt.receiptAmount),
+        extractedAmountCents:
+          receipt.extractedAmount === null || receipt.extractedAmount === undefined || receipt.extractedAmount === ""
+            ? null
+            : parseAmountToCents(receipt.extractedAmount),
+        extractionStatus: receipt.extractionStatus,
+        extractionConfidence: receipt.extractionConfidence,
+        receiptDate: receipt.receiptDate,
+        receiptReference: receipt.receiptReference,
+      })),
+    });
+    const seenHashes = new Set<string>();
+    let duplicateReceiptFlag = false;
+    for (const receipt of receipts) {
+      const normalizedHash = String(receipt.fileHash || "").trim().toLowerCase();
+      if (!normalizedHash) {
+        continue;
+      }
+      if (seenHashes.has(normalizedHash)) {
+        duplicateReceiptFlag = true;
+        break;
+      }
+      seenHashes.add(normalizedHash);
+    }
     records.set(recordId, {
       ...existing,
       receiptFile: receipts[0]?.storagePath || existing.receiptFile || null,
-      receiptTotalAmount: formatAmountFromCents(receiptTotalAmountCents),
-      receiptValidationStatus,
-      receiptValidationMessage,
+      receiptTotalAmount: formatAmountFromCents(validation.receiptTotalAmountCents),
+      receiptValidationStatus: validation.status,
+      receiptValidationMessage: validation.message,
       receiptCount: receipts.length,
+      duplicateReceiptFlag,
     });
   };
 
@@ -396,9 +420,10 @@ export function createCoreCollectionStorageDouble(options?: {
         receiptFile: (data.receiptFile as string | null | undefined) ?? null,
         receipts: [],
         receiptTotalAmount: "0.00",
-        receiptValidationStatus: "needs_review",
+        receiptValidationStatus: "unverified",
         receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
         receiptCount: 0,
+        duplicateReceiptFlag: false,
         createdByLogin: String(data.createdByLogin),
         collectionStaffNickname: String(data.collectionStaffNickname),
         createdAt: new Date("2026-03-15T10:00:00.000Z"),
@@ -444,6 +469,35 @@ export function createCoreCollectionStorageDouble(options?: {
       return Array.from(records.values()).map((record) => hydrateRecord(record));
     },
     listCollectionRecordReceipts: async (recordId: string) => receiptRowsByRecordId.get(recordId) || [],
+    findCollectionReceiptDuplicateSummaries: async (fileHashes: string[], options?: { excludeRecordId?: string }) => {
+      const normalizedExcludeRecordId = String(options?.excludeRecordId || "").trim();
+      const normalizedHashes = Array.from(
+        new Set((fileHashes || []).map((value) => String(value || "").trim().toLowerCase()).filter(Boolean)),
+      );
+
+      return normalizedHashes
+        .map((fileHash) => {
+          const matches = Array.from(receiptRowsByRecordId.values())
+            .flat()
+            .filter((receipt) => receipt.fileHash === fileHash)
+            .filter((receipt) => receipt.collectionRecordId !== normalizedExcludeRecordId)
+            .map((receipt) => ({
+              receiptId: receipt.id,
+              collectionRecordId: receipt.collectionRecordId,
+              originalFileName: receipt.originalFileName,
+              createdAt: receipt.createdAt,
+            }));
+
+          return matches.length > 0
+            ? {
+                fileHash,
+                matchCount: matches.length,
+                matches,
+              }
+            : null;
+        })
+        .filter((summary): summary is NonNullable<typeof summary> => Boolean(summary));
+    },
     getCollectionRecordReceiptById: async (recordId: string, receiptId: string) =>
       (receiptRowsByRecordId.get(recordId) || []).find((receipt) => receipt.id === receiptId) || null,
     createCollectionRecordReceipts: async (
@@ -456,6 +510,7 @@ export function createCoreCollectionStorageDouble(options?: {
         fileSize: number;
         receiptAmountCents?: number | null;
         extractedAmountCents?: number | null;
+        extractionStatus?: string | null;
         extractionConfidence?: number | null;
         receiptDate?: string | null;
         receiptReference?: string | null;
@@ -472,6 +527,7 @@ export function createCoreCollectionStorageDouble(options?: {
           fileSize: Number(receipt.fileSize || 0),
           receiptAmountCents: receipt.receiptAmountCents ?? null,
           extractedAmountCents: receipt.extractedAmountCents ?? null,
+          extractionStatus: String(receipt.extractionStatus || "").trim() || "unprocessed",
           extractionConfidence: receipt.extractionConfidence ?? null,
           receiptDate: String(receipt.receiptDate || "").trim() || null,
           receiptReference: String(receipt.receiptReference || "").trim() || null,
@@ -496,6 +552,7 @@ export function createCoreCollectionStorageDouble(options?: {
           fileSize: Number(receipt.fileSize || 0),
           receiptAmount: receipt.receiptAmountCents == null ? null : formatAmountFromCents(receipt.receiptAmountCents),
           extractedAmount: receipt.extractedAmountCents == null ? null : formatAmountFromCents(receipt.extractedAmountCents),
+          extractionStatus: normalizeCollectionReceiptExtractionStatus(receipt.extractionStatus),
           extractionConfidence:
             receipt.extractionConfidence === undefined || receipt.extractionConfidence === null
               ? null
@@ -518,6 +575,7 @@ export function createCoreCollectionStorageDouble(options?: {
         receiptId: string;
         receiptAmountCents?: number | null;
         extractedAmountCents?: number | null;
+        extractionStatus?: string | null;
         extractionConfidence?: number | null;
         receiptDate?: string | null;
         receiptReference?: string | null;
@@ -538,6 +596,7 @@ export function createCoreCollectionStorageDouble(options?: {
           update.extractedAmountCents === undefined || update.extractedAmountCents === null
             ? null
             : formatAmountFromCents(update.extractedAmountCents);
+        receipt.extractionStatus = normalizeCollectionReceiptExtractionStatus(update.extractionStatus);
         receipt.extractionConfidence =
           update.extractionConfidence === undefined || update.extractionConfidence === null
             ? null
@@ -643,6 +702,7 @@ export function createCoreCollectionStorageDouble(options?: {
               update.extractedAmountCents === undefined || update.extractedAmountCents === null
                 ? null
                 : formatAmountFromCents(update.extractedAmountCents),
+            extractionStatus: normalizeCollectionReceiptExtractionStatus(update.extractionStatus),
             extractionConfidence:
               update.extractionConfidence === undefined || update.extractionConfidence === null
                 ? null
@@ -669,6 +729,7 @@ export function createCoreCollectionStorageDouble(options?: {
             receipt.extractedAmountCents === undefined || receipt.extractedAmountCents === null
               ? null
               : formatAmountFromCents(receipt.extractedAmountCents),
+          extractionStatus: normalizeCollectionReceiptExtractionStatus(receipt.extractionStatus),
           extractionConfidence:
             receipt.extractionConfidence === undefined || receipt.extractionConfidence === null
               ? null

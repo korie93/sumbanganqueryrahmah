@@ -48,6 +48,7 @@ function mapDailyReceiptToCollectionReceipt(
     fileSize: receipt.fileSize,
     receiptAmount: null,
     extractedAmount: null,
+    extractionStatus: "unprocessed",
     extractionConfidence: null,
     receiptDate: null,
     receiptReference: null,
@@ -73,12 +74,13 @@ function mapDailyRecordToCollectionRecord(record: CollectionDailyDayRecord): Col
     receiptFile: null,
     receipts,
     receiptTotalAmount: "0.00",
-    receiptValidationStatus: receipts.length > 0 ? "needs_review" : "needs_review",
+    receiptValidationStatus: receipts.length > 0 ? "unverified" : "unverified",
     receiptValidationMessage:
       receipts.length > 0
         ? "Jumlah resit sedang menunggu semakan di skrin harian."
         : "Tiada resit dilampirkan untuk semakan jumlah.",
     receiptCount: receipts.length,
+    duplicateReceiptFlag: false,
     createdByLogin: record.username,
     collectionStaffNickname: record.collectionStaffNickname,
     createdAt: record.createdAt,

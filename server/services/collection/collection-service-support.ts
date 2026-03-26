@@ -32,6 +32,7 @@ export type CollectionStoragePort = Pick<
   | "getCollectionNicknameAuthProfileByName"
   | "getCollectionNicknameSessionByActivity"
   | "getCollectionRecordById"
+  | "findCollectionReceiptDuplicateSummaries"
   | "getCollectionStaffNicknameById"
   | "getCollectionStaffNicknameByName"
   | "getCollectionStaffNicknames"
