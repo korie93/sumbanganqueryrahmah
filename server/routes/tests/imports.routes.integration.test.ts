@@ -80,6 +80,7 @@ function applyImportColumnFilters(
 function createImportsRouteHarness(options?: {
   viewerRowsPerPage?: number;
   isDbProtected?: boolean;
+  seedImportRows?: DataRow[];
 }) {
   const auditLogs: AuditEntry[] = [];
   const searchCalls: Array<Record<string, unknown>> = [];
@@ -120,27 +121,26 @@ function createImportsRouteHarness(options?: {
   importRecords.set(secondImport.id, secondImport);
   importRecords.set(thirdImport.id, thirdImport);
 
+  const seedImportRows = options?.seedImportRows ?? [
+    {
+      id: "row-1",
+      importId: seedImport.id,
+      jsonDataJsonb: { name: "Alice", age: 31 },
+    },
+    {
+      id: "row-2",
+      importId: seedImport.id,
+      jsonDataJsonb: { name: "Bob", age: 42 },
+    },
+  ];
+
   const importRowCounts = new Map<string, number>([
-    [seedImport.id, 2],
+    [seedImport.id, seedImportRows.length],
     [secondImport.id, 1],
     [thirdImport.id, 0],
   ]);
   const dataRowsByImport = new Map<string, DataRow[]>([
-    [
-      seedImport.id,
-      [
-        {
-          id: "row-1",
-          importId: seedImport.id,
-          jsonDataJsonb: { name: "Alice", age: 31 },
-        },
-        {
-          id: "row-2",
-          importId: seedImport.id,
-          jsonDataJsonb: { name: "Bob", age: 42 },
-        },
-      ],
-    ],
+    [seedImport.id, seedImportRows],
   ]);
 
   const listImportsWithCounts = (): ImportWithRowCount[] =>
@@ -194,15 +194,23 @@ function createImportsRouteHarness(options?: {
       limit: number;
       offset: number;
       columnFilters?: Array<{ column: string; operator: string; value: string }>;
+      cursor?: string | null;
     }) => {
       searchCalls.push(params);
       const rows = applyImportColumnFilters(
         dataRowsByImport.get(params.importId) ?? [],
         params.columnFilters,
       );
+      const cursor = String(params.cursor || "").trim();
+      const pageRows = cursor
+        ? rows.filter((row) => String(row.id) > cursor).slice(0, params.limit + 1)
+        : rows.slice(params.offset, params.offset + params.limit + 1);
+      const hasMore = pageRows.length > params.limit;
+      const items = hasMore ? pageRows.slice(0, params.limit) : pageRows;
       return {
-        rows: rows.slice(params.offset, params.offset + params.limit),
+        rows: items,
         total: rows.length,
+        nextCursorRowId: hasMore ? String(items[items.length - 1]?.id || "") || null : null,
       };
     },
     createImport: async (data: { name: string; filename: string; createdBy?: string }) => {
@@ -521,6 +529,7 @@ test("GET /api/imports/:id/data applies the protected page-size cap and forwards
       limit: 120,
       offset: 120,
       columnFilters: [],
+      cursor: null,
     });
   } finally {
     await stopTestServer(server);
@@ -583,6 +592,76 @@ test("GET /api/imports/:id/data applies dataset-wide column filters", async () =
       columnFilters: [
         { column: "name", operator: "equals", value: "Bob" },
       ],
+      cursor: null,
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/imports/:id/data returns cursor tokens for large datasets", async () => {
+  const { app, searchCalls } = createImportsRouteHarness({
+    seedImportRows: Array.from({ length: 11 }, (_, index) => ({
+      id: `row-${String(index + 1).padStart(2, "0")}`,
+      importId: "import-1",
+      jsonDataJsonb: { name: `Customer ${index + 1}`, age: 20 + index },
+    })),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const firstResponse = await fetch(`${baseUrl}/api/imports/import-1/data?page=1&limit=10`);
+    assert.equal(firstResponse.status, 200);
+
+    const firstPayload = await firstResponse.json();
+    assert.equal(firstPayload.page, 1);
+    assert.equal(firstPayload.rows.length, 10);
+    assert.equal(firstPayload.rows[0]?.jsonDataJsonb?.name, "Customer 1");
+    assert.equal(typeof firstPayload.nextCursor, "string");
+
+    const secondResponse = await fetch(
+      `${baseUrl}/api/imports/import-1/data?page=2&limit=10&cursor=${encodeURIComponent(String(firstPayload.nextCursor || ""))}`,
+    );
+    assert.equal(secondResponse.status, 200);
+
+    const secondPayload = await secondResponse.json();
+    assert.equal(secondPayload.page, 2);
+    assert.equal(secondPayload.rows.length, 1);
+    assert.equal(secondPayload.rows[0]?.jsonDataJsonb?.name, "Customer 11");
+    assert.equal(secondPayload.nextCursor, null);
+    assert.deepEqual(searchCalls, [
+      {
+        importId: "import-1",
+        search: null,
+        limit: 10,
+        offset: 0,
+        columnFilters: [],
+        cursor: null,
+      },
+      {
+        importId: "import-1",
+        search: null,
+        limit: 10,
+        offset: 0,
+        columnFilters: [],
+        cursor: "row-10",
+      },
+    ]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/imports/:id/data rejects malformed cursor tokens", async () => {
+  const { app } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/imports/import-1/data?page=2&cursor=bad-cursor`);
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "Invalid import data cursor.",
     });
   } finally {
     await stopTestServer(server);

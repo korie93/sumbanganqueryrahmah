@@ -312,6 +312,7 @@ test("getImportData forwards AbortSignal and rejects on abort", async () => {
   try {
     const pendingRequest = getImportData("import-123", 2, 50, "alice", {
       signal: controller.signal,
+      cursor: "cursor-1",
       columnFilters: [
         { column: "name", operator: "contains", value: "ali" },
       ],
@@ -332,6 +333,7 @@ test("getImportData forwards AbortSignal and rejects on abort", async () => {
   assert.equal(params.get("page"), "2");
   assert.equal(params.get("limit"), "50");
   assert.equal(params.get("search"), "alice");
+  assert.equal(params.get("cursor"), "cursor-1");
   assert.deepEqual(JSON.parse(String(params.get("columnFilters") || "[]")), [
     { column: "name", operator: "contains", value: "ali" },
   ]);

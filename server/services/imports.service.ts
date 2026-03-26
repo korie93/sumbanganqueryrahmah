@@ -32,6 +32,11 @@ export type ImportDataColumnFilter = {
   value: string;
 };
 
+type ImportDataPageCursor = {
+  lastRowId: string;
+  page: number;
+};
+
 type CreateImportInput = {
   name: string;
   filename: string;
@@ -42,6 +47,7 @@ type CreateImportInput = {
 type ImportDataPageInput = {
   importId: string;
   page: number;
+  cursor?: string | null;
   requestedLimit: number;
   viewerRowsPerPage: number;
   isDbProtected: boolean;
@@ -55,6 +61,7 @@ type SearchImportRowsInput = {
   offset: number;
   search?: string | null;
   columnFilters?: ImportDataColumnFilter[];
+  cursor?: string | null;
 };
 
 type ImportDetailsResult = {
@@ -78,7 +85,35 @@ type ImportDataPageResult = {
   total: number;
   page: number;
   limit: number;
+  nextCursor: string | null;
 };
+
+function encodeImportDataPageCursor(cursor: ImportDataPageCursor): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function parseImportDataPageCursor(rawCursor: string | null | undefined): ImportDataPageCursor | null {
+  const normalized = String(rawCursor || "").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(Buffer.from(normalized, "base64url").toString("utf8")) as Partial<ImportDataPageCursor>;
+    const lastRowId = String(parsed.lastRowId || "").trim();
+    const page = Number.isFinite(Number(parsed.page)) ? Math.trunc(Number(parsed.page)) : 0;
+    if (!lastRowId || page < 2) {
+      return null;
+    }
+
+    return {
+      lastRowId,
+      page,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export class ImportsService {
   constructor(
@@ -94,6 +129,7 @@ export class ImportsService {
       limit: params.limit,
       offset: params.offset,
       columnFilters: params.columnFilters ?? [],
+      cursor: params.cursor ?? null,
     });
   }
 
@@ -148,7 +184,13 @@ export class ImportsService {
   async getImportDataPage(params: ImportDataPageInput): Promise<ImportDataPageResult> {
     const maxLimit = Math.min(params.isDbProtected ? 120 : 500, params.viewerRowsPerPage);
     const limit = Math.max(10, Math.min(params.requestedLimit, maxLimit));
-    const offset = (params.page - 1) * limit;
+    const parsedCursor = parseImportDataPageCursor(params.cursor);
+    if (params.cursor && !parsedCursor) {
+      throw new Error("Invalid import data cursor.");
+    }
+
+    const effectivePage = parsedCursor?.page ?? params.page;
+    const offset = parsedCursor ? 0 : (params.page - 1) * limit;
     const search = String(params.search || "").trim();
     const result = await this.storage.searchDataRows({
       importId: params.importId,
@@ -156,7 +198,15 @@ export class ImportsService {
       limit,
       offset,
       columnFilters: params.columnFilters ?? [],
+      cursor: parsedCursor?.lastRowId ?? null,
     });
+
+    const nextCursor = result.nextCursorRowId
+      ? encodeImportDataPageCursor({
+          lastRowId: result.nextCursorRowId,
+          page: effectivePage + 1,
+        })
+      : null;
 
     return {
       rows: (result.rows || []).map((row) => ({
@@ -165,8 +215,9 @@ export class ImportsService {
         jsonDataJsonb: row.jsonDataJsonb,
       })),
       total: result.total || 0,
-      page: params.page,
+      page: effectivePage,
       limit,
+      nextCursor,
     };
   }
 

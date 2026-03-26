@@ -47,6 +47,7 @@ type ViewerPageResponse = {
   total?: number;
   page?: number;
   limit?: number;
+  nextCursor?: string | null;
 };
 
 function resolveViewerImportName() {
@@ -72,6 +73,7 @@ function normalizeViewerPageResult(
   total: number;
   page: number;
   limit: number;
+  nextCursor: string | null;
 } {
   const page = Number.isFinite(Number(response?.page))
     ? Math.max(1, Math.trunc(Number(response?.page)))
@@ -93,6 +95,7 @@ function normalizeViewerPageResult(
     total,
     page,
     limit,
+    nextCursor: typeof response?.nextCursor === "string" ? response.nextCursor : null,
   };
 }
 
@@ -137,6 +140,8 @@ export default function Viewer({
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPageSize, setCurrentPageSize] = useState(configuredRowsPerPage);
   const [totalRows, setTotalRows] = useState(0);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [pageCursorHistory, setPageCursorHistory] = useState<Array<string | null>>([null]);
 
   const mountedRef = useRef(true);
   const rowsRef = useRef<DataRowWithId[]>([]);
@@ -187,15 +192,23 @@ export default function Viewer({
     setSelectAllFiltered((previous) => (previous ? false : previous));
   }, []);
 
-  const fetchData = useCallback(async (id: string, page = 1) => {
+  const fetchData = useCallback(async (
+    id: string,
+    options?: {
+      page?: number;
+      cursor?: string | null;
+    },
+  ) => {
     if (!id) return;
+    const targetPage = Math.max(1, options?.page ?? 1);
+    const requestCursor = options?.cursor ?? null;
 
     cancelActiveFetch();
     const requestId = ++activeRequestIdRef.current;
     const controller = new AbortController();
     fetchAbortControllerRef.current = controller;
 
-    if (page === 1 && rowsRef.current.length === 0) {
+    if (targetPage === 1 && rowsRef.current.length === 0) {
       setLoading(true);
     } else {
       setLoadingMore(true);
@@ -204,8 +217,9 @@ export default function Viewer({
     setError("");
 
     try {
-      const response = await getImportData(id, page, ROWS_PER_PAGE, debouncedSearch, {
+      const response = await getImportData(id, targetPage, ROWS_PER_PAGE, debouncedSearch, {
         signal: controller.signal,
+        cursor: requestCursor || undefined,
         columnFilters: debouncedColumnFilters,
       });
       if (
@@ -216,7 +230,7 @@ export default function Viewer({
         return;
       }
 
-      const normalizedPage = normalizeViewerPageResult(response ?? {}, page, ROWS_PER_PAGE);
+      const normalizedPage = normalizeViewerPageResult(response ?? {}, targetPage, ROWS_PER_PAGE);
 
       if (normalizedPage.page === 1 && normalizedPage.rows.length > 0 && !headersLockedRef.current) {
         const detectedHeaders = extractHeadersFromRows(normalizedPage.rows);
@@ -232,6 +246,12 @@ export default function Viewer({
       setCurrentPage(normalizedPage.page);
       setCurrentPageSize(normalizedPage.limit);
       setTotalRows(normalizedPage.total);
+      setNextCursor(normalizedPage.nextCursor);
+      setPageCursorHistory((previous) => {
+        const nextHistory = previous.slice(0, normalizedPage.page - 1);
+        nextHistory[normalizedPage.page - 1] = requestCursor;
+        return nextHistory;
+      });
     } catch (fetchError) {
       if (
         controller.signal.aborted ||
@@ -268,6 +288,8 @@ export default function Viewer({
       setCurrentPage(1);
       setCurrentPageSize(ROWS_PER_PAGE);
       setTotalRows(0);
+      setNextCursor(null);
+      setPageCursorHistory([null]);
       return;
     }
 
@@ -287,6 +309,8 @@ export default function Viewer({
     setCurrentPage(1);
     setCurrentPageSize(ROWS_PER_PAGE);
     setTotalRows(0);
+    setNextCursor(null);
+    setPageCursorHistory([null]);
     setLoading(false);
     setLoadingMore(false);
   }, [ROWS_PER_PAGE, cancelActiveFetch, clearSelectionState, importId]);
@@ -310,12 +334,16 @@ export default function Viewer({
       setRows([]);
       setTotalRows(0);
       setCurrentPageSize(ROWS_PER_PAGE);
+      setNextCursor(null);
+      setPageCursorHistory([null]);
       setLoading(false);
       setLoadingMore(false);
       return;
     }
 
-    void fetchData(importId, 1);
+    setNextCursor(null);
+    setPageCursorHistory([null]);
+    void fetchData(importId, { page: 1, cursor: null });
   }, [
     ROWS_PER_PAGE,
     cancelActiveFetch,
@@ -373,7 +401,7 @@ export default function Viewer({
   const pageStart = totalRows === 0 ? 0 : (currentPage - 1) * currentPageSize + 1;
   const pageEnd = totalRows === 0 ? 0 : Math.min(totalRows, pageStart + rows.length - 1);
   const hasPreviousPage = currentPage > 1;
-  const hasNextPage = pageEnd < totalRows;
+  const hasNextPage = nextCursor !== null;
 
   useEffect(() => {
     setSelectedRowIds((previous) => {
@@ -397,14 +425,23 @@ export default function Viewer({
   const handlePrevPage = useCallback(() => {
     if (!importId || loadingMore || !hasPreviousPage) return;
     clearSelectionState();
-    void fetchData(importId, currentPage - 1);
-  }, [clearSelectionState, currentPage, fetchData, hasPreviousPage, importId, loadingMore]);
+    const previousCursor = pageCursorHistory[currentPage - 2] ?? null;
+    void fetchData(importId, { page: currentPage - 1, cursor: previousCursor });
+  }, [
+    clearSelectionState,
+    currentPage,
+    fetchData,
+    hasPreviousPage,
+    importId,
+    loadingMore,
+    pageCursorHistory,
+  ]);
 
   const handleNextPage = useCallback(() => {
-    if (!importId || loadingMore || !hasNextPage) return;
+    if (!importId || loadingMore || !nextCursor) return;
     clearSelectionState();
-    void fetchData(importId, currentPage + 1);
-  }, [clearSelectionState, currentPage, fetchData, hasNextPage, importId, loadingMore]);
+    void fetchData(importId, { page: currentPage + 1, cursor: nextCursor });
+  }, [clearSelectionState, currentPage, fetchData, importId, loadingMore, nextCursor]);
 
   const addFilter = useCallback(() => {
     if (headers.length > 0) {
@@ -451,6 +488,8 @@ export default function Viewer({
     setTotalRows(0);
     setCurrentPage(1);
     setCurrentPageSize(ROWS_PER_PAGE);
+    setNextCursor(null);
+    setPageCursorHistory([null]);
     setLoading(false);
     setLoadingMore(false);
     setIsCleared(true);
@@ -522,11 +561,13 @@ export default function Viewer({
     exportAbortControllerRef.current = controller;
     const exportRows: DataRowWithId[] = [];
     let pageToLoad = 1;
+    let cursorToLoad: string | null = null;
 
     try {
       while (true) {
         const response = await getImportData(importId, pageToLoad, ROWS_PER_PAGE, debouncedSearch, {
           signal: controller.signal,
+          cursor: cursorToLoad || undefined,
           columnFilters: debouncedColumnFilters,
         });
         const normalizedPage = normalizeViewerPageResult(response ?? {}, pageToLoad, ROWS_PER_PAGE);
@@ -537,11 +578,11 @@ export default function Viewer({
 
         exportRows.push(...normalizedPage.rows);
 
-        const loadedThrough = (normalizedPage.page - 1) * normalizedPage.limit + normalizedPage.rows.length;
-        if (loadedThrough >= normalizedPage.total) {
+        if (!normalizedPage.nextCursor) {
           break;
         }
 
+        cursorToLoad = normalizedPage.nextCursor;
         pageToLoad = normalizedPage.page + 1;
       }
 
