@@ -1,5 +1,6 @@
 import type { Response } from "express";
 import type { WebSocket } from "ws";
+import { runWithRequestDeadline } from "../http/request-deadline";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { ensureObject } from "../http/validation";
 import type { AuditLogOperationsService } from "../services/audit-log-operations.service";
@@ -31,6 +32,9 @@ type CreateOperationsControllerDeps = {
     | "getTopActiveUsers"
   >;
   connectedClients: Map<string, WebSocket>;
+  requestTimeouts?: {
+    backupOperationMs?: number;
+  };
 };
 
 export type OperationsController = ReturnType<typeof createOperationsController>;
@@ -42,6 +46,7 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
     backupJobQueueService,
     operationsAnalyticsService,
     connectedClients,
+    requestTimeouts,
   } = deps;
 
   const isAsyncJobRequested = (value: unknown) => {
@@ -106,10 +111,25 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
       });
     }
 
-    const result = await backupOperationsService.createBackup({
-      name: String(body.name || ""),
-      username: req.user!.username,
-    });
+    const outcome = await runWithRequestDeadline(
+      res,
+      {
+        timeoutMs: requestTimeouts?.backupOperationMs ?? 120_000,
+        operationName: "backup-create",
+        timeoutMessage:
+          "Backup creation is taking longer than expected. Please retry or use the async backup queue.",
+      },
+      () =>
+        backupOperationsService.createBackup({
+          name: String(body.name || ""),
+          username: req.user!.username,
+        }),
+    );
+    if (outcome.timedOut) {
+      return;
+    }
+
+    const result = outcome.value;
     return res.status(result.statusCode).json(result.body);
   };
 
@@ -127,7 +147,21 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
   };
 
   const exportBackup = async (req: AuthenticatedRequest, res: Response) => {
-    const result = await backupOperationsService.exportBackup(req.params.id, req.user!.username);
+    const outcome = await runWithRequestDeadline(
+      res,
+      {
+        timeoutMs: requestTimeouts?.backupOperationMs ?? 120_000,
+        operationName: "backup-export",
+        timeoutMessage:
+          "Backup export is taking longer than expected. Please retry in a moment.",
+      },
+      () => backupOperationsService.exportBackup(req.params.id, req.user!.username),
+    );
+    if (outcome.timedOut) {
+      return;
+    }
+
+    const result = outcome.value;
     if (result.statusCode !== 200 || !("fileName" in result.body) || !("payloadJson" in result.body)) {
       return res.status(result.statusCode).json(result.body);
     }
@@ -151,10 +185,25 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
       });
     }
 
-    const result = await backupOperationsService.restoreBackup({
-      backupId: req.params.id,
-      username: req.user!.username,
-    });
+    const outcome = await runWithRequestDeadline(
+      res,
+      {
+        timeoutMs: requestTimeouts?.backupOperationMs ?? 120_000,
+        operationName: "backup-restore",
+        timeoutMessage:
+          "Backup restore is taking longer than expected. Please retry or use the async backup queue.",
+      },
+      () =>
+        backupOperationsService.restoreBackup({
+          backupId: req.params.id,
+          username: req.user!.username,
+        }),
+    );
+    if (outcome.timedOut) {
+      return;
+    }
+
+    const result = outcome.value;
     return res.status(result.statusCode).json(result.body);
   };
 

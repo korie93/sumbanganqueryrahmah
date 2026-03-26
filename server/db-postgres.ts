@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { runtimeConfig } from "./config/runtime";
+import { bindPgPoolMonitoring } from "./db-pool-monitor";
 
 const { Pool } = pg;
 
@@ -27,6 +28,10 @@ export const pool = new Pool({
   idleTimeoutMillis: runtimeConfig.database.idleTimeoutMs,
   connectionTimeoutMillis: runtimeConfig.database.connectionTimeoutMs,
   options: `-c search_path=${validateSearchPath(runtimeConfig.database.searchPath)}`,
+});
+
+bindPgPoolMonitoring(pool, {
+  warnCooldownMs: runtimeConfig.runtime.pgPoolWarnCooldownMs,
 });
 
 export const db = drizzle(pool);

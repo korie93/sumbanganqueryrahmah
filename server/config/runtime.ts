@@ -96,6 +96,9 @@ type RuntimeConfig = {
     maintenanceCacheTtlMs: number;
     runtimeSettingsCacheTtlMs: number;
     pgPoolWarnCooldownMs: number;
+    backupOperationTimeoutMs: number;
+    importAnalysisTimeoutMs: number;
+    collectionRollupListenReconnectMs: number;
   };
   cluster: {
     lowMemoryMode: boolean;
@@ -542,6 +545,9 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     maintenanceCacheTtlMs: readInt("MAINTENANCE_CACHE_TTL_MS", 3_000, { min: 500 }),
     runtimeSettingsCacheTtlMs: readInt("RUNTIME_SETTINGS_CACHE_TTL_MS", 3_000, { min: 500 }),
     pgPoolWarnCooldownMs: readInt("PG_POOL_WARN_COOLDOWN_MS", 60_000, { min: 1_000 }),
+    backupOperationTimeoutMs: readInt("BACKUP_OPERATION_TIMEOUT_MS", 120_000, { min: 5_000 }),
+    importAnalysisTimeoutMs: readInt("IMPORT_ANALYSIS_TIMEOUT_MS", 45_000, { min: 5_000 }),
+    collectionRollupListenReconnectMs: readInt("COLLECTION_ROLLUP_LISTEN_RECONNECT_MS", 5_000, { min: 1_000 }),
   },
   cluster: {
     lowMemoryMode,

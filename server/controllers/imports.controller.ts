@@ -2,6 +2,7 @@ import type { Response } from "express";
 import { z } from "zod";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { badRequest, notFound } from "../http/errors";
+import { runWithRequestDeadline } from "../http/request-deadline";
 import { readInteger, readNonEmptyString } from "../http/validation";
 import type { ImportDataColumnFilter, ImportsService } from "../services/imports.service";
 
@@ -13,6 +14,7 @@ type CreateImportsControllerDeps = {
   importsService: ImportsService;
   getRuntimeSettingsCached: () => Promise<RuntimeSettings>;
   isDbProtected: () => boolean;
+  analysisRequestTimeoutMs?: number;
 };
 
 export type ImportsController = ReturnType<typeof createImportsController>;
@@ -51,6 +53,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     importsService,
     getRuntimeSettingsCached,
     isDbProtected,
+    analysisRequestTimeoutMs,
   } = deps;
 
   const listDataRows = async (req: AuthenticatedRequest, res: Response) => {
@@ -169,7 +172,21 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
   };
 
   const analyzeImport = async (req: AuthenticatedRequest, res: Response) => {
-    const analysis = await importsService.analyzeImport(req.params.id);
+    const outcome = await runWithRequestDeadline(
+      res,
+      {
+        timeoutMs: analysisRequestTimeoutMs ?? 45_000,
+        operationName: "import-analysis",
+        timeoutMessage:
+          "Import analysis is taking longer than expected. Please retry in a moment.",
+      },
+      () => importsService.analyzeImport(req.params.id),
+    );
+    if (outcome.timedOut) {
+      return;
+    }
+
+    const analysis = outcome.value;
     if (!analysis) {
       throw notFound("Import not found");
     }
@@ -178,7 +195,21 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
   };
 
   const analyzeAll = async (_req: AuthenticatedRequest, res: Response) => {
-    return res.json(await importsService.analyzeAll());
+    const outcome = await runWithRequestDeadline(
+      res,
+      {
+        timeoutMs: analysisRequestTimeoutMs ?? 45_000,
+        operationName: "imports-analysis-all",
+        timeoutMessage:
+          "Import analysis is taking longer than expected. Please retry in a moment.",
+      },
+      () => importsService.analyzeAll(),
+    );
+    if (outcome.timedOut) {
+      return;
+    }
+
+    return res.json(outcome.value);
   };
 
   const renameImport = async (req: AuthenticatedRequest, res: Response) => {

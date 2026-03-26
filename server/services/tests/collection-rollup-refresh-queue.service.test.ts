@@ -120,3 +120,40 @@ test("CollectionRollupRefreshQueueService requeues slices with a retry delay aft
   assert.match(failed[0]?.errorMessage || "", /refresh exploded/i);
   assert.ok((failed[0]?.nextAttemptAt?.getTime() || 0) >= before + 20);
 });
+
+test("CollectionRollupRefreshQueueService wakes immediately when the notification subscriber fires", async () => {
+  let notifyQueue: (() => void) | null = null;
+  let pendingSlice: Required<CollectionRecordDailyRollupSlice> | null = null;
+  const completed: string[] = [];
+
+  const service = new CollectionRollupRefreshQueueService({
+    repository: {
+      claimNextSlice: async () => {
+        const next = pendingSlice;
+        pendingSlice = null;
+        return next;
+      },
+      completeSlice: async (slice) => {
+        completed.push(`${slice.paymentDate}:${slice.collectionStaffNickname}`);
+      },
+      failSlice: async () => undefined,
+      refreshSlice: async () => undefined,
+      markRunningSlicesQueued: async () => undefined,
+    },
+    notificationSubscriber: {
+      start: async (onNotify) => {
+        notifyQueue = onNotify as () => void;
+      },
+    },
+    idlePollMs: 10_000,
+  });
+
+  await service.start();
+  pendingSlice = createSlice("2026-03-27", "staff.user", "Collector Gamma");
+  const fireNotification = notifyQueue as (() => void) | null;
+  assert.ok(fireNotification);
+  fireNotification();
+  await waitFor(() => completed.length === 1);
+
+  assert.deepEqual(completed, ["2026-03-27:Collector Gamma"]);
+});

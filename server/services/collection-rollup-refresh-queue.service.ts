@@ -1,4 +1,5 @@
 import { db } from "../db-postgres";
+import type { CollectionRollupRefreshNotificationSubscriberLike } from "../lib/collection-rollup-refresh-notification";
 import { logger } from "../lib/logger";
 import {
   claimNextCollectionRecordDailyRollupRefreshSlice,
@@ -26,6 +27,7 @@ type CollectionRollupRefreshQueueDeps = {
   ensureReady?: () => Promise<void>;
   idlePollMs?: number;
   retryDelayMs?: number;
+  notificationSubscriber?: CollectionRollupRefreshNotificationSubscriberLike;
 };
 
 const DEFAULT_IDLE_POLL_MS = 2_000;
@@ -39,6 +41,7 @@ export class CollectionRollupRefreshQueueService {
   private startPromise: Promise<void> | null = null;
   private runPromise: Promise<void> | null = null;
   private nextTimer: NodeJS.Timeout | null = null;
+  private notificationSubscriberStarted = false;
 
   constructor(private readonly deps: CollectionRollupRefreshQueueDeps = {}) {
     this.repository = deps.repository || {
@@ -54,6 +57,7 @@ export class CollectionRollupRefreshQueueService {
 
   async start(): Promise<void> {
     await this.ensureStarted();
+    await this.ensureNotificationSubscriberStarted();
     this.scheduleRun(0);
   }
 
@@ -83,6 +87,23 @@ export class CollectionRollupRefreshQueueService {
       await this.startPromise;
     } finally {
       this.startPromise = null;
+    }
+  }
+
+  private async ensureNotificationSubscriberStarted(): Promise<void> {
+    if (this.notificationSubscriberStarted || !this.deps.notificationSubscriber) {
+      return;
+    }
+
+    try {
+      await this.deps.notificationSubscriber.start(() => {
+        this.scheduleRun(0);
+      });
+      this.notificationSubscriberStarted = true;
+    } catch (error) {
+      logger.warn("Collection rollup notification subscriber failed to start; polling fallback remains active", {
+        error,
+      });
     }
   }
 

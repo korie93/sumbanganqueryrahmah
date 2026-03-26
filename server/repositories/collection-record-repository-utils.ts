@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
+import { COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL } from "../lib/collection-rollup-refresh-notification";
 import type {
   CollectionMonthlySummary,
   CollectionNicknameDailyAggregate,
@@ -355,6 +356,12 @@ export async function enqueueCollectionRecordDailyRollupSlices(
         last_error = null
     `);
   }
+
+  if (pending.size > 0) {
+    await executor.execute(sql`
+      SELECT pg_notify(${COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL}, 'queued')
+    `);
+  }
 }
 
 export async function getCollectionRecordDailyRollupRefreshQueueSnapshot(
@@ -466,15 +473,26 @@ async function hasPendingCollectionRecordDailyRollupSlices(filters?: {
 }
 
 export async function markRunningCollectionRecordDailyRollupRefreshSlicesQueued(): Promise<void> {
-  await db.execute(sql`
-    UPDATE public.collection_record_daily_rollup_refresh_queue
-    SET
-      status = 'queued',
-      updated_at = now(),
-      next_attempt_at = now(),
-      last_error = COALESCE(last_error, 'Rollup refresh was interrupted by a server restart before completion.')
-    WHERE status = 'running'
+  const result = await db.execute(sql`
+    WITH updated AS (
+      UPDATE public.collection_record_daily_rollup_refresh_queue
+      SET
+        status = 'queued',
+        updated_at = now(),
+        next_attempt_at = now(),
+        last_error = COALESCE(last_error, 'Rollup refresh was interrupted by a server restart before completion.')
+      WHERE status = 'running'
+      RETURNING 1
+    )
+    SELECT COUNT(*)::int AS affected_count
+    FROM updated
   `);
+  const affectedCount = Number((result.rows?.[0] as Record<string, unknown> | undefined)?.affected_count || 0);
+  if (affectedCount > 0) {
+    await db.execute(sql`
+      SELECT pg_notify(${COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL}, 'queued')
+    `);
+  }
 }
 
 export async function requeueCollectionRecordDailyRollupRefreshFailures(): Promise<number> {
@@ -491,7 +509,13 @@ export async function requeueCollectionRecordDailyRollupRefreshFailures(): Promi
     SELECT COUNT(*)::int AS affected_count
     FROM updated
   `);
-  return Number((result.rows?.[0] as Record<string, unknown> | undefined)?.affected_count || 0);
+  const affectedCount = Number((result.rows?.[0] as Record<string, unknown> | undefined)?.affected_count || 0);
+  if (affectedCount > 0) {
+    await db.execute(sql`
+      SELECT pg_notify(${COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL}, 'queued')
+    `);
+  }
+  return affectedCount;
 }
 
 export async function clearCollectionRecordDailyRollupRefreshQueue(): Promise<void> {

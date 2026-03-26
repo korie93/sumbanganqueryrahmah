@@ -2,6 +2,7 @@ import type { Express, RequestHandler, Response } from "express";
 import type { WebSocket, WebSocketServer } from "ws";
 import { getOllamaConfig } from "../ai-ollama";
 import { createAuthGuards, type AuthenticatedRequest } from "../auth/guards";
+import { runtimeConfig as environmentRuntimeConfig } from "../config/runtime";
 import { createImportsController } from "../controllers/imports.controller";
 import { createOperationsController } from "../controllers/operations.controller";
 import { createSearchController } from "../controllers/search.controller";
@@ -9,6 +10,7 @@ import type { MaintenanceState } from "../config/system-settings";
 import { pool } from "../db-postgres";
 import { injectChaos, getIntelligenceExplainability } from "../intelligence";
 import { logger } from "../lib/logger";
+import { CollectionRollupRefreshNotificationSubscriber } from "../lib/collection-rollup-refresh-notification";
 import { errorHandler } from "../middleware/error-handler";
 import { searchRateLimiter } from "../middleware/rate-limit";
 import { AnalyticsRepository } from "../repositories/analytics.repository";
@@ -258,6 +260,9 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
   });
   const collectionRollupRefreshQueueService = new CollectionRollupRefreshQueueService({
     ensureReady: () => storage.ensureCollectionRecordsReady(),
+    notificationSubscriber: new CollectionRollupRefreshNotificationSubscriber({
+      reconnectDelayMs: environmentRuntimeConfig.runtime.collectionRollupListenReconnectMs,
+    }),
   });
   void collectionRollupRefreshQueueService.start().catch((error) => {
     logger.error("Failed to start collection rollup refresh queue", { error });
@@ -321,6 +326,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
       importsService: new ImportsService(storage, importsRepository, importAnalysisService),
       getRuntimeSettingsCached,
       isDbProtected: getDbProtection,
+      analysisRequestTimeoutMs: environmentRuntimeConfig.runtime.importAnalysisTimeoutMs,
     }),
     authenticateToken,
     requireRole,
@@ -378,6 +384,9 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
       backupJobQueueService,
       operationsAnalyticsService: new OperationsAnalyticsService(analyticsRepository),
       connectedClients,
+      requestTimeouts: {
+        backupOperationMs: environmentRuntimeConfig.runtime.backupOperationTimeoutMs,
+      },
     }),
     authenticateToken,
     requireRole,

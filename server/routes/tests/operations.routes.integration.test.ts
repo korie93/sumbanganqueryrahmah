@@ -25,6 +25,10 @@ type AuditEntry = {
 
 function createOperationsRouteHarness(options?: {
   exportCircuitOpen?: boolean;
+  backupOperationTimeoutMs?: number;
+  backupCreateDelayMs?: number;
+  backupExportDelayMs?: number;
+  backupRestoreDelayMs?: number;
 }) {
   const auditLogs: AuditEntry[] = [];
   const cleanupCalls: Date[] = [];
@@ -32,6 +36,10 @@ function createOperationsRouteHarness(options?: {
   const createBackupCalls: Array<Record<string, unknown>> = [];
   const restoreCalls: unknown[] = [];
   const deleteBackupCalls: string[] = [];
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, ms);
+    });
 
   const backups = new Map<string, any>([
     [
@@ -137,15 +145,25 @@ function createOperationsRouteHarness(options?: {
       total: backups.size,
       totalPages: 1,
     }),
-    getBackupDataForExport: async () => ({
-      imports: [{ id: "import-1" }],
-      dataRows: [{ id: "row-1" }, { id: "row-2" }],
-      users: [{ username: "super.user" }],
-      auditLogs: [{ id: "audit-1" }],
-      collectionRecords: [{ id: "record-1" }],
-      collectionRecordReceipts: [{ id: "receipt-1" }],
-    }),
+    getBackupDataForExport: async () => {
+      const exportDelayMs = options?.backupExportDelayMs ?? 0;
+      if (exportDelayMs > 0) {
+        await sleep(exportDelayMs);
+      }
+      return {
+        imports: [{ id: "import-1" }],
+        dataRows: [{ id: "row-1" }, { id: "row-2" }],
+        users: [{ username: "super.user" }],
+        auditLogs: [{ id: "audit-1" }],
+        collectionRecords: [{ id: "record-1" }],
+        collectionRecordReceipts: [{ id: "receipt-1" }],
+      };
+    },
     createBackup: async (data: Record<string, unknown>) => {
+      const createDelayMs = options?.backupCreateDelayMs ?? 0;
+      if (createDelayMs > 0) {
+        await sleep(createDelayMs);
+      }
       createBackupCalls.push(data);
       return {
         id: "backup-2",
@@ -164,8 +182,18 @@ function createOperationsRouteHarness(options?: {
         backupData: "",
       };
     },
-    getBackupById: async (id: string) => backups.get(id),
+    getBackupById: async (id: string) => {
+      const exportDelayMs = options?.backupExportDelayMs ?? 0;
+      if (exportDelayMs > 0) {
+        await sleep(exportDelayMs);
+      }
+      return backups.get(id);
+    },
     restoreFromBackup: async (backupData: unknown) => {
+      const restoreDelayMs = options?.backupRestoreDelayMs ?? 0;
+      if (restoreDelayMs > 0) {
+        await sleep(restoreDelayMs);
+      }
       restoreCalls.push(backupData);
       return {
         success: true,
@@ -219,6 +247,9 @@ function createOperationsRouteHarness(options?: {
         ["activity-1", {} as any],
         ["activity-2", {} as any],
       ]),
+      requestTimeouts: {
+        backupOperationMs: options?.backupOperationTimeoutMs,
+      },
     }),
     authenticateToken: createTestAuthenticateToken({
       userId: "super-1",
@@ -490,6 +521,33 @@ test("POST /api/backups/:id/restore returns restore details and audits the opera
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "RESTORE_BACKUP");
     assert.equal(auditLogs[0].targetResource, "Nightly Backup");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/backups/:id/export returns 504 when the request deadline is exceeded", async () => {
+  const { app } = createOperationsRouteHarness({
+    backupOperationTimeoutMs: 15,
+    backupExportDelayMs: 50,
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/backups/backup-1/export`);
+    assert.equal(response.status, 504);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "Backup export is taking longer than expected. Please retry in a moment.",
+      error: {
+        code: "REQUEST_TIMEOUT",
+        message: "Backup export is taking longer than expected. Please retry in a moment.",
+        details: {
+          operation: "backup-export",
+          timeoutMs: 15,
+        },
+      },
+    });
   } finally {
     await stopTestServer(server);
   }

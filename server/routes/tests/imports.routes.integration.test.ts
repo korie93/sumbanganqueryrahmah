@@ -81,6 +81,9 @@ function createImportsRouteHarness(options?: {
   viewerRowsPerPage?: number;
   isDbProtected?: boolean;
   seedImportRows?: DataRow[];
+  analysisDelayMs?: number;
+  analysisAllDelayMs?: number;
+  analysisRequestTimeoutMs?: number;
 }) {
   const auditLogs: AuditEntry[] = [];
   const searchCalls: Array<Record<string, unknown>> = [];
@@ -91,6 +94,10 @@ function createImportsRouteHarness(options?: {
   const analyzeImportCalls: string[] = [];
   const analyzeAllCalls: string[][] = [];
   const listImportsPageCalls: Array<Record<string, unknown>> = [];
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, ms);
+    });
 
   const importRecords = new Map<string, Import>();
   const seedImport: Import = {
@@ -289,10 +296,18 @@ function createImportsRouteHarness(options?: {
 
   const importAnalysisService = {
     analyzeImport: async (importRecord: { id: string; name: string; filename: string }) => {
+      const analysisDelayMs = options?.analysisDelayMs ?? 0;
+      if (analysisDelayMs > 0) {
+        await sleep(analysisDelayMs);
+      }
       analyzeImportCalls.push(importRecord.id);
       return createAnalysisPayload(importRecord, importRowCounts.get(importRecord.id) ?? 0);
     },
     analyzeAll: async (imports: ImportWithRowCount[]) => {
+      const analysisAllDelayMs = options?.analysisAllDelayMs ?? 0;
+      if (analysisAllDelayMs > 0) {
+        await sleep(analysisAllDelayMs);
+      }
       analyzeAllCalls.push(imports.map((item) => item.id));
       const totalRows = imports.reduce((sum, item) => sum + Number(item.rowCount || 0), 0);
       return {
@@ -321,6 +336,7 @@ function createImportsRouteHarness(options?: {
         viewerRowsPerPage: options?.viewerRowsPerPage ?? 100,
       }),
       isDbProtected: () => options?.isDbProtected ?? false,
+      analysisRequestTimeoutMs: options?.analysisRequestTimeoutMs,
     }),
     authenticateToken: createTestAuthenticateToken({
       userId: "admin-1",
@@ -566,6 +582,33 @@ test("GET /api/analyze/all analyzes all imports through the service layer", asyn
     assert.equal(payload.totalImports, 3);
     assert.equal(payload.totalRows, 3);
     assert.deepEqual(analyzeAllCalls, [["import-1", "import-2", "import-3"]]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/imports/:id/analyze returns 504 when analysis exceeds the request deadline", async () => {
+  const { app } = createImportsRouteHarness({
+    analysisRequestTimeoutMs: 15,
+    analysisDelayMs: 50,
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/imports/import-1/analyze`);
+    assert.equal(response.status, 504);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "Import analysis is taking longer than expected. Please retry in a moment.",
+      error: {
+        code: "REQUEST_TIMEOUT",
+        message: "Import analysis is taking longer than expected. Please retry in a moment.",
+        details: {
+          operation: "import-analysis",
+          timeoutMs: 15,
+        },
+      },
+    });
   } finally {
     await stopTestServer(server);
   }
