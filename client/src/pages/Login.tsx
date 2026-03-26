@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { login, generateFingerprint, verifyTwoFactorLogin } from "@/lib/api";
 import { persistAuthenticatedUser } from "@/lib/auth-session";
 import { isLockedAccountFlow, normalizeLoginIdentity } from "@/pages/login-lock-state";
+import { ERROR_CODES } from "@shared/error-codes";
 
 interface LoginProps {
   onLoginSuccess: (user: User) => void;
@@ -188,7 +189,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       }
       console.error("Login failed:", err);
       let msg = err?.message || "Login failed. Please try again.";
-      if (err?.code === "ACCOUNT_LOCKED" || err?.locked === true) {
+      if (err?.code === ERROR_CODES.ACCOUNT_LOCKED || err?.locked === true) {
         setLockedUsername(normalizeLoginIdentity(username));
         setLockedAccountMessage(msg);
         setError("");
@@ -302,7 +303,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         return;
       }
       console.error("Two-factor verification failed:", err);
-      if (err?.code === "ACCOUNT_LOCKED" || err?.locked === true) {
+      if (err?.code === ERROR_CODES.ACCOUNT_LOCKED || err?.locked === true) {
         setTwoFactorChallengeToken("");
         setTwoFactorCode("");
         setLockedUsername(normalizeLoginIdentity(username));

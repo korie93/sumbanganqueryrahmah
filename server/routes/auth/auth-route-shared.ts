@@ -3,7 +3,9 @@ import jwt from "jsonwebtoken";
 import { WebSocket } from "ws";
 import type { AuthenticatedRequest } from "../../auth/guards";
 import { setAuthSessionCookie } from "../../auth/session-cookie";
+import { HttpError } from "../../http/errors";
 import { parseBrowser } from "../../lib/browser";
+import { ERROR_CODES } from "../../../shared/error-codes";
 import {
   type ManagedAccountActivationDelivery,
   type ManagedAccountPasswordResetDelivery,
@@ -156,6 +158,28 @@ function buildOkPayload<T extends Record<string, unknown>>(payload: T): T & { ok
   };
 }
 
+function buildRouteErrorPayload(error: {
+  message: string;
+  code?: string;
+  details?: unknown;
+  extra?: Record<string, unknown>;
+}) {
+  return {
+    ok: false,
+    message: error.message,
+    ...((error.code || error.details)
+      ? {
+          error: {
+            ...(error.code ? { code: error.code } : {}),
+            message: error.message,
+            ...(error.details !== undefined ? { details: error.details } : {}),
+          },
+        }
+      : {}),
+    ...(error.extra || {}),
+  };
+}
+
 export function createAuthRouteContext(app: Express, deps: AuthRouteDeps): AuthRouteContext {
   const { storage, authenticateToken, requireRole, connectedClients } = deps;
   const authAccountService = new AuthAccountService(storage);
@@ -165,20 +189,26 @@ export function createAuthRouteContext(app: Express, deps: AuthRouteDeps): AuthR
   };
 
   const sendAuthError = (res: Response, error: unknown) => {
-    if (!(error instanceof AuthAccountError)) {
-      return false;
+    if (error instanceof AuthAccountError) {
+      res.status(error.statusCode).json(buildRouteErrorPayload({
+        code: error.code,
+        details: undefined,
+        extra: error.extra,
+        message: error.message,
+      }));
+      return true;
     }
 
-    res.status(error.statusCode).json({
-      ok: false,
-      message: error.message,
-      error: {
+    if (error instanceof HttpError) {
+      res.status(error.statusCode).json(buildRouteErrorPayload({
         code: error.code,
+        details: error.details,
         message: error.message,
-      },
-      ...(error.extra || {}),
-    });
-    return true;
+      }));
+      return true;
+    }
+
+    return false;
   };
 
   return {
@@ -261,7 +291,7 @@ export function createAuthRouteContext(app: Express, deps: AuthRouteDeps): AuthR
       ) {
         throw new AuthAccountError(
           401,
-          "TWO_FACTOR_CHALLENGE_INVALID",
+          ERROR_CODES.TWO_FACTOR_CHALLENGE_INVALID,
           "Two-factor login challenge is invalid or expired.",
         );
       }
