@@ -17,6 +17,7 @@ import AutoLogout from "@/components/AutoLogout";
 import FloatingAI from "@/components/FloatingAI";
 import Navbar from "@/components/Navbar";
 import { AIProvider } from "@/context/AIContext";
+import { isBannedSessionFlagSet } from "@/lib/auth-session";
 
 function AppContent() {
   const {
@@ -65,7 +66,7 @@ function AppContent() {
     return <PageSpinner fullscreen />;
   }
 
-  if (localStorage.getItem("banned") === "1") {
+  if (isBannedSessionFlagSet()) {
     return renderRoutePage("banned", <BannedPage />);
   }
 

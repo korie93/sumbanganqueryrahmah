@@ -1,7 +1,11 @@
 import type { Express, RequestHandler, Response } from "express";
-import jwt from "jsonwebtoken";
 import { WebSocket } from "ws";
 import type { AuthenticatedRequest } from "../../auth/guards";
+import {
+  signSessionJwt,
+  verifySessionJwt,
+  SESSION_JWT_DEFAULT_EXPIRY,
+} from "../../auth/session-jwt";
 import { setAuthSessionCookie } from "../../auth/session-cookie";
 import { HttpError } from "../../http/errors";
 import { parseBrowser } from "../../lib/browser";
@@ -16,7 +20,6 @@ import {
   createAuthRouteRateLimiters,
   type AuthRouteRateLimiters,
 } from "../../middleware/rate-limit";
-import { runtimeConfig } from "../../config/runtime";
 import type { PostgresStorage } from "../../storage-postgres";
 
 export type AuthRouteDeps = {
@@ -247,29 +250,25 @@ export function createAuthRouteContext(app: Express, deps: AuthRouteDeps): AuthR
     buildDeliveryPayload,
     buildOkPayload,
     signSessionToken(payload, res) {
-      const token = jwt.sign(payload, runtimeConfig.auth.sessionSecret, { algorithm: "HS256", expiresIn: "24h" });
+      const token = signSessionJwt(payload, { expiresIn: SESSION_JWT_DEFAULT_EXPIRY });
       if (res) {
         setAuthSessionCookie(res, token);
       }
       return token;
     },
     signTwoFactorChallengeToken(payload) {
-      return jwt.sign(
+      return signSessionJwt(
         {
           ...payload,
           purpose: "two_factor_login",
         },
-        runtimeConfig.auth.sessionSecret,
         {
-          algorithm: "HS256",
           expiresIn: "5m",
         },
       );
     },
     verifyTwoFactorChallengeToken(token) {
-      const decoded = jwt.verify(token, runtimeConfig.auth.sessionSecret, {
-        algorithms: ["HS256"],
-      }) as {
+      const decoded = verifySessionJwt<{
         purpose?: string;
         userId?: string;
         username?: string;
@@ -280,7 +279,7 @@ export function createAuthRouteContext(app: Express, deps: AuthRouteDeps): AuthR
         ipAddress?: string | null;
         iat?: number;
         exp?: number;
-      };
+      }>(token);
 
       if (
         decoded.purpose !== "two_factor_login"

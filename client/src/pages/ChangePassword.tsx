@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { changeMyPassword } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
-import { clearAuthenticatedUserStorage } from "@/lib/auth-session";
+import { clearAuthenticatedUserStorage, setStoredForcePasswordChange } from "@/lib/auth-session";
 
 type ChangePasswordPageProps = {
   username?: string;
@@ -97,7 +97,7 @@ export default function ChangePasswordPage({
         return;
       }
 
-      localStorage.removeItem("forcePasswordChange");
+      setStoredForcePasswordChange(false);
       setSuccessMessage("Password updated successfully.");
     } catch (submitError) {
       if (

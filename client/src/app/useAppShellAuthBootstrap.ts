@@ -14,7 +14,10 @@ import {
 } from "@/app/routing";
 import type { MonitorSection, User } from "@/app/types";
 import {
+  getStoredAuthenticatedUser,
+  getStoredForcePasswordChange,
   hasAuthSessionHintCookie,
+  isBannedSessionFlagSet,
   persistAuthenticatedUser,
 } from "@/lib/auth-session";
 import { getMe } from "@/lib/api";
@@ -46,18 +49,23 @@ export function useAppShellAuthBootstrap({
 
     applyResolvedRoute(resolvedRoute);
 
-    const banned = localStorage.getItem("banned");
-    if (banned === "1") {
+    if (typeof window === "undefined") {
       setIsInitialized(true);
       return;
     }
 
-    const savedUser = localStorage.getItem("user");
-    const savedPage = localStorage.getItem("activeTab") || localStorage.getItem("lastPage");
-    const forcePasswordChange = localStorage.getItem("forcePasswordChange") === "1";
+    if (isBannedSessionFlagSet()) {
+      setIsInitialized(true);
+      return;
+    }
 
-    if (savedUser) {
-      if (!hasAuthSessionHintCookie()) {
+    const savedUser = getStoredAuthenticatedUser();
+    const savedPage = localStorage.getItem("activeTab") || localStorage.getItem("lastPage");
+    const forcePasswordChange = getStoredForcePasswordChange();
+    const hasAuthHintCookie = hasAuthSessionHintCookie();
+
+    if (savedUser || hasAuthHintCookie) {
+      if (savedUser && !hasAuthHintCookie) {
         clearClientSessionStorage();
         setIsInitialized(true);
         return () => {
@@ -122,16 +130,7 @@ export function useAppShellAuthBootstrap({
         }
       };
 
-      try {
-        const parsedUser = JSON.parse(savedUser) as User;
-        if (!parsedUser?.username || !parsedUser?.role) {
-          throw new Error("Invalid cached user");
-        }
-        void restoreAuthenticatedSession();
-      } catch {
-        clearClientSessionStorage();
-        setIsInitialized(true);
-      }
+      void restoreAuthenticatedSession();
       return () => {
         cancelled = true;
       };
@@ -153,7 +152,7 @@ export function useAppShellAuthBootstrap({
   useEffect(() => {
     if (typeof window === "undefined" || user) return;
     const pathname = window.location.pathname.toLowerCase();
-    if (pathname === "/change-password" && !localStorage.getItem("user")) {
+    if (pathname === "/change-password" && !getStoredAuthenticatedUser() && !hasAuthSessionHintCookie()) {
       replaceHistory("/");
       setCurrentPage("home");
     }

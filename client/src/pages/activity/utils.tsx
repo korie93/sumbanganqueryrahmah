@@ -1,17 +1,11 @@
 import { Badge } from "@/components/ui/badge";
 import type { ActivityFilters } from "@/lib/api";
+import { getStoredRole } from "@/lib/auth-session";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import type { ActivityRecord, ActivityStatus, ParsedBrowserInfo } from "@/pages/activity/types";
 
 export function getCurrentActivityRole() {
-  try {
-    const raw = localStorage.getItem("user");
-    if (!raw) return "";
-    const parsed = JSON.parse(raw) as { role?: string };
-    return parsed.role || "";
-  } catch {
-    return "";
-  }
+  return getStoredRole();
 }
 
 export function hasActiveActivityFilters(filters: ActivityFilters) {

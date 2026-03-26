@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef } from "react";
 import { activityHeartbeat } from "@/lib/api";
 import { resolveAutoLogoutReconnectDelayMs } from "@/components/auto-logout-websocket";
+import {
+  getStoredActivityId,
+  getStoredFingerprint,
+  getStoredUsername,
+  setBannedSessionFlag,
+} from "@/lib/auth-session";
 
 interface AutoLogoutProps {
   onClientLogout: () => void | Promise<void>;
@@ -110,8 +116,8 @@ export default function AutoLogout({
     if (logoutStartedRef.current) return;
     if (heartbeatAbortControllerRef.current) return;
 
-    const activityId = localStorage.getItem("activityId");
-    const fingerprint = localStorage.getItem("fingerprint");
+    const activityId = getStoredActivityId();
+    const fingerprint = getStoredFingerprint();
 
     if (!activityId) return;
 
@@ -232,7 +238,7 @@ export default function AutoLogout({
   }, [runClientLogout]);
 
   useEffect(() => {
-    const currentUsername = username || localStorage.getItem("username");
+    const currentUsername = username || getStoredUsername();
     if (!currentUsername) {
       return;
     }
@@ -243,7 +249,7 @@ export default function AutoLogout({
     reconnectAttemptRef.current = 0;
 
     const scheduleReconnect = () => {
-      const nextUsername = username || localStorage.getItem("username");
+      const nextUsername = username || getStoredUsername();
       if (!mountedRef.current || !reconnectEnabledRef.current || !nextUsername) {
         return;
       }
@@ -295,7 +301,7 @@ export default function AutoLogout({
             }
 
             if (message.type === "banned") {
-              localStorage.setItem("banned", "1");
+              setBannedSessionFlag(true);
               alert(message.reason || "Akaun anda telah disekat.");
               window.location.href = "/";
             }

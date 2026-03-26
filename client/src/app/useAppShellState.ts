@@ -10,6 +10,7 @@ import { useAppShellSavedCount } from "@/app/useAppShellSavedCount";
 import { useAppShellTabVisibility } from "@/app/useAppShellTabVisibility";
 import { performAppLogout, performClientLogout } from "@/app/logout-flow";
 import { activityLogout } from "@/lib/api";
+import { getStoredActivityId } from "@/lib/auth-session";
 
 export function useAppShellState() {
   const [currentPage, setCurrentPage] = useState("home");
@@ -82,7 +83,7 @@ export function useAppShellState() {
 
   const handleLogout = useCallback(async () => {
     await performAppLogout({
-      activityId: localStorage.getItem("activityId") || undefined,
+      activityId: getStoredActivityId() || undefined,
       activityLogout,
       applyLoggedOutClientState,
       broadcastLogoutToOtherTabs,

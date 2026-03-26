@@ -5,7 +5,12 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { login, generateFingerprint, verifyTwoFactorLogin } from "@/lib/api";
-import { persistAuthenticatedUser } from "@/lib/auth-session";
+import {
+  persistAuthenticatedUser,
+  setBannedSessionFlag,
+  setStoredActivityId,
+  setStoredFingerprint,
+} from "@/lib/auth-session";
 import { isLockedAccountFlow, normalizeLoginIdentity } from "@/pages/login-lock-state";
 import { ERROR_CODES } from "@shared/error-codes";
 
@@ -117,13 +122,13 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       }
 
       if ("banned" in response) {
-        localStorage.setItem("banned", "1");
+        setBannedSessionFlag(true);
         window.location.href = "/banned";
         return;
       }
 
       if ("twoFactorRequired" in response && response.twoFactorRequired === true) {
-        localStorage.setItem("fingerprint", fingerprint);
+        setStoredFingerprint(fingerprint);
         setLockedUsername("");
         setLockedAccountMessage("");
         setTwoFactorChallengeToken(String(response.challengeToken || ""));
@@ -158,14 +163,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         twoFactorConfiguredAt: loginSuccessResponse?.user?.twoFactorConfiguredAt ?? null,
       };
 
-      localStorage.removeItem("banned");
-      localStorage.setItem("fingerprint", fingerprint);
+      setBannedSessionFlag(false);
+      setStoredFingerprint(fingerprint);
       persistAuthenticatedUser(authenticatedUser);
       setLockedUsername("");
       setLockedAccountMessage("");
 
       if (activityId) {
-        localStorage.setItem("activityId", String(activityId));
+        setStoredActivityId(String(activityId));
       }
 
       const defaultTab = authenticatedUser.mustChangePassword
@@ -272,13 +277,13 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         twoFactorConfiguredAt: response?.user?.twoFactorConfiguredAt ?? null,
       };
 
-      localStorage.removeItem("banned");
+      setBannedSessionFlag(false);
       persistAuthenticatedUser(authenticatedUser);
       setLockedUsername("");
       setLockedAccountMessage("");
 
       if (activityId) {
-        localStorage.setItem("activityId", String(activityId));
+        setStoredActivityId(String(activityId));
       }
 
       const defaultTab = authenticatedUser.mustChangePassword

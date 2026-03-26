@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
-import jwt from "jsonwebtoken";
 import type { AuthenticatedRequest } from "../auth/guards";
+import { verifySessionJwt } from "../auth/session-jwt";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import type { MaintenanceState } from "../config/system-settings";
 import { logger } from "../lib/logger";
@@ -103,7 +103,7 @@ export function createRuntimeConfigManager(options: RuntimeConfigManagerOptions)
     if (!token) return null;
 
     try {
-      const decoded = jwt.verify(token, secret, { algorithms: ["HS256"] }) as { role?: string };
+      const decoded = verifySessionJwt<{ role?: string }>(token, secret);
       return decoded?.role || null;
     } catch {
       return null;

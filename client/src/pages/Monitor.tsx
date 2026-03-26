@@ -34,6 +34,7 @@ import {
   rebuildCollectionRollups,
   retryRollupFailures,
 } from "@/lib/api";
+import { getStoredRole } from "@/lib/auth-session";
 
 const MonitorTechnicalChartsSection = lazy(() =>
   import("@/components/monitor/MonitorTechnicalChartsSection").then((module) => ({
@@ -90,18 +91,7 @@ export default function Monitor() {
     refreshNow,
   } = useSystemMetrics();
 
-  const userRole = useMemo(() => {
-    try {
-      const rawUser = localStorage.getItem("user");
-      if (rawUser) {
-        const parsedUser = JSON.parse(rawUser) as { role?: string };
-        if (parsedUser.role) return parsedUser.role;
-      }
-      return localStorage.getItem("role") || "";
-    } catch {
-      return localStorage.getItem("role") || "";
-    }
-  }, []);
+  const userRole = useMemo(() => getStoredRole(), []);
 
   const canInjectChaos = userRole === "admin" || userRole === "superuser";
   const canManageRollups = userRole === "superuser";

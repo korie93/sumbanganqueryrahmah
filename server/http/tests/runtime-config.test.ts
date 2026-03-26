@@ -243,3 +243,102 @@ test("runtime config rejects invalid AUTH_COOKIE_SECURE flags", async () => {
     },
   );
 });
+
+test("runtime config exposes explicit trusted proxies when configured", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      TRUSTED_PROXIES: "loopback,10.0.0.0/8",
+      SESSION_SECRET: "prod-session-secret",
+      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
+      PG_PASSWORD: "prod-db-password",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.deepEqual(runtimeModule.runtimeConfig.app.trustedProxies, ["loopback", "10.0.0.0/8"]);
+    },
+  );
+});
+
+test("runtime config rejects unsafe TRUSTED_PROXIES wildcard-style values", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      TRUSTED_PROXIES: "*",
+      SESSION_SECRET: "prod-session-secret",
+      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
+      PG_PASSWORD: "prod-db-password",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /TRUSTED_PROXIES must list explicit proxy ranges or names/i,
+      );
+    },
+  );
+});
+
+test("runtime config rejects SESSION_SECRET_PREVIOUS entries that duplicate the active secret", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      SESSION_SECRET: "prod-session-secret",
+      SESSION_SECRET_PREVIOUS: "prod-session-secret",
+      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
+      PG_PASSWORD: "prod-db-password",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /SESSION_SECRET_PREVIOUS must not include the active SESSION_SECRET value/i,
+      );
+    },
+  );
+});
+
+test("runtime config keeps previous session secrets for manual rotation verification", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      SESSION_SECRET: "prod-session-secret",
+      SESSION_SECRET_PREVIOUS: "older-secret,oldest-secret",
+      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
+      PG_PASSWORD: "prod-db-password",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.deepEqual(runtimeModule.runtimeConfig.auth.previousSessionSecrets, [
+        "older-secret",
+        "oldest-secret",
+      ]);
+    },
+  );
+});

@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import { z } from "zod";
 import type { AuthenticatedRequest } from "../auth/guards";
-import { badRequest } from "../http/errors";
+import { badRequest, notFound } from "../http/errors";
 import { readInteger, readNonEmptyString } from "../http/validation";
 import type { ImportDataColumnFilter, ImportsService } from "../services/imports.service";
 
@@ -60,7 +60,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     const search = String(req.query.q || "").trim();
 
     if (!importId) {
-      return res.status(400).json({ error: "importId is required" });
+      throw badRequest("importId is required");
     }
 
     const result = await importsService.searchImportRows({
@@ -107,7 +107,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     const { name, filename, dataRows } = importsService.parseCreateImportBody(req.body);
 
     if (!Array.isArray(dataRows) || dataRows.length === 0) {
-      return res.status(400).json({ message: "No data rows provided" });
+      throw badRequest("No data rows provided");
     }
 
     const importRecord = await importsService.createImport({
@@ -123,12 +123,12 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
   const getImport = async (req: AuthenticatedRequest, res: Response) => {
     const importId = readNonEmptyString(req.params.id);
     if (!importId) {
-      return res.status(400).json({ message: "Import not found" });
+      throw notFound("Import not found");
     }
 
     const details = await importsService.getImportDetails(importId);
     if (!details) {
-      return res.status(404).json({ message: "Import not found" });
+      throw notFound("Import not found");
     }
 
     return res.json(details);
@@ -144,7 +144,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     const columnFilters = parseViewerColumnFiltersQuery(req.query.columnFilters);
 
     if (!importId) {
-      return res.status(400).json({ message: "importId is required" });
+      throw badRequest("importId is required");
     }
 
     try {
@@ -171,7 +171,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
   const analyzeImport = async (req: AuthenticatedRequest, res: Response) => {
     const analysis = await importsService.analyzeImport(req.params.id);
     if (!analysis) {
-      return res.status(404).json({ message: "Import not found" });
+      throw notFound("Import not found");
     }
 
     return res.json(analysis);
@@ -185,7 +185,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     const { name } = importsService.parseRenameBody(req.body);
     const updated = await importsService.renameImport(req.params.id, name, req.user?.username);
     if (!updated) {
-      return res.status(404).json({ message: "Import not found" });
+      throw notFound("Import not found");
     }
 
     return res.json(updated);
@@ -194,7 +194,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
   const deleteImport = async (req: AuthenticatedRequest, res: Response) => {
     const deleted = await importsService.deleteImport(req.params.id, req.user?.username);
     if (!deleted) {
-      return res.status(404).json({ message: "Import not found" });
+      throw notFound("Import not found");
     }
 
     return res.json({ success: true });

@@ -440,6 +440,7 @@ test("POST /api/imports rejects requests without data rows", async () => {
 
     assert.equal(response.status, 400);
     assert.deepEqual(await response.json(), {
+      ok: false,
       message: "No data rows provided",
     });
     assert.equal(createImportCalls.length, 0);
@@ -544,6 +545,7 @@ test("GET /api/imports/:id/analyze returns a 404 for missing imports", async () 
     const response = await fetch(`${baseUrl}/api/imports/missing-import/analyze`);
     assert.equal(response.status, 404);
     assert.deepEqual(await response.json(), {
+      ok: false,
       message: "Import not found",
     });
     assert.equal(analyzeImportCalls.length, 0);

@@ -1,15 +1,11 @@
 import { ShieldX, Ban, Lock, AlertOctagon, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { clearAuthenticatedUserStorage, setBannedSessionFlag } from "@/lib/auth-session";
 
 export default function Banned() {
   const handleRetry = () => {
-    localStorage.removeItem("banned");
-    localStorage.removeItem("token");
-    localStorage.removeItem("username");
-    localStorage.removeItem("role");
-    localStorage.removeItem("user");
-    localStorage.removeItem("activityId");
-    localStorage.removeItem("fingerprint");
+    setBannedSessionFlag(false);
+    clearAuthenticatedUserStorage();
     window.location.href = "/";
   };
   return (

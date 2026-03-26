@@ -1,23 +1,23 @@
 import type { Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 import { PostgresStorage } from "../storage-postgres";
-import { getSessionSecret } from "../config/security";
+import { getSessionJwtVerificationSecrets } from "../auth/session-jwt";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
 
 type LegacyWebSocketOptions = {
   storage?: Pick<PostgresStorage, "getActivityById">;
-  secret?: string;
+  secret?: string | readonly string[];
 };
 
 const defaultStorage = new PostgresStorage();
-const defaultSessionSecret = getSessionSecret();
+const defaultSessionSecrets = getSessionJwtVerificationSecrets();
 
 export const connectedClients = new Map<string, WebSocket>();
 
 export function setupWebSocket(server: Server, options: LegacyWebSocketOptions = {}) {
   const storage = options.storage ?? defaultStorage;
-  const sessionSecret = options.secret ?? defaultSessionSecret;
+  const sessionSecret = options.secret ?? defaultSessionSecrets;
   const wss = new WebSocketServer({ server, path: "/ws" });
 
   wss.on("connection", async (ws, req) => {

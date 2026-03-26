@@ -37,6 +37,7 @@ type RuntimeConfig = {
       collection: string;
     };
     corsAllowedOrigins: string[];
+    trustedProxies: string[];
   };
   database: {
     host: string;
@@ -51,6 +52,7 @@ type RuntimeConfig = {
   };
   auth: {
     sessionSecret: string;
+    previousSessionSecrets: string[];
     collectionNicknameTempPassword: string;
     seedDefaultUsers: boolean;
     cookieSecure: boolean;
@@ -106,6 +108,7 @@ const HTTP_PROTOCOLS = new Set(["http:", "https:"]);
 const AUTO_COOKIE_SECURE_VALUES = new Set(["", "auto", "1", "true", "0", "false"]);
 const PLACEHOLDER_SESSION_SECRETS = new Set(["change-this-session-secret"]);
 const PLACEHOLDER_DATABASE_PASSWORDS = new Set(["change-this-db-password"]);
+const UNSAFE_TRUST_PROXY_VALUES = new Set(["*", "all", "true", "1"]);
 
 function readOptionalString(name: string): string | null {
   const value = process.env[name];
@@ -132,6 +135,22 @@ function readInt(name: string, fallback: number, options?: { min?: number; max?:
 
 function readBoolean(name: string, fallback: boolean): boolean {
   return readBooleanEnvFlag(name, fallback);
+}
+
+function readCommaSeparatedList(name: string): string[] {
+  const raw = readOptionalString(name);
+  if (!raw) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      raw
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  );
 }
 
 function normalizeHttpUrl(name: string, rawValue: string | null): string | null {
@@ -174,6 +193,41 @@ function normalizeCorsOrigin(name: string, rawValue: string): string {
 
 function buildEphemeralSecret(label: string) {
   return `${label.toLowerCase()}-${randomBytes(32).toString("hex")}`;
+}
+
+function resolveTrustedProxies(rawValues: string[]): string[] {
+  if (rawValues.length === 0) {
+    return [];
+  }
+
+  if (rawValues.length > 32) {
+    throw new Error("TRUSTED_PROXIES may contain at most 32 entries.");
+  }
+
+  for (const value of rawValues) {
+    if (UNSAFE_TRUST_PROXY_VALUES.has(value.toLowerCase())) {
+      throw new Error(
+        "TRUSTED_PROXIES must list explicit proxy ranges or names such as loopback, and cannot use '*', 'all', 'true', or '1'.",
+      );
+    }
+  }
+
+  return rawValues;
+}
+
+function resolvePreviousSessionSecrets(rawValues: string[], currentSessionSecret: string | null): string[] {
+  if (rawValues.length === 0) {
+    return [];
+  }
+
+  const normalizedCurrent = String(currentSessionSecret || "").trim();
+  for (const value of rawValues) {
+    if (normalizedCurrent && value === normalizedCurrent) {
+      throw new Error("SESSION_SECRET_PREVIOUS must not include the active SESSION_SECRET value.");
+    }
+  }
+
+  return rawValues;
 }
 
 function readSecretOrThrow(name: string, label: string, isRequired: boolean, fallbackFactory: () => string) {
@@ -350,6 +404,7 @@ function buildRuntimeConfigWarnings(params: {
 function assertNoPlaceholderSecrets(params: {
   isProductionLike: boolean;
   configuredSessionSecret: string | null;
+  configuredPreviousSessionSecrets: readonly string[];
   configuredPgPassword: string | null;
 }) {
   if (!params.isProductionLike) {
@@ -358,6 +413,12 @@ function assertNoPlaceholderSecrets(params: {
 
   if (params.configuredSessionSecret && PLACEHOLDER_SESSION_SECRETS.has(params.configuredSessionSecret)) {
     throw new Error("SESSION_SECRET is using the default placeholder value and must be replaced before non-local startup.");
+  }
+
+  for (const previousSecret of params.configuredPreviousSessionSecrets) {
+    if (PLACEHOLDER_SESSION_SECRETS.has(previousSecret)) {
+      throw new Error("SESSION_SECRET_PREVIOUS contains a placeholder value and must be replaced before non-local startup.");
+    }
   }
 
   if (params.configuredPgPassword && PLACEHOLDER_DATABASE_PASSWORDS.has(params.configuredPgPassword)) {
@@ -370,14 +431,20 @@ const isProduction = nodeEnv === "production";
 const isStrictLocalDevelopment = isStrictLocalDevelopmentEnvironment();
 const isProductionLike = isProductionLikeEnvironment();
 const configuredSessionSecret = readOptionalString("SESSION_SECRET");
+const configuredPreviousSessionSecrets = resolvePreviousSessionSecrets(
+  readCommaSeparatedList("SESSION_SECRET_PREVIOUS"),
+  configuredSessionSecret,
+);
 const configuredCollectionNicknameTempPassword = readOptionalString("COLLECTION_NICKNAME_TEMP_PASSWORD");
 const configuredPgPassword = readOptionalString("PG_PASSWORD");
 const publicAppUrl = normalizeHttpUrl("PUBLIC_APP_URL", readOptionalString("PUBLIC_APP_URL"));
+const trustedProxies = resolveTrustedProxies(readCommaSeparatedList("TRUSTED_PROXIES"));
 const lowMemoryMode = readBoolean("SQR_LOW_MEMORY_MODE", true);
 assertRuntimeSafetyGuards({ isProductionLike, isStrictLocalDevelopment });
 assertNoPlaceholderSecrets({
   isProductionLike,
   configuredSessionSecret,
+  configuredPreviousSessionSecrets,
   configuredPgPassword,
 });
 
@@ -398,6 +465,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       collection: readString("COLLECTION_BODY_LIMIT", "8mb"),
     },
     corsAllowedOrigins: resolveCorsAllowedOrigins(publicAppUrl),
+    trustedProxies,
   },
   database: {
     host: readString("PG_HOST", "localhost"),
@@ -425,6 +493,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
   auth: {
     sessionSecret: readSecretOrThrow("SESSION_SECRET", "session", isProductionLike, () =>
       buildEphemeralSecret("session")),
+    previousSessionSecrets: configuredPreviousSessionSecrets,
     collectionNicknameTempPassword: readSecretOrThrow(
       "COLLECTION_NICKNAME_TEMP_PASSWORD",
       "collection temp password",

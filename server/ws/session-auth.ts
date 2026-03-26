@@ -1,4 +1,4 @@
-import jwt from "jsonwebtoken";
+import { verifySessionJwt } from "../auth/session-jwt";
 
 type ActivitySessionLike = {
   id?: string | null;
@@ -10,11 +10,11 @@ type WsTokenPayload = {
   activityId?: string | null;
 };
 
-export function extractWsActivityId(token: string, secret: string): string | null {
+export function extractWsActivityId(token: string, secret: string | readonly string[]): string | null {
   if (!token || !secret) return null;
 
   try {
-    const decoded = jwt.verify(token, secret, { algorithms: ["HS256"] }) as WsTokenPayload;
+    const decoded = verifySessionJwt<WsTokenPayload>(token, secret);
     const activityId = String(decoded?.activityId || "").trim();
     return activityId || null;
   } catch {

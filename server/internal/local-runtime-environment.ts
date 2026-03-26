@@ -23,6 +23,7 @@ import {
 import { createRuntimeConfigManager } from "./runtime-config-manager";
 import { createRuntimeMonitorManager } from "./runtime-monitor-manager";
 import { wrapAsyncPrototypeMethods } from "./wrapAsyncPrototypeMethods";
+import { applyTrustedProxies } from "../http/trust-proxy";
 
 type CreateLocalRuntimeEnvironmentOptions = {
   notifyFatalStartup?: (reason: string, details?: string) => void;
@@ -33,6 +34,7 @@ const DB_METHOD_WRAP_EXCLUDE = new Set<string>(["constructor"]);
 export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnvironmentOptions = {}) {
   const storage = new PostgresStorage();
   const app = express();
+  applyTrustedProxies(app, runtimeConfig.app.trustedProxies);
   const server = createServer(app);
   const wss = new WebSocketServer({ server, path: "/ws" });
   const notifyFatalStartup = options.notifyFatalStartup ?? (() => undefined);

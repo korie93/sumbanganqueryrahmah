@@ -1,7 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
-import jwt from "jsonwebtoken";
 import type { IStorage } from "../storage-postgres";
 import { getSessionSecret } from "../config/security";
+import { verifySessionJwt } from "./session-jwt";
 import {
   canUserBypassForcedPasswordChange,
   getAccountAccessBlockReason,
@@ -82,7 +82,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     }
 
     try {
-      const decoded = jwt.verify(token, secret, { algorithms: ["HS256"] }) as AuthenticatedUser;
+      const decoded = verifySessionJwt<AuthenticatedUser>(token, secret) as AuthenticatedUser;
       const activity = await storage.getActivityById(decoded.activityId);
 
       if (!activity || activity.isActive === false || activity.logoutTime !== null) {

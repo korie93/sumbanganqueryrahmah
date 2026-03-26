@@ -1,4 +1,9 @@
 import type { CollectionBatch, CollectionReceiptPayload, CollectionRecord } from "@/lib/api";
+import {
+  getStoredAuthenticatedUser,
+  getStoredRole,
+  getStoredUsername,
+} from "@/lib/auth-session";
 
 export const COLLECTION_BATCH_OPTIONS: CollectionBatch[] = ["P10", "P25", "MDD02", "MDD10", "MDD18", "MDD25"];
 export const COLLECTION_ACCEPTED_FILE_TYPES = ["image/jpeg", "image/png", "application/pdf", "image/webp"];
@@ -95,30 +100,21 @@ export function formatAmountRM(raw: string | number): string {
 }
 
 export function getCurrentRole(): string {
-  try {
-    const userRaw = localStorage.getItem("user");
-    if (userRaw) {
-      const parsed = JSON.parse(userRaw);
-      return String(parsed?.role || localStorage.getItem("role") || "user").trim().toLowerCase();
-    }
-  } catch {
-    // ignore parse issues
+  const cachedUser = getStoredAuthenticatedUser();
+  if (cachedUser?.role) {
+    return String(cachedUser.role).trim().toLowerCase();
   }
-  return String(localStorage.getItem("role") || "user").trim().toLowerCase();
+
+  return String(getStoredRole() || "user").trim().toLowerCase();
 }
 
 export function getCurrentUsername(): string {
-  try {
-    const userRaw = localStorage.getItem("user");
-    if (userRaw) {
-      const parsed = JSON.parse(userRaw);
-      const username = String(parsed?.username || "").trim().toLowerCase();
-      if (username) return username;
-    }
-  } catch {
-    // ignore parse issues
+  const cachedUser = getStoredAuthenticatedUser();
+  if (cachedUser?.username) {
+    return String(cachedUser.username).trim().toLowerCase();
   }
-  return String(localStorage.getItem("username") || "").trim().toLowerCase();
+
+  return String(getStoredUsername() || "").trim().toLowerCase();
 }
 
 export function getCurrentCollectionStaffNickname(): string {

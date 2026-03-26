@@ -4,6 +4,7 @@ import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getAuditLogs, getAuditLogStats, cleanupAuditLogs } from "@/lib/api";
+import { getStoredRole } from "@/lib/auth-session";
 import { useToast } from "@/hooks/use-toast";
 import { AuditLogsCleanupPanel } from "@/pages/audit-logs/AuditLogsCleanupPanel";
 import { AuditLogsFiltersPanel } from "@/pages/audit-logs/AuditLogsFiltersPanel";
@@ -18,16 +19,7 @@ import {
 import { resolveAuditLogsExportBlockReason } from "@/pages/audit-logs/export-guards";
 
 export default function AuditLogs() {
-  const currentRole = (() => {
-    try {
-      const raw = localStorage.getItem("user");
-      if (!raw) return "";
-      const parsed = JSON.parse(raw) as { role?: string };
-      return parsed.role || "";
-    } catch {
-      return "";
-    }
-  })();
+  const currentRole = getStoredRole();
 
   const canCleanupLogs = currentRole === "superuser";
   const [logs, setLogs] = useState<AuditLogRecord[]>([]);

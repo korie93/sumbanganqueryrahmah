@@ -1,5 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { getCsrfHeader } from "./api/shared";
+import { setBannedSessionFlag, setStoredForcePasswordChange } from "./auth-session";
 
 const isLowSpecClient = (() => {
   if (typeof window === "undefined" || typeof navigator === "undefined") {
@@ -48,11 +49,11 @@ async function throwIfResNotOk(res: Response) {
     }
 
     if (parsed?.banned) {
-      localStorage.setItem("banned", "1");
+      setBannedSessionFlag(true);
     }
 
     if (parsed?.forcePasswordChange) {
-      localStorage.setItem("forcePasswordChange", "1");
+      setStoredForcePasswordChange(true);
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("force-password-change", {
