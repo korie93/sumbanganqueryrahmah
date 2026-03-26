@@ -138,6 +138,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     const runtimeSettings = await getRuntimeSettingsCached();
     const importId = readNonEmptyString(req.params.id);
     const page = Math.max(1, readInteger(req.query.page, 1));
+    const cursor = readNonEmptyString(req.query.cursor);
     const requestedLimit = readInteger(req.query.limit, runtimeSettings.viewerRowsPerPage);
     const search = String(req.query.search || "").trim();
     const columnFilters = parseViewerColumnFiltersQuery(req.query.columnFilters);
@@ -146,17 +147,25 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
       return res.status(400).json({ message: "importId is required" });
     }
 
-    const result = await importsService.getImportDataPage({
-      importId,
-      page,
-      requestedLimit,
-      viewerRowsPerPage: runtimeSettings.viewerRowsPerPage,
-      isDbProtected: isDbProtected(),
-      search,
-      columnFilters,
-    });
+    try {
+      const result = await importsService.getImportDataPage({
+        importId,
+        page,
+        cursor: cursor || null,
+        requestedLimit,
+        viewerRowsPerPage: runtimeSettings.viewerRowsPerPage,
+        isDbProtected: isDbProtected(),
+        search,
+        columnFilters,
+      });
 
-    return res.json(result);
+      return res.json(result);
+    } catch (error) {
+      if (error instanceof Error && /invalid import data cursor/i.test(error.message)) {
+        throw badRequest("Invalid import data cursor.");
+      }
+      throw error;
+    }
   };
 
   const analyzeImport = async (req: AuthenticatedRequest, res: Response) => {

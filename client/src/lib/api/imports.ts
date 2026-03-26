@@ -68,13 +68,15 @@ export async function getImportData(
   search?: string,
   options?: ImportDataRequestOptions,
 ) {
-  const params = new URLSearchParams({
-    page: String(page),
-    limit: String(limit),
-  });
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("limit", String(limit));
 
   if (search && search.trim() !== "") {
     params.set("search", search.trim());
+  }
+  if (options?.cursor?.trim()) {
+    params.set("cursor", options.cursor.trim());
   }
   if (Array.isArray(options?.columnFilters) && options.columnFilters.length > 0) {
     params.set("columnFilters", JSON.stringify(options.columnFilters));

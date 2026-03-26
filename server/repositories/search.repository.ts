@@ -155,11 +155,13 @@ export class SearchRepository {
     limit: number;
     offset: number;
     columnFilters?: Array<{ column: string; operator: string; value: string }>;
-  }): Promise<{ rows: any[]; total: number }> {
+    cursor?: string | null;
+  }): Promise<{ rows: any[]; total: number; nextCursorRowId: string | null }> {
     const { importId, search, limit, offset } = params;
     const trimmedSearch = search && search.trim() ? search.trim() : null;
     const safeLimit = Math.min(Math.max(1, limit), MAX_SEARCH_LIMIT);
     const safeOffset = Math.max(offset, 0);
+    const cursor = String(params.cursor || "").trim() || null;
     const safeColumnFilters = Array.isArray(params.columnFilters)
       ? params.columnFilters
           .map((filter) => ({
@@ -175,7 +177,7 @@ export class SearchRepository {
       : [];
 
     if (trimmedSearch && trimmedSearch.length < 2) {
-      return { rows: [], total: 0 };
+      return { rows: [], total: 0, nextCursorRowId: null };
     }
     const conditions: SQL[] = [sql`dr.import_id = ${importId}`];
 
@@ -185,6 +187,10 @@ export class SearchRepository {
 
     for (const filter of safeColumnFilters) {
       conditions.push(buildFieldCondition(filter.column, filter.operator, filter.value));
+    }
+
+    if (cursor) {
+      conditions.push(sql`dr.id > ${cursor}`);
     }
 
     const whereClause = conditions.length === 1
@@ -199,8 +205,8 @@ export class SearchRepository {
       FROM public.data_rows dr
       WHERE ${whereClause}
       ORDER BY dr.id
-      LIMIT ${safeLimit}
-      OFFSET ${safeOffset}
+      LIMIT ${safeLimit + 1}
+      ${cursor ? sql`` : sql`OFFSET ${safeOffset}`}
     `);
 
     const totalResult = await db.execute(sql`
@@ -209,13 +215,18 @@ export class SearchRepository {
       WHERE ${whereClause}
     `);
 
+    const rawRows = (rowsResult.rows || []).map((row: any) => ({
+      id: row.id,
+      importId: row.importId,
+      jsonDataJsonb: normalizeJsonPayload(row.jsonDataJsonb),
+    }));
+    const hasMore = rawRows.length > safeLimit;
+    const items = hasMore ? rawRows.slice(0, safeLimit) : rawRows;
+
     return {
-      rows: (rowsResult.rows || []).map((row: any) => ({
-        id: row.id,
-        importId: row.importId,
-        jsonDataJsonb: normalizeJsonPayload(row.jsonDataJsonb),
-      })),
+      rows: items,
       total: totalResult.rows?.[0] ? Number((totalResult.rows[0] as any).total) : 0,
+      nextCursorRowId: hasMore ? String(items[items.length - 1]?.id || "") || null : null,
     };
   }
 
