@@ -26,6 +26,12 @@ type ImportsStorage = Pick<
   | "updateImportName"
 >;
 
+export type ImportDataColumnFilter = {
+  column: string;
+  operator: "contains" | "equals" | "startsWith" | "endsWith" | "notEquals";
+  value: string;
+};
+
 type CreateImportInput = {
   name: string;
   filename: string;
@@ -40,6 +46,7 @@ type ImportDataPageInput = {
   viewerRowsPerPage: number;
   isDbProtected: boolean;
   search?: string | null;
+  columnFilters?: ImportDataColumnFilter[];
 };
 
 type SearchImportRowsInput = {
@@ -47,6 +54,7 @@ type SearchImportRowsInput = {
   limit: number;
   offset: number;
   search?: string | null;
+  columnFilters?: ImportDataColumnFilter[];
 };
 
 type ImportDetailsResult = {
@@ -85,6 +93,7 @@ export class ImportsService {
       search: params.search ?? "",
       limit: params.limit,
       offset: params.offset,
+      columnFilters: params.columnFilters ?? [],
     });
   }
 
@@ -146,6 +155,7 @@ export class ImportsService {
       search: search || null,
       limit,
       offset,
+      columnFilters: params.columnFilters ?? [],
     });
 
     return {

@@ -67,6 +67,7 @@ export class PostgresImportsSearchStorage extends PostgresAuthAccountStorage {
     search?: string | null;
     limit: number;
     offset: number;
+    columnFilters?: Array<{ column: string; operator: string; value: string }>;
   }): Promise<{ rows: any[]; total: number }> {
     const trimmedSearch = params.search && params.search.trim() ? params.search.trim() : null;
 
@@ -77,6 +78,7 @@ export class PostgresImportsSearchStorage extends PostgresAuthAccountStorage {
         trimmedSearch,
         limit: params.limit,
         offset: params.offset,
+        columnFilterCount: params.columnFilters?.length ?? 0,
       });
     }
 

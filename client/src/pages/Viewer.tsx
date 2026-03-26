@@ -124,6 +124,7 @@ export default function Viewer({
   const [importName, setImportName] = useState("Data Viewer");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [debouncedColumnFilters, setDebouncedColumnFilters] = useState<ColumnFilter[]>([]);
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
   const [showFilters, setShowFilters] = useState(false);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
@@ -205,6 +206,7 @@ export default function Viewer({
     try {
       const response = await getImportData(id, page, ROWS_PER_PAGE, debouncedSearch, {
         signal: controller.signal,
+        columnFilters: debouncedColumnFilters,
       });
       if (
         controller.signal.aborted ||
@@ -249,7 +251,7 @@ export default function Viewer({
         setLoadingMore(false);
       }
     }
-  }, [ROWS_PER_PAGE, cancelActiveFetch, debouncedSearch]);
+  }, [ROWS_PER_PAGE, cancelActiveFetch, debouncedColumnFilters, debouncedSearch]);
 
   useEffect(() => {
     if (importId) {
@@ -318,6 +320,7 @@ export default function Viewer({
     ROWS_PER_PAGE,
     cancelActiveFetch,
     clearSelectionState,
+    debouncedColumnFilters,
     debouncedSearch,
     fetchData,
     importId,
@@ -333,6 +336,14 @@ export default function Viewer({
     [columnFilters],
   );
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedColumnFilters(activeColumnFilters);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [SEARCH_DEBOUNCE_MS, activeColumnFilters]);
+
   const visibleHeaders = useMemo(
     () => headers.filter((header) => selectedColumns.has(header)),
     [headers, selectedColumns],
@@ -344,7 +355,8 @@ export default function Viewer({
     () => filterViewerRows(rows, activeColumnFilters),
     [activeColumnFilters, rows],
   );
-  const hasFilteredSubset = activeColumnFilters.length > 0 && filteredRows.length !== rows.length;
+  const hasFilteredSubset =
+    isServerSearchActive || activeColumnFilters.length > 0 || filteredRows.length !== rows.length;
   const hasPageFilterSubset = filteredRows.length !== rows.length;
   const enableVirtualRows = filteredRows.length > (isLowSpecMode ? 60 : 120);
   const rowHeightPx = 48;
@@ -497,8 +509,12 @@ export default function Viewer({
       return rows.filter((row) => selectedRowIds.has(row.__rowId));
     }
 
+    if (exportFiltered) {
+      return filteredRows;
+    }
+
     if (!importId || totalRows <= rows.length) {
-      return exportFiltered ? filteredRows : rows;
+      return rows;
     }
 
     exportAbortControllerRef.current?.abort();
@@ -511,6 +527,7 @@ export default function Viewer({
       while (true) {
         const response = await getImportData(importId, pageToLoad, ROWS_PER_PAGE, debouncedSearch, {
           signal: controller.signal,
+          columnFilters: debouncedColumnFilters,
         });
         const normalizedPage = normalizeViewerPageResult(response ?? {}, pageToLoad, ROWS_PER_PAGE);
 
@@ -518,11 +535,7 @@ export default function Viewer({
           break;
         }
 
-        exportRows.push(
-          ...(exportFiltered
-            ? filterViewerRows(normalizedPage.rows, activeColumnFilters)
-            : normalizedPage.rows),
-        );
+        exportRows.push(...normalizedPage.rows);
 
         const loadedThrough = (normalizedPage.page - 1) * normalizedPage.limit + normalizedPage.rows.length;
         if (loadedThrough >= normalizedPage.total) {
@@ -538,7 +551,7 @@ export default function Viewer({
         exportAbortControllerRef.current = null;
       }
     }
-  }, [ROWS_PER_PAGE, activeColumnFilters, debouncedSearch, filteredRows, importId, rows, selectedRowIds, totalRows]);
+  }, [ROWS_PER_PAGE, debouncedColumnFilters, debouncedSearch, filteredRows, importId, rows, selectedRowIds, totalRows]);
 
   const activeFilterChips = useMemo<ActiveFilterChip[]>(() => {
     const items: ActiveFilterChip[] = [];

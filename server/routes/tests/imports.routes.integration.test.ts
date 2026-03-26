@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { DataRow, Import } from "../../../shared/schema-postgres";
 import { createImportsController } from "../../controllers/imports.controller";
+import { errorHandler } from "../../middleware/error-handler";
 import type { ImportWithRowCount, ImportsRepository } from "../../repositories/imports.repository";
 import type { ImportAnalysisService } from "../../services/import-analysis.service";
 import { ImportsService } from "../../services/imports.service";
@@ -41,6 +42,39 @@ function createAnalysisPayload(importRecord: { id: string; name: string; filenam
       duplicates: { count: 0, items: [] },
     },
   };
+}
+
+function applyImportColumnFilters(
+  rows: DataRow[],
+  filters?: Array<{ column: string; operator: string; value: string }>,
+) {
+  const safeFilters = Array.isArray(filters) ? filters : [];
+  if (safeFilters.length === 0) {
+    return rows;
+  }
+
+  return rows.filter((row) =>
+    safeFilters.every((filter) => {
+      const record = (row.jsonDataJsonb ?? {}) as Record<string, unknown>;
+      const cellValue = String(record[filter.column] ?? "").toLowerCase();
+      const filterValue = String(filter.value ?? "").toLowerCase();
+
+      switch (filter.operator) {
+        case "contains":
+          return cellValue.includes(filterValue);
+        case "equals":
+          return cellValue === filterValue;
+        case "startsWith":
+          return cellValue.startsWith(filterValue);
+        case "endsWith":
+          return cellValue.endsWith(filterValue);
+        case "notEquals":
+          return cellValue !== filterValue;
+        default:
+          return true;
+      }
+    }),
+  );
 }
 
 function createImportsRouteHarness(options?: {
@@ -159,9 +193,13 @@ function createImportsRouteHarness(options?: {
       search?: string | null;
       limit: number;
       offset: number;
+      columnFilters?: Array<{ column: string; operator: string; value: string }>;
     }) => {
       searchCalls.push(params);
-      const rows = dataRowsByImport.get(params.importId) ?? [];
+      const rows = applyImportColumnFilters(
+        dataRowsByImport.get(params.importId) ?? [],
+        params.columnFilters,
+      );
       return {
         rows: rows.slice(params.offset, params.offset + params.limit),
         total: rows.length,
@@ -285,6 +323,7 @@ function createImportsRouteHarness(options?: {
     requireTabAccess: () => allowAllTabs(),
     searchRateLimiter: (_req, _res, next) => next(),
   });
+  app.use(errorHandler);
 
   return {
     app,
@@ -481,6 +520,7 @@ test("GET /api/imports/:id/data applies the protected page-size cap and forwards
       search: "Alice",
       limit: 120,
       offset: 120,
+      columnFilters: [],
     });
   } finally {
     await stopTestServer(server);
@@ -515,6 +555,51 @@ test("GET /api/analyze/all analyzes all imports through the service layer", asyn
     assert.equal(payload.totalImports, 3);
     assert.equal(payload.totalRows, 3);
     assert.deepEqual(analyzeAllCalls, [["import-1", "import-2", "import-3"]]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/imports/:id/data applies dataset-wide column filters", async () => {
+  const { app, searchCalls } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const filters = encodeURIComponent(JSON.stringify([
+      { column: "name", operator: "equals", value: "Bob" },
+    ]));
+    const response = await fetch(`${baseUrl}/api/imports/import-1/data?page=1&limit=20&columnFilters=${filters}`);
+    assert.equal(response.status, 200);
+
+    const payload = await response.json();
+    assert.equal(payload.total, 1);
+    assert.equal(payload.rows.length, 1);
+    assert.equal(payload.rows[0]?.jsonDataJsonb?.name, "Bob");
+    assert.deepEqual(searchCalls[0], {
+      importId: "import-1",
+      search: null,
+      limit: 20,
+      offset: 0,
+      columnFilters: [
+        { column: "name", operator: "equals", value: "Bob" },
+      ],
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/imports/:id/data rejects malformed column filters", async () => {
+  const { app } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/imports/import-1/data?page=1&columnFilters=%7Bbad-json`);
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "Invalid viewer column filters.",
+    });
   } finally {
     await stopTestServer(server);
   }

@@ -154,44 +154,42 @@ export class SearchRepository {
     search?: string | null;
     limit: number;
     offset: number;
+    columnFilters?: Array<{ column: string; operator: string; value: string }>;
   }): Promise<{ rows: any[]; total: number }> {
     const { importId, search, limit, offset } = params;
     const trimmedSearch = search && search.trim() ? search.trim() : null;
     const safeLimit = Math.min(Math.max(1, limit), MAX_SEARCH_LIMIT);
     const safeOffset = Math.max(offset, 0);
+    const safeColumnFilters = Array.isArray(params.columnFilters)
+      ? params.columnFilters
+          .map((filter) => ({
+            column: String(filter?.column ?? "").trim(),
+            operator: String(filter?.operator ?? "").trim(),
+            value: String(filter?.value ?? "").trim(),
+          }))
+          .filter((filter) =>
+            filter.column !== ""
+            && filter.value !== ""
+            && ALLOWED_OPERATORS.has(filter.operator),
+          )
+      : [];
 
     if (trimmedSearch && trimmedSearch.length < 2) {
       return { rows: [], total: 0 };
     }
+    const conditions: SQL[] = [sql`dr.import_id = ${importId}`];
 
-    if (!trimmedSearch) {
-      const rowsResult = await db.execute(sql`
-        SELECT
-          dr.id,
-          dr.import_id as "importId",
-          dr.json_data as "jsonDataJsonb"
-        FROM public.data_rows dr
-        WHERE dr.import_id = ${importId}
-        ORDER BY dr.id
-        LIMIT ${safeLimit}
-        OFFSET ${safeOffset}
-      `);
-
-      const totalResult = await db.execute(sql`
-        SELECT COUNT(*)::int AS total
-        FROM public.data_rows dr
-        WHERE dr.import_id = ${importId}
-      `);
-
-      return {
-        rows: (rowsResult.rows || []).map((row: any) => ({
-          id: row.id,
-          importId: row.importId,
-          jsonDataJsonb: normalizeJsonPayload(row.jsonDataJsonb),
-        })),
-        total: totalResult.rows?.[0] ? Number((totalResult.rows[0] as any).total) : 0,
-      };
+    if (trimmedSearch) {
+      conditions.push(sql`dr.json_data::text ILIKE ${`%${trimmedSearch}%`}`);
     }
+
+    for (const filter of safeColumnFilters) {
+      conditions.push(buildFieldCondition(filter.column, filter.operator, filter.value));
+    }
+
+    const whereClause = conditions.length === 1
+      ? conditions[0]
+      : sql.join(conditions, sql` AND `);
 
     const rowsResult = await db.execute(sql`
       SELECT
@@ -199,8 +197,7 @@ export class SearchRepository {
         dr.import_id as "importId",
         dr.json_data as "jsonDataJsonb"
       FROM public.data_rows dr
-      WHERE dr.import_id = ${importId}
-        AND dr.json_data::text ILIKE ${`%${trimmedSearch}%`}
+      WHERE ${whereClause}
       ORDER BY dr.id
       LIMIT ${safeLimit}
       OFFSET ${safeOffset}
@@ -209,8 +206,7 @@ export class SearchRepository {
     const totalResult = await db.execute(sql`
       SELECT COUNT(*)::int AS total
       FROM public.data_rows dr
-      WHERE dr.import_id = ${importId}
-        AND dr.json_data::text ILIKE ${`%${trimmedSearch}%`}
+      WHERE ${whereClause}
     `);
 
     return {

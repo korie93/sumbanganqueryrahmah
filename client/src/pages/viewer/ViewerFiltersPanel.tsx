@@ -33,7 +33,7 @@ export function ViewerFiltersPanel({
         <div>
           <h3 className="font-medium text-foreground">Column Filters</h3>
           <p className="text-xs text-muted-foreground">
-            Narrow the current page without leaving the viewer.
+            Narrow matching rows across the dataset without leaving the viewer.
           </p>
         </div>
         <div className="flex gap-2">
