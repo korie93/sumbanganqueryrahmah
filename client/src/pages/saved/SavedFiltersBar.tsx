@@ -1,4 +1,5 @@
 import { CalendarIcon, Search, X } from "lucide-react";
+import { ActiveFilterChips } from "@/components/data/ActiveFilterChips";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
@@ -26,8 +27,25 @@ export function SavedFiltersBar({
   onDateFilterChange,
   onClearFilters,
 }: SavedFiltersBarProps) {
+  const activeFilters = [
+    searchTerm.trim()
+      ? {
+          id: "saved-search",
+          label: `Search: ${searchTerm.trim()}`,
+          onRemove: () => onSearchTermChange(""),
+        }
+      : null,
+    dateFilter
+      ? {
+          id: "saved-date",
+          label: `Date: ${formatDateDDMMYYYY(dateFilter)}`,
+          onRemove: () => onDateFilterChange(undefined),
+        }
+      : null,
+  ].filter((item): item is NonNullable<typeof item> => item !== null);
+
   return (
-    <div className="ops-toolbar">
+    <div className="ops-toolbar space-y-3">
       <div className="flex items-center gap-4 flex-wrap">
         <div className="relative flex-1 min-w-48 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -80,6 +98,7 @@ export function SavedFiltersBar({
           </Button>
         ) : null}
       </div>
+      <ActiveFilterChips items={activeFilters} onClearAll={hasActiveFilters ? onClearFilters : undefined} />
     </div>
   );
 }

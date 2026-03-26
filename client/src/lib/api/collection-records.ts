@@ -165,6 +165,8 @@ export async function getCollectionRecords(filters?: {
   search?: string;
   nickname?: string;
   nicknames?: string[];
+  receiptValidationStatus?: "matched" | "underpaid" | "overpaid" | "unverified" | "needs_review" | "flagged";
+  duplicateOnly?: boolean;
   limit?: number;
   offset?: number;
 }, options?: { signal?: AbortSignal }) {
@@ -178,6 +180,12 @@ export async function getCollectionRecords(filters?: {
       "nicknames",
       filters.nicknames.map((value) => String(value || "").trim()).filter(Boolean).join(","),
     );
+  }
+  if (filters?.receiptValidationStatus) {
+    params.set("receiptValidationStatus", filters.receiptValidationStatus);
+  }
+  if (filters?.duplicateOnly) {
+    params.set("duplicateOnly", "1");
   }
   if (typeof filters?.limit === "number" && Number.isFinite(filters.limit)) {
     params.set("limit", String(filters.limit));

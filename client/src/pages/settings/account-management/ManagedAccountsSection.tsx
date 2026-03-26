@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ActiveFilterChips } from "@/components/data/ActiveFilterChips";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { SideTabDataPanel } from "@/components/layout/SideTabDataPanel";
 import { Input } from "@/components/ui/input";
@@ -62,6 +63,45 @@ export function ManagedAccountsSection({
     [deferredSearchQuery],
   );
   const hasActiveFilters = normalizedDeferredSearch.length > 0 || roleFilter !== "all" || statusFilter !== "all";
+  const activeFilters = useMemo(
+    () =>
+      [
+        normalizedDeferredSearch
+          ? {
+              id: "managed-search",
+              label: `Search: ${deferredSearchQuery.trim()}`,
+              onRemove: () => setSearchQuery(""),
+            }
+          : null,
+        roleFilter !== "all"
+          ? {
+              id: "managed-role",
+              label: `Role: ${roleFilter}`,
+              onRemove: () => {
+                setRoleFilter("all");
+                onQueryChange({
+                  page: 1,
+                  role: "all",
+                });
+              },
+            }
+          : null,
+        statusFilter !== "all"
+          ? {
+              id: "managed-status",
+              label: `Status: ${statusFilter}`,
+              onRemove: () => {
+                setStatusFilter("all");
+                onQueryChange({
+                  page: 1,
+                  status: "all",
+                });
+              },
+            }
+          : null,
+      ].filter((item): item is NonNullable<typeof item> => item !== null),
+    [deferredSearchQuery, normalizedDeferredSearch, onQueryChange, roleFilter, statusFilter],
+  );
 
   useEffect(() => {
     const normalizedSearchFromQuery = normalizeSearchValue(query.search);
@@ -111,77 +151,97 @@ export function ManagedAccountsSection({
           </Button>
         }
         filters={
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px_180px]">
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Search by user name</p>
-              <div className="relative">
-                <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search username, full name, or email"
-                  className="pl-9"
-                />
+          <div className="space-y-3">
+            <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px_180px]">
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Search by user name</p>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search username, full name, or email"
+                    className="pl-9"
+                  />
+                </div>
               </div>
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="managed-accounts-role-filter" className="text-sm font-medium">
-                Role
-              </label>
-              <select
-                id="managed-accounts-role-filter"
-                value={roleFilter}
-                onChange={(event) => {
-                  const nextRole = event.target.value === "admin" || event.target.value === "user"
-                    ? event.target.value
-                    : "all";
-                  setRoleFilter(nextRole);
-                  onQueryChange({
-                    page: 1,
-                    role: nextRole,
-                  });
-                }}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="all">All roles</option>
-                <option value="user">user</option>
-                <option value="admin">admin</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="managed-accounts-status-filter" className="text-sm font-medium">
-                Status
-              </label>
-              <select
-                id="managed-accounts-status-filter"
-                value={statusFilter}
-                onChange={(event) => {
-                  const nextStatus =
-                    event.target.value === "active"
-                    || event.target.value === "pending_activation"
-                    || event.target.value === "suspended"
-                    || event.target.value === "disabled"
-                    || event.target.value === "locked"
-                    || event.target.value === "banned"
+              <div className="space-y-2">
+                <label htmlFor="managed-accounts-role-filter" className="text-sm font-medium">
+                  Role
+                </label>
+                <select
+                  id="managed-accounts-role-filter"
+                  value={roleFilter}
+                  onChange={(event) => {
+                    const nextRole = event.target.value === "admin" || event.target.value === "user"
                       ? event.target.value
                       : "all";
-                  setStatusFilter(nextStatus);
-                  onQueryChange({
-                    page: 1,
-                    status: nextStatus,
-                  });
-                }}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="all">All statuses</option>
-                <option value="active">active</option>
-                <option value="pending_activation">pending_activation</option>
-                <option value="suspended">suspended</option>
-                <option value="disabled">disabled</option>
-                <option value="locked">locked</option>
-                <option value="banned">banned</option>
-              </select>
+                    setRoleFilter(nextRole);
+                    onQueryChange({
+                      page: 1,
+                      role: nextRole,
+                    });
+                  }}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="all">All roles</option>
+                  <option value="user">user</option>
+                  <option value="admin">admin</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="managed-accounts-status-filter" className="text-sm font-medium">
+                  Status
+                </label>
+                <select
+                  id="managed-accounts-status-filter"
+                  value={statusFilter}
+                  onChange={(event) => {
+                    const nextStatus =
+                      event.target.value === "active"
+                      || event.target.value === "pending_activation"
+                      || event.target.value === "suspended"
+                      || event.target.value === "disabled"
+                      || event.target.value === "locked"
+                      || event.target.value === "banned"
+                        ? event.target.value
+                        : "all";
+                    setStatusFilter(nextStatus);
+                    onQueryChange({
+                      page: 1,
+                      status: nextStatus,
+                    });
+                  }}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="all">All statuses</option>
+                  <option value="active">active</option>
+                  <option value="pending_activation">pending_activation</option>
+                  <option value="suspended">suspended</option>
+                  <option value="disabled">disabled</option>
+                  <option value="locked">locked</option>
+                  <option value="banned">banned</option>
+                </select>
+              </div>
             </div>
+            <ActiveFilterChips
+              items={activeFilters}
+              onClearAll={
+                hasActiveFilters
+                  ? () => {
+                      setSearchQuery("");
+                      setRoleFilter("all");
+                      setStatusFilter("all");
+                      onQueryChange({
+                        page: 1,
+                        search: "",
+                        role: "all",
+                        status: "all",
+                      });
+                    }
+                  : undefined
+              }
+            />
           </div>
         }
         summary={

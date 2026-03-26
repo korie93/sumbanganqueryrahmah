@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Eye } from "lucide-react";
+import { type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import {
   OperationalMetric,
   OperationalPage,
@@ -21,6 +22,14 @@ import {
 } from "@/pages/viewer/export";
 import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
 import { extractHeadersFromRows, filterViewerRows } from "@/pages/viewer/utils";
+
+const VIEWER_FILTER_OPERATOR_LABELS: Record<ColumnFilter["operator"], string> = {
+  contains: "contains",
+  equals: "is",
+  startsWith: "starts with",
+  endsWith: "ends with",
+  notEquals: "is not",
+};
 
 interface ViewerProps {
   onNavigate: (page: string) => void;
@@ -328,31 +337,32 @@ export default function Viewer({
     void fetchData(importId, currentPage + 1, true);
   };
 
-  const addFilter = () => {
+  const addFilter = useCallback(() => {
     if (headers.length > 0) {
       setColumnFilters((previous) => [
         ...previous,
         { column: headers[0], operator: "contains", value: "" },
       ]);
     }
-  };
+  }, [headers]);
 
-  const updateFilter = (index: number, field: keyof ColumnFilter, value: string) => {
+  const updateFilter = useCallback((index: number, field: keyof ColumnFilter, value: string) => {
     setColumnFilters((previous) =>
       previous.map((filter, filterIndex) =>
         filterIndex === index ? { ...filter, [field]: value } : filter,
       ),
     );
-  };
+  }, []);
 
-  const removeFilter = (index: number) => {
+  const removeFilter = useCallback((index: number) => {
     setColumnFilters((previous) => previous.filter((_, filterIndex) => filterIndex !== index));
-  };
+  }, []);
 
-  const clearAllFilters = () => {
+  const clearAllFilters = useCallback(() => {
     setColumnFilters([]);
     setSearch("");
-  };
+    setCurrentPage(1);
+  }, []);
 
   const clearAllData = () => {
     cancelActiveFetch();
@@ -436,6 +446,31 @@ export default function Viewer({
 
     return dataToExport;
   };
+
+  const activeFilterChips = useMemo<ActiveFilterChip[]>(() => {
+    const items: ActiveFilterChip[] = [];
+
+    if (search.trim()) {
+      items.push({
+        id: "viewer-search",
+        label: `Search: ${search.trim()}`,
+        onRemove: () => {
+          setSearch("");
+          setCurrentPage(1);
+        },
+      });
+    }
+
+    activeColumnFilters.forEach((filter, index) => {
+      items.push({
+        id: `viewer-filter-${index}`,
+        label: `${filter.column} ${VIEWER_FILTER_OPERATOR_LABELS[filter.operator]} ${filter.value}`,
+        onRemove: () => removeFilter(index),
+      });
+    });
+
+    return items;
+  }, [activeColumnFilters, removeFilter, search]);
 
   const exportToCSV = (exportFiltered = false, exportSelected = false) => {
     const dataToExport = resolveRowsForExport(exportFiltered, exportSelected);
@@ -621,6 +656,8 @@ export default function Viewer({
                 filteredRowsCount={filteredRows.length}
                 rowsCount={rows.length}
                 showResultsSummary={columnFilters.length > 0 || isServerSearchActive}
+                activeFilters={activeFilterChips}
+                onClearAllFilters={clearAllFilters}
                 onSearchChange={(value) => {
                   setSearch(value);
                   setCurrentPage(1);

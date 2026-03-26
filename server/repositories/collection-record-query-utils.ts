@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import type {
   CollectionMonthlySummary,
   CollectionNicknameDailyAggregate,
+  CollectionReceiptValidationStatus,
 } from "../storage-postgres";
 
 const COLLECTION_MONTH_NAMES = [
@@ -26,6 +27,8 @@ type CollectionRecordFilters = {
   search?: string;
   createdByLogin?: string;
   nicknames?: string[];
+  receiptValidationStatus?: CollectionReceiptValidationStatus | "flagged";
+  duplicateOnly?: boolean;
 };
 
 export type CollectionRollupFilters = Omit<CollectionRecordFilters, "search">;
@@ -71,6 +74,23 @@ export function buildCollectionRecordConditions(filters?: CollectionRecordFilter
     conditions.push(sql`lower(collection_staff_nickname) IN (${nicknameSql})`);
   }
 
+  const receiptValidationStatus = String(filters?.receiptValidationStatus || "").trim().toLowerCase();
+  if (receiptValidationStatus === "flagged") {
+    conditions.push(sql`(receipt_validation_status <> 'matched' OR duplicate_receipt_flag = true)`);
+  } else if (
+    receiptValidationStatus === "matched"
+    || receiptValidationStatus === "underpaid"
+    || receiptValidationStatus === "overpaid"
+    || receiptValidationStatus === "unverified"
+    || receiptValidationStatus === "needs_review"
+  ) {
+    conditions.push(sql`receipt_validation_status = ${receiptValidationStatus}`);
+  }
+
+  if (filters?.duplicateOnly) {
+    conditions.push(sql`duplicate_receipt_flag = true`);
+  }
+
   return conditions;
 }
 
@@ -82,7 +102,11 @@ export function buildCollectionRecordWhereSql(filters?: CollectionRecordFilters)
 }
 
 export function canUseCollectionRecordDailyRollups(filters?: CollectionRecordFilters): boolean {
-  return String(filters?.search || "").trim().length === 0;
+  return (
+    String(filters?.search || "").trim().length === 0
+    && String(filters?.receiptValidationStatus || "").trim().length === 0
+    && filters?.duplicateOnly !== true
+  );
 }
 
 export function buildCollectionRecordDailyRollupWhereSql(filters?: CollectionRecordFilters): SQL {

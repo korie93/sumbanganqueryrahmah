@@ -4,6 +4,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { CollectionStaffNickname } from "@/lib/api";
+import type {
+  CollectionRecordDuplicateFilter,
+  CollectionRecordReviewFilter,
+} from "@/pages/collection-records/types";
 
 export interface CollectionRecordsFiltersProps {
   canUseNicknameFilter: boolean;
@@ -11,6 +15,8 @@ export interface CollectionRecordsFiltersProps {
   toDate: string;
   searchInput: string;
   nicknameFilter: string;
+  reviewFilter: CollectionRecordReviewFilter;
+  duplicateFilter: CollectionRecordDuplicateFilter;
   nicknameOptions: CollectionStaffNickname[];
   loadingNicknames: boolean;
   loadingRecords: boolean;
@@ -18,6 +24,8 @@ export interface CollectionRecordsFiltersProps {
   onToDateChange: (value: string) => void;
   onSearchInputChange: (value: string) => void;
   onNicknameFilterChange: (value: string) => void;
+  onReviewFilterChange: (value: CollectionRecordReviewFilter) => void;
+  onDuplicateFilterChange: (value: CollectionRecordDuplicateFilter) => void;
   onFilter: () => void;
   onReset: () => void;
 }
@@ -28,6 +36,8 @@ export function CollectionRecordsFilters({
   toDate,
   searchInput,
   nicknameFilter,
+  reviewFilter,
+  duplicateFilter,
   nicknameOptions,
   loadingNicknames,
   loadingRecords,
@@ -35,6 +45,8 @@ export function CollectionRecordsFilters({
   onToDateChange,
   onSearchInputChange,
   onNicknameFilterChange,
+  onReviewFilterChange,
+  onDuplicateFilterChange,
   onFilter,
   onReset,
 }: CollectionRecordsFiltersProps) {
@@ -42,8 +54,8 @@ export function CollectionRecordsFilters({
     <div
       className={`grid gap-3 ${
         canUseNicknameFilter
-          ? "xl:grid-cols-[170px_170px_minmax(260px,1fr)_220px_auto_auto]"
-          : "xl:grid-cols-[170px_170px_minmax(260px,1fr)_auto_auto]"
+          ? "xl:grid-cols-[170px_170px_minmax(260px,1fr)_220px_220px_190px_auto_auto]"
+          : "xl:grid-cols-[170px_170px_minmax(260px,1fr)_220px_190px_auto_auto]"
       }`}
     >
       <div className="space-y-1">
@@ -65,6 +77,43 @@ export function CollectionRecordsFilters({
             className="pl-9"
           />
         </div>
+      </div>
+      <div className="space-y-1">
+        <Label>Receipt Review</Label>
+        <Select
+          value={reviewFilter}
+          onValueChange={(value) => onReviewFilterChange(value as CollectionRecordReviewFilter)}
+          disabled={loadingRecords}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="All records" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All records</SelectItem>
+            <SelectItem value="flagged">Flagged only</SelectItem>
+            <SelectItem value="underpaid">Underpaid</SelectItem>
+            <SelectItem value="overpaid">Overpaid</SelectItem>
+            <SelectItem value="unverified">Unverified</SelectItem>
+            <SelectItem value="needs_review">Needs Review</SelectItem>
+            <SelectItem value="matched">Matched</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <Label>Duplicate Receipts</Label>
+        <Select
+          value={duplicateFilter}
+          onValueChange={(value) => onDuplicateFilterChange(value as CollectionRecordDuplicateFilter)}
+          disabled={loadingRecords}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="All receipts" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All receipts</SelectItem>
+            <SelectItem value="duplicates">Duplicate warnings only</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       {canUseNicknameFilter ? (
         <div className="space-y-1">

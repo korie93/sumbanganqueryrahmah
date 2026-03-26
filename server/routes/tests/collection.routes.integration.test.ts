@@ -831,7 +831,7 @@ test("POST /api/collection rejects future payment dates", async () => {
   }
 });
 
-test("GET /api/collection/list applies pagination and user-scoped filters", async () => {
+test("GET /api/collection/list applies pagination, receipt review filters, and user-scoped filters", async () => {
   const { storage, listCalls, summaryCalls } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
 
@@ -849,7 +849,7 @@ test("GET /api/collection/list applies pagination and user-scoped filters", asyn
   const { server, baseUrl } = await startTestServer(app);
   try {
     const response = await fetch(
-      `${baseUrl}/api/collection/list?from=2026-03-01&to=2026-03-31&search=BATCH-001&limit=20&offset=40`,
+      `${baseUrl}/api/collection/list?from=2026-03-01&to=2026-03-31&search=BATCH-001&receiptValidationStatus=flagged&duplicateOnly=1&limit=20&offset=40`,
     );
 
     assert.equal(response.status, 200);
@@ -860,10 +860,43 @@ test("GET /api/collection/list applies pagination and user-scoped filters", asyn
     assert.equal(summaryCalls.length, 1);
     assert.equal(summaryCalls[0].createdByLogin, "staff.user");
     assert.equal(summaryCalls[0].search, "BATCH-001");
+    assert.equal(summaryCalls[0].receiptValidationStatus, "flagged");
+    assert.equal(summaryCalls[0].duplicateOnly, true);
     assert.equal(listCalls.length, 1);
     assert.equal(listCalls[0].limit, 20);
     assert.equal(listCalls[0].offset, 40);
     assert.equal(listCalls[0].createdByLogin, "staff.user");
+    assert.equal(listCalls[0].receiptValidationStatus, "flagged");
+    assert.equal(listCalls[0].duplicateOnly, true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/collection/list rejects invalid receipt review filters", async () => {
+  const { storage } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/collection/list?receiptValidationStatus=unexpected`,
+    );
+
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.match(String(payload.message), /receipt validation filter/i);
   } finally {
     await stopTestServer(server);
   }
@@ -1904,6 +1937,7 @@ test("PATCH /api/collection/:id rejects a stale rapid second edit and keeps dail
         receiptValidationStatus: "needs_review",
         receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
         receiptCount: 0,
+        duplicateReceiptFlag: false,
         createdByLogin: "alpha.user",
         collectionStaffNickname: "Collector Alpha",
         createdAt: new Date("2026-01-10T09:00:00.000Z"),
@@ -1927,6 +1961,7 @@ test("PATCH /api/collection/:id rejects a stale rapid second edit and keeps dail
         receiptValidationStatus: "needs_review",
         receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
         receiptCount: 0,
+        duplicateReceiptFlag: false,
         createdByLogin: "beta.user",
         collectionStaffNickname: "Collector Beta",
         createdAt: new Date("2026-01-11T09:00:00.000Z"),
@@ -1950,6 +1985,7 @@ test("PATCH /api/collection/:id rejects a stale rapid second edit and keeps dail
         receiptValidationStatus: "needs_review",
         receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
         receiptCount: 0,
+        duplicateReceiptFlag: false,
         createdByLogin: "alpha.user",
         collectionStaffNickname: "Collector Alpha",
         createdAt: new Date("2026-02-01T09:00:00.000Z"),
@@ -2365,6 +2401,7 @@ test("PATCH /api/collection/:id correctly reassigns the staff nickname on the re
     receiptValidationStatus: "needs_review",
     receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
     receiptCount: 0,
+    duplicateReceiptFlag: false,
     createdByLogin: "superuser",
     collectionStaffNickname: "Collector Alpha",
     createdAt: new Date("2026-03-01T09:00:00.000Z"),
@@ -2453,6 +2490,7 @@ test("PATCH /api/collection/:id correctly updates the payment date on the record
     receiptValidationStatus: "needs_review",
     receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
     receiptCount: 0,
+    duplicateReceiptFlag: false,
     createdByLogin: "superuser",
     collectionStaffNickname: "Collector Alpha",
     createdAt: new Date("2026-03-01T09:00:00.000Z"),
@@ -2540,6 +2578,7 @@ test("DELETE /api/collection/:id removes the record so it no longer appears in s
     receiptValidationStatus: "needs_review",
     receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
     receiptCount: 0,
+    duplicateReceiptFlag: false,
     createdByLogin: "superuser",
     collectionStaffNickname: "Collector Alpha",
     createdAt: new Date("2026-03-05T09:00:00.000Z"),
