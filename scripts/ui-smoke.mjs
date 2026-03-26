@@ -617,12 +617,19 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     const createResponsePromise = page.waitForResponse(
       (response) =>
         response.request().method() === "POST"
-        && response.url().includes("/api/collection")
-        && response.status() === 200,
+        && response.url().includes("/api/collection"),
     );
     await page.getByRole("button", { name: "Save Collection" }).click();
     const createResponse = await createResponsePromise;
-    const createPayload = await createResponse.json();
+    const createRawText = await createResponse.text();
+    const createPayload = createRawText ? JSON.parse(createRawText) : {};
+    assert(
+      createResponse.status() === 200,
+      [
+        `collection receipt UI smoke should create a record with HTTP 200, got ${createResponse.status()}`,
+        `response body: ${createRawText || "(empty)"}`,
+      ].join("\n"),
+    );
     recordId = String(createPayload?.record?.id || "").trim();
     expectedUpdatedAt = String(
       createPayload?.record?.updatedAt || createPayload?.record?.createdAt || "",
@@ -654,12 +661,19 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     const updateResponsePromise = page.waitForResponse(
       (response) =>
         response.request().method() === "PATCH"
-        && response.url().includes(`/api/collection/${recordId}`)
-        && response.status() === 200,
+        && response.url().includes(`/api/collection/${recordId}`),
     );
     await editDialog.getByRole("button", { name: /^Save$/ }).click();
     const firstUpdateResponse = await updateResponsePromise;
-    const firstUpdatePayload = await firstUpdateResponse.json();
+    const firstUpdateRawText = await firstUpdateResponse.text();
+    const firstUpdatePayload = firstUpdateRawText ? JSON.parse(firstUpdateRawText) : {};
+    assert(
+      firstUpdateResponse.status() === 200,
+      [
+        `collection receipt UI smoke should update record with HTTP 200, got ${firstUpdateResponse.status()}`,
+        `response body: ${firstUpdateRawText || "(empty)"}`,
+      ].join("\n"),
+    );
     expectedUpdatedAt = String(
       firstUpdatePayload?.record?.updatedAt || firstUpdatePayload?.record?.createdAt || expectedUpdatedAt,
     ).trim();
@@ -681,12 +695,19 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     const removeResponsePromise = page.waitForResponse(
       (response) =>
         response.request().method() === "PATCH"
-        && response.url().includes(`/api/collection/${recordId}`)
-        && response.status() === 200,
+        && response.url().includes(`/api/collection/${recordId}`),
     );
     await removeDialog.getByRole("button", { name: /^Save$/ }).click();
     const removeResponse = await removeResponsePromise;
-    const removePayload = await removeResponse.json();
+    const removeRawText = await removeResponse.text();
+    const removePayload = removeRawText ? JSON.parse(removeRawText) : {};
+    assert(
+      removeResponse.status() === 200,
+      [
+        `collection receipt UI smoke should remove receipt with HTTP 200, got ${removeResponse.status()}`,
+        `response body: ${removeRawText || "(empty)"}`,
+      ].join("\n"),
+    );
     expectedUpdatedAt = String(
       removePayload?.record?.updatedAt || removePayload?.record?.createdAt || expectedUpdatedAt,
     ).trim();

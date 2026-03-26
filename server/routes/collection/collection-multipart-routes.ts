@@ -1,7 +1,6 @@
 import Busboy from "busboy";
 import type { RequestHandler } from "express";
 import {
-  inspectMultipartCollectionReceipt,
   removeCollectionReceiptFile,
   saveMultipartCollectionReceipt,
 } from "../collection-receipt.service";
@@ -10,10 +9,6 @@ type MultipartCollectionBody = Record<string, unknown> & {
   uploadedReceipts?: StoredCollectionReceiptFile[];
 };
 type StoredCollectionReceiptFile = Awaited<ReturnType<typeof saveMultipartCollectionReceipt>>;
-type InspectedCollectionReceiptFile = Awaited<ReturnType<typeof inspectMultipartCollectionReceipt>>;
-type MultipartCollectionInspectBody = Record<string, unknown> & {
-  inspectedReceipts?: InspectedCollectionReceiptFile[];
-};
 
 function normalizeMultipartFieldName(rawName: string): string {
   const normalized = String(rawName || "").trim();
@@ -62,13 +57,6 @@ export function createCollectionMultipartRoute(): RequestHandler {
         receipts.map((receipt) => removeCollectionReceiptFile(receipt.storagePath)),
       );
     },
-  });
-}
-
-export function createCollectionReceiptInspectRoute(): RequestHandler {
-  return createCollectionReceiptMultipartRoute<InspectedCollectionReceiptFile, MultipartCollectionInspectBody>({
-    attachKey: "inspectedReceipts",
-    handleReceipt: inspectMultipartCollectionReceipt,
   });
 }
 

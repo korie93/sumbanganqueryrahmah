@@ -2,7 +2,6 @@ import { apiRequest } from "../queryClient";
 import type {
   CollectionPurgeResponse,
   CollectionPurgeSummaryResponse,
-  CollectionReceiptInspectResponse,
   CollectionRecordListResponse,
   CreateCollectionPayload,
   UpdateCollectionPayload,
@@ -137,21 +136,6 @@ export async function createCollectionRecord(
     headers: buildCollectionMutationHeaders(options),
   });
   return response.json();
-}
-
-export async function inspectCollectionReceiptFiles(
-  receiptFiles: readonly File[],
-  options?: { signal?: AbortSignal },
-) {
-  const formData = new FormData();
-  for (const receiptFile of receiptFiles) {
-    formData.append("receipts", receiptFile);
-  }
-
-  const response = await apiRequest("POST", "/api/collection/receipt-inspect", formData, {
-    signal: options?.signal,
-  });
-  return response.json() as Promise<CollectionReceiptInspectResponse>;
 }
 
 export async function getCollectionRecords(filters?: {
