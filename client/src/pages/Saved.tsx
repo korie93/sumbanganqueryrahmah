@@ -13,7 +13,7 @@ import { SavedDialogs } from "@/pages/saved/SavedDialogs";
 import { SavedFiltersBar } from "@/pages/saved/SavedFiltersBar";
 import { SavedImportsList } from "@/pages/saved/SavedImportsList";
 import type { ImportItem, SavedProps } from "@/pages/saved/types";
-import { filterSavedImports, formatSavedImportDate } from "@/pages/saved/utils";
+import { formatSavedImportDate } from "@/pages/saved/utils";
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
@@ -22,7 +22,10 @@ function isAbortError(error: unknown) {
 export default function Saved({ onNavigate, userRole }: SavedProps) {
   const isSuperuser = userRole === "superuser";
   const [imports, setImports] = useState<ImportItem[]>([]);
+  const [totalImports, setTotalImports] = useState(0);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
@@ -45,18 +48,28 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
   const mutationRequestIdRef = useRef(0);
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const { toast } = useToast();
-
-  const filteredImports = useMemo(
-    () => filterSavedImports(imports, deferredSearchTerm, dateFilter),
-    [dateFilter, deferredSearchTerm, imports],
-  );
   const hasActiveFilters = searchTerm.trim() !== "" || dateFilter !== undefined;
-  const selectedVisibleCount = useMemo(
-    () => filteredImports.filter((item) => selectedImportIds.has(item.id)).length,
-    [filteredImports, selectedImportIds],
+  const activeCreatedOn = useMemo(
+    () => (dateFilter ? dateFilter.toISOString().slice(0, 10) : undefined),
+    [dateFilter],
   );
-  const allVisibleSelected = filteredImports.length > 0 && selectedVisibleCount === filteredImports.length;
+  const visibleImports = imports;
+  const selectedVisibleCount = useMemo(
+    () => visibleImports.filter((item) => selectedImportIds.has(item.id)).length,
+    [visibleImports, selectedImportIds],
+  );
+  const allVisibleSelected = visibleImports.length > 0 && selectedVisibleCount === visibleImports.length;
   const partiallySelected = selectedVisibleCount > 0 && !allVisibleSelected;
+  const hasMoreImports = nextCursor !== null;
+  const importSummaryLabel = useMemo(() => {
+    if (totalImports <= 0) {
+      return "0 files";
+    }
+    if (hasMoreImports && visibleImports.length < totalImports) {
+      return `${visibleImports.length} loaded of ${totalImports}`;
+    }
+    return `${totalImports} files`;
+  }, [hasMoreImports, totalImports, visibleImports.length]);
 
   useEffect(() => {
     setSelectedImportIds((previous) => {
@@ -80,37 +93,69 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
     setDateFilter(undefined);
   };
 
-  const fetchImports = async () => {
+  const fetchImports = async (options?: { cursor?: string | null; reset?: boolean }) => {
+    const reset = options?.reset !== false;
     fetchAbortControllerRef.current?.abort();
     const controller = new AbortController();
     fetchAbortControllerRef.current = controller;
     const requestId = ++fetchRequestIdRef.current;
-    setLoading(true);
     setError("");
+    if (reset) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
 
     try {
-      const data = await getImports({ signal: controller.signal });
+      const data = await getImports({
+        cursor: options?.cursor || undefined,
+        limit: 100,
+        search: deferredSearchTerm,
+        createdOn: activeCreatedOn,
+        signal: controller.signal,
+      });
       if (controller.signal.aborted || requestId !== fetchRequestIdRef.current || !mountedRef.current) {
         return;
       }
-      setImports(data.imports || []);
+
+      const nextItems = Array.isArray(data?.imports) ? data.imports : [];
+      const nextTotal = typeof data?.pagination?.total === "number" ? data.pagination.total : nextItems.length;
+      const nextPageCursor = typeof data?.pagination?.nextCursor === "string" ? data.pagination.nextCursor : null;
+      setTotalImports(nextTotal);
+      setNextCursor(nextPageCursor);
+      setImports((previous) => {
+        if (reset) {
+          return nextItems;
+        }
+
+        const deduped = new Map(previous.map((item) => [item.id, item]));
+        for (const item of nextItems) {
+          deduped.set(item.id, item);
+        }
+        return Array.from(deduped.values());
+      });
     } catch (err: any) {
       if (isAbortError(err) || requestId !== fetchRequestIdRef.current || !mountedRef.current) {
         return;
       }
       setError(err?.message || "Failed to load data.");
+      if (reset) {
+        setImports([]);
+        setTotalImports(0);
+        setNextCursor(null);
+      }
     } finally {
       if (fetchAbortControllerRef.current === controller) {
         fetchAbortControllerRef.current = null;
       }
       if (requestId === fetchRequestIdRef.current && mountedRef.current) {
         setLoading(false);
+        setLoadingMore(false);
       }
     }
   };
 
   useEffect(() => {
-    void fetchImports();
     return () => {
       mountedRef.current = false;
       fetchAbortControllerRef.current?.abort();
@@ -121,6 +166,13 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
       mutationRequestIdRef.current += 1;
     };
   }, []);
+
+  useEffect(() => {
+    if (!mountedRef.current) {
+      return;
+    }
+    void fetchImports({ reset: true });
+  }, [activeCreatedOn, deferredSearchTerm]);
 
   const handleView = (importItem: ImportItem) => {
     localStorage.setItem("selectedImportId", importItem.id);
@@ -209,6 +261,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
         description: `"${targetImport.name}" has been deleted.`,
       });
       setImports((previous) => previous.filter((item) => item.id !== targetImport.id));
+      setTotalImports((previous) => Math.max(0, previous - 1));
       setSelectedImportIds((previous) => {
         if (!previous.has(targetImport.id)) return previous;
         const next = new Set(previous);
@@ -265,6 +318,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
 
       if (deletedIds.length > 0) {
         setImports((previous) => previous.filter((item) => !deletedIds.includes(item.id)));
+        setTotalImports((previous) => Math.max(0, previous - deletedIds.length));
       }
       setSelectedImportIds(new Set());
 
@@ -306,7 +360,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
     }
   };
 
-  const adminActionsDisabled = loading || deleting || bulkDeleting || renaming;
+  const adminActionsDisabled = loading || loadingMore || deleting || bulkDeleting || renaming;
 
   return (
     <OperationalPage width="content">
@@ -315,15 +369,15 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
         eyebrow="Imported Data"
         description="Review imported files, reopen Viewer or Analysis quickly, and keep operational datasets organized."
         badge={
-          !loading && imports.length > 0 ? (
+          !loading && totalImports > 0 ? (
             <Badge
               variant="secondary"
               className="rounded-full px-2.5 py-1 text-xs font-medium"
               data-testid="text-import-count"
             >
               {hasActiveFilters
-                ? `${filteredImports.length} of ${imports.length}`
-                : `${imports.length} files`}
+                ? `${visibleImports.length} of ${totalImports}`
+                : importSummaryLabel}
             </Badge>
           ) : null
         }
@@ -342,7 +396,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             ) : null}
             <Button
               variant="outline"
-              onClick={() => void fetchImports()}
+              onClick={() => void fetchImports({ reset: true })}
               disabled={adminActionsDisabled}
               data-testid="button-refresh"
             >
@@ -353,7 +407,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
         }
       />
 
-      {!loading && imports.length > 0 ? (
+      {!loading && totalImports > 0 ? (
         <OperationalSectionCard
           title="Search and Filter"
           description="Narrow the list without losing your current page context."
@@ -382,7 +436,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-4" />
             <p className="text-muted-foreground">Loading data...</p>
         </OperationalSectionCard>
-      ) : imports.length === 0 ? (
+      ) : !hasActiveFilters && totalImports === 0 ? (
         <OperationalSectionCard contentClassName="ops-empty-state">
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
               <BookMarked className="w-8 h-8 text-muted-foreground" />
@@ -393,7 +447,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
               Import Data
             </Button>
         </OperationalSectionCard>
-      ) : filteredImports.length === 0 ? (
+      ) : visibleImports.length === 0 ? (
         <OperationalSectionCard contentClassName="ops-empty-state">
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
               <Search className="w-8 h-8 text-muted-foreground" />
@@ -413,7 +467,8 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
           contentClassName="space-y-0"
         >
           <SavedImportsList
-            imports={filteredImports}
+            imports={visibleImports}
+            summaryLabel={importSummaryLabel}
             isSuperuser={isSuperuser}
             filesOpen={filesOpen}
             actionsDisabled={adminActionsDisabled}
@@ -436,7 +491,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             onToggleSelectAllVisible={(checked) => {
               setSelectedImportIds((previous) => {
                 const next = new Set(previous);
-                for (const item of filteredImports) {
+                for (const item of visibleImports) {
                   if (checked) {
                     next.add(item.id);
                   } else {
@@ -451,6 +506,22 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             partiallySelected={partiallySelected}
             formatDate={formatSavedImportDate}
           />
+          {hasMoreImports ? (
+            <div className="mt-4 flex flex-col items-center gap-2 border-t border-border/60 pt-4">
+              <p className="text-sm text-muted-foreground">
+                Showing {visibleImports.length} of {totalImports} imports.
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => void fetchImports({ cursor: nextCursor, reset: false })}
+                disabled={loading || loadingMore}
+                data-testid="button-load-more-imports"
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${loadingMore ? "animate-spin" : ""}`} />
+                {loadingMore ? "Loading more..." : "Load more"}
+              </Button>
+            </div>
+          ) : null}
         </OperationalSectionCard>
       )}
 

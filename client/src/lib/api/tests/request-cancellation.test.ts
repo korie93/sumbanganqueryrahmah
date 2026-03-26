@@ -367,7 +367,13 @@ test("saved import API wrappers forward AbortSignal", async () => {
   }) as typeof fetch);
 
   try {
-    await getImports({ signal: controller.signal });
+    await getImports({
+      cursor: "cursor-1",
+      limit: 50,
+      search: "march",
+      createdOn: "2026-03-09",
+      signal: controller.signal,
+    });
     await renameImport("import-123", "Renamed Import", { signal: controller.signal });
     await deleteImport("import-123", { signal: controller.signal });
   } finally {
@@ -378,7 +384,10 @@ test("saved import API wrappers forward AbortSignal", async () => {
   assert.equal(requests[0]?.signal, controller.signal);
   assert.equal(requests[1]?.signal, controller.signal);
   assert.equal(requests[2]?.signal, controller.signal);
-  assert.equal(requests[0]?.url, "/api/imports");
+  assert.equal(
+    requests[0]?.url,
+    "/api/imports?cursor=cursor-1&limit=50&search=march&createdOn=2026-03-09",
+  );
   assert.equal(requests[1]?.url, "/api/imports/import-123/rename");
   assert.equal(requests[2]?.url, "/api/imports/import-123");
 });

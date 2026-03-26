@@ -1,6 +1,10 @@
 import type { DataRow, Import, InsertDataRow } from "../../shared/schema-postgres";
 import { ensureObject } from "../http/validation";
-import type { ImportsRepository, ImportWithRowCount } from "../repositories/imports.repository";
+import type {
+  ImportListPage,
+  ImportsRepository,
+  ImportWithRowCount,
+} from "../repositories/imports.repository";
 import type { ImportAnalysisService } from "./import-analysis.service";
 import type { PostgresStorage } from "../storage-postgres";
 
@@ -50,6 +54,13 @@ type ImportDetailsResult = {
   rows: DataRow[];
 };
 
+type ListImportsInput = {
+  cursor?: string | null;
+  limit?: number;
+  search?: string | null;
+  createdOn?: string | null;
+};
+
 type ImportDataPageResult = {
   rows: Array<{
     id: string;
@@ -64,7 +75,7 @@ type ImportDataPageResult = {
 export class ImportsService {
   constructor(
     private readonly storage: ImportsStorage,
-    private readonly importsRepository: Pick<ImportsRepository, "getImportsWithRowCounts">,
+    private readonly importsRepository: Pick<ImportsRepository, "getImportsWithRowCounts" | "listImportsWithRowCountsPage">,
     private readonly importAnalysisService: Pick<ImportAnalysisService, "analyzeAll" | "analyzeImport">,
   ) {}
 
@@ -77,8 +88,8 @@ export class ImportsService {
     });
   }
 
-  async listImports(): Promise<ImportWithRowCount[]> {
-    return this.importsRepository.getImportsWithRowCounts();
+  async listImports(params: ListImportsInput = {}): Promise<ImportListPage> {
+    return this.importsRepository.listImportsWithRowCountsPage(params);
   }
 
   async createImport(params: CreateImportInput): Promise<Import> {

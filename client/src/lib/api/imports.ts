@@ -1,11 +1,23 @@
 import { apiRequest } from "../queryClient";
 
 type ImportRequestOptions = {
+  cursor?: string;
+  limit?: number;
+  search?: string;
+  createdOn?: string;
   signal?: AbortSignal;
 };
 
 export async function getImports(options?: ImportRequestOptions) {
-  const response = await apiRequest("GET", "/api/imports", undefined, options);
+  const params = new URLSearchParams();
+  if (options?.cursor) params.set("cursor", options.cursor);
+  if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
+    params.set("limit", String(options.limit));
+  }
+  if (options?.search?.trim()) params.set("search", options.search.trim());
+  if (options?.createdOn?.trim()) params.set("createdOn", options.createdOn.trim());
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+  const response = await apiRequest("GET", `/api/imports${suffix}`, undefined, options);
   return response.json();
 }
 

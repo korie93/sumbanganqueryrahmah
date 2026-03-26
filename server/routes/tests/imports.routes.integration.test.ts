@@ -55,6 +55,7 @@ function createImportsRouteHarness(options?: {
   const deleteCalls: string[] = [];
   const analyzeImportCalls: string[] = [];
   const analyzeAllCalls: string[][] = [];
+  const listImportsPageCalls: Array<Record<string, unknown>> = [];
 
   const importRecords = new Map<string, Import>();
   const seedImport: Import = {
@@ -65,9 +66,31 @@ function createImportsRouteHarness(options?: {
     isDeleted: false,
     createdBy: "admin.user",
   };
+  const secondImport: Import = {
+    id: "import-2",
+    name: "March Batch",
+    filename: "march.xlsx",
+    createdAt: new Date("2026-03-09T00:00:00.000Z"),
+    isDeleted: false,
+    createdBy: "admin.user",
+  };
+  const thirdImport: Import = {
+    id: "import-3",
+    name: "Archive Batch",
+    filename: "archive.csv",
+    createdAt: new Date("2026-03-08T00:00:00.000Z"),
+    isDeleted: false,
+    createdBy: "admin.user",
+  };
   importRecords.set(seedImport.id, seedImport);
+  importRecords.set(secondImport.id, secondImport);
+  importRecords.set(thirdImport.id, thirdImport);
 
-  const importRowCounts = new Map<string, number>([[seedImport.id, 2]]);
+  const importRowCounts = new Map<string, number>([
+    [seedImport.id, 2],
+    [secondImport.id, 1],
+    [thirdImport.id, 0],
+  ]);
   const dataRowsByImport = new Map<string, DataRow[]>([
     [
       seedImport.id,
@@ -98,6 +121,37 @@ function createImportsRouteHarness(options?: {
         const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
         return rightTime - leftTime;
       });
+
+  const listImportsWithCursor = (params: {
+    cursor?: string | null;
+    limit?: number;
+    search?: string | null;
+    createdOn?: string | null;
+  }) => {
+    listImportsPageCalls.push(params);
+    const search = String(params.search || "").trim().toLowerCase();
+    const createdOn = String(params.createdOn || "").trim();
+    const limit = Math.max(1, Math.min(200, Number(params.limit || 100)));
+    const filtered = listImportsWithCounts().filter((item) => {
+      const matchesSearch = !search
+        || item.name.toLowerCase().includes(search)
+        || item.filename.toLowerCase().includes(search);
+      const matchesDate = !createdOn || formatImportCreatedOn(item.createdAt) === createdOn;
+      return matchesSearch && matchesDate;
+    });
+    const cursor = String(params.cursor || "").trim();
+    const startIndex = cursor
+      ? Math.max(0, filtered.findIndex((item) => item.id === cursor) + 1)
+      : 0;
+    const items = filtered.slice(startIndex, startIndex + limit);
+    const nextItem = filtered[startIndex + limit];
+    return {
+      items,
+      nextCursor: nextItem ? nextItem.id : null,
+      total: filtered.length,
+      limit,
+    };
+  };
 
   const storage = {
     searchDataRows: async (params: {
@@ -179,6 +233,12 @@ function createImportsRouteHarness(options?: {
 
   const importsRepository = {
     getImportsWithRowCounts: async () => listImportsWithCounts(),
+    listImportsWithRowCountsPage: async (params: {
+      cursor?: string | null;
+      limit?: number;
+      search?: string | null;
+      createdOn?: string | null;
+    }) => listImportsWithCursor(params),
   } as unknown as ImportsRepository;
 
   const importAnalysisService = {
@@ -236,11 +296,27 @@ function createImportsRouteHarness(options?: {
     deleteCalls,
     analyzeImportCalls,
     analyzeAllCalls,
+    listImportsPageCalls,
   };
 }
 
+function formatImportCreatedOn(createdAt: Date | string | null | undefined) {
+  if (createdAt instanceof Date && !Number.isNaN(createdAt.getTime())) {
+    return createdAt.toISOString().slice(0, 10);
+  }
+
+  if (typeof createdAt === "string" && createdAt.trim()) {
+    const parsed = new Date(createdAt);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 10);
+    }
+  }
+
+  return "";
+}
+
 test("GET /api/imports returns imports with row counts", async () => {
-  const { app } = createImportsRouteHarness();
+  const { app, listImportsPageCalls } = createImportsRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
 
   try {
@@ -248,9 +324,51 @@ test("GET /api/imports returns imports with row counts", async () => {
     assert.equal(response.status, 200);
 
     const payload = await response.json();
-    assert.equal(payload.imports.length, 1);
+    assert.equal(payload.imports.length, 3);
     assert.equal(payload.imports[0].id, "import-1");
     assert.equal(payload.imports[0].rowCount, 2);
+    assert.deepEqual(payload.pagination, {
+      limit: 100,
+      nextCursor: null,
+      hasMore: false,
+      total: 3,
+    });
+    assert.deepEqual(listImportsPageCalls, [{
+      cursor: null,
+      limit: 100,
+      search: null,
+      createdOn: null,
+    }]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/imports forwards cursor search and date filters", async () => {
+  const { app, listImportsPageCalls } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/imports?limit=1&cursor=import-1&search=batch&createdOn=2026-03-09`,
+    );
+    assert.equal(response.status, 200);
+
+    const payload = await response.json();
+    assert.equal(payload.imports.length, 1);
+    assert.equal(payload.imports[0].id, "import-2");
+    assert.deepEqual(payload.pagination, {
+      limit: 1,
+      nextCursor: null,
+      hasMore: false,
+      total: 1,
+    });
+    assert.deepEqual(listImportsPageCalls, [{
+      cursor: "import-1",
+      limit: 1,
+      search: "batch",
+      createdOn: "2026-03-09",
+    }]);
   } finally {
     await stopTestServer(server);
   }
@@ -394,9 +512,9 @@ test("GET /api/analyze/all analyzes all imports through the service layer", asyn
     assert.equal(response.status, 200);
 
     const payload = await response.json();
-    assert.equal(payload.totalImports, 1);
-    assert.equal(payload.totalRows, 2);
-    assert.deepEqual(analyzeAllCalls, [["import-1"]]);
+    assert.equal(payload.totalImports, 3);
+    assert.equal(payload.totalRows, 3);
+    assert.deepEqual(analyzeAllCalls, [["import-1", "import-2", "import-3"]]);
   } finally {
     await stopTestServer(server);
   }
