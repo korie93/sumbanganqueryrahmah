@@ -15,15 +15,10 @@ import type {
   CollectionBatch,
   CollectionRecord,
   CollectionRecordReceipt,
-  CollectionReceiptValidationStatus,
   CollectionStaffNickname,
 } from "@/lib/api";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
-import { CollectionReceiptValidationCard } from "@/pages/collection/CollectionReceiptValidationCard";
-import type {
-  CollectionReceiptDraftInput,
-  CollectionReceiptValidationPreview,
-} from "@/pages/collection/receipt-validation";
+import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
 
 export interface EditCollectionRecordDialogProps {
   open: boolean;
@@ -44,10 +39,6 @@ export interface EditCollectionRecordDialogProps {
   editNewReceiptFiles: File[];
   editExistingReceiptDrafts: CollectionReceiptDraftInput[];
   editPendingReceiptDrafts: CollectionReceiptDraftInput[];
-  editReceiptValidation: CollectionReceiptValidationPreview;
-  editReceiptValidationOverrideReason: string;
-  canOverrideReceiptValidation: boolean;
-  isEditReceiptSaveBlocked: boolean;
   editRemovedReceiptIds: string[];
   editReceiptInputRef: MutableRefObject<HTMLInputElement | null>;
   onOpenChange: (open: boolean) => void;
@@ -59,7 +50,6 @@ export interface EditCollectionRecordDialogProps {
   onPaymentDateChange: (value: string) => void;
   onAmountChange: (value: string) => void;
   onStaffNicknameChange: (value: string) => void;
-  onReceiptValidationOverrideReasonChange: (value: string) => void;
   onReceiptChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onRemovePendingReceipt: (index: number) => void;
   onClearPendingReceipts: () => void;
@@ -89,10 +79,6 @@ export function EditCollectionRecordDialog({
   editNewReceiptFiles,
   editExistingReceiptDrafts,
   editPendingReceiptDrafts,
-  editReceiptValidation,
-  editReceiptValidationOverrideReason,
-  canOverrideReceiptValidation,
-  isEditReceiptSaveBlocked,
   editRemovedReceiptIds,
   editReceiptInputRef,
   onOpenChange,
@@ -104,7 +90,6 @@ export function EditCollectionRecordDialog({
   onPaymentDateChange,
   onAmountChange,
   onStaffNicknameChange,
-  onReceiptValidationOverrideReasonChange,
   onReceiptChange,
   onRemovePendingReceipt,
   onClearPendingReceipts,
@@ -243,21 +228,12 @@ export function EditCollectionRecordDialog({
               helperText="Receipt sedia ada kekal dipautkan sehingga anda tandakan buang. Receipt baru hanya akan disimpan selepas Save, dan status remove/replace dipaparkan di bawah."
             />
           </div>
-          <div className="space-y-2 md:col-span-2">
-            <CollectionReceiptValidationCard
-              validation={editReceiptValidation}
-              canOverride={canOverrideReceiptValidation}
-              overrideReason={editReceiptValidationOverrideReason}
-              onOverrideReasonChange={onReceiptValidationOverrideReasonChange}
-              disabled={savingEdit}
-            />
-          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={savingEdit}>
             Cancel
           </Button>
-          <Button onClick={onSave} disabled={savingEdit || isEditReceiptSaveBlocked}>
+          <Button onClick={onSave} disabled={savingEdit}>
             {savingEdit ? "Saving..." : "Save"}
           </Button>
         </DialogFooter>

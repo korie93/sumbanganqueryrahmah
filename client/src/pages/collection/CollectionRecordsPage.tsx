@@ -2,12 +2,7 @@ import { memo, useMemo } from "react";
 import { ActiveFilterChips, type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
-import {
-  buildCollectionReceiptReviewSummary,
-  getCollectionReceiptReviewFilterLabel,
-} from "@/pages/collection/collection-receipt-status";
 import { CollectionRecordsFilters } from "@/pages/collection-records/CollectionRecordsFilters";
-import { CollectionReceiptReviewQueue } from "@/pages/collection-records/CollectionReceiptReviewQueue";
 import { CollectionRecordsTable } from "@/pages/collection-records/CollectionRecordsTable";
 import { DeleteCollectionRecordDialog } from "@/pages/collection-records/DeleteCollectionRecordDialog";
 import { CollectionRecordsToolbar } from "@/pages/collection-records/CollectionRecordsToolbar";
@@ -25,10 +20,6 @@ type CollectionRecordsPageProps = {
 function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
   const controller = useCollectionRecordsController({ role });
   const viewModel = buildCollectionRecordsPageViewModel(controller);
-  const reviewSummary = useMemo(
-    () => buildCollectionReceiptReviewSummary(viewModel.table.visibleRecords),
-    [viewModel.table.visibleRecords],
-  );
   const activeFilterChips = useMemo<ActiveFilterChip[]>(() => {
     const items: ActiveFilterChip[] = [];
     if (viewModel.filters.fromDate) {
@@ -59,33 +50,15 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
         onRemove: () => viewModel.filters.onNicknameFilterChange("all"),
       });
     }
-    if (viewModel.filters.reviewFilter !== "all") {
-      items.push({
-        id: "collection-receipt-review",
-        label: `Receipt review: ${getCollectionReceiptReviewFilterLabel(viewModel.filters.reviewFilter)}`,
-        onRemove: () => viewModel.filters.onReviewFilterChange("all"),
-      });
-    }
-    if (viewModel.filters.duplicateFilter === "duplicates") {
-      items.push({
-        id: "collection-duplicate-filter",
-        label: "Duplicate warnings only",
-        onRemove: () => viewModel.filters.onDuplicateFilterChange("all"),
-      });
-    }
     return items;
   }, [
     viewModel.filters.canUseNicknameFilter,
-    viewModel.filters.duplicateFilter,
     viewModel.filters.fromDate,
     viewModel.filters.nicknameFilter,
-    viewModel.filters.onDuplicateFilterChange,
     viewModel.filters.onFromDateChange,
     viewModel.filters.onNicknameFilterChange,
-    viewModel.filters.onReviewFilterChange,
     viewModel.filters.onSearchInputChange,
     viewModel.filters.onToDateChange,
-    viewModel.filters.reviewFilter,
     viewModel.filters.searchInput,
     viewModel.filters.toDate,
   ]);
@@ -103,14 +76,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
 
         <ActiveFilterChips items={activeFilterChips} onClearAll={viewModel.filters.onReset} />
 
-        <CollectionReceiptReviewQueue
-          summary={reviewSummary}
-          canEdit={viewModel.table.canEdit}
-          onEdit={viewModel.table.onEdit}
-          onViewReceipt={viewModel.table.onViewReceipt}
-        />
-
-        <CollectionRecordsToolbar {...viewModel.toolbar} reviewSummary={reviewSummary} />
+        <CollectionRecordsToolbar {...viewModel.toolbar} />
 
         <CollectionRecordsTable {...viewModel.table} />
       </OperationalSectionCard>

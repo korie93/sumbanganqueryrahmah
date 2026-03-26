@@ -20,9 +20,6 @@ export function buildCollectionRecordsCacheKey(filters?: CollectionRecordFilters
     to: normalizeCollectionRecordFilterValue(filters?.to),
     search: normalizeCollectionRecordFilterValue(filters?.search)?.toLowerCase() || null,
     nickname: normalizeCollectionRecordFilterValue(filters?.nickname)?.toLowerCase() || null,
-    receiptValidationStatus:
-      normalizeCollectionRecordFilterValue(filters?.receiptValidationStatus)?.toLowerCase() || null,
-    duplicateOnly: filters?.duplicateOnly === true,
     limit: Number.isFinite(Number(filters?.limit)) ? Number(filters?.limit) : null,
     offset: Number.isFinite(Number(filters?.offset)) ? Number(filters?.offset) : null,
   });

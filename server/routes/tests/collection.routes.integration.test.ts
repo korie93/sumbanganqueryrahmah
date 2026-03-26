@@ -402,13 +402,13 @@ test("POST /api/collection stores matched receipt totals and allows save", async
     assert.equal(createReceiptCalls[0]?.receipts[0]?.receiptAmountCents, 150000);
     assert.equal(createReceiptCalls[0]?.receipts[1]?.receiptAmountCents, 150000);
     const auditDetails = parseAuditDetails(auditLogs[0]);
-    assert.equal(auditDetails.receiptValidation.status, "matched");
+    assert.equal(typeof auditDetails.receiptValidation, "undefined");
   } finally {
     await stopTestServer(server);
   }
 });
 
-test("POST /api/collection blocks regular users when receipt total is underpaid", async () => {
+test("POST /api/collection allows regular users to save when receipt total is underpaid", async () => {
   const { storage, createCalls, createReceiptCalls, auditLogs } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
 
@@ -446,19 +446,21 @@ test("POST /api/collection blocks regular users when receipt total is underpaid"
       }),
     });
 
-    assert.equal(response.status, 409);
+    assert.equal(response.status, 200);
     const payload = await response.json();
-    assert.equal(payload.ok, false);
-    assert.match(String(payload.message), /kurang/i);
-    assert.equal(createCalls.length, 0);
-    assert.equal(createReceiptCalls.length, 0);
-    assert.equal(auditLogs[0]?.action, "COLLECTION_RECEIPT_VALIDATION_REJECTED");
+    assert.equal(payload.ok, true);
+    assert.equal(createCalls.length, 1);
+    assert.equal(createReceiptCalls.length, 1);
+    assert.equal(
+      auditLogs.some((entry) => entry.action === "COLLECTION_RECEIPT_VALIDATION_REJECTED"),
+      false,
+    );
   } finally {
     await stopTestServer(server);
   }
 });
 
-test("POST /api/collection allows superuser override for receipt amount mismatch with audit trail", async () => {
+test("POST /api/collection accepts receiptValidationOverrideReason without enforcing override workflow", async () => {
   const { storage, createCalls, createReceiptCalls, auditLogs } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
 
@@ -502,8 +504,10 @@ test("POST /api/collection allows superuser override for receipt amount mismatch
     assert.equal(payload.ok, true);
     assert.equal(createCalls.length, 1);
     assert.equal(createReceiptCalls.length, 1);
-    assert.equal(auditLogs.some((entry) => entry.action === "COLLECTION_RECEIPT_VALIDATION_OVERRIDDEN"), true);
-    assert.equal(payload.record.receiptValidationStatus, "underpaid");
+    assert.equal(
+      auditLogs.some((entry) => entry.action === "COLLECTION_RECEIPT_VALIDATION_OVERRIDDEN"),
+      false,
+    );
   } finally {
     await stopTestServer(server);
   }
@@ -750,7 +754,7 @@ test("POST /api/collection accepts multipart progressive-style JPEG receipts", a
   }
 });
 
-test("POST /api/collection/receipt-inspect returns OCR assist state and duplicate warnings", async () => {
+test("POST /api/collection/receipt-inspect returns passive receipt inspection state and duplicate warnings", async () => {
   const duplicateBuffer = createTinyPngBuffer();
   const duplicateHash = createHash("sha256").update(duplicateBuffer).digest("hex");
   const { storage } = createCoreCollectionStorageDouble({
@@ -804,7 +808,7 @@ test("POST /api/collection/receipt-inspect returns OCR assist state and duplicat
     assert.equal(payload.ok, true);
     assert.equal(payload.receipts.length, 1);
     assert.equal(payload.receipts[0]?.fileHash, duplicateHash);
-    assert.equal(payload.receipts[0]?.extractionStatus, "unavailable");
+    assert.equal(payload.receipts[0]?.extractionStatus, "unprocessed");
     assert.equal(payload.receipts[0]?.duplicateSummary?.matchCount, 1);
     assert.equal(payload.receipts[0]?.duplicateSummary?.matches?.[0]?.receiptId, "receipt-collection-1-1");
   } finally {
@@ -1205,7 +1209,7 @@ test("PATCH /api/collection/:id accepts multipart receipt uploads during edit fl
   }
 });
 
-test("PATCH /api/collection/:id blocks regular users when edited receipt totals become underpaid", async () => {
+test("PATCH /api/collection/:id allows regular users when edited receipt totals become underpaid", async () => {
   const { storage, updateCalls, auditLogs } = createCoreCollectionStorageDouble({
     receiptRowsByRecordId: {
       "collection-1": [
@@ -1254,12 +1258,14 @@ test("PATCH /api/collection/:id blocks regular users when edited receipt totals 
       }),
     });
 
-    assert.equal(response.status, 409);
+    assert.equal(response.status, 200);
     const payload = await response.json();
-    assert.equal(payload.ok, false);
-    assert.match(String(payload.message), /kurang/i);
-    assert.equal(updateCalls.length, 0);
-    assert.equal(auditLogs[0]?.action, "COLLECTION_RECEIPT_VALIDATION_REJECTED");
+    assert.equal(payload.ok, true);
+    assert.equal(updateCalls.length, 1);
+    assert.equal(
+      auditLogs.some((entry) => entry.action === "COLLECTION_RECEIPT_VALIDATION_REJECTED"),
+      false,
+    );
   } finally {
     await stopTestServer(server);
   }

@@ -136,7 +136,6 @@ export type CreateCollectionPayload = {
   receipt?: CollectionReceiptPayload | null;
   receipts?: CollectionReceiptPayload[] | null;
   newReceiptMetadata?: CollectionReceiptMetadata[] | null;
-  receiptValidationOverrideReason?: string | null;
 };
 
 export type UpdateCollectionPayload = Partial<CreateCollectionPayload> & {

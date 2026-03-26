@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/dialog";
 import type { CollectionRecord, CollectionRecordReceipt } from "@/lib/api";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
-import { CollectionReceiptValidationBadge } from "@/pages/collection/CollectionReceiptValidationBadge";
 import { formatAmountRM } from "@/pages/collection/utils";
 import type { ReceiptPreviewKind } from "@/pages/collection-records/types";
 import "./receipt-preview-dialog.css";
@@ -153,7 +152,7 @@ export function ReceiptPreviewDialog({
         </div>
 
         {record ? (
-          <div className="grid gap-3 rounded-md border border-border/60 bg-background/40 px-3 py-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+          <div className="rounded-md border border-border/60 bg-background/40 px-3 py-3">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Customer</p>
@@ -180,12 +179,6 @@ export function ReceiptPreviewDialog({
                     </p>
                   </div>
                   <div>
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">OCR Suggestion</p>
-                    <p className="text-sm font-medium">
-                      {selectedReceipt.extractedAmount ? formatAmountRM(selectedReceipt.extractedAmount) : "-"}
-                    </p>
-                  </div>
-                  <div>
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Receipt Date</p>
                     <p className="text-sm font-medium">
                       {selectedReceipt.receiptDate ? formatIsoDateToDDMMYYYY(selectedReceipt.receiptDate) : "-"}
@@ -198,11 +191,6 @@ export function ReceiptPreviewDialog({
                 </>
               ) : null}
             </div>
-            <CollectionReceiptValidationBadge
-              status={record.receiptValidationStatus}
-              duplicateFlag={record.duplicateReceiptFlag}
-              className="justify-start lg:justify-end"
-            />
           </div>
         ) : null}
 
