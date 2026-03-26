@@ -7,7 +7,6 @@ import {
   resolveCurrentCollectionNicknameFromSession,
 } from "../../routes/collection-access";
 import {
-  ensureLooseObject,
   isValidCollectionDate,
   normalizeCollectionStringList,
   normalizeCollectionText,
@@ -20,10 +19,6 @@ import {
 import { CollectionRecordMutationOperations } from "./collection-record-mutation-operations";
 import { CollectionDailyOperations } from "./collection-daily-operations";
 import { getCollectionReportFreshness } from "./collection-report-freshness";
-import {
-  formatCollectionAmountFromCents,
-  normalizeCollectionReceiptExtractionStatus,
-} from "./collection-receipt-validation";
 
 function parseCollectionBooleanQueryValue(value: unknown): boolean | undefined {
   const normalized = normalizeCollectionText(value).toLowerCase();
@@ -96,55 +91,6 @@ export class CollectionRecordService extends CollectionServiceSupport {
 
   async createRecord(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], bodyRaw: unknown) {
     return this.mutationOperations.createRecord(userInput, bodyRaw);
-  }
-
-  async inspectReceipts(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], bodyRaw: unknown) {
-    this.requireUser(userInput);
-    const body = ensureLooseObject(bodyRaw) || {};
-    const inspectedReceipts = Array.isArray(body.inspectedReceipts)
-      ? body.inspectedReceipts
-          .map((item) => ensureLooseObject(item))
-          .filter((item): item is Record<string, unknown> => Boolean(item))
-      : [];
-
-    const duplicateSummaries = await this.storage.findCollectionReceiptDuplicateSummaries(
-      inspectedReceipts
-        .map((receipt) => normalizeCollectionText(receipt.fileHash).toLowerCase())
-        .filter(Boolean),
-    );
-    const duplicateSummaryByHash = new Map(
-      duplicateSummaries.map((summary) => [summary.fileHash, summary] as const),
-    );
-
-    return {
-      ok: true as const,
-      receipts: inspectedReceipts.map((receipt) => {
-        const fileHash = normalizeCollectionText(receipt.fileHash).toLowerCase() || null;
-        const extractedAmountRaw = receipt.extractedAmountCents;
-        const extractedAmountCents =
-          extractedAmountRaw === null || extractedAmountRaw === undefined || extractedAmountRaw === ""
-            ? null
-            : Number(extractedAmountRaw);
-        const extractionConfidenceRaw = receipt.extractionConfidence;
-        const extractionConfidence =
-          extractionConfidenceRaw === null || extractionConfidenceRaw === undefined || extractionConfidenceRaw === ""
-            ? null
-            : Number(extractionConfidenceRaw);
-
-        return {
-          fileName: normalizeCollectionText(receipt.fileName) || "receipt",
-          fileHash,
-          extractedAmount:
-            Number.isFinite(extractedAmountCents) && extractedAmountCents !== null
-              ? formatCollectionAmountFromCents(extractedAmountCents)
-              : null,
-          extractionStatus: normalizeCollectionReceiptExtractionStatus(receipt.extractionStatus ?? null),
-          extractionConfidence: Number.isFinite(extractionConfidence) ? extractionConfidence : null,
-          extractionMessage: normalizeCollectionText(receipt.extractionMessage) || null,
-          duplicateSummary: fileHash ? duplicateSummaryByHash.get(fileHash) || null : null,
-        };
-      }),
-    };
   }
 
   async getSummary(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], query: SummaryQuery) {

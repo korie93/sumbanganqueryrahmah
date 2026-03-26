@@ -31,29 +31,6 @@ export type CollectionReceiptExtractionStatus =
   | "unavailable"
   | "error";
 
-export type CollectionReceiptDuplicateMatch = {
-  receiptId: string;
-  collectionRecordId: string;
-  originalFileName: string;
-  createdAt: string;
-};
-
-export type CollectionReceiptDuplicateSummary = {
-  fileHash: string;
-  matchCount: number;
-  matches: CollectionReceiptDuplicateMatch[];
-};
-
-export type CollectionReceiptInspection = {
-  fileName: string;
-  fileHash: string | null;
-  extractedAmount: string | null;
-  extractionStatus: CollectionReceiptExtractionStatus;
-  extractionConfidence: number | null;
-  extractionMessage: string | null;
-  duplicateSummary: CollectionReceiptDuplicateSummary | null;
-};
-
 export type CollectionRecord = {
   id: string;
   customerName: string;
@@ -143,11 +120,6 @@ export type UpdateCollectionPayload = Partial<CreateCollectionPayload> & {
   removeReceiptIds?: string[];
   expectedUpdatedAt?: string;
   existingReceiptMetadata?: CollectionReceiptMetadata[] | null;
-};
-
-export type CollectionReceiptInspectResponse = {
-  ok: boolean;
-  receipts: CollectionReceiptInspection[];
 };
 
 export type CollectionRecordListResponse = {

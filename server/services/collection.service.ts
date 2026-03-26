@@ -87,10 +87,6 @@ export class CollectionService {
     return this.recordService.createRecord(user, bodyRaw);
   }
 
-  inspectReceipts(user: AuthenticatedUser | undefined, bodyRaw: unknown) {
-    return this.recordService.inspectReceipts(user, bodyRaw);
-  }
-
   getSummary(user: AuthenticatedUser | undefined, query: SummaryQuery) {
     return this.recordService.getSummary(user, query);
   }

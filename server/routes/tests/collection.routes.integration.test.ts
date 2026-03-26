@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
@@ -749,108 +748,6 @@ test("POST /api/collection accepts multipart progressive-style JPEG receipts", a
     assert.equal(createReceiptCalls.length, 1);
     assert.equal(createReceiptCalls[0]?.receipts[0]?.originalMimeType, "image/jpeg");
     assert.match(String(createReceiptCalls[0]?.receipts[0]?.storagePath || ""), /\/uploads\/collection-receipts\/.+\.jpg$/);
-  } finally {
-    await stopTestServer(server);
-  }
-});
-
-test("POST /api/collection/receipt-inspect returns passive receipt inspection state and duplicate warnings", async () => {
-  const duplicateBuffer = createTinyPngBuffer();
-  const duplicateHash = createHash("sha256").update(duplicateBuffer).digest("hex");
-  const { storage } = createCoreCollectionStorageDouble({
-    receiptRowsByRecordId: {
-      "collection-1": [
-        {
-          id: "receipt-collection-1-1",
-          collectionRecordId: "collection-1",
-          storagePath: "/uploads/collection-receipts/existing-duplicate.png",
-          originalFileName: "existing-duplicate.png",
-          originalMimeType: "image/png",
-          originalExtension: ".png",
-          fileSize: duplicateBuffer.length,
-          receiptAmount: "100.00",
-          extractionStatus: "suggested",
-          fileHash: duplicateHash,
-          createdAt: new Date("2026-03-01T09:30:00.000Z"),
-        },
-      ],
-    },
-  });
-  const app = createJsonTestApp();
-
-  registerCollectionRoutes(app, {
-    storage,
-    authenticateToken: createTestAuthenticateToken({
-      userId: "user-1",
-      username: "staff.user",
-      role: "user",
-    }),
-    requireRole: createTestRequireRole(),
-    requireTabAccess: () => allowAllTabs(),
-  });
-
-  const { server, baseUrl } = await startTestServer(app);
-  try {
-    const formData = new FormData();
-    formData.append(
-      "receipts",
-      new Blob([duplicateBuffer], { type: "image/png" }),
-      "duplicate-check.png",
-    );
-
-    const response = await fetch(`${baseUrl}/api/collection/receipt-inspect`, {
-      method: "POST",
-      body: formData,
-    });
-
-    assert.equal(response.status, 200);
-    const payload = await response.json();
-    assert.equal(payload.ok, true);
-    assert.equal(payload.receipts.length, 1);
-    assert.equal(payload.receipts[0]?.fileHash, duplicateHash);
-    assert.equal(payload.receipts[0]?.extractionStatus, "unprocessed");
-    assert.equal(payload.receipts[0]?.duplicateSummary?.matchCount, 1);
-    assert.equal(payload.receipts[0]?.duplicateSummary?.matches?.[0]?.receiptId, "receipt-collection-1-1");
-  } finally {
-    await stopTestServer(server);
-  }
-});
-
-test("POST /api/collection/receipt-inspect accepts progressive-style JPEG receipts", async () => {
-  const { storage } = createCoreCollectionStorageDouble();
-  const app = createJsonTestApp();
-
-  registerCollectionRoutes(app, {
-    storage,
-    authenticateToken: createTestAuthenticateToken({
-      userId: "user-1",
-      username: "staff.user",
-      role: "user",
-    }),
-    requireRole: createTestRequireRole(),
-    requireTabAccess: () => allowAllTabs(),
-  });
-
-  const { server, baseUrl } = await startTestServer(app);
-  try {
-    const formData = new FormData();
-    formData.append(
-      "receipts",
-      new Blob([createMultiScanJpegBuffer()], { type: "image/jpeg" }),
-      "progressive-check.jpg",
-    );
-
-    const response = await fetch(`${baseUrl}/api/collection/receipt-inspect`, {
-      method: "POST",
-      body: formData,
-    });
-
-    assert.equal(response.status, 200);
-    const payload = await response.json();
-    assert.equal(payload.ok, true);
-    assert.equal(payload.receipts.length, 1);
-    assert.equal(payload.receipts[0]?.fileName, "progressive-check.jpg");
-    assert.equal(typeof payload.receipts[0]?.extractionStatus, "string");
   } finally {
     await stopTestServer(server);
   }
