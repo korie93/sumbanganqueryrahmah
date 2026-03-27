@@ -2,6 +2,7 @@ import { memo, useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { FixedSizeList, type ListChildComponentProps } from "react-window";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { DataRowWithId, ViewerVirtualRowData } from "@/pages/viewer/types";
+import { applyViewerVirtualRowStyle } from "@/pages/viewer/viewer-virtual-row-style";
 import styles from "./ViewerDataTable.module.css";
 
 interface ViewerDataTableProps {
@@ -34,7 +35,7 @@ const PositionedRowShell = memo(function PositionedRowShell({
   useLayoutEffect(() => {
     const node = shellRef.current;
     if (!node) return;
-    Object.assign(node.style, positionStyle);
+    applyViewerVirtualRowStyle(node.style, positionStyle);
   }, [positionStyle]);
 
   return <div ref={shellRef}>{children}</div>;
