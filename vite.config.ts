@@ -36,6 +36,14 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (
+            id.includes("node_modules/zod")
+            || id.includes("shared/api-contracts.ts")
+            || id.includes("client/src/lib/api/contract.ts")
+          ) {
+            return "validation";
+          }
+
           if (!id.includes("node_modules")) {
             return undefined;
           }
