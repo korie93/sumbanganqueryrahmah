@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runtimeConfig } from "./config/runtime";
+import { shouldUseSingleProcessMode } from "./internal/cluster-mode";
 import { logger } from "./lib/logger";
 import { LoadPredictor, type LoadTrendSnapshot } from "./internal/loadPredictor";
 import {
@@ -42,6 +43,10 @@ const MAX_WORKERS = Math.min(4, os.cpus().length);
 const requestedMaxWorkers = runtimeConfig.cluster.maxWorkers;
 const normalizedMaxWorkers = Number.isFinite(requestedMaxWorkers) ? Math.floor(requestedMaxWorkers) : 1;
 const MAX_WORKERS_HARD_CAP = Math.max(1, Math.min(MAX_WORKERS, normalizedMaxWorkers));
+const SINGLE_PROCESS_MODE = shouldUseSingleProcessMode({
+  maxWorkers: MAX_WORKERS_HARD_CAP,
+  forceCluster: process.env.SQR_FORCE_CLUSTER,
+});
 const MIN_WORKERS = 1;
 const SCALE_COOLDOWN_MS = LOW_MEMORY_MODE ? 30_000 : 15_000; // more conservative in low-memory mode
 const RESTART_THROTTLE_MS = 2_000; // 2 second throttle between restart attempts
@@ -617,7 +622,15 @@ process.on("unhandledRejection", (reason, promise) => {
 });
 
 if (cluster.isPrimary) {
-  bootCluster();
+  if (SINGLE_PROCESS_MODE) {
+    logger.info("Starting server in single-process mode", {
+      maxWorkers: MAX_WORKERS_HARD_CAP,
+      reason: "cluster-single-worker-bypass",
+    });
+    await import("./index-local.js");
+  } else {
+    bootCluster();
+  }
 } else {
   // In case this file is accidentally used as worker entry.
   await import("./index-local.js");
