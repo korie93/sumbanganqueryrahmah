@@ -1,0 +1,17 @@
+module.exports = {
+  apps: [
+    {
+      name: "sqr",
+      cwd: "/var/www/sumbanganqueryrahmah",
+      script: "npm",
+      args: "start",
+      interpreter: "none",
+      env: {
+        NODE_ENV: "production",
+      },
+      max_memory_restart: "768M",
+      restart_delay: 5000,
+      time: true,
+    },
+  ],
+};

@@ -171,6 +171,13 @@ Pasang dependencies:
 npm ci
 ```
 
+Contoh fail deploy yang boleh anda salin dan ubah suai ada di:
+
+- `deploy/examples/sqr.production.env.template`
+- `deploy/nginx/sqr.conf.example`
+- `deploy/pm2/ecosystem.config.cjs.example`
+- `deploy/systemd/sqr.service.example`
+
 ## 8. Sediakan Production .env
 
 Salin contoh env:
@@ -281,6 +288,10 @@ module.exports = {
 };
 ```
 
+Jika anda lebih suka `systemd` berbanding PM2, gunakan contoh:
+
+- `deploy/systemd/sqr.service.example`
+
 ## 11. Nginx Reverse Proxy
 
 Cipta fail:
@@ -313,6 +324,10 @@ server {
     }
 }
 ```
+
+Anda juga boleh terus bermula daripada:
+
+- `deploy/nginx/sqr.conf.example`
 
 Aktifkan:
 
