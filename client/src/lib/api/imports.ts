@@ -1,4 +1,11 @@
 import { apiRequest } from "../queryClient";
+import { parseApiJson } from "./contract";
+import {
+  deleteImportResponseSchema,
+  importDataPageResponseSchema,
+  importRecordSchema,
+  importsListResponseSchema,
+} from "@shared/api-contracts";
 
 type ImportRequestOptions = {
   cursor?: string;
@@ -28,7 +35,7 @@ export async function getImports(options?: ImportRequestOptions) {
   if (options?.createdOn?.trim()) params.set("createdOn", options.createdOn.trim());
   const suffix = params.size > 0 ? `?${params.toString()}` : "";
   const response = await apiRequest("GET", `/api/imports${suffix}`, undefined, options);
-  return response.json();
+  return parseApiJson(response, importsListResponseSchema, "/api/imports");
 }
 
 export async function createImport(
@@ -43,12 +50,12 @@ export async function createImport(
     { name, filename, data },
     options,
   );
-  return response.json();
+  return parseApiJson(response, importRecordSchema, "/api/imports");
 }
 
 export async function deleteImport(id: string, options?: ImportRequestOptions) {
   const response = await apiRequest("DELETE", `/api/imports/${id}`, undefined, options);
-  return response.json();
+  return parseApiJson(response, deleteImportResponseSchema, `/api/imports/${id}`);
 }
 
 export async function renameImport(id: string, name: string, options?: ImportRequestOptions) {
@@ -58,7 +65,7 @@ export async function renameImport(id: string, name: string, options?: ImportReq
     { name },
     options,
   );
-  return response.json();
+  return parseApiJson(response, importRecordSchema, `/api/imports/${id}/rename`);
 }
 
 export async function getImportData(
@@ -89,7 +96,7 @@ export async function getImportData(
     options,
   );
 
-  return response.json();
+  return parseApiJson(response, importDataPageResponseSchema, `/api/imports/${id}/data`);
 }
 
 export async function analyzeImport(id: string, options?: ImportRequestOptions) {

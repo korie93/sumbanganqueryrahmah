@@ -1,5 +1,11 @@
 import { apiRequest, createApiHeaders } from "../queryClient";
 import { getAuthHeader } from "./shared";
+import { parseApiJson } from "./contract";
+import {
+  settingsResponseSchema,
+  settingsUpdateResponseSchema,
+  tabVisibilityResponseSchema,
+} from "@shared/api-contracts";
 
 type SettingsRequestOptions = {
   signal?: AbortSignal;
@@ -7,7 +13,7 @@ type SettingsRequestOptions = {
 
 export async function getSettings() {
   const response = await apiRequest("GET", "/api/settings");
-  return response.json();
+  return parseApiJson(response, settingsResponseSchema, "/api/settings");
 }
 
 export async function getAppConfig() {
@@ -17,7 +23,7 @@ export async function getAppConfig() {
 
 export async function getTabVisibility() {
   const response = await apiRequest("GET", "/api/settings/tab-visibility");
-  return response.json();
+  return parseApiJson(response, tabVisibilityResponseSchema, "/api/settings/tab-visibility");
 }
 
 export async function updateSetting(payload: {
@@ -26,7 +32,7 @@ export async function updateSetting(payload: {
   confirmCritical?: boolean;
 }) {
   const response = await apiRequest("PATCH", "/api/settings", payload);
-  return response.json();
+  return parseApiJson(response, settingsUpdateResponseSchema, "/api/settings");
 }
 
 export async function getMaintenanceStatus(options?: SettingsRequestOptions) {

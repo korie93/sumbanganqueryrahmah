@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { DataRow, Import } from "../../../shared/schema-postgres";
+import {
+  deleteImportResponseSchema,
+  importDataPageResponseSchema,
+  importRecordSchema,
+  importsListResponseSchema,
+} from "../../../shared/api-contracts";
 import { createImportsController } from "../../controllers/imports.controller";
 import { errorHandler } from "../../middleware/error-handler";
 import type { ImportWithRowCount, ImportsRepository } from "../../repositories/imports.repository";
@@ -387,6 +393,7 @@ test("GET /api/imports returns imports with row counts", async () => {
     assert.equal(response.status, 200);
 
     const payload = await response.json();
+    assert.doesNotThrow(() => importsListResponseSchema.parse(payload));
     assert.equal(payload.imports.length, 3);
     assert.equal(payload.imports[0].id, "import-1");
     assert.equal(payload.imports[0].rowCount, 2);
@@ -418,6 +425,7 @@ test("GET /api/imports forwards cursor search and date filters", async () => {
     assert.equal(response.status, 200);
 
     const payload = await response.json();
+    assert.doesNotThrow(() => importsListResponseSchema.parse(payload));
     assert.equal(payload.imports.length, 1);
     assert.equal(payload.imports[0].id, "import-2");
     assert.deepEqual(payload.pagination, {
@@ -490,6 +498,7 @@ test("POST /api/imports creates an import, writes rows, and audits the import", 
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => importRecordSchema.parse(payload));
     assert.equal(payload.name, "March Import");
     assert.equal(payload.filename, "march.csv");
     assert.equal(createImportCalls.length, 1);
@@ -536,6 +545,7 @@ test("GET /api/imports/:id/data applies the protected page-size cap and forwards
     assert.equal(response.status, 200);
 
     const payload = await response.json();
+    assert.doesNotThrow(() => importDataPageResponseSchema.parse(payload));
     assert.equal(payload.page, 2);
     assert.equal(payload.limit, 120);
     assert.equal(payload.total, 2);
@@ -626,6 +636,7 @@ test("GET /api/imports/:id/data applies dataset-wide column filters", async () =
     assert.equal(response.status, 200);
 
     const payload = await response.json();
+    assert.doesNotThrow(() => importDataPageResponseSchema.parse(payload));
     assert.equal(payload.total, 1);
     assert.equal(payload.rows.length, 1);
     assert.equal(payload.rows[0]?.jsonDataJsonb?.name, "Bob");
@@ -659,6 +670,7 @@ test("GET /api/imports/:id/data returns cursor tokens for large datasets", async
     assert.equal(firstResponse.status, 200);
 
     const firstPayload = await firstResponse.json();
+    assert.doesNotThrow(() => importDataPageResponseSchema.parse(firstPayload));
     assert.equal(firstPayload.page, 1);
     assert.equal(firstPayload.rows.length, 10);
     assert.equal(firstPayload.rows[0]?.jsonDataJsonb?.name, "Customer 1");
@@ -670,6 +682,7 @@ test("GET /api/imports/:id/data returns cursor tokens for large datasets", async
     assert.equal(secondResponse.status, 200);
 
     const secondPayload = await secondResponse.json();
+    assert.doesNotThrow(() => importDataPageResponseSchema.parse(secondPayload));
     assert.equal(secondPayload.page, 2);
     assert.equal(secondPayload.rows.length, 1);
     assert.equal(secondPayload.rows[0]?.jsonDataJsonb?.name, "Customer 11");
@@ -746,6 +759,7 @@ test("PATCH /api/imports/:id/rename renames an import and writes an audit log", 
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => importRecordSchema.parse(payload));
     assert.equal(payload.name, "Renamed Import");
     assert.deepEqual(renameCalls, [{
       id: "import-1",
@@ -769,7 +783,9 @@ test("DELETE /api/imports/:id deletes an import and audits the deletion", async 
     });
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), {
+    const payload = await response.json();
+    assert.doesNotThrow(() => deleteImportResponseSchema.parse(payload));
+    assert.deepEqual(payload, {
       success: true,
     });
     assert.deepEqual(deleteCalls, ["import-1"]);

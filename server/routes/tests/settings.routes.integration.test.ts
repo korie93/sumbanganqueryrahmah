@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ERROR_CODES } from "../../../shared/error-codes";
+import {
+  settingsResponseSchema,
+  settingsUpdateResponseSchema,
+  tabVisibilityResponseSchema,
+} from "../../../shared/api-contracts";
 import type { SystemSettingItem } from "../../config/system-settings";
 import { errorHandler } from "../../middleware/error-handler";
 import { registerSettingsRoutes } from "../settings.routes";
@@ -197,6 +202,7 @@ test("GET /api/settings/tab-visibility returns role-scoped tab visibility", asyn
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => tabVisibilityResponseSchema.parse(payload));
     assert.equal(payload.role, "user");
     assert.deepEqual(payload.tabs, {
       home: false,
@@ -220,7 +226,9 @@ test("GET /api/settings returns admin-visible categories", async () => {
     });
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), {
+    const payload = await response.json();
+    assert.doesNotThrow(() => settingsResponseSchema.parse(payload));
+    assert.deepEqual(payload, {
       categories: [
         {
           id: "general",
@@ -321,6 +329,7 @@ test("PATCH /api/settings updates a non-critical setting and broadcasts a settin
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => settingsUpdateResponseSchema.parse(payload));
     assert.equal(payload.success, true);
     assert.equal(payload.status, "updated");
     assert.equal(updateCalls.length, 1);
@@ -370,7 +379,9 @@ test("PATCH /api/settings returns success for unchanged values without extra bro
     });
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), {
+    const payload = await response.json();
+    assert.doesNotThrow(() => settingsUpdateResponseSchema.parse(payload));
+    assert.deepEqual(payload, {
       success: true,
       status: "unchanged",
       message: "No changes detected.",
@@ -423,6 +434,7 @@ test("PATCH /api/settings broadcasts maintenance changes for broadcast-worthy up
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => settingsUpdateResponseSchema.parse(payload));
     assert.equal(payload.success, true);
     assert.equal(payload.status, "updated");
     assert.equal(getInvalidateMaintenanceCacheCount(), 1);

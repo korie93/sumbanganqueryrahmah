@@ -41,6 +41,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Run API contract tests
+        run: npm run test:contracts
+
       - name: Run client tests
         run: npm run test:client
 
@@ -62,8 +65,42 @@ jobs:
       - name: Verify client bundle budgets
         run: npm run verify:bundle-budgets
 
-  smoke-ui:
+  coverage-gate:
     needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Node version
+        run: npm run verify:node-version
+
+      - name: Enforce coverage gate
+        run: npm run test:coverage:gate
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          path: |
+            coverage
+
+  smoke-ui:
+    needs:
+      - build-and-test
+      - coverage-gate
     runs-on: ubuntu-latest
     timeout-minutes: 35
     services:

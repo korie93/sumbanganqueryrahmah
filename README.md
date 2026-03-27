@@ -69,6 +69,9 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 | `npm run db:studio` | Open Drizzle Studio |
 | `npm run typecheck` | Run TypeScript type checking |
 | `npm test` | Run all test suites |
+| `npm run test:contracts` | Run shared frontend/backend API contract checks for critical endpoints |
+| `npm run test:coverage` | Generate c8 coverage reports for the full main automated test suite |
+| `npm run test:coverage:gate` | Enforce CI coverage thresholds (lines >= 70, branches >= 60) for the hardened API contract boundary suite |
 | `npm run smoke:preflight` | Validate smoke prerequisites and bootstrap assumptions |
 | `npm run smoke:ui` | Run UI smoke coverage against a running server |
 | `npm run smoke:ci-local` | Build + run local CI-style smoke sequence with artifacts |

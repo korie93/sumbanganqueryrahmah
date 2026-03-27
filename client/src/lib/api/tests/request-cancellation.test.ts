@@ -303,6 +303,9 @@ test("getImportData forwards AbortSignal and rejects on abort", async () => {
           jsonResponse({
             rows: [],
             total: 0,
+            page: 2,
+            limit: 50,
+            nextCursor: null,
           }),
         );
       }, 50);
@@ -349,8 +352,12 @@ test("createImport forwards AbortSignal", async () => {
     });
 
     return jsonResponse({
-      ok: true,
-      import: { id: "import-123", name: "Sample Import" },
+      id: "import-123",
+      name: "Sample Import",
+      filename: "sample.csv",
+      createdAt: "2026-03-26T00:00:00.000Z",
+      isDeleted: false,
+      createdBy: "admin.user",
     });
   }) as typeof fetch);
 
@@ -369,12 +376,40 @@ test("saved import API wrappers forward AbortSignal", async () => {
   const requests: Array<{ url: string; signal: AbortSignal | null }> = [];
   const controller = new AbortController();
   const restoreFetch = withMockFetch((async (input, init) => {
+    const url = String(input);
     requests.push({
-      url: String(input),
+      url,
       signal: (init?.signal as AbortSignal | undefined) || null,
     });
 
-    return jsonResponse({ ok: true });
+    if (url.startsWith("/api/imports?")) {
+      return jsonResponse({
+        imports: [],
+        pagination: {
+          limit: 50,
+          nextCursor: null,
+          hasMore: false,
+          total: 0,
+        },
+      });
+    }
+
+    if (url === "/api/imports/import-123/rename") {
+      return jsonResponse({
+        id: "import-123",
+        name: "Renamed Import",
+        filename: "march.csv",
+        createdAt: "2026-03-26T00:00:00.000Z",
+        isDeleted: false,
+        createdBy: "admin.user",
+      });
+    }
+
+    if (url === "/api/imports/import-123") {
+      return jsonResponse({ success: true });
+    }
+
+    throw new Error(`Unexpected URL: ${url}`);
   }) as typeof fetch);
 
   try {
