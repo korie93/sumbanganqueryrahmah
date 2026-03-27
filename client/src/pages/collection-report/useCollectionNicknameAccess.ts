@@ -5,6 +5,7 @@ import {
   loginCollectionNickname,
   setupCollectionNicknamePassword,
 } from "@/lib/api";
+import { getCollectionNicknameForcedChangeToast } from "@/pages/collection-report/collection-nickname-auth-feedback";
 import {
   COLLECTION_STAFF_NICKNAME_AUTH_KEY,
   COLLECTION_STAFF_NICKNAME_KEY,
@@ -262,11 +263,7 @@ export function useCollectionNicknameAccess({
         setShowLoginPassword(false);
         setShowSetupPassword(false);
         setShowSetupConfirmPassword(false);
-        toast({
-          title: "Tukar Password Diperlukan",
-          description: "Sila tetapkan kata laluan baharu sebelum meneruskan.",
-          variant: "destructive",
-        });
+        toast(getCollectionNicknameForcedChangeToast());
         return;
       }
 

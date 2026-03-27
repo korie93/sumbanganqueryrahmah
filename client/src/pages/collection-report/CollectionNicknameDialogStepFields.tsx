@@ -1,5 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getCollectionNicknameSetupDescription } from "@/pages/collection-report/collection-nickname-auth-feedback";
 import { CollectionNicknamePasswordField } from "@/pages/collection-report/CollectionNicknamePasswordField";
 import type { NicknameDialogStep } from "@/pages/collection-report/types";
 
@@ -63,9 +64,7 @@ export function CollectionNicknameDialogStepFields({
     return (
       <div className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          {setupMode === "forced-change"
-            ? "Sila tetapkan kata laluan baharu sebelum meneruskan."
-            : "Sila tetapkan kata laluan baharu untuk nickname ini sebelum meneruskan."}
+          {getCollectionNicknameSetupDescription(setupMode)}
         </p>
         <div className="space-y-2">
           <Label>Nickname</Label>

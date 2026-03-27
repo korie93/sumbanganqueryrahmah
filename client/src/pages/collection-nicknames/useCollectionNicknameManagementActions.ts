@@ -331,8 +331,8 @@ export function useCollectionNicknameManagementActions({
       toast({
         title: "Password Nickname Direset",
         description: temporaryPassword
-          ? `${target.nickname} telah direset. Password sementara: ${temporaryPassword}`
-          : `${target.nickname} telah direset. Gunakan password sementara semasa yang ditetapkan oleh sistem.`,
+          ? `${target.nickname} telah direset. Password sementara: ${temporaryPassword}. Pengguna perlu login menggunakan password ini dan terus tetapkan password baharu.`
+          : `${target.nickname} telah direset. Gunakan password sementara semasa yang ditetapkan oleh sistem dan tetapkan password baharu selepas login.`,
       });
     } catch (error: unknown) {
       toast({
