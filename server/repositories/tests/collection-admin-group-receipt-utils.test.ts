@@ -253,13 +253,16 @@ test("attachCollectionReceipts promotes legacy receipt_file rows into relation-b
 
     assert.equal(records[0]?.receiptFile, null);
     assert.equal(records[0]?.receipts.length, 2);
+    assert.equal(records[0]?.archivedReceipts.length, 0);
     assert.equal(records[1]?.receiptFile, null);
     assert.equal(records[1]?.receipts.length, 1);
     assert.equal(records[1]?.receipts[0]?.storagePath, legacyReceipt.publicPath);
-    assert.equal(queries.length, 5);
+    assert.equal(records[1]?.archivedReceipts.length, 0);
+    assert.equal(queries.length, 6);
     assert.match(collectSqlText(queries[1]), /INSERT INTO public\.collection_record_receipts/i);
     assert.match(collectSqlText(queries[2]), /SELECT storage_path/i);
     assert.match(collectSqlText(queries[3]), /UPDATE public\.collection_records/i);
+    assert.match(collectSqlText(queries[5]), /deleted_at IS NOT NULL/i);
   } finally {
     await fs.unlink(receiptOne.absolutePath).catch(() => undefined);
     await fs.unlink(receiptTwo.absolutePath).catch(() => undefined);
@@ -315,10 +318,12 @@ test("attachCollectionReceipts prunes relation-backed receipts whose files are m
     assert.equal(record?.receiptFile, null);
     assert.equal(record?.receipts.length, 1);
     assert.equal(record?.receipts[0]?.id, "receipt-valid");
-    assert.equal(queries.length, 4);
+    assert.equal(record?.archivedReceipts.length, 0);
+    assert.equal(queries.length, 5);
     assert.match(collectSqlText(queries[1]), /DELETE FROM public\.collection_record_receipts/i);
     assert.match(collectSqlText(queries[2]), /SELECT storage_path/i);
     assert.match(collectSqlText(queries[3]), /UPDATE public\.collection_records/i);
+    assert.match(collectSqlText(queries[4]), /deleted_at IS NOT NULL/i);
   } finally {
     await fs.unlink(validReceipt.absolutePath).catch(() => undefined);
   }
@@ -435,7 +440,8 @@ test("getCollectionRecordReceiptByIdForRecord and delete receipt helpers short-c
   assert.equal(single?.id, "receipt-1");
   assert.equal(deleted.length, 1);
   assert.equal(queries.length, 5);
-  assert.match(collectSqlText(queries[2]), /DELETE FROM public\.collection_record_receipts/i);
+  assert.match(collectSqlText(queries[2]), /UPDATE public\.collection_record_receipts/i);
+  assert.match(collectSqlText(queries[2]), /SET deleted_at = now\(\)/i);
   assert.match(collectSqlText(queries[3]), /SELECT storage_path/i);
   assert.match(collectSqlText(queries[4]), /UPDATE public\.collection_records/i);
 });
@@ -476,7 +482,8 @@ test("deleteAllCollectionRecordReceiptRows deletes only after loading existing r
   assert.equal(deleted.length, 2);
   assert.equal(queries.length, 4);
   assert.match(collectSqlText(queries[0]), /WHERE collection_record_id =/i);
-  assert.match(collectSqlText(queries[1]), /DELETE FROM public\.collection_record_receipts/i);
+  assert.match(collectSqlText(queries[1]), /UPDATE public\.collection_record_receipts/i);
+  assert.match(collectSqlText(queries[1]), /SET deleted_at = now\(\)/i);
   assert.match(collectSqlText(queries[2]), /SELECT storage_path/i);
   assert.match(collectSqlText(queries[3]), /UPDATE public\.collection_records/i);
 });

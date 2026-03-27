@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { AIChatStatus } from "@/components/AIChat";
+import { resolveFloatingAIMinimizedStatus } from "@/components/floating-ai-status";
 import { useAIContext } from "@/context/AIContext";
 import { cn } from "@/lib/utils";
 import styles from "./FloatingAI.module.css";
@@ -175,14 +176,9 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     };
   }, [hiddenForAiPage, location, syncSafePosition]);
 
-  if (hiddenForAiPage) return null;
+  const minimizedStatus = resolveFloatingAIMinimizedStatus(aiStatus);
 
-  const minimizedStatus = useMemo(() => {
-    if (aiStatus === "SEARCHING") return "AI sedang mencari maklumat...";
-    if (aiStatus === "PROCESSING") return "AI sedang memproses data...";
-    if (aiStatus === "TYPING") return "AI sedang menaip jawapan...";
-    return "AI sedang memproses...";
-  }, [aiStatus]);
+  if (hiddenForAiPage) return null;
 
   return (
     <div
