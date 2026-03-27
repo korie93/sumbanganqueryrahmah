@@ -58,13 +58,17 @@ export default function CollectionReport() {
 
   const primaryActionLabel =
     nicknameAccess.dialogStep === "setup"
-      ? "Save Password"
+      ? nicknameAccess.setupMode === "forced-change"
+        ? "Set New Password"
+        : "Save Password"
       : nicknameAccess.dialogStep === "login"
         ? "Login Nickname"
         : "Continue";
   const primaryLoadingLabel =
     nicknameAccess.dialogStep === "setup"
-      ? "Saving..."
+      ? nicknameAccess.setupMode === "forced-change"
+        ? "Updating..."
+        : "Saving..."
       : nicknameAccess.dialogStep === "login"
         ? "Signing In..."
         : "Checking...";

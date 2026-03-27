@@ -58,14 +58,29 @@ export function CollectionNicknameDialog({
   showSetupPassword,
   submittingNicknameAuth,
 }: CollectionNicknameDialogProps) {
+  const dialogTitle =
+    dialogStep === "setup"
+      ? setupMode === "forced-change"
+        ? "Tetapkan Password Baharu"
+        : "Simpan Password Nickname"
+      : dialogStep === "login"
+        ? "Login Nickname Collection"
+        : "Masukkan Nama Staff Collection";
+  const dialogDescription =
+    dialogStep === "setup"
+      ? setupMode === "forced-change"
+        ? "Password sementara anda telah disahkan. Tetapkan kata laluan baharu untuk terus masuk ke Collection."
+        : "Ini kali pertama untuk nickname ini. Tetapkan kata laluan baharu sebelum meneruskan."
+      : dialogStep === "login"
+        ? "Masukkan password nickname yang sah. Jika anda menggunakan password sementara, sistem akan minta anda tukar ke password baharu selepas ini."
+        : "Sahkan nickname dahulu. Jika ini kali pertama atau password telah direset, anda akan dibimbing ke langkah set password.";
+
   return (
     <Dialog open={nicknameDialogOpen} onOpenChange={onDialogOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Masukkan Nama Staff Collection</DialogTitle>
-          <DialogDescription>
-            Sahkan nickname dahulu. Jika ini kali pertama, anda perlu tetapkan password nickname baharu.
-          </DialogDescription>
+          <DialogTitle>{dialogTitle}</DialogTitle>
+          <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
 
         <CollectionNicknameDialogStepFields
