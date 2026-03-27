@@ -36,17 +36,67 @@ const parseCookieValues = (headers) => {
   return single ? [single] : [];
 };
 
-const toCookieHeader = (setCookies) =>
-  setCookies
-    .map((cookie) => String(cookie || "").split(";")[0] || "")
-    .map((cookie) => cookie.trim())
-    .filter(Boolean)
+const parseSetCookie = (cookieLine) => {
+  const [pair] = String(cookieLine || "").split(";");
+  const separatorIndex = pair.indexOf("=");
+  if (separatorIndex <= 0) {
+    return null;
+  }
+
+  const name = pair.slice(0, separatorIndex).trim();
+  const value = pair.slice(separatorIndex + 1).trim();
+  if (!name) {
+    return null;
+  }
+
+  return { name, value };
+};
+
+const buildCookieHeader = (cookieJar) =>
+  Array.from(cookieJar.entries())
+    .map(([name, value]) => `${name}=${value}`)
     .join("; ");
 
-const request = async (path, init = {}) =>
-  withTimeout(fetch(`${baseUrl}${path}`, init), `${init.method || "GET"} ${path}`);
-
 const run = async () => {
+  const cookieJar = new Map();
+  const request = async (path, init = {}) => {
+    const method = String(init.method || "GET").toUpperCase();
+    const headers = new Headers(init.headers || {});
+    const cookieHeader = buildCookieHeader(cookieJar);
+    if (cookieHeader && !headers.has("cookie")) {
+      headers.set("cookie", cookieHeader);
+    }
+    if (["POST", "PUT", "PATCH", "DELETE"].includes(method) && !headers.has("x-csrf-token")) {
+      const csrfToken = cookieJar.get("sqr_csrf");
+      if (csrfToken) {
+        headers.set("x-csrf-token", csrfToken);
+      }
+    }
+
+    const response = await withTimeout(
+      fetch(`${baseUrl}${path}`, {
+        ...init,
+        method,
+        headers,
+      }),
+      `${method} ${path}`,
+    );
+
+    for (const setCookie of parseCookieValues(response.headers)) {
+      const parsed = parseSetCookie(setCookie);
+      if (!parsed) {
+        continue;
+      }
+      if (parsed.value) {
+        cookieJar.set(parsed.name, parsed.value);
+      } else {
+        cookieJar.delete(parsed.name);
+      }
+    }
+
+    return response;
+  };
+
   const liveHealth = await request("/api/health/live");
   const livePayload = await readJsonSafely(liveHealth);
   assert(
@@ -103,15 +153,10 @@ const run = async () => {
     ].join("\n"),
   );
 
-  const setCookies = parseCookieValues(loginResponse.headers);
-  const cookieHeader = toCookieHeader(setCookies);
-  assert(cookieHeader.includes("sqr_auth="), "Smoke preflight login did not return sqr_auth cookie.");
+  assert(cookieJar.has("sqr_auth"), "Smoke preflight login did not return sqr_auth cookie.");
+  assert(cookieJar.has("sqr_csrf"), "Smoke preflight login did not return sqr_csrf cookie.");
 
-  const authedMe = await request("/api/me", {
-    headers: {
-      cookie: cookieHeader,
-    },
-  });
+  const authedMe = await request("/api/me");
   const authedPayload = await readJsonSafely(authedMe);
   assert(
     authedMe.ok && Boolean(authedPayload?.user),
@@ -124,9 +169,6 @@ const run = async () => {
 
   const logoutResponse = await request("/api/activity/logout", {
     method: "POST",
-    headers: {
-      cookie: cookieHeader,
-    },
   });
   const logoutPayload = await readJsonSafely(logoutResponse);
   assert(
@@ -138,11 +180,7 @@ const run = async () => {
     ].join("\n"),
   );
 
-  const postLogoutMe = await request("/api/me", {
-    headers: {
-      cookie: cookieHeader,
-    },
-  });
+  const postLogoutMe = await request("/api/me");
   assert(
     postLogoutMe.status === 401,
     `GET /api/me after preflight logout should return 401, received ${postLogoutMe.status}`,
