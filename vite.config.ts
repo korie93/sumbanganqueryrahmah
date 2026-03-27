@@ -33,6 +33,21 @@ export default defineConfig({
     outDir: "../dist-local/public",
     emptyOutDir: true,
     chunkSizeWarningLimit: 1200,
+    modulePreload: {
+      resolveDependencies(_filename, dependencies, context) {
+        if (context.hostType !== "html") {
+          return dependencies;
+        }
+
+        return dependencies.filter((dependency) => {
+          if (!dependency.startsWith("assets/")) {
+            return true;
+          }
+
+          return !/^(assets\/(?:charts|pdf|excel|capture)-)/.test(dependency);
+        });
+      },
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {
