@@ -48,6 +48,9 @@ export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = 
         code: "CSRF_REJECTED",
       });
     }
+    if (fetchSite === "same-origin") {
+      return next();
+    }
 
     const requestOrigin = normalizeCorsOrigin(req.headers.origin);
     if (requestOrigin) {
@@ -73,7 +76,10 @@ export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = 
       });
     }
 
-    // Non-browser clients and tests may omit both origin and fetch metadata.
-    return next();
+    return res.status(403).json({
+      ok: false,
+      message: "CSRF protection requires a valid same-origin signal or CSRF token.",
+      code: "CSRF_SIGNAL_MISSING",
+    });
   };
 }

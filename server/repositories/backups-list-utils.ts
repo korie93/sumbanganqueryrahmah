@@ -18,6 +18,7 @@ import {
   type BackupListPageResult,
   type BackupsRepositoryOptions,
 } from "./backups-repository-types";
+import { buildLikePattern } from "./sql-like-utils";
 
 export async function createBackup(
   options: BackupsRepositoryOptions,
@@ -90,12 +91,12 @@ export async function listBackupsPage(
   const whereClauses: any[] = [];
   const searchName = String(params.searchName || "").trim();
   if (searchName) {
-    whereClauses.push(sql`name ILIKE ${`%${searchName}%`}`);
+    whereClauses.push(sql`name ILIKE ${buildLikePattern(searchName, "contains")} ESCAPE '\'`);
   }
 
   const createdBy = String(params.createdBy || "").trim();
   if (createdBy) {
-    whereClauses.push(sql`created_by ILIKE ${`%${createdBy}%`}`);
+    whereClauses.push(sql`created_by ILIKE ${buildLikePattern(createdBy, "contains")} ESCAPE '\'`);
   }
 
   const dateFrom = params.dateFrom instanceof Date && Number.isFinite(params.dateFrom.getTime())

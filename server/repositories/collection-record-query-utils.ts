@@ -5,6 +5,7 @@ import type {
   CollectionNicknameDailyAggregate,
   CollectionReceiptValidationStatus,
 } from "../storage-postgres";
+import { buildLikePattern } from "./sql-like-utils";
 
 const COLLECTION_MONTH_NAMES = [
   "January",
@@ -52,14 +53,14 @@ export function buildCollectionRecordConditions(filters?: CollectionRecordFilter
 
   const search = String(filters?.search || "").trim();
   if (search) {
-    const like = `%${search}%`;
+    const like = buildLikePattern(search, "contains");
     conditions.push(sql`(
-      customer_name ILIKE ${like}
-      OR ic_number ILIKE ${like}
-      OR account_number ILIKE ${like}
-      OR batch ILIKE ${like}
-      OR customer_phone ILIKE ${like}
-      OR amount::text ILIKE ${like}
+      customer_name ILIKE ${like} ESCAPE '\'
+      OR ic_number ILIKE ${like} ESCAPE '\'
+      OR account_number ILIKE ${like} ESCAPE '\'
+      OR batch ILIKE ${like} ESCAPE '\'
+      OR customer_phone ILIKE ${like} ESCAPE '\'
+      OR amount::text ILIKE ${like} ESCAPE '\'
     )`);
   }
 

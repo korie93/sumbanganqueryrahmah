@@ -8,6 +8,7 @@ import type {
 } from "../../shared/schema-postgres";
 import { dataRows, imports } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
+import { buildLikePattern } from "./sql-like-utils";
 
 const QUERY_PAGE_LIMIT = 1000;
 const IMPORT_LIST_PAGE_DEFAULT_LIMIT = 100;
@@ -91,8 +92,10 @@ function buildImportListFilterSql(params: {
   const conditions = [sql`${alias}.is_deleted = false`];
   const search = String(params.search || "").trim();
   if (search) {
-    const likeValue = `%${search}%`;
-    conditions.push(sql`(${alias}.name ILIKE ${likeValue} OR ${alias}.filename ILIKE ${likeValue})`);
+    const likeValue = buildLikePattern(search, "contains");
+    conditions.push(
+      sql`(${alias}.name ILIKE ${likeValue} ESCAPE '\' OR ${alias}.filename ILIKE ${likeValue} ESCAPE '\')`,
+    );
   }
 
   const createdOn = String(params.createdOn || "").trim();

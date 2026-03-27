@@ -32,14 +32,17 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
 } {
   const adaptiveRateState = new Map<string, { count: number; resetAt: number }>();
 
+  function resolveRateLimitClientIp(req: Request): string {
+    const ip = String(req.ip || req.socket.remoteAddress || "unknown").trim();
+    return ip || "unknown";
+  }
+
   function resolveAdaptiveRateBucket(req: Request): {
     bucketKey: string;
     dynamicLimit: number;
   } {
     const controlState = options.getControlState();
-    const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "unknown")
-      .split(",")[0]
-      .trim();
+    const ip = resolveRateLimitClientIp(req);
     const method = String(req.method || "GET").toUpperCase();
     const path = req.path || "/";
 

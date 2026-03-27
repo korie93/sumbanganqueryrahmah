@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
 import { mapSearchRow, readRows } from "./ai-repository-mappers";
+import { buildLikePattern } from "./sql-like-utils";
 import type {
   AiFuzzySearchRow,
   AiSearchRecordRow,
@@ -149,13 +150,14 @@ export async function aiNameSearchRows(params: {
 }): Promise<AiSearchRecordRow[]> {
   const q = String(params.query || "").trim();
   if (!q) return [];
+  const qPattern = buildLikePattern(q, "contains");
 
   const nameKeysMatch = sql`
     (
-      coalesce((dr.json_data::jsonb)->>'Nama','') ILIKE ${`%${q}%`} OR
-      coalesce((dr.json_data::jsonb)->>'Customer Name','') ILIKE ${`%${q}%`} OR
-      coalesce((dr.json_data::jsonb)->>'name','') ILIKE ${`%${q}%`} OR
-      coalesce((dr.json_data::jsonb)->>'MAKLUMAT PEMOHON','') ILIKE ${`%${q}%`}
+      coalesce((dr.json_data::jsonb)->>'Nama','') ILIKE ${qPattern} ESCAPE '\' OR
+      coalesce((dr.json_data::jsonb)->>'Customer Name','') ILIKE ${qPattern} ESCAPE '\' OR
+      coalesce((dr.json_data::jsonb)->>'name','') ILIKE ${qPattern} ESCAPE '\' OR
+      coalesce((dr.json_data::jsonb)->>'MAKLUMAT PEMOHON','') ILIKE ${qPattern} ESCAPE '\'
     )
   `;
 
@@ -181,6 +183,7 @@ export async function aiDigitsSearchRows(params: {
   digits: string;
   limit: number;
 }): Promise<AiSearchRecordRow[]> {
+  const digitsPattern = buildLikePattern(params.digits, "contains");
   const result = await db.execute(sql`
     SELECT
       dr.id as "rowId",
@@ -191,7 +194,7 @@ export async function aiDigitsSearchRows(params: {
     FROM public.data_rows dr
     JOIN public.imports i ON i.id = dr.import_id
     WHERE i.is_deleted = false
-      AND regexp_replace(dr.json_data::text, '[^0-9]', '', 'g') LIKE ${`%${params.digits}%`}
+      AND regexp_replace(dr.json_data::text, '[^0-9]', '', 'g') LIKE ${digitsPattern} ESCAPE '\'
     ORDER BY dr.id
     LIMIT ${params.limit}
   `);
@@ -205,13 +208,14 @@ export async function aiFuzzySearchRows(params: {
 }): Promise<AiFuzzySearchRow[]> {
   const tokens = tokenizeAiFuzzyQuery(params.query);
   if (tokens.length === 0) return [];
+  const tokenPatterns = tokens.map((token) => buildLikePattern(token, "contains"));
 
   const scoreSql = sql.join(
-    tokens.map((token) => sql`CASE WHEN dr.json_data::text ILIKE ${`%${token}%`} THEN 1 ELSE 0 END`),
+    tokenPatterns.map((pattern) => sql`CASE WHEN dr.json_data::text ILIKE ${pattern} ESCAPE '\' THEN 1 ELSE 0 END`),
     sql` + `,
   );
   const whereSql = sql.join(
-    tokens.map((token) => sql`dr.json_data::text ILIKE ${`%${token}%`}`),
+    tokenPatterns.map((pattern) => sql`dr.json_data::text ILIKE ${pattern} ESCAPE '\'`),
     sql` OR `,
   );
 

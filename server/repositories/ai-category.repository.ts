@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
+import { buildLikePattern } from "./sql-like-utils";
 
 type CategoryRule = {
   key: string;
@@ -102,7 +103,7 @@ function buildMatchSql(terms: string[], fields: string[], matchMode: string) {
 
   if (fields.length === 0) {
     return sql.join(
-      terms.map((term) => sql`dr.json_data::text ILIKE ${`%${term}%`}`),
+      terms.map((term) => sql`dr.json_data::text ILIKE ${buildLikePattern(term, "contains")} ESCAPE '\'`),
       sql` OR `,
     );
   }
@@ -122,8 +123,9 @@ function buildMatchSql(terms: string[], fields: string[], matchMode: string) {
 
   return sql.join(
     terms.map((term) => {
+      const termPattern = buildLikePattern(term, "contains");
       const perField = sql.join(
-        fields.map((field) => sql`(dr.json_data::jsonb)->>${field} ILIKE ${`%${term}%`}`),
+        fields.map((field) => sql`(dr.json_data::jsonb)->>${field} ILIKE ${termPattern} ESCAPE '\'`),
         sql` OR `,
       );
       return sql`(${perField})`;
@@ -165,11 +167,12 @@ export class AiCategoryRepository {
           )
         : sql.join(
             terms.map((term) => {
+              const termPattern = buildLikePattern(term, "contains");
               const perField = sql.join(
-                fields.map((field) => sql`coalesce((dr.json_data::jsonb)->>${field}, '') ILIKE ${`%${term}%`}`),
+                fields.map((field) => sql`coalesce((dr.json_data::jsonb)->>${field}, '') ILIKE ${termPattern} ESCAPE '\'`),
                 sql` OR `,
               );
-              return sql`((${perField}) OR dr.json_data::text ILIKE ${`%${term}%`})`;
+              return sql`((${perField}) OR dr.json_data::text ILIKE ${termPattern} ESCAPE '\')`;
             }),
             sql` OR `,
           );

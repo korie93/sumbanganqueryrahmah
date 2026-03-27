@@ -4,6 +4,7 @@ import type { AuditLog, InsertAuditLog } from "../../shared/schema-postgres";
 import { auditLogs } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
 import { getRequestIdFromContext } from "../lib/request-context";
+import { buildLikePattern } from "./sql-like-utils";
 
 const QUERY_PAGE_LIMIT = 1000;
 const AUDIT_LIST_DEFAULT_PAGE_SIZE = 50;
@@ -92,20 +93,21 @@ export class AuditRepository {
 
     const performedBy = String(params.performedBy || "").trim();
     if (performedBy) {
-      whereClauses.push(sql`performed_by ILIKE ${`%${performedBy}%`}`);
+      whereClauses.push(sql`performed_by ILIKE ${buildLikePattern(performedBy, "contains")} ESCAPE '\'`);
     }
 
     const targetUser = String(params.targetUser || "").trim();
     if (targetUser) {
-      whereClauses.push(sql`target_user ILIKE ${`%${targetUser}%`}`);
+      whereClauses.push(sql`target_user ILIKE ${buildLikePattern(targetUser, "contains")} ESCAPE '\'`);
     }
 
     const search = String(params.search || "").trim();
     if (search) {
+      const searchPattern = buildLikePattern(search, "contains");
       whereClauses.push(sql`(
-        action ILIKE ${`%${search}%`}
-        OR COALESCE(details, '') ILIKE ${`%${search}%`}
-        OR COALESCE(target_resource, '') ILIKE ${`%${search}%`}
+        action ILIKE ${searchPattern} ESCAPE '\'
+        OR COALESCE(details, '') ILIKE ${searchPattern} ESCAPE '\'
+        OR COALESCE(target_resource, '') ILIKE ${searchPattern} ESCAPE '\'
       )`);
     }
 

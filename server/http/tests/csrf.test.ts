@@ -59,6 +59,46 @@ test("csrf middleware accepts session mutations with a valid double-submit token
   }
 });
 
+test("csrf middleware rejects cookie-authenticated mutations that omit all CSRF validation signals", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/mutate`, {
+      method: "POST",
+      headers: {
+        Cookie: "sqr_auth=token-value; sqr_csrf=csrf-token",
+      },
+    });
+
+    assert.equal(response.status, 403);
+    const payload = await response.json();
+    assert.equal(payload.code, "CSRF_SIGNAL_MISSING");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("csrf middleware accepts cookie-authenticated mutations with a same-origin fetch metadata signal", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/mutate`, {
+      method: "POST",
+      headers: {
+        Cookie: "sqr_auth=token-value; sqr_csrf=csrf-token",
+        "sec-fetch-site": "same-origin",
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("csrf middleware allows requests without auth session cookies", async () => {
   const app = createCsrfTestApp();
   const { server, baseUrl } = await startTestServer(app);

@@ -126,3 +126,32 @@ test("adaptive API protection does not throttle session control endpoints under 
     await stopTestServer(server);
   }
 });
+
+test("adaptive API protection ignores spoofed x-forwarded-for headers when trust proxy is not enabled", async () => {
+  const app = createApiProtectionTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    for (let index = 0; index < 8; index += 1) {
+      const response = await fetch(`${baseUrl}/api/noisy`, {
+        headers: {
+          "x-forwarded-for": `203.0.113.${index + 1}`,
+        },
+      });
+      assert.equal(response.status, 200);
+    }
+
+    const throttled = await fetch(`${baseUrl}/api/noisy`, {
+      headers: {
+        "x-forwarded-for": "198.51.100.77",
+      },
+    });
+
+    assert.equal(throttled.status, 429);
+    const payload = await throttled.json();
+    assert.equal(payload.limit, 8);
+    assert.equal(payload.mode, "NORMAL");
+  } finally {
+    await stopTestServer(server);
+  }
+});

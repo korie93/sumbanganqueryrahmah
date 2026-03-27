@@ -20,6 +20,7 @@ import {
   type PendingPasswordResetListPageResult,
   type PendingPasswordResetRequestRecord,
 } from "./auth-repository-types";
+import { buildLikePattern } from "./sql-like-utils";
 
 export async function getUsersByRoles(roles: string[]): Promise<Array<{
   id: string;
@@ -101,10 +102,11 @@ export async function listManagedUsersPage(
   const whereClauses: any[] = [sql`role IN ('admin', 'user')`];
   const search = String(params.search || "").trim();
   if (search) {
+    const searchPattern = buildLikePattern(search, "contains");
     whereClauses.push(sql`(
-      username ILIKE ${`%${search}%`}
-      OR COALESCE(full_name, '') ILIKE ${`%${search}%`}
-      OR COALESCE(email, '') ILIKE ${`%${search}%`}
+      username ILIKE ${searchPattern} ESCAPE '\'
+      OR COALESCE(full_name, '') ILIKE ${searchPattern} ESCAPE '\'
+      OR COALESCE(email, '') ILIKE ${searchPattern} ESCAPE '\'
     )`);
   }
 
@@ -263,11 +265,12 @@ export async function listPendingPasswordResetRequestsPage(
 
   const search = String(params.search || "").trim();
   if (search) {
+    const searchPattern = buildLikePattern(search, "contains");
     whereClauses.push(sql`(
-      u.username ILIKE ${`%${search}%`}
-      OR COALESCE(u.full_name, '') ILIKE ${`%${search}%`}
-      OR COALESCE(u.email, '') ILIKE ${`%${search}%`}
-      OR COALESCE(r.requested_by_user, '') ILIKE ${`%${search}%`}
+      u.username ILIKE ${searchPattern} ESCAPE '\'
+      OR COALESCE(u.full_name, '') ILIKE ${searchPattern} ESCAPE '\'
+      OR COALESCE(u.email, '') ILIKE ${searchPattern} ESCAPE '\'
+      OR COALESCE(r.requested_by_user, '') ILIKE ${searchPattern} ESCAPE '\'
     )`);
   }
 

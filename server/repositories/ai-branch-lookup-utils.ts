@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
 import { mapBranchRow, readRows } from "./ai-repository-mappers";
+import { buildLikePattern } from "./sql-like-utils";
 import type {
   BranchRowDb,
   BranchSearchResult,
@@ -35,6 +36,7 @@ export async function findBranchesByTextRows(params: {
 }): Promise<BranchSearchResult[]> {
   const q = normalizeAiBranchLookupQuery(params.query);
   if (!q) return [];
+  const likePattern = buildLikePattern(q, "contains");
 
   const limit = clampAiBranchLookupLimit(params.limit);
 
@@ -57,15 +59,17 @@ export async function findBranchesByTextRows(params: {
         ) AS score
       FROM public.aeon_branches
       WHERE
-        name ILIKE ${`%${q}%`}
-        OR branch_address ILIKE ${`%${q}%`}
+        name ILIKE ${likePattern} ESCAPE '\'
+        OR branch_address ILIKE ${likePattern} ESCAPE '\'
         OR GREATEST(
           similarity(coalesce(name, ''), ${q}),
           similarity(coalesce(branch_address, ''), ${q})
         ) > 0.1
       ORDER BY
         CASE
-          WHEN name ILIKE ${`%${q}%`} OR branch_address ILIKE ${`%${q}%`} THEN 0
+          WHEN name ILIKE ${likePattern} ESCAPE '\'
+            OR branch_address ILIKE ${likePattern} ESCAPE '\'
+            THEN 0
           ELSE 1
         END,
         score DESC,
@@ -88,8 +92,8 @@ export async function findBranchesByTextRows(params: {
         application_availability,
         aeon_lounge
       FROM public.aeon_branches
-      WHERE name ILIKE ${`%${q}%`}
-         OR branch_address ILIKE ${`%${q}%`}
+      WHERE name ILIKE ${likePattern} ESCAPE '\'
+         OR branch_address ILIKE ${likePattern} ESCAPE '\'
       ORDER BY name
       LIMIT ${limit}
     `);

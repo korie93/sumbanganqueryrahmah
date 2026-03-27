@@ -2,6 +2,7 @@ import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import type { DataRow } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
+import { buildLikePattern } from "./sql-like-utils";
 
 const MAX_SEARCH_LIMIT = 200;
 const MAX_COLUMN_KEYS = 500;
@@ -54,18 +55,21 @@ function normalizeJsonPayload(raw: unknown): unknown {
 function buildFieldCondition(field: string, operator: string, value: string): SQL {
   const column = sql`dr.json_data::jsonb ->> ${field}`;
   const valueType = detectValueType(value);
+  const containsPattern = buildLikePattern(value, "contains");
+  const startsWithPattern = buildLikePattern(value, "startsWith");
+  const endsWithPattern = buildLikePattern(value, "endsWith");
 
   switch (operator) {
     case "contains":
-      return sql`${column} ILIKE ${`%${value}%`}`;
+      return sql`${column} ILIKE ${containsPattern} ESCAPE '\'`;
     case "equals":
       return sql`${column} = ${value}`;
     case "notEquals":
       return sql`${column} <> ${value}`;
     case "startsWith":
-      return sql`${column} ILIKE ${`${value}%`}`;
+      return sql`${column} ILIKE ${startsWithPattern} ESCAPE '\'`;
     case "endsWith":
-      return sql`${column} ILIKE ${`%${value}`}`;
+      return sql`${column} ILIKE ${endsWithPattern} ESCAPE '\'`;
     case "greaterThan":
       if (valueType === "number") return sql`NULLIF(${column}, '')::numeric > ${Number(value)}`;
       if (valueType === "date") return sql`NULLIF(${column}, '')::date > ${value}`;
@@ -98,6 +102,7 @@ export class SearchRepository {
     offset: number;
   }): Promise<{ rows: any[]; total: number }> {
     const { search, limit, offset } = params;
+    const searchPattern = buildLikePattern(search, "contains");
 
     const rowsResult = await db.execute(sql`
       SELECT
@@ -109,7 +114,7 @@ export class SearchRepository {
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id
       WHERE i.is_deleted = false
-        AND dr.json_data::text ILIKE ${`%${search}%`}
+        AND dr.json_data::text ILIKE ${searchPattern} ESCAPE '\'
       ORDER BY dr.id
       LIMIT ${Math.max(1, Math.min(limit, MAX_SEARCH_LIMIT))}
       OFFSET ${Math.max(0, offset)}
@@ -120,7 +125,7 @@ export class SearchRepository {
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id
       WHERE i.is_deleted = false
-        AND dr.json_data::text ILIKE ${`%${search}%`}
+        AND dr.json_data::text ILIKE ${searchPattern} ESCAPE '\'
     `);
 
     const rows = (rowsResult.rows || []).map((row: any) => ({
@@ -136,6 +141,7 @@ export class SearchRepository {
   }
 
   async searchSimpleDataRows(search: string) {
+    const searchPattern = buildLikePattern(search, "contains");
     return db.execute(sql`
       SELECT
         dr.import_id as "importId",
@@ -144,7 +150,7 @@ export class SearchRepository {
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id
       WHERE i.is_deleted = false
-        AND dr.json_data::text ILIKE ${`%${search}%`}
+        AND dr.json_data::text ILIKE ${searchPattern} ESCAPE '\'
       LIMIT ${MAX_SEARCH_LIMIT}
     `);
   }
@@ -182,7 +188,7 @@ export class SearchRepository {
     const conditions: SQL[] = [sql`dr.import_id = ${importId}`];
 
     if (trimmedSearch) {
-      conditions.push(sql`dr.json_data::text ILIKE ${`%${trimmedSearch}%`}`);
+      conditions.push(sql`dr.json_data::text ILIKE ${buildLikePattern(trimmedSearch, "contains")} ESCAPE '\'`);
     }
 
     for (const filter of safeColumnFilters) {
