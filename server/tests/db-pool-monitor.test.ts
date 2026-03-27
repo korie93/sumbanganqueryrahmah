@@ -53,6 +53,29 @@ test("bindPgPoolMonitoring deduplicates repeated pressure warnings within the co
   assert.equal(warnings[0]?.source, "pool-acquire");
 });
 
+test("bindPgPoolMonitoring does not warn when the pool is only momentarily fully acquired without queueing", () => {
+  const pool = new FakePool();
+  pool.totalCount = 2;
+  pool.idleCount = 0;
+  pool.waitingCount = 0;
+  pool.options.max = 5;
+
+  const warnings: Array<Record<string, unknown>> = [];
+
+  bindPgPoolMonitoring(pool, {
+    logger: {
+      warn: (_message, meta) => {
+        warnings.push(meta || {});
+      },
+      error: () => undefined,
+    },
+  });
+
+  pool.emit("acquire");
+
+  assert.equal(warnings.length, 0);
+});
+
 test("bindPgPoolMonitoring logs pool client errors with the current snapshot", () => {
   const pool = new FakePool();
   pool.totalCount = 3;

@@ -43,7 +43,7 @@ export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonito
   const maybeWarnPressure = (source: string) => {
     const snapshot = getPgPoolSnapshot(pool);
     const nearMax = snapshot.max > 0 && snapshot.total >= Math.max(1, snapshot.max - 1);
-    const hasPressure = snapshot.waiting > 0 || (snapshot.total > 0 && snapshot.idle === 0) || nearMax;
+    const hasPressure = snapshot.waiting > 0 || nearMax;
 
     if (!hasPressure) {
       lastWarningSignature = "";

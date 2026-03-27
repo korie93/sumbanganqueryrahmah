@@ -196,7 +196,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     const waiting = Number(options.pool.waitingCount || 0);
     const max = Number((options.pool as PoolWithOptions).options?.max || 0);
     const nearMax = max > 0 ? total >= Math.max(1, max - 1) : false;
-    const hasPressure = waiting > 0 || idle === 0 || nearMax;
+    const hasPressure = waiting > 0 || nearMax;
 
     if (!hasPressure) {
       lastPgPoolWarningSignature = "";
