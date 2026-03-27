@@ -109,6 +109,7 @@ export default function AIChat({ timeoutMs, aiEnabled, onCancelAISearchReady, on
     if (isMountedRef.current) {
       setStreamingText("");
       setSlowNotice(false);
+      setGateNotice(null);
     }
     processingRef.current = false;
     if (isMountedRef.current) {
@@ -121,7 +122,6 @@ export default function AIChat({ timeoutMs, aiEnabled, onCancelAISearchReady, on
   const resetSession = useCallback(() => {
     cancelAISearch(true);
     setMessages([]);
-    setGateNotice(null);
     setQuery("");
   }, [cancelAISearch, setMessages]);
 

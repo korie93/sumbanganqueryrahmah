@@ -105,13 +105,13 @@ export function useAIPageController({
     abortActiveRequest();
     if (isMountedRef.current) {
       setStreamingText("");
+      setGateNotice(null);
     }
     stopProcessingState();
   }, [abortActiveRequest, clearRetryTimers, clearSlowNoticeTimer, stopProcessingState, stopTyping]);
 
   const resetChat = useCallback(() => {
     cancelAI();
-    setGateNotice(null);
     setQuery("");
     resetSession();
   }, [cancelAI, resetSession]);

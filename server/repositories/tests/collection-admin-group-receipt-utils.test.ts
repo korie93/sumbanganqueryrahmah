@@ -251,13 +251,21 @@ test("attachCollectionReceipts promotes legacy receipt_file rows into relation-b
       } as any,
     ]);
 
-    assert.equal(records[0]?.receiptFile, null);
-    assert.equal(records[0]?.receipts.length, 2);
-    assert.equal(records[0]?.archivedReceipts.length, 0);
-    assert.equal(records[1]?.receiptFile, null);
-    assert.equal(records[1]?.receipts.length, 1);
-    assert.equal(records[1]?.receipts[0]?.storagePath, legacyReceipt.publicPath);
-    assert.equal(records[1]?.archivedReceipts.length, 0);
+    const firstRecord = records[0];
+    const secondRecord = records[1];
+
+    assert.ok(firstRecord);
+    assert.ok(secondRecord);
+    assert.ok(Array.isArray(firstRecord.archivedReceipts));
+    assert.ok(Array.isArray(secondRecord.archivedReceipts));
+
+    assert.equal(firstRecord.receiptFile, null);
+    assert.equal(firstRecord.receipts.length, 2);
+    assert.equal(firstRecord.archivedReceipts.length, 0);
+    assert.equal(secondRecord.receiptFile, null);
+    assert.equal(secondRecord.receipts.length, 1);
+    assert.equal(secondRecord.receipts[0]?.storagePath, legacyReceipt.publicPath);
+    assert.equal(secondRecord.archivedReceipts.length, 0);
     assert.equal(queries.length, 6);
     assert.match(collectSqlText(queries[1]), /INSERT INTO public\.collection_record_receipts/i);
     assert.match(collectSqlText(queries[2]), /SELECT storage_path/i);
@@ -315,10 +323,13 @@ test("attachCollectionReceipts prunes relation-backed receipts whose files are m
       } as any,
     ]);
 
-    assert.equal(record?.receiptFile, null);
-    assert.equal(record?.receipts.length, 1);
-    assert.equal(record?.receipts[0]?.id, "receipt-valid");
-    assert.equal(record?.archivedReceipts.length, 0);
+    assert.ok(record);
+    assert.ok(Array.isArray(record.archivedReceipts));
+
+    assert.equal(record.receiptFile, null);
+    assert.equal(record.receipts.length, 1);
+    assert.equal(record.receipts[0]?.id, "receipt-valid");
+    assert.equal(record.archivedReceipts.length, 0);
     assert.equal(queries.length, 5);
     assert.match(collectSqlText(queries[1]), /DELETE FROM public\.collection_record_receipts/i);
     assert.match(collectSqlText(queries[2]), /SELECT storage_path/i);

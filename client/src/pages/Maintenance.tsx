@@ -3,13 +3,18 @@ import { AlertTriangle, Clock3, ShieldAlert, TimerReset, Wrench } from "lucide-r
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMaintenanceStatus } from "@/lib/api";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import {
+  mergeMaintenancePayload,
+  parseStoredMaintenanceState,
+  type MaintenancePayload,
+} from "@/pages/maintenance-state";
 
-type MaintenancePayload = {
-  maintenance: boolean;
-  message: string;
-  type: "soft" | "hard";
-  startTime?: string | null;
-  endTime?: string | null;
+const DEFAULT_MAINTENANCE_STATE: MaintenancePayload = {
+  maintenance: true,
+  message: "Sistem sedang diselenggara. Sila cuba semula sebentar lagi.",
+  type: "hard",
+  startTime: null,
+  endTime: null,
 };
 
 function formatCountdown(endTime: string | null, now: number) {
@@ -26,28 +31,14 @@ function formatCountdown(endTime: string | null, now: number) {
 }
 
 export default function MaintenancePage() {
-  const [state, setState] = useState<MaintenancePayload>({
-    maintenance: true,
-    message: "Sistem sedang diselenggara. Sila cuba semula sebentar lagi.",
-    type: "hard",
-    startTime: null,
-    endTime: null,
-  });
+  const [state, setState] = useState<MaintenancePayload>(DEFAULT_MAINTENANCE_STATE);
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     let mounted = true;
     let activeController: AbortController | null = null;
 
-    const cached = localStorage.getItem("maintenanceState");
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        setState((prev) => ({ ...prev, ...parsed }));
-      } catch {
-        // ignore cache parse issue
-      }
-    }
+    setState((previous) => parseStoredMaintenanceState(localStorage.getItem("maintenanceState"), previous));
 
     const load = async () => {
       try {
@@ -59,7 +50,7 @@ export default function MaintenancePage() {
           return;
         }
         if (latest && typeof latest === "object") {
-          setState((prev) => ({ ...prev, ...latest }));
+          setState((prev) => mergeMaintenancePayload(prev, latest));
           localStorage.setItem("maintenanceState", JSON.stringify(latest));
         }
       } catch (error) {
@@ -69,17 +60,63 @@ export default function MaintenancePage() {
         // keep last known state
       }
     };
+
+    const handleMaintenanceUpdated = (event: Event) => {
+      const nextState = (event as CustomEvent<Partial<MaintenancePayload>>).detail;
+      if (!mounted) {
+        return;
+      }
+      setState((previous) => mergeMaintenancePayload(previous, nextState));
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== "maintenanceState" || !mounted) {
+        return;
+      }
+      setState((previous) => parseStoredMaintenanceState(event.newValue, previous));
+    };
+
     load();
     const poll = setInterval(load, 15_000);
-    const tick = setInterval(() => setNow(Date.now()), 1000);
+    window.addEventListener("maintenance-updated", handleMaintenanceUpdated as EventListener);
+    window.addEventListener("storage", handleStorage);
+
     return () => {
       mounted = false;
       activeController?.abort();
       activeController = null;
+      window.removeEventListener("maintenance-updated", handleMaintenanceUpdated as EventListener);
+      window.removeEventListener("storage", handleStorage);
       clearInterval(poll);
-      clearInterval(tick);
     };
   }, []);
+
+  const countdownTargetMs = useMemo(() => {
+    if (!state.endTime) {
+      return null;
+    }
+    const target = new Date(state.endTime).getTime();
+    return Number.isNaN(target) ? null : target;
+  }, [state.endTime]);
+
+  useEffect(() => {
+    if (countdownTargetMs === null) {
+      return;
+    }
+
+    setNow(Date.now());
+    const tick = window.setInterval(() => {
+      const nextNow = Date.now();
+      setNow(nextNow);
+      if (nextNow >= countdownTargetMs) {
+        window.clearInterval(tick);
+      }
+    }, 1000);
+
+    return () => {
+      window.clearInterval(tick);
+    };
+  }, [countdownTargetMs]);
 
   const countdown = useMemo(
     () => formatCountdown(state.endTime || null, now),

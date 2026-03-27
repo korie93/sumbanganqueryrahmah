@@ -132,13 +132,35 @@ export default function Activity() {
   }, [fetchActivities]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      if (!hasActiveActivityFilters(filtersRef.current)) {
+    const shouldRefresh = () =>
+      typeof document === "undefined" || document.visibilityState === "visible";
+
+    const refreshVisibleActivity = () => {
+      if (!hasActiveActivityFilters(filtersRef.current) && shouldRefresh()) {
         void fetchActivities(false);
       }
+    };
+
+    const interval = window.setInterval(() => {
+      refreshVisibleActivity();
     }, 30000);
 
-    return () => window.clearInterval(interval);
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        refreshVisibleActivity();
+      }
+    };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+
+    return () => {
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
+      window.clearInterval(interval);
+    };
   }, [fetchActivities]);
 
   const handleApplyFilters = () => {

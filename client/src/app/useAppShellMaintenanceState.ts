@@ -36,7 +36,13 @@ export function useAppShellMaintenanceState({
     let cancelled = false;
     let activeController: AbortController | null = null;
 
+    const canPollNow = () =>
+      typeof document === "undefined" || document.visibilityState === "visible";
+
     const checkMaintenance = async () => {
+      if (!canPollNow()) {
+        return;
+      }
       try {
         activeController?.abort();
         const controller = new AbortController();
@@ -58,12 +64,24 @@ export function useAppShellMaintenanceState({
       }
     };
 
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void checkMaintenance();
+      }
+    };
+
     void checkMaintenance();
     const timer = window.setInterval(checkMaintenance, 15000);
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
     return () => {
       cancelled = true;
       activeController?.abort();
       activeController = null;
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
       window.clearInterval(timer);
     };
   }, [currentPage, setCurrentPage, user]);
