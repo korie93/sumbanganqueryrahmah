@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Brain, PencilLine, Search, type LucideIcon } from "lucide-react";
 import { type AIChatMessage, useAIContext } from "@/context/AIContext";
 import { AI_CANCEL_EVENT, AI_RESET_EVENT, type AIChatStatus } from "@/lib/ai-chat";
+import { resolveAiErrorMessage } from "@/lib/ai-error";
 import { searchAI } from "@/lib/api";
 
 export interface AIPageStatusContent {
@@ -327,7 +328,7 @@ export function useAIPageController({
 
         appendMessage({
           role: "assistant",
-          content: err?.message || "AI tidak dapat memproses permintaan sekarang.\nSila cuba semula.",
+          content: resolveAiErrorMessage(error),
           timestamp: new Date().toISOString(),
         });
         shouldStopProcessing = true;

@@ -9,6 +9,7 @@ import {
   AI_RESET_EVENT,
   type AIChatStatus as SharedAIChatStatus,
 } from "@/lib/ai-chat";
+import { resolveAiErrorMessage } from "@/lib/ai-error";
 import { searchAI } from "@/lib/api";
 import "@/styles/ai.css";
 
@@ -280,7 +281,7 @@ export default function AIChat({ timeoutMs, aiEnabled, onCancelAISearchReady, on
       }
       appendMessage({
         role: "assistant",
-        content: "AI tidak dapat memproses permintaan sekarang.\nSila cuba semula.",
+        content: resolveAiErrorMessage(error),
         timestamp: new Date().toISOString(),
       });
       processingRef.current = false;

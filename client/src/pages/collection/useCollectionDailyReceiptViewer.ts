@@ -97,6 +97,7 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
   const previewRequestIdRef = useRef(0);
   const previewObjectUrlRef = useRef<string | null>(null);
   const previewAbortControllerRef = useRef<AbortController | null>(null);
+  const downloadAbortControllerRef = useRef<AbortController | null>(null);
 
   const [loadingReceiptKey, setLoadingReceiptKey] = useState<string | null>(null);
   const [receiptPreviewOpen, setReceiptPreviewOpen] = useState(false);
@@ -133,9 +134,17 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
     }
   }, []);
 
+  const abortDownloadRequest = useCallback(() => {
+    if (downloadAbortControllerRef.current) {
+      downloadAbortControllerRef.current.abort();
+      downloadAbortControllerRef.current = null;
+    }
+  }, []);
+
   const closeReceiptViewer = useCallback(() => {
     previewRequestIdRef.current += 1;
     abortPreviewRequest();
+    abortDownloadRequest();
     clearPreviewObjectUrl();
     setLoadingReceiptKey(null);
     setReceiptPreviewOpen(false);
@@ -147,7 +156,7 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
     setReceiptPreviewMimeType("");
     setReceiptPreviewFileName("");
     setReceiptPreviewError("");
-  }, [abortPreviewRequest, clearPreviewObjectUrl]);
+  }, [abortDownloadRequest, abortPreviewRequest, clearPreviewObjectUrl]);
 
   const openReceiptViewer = useCallback((record: CollectionDailyDayRecord, receiptId?: string) => {
     const mappedRecord = mapDailyRecordToCollectionRecord(record);
@@ -162,9 +171,10 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
     return () => {
       isMountedRef.current = false;
       abortPreviewRequest();
+      abortDownloadRequest();
       clearPreviewObjectUrl();
     };
-  }, [abortPreviewRequest, clearPreviewObjectUrl]);
+  }, [abortDownloadRequest, abortPreviewRequest, clearPreviewObjectUrl]);
 
   useEffect(() => {
     if (!receiptPreviewOpen || !receiptPreviewRecord) return;
@@ -277,13 +287,20 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
 
   const handleDownloadReceipt = useCallback(async () => {
     if (!receiptPreviewRecord || receiptPreviewDownloading) return;
+    abortDownloadRequest();
+    const controller = new AbortController();
+    downloadAbortControllerRef.current = controller;
     setReceiptPreviewDownloading(true);
     try {
       const { blob, fileName } = await fetchCollectionReceiptBlob(
         receiptPreviewRecord.id,
         "download",
         selectedPreviewReceipt?.id,
+        { signal: controller.signal },
       );
+      if (controller.signal.aborted) {
+        return;
+      }
       downloadBlob(
         blob,
         fileName ||
@@ -291,16 +308,28 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
           "receipt",
       );
     } catch (error: unknown) {
+      if (isAbortError(error)) {
+        return;
+      }
       toast({
         title: "Download Failed",
         description: parseApiError(error),
         variant: "destructive",
       });
     } finally {
+      if (downloadAbortControllerRef.current === controller) {
+        downloadAbortControllerRef.current = null;
+      }
       if (!isMountedRef.current) return;
       setReceiptPreviewDownloading(false);
     }
-  }, [receiptPreviewDownloading, receiptPreviewRecord, selectedPreviewReceipt, toast]);
+  }, [
+    abortDownloadRequest,
+    receiptPreviewDownloading,
+    receiptPreviewRecord,
+    selectedPreviewReceipt,
+    toast,
+  ]);
 
   const receiptPreviewKind = useMemo(
     () =>

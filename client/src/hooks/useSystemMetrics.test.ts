@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   combineOpenCircuitCount,
   resolveSystemMetricsPollIntervalMs,
+  shouldFetchSystemMetricsDetails,
   shouldPollSystemMetricsDetails,
 } from "@/hooks/useSystemMetrics";
 
@@ -40,6 +41,21 @@ test("shouldPollSystemMetricsDetails forces the first and periodic detailed refr
   );
   assert.equal(
     shouldPollSystemMetricsDetails({ pollCount: 2, forceDetailed: true }),
+    true,
+  );
+});
+
+test("shouldFetchSystemMetricsDetails skips heavy detail polling while hidden unless forced", () => {
+  assert.equal(
+    shouldFetchSystemMetricsDetails({ hidden: true, pollCount: 3 }),
+    false,
+  );
+  assert.equal(
+    shouldFetchSystemMetricsDetails({ hidden: true, pollCount: 2, forceDetailed: true }),
+    true,
+  );
+  assert.equal(
+    shouldFetchSystemMetricsDetails({ hidden: false, pollCount: 3 }),
     true,
   );
 });

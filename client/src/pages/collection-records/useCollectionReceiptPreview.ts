@@ -30,6 +30,7 @@ export function useCollectionReceiptPreview() {
   const receiptPreviewUrlRef = useRef<string | null>(null);
   const receiptPreviewRequestIdRef = useRef(0);
   const receiptPreviewAbortControllerRef = useRef<AbortController | null>(null);
+  const receiptDownloadAbortControllerRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
 
   const [receiptPreviewOpen, setReceiptPreviewOpen] = useState(false);
@@ -83,9 +84,17 @@ export function useCollectionReceiptPreview() {
     }
   }, []);
 
+  const abortReceiptDownloadRequest = useCallback(() => {
+    if (receiptDownloadAbortControllerRef.current) {
+      receiptDownloadAbortControllerRef.current.abort();
+      receiptDownloadAbortControllerRef.current = null;
+    }
+  }, []);
+
   const closeReceiptPreview = useCallback(() => {
     receiptPreviewRequestIdRef.current += 1;
     abortReceiptPreviewRequest();
+    abortReceiptDownloadRequest();
     clearReceiptPreviewObjectUrl();
     setReceiptPreviewOpen(false);
     setReceiptPreviewRecord(null);
@@ -96,7 +105,7 @@ export function useCollectionReceiptPreview() {
     setReceiptPreviewMimeType("");
     setReceiptPreviewFileName("");
     setReceiptPreviewError("");
-  }, [abortReceiptPreviewRequest, clearReceiptPreviewObjectUrl]);
+  }, [abortReceiptDownloadRequest, abortReceiptPreviewRequest, clearReceiptPreviewObjectUrl]);
 
   const handleViewReceipt = useCallback((record: CollectionRecord, receiptId?: string) => {
     const nextReceiptId = receiptId || record.receipts?.[0]?.id || null;
@@ -109,9 +118,10 @@ export function useCollectionReceiptPreview() {
     return () => {
       isMountedRef.current = false;
       abortReceiptPreviewRequest();
+      abortReceiptDownloadRequest();
       clearReceiptPreviewObjectUrl();
     };
-  }, [abortReceiptPreviewRequest, clearReceiptPreviewObjectUrl]);
+  }, [abortReceiptDownloadRequest, abortReceiptPreviewRequest, clearReceiptPreviewObjectUrl]);
 
   useEffect(() => {
     if (!receiptPreviewOpen || !receiptPreviewRecord) return;
@@ -221,13 +231,20 @@ export function useCollectionReceiptPreview() {
 
   const handleDownloadReceipt = useCallback(async () => {
     if (!receiptPreviewRecord || receiptPreviewDownloading) return;
+    abortReceiptDownloadRequest();
+    const controller = new AbortController();
+    receiptDownloadAbortControllerRef.current = controller;
     setReceiptPreviewDownloading(true);
     try {
       const { blob, fileName } = await fetchCollectionReceiptBlob(
         receiptPreviewRecord.id,
         "download",
         selectedPreviewReceipt?.id,
+        { signal: controller.signal },
       );
+      if (controller.signal.aborted) {
+        return;
+      }
       downloadBlob(
         blob,
         fileName ||
@@ -235,16 +252,28 @@ export function useCollectionReceiptPreview() {
           "receipt",
       );
     } catch (error: unknown) {
+      if (isAbortError(error)) {
+        return;
+      }
       toast({
         title: "Download Failed",
         description: parseApiError(error),
         variant: "destructive",
       });
     } finally {
+      if (receiptDownloadAbortControllerRef.current === controller) {
+        receiptDownloadAbortControllerRef.current = null;
+      }
       if (!isMountedRef.current) return;
       setReceiptPreviewDownloading(false);
     }
-  }, [receiptPreviewDownloading, receiptPreviewRecord, selectedPreviewReceipt, toast]);
+  }, [
+    abortReceiptDownloadRequest,
+    receiptPreviewDownloading,
+    receiptPreviewRecord,
+    selectedPreviewReceipt,
+    toast,
+  ]);
 
   const handleReceiptPreviewOpenChange = useCallback((open: boolean) => {
     if (!open) {

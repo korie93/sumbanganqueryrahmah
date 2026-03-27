@@ -130,6 +130,22 @@ export function shouldPollSystemMetricsDetails({
   return pollCount === 0 || pollCount % DETAIL_POLL_EVERY === 0;
 }
 
+export function shouldFetchSystemMetricsDetails({
+  hidden,
+  pollCount,
+  forceDetailed = false,
+}: {
+  hidden: boolean;
+  pollCount: number;
+  forceDetailed?: boolean;
+}) {
+  if (hidden && !forceDetailed) {
+    return false;
+  }
+
+  return shouldPollSystemMetricsDetails({ pollCount, forceDetailed });
+}
+
 export function combineOpenCircuitCount({
   localCount,
   clusterCount,
@@ -526,7 +542,8 @@ export function useSystemMetrics(): UseSystemMetricsResult {
     inFlightRef.current = true;
     const controller = new AbortController();
     pollControllerRef.current = controller;
-    const shouldFetchDetails = shouldPollSystemMetricsDetails({
+    const shouldFetchDetails = shouldFetchSystemMetricsDetails({
+      hidden: visibilityHiddenRef.current,
       pollCount: pollCycleRef.current,
       forceDetailed,
     });
