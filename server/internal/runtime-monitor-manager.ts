@@ -1,6 +1,11 @@
 import { PerformanceObserver, monitorEventLoopDelay } from "node:perf_hooks";
 import { logger } from "../lib/logger";
+import { hasPgPoolPressure } from "../db-pool-monitor";
 import { CircuitBreaker } from "./circuitBreaker";
+import {
+  resolveRuntimeMonitorTaskIntervalMs,
+  shouldRunRuntimeMonitorTask,
+} from "./runtime-monitor-cadence";
 import type {
   SystemHistory,
   SystemSnapshot,
@@ -104,6 +109,20 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     ...EMPTY_ROLLUP_REFRESH_SNAPSHOT,
   };
   let alertHistorySyncInFlight = false;
+  let lastRollupRefreshSnapshotAt = 0;
+  let lastAlertHistorySyncAt = 0;
+  let lastIntelligenceEvaluationAt = 0;
+  let lastAlertHistorySignature = "";
+  let alertHistorySyncInitialized = false;
+  const rollupRefreshSnapshotIntervalMs = resolveRuntimeMonitorTaskIntervalMs("rollupRefreshSnapshot", {
+    lowMemoryMode: options.lowMemoryMode,
+  });
+  const alertHistorySyncIntervalMs = resolveRuntimeMonitorTaskIntervalMs("alertHistorySync", {
+    lowMemoryMode: options.lowMemoryMode,
+  });
+  const intelligenceEvaluationIntervalMs = resolveRuntimeMonitorTaskIntervalMs("intelligenceEvaluation", {
+    lowMemoryMode: options.lowMemoryMode,
+  });
 
   const intelligenceHistory: SystemHistory = {
     cpuPercent: [],
@@ -195,8 +214,12 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     const idle = Number(options.pool.idleCount || 0);
     const waiting = Number(options.pool.waitingCount || 0);
     const max = Number((options.pool as PoolWithOptions).options?.max || 0);
-    const nearMax = max > 0 ? total >= Math.max(1, max - 1) : false;
-    const hasPressure = waiting > 0 || nearMax;
+    const hasPressure = hasPgPoolPressure({
+      total,
+      idle,
+      waiting,
+      max,
+    });
 
     if (!hasPressure) {
       lastPgPoolWarningSignature = "";
@@ -282,6 +305,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
         retryCount: Math.max(0, Number(nextSnapshot?.retryCount || 0)),
         oldestPendingAgeMs: Math.max(0, Number(nextSnapshot?.oldestPendingAgeMs || 0)),
       };
+      lastRollupRefreshSnapshotAt = Date.now();
     } catch (error) {
       if (options.apiDebugLogs) {
         logger.warn("Collection rollup queue snapshot refresh failed", { error });
@@ -426,6 +450,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
         logger.warn("Intelligence cycle error", { error: err });
       }
     } finally {
+      lastIntelligenceEvaluationAt = Date.now();
       intelligenceInFlight = false;
     }
   }
@@ -439,7 +464,18 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     try {
       const snapshot = computeInternalMonitorSnapshot();
       const alerts = buildInternalMonitorAlerts(snapshot);
+      const nextSignature = alerts
+        .map((alert) => `${alert.id}:${alert.severity}:${alert.message}`)
+        .sort()
+        .join("|");
+      if (alertHistorySyncInitialized && nextSignature === lastAlertHistorySignature) {
+        lastAlertHistorySyncAt = Date.now();
+        return;
+      }
       await options.syncAlertHistory(snapshot, alerts, new Date());
+      lastAlertHistorySignature = nextSignature;
+      lastAlertHistorySyncAt = Date.now();
+      alertHistorySyncInitialized = true;
     } catch (err) {
       if (options.apiDebugLogs) {
         logger.warn("Monitor alert history sync failed", { error: err });
@@ -589,9 +625,28 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
         }
       }
 
-      void refreshCollectionRollupRefreshQueueSnapshot();
-      void syncAlertHistoryIfNeeded();
-      void runIntelligenceCycle();
+      const taskNow = Date.now();
+      if (shouldRunRuntimeMonitorTask({
+        lastRunAt: lastRollupRefreshSnapshotAt,
+        now: taskNow,
+        intervalMs: rollupRefreshSnapshotIntervalMs,
+      })) {
+        void refreshCollectionRollupRefreshQueueSnapshot();
+      }
+      if (shouldRunRuntimeMonitorTask({
+        lastRunAt: lastAlertHistorySyncAt,
+        now: taskNow,
+        intervalMs: alertHistorySyncIntervalMs,
+      })) {
+        void syncAlertHistoryIfNeeded();
+      }
+      if (shouldRunRuntimeMonitorTask({
+        lastRunAt: lastIntelligenceEvaluationAt,
+        now: taskNow,
+        intervalMs: intelligenceEvaluationIntervalMs,
+      })) {
+        void runIntelligenceCycle();
+      }
     }, 5_000);
 
     runtimeLoopHandle.unref();

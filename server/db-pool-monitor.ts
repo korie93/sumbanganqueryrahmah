@@ -34,6 +34,10 @@ export function getPgPoolSnapshot(pool: PgPoolLike): PgPoolSnapshot {
   };
 }
 
+export function hasPgPoolPressure(snapshot: PgPoolSnapshot): boolean {
+  return snapshot.waiting > 0;
+}
+
 export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonitoringOptions = {}) {
   const warnCooldownMs = Math.max(1_000, Number(options.warnCooldownMs || 60_000));
   const sink = options.logger ?? logger;
@@ -42,10 +46,8 @@ export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonito
 
   const maybeWarnPressure = (source: string) => {
     const snapshot = getPgPoolSnapshot(pool);
-    const nearMax = snapshot.max > 0 && snapshot.total >= Math.max(1, snapshot.max - 1);
-    const hasPressure = snapshot.waiting > 0 || nearMax;
 
-    if (!hasPressure) {
+    if (!hasPgPoolPressure(snapshot)) {
       lastWarningSignature = "";
       return;
     }

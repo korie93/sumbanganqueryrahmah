@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import { bindPgPoolMonitoring, getPgPoolSnapshot } from "../db-pool-monitor";
+import {
+  bindPgPoolMonitoring,
+  getPgPoolSnapshot,
+  hasPgPoolPressure,
+} from "../db-pool-monitor";
 
 class FakePool extends EventEmitter {
   totalCount = 0;
@@ -74,6 +78,28 @@ test("bindPgPoolMonitoring does not warn when the pool is only momentarily fully
   pool.emit("acquire");
 
   assert.equal(warnings.length, 0);
+});
+
+test("hasPgPoolPressure only reports pressure when clients are queueing", () => {
+  assert.equal(
+    hasPgPoolPressure({
+      total: 3,
+      idle: 0,
+      waiting: 0,
+      max: 3,
+    }),
+    false,
+  );
+
+  assert.equal(
+    hasPgPoolPressure({
+      total: 3,
+      idle: 0,
+      waiting: 1,
+      max: 3,
+    }),
+    true,
+  );
 });
 
 test("bindPgPoolMonitoring logs pool client errors with the current snapshot", () => {
