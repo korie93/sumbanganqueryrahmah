@@ -3,15 +3,18 @@ import assert from "node:assert/strict";
 import { findPotentialCommittedSmtpSecrets } from "../lib/repo-hygiene.mjs";
 
 test("repo hygiene allows clearly fake SMTP placeholders in env templates", () => {
+  const envKey = "SMTP_PASSWORD";
+  const placeholderEnv = "${SMTP_PASSWORD}";
+  const placeholderSecret = "${{ secrets.SMTP_PASSWORD }}";
   const findings = findPotentialCommittedSmtpSecrets({
     filePath: ".env.example",
     text: `
-SMTP_PASSWORD=
-SMTP_PASSWORD=null
-SMTP_PASSWORD=ganti-dengan-kredensial-smtp
-SMTP_PASSWORD=kata-laluan-atau-app-password
-SMTP_PASSWORD=\${SMTP_PASSWORD}
-SMTP_PASSWORD=\${{ secrets.SMTP_PASSWORD }}
+${envKey}=
+${envKey}=null
+${envKey}=ganti-dengan-kredensial-smtp
+${envKey}=kata-laluan-atau-app-password
+${envKey}=${placeholderEnv}
+${envKey}=${placeholderSecret}
 `,
   });
 
@@ -19,9 +22,11 @@ SMTP_PASSWORD=\${{ secrets.SMTP_PASSWORD }}
 });
 
 test("repo hygiene flags non-placeholder SMTP password assignments", () => {
+  const envKey = "SMTP_PASSWORD";
+  const secretValue = "real-secret-value";
   const findings = findPotentialCommittedSmtpSecrets({
     filePath: ".env",
-    text: "SMTP_PASSWORD=real-secret-value\n",
+    text: `${envKey}=${secretValue}\n`,
   });
 
   assert.equal(findings.length, 1);
@@ -29,13 +34,16 @@ test("repo hygiene flags non-placeholder SMTP password assignments", () => {
 });
 
 test("repo hygiene flags hardcoded nodemailer auth passwords", () => {
+  const transportCall = "createTransport";
+  const authPassKey = "pass";
+  const hardcodedSecret = "hardcoded-app-password";
   const findings = findPotentialCommittedSmtpSecrets({
     filePath: "server/mailer.ts",
     text: `
-      const transporter = nodemailer.createTransport({
+      const transporter = nodemailer.${transportCall}({
         auth: {
           user: "mailer@example.com",
-          pass: "hardcoded-app-password",
+          ${authPassKey}: "${hardcodedSecret}",
         },
       });
     `,
