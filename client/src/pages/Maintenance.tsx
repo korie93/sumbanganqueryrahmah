@@ -135,10 +135,10 @@ export default function MaintenancePage() {
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-amber-300">
               <ShieldAlert className="w-5 h-5" />
-              <span className="text-xs sm:text-sm uppercase tracking-wide">System Maintenance</span>
+              <span className="text-xs sm:text-sm uppercase tracking-wide">Penyelenggaraan Sistem</span>
             </div>
             <div className="rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1 text-xs text-slate-300">
-              {state.type === "hard" ? "Hard Mode" : "Soft Mode"}
+              {state.type === "hard" ? "Mod Penuh" : "Mod Lembut"}
             </div>
           </div>
           <CardTitle className="text-2xl sm:text-3xl font-bold text-slate-100">Sistem Sedang Diselenggara</CardTitle>
@@ -154,11 +154,11 @@ export default function MaintenancePage() {
               <p className="font-semibold">{state.maintenance ? "Aktif" : "Tidak Aktif"}</p>
             </div>
             <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
-              <p className="text-slate-400 mb-1">Start Time</p>
+              <p className="text-slate-400 mb-1">Masa Mula</p>
               <p className="font-semibold text-xs sm:text-sm">{formatTime(state.startTime)}</p>
             </div>
             <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
-              <p className="text-slate-400 mb-1">End Time</p>
+              <p className="text-slate-400 mb-1">Masa Tamat</p>
               <p className="font-semibold text-xs sm:text-sm">{formatTime(state.endTime)}</p>
             </div>
           </div>
@@ -179,7 +179,7 @@ export default function MaintenancePage() {
           <div className="text-xs text-slate-400 flex items-center gap-2 rounded-md border border-slate-800 bg-slate-900/50 p-3">
             <Wrench className="w-4 h-4" />
             <AlertTriangle className="w-4 h-4" />
-            Jika anda admin/superuser, log masuk semula untuk bypass maintenance mode.
+            Jika anda admin atau superuser, log masuk semula untuk akses yang dibenarkan semasa penyelenggaraan.
           </div>
         </CardContent>
       </Card>

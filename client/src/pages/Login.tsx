@@ -101,7 +101,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     try {
       if (!username.trim() || !password) {
         if (mountedRef.current && loginRequestIdRef.current === requestId) {
-          setError("Please enter username and password.");
+          setError("Sila masukkan username dan password.");
         }
         return;
       }
@@ -133,7 +133,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         setLockedAccountMessage("");
         setTwoFactorChallengeToken(String(response.challengeToken || ""));
         setTwoFactorCode("");
-        setNotice("Enter the 6-digit authenticator code to complete sign-in.");
+        setNotice("Masukkan kod pengesah 6 digit untuk melengkapkan log masuk.");
         return;
       }
 
@@ -141,7 +141,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       const { username: responseUsername, role, activityId } = loginSuccessResponse;
 
       if (!responseUsername || !role) {
-        throw new Error("Incomplete login information from server.");
+        throw new Error("Maklumat log masuk daripada server tidak lengkap.");
       }
 
       const authenticatedUser: User = {
@@ -232,12 +232,12 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
     try {
       if (!twoFactorChallengeToken.trim()) {
-        throw new Error("Two-factor login challenge is missing. Please sign in again.");
+        throw new Error("Sesi pengesahan dua faktor tiada. Sila log masuk semula.");
       }
 
       const normalizedCode = twoFactorCode.replace(/\D/g, "").slice(0, 6);
       if (normalizedCode.length !== 6) {
-        throw new Error("Please enter the 6-digit authenticator code.");
+        throw new Error("Sila masukkan kod pengesah 6 digit.");
       }
 
       controller = new AbortController();
@@ -257,7 +257,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       const { username: responseUsername, role, activityId } = response;
 
       if (!responseUsername || !role) {
-        throw new Error("Incomplete login information from server.");
+        throw new Error("Maklumat log masuk daripada server tidak lengkap.");
       }
 
       const authenticatedUser: User = {
@@ -312,11 +312,11 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         setTwoFactorChallengeToken("");
         setTwoFactorCode("");
         setLockedUsername(normalizeLoginIdentity(username));
-        setLockedAccountMessage(err?.message || "Your account has been locked due to too many incorrect login attempts.");
+        setLockedAccountMessage(err?.message || "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah.");
         setError("");
         return;
       }
-      setError(err?.message || "Two-factor verification failed. Please try again.");
+      setError(err?.message || "Pengesahan dua faktor gagal. Sila cuba lagi.");
     } finally {
       if (loginAbortControllerRef.current === controller) {
         loginAbortControllerRef.current = null;
@@ -358,6 +358,16 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
       <div className="relative z-10 flex items-center justify-center min-h-screen px-4 login-content">
         <div className="relative w-full max-w-md">
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = "/";
+            }}
+            className="mb-4 inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            Kembali ke landing page
+          </button>
+
           <div className="login-bg-effect pointer-events-none absolute -inset-4 rounded-[2rem] bg-blue-400/12 blur-2xl" />
 
           <div className="login-card px-8 py-10">
@@ -374,7 +384,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 Log In SQR System
               </h2>
               <p className="text-sm text-white/70 mt-2">
-                Sumbangan Query Rahmah
+                Platform operasi dalaman Sumbangan Query Rahmah
               </p>
             </div>
 
@@ -406,7 +416,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     data-testid="input-two-factor-code"
                   />
                   <p className="text-center text-xs text-white/70">
-                    Enter the 6-digit code from your authenticator app.
+                    Masukkan kod 6 digit daripada aplikasi pengesah anda.
                   </p>
                 </div>
               ) : (
@@ -443,12 +453,12 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 {loading ? (
                   <div className="flex items-center gap-2">
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    {twoFactorChallengeToken ? "Verifying..." : "Signing in..."}
+                    {twoFactorChallengeToken ? "Mengesahkan..." : "Sedang log masuk..."}
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
                     <LogIn className="w-5 h-5" />
-                    {lockedFlow ? "Account Locked" : twoFactorChallengeToken ? "Verify Code" : "Log In"}
+                    {lockedFlow ? "Akaun Dikunci" : twoFactorChallengeToken ? "Sahkan Kod" : "Log In"}
                   </div>
                 )}
               </Button>
@@ -457,10 +467,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             {lockedFlow ? (
               <div className="mt-4 rounded-xl border border-amber-400/40 bg-amber-500/20 px-4 py-3 text-center text-sm text-amber-50">
                 <div className="font-medium">
-                  {lockedAccountMessage || "Your account has been locked due to too many incorrect login attempts."}
+                  {lockedAccountMessage || "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah."}
                 </div>
                 <div className="mt-1 text-xs text-amber-100/90">
-                  Please contact the system administrator to reactivate your account.
+                  Sila hubungi pentadbir sistem untuk pengaktifan semula akaun.
                 </div>
               </div>
             ) : null}
@@ -477,7 +487,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 }}
                 className="mt-3 w-full text-center text-sm text-white/75 transition-colors hover:text-white"
               >
-                Back to password login
+                Kembali ke log masuk kata laluan
               </button>
             ) : null}
 
@@ -488,7 +498,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               }}
               className="mt-4 w-full text-center text-sm text-white/75 transition-colors hover:text-white"
             >
-              Forgot password?
+              Lupa kata laluan?
             </button>
 
             {error && !lockedFlow && (
@@ -504,7 +514,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             )}
 
             <div className="text-center mt-8 text-white/50 text-xs">
-              Copyright 2025 Ministry of Madanon
+              Hak cipta terpelihara. Sumbangan Query Rahmah.
             </div>
           </div>
         </div>

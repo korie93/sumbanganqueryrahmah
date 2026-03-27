@@ -9,6 +9,7 @@ import {
 } from "@/app/constants";
 import { clearAuthenticatedUserStorage } from "@/lib/auth-session";
 import {
+  isPublicAuthRoutePage,
   replaceHistory,
   resolveRouteFromLocation,
   type ResolvedRoute,
@@ -96,7 +97,7 @@ export function useAppShellAuthActions({
         window.location.pathname,
         window.location.search,
       );
-      if (resolvedRoute && applyResolvedRoute(resolvedRoute)) {
+      if (resolvedRoute && !isPublicAuthRoutePage(resolvedRoute.page) && applyResolvedRoute(resolvedRoute)) {
         const persistedPage = resolvedRoute.page === "monitor"
           ? "monitor"
           : resolvedRoute.page;

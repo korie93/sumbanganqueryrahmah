@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PublicAuthLayout } from "@/components/PublicAuthLayout";
 import { Input } from "@/components/ui/input";
 import {
   activateAccount,
@@ -30,7 +30,7 @@ export default function ActivateAccountPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(token ? "" : "Activation link is invalid.");
+  const [error, setError] = useState(token ? "" : "Pautan aktivasi tidak sah.");
   const mountedRef = useRef(true);
   const validationAbortControllerRef = useRef<AbortController | null>(null);
   const activationAbortControllerRef = useRef<AbortController | null>(null);
@@ -53,7 +53,7 @@ export default function ActivateAccountPage() {
     sessionStorage.setItem(
       AUTH_NOTICE_STORAGE_KEY,
       JSON.stringify({
-        message: `Account for ${activation.username} is ready. Please login using your new password.`,
+        message: `Akaun untuk ${activation.username} telah sedia digunakan. Sila log masuk menggunakan kata laluan baharu anda.`,
         type: "success",
       }),
     );
@@ -70,7 +70,7 @@ export default function ActivateAccountPage() {
   useEffect(() => {
     if (!token) {
       setPhase("invalid");
-      setError("Activation link is invalid.");
+      setError("Pautan aktivasi tidak sah.");
       return undefined;
     }
 
@@ -99,7 +99,7 @@ export default function ActivateAccountPage() {
         }
         setActivation(null);
         setPhase("invalid");
-        setError(getApiErrorMessage(validationError, "Activation link is invalid or expired."));
+        setError(getApiErrorMessage(validationError, "Pautan aktivasi tidak sah atau telah tamat tempoh."));
       } finally {
         if (validationAbortControllerRef.current === controller) {
           validationAbortControllerRef.current = null;
@@ -120,7 +120,7 @@ export default function ActivateAccountPage() {
     if (!activation || loading || phase !== "ready" || activationAbortControllerRef.current) return;
 
     if (newPassword !== confirmPassword) {
-      setError("Confirm password does not match.");
+      setError("Pengesahan kata laluan tidak sepadan.");
       return;
     }
 
@@ -152,7 +152,7 @@ export default function ActivateAccountPage() {
       ) {
         return;
       }
-      setError(getApiErrorMessage(activationError, "Activation failed."));
+      setError(getApiErrorMessage(activationError, "Aktivasi akaun gagal."));
     } finally {
       if (activationAbortControllerRef.current === controller) {
         activationAbortControllerRef.current = null;
@@ -171,116 +171,106 @@ export default function ActivateAccountPage() {
 
   const title =
     phase === "success"
-      ? "Password Created"
+      ? "Kata Laluan Berjaya Dicipta"
       : phase === "ready"
-        ? "Create Password"
-        : "Activate Account";
+        ? "Cipta Kata Laluan"
+        : "Aktivasi Akaun";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 p-4">
-      <div className="mx-auto flex min-h-screen max-w-xl items-center justify-center">
-        <Card className="w-full border-white/10 bg-slate-950/70 text-white shadow-2xl backdrop-blur">
-          <CardHeader className="space-y-3">
-            <div className="flex items-center justify-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/15 bg-white/10">
-                {phase === "invalid" ? (
-                  <ShieldAlert className="h-7 w-7" />
-                ) : phase === "success" ? (
-                  <BadgeCheck className="h-7 w-7" />
-                ) : (
-                  <KeyRound className="h-7 w-7" />
-                )}
-              </div>
+    <PublicAuthLayout
+      badge="Aktivasi Akaun"
+      title={title}
+      description="Lengkapkan persediaan akaun kali pertama menggunakan pautan aktivasi yang dihantar ke emel anda. Langkah ini diperlukan sebelum anda boleh mula menggunakan sistem."
+      icon={
+        phase === "invalid" ? (
+          <ShieldAlert className="h-7 w-7" />
+        ) : phase === "success" ? (
+          <BadgeCheck className="h-7 w-7" />
+        ) : (
+          <KeyRound className="h-7 w-7" />
+        )
+      }
+    >
+      {phase === "validating" ? (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
+          Sedang mengesahkan pautan aktivasi anda...
+        </div>
+      ) : null}
+
+      {phase === "invalid" ? (
+        <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100">
+          {error || "Pautan aktivasi tidak sah atau telah tamat tempoh."}
+        </div>
+      ) : null}
+
+      {phase === "success" ? (
+        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100">
+          Kata laluan berjaya dicipta. Anda akan dibawa semula ke halaman log masuk sebentar lagi.
+        </div>
+      ) : null}
+
+      {phase === "ready" && activation ? (
+        <>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-7 text-slate-200">
+            <div><span className="font-semibold text-white">Username:</span> {activation.username}</div>
+            <div><span className="font-semibold text-white">Peranan:</span> {activation.role}</div>
+            <div><span className="font-semibold text-white">Tamat Tempoh:</span> {formatExpiry(activation.expiresAt)}</div>
+          </div>
+          <Input
+            type="password"
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+            onKeyDown={onPasswordKeyDown}
+            placeholder="Kata laluan baharu"
+            className="border-white/10 bg-white/95 text-slate-950"
+            autoFocus
+          />
+          <Input
+            type="password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            onKeyDown={onPasswordKeyDown}
+            placeholder="Sahkan kata laluan baharu"
+            className="border-white/10 bg-white/95 text-slate-950"
+          />
+          {error ? (
+            <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100">
+              {error}
             </div>
-            <CardTitle className="text-center text-2xl">{title}</CardTitle>
-            <p className="text-center text-sm text-slate-300">
-              Complete first-time setup using the activation link sent to your email.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {phase === "validating" ? (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
-                Validating your activation link...
-              </div>
-            ) : null}
+          ) : null}
+          <Button
+            className="h-11 w-full rounded-xl bg-blue-600 text-white hover:bg-blue-500"
+            onClick={() => void handleActivate()}
+            disabled={loading}
+          >
+            {loading ? "Sedang mencipta kata laluan..." : "Cipta Kata Laluan"}
+          </Button>
+        </>
+      ) : null}
 
-            {phase === "invalid" ? (
-              <div className="rounded-xl border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100">
-                {error || "Activation link is invalid or expired."}
-              </div>
-            ) : null}
+      {phase === "success" ? (
+        <Button
+          type="button"
+          className="h-11 w-full rounded-xl bg-blue-600 text-white hover:bg-blue-500"
+          onClick={() => {
+            window.location.href = "/";
+          }}
+        >
+          Buka Halaman Log Masuk
+        </Button>
+      ) : null}
 
-            {phase === "success" ? (
-              <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-                Password created successfully. Redirecting you to the main login page...
-              </div>
-            ) : null}
-
-            {phase === "ready" && activation ? (
-              <>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
-                  <div><span className="font-semibold text-white">Username:</span> {activation.username}</div>
-                  <div><span className="font-semibold text-white">Role:</span> {activation.role}</div>
-                  <div><span className="font-semibold text-white">Expires:</span> {formatExpiry(activation.expiresAt)}</div>
-                </div>
-                <Input
-                  type="password"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  onKeyDown={onPasswordKeyDown}
-                  placeholder="New password"
-                  className="border-white/10 bg-white/95 text-slate-950"
-                  autoFocus
-                />
-                <Input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  onKeyDown={onPasswordKeyDown}
-                  placeholder="Confirm password"
-                  className="border-white/10 bg-white/95 text-slate-950"
-                />
-                {error ? (
-                  <div className="rounded-xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100">
-                    {error}
-                  </div>
-                ) : null}
-                <Button
-                  className="w-full"
-                  onClick={() => void handleActivate()}
-                  disabled={loading}
-                >
-                  {loading ? "Creating password..." : "Create Password"}
-                </Button>
-              </>
-            ) : null}
-
-            {phase === "success" ? (
-              <Button
-                type="button"
-                className="w-full"
-                onClick={() => {
-                  window.location.href = "/";
-                }}
-              >
-                Go to Login Now
-              </Button>
-            ) : null}
-
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full text-slate-200 hover:text-white"
-              onClick={() => {
-                window.location.href = "/";
-              }}
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Login
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+      <Button
+        type="button"
+        variant="ghost"
+        className="w-full rounded-xl text-slate-200 hover:bg-white/5 hover:text-white"
+        onClick={() => {
+          window.location.href = "/";
+        }}
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Kembali ke log masuk
+      </Button>
+    </PublicAuthLayout>
   );
 }

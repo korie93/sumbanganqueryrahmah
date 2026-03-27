@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PublicAuthLayout } from "@/components/PublicAuthLayout";
 import { Input } from "@/components/ui/input";
 import {
   resetPasswordWithToken,
@@ -29,14 +29,14 @@ export default function ResetPasswordPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(token ? "" : "Password reset link is invalid.");
+  const [error, setError] = useState(token ? "" : "Pautan tetapan semula kata laluan tidak sah.");
 
   useEffect(() => {
     let cancelled = false;
 
     if (!token) {
       setPhase("invalid");
-      setError("Password reset link is invalid.");
+      setError("Pautan tetapan semula kata laluan tidak sah.");
       return () => {
         cancelled = true;
       };
@@ -55,7 +55,7 @@ export default function ResetPasswordPage() {
         if (cancelled) return;
         setReset(null);
         setPhase("invalid");
-        setError(getApiErrorMessage(validationError, "Password reset link is invalid or expired."));
+        setError(getApiErrorMessage(validationError, "Pautan tetapan semula tidak sah atau telah tamat tempoh."));
       }
     };
 
@@ -69,7 +69,7 @@ export default function ResetPasswordPage() {
     if (!reset || loading || phase !== "ready") return;
 
     if (newPassword !== confirmPassword) {
-      setError("Confirm password does not match.");
+      setError("Pengesahan kata laluan tidak sepadan.");
       return;
     }
 
@@ -86,102 +86,93 @@ export default function ResetPasswordPage() {
       setConfirmPassword("");
       setPhase("success");
     } catch (resetError) {
-      setError(getApiErrorMessage(resetError, "Password reset failed."));
+      setError(getApiErrorMessage(resetError, "Tetapan semula kata laluan gagal."));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 p-4">
-      <div className="mx-auto flex min-h-screen max-w-xl items-center justify-center">
-        <Card className="w-full border-white/10 bg-slate-950/70 text-white shadow-2xl backdrop-blur">
-          <CardHeader className="space-y-3">
-            <div className="flex items-center justify-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/15 bg-white/10">
-                {phase === "invalid" ? (
-                  <ShieldAlert className="h-7 w-7" />
-                ) : phase === "success" ? (
-                  <BadgeCheck className="h-7 w-7" />
-                ) : (
-                  <KeyRound className="h-7 w-7" />
-                )}
-              </div>
+    <PublicAuthLayout
+      badge="Tetapan Semula Kata Laluan"
+      title="Cipta Kata Laluan Baharu"
+      description="Gunakan pautan selamat yang dihantar ke emel anda untuk menetapkan kata laluan baharu dan mendapatkan semula akses ke sistem."
+      icon={
+        phase === "invalid" ? (
+          <ShieldAlert className="h-7 w-7" />
+        ) : phase === "success" ? (
+          <BadgeCheck className="h-7 w-7" />
+        ) : (
+          <KeyRound className="h-7 w-7" />
+        )
+      }
+    >
+      {phase === "validating" ? (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
+          Sedang mengesahkan pautan tetapan semula anda...
+        </div>
+      ) : null}
+
+      {phase === "invalid" ? (
+        <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100">
+          {error || "Pautan tetapan semula tidak sah atau telah tamat tempoh."}
+        </div>
+      ) : null}
+
+      {phase === "success" ? (
+        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100">
+          Tetapan semula kata laluan berjaya. Anda kini boleh log masuk menggunakan username dan
+          kata laluan baharu.
+        </div>
+      ) : null}
+
+      {phase === "ready" && reset ? (
+        <>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-7 text-slate-200">
+            <div><span className="font-semibold text-white">Username:</span> {reset.username}</div>
+            <div><span className="font-semibold text-white">Peranan:</span> {reset.role}</div>
+            <div><span className="font-semibold text-white">Tamat Tempoh:</span> {formatExpiry(reset.expiresAt)}</div>
+          </div>
+          <Input
+            type="password"
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+            placeholder="Kata laluan baharu"
+            className="border-white/10 bg-white/95 text-slate-950"
+          />
+          <Input
+            type="password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            placeholder="Sahkan kata laluan baharu"
+            className="border-white/10 bg-white/95 text-slate-950"
+          />
+          {error ? (
+            <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100">
+              {error}
             </div>
-            <CardTitle className="text-center text-2xl">Reset Password</CardTitle>
-            <p className="text-center text-sm text-slate-300">
-              Create a new password using the secure reset link sent to your email.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {phase === "validating" ? (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
-                Validating your password reset link...
-              </div>
-            ) : null}
+          ) : null}
+          <Button
+            className="h-11 w-full rounded-xl bg-blue-600 text-white hover:bg-blue-500"
+            onClick={() => void handleResetPassword()}
+            disabled={loading}
+          >
+            {loading ? "Sedang menetapkan semula..." : "Tetapkan Kata Laluan Baharu"}
+          </Button>
+        </>
+      ) : null}
 
-            {phase === "invalid" ? (
-              <div className="rounded-xl border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100">
-                {error || "Password reset link is invalid or expired."}
-              </div>
-            ) : null}
-
-            {phase === "success" ? (
-              <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-                Password reset completed. You can login now using your username and new password.
-              </div>
-            ) : null}
-
-            {phase === "ready" && reset ? (
-              <>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
-                  <div><span className="font-semibold text-white">Username:</span> {reset.username}</div>
-                  <div><span className="font-semibold text-white">Role:</span> {reset.role}</div>
-                  <div><span className="font-semibold text-white">Expires:</span> {formatExpiry(reset.expiresAt)}</div>
-                </div>
-                <Input
-                  type="password"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  placeholder="New password"
-                  className="border-white/10 bg-white/95 text-slate-950"
-                />
-                <Input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  placeholder="Confirm password"
-                  className="border-white/10 bg-white/95 text-slate-950"
-                />
-                {error ? (
-                  <div className="rounded-xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100">
-                    {error}
-                  </div>
-                ) : null}
-                <Button
-                  className="w-full"
-                  onClick={() => void handleResetPassword()}
-                  disabled={loading}
-                >
-                  {loading ? "Resetting..." : "Set New Password"}
-                </Button>
-              </>
-            ) : null}
-
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full text-slate-200 hover:text-white"
-              onClick={() => {
-                window.location.href = "/";
-              }}
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Login
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+      <Button
+        type="button"
+        variant="ghost"
+        className="w-full rounded-xl text-slate-200 hover:bg-white/5 hover:text-white"
+        onClick={() => {
+          window.location.href = "/";
+        }}
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Kembali ke log masuk
+      </Button>
+    </PublicAuthLayout>
   );
 }

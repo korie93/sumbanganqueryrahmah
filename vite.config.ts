@@ -32,6 +32,7 @@ export default defineConfig({
   build: {
     outDir: "../dist-local/public",
     emptyOutDir: true,
+    sourcemap: false,
     chunkSizeWarningLimit: 1200,
     modulePreload: {
       resolveDependencies(_filename, dependencies, context) {

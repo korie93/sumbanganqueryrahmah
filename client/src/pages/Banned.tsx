@@ -32,42 +32,39 @@ export default function Banned() {
           <div className="mt-10 text-center">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-red-500/20 border border-red-500/30 mb-6">
               <Ban className="w-4 h-4 text-red-400" />
-              <span className="text-sm font-medium text-red-400">ACCOUNT BANNED</span>
+              <span className="text-sm font-medium text-red-400">AKAUN DISEKAT</span>
             </div>
 
             <h1 className="text-3xl font-bold text-white mb-4 tracking-tight">
-              Administrator Has Banned Your Account
+              Akaun Anda Telah Disekat Oleh Pentadbir
             </h1>
 
             <p className="text-slate-400 text-lg mb-8 leading-relaxed">
-              Access to the system has been revoked by the system administrator.
-              You cannot use this system until your account is restored.
+              Akses ke sistem telah ditarik balik oleh pentadbir sistem. Anda tidak boleh
+              menggunakan sistem ini sehingga akaun dipulihkan semula.
             </p>
 
             <div className="grid grid-cols-3 gap-3 mb-8">
               <div className="flex flex-col items-center gap-2 p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
                 <Lock className="w-6 h-6 text-red-400" />
-                <span className="text-xs text-slate-500">Login Blocked</span>
+                <span className="text-xs text-slate-500">Log In Disekat</span>
               </div>
               <div className="flex flex-col items-center gap-2 p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
                 <Ban className="w-6 h-6 text-red-400" />
-                <span className="text-xs text-slate-500">Access Denied</span>
+                <span className="text-xs text-slate-500">Akses Ditolak</span>
               </div>
               <div className="flex flex-col items-center gap-2 p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
                 <AlertOctagon className="w-6 h-6 text-red-400" />
-                <span className="text-xs text-slate-500">Activity Logged</span>
+                <span className="text-xs text-slate-500">Aktiviti Direkodkan</span>
               </div>
             </div>
 
             <div className="p-5 rounded-2xl bg-slate-800/60 border border-slate-700/50 backdrop-blur-sm">
               <p className="text-sm text-slate-400 mb-2">
-                If you believe this is a mistake, please contact:
+                Jika anda percaya ini berlaku secara tidak sengaja, sila hubungi:
               </p>
               <p className="text-lg font-semibold text-white">
-                SQR System Administrator
-              </p>
-              <p className="text-sm text-blue-400 mt-1">
-                admin@sqr.gov.my
+                Pentadbir SQR System
               </p>
             </div>
 
@@ -78,15 +75,15 @@ export default function Banned() {
               data-testid="button-retry-login"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
-              Retry Login
+              Cuba Log In Semula
             </Button>
 
             <div className="mt-8 pt-6 border-t border-slate-800">
               <p className="text-xs text-slate-600">
-                Sumbangan Query Rahmah - Data Management System
+                Sumbangan Query Rahmah
               </p>
               <p className="text-xs text-slate-700 mt-1">
-                Copyright Reserved 2025 Ministry of Madanon
+                Hak cipta terpelihara.
               </p>
             </div>
           </div>

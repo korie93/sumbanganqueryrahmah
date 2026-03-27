@@ -7,6 +7,7 @@ import {
   ACTIVE_SETTINGS_SECTION_KEY,
 } from "@/app/constants";
 import {
+  isPublicAuthRoutePage,
   parseMonitorSectionFromPageInput,
   replaceHistory,
   resolveRouteFromLocation,
@@ -99,7 +100,7 @@ export function useAppShellAuthBootstrap({
           persistAuthenticatedUser(nextUser);
           setUser(nextUser);
 
-          if (!applyResolvedRoute(resolvedRoute)) {
+          if (!resolvedRoute || isPublicAuthRoutePage(resolvedRoute.page) || !applyResolvedRoute(resolvedRoute)) {
             if (nextUser.mustChangePassword) {
               setCurrentPage("change-password");
               replaceHistory("/change-password");

@@ -1,5 +1,6 @@
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
+import { applyDocumentMetadata, resolveDocumentMetadata } from "@/app/document-metadata";
 import { AppPageRenderer } from "@/app/AppPageRenderer";
 import { AppProviders } from "@/app/AppProviders";
 import {
@@ -7,6 +8,7 @@ import {
   BannedPage,
   ChangePasswordPage,
   ForgotPasswordPage,
+  LandingPage,
   LoginPage,
   MaintenanceRoutePage,
   ResetPasswordPage,
@@ -49,6 +51,17 @@ function AppContent() {
     handleNavigate(user.role === "user" ? "general-search" : "home");
   };
 
+  useEffect(() => {
+    applyDocumentMetadata(
+      resolveDocumentMetadata({
+        currentPage,
+        monitorSection,
+        systemName,
+        user,
+      }),
+    );
+  }, [currentPage, monitorSection, systemName, user]);
+
   const renderRoutePage = (routeKey: string, node: React.ReactNode, fullscreen = true) => (
     <AppRouteErrorBoundary
       routeKey={routeKey}
@@ -71,6 +84,13 @@ function AppContent() {
   }
 
   if (!user) {
+    if (currentPage === "home") {
+      return renderRoutePage(
+        "home",
+        <LandingPage onLoginClick={() => handleNavigate("login")} />,
+      );
+    }
+
     if (currentPage === "maintenance") {
       return renderRoutePage("maintenance", <MaintenanceRoutePage />);
     }

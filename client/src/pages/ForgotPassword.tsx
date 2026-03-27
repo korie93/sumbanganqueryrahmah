@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ArrowLeft, LifeBuoy } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PublicAuthLayout } from "@/components/PublicAuthLayout";
 import { Input } from "@/components/ui/input";
 import { requestPasswordReset } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
@@ -18,76 +18,68 @@ export default function ForgotPasswordPage() {
 
     try {
       if (!identifier.trim()) {
-        setError("Enter your username or email.");
+        setError("Sila masukkan username atau emel anda.");
         return;
       }
 
       await requestPasswordReset({ identifier: identifier.trim() });
       setSubmitted(true);
     } catch (submitError) {
-      setError(getApiErrorMessage(submitError, "Failed to submit reset request."));
+      setError(getApiErrorMessage(submitError, "Permintaan tetapan semula gagal dihantar."));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 p-4">
-      <div className="mx-auto flex min-h-screen max-w-xl items-center justify-center">
-        <Card className="w-full border-white/10 bg-slate-950/70 text-white shadow-2xl backdrop-blur">
-          <CardHeader className="space-y-3">
-            <div className="flex items-center justify-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/15 bg-white/10">
-                <LifeBuoy className="h-7 w-7" />
-              </div>
+    <PublicAuthLayout
+      badge="Pemulihan Akses"
+      title="Permintaan Tetapan Semula Kata Laluan"
+      description="Masukkan username atau emel anda untuk menghantar permintaan tetapan semula. Permintaan ini akan disemak oleh superuser sebelum pautan selamat dihantar kepada akaun yang berkaitan."
+      icon={<LifeBuoy className="h-7 w-7" />}
+    >
+      {submitted ? (
+        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100">
+          Jika akaun wujud, permintaan tetapan semula telah dihantar untuk semakan.
+        </div>
+      ) : (
+        <>
+          <Input
+            value={identifier}
+            onChange={(event) => setIdentifier(event.target.value)}
+            placeholder="Username atau emel"
+            className="border-white/10 bg-white/95 text-slate-950"
+          />
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-white/75">
+            Demi keselamatan, sistem hanya memaparkan status umum dan tidak mendedahkan sama ada
+            sesuatu akaun benar-benar wujud.
+          </div>
+          {error ? (
+            <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100">
+              {error}
             </div>
-            <CardTitle className="text-center text-2xl">Request Password Reset</CardTitle>
-            <p className="text-center text-sm text-slate-300">
-              Submit your username or email. The request will be reviewed by the superuser, and an approved reset link will be sent to your email.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {submitted ? (
-              <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-                If the account exists, the reset request has been submitted for review.
-              </div>
-            ) : (
-              <>
-                <Input
-                  value={identifier}
-                  onChange={(event) => setIdentifier(event.target.value)}
-                  placeholder="Username or email"
-                  className="border-white/10 bg-white/95 text-slate-950"
-                />
-                {error ? (
-                  <div className="rounded-xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100">
-                    {error}
-                  </div>
-                ) : null}
-                <Button
-                  className="w-full"
-                  onClick={() => void handleSubmit()}
-                  disabled={loading}
-                >
-                  {loading ? "Submitting..." : "Submit Request"}
-                </Button>
-              </>
-            )}
+          ) : null}
+          <Button
+            className="h-11 w-full rounded-xl bg-blue-600 text-white hover:bg-blue-500"
+            onClick={() => void handleSubmit()}
+            disabled={loading}
+          >
+            {loading ? "Sedang menghantar..." : "Hantar Permintaan"}
+          </Button>
+        </>
+      )}
 
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full text-slate-200 hover:text-white"
-              onClick={() => {
-                window.location.href = "/";
-              }}
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Login
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+      <Button
+        type="button"
+        variant="ghost"
+        className="w-full rounded-xl text-slate-200 hover:bg-white/5 hover:text-white"
+        onClick={() => {
+          window.location.href = "/";
+        }}
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Kembali ke log masuk
+      </Button>
+    </PublicAuthLayout>
   );
 }

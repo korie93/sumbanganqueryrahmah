@@ -1,6 +1,7 @@
 import { lazy } from "react";
 
 export const LoginPage = lazy(() => import("@/pages/Login"));
+export const LandingPage = lazy(() => import("@/pages/Landing"));
 export const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPassword"));
 export const ActivateAccountPage = lazy(() => import("@/pages/ActivateAccount"));
 export const ResetPasswordPage = lazy(() => import("@/pages/ResetPassword"));

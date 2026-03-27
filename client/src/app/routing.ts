@@ -6,6 +6,13 @@ export type ResolvedRoute = {
   normalizedPath?: string;
 };
 
+const PUBLIC_AUTH_ROUTES = new Set([
+  "login",
+  "forgot-password",
+  "activate-account",
+  "reset-password",
+]);
+
 const LEGACY_MONITOR_ROUTES: Record<string, MonitorSection> = {
   "/dashboard": "dashboard",
   "/activity": "activity",
@@ -53,6 +60,12 @@ export function resolveRouteFromLocation(pathname: string, search: string): Reso
   const normalizedPath = pathname.toLowerCase();
   const legacyMonitorSection = LEGACY_MONITOR_ROUTES[normalizedPath];
 
+  if (normalizedPath === "/") {
+    return { page: "home" };
+  }
+  if (normalizedPath === "/login") {
+    return { page: "login" };
+  }
   if (normalizedPath === "/maintenance") {
     return { page: "maintenance" };
   }
@@ -94,7 +107,13 @@ export function resolveRouteFromLocation(pathname: string, search: string): Reso
   return null;
 }
 
+export function isPublicAuthRoutePage(page: string) {
+  return PUBLIC_AUTH_ROUTES.has(String(page || "").trim());
+}
+
 export function buildPathForPage(page: string, monitorSection: MonitorSection = "monitor") {
+  if (page === "home") return "/";
+  if (page === "login") return "/login";
   if (page === "settings") return "/settings";
   if (page === "backup") return "/settings?section=backup-restore";
   if (page === "collection-report") return "/collection/save";
