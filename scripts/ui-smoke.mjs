@@ -1541,6 +1541,38 @@ const probeAuthSession = async (page) =>
     };
   });
 
+const waitForVisible = async (locator, timeout = 1_500) => {
+  try {
+    await locator.waitFor({ state: "visible", timeout });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const ensureLoginPageVisible = async (page) => {
+  const loginHeading = page.locator('text="Log In SQR System"');
+  const usernameInput = page.getByPlaceholder("Username");
+
+  if (await waitForVisible(loginHeading) || await waitForVisible(usernameInput)) {
+    return;
+  }
+
+  const publicLoginButton = page.getByRole("button", { name: /^Log In$/ }).first();
+  if (await waitForVisible(publicLoginButton, 2_000)) {
+    await publicLoginButton.click();
+    await page.waitForLoadState("networkidle");
+    await usernameInput.waitFor({ state: "visible", timeout: 10_000 });
+    await loginHeading.waitFor({ state: "visible", timeout: 10_000 });
+    return;
+  }
+
+  const bodyText = await page.locator("body").innerText().catch(() => "(unavailable)");
+  throw new Error(
+    `Smoke login page was not reachable after landing bootstrap. Visible body excerpt: ${bodyText.slice(0, 400)}`,
+  );
+};
+
 const checkLogoutFlow = async (page, context, tracker) => {
   // Ignore stale request noise from prior smoke sections; this assertion scopes logout only.
   tracker.clear();
@@ -1551,7 +1583,7 @@ const checkLogoutFlow = async (page, context, tracker) => {
   await openUserMenu(page);
   await page.getByTestId("button-logout").click();
   await page.waitForLoadState("networkidle");
-  await page.waitForSelector('text="Log In SQR System"');
+  await ensureLoginPageVisible(page);
 
   const cookieNames = await waitForClearedAuthCookies(context);
   if (cookieNames.has("sqr_auth") || cookieNames.has("sqr_auth_hint")) {
@@ -1599,7 +1631,7 @@ const run = async () => {
 
   try {
     await page.goto(baseUrl, { waitUntil: "networkidle" });
-    await page.waitForSelector('text="Log In SQR System"');
+    await ensureLoginPageVisible(page);
 
     await context.clearCookies();
     await page.evaluate(() => {
@@ -1623,7 +1655,7 @@ const run = async () => {
     await page.reload({ waitUntil: "networkidle" });
     const staleUserValue = await page.evaluate(() => localStorage.getItem("user"));
     assert(staleUserValue === null, "stale localStorage user should be cleared when no auth cookie exists");
-    await page.waitForSelector('text="Log In SQR System"');
+    await ensureLoginPageVisible(page);
     tracker.assertClean("unauth bootstrap");
     tracker.clear();
 
