@@ -346,6 +346,7 @@ export class CollectionNicknameService extends CollectionServiceSupport {
 
     return {
       ok: true as const,
+      temporaryPassword: COLLECTION_NICKNAME_TEMP_PASSWORD,
       nickname: {
         id: nickname.id,
         nickname: nickname.nickname,

@@ -325,11 +325,14 @@ export function useCollectionNicknameManagementActions({
     confirmResetPasswordRef.current = true;
     dialogs.setResettingNicknameId(target.id);
     try {
-      await resetCollectionNicknamePassword(target.id);
+      const response = await resetCollectionNicknamePassword(target.id);
+      const temporaryPassword = String(response?.temporaryPassword || "").trim();
       dialogs.setPendingResetPassword(null);
       toast({
         title: "Password Nickname Direset",
-        description: `${target.nickname} telah direset. Password sementara: 12345678a`,
+        description: temporaryPassword
+          ? `${target.nickname} telah direset. Password sementara: ${temporaryPassword}`
+          : `${target.nickname} telah direset. Gunakan password sementara semasa yang ditetapkan oleh sistem.`,
       });
     } catch (error: unknown) {
       toast({

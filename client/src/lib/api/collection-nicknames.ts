@@ -87,6 +87,7 @@ export async function resetCollectionNicknamePassword(id: string) {
   const response = await apiRequest("POST", `/api/collection/nicknames/${encodeURIComponent(id)}/reset-password`);
   return response.json() as Promise<{
     ok: boolean;
+    temporaryPassword: string;
     nickname: {
       id: string;
       nickname: string;
