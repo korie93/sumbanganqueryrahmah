@@ -106,18 +106,26 @@ function readTransportConfig(): MailTransportConfig | null {
 function getTransporter(config: MailTransportConfig): nodemailer.Transporter {
   if (cachedTransporter) return cachedTransporter;
 
+  const auth = (() => {
+    if (!config.user) {
+      return undefined;
+    }
+    if (!config.password) {
+      throw new Error("SMTP_PASSWORD is required when SMTP_USER is configured.");
+    }
+    return {
+      user: config.user,
+      pass: config.password,
+    };
+  })();
+
   cachedTransporter = nodemailer.createTransport({
     service: config.service,
     host: config.host,
     port: config.port,
     secure: config.secure,
     requireTLS: config.requireTls,
-    auth: config.user
-      ? {
-          user: config.user,
-          pass: config.password || "",
-        }
-      : undefined,
+    auth,
   });
 
   return cachedTransporter;

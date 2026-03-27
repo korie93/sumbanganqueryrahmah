@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { findPotentialCommittedSmtpSecrets } from "./lib/repo-hygiene.mjs";
 
 const forbiddenEnvFiles = [
   ".env",
@@ -79,6 +80,41 @@ if (trackedGeneratedOutputsResult.error) {
   if (trackedGeneratedOutputs.length > 0) {
     failures.push(
       `Generated output should not be tracked by git: ${trackedGeneratedOutputs.join(", ")}`,
+    );
+  }
+}
+
+const allTrackedFilesResult = spawnSync(
+  gitCommand,
+  ["ls-files"],
+  { encoding: "utf8" },
+);
+
+if (allTrackedFilesResult.error) {
+  failures.push(`Unable to inspect tracked repository files: ${allTrackedFilesResult.error.message}`);
+} else if (allTrackedFilesResult.status !== 0) {
+  failures.push(`git ls-files for tracked repository files exited with status ${allTrackedFilesResult.status}.`);
+} else {
+  const trackedFiles = allTrackedFilesResult.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const smtpSecretFindings = [];
+  for (const filePath of trackedFiles) {
+    try {
+      const text = readFileSync(filePath, "utf8");
+      smtpSecretFindings.push(
+        ...findPotentialCommittedSmtpSecrets({ filePath, text }),
+      );
+    } catch {
+      // Ignore binary or unreadable files. Hygiene scanning targets text sources only.
+    }
+  }
+
+  if (smtpSecretFindings.length > 0) {
+    failures.push(
+      `Potential committed SMTP secrets detected: ${smtpSecretFindings.join("; ")}`,
     );
   }
 }

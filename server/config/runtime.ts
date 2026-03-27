@@ -20,6 +20,13 @@ export type RuntimeConfigValidation = {
   warnings: readonly RuntimeConfigDiagnostic[];
 };
 
+type MailConfigurationAssessment = {
+  effectiveFrom: string | null;
+  hasAnyInput: boolean;
+  isConfigured: boolean;
+  isIncomplete: boolean;
+};
+
 type RuntimeConfig = {
   app: {
     nodeEnv: RuntimeEnvironment;
@@ -287,11 +294,50 @@ function isBackupFeatureEnabled(): boolean {
   return readBoolean("BACKUP_FEATURE_ENABLED", true);
 }
 
+function assessMailConfiguration(params: {
+  smtpService: string | null;
+  smtpHost: string | null;
+  smtpUser: string | null;
+  smtpPassword: string | null;
+  mailFrom: string | null;
+}): MailConfigurationAssessment {
+  const {
+    smtpService,
+    smtpHost,
+    smtpUser,
+    smtpPassword,
+    mailFrom,
+  } = params;
+  const effectiveFrom = mailFrom || smtpUser || null;
+  const hasAnyInput = Boolean(
+    smtpService
+    || smtpHost
+    || smtpUser
+    || smtpPassword
+    || mailFrom,
+  );
+
+  let isConfigured = false;
+  if (smtpService) {
+    isConfigured = Boolean(smtpUser && smtpPassword && effectiveFrom);
+  } else if (smtpHost) {
+    isConfigured = Boolean(effectiveFrom && (!smtpUser || smtpPassword));
+  }
+
+  return {
+    effectiveFrom,
+    hasAnyInput,
+    isConfigured,
+    isIncomplete: hasAnyInput && !isConfigured,
+  };
+}
+
 function assertRuntimeSafetyGuards(params: {
   isProductionLike: boolean;
   isStrictLocalDevelopment: boolean;
+  mailConfiguration: MailConfigurationAssessment;
 }) {
-  const { isProductionLike, isStrictLocalDevelopment } = params;
+  const { isProductionLike, isStrictLocalDevelopment, mailConfiguration } = params;
 
   if (isProductionLike && isBackupFeatureEnabled() && !hasBackupEncryptionKeyConfigured()) {
     throw new Error(
@@ -316,6 +362,12 @@ function assertRuntimeSafetyGuards(params: {
       "MAIL_DEV_OUTBOX_ENABLED is only allowed in strict local development mode.",
     );
   }
+
+  if (!isStrictLocalDevelopment && mailConfiguration.isIncomplete) {
+    throw new Error(
+      "SMTP mail configuration is incomplete. Configure MAIL_FROM/SMTP_* fully or clear the SMTP env vars entirely before startup.",
+    );
+  }
 }
 
 function buildRuntimeConfigWarnings(params: {
@@ -324,11 +376,7 @@ function buildRuntimeConfigWarnings(params: {
   configuredSessionSecret: string | null;
   configuredCollectionNicknameTempPassword: string | null;
   configuredPgPassword: string | null;
-  smtpService: string | null;
-  smtpHost: string | null;
-  smtpUser: string | null;
-  smtpPassword: string | null;
-  mailFrom: string | null;
+  mailConfiguration: MailConfigurationAssessment;
 }): RuntimeConfigDiagnostic[] {
   const warnings: RuntimeConfigDiagnostic[] = [];
   const {
@@ -337,11 +385,7 @@ function buildRuntimeConfigWarnings(params: {
     configuredSessionSecret,
     configuredCollectionNicknameTempPassword,
     configuredPgPassword,
-    smtpService,
-    smtpHost,
-    smtpUser,
-    smtpPassword,
-    mailFrom,
+    mailConfiguration,
   } = params;
 
   if (!publicAppUrl) {
@@ -380,25 +424,15 @@ function buildRuntimeConfigWarnings(params: {
     });
   }
 
-  const hasAnyMailInput = Boolean(
-    smtpService
-    || smtpHost
-    || smtpUser
-    || smtpPassword
-    || mailFrom,
-  );
-
-  if (hasAnyMailInput) {
-    const hasValidServiceAuth = Boolean(smtpService && smtpUser && smtpPassword && mailFrom);
-    const hasValidHostConfig = Boolean(smtpHost && mailFrom && (!smtpUser || smtpPassword));
-    if (!hasValidServiceAuth && !hasValidHostConfig) {
-      warnings.push({
-        code: "MAIL_CONFIGURATION_INCOMPLETE",
-        envNames: ["MAIL_FROM", "SMTP_SERVICE", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"],
-        message: "Mail delivery env vars are partially configured. Outbound activation or reset email may silently fall back to 'not configured'.",
-        severity: "warning",
-      });
-    }
+  if (mailConfiguration.isIncomplete) {
+    warnings.push({
+      code: "MAIL_CONFIGURATION_INCOMPLETE",
+      envNames: ["MAIL_FROM", "SMTP_SERVICE", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"],
+      message: isStrictLocalDevelopment
+        ? "Mail delivery env vars are partially configured. Email delivery will stay disabled until the SMTP env vars are completed."
+        : "Mail delivery env vars are partially configured.",
+      severity: "warning",
+    });
   }
 
   return warnings;
@@ -443,7 +477,14 @@ const configuredPgPassword = readOptionalString("PG_PASSWORD");
 const publicAppUrl = normalizeHttpUrl("PUBLIC_APP_URL", readOptionalString("PUBLIC_APP_URL"));
 const trustedProxies = resolveTrustedProxies(readCommaSeparatedList("TRUSTED_PROXIES"));
 const lowMemoryMode = readBoolean("SQR_LOW_MEMORY_MODE", true);
-assertRuntimeSafetyGuards({ isProductionLike, isStrictLocalDevelopment });
+const mailConfiguration = assessMailConfiguration({
+  smtpService: readOptionalString("SMTP_SERVICE"),
+  smtpHost: readOptionalString("SMTP_HOST"),
+  smtpUser: readOptionalString("SMTP_USER"),
+  smtpPassword: readOptionalString("SMTP_PASSWORD"),
+  mailFrom: readOptionalString("MAIL_FROM"),
+});
+assertRuntimeSafetyGuards({ isProductionLike, isStrictLocalDevelopment, mailConfiguration });
 assertNoPlaceholderSecrets({
   isProductionLike,
   configuredSessionSecret,
@@ -562,11 +603,7 @@ const runtimeWarnings = buildRuntimeConfigWarnings({
   configuredSessionSecret,
   configuredCollectionNicknameTempPassword,
   configuredPgPassword,
-  smtpService: readOptionalString("SMTP_SERVICE"),
-  smtpHost: readOptionalString("SMTP_HOST"),
-  smtpUser: readOptionalString("SMTP_USER"),
-  smtpPassword: readOptionalString("SMTP_PASSWORD"),
-  mailFrom: readOptionalString("MAIL_FROM"),
+  mailConfiguration,
 });
 
 export const runtimeConfigValidation: RuntimeConfigValidation = Object.freeze({

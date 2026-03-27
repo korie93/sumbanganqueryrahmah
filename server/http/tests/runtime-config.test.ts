@@ -145,6 +145,34 @@ test("runtime config rejects development startup when dev outbox is enabled outs
   );
 });
 
+test("runtime config rejects non-local startup when SMTP env vars are partially configured", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      SESSION_SECRET: "prod-session-secret",
+      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
+      PG_PASSWORD: "prod-db-password",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+      SMTP_HOST: "smtp.example.com",
+      SMTP_USER: "mailer@example.com",
+      SMTP_PASSWORD: null,
+      MAIL_FROM: "noreply@example.com",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /SMTP mail configuration is incomplete/i,
+      );
+    },
+  );
+});
+
 test("runtime config normalizes missing PG_PASSWORD to an empty string in strict local development", async () => {
   await withEnv(
     {
@@ -166,6 +194,37 @@ test("runtime config normalizes missing PG_PASSWORD to an empty string in strict
       assert.equal(runtimeModule.runtimeConfig.app.isStrictLocalDevelopment, true);
       assert.equal(runtimeModule.runtimeConfig.database.password, "");
       assert.equal(runtimeModule.runtimeConfigValidation.warningCount > 0, true);
+    },
+  );
+});
+
+test("runtime config keeps strict local development bootable when SMTP env vars are incomplete", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      PG_PASSWORD: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+      SMTP_HOST: "smtp.example.com",
+      SMTP_USER: "mailer@example.com",
+      SMTP_PASSWORD: null,
+      MAIL_FROM: "noreply@example.com",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.app.isStrictLocalDevelopment, true);
+      assert.match(
+        runtimeModule.runtimeConfigValidation.warnings.map((warning: { code: string }) => warning.code).join(","),
+        /MAIL_CONFIGURATION_INCOMPLETE/,
+      );
     },
   );
 });

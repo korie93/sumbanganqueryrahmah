@@ -120,6 +120,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for a detailed architecture overview.
 - [docs/GO_LIVE_LAUNCH_CHECKLIST.md](./docs/GO_LIVE_LAUNCH_CHECKLIST.md) - Final go-live launch gate checklist
 - [docs/PRODUCTION_PROMOTION_PLAYBOOK.md](./docs/PRODUCTION_PROMOTION_PLAYBOOK.md) - Staging soak, canary, monitor, and rollback playbook
 - [docs/HETZNER_PRODUCTION_DEPLOYMENT.md](./docs/HETZNER_PRODUCTION_DEPLOYMENT.md) - Practical single-VPS production deployment guide for Hetzner, Nginx, PM2, PostgreSQL, and HTTPS
+- [docs/SMTP_SECRET_INCIDENT_RESPONSE.md](./docs/SMTP_SECRET_INCIDENT_RESPONSE.md) - Secret rotation and git-history cleanup guide for exposed SMTP credentials
 - [docs/RELEASE_HARDENING_SUMMARY.md](./docs/RELEASE_HARDENING_SUMMARY.md) - Current build hardening summary and controlled rollout checklist
 - [docs/GO_NO_GO_RELEASE_TEMPLATE.md](./docs/GO_NO_GO_RELEASE_TEMPLATE.md) - Fill-in template for final rollout decision during the release window
 - [docs/DISASTER_RECOVERY_DRILL.md](./docs/DISASTER_RECOVERY_DRILL.md) - Backup and restore drill guide
