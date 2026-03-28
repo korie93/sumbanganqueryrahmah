@@ -57,7 +57,7 @@ export function registerAuthSessionRoutes(context: AuthRouteContext) {
       };
     }
 
-    const { user, activity } = loginResult;
+    const { user, activity, closedSessionIds } = loginResult;
 
     signSessionToken(
       {
@@ -67,6 +67,11 @@ export function registerAuthSessionRoutes(context: AuthRouteContext) {
         activityId: activity.id,
       },
       res,
+    );
+
+    closeActivitySockets(
+      closedSessionIds,
+      "Your account was opened in another browser or device. Please login again.",
     );
 
     return {
@@ -106,6 +111,11 @@ export function registerAuthSessionRoutes(context: AuthRouteContext) {
           activityId: result.activity.id,
         },
         res,
+      );
+
+      closeActivitySockets(
+        result.closedSessionIds,
+        "Your account was opened in another browser or device. Please login again.",
       );
 
       return {

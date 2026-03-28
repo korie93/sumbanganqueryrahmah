@@ -302,12 +302,16 @@ export default function AutoLogout({
             const message = JSON.parse(event.data);
 
             if (message.type === "kicked") {
+              if (message.reason) {
+                persistAuthNotice(String(message.reason));
+              }
               alert(message.reason || "Anda telah dilogout oleh pentadbir.");
               void runClientLogout();
             }
 
             if (message.type === "logout") {
               if (message.reason) {
+                persistAuthNotice(String(message.reason));
                 alert(String(message.reason));
               }
               void runClientLogout();

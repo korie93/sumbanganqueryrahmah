@@ -267,11 +267,39 @@ export class AuthAccountAuthenticationOperations {
     return activeSessions.map((activity) => activity.id);
   }
 
+  private async replaceExistingSessionsForLogin(
+    user: NonNullable<Awaited<ReturnType<PostgresStorage["getUser"]>>>,
+    browserName: string,
+  ) {
+    const activeSessions = await this.deps.storage.getActiveActivitiesByUsername(user.username);
+    if (activeSessions.length === 0) {
+      return [] as string[];
+    }
+
+    await this.deps.storage.deactivateUserActivities(user.username, "NEW_SESSION");
+    await this.deps.storage.createAuditLog({
+      action: "LOGIN_REPLACED_EXISTING_SESSION",
+      performedBy: user.username,
+      targetUser: user.id,
+      details: JSON.stringify({
+        metadata: {
+          browser: browserName,
+          replaced_session_count: activeSessions.length,
+          replaced_session_ids: activeSessions.map((activity) => activity.id),
+        },
+      }),
+    });
+
+    return activeSessions.map((activity) => activity.id);
+  }
+
   private async createAuthenticatedSession(
     user: NonNullable<Awaited<ReturnType<PostgresStorage["getUser"]>>>,
     input: Omit<LoginInput, "password" | "username">,
     details: string,
   ) {
+    let closedSessionIds: string[] = [];
+
     if (user.role === "superuser") {
       const enforceSingleSession = await this.deps.storage.getBooleanSystemSetting(
         "enforce_superuser_single_session",
@@ -289,6 +317,7 @@ export class AuthAccountAuthenticationOperations {
 
           if (freshSessions.length === 0) {
             await this.deps.storage.deactivateUserActivities(user.username, "IDLE_TIMEOUT");
+            closedSessionIds = activeSessions.map((activity) => activity.id);
             await this.deps.storage.createAuditLog({
               action: "LOGIN_STALE_SESSION_RECOVERED",
               performedBy: user.username,
@@ -309,8 +338,10 @@ export class AuthAccountAuthenticationOperations {
           }
         }
       }
-    } else if (user.role === "admin" && input.fingerprint) {
-      await this.deps.storage.deactivateUserSessionsByFingerprint(user.username, input.fingerprint);
+    }
+
+    if (user.role !== "superuser" || closedSessionIds.length === 0) {
+      closedSessionIds = await this.replaceExistingSessionsForLogin(user, input.browserName);
     }
 
     const activity = await this.deps.storage.createActivity({
@@ -331,7 +362,10 @@ export class AuthAccountAuthenticationOperations {
       details,
     });
 
-    return activity;
+    return {
+      activity,
+      closedSessionIds,
+    };
   }
 
   private async clearFailedLoginState(
@@ -511,7 +545,7 @@ export class AuthAccountAuthenticationOperations {
       };
     }
 
-    const activity = await this.createAuthenticatedSession(
+    const sessionResult = await this.createAuthenticatedSession(
       unlockedUser,
       input,
       `Login from ${input.browserName}`,
@@ -520,7 +554,8 @@ export class AuthAccountAuthenticationOperations {
     return {
       kind: "authenticated" as const,
       user: unlockedUser,
-      activity,
+      activity: sessionResult.activity,
+      closedSessionIds: sessionResult.closedSessionIds,
     };
   }
 
@@ -595,7 +630,7 @@ export class AuthAccountAuthenticationOperations {
       throw new AuthAccountError(401, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
     }
 
-    const activity = await this.createAuthenticatedSession(
+    const sessionResult = await this.createAuthenticatedSession(
       user,
       {
         fingerprint: input.fingerprint,
@@ -608,7 +643,8 @@ export class AuthAccountAuthenticationOperations {
 
     return {
       user,
-      activity,
+      activity: sessionResult.activity,
+      closedSessionIds: sessionResult.closedSessionIds,
     };
   }
 

@@ -239,6 +239,73 @@ test("AuthAccountService.login blocks superuser when another recent session is s
   );
 });
 
+test("AuthAccountService.login replaces existing user sessions so only the latest login stays active", async () => {
+  const passwordHash = await hashPassword("Password123!");
+  const user = buildManagedUser(passwordHash);
+  const auditActions: string[] = [];
+  const deactivatedReasons: string[] = [];
+
+  const service = new AuthAccountService({
+    getUserByUsername: async () => user,
+    isVisitorBanned: async () => false,
+    getActiveActivitiesByUsername: async () => [
+      {
+        id: "activity-old-1",
+        username: user.username,
+        loginTime: new Date("2026-03-20T00:00:00.000Z"),
+        lastActivityTime: new Date("2026-03-20T00:05:00.000Z"),
+        isActive: true,
+      },
+      {
+        id: "activity-old-2",
+        username: user.username,
+        loginTime: new Date("2026-03-20T00:10:00.000Z"),
+        lastActivityTime: new Date("2026-03-20T00:15:00.000Z"),
+        isActive: true,
+      },
+    ],
+    deactivateUserActivities: async (_username: string, reason: string) => {
+      deactivatedReasons.push(reason);
+    },
+    deactivateUserSessionsByFingerprint: async () => undefined,
+    createAuditLog: async (entry: any) => {
+      auditActions.push(String(entry?.action || ""));
+      return entry;
+    },
+    createActivity: async () => ({
+      id: "activity-new-1",
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+      loginTime: new Date("2026-03-20T00:20:00.000Z"),
+      lastActivityTime: new Date("2026-03-20T00:20:00.000Z"),
+      logoutTime: null,
+      isActive: true,
+      logoutReason: null,
+      fingerprint: "fp-user",
+      browser: "chrome",
+      pcName: "pc",
+      ipAddress: "127.0.0.1",
+    }),
+    touchLastLogin: async () => undefined,
+  } as any);
+
+  const result = await service.login({
+    username: user.username,
+    password: "Password123!",
+    browserName: "chrome",
+    fingerprint: "fp-user",
+    ipAddress: "127.0.0.1",
+    pcName: "pc",
+  });
+
+  assert.equal(result.kind, "authenticated");
+  assert.deepEqual(result.closedSessionIds, ["activity-old-1", "activity-old-2"]);
+  assert.deepEqual(deactivatedReasons, ["NEW_SESSION"]);
+  assert.ok(auditActions.includes("LOGIN_REPLACED_EXISTING_SESSION"));
+  assert.ok(auditActions.includes("LOGIN_SUCCESS"));
+});
+
 test("AuthAccountService.login requires second factor for admin accounts with 2FA enabled", async () => {
   const passwordHash = await hashPassword("Password123!");
   const user = {
@@ -281,6 +348,73 @@ test("AuthAccountService.login requires second factor for admin accounts with 2F
   assert.equal(result.user.username, "admin.user");
   assert.equal(createActivityCalled, false);
   assert.ok(auditActions.includes("LOGIN_SECOND_FACTOR_REQUIRED"));
+});
+
+test("AuthAccountService.verifyTwoFactorLogin replaces existing admin sessions after successful verification", async () => {
+  const passwordHash = await hashPassword("Password123!");
+  const user = {
+    ...buildSuperuser(passwordHash),
+    id: "admin-verify-1",
+    username: "admin.verify",
+    role: "admin",
+    twoFactorEnabled: true,
+    twoFactorSecretEncrypted: encryptTwoFactorSecret("JBSWY3DPEHPK3PXP"),
+    twoFactorConfiguredAt: new Date("2026-03-20T00:00:00.000Z"),
+  };
+  const auditActions: string[] = [];
+  const deactivatedReasons: string[] = [];
+
+  const service = new AuthAccountService({
+    getUser: async () => user,
+    isVisitorBanned: async () => false,
+    getActiveActivitiesByUsername: async () => [
+      {
+        id: "activity-old-admin-1",
+        username: user.username,
+        loginTime: new Date("2026-03-20T00:00:00.000Z"),
+        lastActivityTime: new Date("2026-03-20T00:05:00.000Z"),
+        isActive: true,
+      },
+    ],
+    deactivateUserActivities: async (_username: string, reason: string) => {
+      deactivatedReasons.push(reason);
+    },
+    createAuditLog: async (entry: any) => {
+      auditActions.push(String(entry?.action || ""));
+      return entry;
+    },
+    createActivity: async () => ({
+      id: "activity-admin-new-1",
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+      loginTime: new Date("2026-03-20T00:20:00.000Z"),
+      lastActivityTime: new Date("2026-03-20T00:20:00.000Z"),
+      logoutTime: null,
+      isActive: true,
+      logoutReason: null,
+      fingerprint: "fp-admin",
+      browser: "chrome",
+      pcName: "pc",
+      ipAddress: "127.0.0.1",
+    }),
+    touchLastLogin: async () => undefined,
+  } as any);
+
+  const result = await service.verifyTwoFactorLogin({
+    userId: user.id,
+    code: generateCurrentTwoFactorCode("JBSWY3DPEHPK3PXP"),
+    fingerprint: "fp-admin",
+    browserName: "chrome",
+    ipAddress: "127.0.0.1",
+    pcName: "pc",
+  });
+
+  assert.equal(result.activity.id, "activity-admin-new-1");
+  assert.deepEqual(result.closedSessionIds, ["activity-old-admin-1"]);
+  assert.deepEqual(deactivatedReasons, ["NEW_SESSION"]);
+  assert.ok(auditActions.includes("LOGIN_REPLACED_EXISTING_SESSION"));
+  assert.ok(auditActions.includes("LOGIN_SUCCESS"));
 });
 
 test("AuthAccountService supports starting, confirming, and disabling 2FA for admin accounts", async () => {

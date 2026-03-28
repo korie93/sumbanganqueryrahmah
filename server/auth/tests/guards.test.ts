@@ -20,6 +20,13 @@ test("getInvalidatedSessionMessage returns password-changed messaging for self-s
   );
 });
 
+test("getInvalidatedSessionMessage returns replaced-session messaging for newer logins", () => {
+  assert.equal(
+    getInvalidatedSessionMessage("NEW_SESSION"),
+    "Your account was opened in another browser or device. Please login again.",
+  );
+});
+
 test("getInvalidatedSessionMessage falls back to generic session expiry messaging", () => {
   assert.equal(
     getInvalidatedSessionMessage("IDLE_TIMEOUT"),

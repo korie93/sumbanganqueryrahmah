@@ -266,9 +266,11 @@ export function createCookieAuthStorageDouble() {
 
 export async function createLoginStorageDouble(options?: {
   user?: Record<string, any>;
+  activeSessions?: Array<Record<string, any>>;
 }) {
   const passwordHash = await hashPassword("StrongPass123!");
   const auditLogs: AuditEntry[] = [];
+  const deactivatedSessions: Array<{ username: string; reason: string }> = [];
   const user = {
     id: "login-user-1",
     username: "login.user",
@@ -302,15 +304,26 @@ export async function createLoginStorageDouble(options?: {
     fingerprint: "fingerprint-login",
     ipAddress: "127.0.0.1",
   };
+  const activeSessions = (options?.activeSessions || []).map((session, index) => ({
+    id: `activity-existing-${index + 1}`,
+    username: user.username,
+    isActive: true,
+    loginTime: new Date("2026-03-01T00:00:00.000Z"),
+    lastActivityTime: new Date("2026-03-01T00:00:00.000Z"),
+    ...session,
+  }));
 
   const storage = {
     getUser: async (userId: string) => (userId === user.id ? user : null),
     getUserByUsername: async (username: string) => (username === user.username ? user : null),
     isVisitorBanned: async () => false,
     getBooleanSystemSetting: async () => false,
-    getActiveActivitiesByUsername: async () => [],
-    deactivateUserActivities: async () => undefined,
+    getActiveActivitiesByUsername: async () => activeSessions,
+    deactivateUserActivities: async (username: string, reason: string) => {
+      deactivatedSessions.push({ username, reason });
+    },
     deactivateUserSessionsByFingerprint: async () => undefined,
+    clearCollectionNicknameSessionByActivity: async () => undefined,
     createAuditLog: async (entry: AuditEntry) => {
       auditLogs.push(entry);
       return { id: `audit-${auditLogs.length}`, ...entry };
@@ -346,7 +359,7 @@ export async function createLoginStorageDouble(options?: {
     },
   } as unknown as PostgresStorage;
 
-  return { storage, user, activity, auditLogs };
+  return { storage, user, activity, auditLogs, deactivatedSessions, activeSessions };
 }
 
 export function authenticateAs(user: {

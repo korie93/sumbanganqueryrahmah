@@ -769,6 +769,81 @@ test("POST /api/auth/login sets the auth cookie without exposing the JWT in JSON
   }
 });
 
+test("POST /api/auth/login deactivates and closes older sessions for the same account", async () => {
+  const {
+    storage,
+    user,
+    activeSessions,
+    deactivatedSessions,
+    auditLogs,
+  } = await createLoginStorageDouble({
+    activeSessions: [
+      { id: "activity-existing-1" },
+      { id: "activity-existing-2" },
+    ],
+  });
+  const sentPayloads: string[] = [];
+  let closedCount = 0;
+  const connectedClients = new Map<string, any>([
+    ["activity-existing-1", {
+      readyState: 1,
+      send: (payload: string) => {
+        sentPayloads.push(payload);
+      },
+      close: () => {
+        closedCount += 1;
+      },
+    }],
+    ["activity-existing-2", {
+      readyState: 1,
+      send: (payload: string) => {
+        sentPayloads.push(payload);
+      },
+      close: () => {
+        closedCount += 1;
+      },
+    }],
+  ]);
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: (_req, _res, next) => next(),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients,
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: user.username,
+        password: "StrongPass123!",
+        fingerprint: "fingerprint-login",
+        browser: "Mozilla/5.0",
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(deactivatedSessions, [{
+      username: user.username,
+      reason: "NEW_SESSION",
+    }]);
+    assert.equal(closedCount, activeSessions.length);
+    assert.equal(sentPayloads.length, activeSessions.length);
+    assert.ok(sentPayloads.every((payload) => payload.includes("another browser or device")));
+    assert.equal(connectedClients.size, 0);
+    assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_REPLACED_EXISTING_SESSION"), true);
+    assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_SUCCESS"), true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /api/auth/login locks valid accounts after more than three failed password attempts", async () => {
   const { storage, user, auditLogs } = await createLoginStorageDouble();
   const app = createJsonTestApp();
@@ -979,6 +1054,90 @@ test("POST /api/auth/login returns a 2FA challenge for enabled admin accounts an
     assert.match(setCookie, /sqr_auth=/);
     assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_SECOND_FACTOR_REQUIRED"), true);
     assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_SUCCESS"), true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/auth/verify-two-factor-login closes older sessions after successful verification", async () => {
+  const secret = generateTwoFactorSecret();
+  const {
+    storage,
+    user,
+    activity,
+    deactivatedSessions,
+  } = await createLoginStorageDouble({
+    user: {
+      role: "admin",
+      twoFactorEnabled: true,
+      twoFactorSecretEncrypted: encryptTwoFactorSecret(secret),
+      twoFactorConfiguredAt: new Date("2026-03-20T00:00:00.000Z"),
+    },
+    activeSessions: [
+      { id: "activity-existing-2fa-1" },
+    ],
+  });
+  const sentPayloads: string[] = [];
+  let closedCount = 0;
+  const connectedClients = new Map<string, any>([
+    ["activity-existing-2fa-1", {
+      readyState: 1,
+      send: (payload: string) => {
+        sentPayloads.push(payload);
+      },
+      close: () => {
+        closedCount += 1;
+      },
+    }],
+  ]);
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: (_req, _res, next) => next(),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients,
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const loginResponse = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: user.username,
+        password: "StrongPass123!",
+        fingerprint: "fingerprint-login",
+        browser: "Mozilla/5.0",
+      }),
+    });
+
+    assert.equal(loginResponse.status, 200);
+    const loginPayload = await loginResponse.json();
+    const verifyResponse = await fetch(`${baseUrl}/api/auth/verify-two-factor-login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        challengeToken: loginPayload.challengeToken,
+        code: generateCurrentTwoFactorCode(secret),
+      }),
+    });
+
+    assert.equal(verifyResponse.status, 200);
+    const verifyPayload = await verifyResponse.json();
+    assert.equal(verifyPayload.activityId, activity.id);
+    assert.deepEqual(deactivatedSessions, [{
+      username: user.username,
+      reason: "NEW_SESSION",
+    }]);
+    assert.equal(closedCount, 1);
+    assert.equal(sentPayloads.length, 1);
+    assert.ok(sentPayloads[0]?.includes("another browser or device"));
+    assert.equal(connectedClients.size, 0);
   } finally {
     await stopTestServer(server);
   }
