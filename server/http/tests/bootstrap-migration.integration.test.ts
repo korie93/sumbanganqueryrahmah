@@ -19,6 +19,10 @@ const aiSupportMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", "0006_reviewed_ai_support_tables.sql"),
   "utf8",
 );
+const dataEmbeddingsMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", "0008_reviewed_data_embeddings.sql"),
+  "utf8",
+);
 const storageMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", "0003_reviewed_storage_tables.sql"),
   "utf8",
@@ -200,6 +204,26 @@ test(
 
       assert.equal(await indexExists(pool, "idx_ai_messages_conversation_created_at"), true);
       assert.equal(await indexExists(pool, "idx_ai_messages_conversation_id"), true);
+    });
+  },
+);
+
+test(
+  "reviewed pgvector migration stays compatible when the extension is unavailable",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await applySql(pool, dataEmbeddingsMigrationSql);
+      const vectorInstalled = await pool
+        .query<{ present: boolean }>(`SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') AS present`)
+        .then((result) => Boolean(result.rows[0]?.present));
+
+      if (vectorInstalled) {
+        assert.equal(await indexExists(pool, "idx_data_embeddings_import_id"), true);
+      } else {
+        assert.equal(await indexExists(pool, "idx_data_embeddings_import_id"), false);
+        assert.equal(await indexExists(pool, "idx_data_embeddings_vector"), false);
+      }
     });
   },
 );

@@ -7,7 +7,7 @@ BEGIN
   EXCEPTION
     WHEN insufficient_privilege THEN
       RAISE NOTICE 'Skipping pgvector extension install because the current role lacks privilege.';
-    WHEN undefined_file THEN
+    WHEN undefined_file OR feature_not_supported THEN
       RAISE NOTICE 'Skipping pgvector extension install because the extension is not available on this server.';
   END;
 
