@@ -5,7 +5,11 @@ import { PublicAuthLayout } from "@/components/PublicAuthLayout";
 import { Input } from "@/components/ui/input";
 import { changeMyPassword } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
-import { clearAuthenticatedUserStorage, setStoredForcePasswordChange } from "@/lib/auth-session";
+import {
+  broadcastForcedLogout,
+  clearAuthenticatedUserStorage,
+  setStoredForcePasswordChange,
+} from "@/lib/auth-session";
 
 type ChangePasswordPageProps = {
   username?: string;
@@ -85,7 +89,7 @@ export default function ChangePasswordPage({
       }
 
       if (response?.forceLogout) {
-        clearAuthenticatedUserStorage();
+        broadcastForcedLogout("Password changed. Please login again.");
         setSuccessMessage("Kata laluan berjaya dikemas kini. Sila log masuk semula.");
         if (redirectTimeoutRef.current) {
           window.clearTimeout(redirectTimeoutRef.current);

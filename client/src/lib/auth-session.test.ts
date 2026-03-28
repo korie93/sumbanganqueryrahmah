@@ -2,13 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { User } from "@/app/types";
 import {
+  broadcastForcedLogout,
   clearAuthenticatedUserStorage,
+  consumeStoredAuthNotice,
   getStoredActivityId,
   getStoredAuthenticatedUser,
   getStoredRole,
   getStoredUsername,
   isBannedSessionFlagSet,
+  parseForcedLogoutStorageValue,
   persistAuthenticatedUser,
+  persistAuthNotice,
   setBannedSessionFlag,
   setStoredActivityId,
 } from "@/lib/auth-session";
@@ -51,10 +55,16 @@ function installStorageMocks() {
   const local = createStorageMock();
   const session = createStorageMock();
   const documentMock = { cookie: "sqr_auth_hint=1" };
+  const eventTarget = new EventTarget();
+  const windowMock = Object.assign(globalThis, {
+    addEventListener: eventTarget.addEventListener.bind(eventTarget),
+    removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+    dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+  });
 
   Object.defineProperty(globalThis, "window", {
     configurable: true,
-    value: globalThis,
+    value: windowMock,
   });
   Object.defineProperty(globalThis, "localStorage", {
     configurable: true,
@@ -136,4 +146,41 @@ test("clearAuthenticatedUserStorage clears both session auth data and legacy loc
   assert.equal(local.getItem("token"), null);
   assert.equal(local.getItem("activeTab"), null);
   assert.match(documentMock.cookie, /Max-Age=0/);
+});
+
+test("persistAuthNotice stores a one-time login notice in sessionStorage", () => {
+  const { session } = installStorageMocks();
+
+  persistAuthNotice("Session expired. Please login again.");
+
+  assert.match(String(session.getItem("auth_notice") || ""), /Session expired/i);
+  assert.equal(consumeStoredAuthNotice(), "Session expired. Please login again.");
+  assert.equal(session.getItem("auth_notice"), null);
+});
+
+test("parseForcedLogoutStorageValue supports both legacy and structured payloads", () => {
+  assert.deepEqual(parseForcedLogoutStorageValue("true"), {});
+  assert.deepEqual(
+    parseForcedLogoutStorageValue(JSON.stringify({ message: "Password changed. Please login again." })),
+    { message: "Password changed. Please login again." },
+  );
+});
+
+test("broadcastForcedLogout stores a structured cross-tab payload and dispatches a browser event", () => {
+  const { local } = installStorageMocks();
+  const events: Array<string> = [];
+  const listener = (event: Event) => {
+    events.push(String((event as CustomEvent<{ message?: string }>).detail?.message || ""));
+  };
+
+  window.addEventListener("force-logout", listener);
+  try {
+    broadcastForcedLogout("Password was reset. Please login again.");
+  } finally {
+    window.removeEventListener("force-logout", listener);
+  }
+
+  const raw = String(local.getItem("forceLogout") || "");
+  assert.match(raw, /Password was reset/i);
+  assert.deepEqual(events, ["Password was reset. Please login again."]);
 });

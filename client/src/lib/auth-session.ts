@@ -1,6 +1,8 @@
 import type { User } from "@/app/types";
 
 const AUTH_SESSION_HINT_COOKIE_NAME = "sqr_auth_hint";
+const AUTH_NOTICE_STORAGE_KEY = "auth_notice";
+const FORCE_LOGOUT_STORAGE_KEY = "forceLogout";
 const AUTH_SESSION_STORAGE_KEYS = [
   "activityId",
   "banned",
@@ -12,6 +14,11 @@ const AUTH_SESSION_STORAGE_KEYS = [
 ] as const;
 
 type AuthSessionStorageKey = (typeof AUTH_SESSION_STORAGE_KEYS)[number];
+
+type ForcedLogoutPayload = {
+  message?: string;
+  nonce?: string;
+};
 
 function canUseAuthStorage() {
   return typeof window !== "undefined"
@@ -73,6 +80,111 @@ function clearAuthSessionHintCookie() {
   if (typeof document === "undefined") return;
 
   document.cookie = `${AUTH_SESSION_HINT_COOKIE_NAME}=; Max-Age=0; path=/; SameSite=Lax`;
+}
+
+function normalizeAuthNoticeMessage(message: string | null | undefined): string {
+  return String(message || "").trim();
+}
+
+function parseAuthNoticePayload(raw: string | null | undefined): string {
+  const normalized = String(raw || "").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  try {
+    const parsed = JSON.parse(normalized) as { message?: unknown };
+    return normalizeAuthNoticeMessage(typeof parsed?.message === "string" ? parsed.message : "");
+  } catch {
+    return normalized;
+  }
+}
+
+export function persistAuthNotice(message: string | null | undefined) {
+  if (!canUseAuthStorage()) {
+    return;
+  }
+
+  const normalized = normalizeAuthNoticeMessage(message);
+  if (!normalized) {
+    try {
+      sessionStorage.removeItem(AUTH_NOTICE_STORAGE_KEY);
+    } catch {
+      // Ignore storage cleanup failures.
+    }
+    return;
+  }
+
+  try {
+    sessionStorage.setItem(
+      AUTH_NOTICE_STORAGE_KEY,
+      JSON.stringify({
+        message: normalized,
+      }),
+    );
+  } catch {
+    // Ignore storage write failures during best-effort notice persistence.
+  }
+}
+
+export function consumeStoredAuthNotice(): string {
+  if (!canUseAuthStorage()) {
+    return "";
+  }
+
+  try {
+    const raw = sessionStorage.getItem(AUTH_NOTICE_STORAGE_KEY);
+    sessionStorage.removeItem(AUTH_NOTICE_STORAGE_KEY);
+    return parseAuthNoticePayload(raw);
+  } catch {
+    return "";
+  }
+}
+
+export function parseForcedLogoutStorageValue(raw: string | null | undefined): ForcedLogoutPayload | null {
+  const normalized = String(raw || "").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized === "true") {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(normalized) as ForcedLogoutPayload;
+    return {
+      message: normalizeAuthNoticeMessage(parsed?.message),
+    };
+  } catch {
+    return {};
+  }
+}
+
+export function broadcastForcedLogout(message?: string | null | undefined) {
+  const normalizedMessage = normalizeAuthNoticeMessage(message);
+  const payload = normalizedMessage
+    ? JSON.stringify({
+      message: normalizedMessage,
+      nonce: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    })
+    : "true";
+
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.setItem(FORCE_LOGOUT_STORAGE_KEY, payload);
+    } catch {
+      // Ignore cross-tab broadcast storage failures.
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("force-logout", {
+        detail: normalizedMessage ? { message: normalizedMessage } : undefined,
+      }),
+    );
+  }
 }
 
 export function hasAuthSessionHintCookie() {

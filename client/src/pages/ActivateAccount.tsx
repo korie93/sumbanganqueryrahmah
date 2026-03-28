@@ -9,10 +9,10 @@ import {
   validateActivationToken,
 } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { persistAuthNotice } from "@/lib/auth-session";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 
 type ActivationPhase = "invalid" | "ready" | "success" | "validating";
-const AUTH_NOTICE_STORAGE_KEY = "auth_notice";
 
 function getTokenFromLocation() {
   if (typeof window === "undefined") return "";
@@ -50,12 +50,8 @@ export default function ActivateAccountPage() {
   useEffect(() => {
     if (phase !== "success" || !activation) return;
 
-    sessionStorage.setItem(
-      AUTH_NOTICE_STORAGE_KEY,
-      JSON.stringify({
-        message: `Akaun untuk ${activation.username} telah sedia digunakan. Sila log masuk menggunakan kata laluan baharu anda.`,
-        type: "success",
-      }),
+    persistAuthNotice(
+      `Akaun untuk ${activation.username} telah sedia digunakan. Sila log masuk menggunakan kata laluan baharu anda.`,
     );
 
     const timeoutId = window.setTimeout(() => {

@@ -1,6 +1,10 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { getCsrfHeader } from "./api/shared";
-import { setBannedSessionFlag, setStoredForcePasswordChange } from "./auth-session";
+import {
+  broadcastForcedLogout,
+  setBannedSessionFlag,
+  setStoredForcePasswordChange,
+} from "./auth-session";
 
 const isLowSpecClient = (() => {
   if (typeof window === "undefined" || typeof navigator === "undefined") {
@@ -64,14 +68,7 @@ async function throwIfResNotOk(res: Response) {
     }
 
     if (parsed?.forceLogout) {
-      localStorage.setItem("forceLogout", "true");
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(
-          new CustomEvent("force-logout", {
-            detail: parsed,
-          }),
-        );
-      }
+      broadcastForcedLogout(parsed?.message || parsed?.error?.message || "");
     }
 
     if (res.status === 503) {

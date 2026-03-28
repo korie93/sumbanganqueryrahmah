@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { login, generateFingerprint, verifyTwoFactorLogin } from "@/lib/api";
 import {
+  consumeStoredAuthNotice,
   persistAuthenticatedUser,
   setBannedSessionFlag,
   setStoredActivityId,
@@ -17,8 +18,6 @@ import { ERROR_CODES } from "@shared/error-codes";
 interface LoginProps {
   onLoginSuccess: (user: User) => void;
 }
-
-const AUTH_NOTICE_STORAGE_KEY = "auth_notice";
 
 export default function Login({ onLoginSuccess }: LoginProps) {
   const [username, setUsername] = useState("");
@@ -54,19 +53,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   };
 
   useEffect(() => {
-    const rawNotice = sessionStorage.getItem(AUTH_NOTICE_STORAGE_KEY);
-    if (!rawNotice) return;
-
-    try {
-      const parsed = JSON.parse(rawNotice) as { message?: string };
-      const message = String(parsed?.message || "").trim();
-      if (message) {
-        setNotice(message);
-      }
-    } catch {
-      // Ignore malformed notice payloads and continue with normal login.
-    } finally {
-      sessionStorage.removeItem(AUTH_NOTICE_STORAGE_KEY);
+    const message = consumeStoredAuthNotice();
+    if (message) {
+      setNotice(message);
     }
   }, []);
 

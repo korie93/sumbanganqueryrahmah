@@ -9,6 +9,7 @@ import {
   validatePasswordResetToken,
 } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { broadcastForcedLogout } from "@/lib/auth-session";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 
 type ResetPhase = "invalid" | "ready" | "success" | "validating";
@@ -82,6 +83,9 @@ export default function ResetPasswordPage() {
         newPassword,
         confirmPassword,
       });
+      broadcastForcedLogout(
+        "Sesi lama anda telah tamat kerana kata laluan telah ditetapkan semula. Sila log masuk semula.",
+      );
       setNewPassword("");
       setConfirmPassword("");
       setPhase("success");

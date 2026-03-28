@@ -5,7 +5,7 @@ import {
   startTwoFactorSetup,
   updateMyCredentials,
 } from "@/lib/api";
-import { clearAuthenticatedUserStorage, persistAuthenticatedUser } from "@/lib/auth-session";
+import { broadcastForcedLogout, persistAuthenticatedUser } from "@/lib/auth-session";
 import {
   buildMutationErrorToast,
   buildMutationSuccessToast,
@@ -90,10 +90,7 @@ export function useSettingsMyAccount({
   }, []);
 
   const forceLogoutAfterPasswordChange = useCallback(() => {
-    clearAuthenticatedUserStorage();
-    localStorage.setItem("forceLogout", "true");
-    window.dispatchEvent(new CustomEvent("force-logout"));
-    window.location.href = "/";
+    broadcastForcedLogout("Password changed. Please login again.");
   }, []);
 
   const handleChangeUsername = useCallback(async () => {

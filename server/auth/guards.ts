@@ -51,6 +51,20 @@ function canAccessDuringForcedPasswordChange(method: string, path: string) {
   return FORCED_PASSWORD_CHANGE_ALLOWLIST.has(`${method.toUpperCase()}:${path}`);
 }
 
+export function getInvalidatedSessionMessage(logoutReason?: string | null): string {
+  const normalized = String(logoutReason || "").trim().toUpperCase();
+
+  if (normalized === "PASSWORD_RESET_BY_SUPERUSER" || normalized === "PASSWORD_RESET_COMPLETED") {
+    return "Password was reset. Please login again.";
+  }
+
+  if (normalized === "PASSWORD_CHANGED") {
+    return "Password changed. Please login again.";
+  }
+
+  return "Session expired. Please login again.";
+}
+
 export function createAuthGuards(options: CreateAuthGuardsOptions) {
   const storage = options.storage;
   const secret = options.secret || getSessionSecret();
@@ -88,7 +102,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
       if (!activity || activity.isActive === false || activity.logoutTime !== null) {
         clearAuthSessionCookie(res);
         return res.status(401).json({
-          message: "Session expired. Please login again.",
+          message: getInvalidatedSessionMessage(activity?.logoutReason),
           forceLogout: true,
         });
       }
