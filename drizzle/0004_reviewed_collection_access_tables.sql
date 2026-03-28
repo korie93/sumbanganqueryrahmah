@@ -207,13 +207,18 @@ DELETE FROM public.admin_visible_nicknames avn
 WHERE avn.admin_user_id IS NULL
   OR avn.nickname_id IS NULL;
 
-DELETE FROM public.admin_visible_nicknames avn
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM public.users u
-  WHERE u.id = avn.admin_user_id
-    AND u.role = 'admin'
-);
+DO $$
+BEGIN
+  IF to_regclass('public.users') IS NOT NULL THEN
+    DELETE FROM public.admin_visible_nicknames avn
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM public.users u
+      WHERE u.id = avn.admin_user_id
+        AND u.role = 'admin'
+    );
+  END IF;
+END $$;
 
 DELETE FROM public.admin_visible_nicknames avn
 WHERE NOT EXISTS (

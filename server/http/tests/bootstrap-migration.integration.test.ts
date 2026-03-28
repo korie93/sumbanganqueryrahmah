@@ -19,6 +19,14 @@ const aiSupportMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", "0006_reviewed_ai_support_tables.sql"),
   "utf8",
 );
+const storageMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", "0003_reviewed_storage_tables.sql"),
+  "utf8",
+);
+const collectionAccessMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", "0004_reviewed_collection_access_tables.sql"),
+  "utf8",
+);
 const authLifecycleMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", "0009_reviewed_auth_lifecycle_tables.sql"),
   "utf8",
@@ -192,6 +200,22 @@ test(
 
       assert.equal(await indexExists(pool, "idx_ai_messages_conversation_created_at"), true);
       assert.equal(await indexExists(pool, "idx_ai_messages_conversation_id"), true);
+    });
+  },
+);
+
+test(
+  "reviewed pre-user migrations remain compatible before users exists and users migration restores deferred constraints",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await applySql(pool, storageMigrationSql);
+      await applySql(pool, collectionAccessMigrationSql);
+      await applySql(pool, usersMigrationSql);
+
+      assert.equal(await constraintExists(pool, "fk_user_activity_user_id"), true);
+      assert.equal(await indexExists(pool, "idx_user_activity_user_id"), true);
+      assert.equal(await indexExists(pool, "idx_admin_visible_nicknames_admin_nickname_unique"), true);
     });
   },
 );

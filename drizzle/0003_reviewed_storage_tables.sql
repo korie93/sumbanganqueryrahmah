@@ -85,26 +85,28 @@ SET
   login_time = COALESCE(login_time, now()),
   last_activity_time = COALESCE(last_activity_time, login_time, now());
 
-DELETE FROM public.user_activity activity
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM public.users usr
-  WHERE usr.id = activity.user_id
-);
-
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_constraint
-    WHERE conname = 'fk_user_activity_user_id'
-  ) THEN
-    ALTER TABLE public.user_activity
-    ADD CONSTRAINT fk_user_activity_user_id
-    FOREIGN KEY (user_id)
-    REFERENCES public.users(id)
-    ON UPDATE CASCADE
-    ON DELETE CASCADE;
+  IF to_regclass('public.users') IS NOT NULL THEN
+    DELETE FROM public.user_activity activity
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM public.users usr
+      WHERE usr.id = activity.user_id
+    );
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'fk_user_activity_user_id'
+    ) THEN
+      ALTER TABLE public.user_activity
+      ADD CONSTRAINT fk_user_activity_user_id
+      FOREIGN KEY (user_id)
+      REFERENCES public.users(id)
+      ON UPDATE CASCADE
+      ON DELETE CASCADE;
+    END IF;
   END IF;
 END $$;
 

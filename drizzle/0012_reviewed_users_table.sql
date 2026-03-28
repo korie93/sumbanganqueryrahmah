@@ -98,6 +98,32 @@ BEGIN
 END
 $$;
 
+DO $$
+BEGIN
+  IF to_regclass('public.user_activity') IS NOT NULL THEN
+    DELETE FROM public.user_activity activity
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM public.users usr
+      WHERE usr.id = activity.user_id
+    );
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'fk_user_activity_user_id'
+    ) THEN
+      ALTER TABLE public.user_activity
+      ADD CONSTRAINT fk_user_activity_user_id
+      FOREIGN KEY (user_id)
+      REFERENCES public.users(id)
+      ON UPDATE CASCADE
+      ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower_unique
 ON public.users(lower(username));
 
