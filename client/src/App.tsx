@@ -12,8 +12,10 @@ import {
   LoginPage,
   MaintenanceRoutePage,
   ResetPasswordPage,
+  SingleTabBlockedPage,
 } from "@/app/lazy-pages";
 import { PageSpinner } from "@/app/PageSpinner";
+import { useSingleTabSession } from "@/app/useSingleTabSession";
 import { useAppShellState } from "@/app/useAppShellState";
 import AutoLogout from "@/components/AutoLogout";
 import FloatingAI from "@/components/FloatingAI";
@@ -62,6 +64,12 @@ function AppContent() {
     );
   }, [currentPage, monitorSection, systemName, user]);
 
+  const {
+    isBlocked: isSingleTabBlocked,
+    isReady: isSingleTabReady,
+    retryNow: retrySingleTabLock,
+  } = useSingleTabSession(user?.username);
+
   const renderRoutePage = (routeKey: string, node: React.ReactNode, fullscreen = true) => (
     <AppRouteErrorBoundary
       routeKey={routeKey}
@@ -108,6 +116,17 @@ function AppContent() {
     }
 
     return renderRoutePage("login", <LoginPage onLoginSuccess={handleLoginSuccess} />);
+  }
+
+  if (!isSingleTabReady) {
+    return <PageSpinner fullscreen />;
+  }
+
+  if (isSingleTabBlocked) {
+    return renderRoutePage(
+      "single-tab-blocked",
+      <SingleTabBlockedPage onRetry={retrySingleTabLock} />,
+    );
   }
 
   if (user.mustChangePassword) {
