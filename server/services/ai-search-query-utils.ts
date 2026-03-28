@@ -22,6 +22,31 @@ const RELATION_WORDS = [
   "isteri",
 ];
 
+const CUSTOMER_ADDRESS_CONTEXT_WORDS = [
+  "home",
+  "mail",
+  "mailing",
+  "correspondence",
+  "residence",
+  "residential",
+  "current",
+  "customer",
+  "applicant",
+  "pemohon",
+];
+
+const CUSTOMER_LOCALITY_KEYS = [
+  "bandar",
+  "city",
+  "citytown",
+  "town",
+  "district",
+  "daerah",
+  "mukim",
+  "negeri",
+  "state",
+];
+
 function normalizeKey(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -29,6 +54,36 @@ function normalizeKey(value: string): string {
 function isRelationKey(normalizedKey: string): boolean {
   const relationWordsNorm = RELATION_WORDS.map(normalizeKey);
   return relationWordsNorm.some((word) => normalizedKey.includes(word));
+}
+
+function isOfficeKey(normalizedKey: string): boolean {
+  return normalizedKey.includes("office") || normalizedKey.includes("pejabat");
+}
+
+function isPostcodeKey(normalizedKey: string): boolean {
+  return (
+    normalizedKey.includes("postcode")
+    || normalizedKey.includes("postalcode")
+    || normalizedKey.includes("poskod")
+    || normalizedKey.includes("zipcode")
+    || normalizedKey === "zip"
+  );
+}
+
+function hasCustomerAddressContext(normalizedKey: string): boolean {
+  return CUSTOMER_ADDRESS_CONTEXT_WORDS.some((word) => normalizedKey.includes(word));
+}
+
+function isAddressKey(normalizedKey: string): boolean {
+  return (
+    normalizedKey === "address"
+    || normalizedKey.includes("address")
+    || normalizedKey.includes("alamat")
+  );
+}
+
+function isLocalityKey(normalizedKey: string): boolean {
+  return CUSTOMER_LOCALITY_KEYS.some((word) => normalizedKey === word || normalizedKey.includes(word));
 }
 
 function normalizeToObject(value: unknown): AiSearchJsonRecord {
@@ -269,24 +324,19 @@ export function extractCustomerPostcode(data: AiSearchJsonRecord): string | null
     return null;
   };
 
-  const homePostcode = pickByKey(
+  const preferredCustomerPostcode = pickByKey(
     (key) =>
-      !isRelationKey(key) &&
-      key.includes("home") &&
-      (key.includes("postcode") || key.includes("postalcode") || key.includes("poskod")),
+      !isRelationKey(key)
+      && !isOfficeKey(key)
+      && isPostcodeKey(key)
+      && hasCustomerAddressContext(key),
   );
-  if (homePostcode) return homePostcode;
+  if (preferredCustomerPostcode) return preferredCustomerPostcode;
 
   const genericPostcode = pickByKey((key) => {
-    const isGenericPostcode =
-      key === "poskod" ||
-      key === "postcode" ||
-      key === "postalcode" ||
-      key.endsWith("postcode") ||
-      key.endsWith("poskod");
-    if (!isGenericPostcode) return false;
+    if (!isPostcodeKey(key)) return false;
     if (/[23]$/.test(key)) return false;
-    if (key.includes("office")) return false;
+    if (isOfficeKey(key)) return false;
     if (isRelationKey(key)) return false;
     return true;
   });
@@ -295,12 +345,10 @@ export function extractCustomerPostcode(data: AiSearchJsonRecord): string | null
   return pickByKey(
     (key) => {
       if (isRelationKey(key)) return false;
-      if (key.includes("office")) return false;
+      if (isOfficeKey(key)) return false;
       return (
-        key.includes("homeaddress") ||
-        key.includes("alamatsuratmenyurat") ||
-        key === "address" ||
-        key.includes("alamat")
+        isAddressKey(key)
+        || key.includes("alamatsuratmenyurat")
       );
     },
     (_key, rawValue) => isNonEmptyString(rawValue),
@@ -315,20 +363,13 @@ export function extractCustomerLocationHint(data: AiSearchJsonRecord): string {
     if (!isNonEmptyString(rawValue)) continue;
     const key = normalizeKey(rawKey);
     if (isRelationKey(key)) continue;
-    if (key.includes("office")) continue;
+    if (isOfficeKey(key)) continue;
 
     const isLocationField =
-      key.includes("homeaddress") ||
-      key.includes("alamatsuratmenyurat") ||
-      key === "address" ||
-      key.includes("alamat") ||
-      key === "bandar" ||
-      key === "city" ||
-      key.includes("citytown") ||
-      key === "negeri" ||
-      key === "state" ||
-      key.includes("postcode") ||
-      key.includes("poskod");
+      isAddressKey(key)
+      || key.includes("alamatsuratmenyurat")
+      || isLocalityKey(key)
+      || isPostcodeKey(key);
 
     if (!isLocationField) continue;
     const value = String(rawValue).trim();

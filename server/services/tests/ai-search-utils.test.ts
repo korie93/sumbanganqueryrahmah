@@ -64,6 +64,29 @@ test("customer postcode and location helpers prefer home fields and ignore relat
   assert.equal(normalizeLocationHint("Jalan Ampang, Selangor!!!"), "Jalan Ampang Selangor");
 });
 
+test("customer postcode and location helpers understand mailing and residential field variants", () => {
+  const data = {
+    MailingPostcode: "43200",
+    MailingAddress1: "Jalan Cheras",
+    MailingAddress2: "Taman Maju",
+    Daerah: "Cheras",
+    StateName: "Selangor",
+    OfficePostalCode: "50000",
+    SpouseMailingPostcode: "12345",
+  };
+
+  assert.equal(extractCustomerPostcode(data), "43200");
+  assert.deepEqual(extractCustomerLocationHint(data).split(" "), [
+    "43200",
+    "Jalan",
+    "Cheras",
+    "Taman",
+    "Maju",
+    "Cheras",
+    "Selangor",
+  ]);
+});
+
 test("matching and scoring helpers rank likely fields without mutating behavior", () => {
   const row = ensureJsonRow({
     rowId: "row-1",

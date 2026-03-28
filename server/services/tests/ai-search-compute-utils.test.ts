@@ -254,3 +254,61 @@ test("buildResolvedAiSearchResult skips fuzzy suggestions for digit-style search
   assert.equal((result.payload as any).person?.id, "row-1");
   assert.equal(result.audit.used_last_person, false);
 });
+
+test("buildResolvedAiSearchResult includes nearest branch for IC searches with mailing postcode fields", async () => {
+  let postcodeLookup = "";
+
+  const result = await buildResolvedAiSearchResult({
+    query: "900101015555",
+    aiTimeoutMs: 6000,
+    intent: {
+      ...createIntent(),
+      entities: {
+        name: null,
+        ic: "900101015555",
+        account_no: null,
+        phone: null,
+        address: null,
+        count_groups: null,
+      },
+    },
+    best: createCandidate("row-1", {
+      Nama: "Ali Bin Abu",
+      "No. MyKad": "900101015555",
+      MailingPostcode: "43200",
+      MailingAddress1: "Jalan Cheras",
+    }),
+    bestScore: 20,
+    hasDigitsQuery: true,
+    keywordResults: [],
+    fallbackDigitsResults: [],
+    fallbackPerson: null,
+    storage: {
+      aiFuzzySearch: async () => [],
+    } as any,
+    branchLookups: {
+      findBranchesByText: async () => [],
+      findBranchesByPostcode: async (postcode: string) => {
+        postcodeLookup = postcode;
+        return [{
+          name: "AEON Cheras Selatan",
+          address: "Cheras Selatan",
+          phone: "03-12345678",
+          fax: null,
+          businessHour: null,
+          dayOpen: null,
+          atmCdm: null,
+          inquiryAvailability: null,
+          applicationAvailability: null,
+          aeonLounge: null,
+        }];
+      },
+      nearestBranches: async () => [],
+      postcodeLatLng: async () => null,
+    },
+  });
+
+  assert.equal(postcodeLookup, "43200");
+  assert.equal((result.payload as any).nearest_branch?.name, "AEON Cheras Selatan");
+  assert.ok(String((result.payload as any).ai_explanation).includes("AEON Cheras Selatan"));
+});
