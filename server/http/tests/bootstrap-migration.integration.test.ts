@@ -11,6 +11,14 @@ import { ensureCollectionRecordsTables } from "../../internal/collection-bootstr
 import { ensureUsersBootstrapSchema } from "../../internal/users-bootstrap/schema";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+const aiMessagesIndexMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", "0000_ai_messages_conversation_created_at_idx.sql"),
+  "utf8",
+);
+const aiSupportMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", "0006_reviewed_ai_support_tables.sql"),
+  "utf8",
+);
 const authLifecycleMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", "0009_reviewed_auth_lifecycle_tables.sql"),
   "utf8",
@@ -173,6 +181,20 @@ async function columnIsNotNull(pool: pg.Pool, table: string, column: string): Pr
   );
   return Boolean(result.rows[0]?.is_not_null);
 }
+
+test(
+  "reviewed AI migrations remain compatible on a fresh database even when the early index migration runs first",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await applySql(pool, aiMessagesIndexMigrationSql);
+      await applySql(pool, aiSupportMigrationSql);
+
+      assert.equal(await indexExists(pool, "idx_ai_messages_conversation_created_at"), true);
+      assert.equal(await indexExists(pool, "idx_ai_messages_conversation_id"), true);
+    });
+  },
+);
 
 test(
   "reviewed auth migrations remain compatible when users bootstrap runs afterward",
