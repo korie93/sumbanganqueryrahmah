@@ -53,6 +53,24 @@ export async function createImport(
   return parseApiJson(response, importRecordSchema, "/api/imports");
 }
 
+export async function createImportFromFile(
+  name: string,
+  file: File,
+  options?: ImportRequestOptions,
+) {
+  const formData = new FormData();
+  formData.set("name", name);
+  formData.append("file", file, file.name);
+
+  const response = await apiRequest(
+    "POST",
+    "/api/imports",
+    formData,
+    options,
+  );
+  return parseApiJson(response, importRecordSchema, "/api/imports");
+}
+
 export async function deleteImport(id: string, options?: ImportRequestOptions) {
   const response = await apiRequest("DELETE", `/api/imports/${id}`, undefined, options);
   return parseApiJson(response, deleteImportResponseSchema, `/api/imports/${id}`);

@@ -41,6 +41,30 @@ export function createApiHeaders(headers?: HeadersInit): Record<string, string> 
   return Object.fromEntries(normalizedHeaders.entries());
 }
 
+function looksLikeHtmlDocument(value: string) {
+  return /<!doctype html|<html[\s>]|<body[\s>]|<head[\s>]/i.test(value);
+}
+
+function normalizePlainTextErrorMessage(res: Response, text: string) {
+  const normalizedText = String(text || "").replace(/\s+/g, " ").trim();
+
+  if (res.status === 413) {
+    return "The selected file is too large to import. Try a smaller file or increase the server upload limit.";
+  }
+
+  if (looksLikeHtmlDocument(normalizedText)) {
+    return `The server returned an unexpected ${res.status} error page.`;
+  }
+
+  if (!normalizedText) {
+    return res.statusText || "Request failed";
+  }
+
+  return normalizedText.length > 240
+    ? `${normalizedText.slice(0, 237)}...`
+    : normalizedText;
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -84,7 +108,7 @@ async function throwIfResNotOk(res: Response) {
       }
     }
 
-    const errorMessage = parsed?.error?.message || parsed?.message || text;
+    const errorMessage = parsed?.error?.message || parsed?.message || normalizePlainTextErrorMessage(res, text);
     const normalizedPayload = parsed || { message: errorMessage };
     if (requestId && !normalizedPayload.requestId) {
       normalizedPayload.requestId = requestId;

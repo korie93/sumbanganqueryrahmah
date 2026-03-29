@@ -516,6 +516,46 @@ test("POST /api/imports creates an import, writes rows, and audits the import", 
   }
 });
 
+test("POST /api/imports accepts multipart file uploads for bulk-friendly imports", async () => {
+  const { app, createImportCalls, createDataRowCalls, auditLogs } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const formData = new FormData();
+    formData.set("name", "Multipart Import");
+    formData.append(
+      "file",
+      new File(
+        ["customer,amount\nAlice,15\nBob,27\n"],
+        "multipart-import.csv",
+        { type: "text/csv" },
+      ),
+    );
+
+    const response = await fetch(`${baseUrl}/api/imports`, {
+      method: "POST",
+      body: formData,
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.doesNotThrow(() => importRecordSchema.parse(payload));
+    assert.equal(payload.name, "Multipart Import");
+    assert.equal(payload.filename, "multipart-import.csv");
+    assert.equal(createImportCalls.length, 1);
+    assert.equal(createImportCalls[0].name, "Multipart Import");
+    assert.equal(createDataRowCalls.length, 2);
+    assert.deepEqual(createDataRowCalls[0].jsonDataJsonb, {
+      customer: "Alice",
+      amount: "15",
+    });
+    assert.equal(auditLogs.length, 1);
+    assert.match(String(auditLogs[0].details), /Imported 2 rows from multipart-import\.csv/);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /api/imports/:id returns the import details with rows", async () => {
   const { app } = createImportsRouteHarness();
   const { server, baseUrl } = await startTestServer(app);

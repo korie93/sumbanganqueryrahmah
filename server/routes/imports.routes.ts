@@ -1,6 +1,7 @@
 import type { Express, RequestHandler } from "express";
 import type { ImportsController } from "../controllers/imports.controller";
 import { asyncHandler } from "../http/async-handler";
+import { createImportsMultipartRoute } from "./imports-multipart-route";
 
 type ImportsRouteDeps = {
   importsController: ImportsController;
@@ -18,12 +19,13 @@ export function registerImportRoutes(app: Express, deps: ImportsRouteDeps) {
     requireTabAccess,
     searchRateLimiter,
   } = deps;
+  const importsMultipartRoute = createImportsMultipartRoute();
 
   app.get("/api/data-rows", authenticateToken, asyncHandler(importsController.listDataRows));
 
   app.get("/api/imports", authenticateToken, asyncHandler(importsController.listImports));
 
-  app.post("/api/imports", authenticateToken, asyncHandler(importsController.createImport));
+  app.post("/api/imports", authenticateToken, importsMultipartRoute, asyncHandler(importsController.createImport));
 
   app.get("/api/imports/:id", authenticateToken, asyncHandler(importsController.getImport));
 

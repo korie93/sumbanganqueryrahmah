@@ -56,6 +56,34 @@ test("apiRequest injects x-request-id headers and preserves backend request ids 
   }
 });
 
+test("apiRequest normalizes oversized HTML error pages into a friendly message", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async () => new Response(
+    "<!DOCTYPE html><html><head><title>413 Request Entity Too Large</title></head><body><h1>413 Request Entity Too Large</h1></body></html>",
+    {
+      status: 413,
+      headers: {
+        "Content-Type": "text/html",
+      },
+    },
+  )) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () => apiRequest("POST", "/api/imports", { ok: true }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /too large to import/i);
+        assert.doesNotMatch(error.message, /<!doctype html|<html/i);
+        return true;
+      },
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("getQueryFn injects x-request-id headers for query fetches", async () => {
   const originalFetch = globalThis.fetch;
   let observedRequestId = "";

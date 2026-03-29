@@ -133,7 +133,7 @@ export function BulkImportPanel({
                     <p className="text-xs text-green-600 dark:text-green-400">{result.rowCount} rows imported</p>
                   ) : null}
                   {result.status === "error" && result.error ? (
-                    <p className="text-xs text-red-600 dark:text-red-400">{result.error}</p>
+                    <p className="text-xs text-red-600 dark:text-red-400 break-words">{result.error}</p>
                   ) : null}
                 </div>
 
@@ -166,7 +166,7 @@ export function BulkImportPanel({
                 {bulkResults
                   .filter((result) => result.status === "error")
                   .map((result, index) => (
-                    <li key={index}>
+                    <li key={index} className="break-words">
                       <span className="font-medium">{result.filename}</span>: {result.error}
                     </li>
                   ))}

@@ -7,6 +7,21 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
     return next(err);
   }
 
+  const error = err as {
+    message?: string;
+    code?: string;
+    type?: string;
+    status?: number;
+    statusCode?: number;
+  };
+
+  if (error?.type === "entity.too.large" || error?.status === 413 || error?.statusCode === 413) {
+    return res.status(413).json({
+      ok: false,
+      message: "The request payload is too large to process.",
+    });
+  }
+
   if (err instanceof HttpError) {
     return res.status(err.statusCode).json({
       ok: false,
@@ -23,7 +38,6 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
     });
   }
 
-  const error = err as { message?: string; code?: string };
   logger.error("Unhandled API error", {
     path: req.path,
     method: req.method,

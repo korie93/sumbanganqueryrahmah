@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { File, FolderOpen } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { createImport } from "@/lib/api";
+import { createImport, createImportFromFile } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { BulkImportPanel } from "@/pages/import/BulkImportPanel";
-import { parseImportFileForBulk, parseImportPreview, stripImportExtension } from "@/pages/import/parsing";
+import { parseImportPreview, stripImportExtension } from "@/pages/import/parsing";
 import { SingleImportPanel } from "@/pages/import/SingleImportPanel";
 import type { BulkFileResult, ImportProps, ImportRow } from "@/pages/import/types";
 
@@ -204,45 +204,15 @@ export default function Import({ onNavigate }: ImportProps) {
       }
 
       try {
-        let parsedRows: ImportRow[] | null = null;
-        let parseErrorMessage: string | undefined;
-        {
-          const parsed = await parseImportFileForBulk(currentFile);
-          parsedRows = parsed.data;
-          parseErrorMessage = parsed.error;
-        }
-
+        await createImportFromFile(
+          stripImportExtension(currentFile.name),
+          currentFile,
+          { signal: controller.signal },
+        );
         if (controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {
-          if (parsedRows) {
-            parsedRows.length = 0;
-          }
           break;
         }
-
-        if (parseErrorMessage) {
-          nextPending.status = "error";
-          nextPending.error = parseErrorMessage;
-        } else if (!parsedRows || parsedRows.length === 0) {
-          nextPending.status = "error";
-          nextPending.error = "No data found in file";
-        } else {
-          await createImport(
-            stripImportExtension(currentFile.name),
-            currentFile.name,
-            parsedRows,
-            { signal: controller.signal },
-          );
-          if (controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {
-            parsedRows.length = 0;
-            break;
-          }
-          nextPending.status = "success";
-          nextPending.rowCount = parsedRows.length;
-        }
-
-        if (parsedRows) {
-          parsedRows.length = 0;
-        }
+        nextPending.status = "success";
       } catch (bulkError: unknown) {
         if (isAbortError(bulkError) || controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {
           break;
