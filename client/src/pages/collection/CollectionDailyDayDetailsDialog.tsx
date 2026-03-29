@@ -174,7 +174,11 @@ export function CollectionDailyDayDetailsDialog({
               )}
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-border/60 pt-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <div
+              className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-3 border-t border-border/60 bg-background/95 px-4 pt-3 text-sm shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:-mx-6 sm:px-6 sm:flex-row sm:items-center sm:justify-between"
+              style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
+              data-floating-ai-avoid="true"
+            >
               <div className="text-muted-foreground">
                 Page {dayDetails.pagination.page} of {dayDetails.pagination.totalPages} | Records{" "}
                 {dayDetails.pagination.totalRecords}

@@ -374,7 +374,8 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         </div>
 
         <div
-          className="flex flex-wrap justify-end gap-2"
+          className="sticky bottom-0 z-10 -mx-6 flex flex-col gap-2 border-t border-border/60 bg-background/95 px-6 pt-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:static sm:mx-0 sm:flex-row sm:flex-wrap sm:justify-end sm:border-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none sm:backdrop-blur-0"
+          style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
           data-floating-ai-avoid="true"
         >
           <Button
@@ -382,10 +383,11 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
             variant="outline"
             onClick={clearForm}
             disabled={submitting}
+            className="w-full sm:w-auto"
           >
             Reset Form
           </Button>
-          <Button type="button" onClick={handleSubmit} disabled={submitting}>
+          <Button type="button" onClick={handleSubmit} disabled={submitting} className="w-full sm:w-auto">
             {submitting ? "Saving..." : "Save Collection"}
           </Button>
         </div>

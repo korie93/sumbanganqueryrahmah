@@ -197,6 +197,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
         <div
           className={cn(
             "pointer-events-auto transition-all duration-200",
+            isMobile ? "w-[min(24rem,calc(100vw-0.75rem))] self-center" : "",
             isOpen && !safePosition.hasBlockingDialog
               ? "translate-y-0 opacity-100"
               : "pointer-events-none translate-y-2 opacity-0",
@@ -206,7 +207,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
             className={cn(
               "border border-border bg-card text-card-foreground shadow-xl",
               isMobile
-                ? "h-[min(62vh,30rem)] w-[min(24rem,calc(100vw-1rem))] rounded-[22px]"
+                ? "h-[min(62vh,30rem)] w-full rounded-[24px]"
                 : "h-[min(520px,calc(100vh-120px))] w-[min(380px,calc(100vw-48px))] rounded-[16px]",
             )}
             aria-label="AI SQR Popup"
@@ -268,6 +269,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
         className={cn(
           "pointer-events-auto relative flex items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-[1.03]",
           isMobile ? "h-12 w-12" : "h-14 w-14",
+          isMobile && isOpen ? "pointer-events-none scale-95 opacity-0" : "",
           safePosition.hasBlockingDialog ? "pointer-events-none scale-95" : "",
           !isOpen && isThinking ? styles.aiThinkingRing : "",
         )}

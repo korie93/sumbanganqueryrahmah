@@ -62,7 +62,10 @@ export function ViewerFiltersPanel({
       ) : (
         <div className="space-y-3">
           {columnFilters.map((filter, index) => (
-            <div key={index} className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <div
+              key={index}
+              className="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/70 p-3 sm:flex-row sm:flex-wrap sm:items-center"
+            >
               <Select
                 value={filter.column}
                 onValueChange={(value) => onUpdateFilter(index, "column", value)}
@@ -105,12 +108,13 @@ export function ViewerFiltersPanel({
 
               <Button
                 variant="ghost"
-                size="icon"
+                size="sm"
                 onClick={() => onRemoveFilter(index)}
                 data-testid={`button-remove-filter-${index}`}
-                className="self-end sm:self-auto"
+                className="w-full justify-center gap-2 self-end sm:w-auto sm:justify-start sm:self-auto"
               >
                 <X className="w-4 h-4" />
+                <span>Remove</span>
               </Button>
             </div>
           ))}

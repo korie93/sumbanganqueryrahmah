@@ -42,7 +42,8 @@ export function ViewerFooter({
 
   return (
     <div
-      className="mt-4 flex flex-col gap-3 rounded-xl border border-border/60 bg-background/70 px-3.5 py-2.5 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
+      className="sticky bottom-0 z-20 mt-4 flex flex-col gap-3 rounded-xl border border-border/60 bg-background/95 px-3.5 py-2.5 text-sm text-muted-foreground shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 md:static md:z-auto md:bg-background/70 md:shadow-none md:backdrop-blur-0 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
+      style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
       data-floating-ai-avoid="true"
     >
       <span>

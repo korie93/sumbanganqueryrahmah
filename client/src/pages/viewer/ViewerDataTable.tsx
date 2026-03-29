@@ -1,5 +1,6 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { FixedSizeList, type ListChildComponentProps } from "react-window";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { DataRowWithId, ViewerVirtualRowData } from "@/pages/viewer/types";
 import { applyViewerVirtualRowStyle } from "@/pages/viewer/viewer-virtual-row-style";
@@ -80,6 +81,7 @@ export function ViewerDataTable({
   viewportHeightPx,
   visibleHeaders,
 }: ViewerDataTableProps) {
+  const isMobile = useIsMobile();
   const virtualTableWidthRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
@@ -133,7 +135,89 @@ export function ViewerDataTable({
 
   return (
     <div className="ops-table-shell overflow-x-auto">
-      {enableVirtualRows ? (
+      {isMobile ? (
+        <div className="space-y-3">
+          {filteredRows.length > 0 ? (
+            <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background/80 px-3 py-2.5 text-sm text-muted-foreground">
+              <span>{filteredRows.length} row{filteredRows.length === 1 ? "" : "s"} on this page</span>
+              <label className="flex items-center gap-2 text-foreground">
+                <Checkbox
+                  checked={selectAllFiltered && filteredRows.length > 0}
+                  onCheckedChange={onToggleSelectAllFiltered}
+                  data-testid="checkbox-select-all-rows"
+                />
+                <span className="text-sm font-medium">Select all</span>
+              </label>
+            </div>
+          ) : null}
+
+          {filteredRows.map((row) => {
+            const previewHeaders = visibleHeaders.slice(0, 4);
+            const overflowHeaders = visibleHeaders.slice(4);
+            const selected = selectedRowIds.has(row.__rowId);
+
+            return (
+              <article
+                key={row.__rowId}
+                className={`rounded-2xl border border-border/60 bg-background/80 p-3 shadow-sm ${selected ? "border-primary/40 bg-primary/5" : ""}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      Row {row.__rowId + 1}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {visibleHeaders.length > 0
+                        ? `${Math.min(visibleHeaders.length, 4)} field${visibleHeaders.length === 1 ? "" : "s"} shown`
+                        : "No visible columns selected"}
+                    </p>
+                  </div>
+                  <Checkbox
+                    checked={selected}
+                    onCheckedChange={() => onToggleRowSelection(row.__rowId)}
+                    aria-label={`Select row ${row.__rowId + 1}`}
+                  />
+                </div>
+
+                {previewHeaders.length > 0 ? (
+                  <dl className="mt-3 space-y-2">
+                    {previewHeaders.map((header) => (
+                      <div key={`${row.__rowId}-${header}`} className="rounded-xl border border-border/50 bg-muted/30 px-3 py-2">
+                        <dt className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                          {header}
+                        </dt>
+                        <dd className="mt-1 break-words text-sm text-foreground">
+                          {String(row[header] ?? "-")}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : null}
+
+                {overflowHeaders.length > 0 ? (
+                  <details className="mt-3 rounded-xl border border-border/50 bg-background/70">
+                    <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-primary">
+                      Show {overflowHeaders.length} more field{overflowHeaders.length === 1 ? "" : "s"}
+                    </summary>
+                    <dl className="space-y-2 border-t border-border/50 px-3 py-3">
+                      {overflowHeaders.map((header) => (
+                        <div key={`${row.__rowId}-${header}-extra`} className="rounded-lg border border-border/40 bg-muted/20 px-3 py-2">
+                          <dt className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                            {header}
+                          </dt>
+                          <dd className="mt-1 break-words text-sm text-foreground">
+                            {String(row[header] ?? "-")}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </details>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
+      ) : enableVirtualRows ? (
         <div ref={virtualTableWidthRef} className={styles.virtualTableWidth}>
           <div className="sticky top-0 z-10 border-b border-border bg-muted">
             <ViewerGridShell gridTemplateColumns={gridTemplateColumns} className="h-12 items-center">
