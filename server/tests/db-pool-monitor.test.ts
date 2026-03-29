@@ -96,10 +96,43 @@ test("hasPgPoolPressure only reports pressure when clients are queueing", () => 
       total: 3,
       idle: 0,
       waiting: 1,
+      max: 5,
+    }),
+    false,
+  );
+
+  assert.equal(
+    hasPgPoolPressure({
+      total: 3,
+      idle: 0,
+      waiting: 1,
       max: 3,
     }),
     true,
   );
+});
+
+test("bindPgPoolMonitoring does not warn while the pool can still create more clients", () => {
+  const pool = new FakePool();
+  pool.totalCount = 1;
+  pool.idleCount = 0;
+  pool.waitingCount = 1;
+  pool.options.max = 5;
+
+  const warnings: Array<Record<string, unknown>> = [];
+
+  bindPgPoolMonitoring(pool, {
+    logger: {
+      warn: (_message, meta) => {
+        warnings.push(meta || {});
+      },
+      error: () => undefined,
+    },
+  });
+
+  pool.emit("acquire");
+
+  assert.equal(warnings.length, 0);
 });
 
 test("bindPgPoolMonitoring logs pool client errors with the current snapshot", () => {

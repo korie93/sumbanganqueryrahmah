@@ -35,7 +35,7 @@ export function getPgPoolSnapshot(pool: PgPoolLike): PgPoolSnapshot {
 }
 
 export function hasPgPoolPressure(snapshot: PgPoolSnapshot): boolean {
-  return snapshot.waiting > 0;
+  return snapshot.max > 0 && snapshot.waiting > 0 && snapshot.idle <= 0 && snapshot.total >= snapshot.max;
 }
 
 export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonitoringOptions = {}) {

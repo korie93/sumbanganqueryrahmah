@@ -8,8 +8,11 @@ const HEARTBEAT_INTERVAL_MS = 30_000;
 
 type RuntimeManagerOptions = {
   wss: WebSocketServer;
-  storage: Pick<PostgresStorage, "getActivityById" | "clearCollectionNicknameSessionByActivity">;
-  secret: string;
+  storage: Pick<PostgresStorage, "getActivityById"> & {
+    clearCollectionNicknameSessionByActivity?: (activityId: string) => Promise<unknown> | unknown;
+  };
+  secret: string | readonly string[];
+  connectedClients?: Map<string, WebSocket>;
 };
 
 export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
@@ -17,8 +20,10 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   broadcastWsMessage: (payload: Record<string, unknown>) => void;
 } {
   const { wss, storage, secret } = options;
-  const connectedClients = new Map<string, WebSocket>();
+  const connectedClients = options.connectedClients ?? new Map<string, WebSocket>();
   const aliveSockets = new WeakSet<WebSocket>();
+  const clearNicknameSession = (activityId: string) =>
+    Promise.resolve(storage.clearCollectionNicknameSessionByActivity?.(activityId)).catch(() => undefined);
 
   const broadcastWsMessage = (payload: Record<string, unknown>) => {
     const message = JSON.stringify(payload);
@@ -26,7 +31,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     for (const [activityId, ws] of connectedClients.entries()) {
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         connectedClients.delete(activityId);
-        void storage.clearCollectionNicknameSessionByActivity(activityId);
+        void clearNicknameSession(activityId);
         continue;
       }
 
@@ -34,7 +39,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         ws.send(message);
       } catch {
         connectedClients.delete(activityId);
-        void storage.clearCollectionNicknameSessionByActivity(activityId);
+        void clearNicknameSession(activityId);
       }
     }
   };
