@@ -266,10 +266,14 @@ const checkMobileNavbar = async (page, tracker) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForLoadState("networkidle");
 
-  await page.getByRole("button", { name: "Open navigation menu" }).waitFor();
-  await page.locator('button[aria-label="Open navigation menu"]').click();
-  await page.getByRole("menuitem", { name: "Home" }).waitFor();
-  await page.getByRole("menuitem", { name: /Backup & Restore/i }).waitFor();
+  const mobileNavTrigger = page.getByTestId("button-open-mobile-nav");
+  await mobileNavTrigger.waitFor();
+  await mobileNavTrigger.click();
+
+  const mobileNavigation = page.getByRole("navigation", { name: "Mobile navigation" });
+  await page.getByRole("heading", { name: "Navigation" }).waitFor();
+  await mobileNavigation.getByRole("button", { name: /^Home\b/i }).waitFor();
+  await mobileNavigation.getByRole("button", { name: /Backup & Restore/i }).waitFor();
 
   tracker.assertClean("mobile navbar");
   tracker.clear();
