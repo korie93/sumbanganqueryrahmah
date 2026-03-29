@@ -133,9 +133,9 @@ function NavbarImpl({
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/70 bg-background/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-[1440px] flex-col gap-3 px-3 py-2 md:px-4 lg:min-h-16 lg:flex-row lg:items-center">
-        <div className="flex min-w-0 items-start justify-between gap-3 lg:flex-1 lg:items-center">
+        <div className="flex min-w-0 items-start justify-between gap-3 lg:flex-[0_1_auto] lg:items-center lg:pr-2">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex min-w-0 items-center gap-2 rounded-full border border-border/70 bg-card/75 px-2.5 py-1.5 shadow-sm">
+            <div className="flex min-w-0 items-center gap-2 rounded-full border border-border/70 bg-card/75 px-2.5 py-1.5 shadow-sm lg:max-w-[17rem] xl:max-w-none">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/10">
                 <BrandLogo
                   decorative
@@ -205,8 +205,8 @@ function NavbarImpl({
           </div>
         </div>
 
-        <div className="hidden min-w-0 flex-1 items-center justify-center gap-2 lg:flex">
-          <nav className="navbar-premium-glass max-w-full">
+        <div className="hidden min-w-0 flex-1 items-center justify-start overflow-hidden lg:flex">
+          <nav className="navbar-premium-glass w-full justify-start" aria-label="Primary navigation">
             {directItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeNavigationItemId === item.id;
@@ -302,12 +302,12 @@ function NavbarImpl({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="user-menu-trigger"
+                className="user-menu-trigger max-w-[15rem] xl:max-w-none"
                 data-testid="button-user-menu"
                 aria-label="Open user menu"
                 aria-haspopup="menu"
               >
-                <span className="user-menu-copy">
+                <span className="user-menu-copy max-w-[10.5rem] xl:max-w-none">
                   <span className="truncate font-medium text-foreground">{username}</span>
                   <span className="user-menu-role">{userRole}</span>
                 </span>
