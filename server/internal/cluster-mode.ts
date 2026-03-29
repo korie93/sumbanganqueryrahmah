@@ -13,3 +13,17 @@ export function shouldUseSingleProcessMode(options: {
 
   return maxWorkers <= 1;
 }
+
+export function normalizeInitialWorkerCount(options: {
+  maxWorkers: number;
+  initialWorkers: number;
+}) {
+  const maxWorkers = Number.isFinite(options.maxWorkers)
+    ? Math.max(1, Math.trunc(options.maxWorkers))
+    : 1;
+  const initialWorkers = Number.isFinite(options.initialWorkers)
+    ? Math.max(1, Math.trunc(options.initialWorkers))
+    : 1;
+
+  return Math.min(maxWorkers, initialWorkers);
+}

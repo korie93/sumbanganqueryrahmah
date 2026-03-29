@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { shouldUseSingleProcessMode } from "../../internal/cluster-mode";
+import { normalizeInitialWorkerCount, shouldUseSingleProcessMode } from "../../internal/cluster-mode";
 
 test("shouldUseSingleProcessMode enables single-process startup for a single worker", () => {
   assert.equal(
@@ -27,5 +27,25 @@ test("shouldUseSingleProcessMode honors explicit cluster override", () => {
       forceCluster: "1",
     }),
     false,
+  );
+});
+
+test("normalizeInitialWorkerCount caps startup workers at the cluster max", () => {
+  assert.equal(
+    normalizeInitialWorkerCount({
+      maxWorkers: 2,
+      initialWorkers: 4,
+    }),
+    2,
+  );
+});
+
+test("normalizeInitialWorkerCount keeps at least one startup worker", () => {
+  assert.equal(
+    normalizeInitialWorkerCount({
+      maxWorkers: 2,
+      initialWorkers: 0,
+    }),
+    1,
   );
 });

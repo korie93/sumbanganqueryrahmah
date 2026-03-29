@@ -110,6 +110,7 @@ type RuntimeConfig = {
   cluster: {
     lowMemoryMode: boolean;
     maxWorkers: number;
+    initialWorkers: number;
     preallocateMb: number;
   };
 };
@@ -593,6 +594,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
   cluster: {
     lowMemoryMode,
     maxWorkers: readInt("SQR_MAX_WORKERS", lowMemoryMode ? 1 : 4, { min: 1 }),
+    initialWorkers: readInt("SQR_INITIAL_WORKERS", 1, { min: 1 }),
     preallocateMb: readInt("SQR_PREALLOCATE_MB", lowMemoryMode ? 0 : 32, { min: 0 }),
   },
 });

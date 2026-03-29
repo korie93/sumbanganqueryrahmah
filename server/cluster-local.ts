@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runtimeConfig } from "./config/runtime";
-import { shouldUseSingleProcessMode } from "./internal/cluster-mode";
+import { normalizeInitialWorkerCount, shouldUseSingleProcessMode } from "./internal/cluster-mode";
 import { logger } from "./lib/logger";
 import { LoadPredictor, type LoadTrendSnapshot } from "./internal/loadPredictor";
 import {
@@ -43,6 +43,10 @@ const MAX_WORKERS = Math.min(4, os.cpus().length);
 const requestedMaxWorkers = runtimeConfig.cluster.maxWorkers;
 const normalizedMaxWorkers = Number.isFinite(requestedMaxWorkers) ? Math.floor(requestedMaxWorkers) : 1;
 const MAX_WORKERS_HARD_CAP = Math.max(1, Math.min(MAX_WORKERS, normalizedMaxWorkers));
+const INITIAL_WORKERS = normalizeInitialWorkerCount({
+  maxWorkers: MAX_WORKERS_HARD_CAP,
+  initialWorkers: runtimeConfig.cluster.initialWorkers,
+});
 const SINGLE_PROCESS_MODE = shouldUseSingleProcessMode({
   maxWorkers: MAX_WORKERS_HARD_CAP,
   forceCluster: process.env.SQR_FORCE_CLUSTER,
@@ -99,11 +103,52 @@ function getWorkers(): Worker[] {
   return Object.values(cluster.workers ?? {}).filter((w): w is Worker => Boolean(w));
 }
 
-function shutdownMasterDueToFatalStartup(reason: string) {
+function shutdownMasterDueToFatalError(reason: string, metadata?: Record<string, unknown>) {
   if (fatalShutdownScheduled) return;
   fatalShutdownScheduled = true;
-  logger.error("Cluster master shutting down due to unrecoverable startup error", { reason });
-  setTimeout(() => process.exit(1), 50).unref();
+  process.exitCode = 1;
+  logger.error("Cluster master shutting down due to unrecoverable error", {
+    reason,
+    ...metadata,
+  });
+
+  const forceExitTimer = setTimeout(() => {
+    process.exit(1);
+  }, 5_000);
+  forceExitTimer.unref();
+
+  const workers = getWorkers();
+  for (const worker of workers) {
+    if (!worker.isConnected() || worker.isDead()) {
+      continue;
+    }
+
+    try {
+      worker.send(toGracefulShutdownMessage(`master-fatal:${reason}`));
+    } catch {
+      // Ignore IPC send failures while the master is already shutting down.
+    }
+  }
+
+  if (cluster.isPrimary && workers.length > 0) {
+    try {
+      cluster.disconnect(() => {
+        clearTimeout(forceExitTimer);
+        process.exit(1);
+      });
+      return;
+    } catch (error) {
+      logger.error("Cluster master disconnect failed during fatal shutdown", {
+        reason,
+        error,
+      });
+    }
+  }
+
+  setTimeout(() => {
+    clearTimeout(forceExitTimer);
+    process.exit(1);
+  }, 50).unref();
 }
 
 function aggregateMetrics(): Aggregate {
@@ -486,8 +531,7 @@ function bootCluster() {
     exec: workerExec,
   });
 
-  const initialWorkers = 1;
-  for (let i = 0; i < initialWorkers; i += 1) {
+  for (let i = 0; i < INITIAL_WORKERS; i += 1) {
     const worker = safeFork("initial-boot");
     if (worker) {
       wireWorker(worker);
@@ -523,7 +567,7 @@ function bootCluster() {
         signal,
       });
       if (getWorkers().length === 0) {
-        shutdownMasterDueToFatalStartup("EADDRINUSE");
+        shutdownMasterDueToFatalError("EADDRINUSE");
       }
       return;
     }
@@ -604,21 +648,25 @@ function bootCluster() {
 
   setInterval(evaluateScale, SCALE_INTERVAL_MS);
   logger.info("Cluster master online", {
-    workers: initialWorkers,
+    workers: INITIAL_WORKERS,
     maxWorkers: getMaxWorkers(),
     minWorkers: getMinWorkers(),
   });
 }
 
-// GLOBAL ERROR PROTECTION: Master must NEVER crash
+// Fatal master-level errors should fail fast so the process supervisor can restart cleanly.
 process.on("uncaughtException", (err) => {
   logger.error("Uncaught exception in cluster master", { error: err });
-  // Log but don't exit - cluster must survive
+  shutdownMasterDueToFatalError("uncaughtException", {
+    error: err,
+  });
 });
 
-process.on("unhandledRejection", (reason, promise) => {
+process.on("unhandledRejection", (reason) => {
   logger.error("Unhandled rejection in cluster master", { reason });
-  // Log but don't exit - cluster must survive
+  shutdownMasterDueToFatalError("unhandledRejection", {
+    reason,
+  });
 });
 
 if (cluster.isPrimary) {
