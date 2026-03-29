@@ -103,7 +103,7 @@ export function NicknameAssignmentPanel({
   };
 
   return (
-    <div className="rounded-md border border-border/60 bg-background/40 p-3">
+    <div className="rounded-xl border border-border/60 bg-background/40 p-3">
       <NicknameAssignmentHeader {...headerProps} />
       <NicknameAssignmentTable {...tableProps} />
     </div>

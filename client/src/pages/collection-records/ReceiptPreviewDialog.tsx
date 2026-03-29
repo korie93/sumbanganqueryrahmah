@@ -10,6 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 import type { CollectionRecord, CollectionRecordReceipt } from "@/lib/api";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { formatAmountRM } from "@/pages/collection/utils";
@@ -59,6 +61,7 @@ export function ReceiptPreviewDialog({
   onDownload,
   onClose,
 }: ReceiptPreviewDialogProps) {
+  const isMobile = useIsMobile();
   const [zoom, setZoom] = useState(1);
   const [showDetails, setShowDetails] = useState(false);
 
@@ -85,8 +88,14 @@ export function ReceiptPreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[90vh] w-[96vw] max-w-6xl flex-col">
-        <DialogHeader>
+      <DialogContent
+        className={
+          isMobile
+            ? "flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col overflow-hidden rounded-none border-0 p-0"
+            : "flex h-[90vh] w-[96vw] max-w-6xl flex-col"
+        }
+      >
+        <DialogHeader className={isMobile ? "border-b border-border/60 px-4 py-4 pr-12 text-left" : ""}>
           <DialogTitle>Receipt Preview</DialogTitle>
           <DialogDescription>
             {fileName || selectedReceipt?.originalFileName || "Preview fail resit yang dimuat naik."}
@@ -94,87 +103,103 @@ export function ReceiptPreviewDialog({
         </DialogHeader>
 
         {receipts.length > 1 ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-background/40 p-3">
+          <div className={cn(
+            "rounded-md border border-border/60 bg-background/40 p-3",
+            isMobile ? "mx-3 mt-3 overflow-x-auto" : "mt-3 flex flex-wrap items-center gap-2",
+          )}>
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Receipts
             </span>
-            {receipts.map((receipt, index) => (
-              <Button
-                key={receipt.id}
-                type="button"
-                size="sm"
-                variant={selectedReceipt?.id === receipt.id ? "default" : "outline"}
-                onClick={() => onSelectReceipt(receipt.id)}
-                disabled={loading}
-              >
-                #{index + 1}
-              </Button>
-            ))}
+            <div className={cn("gap-2", isMobile ? "mt-2 flex w-max min-w-full" : "flex flex-wrap items-center")}>
+              {receipts.map((receipt, index) => (
+                <Button
+                  key={receipt.id}
+                  type="button"
+                  size="sm"
+                  variant={selectedReceipt?.id === receipt.id ? "default" : "outline"}
+                  onClick={() => onSelectReceipt(receipt.id)}
+                  disabled={loading}
+                  className={isMobile ? "shrink-0" : ""}
+                >
+                  #{index + 1}
+                </Button>
+              ))}
+            </div>
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-3 py-2">
+        <div
+          className={cn(
+            "rounded-md border border-border/60 bg-background/40",
+            isMobile ? "mx-3 mt-3 space-y-3 px-3 py-3" : "mt-3 flex flex-wrap items-center justify-between gap-2 px-3 py-2",
+          )}
+          data-floating-ai-avoid="true"
+        >
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             {showDetails && selectedReceipt ? (
               <>
                 <Badge variant="secondary">{selectedReceipt.originalMimeType}</Badge>
-                <span>{selectedReceipt.originalFileName}</span>
+                <span className="break-all">{selectedReceipt.originalFileName}</span>
               </>
             ) : (
               <span>Receipt info hidden. Click Show more to view details.</span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className={cn(isMobile ? "grid grid-cols-2 gap-2" : "flex items-center gap-2")}>
             <Button
               type="button"
               size="sm"
               variant="outline"
               onClick={() => setShowDetails((previous) => !previous)}
               aria-expanded={showDetails}
+              className={isMobile ? "col-span-2 w-full" : ""}
             >
               {showDetails ? "Show less" : "Show more"}
             </Button>
             {canZoom ? (
               <>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setZoom((previous) => Math.max(0.5, Number((previous - 0.1).toFixed(2))))}
-                disabled={zoom <= 0.5}
-              >
-                <ZoomOut className="mr-2 h-4 w-4" />
-                Zoom Out
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setZoom(1)}
-                disabled={zoom === 1}
-              >
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Reset
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setZoom((previous) => Math.min(3, Number((previous + 0.1).toFixed(2))))}
-                disabled={zoom >= 3}
-              >
-                <ZoomIn className="mr-2 h-4 w-4" />
-                Zoom In
-              </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setZoom((previous) => Math.max(0.5, Number((previous - 0.1).toFixed(2))))}
+                  disabled={zoom <= 0.5}
+                  className={isMobile ? "w-full" : ""}
+                >
+                  <ZoomOut className="mr-2 h-4 w-4" />
+                  {isMobile ? "Zoom -" : "Zoom Out"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setZoom(1)}
+                  disabled={zoom === 1}
+                  className={isMobile ? "w-full" : ""}
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Reset
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setZoom((previous) => Math.min(3, Number((previous + 0.1).toFixed(2))))}
+                  disabled={zoom >= 3}
+                  className={isMobile ? "col-span-2 w-full" : ""}
+                >
+                  <ZoomIn className="mr-2 h-4 w-4" />
+                  {isMobile ? "Zoom +" : "Zoom In"}
+                </Button>
               </>
             ) : null}
           </div>
         </div>
 
         {record && showDetails ? (
-          <div className="rounded-md border border-border/60 bg-background/40 px-3 py-3">
+          <div className={cn("rounded-md border border-border/60 bg-background/40 px-3 py-3", isMobile ? "mx-3 mt-3" : "mt-3")}>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div>
+              <div className="break-words">
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Customer</p>
                 <p className="text-sm font-medium">{record.customerName}</p>
               </div>
@@ -206,7 +231,7 @@ export function ReceiptPreviewDialog({
                   </div>
                   <div>
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Reference</p>
-                    <p className="truncate text-sm font-medium">{selectedReceipt.receiptReference || "-"}</p>
+                    <p className="break-words text-sm font-medium">{selectedReceipt.receiptReference || "-"}</p>
                   </div>
                 </>
               ) : null}
@@ -214,7 +239,7 @@ export function ReceiptPreviewDialog({
           </div>
         ) : null}
 
-        <div className="min-h-0 flex-1 rounded-md border border-border/60 bg-background/40 p-3">
+        <div className={cn("min-h-0 flex-1 rounded-md border border-border/60 bg-background/40 p-3", isMobile ? "mx-3 my-3" : "mt-3")}>
           {loading ? (
             <div className="flex h-full min-h-[240px] items-center justify-center text-sm text-muted-foreground">
               Loading preview...
@@ -232,7 +257,7 @@ export function ReceiptPreviewDialog({
           ) : kind === "pdf" ? (
             <div className="h-full overflow-auto">
               <div
-                className={`mx-auto h-[72vh] w-full ${zoomClassName}`}
+                className={cn("mx-auto w-full", isMobile ? "h-full" : "h-[72vh]", zoomClassName)}
               >
                 <iframe
                   src={source}
@@ -246,7 +271,7 @@ export function ReceiptPreviewDialog({
               <img
                 src={source}
                 alt={fileName || "Receipt preview"}
-                className={`max-w-none rounded-sm object-contain ${zoomClassName}`}
+                className={cn("rounded-sm object-contain", isMobile ? "max-w-full" : "max-w-none", zoomClassName)}
               />
             </div>
           ) : (
@@ -256,17 +281,27 @@ export function ReceiptPreviewDialog({
           )}
         </div>
 
-        <DialogFooter className="flex flex-row items-center justify-end gap-2">
+        <DialogFooter
+          className={cn(
+            "gap-2 border-t border-border/60 bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85",
+            isMobile
+              ? "sticky bottom-0 z-10 flex-col-reverse px-4 py-3"
+              : "flex-row items-center justify-end px-0 py-0",
+          )}
+          style={isMobile ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" } : undefined}
+          data-floating-ai-avoid="true"
+        >
           <Button
             type="button"
             variant="outline"
             onClick={onDownload}
             disabled={!record || downloading}
+            className={isMobile ? "w-full" : ""}
           >
             <Download className="mr-2 h-4 w-4" />
             {downloading ? "Downloading..." : "Download Original"}
           </Button>
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button type="button" variant="secondary" onClick={onClose} className={isMobile ? "w-full" : ""}>
             Close
           </Button>
         </DialogFooter>

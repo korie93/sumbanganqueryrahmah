@@ -4,6 +4,7 @@ import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { CollectionNicknameBatchSections } from "@/pages/collection-nickname-summary/CollectionNicknameBatchSections";
 import { useCollectionNicknameSummaryData } from "@/pages/collection-nickname-summary/useCollectionNicknameSummaryData";
 import { CollectionNicknameMultiSelect } from "@/pages/collection-report/CollectionNicknameMultiSelect";
@@ -14,6 +15,7 @@ type CollectionNicknameSummaryPageProps = {
 
 function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPageProps) {
   const canAccess = role === "admin" || role === "superuser";
+  const isMobile = useIsMobile();
   const summaryData = useCollectionNicknameSummaryData({ canAccess });
 
   if (!canAccess) {
@@ -31,7 +33,7 @@ function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPagePr
       badge={<CollectionReportFreshnessBadge freshness={summaryData.freshness} />}
       contentClassName="space-y-4"
     >
-      <div className="ops-toolbar">
+      <div className="ops-toolbar" data-floating-ai-avoid="true">
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px_180px_auto] xl:items-end">
           <CollectionNicknameMultiSelect
             label="Staff Nickname"
@@ -67,10 +69,11 @@ function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPagePr
             />
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap" data-floating-ai-avoid="true">
             <Button
               onClick={() => void summaryData.apply()}
               disabled={summaryData.loadingSummary || summaryData.loadingNicknames}
+              className={isMobile ? "w-full" : undefined}
             >
               {summaryData.loadingSummary ? "Loading..." : "Apply"}
             </Button>
@@ -78,6 +81,7 @@ function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPagePr
               variant="outline"
               onClick={summaryData.reset}
               disabled={summaryData.loadingSummary}
+              className={isMobile ? "w-full" : undefined}
             >
               Reset
             </Button>

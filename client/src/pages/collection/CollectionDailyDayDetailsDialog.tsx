@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionDailyDayDetailsResponse, CollectionDailyOverviewDay } from "@/lib/api";
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import { statusLabel, statusTextClass } from "@/pages/collection/CollectionDailyShared";
@@ -37,13 +38,19 @@ export function CollectionDailyDayDetailsDialog({
   onViewReceipt,
   onChangePage,
 }: CollectionDailyDayDetailsDialogProps) {
+  const isMobile = useIsMobile();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex max-h-[92vh] max-w-5xl flex-col overflow-hidden"
+        className={
+          isMobile
+            ? "flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col overflow-hidden rounded-none border-0 p-0"
+            : "flex max-h-[92vh] max-w-5xl flex-col overflow-hidden"
+        }
         data-testid="collection-daily-day-dialog"
       >
-        <DialogHeader>
+        <DialogHeader className={isMobile ? "border-b border-border/60 px-4 py-4 pr-12 text-left" : ""}>
           <DialogTitle>
             Collection Day Details - {selectedDate ? formatDateDDMMYYYY(selectedDate) : "-"}
           </DialogTitle>
@@ -60,8 +67,8 @@ export function CollectionDailyDayDetailsDialog({
         ) : !dayDetails ? (
           <div className="py-8 text-center text-sm text-muted-foreground">No details available.</div>
         ) : (
-          <div className="flex flex-1 flex-col gap-3 overflow-hidden">
-            <div className="grid gap-2 rounded-md border border-border/60 bg-background/70 p-3 text-sm md:grid-cols-2 lg:grid-cols-4">
+          <div className={`flex flex-1 flex-col gap-3 overflow-hidden ${isMobile ? "px-3 py-3" : ""}`}>
+            <div className="grid gap-2 rounded-md border border-border/60 bg-background/70 p-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
               <div className="flex flex-col gap-2 md:col-span-2 md:flex-row md:flex-wrap md:items-center md:justify-between lg:col-span-4">
                 <div className="text-muted-foreground">
                   {dayDetails.freshness?.message || "Day details are using the latest available rollups."}
@@ -93,7 +100,7 @@ export function CollectionDailyDayDetailsDialog({
                 </span>
               </div>
               {selectedOverviewDay?.isHoliday && selectedOverviewDay.holidayName ? (
-                <div>
+                <div className="break-words">
                   Holiday: <span className="font-semibold">{selectedOverviewDay.holidayName}</span>
                 </div>
               ) : null}
@@ -107,33 +114,33 @@ export function CollectionDailyDayDetailsDialog({
                 </div>
               ) : (
                 dayDetails.records.map((record) => (
-                  <div key={record.id} className="space-y-2 rounded-md border border-border/60 bg-background/70 p-3">
-                    <div className="grid gap-1 text-sm md:grid-cols-2 xl:grid-cols-3">
-                      <div>
+                  <div key={record.id} className="space-y-3 rounded-xl border border-border/60 bg-background/70 p-3">
+                    <div className={`grid gap-2 text-sm ${isMobile ? "grid-cols-1" : "md:grid-cols-2 xl:grid-cols-3"}`}>
+                      <div className="break-words rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
                         Customer: <span className="font-medium">{record.customerName}</span>
                       </div>
-                      <div>
+                      <div className="break-words rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
                         Account: <span className="font-medium">{record.accountNumber}</span>
                       </div>
-                      <div>
+                      <div className="rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
                         Amount: <span className="font-medium">{formatAmountRM(record.amount)}</span>
                       </div>
-                      <div>
+                      <div className="break-words rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
                         User: <span className="font-medium">{record.username}</span>
                       </div>
-                      <div>
+                      <div className="break-words rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
                         Nickname: <span className="font-medium">{record.collectionStaffNickname}</span>
                       </div>
-                      <div>
+                      <div className="break-words rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
                         Reference: <span className="font-medium">{record.paymentReference}</span>
                       </div>
-                      <div>
+                      <div className="rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
                         Batch: <span className="font-medium">{record.batch}</span>
                       </div>
-                      <div>
+                      <div className="rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
                         Date: <span className="font-medium">{formatDateDDMMYYYY(record.paymentDate)}</span>
                       </div>
-                      <div>
+                      <div className="rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
                         Created: <span className="font-medium">{formatDateTimeDDMMYYYY(record.createdAt)}</span>
                       </div>
                     </div>
@@ -145,7 +152,7 @@ export function CollectionDailyDayDetailsDialog({
                       {record.receipts.length === 0 ? (
                         <div className="text-xs text-muted-foreground">No stored receipt.</div>
                       ) : (
-                        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap" data-floating-ai-avoid="true">
                           {record.receipts.map((receipt) => {
                             const key = buildCollectionDailyReceiptKey(record.id, receipt.id);
                             return (
@@ -154,6 +161,7 @@ export function CollectionDailyDayDetailsDialog({
                                 type="button"
                                 size="sm"
                                 variant="outline"
+                                className="w-full justify-start break-all sm:w-auto"
                                 disabled={loadingReceiptKey === key}
                                 onClick={() => onViewReceipt(record, receipt.id)}
                               >
@@ -175,7 +183,9 @@ export function CollectionDailyDayDetailsDialog({
             </div>
 
             <div
-              className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-3 border-t border-border/60 bg-background/95 px-4 pt-3 text-sm shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:-mx-6 sm:px-6 sm:flex-row sm:items-center sm:justify-between"
+              className={`sticky bottom-0 z-10 flex flex-col gap-3 border-t border-border/60 bg-background/95 pt-3 text-sm shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 ${
+                isMobile ? "-mx-3 px-3" : "-mx-4 px-4 sm:-mx-6 sm:px-6"
+              } sm:flex-row sm:items-center sm:justify-between`}
               style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
               data-floating-ai-avoid="true"
             >

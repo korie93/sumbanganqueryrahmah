@@ -81,52 +81,115 @@ export function CollectionDailyCalendarCard({
           <div className="py-8 text-center text-sm text-muted-foreground">{emptyOverviewMessage}</div>
         ) : (
           <div className="space-y-3">
-            <div className="grid grid-cols-7 gap-2 text-center text-xs font-medium text-muted-foreground">
-              <div>Sun</div>
-              <div>Mon</div>
-              <div>Tue</div>
-              <div>Wed</div>
-              <div>Thu</div>
-              <div>Fri</div>
-              <div>Sat</div>
-            </div>
-            <div className={isMobile ? "overflow-x-auto" : ""}>
-              <div
-                className={`grid grid-cols-7 gap-2 ${isMobile ? "min-w-[22rem]" : ""}`}
-                data-testid="collection-daily-calendar-grid"
-              >
-              {Array.from({ length: firstWeekday }).map((_, index) => (
-                <div key={`blank-${index}`} />
-              ))}
-              {overview.days.map((day) => {
-                const editable = editableCalendarByDay.get(day.day);
-                const isSelected = selectedDate === day.date;
-                return (
-                  <div
-                    key={day.date}
-                    className={`rounded-xl border text-xs shadow-sm ${isSelected ? "ring-2 ring-ring ring-offset-1" : ""} ${statusCardClass(day.status)}`}
-                  >
-                    <button
-                      type="button"
-                      className={`w-full rounded-md text-left transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
-                        isMobile ? "p-1.5" : "p-2"
+            {isMobile ? (
+              <div className="space-y-3" data-testid="collection-daily-calendar-mobile-list">
+                <p className="text-xs text-muted-foreground">
+                  Tap a day to open details. Mobile view shows each day as a full card for easier scanning.
+                </p>
+                {overview.days.map((day) => {
+                  const isSelected = selectedDate === day.date;
+
+                  return (
+                    <article
+                      key={day.date}
+                      className={`rounded-2xl border shadow-sm ${statusCardClass(day.status)} ${
+                        isSelected ? "ring-2 ring-ring ring-offset-1" : ""
                       }`}
-                      aria-label={`${formatDateDDMMYYYY(day.date)} - ${statusLabel(day.status)} - Collected ${formatAmountRM(day.amount)} - Target ${formatAmountRM(day.target)}${isSelected ? " - Selected" : ""}`}
-                      onClick={() => onSelectDate(day.date)}
-                      data-testid={`collection-daily-day-${day.day}`}
                     >
-                      <div className="mb-1 flex items-center justify-between">
-                        <div className="font-semibold">{day.day}</div>
-                        <DayStatusIcon status={day.status} />
-                      </div>
-                      <div className={statusTextClass(day.status)}>
-                        {isMobile ? statusLabel(day.status).split(":")[0] : statusLabel(day.status)}
-                      </div>
-                      <div className={isMobile ? "truncate" : ""}>
-                        {isMobile ? formatAmountRM(day.amount) : `Collected: ${formatAmountRM(day.amount)}`}
-                      </div>
-                      {!isMobile ? (
-                        <>
+                      <button
+                        type="button"
+                        className="w-full rounded-[inherit] p-3 text-left transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                        aria-label={`${formatDateDDMMYYYY(day.date)} - ${statusLabel(day.status)} - Collected ${formatAmountRM(day.amount)} - Target ${formatAmountRM(day.target)}${isSelected ? " - Selected" : ""}`}
+                        onClick={() => onSelectDate(day.date)}
+                        data-testid={`collection-daily-day-${day.day}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                              Day {day.day}
+                            </p>
+                            <p className="font-semibold text-foreground">
+                              {formatDateDDMMYYYY(day.date)}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <DayStatusIcon status={day.status} />
+                            <span className="rounded-full border border-border/50 bg-background/75 px-2 py-1 text-[11px] font-medium text-foreground">
+                              {statusLabel(day.status)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                          <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+                            <p className="uppercase tracking-[0.12em] text-muted-foreground">Collected</p>
+                            <p className="mt-1 font-medium text-foreground">{formatAmountRM(day.amount)}</p>
+                          </div>
+                          <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+                            <p className="uppercase tracking-[0.12em] text-muted-foreground">Target</p>
+                            <p className="mt-1 font-medium text-foreground">{formatAmountRM(day.target)}</p>
+                          </div>
+                          <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+                            <p className="uppercase tracking-[0.12em] text-muted-foreground">Customers</p>
+                            <p className="mt-1 font-medium text-foreground">{day.customerCount}</p>
+                          </div>
+                          <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+                            <p className="uppercase tracking-[0.12em] text-muted-foreground">Status</p>
+                            <p className={`mt-1 font-medium ${statusTextClass(day.status)}`}>
+                              {statusLabel(day.status)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {day.isHoliday && day.holidayName ? (
+                          <div className="mt-3 rounded-xl border border-border/50 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+                            Holiday: <span className="font-medium text-foreground">{day.holidayName}</span>
+                          </div>
+                        ) : null}
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-7 gap-2 text-center text-xs font-medium text-muted-foreground">
+                  <div>Sun</div>
+                  <div>Mon</div>
+                  <div>Tue</div>
+                  <div>Wed</div>
+                  <div>Thu</div>
+                  <div>Fri</div>
+                  <div>Sat</div>
+                </div>
+                <div
+                  className="grid grid-cols-7 gap-2"
+                  data-testid="collection-daily-calendar-grid"
+                >
+                  {Array.from({ length: firstWeekday }).map((_, index) => (
+                    <div key={`blank-${index}`} />
+                  ))}
+                  {overview.days.map((day) => {
+                    const editable = editableCalendarByDay.get(day.day);
+                    const isSelected = selectedDate === day.date;
+                    return (
+                      <div
+                        key={day.date}
+                        className={`rounded-xl border text-xs shadow-sm ${isSelected ? "ring-2 ring-ring ring-offset-1" : ""} ${statusCardClass(day.status)}`}
+                      >
+                        <button
+                          type="button"
+                          className="w-full rounded-md p-2 text-left transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                          aria-label={`${formatDateDDMMYYYY(day.date)} - ${statusLabel(day.status)} - Collected ${formatAmountRM(day.amount)} - Target ${formatAmountRM(day.target)}${isSelected ? " - Selected" : ""}`}
+                          onClick={() => onSelectDate(day.date)}
+                          data-testid={`collection-daily-day-${day.day}`}
+                        >
+                          <div className="mb-1 flex items-center justify-between">
+                            <div className="font-semibold">{day.day}</div>
+                            <DayStatusIcon status={day.status} />
+                          </div>
+                          <div className={statusTextClass(day.status)}>{statusLabel(day.status)}</div>
+                          <div>Collected: {formatAmountRM(day.amount)}</div>
                           <div className="text-[10px] text-muted-foreground">Customers: {day.customerCount}</div>
                           <div className="text-[10px] text-muted-foreground">Required Today: {formatAmountRM(day.target)}</div>
                           {day.isHoliday && day.holidayName ? (
@@ -134,41 +197,40 @@ export function CollectionDailyCalendarCard({
                               {day.holidayName}
                             </div>
                           ) : null}
-                        </>
-                      ) : null}
-                    </button>
-                    {canManage && editable && !isMobile ? (
-                      <div className="space-y-1 border-t border-border/40 px-2 pb-2 pt-1.5">
-                        <label className="flex items-center gap-1">
-                          <input
-                            type="checkbox"
-                            checked={editable.isWorkingDay}
-                            onChange={(event) =>
-                              onUpdateEditableDay(editable.day, { isWorkingDay: event.target.checked })
-                            }
-                          />
-                          Working
-                        </label>
-                        <label className="flex items-center gap-1">
-                          <input
-                            type="checkbox"
-                            checked={editable.isHoliday}
-                            onChange={(event) =>
-                              onUpdateEditableDay(editable.day, { isHoliday: event.target.checked })
-                            }
-                          />
-                          Holiday
-                        </label>
+                        </button>
+                        {canManage && editable ? (
+                          <div className="space-y-1 border-t border-border/40 px-2 pb-2 pt-1.5">
+                            <label className="flex items-center gap-1">
+                              <input
+                                type="checkbox"
+                                checked={editable.isWorkingDay}
+                                onChange={(event) =>
+                                  onUpdateEditableDay(editable.day, { isWorkingDay: event.target.checked })
+                                }
+                              />
+                              Working
+                            </label>
+                            <label className="flex items-center gap-1">
+                              <input
+                                type="checkbox"
+                                checked={editable.isHoliday}
+                                onChange={(event) =>
+                                  onUpdateEditableDay(editable.day, { isHoliday: event.target.checked })
+                                }
+                              />
+                              Holiday
+                            </label>
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-              </div>
-            </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
 
             {canManage && isMobile && selectedDay && selectedEditableDay ? (
-              <div className="space-y-3 rounded-xl border border-border/60 bg-background/70 p-4">
+              <div className="space-y-3 rounded-xl border border-border/60 bg-background/70 p-4" data-floating-ai-avoid="true">
                 <div className="space-y-1">
                   <p className="text-sm font-semibold">
                     Edit {formatDateDDMMYYYY(selectedDay.date)}

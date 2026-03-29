@@ -31,16 +31,17 @@ export function GroupListPanel({
   nicknameIdByName,
 }: GroupListPanelProps) {
   return (
-    <div className="rounded-md border border-border/60 bg-background/40 p-3">
+    <div className="rounded-xl border border-border/60 bg-background/40 p-3">
       <div className="space-y-2">
         <Label>Admin Nickname Groups</Label>
         <Input
           value={groupSearch}
           onChange={(event) => onGroupSearchChange(event.target.value)}
           placeholder="Cari leader/member..."
+          enterKeyHint="search"
         />
       </div>
-      <div className="mt-3 max-h-[58vh] overflow-y-auto space-y-2 pr-1">
+      <div className="mt-3 max-h-[58vh] space-y-2 overflow-y-auto pr-1">
         {loadingGroups ? (
           <p className="text-sm text-muted-foreground">Loading groups...</p>
         ) : filteredGroups.length === 0 ? (
@@ -53,22 +54,23 @@ export function GroupListPanel({
               .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 
             return (
-              <div key={group.id} className="rounded-md border border-border/60 bg-background/50">
-                <div className="flex items-center justify-between px-2 py-2">
+              <div key={group.id} className="rounded-xl border border-border/60 bg-background/50">
+                <div className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <button
                     type="button"
-                    className="inline-flex items-center gap-2 text-left"
+                    className="inline-flex min-w-0 items-center gap-2 text-left"
                     onClick={() => onToggleExpandGroup(group.id)}
                   >
                     <ChevronRight className={`h-4 w-4 transition ${expanded ? "rotate-90" : ""}`} />
-                    <span className="text-sm font-medium">{group.leaderNickname}</span>
+                    <span className="truncate text-sm font-medium">{group.leaderNickname}</span>
                   </button>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2" data-floating-ai-avoid="true">
                     <Badge variant="outline">{members.length}</Badge>
                     <Button
                       size="sm"
                       variant={selectedGroupId === group.id ? "default" : "outline"}
                       onClick={() => onSelectGroup(group.id)}
+                      className="w-full sm:w-auto"
                     >
                       Open
                     </Button>
@@ -76,7 +78,7 @@ export function GroupListPanel({
                 </div>
 
                 {expanded ? (
-                  <div className="border-t border-border/60 px-3 py-2 space-y-2">
+                  <div className="space-y-2 border-t border-border/60 px-3 py-2">
                     {members.length === 0 ? (
                       <p className="text-xs text-muted-foreground">Tiada member dalam group ini.</p>
                     ) : (
@@ -85,7 +87,7 @@ export function GroupListPanel({
                         return (
                           <div
                             key={`${group.id}-${memberNickname}`}
-                            className="flex items-center justify-between gap-2 text-sm"
+                            className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between"
                           >
                             <span className="truncate">- {memberNickname}</span>
                             <Button
@@ -93,6 +95,7 @@ export function GroupListPanel({
                               variant="outline"
                               onClick={() => nicknameId && onUngroup(group.id, nicknameId)}
                               disabled={!nicknameId}
+                              className="w-full sm:w-auto"
                             >
                               Ungroup
                             </Button>

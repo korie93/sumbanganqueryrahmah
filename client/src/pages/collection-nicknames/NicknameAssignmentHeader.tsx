@@ -1,6 +1,8 @@
 import { Badge } from "@/components/ui/badge";
+import { MobileActionMenu } from "@/components/data/MobileActionMenu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionAdminGroup } from "@/lib/api";
 
 export interface NicknameAssignmentHeaderProps {
@@ -38,9 +40,11 @@ export function NicknameAssignmentHeader({
   onClearAll,
   onSaveAssignment,
 }: NicknameAssignmentHeaderProps) {
+  const isMobile = useIsMobile();
+
   return (
     <>
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+      <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-2">
           <p className="text-sm font-semibold">Nickname List / Assignment</p>
           <p className="text-xs text-muted-foreground">
@@ -52,19 +56,42 @@ export function NicknameAssignmentHeader({
             {unsaved ? <Badge variant="destructive">Unsaved changes</Badge> : null}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={onOpenCreateGroup}>
-            Tambah Group
-          </Button>
-          <Button variant="outline" onClick={onOpenChangeLeader} disabled={!selectedGroup}>
-            Tukar Leader
-          </Button>
-          <Button variant="destructive" onClick={onDeleteSelectedGroup} disabled={!selectedGroup}>
-            Padam Group
-          </Button>
-          <Button variant="outline" onClick={onOpenAddNickname}>
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:w-auto lg:justify-end" data-floating-ai-avoid="true">
+          <Button variant="outline" onClick={onOpenAddNickname} className="w-full sm:w-auto">
             Tambah Nickname
           </Button>
+          <Button variant="outline" onClick={onOpenCreateGroup} className="w-full sm:w-auto">
+            Tambah Group
+          </Button>
+          {isMobile ? (
+            <MobileActionMenu
+              contentLabel="Group actions"
+              items={[
+                {
+                  id: "change-leader",
+                  label: "Tukar Leader",
+                  onSelect: onOpenChangeLeader,
+                  disabled: !selectedGroup,
+                },
+                {
+                  id: "delete-group",
+                  label: "Padam Group",
+                  onSelect: onDeleteSelectedGroup,
+                  disabled: !selectedGroup,
+                  destructive: true,
+                },
+              ]}
+            />
+          ) : (
+            <>
+              <Button variant="outline" onClick={onOpenChangeLeader} disabled={!selectedGroup}>
+                Tukar Leader
+              </Button>
+              <Button variant="destructive" onClick={onDeleteSelectedGroup} disabled={!selectedGroup}>
+                Padam Group
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -73,15 +100,16 @@ export function NicknameAssignmentHeader({
           value={nicknameSearch}
           onChange={(event) => onNicknameSearchChange(event.target.value)}
           placeholder="Cari nickname..."
+          enterKeyHint="search"
         />
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={onSelectAll} disabled={!selectedGroupId}>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center" data-floating-ai-avoid="true">
+          <Button variant="outline" onClick={onSelectAll} disabled={!selectedGroupId} className="w-full sm:w-auto">
             Select All
           </Button>
-          <Button variant="outline" onClick={onClearAll} disabled={!selectedGroupId}>
+          <Button variant="outline" onClick={onClearAll} disabled={!selectedGroupId} className="w-full sm:w-auto">
             Clear All
           </Button>
-          <Button onClick={onSaveAssignment} disabled={!selectedGroupId || savingAssignment || !unsaved}>
+          <Button onClick={onSaveAssignment} disabled={!selectedGroupId || savingAssignment || !unsaved} className="w-full sm:w-auto">
             {savingAssignment ? "Saving..." : "Save Assignment"}
           </Button>
         </div>
