@@ -426,10 +426,11 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
           </div>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
           <Popover>
             <PopoverTrigger asChild>
               <Button
+                className="w-full sm:w-auto"
                 variant="outline"
                 disabled={loading || visibleBackups.length === 0 || exportingPdf}
                 data-testid="button-export-backups"
@@ -464,6 +465,7 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
             </PopoverContent>
           </Popover>
           <Button
+            className="w-full sm:w-auto"
             variant="outline"
             onClick={() => {
               void refetch();
@@ -476,6 +478,7 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
           </Button>
           {canManageBackups ? (
             <Button
+              className="w-full sm:w-auto"
               onClick={() => setShowCreateDialog(true)}
               disabled={activeBackupJobBusy}
               data-testid="button-create-backup"
