@@ -1,14 +1,21 @@
 const SINGLE_TAB_LOCK_STORAGE_PREFIX = "sqr_single_tab_lock:";
 const SINGLE_TAB_SEED_STORAGE_KEY = "sqr_single_tab_seed";
+const SINGLE_TAB_NAVIGATION_RECLAIM_STORAGE_KEY = "sqr_single_tab_navigation_reclaim";
 
 export const SINGLE_TAB_LOCK_TTL_MS = 12_000;
 export const SINGLE_TAB_LOCK_HEARTBEAT_MS = 4_000;
+export const SINGLE_TAB_NAVIGATION_RECLAIM_TTL_MS = 15_000;
 
 export type SingleTabLock = {
   username: string;
   tabSeed: string;
   instanceId: string;
   updatedAt: number;
+};
+
+export type SingleTabNavigationReclaim = {
+  tabSeed: string;
+  markedAt: number;
 };
 
 function normalizeStorageValue(value: string | null | undefined): string {
@@ -49,6 +56,65 @@ export function parseSingleTabLock(raw: string | null | undefined): SingleTabLoc
   } catch {
     return null;
   }
+}
+
+export function createSingleTabNavigationReclaim(
+  tabSeed: string,
+  markedAt = Date.now(),
+): SingleTabNavigationReclaim {
+  return {
+    tabSeed: normalizeStorageValue(tabSeed),
+    markedAt,
+  };
+}
+
+export function serializeSingleTabNavigationReclaim(
+  reclaim: SingleTabNavigationReclaim,
+): string {
+  return JSON.stringify(reclaim);
+}
+
+export function parseSingleTabNavigationReclaim(
+  raw: string | null | undefined,
+): SingleTabNavigationReclaim | null {
+  const normalized = normalizeStorageValue(raw);
+  if (!normalized) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(normalized) as Partial<SingleTabNavigationReclaim>;
+    const tabSeed = normalizeStorageValue(parsed.tabSeed);
+    const markedAt = Number(parsed.markedAt);
+
+    if (!tabSeed || !Number.isFinite(markedAt) || markedAt <= 0) {
+      return null;
+    }
+
+    return {
+      tabSeed,
+      markedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function isSingleTabNavigationReclaimActive(
+  reclaim: SingleTabNavigationReclaim | null,
+  tabSeed: string | null | undefined,
+  now = Date.now(),
+  ttlMs = SINGLE_TAB_NAVIGATION_RECLAIM_TTL_MS,
+): boolean {
+  if (!reclaim) {
+    return false;
+  }
+
+  if (!Number.isFinite(now) || !Number.isFinite(ttlMs) || ttlMs <= 0) {
+    return false;
+  }
+
+  return reclaim.tabSeed === normalizeStorageValue(tabSeed) && now - reclaim.markedAt <= ttlMs;
 }
 
 export function isSingleTabLockExpired(
@@ -127,4 +193,8 @@ export function serializeSingleTabLock(lock: SingleTabLock): string {
 
 export function getSingleTabSeedStorageKey(): string {
   return SINGLE_TAB_SEED_STORAGE_KEY;
+}
+
+export function getSingleTabNavigationReclaimStorageKey(): string {
+  return SINGLE_TAB_NAVIGATION_RECLAIM_STORAGE_KEY;
 }

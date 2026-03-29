@@ -3,9 +3,14 @@ import {
   buildSingleTabLockStorageKey,
   canClaimSingleTabLock,
   createSingleTabLock,
+  createSingleTabNavigationReclaim,
+  getSingleTabNavigationReclaimStorageKey,
   getSingleTabSeedStorageKey,
+  isSingleTabNavigationReclaimActive,
   isSingleTabLockOwner,
+  parseSingleTabNavigationReclaim,
   parseSingleTabLock,
+  serializeSingleTabNavigationReclaim,
   serializeSingleTabLock,
   SINGLE_TAB_LOCK_HEARTBEAT_MS,
   SINGLE_TAB_LOCK_TTL_MS,
@@ -32,13 +37,37 @@ function createRuntimeId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function canReuseSingleTabSeedOnThisLoad(): boolean {
-  if (typeof performance === "undefined" || typeof performance.getEntriesByType !== "function") {
+function consumeSingleTabNavigationReclaim(tabSeed: string): boolean {
+  if (!canUseSingleTabLockStorage()) {
     return false;
   }
 
-  const navigationEntry = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
-  return navigationEntry?.type === "reload";
+  const storageKey = getSingleTabNavigationReclaimStorageKey();
+
+  try {
+    const reclaim = parseSingleTabNavigationReclaim(sessionStorage.getItem(storageKey));
+    sessionStorage.removeItem(storageKey);
+    return isSingleTabNavigationReclaimActive(reclaim, tabSeed);
+  } catch {
+    return false;
+  }
+}
+
+function markSingleTabNavigationReclaim(tabSeed: string) {
+  if (!canUseSingleTabLockStorage()) {
+    return;
+  }
+
+  const storageKey = getSingleTabNavigationReclaimStorageKey();
+
+  try {
+    sessionStorage.setItem(
+      storageKey,
+      serializeSingleTabNavigationReclaim(createSingleTabNavigationReclaim(tabSeed)),
+    );
+  } catch {
+    // Ignore best-effort navigation reclaim persistence failures.
+  }
 }
 
 function getOrCreateTabSeed(): string {
@@ -66,12 +95,13 @@ export function useSingleTabSession(username: string | null | undefined) {
   const normalizedUsername = useMemo(() => normalizeSingleTabUsername(username), [username]);
   const tabSeedRef = useRef("");
   const instanceIdRef = useRef(`instance-${createRuntimeId()}`);
-  const allowTabSeedReuseRef = useRef(canReuseSingleTabSeedOnThisLoad());
+  const allowTabSeedReuseRef = useRef(false);
   const retryRef = useRef<(() => void) | null>(null);
   const [state, setState] = useState<SingleTabSessionState>(READY_IDLE_STATE);
 
   if (!tabSeedRef.current) {
     tabSeedRef.current = getOrCreateTabSeed();
+    allowTabSeedReuseRef.current = consumeSingleTabNavigationReclaim(tabSeedRef.current);
   }
 
   const retryNow = useCallback(() => {
@@ -177,6 +207,7 @@ export function useSingleTabSession(username: string | null | undefined) {
 
     const handlePageUnload = () => {
       isPageUnloading = true;
+      markSingleTabNavigationReclaim(tabSeed);
     };
 
     const handleVisibilityChange = () => {

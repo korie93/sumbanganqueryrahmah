@@ -4,9 +4,13 @@ import {
   buildSingleTabLockStorageKey,
   canClaimSingleTabLock,
   createSingleTabLock,
+  createSingleTabNavigationReclaim,
+  isSingleTabNavigationReclaimActive,
   isSingleTabLockExpired,
   isSingleTabLockOwner,
+  parseSingleTabNavigationReclaim,
   parseSingleTabLock,
+  serializeSingleTabNavigationReclaim,
   serializeSingleTabLock,
 } from "@/app/single-tab-session";
 
@@ -76,4 +80,17 @@ test("single-tab lock allows the same tab seed to reclaim ownership during a rel
     ),
     true,
   );
+});
+
+test("single-tab navigation reclaim round-trips and validates recent same-tab navigation", () => {
+  const reclaim = createSingleTabNavigationReclaim("tab-seed-1", 5_000);
+  const parsed = parseSingleTabNavigationReclaim(serializeSingleTabNavigationReclaim(reclaim));
+
+  assert.deepEqual(parsed, {
+    tabSeed: "tab-seed-1",
+    markedAt: 5_000,
+  });
+  assert.equal(isSingleTabNavigationReclaimActive(parsed, "tab-seed-1", 6_000, 15_000), true);
+  assert.equal(isSingleTabNavigationReclaimActive(parsed, "tab-seed-2", 6_000, 15_000), false);
+  assert.equal(isSingleTabNavigationReclaimActive(parsed, "tab-seed-1", 21_000, 15_000), false);
 });
