@@ -88,7 +88,7 @@ export function CreateClosedAccountSection({
           </div>
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex justify-end" data-floating-ai-avoid="true">
           <Button onClick={onCreateManagedUser} disabled={creatingManagedUser}>
             {creatingManagedUser ? "Creating..." : "Create Closed Account"}
           </Button>

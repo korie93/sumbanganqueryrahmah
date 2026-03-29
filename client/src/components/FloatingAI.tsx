@@ -102,10 +102,10 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const compactViewport = viewportWidth < 640;
-    const baseRight = compactViewport ? 12 : 24;
-    const baseBottom = compactViewport ? 12 : 24;
+    const baseRight = compactViewport ? 14 : 24;
+    const baseBottom = compactViewport ? (isMobile ? 28 : 12) : 24;
     const overlayWidth = isOpen
-      ? Math.max(56, Math.min(isMobile ? 420 : 380, viewportWidth - (compactViewport ? 20 : 48)))
+      ? Math.max(56, Math.min(isMobile ? 392 : 380, viewportWidth - (compactViewport ? 16 : 48)))
       : 56;
     const rightBoundary = viewportWidth - overlayWidth - baseRight - 8;
     let requiredBottom = baseBottom;
@@ -118,7 +118,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
       if (!nearViewportBottom || !overlapsAiColumn) return;
       requiredBottom = Math.max(
         requiredBottom,
-        Math.max(baseBottom, viewportHeight - rect.top + 12),
+        Math.max(baseBottom, viewportHeight - rect.top + (isMobile ? 28 : 12)),
       );
     });
 
@@ -206,7 +206,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
             className={cn(
               "border border-border bg-card text-card-foreground shadow-xl",
               isMobile
-                ? "h-[min(72vh,34rem)] w-[min(26rem,calc(100vw-1.25rem))] rounded-[22px]"
+                ? "h-[min(62vh,30rem)] w-[min(24rem,calc(100vw-1rem))] rounded-[22px]"
                 : "h-[min(520px,calc(100vh-120px))] w-[min(380px,calc(100vw-48px))] rounded-[16px]",
             )}
             aria-label="AI SQR Popup"

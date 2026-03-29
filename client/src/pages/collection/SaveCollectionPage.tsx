@@ -373,7 +373,10 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           </div>
         </div>
 
-        <div className="flex flex-wrap justify-end gap-2">
+        <div
+          className="flex flex-wrap justify-end gap-2"
+          data-floating-ai-avoid="true"
+        >
           <Button
             type="button"
             variant="outline"

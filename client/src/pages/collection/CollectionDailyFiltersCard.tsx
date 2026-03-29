@@ -237,7 +237,10 @@ export function CollectionDailyFiltersCard({
                 </p>
               ) : null}
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <div
+              className="flex flex-col gap-2 sm:flex-row sm:flex-wrap"
+              data-floating-ai-avoid="true"
+            >
               <Button className="w-full sm:w-auto" onClick={onSaveTarget} disabled={savingTarget || !canEditTarget}>
                 {savingTarget ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
