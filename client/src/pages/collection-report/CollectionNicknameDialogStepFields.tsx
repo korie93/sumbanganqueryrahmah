@@ -49,7 +49,7 @@ export function CollectionNicknameDialogStepFields({
           <Input
             value={nicknameInput}
             onChange={(event) => onNicknameInputChange(event.target.value)}
-            placeholder="Contoh: SW.NAMA.NO"
+            placeholder="Contoh: SW.NAMA_NO"
             disabled={submittingNicknameAuth}
           />
         </div>

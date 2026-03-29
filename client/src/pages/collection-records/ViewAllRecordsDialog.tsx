@@ -101,8 +101,11 @@ export function ViewAllRecordsDialog({
 
           <div className={`flex min-h-0 flex-1 flex-col gap-3 ${isMobile ? "p-3" : "p-4"}`}>
             <div
-              className={isMobile ? "border-b border-border/60 bg-background/95 pb-3 shadow-sm" : ""}
-              style={isMobile ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.25rem)" } : undefined}
+              className={
+                isMobile
+                  ? "border-b border-border/60 bg-background/95 pb-[calc(env(safe-area-inset-bottom,0px)+0.25rem)] shadow-sm"
+                  : ""
+              }
               data-floating-ai-avoid="true"
             >
               <CollectionPaginationBar
