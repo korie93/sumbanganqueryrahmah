@@ -11,6 +11,7 @@ import {
   resolveFloatingAiLayout,
   type RectLike,
 } from "@/components/floating-ai-layout";
+import { applyFloatingAiScrollLock } from "@/components/floating-ai-scroll-lock";
 import { resolveFloatingAIMinimizedStatus } from "@/components/floating-ai-status";
 import { useAIContext } from "@/context/AIContext";
 import { cn } from "@/lib/utils";
@@ -174,17 +175,10 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     if (typeof document === "undefined") return;
     if (!isMobile || !isOpen || layoutState.rootHidden || layoutState.panel.mode !== "fullscreen") return;
 
-    const { body, documentElement } = document;
-    const previousBodyOverflow = body.style.overflow;
-    const previousOverscrollBehavior = documentElement.style.overscrollBehavior;
-
-    body.style.overflow = "hidden";
-    documentElement.style.overscrollBehavior = "none";
-
-    return () => {
-      body.style.overflow = previousBodyOverflow;
-      documentElement.style.overscrollBehavior = previousOverscrollBehavior;
-    };
+    return applyFloatingAiScrollLock({
+      bodyStyle: document.body.style,
+      documentElementStyle: document.documentElement.style,
+    });
   }, [isMobile, isOpen, layoutState.panel.mode, layoutState.rootHidden]);
 
   const handleMinimize = useCallback(() => {
