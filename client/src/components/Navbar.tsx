@@ -167,7 +167,7 @@ function NavbarImpl({
               className="nav-mobile-trigger px-3"
               aria-label="Open navigation menu"
               aria-haspopup="dialog"
-              aria-expanded={mobileNavOpen}
+              aria-controls="mobile-navigation-drawer"
               onClick={() => setMobileNavOpen(true)}
               data-testid="button-open-mobile-nav"
             >
@@ -314,7 +314,11 @@ function NavbarImpl({
       </div>
 
       <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-        <SheetContent side="left" className="w-[min(92vw,22rem)]">
+        <SheetContent
+          id="mobile-navigation-drawer"
+          side="left"
+          className="w-[min(92vw,22rem)]"
+        >
           <SheetHeader className="pr-8 text-left">
             <SheetTitle>Navigation</SheetTitle>
             <SheetDescription>
