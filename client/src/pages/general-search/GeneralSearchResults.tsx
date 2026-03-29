@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, Eye, FileText, Loader2 } from "lucide-react";
+import { Eye, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -13,6 +8,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { GeneralSearchExportMenu } from "@/pages/general-search/GeneralSearchExportMenu";
 import type { SearchResultRow } from "@/pages/general-search/types";
 import { getCellDisplayText, getPriorityRank, highlightMatch } from "@/pages/general-search/utils";
 
@@ -59,6 +56,7 @@ export function GeneralSearchResults({
   resultsPerPage,
   totalResults,
 }: GeneralSearchResultsProps) {
+  const isMobile = useIsMobile();
   const [tableScrollTop, setTableScrollTop] = useState(0);
 
   useEffect(() => {
@@ -84,6 +82,8 @@ export function GeneralSearchResults({
   const topSpacerHeight = enableVirtualRows ? virtualStartRow * rowHeightPx : 0;
   const bottomSpacerHeight = enableVirtualRows ? Math.max(0, (results.length - virtualEndRow) * rowHeightPx) : 0;
   const totalPages = Math.ceil(totalResults / resultsPerPage);
+  const rangeStart = totalResults > 0 ? (currentPage - 1) * resultsPerPage + 1 : 0;
+  const rangeEnd = Math.min(currentPage * resultsPerPage, totalResults);
 
   const pageButtons = useMemo(
     () =>
@@ -118,6 +118,18 @@ export function GeneralSearchResults({
     [currentPage, loading, onPageChange, totalPages],
   );
 
+  const renderCellValue = (safeText: string) =>
+    advancedMode || isLowSpecMode ? safeText : highlightMatch(safeText, query);
+
+  const getRowHeadersWithContent = (row: SearchResultRow) => {
+    const populatedHeaders = headers.filter((header) => {
+      const safeText = getCellDisplayText(row?.[header]).trim();
+      return safeText !== "" && safeText !== "-";
+    });
+
+    return populatedHeaders.length > 0 ? populatedHeaders : headers;
+  };
+
   if (results.length === 0) {
     return (
       <div className="glass-wrapper p-6">
@@ -146,21 +158,23 @@ export function GeneralSearchResults({
   }
 
   return (
-    <div className="glass-wrapper p-6">
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <div>
-          <p className="text-foreground font-medium">{results.length} results found</p>
+    <div className="glass-wrapper p-4 sm:p-6" data-floating-ai-avoid="true">
+      <div className={`mb-4 gap-3 ${isMobile ? "space-y-3" : "flex flex-wrap items-center justify-between"}`}>
+        <div className="min-w-0">
+          <p className="text-foreground font-medium">
+            {totalResults} result{totalResults === 1 ? "" : "s"} found
+          </p>
           {advancedMode ? (
             <p className="text-sm text-muted-foreground">
               {filtersCount} active filters with {logic} logic
             </p>
           ) : null}
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className={`gap-2 ${isMobile ? "grid grid-cols-1" : "flex items-center flex-wrap"}`}>
+          <div className={`text-sm text-muted-foreground ${isMobile ? "grid grid-cols-1 gap-2" : "flex items-center gap-2"}`}>
             <span>Rows per page</span>
             <Select value={String(resultsPerPage)} onValueChange={(value) => onRowsPerPageChange(Number(value))}>
-              <SelectTrigger className="w-[110px]" data-testid="select-rows-per-page">
+              <SelectTrigger className={isMobile ? "h-10 w-full" : "w-[110px]"} data-testid="select-rows-per-page">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -173,154 +187,257 @@ export function GeneralSearchResults({
             </Select>
           </div>
           {canExport ? (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" disabled={exportingPdf} data-testid="button-export">
-                  {exportingPdf ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                  Export
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-48" align="end">
-                <div className="space-y-1">
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start"
-                    onClick={onExportCsv}
-                    disabled={exportingPdf}
-                    data-testid="button-export-csv"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Export CSV
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start"
-                    onClick={onExportPdf}
-                    disabled={exportingPdf}
-                    data-testid="button-export-pdf"
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Export PDF
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
+            <GeneralSearchExportMenu
+              exportingPdf={exportingPdf}
+              totalResults={totalResults}
+              visibleResultsCount={results.length}
+              onExportCsv={onExportCsv}
+              onExportPdf={onExportPdf}
+            />
           ) : null}
         </div>
       </div>
 
-      <div
-        className="overflow-x-auto overflow-y-auto rounded-lg border border-border max-h-[600px] scrollbar-visible"
-        onScroll={enableVirtualRows ? (event) => setTableScrollTop(event.currentTarget.scrollTop) : undefined}
-      >
-        <style>{`
-          .scrollbar-visible {
-            -ms-overflow-style: auto;
-          }
-          .scrollbar-visible::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-          }
-          .scrollbar-visible::-webkit-scrollbar-track {
-            background: rgba(31, 41, 55, 0.1);
-            border-radius: 4px;
-          }
-          .scrollbar-visible::-webkit-scrollbar-thumb {
-            background: rgba(99, 102, 241, 0.5);
-            border-radius: 4px;
-          }
-          .scrollbar-visible::-webkit-scrollbar-thumb:hover {
-            background: rgba(99, 102, 241, 0.8);
-          }
-        `}</style>
-        <table className="w-full text-sm">
-          <thead className="bg-muted sticky top-0">
-            <tr>
-              <th className="text-left p-3 font-medium text-muted-foreground">#</th>
-              <th className="text-left p-3 font-medium text-muted-foreground">Action</th>
-              {headers.map((header, index) => (
-                <th key={index} className="text-left p-3 font-medium text-muted-foreground whitespace-nowrap">
-                  {header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {enableVirtualRows && topSpacerHeight > 0 ? (
-              <tr aria-hidden="true">
-                <td colSpan={headers.length + 2} height={topSpacerHeight} className="p-0" />
-              </tr>
-            ) : null}
-            {virtualRows.map((row, rowIndex) => {
-              const actualRowIndex = enableVirtualRows ? virtualStartRow + rowIndex : rowIndex;
+      {isMobile ? (
+        <div className="space-y-3">
+          {results.map((row, rowIndex) => {
+            const resultNumber = rangeStart + rowIndex;
+            const populatedHeaders = getRowHeadersWithContent(row);
+            const headlineHeader = populatedHeaders[0];
+            const subheadlineHeader = populatedHeaders[1];
+            const visibleDetailHeaders = populatedHeaders.slice(2, 6);
+            const overflowHeaders = populatedHeaders.slice(6);
+            const headlineValue = headlineHeader ? getCellDisplayText(row?.[headlineHeader]) : "-";
+            const subheadlineValue = subheadlineHeader ? getCellDisplayText(row?.[subheadlineHeader]) : "";
 
-              return (
-                <tr key={actualRowIndex} className="border-t border-border hover:bg-muted/50 h-[52px]">
-                  <td className="p-3 text-muted-foreground">{actualRowIndex + 1}</td>
-                  <td className="p-3">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onRecordSelect(row)}
-                      data-testid={`button-view-${actualRowIndex}`}
-                    >
-                      <Eye className="w-4 h-4 mr-2" />
-                      View
-                    </Button>
-                  </td>
-                  {headers.map((header) => {
-                    const safeText = getCellDisplayText(row?.[header]);
-                    return (
-                      <td
-                        key={`${actualRowIndex}-${header}`}
-                        className={`p-3 text-foreground max-w-[280px] truncate whitespace-nowrap ${
-                          getPriorityRank(header) <= 2 ? "font-semibold" : ""
-                        }`}
-                        title={safeText}
-                      >
-                        {advancedMode || isLowSpecMode ? safeText : highlightMatch(safeText, query)}
-                      </td>
-                    );
-                  })}
+            return (
+              <article
+                key={`mobile-result-${resultNumber}`}
+                className="rounded-2xl border border-border/60 bg-background/80 p-3 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      Result {resultNumber}
+                    </p>
+                    <div className="break-words text-base font-semibold text-foreground">
+                      {renderCellValue(headlineValue)}
+                    </div>
+                    {subheadlineHeader && subheadlineValue && subheadlineValue !== "-" ? (
+                      <p className="break-words text-sm text-muted-foreground">
+                        <span className="font-medium text-foreground">{subheadlineHeader}:</span>{" "}
+                        {renderCellValue(subheadlineValue)}
+                      </p>
+                    ) : null}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onRecordSelect(row)}
+                    className="h-10 shrink-0 px-3"
+                    data-testid={`button-view-${rowIndex}`}
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    View
+                  </Button>
+                </div>
+
+                {visibleDetailHeaders.length > 0 ? (
+                  <dl className="mt-3 space-y-2">
+                    {visibleDetailHeaders.map((header) => {
+                      const safeText = getCellDisplayText(row?.[header]);
+                      return (
+                        <div
+                          key={`${resultNumber}-${header}`}
+                          className="rounded-xl border border-border/50 bg-muted/30 px-3 py-2"
+                        >
+                          <dt className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                            {header}
+                          </dt>
+                          <dd
+                            className={`mt-1 break-words text-sm text-foreground ${
+                              getPriorityRank(header) <= 2 ? "font-semibold" : ""
+                            }`}
+                          >
+                            {renderCellValue(safeText)}
+                          </dd>
+                        </div>
+                      );
+                    })}
+                  </dl>
+                ) : null}
+
+                {overflowHeaders.length > 0 ? (
+                  <details className="mt-3 rounded-xl border border-border/50 bg-background/70">
+                    <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-primary">
+                      Show {overflowHeaders.length} more field{overflowHeaders.length === 1 ? "" : "s"}
+                    </summary>
+                    <dl className="space-y-2 border-t border-border/50 px-3 py-3">
+                      {overflowHeaders.map((header) => {
+                        const safeText = getCellDisplayText(row?.[header]);
+                        return (
+                          <div
+                            key={`${resultNumber}-${header}-extra`}
+                            className="rounded-lg border border-border/40 bg-muted/20 px-3 py-2"
+                          >
+                            <dt className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                              {header}
+                            </dt>
+                            <dd className="mt-1 break-words text-sm text-foreground">
+                              {renderCellValue(safeText)}
+                            </dd>
+                          </div>
+                        );
+                      })}
+                    </dl>
+                  </details>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div
+          className="max-h-[600px] overflow-x-auto overflow-y-auto rounded-lg border border-border scrollbar-visible"
+          onScroll={enableVirtualRows ? (event) => setTableScrollTop(event.currentTarget.scrollTop) : undefined}
+        >
+          <style>{`
+            .scrollbar-visible {
+              -ms-overflow-style: auto;
+            }
+            .scrollbar-visible::-webkit-scrollbar {
+              width: 8px;
+              height: 8px;
+            }
+            .scrollbar-visible::-webkit-scrollbar-track {
+              background: rgba(31, 41, 55, 0.1);
+              border-radius: 4px;
+            }
+            .scrollbar-visible::-webkit-scrollbar-thumb {
+              background: rgba(99, 102, 241, 0.5);
+              border-radius: 4px;
+            }
+            .scrollbar-visible::-webkit-scrollbar-thumb:hover {
+              background: rgba(99, 102, 241, 0.8);
+            }
+          `}</style>
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-muted">
+              <tr>
+                <th className="p-3 text-left font-medium text-muted-foreground">#</th>
+                <th className="p-3 text-left font-medium text-muted-foreground">Action</th>
+                {headers.map((header, index) => (
+                  <th key={index} className="whitespace-nowrap p-3 text-left font-medium text-muted-foreground">
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {enableVirtualRows && topSpacerHeight > 0 ? (
+                <tr aria-hidden="true">
+                  <td colSpan={headers.length + 2} height={topSpacerHeight} className="p-0" />
                 </tr>
-              );
-            })}
-            {enableVirtualRows && bottomSpacerHeight > 0 ? (
-              <tr aria-hidden="true">
-                <td colSpan={headers.length + 2} height={bottomSpacerHeight} className="p-0" />
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+              ) : null}
+              {virtualRows.map((row, rowIndex) => {
+                const actualRowIndex = enableVirtualRows ? virtualStartRow + rowIndex : rowIndex;
 
-      <div className="mt-4 flex items-center justify-between flex-wrap gap-3">
+                return (
+                  <tr key={actualRowIndex} className="h-[52px] border-t border-border hover:bg-muted/50">
+                    <td className="p-3 text-muted-foreground">{actualRowIndex + 1}</td>
+                    <td className="p-3">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onRecordSelect(row)}
+                        data-testid={`button-view-${actualRowIndex}`}
+                      >
+                        <Eye className="mr-2 h-4 w-4" />
+                        View
+                      </Button>
+                    </td>
+                    {headers.map((header) => {
+                      const safeText = getCellDisplayText(row?.[header]);
+                      return (
+                        <td
+                          key={`${actualRowIndex}-${header}`}
+                          className={`max-w-[280px] truncate whitespace-nowrap p-3 text-foreground ${
+                            getPriorityRank(header) <= 2 ? "font-semibold" : ""
+                          }`}
+                          title={safeText}
+                        >
+                          {renderCellValue(safeText)}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+              {enableVirtualRows && bottomSpacerHeight > 0 ? (
+                <tr aria-hidden="true">
+                  <td colSpan={headers.length + 2} height={bottomSpacerHeight} className="p-0" />
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className={`mt-4 gap-3 ${isMobile ? "space-y-3" : "flex flex-wrap items-center justify-between"}`}>
         <p className="text-sm text-muted-foreground">
-          Showing {results.length > 0 ? (currentPage - 1) * resultsPerPage + 1 : 0} - {Math.min(currentPage * resultsPerPage, totalResults)} of {totalResults} results
+          Showing {rangeStart} - {rangeEnd} of {totalResults} results
         </p>
 
         {totalResults > resultsPerPage ? (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage - 1)}
-              disabled={currentPage === 1 || loading}
-              data-testid="button-prev-page"
-            >
-              Previous
-            </Button>
-            <div className="flex items-center gap-1">{pageButtons}</div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage + 1)}
-              disabled={currentPage >= totalPages || loading}
-              data-testid="button-next-page"
-            >
-              Next
-            </Button>
-          </div>
+          isMobile ? (
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onPageChange(currentPage - 1)}
+                disabled={currentPage === 1 || loading}
+                className="h-10 w-full"
+                data-testid="button-prev-page"
+              >
+                Previous
+              </Button>
+              <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-center text-sm font-medium text-foreground">
+                Page {currentPage} / {totalPages}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onPageChange(currentPage + 1)}
+                disabled={currentPage >= totalPages || loading}
+                className="h-10 w-full"
+                data-testid="button-next-page"
+              >
+                Next
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onPageChange(currentPage - 1)}
+                disabled={currentPage === 1 || loading}
+                data-testid="button-prev-page"
+              >
+                Previous
+              </Button>
+              <div className="flex items-center gap-1">{pageButtons}</div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onPageChange(currentPage + 1)}
+                disabled={currentPage >= totalPages || loading}
+                data-testid="button-next-page"
+              >
+                Next
+              </Button>
+            </div>
+          )
         ) : null}
       </div>
     </div>
