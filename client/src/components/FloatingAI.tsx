@@ -6,6 +6,11 @@ import { Button } from "@/components/ui/button";
 import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { AIChatStatus } from "@/components/AIChat";
+import {
+  areFloatingAiLayoutsEqual,
+  resolveFloatingAiLayout,
+  type RectLike,
+} from "@/components/floating-ai-layout";
 import { resolveFloatingAIMinimizedStatus } from "@/components/floating-ai-status";
 import { useAIContext } from "@/context/AIContext";
 import { cn } from "@/lib/utils";
@@ -15,6 +20,19 @@ const AI_RESET_EVENT = "ai-chat-reset";
 const AIChat = lazy(() => import("@/components/AIChat"));
 const AVOID_SELECTOR = "[data-floating-ai-avoid='true']";
 const DIALOG_SELECTOR = "[role='dialog'], [data-radix-dialog-content]";
+const DENSE_PAGE_HINTS = [
+  "analysis",
+  "audit",
+  "backup",
+  "collection",
+  "dashboard",
+  "general-search",
+  "monitor",
+  "saved",
+  "search",
+  "settings",
+  "viewer",
+] as const;
 
 function isVisibleElement(element: Element | null): element is HTMLElement {
   if (!(element instanceof HTMLElement)) return false;
@@ -44,11 +62,19 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
   const [hasActivated, setHasActivated] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIChatStatus>("IDLE");
   const [hasFocusedEditable, setHasFocusedEditable] = useState(false);
-  const [safePosition, setSafePosition] = useState({
-    bottom: 24,
-    right: 24,
-    hasBlockingDialog: false,
-  });
+  const [layoutState, setLayoutState] = useState(() =>
+    resolveFloatingAiLayout({
+      viewportWidth: 1280,
+      viewportHeight: 720,
+      isMobile: false,
+      isOpen: false,
+      hasBlockingDialog: false,
+      keyboardOpen: false,
+      hasFocusedEditable: false,
+      hasDensePage: false,
+      avoidRects: [],
+    }),
+  );
   const [location] = useLocation();
   const floatingRootRef = useRef<HTMLDivElement | null>(null);
   const cancelAISearchRef = useRef<(() => void) | null>(null);
@@ -86,9 +112,27 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
   useEffect(() => {
     const node = floatingRootRef.current;
     if (!node) return;
-    node.style.bottom = `${safePosition.bottom}px`;
-    node.style.right = `${safePosition.right}px`;
-  }, [safePosition.bottom, safePosition.right]);
+    node.style.setProperty("--floating-ai-trigger-bottom", `${layoutState.trigger.bottom}px`);
+    node.style.setProperty(
+      "--floating-ai-trigger-left",
+      layoutState.trigger.left === null ? "auto" : `${layoutState.trigger.left}px`,
+    );
+    node.style.setProperty(
+      "--floating-ai-trigger-right",
+      layoutState.trigger.right === null ? "auto" : `${layoutState.trigger.right}px`,
+    );
+    node.style.setProperty("--floating-ai-panel-bottom", `${layoutState.panel.bottom}px`);
+    node.style.setProperty(
+      "--floating-ai-panel-left",
+      layoutState.panel.left === null ? "auto" : `${layoutState.panel.left}px`,
+    );
+    node.style.setProperty(
+      "--floating-ai-panel-right",
+      layoutState.panel.right === null ? "auto" : `${layoutState.panel.right}px`,
+    );
+    node.style.setProperty("--floating-ai-panel-width", `${layoutState.panel.width}px`);
+    node.style.setProperty("--floating-ai-panel-height", `${layoutState.panel.height}px`);
+  }, [layoutState]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -116,6 +160,11 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     setIsOpen(false);
   }, [hasFocusedEditable, isMobile, isOpen]);
 
+  useEffect(() => {
+    if (!isOpen || !layoutState.shouldAutoMinimize) return;
+    setIsOpen(false);
+  }, [isOpen, layoutState.shouldAutoMinimize]);
+
   const handleMinimize = useCallback(() => {
     setIsOpen(false);
   }, []);
@@ -133,62 +182,84 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
 
   const hiddenForAiPage = activePage === "ai" || location.toLowerCase() === "/ai";
   const hideForFocusedEditable = isMobile && (hasFocusedEditable || keyboardOpen);
-  const syncSafePosition = useCallback(() => {
+  const hasDensePage = useMemo(() => {
+    const pageKey = `${activePage}:${location}`.toLowerCase();
+    return DENSE_PAGE_HINTS.some((token) => pageKey.includes(token));
+  }, [activePage, location]);
+
+  const syncLayout = useCallback(() => {
     if (typeof window === "undefined") return;
 
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const compactViewport = viewportWidth < 640;
-    const baseRight = compactViewport ? 14 : 24;
-    const baseBottom = compactViewport ? (isMobile ? 28 : 12) : 24;
-    const overlayWidth = isOpen
-      ? Math.max(56, Math.min(isMobile ? 392 : 380, viewportWidth - (compactViewport ? 16 : 48)))
-      : 56;
-    const rightBoundary = viewportWidth - overlayWidth - baseRight - 8;
-    let requiredBottom = baseBottom;
-
-    document.querySelectorAll(AVOID_SELECTOR).forEach((element) => {
-      if (!isVisibleElement(element)) return;
-      const rect = element.getBoundingClientRect();
-      const nearViewportBottom = rect.bottom > viewportHeight - 220;
-      const overlapsAiColumn = rect.right > rightBoundary;
-      if (!nearViewportBottom || !overlapsAiColumn) return;
-      requiredBottom = Math.max(
-        requiredBottom,
-        Math.max(baseBottom, viewportHeight - rect.top + (isMobile ? 28 : 12)),
-      );
-    });
+    const avoidRects: RectLike[] = Array.from(document.querySelectorAll(AVOID_SELECTOR))
+      .filter((element) => isVisibleElement(element))
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+        };
+      });
 
     const hasBlockingDialog = Array.from(document.querySelectorAll(DIALOG_SELECTOR)).some((element) =>
       isVisibleElement(element),
     );
 
-    const nextPosition = {
-      bottom: Math.min(requiredBottom, Math.max(baseBottom, viewportHeight - 96)),
-      right: baseRight,
+    const nextLayout = resolveFloatingAiLayout({
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      isMobile,
+      isOpen,
       hasBlockingDialog,
-    };
+      keyboardOpen,
+      hasFocusedEditable,
+      hasDensePage,
+      avoidRects,
+    });
 
-    setSafePosition((previous) =>
-      previous.bottom === nextPosition.bottom &&
-      previous.right === nextPosition.right &&
-      previous.hasBlockingDialog === nextPosition.hasBlockingDialog
-        ? previous
-        : nextPosition,
-    );
-  }, [isMobile, isOpen]);
+    setLayoutState((previous) => (areFloatingAiLayoutsEqual(previous, nextLayout) ? previous : nextLayout));
+  }, [hasDensePage, hasFocusedEditable, isMobile, isOpen, keyboardOpen]);
 
   useEffect(() => {
     if (hiddenForAiPage || typeof window === "undefined") return;
 
     let frame = 0;
     let scheduled = false;
+    const resizeObserver = new ResizeObserver(() => {
+      scheduleSync();
+    });
+    const observedElements = new Set<Element>();
+
+    const syncObservedElements = () => {
+      const nextElements = new Set<Element>([
+        ...document.querySelectorAll(AVOID_SELECTOR),
+        ...document.querySelectorAll(DIALOG_SELECTOR),
+      ]);
+
+      for (const element of observedElements) {
+        if (nextElements.has(element)) continue;
+        resizeObserver.unobserve(element);
+        observedElements.delete(element);
+      }
+
+      for (const element of nextElements) {
+        if (observedElements.has(element)) continue;
+        if (!(element instanceof Element)) continue;
+        resizeObserver.observe(element);
+        observedElements.add(element);
+      }
+    };
+
     const scheduleSync = () => {
       if (scheduled) return;
       scheduled = true;
       frame = window.requestAnimationFrame(() => {
         scheduled = false;
-        syncSafePosition();
+        syncObservedElements();
+        syncLayout();
       });
     };
 
@@ -199,7 +270,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["class", "style", "data-state", "aria-hidden", "open"],
+      attributeFilter: ["class", "data-state", "hidden", "open"],
     });
 
     window.addEventListener("resize", scheduleSync, { passive: true });
@@ -207,13 +278,14 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
 
     return () => {
       observer.disconnect();
+      resizeObserver.disconnect();
       window.removeEventListener("resize", scheduleSync);
       window.removeEventListener("scroll", scheduleSync);
       if (frame) {
         window.cancelAnimationFrame(frame);
       }
     };
-  }, [hiddenForAiPage, location, syncSafePosition]);
+  }, [hiddenForAiPage, location, syncLayout]);
 
   const minimizedStatus = resolveFloatingAIMinimizedStatus(aiStatus);
 
@@ -223,35 +295,42 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     <div
       ref={floatingRootRef}
       className={cn(
-        "pointer-events-none fixed z-[9999] flex flex-col items-end gap-3 transition-[bottom,right,opacity,transform] duration-200",
+        "pointer-events-none fixed transition-opacity duration-200",
         styles.floatingRoot,
-        safePosition.hasBlockingDialog || (hideForFocusedEditable && !isOpen)
+        layoutState.rootHidden || (hideForFocusedEditable && !isOpen)
           ? "translate-y-2 opacity-0"
           : "opacity-100",
       )}
-      aria-hidden={safePosition.hasBlockingDialog}
-      hidden={safePosition.hasBlockingDialog}
+      aria-hidden={layoutState.rootHidden}
+      hidden={layoutState.rootHidden}
     >
       {hasActivated ? (
         <div
           className={cn(
-            "pointer-events-auto transition-all duration-200",
-            isMobile ? "w-[min(24rem,calc(100vw-0.75rem))] self-center" : "",
-            isOpen && !safePosition.hasBlockingDialog
+            "pointer-events-none absolute transition-all duration-200",
+            styles.floatingPanelShell,
+            isOpen && !layoutState.rootHidden
               ? "translate-y-0 opacity-100"
               : "pointer-events-none translate-y-2 opacity-0",
           )}
+          aria-hidden={!isOpen}
         >
           <section
             className={cn(
-              "border border-border bg-card text-card-foreground shadow-xl",
-              isMobile
-                ? "h-[min(62vh,30rem)] w-full rounded-[24px]"
-                : "h-[min(520px,calc(100vh-120px))] w-[min(380px,calc(100vw-48px))] rounded-[16px]",
+              "pointer-events-auto h-full w-full border border-border bg-card text-card-foreground shadow-xl",
+              layoutState.panel.mode === "sheet"
+                ? "rounded-[24px] border-border/90 shadow-2xl"
+                : "rounded-[18px]",
             )}
             aria-label="AI SQR Popup"
+            data-floating-ai-panel-mode={layoutState.panel.mode}
           >
-            <header className={cn("flex items-center justify-between border-b border-border", isMobile ? "min-h-14 px-3.5" : "h-14 px-4")}>
+            <header
+              className={cn(
+                "flex items-center justify-between border-b border-border",
+                isMobile ? "min-h-14 px-3.5" : "h-14 px-4",
+              )}
+            >
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-foreground">AI SQR</p>
                 <p className="truncate text-[11px] text-muted-foreground">Smart Query Engine</p>
@@ -300,37 +379,45 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           </section>
         </div>
       ) : null}
-
-      <button
-        type="button"
-        onClick={handleToggle}
-        title="AI SQR"
+      <div
         className={cn(
-          "pointer-events-auto relative flex items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-[1.03]",
-          isMobile ? "h-12 w-12" : "h-14 w-14",
-          hideForFocusedEditable ? "pointer-events-none" : "",
-          isMobile && isOpen ? "pointer-events-none scale-95 opacity-0" : "",
-          safePosition.hasBlockingDialog ? "pointer-events-none scale-95" : "",
-          !isOpen && isThinking ? styles.aiThinkingRing : "",
+          "absolute flex flex-col gap-2 pointer-events-none",
+          styles.floatingTriggerShell,
+          layoutState.trigger.anchor === "left" ? "items-start" : "items-end",
+          layoutState.triggerHidden ? "translate-y-2 opacity-0" : "opacity-100",
         )}
-        aria-label="AI SQR"
-        data-testid="floating-ai-toggle"
+        aria-hidden={layoutState.triggerHidden}
       >
-        <Bot className="h-6 w-6" />
-        {!isOpen && unreadCount > 0 ? (
-          <Badge
-            className="absolute -right-1 -top-1 h-5 min-w-5 justify-center rounded-full bg-destructive px-1 text-[10px] text-destructive-foreground"
-            data-testid="floating-ai-unread-badge"
-          >
-            {unreadCount > 99 ? "99+" : unreadCount}
-          </Badge>
+        {!isOpen && isThinking && !layoutState.rootHidden && !isMobile ? (
+          <div className="pointer-events-none max-w-[220px] rounded-lg border border-blue-500/35 bg-blue-500/10 px-3 py-1.5 text-[11px] text-blue-200 shadow-sm">
+            {minimizedStatus}
+          </div>
         ) : null}
-      </button>
-      {!isOpen && isThinking && !safePosition.hasBlockingDialog && !isMobile ? (
-        <div className="pointer-events-none max-w-[220px] rounded-lg border border-blue-500/35 bg-blue-500/10 px-3 py-1.5 text-[11px] text-blue-200 shadow-sm">
-          {minimizedStatus}
-        </div>
-      ) : null}
+        <button
+          type="button"
+          onClick={handleToggle}
+          title="AI SQR"
+          className={cn(
+            "pointer-events-auto relative flex items-center justify-center rounded-full border border-border/50 bg-background/95 text-foreground shadow-lg backdrop-blur-sm transition-transform hover:scale-[1.03]",
+            isMobile ? "h-12 w-12" : "h-14 w-14",
+            hideForFocusedEditable ? "pointer-events-none" : "",
+            layoutState.triggerHidden ? "pointer-events-none scale-95 opacity-0" : "",
+            !isOpen && isThinking ? styles.aiThinkingRing : "",
+          )}
+          aria-label="AI SQR"
+          data-testid="floating-ai-toggle"
+        >
+          <Bot className="h-6 w-6" />
+          {!isOpen && unreadCount > 0 ? (
+            <Badge
+              className="absolute -right-1 -top-1 h-5 min-w-5 justify-center rounded-full bg-destructive px-1 text-[10px] text-destructive-foreground"
+              data-testid="floating-ai-unread-badge"
+            >
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </Badge>
+          ) : null}
+        </button>
+      </div>
     </div>
   );
 }

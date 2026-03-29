@@ -1,7 +1,26 @@
 .floatingRoot {
-  bottom: 24px;
-  right: 24px;
+  inset: 0;
+  z-index: 40;
+  overflow: clip;
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.floatingTriggerShell {
+  position: absolute;
+  left: var(--floating-ai-trigger-left, auto);
+  right: var(--floating-ai-trigger-right, 24px);
+  bottom: var(--floating-ai-trigger-bottom, 24px);
+}
+
+.floatingPanelShell {
+  position: absolute;
+  left: var(--floating-ai-panel-left, auto);
+  right: var(--floating-ai-panel-right, 24px);
+  bottom: var(--floating-ai-panel-bottom, 24px);
+  width: var(--floating-ai-panel-width, 380px);
+  height: var(--floating-ai-panel-height, 420px);
+  max-width: calc(100vw - 1rem);
+  max-height: calc(100dvh - 5rem);
 }
 
 .aiThinkingRing {
