@@ -198,6 +198,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
 
   const hiddenForAiPage = activePage === "ai" || location.toLowerCase() === "/ai";
   const hideForFocusedEditable = isMobile && hasFocusedEditable;
+  const shouldRenderPanel = hasActivated && isOpen && !layoutState.rootHidden;
   const preferCompactPanel =
     isMobile &&
     (
@@ -330,7 +331,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
       className={cn(
         "pointer-events-none fixed transition-opacity duration-200",
         styles.floatingRoot,
-        isMobile && isOpen && !layoutState.rootHidden ? "z-[60]" : "",
+        isMobile && shouldRenderPanel ? "z-[60]" : "",
         layoutState.rootHidden || (hideForFocusedEditable && !isOpen)
           ? "translate-y-2 opacity-0"
           : "opacity-100",
@@ -338,24 +339,21 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
       aria-hidden={layoutState.rootHidden}
       hidden={layoutState.rootHidden}
     >
-      {isMobile && isOpen && !layoutState.rootHidden ? (
+      {isMobile && shouldRenderPanel ? (
         <div
           className={cn("pointer-events-auto", styles.floatingMobileBackdrop)}
           aria-hidden="true"
           onClick={handleMinimize}
         />
       ) : null}
-      {hasActivated ? (
+      {shouldRenderPanel ? (
         <div
           className={cn(
             "pointer-events-none absolute transition-all duration-200",
             styles.floatingPanelShell,
             layoutState.panel.mode === "fullscreen" ? styles.floatingPanelShellFullscreen : "",
-            isOpen && !layoutState.rootHidden
-              ? "translate-y-0 opacity-100"
-              : "pointer-events-none translate-y-2 opacity-0",
+            "translate-y-0 opacity-100",
           )}
-          aria-hidden={!isOpen}
         >
           <section
             className={cn(

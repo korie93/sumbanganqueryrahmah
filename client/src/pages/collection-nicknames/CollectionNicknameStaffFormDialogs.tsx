@@ -57,7 +57,7 @@ export function CollectionNicknameStaffFormDialogs({
             <Input
               value={newNickname}
               onChange={(event) => onNewNicknameChange(event.target.value)}
-              placeholder="Contoh: SW.HAIZAL_1131"
+              placeholder="Contoh: SW.NAMA_NO"
               maxLength={64}
             />
           </div>
