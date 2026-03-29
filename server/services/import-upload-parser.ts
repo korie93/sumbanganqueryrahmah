@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import readline from "node:readline";
 import * as xlsx from "xlsx";
 
 type ImportRow = Record<string, string>;
@@ -84,35 +86,54 @@ function parseCsvBuffer(buffer: Buffer): ParsedImportUploadResult {
   return { headers, rows };
 }
 
-function parseExcelBuffer(
-  buffer: Buffer,
-): ParsedImportUploadResult {
-  let workbook;
+async function parseCsvFile(filePath: string): Promise<ParsedImportUploadResult> {
+  const stream = fs.createReadStream(filePath, { encoding: "utf8" });
+  const lineReader = readline.createInterface({
+    input: stream,
+    crlfDelay: Infinity,
+  });
+
+  const rows: ImportRow[] = [];
+  let headers: string[] = [];
+  let headerResolved = false;
+
   try {
-    workbook = xlsx.read(buffer, { type: "buffer", cellDates: true, cellNF: false, cellText: false });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Failed to read Excel file";
-    if (message.includes("password") || message.includes("encrypt")) {
-      return { headers: [], rows: [], error: "File is password protected" };
+    for await (const rawLine of lineReader) {
+      const line = String(rawLine ?? "");
+      const normalizedLine = headerResolved ? line : line.replace(/^\ufeff/, "");
+      if (!normalizedLine.trim()) {
+        continue;
+      }
+
+      if (!headerResolved) {
+        headers = parseCsvLine(normalizedLine);
+        headerResolved = true;
+        continue;
+      }
+
+      const values = parseCsvLine(normalizedLine);
+      const row: ImportRow = {};
+      headers.forEach((header, headerIndex) => {
+        row[header] = values[headerIndex] || "";
+      });
+
+      if (Object.values(row).some((value) => value !== "")) {
+        rows.push(row);
+      }
     }
-    if (message.includes("Unsupported") || message.includes("corrupt")) {
-      return { headers: [], rows: [], error: "File is corrupted or unsupported format" };
-    }
-    return { headers: [], rows: [], error: message };
+  } finally {
+    lineReader.close();
+    stream.destroy();
   }
 
-  const firstSheetName = workbook.SheetNames[0];
-  if (!firstSheetName) {
-    return { headers: [], rows: [], error: "Excel file does not have any sheets." };
+  if (!headerResolved || headers.length === 0) {
+    return { headers: [], rows: [], error: "CSV file is empty." };
   }
 
-  const worksheet = workbook.Sheets[firstSheetName];
-  const jsonData = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: "", raw: false }) as unknown[][];
+  return { headers, rows };
+}
 
-  (workbook as { SheetNames?: unknown; Sheets?: unknown }).SheetNames = null;
-  (workbook as { SheetNames?: unknown; Sheets?: unknown }).Sheets = null;
-  workbook = null as never;
-
+function parseWorkbookJsonData(jsonData: unknown[][]): ParsedImportUploadResult {
   if (jsonData.length === 0) {
     return { headers: [], rows: [], error: "Excel file is empty." };
   }
@@ -158,6 +179,66 @@ function parseExcelBuffer(
   return { headers, rows };
 }
 
+function parseExcelBuffer(buffer: Buffer): ParsedImportUploadResult {
+  let workbook;
+  try {
+    workbook = xlsx.read(buffer, { type: "buffer", cellDates: true, cellNF: false, cellText: false });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to read Excel file";
+    if (message.includes("password") || message.includes("encrypt")) {
+      return { headers: [], rows: [], error: "File is password protected" };
+    }
+    if (message.includes("Unsupported") || message.includes("corrupt")) {
+      return { headers: [], rows: [], error: "File is corrupted or unsupported format" };
+    }
+    return { headers: [], rows: [], error: message };
+  }
+
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) {
+    return { headers: [], rows: [], error: "Excel file does not have any sheets." };
+  }
+
+  const worksheet = workbook.Sheets[firstSheetName];
+  const jsonData = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: "", raw: false }) as unknown[][];
+
+  (workbook as { SheetNames?: unknown; Sheets?: unknown }).SheetNames = null;
+  (workbook as { SheetNames?: unknown; Sheets?: unknown }).Sheets = null;
+  workbook = null as never;
+
+  return parseWorkbookJsonData(jsonData);
+}
+
+function parseExcelFile(filePath: string): ParsedImportUploadResult {
+  let workbook;
+  try {
+    workbook = xlsx.readFile(filePath, { cellDates: true, cellNF: false, cellText: false });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to read Excel file";
+    if (message.includes("password") || message.includes("encrypt")) {
+      return { headers: [], rows: [], error: "File is password protected" };
+    }
+    if (message.includes("Unsupported") || message.includes("corrupt")) {
+      return { headers: [], rows: [], error: "File is corrupted or unsupported format" };
+    }
+    return { headers: [], rows: [], error: message };
+  }
+
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) {
+    return { headers: [], rows: [], error: "Excel file does not have any sheets." };
+  }
+
+  const worksheet = workbook.Sheets[firstSheetName];
+  const jsonData = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: "", raw: false }) as unknown[][];
+
+  (workbook as { SheetNames?: unknown; Sheets?: unknown }).SheetNames = null;
+  (workbook as { SheetNames?: unknown; Sheets?: unknown }).Sheets = null;
+  workbook = null as never;
+
+  return parseWorkbookJsonData(jsonData);
+}
+
 export function parseImportUploadBuffer(filename: string, buffer: Buffer): ParsedImportUploadResult {
   const normalizedFilename = String(filename || "").trim().toLowerCase();
   if (!isSupportedSpreadsheet(normalizedFilename)) {
@@ -169,4 +250,17 @@ export function parseImportUploadBuffer(filename: string, buffer: Buffer): Parse
   }
 
   return parseExcelBuffer(buffer);
+}
+
+export async function parseImportUploadFile(filename: string, filePath: string): Promise<ParsedImportUploadResult> {
+  const normalizedFilename = String(filename || "").trim().toLowerCase();
+  if (!isSupportedSpreadsheet(normalizedFilename)) {
+    return { headers: [], rows: [], error: "Please select a CSV or Excel file (.xlsx, .xls, .xlsb)" };
+  }
+
+  if (normalizedFilename.endsWith(".csv")) {
+    return parseCsvFile(filePath);
+  }
+
+  return parseExcelFile(filePath);
 }

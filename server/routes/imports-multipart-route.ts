@@ -1,7 +1,13 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { mkdtemp, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { pipeline } from "node:stream/promises";
 import Busboy from "busboy";
 import type { RequestHandler } from "express";
 import {
-  parseImportUploadBuffer,
+  parseImportUploadFile,
   stripImportUploadExtension,
 } from "../services/import-upload-parser";
 
@@ -65,51 +71,40 @@ export function createImportsMultipartRoute(): RequestHandler {
         return;
       }
 
-      fileTask = new Promise((resolve, reject) => {
-        const chunks: Buffer[] = [];
+      fileTask = (async () => {
+        const filename = String(info.filename || "").trim();
+        const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-upload-"));
+        const tempFilePath = path.join(tempDir, `${Date.now()}-${randomUUID()}.upload`);
         let exceededSizeLimit = false;
 
         file.once("limit", () => {
           exceededSizeLimit = true;
-          chunks.length = 0;
-          reject(new Error("The selected file is too large to import. Please split it into smaller files and try again."));
         });
 
-        file.on("data", (chunk) => {
-          if (!exceededSizeLimit) {
-            chunks.push(Buffer.from(chunk));
-          }
-        });
+        try {
+          await pipeline(
+            file,
+            fs.createWriteStream(tempFilePath, { flags: "wx" }),
+          );
 
-        file.once("error", (error) => {
-          chunks.length = 0;
-          reject(error);
-        });
-
-        file.once("end", () => {
           if (exceededSizeLimit) {
-            return;
+            throw new Error("The selected file is too large to import. Please split it into smaller files and try again.");
           }
 
-          try {
-            const filename = String(info.filename || "").trim();
-            const parsed = parseImportUploadBuffer(filename, Buffer.concat(chunks));
-            chunks.length = 0;
-            if (parsed.error) {
-              reject(new Error(parsed.error));
-              return;
-            }
-
-            resolve({
-              filename,
-              dataRows: parsed.rows,
-            });
-          } catch (error) {
-            chunks.length = 0;
-            reject(error);
+          const parsed = await parseImportUploadFile(filename, tempFilePath);
+          if (parsed.error) {
+            throw new Error(parsed.error);
           }
-        });
-      });
+
+          return {
+            filename,
+            dataRows: parsed.rows,
+          };
+        } finally {
+          await rm(tempFilePath, { force: true }).catch(() => undefined);
+          await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+        }
+      })();
     });
 
     parser.once("error", (error) => {
