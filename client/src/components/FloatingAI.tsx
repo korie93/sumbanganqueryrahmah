@@ -3,8 +3,8 @@ import { Bot, Minimize2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useMobileViewportState } from "@/hooks/use-mobile-viewport-state";
 import type { AIChatStatus } from "@/components/AIChat";
 import {
   areFloatingAiLayoutsEqual,
@@ -57,15 +57,17 @@ type FloatingAIProps = {
 
 export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: FloatingAIProps) {
   const isMobile = useIsMobile();
-  const keyboardOpen = useMobileKeyboardState();
+  const { keyboardOpen, bottomInset: viewportBottomInset } = useMobileViewportState();
   const [isOpen, setIsOpen] = useState(false);
   const [hasActivated, setHasActivated] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIChatStatus>("IDLE");
   const [hasFocusedEditable, setHasFocusedEditable] = useState(false);
+  const [hasFocusedAiEditable, setHasFocusedAiEditable] = useState(false);
   const [layoutState, setLayoutState] = useState(() =>
     resolveFloatingAiLayout({
       viewportWidth: 1280,
       viewportHeight: 720,
+      viewportBottomInset: 0,
       isMobile: false,
       isOpen: false,
       hasBlockingDialog: false,
@@ -143,7 +145,9 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
       const isInsideFloatingAi = Boolean(
         activeElement instanceof Node && floatingRootRef.current?.contains(activeElement),
       );
-      setHasFocusedEditable(!isInsideFloatingAi && isEditableElement(activeElement));
+      const nextIsEditable = isEditableElement(activeElement);
+      setHasFocusedEditable(!isInsideFloatingAi && nextIsEditable);
+      setHasFocusedAiEditable(isInsideFloatingAi && nextIsEditable);
     };
 
     updateFocusedEditable();
@@ -182,8 +186,13 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
   }, [resetSession]);
 
   const hiddenForAiPage = activePage === "ai" || location.toLowerCase() === "/ai";
-  const hideForFocusedEditable = isMobile && (hasFocusedEditable || keyboardOpen);
-  const preferCompactPanel = isMobile && messages.length === 0 && !isThinking && aiStatus === "IDLE";
+  const hideForFocusedEditable = isMobile && hasFocusedEditable;
+  const preferCompactPanel =
+    isMobile &&
+    (
+      (messages.length === 0 && !isThinking && aiStatus === "IDLE") ||
+      hasFocusedAiEditable
+    );
   const hasDensePage = useMemo(() => {
     const pageKey = `${activePage}:${location}`.toLowerCase();
     return DENSE_PAGE_HINTS.some((token) => pageKey.includes(token));
@@ -213,6 +222,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     const nextLayout = resolveFloatingAiLayout({
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
+      viewportBottomInset: hasFocusedAiEditable ? viewportBottomInset : 0,
       isMobile,
       isOpen,
       hasBlockingDialog,
@@ -224,7 +234,16 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     });
 
     setLayoutState((previous) => (areFloatingAiLayoutsEqual(previous, nextLayout) ? previous : nextLayout));
-  }, [hasDensePage, hasFocusedEditable, isMobile, isOpen, keyboardOpen, preferCompactPanel]);
+  }, [
+    hasDensePage,
+    hasFocusedAiEditable,
+    hasFocusedEditable,
+    isMobile,
+    isOpen,
+    keyboardOpen,
+    preferCompactPanel,
+    viewportBottomInset,
+  ]);
 
   useEffect(() => {
     if (hiddenForAiPage || typeof window === "undefined") return;

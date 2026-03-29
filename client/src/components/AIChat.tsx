@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Brain, Loader2, PencilLine, Search, StopCircle, SendHorizonal, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useIsMobile } from "@/hooks/use-mobile";
 import AIMessage from "@/components/AIMessage";
 import { type AIChatMessage, useAIContext } from "@/context/AIContext";
 import {
@@ -33,6 +34,7 @@ export default function AIChat({
   onCancelAISearchReady,
   onStatusChange,
 }: AIChatProps) {
+  const isMobile = useIsMobile();
   const {
     messages,
     setMessages,
@@ -54,6 +56,7 @@ export default function AIChat({
   const [gateNotice, setGateNotice] = useState<string | null>(null);
 
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
   const typingIntervalRef = useRef<number | null>(null);
   const retryTimersRef = useRef<number[]>([]);
@@ -343,9 +346,12 @@ export default function AIChat({
       content: trimmed,
       timestamp: new Date().toISOString(),
     });
+    if (isMobile) {
+      textareaRef.current?.blur();
+    }
     startSlowNoticeWatch(sessionId);
     await executeSearch(trimmed, sessionId, 0);
-  }, [aiEnabled, appendMessage, cancelAISearch, executeSearch, query, setIsThinking, startSlowNoticeWatch]);
+  }, [aiEnabled, appendMessage, cancelAISearch, executeSearch, isMobile, query, setIsThinking, startSlowNoticeWatch]);
 
   useEffect(() => {
     const onReset = () => {
@@ -444,6 +450,7 @@ export default function AIChat({
 
       <div className="ai-input-container">
         <Textarea
+          ref={textareaRef}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={compactMode ? "Taip soalan ringkas..." : "Taip soalan anda..."}

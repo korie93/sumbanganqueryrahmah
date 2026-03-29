@@ -10,6 +10,7 @@ export type RectLike = {
 export type FloatingAiLayoutInput = {
   viewportWidth: number;
   viewportHeight: number;
+  viewportBottomInset: number;
   isMobile: boolean;
   isOpen: boolean;
   hasBlockingDialog: boolean;
@@ -159,14 +160,15 @@ function chooseBestCandidate<T extends { score: number }>(candidates: readonly T
 export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingAiLayout {
   const viewportWidth = Math.max(input.viewportWidth, 320);
   const viewportHeight = Math.max(input.viewportHeight, 480);
+  const viewportBottomInset = Math.max(0, input.viewportBottomInset);
   const avoidRects = input.avoidRects.map(normalizeRect);
 
   const gutterX = input.isMobile ? 12 : 20;
-  const gutterY = input.isMobile ? 16 : 20;
+  const gutterY = (input.isMobile ? 16 : 20) + viewportBottomInset;
   const triggerSize = input.isMobile ? 48 : 56;
   const topInset = input.isMobile ? 72 : 92;
   const shouldAutoMinimize =
-    input.hasBlockingDialog || (input.isMobile && (input.keyboardOpen || input.hasFocusedEditable));
+    input.hasBlockingDialog || (input.isMobile && input.hasFocusedEditable);
 
   const triggerCandidates = [
     {

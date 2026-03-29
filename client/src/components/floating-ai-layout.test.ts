@@ -7,6 +7,7 @@ test("resolveFloatingAiLayout moves the trigger away from bottom-right avoid zon
   const layout = resolveFloatingAiLayout({
     viewportWidth: 390,
     viewportHeight: 844,
+    viewportBottomInset: 0,
     isMobile: true,
     isOpen: false,
     hasBlockingDialog: false,
@@ -33,6 +34,7 @@ test("resolveFloatingAiLayout lifts the mobile panel above bottom action bars", 
   const layout = resolveFloatingAiLayout({
     viewportWidth: 390,
     viewportHeight: 844,
+    viewportBottomInset: 0,
     isMobile: true,
     isOpen: true,
     hasBlockingDialog: false,
@@ -60,6 +62,7 @@ test("resolveFloatingAiLayout auto-minimizes when a blocking dialog is open", ()
   const layout = resolveFloatingAiLayout({
     viewportWidth: 430,
     viewportHeight: 932,
+    viewportBottomInset: 0,
     isMobile: true,
     isOpen: true,
     hasBlockingDialog: true,
@@ -78,6 +81,7 @@ test("resolveFloatingAiLayout keeps 320px mobile view compact and centered", () 
   const layout = resolveFloatingAiLayout({
     viewportWidth: 320,
     viewportHeight: 640,
+    viewportBottomInset: 0,
     isMobile: true,
     isOpen: true,
     hasBlockingDialog: false,
@@ -98,11 +102,12 @@ test("resolveFloatingAiLayout auto-minimizes on 360px mobile when keyboard opens
   const layout = resolveFloatingAiLayout({
     viewportWidth: 360,
     viewportHeight: 740,
+    viewportBottomInset: 280,
     isMobile: true,
     isOpen: true,
     hasBlockingDialog: false,
     keyboardOpen: true,
-    hasFocusedEditable: false,
+    hasFocusedEditable: true,
     hasDensePage: false,
     preferCompactPanel: false,
     avoidRects: [],
@@ -116,6 +121,7 @@ test("resolveFloatingAiLayout keeps the desktop panel docked compactly on the pr
   const layout = resolveFloatingAiLayout({
     viewportWidth: 1366,
     viewportHeight: 900,
+    viewportBottomInset: 0,
     isMobile: false,
     isOpen: true,
     hasBlockingDialog: false,
@@ -135,6 +141,7 @@ test("resolveFloatingAiLayout switches to dock mode for tablet widths", () => {
   const layout = resolveFloatingAiLayout({
     viewportWidth: 768,
     viewportHeight: 1024,
+    viewportBottomInset: 0,
     isMobile: false,
     isOpen: true,
     hasBlockingDialog: false,
@@ -153,6 +160,7 @@ test("areFloatingAiLayoutsEqual stays stable for unchanged placement decisions",
   const layout = resolveFloatingAiLayout({
     viewportWidth: 430,
     viewportHeight: 932,
+    viewportBottomInset: 0,
     isMobile: true,
     isOpen: false,
     hasBlockingDialog: false,
@@ -164,4 +172,23 @@ test("areFloatingAiLayoutsEqual stays stable for unchanged placement decisions",
   });
 
   assert.equal(areFloatingAiLayoutsEqual(layout, layout), true);
+});
+
+test("resolveFloatingAiLayout lifts the panel above the mobile keyboard inset without auto-minimizing internal AI input", () => {
+  const layout = resolveFloatingAiLayout({
+    viewportWidth: 390,
+    viewportHeight: 844,
+    viewportBottomInset: 280,
+    isMobile: true,
+    isOpen: true,
+    hasBlockingDialog: false,
+    keyboardOpen: true,
+    hasFocusedEditable: false,
+    hasDensePage: false,
+    preferCompactPanel: true,
+    avoidRects: [],
+  });
+
+  assert.equal(layout.shouldAutoMinimize, false);
+  assert.ok(layout.panel.bottom >= 296);
 });
