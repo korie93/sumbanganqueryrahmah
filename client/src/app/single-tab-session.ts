@@ -198,3 +198,23 @@ export function getSingleTabSeedStorageKey(): string {
 export function getSingleTabNavigationReclaimStorageKey(): string {
   return SINGLE_TAB_NAVIGATION_RECLAIM_STORAGE_KEY;
 }
+
+export function markSingleTabNavigationReclaimForCurrentTab() {
+  if (typeof sessionStorage === "undefined") {
+    return;
+  }
+
+  try {
+    const tabSeed = normalizeStorageValue(sessionStorage.getItem(getSingleTabSeedStorageKey()));
+    if (!tabSeed) {
+      return;
+    }
+
+    sessionStorage.setItem(
+      getSingleTabNavigationReclaimStorageKey(),
+      serializeSingleTabNavigationReclaim(createSingleTabNavigationReclaim(tabSeed)),
+    );
+  } catch {
+    // Ignore best-effort session reclaim persistence failures.
+  }
+}
