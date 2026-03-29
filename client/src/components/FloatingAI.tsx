@@ -3,6 +3,7 @@ import { Bot, Minimize2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { AIChatStatus } from "@/components/AIChat";
 import { resolveFloatingAIMinimizedStatus } from "@/components/floating-ai-status";
 import { useAIContext } from "@/context/AIContext";
@@ -29,6 +30,7 @@ type FloatingAIProps = {
 };
 
 export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: FloatingAIProps) {
+  const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(false);
   const [hasActivated, setHasActivated] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIChatStatus>("IDLE");
@@ -100,10 +102,10 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const compactViewport = viewportWidth < 640;
-    const baseRight = compactViewport ? 16 : 24;
-    const baseBottom = compactViewport ? 16 : 24;
+    const baseRight = compactViewport ? 12 : 24;
+    const baseBottom = compactViewport ? 12 : 24;
     const overlayWidth = isOpen
-      ? Math.max(56, Math.min(380, viewportWidth - (compactViewport ? 24 : 48)))
+      ? Math.max(56, Math.min(isMobile ? 420 : 380, viewportWidth - (compactViewport ? 20 : 48)))
       : 56;
     const rightBoundary = viewportWidth - overlayWidth - baseRight - 8;
     let requiredBottom = baseBottom;
@@ -137,7 +139,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
         ? previous
         : nextPosition,
     );
-  }, [isOpen]);
+  }, [isMobile, isOpen]);
 
   useEffect(() => {
     if (hiddenForAiPage || typeof window === "undefined") return;
@@ -201,10 +203,15 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           )}
         >
           <section
-            className="h-[min(520px,calc(100vh-120px))] w-[min(380px,calc(100vw-48px))] rounded-[16px] border border-border bg-card text-card-foreground shadow-xl"
+            className={cn(
+              "border border-border bg-card text-card-foreground shadow-xl",
+              isMobile
+                ? "h-[min(72vh,34rem)] w-[min(26rem,calc(100vw-1.25rem))] rounded-[22px]"
+                : "h-[min(520px,calc(100vh-120px))] w-[min(380px,calc(100vw-48px))] rounded-[16px]",
+            )}
             aria-label="AI SQR Popup"
           >
-            <header className="flex h-14 items-center justify-between border-b border-border px-4">
+            <header className={cn("flex items-center justify-between border-b border-border", isMobile ? "min-h-14 px-3.5" : "h-14 px-4")}>
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-foreground">AI SQR</p>
                 <p className="truncate text-[11px] text-muted-foreground">Smart Query Engine</p>
@@ -214,7 +221,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="h-8 px-2 text-xs"
+                  className={cn("text-xs", isMobile ? "h-9 px-2.5" : "h-8 px-2")}
                   onClick={handleReset}
                   disabled={messages.length === 0 && !isThinking}
                 >
@@ -224,7 +231,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   type="button"
                   size="icon"
                   variant="ghost"
-                  className="h-8 w-8"
+                  className={cn(isMobile ? "h-9 w-9" : "h-8 w-8")}
                   onClick={handleMinimize}
                   aria-label="Minimize AI panel"
                 >
@@ -232,7 +239,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                 </Button>
               </div>
             </header>
-            <div className="h-[calc(100%-56px)] p-3">
+            <div className={cn("h-[calc(100%-56px)]", isMobile ? "p-2.5" : "p-3")}>
               <Suspense
                 fallback={
                   <div className="flex h-full items-center justify-center">
@@ -259,7 +266,8 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
         onClick={handleToggle}
         title="AI SQR"
         className={cn(
-          "pointer-events-auto relative flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-[1.03]",
+          "pointer-events-auto relative flex items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-[1.03]",
+          isMobile ? "h-12 w-12" : "h-14 w-14",
           safePosition.hasBlockingDialog ? "pointer-events-none scale-95" : "",
           !isOpen && isThinking ? styles.aiThinkingRing : "",
         )}
@@ -276,7 +284,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           </Badge>
         ) : null}
       </button>
-      {!isOpen && isThinking && !safePosition.hasBlockingDialog ? (
+      {!isOpen && isThinking && !safePosition.hasBlockingDialog && !isMobile ? (
         <div className="pointer-events-none max-w-[220px] rounded-lg border border-blue-500/35 bg-blue-500/10 px-3 py-1.5 text-[11px] text-blue-200 shadow-sm">
           {minimizedStatus}
         </div>

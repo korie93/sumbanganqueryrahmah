@@ -25,17 +25,21 @@ export function SideTabDataPanel({
 }: SideTabDataPanelProps) {
   return (
     <Card className="ops-section-card">
-      <CardHeader className="gap-4 pb-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
+      <CardHeader className="gap-4 pb-3 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0">
           <CardTitle className="flex items-center gap-2 text-lg">
             <Icon className="h-5 w-5" />
             {title}
           </CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
-        {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+        {actions ? (
+          <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
+            {actions}
+          </div>
+        ) : null}
       </CardHeader>
-      <CardContent className="flex min-h-[420px] flex-col gap-4">
+      <CardContent className="flex min-h-[360px] flex-col gap-4 sm:min-h-[420px]">
         {filters ? <div className="ops-toolbar">{filters}</div> : null}
         {summary ? <div>{summary}</div> : null}
         <div className="min-h-0 flex-1 overflow-auto rounded-[18px] border border-border/60 bg-background/45">

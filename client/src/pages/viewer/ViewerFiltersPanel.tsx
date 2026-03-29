@@ -29,26 +29,27 @@ export function ViewerFiltersPanel({
 }: ViewerFiltersPanelProps) {
   return (
     <div className="ops-toolbar mb-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="font-medium text-foreground">Column Filters</h3>
           <p className="text-xs text-muted-foreground">
             Narrow matching rows across the dataset without leaving the viewer.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           {columnFilters.length > 0 ? (
             <Button
               variant="ghost"
               size="sm"
               onClick={onClearAllFilters}
               data-testid="button-clear-filters"
+              className="w-full sm:w-auto"
             >
               <X className="w-4 h-4 mr-1" />
               Clear All
             </Button>
           ) : null}
-          <Button variant="outline" size="sm" onClick={onAddFilter} data-testid="button-add-filter">
+          <Button variant="outline" size="sm" onClick={onAddFilter} data-testid="button-add-filter" className="w-full sm:w-auto">
             Add Filter
           </Button>
         </div>
@@ -61,12 +62,12 @@ export function ViewerFiltersPanel({
       ) : (
         <div className="space-y-3">
           {columnFilters.map((filter, index) => (
-            <div key={index} className="flex items-center gap-2 flex-wrap">
+            <div key={index} className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <Select
                 value={filter.column}
                 onValueChange={(value) => onUpdateFilter(index, "column", value)}
               >
-                <SelectTrigger className="w-40" data-testid={`select-filter-column-${index}`}>
+                <SelectTrigger className="w-full sm:w-40" data-testid={`select-filter-column-${index}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -82,7 +83,7 @@ export function ViewerFiltersPanel({
                 value={filter.operator}
                 onValueChange={(value) => onUpdateFilter(index, "operator", value)}
               >
-                <SelectTrigger className="w-32" data-testid={`select-filter-operator-${index}`}>
+                <SelectTrigger className="w-full sm:w-32" data-testid={`select-filter-operator-${index}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -98,7 +99,7 @@ export function ViewerFiltersPanel({
                 value={filter.value}
                 onChange={(event) => onUpdateFilter(index, "value", event.target.value)}
                 placeholder="Value..."
-                className="flex-1 min-w-32"
+                className="min-w-0 flex-1"
                 data-testid={`input-filter-value-${index}`}
               />
 
@@ -107,6 +108,7 @@ export function ViewerFiltersPanel({
                 size="icon"
                 onClick={() => onRemoveFilter(index)}
                 data-testid={`button-remove-filter-${index}`}
+                className="self-end sm:self-auto"
               >
                 <X className="w-4 h-4" />
               </Button>

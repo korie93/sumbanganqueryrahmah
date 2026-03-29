@@ -100,6 +100,7 @@ export function CollectionRecordsToolbar({
             </div>
             <Button
               variant="destructive"
+              className="w-full sm:w-auto"
               onClick={onOpenPurgeDialog}
               disabled={
                 loadingRecords ||
@@ -115,33 +116,38 @@ export function CollectionRecordsToolbar({
         </Card>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-end gap-2" data-floating-ai-avoid="true">
-        <Button variant="secondary" onClick={onOpenViewAll} disabled={loadingRecords || viewAllLoading}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end" data-floating-ai-avoid="true">
+        <Button
+          variant="secondary"
+          className="w-full sm:w-auto"
+          onClick={onOpenViewAll}
+          disabled={loadingRecords || viewAllLoading}
+        >
           {viewAllLoading ? "Loading..." : "View All"}
         </Button>
-        <Button variant="outline" onClick={onExportExcel} disabled={loadingRecords || exportBusy}>
+        <Button className="w-full sm:w-auto" variant="outline" onClick={onExportExcel} disabled={loadingRecords || exportBusy}>
           <Download className="w-4 h-4 mr-2" />
           {exportingExcel ? "Exporting..." : "Export Excel"}
         </Button>
-        <Button variant="outline" onClick={onExportPdf} disabled={loadingRecords || exportBusy}>
+        <Button className="w-full sm:w-auto" variant="outline" onClick={onExportPdf} disabled={loadingRecords || exportBusy}>
           <FileText className="w-4 h-4 mr-2" />
           {exportingPdf ? "Exporting..." : "Export PDF"}
         </Button>
       </div>
 
       <div
-        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/50 px-3 py-2"
+        className="flex flex-col gap-3 rounded-md border border-border/60 bg-background/50 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
         data-floating-ai-avoid="true"
       >
         <p className="text-xs text-muted-foreground">
           Showing {pagedStart}-{pagedEnd} of {totalRecords} records
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
           <Select
             value={String(tablePageSize)}
             onValueChange={(value) => onTablePageSizeChange(Number(value))}
           >
-            <SelectTrigger className="h-8 w-[120px]">
+            <SelectTrigger className="h-9 w-full sm:w-[120px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -150,13 +156,13 @@ export function CollectionRecordsToolbar({
               <SelectItem value="200">200 / page</SelectItem>
             </SelectContent>
           </Select>
-          <Button size="sm" variant="outline" disabled={!hasPreviousPage} onClick={onPrevPage}>
+          <Button size="sm" variant="outline" className="w-full sm:w-auto" disabled={!hasPreviousPage} onClick={onPrevPage}>
             Prev
           </Button>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-center text-xs text-muted-foreground sm:text-left">
             Page {tablePage} / {totalPages}
           </span>
-          <Button size="sm" variant="outline" disabled={!hasNextPage} onClick={onNextPage}>
+          <Button size="sm" variant="outline" className="w-full sm:w-auto" disabled={!hasNextPage} onClick={onNextPage}>
             Next
           </Button>
         </div>

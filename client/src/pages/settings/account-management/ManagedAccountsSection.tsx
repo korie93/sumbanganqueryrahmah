@@ -14,11 +14,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ActiveFilterChips } from "@/components/data/ActiveFilterChips";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
+import { MobileActionMenu } from "@/components/data/MobileActionMenu";
 import { SideTabDataPanel } from "@/components/layout/SideTabDataPanel";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ManagedAccountRow } from "@/pages/settings/account-management/ManagedAccountRow";
-import { normalizeSearchValue } from "@/pages/settings/account-management/utils";
+import {
+  formatDateTime,
+  getStatusVariant,
+  normalizeSearchValue,
+} from "@/pages/settings/account-management/utils";
 import type { ManagedUser } from "@/pages/settings/types";
 import type { ManagedUsersPaginationState, ManagedUsersQueryState } from "@/pages/settings/useSettingsManagedUserData";
 
@@ -51,6 +57,7 @@ export function ManagedAccountsSection({
   onResetPassword,
   onResendActivation,
 }: ManagedAccountsSectionProps) {
+  const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState(query.search);
   const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">(query.role);
   const [statusFilter, setStatusFilter] = useState<
@@ -273,39 +280,127 @@ export function ManagedAccountsSection({
           />
         }
       >
-        <Table className="min-w-[980px] text-sm">
-          <TableHeader>
-            <TableRow>
-              <TableHead>User</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Last Login</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        {isMobile ? (
+          <div className="space-y-3 p-3">
             {loading || managedUsers.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground">
-                  {emptyMessage}
-                </TableCell>
-              </TableRow>
+              <div className="rounded-lg border border-border/60 bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground">
+                {emptyMessage}
+              </div>
             ) : (
               managedUsers.map((user) => (
-                <ManagedAccountRow
+                <div
                   key={user.id}
-                  deletingManagedUserId={deletingManagedUserId}
-                  onBanToggle={onBanToggle}
-                  onDelete={(nextUser) => setUserToDelete(nextUser)}
-                  onEdit={onEditUser}
-                  onResetPassword={onResetPassword}
-                  onResendActivation={onResendActivation}
-                  user={user}
-                />
+                  className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <div className="break-words font-medium">{user.username}</div>
+                      <div className="break-words text-xs text-muted-foreground">
+                        {user.fullName || user.email || "No profile details"}
+                      </div>
+                    </div>
+                    <MobileActionMenu
+                      contentLabel="Managed account actions"
+                      items={[
+                        {
+                          id: `resend-${user.id}`,
+                          label: "Resend Activation",
+                          onSelect: () => onResendActivation(user),
+                          disabled: user.status !== "pending_activation" || Boolean(user.isBanned),
+                        },
+                        {
+                          id: `ban-${user.id}`,
+                          label: user.isBanned ? "Unban" : "Ban",
+                          onSelect: () => onBanToggle(user),
+                        },
+                        {
+                          id: `delete-${user.id}`,
+                          label: deletingManagedUserId === user.id ? "Deleting..." : "Delete",
+                          onSelect: () => setUserToDelete(user),
+                          disabled: deletingManagedUserId === user.id,
+                          destructive: true,
+                        },
+                      ]}
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="secondary">{user.role}</Badge>
+                    <Badge variant={getStatusVariant(user.status, user.isBanned)}>
+                      {user.isBanned ? "banned" : user.status}
+                    </Badge>
+                    {user.lockedAt ? (
+                      <Badge variant="destructive" title={user.lockedReason || "Account locked"}>
+                        locked
+                      </Badge>
+                    ) : null}
+                    {user.mustChangePassword ? <Badge variant="outline">must change password</Badge> : null}
+                  </div>
+
+                  <dl className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Last Login</dt>
+                      <dd>{formatDateTime(user.lastLoginAt)}</dd>
+                    </div>
+                    {user.lockedAt ? (
+                      <div className="space-y-1">
+                        <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Locked At</dt>
+                        <dd>{formatDateTime(user.lockedAt)}</dd>
+                      </div>
+                    ) : null}
+                  </dl>
+
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button variant="outline" className="w-full sm:w-auto" onClick={() => onEditUser(user)}>
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full sm:w-auto"
+                      onClick={() => onResetPassword(user)}
+                    >
+                      Send Reset Email
+                    </Button>
+                  </div>
+                </div>
               ))
             )}
-          </TableBody>
-        </Table>
+          </div>
+        ) : (
+          <Table className="min-w-[980px] text-sm">
+            <TableHeader>
+              <TableRow>
+                <TableHead>User</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Last Login</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading || managedUsers.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    {emptyMessage}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                managedUsers.map((user) => (
+                  <ManagedAccountRow
+                    key={user.id}
+                    deletingManagedUserId={deletingManagedUserId}
+                    onBanToggle={onBanToggle}
+                    onDelete={(nextUser) => setUserToDelete(nextUser)}
+                    onEdit={onEditUser}
+                    onResetPassword={onResetPassword}
+                    onResendActivation={onResendActivation}
+                    user={user}
+                  />
+                ))
+              )}
+            </TableBody>
+          </Table>
+        )}
       </SideTabDataPanel>
 
       <AlertDialog

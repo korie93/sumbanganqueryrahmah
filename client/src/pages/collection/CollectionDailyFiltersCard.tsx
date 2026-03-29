@@ -154,7 +154,7 @@ export function CollectionDailyFiltersCard({
                 </PopoverTrigger>
                 <PopoverContent
                   align="start"
-                  className="w-[340px] p-2"
+                  className="w-[min(340px,calc(100vw-1.5rem))] p-2"
                   data-testid="collection-daily-user-popover"
                 >
                   {loadingUsers ? (
@@ -237,8 +237,8 @@ export function CollectionDailyFiltersCard({
                 </p>
               ) : null}
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={onSaveTarget} disabled={savingTarget || !canEditTarget}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Button className="w-full sm:w-auto" onClick={onSaveTarget} disabled={savingTarget || !canEditTarget}>
                 {savingTarget ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
@@ -248,6 +248,7 @@ export function CollectionDailyFiltersCard({
               </Button>
               <Button
                 variant="outline"
+                className="w-full sm:w-auto"
                 onClick={onSaveCalendar}
                 disabled={savingCalendar || calendarDays.length === 0}
               >

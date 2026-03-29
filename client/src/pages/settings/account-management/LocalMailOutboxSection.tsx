@@ -11,9 +11,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
+import { MobileActionMenu } from "@/components/data/MobileActionMenu";
 import { UrlPreviewDialog } from "@/components/dialogs/UrlPreviewDialog";
 import { SideTabDataPanel } from "@/components/layout/SideTabDataPanel";
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { DevMailOutboxPreview } from "@/pages/settings/types";
@@ -47,6 +49,7 @@ export function LocalMailOutboxSection({
   onQueryChange,
   onRefresh,
 }: LocalMailOutboxSectionProps) {
+  const isMobile = useIsMobile();
   const [emailQuery, setEmailQuery] = useState(query.searchEmail);
   const [subjectQuery, setSubjectQuery] = useState(query.searchSubject);
   const [sortDirection, setSortDirection] = useState<"desc" | "asc">(query.sortDirection);
@@ -224,6 +227,77 @@ export function LocalMailOutboxSection({
         {!enabled && pagination.total === 0 ? (
           <div className="flex h-full min-h-[240px] items-center justify-center p-6 text-sm text-muted-foreground">
             Local development mail outbox is disabled.
+          </div>
+        ) : isMobile ? (
+          <div className="space-y-3 p-3">
+            {loading || entries.length === 0 ? (
+              <div className="rounded-lg border border-border/60 bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground">
+                {emptyMessage}
+              </div>
+            ) : (
+              entries.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <div className="break-words font-medium">{entry.to}</div>
+                      <div className="break-words text-sm text-muted-foreground">{entry.subject}</div>
+                    </div>
+                    <MobileActionMenu
+                      contentLabel="Email preview actions"
+                      items={[
+                        {
+                          id: `copy-${entry.id}`,
+                          label: "Copy Link",
+                          onSelect: async () => {
+                            if (!navigator.clipboard?.writeText) return;
+                            await navigator.clipboard.writeText(entry.previewUrl);
+                          },
+                        },
+                        {
+                          id: `delete-${entry.id}`,
+                          label: deletingDevMailOutboxId === entry.id ? "Deleting..." : "Delete",
+                          onSelect: () => setPreviewToDelete(entry),
+                          disabled: deletingDevMailOutboxId === entry.id || clearingDevMailOutbox,
+                          destructive: true,
+                        },
+                      ]}
+                    />
+                  </div>
+
+                  <dl className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm">
+                    <div className="space-y-1">
+                      <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Created</dt>
+                      <dd>{formatDateTime(entry.createdAt)}</dd>
+                    </div>
+                  </dl>
+
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button
+                      variant="outline"
+                      className="w-full sm:w-auto"
+                      onClick={() => setPreviewEntry(entry)}
+                    >
+                      Open
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="hidden sm:inline-flex"
+                      onClick={async () => {
+                        if (!navigator.clipboard?.writeText) {
+                          return;
+                        }
+                        await navigator.clipboard.writeText(entry.previewUrl);
+                      }}
+                    >
+                      Copy Link
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         ) : (
           <Table className="min-w-[920px] text-sm">

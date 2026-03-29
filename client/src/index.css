@@ -172,6 +172,7 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    overflow-x: hidden;
   }
 }
 
@@ -875,6 +876,36 @@
 @media (min-width: 1024px) {
   .ops-page {
     padding: 1rem 1.5rem 1.5rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .ops-page {
+    padding: 0.75rem;
+  }
+
+  .ops-toolbar,
+  .ops-summary-strip,
+  .ops-inline-note {
+    border-radius: 16px;
+    padding: 0.85rem;
+  }
+
+  .ops-metric {
+    min-width: 0;
+    flex-basis: 100%;
+    padding: 0.75rem 0.85rem;
+  }
+
+  .ops-empty-state {
+    min-height: 200px;
+    padding: 1.1rem;
+  }
+
+  .nav-mobile-trigger,
+  .user-menu-trigger {
+    min-height: 2.75rem;
+    padding: 0.55rem 0.8rem;
   }
 }
 

@@ -1,5 +1,6 @@
 import { AlertTriangle, CheckCircle2, CircleSlash, Loader2 } from "lucide-react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionDailyOverviewDay, CollectionDailyOverviewResponse } from "@/lib/api";
 import { formatDateDDMMYYYY } from "@/lib/date-format";
 import {
@@ -40,6 +41,11 @@ export function CollectionDailyCalendarCard({
   onSelectDate,
   onUpdateEditableDay,
 }: CollectionDailyCalendarCardProps) {
+  const isMobile = useIsMobile();
+  const selectedDay = overview?.days.find((day) => day.date === selectedDate) || null;
+  const selectedEditableDay =
+    selectedDay ? editableCalendarByDay.get(selectedDay.day) || null : null;
+
   return (
     <div data-testid="collection-daily-calendar">
       <OperationalSectionCard
@@ -84,7 +90,11 @@ export function CollectionDailyCalendarCard({
               <div>Fri</div>
               <div>Sat</div>
             </div>
-            <div className="grid grid-cols-7 gap-2" data-testid="collection-daily-calendar-grid">
+            <div className={isMobile ? "overflow-x-auto" : ""}>
+              <div
+                className={`grid grid-cols-7 gap-2 ${isMobile ? "min-w-[22rem]" : ""}`}
+                data-testid="collection-daily-calendar-grid"
+              >
               {Array.from({ length: firstWeekday }).map((_, index) => (
                 <div key={`blank-${index}`} />
               ))}
@@ -98,7 +108,9 @@ export function CollectionDailyCalendarCard({
                   >
                     <button
                       type="button"
-                      className="w-full rounded-md p-2 text-left transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                      className={`w-full rounded-md text-left transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
+                        isMobile ? "p-1.5" : "p-2"
+                      }`}
                       aria-label={`${formatDateDDMMYYYY(day.date)} - ${statusLabel(day.status)} - Collected ${formatAmountRM(day.amount)} - Target ${formatAmountRM(day.target)}${isSelected ? " - Selected" : ""}`}
                       onClick={() => onSelectDate(day.date)}
                       data-testid={`collection-daily-day-${day.day}`}
@@ -107,17 +119,25 @@ export function CollectionDailyCalendarCard({
                         <div className="font-semibold">{day.day}</div>
                         <DayStatusIcon status={day.status} />
                       </div>
-                      <div className={statusTextClass(day.status)}>{statusLabel(day.status)}</div>
-                      <div>Collected: {formatAmountRM(day.amount)}</div>
-                      <div className="text-[10px] text-muted-foreground">Customers: {day.customerCount}</div>
-                      <div className="text-[10px] text-muted-foreground">Required Today: {formatAmountRM(day.target)}</div>
-                      {day.isHoliday && day.holidayName ? (
-                        <div className="truncate text-[10px] text-muted-foreground" title={day.holidayName}>
-                          {day.holidayName}
-                        </div>
+                      <div className={statusTextClass(day.status)}>
+                        {isMobile ? statusLabel(day.status).split(":")[0] : statusLabel(day.status)}
+                      </div>
+                      <div className={isMobile ? "truncate" : ""}>
+                        {isMobile ? formatAmountRM(day.amount) : `Collected: ${formatAmountRM(day.amount)}`}
+                      </div>
+                      {!isMobile ? (
+                        <>
+                          <div className="text-[10px] text-muted-foreground">Customers: {day.customerCount}</div>
+                          <div className="text-[10px] text-muted-foreground">Required Today: {formatAmountRM(day.target)}</div>
+                          {day.isHoliday && day.holidayName ? (
+                            <div className="truncate text-[10px] text-muted-foreground" title={day.holidayName}>
+                              {day.holidayName}
+                            </div>
+                          ) : null}
+                        </>
                       ) : null}
                     </button>
-                    {canManage && editable ? (
+                    {canManage && editable && !isMobile ? (
                       <div className="space-y-1 border-t border-border/40 px-2 pb-2 pt-1.5">
                         <label className="flex items-center gap-1">
                           <input
@@ -144,7 +164,43 @@ export function CollectionDailyCalendarCard({
                   </div>
                 );
               })}
+              </div>
             </div>
+
+            {canManage && isMobile && selectedDay && selectedEditableDay ? (
+              <div className="space-y-3 rounded-xl border border-border/60 bg-background/70 p-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">
+                    Edit {formatDateDDMMYYYY(selectedDay.date)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Collected {formatAmountRM(selectedDay.amount)} | Required {formatAmountRM(selectedDay.target)}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <label className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedEditableDay.isWorkingDay}
+                      onChange={(event) =>
+                        onUpdateEditableDay(selectedEditableDay.day, { isWorkingDay: event.target.checked })
+                      }
+                    />
+                    <span>Working day</span>
+                  </label>
+                  <label className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedEditableDay.isHoliday}
+                      onChange={(event) =>
+                        onUpdateEditableDay(selectedEditableDay.day, { isHoliday: event.target.checked })
+                      }
+                    />
+                    <span>Holiday</span>
+                  </label>
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       </OperationalSectionCard>

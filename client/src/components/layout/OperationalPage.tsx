@@ -71,7 +71,7 @@ export function OperationalPageHeader({
 }: OperationalPageHeaderProps) {
   return (
     <Card className={cn("ops-header-card", className)}>
-      <CardHeader className="gap-4 py-5 lg:flex-row lg:items-start lg:justify-between">
+      <CardHeader className="gap-4 py-4 sm:py-5 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0 space-y-2">
           {eyebrow ? (
             <p className="ops-eyebrow">
@@ -92,7 +92,11 @@ export function OperationalPageHeader({
             {badge ? <div className="shrink-0">{badge}</div> : null}
           </div>
         </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+        {actions ? (
+          <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
+            {actions}
+          </div>
+        ) : null}
       </CardHeader>
     </Card>
   );
@@ -113,13 +117,18 @@ export function OperationalSectionCard({
   return (
     <Card className={cn("ops-section-card", className)}>
       {hasHeader ? (
-        <CardHeader className={cn("gap-4 pb-3 lg:flex-row lg:items-start lg:justify-between", headerClassName)}>
+        <CardHeader
+          className={cn(
+            "gap-4 pb-3 xl:flex-row xl:items-start xl:justify-between",
+            headerClassName,
+          )}
+        >
           <div className="min-w-0 space-y-1">
             {title ? <CardTitle className="text-xl leading-tight">{title}</CardTitle> : null}
             {description ? <p className="text-sm leading-6 text-muted-foreground">{description}</p> : null}
           </div>
           {(badge || actions) ? (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
               {badge}
               {actions}
             </div>

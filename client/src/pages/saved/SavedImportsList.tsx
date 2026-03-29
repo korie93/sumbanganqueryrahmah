@@ -1,4 +1,5 @@
 import { BarChart3, BookMarked, ChevronDown, Edit2, Eye, Search, Trash2 } from "lucide-react";
+import { MobileActionMenu } from "@/components/data/MobileActionMenu";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -99,69 +100,101 @@ export function SavedImportsList({
             {imports.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-background/70 p-4 shadow-sm"
+                className="rounded-xl border border-border/70 bg-background/70 p-4 shadow-sm"
                 data-testid={`card-import-${item.id}`}
               >
-                <div className="flex items-center gap-4 flex-1 min-w-0">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    {isSuperuser ? (
+                      <Checkbox
+                        checked={selectedImportIds.has(item.id)}
+                        onCheckedChange={(checked) => onToggleSelected(item.id, Boolean(checked))}
+                        aria-label={`Select ${item.name}`}
+                        disabled={actionsDisabled}
+                        className="mt-2"
+                      />
+                    ) : null}
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                      <BookMarked className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0 space-y-1">
+                      <h3 className="break-words text-sm font-medium text-foreground sm:text-base">
+                        {item.name}
+                      </h3>
+                      <p className="break-words text-sm text-muted-foreground">
+                        {item.filename}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{formatDate(item.createdAt)}</p>
+                    </div>
+                  </div>
+
                   {isSuperuser ? (
-                    <Checkbox
-                      checked={selectedImportIds.has(item.id)}
-                      onCheckedChange={(checked) => onToggleSelected(item.id, Boolean(checked))}
-                      aria-label={`Select ${item.name}`}
-                      disabled={actionsDisabled}
-                    />
+                    <div className="flex items-start justify-end">
+                      <MobileActionMenu
+                        contentLabel="Saved file actions"
+                        items={[
+                          {
+                            id: `rename-${item.id}`,
+                            label: "Rename",
+                            icon: Edit2,
+                            onSelect: () => onRename(item),
+                            disabled: actionsDisabled,
+                          },
+                          {
+                            id: `delete-${item.id}`,
+                            label: "Delete",
+                            icon: Trash2,
+                            onSelect: () => onDelete(item),
+                            disabled: actionsDisabled,
+                            destructive: true,
+                          },
+                        ]}
+                      />
+                    </div>
                   ) : null}
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <BookMarked className="w-5 h-5 text-primary" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-medium text-foreground truncate">{item.name}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {item.filename} - {formatDate(item.createdAt)}
-                    </p>
-                  </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0 flex-wrap">
+
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                   <Button
                     variant="outline"
-                    size="sm"
+                    className="w-full sm:w-auto"
                     onClick={() => onView(item)}
                     data-testid={`button-view-${item.id}`}
                   >
-                    <Eye className="w-4 h-4 mr-1" />
+                    <Eye className="mr-2 h-4 w-4" />
                     View
                   </Button>
                   {isSuperuser ? (
                     <Button
                       variant="outline"
-                      size="sm"
+                      className="hidden md:inline-flex"
                       onClick={() => onRename(item)}
                       disabled={actionsDisabled}
                       data-testid={`button-rename-${item.id}`}
                     >
-                      <Edit2 className="w-4 h-4 mr-1" />
+                      <Edit2 className="mr-2 h-4 w-4" />
                       Rename
                     </Button>
                   ) : null}
                   <Button
                     variant="outline"
-                    size="sm"
+                    className="w-full sm:w-auto"
                     onClick={() => onAnalysis(item)}
                     data-testid={`button-analysis-${item.id}`}
                   >
-                    <BarChart3 className="w-4 h-4 mr-1" />
+                    <BarChart3 className="mr-2 h-4 w-4" />
                     Analysis
                   </Button>
                   {isSuperuser ? (
                     <Button
                       variant="outline"
-                      size="sm"
+                      className="hidden text-destructive md:inline-flex"
                       onClick={() => onDelete(item)}
-                      className="text-destructive"
                       disabled={actionsDisabled}
                       data-testid={`button-delete-${item.id}`}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
                     </Button>
                   ) : null}
                 </div>

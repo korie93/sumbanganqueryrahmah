@@ -1,6 +1,7 @@
 .floatingRoot {
   bottom: 24px;
   right: 24px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .aiThinkingRing {

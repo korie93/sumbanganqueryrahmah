@@ -26,7 +26,7 @@ export function ViewerSearchBar({
 }: ViewerSearchBarProps) {
   return (
     <div className="ops-toolbar mb-4 space-y-3">
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="relative min-w-48 max-w-xl flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -42,7 +42,7 @@ export function ViewerSearchBar({
           Press <span className="font-medium text-foreground">/</span> to focus search
         </p>
         {showResultsSummary ? (
-          <div className="flex items-center gap-2 rounded-full border border-border/60 bg-background/80 px-3 py-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 rounded-2xl border border-border/60 bg-background/80 px-3 py-2 text-sm text-muted-foreground">
             <Filter className="w-4 h-4" />
             <span>
               {filteredRowsCount} shown on this page of {rowsCount}

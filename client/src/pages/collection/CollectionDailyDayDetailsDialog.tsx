@@ -62,7 +62,7 @@ export function CollectionDailyDayDetailsDialog({
         ) : (
           <div className="flex flex-1 flex-col gap-3 overflow-hidden">
             <div className="grid gap-2 rounded-md border border-border/60 bg-background/70 p-3 text-sm md:grid-cols-2 lg:grid-cols-4">
-              <div className="md:col-span-2 lg:col-span-4 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-col gap-2 md:col-span-2 md:flex-row md:flex-wrap md:items-center md:justify-between lg:col-span-4">
                 <div className="text-muted-foreground">
                   {dayDetails.freshness?.message || "Day details are using the latest available rollups."}
                 </div>
@@ -145,7 +145,7 @@ export function CollectionDailyDayDetailsDialog({
                       {record.receipts.length === 0 ? (
                         <div className="text-xs text-muted-foreground">No stored receipt.</div>
                       ) : (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                           {record.receipts.map((receipt) => {
                             const key = buildCollectionDailyReceiptKey(record.id, receipt.id);
                             return (
@@ -174,16 +174,17 @@ export function CollectionDailyDayDetailsDialog({
               )}
             </div>
 
-            <div className="flex items-center justify-between border-t border-border/60 pt-2 text-sm">
+            <div className="flex flex-col gap-3 border-t border-border/60 pt-2 text-sm sm:flex-row sm:items-center sm:justify-between">
               <div className="text-muted-foreground">
                 Page {dayDetails.pagination.page} of {dayDetails.pagination.totalPages} | Records{" "}
                 {dayDetails.pagination.totalRecords}
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="w-full sm:w-auto"
                   disabled={!dayDetails.pagination.hasPreviousPage || loadingDayDetails || !selectedDate}
                   onClick={() => onChangePage(dayDetails.pagination.page - 1)}
                 >
@@ -193,6 +194,7 @@ export function CollectionDailyDayDetailsDialog({
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="w-full sm:w-auto"
                   disabled={!dayDetails.pagination.hasNextPage || loadingDayDetails || !selectedDate}
                   onClick={() => onChangePage(dayDetails.pagination.page + 1)}
                 >

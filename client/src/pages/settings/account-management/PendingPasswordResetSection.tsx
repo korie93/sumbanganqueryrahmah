@@ -5,6 +5,7 @@ import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { SideTabDataPanel } from "@/components/layout/SideTabDataPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDateTime, getStatusVariant, normalizeSearchValue } from "@/pages/settings/account-management/utils";
@@ -31,6 +32,7 @@ export function PendingPasswordResetSection({
   onRefresh,
   requests,
 }: PendingPasswordResetSectionProps) {
+  const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState(query.search);
   const [statusFilter, setStatusFilter] = useState<
     "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned"
@@ -202,45 +204,84 @@ export function PendingPasswordResetSection({
         />
       }
     >
-      <Table className="min-w-[860px] text-sm">
-        <TableHeader>
-          <TableRow>
-            <TableHead>User</TableHead>
-            <TableHead>Requested By</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Created At</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+      {isMobile ? (
+        <div className="space-y-3 p-3">
           {loading || requests.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={4} className="text-center text-muted-foreground">
-                {emptyMessage}
-              </TableCell>
-            </TableRow>
+            <div className="rounded-lg border border-border/60 bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground">
+              {emptyMessage}
+            </div>
           ) : (
             requests.map((request) => (
-              <TableRow key={request.id}>
-                <TableCell>
-                  <div className="space-y-1">
-                    <div className="font-medium">{request.username}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {request.fullName || request.email || "No profile details"}
-                    </div>
+              <div
+                key={request.id}
+                className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
+              >
+                <div className="space-y-1">
+                  <div className="break-words font-medium">{request.username}</div>
+                  <div className="break-words text-xs text-muted-foreground">
+                    {request.fullName || request.email || "No profile details"}
                   </div>
-                </TableCell>
-                <TableCell>{request.requestedByUser || "-"}</TableCell>
-                <TableCell>
+                </div>
+                <div className="flex flex-wrap gap-2">
                   <Badge variant={getStatusVariant(request.status, request.isBanned)}>
                     {request.isBanned ? "banned" : request.status}
                   </Badge>
-                </TableCell>
-                <TableCell>{formatDateTime(request.createdAt)}</TableCell>
-              </TableRow>
+                </div>
+                <dl className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm">
+                  <div className="space-y-1">
+                    <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Requested By</dt>
+                    <dd className="break-words">{request.requestedByUser || "-"}</dd>
+                  </div>
+                  <div className="space-y-1">
+                    <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Created At</dt>
+                    <dd>{formatDateTime(request.createdAt)}</dd>
+                  </div>
+                </dl>
+              </div>
             ))
           )}
-        </TableBody>
-      </Table>
+        </div>
+      ) : (
+        <Table className="min-w-[860px] text-sm">
+          <TableHeader>
+            <TableRow>
+              <TableHead>User</TableHead>
+              <TableHead>Requested By</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Created At</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading || requests.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center text-muted-foreground">
+                  {emptyMessage}
+                </TableCell>
+              </TableRow>
+            ) : (
+              requests.map((request) => (
+                <TableRow key={request.id}>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <div className="font-medium">{request.username}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {request.fullName || request.email || "No profile details"}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>{request.requestedByUser || "-"}</TableCell>
+                  <TableCell>
+                    <Badge variant={getStatusVariant(request.status, request.isBanned)}>
+                      {request.isBanned ? "banned" : request.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{formatDateTime(request.createdAt)}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      )}
     </SideTabDataPanel>
   );
 }

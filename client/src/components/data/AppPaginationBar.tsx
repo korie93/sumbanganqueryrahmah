@@ -33,20 +33,20 @@ export function AppPaginationBar({
 
   return (
     <div
-      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-background/70 px-3.5 py-2.5"
+      className="flex flex-col gap-3 rounded-xl border border-border/60 bg-background/70 px-3.5 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
       data-floating-ai-avoid="true"
     >
       <p className="text-xs font-medium text-muted-foreground">
         Showing {start}-{end} of {totalItems} {itemLabel}
       </p>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
         <Select
           value={String(pageSize)}
           onValueChange={(value) => onPageSizeChange(Number(value))}
           disabled={disabled}
         >
-          <SelectTrigger className="h-8 w-[120px]">
+          <SelectTrigger className="h-9 w-full sm:w-[120px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -61,17 +61,19 @@ export function AppPaginationBar({
         <Button
           size="sm"
           variant="outline"
+          className="w-full sm:w-auto"
           disabled={disabled || safePage <= 1}
           onClick={() => onPageChange(safePage - 1)}
         >
           Prev
         </Button>
-        <span className="text-xs font-medium text-muted-foreground">
+        <span className="text-center text-xs font-medium text-muted-foreground sm:text-left">
           Page {safePage} / {safeTotalPages}
         </span>
         <Button
           size="sm"
           variant="outline"
+          className="w-full sm:w-auto"
           disabled={disabled || safePage >= safeTotalPages}
           onClick={() => onPageChange(safePage + 1)}
         >

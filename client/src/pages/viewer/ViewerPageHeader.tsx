@@ -63,8 +63,14 @@ export function ViewerPageHeader({
     <OperationalPageHeader
       eyebrow="Data Viewer"
       title={
-        <div className="flex min-w-0 items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={onBack} data-testid="button-back" className="shrink-0">
+        <div className="flex min-w-0 items-start gap-3 sm:items-center">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onBack}
+            data-testid="button-back"
+            className="mt-0.5 shrink-0 sm:mt-0"
+          >
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <span className="truncate">{importName}</span>
@@ -72,7 +78,7 @@ export function ViewerPageHeader({
       }
       description={`${rowsCount} row${rowsCount === 1 ? "" : "s"} on page ${currentPage} of ${totalPages} (${totalRows} total) ready for inspection, filtering, and export.`}
       actions={
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
           {rowsCount > 0 ? (
             <>
               <ViewerColumnSelector
@@ -89,6 +95,7 @@ export function ViewerPageHeader({
                 variant={showFilters ? "default" : "outline"}
                 onClick={onToggleFilters}
                 data-testid="button-toggle-filters"
+                className="w-full sm:w-auto"
               >
                 <Filter className="w-4 h-4 mr-2" />
                 Filters {filterCount > 0 ? `(${filterCount})` : ""}
@@ -98,7 +105,7 @@ export function ViewerPageHeader({
                 variant="outline"
                 onClick={onClearAllData}
                 disabled={rowsCount === 0}
-                className="text-destructive"
+                className="w-full text-destructive sm:w-auto"
                 data-testid="button-clear-all"
               >
                 <Trash2 className="w-4 h-4 mr-2" />

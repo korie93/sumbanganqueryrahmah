@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 import {
   ChevronDown,
   Home,
@@ -18,6 +18,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   formatNavigationLabel,
   getVisibleNavItems,
@@ -56,6 +63,7 @@ function NavbarImpl({
   featureLockdown = false,
 }: NavbarProps) {
   const { theme, setTheme } = useTheme();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const directItems = useMemo(
     () => getVisiblePrimaryNavItems(userRole, tabVisibility ?? null, featureLockdown),
     [featureLockdown, tabVisibility, userRole],
@@ -77,40 +85,118 @@ function NavbarImpl({
     onNavigate(resolveNavigationTarget(itemId));
   };
 
+  const renderUserMenuContent = () => (
+    <DropdownMenuContent
+      align="end"
+      className="w-[min(18rem,calc(100vw-1rem))] rounded-xl p-2"
+    >
+      <DropdownMenuLabel className="px-2 pb-2 pt-1">
+        <div className="text-sm font-semibold">{username}</div>
+        <div className="mt-1 text-xs font-normal text-muted-foreground">
+          Signed in as {userRole}
+        </div>
+      </DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      <DropdownMenuLabel className="px-2 pb-1 pt-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+        Appearance
+      </DropdownMenuLabel>
+      <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value === "dark" ? "dark" : "light")}>
+        <DropdownMenuRadioItem value="light" className="rounded-lg px-3 py-2.5">
+          <Sun className="h-4 w-4" />
+          <span>Light Mode</span>
+        </DropdownMenuRadioItem>
+        <DropdownMenuRadioItem value="dark" className="rounded-lg px-3 py-2.5">
+          <Moon className="h-4 w-4" />
+          <span>Dark Mode</span>
+        </DropdownMenuRadioItem>
+      </DropdownMenuRadioGroup>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        onSelect={() => {
+          void onLogout();
+        }}
+        className="rounded-lg px-3 py-2.5 text-destructive focus:text-destructive"
+        data-testid="button-logout"
+      >
+        <LogOut className="h-4 w-4" />
+        <span>Logout</span>
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  );
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/70 bg-background/90 backdrop-blur-md">
-      <div className="mx-auto flex min-h-16 max-w-[1440px] items-center gap-3 px-3 py-2 md:px-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex items-center gap-2 rounded-full border border-border/70 bg-card/75 px-2.5 py-1.5 shadow-sm">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/10">
-              <BrandLogo
-                decorative
-                priority
-                className="block h-5 w-5"
-                imageClassName="h-full w-full"
-              />
+      <div className="mx-auto flex max-w-[1440px] flex-col gap-3 px-3 py-2 md:px-4 lg:min-h-16 lg:flex-row lg:items-center">
+        <div className="flex min-w-0 items-start justify-between gap-3 lg:flex-1 lg:items-center">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex min-w-0 items-center gap-2 rounded-full border border-border/70 bg-card/75 px-2.5 py-1.5 shadow-sm">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/10">
+                <BrandLogo
+                  decorative
+                  priority
+                  className="block h-5 w-5"
+                  imageClassName="h-full w-full"
+                />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-foreground">{systemName || "SQR System"}</p>
+                <p className="hidden text-[11px] text-muted-foreground sm:block">Operational workspace</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-foreground">{systemName || "SQR System"}</p>
-              <p className="hidden text-[11px] text-muted-foreground sm:block">Operational workspace</p>
-            </div>
+
+            {showHomeButton ? (
+              <button
+                type="button"
+                onClick={() => navigateToItem(HOME_NAV_ITEM.id)}
+                className={`nav-pill nav-home-pill hidden lg:inline-flex ${isNavigationItemActive(currentPage, HOME_NAV_ITEM.id) ? "nav-pill-active" : ""}`}
+                data-testid="nav-home"
+                aria-label={HOME_NAV_ITEM.label}
+                aria-current={isNavigationItemActive(currentPage, HOME_NAV_ITEM.id) ? "page" : undefined}
+              >
+                <span className="nav-pill-icon">
+                  <Home className="h-4 w-4" />
+                </span>
+                <span className="nav-pill-label">Home</span>
+              </button>
+            ) : null}
           </div>
 
-          {showHomeButton ? (
+          <div className="flex shrink-0 items-center gap-2 lg:hidden">
             <button
               type="button"
-              onClick={() => navigateToItem(HOME_NAV_ITEM.id)}
-              className={`nav-pill nav-home-pill hidden lg:inline-flex ${isNavigationItemActive(currentPage, HOME_NAV_ITEM.id) ? "nav-pill-active" : ""}`}
-              data-testid="nav-home"
-              aria-label={HOME_NAV_ITEM.label}
-              aria-current={isNavigationItemActive(currentPage, HOME_NAV_ITEM.id) ? "page" : undefined}
+              className="nav-mobile-trigger px-3"
+              aria-label="Open navigation menu"
+              aria-haspopup="dialog"
+              aria-expanded={mobileNavOpen}
+              onClick={() => setMobileNavOpen(true)}
+              data-testid="button-open-mobile-nav"
             >
-              <span className="nav-pill-icon">
-                <Home className="h-4 w-4" />
-              </span>
-              <span className="nav-pill-label">Home</span>
+              <Menu className="h-4 w-4" />
+              <span className="hidden sm:inline">Menu</span>
             </button>
-          ) : null}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="user-menu-trigger px-2.5 sm:px-3"
+                  data-testid="button-user-menu-mobile"
+                  aria-label="Open user menu"
+                  aria-haspopup="menu"
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold uppercase text-primary">
+                    {username.slice(0, 1)}
+                  </span>
+                  <span className="hidden min-w-0 sm:flex sm:flex-col sm:items-start sm:leading-tight">
+                    <span className="truncate text-xs font-medium text-foreground">{username}</span>
+                    <span className="truncate text-[11px] text-muted-foreground">{userRole}</span>
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              {renderUserMenuContent()}
+            </DropdownMenu>
+          </div>
         </div>
 
         <div className="hidden min-w-0 flex-1 items-center justify-center gap-2 lg:flex">
@@ -205,54 +291,7 @@ function NavbarImpl({
           </nav>
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <div className="lg:hidden">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="nav-mobile-trigger"
-                  aria-label="Open navigation menu"
-                  aria-haspopup="menu"
-                  data-testid="button-open-mobile-nav"
-                >
-                  <Menu className="h-4 w-4" />
-                  <span className="hidden sm:inline">Menu</span>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80 p-2">
-                <DropdownMenuLabel className="px-2 pb-2 pt-1">
-                  <div className="text-sm font-semibold">Navigate</div>
-                  <div className="mt-1 text-xs font-normal text-muted-foreground">
-                    Current section: {formatNavigationLabel(
-                      mobileItems.find((item) => item.id === activeMobileItemId)?.label || "Home",
-                      activeMobileItemId,
-                      savedCount,
-                    )}
-                  </div>
-                </DropdownMenuLabel>
-                {mobileItems.map((item) => {
-                  const Icon = item.icon;
-                  const active = isNavigationItemActive(currentPage, item.id);
-                  return (
-                    <DropdownMenuItem
-                      key={item.id}
-                      onSelect={() => navigateToItem(item.id)}
-                      className={`items-center gap-3 rounded-xl px-3 py-3 ${active ? "bg-accent text-accent-foreground" : ""}`}
-                    >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                        <Icon className="h-4 w-4" />
-                      </span>
-                      <span className="flex-1 text-sm font-medium">
-                        {formatNavigationLabel(item.label, item.id, savedCount)}
-                      </span>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
+        <div className="ml-auto hidden shrink-0 items-center gap-2 lg:flex">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -269,42 +308,61 @@ function NavbarImpl({
                 <ChevronDown className="h-4 w-4 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-72 p-2">
-              <DropdownMenuLabel className="px-2 pb-2 pt-1">
-                <div className="text-sm font-semibold">{username}</div>
-                <div className="mt-1 text-xs font-normal text-muted-foreground">
-                  Signed in as {userRole}
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="px-2 pb-1 pt-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Appearance
-              </DropdownMenuLabel>
-              <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value === "dark" ? "dark" : "light")}>
-                <DropdownMenuRadioItem value="light" className="rounded-lg px-3 py-2.5">
-                  <Sun className="h-4 w-4" />
-                  <span>Light Mode</span>
-                </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="dark" className="rounded-lg px-3 py-2.5">
-                  <Moon className="h-4 w-4" />
-                  <span>Dark Mode</span>
-                </DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => {
-                  void onLogout();
-                }}
-                className="rounded-lg px-3 py-2.5 text-destructive focus:text-destructive"
-                data-testid="button-logout"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Logout</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
+            {renderUserMenuContent()}
           </DropdownMenu>
         </div>
       </div>
+
+      <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+        <SheetContent side="left" className="w-[min(92vw,22rem)]">
+          <SheetHeader className="pr-8 text-left">
+            <SheetTitle>Navigation</SheetTitle>
+            <SheetDescription>
+              Current section: {formatNavigationLabel(
+                mobileItems.find((item) => item.id === activeMobileItemId)?.label || "Home",
+                activeMobileItemId,
+                savedCount,
+              )}
+            </SheetDescription>
+          </SheetHeader>
+
+          <nav className="mt-4 space-y-2" aria-label="Mobile navigation">
+            {mobileItems.map((item) => {
+              const Icon = item.icon;
+              const active = isNavigationItemActive(currentPage, item.id);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    navigateToItem(item.id);
+                    setMobileNavOpen(false);
+                  }}
+                  className={`flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition-colors ${
+                    active
+                      ? "border-primary/35 bg-primary/10 text-primary"
+                      : "border-border/60 bg-background/70 text-foreground hover:bg-accent/40"
+                  }`}
+                >
+                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">
+                      {formatNavigationLabel(item.label, item.id, savedCount)}
+                    </span>
+                    {item.description ? (
+                      <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                        {item.description}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+        </SheetContent>
+      </Sheet>
     </header>
   );
 }
