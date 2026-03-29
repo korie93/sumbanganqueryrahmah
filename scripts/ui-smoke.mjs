@@ -58,8 +58,22 @@ const captureFailureArtifacts = async ({ context, page, tracker, error }) => {
   ).catch(() => {});
 };
 
+const getVisibleUserMenuTrigger = async (page) => {
+  const desktopTrigger = page.getByTestId("button-user-menu");
+  if (await desktopTrigger.isVisible().catch(() => false)) {
+    return desktopTrigger;
+  }
+
+  const mobileTrigger = page.getByTestId("button-user-menu-mobile");
+  if (await mobileTrigger.isVisible().catch(() => false)) {
+    return mobileTrigger;
+  }
+
+  return page.locator('button[aria-label="Open user menu"]:visible').first();
+};
+
 const openUserMenu = async (page) => {
-  const trigger = page.locator('button[aria-label="Open user menu"]');
+  const trigger = await getVisibleUserMenuTrigger(page);
   await trigger.click();
   await page.getByRole("menuitemradio", { name: "Light Mode" }).waitFor();
 };
@@ -196,7 +210,7 @@ const checkKeyboardMenuAccess = async (page, tracker) => {
     "Focus should return to the settings menu trigger after Escape",
   );
 
-  const userTrigger = page.getByTestId("button-user-menu");
+  const userTrigger = await getVisibleUserMenuTrigger(page);
   await userTrigger.focus();
   assert(
     await userTrigger.evaluate((element) => element === document.activeElement),
@@ -1578,7 +1592,7 @@ const checkLogoutFlow = async (page, context, tracker) => {
   tracker.clear();
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(baseUrl, { waitUntil: "networkidle" });
-  await page.getByTestId("button-user-menu").waitFor();
+  await (await getVisibleUserMenuTrigger(page)).waitFor();
   await page.waitForLoadState("networkidle");
   await openUserMenu(page);
   await page.getByTestId("button-logout").click();
