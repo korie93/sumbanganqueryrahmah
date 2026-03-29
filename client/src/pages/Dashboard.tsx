@@ -129,21 +129,24 @@ export default function Dashboard() {
   }, [exportBlockReason]);
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground" data-testid="text-dashboard-title">
+    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 sm:p-6">
+      <div className="mx-auto max-w-7xl space-y-5 sm:space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between" data-floating-ai-avoid="true">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-bold text-foreground sm:text-3xl" data-testid="text-dashboard-title">
               Dashboard Analytics
             </h1>
-            <p className="text-muted-foreground mt-1">System overview and activity insights</p>
+            <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
+              System overview and activity insights
+            </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Button
               onClick={handleExportPdf}
               variant="outline"
               disabled={exportBlockReason !== null}
               data-testid="button-export-pdf"
+              className="w-full sm:w-auto"
             >
               {exportingPdf ? (
                 <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
@@ -159,6 +162,7 @@ export default function Dashboard() {
               variant="outline"
               disabled={refreshing}
               data-testid="button-refresh-dashboard"
+              className="w-full sm:w-auto"
             >
               <RefreshCw className={`w-4 h-4 mr-2${refreshing ? " animate-spin" : ""}`} />
               Refresh
