@@ -28,6 +28,13 @@ export const auditActionLabels: Record<string, { label: string; variant: AuditBa
   DELETE_BACKUP_FAILED: { label: "Delete Backup Failed", variant: "outline" },
   CLEANUP_AUDIT_LOGS: { label: "Cleanup Logs", variant: "destructive" },
   RENAME_IMPORT: { label: "Rename Import", variant: "secondary" },
+  LOGIN_SUCCESS: { label: "Login Success", variant: "default" },
+  LOGOUT: { label: "Logout", variant: "secondary" },
+  LOGIN_FAILED_PASSWORD: { label: "Password Failed", variant: "outline" },
+  LOGIN_BLOCKED_SINGLE_SESSION: { label: "Single Session Blocked", variant: "destructive" },
+  COLLECTION_RECORD_CREATED: { label: "Record Created", variant: "default" },
+  COLLECTION_NICKNAME_PASSWORD_SET: { label: "Nickname Password Set", variant: "secondary" },
+  COLLECTION_NICKNAME_CREATED: { label: "Nickname Created", variant: "default" },
 };
 
 export const auditActionOptions: AuditActionOption[] = [
@@ -142,12 +149,33 @@ export function formatAuditTime(dateStr: string) {
 }
 
 export function getAuditActionLabel(action: string) {
-  return auditActionLabels[action]?.label || action;
+  return auditActionLabels[action]?.label || formatFallbackAuditActionLabel(action);
 }
 
-export function getAuditActionBadge(action: string) {
-  const actionInfo = auditActionLabels[action] || { label: action, variant: "outline" as const };
-  return <Badge variant={actionInfo.variant}>{actionInfo.label}</Badge>;
+function formatFallbackAuditActionLabel(action: string) {
+  return action
+    .toLowerCase()
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+export function getAuditActionInfo(action: string) {
+  const actionInfo = auditActionLabels[action] || { label: formatFallbackAuditActionLabel(action), variant: "outline" as const };
+  return {
+    ...actionInfo,
+    rawAction: action,
+  };
+}
+
+export function getAuditActionBadge(action: string, className?: string) {
+  const actionInfo = getAuditActionInfo(action);
+  return (
+    <Badge variant={actionInfo.variant} className={className}>
+      {actionInfo.label}
+    </Badge>
+  );
 }
 
 export function getLogsToDeleteCount(stats: AuditLogStats | null, cleanupDays: string) {

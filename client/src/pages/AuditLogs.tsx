@@ -210,28 +210,32 @@ export default function AuditLogs() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10">
+    <div className="space-y-6 p-4 sm:p-6">
+      <div
+        className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card/60 p-4 sm:flex-row sm:items-start sm:justify-between"
+        data-floating-ai-avoid="true"
+      >
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="rounded-xl bg-primary/10 p-2.5">
             <FileText className="h-6 w-6 text-primary" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold" data-testid="text-audit-logs-title">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold sm:text-2xl" data-testid="text-audit-logs-title">
               Audit Logs
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
               Records of all administrator actions in the system
             </p>
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 disabled={loading || filteredLogs.length === 0 || exportingPdf}
+                className="w-full sm:w-auto"
                 data-testid="button-export-logs"
               >
                 {exportingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
@@ -267,6 +271,7 @@ export default function AuditLogs() {
             variant="outline"
             onClick={() => setRefreshNonce((value) => value + 1)}
             disabled={loading}
+            className="w-full sm:w-auto"
             data-testid="button-refresh-logs"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />

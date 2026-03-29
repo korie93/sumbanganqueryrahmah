@@ -52,22 +52,29 @@ export function AuditLogsCleanupPanel({
 
   return (
     <>
-      <Card>
+      <Card data-floating-ai-avoid="true">
         <Collapsible open={cleanupOpen} onOpenChange={onCleanupOpenChange}>
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <CollapsibleTrigger asChild>
-                <Button variant="ghost" className="p-0 h-auto gap-2">
-                  <Settings className="h-5 w-5" />
-                  <CardTitle className="text-lg">Log Cleanup</CardTitle>
+                <Button variant="ghost" className="h-auto w-full justify-between gap-3 rounded-xl px-0 py-0 text-left sm:w-auto sm:justify-start">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Settings className="h-5 w-5 shrink-0" />
+                    <div className="min-w-0">
+                      <CardTitle className="text-lg">Log Cleanup</CardTitle>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Review retention counts before deleting older audit logs.
+                      </p>
+                    </div>
+                  </div>
                   <ChevronDown className={`h-4 w-4 transition-transform ${cleanupOpen ? "rotate-180" : ""}`} />
                 </Button>
               </CollapsibleTrigger>
             </div>
           </CardHeader>
           <CollapsibleContent>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <CardContent className="space-y-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <div className="p-4 rounded-lg bg-muted/30 space-y-1">
                   <p className="text-sm text-muted-foreground">Total Logs</p>
                   <p className="text-2xl font-bold" data-testid="text-total-logs">
@@ -94,33 +101,50 @@ export function AuditLogsCleanupPanel({
                 </p>
               ) : null}
 
-              <div className="flex items-end gap-4 flex-wrap pt-2 border-t">
-                <div className="space-y-2">
-                  <Label htmlFor="cleanup-days" className="text-sm font-medium">
-                    Delete logs older than (days)
-                  </Label>
-                  <Select value={cleanupDays} onValueChange={onCleanupDaysChange}>
-                    <SelectTrigger className="w-[180px]" data-testid="select-cleanup-days">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="30">30 days</SelectItem>
-                      <SelectItem value="60">60 days</SelectItem>
-                      <SelectItem value="90">90 days</SelectItem>
-                      <SelectItem value="180">180 days</SelectItem>
-                      <SelectItem value="365">1 year</SelectItem>
-                    </SelectContent>
-                  </Select>
+              <div
+                className="rounded-xl border border-destructive/20 bg-destructive/[0.04] p-4"
+                data-floating-ai-avoid="true"
+              >
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="w-full max-w-md space-y-2">
+                    <Label htmlFor="cleanup-days" className="text-sm font-medium">
+                      Delete logs older than
+                    </Label>
+                    <Select value={cleanupDays} onValueChange={onCleanupDaysChange}>
+                      <SelectTrigger className="h-11 w-full sm:w-[220px]" data-testid="select-cleanup-days">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="30">30 days</SelectItem>
+                        <SelectItem value="60">60 days</SelectItem>
+                        <SelectItem value="90">90 days</SelectItem>
+                        <SelectItem value="180">180 days</SelectItem>
+                        <SelectItem value="365">1 year</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      Cleanup still requires confirmation before any audit entries are removed.
+                    </p>
+                  </div>
+
+                  <div className="w-full space-y-2 lg:max-w-xs lg:text-right">
+                    <p className="text-sm text-muted-foreground">
+                      This action will affect approximately{" "}
+                      <span className="font-semibold text-foreground">{logsToDeleteCount}</span>{" "}
+                      log entries.
+                    </p>
+                    <Button
+                      variant="destructive"
+                      onClick={() => onCleanupDialogOpenChange(true)}
+                      disabled={cleanupLoading || logsToDeleteCount === 0}
+                      className="h-11 w-full lg:w-auto"
+                      data-testid="button-cleanup-logs"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Cleanup ({logsToDeleteCount} logs)
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  variant="destructive"
-                  onClick={() => onCleanupDialogOpenChange(true)}
-                  disabled={cleanupLoading || logsToDeleteCount === 0}
-                  data-testid="button-cleanup-logs"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Cleanup ({logsToDeleteCount} logs)
-                </Button>
               </div>
             </CardContent>
           </CollapsibleContent>

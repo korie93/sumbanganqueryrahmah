@@ -50,14 +50,21 @@ export function AuditLogsFiltersPanel({
   targetUserFilter,
 }: AuditLogsFiltersPanelProps) {
   return (
-    <Card>
+    <Card data-floating-ai-avoid="true">
       <Collapsible open={filtersOpen} onOpenChange={onFiltersOpenChange}>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <CollapsibleTrigger asChild>
-              <Button variant="ghost" className="p-0 h-auto gap-2">
-                <Filter className="h-5 w-5" />
-                <CardTitle className="text-lg">Search & Filters</CardTitle>
+              <Button variant="ghost" className="h-auto w-full justify-between gap-3 rounded-xl px-0 py-0 text-left sm:w-auto sm:justify-start">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Filter className="h-5 w-5 shrink-0" />
+                  <div className="min-w-0">
+                    <CardTitle className="text-lg">Search & Filters</CardTitle>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Narrow the log list by user, action, time period, or free text.
+                    </p>
+                  </div>
+                </div>
                 <ChevronDown className={`h-4 w-4 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
               </Button>
             </CollapsibleTrigger>
@@ -66,7 +73,7 @@ export function AuditLogsFiltersPanel({
                 variant="ghost"
                 size="sm"
                 onClick={onClearFilters}
-                className="text-muted-foreground"
+                className="w-full justify-center text-muted-foreground sm:w-auto sm:justify-start"
                 data-testid="button-clear-filters"
               >
                 <X className="h-4 w-4 mr-1" />
@@ -76,8 +83,8 @@ export function AuditLogsFiltersPanel({
           </div>
         </CardHeader>
         <CollapsibleContent>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <CardContent className="space-y-5">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="search-text" className="text-sm font-medium flex items-center gap-1">
                   <Search className="h-3.5 w-3.5" />
@@ -88,6 +95,8 @@ export function AuditLogsFiltersPanel({
                   placeholder="Search in details, resources..."
                   value={searchText}
                   onChange={(event) => onSearchTextChange(event.target.value)}
+                  enterKeyHint="search"
+                  autoCapitalize="none"
                   data-testid="input-search-text"
                 />
               </div>
@@ -102,6 +111,7 @@ export function AuditLogsFiltersPanel({
                   placeholder="Username..."
                   value={performedByFilter}
                   onChange={(event) => onPerformedByFilterChange(event.target.value)}
+                  autoCapitalize="none"
                   data-testid="input-performed-by"
                 />
               </div>
@@ -116,6 +126,7 @@ export function AuditLogsFiltersPanel({
                   placeholder="Target username..."
                   value={targetUserFilter}
                   onChange={(event) => onTargetUserFilterChange(event.target.value)}
+                  autoCapitalize="none"
                   data-testid="input-target-user"
                 />
               </div>
@@ -162,7 +173,7 @@ export function AuditLogsFiltersPanel({
               {datePreset === "custom" ? (
                 <div className="space-y-2 lg:col-span-1">
                   <Label className="text-sm font-medium">Custom Date Range</Label>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <Input
                       type="date"
                       value={dateFrom}
@@ -170,7 +181,7 @@ export function AuditLogsFiltersPanel({
                       className="flex-1"
                       data-testid="input-date-from"
                     />
-                    <span className="text-muted-foreground text-sm">-</span>
+                    <span className="hidden text-muted-foreground text-sm sm:inline">-</span>
                     <Input
                       type="date"
                       value={dateTo}
@@ -184,10 +195,11 @@ export function AuditLogsFiltersPanel({
             </div>
 
             {hasActiveFilters ? (
-              <div className="flex items-center gap-2 flex-wrap pt-2 border-t">
-                <span className="text-sm text-muted-foreground">Active filters:</span>
+              <div className="space-y-3 border-t pt-3" data-floating-ai-avoid="true">
+                <span className="text-sm font-medium text-muted-foreground">Active filters</span>
+                <div className="flex flex-wrap gap-2">
                 {actionFilter !== "all" ? (
-                  <Badge variant="secondary" className="gap-1">
+                  <Badge variant="secondary" className="max-w-full gap-1 whitespace-normal break-words py-1.5 pr-1">
                     Action: {auditActionOptions.find((option) => option.value === actionFilter)?.label}
                     <Button
                       variant="ghost"
@@ -201,7 +213,7 @@ export function AuditLogsFiltersPanel({
                   </Badge>
                 ) : null}
                 {performedByFilter ? (
-                  <Badge variant="secondary" className="gap-1">
+                  <Badge variant="secondary" className="max-w-full gap-1 whitespace-normal break-words py-1.5 pr-1">
                     By: {performedByFilter}
                     <Button
                       variant="ghost"
@@ -215,7 +227,7 @@ export function AuditLogsFiltersPanel({
                   </Badge>
                 ) : null}
                 {targetUserFilter ? (
-                  <Badge variant="secondary" className="gap-1">
+                  <Badge variant="secondary" className="max-w-full gap-1 whitespace-normal break-words py-1.5 pr-1">
                     Target: {targetUserFilter}
                     <Button
                       variant="ghost"
@@ -229,7 +241,7 @@ export function AuditLogsFiltersPanel({
                   </Badge>
                 ) : null}
                 {searchText ? (
-                  <Badge variant="secondary" className="gap-1">
+                  <Badge variant="secondary" className="max-w-full gap-1 whitespace-normal break-words py-1.5 pr-1">
                     Text: {searchText}
                     <Button
                       variant="ghost"
@@ -243,7 +255,7 @@ export function AuditLogsFiltersPanel({
                   </Badge>
                 ) : null}
                 {datePreset !== "all" ? (
-                  <Badge variant="secondary" className="gap-1">
+                  <Badge variant="secondary" className="max-w-full gap-1 whitespace-normal break-words py-1.5 pr-1">
                     Time: {datePreset === "custom"
                       ? `${dateFrom || "?"} - ${dateTo || "?"}`
                       : auditDatePresets.find((preset) => preset.value === datePreset)?.label}
@@ -258,6 +270,7 @@ export function AuditLogsFiltersPanel({
                     </Button>
                   </Badge>
                 ) : null}
+                </div>
               </div>
             ) : null}
           </CardContent>
