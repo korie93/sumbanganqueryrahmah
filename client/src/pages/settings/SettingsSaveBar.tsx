@@ -10,8 +10,14 @@ interface SettingsSaveBarProps {
 
 export function SettingsSaveBar({ dirtyCount, onSave, saving }: SettingsSaveBarProps) {
   return (
-    <Card className="border-primary/40 bg-background/95 shadow-sm" data-floating-ai-avoid="true">
-      <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <Card
+      className="sticky bottom-0 z-20 border-primary/40 bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:static sm:shadow-sm sm:backdrop-blur-0"
+      data-floating-ai-avoid="true"
+    >
+      <CardContent
+        className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
+      >
         <div className="flex items-center gap-2 text-sm">
           {dirtyCount > 0 ? (
             <>
@@ -26,7 +32,11 @@ export function SettingsSaveBar({ dirtyCount, onSave, saving }: SettingsSaveBarP
           )}
         </div>
         <span title="Save all setting changes now.">
-          <Button onClick={onSave} disabled={dirtyCount === 0 || saving} className="gap-2">
+          <Button
+            onClick={onSave}
+            disabled={dirtyCount === 0 || saving}
+            className="w-full gap-2 sm:w-auto"
+          >
             <Save className="w-4 h-4" />
             {saving ? "Saving..." : "Save Changes"}
           </Button>

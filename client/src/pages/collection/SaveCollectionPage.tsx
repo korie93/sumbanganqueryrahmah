@@ -302,24 +302,43 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         <div className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2">
             <Label>Customer Name</Label>
-            <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} disabled={submitting} />
+            <Input
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              disabled={submitting}
+              autoComplete="name"
+            />
           </div>
           <div className="space-y-2">
             <Label>IC Number</Label>
-            <Input value={icNumber} onChange={(e) => setIcNumber(e.target.value)} disabled={submitting} />
+            <Input
+              value={icNumber}
+              onChange={(e) => setIcNumber(e.target.value)}
+              disabled={submitting}
+              inputMode="numeric"
+              autoComplete="off"
+            />
           </div>
           <div className="space-y-2">
             <Label>Customer Phone Number</Label>
             <Input
+              type="tel"
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value)}
               disabled={submitting}
               placeholder="+60 12-345 6789"
+              inputMode="tel"
+              autoComplete="tel"
             />
           </div>
           <div className="space-y-2">
             <Label>Account Number</Label>
-            <Input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} disabled={submitting} />
+            <Input
+              value={accountNumber}
+              onChange={(e) => setAccountNumber(e.target.value)}
+              disabled={submitting}
+              autoComplete="off"
+            />
           </div>
           <div className="space-y-2">
             <Label>Batch</Label>
@@ -349,7 +368,15 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           </div>
           <div className="space-y-2">
             <Label>Amount (RM)</Label>
-            <Input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={submitting} />
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              disabled={submitting}
+              inputMode="decimal"
+            />
           </div>
           <div className="space-y-2 md:col-span-3">
             <Label>Receipt Upload</Label>

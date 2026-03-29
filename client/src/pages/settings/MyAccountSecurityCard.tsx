@@ -79,26 +79,36 @@ export function MyAccountSecurityCard({
             <CardTitle className="text-base">My Account</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Username</p>
-                <Input
-                  value={usernameInput}
-                  onChange={(event) => onUsernameInputChange(event.target.value)}
+            <div className="space-y-4 rounded-xl border border-border/60 bg-background/50 p-4 sm:p-5">
+              <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Username</p>
+                  <Input
+                    value={usernameInput}
+                    onChange={(event) => onUsernameInputChange(event.target.value)}
+                    disabled={securityBusy}
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                </div>
+                <Button
+                  onClick={onChangeUsername}
                   disabled={securityBusy}
-                />
+                  className="w-full md:w-auto"
+                >
+                  {usernameSaving ? "Updating..." : "Change Username"}
+                </Button>
               </div>
-              <Button onClick={onChangeUsername} disabled={securityBusy}>
-                {usernameSaving ? "Updating..." : "Change Username"}
-              </Button>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Role (read only)</p>
+                <Input value={currentUserRole} disabled />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Role (read only)</p>
-              <Input value={currentUserRole} disabled />
-            </div>
-
-            <div className="space-y-4 border-t border-border/60 pt-6">
+            <div className="space-y-4 rounded-xl border border-border/60 bg-background/50 p-4 sm:p-5">
               <h3 className="text-sm font-semibold">Change Password</h3>
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
@@ -108,6 +118,7 @@ export function MyAccountSecurityCard({
                     value={currentPasswordInput}
                     onChange={(event) => onCurrentPasswordInputChange(event.target.value)}
                     disabled={securityBusy}
+                    autoComplete="current-password"
                   />
                 </div>
                 <div className="space-y-2">
@@ -117,6 +128,7 @@ export function MyAccountSecurityCard({
                     value={newPasswordInput}
                     onChange={(event) => onNewPasswordInputChange(event.target.value)}
                     disabled={securityBusy}
+                    autoComplete="new-password"
                   />
                 </div>
                 <div className="space-y-2">
@@ -126,16 +138,19 @@ export function MyAccountSecurityCard({
                     value={confirmPasswordInput}
                     onChange={(event) => onConfirmPasswordInputChange(event.target.value)}
                     disabled={securityBusy}
+                    autoComplete="new-password"
                   />
                 </div>
               </div>
-              <Button onClick={onChangePassword} disabled={securityBusy}>
-                {passwordSaving ? "Updating..." : "Change Password"}
-              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end" data-floating-ai-avoid="true">
+                <Button onClick={onChangePassword} disabled={securityBusy} className="w-full sm:w-auto">
+                  {passwordSaving ? "Updating..." : "Change Password"}
+                </Button>
+              </div>
             </div>
 
             {supportsTwoFactor ? (
-              <div className="space-y-4 border-t border-border/60 pt-6">
+              <div className="space-y-4 rounded-xl border border-border/60 bg-background/50 p-4 sm:p-5">
                 <div className="space-y-1">
                   <h3 className="text-sm font-semibold">Two-Factor Authentication</h3>
                   <p className="text-sm text-muted-foreground">
@@ -151,6 +166,7 @@ export function MyAccountSecurityCard({
                       value={twoFactorPasswordInput}
                       onChange={(event) => onTwoFactorPasswordInputChange(event.target.value)}
                       disabled={securityBusy}
+                      autoComplete="current-password"
                     />
                   </div>
                   <div className="space-y-2">
@@ -161,6 +177,8 @@ export function MyAccountSecurityCard({
                       value={twoFactorCodeInput}
                       onChange={(event) => onTwoFactorCodeInputChange(event.target.value)}
                       disabled={securityBusy && !twoFactorPendingSetup}
+                      pattern="[0-9]*"
+                      autoComplete="one-time-code"
                     />
                   </div>
                 </div>
@@ -193,19 +211,24 @@ export function MyAccountSecurityCard({
                   </div>
                 ) : null}
 
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap" data-floating-ai-avoid="true">
                   {!twoFactorEnabled ? (
-                    <Button onClick={onStartTwoFactorSetup} disabled={securityBusy}>
+                    <Button onClick={onStartTwoFactorSetup} disabled={securityBusy} className="w-full sm:w-auto">
                       {twoFactorLoading && !twoFactorSetupSecret ? "Preparing..." : "Start 2FA Setup"}
                     </Button>
                   ) : null}
                   {(twoFactorPendingSetup || twoFactorSetupSecret) && !twoFactorEnabled ? (
-                    <Button onClick={onEnableTwoFactor} disabled={securityBusy}>
+                    <Button onClick={onEnableTwoFactor} disabled={securityBusy} className="w-full sm:w-auto">
                       {twoFactorLoading ? "Verifying..." : "Verify & Enable 2FA"}
                     </Button>
                   ) : null}
                   {twoFactorEnabled ? (
-                    <Button variant="destructive" onClick={onDisableTwoFactor} disabled={securityBusy}>
+                    <Button
+                      variant="destructive"
+                      onClick={onDisableTwoFactor}
+                      disabled={securityBusy}
+                      className="w-full sm:w-auto"
+                    >
                       {twoFactorLoading ? "Disabling..." : "Disable 2FA"}
                     </Button>
                   ) : null}

@@ -157,10 +157,15 @@ export function LocalMailOutboxSection({
               <div className="relative">
                 <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  type="search"
                   value={emailQuery}
                   onChange={(event) => setEmailQuery(event.target.value)}
                   placeholder="Filter recipient email"
                   className="pl-9"
+                  enterKeyHint="search"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                 />
               </div>
             </div>
@@ -169,10 +174,12 @@ export function LocalMailOutboxSection({
               <div className="relative">
                 <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  type="search"
                   value={subjectQuery}
                   onChange={(event) => setSubjectQuery(event.target.value)}
                   placeholder="Filter email subject"
                   className="pl-9"
+                  enterKeyHint="search"
                 />
               </div>
             </div>
