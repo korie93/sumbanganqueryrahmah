@@ -10,6 +10,7 @@ import {
   isSingleTabLockOwner,
   parseSingleTabNavigationReclaim,
   parseSingleTabLock,
+  reloadAppPreservingSingleTabLock,
   serializeSingleTabNavigationReclaim,
   serializeSingleTabLock,
 } from "@/app/single-tab-session";
@@ -93,4 +94,70 @@ test("single-tab navigation reclaim round-trips and validates recent same-tab na
   assert.equal(isSingleTabNavigationReclaimActive(parsed, "tab-seed-1", 6_000, 15_000), true);
   assert.equal(isSingleTabNavigationReclaimActive(parsed, "tab-seed-2", 6_000, 15_000), false);
   assert.equal(isSingleTabNavigationReclaimActive(parsed, "tab-seed-1", 21_000, 15_000), false);
+});
+
+test("reload helper preserves same-tab reclaim state before forcing a full reload", () => {
+  const sessionStore = new Map<string, string>();
+  sessionStore.set("sqr_single_tab_seed", "tab-seed-1");
+
+  const originalWindow = globalThis.window;
+  const originalSessionStorage = globalThis.sessionStorage;
+
+  const navigatedTo: string[] = [];
+
+  const sessionStorageMock = {
+    getItem(key: string) {
+      return sessionStore.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      sessionStore.set(key, value);
+    },
+    removeItem(key: string) {
+      sessionStore.delete(key);
+    },
+    clear() {
+      sessionStore.clear();
+    },
+  } as Storage;
+
+  const windowMock = {
+    location: {
+      href: "https://example.com/current",
+      replace(url: string) {
+        navigatedTo.push(url);
+      },
+    },
+    setTimeout(callback: () => void) {
+      callback();
+      return 1;
+    },
+  } as unknown as Window & typeof globalThis;
+
+  Object.assign(globalThis, {
+    window: windowMock,
+    sessionStorage: sessionStorageMock,
+  });
+
+  try {
+    reloadAppPreservingSingleTabLock();
+
+    const reclaim = parseSingleTabNavigationReclaim(
+      sessionStore.get("sqr_single_tab_navigation_reclaim") ?? null,
+    );
+
+    assert.deepEqual(navigatedTo, ["https://example.com/current"]);
+    assert.deepEqual(reclaim, {
+      tabSeed: "tab-seed-1",
+      markedAt: reclaim?.markedAt ?? 0,
+    });
+    assert.equal(
+      isSingleTabNavigationReclaimActive(reclaim, "tab-seed-1", reclaim!.markedAt + 1, 15_000),
+      true,
+    );
+  } finally {
+    Object.assign(globalThis, {
+      window: originalWindow,
+      sessionStorage: originalSessionStorage,
+    });
+  }
 });

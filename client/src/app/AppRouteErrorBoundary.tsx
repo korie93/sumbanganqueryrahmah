@@ -1,7 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, Home, RefreshCw, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { markSingleTabNavigationReclaimForCurrentTab } from "@/app/single-tab-session";
+import { reloadAppPreservingSingleTabLock } from "@/app/single-tab-session";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   resolveRouteErrorDescription,
@@ -62,8 +62,7 @@ export class AppRouteErrorBoundary extends Component<
     if (typeof window === "undefined") {
       return;
     }
-    markSingleTabNavigationReclaimForCurrentTab();
-    window.location.reload();
+    reloadAppPreservingSingleTabLock(window.location.href);
   };
 
   render() {

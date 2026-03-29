@@ -218,3 +218,32 @@ export function markSingleTabNavigationReclaimForCurrentTab() {
     // Ignore best-effort session reclaim persistence failures.
   }
 }
+
+export function reloadAppPreservingSingleTabLock(url?: string | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const targetUrl = normalizeStorageValue(url) || window.location.href;
+  const performReload = () => {
+    markSingleTabNavigationReclaimForCurrentTab();
+
+    if (typeof window.location.replace === "function") {
+      window.location.replace(targetUrl);
+      return;
+    }
+
+    window.location.href = targetUrl;
+  };
+
+  markSingleTabNavigationReclaimForCurrentTab();
+
+  if (typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(() => {
+      performReload();
+    });
+    return;
+  }
+
+  window.setTimeout(performReload, 0);
+}
