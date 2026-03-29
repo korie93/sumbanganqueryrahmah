@@ -169,6 +169,23 @@ export function getAuditActionInfo(action: string) {
   };
 }
 
+function normalizeAuditDetails(details: string) {
+  return details.replace(/\s+/g, " ").trim();
+}
+
+export function shouldCollapseAuditDetails(details: string, maxLength = 180) {
+  return normalizeAuditDetails(details).length > maxLength;
+}
+
+export function getAuditDetailsPreview(details: string, maxLength = 180) {
+  const normalized = normalizeAuditDetails(details);
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
 export function getAuditActionBadge(action: string, className?: string) {
   const actionInfo = getAuditActionInfo(action);
   return (

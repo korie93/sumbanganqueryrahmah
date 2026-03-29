@@ -5,7 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { AuditLogRecord } from "@/pages/audit-logs/types";
-import { formatAuditTime, getAuditActionInfo } from "@/pages/audit-logs/utils";
+import {
+  formatAuditTime,
+  getAuditActionInfo,
+  getAuditDetailsPreview,
+  shouldCollapseAuditDetails,
+} from "@/pages/audit-logs/utils";
 
 interface AuditLogsRecordsListProps {
   filteredLogs: AuditLogRecord[];
@@ -80,6 +85,8 @@ export function AuditLogsRecordsList({
               <div className="max-h-[min(70vh,38rem)] space-y-3 overflow-y-auto pr-1 sm:pr-2">
                 {filteredLogs.map((log) => {
                   const actionInfo = getAuditActionInfo(log.action);
+                  const details = log.details ?? "";
+                  const collapseDetails = Boolean(details) && isMobile && shouldCollapseAuditDetails(details);
 
                   return (
                     <div
@@ -156,17 +163,39 @@ export function AuditLogsRecordsList({
                         </div>
                       ) : null}
 
-                      {log.details ? (
+                      {details ? (
                         <div className="rounded-lg bg-muted/35 p-3">
                           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                             Details
                           </p>
-                          <p
-                            className="mt-2 break-words text-sm leading-relaxed text-muted-foreground"
-                            data-testid={`text-details-${log.id}`}
-                          >
-                            {log.details}
-                          </p>
+                          {collapseDetails ? (
+                            <details className="mt-2 rounded-md border border-border/60 bg-background/70 p-3">
+                              <summary
+                                className="cursor-pointer list-none text-left [&::-webkit-details-marker]:hidden"
+                                data-testid={`button-details-toggle-${log.id}`}
+                              >
+                                <p className="break-words text-sm leading-relaxed text-muted-foreground">
+                                  {getAuditDetailsPreview(details)}
+                                </p>
+                                <span className="mt-2 inline-flex text-xs font-medium text-primary">
+                                  Show full details
+                                </span>
+                              </summary>
+                              <pre
+                                className="mt-3 overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-border/60 bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground"
+                                data-testid={`text-details-${log.id}`}
+                              >
+                                {details}
+                              </pre>
+                            </details>
+                          ) : (
+                            <p
+                              className="mt-2 break-words text-sm leading-relaxed text-muted-foreground"
+                              data-testid={`text-details-${log.id}`}
+                            >
+                              {details}
+                            </p>
+                          )}
                         </div>
                       ) : null}
                     </div>

@@ -58,27 +58,29 @@ export function AppPaginationBar({
           </SelectContent>
         </Select>
 
-        <Button
-          size="sm"
-          variant="outline"
-          className="w-full sm:w-auto"
-          disabled={disabled || safePage <= 1}
-          onClick={() => onPageChange(safePage - 1)}
-        >
-          Prev
-        </Button>
-        <span className="text-center text-xs font-medium text-muted-foreground sm:text-left">
-          Page {safePage} / {safeTotalPages}
-        </span>
-        <Button
-          size="sm"
-          variant="outline"
-          className="w-full sm:w-auto"
-          disabled={disabled || safePage >= safeTotalPages}
-          onClick={() => onPageChange(safePage + 1)}
-        >
-          Next
-        </Button>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:flex-wrap sm:items-center">
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full min-w-0 sm:w-auto"
+            disabled={disabled || safePage <= 1}
+            onClick={() => onPageChange(safePage - 1)}
+          >
+            Prev
+          </Button>
+          <span className="min-w-[72px] text-center text-xs font-medium text-muted-foreground">
+            Page {safePage} / {safeTotalPages}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full min-w-0 sm:w-auto"
+            disabled={disabled || safePage >= safeTotalPages}
+            onClick={() => onPageChange(safePage + 1)}
+          >
+            Next
+          </Button>
+        </div>
       </div>
     </div>
   );
