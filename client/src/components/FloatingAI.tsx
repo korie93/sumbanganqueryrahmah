@@ -23,6 +23,13 @@ function isVisibleElement(element: Element | null): element is HTMLElement {
   return style.display !== "none" && style.visibility !== "hidden";
 }
 
+function isEditableElement(element: Element | null): element is HTMLElement {
+  if (!(element instanceof HTMLElement)) return false;
+  if (element.isContentEditable) return true;
+  const tagName = element.tagName;
+  return tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
+}
+
 type FloatingAIProps = {
   timeoutMs: number;
   aiEnabled: boolean;
@@ -34,6 +41,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
   const [isOpen, setIsOpen] = useState(false);
   const [hasActivated, setHasActivated] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIChatStatus>("IDLE");
+  const [hasFocusedEditable, setHasFocusedEditable] = useState(false);
   const [safePosition, setSafePosition] = useState({
     bottom: 24,
     right: 24,
@@ -80,6 +88,32 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     node.style.right = `${safePosition.right}px`;
   }, [safePosition.bottom, safePosition.right]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const updateFocusedEditable = () => {
+      const activeElement = document.activeElement;
+      const isInsideFloatingAi = Boolean(
+        activeElement instanceof Node && floatingRootRef.current?.contains(activeElement),
+      );
+      setHasFocusedEditable(!isInsideFloatingAi && isEditableElement(activeElement));
+    };
+
+    updateFocusedEditable();
+    document.addEventListener("focusin", updateFocusedEditable);
+    document.addEventListener("focusout", updateFocusedEditable);
+
+    return () => {
+      document.removeEventListener("focusin", updateFocusedEditable);
+      document.removeEventListener("focusout", updateFocusedEditable);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isMobile || !isOpen || !hasFocusedEditable) return;
+    setIsOpen(false);
+  }, [hasFocusedEditable, isMobile, isOpen]);
+
   const handleMinimize = useCallback(() => {
     setIsOpen(false);
   }, []);
@@ -96,6 +130,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
   }, [resetSession]);
 
   const hiddenForAiPage = activePage === "ai" || location.toLowerCase() === "/ai";
+  const hideForFocusedEditable = isMobile && hasFocusedEditable;
   const syncSafePosition = useCallback(() => {
     if (typeof window === "undefined") return;
 
@@ -188,7 +223,9 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
       className={cn(
         "pointer-events-none fixed z-[9999] flex flex-col items-end gap-3 transition-[bottom,right,opacity,transform] duration-200",
         styles.floatingRoot,
-        safePosition.hasBlockingDialog ? "opacity-0 translate-y-2" : "opacity-100",
+        safePosition.hasBlockingDialog || (hideForFocusedEditable && !isOpen)
+          ? "translate-y-2 opacity-0"
+          : "opacity-100",
       )}
       aria-hidden={safePosition.hasBlockingDialog}
       hidden={safePosition.hasBlockingDialog}
@@ -269,6 +306,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
         className={cn(
           "pointer-events-auto relative flex items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-[1.03]",
           isMobile ? "h-12 w-12" : "h-14 w-14",
+          hideForFocusedEditable ? "pointer-events-none" : "",
           isMobile && isOpen ? "pointer-events-none scale-95 opacity-0" : "",
           safePosition.hasBlockingDialog ? "pointer-events-none scale-95" : "",
           !isOpen && isThinking ? styles.aiThinkingRing : "",

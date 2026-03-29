@@ -120,6 +120,13 @@ export function LocalMailOutboxSection({
     query.searchSubject,
   ]);
 
+  const copyPreviewLink = async (previewUrl: string) => {
+    if (!navigator.clipboard?.writeText) {
+      return;
+    }
+    await navigator.clipboard.writeText(previewUrl);
+  };
+
   return (
     <>
       <SideTabDataPanel
@@ -251,10 +258,7 @@ export function LocalMailOutboxSection({
                         {
                           id: `copy-${entry.id}`,
                           label: "Copy Link",
-                          onSelect: async () => {
-                            if (!navigator.clipboard?.writeText) return;
-                            await navigator.clipboard.writeText(entry.previewUrl);
-                          },
+                          onSelect: async () => copyPreviewLink(entry.previewUrl),
                         },
                         {
                           id: `delete-${entry.id}`,
@@ -274,7 +278,7 @@ export function LocalMailOutboxSection({
                     </div>
                   </dl>
 
-                  <div className="flex flex-col gap-2 sm:flex-row">
+                  <div className="flex flex-col gap-2 sm:flex-row" data-floating-ai-avoid="true">
                     <Button
                       variant="outline"
                       className="w-full sm:w-auto"
@@ -284,12 +288,9 @@ export function LocalMailOutboxSection({
                     </Button>
                     <Button
                       variant="outline"
-                      className="hidden sm:inline-flex"
-                      onClick={async () => {
-                        if (!navigator.clipboard?.writeText) {
-                          return;
-                        }
-                        await navigator.clipboard.writeText(entry.previewUrl);
+                      className="w-full sm:w-auto"
+                      onClick={() => {
+                        void copyPreviewLink(entry.previewUrl);
                       }}
                     >
                       Copy Link
@@ -334,11 +335,8 @@ export function LocalMailOutboxSection({
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={async () => {
-                            if (!navigator.clipboard?.writeText) {
-                              return;
-                            }
-                            await navigator.clipboard.writeText(entry.previewUrl);
+                          onClick={() => {
+                            void copyPreviewLink(entry.previewUrl);
                           }}
                         >
                           Copy Link

@@ -350,7 +350,7 @@ export function ManagedAccountsSection({
                     ) : null}
                   </dl>
 
-                  <div className="flex flex-col gap-2 sm:flex-row">
+                  <div className="grid gap-2 sm:flex sm:flex-row" data-floating-ai-avoid="true">
                     <Button variant="outline" className="w-full sm:w-auto" onClick={() => onEditUser(user)}>
                       Edit
                     </Button>
@@ -361,6 +361,15 @@ export function ManagedAccountsSection({
                     >
                       Send Reset Email
                     </Button>
+                    {user.status === "pending_activation" && !user.isBanned ? (
+                      <Button
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                        onClick={() => onResendActivation(user)}
+                      >
+                        Resend Activation
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               ))
