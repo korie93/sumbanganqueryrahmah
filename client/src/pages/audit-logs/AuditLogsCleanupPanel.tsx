@@ -50,6 +50,20 @@ export function AuditLogsCleanupPanel({
     return null;
   }
 
+  const cleanupImpactText = logsToDeleteCount > 0
+    ? (
+      <>
+        This action will affect approximately{" "}
+        <span className="font-semibold text-foreground">{logsToDeleteCount}</span>{" "}
+        log entries.
+      </>
+    )
+    : "No audit logs match the selected cleanup rule.";
+
+  const cleanupButtonLabel = logsToDeleteCount > 0
+    ? `Cleanup (${logsToDeleteCount} logs)`
+    : "No Logs to Cleanup";
+
   return (
     <>
       <Card data-floating-ai-avoid="true">
@@ -128,11 +142,7 @@ export function AuditLogsCleanupPanel({
                   </div>
 
                   <div className="w-full space-y-2 lg:max-w-xs lg:text-right">
-                    <p className="text-sm text-muted-foreground">
-                      This action will affect approximately{" "}
-                      <span className="font-semibold text-foreground">{logsToDeleteCount}</span>{" "}
-                      log entries.
-                    </p>
+                    <p className="text-sm text-muted-foreground">{cleanupImpactText}</p>
                     <Button
                       variant="destructive"
                       onClick={() => onCleanupDialogOpenChange(true)}
@@ -141,7 +151,7 @@ export function AuditLogsCleanupPanel({
                       data-testid="button-cleanup-logs"
                     >
                       <Trash2 className="mr-2 h-4 w-4" />
-                      Cleanup ({logsToDeleteCount} logs)
+                      {cleanupButtonLabel}
                     </Button>
                   </div>
                 </div>

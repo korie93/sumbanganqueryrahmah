@@ -22,7 +22,8 @@ import {
   canViewDashboardSection,
   canViewMonitorSection,
 } from "@/app/monitorAccess";
-import type { TabVisibility } from "@/app/types";
+import { parseMonitorSectionFromQuery } from "@/app/routing";
+import type { MonitorSection, TabVisibility } from "@/app/types";
 
 export type NavigationEntry = {
   id: string;
@@ -291,6 +292,47 @@ export function getVisibleHomeItems(userRole: string, tabVisibility: TabVisibili
 
 export function resolveNavigationTarget(itemId: string) {
   return MONITOR_TARGET_MAP[itemId] || itemId;
+}
+
+type ResolveActiveNavigationItemOptions = {
+  monitorSection?: MonitorSection | null;
+  pathname?: string | null;
+  search?: string | null;
+};
+
+export function resolveActiveNavigationItemId(
+  currentPage: string,
+  options: ResolveActiveNavigationItemOptions = {},
+) {
+  const normalizedPath = String(options.pathname ?? "").toLowerCase();
+  const normalizedSearch = options.search ?? "";
+
+  if (currentPage === "audit" || currentPage === "audit-logs") {
+    return "audit-logs";
+  }
+
+  if (
+    currentPage === "monitor"
+    || currentPage === "dashboard"
+    || currentPage === "activity"
+    || currentPage === "analysis"
+  ) {
+    const resolvedSection = options.monitorSection
+      ?? parseMonitorSectionFromQuery(normalizedSearch)
+      ?? (currentPage === "monitor" ? "monitor" : currentPage);
+
+    return resolvedSection === "audit" ? "audit-logs" : resolvedSection;
+  }
+
+  if (currentPage === "settings" || currentPage === "backup") {
+    const settingsSection = new URLSearchParams(normalizedSearch).get("section");
+    if (settingsSection === "backup-restore") {
+      return "backup";
+    }
+    return "settings";
+  }
+
+  return currentPage;
 }
 
 export function formatNavigationLabel(label: string, itemId: string, savedCount?: number) {

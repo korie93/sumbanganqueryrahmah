@@ -166,6 +166,7 @@ function AppContent() {
         />
         <Navbar
           currentPage={currentPage}
+          monitorSection={monitorSection}
           onNavigate={handleNavigate}
           onLogout={handleLogout}
           userRole={user.role}

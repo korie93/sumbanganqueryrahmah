@@ -31,11 +31,10 @@ import {
   getVisibleNavigationGroups,
   getVisiblePrimaryNavItems,
   HOME_NAV_ITEM,
-  isNavigationGroupActive,
-  isNavigationItemActive,
   resolveNavigationTarget,
+  resolveActiveNavigationItemId,
 } from "@/app/navigation";
-import type { TabVisibility } from "@/app/types";
+import type { MonitorSection, TabVisibility } from "@/app/types";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useTheme } from "@/components/useTheme";
 
@@ -49,6 +48,7 @@ interface NavbarProps {
   savedCount?: number;
   tabVisibility?: TabVisibility;
   featureLockdown?: boolean;
+  monitorSection?: MonitorSection;
 }
 
 function NavbarImpl({
@@ -61,6 +61,7 @@ function NavbarImpl({
   savedCount,
   tabVisibility,
   featureLockdown = false,
+  monitorSection,
 }: NavbarProps) {
   const { theme, setTheme } = useTheme();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -77,7 +78,12 @@ function NavbarImpl({
     [featureLockdown, tabVisibility, userRole],
   );
   const showHomeButton = mobileItems.some((item) => item.id === HOME_NAV_ITEM.id);
-  const activeMobileItemId = mobileItems.find((item) => isNavigationItemActive(currentPage, item.id))?.id
+  const activeNavigationItemId = resolveActiveNavigationItemId(currentPage, {
+    monitorSection,
+    pathname: typeof window !== "undefined" ? window.location.pathname : "",
+    search: typeof window !== "undefined" ? window.location.search : "",
+  });
+  const activeMobileItemId = mobileItems.find((item) => item.id === activeNavigationItemId)?.id
     || mobileItems[0]?.id
     || HOME_NAV_ITEM.id;
 
@@ -148,10 +154,10 @@ function NavbarImpl({
               <button
                 type="button"
                 onClick={() => navigateToItem(HOME_NAV_ITEM.id)}
-                className={`nav-pill nav-home-pill hidden lg:inline-flex ${isNavigationItemActive(currentPage, HOME_NAV_ITEM.id) ? "nav-pill-active" : ""}`}
+                className={`nav-pill nav-home-pill hidden lg:inline-flex ${activeNavigationItemId === HOME_NAV_ITEM.id ? "nav-pill-active" : ""}`}
                 data-testid="nav-home"
                 aria-label={HOME_NAV_ITEM.label}
-                aria-current={isNavigationItemActive(currentPage, HOME_NAV_ITEM.id) ? "page" : undefined}
+                aria-current={activeNavigationItemId === HOME_NAV_ITEM.id ? "page" : undefined}
               >
                 <span className="nav-pill-icon">
                   <Home className="h-4 w-4" />
@@ -203,7 +209,7 @@ function NavbarImpl({
           <nav className="navbar-premium-glass max-w-full">
             {directItems.map((item) => {
               const Icon = item.icon;
-              const isActive = isNavigationItemActive(currentPage, item.id);
+              const isActive = activeNavigationItemId === item.id;
               const showBadge = item.id === "saved" && savedCount !== undefined && savedCount > 0;
               return (
                 <button
@@ -234,7 +240,7 @@ function NavbarImpl({
 
             {groupedItems.map((group) => {
               const GroupIcon = group.icon;
-              const active = isNavigationGroupActive(currentPage, group);
+              const active = group.items.some((item) => item.id === activeNavigationItemId);
               return (
                 <DropdownMenu key={group.id}>
                   <DropdownMenuTrigger asChild>
@@ -262,7 +268,7 @@ function NavbarImpl({
                     <DropdownMenuGroup>
                       {group.items.map((item) => {
                         const Icon = item.icon;
-                        const activeItem = isNavigationItemActive(currentPage, item.id);
+                        const activeItem = activeNavigationItemId === item.id;
                         return (
                           <DropdownMenuItem
                             key={item.id}
@@ -333,7 +339,7 @@ function NavbarImpl({
           <nav className="mt-4 space-y-2" aria-label="Mobile navigation">
             {mobileItems.map((item) => {
               const Icon = item.icon;
-              const active = isNavigationItemActive(currentPage, item.id);
+              const active = item.id === activeMobileItemId;
               return (
                 <button
                   key={item.id}
