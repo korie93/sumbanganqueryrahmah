@@ -7,6 +7,15 @@ interface AnalysisChartsProps {
   genderPieData: { name: string; value: number; color: string }[];
 }
 
+const PIE_LEGEND_DOT_CLASS_BY_COLOR: Record<string, string> = {
+  "#3b82f6": "bg-blue-500",
+  "#ec4899": "bg-pink-500",
+  "#ca8a04": "bg-yellow-600",
+  "#16a34a": "bg-green-600",
+  "#9333ea": "bg-purple-600",
+  "#ea580c": "bg-orange-600",
+};
+
 export function AnalysisCharts({ categoryBarData, genderPieData }: AnalysisChartsProps) {
   const isMobile = useIsMobile();
 
@@ -49,8 +58,7 @@ export function AnalysisCharts({ categoryBarData, genderPieData }: AnalysisChart
                     >
                       <div className="flex items-center gap-2">
                         <span
-                          className="h-2.5 w-2.5 rounded-full"
-                          style={{ backgroundColor: entry.color }}
+                          className={`h-2.5 w-2.5 rounded-full ${PIE_LEGEND_DOT_CLASS_BY_COLOR[entry.color] ?? "bg-muted-foreground"}`}
                           aria-hidden="true"
                         />
                         <span className="text-foreground">{entry.name}</span>
