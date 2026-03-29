@@ -58,6 +58,7 @@ export function SingleImportPanel({
           <input
             ref={fileInputRef}
             type="file"
+            aria-label="Select single import file"
             accept=".csv,.xlsx,.xls,.xlsb"
             onChange={onFileChange}
             className="hidden"
@@ -79,6 +80,8 @@ export function SingleImportPanel({
             <FileSpreadsheet className="w-5 h-5 text-primary" />
             <span className="text-sm text-foreground">{file.name}</span>
             <button
+              type="button"
+              aria-label="Clear selected file"
               onClick={onClear}
               className="ml-auto text-muted-foreground hover:text-destructive transition-colors"
               data-testid="button-clear-file"

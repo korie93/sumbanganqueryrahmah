@@ -48,6 +48,7 @@ export function BulkImportPanel({
         <input
           ref={bulkInputRef}
           type="file"
+          aria-label="Select bulk import files"
           accept=".csv,.xlsx,.xls,.xlsb"
           multiple
           onChange={onBulkFileSelect}
