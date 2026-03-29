@@ -72,6 +72,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
       keyboardOpen: false,
       hasFocusedEditable: false,
       hasDensePage: false,
+      preferCompactPanel: false,
       avoidRects: [],
     }),
   );
@@ -182,6 +183,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
 
   const hiddenForAiPage = activePage === "ai" || location.toLowerCase() === "/ai";
   const hideForFocusedEditable = isMobile && (hasFocusedEditable || keyboardOpen);
+  const preferCompactPanel = isMobile && messages.length === 0 && !isThinking && aiStatus === "IDLE";
   const hasDensePage = useMemo(() => {
     const pageKey = `${activePage}:${location}`.toLowerCase();
     return DENSE_PAGE_HINTS.some((token) => pageKey.includes(token));
@@ -217,11 +219,12 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
       keyboardOpen,
       hasFocusedEditable,
       hasDensePage,
+      preferCompactPanel,
       avoidRects,
     });
 
     setLayoutState((previous) => (areFloatingAiLayoutsEqual(previous, nextLayout) ? previous : nextLayout));
-  }, [hasDensePage, hasFocusedEditable, isMobile, isOpen, keyboardOpen]);
+  }, [hasDensePage, hasFocusedEditable, isMobile, isOpen, keyboardOpen, preferCompactPanel]);
 
   useEffect(() => {
     if (hiddenForAiPage || typeof window === "undefined") return;
@@ -317,30 +320,35 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
         >
           <section
             className={cn(
-              "pointer-events-auto h-full w-full border border-border bg-card text-card-foreground shadow-xl",
+              "pointer-events-auto h-full w-full border bg-slate-950/98 text-card-foreground shadow-xl ring-1 ring-white/10 backdrop-blur-sm",
               layoutState.panel.mode === "sheet"
-                ? "rounded-[24px] border-border/90 shadow-2xl"
-                : "rounded-[18px]",
+                ? "rounded-[24px] border-sky-400/20 shadow-2xl"
+                : "rounded-[18px] border-sky-400/15",
             )}
             aria-label="AI SQR Popup"
             data-floating-ai-panel-mode={layoutState.panel.mode}
           >
+            {isMobile ? (
+              <div className="flex justify-center pt-2">
+                <div className="h-1.5 w-10 rounded-full bg-white/20" aria-hidden="true" />
+              </div>
+            ) : null}
             <header
               className={cn(
-                "flex items-center justify-between border-b border-border",
+                "flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-sky-500/12 via-transparent to-transparent",
                 isMobile ? "min-h-14 px-3.5" : "h-14 px-4",
               )}
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground">AI SQR</p>
-                <p className="truncate text-[11px] text-muted-foreground">Smart Query Engine</p>
+                <p className="truncate text-sm font-semibold text-slate-50">AI SQR</p>
+                <p className="truncate text-[11px] text-slate-300/90">Smart Query Engine</p>
               </div>
               <div className="flex items-center gap-1.5">
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className={cn("text-xs", isMobile ? "h-9 px-2.5" : "h-8 px-2")}
+                  className={cn("text-xs text-slate-200 hover:bg-white/10 hover:text-white", isMobile ? "h-9 px-2.5" : "h-8 px-2")}
                   onClick={handleReset}
                   disabled={messages.length === 0 && !isThinking}
                 >
@@ -350,7 +358,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   type="button"
                   size="icon"
                   variant="ghost"
-                  className={cn(isMobile ? "h-9 w-9" : "h-8 w-8")}
+                  className={cn("text-slate-200 hover:bg-white/10 hover:text-white", isMobile ? "h-9 w-9" : "h-8 w-8")}
                   onClick={handleMinimize}
                   aria-label="Minimize AI panel"
                 >
@@ -369,6 +377,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                 <AIChat
                   timeoutMs={timeoutMs}
                   aiEnabled={aiEnabled}
+                  compactMode={preferCompactPanel}
                   onStatusChange={setAiStatus}
                   onCancelAISearchReady={(cancelFn) => {
                     cancelAISearchRef.current = cancelFn;
@@ -398,7 +407,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           onClick={handleToggle}
           title="AI SQR"
           className={cn(
-            "pointer-events-auto relative flex items-center justify-center rounded-full border border-border/50 bg-background/95 text-foreground shadow-lg backdrop-blur-sm transition-transform hover:scale-[1.03]",
+            "pointer-events-auto relative flex items-center justify-center rounded-full border border-sky-300/30 bg-sky-500 text-white shadow-[0_18px_38px_rgba(14,165,233,0.33)] transition-transform hover:scale-[1.03]",
             isMobile ? "h-12 w-12" : "h-14 w-14",
             hideForFocusedEditable ? "pointer-events-none" : "",
             layoutState.triggerHidden ? "pointer-events-none scale-95 opacity-0" : "",

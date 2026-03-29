@@ -13,6 +13,7 @@ test("resolveFloatingAiLayout moves the trigger away from bottom-right avoid zon
     keyboardOpen: false,
     hasFocusedEditable: false,
     hasDensePage: true,
+    preferCompactPanel: false,
     avoidRects: [
       {
         left: 220,
@@ -38,6 +39,7 @@ test("resolveFloatingAiLayout lifts the mobile panel above bottom action bars", 
     keyboardOpen: false,
     hasFocusedEditable: false,
     hasDensePage: true,
+    preferCompactPanel: false,
     avoidRects: [
       {
         left: 0,
@@ -64,6 +66,7 @@ test("resolveFloatingAiLayout auto-minimizes when a blocking dialog is open", ()
     keyboardOpen: false,
     hasFocusedEditable: false,
     hasDensePage: false,
+    preferCompactPanel: false,
     avoidRects: [],
   });
 
@@ -81,13 +84,14 @@ test("resolveFloatingAiLayout keeps 320px mobile view compact and centered", () 
     keyboardOpen: false,
     hasFocusedEditable: false,
     hasDensePage: true,
+    preferCompactPanel: true,
     avoidRects: [],
   });
 
   assert.equal(layout.panel.mode, "sheet");
   assert.equal(layout.panel.alignment, "center");
   assert.ok(layout.panel.width <= 304);
-  assert.ok(layout.panel.height <= 360);
+  assert.ok(layout.panel.height <= 248);
 });
 
 test("resolveFloatingAiLayout auto-minimizes on 360px mobile when keyboard opens", () => {
@@ -100,6 +104,7 @@ test("resolveFloatingAiLayout auto-minimizes on 360px mobile when keyboard opens
     keyboardOpen: true,
     hasFocusedEditable: false,
     hasDensePage: false,
+    preferCompactPanel: false,
     avoidRects: [],
   });
 
@@ -117,6 +122,7 @@ test("resolveFloatingAiLayout keeps the desktop panel docked compactly on the pr
     keyboardOpen: false,
     hasFocusedEditable: false,
     hasDensePage: false,
+    preferCompactPanel: false,
     avoidRects: [],
   });
 
@@ -135,6 +141,7 @@ test("resolveFloatingAiLayout switches to dock mode for tablet widths", () => {
     keyboardOpen: false,
     hasFocusedEditable: false,
     hasDensePage: true,
+    preferCompactPanel: false,
     avoidRects: [],
   });
 
@@ -152,6 +159,7 @@ test("areFloatingAiLayoutsEqual stays stable for unchanged placement decisions",
     keyboardOpen: false,
     hasFocusedEditable: false,
     hasDensePage: false,
+    preferCompactPanel: false,
     avoidRects: [],
   });
 

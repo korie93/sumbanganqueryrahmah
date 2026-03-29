@@ -16,6 +16,7 @@ import "@/styles/ai.css";
 type AIChatProps = {
   timeoutMs: number;
   aiEnabled: boolean;
+  compactMode?: boolean;
   onCancelAISearchReady?: (cancelFn: () => void) => void;
   onStatusChange?: (status: AIChatStatus) => void;
 };
@@ -25,7 +26,13 @@ export type AIChatStatus = SharedAIChatStatus;
 const MAX_RETRIES = 6;
 const RETRY_MS = 2500;
 
-export default function AIChat({ timeoutMs, aiEnabled, onCancelAISearchReady, onStatusChange }: AIChatProps) {
+export default function AIChat({
+  timeoutMs,
+  aiEnabled,
+  compactMode = false,
+  onCancelAISearchReady,
+  onStatusChange,
+}: AIChatProps) {
   const {
     messages,
     setMessages,
@@ -382,8 +389,10 @@ export default function AIChat({ timeoutMs, aiEnabled, onCancelAISearchReady, on
     };
   }, [aiStatus]);
 
+  const showActions = isProcessing || isTyping;
+
   return (
-    <div className="ai-chat-container">
+    <div className="ai-chat-container" data-compact={compactMode ? "true" : "false"}>
       <div className="ai-status-bar">
         <statusMeta.icon className="ai-status-icon" />
         <span>{statusMeta.text}</span>
@@ -437,9 +446,9 @@ export default function AIChat({ timeoutMs, aiEnabled, onCancelAISearchReady, on
         <Textarea
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Taip soalan anda..."
+          placeholder={compactMode ? "Taip soalan ringkas..." : "Taip soalan anda..."}
           className="ai-input"
-          rows={2}
+          rows={compactMode ? 1 : 2}
           disabled={!aiEnabled || isProcessing}
         />
         <Button
@@ -453,19 +462,21 @@ export default function AIChat({ timeoutMs, aiEnabled, onCancelAISearchReady, on
         </Button>
       </div>
 
-      <div className="ai-actions">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="ai-stop-btn"
-          onClick={() => cancelAISearch(true)}
-          disabled={!isProcessing && !isTyping}
-        >
-          <StopCircle className="h-4 w-4" />
-          <span>Stop AI</span>
-        </Button>
-      </div>
+      {showActions ? (
+        <div className="ai-actions">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="ai-stop-btn"
+            onClick={() => cancelAISearch(true)}
+            disabled={!isProcessing && !isTyping}
+          >
+            <StopCircle className="h-4 w-4" />
+            <span>Stop AI</span>
+          </Button>
+        </div>
+      ) : null}
 
       {!aiEnabled ? (
         <div className="ai-notice ai-notice-error">

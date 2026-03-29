@@ -16,6 +16,7 @@ export type FloatingAiLayoutInput = {
   keyboardOpen: boolean;
   hasFocusedEditable: boolean;
   hasDensePage: boolean;
+  preferCompactPanel: boolean;
   avoidRects: ReadonlyArray<RectLike>;
 };
 
@@ -196,18 +197,20 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
   const triggerCandidate = chooseBestCandidate(triggerCandidates);
 
   const preferredPanelWidth = input.isMobile
-    ? clamp(viewportWidth - 16, 272, 360)
+    ? clamp(viewportWidth - 16, input.preferCompactPanel ? 264 : 272, input.preferCompactPanel ? 340 : 360)
     : clamp(Math.min(392, viewportWidth - 48), 320, 392);
   const preferredPanelHeight = input.isMobile
-    ? Math.min(
-        input.hasDensePage ? 360 : 420,
-        Math.max(252, Math.round(viewportHeight * (input.hasDensePage ? 0.42 : 0.48))),
-      )
+    ? input.preferCompactPanel
+      ? Math.min(248, Math.max(196, Math.round(viewportHeight * 0.3)))
+      : Math.min(
+          input.hasDensePage ? 344 : 392,
+          Math.max(232, Math.round(viewportHeight * (input.hasDensePage ? 0.38 : 0.44))),
+        )
     : Math.min(
         input.hasDensePage ? 420 : 520,
         Math.max(300, viewportHeight - (input.hasDensePage ? 176 : 136)),
       );
-  const minimumPanelHeight = input.isMobile ? 220 : 260;
+  const minimumPanelHeight = input.isMobile ? (input.preferCompactPanel ? 188 : 220) : 260;
   const preferredPanelAlignments = input.isMobile
     ? (["center", "left", "right"] as const)
     : ([triggerCandidate.anchor, triggerCandidate.anchor === "right" ? "left" : "right", "center"] as const);
