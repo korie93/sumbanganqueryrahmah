@@ -1,6 +1,8 @@
 import { AlertTriangle, CheckCircle2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
+import { cn } from "@/lib/utils";
 
 interface SettingsSaveBarProps {
   dirtyCount: number;
@@ -9,9 +11,14 @@ interface SettingsSaveBarProps {
 }
 
 export function SettingsSaveBar({ dirtyCount, onSave, saving }: SettingsSaveBarProps) {
+  const keyboardOpen = useMobileKeyboardState();
+
   return (
     <Card
-      className="sticky bottom-0 z-20 border-primary/40 bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:static sm:shadow-sm sm:backdrop-blur-0"
+      className={cn(
+        "border-primary/40 bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:static sm:shadow-sm sm:backdrop-blur-0",
+        keyboardOpen ? "static shadow-sm backdrop-blur-0" : "sticky bottom-0 z-20",
+      )}
       data-floating-ai-avoid="true"
     >
       <CardContent

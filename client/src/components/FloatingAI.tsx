@@ -3,6 +3,7 @@ import { Bot, Minimize2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { AIChatStatus } from "@/components/AIChat";
 import { resolveFloatingAIMinimizedStatus } from "@/components/floating-ai-status";
@@ -38,6 +39,7 @@ type FloatingAIProps = {
 
 export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: FloatingAIProps) {
   const isMobile = useIsMobile();
+  const keyboardOpen = useMobileKeyboardState();
   const [isOpen, setIsOpen] = useState(false);
   const [hasActivated, setHasActivated] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIChatStatus>("IDLE");
@@ -130,7 +132,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
   }, [resetSession]);
 
   const hiddenForAiPage = activePage === "ai" || location.toLowerCase() === "/ai";
-  const hideForFocusedEditable = isMobile && hasFocusedEditable;
+  const hideForFocusedEditable = isMobile && (hasFocusedEditable || keyboardOpen);
   const syncSafePosition = useCallback(() => {
     if (typeof window === "undefined") return;
 

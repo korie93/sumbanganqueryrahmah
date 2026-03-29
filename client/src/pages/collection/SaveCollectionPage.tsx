@@ -4,8 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
+import { cn } from "@/lib/utils";
 import { type CollectionBatch, type CollectionReceiptMetadata } from "@/lib/api";
 import {
   buildCollectionMutationFingerprint,
@@ -42,6 +44,7 @@ type SaveCollectionPageProps = {
 
 function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps) {
   const { notifyMutationError, notifyMutationSuccess } = useMutationFeedback();
+  const keyboardOpen = useMobileKeyboardState();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const submitInFlightRef = useRef(false);
   const submitMutationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
@@ -401,7 +404,10 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         </div>
 
         <div
-          className="sticky bottom-0 z-10 -mx-6 flex flex-col gap-2 border-t border-border/60 bg-background/95 px-6 pt-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:static sm:mx-0 sm:flex-row sm:flex-wrap sm:justify-end sm:border-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none sm:backdrop-blur-0"
+          className={cn(
+            "-mx-6 flex flex-col gap-2 border-t border-border/60 bg-background/95 px-6 pt-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:static sm:mx-0 sm:flex-row sm:flex-wrap sm:justify-end sm:border-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none sm:backdrop-blur-0",
+            keyboardOpen ? "static" : "sticky bottom-0 z-10",
+          )}
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
           data-floating-ai-avoid="true"
         >
