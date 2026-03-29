@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowLeft, BarChart3, FileStack, Plane, RefreshCw, Rotat
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { analyzeAll, analyzeImport } from "@/lib/api";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { AnalysisCategoryCard } from "@/pages/analysis/AnalysisCategoryCard";
 import { AnalysisChartsSkeleton } from "@/pages/analysis/AnalysisChartsSkeleton";
@@ -21,6 +22,7 @@ function isAbortError(error: unknown) {
 }
 
 export default function Analysis({ onNavigate }: AnalysisProps) {
+  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [mode, setMode] = useState<AnalysisMode>("single");
@@ -186,16 +188,16 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
   );
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
+    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 sm:p-6">
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between gap-4 mb-8 flex-wrap">
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="icon" onClick={() => onNavigate("saved")} data-testid="button-back">
+        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex items-start gap-3 sm:gap-4">
+            <Button variant="outline" size="icon" onClick={() => onNavigate("saved")} data-testid="button-back" className="shrink-0">
               <ArrowLeft className="w-4 h-4" />
             </Button>
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-3xl font-bold text-foreground">Data Analysis</h1>
+            <div className="min-w-0">
+              <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Data Analysis</h1>
                 {mode === "all" && allResult ? (
                   <Badge variant="default" className="flex items-center gap-1" data-testid="badge-total-files">
                     <FileStack className="w-3 h-3" />
@@ -215,9 +217,9 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
             {mode === "single" ? (
-              <Button variant="outline" onClick={handleReset} data-testid="button-reset">
+              <Button variant="outline" onClick={handleReset} data-testid="button-reset" className="w-full sm:w-auto">
                 <RotateCcw className="w-4 h-4 mr-2" />
                 Reset (View All)
               </Button>
@@ -229,6 +231,7 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
               }}
               disabled={loading}
               data-testid="button-refresh"
+              className="w-full sm:w-auto"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
               Refresh
@@ -251,13 +254,17 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
         {!loading && !error && analysis ? (
           <>
             <div className="glass-wrapper p-4 mb-6">
-              <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
                 <div className="flex items-center gap-2">
                   <BarChart3 className="w-5 h-5 text-primary" />
                   <span className="text-muted-foreground">Total Rows:</span>
                   <span className="font-bold text-foreground">{totalRows.toLocaleString()}</span>
                 </div>
-                {mode === "single" && singleResult ? <Badge variant="outline">{singleResult.import.filename}</Badge> : null}
+                {mode === "single" && singleResult ? (
+                  <Badge variant="outline" className={`${isMobile ? "w-full justify-start" : ""} max-w-full break-all`}>
+                    {singleResult.import.filename}
+                  </Badge>
+                ) : null}
                 {mode === "all" && allResult ? <Badge variant="outline">{allResult.totalImports} files combined</Badge> : null}
               </div>
             </div>
