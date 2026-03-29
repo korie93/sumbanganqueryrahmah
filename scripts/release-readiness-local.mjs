@@ -123,6 +123,11 @@ const run = async () => {
     DRILL_SUPERUSER_USERNAME: smokeUser,
     DRILL_SUPERUSER_PASSWORD: smokePassword,
   };
+  const releaseBuildEnv = {
+    ...env,
+    // Bundle budgets should reflect the release artifact, not development-only branches.
+    NODE_ENV: "production",
+  };
 
   console.log("Release readiness: running fast regression gates...");
   await runNpm(["run", "verify:db-schema-governance"], { env });
@@ -133,8 +138,8 @@ const run = async () => {
   await runNpm(["run", "test:services"], { env });
 
   console.log("Release readiness: building runtime bundle...");
-  await runNpm(["run", "build"], { env });
-  await runNpm(["run", "verify:bundle-budgets"], { env });
+  await runNpm(["run", "build"], { env: releaseBuildEnv });
+  await runNpm(["run", "verify:bundle-budgets"], { env: releaseBuildEnv });
 
   const serverProcess = spawn(
     npmCommand,
