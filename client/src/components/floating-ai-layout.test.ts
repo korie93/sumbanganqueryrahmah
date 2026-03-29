@@ -52,10 +52,10 @@ test("resolveFloatingAiLayout lifts the mobile panel above bottom action bars", 
     ],
   });
 
-  assert.equal(layout.panel.mode, "sheet");
+  assert.equal(layout.panel.mode, "fullscreen");
   assert.equal(layout.panel.alignment, "center");
-  assert.ok(layout.panel.bottom > 16);
-  assert.ok(layout.panel.height <= 360);
+  assert.equal(layout.panel.bottom, 0);
+  assert.equal(layout.panel.height, 844);
 });
 
 test("resolveFloatingAiLayout auto-minimizes when a blocking dialog is open", () => {
@@ -92,10 +92,10 @@ test("resolveFloatingAiLayout keeps 320px mobile view compact and centered", () 
     avoidRects: [],
   });
 
-  assert.equal(layout.panel.mode, "sheet");
+  assert.equal(layout.panel.mode, "fullscreen");
   assert.equal(layout.panel.alignment, "center");
-  assert.ok(layout.panel.width <= 304);
-  assert.ok(layout.panel.height <= 248);
+  assert.equal(layout.panel.width, 320);
+  assert.equal(layout.panel.height, 640);
 });
 
 test("resolveFloatingAiLayout auto-minimizes on 360px mobile when keyboard opens", () => {
@@ -190,5 +190,7 @@ test("resolveFloatingAiLayout lifts the panel above the mobile keyboard inset wi
   });
 
   assert.equal(layout.shouldAutoMinimize, false);
-  assert.ok(layout.panel.bottom >= 296);
+  assert.equal(layout.panel.mode, "fullscreen");
+  assert.equal(layout.panel.bottom, 280);
+  assert.equal(layout.panel.height, 564);
 });

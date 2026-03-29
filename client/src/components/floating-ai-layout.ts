@@ -38,7 +38,7 @@ export type FloatingAiLayout = {
     right: number | null;
     width: number;
     height: number;
-    mode: "dock" | "sheet";
+    mode: "dock" | "sheet" | "fullscreen";
     alignment: "left" | "right" | "center";
   };
 };
@@ -197,6 +197,30 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
   });
 
   const triggerCandidate = chooseBestCandidate(triggerCandidates);
+
+  if (input.isMobile && input.isOpen) {
+    return {
+      rootHidden: input.hasBlockingDialog,
+      triggerHidden: true,
+      shouldAutoMinimize,
+      trigger: {
+        bottom: triggerCandidate.bottom,
+        left: triggerCandidate.anchor === "left" ? triggerCandidate.left : null,
+        right: triggerCandidate.anchor === "right" ? triggerCandidate.right : null,
+        anchor: triggerCandidate.anchor,
+        size: triggerSize,
+      },
+      panel: {
+        bottom: viewportBottomInset,
+        left: 0,
+        right: 0,
+        width: viewportWidth,
+        height: Math.max(320, viewportHeight - viewportBottomInset),
+        mode: "fullscreen",
+        alignment: "center",
+      },
+    };
+  }
 
   const preferredPanelWidth = input.isMobile
     ? clamp(viewportWidth - 16, input.preferCompactPanel ? 264 : 272, input.preferCompactPanel ? 340 : 360)

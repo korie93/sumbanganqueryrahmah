@@ -170,6 +170,23 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     setIsOpen(false);
   }, [isOpen, layoutState.shouldAutoMinimize]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (!isMobile || !isOpen || layoutState.rootHidden || layoutState.panel.mode !== "fullscreen") return;
+
+    const { body, documentElement } = document;
+    const previousBodyOverflow = body.style.overflow;
+    const previousOverscrollBehavior = documentElement.style.overscrollBehavior;
+
+    body.style.overflow = "hidden";
+    documentElement.style.overscrollBehavior = "none";
+
+    return () => {
+      body.style.overflow = previousBodyOverflow;
+      documentElement.style.overscrollBehavior = previousOverscrollBehavior;
+    };
+  }, [isMobile, isOpen, layoutState.panel.mode, layoutState.rootHidden]);
+
   const handleMinimize = useCallback(() => {
     setIsOpen(false);
   }, []);
@@ -319,6 +336,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
       className={cn(
         "pointer-events-none fixed transition-opacity duration-200",
         styles.floatingRoot,
+        isMobile && isOpen && !layoutState.rootHidden ? "z-[60]" : "",
         layoutState.rootHidden || (hideForFocusedEditable && !isOpen)
           ? "translate-y-2 opacity-0"
           : "opacity-100",
@@ -326,11 +344,19 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
       aria-hidden={layoutState.rootHidden}
       hidden={layoutState.rootHidden}
     >
+      {isMobile && isOpen && !layoutState.rootHidden ? (
+        <div
+          className={cn("pointer-events-auto", styles.floatingMobileBackdrop)}
+          aria-hidden="true"
+          onClick={handleMinimize}
+        />
+      ) : null}
       {hasActivated ? (
         <div
           className={cn(
             "pointer-events-none absolute transition-all duration-200",
             styles.floatingPanelShell,
+            layoutState.panel.mode === "fullscreen" ? styles.floatingPanelShellFullscreen : "",
             isOpen && !layoutState.rootHidden
               ? "translate-y-0 opacity-100"
               : "pointer-events-none translate-y-2 opacity-0",
@@ -340,26 +366,35 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           <section
             className={cn(
               "pointer-events-auto h-full w-full border bg-slate-950/98 text-card-foreground shadow-xl ring-1 ring-white/10 backdrop-blur-sm",
+              layoutState.panel.mode === "fullscreen"
+                ? styles.floatingPanelFullscreenSurface
+                : "",
               layoutState.panel.mode === "sheet"
                 ? "rounded-[24px] border-sky-400/20 shadow-2xl"
-                : "rounded-[18px] border-sky-400/15",
+                : layoutState.panel.mode === "fullscreen"
+                  ? "border-sky-400/20 shadow-2xl"
+                  : "rounded-[18px] border-sky-400/15",
             )}
             aria-label="AI SQR Popup"
             data-floating-ai-panel-mode={layoutState.panel.mode}
           >
             {isMobile ? (
-              <div className="flex justify-center pt-2">
+              <div className={cn("flex justify-center", layoutState.panel.mode === "fullscreen" ? "pt-2" : "pt-2")}>
                 <div className="h-1.5 w-10 rounded-full bg-white/20" aria-hidden="true" />
               </div>
             ) : null}
             <header
               className={cn(
                 "flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-sky-500/12 via-transparent to-transparent",
-                isMobile ? "min-h-14 px-3.5" : "h-14 px-4",
+                isMobile && layoutState.panel.mode === "fullscreen"
+                  ? "min-h-16 px-4"
+                  : isMobile
+                    ? "min-h-14 px-3.5"
+                    : "h-14 px-4",
               )}
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-50">AI SQR</p>
+                <p className={cn("truncate font-semibold text-slate-50", layoutState.panel.mode === "fullscreen" ? "text-base" : "text-sm")}>AI SQR</p>
                 <p className="truncate text-[11px] text-slate-300/90">Smart Query Engine</p>
               </div>
               <div className="flex items-center gap-1.5">
@@ -367,7 +402,14 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className={cn("text-xs text-slate-200 hover:bg-white/10 hover:text-white", isMobile ? "h-9 px-2.5" : "h-8 px-2")}
+                  className={cn(
+                    "text-xs text-slate-200 hover:bg-white/10 hover:text-white",
+                    isMobile && layoutState.panel.mode === "fullscreen"
+                      ? "h-10 px-3"
+                      : isMobile
+                        ? "h-9 px-2.5"
+                        : "h-8 px-2",
+                  )}
                   onClick={handleReset}
                   disabled={messages.length === 0 && !isThinking}
                 >
@@ -377,7 +419,14 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   type="button"
                   size="icon"
                   variant="ghost"
-                  className={cn("text-slate-200 hover:bg-white/10 hover:text-white", isMobile ? "h-9 w-9" : "h-8 w-8")}
+                  className={cn(
+                    "text-slate-200 hover:bg-white/10 hover:text-white",
+                    isMobile && layoutState.panel.mode === "fullscreen"
+                      ? "h-10 w-10"
+                      : isMobile
+                        ? "h-9 w-9"
+                        : "h-8 w-8",
+                  )}
                   onClick={handleMinimize}
                   aria-label="Minimize AI panel"
                 >
@@ -385,7 +434,16 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                 </Button>
               </div>
             </header>
-            <div className={cn("h-[calc(100%-56px)]", isMobile ? "p-2.5" : "p-3")}>
+            <div
+              className={cn(
+                "h-[calc(100%-56px)]",
+                layoutState.panel.mode === "fullscreen"
+                  ? "p-3"
+                  : isMobile
+                    ? "p-2.5"
+                    : "p-3",
+              )}
+            >
               <Suspense
                 fallback={
                   <div className="flex h-full items-center justify-center">
