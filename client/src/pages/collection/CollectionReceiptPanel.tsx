@@ -216,7 +216,7 @@ export function CollectionReceiptPanel({
       ) : null}
 
       {archivedReceipts.length > 0 ? (
-        <div className="space-y-2">
+        <div className="hidden space-y-2 md:block">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Archived Receipts (Can Still View)
           </p>

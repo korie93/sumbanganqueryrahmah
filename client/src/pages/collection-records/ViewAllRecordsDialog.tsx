@@ -1,4 +1,5 @@
-import { Eye } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { ChevronDown, ChevronUp, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -59,6 +60,19 @@ export function ViewAllRecordsDialog({
 }: ViewAllRecordsDialogProps) {
   const isMobile = useIsMobile();
   const dialogDescription = `Dari ${toDisplayDate(fromDate)} hingga ${toDisplayDate(toDate)}`;
+  const [expandedRecordIds, setExpandedRecordIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setExpandedRecordIds([]);
+  }, [open, page, pageSize, viewAllRecords]);
+
+  const toggleRecordExpanded = useCallback((recordId: string) => {
+    setExpandedRecordIds((previous) =>
+      previous.includes(recordId)
+        ? previous.filter((value) => value !== recordId)
+        : [...previous, recordId],
+    );
+  }, []);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -99,11 +113,11 @@ export function ViewAllRecordsDialog({
             </div>
           </div>
 
-          <div className={`flex min-h-0 flex-1 flex-col gap-3 ${isMobile ? "p-3" : "p-4"}`}>
+          <div className={`flex min-h-0 flex-1 flex-col ${isMobile ? "px-3 pb-3 pt-3" : "gap-3 p-4"}`}>
             <div
               className={
                 isMobile
-                  ? "border-b border-border/60 bg-background/95 pb-[calc(env(safe-area-inset-bottom,0px)+0.25rem)] shadow-sm"
+                  ? "shrink-0 border-b border-border/60 bg-background/95 pb-[calc(env(safe-area-inset-bottom,0px)+0.25rem)] shadow-sm"
                   : ""
               }
               data-floating-ai-avoid="true"
@@ -120,9 +134,9 @@ export function ViewAllRecordsDialog({
               />
             </div>
 
-            <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border/60">
+            <div className={isMobile ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-auto rounded-md border border-border/60"}>
               {isMobile ? (
-                <div className="space-y-3 p-3">
+                <div className="h-full overflow-y-auto overscroll-y-contain rounded-md border border-border/60 bg-background/60 p-3 [-webkit-overflow-scrolling:touch]">
                   {loading ? (
                     <div className="rounded-lg border border-border/60 bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground">
                       Loading full records...
@@ -132,63 +146,87 @@ export function ViewAllRecordsDialog({
                       Tiada rekod dalam julat tarikh yang dipilih.
                     </div>
                   ) : (
-                    viewAllRecords.map((record, index) => (
-                      <article
-                        key={`view-all-${record.id}`}
-                        className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
-                      >
-                        <div className="space-y-1">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                            Record {(page - 1) * pageSize + index + 1}
-                          </p>
-                          <p className="break-words font-medium">{record.customerName}</p>
-                        </div>
-                        <dl className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm">
-                          <div className="space-y-1">
-                            <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">IC Number</dt>
-                            <dd className="break-words">{record.icNumber}</dd>
-                          </div>
-                          <div className="space-y-1">
-                            <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Account Number</dt>
-                            <dd className="break-words">{record.accountNumber}</dd>
-                          </div>
-                          <div className="space-y-1">
-                            <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Customer Phone</dt>
-                            <dd className="break-words">{record.customerPhone}</dd>
-                          </div>
-                          <div className="space-y-1">
-                            <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Batch</dt>
-                            <dd>{record.batch}</dd>
-                          </div>
-                          <div className="space-y-1">
-                            <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Amount</dt>
-                            <dd>{formatAmountRM(record.amount)}</dd>
-                          </div>
-                          <div className="space-y-1">
-                            <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Payment Date</dt>
-                            <dd>{formatIsoDateToDDMMYYYY(record.paymentDate)}</dd>
-                          </div>
-                          <div className="space-y-1">
-                            <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Staff Nickname</dt>
-                            <dd className="break-words">{record.collectionStaffNickname}</dd>
-                          </div>
-                        </dl>
-
-                        {(record.receipts?.length || 0) > 0 ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="w-full"
-                            onClick={() => onViewReceipt(record)}
+                    <div className="space-y-3">
+                      {viewAllRecords.map((record, index) => {
+                        const isExpanded = expandedRecordIds.includes(record.id);
+                        return (
+                          <article
+                            key={`view-all-${record.id}`}
+                            className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
                           >
-                            <Eye className="mr-2 h-4 w-4" />
-                            {(record.receipts?.length || 0) > 1
-                              ? `View Receipt (${record.receipts.length})`
-                              : "View Receipt"}
-                          </Button>
-                        ) : null}
-                      </article>
-                    ))
+                            <div className="space-y-2">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                Record {(page - 1) * pageSize + index + 1}
+                              </p>
+                              <div className="space-y-1">
+                                <p className="break-words text-base font-semibold">{record.customerName}</p>
+                                <p className="text-base font-semibold text-primary">{formatAmountRM(record.amount)}</p>
+                              </div>
+                            </div>
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="w-full"
+                              onClick={() => toggleRecordExpanded(record.id)}
+                              aria-expanded={isExpanded}
+                            >
+                              {isExpanded ? (
+                                <ChevronUp className="mr-2 h-4 w-4" />
+                              ) : (
+                                <ChevronDown className="mr-2 h-4 w-4" />
+                              )}
+                              {isExpanded ? "Show less" : "Show more"}
+                            </Button>
+
+                            {isExpanded ? (
+                              <>
+                                <dl className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm">
+                                  <div className="space-y-1">
+                                    <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">IC Number</dt>
+                                    <dd className="break-words">{record.icNumber}</dd>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Account Number</dt>
+                                    <dd className="break-words">{record.accountNumber}</dd>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Customer Phone</dt>
+                                    <dd className="break-words">{record.customerPhone}</dd>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Batch</dt>
+                                    <dd>{record.batch}</dd>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Payment Date</dt>
+                                    <dd>{formatIsoDateToDDMMYYYY(record.paymentDate)}</dd>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Staff Nickname</dt>
+                                    <dd className="break-words">{record.collectionStaffNickname}</dd>
+                                  </div>
+                                </dl>
+
+                                {(record.receipts?.length || 0) > 0 ? (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => onViewReceipt(record)}
+                                  >
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    {(record.receipts?.length || 0) > 1
+                                      ? `View Receipt (${record.receipts.length})`
+                                      : "View Receipt"}
+                                  </Button>
+                                ) : null}
+                              </>
+                            ) : null}
+                          </article>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               ) : (
