@@ -32,6 +32,13 @@ export function resolveReceiptPreviewKind(input: {
   return "unsupported";
 }
 
+export function shouldRenderInlineReceiptPdfPreview(input: {
+  kind: ReceiptPreviewKind;
+  isMobile: boolean;
+}): boolean {
+  return input.kind === "pdf" && !input.isMobile;
+}
+
 export function toCollectionDisplayDate(value: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const [year, month, day] = value.split("-");
