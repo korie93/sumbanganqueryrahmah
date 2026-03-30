@@ -151,8 +151,9 @@ function resolveBottomClearance(
       Math.min(horizontalRect.right, avoidRect.right) > Math.max(horizontalRect.left, avoidRect.left);
     if (!overlapsHorizontally) continue;
 
-    const isBottomWeighted =
-      avoidRect.bottom >= viewportHeight - 220 || avoidRect.top >= viewportHeight * 0.5;
+    const isShortBottomSurface = avoidRect.height <= 220 && avoidRect.bottom >= viewportHeight - 32;
+    const startsInBottomBand = avoidRect.top >= viewportHeight * 0.62;
+    const isBottomWeighted = startsInBottomBand || isShortBottomSurface;
     if (!isBottomWeighted) continue;
 
     clearance = Math.max(clearance, viewportHeight - avoidRect.top + 12);
@@ -300,12 +301,16 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
       left: sheetLeft,
       right: sheetLeft + sheetWidth,
     };
-    const bottom = resolveBottomClearance(horizontalRect, viewportHeight, gutterY, avoidRects);
+    const minimumHeight = input.preferCompactPanel ? 420 : 520;
+    const bottom = clamp(
+      resolveBottomClearance(horizontalRect, viewportHeight, gutterY, avoidRects),
+      gutterY,
+      Math.max(gutterY, viewportHeight - mobileSheetTopGap - minimumHeight),
+    );
     const availableHeight = Math.max(300, viewportHeight - mobileSheetTopGap - bottom);
     const preferredHeight = Math.round(
       availableHeight * (input.preferCompactPanel ? 0.82 : 0.9),
     );
-    const minimumHeight = input.preferCompactPanel ? 420 : 520;
     const height = clamp(preferredHeight, Math.min(minimumHeight, availableHeight), availableHeight);
 
     return {

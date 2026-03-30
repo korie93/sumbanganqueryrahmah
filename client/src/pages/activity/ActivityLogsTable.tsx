@@ -1,9 +1,9 @@
+import { useEffect, useState } from "react";
 import { Activity as ActivityIcon, ChevronDown, Shield, Trash2, UserX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useIsMobile } from "@/hooks/use-mobile";
 import type { ActivityRecord } from "@/pages/activity/types";
 import { formatActivityTime, getSessionDuration, getStatusBadge, parseActivityUserAgent } from "@/pages/activity/utils";
 
@@ -40,7 +40,24 @@ export function ActivityLogsTable({
   allVisibleSelected,
   partiallySelected,
 }: ActivityLogsTableProps) {
-  const isMobile = useIsMobile();
+  const [preferMobileLayout, setPreferMobileLayout] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 768,
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const handleChange = (event: MediaQueryListEvent) => {
+      setPreferMobileLayout(event.matches);
+    };
+
+    setPreferMobileLayout(mediaQuery.matches);
+    mediaQuery.addEventListener("change", handleChange);
+
+    return () => {
+      mediaQuery.removeEventListener("change", handleChange);
+    };
+  }, []);
 
   return (
     <Collapsible open={logsOpen} onOpenChange={onLogsOpenChange}>
@@ -66,7 +83,7 @@ export function ActivityLogsTable({
               <ActivityIcon className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
               <p className="text-muted-foreground">No activity records</p>
             </div>
-          ) : isMobile ? (
+          ) : preferMobileLayout ? (
             <div className="space-y-3">
               {canModerateActivity ? (
                 <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/30 px-3 py-2">
@@ -117,7 +134,7 @@ export function ActivityLogsTable({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 rounded-lg border border-border/60 bg-muted/20 p-3 text-sm sm:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-3 rounded-lg border border-border/60 bg-muted/20 p-3 text-sm">
                       <div className="space-y-1">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">IP Address</p>
                         <p className="break-all text-foreground/90">{activity.ipAddress || "-"}</p>
@@ -136,7 +153,7 @@ export function ActivityLogsTable({
                           {activity.logoutTime ? formatActivityTime(activity.logoutTime) : "-"}
                         </p>
                       </div>
-                      <div className="space-y-1 sm:col-span-2">
+                      <div className="space-y-1">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Session Duration</p>
                         <p className="text-foreground/90">{getSessionDuration(activity.loginTime, activity.logoutTime)}</p>
                       </div>

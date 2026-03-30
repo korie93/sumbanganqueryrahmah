@@ -22,14 +22,15 @@ import { resolveAuditLogsExportBlockReason } from "@/pages/audit-logs/export-gua
 export default function AuditLogs() {
   const isMobile = useIsMobile();
   const currentRole = getStoredRole();
+  const initialMobileViewport = typeof window !== "undefined" && window.innerWidth < 768;
 
   const canCleanupLogs = currentRole === "superuser";
   const [logs, setLogs] = useState<AuditLogRecord[]>([]);
   const [stats, setStats] = useState<AuditLogStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filtersOpen, setFiltersOpen] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(() => !initialMobileViewport);
   const [recordsOpen, setRecordsOpen] = useState(true);
-  const [cleanupOpen, setCleanupOpen] = useState(true);
+  const [cleanupOpen, setCleanupOpen] = useState(() => !initialMobileViewport);
   const [searchText, setSearchText] = useState("");
   const [performedByFilter, setPerformedByFilter] = useState("");
   const [targetUserFilter, setTargetUserFilter] = useState("");
@@ -51,16 +52,24 @@ export default function AuditLogs() {
   });
   const [refreshNonce, setRefreshNonce] = useState(0);
   const exportInFlightRef = useRef(false);
-  const mobileDefaultsAppliedRef = useRef(false);
+  const wasMobileRef = useRef(initialMobileViewport);
   const { toast } = useToast();
   const deferredSearchText = useDeferredValue(searchText.trim());
 
   useEffect(() => {
-    if (!isMobile || mobileDefaultsAppliedRef.current) return;
-    mobileDefaultsAppliedRef.current = true;
-    setFiltersOpen(false);
-    setCleanupOpen(false);
-    setRecordsOpen(true);
+    if (isMobile === wasMobileRef.current) return;
+
+    if (isMobile) {
+      setFiltersOpen(false);
+      setCleanupOpen(false);
+      setRecordsOpen(true);
+    } else {
+      setFiltersOpen(true);
+      setCleanupOpen(true);
+      setRecordsOpen(true);
+    }
+
+    wasMobileRef.current = isMobile;
   }, [isMobile]);
 
   const fetchStats = useCallback(async () => {

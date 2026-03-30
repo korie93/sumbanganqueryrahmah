@@ -163,6 +163,36 @@ test("resolveFloatingAiLayout keeps compact mobile idle sheets tall enough to pr
   assert.ok(layout.panel.height >= 660);
 });
 
+test("resolveFloatingAiLayout keeps mobile sheets inside the viewport when tall audit panels are visible", () => {
+  const viewportHeight = 844;
+  const layout = resolveFloatingAiLayout({
+    viewportWidth: 390,
+    viewportHeight,
+    viewportBottomInset: 0,
+    isMobile: true,
+    isOpen: true,
+    hasBlockingDialog: false,
+    keyboardOpen: false,
+    hasFocusedEditable: false,
+    hasDensePage: true,
+    preferCompactPanel: true,
+    avoidRects: [
+      {
+        left: 33,
+        top: 117,
+        right: 342,
+        bottom: 843,
+      },
+    ],
+  });
+
+  const panelTop = viewportHeight - layout.panel.bottom - layout.panel.height;
+  assert.equal(layout.panel.mode, "sheet");
+  assert.ok(layout.panel.bottom < 320);
+  assert.ok(layout.panel.height >= 420);
+  assert.ok(panelTop >= 20);
+});
+
 test("resolveFloatingAiLayout gives 412px mobile sheets enough height for a readable message region", () => {
   const layout = resolveFloatingAiLayout({
     viewportWidth: 412,
