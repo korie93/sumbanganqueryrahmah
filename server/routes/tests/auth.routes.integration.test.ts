@@ -1516,6 +1516,42 @@ test("POST /api/auth/validate-password-reset-token returns reset metadata for a 
   }
 });
 
+test("POST /api/auth/validate-password-reset-token accepts database-style UTC timestamps without timezone", async () => {
+  const { storage, rawToken } = createPasswordResetStorageDouble({
+    resetRecord: {
+      expiresAt: "2099-03-30 17:54:00" as any,
+      createdAt: "2099-03-30 09:54:00" as any,
+      activatedAt: "2099-03-29 09:00:00" as any,
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: (_req, _res, next) => next(),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/validate-password-reset-token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ token: rawToken }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.reset.username, "reset.user");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /api/auth/reset-password-with-token updates credentials, invalidates old resets, and audits completion", async () => {
   const {
     storage,

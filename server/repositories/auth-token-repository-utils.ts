@@ -15,6 +15,10 @@ import type {
   PasswordResetTokenRecord,
 } from "./auth-repository-types";
 
+function asUtcTimestamp(columnSql: ReturnType<typeof sql>) {
+  return sql`(${columnSql} AT TIME ZONE 'UTC')`;
+}
+
 export async function createActivationToken(params: {
   userId: string;
   tokenHash: string;
@@ -58,9 +62,9 @@ export async function getActivationTokenRecordByHash(
   const result = await db.execute(sql`
     SELECT
       t.id as "tokenId",
-      t.expires_at as "expiresAt",
-      t.used_at as "usedAt",
-      t.created_at as "createdAt",
+      ${asUtcTimestamp(sql`t.expires_at`)} as "expiresAt",
+      ${asUtcTimestamp(sql`t.used_at`)} as "usedAt",
+      ${asUtcTimestamp(sql`t.created_at`)} as "createdAt",
       u.id as "userId",
       u.username,
       u.full_name as "fullName",
@@ -89,12 +93,13 @@ export async function consumeActivationTokenById(params: {
   }
 
   const now = params.now ?? new Date();
+  const nowIso = now.toISOString();
   const result = await db.execute(sql`
     UPDATE public.account_activation_tokens
-    SET used_at = ${now}
+    SET used_at = ${nowIso}
     WHERE id = ${tokenId}
       AND used_at IS NULL
-      AND expires_at > ${now}
+      AND (expires_at AT TIME ZONE 'UTC') > ${nowIso}
     RETURNING id
   `);
 
@@ -193,9 +198,9 @@ export async function getPasswordResetTokenRecordByHash(
     SELECT
       r.id as "requestId",
       r.user_id as "userId",
-      r.expires_at as "expiresAt",
-      r.used_at as "usedAt",
-      r.created_at as "createdAt",
+      ${asUtcTimestamp(sql`r.expires_at`)} as "expiresAt",
+      ${asUtcTimestamp(sql`r.used_at`)} as "usedAt",
+      ${asUtcTimestamp(sql`r.created_at`)} as "createdAt",
       u.username,
       u.full_name as "fullName",
       u.email,
@@ -223,12 +228,13 @@ export async function consumePasswordResetRequestById(params: {
   }
 
   const now = params.now ?? new Date();
+  const nowIso = now.toISOString();
   const result = await db.execute(sql`
     UPDATE public.password_reset_requests
-    SET used_at = ${now}
+    SET used_at = ${nowIso}
     WHERE id = ${requestId}
       AND used_at IS NULL
-      AND expires_at > ${now}
+      AND (expires_at AT TIME ZONE 'UTC') > ${nowIso}
     RETURNING id
   `);
 

@@ -191,3 +191,46 @@ test("assertUsablePasswordResetTokenRecord rejects used, expired, pending, and u
     /not available for this account/i,
   );
 });
+
+test("auth token helpers treat database timestamps without timezone as UTC", () => {
+  const now = new Date("2026-03-30T13:54:00.000Z");
+
+  const reset = assertUsablePasswordResetTokenRecord(
+    {
+      requestId: "request-utc-1",
+      userId: "user-utc-1",
+      username: "utc.user",
+      fullName: "UTC User",
+      email: "utc.user@example.com",
+      role: "user",
+      status: "active",
+      isBanned: false,
+      activatedAt: "2026-03-29 09:00:00" as any,
+      expiresAt: "2026-03-30 17:54:00" as any,
+      usedAt: null,
+      createdAt: "2026-03-30 09:54:00" as any,
+    },
+    now,
+  );
+
+  const activation = assertUsableActivationTokenRecord(
+    {
+      tokenId: "token-utc-1",
+      userId: "user-utc-1",
+      username: "utc.user",
+      fullName: "UTC User",
+      email: "utc.user@example.com",
+      role: "user",
+      status: "pending_activation",
+      isBanned: false,
+      activatedAt: null,
+      expiresAt: "2026-03-30 17:54:00" as any,
+      usedAt: null,
+      createdAt: "2026-03-30 09:54:00" as any,
+    },
+    now,
+  );
+
+  assert.equal(reset.expiresAt.toISOString(), "2026-03-30T17:54:00.000Z");
+  assert.equal(activation.expiresAt.toISOString(), "2026-03-30T17:54:00.000Z");
+});

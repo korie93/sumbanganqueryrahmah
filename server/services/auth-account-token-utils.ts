@@ -28,13 +28,37 @@ export type UsablePasswordResetTokenRecord = PasswordResetTokenSummary & {
   usedAt: Date | null;
 };
 
+const UTC_NAIVE_TIMESTAMP_PATTERN =
+  /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?$/;
+
+function normalizeTokenDateValue(value: Date | string | null | undefined): Date | null {
+  if (value == null) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return new Date(value.getTime());
+  }
+
+  const normalized = String(value).trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const asUtcNaiveTimestamp = UTC_NAIVE_TIMESTAMP_PATTERN.test(normalized)
+    ? normalized.replace(" ", "T").replace(/$/, "Z")
+    : normalized;
+
+  return new Date(asUtcNaiveTimestamp);
+}
+
 function normalizeTokenDates<TRecord extends { expiresAt: Date | string; usedAt: Date | string | null }>(
   record: TRecord,
 ) {
   return {
     ...record,
-    expiresAt: new Date(record.expiresAt),
-    usedAt: record.usedAt ? new Date(record.usedAt) : null,
+    expiresAt: normalizeTokenDateValue(record.expiresAt) ?? new Date(Number.NaN),
+    usedAt: normalizeTokenDateValue(record.usedAt),
   };
 }
 
