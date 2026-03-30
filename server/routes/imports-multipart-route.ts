@@ -10,14 +10,15 @@ import {
   parseImportUploadFile,
   stripImportUploadExtension,
 } from "../services/import-upload-parser";
-
-const IMPORT_MULTIPART_MAX_FILE_SIZE_BYTES = 96 * 1024 * 1024;
+import { DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES } from "../config/body-limit";
 
 type MultipartImportBody = {
   name?: string;
   filename?: string;
   data?: Record<string, string>[];
 };
+
+const IMPORT_TOO_LARGE_MESSAGE = "The selected file is too large to import. Please split it into smaller files and try again.";
 
 function normalizeImportName(rawValue: string | undefined, fallbackFilename: string) {
   const normalized = String(rawValue || "").trim();
@@ -28,25 +29,32 @@ function normalizeImportName(rawValue: string | undefined, fallbackFilename: str
   return stripImportUploadExtension(fallbackFilename).slice(0, 160);
 }
 
-export function createImportsMultipartRoute(): RequestHandler {
+export function createImportsMultipartRoute(
+  maxFileSizeBytes: number = DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES,
+): RequestHandler {
   return (req, res, next) => {
     if (!req.is("multipart/form-data")) {
       next();
       return;
     }
 
+    const safeMaxFileSizeBytes = Number.isFinite(maxFileSizeBytes) && maxFileSizeBytes > 0
+      ? Math.floor(maxFileSizeBytes)
+      : DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES;
+
     const parser = Busboy({
       headers: req.headers,
       limits: {
         files: 1,
         fields: 4,
-        fileSize: IMPORT_MULTIPART_MAX_FILE_SIZE_BYTES,
+        fileSize: safeMaxFileSizeBytes,
       },
     });
 
     const body: MultipartImportBody = {};
     let fileTask: Promise<{ filename: string; dataRows: Record<string, string>[] }> | null = null;
     let settled = false;
+    let fileLimitExceeded = false;
 
     const fail = (status: number, message: string) => {
       if (settled) {
@@ -79,6 +87,7 @@ export function createImportsMultipartRoute(): RequestHandler {
 
         file.once("limit", () => {
           exceededSizeLimit = true;
+          fileLimitExceeded = true;
         });
 
         try {
@@ -88,7 +97,7 @@ export function createImportsMultipartRoute(): RequestHandler {
           );
 
           if (exceededSizeLimit) {
-            throw new Error("The selected file is too large to import. Please split it into smaller files and try again.");
+            throw new Error(IMPORT_TOO_LARGE_MESSAGE);
           }
 
           const parsed = await parseImportUploadFile(filename, tempFilePath);
@@ -112,7 +121,7 @@ export function createImportsMultipartRoute(): RequestHandler {
         error instanceof Error && error.message
           ? error.message
           : "Failed to parse import upload.";
-      fail(400, message);
+      fail(fileLimitExceeded || /too large|size limit/i.test(message) ? 413 : 400, fileLimitExceeded ? IMPORT_TOO_LARGE_MESSAGE : message);
     });
 
     parser.once("finish", async () => {
@@ -138,8 +147,8 @@ export function createImportsMultipartRoute(): RequestHandler {
           error instanceof Error && error.message
             ? error.message
             : "Failed to parse import upload.";
-        const statusCode = /too large/i.test(message) ? 413 : 400;
-        fail(statusCode, message);
+        const statusCode = fileLimitExceeded || /too large/i.test(message) ? 413 : 400;
+        fail(statusCode, fileLimitExceeded ? IMPORT_TOO_LARGE_MESSAGE : message);
       }
     });
 

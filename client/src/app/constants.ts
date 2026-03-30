@@ -9,6 +9,7 @@ export const DEFAULT_RUNTIME_CONFIG: AppRuntimeConfig = {
   aiEnabled: true,
   searchResultLimit: 200,
   viewerRowsPerPage: 100,
+  importUploadLimitBytes: 64 * 1024 * 1024,
 };
 
 export const ACTIVE_SETTINGS_SECTION_KEY = "activeSettingsSection";

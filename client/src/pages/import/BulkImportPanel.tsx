@@ -10,6 +10,7 @@ interface BulkImportPanelProps {
   bulkProcessing: boolean;
   bulkProgress: number;
   bulkResults: BulkFileResult[];
+  maxUploadSizeLabel: string;
   onBulkDrop: (event: React.DragEvent<HTMLDivElement>) => void;
   onBulkDragOver: (event: React.DragEvent<HTMLDivElement>) => void;
   onBulkFileSelect: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -23,12 +24,16 @@ export function BulkImportPanel({
   bulkProcessing,
   bulkProgress,
   bulkResults,
+  maxUploadSizeLabel,
   onBulkDrop,
   onBulkDragOver,
   onBulkFileSelect,
   onClearBulk,
   onStartBulkImport,
 }: BulkImportPanelProps) {
+  const blockedCount = bulkResults.filter((result) => result.blocked).length;
+  const hasImportableFiles = bulkResults.some((result) => !result.blocked);
+
   return (
     <div className="glass-wrapper p-6 mb-6">
       <div className="mb-4">
@@ -62,6 +67,7 @@ export function BulkImportPanel({
           <div>
             <p className="text-foreground font-medium">Click or drag multiple files here</p>
             <p className="text-sm text-muted-foreground mt-1">Select multiple CSV or Excel files at once</p>
+            <p className="text-xs text-muted-foreground mt-1">Maximum upload size per file: {maxUploadSizeLabel}</p>
           </div>
         </div>
       </div>
@@ -69,12 +75,19 @@ export function BulkImportPanel({
       {bulkFiles.length > 0 ? (
         <div className="mt-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-medium text-foreground">Selected Files ({bulkFiles.length})</h3>
+            <div>
+              <h3 className="font-medium text-foreground">Selected Files ({bulkFiles.length})</h3>
+              {blockedCount > 0 ? (
+                <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                  {blockedCount} file(s) exceed the current upload limit and will be skipped.
+                </p>
+              ) : null}
+            </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={onClearBulk} disabled={bulkProcessing} data-testid="button-clear-bulk">
                 Clear All
               </Button>
-              <Button onClick={onStartBulkImport} disabled={bulkProcessing} data-testid="button-start-bulk">
+              <Button onClick={onStartBulkImport} disabled={bulkProcessing || !hasImportableFiles} data-testid="button-start-bulk">
                 {bulkProcessing ? (
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -147,7 +160,9 @@ export function BulkImportPanel({
                   }
                   className="flex-shrink-0"
                 >
-                  {result.status === "success"
+                  {result.blocked
+                    ? "Too Large"
+                    : result.status === "success"
                     ? "Success"
                     : result.status === "error"
                       ? "Failed"

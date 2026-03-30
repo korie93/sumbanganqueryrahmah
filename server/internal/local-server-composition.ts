@@ -2,6 +2,10 @@ import type { Express, RequestHandler, Response } from "express";
 import type { WebSocket, WebSocketServer } from "ws";
 import { getOllamaConfig } from "../ai-ollama";
 import { createAuthGuards, type AuthenticatedRequest } from "../auth/guards";
+import {
+  DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES,
+  parseBodyLimitToBytes,
+} from "../config/body-limit";
 import { runtimeConfig as environmentRuntimeConfig } from "../config/runtime";
 import { createImportsController } from "../controllers/imports.controller";
 import { createOperationsController } from "../controllers/operations.controller";
@@ -243,6 +247,10 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     getLatencyP95,
     getLocalCircuitSnapshots,
   } = runtimeMonitor;
+  const importUploadLimitBytes = parseBodyLimitToBytes(
+    environmentRuntimeConfig.app.bodyLimits.imports,
+    DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES,
+  );
   const backupOperationsService = new BackupOperationsService(
     storage,
     backupsRepository,
@@ -332,6 +340,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     requireRole,
     requireTabAccess,
     searchRateLimiter,
+    multipartMaxFileSizeBytes: importUploadLimitBytes,
   });
 
   registerSearchRoutes(app, {
@@ -375,6 +384,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     invalidateMaintenanceCache,
     getMaintenanceStateCached,
     broadcastWsMessage,
+    importUploadLimitBytes,
   });
 
   registerOperationsRoutes(app, {

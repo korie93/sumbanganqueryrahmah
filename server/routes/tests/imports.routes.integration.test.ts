@@ -91,6 +91,7 @@ function createImportsRouteHarness(options?: {
   analysisDelayMs?: number;
   analysisAllDelayMs?: number;
   analysisRequestTimeoutMs?: number;
+  multipartMaxFileSizeBytes?: number;
 }) {
   const auditLogs: AuditEntry[] = [];
   const searchCalls: Array<Record<string, unknown>> = [];
@@ -344,16 +345,17 @@ function createImportsRouteHarness(options?: {
       }),
       isDbProtected: () => options?.isDbProtected ?? false,
       analysisRequestTimeoutMs: options?.analysisRequestTimeoutMs,
-    }),
-    authenticateToken: createTestAuthenticateToken({
-      userId: "admin-1",
-      username: "admin.user",
-      role: "admin",
-    }),
-    requireRole: createTestRequireRole(),
-    requireTabAccess: () => allowAllTabs(),
-    searchRateLimiter: (_req, _res, next) => next(),
-  });
+      }),
+      authenticateToken: createTestAuthenticateToken({
+        userId: "admin-1",
+        username: "admin.user",
+        role: "admin",
+      }),
+      requireRole: createTestRequireRole(),
+      requireTabAccess: () => allowAllTabs(),
+      searchRateLimiter: (_req, _res, next) => next(),
+      multipartMaxFileSizeBytes: options?.multipartMaxFileSizeBytes,
+    });
   app.use(errorHandler);
 
   return {
@@ -609,6 +611,7 @@ test("POST /api/imports accepts multipart Excel uploads without leaking temp fil
     await stopTestServer(server);
   }
 });
+
 
 test("GET /api/imports/:id returns the import details with rows", async () => {
   const { app } = createImportsRouteHarness();

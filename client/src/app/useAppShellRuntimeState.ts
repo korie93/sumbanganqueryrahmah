@@ -29,6 +29,7 @@ export function useAppShellRuntimeState({ user }: UseAppShellRuntimeStateArgs) {
         const aiTimeoutMs = Number(response?.aiTimeoutMs);
         const searchResultLimit = Number(response?.searchResultLimit);
         const viewerRowsPerPage = Number(response?.viewerRowsPerPage);
+        const importUploadLimitBytes = Number(response?.importUploadLimitBytes);
 
         if (!cancelled) {
           setSystemName(name || DEFAULT_SYSTEM_NAME);
@@ -49,6 +50,9 @@ export function useAppShellRuntimeState({ user }: UseAppShellRuntimeStateArgs) {
             viewerRowsPerPage: Number.isFinite(viewerRowsPerPage)
               ? Math.min(500, Math.max(10, Math.floor(viewerRowsPerPage)))
               : DEFAULT_RUNTIME_CONFIG.viewerRowsPerPage,
+            importUploadLimitBytes: Number.isFinite(importUploadLimitBytes)
+              ? Math.min(512 * 1024 * 1024, Math.max(1 * 1024 * 1024, Math.floor(importUploadLimitBytes)))
+              : DEFAULT_RUNTIME_CONFIG.importUploadLimitBytes,
           });
         }
       } catch {

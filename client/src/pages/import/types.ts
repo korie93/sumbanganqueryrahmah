@@ -1,5 +1,6 @@
 export interface ImportProps {
   onNavigate: (page: string) => void;
+  importUploadLimitBytes?: number;
 }
 
 export interface BulkFileResult {
@@ -7,6 +8,7 @@ export interface BulkFileResult {
   status: "pending" | "processing" | "success" | "error";
   error?: string;
   rowCount?: number;
+  blocked?: boolean;
 }
 
 export type ImportRow = Record<string, string>;

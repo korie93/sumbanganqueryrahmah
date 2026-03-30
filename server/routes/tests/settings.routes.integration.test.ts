@@ -7,6 +7,7 @@ import {
   tabVisibilityResponseSchema,
 } from "../../../shared/api-contracts";
 import type { SystemSettingItem } from "../../config/system-settings";
+import { DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES } from "../../config/body-limit";
 import { errorHandler } from "../../middleware/error-handler";
 import { registerSettingsRoutes } from "../settings.routes";
 import type { PostgresStorage } from "../../storage-postgres";
@@ -180,13 +181,14 @@ test("GET /api/app-config returns config with no-store cache headers", async () 
     assert.equal(response.headers.get("pragma"), "no-cache");
     assert.equal(response.headers.get("expires"), "0");
 
-    const payload = await response.json();
-    assert.equal(payload.systemName, "SQR");
-    assert.equal(payload.viewerRowsPerPage, 100);
-  } finally {
-    await stopTestServer(server);
-  }
-});
+      const payload = await response.json();
+      assert.equal(payload.systemName, "SQR");
+      assert.equal(payload.viewerRowsPerPage, 100);
+      assert.equal(payload.importUploadLimitBytes, DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES);
+    } finally {
+      await stopTestServer(server);
+    }
+  });
 
 test("GET /api/settings/tab-visibility returns role-scoped tab visibility", async () => {
   const { app } = createSettingsRouteHarness();

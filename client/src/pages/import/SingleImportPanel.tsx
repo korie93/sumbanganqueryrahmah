@@ -10,6 +10,7 @@ interface SingleImportPanelProps {
   headers: string[];
   importName: string;
   loading: boolean;
+  maxUploadSizeLabel: string;
   onClear: () => void;
   onDrop: (event: React.DragEvent<HTMLDivElement>) => void;
   onDragOver: (event: React.DragEvent<HTMLDivElement>) => void;
@@ -26,6 +27,7 @@ export function SingleImportPanel({
   headers,
   importName,
   loading,
+  maxUploadSizeLabel,
   onClear,
   onDrop,
   onDragOver,
@@ -71,6 +73,7 @@ export function SingleImportPanel({
             <div>
               <p className="text-foreground font-medium">Click or drag file here</p>
               <p className="text-sm text-muted-foreground mt-1">Supported: CSV, Excel (.xlsx, .xls, .xlsb)</p>
+              <p className="text-xs text-muted-foreground mt-1">Maximum upload size per file: {maxUploadSizeLabel}</p>
             </div>
           </div>
         </div>

@@ -9,6 +9,7 @@ type ImportsRouteDeps = {
   requireRole: (...roles: string[]) => RequestHandler;
   requireTabAccess: (tabId: string) => RequestHandler;
   searchRateLimiter: RequestHandler;
+  multipartMaxFileSizeBytes?: number;
 };
 
 export function registerImportRoutes(app: Express, deps: ImportsRouteDeps) {
@@ -19,7 +20,7 @@ export function registerImportRoutes(app: Express, deps: ImportsRouteDeps) {
     requireTabAccess,
     searchRateLimiter,
   } = deps;
-  const importsMultipartRoute = createImportsMultipartRoute();
+  const importsMultipartRoute = createImportsMultipartRoute(deps.multipartMaxFileSizeBytes);
 
   app.get("/api/data-rows", authenticateToken, asyncHandler(importsController.listDataRows));
 

@@ -76,7 +76,7 @@ function AppPageRendererImpl({
     case "home":
       return <HomePage onNavigate={onNavigate} userRole={user.role} tabVisibility={tabVisibility} />;
     case "import":
-      return <ImportPage onNavigate={onNavigate} />;
+      return <ImportPage onNavigate={onNavigate} importUploadLimitBytes={runtimeConfig.importUploadLimitBytes} />;
     case "saved":
       return <SavedPage onNavigate={onNavigate} userRole={user.role} />;
     case "viewer":

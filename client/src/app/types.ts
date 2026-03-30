@@ -26,4 +26,5 @@ export type AppRuntimeConfig = {
   aiEnabled: boolean;
   searchResultLimit: number;
   viewerRowsPerPage: number;
+  importUploadLimitBytes: number;
 };

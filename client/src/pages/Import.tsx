@@ -7,12 +7,18 @@ import { BulkImportPanel } from "@/pages/import/BulkImportPanel";
 import { parseImportPreview, stripImportExtension } from "@/pages/import/parsing";
 import { SingleImportPanel } from "@/pages/import/SingleImportPanel";
 import type { BulkFileResult, ImportProps, ImportRow } from "@/pages/import/types";
+import {
+  buildImportFileTooLargeMessage,
+  formatImportUploadSize,
+  isImportFileTooLarge,
+  resolveImportUploadLimitBytes,
+} from "@/pages/import/upload-limits";
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
-export default function Import({ onNavigate }: ImportProps) {
+export default function Import({ onNavigate, importUploadLimitBytes }: ImportProps) {
   const [activeTab, setActiveTab] = useState<"single" | "bulk">("single");
   const [file, setFile] = useState<File | null>(null);
   const [importName, setImportName] = useState("");
@@ -34,6 +40,8 @@ export default function Import({ onNavigate }: ImportProps) {
   const bulkImportRequestIdRef = useRef(0);
   const isMountedRef = useRef(true);
   const { toast } = useToast();
+  const resolvedImportUploadLimitBytes = resolveImportUploadLimitBytes(importUploadLimitBytes);
+  const maxUploadSizeLabel = formatImportUploadSize(resolvedImportUploadLimitBytes);
 
   const resetSingleImport = () => {
     setFile(null);
@@ -55,6 +63,11 @@ export default function Import({ onNavigate }: ImportProps) {
     setFile(selectedFile);
     setParsedData([]);
     setHeaders([]);
+
+    if (isImportFileTooLarge(selectedFile, resolvedImportUploadLimitBytes)) {
+      setError(buildImportFileTooLargeMessage(selectedFile.size, resolvedImportUploadLimitBytes));
+      return;
+    }
 
     try {
       const parsed = await parseImportPreview(selectedFile);
@@ -158,7 +171,20 @@ export default function Import({ onNavigate }: ImportProps) {
 
   const setBulkSelection = (files: File[]) => {
     setBulkFiles(files);
-    setBulkResults(files.map((selectedFile) => ({ filename: selectedFile.name, status: "pending" })));
+    setBulkProgress(0);
+    setBulkResults(files.map((selectedFile) => (
+      isImportFileTooLarge(selectedFile, resolvedImportUploadLimitBytes)
+        ? {
+          filename: selectedFile.name,
+          status: "error",
+          blocked: true,
+          error: buildImportFileTooLargeMessage(selectedFile.size, resolvedImportUploadLimitBytes),
+        }
+        : {
+          filename: selectedFile.name,
+          status: "pending",
+        }
+    )));
   };
 
   const filterSupportedFiles = (files: File[]) =>
@@ -180,6 +206,19 @@ export default function Import({ onNavigate }: ImportProps) {
   const handleBulkImport = async () => {
     if (bulkFiles.length === 0 || bulkProcessing || bulkImportInFlightRef.current) return;
 
+    const blockedCount = bulkResults.filter((result) => result.blocked).length;
+    const hasImportableFiles = bulkResults.some((result) => !result.blocked);
+    if (!hasImportableFiles) {
+      toast({
+        title: "No Importable Files",
+        description: blockedCount > 0
+          ? `${blockedCount} selected file(s) exceed the ${maxUploadSizeLabel} upload limit.`
+          : "Please select at least one supported file to import.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const requestId = ++bulkImportRequestIdRef.current;
     bulkImportAbortControllerRef.current?.abort();
     const controller = new AbortController();
@@ -195,6 +234,14 @@ export default function Import({ onNavigate }: ImportProps) {
         break;
       }
       const currentFile = bulkFiles[index];
+      const existingResult = bulkResults[index];
+      if (existingResult?.blocked) {
+        results.push(existingResult);
+        if (isMountedRef.current) {
+          setBulkProgress(((index + 1) / bulkFiles.length) * 100);
+        }
+        continue;
+      }
       const nextPending: BulkFileResult = { filename: currentFile.name, status: "processing" };
 
       if (isMountedRef.current) {
@@ -244,12 +291,15 @@ export default function Import({ onNavigate }: ImportProps) {
     setBulkProcessing(false);
 
     const successCount = results.filter((result) => result.status === "success").length;
-    const errorCount = results.filter((result) => result.status === "error").length;
+    const blockedErrorCount = results.filter((result) => result.status === "error" && result.blocked).length;
+    const errorCount = results.filter((result) => result.status === "error" && !result.blocked).length;
 
     toast({
       title: "Bulk Import Complete",
-      description: `${successCount} file(s) imported successfully, ${errorCount} file(s) failed.`,
-      variant: errorCount > 0 ? "destructive" : "default",
+      description: blockedErrorCount > 0
+        ? `${successCount} file(s) imported successfully, ${errorCount} file(s) failed, ${blockedErrorCount} file(s) were skipped for exceeding the upload limit.`
+        : `${successCount} file(s) imported successfully, ${errorCount} file(s) failed.`,
+      variant: errorCount > 0 || blockedErrorCount > 0 ? "destructive" : "default",
     });
   };
 
@@ -321,6 +371,7 @@ export default function Import({ onNavigate }: ImportProps) {
               headers={headers}
               importName={importName}
               loading={loading}
+              maxUploadSizeLabel={maxUploadSizeLabel}
               onClear={resetSingleImport}
               onDrop={handleDrop}
               onDragOver={handleDragOver}
@@ -338,6 +389,7 @@ export default function Import({ onNavigate }: ImportProps) {
               bulkProcessing={bulkProcessing}
               bulkProgress={bulkProgress}
               bulkResults={bulkResults}
+              maxUploadSizeLabel={maxUploadSizeLabel}
               onBulkDrop={handleBulkDrop}
               onBulkDragOver={handleDragOver}
               onBulkFileSelect={handleBulkFileSelect}

@@ -7,6 +7,7 @@ import {
   resolveRuntimeEnvironment,
   type RuntimeEnvironment,
 } from "./runtime-environment";
+import { DEFAULT_IMPORT_BODY_LIMIT } from "./body-limit";
 
 export type RuntimeConfigDiagnostic = {
   code: string;
@@ -502,13 +503,13 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     port: readInt("PORT", 5000, { min: 1, max: 65535 }),
     host: readString("HOST", "0.0.0.0"),
     publicAppUrl,
-    debugLogs: readBoolean("DEBUG_LOGS", false),
-    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
-    bodyLimits: {
-      default: readString("DEFAULT_BODY_LIMIT", "2mb"),
-      imports: readString("IMPORT_BODY_LIMIT", "50mb"),
-      collection: readString("COLLECTION_BODY_LIMIT", "8mb"),
-    },
+      debugLogs: readBoolean("DEBUG_LOGS", false),
+      uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+      bodyLimits: {
+        default: readString("DEFAULT_BODY_LIMIT", "2mb"),
+        imports: readString("IMPORT_BODY_LIMIT", DEFAULT_IMPORT_BODY_LIMIT),
+        collection: readString("COLLECTION_BODY_LIMIT", "8mb"),
+      },
     corsAllowedOrigins: resolveCorsAllowedOrigins(publicAppUrl),
     trustedProxies,
   },
