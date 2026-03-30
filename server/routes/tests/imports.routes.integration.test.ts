@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as xlsx from "xlsx";
 import type { DataRow, Import } from "../../../shared/schema-postgres";
 import {
   deleteImportResponseSchema,
@@ -551,6 +552,59 @@ test("POST /api/imports accepts multipart file uploads for bulk-friendly imports
     });
     assert.equal(auditLogs.length, 1);
     assert.match(String(auditLogs[0].details), /Imported 2 rows from multipart-import\.csv/);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/imports accepts multipart Excel uploads without leaking temp file access errors", async () => {
+  const { app, createImportCalls, createDataRowCalls, auditLogs } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+  const workbook = xlsx.utils.book_new();
+  const worksheet = xlsx.utils.aoa_to_sheet([
+    ["customer", "amount"],
+    ["Alice", 15],
+    ["Bob", 27],
+  ]);
+
+  try {
+    xlsx.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+    const workbookBuffer = xlsx.write(workbook, {
+      type: "buffer",
+      bookType: "xlsx",
+    }) as Uint8Array;
+    const formData = new FormData();
+    formData.set("name", "Multipart Excel Import");
+    formData.append(
+      "file",
+      new File(
+        [workbookBuffer],
+        "multipart-import.xlsx",
+        {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+      ),
+    );
+
+    const response = await fetch(`${baseUrl}/api/imports`, {
+      method: "POST",
+      body: formData,
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.doesNotThrow(() => importRecordSchema.parse(payload));
+    assert.equal(payload.name, "Multipart Excel Import");
+    assert.equal(payload.filename, "multipart-import.xlsx");
+    assert.equal(createImportCalls.length, 1);
+    assert.equal(createImportCalls[0].name, "Multipart Excel Import");
+    assert.equal(createDataRowCalls.length, 2);
+    assert.deepEqual(createDataRowCalls[0].jsonDataJsonb, {
+      customer: "Alice",
+      amount: "15",
+    });
+    assert.equal(auditLogs.length, 1);
+    assert.match(String(auditLogs[0].details), /Imported 2 rows from multipart-import\.xlsx/);
   } finally {
     await stopTestServer(server);
   }

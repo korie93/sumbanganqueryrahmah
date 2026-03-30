@@ -10,6 +10,19 @@ type ParsedImportUploadResult = {
   error?: string;
 };
 
+function isFileAccessError(error: unknown) {
+  const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code || "") : "";
+  return ["ENOENT", "EACCES", "EPERM", "EBUSY"].includes(code);
+}
+
+function createUploadFileAccessError(): ParsedImportUploadResult {
+  return {
+    headers: [],
+    rows: [],
+    error: "Cannot access the uploaded file. Please try again.",
+  };
+}
+
 function isSupportedSpreadsheet(filename: string) {
   return /\.(csv|xlsx|xls|xlsb)$/i.test(filename);
 }
@@ -121,6 +134,11 @@ async function parseCsvFile(filePath: string): Promise<ParsedImportUploadResult>
         rows.push(row);
       }
     }
+  } catch (error) {
+    if (isFileAccessError(error)) {
+      return createUploadFileAccessError();
+    }
+    throw error;
   } finally {
     lineReader.close();
     stream.destroy();
@@ -209,10 +227,21 @@ function parseExcelBuffer(buffer: Buffer): ParsedImportUploadResult {
   return parseWorkbookJsonData(jsonData);
 }
 
-function parseExcelFile(filePath: string): ParsedImportUploadResult {
+async function parseExcelFile(filePath: string): Promise<ParsedImportUploadResult> {
+  let buffer: Buffer;
+  try {
+    buffer = await fs.promises.readFile(filePath);
+  } catch (error) {
+    if (isFileAccessError(error)) {
+      return createUploadFileAccessError();
+    }
+    const message = error instanceof Error ? error.message : "Failed to read Excel file";
+    return { headers: [], rows: [], error: message };
+  }
+
   let workbook;
   try {
-    workbook = xlsx.readFile(filePath, { cellDates: true, cellNF: false, cellText: false });
+    workbook = xlsx.read(buffer, { type: "buffer", cellDates: true, cellNF: false, cellText: false });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to read Excel file";
     if (message.includes("password") || message.includes("encrypt")) {
@@ -262,5 +291,5 @@ export async function parseImportUploadFile(filename: string, filePath: string):
     return parseCsvFile(filePath);
   }
 
-  return parseExcelFile(filePath);
+  return await parseExcelFile(filePath);
 }
