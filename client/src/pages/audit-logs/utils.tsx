@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { downloadBlob } from "@/lib/download";
-import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import { formatDateTimeMalaysia } from "@/lib/date-format";
 import type {
   AuditActionOption,
   AuditDatePresetOption,
@@ -145,7 +145,7 @@ export function filterAuditLogs(logs: AuditLogRecord[], filters: AuditLogFilters
 }
 
 export function formatAuditTime(dateStr: string) {
-  return formatDateTimeDDMMYYYY(dateStr, { includeSeconds: true, fallback: dateStr });
+  return formatDateTimeMalaysia(dateStr, { includeSeconds: true, fallback: dateStr });
 }
 
 export function getAuditActionLabel(action: string) {
@@ -267,7 +267,7 @@ export async function exportAuditLogsToPdf(logs: AuditLogRecord[]) {
   pdf.setFontSize(10);
   pdf.setFont("helvetica", "normal");
   pdf.setTextColor(isDark ? 180 : 100);
-  pdf.text(`${logs.length} records | Generated: ${formatDateTimeDDMMYYYY(new Date(), { includeSeconds: true })}`, margin, yPos);
+  pdf.text(`${logs.length} records | Generated: ${formatDateTimeMalaysia(new Date(), { includeSeconds: true })}`, margin, yPos);
   yPos += 8;
 
   pdf.setDrawColor(isDark ? 100 : 200);
