@@ -17,7 +17,6 @@ interface CollectionReceiptPanelProps {
   disabled?: boolean;
   accept?: string;
   existingReceipts?: CollectionRecordReceipt[];
-  archivedReceipts?: CollectionRecordReceipt[];
   existingReceiptDrafts?: CollectionReceiptDraftInput[];
   removedReceiptIds?: string[];
   pendingReceiptDrafts?: CollectionReceiptDraftInput[];
@@ -38,7 +37,6 @@ export function CollectionReceiptPanel({
   disabled = false,
   accept = ".jpg,.jpeg,.png,.webp,.pdf",
   existingReceipts = [],
-  archivedReceipts = [],
   existingReceiptDrafts = [],
   removedReceiptIds = [],
   pendingReceiptDrafts = [],
@@ -211,45 +209,6 @@ export function CollectionReceiptPanel({
                 </div>
               );
             })}
-          </div>
-        </div>
-      ) : null}
-
-      {archivedReceipts.length > 0 ? (
-        <div className="hidden space-y-2 md:block">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Archived Receipts (Can Still View)
-          </p>
-          <div className="space-y-2">
-            {archivedReceipts.map((receipt) => (
-              <div
-                key={receipt.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate text-sm font-medium">{receipt.originalFileName}</p>
-                    <Badge variant="secondary">Archived</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {receipt.originalMimeType} | {formatCollectionReceiptFileSize(receipt.fileSize)}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {onViewExisting ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onViewExisting(receipt)}
-                      disabled={disabled}
-                    >
-                      View
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       ) : null}

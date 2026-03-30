@@ -214,7 +214,6 @@ export function EditCollectionRecordDialog({
               pendingReceiptDrafts={editPendingReceiptDrafts}
               inputRef={editReceiptInputRef}
               existingReceipts={editingRecord?.receipts || []}
-              archivedReceipts={editingRecord?.archivedReceipts || []}
               existingReceiptDrafts={editExistingReceiptDrafts}
               removedReceiptIds={editRemovedReceiptIds}
               disabled={savingEdit}
