@@ -18,3 +18,19 @@ export function shouldKeepFloatingAiPanelMounted({
   if (isThinking) return true;
   return aiStatus !== "IDLE";
 }
+
+type FloatingAiDomTrackingInput = {
+  isOpen: boolean;
+  isThinking: boolean;
+  aiStatus: AIChatStatus;
+};
+
+export function shouldTrackFloatingAiDom({
+  isOpen,
+  isThinking,
+  aiStatus,
+}: FloatingAiDomTrackingInput) {
+  if (isOpen) return true;
+  if (isThinking) return true;
+  return aiStatus !== "IDLE";
+}

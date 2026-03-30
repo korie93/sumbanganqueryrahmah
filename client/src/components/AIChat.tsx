@@ -44,7 +44,7 @@ export default function AIChat({
   const isLowSpecMode =
     typeof document !== "undefined" &&
     document.documentElement.classList.contains("low-spec");
-  const maxMessages = 50;
+  const maxMessages = 30;
   const typingDelayMs = isLowSpecMode ? 18 : 14;
 
   const [query, setQuery] = useState("");

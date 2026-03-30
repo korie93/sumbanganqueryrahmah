@@ -13,7 +13,10 @@ import {
 } from "@/components/floating-ai-layout";
 import { applyFloatingAiScrollLock } from "@/components/floating-ai-scroll-lock";
 import { resolveFloatingAIMinimizedStatus } from "@/components/floating-ai-status";
-import { shouldKeepFloatingAiPanelMounted } from "@/components/floating-ai-visibility";
+import {
+  shouldKeepFloatingAiPanelMounted,
+  shouldTrackFloatingAiDom,
+} from "@/components/floating-ai-visibility";
 import { useAIContext } from "@/context/AIContext";
 import { cn } from "@/lib/utils";
 import styles from "./FloatingAI.module.css";
@@ -206,6 +209,11 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     aiStatus,
   });
   const shouldShowPanel = shouldKeepPanelMounted && isOpen && !layoutState.rootHidden;
+  const shouldTrackDomAggressively = shouldTrackFloatingAiDom({
+    isOpen,
+    isThinking,
+    aiStatus,
+  });
   const preferCompactPanel =
     isMobile &&
     (
@@ -269,12 +277,11 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
 
     let frame = 0;
     let scheduled = false;
-    const resizeObserver = new ResizeObserver(() => {
-      scheduleSync();
-    });
+    let resizeObserver: ResizeObserver | null = null;
     const observedElements = new Set<Element>();
 
     const syncObservedElements = () => {
+      if (!resizeObserver) return;
       const nextElements = new Set<Element>([
         ...document.querySelectorAll(AVOID_SELECTOR),
         ...document.querySelectorAll(DIALOG_SELECTOR),
@@ -306,27 +313,33 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
 
     scheduleSync();
 
-    const observer = new MutationObserver(scheduleSync);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["class", "data-state", "hidden", "open"],
-    });
+    let observer: MutationObserver | null = null;
+    if (shouldTrackDomAggressively) {
+      resizeObserver = new ResizeObserver(() => {
+        scheduleSync();
+      });
+      observer = new MutationObserver(scheduleSync);
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["class", "data-state", "hidden", "open"],
+      });
+    }
 
     window.addEventListener("resize", scheduleSync, { passive: true });
     window.addEventListener("scroll", scheduleSync, { passive: true });
 
     return () => {
-      observer.disconnect();
-      resizeObserver.disconnect();
+      observer?.disconnect();
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", scheduleSync);
       window.removeEventListener("scroll", scheduleSync);
       if (frame) {
         window.cancelAnimationFrame(frame);
       }
     };
-  }, [hiddenForAiPage, location, syncLayout]);
+  }, [hiddenForAiPage, location, shouldTrackDomAggressively, syncLayout]);
 
   const minimizedStatus = resolveFloatingAIMinimizedStatus(aiStatus);
 
