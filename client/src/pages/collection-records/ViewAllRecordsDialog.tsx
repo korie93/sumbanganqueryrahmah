@@ -79,16 +79,22 @@ export function ViewAllRecordsDialog({
       <DialogContent
         className={
           isMobile
-            ? "h-[100dvh] max-h-[100dvh] w-screen max-w-none gap-0 overflow-hidden rounded-none border-0 p-0"
-            : "h-[90vh] w-[96vw] max-w-[96vw] gap-0 overflow-hidden p-0"
+            ? "flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0"
+            : "flex h-[90vh] w-[96vw] max-w-[96vw] flex-col gap-0 overflow-hidden p-0"
         }
       >
         <DialogHeader className="sr-only">
           <DialogTitle>Senarai Penuh Rekod Collection</DialogTitle>
           <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
-        <div className="flex h-full flex-col">
-          <div className={isMobile ? "border-b bg-background/95 px-4 py-4 pr-12" : "border-b bg-background/95 px-6 py-4"}>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div
+            className={
+              isMobile
+                ? "shrink-0 border-b bg-background/95 px-4 py-4 pr-12"
+                : "shrink-0 border-b bg-background/95 px-6 py-4"
+            }
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-xl font-semibold">Senarai Penuh Rekod Collection</h3>
@@ -113,7 +119,9 @@ export function ViewAllRecordsDialog({
             </div>
           </div>
 
-          <div className={`flex min-h-0 flex-1 flex-col ${isMobile ? "px-3 pb-3 pt-3" : "gap-3 p-4"}`}>
+          <div
+            className={`flex min-h-0 flex-1 flex-col overflow-hidden ${isMobile ? "px-3 pb-3 pt-3" : "gap-3 p-4"}`}
+          >
             <div
               className={
                 isMobile
@@ -134,9 +142,15 @@ export function ViewAllRecordsDialog({
               />
             </div>
 
-            <div className={isMobile ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-auto rounded-md border border-border/60"}>
+            <div
+              className={
+                isMobile
+                  ? "min-h-0 flex-1 overflow-hidden pt-3"
+                  : "min-h-0 flex-1 overflow-auto rounded-md border border-border/60"
+              }
+            >
               {isMobile ? (
-                <div className="h-full overflow-y-auto overscroll-y-contain rounded-md border border-border/60 bg-background/60 p-3 [-webkit-overflow-scrolling:touch]">
+                <div className="min-h-0 h-full overflow-y-auto overscroll-y-contain rounded-md border border-border/60 bg-background/60 p-3 [touch-action:pan-y] [-webkit-overflow-scrolling:touch]">
                   {loading ? (
                     <div className="rounded-lg border border-border/60 bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground">
                       Loading full records...
