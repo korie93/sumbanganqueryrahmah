@@ -46,9 +46,9 @@ const malaysiaDateTimeFormatter = createDateFormatter(
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
-    hour12: false,
+    hour12: true,
   },
   MALAYSIA_TIME_ZONE,
 );
@@ -58,10 +58,10 @@ const malaysiaDateTimeWithSecondsFormatter = createDateFormatter(
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
     second: "2-digit",
-    hour12: false,
+    hour12: true,
   },
   MALAYSIA_TIME_ZONE,
 );
@@ -124,9 +124,10 @@ export function formatDateTimeMalaysia(
 ) {
   const parsed = parseDateValue(value);
   if (!parsed) return options?.fallback ?? "-";
-  return options?.includeSeconds
-    ? malaysiaDateTimeWithSecondsFormatter.format(parsed)
-    : malaysiaDateTimeFormatter.format(parsed);
+  const formatter = options?.includeSeconds
+    ? malaysiaDateTimeWithSecondsFormatter
+    : malaysiaDateTimeFormatter;
+  return formatter.format(parsed).replace(/\bam\b/gi, "AM").replace(/\bpm\b/gi, "PM");
 }
 
 export function formatDateKeyInMalaysia(value: string | number | Date | null | undefined, fallback = "") {

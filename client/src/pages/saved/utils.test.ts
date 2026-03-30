@@ -6,7 +6,7 @@ import { filterSavedImports, formatSavedFilterDate, formatSavedImportDate } from
 test("formatSavedImportDate renders saved timestamps in Malaysia time", () => {
   assert.equal(
     formatSavedImportDate("2026-03-29T16:30:00.000Z"),
-    "30/03/2026, 00:30",
+    "30/03/2026, 12:30 AM",
   );
 });
 

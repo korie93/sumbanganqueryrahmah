@@ -38,6 +38,6 @@ test("shouldCollapseAuditDetails only collapses long detail payloads", () => {
 test("formatAuditTime renders audit timestamps in Malaysia time", () => {
   assert.equal(
     formatAuditTime("2026-03-29T16:30:00.000Z"),
-    "30/03/2026, 00:30:00",
+    "30/03/2026, 12:30:00 AM",
   );
 });
