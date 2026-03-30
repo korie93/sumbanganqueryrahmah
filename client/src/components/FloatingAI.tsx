@@ -62,7 +62,11 @@ type FloatingAIProps = {
 
 export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: FloatingAIProps) {
   const isMobile = useIsMobile();
-  const { keyboardOpen, bottomInset: viewportBottomInset } = useMobileViewportState();
+  const {
+    keyboardOpen,
+    bottomInset: viewportBottomInset,
+    viewportHeight: mobileViewportHeight,
+  } = useMobileViewportState();
   const [isOpen, setIsOpen] = useState(false);
   const [hasActivated, setHasActivated] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIChatStatus>("IDLE");
@@ -227,6 +231,10 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
 
   const syncLayout = useCallback(() => {
     if (typeof window === "undefined") return;
+    const effectiveViewportHeight =
+      isMobile && mobileViewportHeight > 0 && !keyboardOpen
+        ? mobileViewportHeight
+        : window.innerHeight;
 
     const avoidRects: RectLike[] = Array.from(document.querySelectorAll(AVOID_SELECTOR))
       .filter((element) => isVisibleElement(element))
@@ -248,7 +256,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
 
     const nextLayout = resolveFloatingAiLayout({
       viewportWidth: window.innerWidth,
-      viewportHeight: window.innerHeight,
+      viewportHeight: effectiveViewportHeight,
       viewportBottomInset: hasFocusedAiEditable ? viewportBottomInset : 0,
       isMobile,
       isOpen,
@@ -268,6 +276,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     isMobile,
     isOpen,
     keyboardOpen,
+    mobileViewportHeight,
     preferCompactPanel,
     viewportBottomInset,
   ]);
@@ -379,7 +388,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
         >
           <section
             className={cn(
-              "h-full w-full border bg-white/98 text-slate-900 shadow-xl ring-1 ring-slate-900/8 backdrop-blur-sm dark:bg-slate-950/98 dark:text-card-foreground dark:ring-white/10",
+              "flex h-full w-full flex-col overflow-hidden border bg-white/98 text-slate-900 shadow-xl ring-1 ring-slate-900/8 backdrop-blur-sm dark:bg-slate-950/98 dark:text-card-foreground dark:ring-white/10",
               shouldShowPanel ? "pointer-events-auto" : "pointer-events-none",
               layoutState.panel.mode === "fullscreen"
                 ? styles.floatingPanelFullscreenSurface
@@ -394,13 +403,18 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
             data-floating-ai-panel-mode={layoutState.panel.mode}
           >
             {isMobile ? (
-              <div className={cn("flex justify-center", layoutState.panel.mode === "fullscreen" ? "pt-2" : "pt-2")}>
+              <div
+                className={cn(
+                  "flex shrink-0 justify-center",
+                  layoutState.panel.mode === "fullscreen" ? "pt-2" : "pt-2",
+                )}
+              >
                 <div className="h-1.5 w-10 rounded-full bg-slate-400/45 dark:bg-white/20" aria-hidden="true" />
               </div>
             ) : null}
             <header
               className={cn(
-                "flex items-center justify-between border-b border-slate-200/80 bg-gradient-to-r from-sky-500/12 via-slate-100/60 to-transparent dark:border-white/10 dark:via-transparent",
+                "flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-gradient-to-r from-sky-500/12 via-slate-100/60 to-transparent dark:border-white/10 dark:via-transparent",
                 isMobile && layoutState.panel.mode === "fullscreen"
                   ? "min-h-16 px-4"
                   : isMobile
@@ -451,7 +465,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
             </header>
             <div
               className={cn(
-                "h-[calc(100%-56px)]",
+                "min-h-0 flex-1 overflow-hidden",
                 layoutState.panel.mode === "fullscreen"
                   ? "p-3"
                   : isMobile
@@ -459,23 +473,25 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                     : "p-3",
               )}
             >
-              <Suspense
-                fallback={
-                  <div className="flex h-full items-center justify-center">
-                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                  </div>
-                }
-              >
-                <AIChat
-                  timeoutMs={timeoutMs}
-                  aiEnabled={aiEnabled}
-                  compactMode={preferCompactPanel}
-                  onStatusChange={setAiStatus}
-                  onCancelAISearchReady={(cancelFn) => {
-                    cancelAISearchRef.current = cancelFn;
-                  }}
-                />
-              </Suspense>
+              <div className="h-full min-h-0">
+                <Suspense
+                  fallback={
+                    <div className="flex h-full items-center justify-center">
+                      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                    </div>
+                  }
+                >
+                  <AIChat
+                    timeoutMs={timeoutMs}
+                    aiEnabled={aiEnabled}
+                    compactMode={preferCompactPanel}
+                    onStatusChange={setAiStatus}
+                    onCancelAISearchReady={(cancelFn) => {
+                      cancelAISearchRef.current = cancelFn;
+                    }}
+                  />
+                </Suspense>
+              </div>
             </div>
           </section>
         </div>

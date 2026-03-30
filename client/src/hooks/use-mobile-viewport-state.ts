@@ -6,6 +6,7 @@ const MOBILE_KEYBOARD_THRESHOLD_PX = 120;
 export type MobileViewportState = {
   keyboardOpen: boolean;
   bottomInset: number;
+  viewportHeight: number;
 };
 
 export function resolveMobileViewportState(
@@ -13,18 +14,20 @@ export function resolveMobileViewportState(
   viewportHeight: number,
   viewportOffsetTop = 0,
 ): MobileViewportState {
+  const safeViewportHeight = Math.max(0, Math.round(viewportHeight));
   const visibleBottom = Math.max(
     0,
-    Math.min(windowInnerHeight, Math.round(viewportOffsetTop + viewportHeight)),
+    Math.min(windowInnerHeight, Math.round(viewportOffsetTop + safeViewportHeight)),
   );
   const bottomInset = Math.max(0, windowInnerHeight - visibleBottom);
-  const viewportDelta = Math.max(0, windowInnerHeight - viewportHeight);
+  const viewportDelta = Math.max(0, windowInnerHeight - safeViewportHeight);
   const keyboardOpen =
     viewportDelta > MOBILE_KEYBOARD_THRESHOLD_PX || bottomInset > MOBILE_KEYBOARD_THRESHOLD_PX;
 
   return {
     keyboardOpen,
     bottomInset,
+    viewportHeight: safeViewportHeight || windowInnerHeight,
   };
 }
 
@@ -33,14 +36,15 @@ export function useMobileViewportState() {
   const [state, setState] = React.useState<MobileViewportState>({
     keyboardOpen: false,
     bottomInset: 0,
+    viewportHeight: 0,
   });
 
   React.useEffect(() => {
     if (!isMobile || typeof window === "undefined" || !window.visualViewport) {
       setState((previous) =>
-        previous.keyboardOpen === false && previous.bottomInset === 0
+        previous.keyboardOpen === false && previous.bottomInset === 0 && previous.viewportHeight === 0
           ? previous
-          : { keyboardOpen: false, bottomInset: 0 },
+          : { keyboardOpen: false, bottomInset: 0, viewportHeight: 0 },
       );
       return;
     }
@@ -57,7 +61,8 @@ export function useMobileViewportState() {
 
       setState((previous) =>
         previous.keyboardOpen === nextState.keyboardOpen &&
-        previous.bottomInset === nextState.bottomInset
+        previous.bottomInset === nextState.bottomInset &&
+        previous.viewportHeight === nextState.viewportHeight
           ? previous
           : nextState,
       );

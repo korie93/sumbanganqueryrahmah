@@ -261,8 +261,9 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
   const triggerCandidate = chooseBestCandidate(input.isMobile ? mobileTriggerCandidates : desktopTriggerCandidates);
 
   if (input.isMobile && input.isOpen) {
+    const mobileSheetTopGap = clamp(Math.round(viewportHeight * 0.08), 20, 48);
     const shouldUseFullscreen =
-      input.keyboardOpen || viewportWidth <= 340 || viewportHeight - viewportBottomInset < 520;
+      input.keyboardOpen || viewportWidth <= 340 || viewportHeight - viewportBottomInset - mobileSheetTopGap < 520;
 
     if (shouldUseFullscreen) {
       return {
@@ -289,28 +290,25 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
     }
 
     const sheetWidth = clamp(
-      viewportWidth - 20,
-      input.preferCompactPanel ? 280 : 304,
-      360,
+      viewportWidth - 12,
+      input.preferCompactPanel ? 300 : 312,
+      420,
     );
     const sheetLeft = clamp(
       Math.round((viewportWidth - sheetWidth) / 2),
-      10,
-      Math.max(10, viewportWidth - sheetWidth - 10),
+      6,
+      Math.max(6, viewportWidth - sheetWidth - 6),
     );
     const horizontalRect = {
       left: sheetLeft,
       right: sheetLeft + sheetWidth,
     };
     const bottom = resolveBottomClearance(horizontalRect, viewportHeight, gutterY, avoidRects);
-    const availableHeight = Math.max(220, viewportHeight - topInset - bottom);
-    const preferredHeight = input.preferCompactPanel
-      ? Math.min(276, Math.max(220, Math.round(viewportHeight * 0.32)))
-      : Math.min(
-          input.hasDensePage ? 432 : 472,
-          Math.max(320, Math.round(viewportHeight * (input.hasDensePage ? 0.5 : 0.54))),
-        );
-    const minimumHeight = input.preferCompactPanel ? 208 : 288;
+    const availableHeight = Math.max(300, viewportHeight - mobileSheetTopGap - bottom);
+    const preferredHeight = Math.round(
+      availableHeight * (input.preferCompactPanel ? 0.82 : 0.9),
+    );
+    const minimumHeight = input.preferCompactPanel ? 420 : 520;
     const height = clamp(preferredHeight, Math.min(minimumHeight, availableHeight), availableHeight);
 
     return {

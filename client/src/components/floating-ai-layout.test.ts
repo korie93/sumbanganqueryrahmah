@@ -55,6 +55,7 @@ test("resolveFloatingAiLayout lifts the mobile panel above bottom action bars", 
   assert.equal(layout.panel.mode, "sheet");
   assert.equal(layout.panel.alignment, "center");
   assert.ok(layout.panel.bottom > 16);
+  assert.ok(layout.panel.height >= 620);
   assert.ok(layout.panel.height < 844);
 });
 
@@ -115,6 +116,46 @@ test("resolveFloatingAiLayout auto-minimizes on 360px mobile when keyboard opens
 
   assert.equal(layout.triggerHidden, true);
   assert.equal(layout.shouldAutoMinimize, true);
+});
+
+test("resolveFloatingAiLayout keeps compact mobile idle sheets tall enough to preserve a usable message area", () => {
+  const layout = resolveFloatingAiLayout({
+    viewportWidth: 430,
+    viewportHeight: 932,
+    viewportBottomInset: 0,
+    isMobile: true,
+    isOpen: true,
+    hasBlockingDialog: false,
+    keyboardOpen: false,
+    hasFocusedEditable: false,
+    hasDensePage: false,
+    preferCompactPanel: true,
+    avoidRects: [],
+  });
+
+  assert.equal(layout.panel.mode, "sheet");
+  assert.ok(layout.panel.width >= 400);
+  assert.ok(layout.panel.height >= 660);
+});
+
+test("resolveFloatingAiLayout gives 412px mobile sheets enough height for a readable message region", () => {
+  const layout = resolveFloatingAiLayout({
+    viewportWidth: 412,
+    viewportHeight: 915,
+    viewportBottomInset: 0,
+    isMobile: true,
+    isOpen: true,
+    hasBlockingDialog: false,
+    keyboardOpen: false,
+    hasFocusedEditable: false,
+    hasDensePage: true,
+    preferCompactPanel: false,
+    avoidRects: [],
+  });
+
+  assert.equal(layout.panel.mode, "sheet");
+  assert.ok(layout.panel.width >= 396);
+  assert.ok(layout.panel.height >= 740);
 });
 
 test("resolveFloatingAiLayout keeps the desktop panel docked compactly on the preferred side", () => {
