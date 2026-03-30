@@ -13,6 +13,7 @@ import {
 } from "@/components/floating-ai-layout";
 import { applyFloatingAiScrollLock } from "@/components/floating-ai-scroll-lock";
 import { resolveFloatingAIMinimizedStatus } from "@/components/floating-ai-status";
+import { shouldKeepFloatingAiPanelMounted } from "@/components/floating-ai-visibility";
 import { useAIContext } from "@/context/AIContext";
 import { cn } from "@/lib/utils";
 import styles from "./FloatingAI.module.css";
@@ -198,7 +199,13 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
 
   const hiddenForAiPage = activePage === "ai" || location.toLowerCase() === "/ai";
   const hideForFocusedEditable = isMobile && hasFocusedEditable;
-  const shouldRenderPanel = hasActivated && isOpen && !layoutState.rootHidden;
+  const shouldKeepPanelMounted = shouldKeepFloatingAiPanelMounted({
+    hasActivated,
+    isOpen,
+    isThinking,
+    aiStatus,
+  });
+  const shouldShowPanel = shouldKeepPanelMounted && isOpen && !layoutState.rootHidden;
   const preferCompactPanel =
     isMobile &&
     (
@@ -331,7 +338,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
       className={cn(
         "pointer-events-none fixed transition-opacity duration-200",
         styles.floatingRoot,
-        isMobile && shouldRenderPanel ? "z-[60]" : "",
+        isMobile && shouldShowPanel ? "z-[60]" : "",
         layoutState.rootHidden || (hideForFocusedEditable && !isOpen)
           ? "translate-y-2 opacity-0"
           : "opacity-100",
@@ -339,25 +346,28 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
       aria-hidden={layoutState.rootHidden}
       hidden={layoutState.rootHidden}
     >
-      {isMobile && shouldRenderPanel ? (
+      {isMobile && shouldShowPanel ? (
         <div
           className={cn("pointer-events-auto", styles.floatingMobileBackdrop)}
           aria-hidden="true"
           onClick={handleMinimize}
         />
       ) : null}
-      {shouldRenderPanel ? (
+      {shouldKeepPanelMounted ? (
         <div
+          hidden={!shouldShowPanel}
+          aria-hidden={!shouldShowPanel}
           className={cn(
             "pointer-events-none absolute transition-all duration-200",
             styles.floatingPanelShell,
             layoutState.panel.mode === "fullscreen" ? styles.floatingPanelShellFullscreen : "",
-            "translate-y-0 opacity-100",
+            shouldShowPanel ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
           )}
         >
           <section
             className={cn(
-              "pointer-events-auto h-full w-full border bg-slate-950/98 text-card-foreground shadow-xl ring-1 ring-white/10 backdrop-blur-sm",
+              "h-full w-full border bg-slate-950/98 text-card-foreground shadow-xl ring-1 ring-white/10 backdrop-blur-sm",
+              shouldShowPanel ? "pointer-events-auto" : "pointer-events-none",
               layoutState.panel.mode === "fullscreen"
                 ? styles.floatingPanelFullscreenSurface
                 : "",

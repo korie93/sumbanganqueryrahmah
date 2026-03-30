@@ -182,9 +182,9 @@ function resolveDesktopPanelWidth(viewportWidth: number) {
 }
 
 function resolveDesktopPanelPreferredHeight(viewportHeight: number, hasDensePage: boolean) {
-  const target = hasDensePage ? 432 : 456;
-  const minimum = viewportHeight >= 820 ? 404 : 380;
-  const scaled = Math.round(viewportHeight * (hasDensePage ? 0.48 : 0.52));
+  const target = hasDensePage ? 456 : 492;
+  const minimum = viewportHeight >= 820 ? 424 : 396;
+  const scaled = Math.round(viewportHeight * (hasDensePage ? 0.52 : 0.56));
   return clamp(scaled, minimum, target);
 }
 
@@ -307,10 +307,10 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
     const preferredHeight = input.preferCompactPanel
       ? Math.min(276, Math.max(220, Math.round(viewportHeight * 0.32)))
       : Math.min(
-          input.hasDensePage ? 380 : 420,
-          Math.max(280, Math.round(viewportHeight * (input.hasDensePage ? 0.42 : 0.46))),
+          input.hasDensePage ? 404 : 444,
+          Math.max(304, Math.round(viewportHeight * (input.hasDensePage ? 0.46 : 0.5))),
         );
-    const minimumHeight = input.preferCompactPanel ? 208 : 248;
+    const minimumHeight = input.preferCompactPanel ? 208 : 272;
     const height = clamp(preferredHeight, Math.min(minimumHeight, availableHeight), availableHeight);
 
     return {
@@ -343,11 +343,11 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
     ? input.preferCompactPanel
       ? Math.min(248, Math.max(196, Math.round(viewportHeight * 0.3)))
       : Math.min(
-          input.hasDensePage ? 344 : 392,
-          Math.max(232, Math.round(viewportHeight * (input.hasDensePage ? 0.38 : 0.44))),
+          input.hasDensePage ? 376 : 420,
+          Math.max(264, Math.round(viewportHeight * (input.hasDensePage ? 0.42 : 0.48))),
         )
     : resolveDesktopPanelPreferredHeight(viewportHeight, input.hasDensePage);
-  const minimumPanelHeight = input.isMobile ? (input.preferCompactPanel ? 188 : 220) : (viewportHeight >= 760 ? 384 : 340);
+  const minimumPanelHeight = input.isMobile ? (input.preferCompactPanel ? 188 : 244) : (viewportHeight >= 760 ? 408 : 364);
 
   const desktopPanelRightOffsets = buildOffsetCandidates(
     gutterX,
