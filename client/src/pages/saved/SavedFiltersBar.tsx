@@ -4,7 +4,7 @@ import { ActiveFilterChips } from "@/components/data/ActiveFilterChips";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
-import { formatDateDDMMYYYY } from "@/lib/date-format";
+import { formatSavedFilterDate } from "@/pages/saved/utils";
 import {
   Popover,
   PopoverContent,
@@ -41,7 +41,7 @@ export function SavedFiltersBar({
     dateFilter
       ? {
           id: "saved-date",
-          label: `Date: ${formatDateDDMMYYYY(dateFilter)}`,
+          label: `Date: ${formatSavedFilterDate(dateFilter)}`,
           onRemove: () => onDateFilterChange(undefined),
         }
       : null,
@@ -72,7 +72,7 @@ export function SavedFiltersBar({
               data-testid="button-date-filter"
             >
               <CalendarIcon className="w-4 h-4 mr-2" />
-              {dateFilter ? formatDateDDMMYYYY(dateFilter) : "Filter by date"}
+              {dateFilter ? formatSavedFilterDate(dateFilter) : "Filter by date"}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">

@@ -379,7 +379,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
         >
           <section
             className={cn(
-              "h-full w-full border bg-slate-950/98 text-card-foreground shadow-xl ring-1 ring-white/10 backdrop-blur-sm",
+              "h-full w-full border bg-white/98 text-slate-900 shadow-xl ring-1 ring-slate-900/8 backdrop-blur-sm dark:bg-slate-950/98 dark:text-card-foreground dark:ring-white/10",
               shouldShowPanel ? "pointer-events-auto" : "pointer-events-none",
               layoutState.panel.mode === "fullscreen"
                 ? styles.floatingPanelFullscreenSurface
@@ -395,12 +395,12 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           >
             {isMobile ? (
               <div className={cn("flex justify-center", layoutState.panel.mode === "fullscreen" ? "pt-2" : "pt-2")}>
-                <div className="h-1.5 w-10 rounded-full bg-white/20" aria-hidden="true" />
+                <div className="h-1.5 w-10 rounded-full bg-slate-400/45 dark:bg-white/20" aria-hidden="true" />
               </div>
             ) : null}
             <header
               className={cn(
-                "flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-sky-500/12 via-transparent to-transparent",
+                "flex items-center justify-between border-b border-slate-200/80 bg-gradient-to-r from-sky-500/12 via-slate-100/60 to-transparent dark:border-white/10 dark:via-transparent",
                 isMobile && layoutState.panel.mode === "fullscreen"
                   ? "min-h-16 px-4"
                   : isMobile
@@ -409,8 +409,8 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
               )}
             >
               <div className="min-w-0">
-                <p className={cn("truncate font-semibold text-slate-50", layoutState.panel.mode === "fullscreen" ? "text-base" : "text-sm")}>AI SQR</p>
-                <p className="truncate text-[11px] text-slate-300/90">Smart Query Engine</p>
+                <p className={cn("truncate font-semibold text-slate-950 dark:text-slate-50", layoutState.panel.mode === "fullscreen" ? "text-base" : "text-sm")}>AI SQR</p>
+                <p className="truncate text-[11px] text-slate-600 dark:text-slate-300/90">Smart Query Engine</p>
               </div>
               <div className="flex items-center gap-1.5">
                 <Button
@@ -418,7 +418,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   size="sm"
                   variant="ghost"
                   className={cn(
-                    "text-xs text-slate-200 hover:bg-white/10 hover:text-white",
+                    "text-xs text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white",
                     isMobile && layoutState.panel.mode === "fullscreen"
                       ? "h-10 px-3"
                       : isMobile
@@ -435,7 +435,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   size="icon"
                   variant="ghost"
                   className={cn(
-                    "text-slate-200 hover:bg-white/10 hover:text-white",
+                    "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white",
                     isMobile && layoutState.panel.mode === "fullscreen"
                       ? "h-10 w-10"
                       : isMobile

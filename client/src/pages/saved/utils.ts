@@ -1,5 +1,9 @@
 import type { ImportItem } from "@/pages/saved/types";
-import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import {
+  formatDateDDMMYYYYMalaysia,
+  formatDateKeyInMalaysia,
+  formatDateTimeMalaysia,
+} from "@/lib/date-format";
 
 export function filterSavedImports(
   imports: ImportItem[],
@@ -17,12 +21,7 @@ export function filterSavedImports(
     const matchesDate =
       !dateFilter ||
       (() => {
-        const itemDate = new Date(item.createdAt);
-        return (
-          itemDate.getFullYear() === dateFilter.getFullYear() &&
-          itemDate.getMonth() === dateFilter.getMonth() &&
-          itemDate.getDate() === dateFilter.getDate()
-        );
+        return formatDateKeyInMalaysia(item.createdAt) === formatDateKeyInMalaysia(dateFilter);
       })();
 
     return matchesSearch && matchesDate;
@@ -30,5 +29,9 @@ export function filterSavedImports(
 }
 
 export function formatSavedImportDate(dateStr: string) {
-  return formatDateTimeDDMMYYYY(dateStr, { fallback: dateStr });
+  return formatDateTimeMalaysia(dateStr, { fallback: dateStr });
+}
+
+export function formatSavedFilterDate(date: Date) {
+  return formatDateDDMMYYYYMalaysia(date);
 }

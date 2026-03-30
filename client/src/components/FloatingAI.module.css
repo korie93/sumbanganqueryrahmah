@@ -60,7 +60,7 @@
 @media (min-width: 768px) {
   .floatingPanelShell {
     min-width: 360px;
-    min-height: 420px;
+    min-height: 452px;
     max-width: min(420px, calc(100vw - 2rem));
     max-height: calc(100dvh - 6rem);
   }

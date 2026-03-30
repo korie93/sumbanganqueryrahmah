@@ -1,10 +1,19 @@
-const dateFormatter = new Intl.DateTimeFormat("en-GB", {
+const MALAYSIA_TIME_ZONE = "Asia/Kuala_Lumpur";
+
+function createDateFormatter(
+  options: Intl.DateTimeFormatOptions,
+  timeZone?: string,
+) {
+  return new Intl.DateTimeFormat("en-GB", timeZone ? { ...options, timeZone } : options);
+}
+
+const dateFormatter = createDateFormatter({
   day: "2-digit",
   month: "2-digit",
   year: "numeric",
 });
 
-const dateTimeFormatter = new Intl.DateTimeFormat("en-GB", {
+const dateTimeFormatter = createDateFormatter({
   day: "2-digit",
   month: "2-digit",
   year: "numeric",
@@ -13,7 +22,7 @@ const dateTimeFormatter = new Intl.DateTimeFormat("en-GB", {
   hour12: false,
 });
 
-const dateTimeWithSecondsFormatter = new Intl.DateTimeFormat("en-GB", {
+const dateTimeWithSecondsFormatter = createDateFormatter({
   day: "2-digit",
   month: "2-digit",
   year: "numeric",
@@ -21,6 +30,47 @@ const dateTimeWithSecondsFormatter = new Intl.DateTimeFormat("en-GB", {
   minute: "2-digit",
   second: "2-digit",
   hour12: false,
+});
+
+const malaysiaDateFormatter = createDateFormatter(
+  {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  },
+  MALAYSIA_TIME_ZONE,
+);
+
+const malaysiaDateTimeFormatter = createDateFormatter(
+  {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  },
+  MALAYSIA_TIME_ZONE,
+);
+
+const malaysiaDateTimeWithSecondsFormatter = createDateFormatter(
+  {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  },
+  MALAYSIA_TIME_ZONE,
+);
+
+const malaysiaDateKeyFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: MALAYSIA_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
 });
 
 export function parseDateValue(value: string | number | Date | null | undefined): Date | null {
@@ -60,4 +110,27 @@ export function formatIsoDateToDDMMYYYY(value: string | null | undefined, fallba
     return fallback;
   }
   return `${matched[3]}/${matched[2]}/${matched[1]}`;
+}
+
+export function formatDateDDMMYYYYMalaysia(value: string | number | Date | null | undefined, fallback = "-") {
+  const parsed = parseDateValue(value);
+  if (!parsed) return fallback;
+  return malaysiaDateFormatter.format(parsed);
+}
+
+export function formatDateTimeMalaysia(
+  value: string | number | Date | null | undefined,
+  options?: { includeSeconds?: boolean; fallback?: string },
+) {
+  const parsed = parseDateValue(value);
+  if (!parsed) return options?.fallback ?? "-";
+  return options?.includeSeconds
+    ? malaysiaDateTimeWithSecondsFormatter.format(parsed)
+    : malaysiaDateTimeFormatter.format(parsed);
+}
+
+export function formatDateKeyInMalaysia(value: string | number | Date | null | undefined, fallback = "") {
+  const parsed = parseDateValue(value);
+  if (!parsed) return fallback;
+  return malaysiaDateKeyFormatter.format(parsed);
 }
