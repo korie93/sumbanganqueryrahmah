@@ -52,10 +52,10 @@ test("resolveFloatingAiLayout lifts the mobile panel above bottom action bars", 
     ],
   });
 
-  assert.equal(layout.panel.mode, "fullscreen");
+  assert.equal(layout.panel.mode, "sheet");
   assert.equal(layout.panel.alignment, "center");
-  assert.equal(layout.panel.bottom, 0);
-  assert.equal(layout.panel.height, 844);
+  assert.ok(layout.panel.bottom > 16);
+  assert.ok(layout.panel.height < 844);
 });
 
 test("resolveFloatingAiLayout auto-minimizes when a blocking dialog is open", () => {
@@ -134,7 +134,9 @@ test("resolveFloatingAiLayout keeps the desktop panel docked compactly on the pr
 
   assert.equal(layout.panel.mode, "dock");
   assert.equal(layout.panel.alignment, "right");
-  assert.ok(layout.panel.width <= 392);
+  assert.ok(layout.panel.width >= 396);
+  assert.ok(layout.panel.right !== null && layout.panel.right <= 24);
+  assert.ok(layout.panel.height >= 400);
 });
 
 test("resolveFloatingAiLayout switches to dock mode for tablet widths", () => {
@@ -153,7 +155,9 @@ test("resolveFloatingAiLayout switches to dock mode for tablet widths", () => {
   });
 
   assert.equal(layout.panel.mode, "dock");
-  assert.ok(layout.panel.height <= 420);
+  assert.equal(layout.panel.alignment, "right");
+  assert.ok(layout.panel.width >= 336);
+  assert.ok(layout.panel.height >= 340);
 });
 
 test("areFloatingAiLayoutsEqual stays stable for unchanged placement decisions", () => {
@@ -193,4 +197,60 @@ test("resolveFloatingAiLayout lifts the panel above the mobile keyboard inset wi
   assert.equal(layout.panel.mode, "fullscreen");
   assert.equal(layout.panel.bottom, 280);
   assert.equal(layout.panel.height, 564);
+});
+
+test("resolveFloatingAiLayout keeps desktop trigger on the right even when bottom-right controls need clearance", () => {
+  const layout = resolveFloatingAiLayout({
+    viewportWidth: 1366,
+    viewportHeight: 900,
+    viewportBottomInset: 0,
+    isMobile: false,
+    isOpen: false,
+    hasBlockingDialog: false,
+    keyboardOpen: false,
+    hasFocusedEditable: false,
+    hasDensePage: true,
+    preferCompactPanel: false,
+    avoidRects: [
+      {
+        left: 1110,
+        top: 760,
+        right: 1350,
+        bottom: 880,
+      },
+    ],
+  });
+
+  assert.equal(layout.trigger.anchor, "right");
+  assert.equal(layout.trigger.left, null);
+  assert.ok(layout.trigger.right !== null && layout.trigger.right >= 24);
+});
+
+test("resolveFloatingAiLayout nudges the desktop panel without shrinking it into a tiny card", () => {
+  const layout = resolveFloatingAiLayout({
+    viewportWidth: 1366,
+    viewportHeight: 900,
+    viewportBottomInset: 0,
+    isMobile: false,
+    isOpen: true,
+    hasBlockingDialog: false,
+    keyboardOpen: false,
+    hasFocusedEditable: false,
+    hasDensePage: true,
+    preferCompactPanel: false,
+    avoidRects: [
+      {
+        left: 1100,
+        top: 760,
+        right: 1350,
+        bottom: 880,
+      },
+    ],
+  });
+
+  assert.equal(layout.panel.mode, "dock");
+  assert.equal(layout.panel.alignment, "right");
+  assert.ok(layout.panel.width >= 396);
+  assert.ok(layout.panel.height >= 380);
+  assert.ok(layout.panel.right !== null && layout.panel.right >= 24);
 });

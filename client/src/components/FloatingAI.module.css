@@ -19,6 +19,8 @@
   bottom: var(--floating-ai-panel-bottom, 24px);
   width: var(--floating-ai-panel-width, 380px);
   height: var(--floating-ai-panel-height, 420px);
+  min-width: 260px;
+  min-height: 200px;
   max-width: calc(100vw - 1rem);
   max-height: calc(100dvh - 5rem);
 }
@@ -53,6 +55,15 @@
 .aiThinkingRing {
   box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
   animation: pulseRing 1.5s infinite;
+}
+
+@media (min-width: 768px) {
+  .floatingPanelShell {
+    min-width: 360px;
+    min-height: 392px;
+    max-width: min(420px, calc(100vw - 2rem));
+    max-height: calc(100dvh - 6rem);
+  }
 }
 
 @keyframes pulseRing {

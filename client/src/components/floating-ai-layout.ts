@@ -72,6 +72,14 @@ type Rect = {
   height: number;
 };
 
+type TriggerCandidate = {
+  anchor: "left" | "right";
+  bottom: number;
+  left: number | null;
+  right: number | null;
+  score: number;
+};
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
@@ -157,24 +165,47 @@ function chooseBestCandidate<T extends { score: number }>(candidates: readonly T
   return candidates.reduce((best, candidate) => (candidate.score < best.score ? candidate : best));
 }
 
+function buildOffsetCandidates(baseOffset: number, maxOffset: number, stepOffsets: readonly number[]) {
+  return Array.from(
+    new Set(
+      stepOffsets.map((step) => clamp(baseOffset + step, baseOffset, maxOffset)),
+    ),
+  );
+}
+
+function resolveDesktopPanelWidth(viewportWidth: number) {
+  if (viewportWidth >= 1536) return 420;
+  if (viewportWidth >= 1280) return 408;
+  if (viewportWidth >= 1100) return 396;
+  if (viewportWidth >= 960) return 380;
+  return Math.min(360, Math.max(320, viewportWidth - 40));
+}
+
+function resolveDesktopPanelPreferredHeight(viewportHeight: number, hasDensePage: boolean) {
+  const target = hasDensePage ? 432 : 456;
+  const minimum = viewportHeight >= 820 ? 404 : 380;
+  const scaled = Math.round(viewportHeight * (hasDensePage ? 0.48 : 0.52));
+  return clamp(scaled, minimum, target);
+}
+
 export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingAiLayout {
   const viewportWidth = Math.max(input.viewportWidth, 320);
   const viewportHeight = Math.max(input.viewportHeight, 480);
   const viewportBottomInset = Math.max(0, input.viewportBottomInset);
   const avoidRects = input.avoidRects.map(normalizeRect);
 
-  const gutterX = input.isMobile ? 12 : 20;
-  const gutterY = (input.isMobile ? 16 : 20) + viewportBottomInset;
+  const gutterX = input.isMobile ? 12 : 24;
+  const gutterY = (input.isMobile ? 16 : 24) + viewportBottomInset;
   const triggerSize = input.isMobile ? 48 : 56;
   const topInset = input.isMobile ? 72 : 92;
   const shouldAutoMinimize =
     input.hasBlockingDialog || (input.isMobile && input.hasFocusedEditable);
 
-  const triggerCandidates = [
+  const mobileTriggerCandidates: TriggerCandidate[] = [
     {
       anchor: "right" as const,
       bottom: gutterY,
-      left: viewportWidth - gutterX - triggerSize,
+      left: null,
       right: gutterX,
       score: 0,
     },
@@ -186,8 +217,11 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
       score: 0,
     },
   ].map((candidate) => {
+    const left = candidate.anchor === "left"
+      ? candidate.left ?? gutterX
+      : viewportWidth - (candidate.right ?? gutterX) - triggerSize;
     const top = viewportHeight - candidate.bottom - triggerSize;
-    const rect = buildRect(candidate.left, top, triggerSize, triggerSize);
+    const rect = buildRect(left, top, triggerSize, triggerSize);
     const preferredBias = candidate.anchor === "right" ? -80 : 0;
 
     return {
@@ -196,9 +230,89 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
     };
   });
 
-  const triggerCandidate = chooseBestCandidate(triggerCandidates);
+  const desktopTriggerRightOffsets = buildOffsetCandidates(
+    gutterX,
+    Math.max(gutterX, viewportWidth - triggerSize - 16),
+    [0, 72, 144, 216],
+  );
+  const desktopTriggerBottomOffsets = buildOffsetCandidates(
+    gutterY,
+    Math.max(gutterY, viewportHeight - topInset - triggerSize),
+    [0, 72, 144, 216],
+  );
+  const desktopTriggerCandidates: TriggerCandidate[] = desktopTriggerRightOffsets.flatMap((right) =>
+    desktopTriggerBottomOffsets.map((bottom) => {
+      const left = viewportWidth - right - triggerSize;
+      const top = viewportHeight - bottom - triggerSize;
+      const rect = buildRect(left, top, triggerSize, triggerSize);
+      return {
+        anchor: "right" as const,
+        bottom,
+        left: null,
+        right,
+        score:
+          overlapScore(rect, avoidRects, viewportHeight)
+          + (right - gutterX) * 2.4
+          + (bottom - gutterY) * 2.9
+          - 120,
+      };
+    }),
+  );
+  const triggerCandidate = chooseBestCandidate(input.isMobile ? mobileTriggerCandidates : desktopTriggerCandidates);
 
   if (input.isMobile && input.isOpen) {
+    const shouldUseFullscreen =
+      input.keyboardOpen || viewportWidth <= 340 || viewportHeight - viewportBottomInset < 520;
+
+    if (shouldUseFullscreen) {
+      return {
+        rootHidden: input.hasBlockingDialog,
+        triggerHidden: true,
+        shouldAutoMinimize,
+        trigger: {
+          bottom: triggerCandidate.bottom,
+          left: triggerCandidate.anchor === "left" ? triggerCandidate.left : null,
+          right: triggerCandidate.anchor === "right" ? triggerCandidate.right : null,
+          anchor: triggerCandidate.anchor,
+          size: triggerSize,
+        },
+        panel: {
+          bottom: viewportBottomInset,
+          left: 0,
+          right: 0,
+          width: viewportWidth,
+          height: Math.max(320, viewportHeight - viewportBottomInset),
+          mode: "fullscreen",
+          alignment: "center",
+        },
+      };
+    }
+
+    const sheetWidth = clamp(
+      viewportWidth - 20,
+      input.preferCompactPanel ? 280 : 304,
+      360,
+    );
+    const sheetLeft = clamp(
+      Math.round((viewportWidth - sheetWidth) / 2),
+      10,
+      Math.max(10, viewportWidth - sheetWidth - 10),
+    );
+    const horizontalRect = {
+      left: sheetLeft,
+      right: sheetLeft + sheetWidth,
+    };
+    const bottom = resolveBottomClearance(horizontalRect, viewportHeight, gutterY, avoidRects);
+    const availableHeight = Math.max(220, viewportHeight - topInset - bottom);
+    const preferredHeight = input.preferCompactPanel
+      ? Math.min(276, Math.max(220, Math.round(viewportHeight * 0.32)))
+      : Math.min(
+          input.hasDensePage ? 380 : 420,
+          Math.max(280, Math.round(viewportHeight * (input.hasDensePage ? 0.42 : 0.46))),
+        );
+    const minimumHeight = input.preferCompactPanel ? 208 : 248;
+    const height = clamp(preferredHeight, Math.min(minimumHeight, availableHeight), availableHeight);
+
     return {
       rootHidden: input.hasBlockingDialog,
       triggerHidden: true,
@@ -211,12 +325,12 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
         size: triggerSize,
       },
       panel: {
-        bottom: viewportBottomInset,
-        left: 0,
-        right: 0,
-        width: viewportWidth,
-        height: Math.max(320, viewportHeight - viewportBottomInset),
-        mode: "fullscreen",
+        bottom,
+        left: sheetLeft,
+        right: null,
+        width: sheetWidth,
+        height,
+        mode: "sheet",
         alignment: "center",
       },
     };
@@ -224,7 +338,7 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
 
   const preferredPanelWidth = input.isMobile
     ? clamp(viewportWidth - 16, input.preferCompactPanel ? 264 : 272, input.preferCompactPanel ? 340 : 360)
-    : clamp(Math.min(392, viewportWidth - 48), 320, 392);
+    : resolveDesktopPanelWidth(viewportWidth);
   const preferredPanelHeight = input.isMobile
     ? input.preferCompactPanel
       ? Math.min(248, Math.max(196, Math.round(viewportHeight * 0.3)))
@@ -232,50 +346,68 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
           input.hasDensePage ? 344 : 392,
           Math.max(232, Math.round(viewportHeight * (input.hasDensePage ? 0.38 : 0.44))),
         )
-    : Math.min(
-        input.hasDensePage ? 420 : 520,
-        Math.max(300, viewportHeight - (input.hasDensePage ? 176 : 136)),
-      );
-  const minimumPanelHeight = input.isMobile ? (input.preferCompactPanel ? 188 : 220) : 260;
-  const preferredPanelAlignments = input.isMobile
-    ? (["center", "left", "right"] as const)
-    : ([triggerCandidate.anchor, triggerCandidate.anchor === "right" ? "left" : "right", "center"] as const);
+    : resolveDesktopPanelPreferredHeight(viewportHeight, input.hasDensePage);
+  const minimumPanelHeight = input.isMobile ? (input.preferCompactPanel ? 188 : 220) : (viewportHeight >= 760 ? 384 : 340);
 
-  const panelCandidates = preferredPanelAlignments.map((alignment, index) => {
-    let left = gutterX;
+  const desktopPanelRightOffsets = buildOffsetCandidates(
+    gutterX,
+    Math.max(gutterX, viewportWidth - preferredPanelWidth - 16),
+    [0, 84, 168, 252],
+  );
+  const desktopPanelBottomOffsets = buildOffsetCandidates(
+    gutterY,
+    Math.max(gutterY, viewportHeight - topInset - 280),
+    [0, 64, 128, 192],
+  );
+  const desktopPanelCandidates = desktopPanelRightOffsets.flatMap((right) =>
+    desktopPanelBottomOffsets
+      .map((bottom) => {
+        const left = viewportWidth - right - preferredPanelWidth;
+        if (left < 16) {
+          return null;
+        }
 
-    if (alignment === "center") {
-      left = Math.round((viewportWidth - preferredPanelWidth) / 2);
-    } else if (alignment === "right") {
-      left = viewportWidth - gutterX - preferredPanelWidth;
-    }
+        const availableHeight = Math.max(220, viewportHeight - topInset - bottom);
+        const height = clamp(
+          preferredPanelHeight,
+          Math.min(minimumPanelHeight, availableHeight),
+          availableHeight,
+        );
+        const top = viewportHeight - bottom - height;
+        const rect = buildRect(left, top, preferredPanelWidth, height);
 
-    left = clamp(left, gutterX, Math.max(gutterX, viewportWidth - preferredPanelWidth - gutterX));
-    const horizontalRect = {
-      left,
-      right: left + preferredPanelWidth,
-    };
-    const bottom = resolveBottomClearance(horizontalRect, viewportHeight, gutterY, avoidRects);
-    const availableHeight = Math.max(180, viewportHeight - topInset - bottom);
-    const height = clamp(preferredPanelHeight, Math.min(minimumPanelHeight, availableHeight), availableHeight);
-    const top = viewportHeight - bottom - height;
-    const rect = buildRect(left, top, preferredPanelWidth, height);
-    const overlapPenalty = overlapScore(rect, avoidRects, viewportHeight);
-    const alignmentPenalty = index * 48;
-    const tightViewportPenalty = availableHeight < minimumPanelHeight ? 800 : 0;
+        return {
+          alignment: "right" as const,
+          left: null,
+          right,
+          bottom,
+          width: preferredPanelWidth,
+          height,
+          score:
+            overlapScore(rect, avoidRects, viewportHeight)
+            + (right - gutterX) * 1.75
+            + (bottom - gutterY) * 3.5
+            + Math.max(0, preferredPanelHeight - height) * 2.2,
+        };
+      })
+      .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null),
+  );
 
-    return {
-      alignment,
-      left,
-      right: viewportWidth - left - preferredPanelWidth,
-      bottom,
+  const panelCandidate = chooseBestCandidate(desktopPanelCandidates.length > 0 ? desktopPanelCandidates : [
+    {
+      alignment: "right" as const,
+      left: null,
+      right: gutterX,
+      bottom: gutterY,
       width: preferredPanelWidth,
-      height,
-      score: overlapPenalty + alignmentPenalty + tightViewportPenalty,
-    };
-  });
-
-  const panelCandidate = chooseBestCandidate(panelCandidates);
+      height: clamp(
+        preferredPanelHeight,
+        Math.min(minimumPanelHeight, Math.max(220, viewportHeight - topInset - gutterY)),
+        Math.max(220, viewportHeight - topInset - gutterY),
+      ),
+      score: 0,
+    },
+  ]);
 
   return {
     rootHidden: input.hasBlockingDialog,
@@ -290,13 +422,8 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
     },
     panel: {
       bottom: panelCandidate.bottom,
-      left: panelCandidate.alignment === "right" ? null : panelCandidate.left,
-      right:
-        panelCandidate.alignment === "left"
-          ? null
-          : panelCandidate.alignment === "center"
-            ? null
-            : panelCandidate.right,
+      left: panelCandidate.left,
+      right: panelCandidate.right,
       width: panelCandidate.width,
       height: panelCandidate.height,
       mode: input.isMobile ? "sheet" : "dock",
