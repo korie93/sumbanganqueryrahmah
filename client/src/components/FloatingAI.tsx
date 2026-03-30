@@ -181,13 +181,14 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
 
   useEffect(() => {
     if (typeof document === "undefined") return;
-    if (!isMobile || !isOpen || layoutState.rootHidden || layoutState.panel.mode !== "fullscreen") return;
+    if (!isMobile || !isOpen || layoutState.rootHidden) return;
 
     return applyFloatingAiScrollLock({
       bodyStyle: document.body.style,
       documentElementStyle: document.documentElement.style,
+      windowObject: window,
     });
-  }, [isMobile, isOpen, layoutState.panel.mode, layoutState.rootHidden]);
+  }, [isMobile, isOpen, layoutState.rootHidden]);
 
   const handleMinimize = useCallback(() => {
     setIsOpen(false);
@@ -414,7 +415,10 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
             ) : null}
             <header
               className={cn(
-                "flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-gradient-to-r from-sky-500/12 via-slate-100/60 to-transparent dark:border-white/10 dark:via-transparent",
+                "flex shrink-0 items-center justify-between border-b",
+                isMobile
+                  ? "border-slate-300/70 bg-slate-950/80 text-white backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88"
+                  : "border-slate-200/80 bg-gradient-to-r from-sky-500/12 via-slate-100/60 to-transparent dark:border-white/10 dark:via-transparent",
                 isMobile && layoutState.panel.mode === "fullscreen"
                   ? "min-h-16 px-4"
                   : isMobile
@@ -423,8 +427,18 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
               )}
             >
               <div className="min-w-0">
-                <p className={cn("truncate font-semibold text-slate-950 dark:text-slate-50", layoutState.panel.mode === "fullscreen" ? "text-base" : "text-sm")}>AI SQR</p>
-                <p className="truncate text-[11px] text-slate-600 dark:text-slate-300/90">Smart Query Engine</p>
+                <p
+                  className={cn(
+                    "truncate font-semibold",
+                    isMobile ? "text-white" : "text-slate-950 dark:text-slate-50",
+                    layoutState.panel.mode === "fullscreen" ? "text-base" : "text-sm",
+                  )}
+                >
+                  AI SQR
+                </p>
+                <p className={cn("truncate text-[11px]", isMobile ? "text-white/70" : "text-slate-600 dark:text-slate-300/90")}>
+                  Smart Query Engine
+                </p>
               </div>
               <div className="flex items-center gap-1.5">
                 <Button
@@ -432,7 +446,10 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   size="sm"
                   variant="ghost"
                   className={cn(
-                    "text-xs text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white",
+                    "text-xs",
+                    isMobile
+                      ? "text-white/80 hover:bg-white/10 hover:text-white"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white",
                     isMobile && layoutState.panel.mode === "fullscreen"
                       ? "h-10 px-3"
                       : isMobile
@@ -449,7 +466,9 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   size="icon"
                   variant="ghost"
                   className={cn(
-                    "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white",
+                    isMobile
+                      ? "text-white/80 hover:bg-white/10 hover:text-white"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white",
                     isMobile && layoutState.panel.mode === "fullscreen"
                       ? "h-10 w-10"
                       : isMobile

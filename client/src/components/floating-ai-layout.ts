@@ -201,34 +201,31 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
   const shouldAutoMinimize =
     input.hasBlockingDialog || (input.isMobile && input.hasFocusedEditable);
 
-  const mobileTriggerCandidates: TriggerCandidate[] = [
-    {
-      anchor: "right" as const,
-      bottom: gutterY,
-      left: null,
-      right: gutterX,
-      score: 0,
-    },
-    {
-      anchor: "left" as const,
-      bottom: gutterY,
-      left: gutterX,
-      right: null,
-      score: 0,
-    },
-  ].map((candidate) => {
-    const left = candidate.anchor === "left"
-      ? candidate.left ?? gutterX
-      : viewportWidth - (candidate.right ?? gutterX) - triggerSize;
-    const top = viewportHeight - candidate.bottom - triggerSize;
-    const rect = buildRect(left, top, triggerSize, triggerSize);
-    const preferredBias = candidate.anchor === "right" ? -80 : 0;
+  const mobileTriggerBottomOffsets = buildOffsetCandidates(
+    gutterY,
+    Math.max(gutterY, viewportHeight - topInset - triggerSize),
+    [0, 72, 144, 216],
+  );
+  const mobileTriggerCandidates: TriggerCandidate[] = (["right", "left"] as const).flatMap((anchor) =>
+    mobileTriggerBottomOffsets.map((bottom) => {
+      const isLeftAnchor = anchor === "left";
+      const left = isLeftAnchor ? gutterX : viewportWidth - gutterX - triggerSize;
+      const top = viewportHeight - bottom - triggerSize;
+      const rect = buildRect(left, top, triggerSize, triggerSize);
+      const preferredBias = isLeftAnchor ? 0 : -80;
 
-    return {
-      ...candidate,
-      score: overlapScore(rect, avoidRects, viewportHeight) + preferredBias,
-    };
-  });
+      return {
+        anchor,
+        bottom,
+        left: isLeftAnchor ? gutterX : null,
+        right: isLeftAnchor ? null : gutterX,
+        score:
+          overlapScore(rect, avoidRects, viewportHeight)
+          + (bottom - gutterY) * 2.1
+          + preferredBias,
+      };
+    }),
+  );
 
   const desktopTriggerRightOffsets = buildOffsetCandidates(
     gutterX,

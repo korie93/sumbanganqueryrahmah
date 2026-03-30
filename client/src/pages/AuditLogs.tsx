@@ -3,6 +3,7 @@ import { Download, FileText, Loader2, RefreshCw } from "lucide-react";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { getAuditLogs, getAuditLogStats, cleanupAuditLogs } from "@/lib/api";
 import { getStoredRole } from "@/lib/auth-session";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +20,7 @@ import {
 import { resolveAuditLogsExportBlockReason } from "@/pages/audit-logs/export-guards";
 
 export default function AuditLogs() {
+  const isMobile = useIsMobile();
   const currentRole = getStoredRole();
 
   const canCleanupLogs = currentRole === "superuser";
@@ -49,8 +51,17 @@ export default function AuditLogs() {
   });
   const [refreshNonce, setRefreshNonce] = useState(0);
   const exportInFlightRef = useRef(false);
+  const mobileDefaultsAppliedRef = useRef(false);
   const { toast } = useToast();
   const deferredSearchText = useDeferredValue(searchText.trim());
+
+  useEffect(() => {
+    if (!isMobile || mobileDefaultsAppliedRef.current) return;
+    mobileDefaultsAppliedRef.current = true;
+    setFiltersOpen(false);
+    setCleanupOpen(false);
+    setRecordsOpen(true);
+  }, [isMobile]);
 
   const fetchStats = useCallback(async () => {
     try {

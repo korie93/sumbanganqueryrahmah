@@ -34,7 +34,7 @@ export function ActivityFiltersPanel({
   onToggleStatus,
 }: ActivityFiltersPanelProps) {
   return (
-    <Card className="mb-6 glass-wrapper border-0">
+    <Card className="mb-6 glass-wrapper border-0" data-floating-ai-avoid="true">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg flex items-center gap-2">
           <Filter className="w-5 h-5" />

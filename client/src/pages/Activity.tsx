@@ -323,7 +323,7 @@ export default function Activity() {
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4" data-floating-ai-avoid="true">
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2">Activity Monitor</h1>
             <p className="text-muted-foreground">Monitor user activity in real-time</p>

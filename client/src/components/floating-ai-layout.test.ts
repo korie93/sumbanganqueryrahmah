@@ -30,6 +30,31 @@ test("resolveFloatingAiLayout moves the trigger away from bottom-right avoid zon
   assert.equal(layout.trigger.right, null);
 });
 
+test("resolveFloatingAiLayout lifts the mobile trigger above wide bottom action surfaces", () => {
+  const layout = resolveFloatingAiLayout({
+    viewportWidth: 390,
+    viewportHeight: 844,
+    viewportBottomInset: 0,
+    isMobile: true,
+    isOpen: false,
+    hasBlockingDialog: false,
+    keyboardOpen: false,
+    hasFocusedEditable: false,
+    hasDensePage: true,
+    preferCompactPanel: false,
+    avoidRects: [
+      {
+        left: 12,
+        top: 700,
+        right: 378,
+        bottom: 824,
+      },
+    ],
+  });
+
+  assert.ok(layout.trigger.bottom > 16);
+});
+
 test("resolveFloatingAiLayout lifts the mobile panel above bottom action bars", () => {
   const layout = resolveFloatingAiLayout({
     viewportWidth: 390,
