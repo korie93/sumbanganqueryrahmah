@@ -38,10 +38,14 @@ function MonitorInsightsMetricsImpl({
                     <span className="font-medium text-foreground">{row.value.toFixed(4)}</span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-muted/50">
-                    <div
-                      className="h-full rounded-full bg-primary/80 transition-[width]"
-                      style={{ width: `${fillWidth}%` }}
-                    />
+                    <svg
+                      viewBox="0 0 100 6"
+                      className="h-full w-full text-primary/80"
+                      preserveAspectRatio="none"
+                      aria-hidden="true"
+                    >
+                      <rect width={fillWidth} height="6" rx="3" fill="currentColor" />
+                    </svg>
                   </div>
                 </div>
               );
