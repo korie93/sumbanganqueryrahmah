@@ -1,4 +1,3 @@
-import { buildActivationUrl } from "../auth/activation-links";
 import {
   CREDENTIAL_EMAIL_REGEX,
   normalizeUsernameInput,
@@ -13,21 +12,25 @@ import {
   hashPassword,
   verifyPassword,
 } from "../auth/passwords";
-import {
-  decryptTwoFactorSecret,
-  verifyTwoFactorCode,
-} from "../auth/two-factor";
-import { buildAccountActivationEmail } from "../mail/account-activation-email";
-import { buildPasswordResetEmail } from "../mail/password-reset-email";
-import { sendMail } from "../mail/mailer";
 import type { PostgresStorage } from "../storage-postgres";
 import { ERROR_CODES } from "../../shared/error-codes";
 import {
   assertConfirmedStrongPassword,
   assertUsableActivationTokenRecord,
   assertUsablePasswordResetTokenRecord,
-  createActivationTokenPayload,
 } from "./auth-account-token-utils";
+import {
+  type AuthAccountAuthenticationStorage,
+  clearFailedLoginState,
+  createAuthenticatedSession,
+  failLockedLogin,
+  handleFailedPasswordAttempt,
+  invalidateUserSessions,
+  requiresTwoFactor,
+  sendActivationEmailOperation,
+  sendPasswordResetEmailOperation,
+  verifyTwoFactorSecretCode,
+} from "./auth-account-authentication-utils";
 import {
   type ActivationTokenValidationResult,
   type ManagedAccountActivationDelivery,
@@ -54,33 +57,6 @@ type TwoFactorLoginInput = {
   ipAddress?: string | null;
 };
 
-type AuthAccountAuthenticationStorage = Pick<
-  PostgresStorage,
-  | "consumeActivationTokenById"
-  | "consumePasswordResetRequestById"
-  | "createActivationToken"
-  | "createActivity"
-  | "createAuditLog"
-  | "createPasswordResetRequest"
-  | "deactivateUserActivities"
-  | "deactivateUserSessionsByFingerprint"
-  | "getActivationTokenRecordByHash"
-  | "getActiveActivitiesByUsername"
-  | "getBooleanSystemSetting"
-  | "getPasswordResetTokenRecordByHash"
-  | "getUser"
-  | "getUserByEmail"
-  | "getUserByUsername"
-  | "invalidateUnusedActivationTokens"
-  | "invalidateUnusedPasswordResetTokens"
-  | "isVisitorBanned"
-  | "recordFailedLoginAttempt"
-  | "touchLastLogin"
-  | "updateUserAccount"
-> & {
-  getAppConfig?: () => Promise<{ sessionTimeoutMinutes?: unknown } | null | undefined>;
-};
-
 type AuthAccountAuthenticationDeps = {
   storage: AuthAccountAuthenticationStorage;
   requireManagedEmail: (email: string | null, message: string) => string;
@@ -93,61 +69,6 @@ export class AuthAccountAuthenticationOperations {
     "Your account has been locked due to too many incorrect login attempts. Please contact the system administrator.";
 
   constructor(private readonly deps: AuthAccountAuthenticationDeps) {}
-
-  private requiresTwoFactor(user: Awaited<ReturnType<PostgresStorage["getUser"]>>) {
-    return (
-      (user?.role === "superuser" || user?.role === "admin")
-      && user?.twoFactorEnabled === true
-      && Boolean(String(user?.twoFactorSecretEncrypted || "").trim())
-    );
-  }
-
-  private async getSuperuserSessionIdleWindowMs(): Promise<number> {
-    const fallbackMinutes = 30;
-    try {
-      const runtime = await this.deps.storage.getAppConfig?.();
-      const configuredMinutes = Number(runtime?.sessionTimeoutMinutes);
-      const safeMinutes = Number.isFinite(configuredMinutes)
-        ? Math.min(1440, Math.max(1, Math.floor(configuredMinutes)))
-        : fallbackMinutes;
-      return safeMinutes * 60 * 1000;
-    } catch {
-      return fallbackMinutes * 60 * 1000;
-    }
-  }
-
-  private isRecentActivitySession(
-    activity: { lastActivityTime?: Date | string | null; loginTime?: Date | string | null },
-    nowMs: number,
-    idleWindowMs: number,
-  ): boolean {
-    const timestampSource = activity.lastActivityTime ?? activity.loginTime ?? null;
-    if (!timestampSource) {
-      return true;
-    }
-    const activityMs = new Date(timestampSource).getTime();
-    if (!Number.isFinite(activityMs)) {
-      return true;
-    }
-    return nowMs - activityMs <= idleWindowMs;
-  }
-
-  private async issueActivationToken(params: {
-    userId: string;
-    createdBy: string;
-  }) {
-    const activation = createActivationTokenPayload();
-
-    await this.deps.storage.invalidateUnusedActivationTokens(params.userId);
-    await this.deps.storage.createActivationToken({
-      userId: params.userId,
-      tokenHash: activation.tokenHash,
-      expiresAt: activation.expiresAt,
-      createdBy: params.createdBy,
-    });
-
-    return activation;
-  }
 
   async sendActivationEmail(params: {
     actorUsername: string;
@@ -174,55 +95,13 @@ export class AuthAccountAuthenticationOperations {
       );
     }
 
-    const recipientEmail = this.deps.requireManagedEmail(
-      params.user.email,
-      "Email is required to send account activation.",
-    );
-    const activation = await this.issueActivationToken({
-      userId: params.user.id,
-      createdBy: params.actorUsername,
+    return sendActivationEmailOperation({
+      actorUsername: params.actorUsername,
+      requireManagedEmail: this.deps.requireManagedEmail,
+      resent: params.resent,
+      storage: this.deps.storage,
+      user: params.user,
     });
-    const activationUrl = buildActivationUrl(activation.token);
-    const email = buildAccountActivationEmail({
-      activationUrl,
-      expiresAt: activation.expiresAt,
-      username: params.user.username,
-    });
-    const mailResult = await sendMail({
-      to: recipientEmail,
-      subject: email.subject,
-      text: email.text,
-      html: email.html,
-    });
-
-    await this.deps.storage.createAuditLog({
-      action: mailResult.sent ? "ACCOUNT_ACTIVATION_SENT" : "ACCOUNT_ACTIVATION_SEND_FAILED",
-      performedBy: params.actorUsername,
-      targetUser: params.user.id,
-      details: JSON.stringify({
-        metadata: {
-          delivery: "email",
-          delivery_mode: mailResult.deliveryMode,
-          resent: params.resent === true,
-          expires_at: activation.expiresAt.toISOString(),
-          recipient_email: recipientEmail,
-          mail_error_code: mailResult.errorCode,
-        },
-      }),
-    });
-
-    return {
-      activation,
-      delivery: {
-        deliveryMode: mailResult.deliveryMode,
-        errorCode: mailResult.errorCode,
-        errorMessage: mailResult.errorMessage,
-        expiresAt: activation.expiresAt,
-        previewUrl: mailResult.previewUrl,
-        recipientEmail,
-        sent: mailResult.sent,
-      } satisfies ManagedAccountActivationDelivery,
-    };
   }
 
   async sendPasswordResetEmail(params: {
@@ -230,242 +109,16 @@ export class AuthAccountAuthenticationOperations {
     resetUrl: string;
     user: Awaited<ReturnType<PostgresStorage["getUser"]>>;
   }): Promise<ManagedAccountPasswordResetDelivery> {
-    if (!params.user) {
-      throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
-    }
-
-    const recipientEmail = this.deps.requireManagedEmail(
-      params.user.email,
-      "Email is required to send password reset.",
-    );
-    const email = buildPasswordResetEmail({
+    return sendPasswordResetEmailOperation({
+      expiresAt: params.expiresAt,
+      requireManagedEmail: this.deps.requireManagedEmail,
       resetUrl: params.resetUrl,
-      expiresAt: params.expiresAt,
-      username: params.user.username,
+      user: params.user,
     });
-    const mailResult = await sendMail({
-      to: recipientEmail,
-      subject: email.subject,
-      text: email.text,
-      html: email.html,
-    });
-
-    return {
-      deliveryMode: mailResult.deliveryMode,
-      errorCode: mailResult.errorCode,
-      errorMessage: mailResult.errorMessage,
-      expiresAt: params.expiresAt,
-      previewUrl: mailResult.previewUrl,
-      recipientEmail,
-      sent: mailResult.sent,
-    };
   }
 
   async invalidateUserSessions(username: string, reason: string) {
-    const activeSessions = await this.deps.storage.getActiveActivitiesByUsername(username);
-    await this.deps.storage.deactivateUserActivities(username, reason);
-    return activeSessions.map((activity) => activity.id);
-  }
-
-  private async replaceExistingSessionsForLogin(
-    user: NonNullable<Awaited<ReturnType<PostgresStorage["getUser"]>>>,
-    browserName: string,
-  ) {
-    const activeSessions = await this.deps.storage.getActiveActivitiesByUsername(user.username);
-    if (activeSessions.length === 0) {
-      return [] as string[];
-    }
-
-    await this.deps.storage.deactivateUserActivities(user.username, "NEW_SESSION");
-    await this.deps.storage.createAuditLog({
-      action: "LOGIN_REPLACED_EXISTING_SESSION",
-      performedBy: user.username,
-      targetUser: user.id,
-      details: JSON.stringify({
-        metadata: {
-          browser: browserName,
-          replaced_session_count: activeSessions.length,
-          replaced_session_ids: activeSessions.map((activity) => activity.id),
-        },
-      }),
-    });
-
-    return activeSessions.map((activity) => activity.id);
-  }
-
-  private async createAuthenticatedSession(
-    user: NonNullable<Awaited<ReturnType<PostgresStorage["getUser"]>>>,
-    input: Omit<LoginInput, "password" | "username">,
-    details: string,
-  ) {
-    let closedSessionIds: string[] = [];
-
-    if (user.role === "superuser") {
-      const enforceSingleSession = await this.deps.storage.getBooleanSystemSetting(
-        "enforce_superuser_single_session",
-        false,
-      );
-
-      if (enforceSingleSession) {
-        const activeSessions = await this.deps.storage.getActiveActivitiesByUsername(user.username);
-        if (activeSessions.length > 0) {
-          const nowMs = Date.now();
-          const idleWindowMs = await this.getSuperuserSessionIdleWindowMs();
-          const freshSessions = activeSessions.filter((session) =>
-            this.isRecentActivitySession(session, nowMs, idleWindowMs),
-          );
-
-          if (freshSessions.length === 0) {
-            await this.deps.storage.deactivateUserActivities(user.username, "IDLE_TIMEOUT");
-            closedSessionIds = activeSessions.map((activity) => activity.id);
-            await this.deps.storage.createAuditLog({
-              action: "LOGIN_STALE_SESSION_RECOVERED",
-              performedBy: user.username,
-              targetUser: user.id,
-              details: `Recovered stale superuser sessions before login. Sessions cleared: ${activeSessions.length}`,
-            });
-          } else {
-            await this.deps.storage.createAuditLog({
-              action: "LOGIN_BLOCKED_SINGLE_SESSION",
-              performedBy: user.username,
-              details: `Superuser single-session policy blocked login. Active sessions: ${freshSessions.length}`,
-            });
-            throw new AuthAccountError(
-              409,
-              "SUPERUSER_SINGLE_SESSION_ENFORCED",
-              "Single superuser session is enforced. Logout from the current session first.",
-            );
-          }
-        }
-      }
-    }
-
-    if (user.role !== "superuser" || closedSessionIds.length === 0) {
-      closedSessionIds = await this.replaceExistingSessionsForLogin(user, input.browserName);
-    }
-
-    const activity = await this.deps.storage.createActivity({
-      userId: user.id,
-      username: user.username,
-      role: user.role,
-      pcName: input.pcName ?? null,
-      browser: input.browserName,
-      fingerprint: input.fingerprint ?? null,
-      ipAddress: input.ipAddress ?? null,
-    });
-
-    await this.deps.storage.touchLastLogin(user.id, new Date());
-    await this.deps.storage.createAuditLog({
-      action: "LOGIN_SUCCESS",
-      performedBy: user.username,
-      targetUser: user.id,
-      details,
-    });
-
-    return {
-      activity,
-      closedSessionIds,
-    };
-  }
-
-  private async clearFailedLoginState(
-    user: NonNullable<Awaited<ReturnType<PostgresStorage["getUser"]>>>,
-  ) {
-    if (
-      Number(user.failedLoginAttempts || 0) <= 0
-      && !user.lockedAt
-      && user.lockedBySystem !== true
-      && !String(user.lockedReason || "").trim()
-    ) {
-      return user;
-    }
-
-    return (await this.deps.storage.updateUserAccount({
-      userId: user.id,
-      failedLoginAttempts: 0,
-      lockedAt: null,
-      lockedReason: null,
-      lockedBySystem: false,
-    })) ?? user;
-  }
-
-  private async failLockedLogin(
-    user: NonNullable<Awaited<ReturnType<PostgresStorage["getUser"]>>>,
-    action: string,
-    details: string,
-  ): Promise<never> {
-    await this.deps.storage.createAuditLog({
-      action,
-      performedBy: user.username,
-      targetUser: user.id,
-      details,
-    });
-    throw new AuthAccountError(
-      423,
-      ERROR_CODES.ACCOUNT_LOCKED,
-      AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_MESSAGE,
-      {
-        locked: true,
-      },
-    );
-  }
-
-  private async handleFailedPasswordAttempt(
-    user: NonNullable<Awaited<ReturnType<PostgresStorage["getUser"]>>>,
-    input: Omit<LoginInput, "password">,
-  ): Promise<never> {
-    const result = await this.deps.storage.recordFailedLoginAttempt({
-      userId: user.id,
-      maxAllowedAttempts: AuthAccountAuthenticationOperations.MAX_ALLOWED_FAILED_PASSWORD_ATTEMPTS,
-      lockedReason: AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_REASON,
-    });
-
-    await this.deps.storage.createAuditLog({
-      action: result.locked ? "LOGIN_FAILED_PASSWORD_LOCKED" : "LOGIN_FAILED_PASSWORD",
-      performedBy: user.username,
-      targetUser: user.id,
-      details: JSON.stringify({
-        metadata: {
-          browser: input.browserName,
-          failed_login_attempts: result.failedLoginAttempts,
-          locked: result.locked,
-        },
-      }),
-    });
-
-    if (result.newlyLocked) {
-      const closedSessionIds = await this.invalidateUserSessions(
-        user.username,
-        "ACCOUNT_LOCKED_FAILED_LOGINS",
-      );
-      await this.deps.storage.createAuditLog({
-        action: "ACCOUNT_LOCKED_TOO_MANY_FAILED_LOGINS",
-        performedBy: user.username,
-        targetUser: user.id,
-        details: JSON.stringify({
-          metadata: {
-            browser: input.browserName,
-            failed_login_attempts: result.failedLoginAttempts,
-            locked_reason: AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_REASON,
-            locked_by_system: true,
-            closed_session_ids: closedSessionIds,
-          },
-        }),
-      });
-    }
-
-    if (result.locked) {
-      throw new AuthAccountError(
-        423,
-        ERROR_CODES.ACCOUNT_LOCKED,
-        AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_MESSAGE,
-        {
-          locked: true,
-        },
-      );
-    }
-
-    throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
+    return invalidateUserSessions(this.deps.storage, username, reason);
   }
 
   async login(input: LoginInput) {
@@ -502,11 +155,11 @@ export class AuthAccountAuthenticationOperations {
     const blockReason = getAccountAccessBlockReason(user);
     if (blockReason && blockReason !== "banned") {
       if (blockReason === "locked") {
-        await this.failLockedLogin(
-          user,
-          "LOGIN_BLOCKED_LOCKED_ACCOUNT",
-          "Login blocked because the account is locked after repeated failed password attempts.",
-        );
+        await failLockedLogin(this.deps.storage, user, {
+          action: "LOGIN_BLOCKED_LOCKED_ACCOUNT",
+          details: "Login blocked because the account is locked after repeated failed password attempts.",
+          lockedAccountMessage: AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_MESSAGE,
+        });
       }
 
       await this.deps.storage.createAuditLog({
@@ -520,18 +173,24 @@ export class AuthAccountAuthenticationOperations {
 
     const validPassword = await verifyPassword(password, user.passwordHash);
     if (!validPassword) {
-      await this.handleFailedPasswordAttempt(user, {
-        username: user.username,
+      await handleFailedPasswordAttempt({
+        input: {
         fingerprint: input.fingerprint,
         browserName: input.browserName,
         pcName: input.pcName,
         ipAddress: input.ipAddress,
+        },
+        lockedAccountMessage: AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_MESSAGE,
+        lockedReason: AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_REASON,
+        maxAllowedAttempts: AuthAccountAuthenticationOperations.MAX_ALLOWED_FAILED_PASSWORD_ATTEMPTS,
+        storage: this.deps.storage,
+        user,
       });
     }
 
-    const unlockedUser = await this.clearFailedLoginState(user);
+    const unlockedUser = await clearFailedLoginState(this.deps.storage, user);
 
-    if (this.requiresTwoFactor(unlockedUser)) {
+    if (requiresTwoFactor(unlockedUser)) {
       await this.deps.storage.createAuditLog({
         action: "LOGIN_SECOND_FACTOR_REQUIRED",
         performedBy: unlockedUser.username,
@@ -545,11 +204,12 @@ export class AuthAccountAuthenticationOperations {
       };
     }
 
-    const sessionResult = await this.createAuthenticatedSession(
-      unlockedUser,
+    const sessionResult = await createAuthenticatedSession({
+      details: `Login from ${input.browserName}`,
       input,
-      `Login from ${input.browserName}`,
-    );
+      storage: this.deps.storage,
+      user: unlockedUser,
+    });
 
     return {
       kind: "authenticated" as const,
@@ -586,11 +246,11 @@ export class AuthAccountAuthenticationOperations {
     const blockReason = getAccountAccessBlockReason(user);
     if (blockReason && blockReason !== "banned") {
       if (blockReason === "locked") {
-        await this.failLockedLogin(
-          user,
-          "LOGIN_2FA_BLOCKED_LOCKED_ACCOUNT",
-          "Second-factor login blocked because the account is locked after repeated failed password attempts.",
-        );
+        await failLockedLogin(this.deps.storage, user, {
+          action: "LOGIN_2FA_BLOCKED_LOCKED_ACCOUNT",
+          details: "Second-factor login blocked because the account is locked after repeated failed password attempts.",
+          lockedAccountMessage: AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_MESSAGE,
+        });
       }
 
       await this.deps.storage.createAuditLog({
@@ -602,44 +262,49 @@ export class AuthAccountAuthenticationOperations {
       throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
     }
 
-    if (!this.requiresTwoFactor(user)) {
+    if (!requiresTwoFactor(user)) {
       throw new AuthAccountError(409, ERROR_CODES.TWO_FACTOR_NOT_ENABLED, "Two-factor authentication is not enabled.");
     }
 
     const encryptedSecret = String(user.twoFactorSecretEncrypted || "").trim();
-    let secret = "";
     try {
-      secret = decryptTwoFactorSecret(encryptedSecret);
-    } catch {
-      await this.deps.storage.createAuditLog({
-        action: "LOGIN_2FA_FAILED_SECRET",
-        performedBy: user.username,
-        targetUser: user.id,
-        details: "Stored two-factor secret could not be decrypted.",
+      verifyTwoFactorSecretCode({
+        code: input.code,
+        encryptedSecret,
       });
-      throw new AuthAccountError(500, ERROR_CODES.TWO_FACTOR_SECRET_INVALID, "Two-factor authentication is unavailable.");
-    }
-
-    if (!verifyTwoFactorCode(secret, input.code)) {
+    } catch (error) {
+      if (
+        error instanceof AuthAccountError
+        && error.code === ERROR_CODES.TWO_FACTOR_SECRET_INVALID
+      ) {
+        await this.deps.storage.createAuditLog({
+          action: "LOGIN_2FA_FAILED_SECRET",
+          performedBy: user.username,
+          targetUser: user.id,
+          details: "Stored two-factor secret could not be decrypted.",
+        });
+        throw error;
+      }
       await this.deps.storage.createAuditLog({
         action: "LOGIN_2FA_FAILED",
         performedBy: user.username,
         targetUser: user.id,
         details: `Invalid authenticator code from ${input.browserName}`,
       });
-      throw new AuthAccountError(401, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
+      throw error;
     }
 
-    const sessionResult = await this.createAuthenticatedSession(
-      user,
-      {
+    const sessionResult = await createAuthenticatedSession({
+      details: `Login with 2FA from ${input.browserName}`,
+      input: {
         fingerprint: input.fingerprint,
         browserName: input.browserName,
         pcName: input.pcName,
         ipAddress: input.ipAddress,
       },
-      `Login with 2FA from ${input.browserName}`,
-    );
+      storage: this.deps.storage,
+      user,
+    });
 
     return {
       user,

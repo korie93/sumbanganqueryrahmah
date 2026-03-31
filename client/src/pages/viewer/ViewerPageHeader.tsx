@@ -1,8 +1,8 @@
-import { ArrowLeft, Filter, Trash2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OperationalPageHeader } from "@/components/layout/OperationalPage";
-import { ViewerColumnSelector } from "@/pages/viewer/ViewerColumnSelector";
-import { ViewerExportMenu } from "@/pages/viewer/ViewerExportMenu";
+import { buildViewerPageHeaderDescription } from "@/pages/viewer/page-header-utils";
+import { ViewerPageHeaderActions } from "@/pages/viewer/ViewerPageHeaderActions";
 
 interface ViewerPageHeaderProps {
   importName: string;
@@ -76,59 +76,36 @@ export function ViewerPageHeader({
           <span className="truncate">{importName}</span>
         </div>
       }
-      description={`${rowsCount} row${rowsCount === 1 ? "" : "s"} on page ${currentPage} of ${totalPages} (${totalRows} total) ready for inspection, filtering, and export.`}
+      description={buildViewerPageHeaderDescription(
+        rowsCount,
+        currentPage,
+        totalPages,
+        totalRows,
+      )}
       actions={
-        <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
-          {rowsCount > 0 ? (
-            <>
-              <ViewerColumnSelector
-                open={showColumnSelector}
-                headers={headers}
-                selectedColumns={selectedColumns}
-                onOpenChange={onShowColumnSelectorChange}
-                onToggleColumn={onToggleColumn}
-                onSelectAllColumns={onSelectAllColumns}
-                onDeselectAllColumns={onDeselectAllColumns}
-              />
-
-              <Button
-                variant={showFilters ? "default" : "outline"}
-                onClick={onToggleFilters}
-                data-testid="button-toggle-filters"
-                className="w-full sm:w-auto"
-              >
-                <Filter className="w-4 h-4 mr-2" />
-                Filters {filterCount > 0 ? `(${filterCount})` : ""}
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={onClearAllData}
-                disabled={rowsCount === 0}
-                className="w-full text-destructive sm:w-auto"
-                data-testid="button-clear-all"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Clear
-              </Button>
-            </>
-          ) : null}
-
-          {isSuperuser && rowsCount > 0 ? (
-            <ViewerExportMenu
-              exportBusy={exportBusy}
-              totalRows={totalRows}
-              filteredRowsCount={filteredRowsCount}
-              selectedRowCount={selectedRowCount}
-              selectedColumnsCount={selectedColumns.size}
-              headersCount={headers.length}
-              hasFilteredSubset={hasFilteredSubset}
-              onExportCsv={onExportCsv}
-              onExportPdf={onExportPdf}
-              onExportExcel={onExportExcel}
-            />
-          ) : null}
-        </div>
+        <ViewerPageHeaderActions
+          exportBusy={exportBusy}
+          filteredRowsCount={filteredRowsCount}
+          filterCount={filterCount}
+          hasFilteredSubset={hasFilteredSubset}
+          headers={headers}
+          isSuperuser={isSuperuser}
+          onClearAllData={onClearAllData}
+          onDeselectAllColumns={onDeselectAllColumns}
+          onExportCsv={onExportCsv}
+          onExportExcel={onExportExcel}
+          onExportPdf={onExportPdf}
+          onSelectAllColumns={onSelectAllColumns}
+          onShowColumnSelectorChange={onShowColumnSelectorChange}
+          onToggleColumn={onToggleColumn}
+          onToggleFilters={onToggleFilters}
+          rowsCount={rowsCount}
+          selectedColumns={selectedColumns}
+          selectedRowCount={selectedRowCount}
+          showColumnSelector={showColumnSelector}
+          showFilters={showFilters}
+          totalRows={totalRows}
+        />
       }
     />
   );

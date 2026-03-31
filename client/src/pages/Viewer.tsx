@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Eye } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import {
   OperationalMetric,
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { getImportData } from "@/lib/api";
 import { ViewerDataTable } from "@/pages/viewer/ViewerDataTable";
+import { ViewerEmptyState } from "@/pages/viewer/ViewerEmptyState";
 import { ViewerFiltersPanel } from "@/pages/viewer/ViewerFiltersPanel";
 import { ViewerFooter } from "@/pages/viewer/ViewerFooter";
 import { ViewerLoadingSkeleton } from "@/pages/viewer/ViewerLoadingSkeleton";
@@ -22,83 +23,20 @@ import {
   exportViewerRowsToExcel,
   exportViewerRowsToPdf,
 } from "@/pages/viewer/export";
+import {
+  buildViewerActiveFilterChips,
+  isAbortError,
+  normalizeViewerPageResult,
+  resolveViewerImportName,
+} from "@/pages/viewer/page-utils";
 import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
 import { extractHeadersFromRows, filterViewerRows } from "@/pages/viewer/utils";
-
-const VIEWER_FILTER_OPERATOR_LABELS: Record<ColumnFilter["operator"], string> = {
-  contains: "contains",
-  equals: "is",
-  startsWith: "starts with",
-  endsWith: "ends with",
-  notEquals: "is not",
-};
 
 interface ViewerProps {
   onNavigate: (page: string) => void;
   importId?: string;
   userRole: string;
   viewerRowsPerPage?: number;
-}
-
-type ViewerApiRow = {
-  jsonDataJsonb?: Record<string, unknown>;
-};
-
-type ViewerPageResponse = {
-  rows?: ViewerApiRow[];
-  total?: number;
-  page?: number;
-  limit?: number;
-  nextCursor?: string | null;
-};
-
-function resolveViewerImportName() {
-  return (
-    localStorage.getItem("selectedImportName") ||
-    localStorage.getItem("analysisImportName") ||
-    "Data Viewer"
-  );
-}
-
-function isAbortError(error: unknown) {
-  return error instanceof DOMException
-    ? error.name === "AbortError"
-    : error instanceof Error && error.name === "AbortError";
-}
-
-function normalizeViewerPageResult(
-  response: ViewerPageResponse,
-  requestedPage: number,
-  fallbackLimit: number,
-): {
-  rows: DataRowWithId[];
-  total: number;
-  page: number;
-  limit: number;
-  nextCursor: string | null;
-} {
-  const page = Number.isFinite(Number(response?.page))
-    ? Math.max(1, Math.trunc(Number(response?.page)))
-    : requestedPage;
-  const limit = Number.isFinite(Number(response?.limit))
-    ? Math.max(1, Math.trunc(Number(response?.limit)))
-    : fallbackLimit;
-  const total = Number.isFinite(Number(response?.total))
-    ? Math.max(0, Math.trunc(Number(response?.total)))
-    : 0;
-  const pageBase = (page - 1) * limit;
-  const apiRows = Array.isArray(response?.rows) ? response.rows : [];
-
-  return {
-    rows: apiRows.map((row, index) => ({
-      ...(row.jsonDataJsonb ?? {}),
-      __rowId: pageBase + index,
-    })),
-    total,
-    page,
-    limit,
-    nextCursor: typeof response?.nextCursor === "string" ? response.nextCursor : null,
-  };
 }
 
 export default function Viewer({
@@ -617,30 +555,19 @@ export default function Viewer({
     }
   }, [ROWS_PER_PAGE, debouncedColumnFilters, debouncedSearch, filteredRows, importId, rows, selectedRowIds, totalRows]);
 
-  const activeFilterChips = useMemo<ActiveFilterChip[]>(() => {
-    const items: ActiveFilterChip[] = [];
-
-    if (search.trim()) {
-      items.push({
-        id: "viewer-search",
-        label: `Search: ${search.trim()}`,
-        onRemove: () => {
+  const activeFilterChips = useMemo<ActiveFilterChip[]>(
+    () =>
+      buildViewerActiveFilterChips({
+        search,
+        activeColumnFilters,
+        onClearSearch: () => {
           setSearch("");
           setCurrentPage(1);
         },
-      });
-    }
-
-    activeColumnFilters.forEach((filter, index) => {
-      items.push({
-        id: `viewer-filter-${index}`,
-        label: `${filter.column} ${VIEWER_FILTER_OPERATOR_LABELS[filter.operator]} ${filter.value}`,
-        onRemove: () => removeFilter(index),
-      });
-    });
-
-    return items;
-  }, [activeColumnFilters, removeFilter, search]);
+        onRemoveFilter: removeFilter,
+      }),
+    [activeColumnFilters, removeFilter, search],
+  );
 
   const exportToCSV = async (exportFiltered = false, exportSelected = false) => {
     const blockReason = resolveViewerExportBlockReason({
@@ -845,18 +772,11 @@ export default function Viewer({
       {loading ? (
         <ViewerLoadingSkeleton />
       ) : rows.length === 0 && !error ? (
-        <div className="ops-empty-state">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-            <Eye className="w-8 h-8 text-muted-foreground" />
-          </div>
-          <p className="text-foreground font-medium">No data</p>
-          {emptyHint ? <p className="text-sm text-muted-foreground mt-2">{emptyHint}</p> : null}
-          {isSearchBelowMinLength ? (
-            <p className="text-sm text-muted-foreground mt-2">
-              Enter at least {MIN_SEARCH_LENGTH} characters to search large datasets.
-            </p>
-          ) : null}
-        </div>
+        <ViewerEmptyState
+          emptyHint={emptyHint}
+          isSearchBelowMinLength={isSearchBelowMinLength}
+          minSearchLength={MIN_SEARCH_LENGTH}
+        />
       ) : (
         <OperationalSectionCard
           title="Dataset rows"

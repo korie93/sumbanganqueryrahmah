@@ -1,7 +1,9 @@
 import type { RefObject } from "react";
-import { Filter, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { ActiveFilterChips, type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import { Input } from "@/components/ui/input";
+import { buildViewerSearchShortcutHint } from "@/pages/viewer/search-bar-utils";
+import { ViewerSearchSummary } from "@/pages/viewer/ViewerSearchSummary";
 
 interface ViewerSearchBarProps {
   search: string;
@@ -39,15 +41,10 @@ export function ViewerSearchBar({
           />
         </div>
         <p className="text-xs text-muted-foreground">
-          Press <span className="font-medium text-foreground">/</span> to focus search
+          Press <span className="font-medium text-foreground">{buildViewerSearchShortcutHint()}</span> to focus search
         </p>
         {showResultsSummary ? (
-          <div className="flex items-center gap-2 rounded-2xl border border-border/60 bg-background/80 px-3 py-2 text-sm text-muted-foreground">
-            <Filter className="w-4 h-4" />
-            <span>
-              {filteredRowsCount} shown on this page of {rowsCount}
-            </span>
-          </div>
+          <ViewerSearchSummary filteredRowsCount={filteredRowsCount} rowsCount={rowsCount} />
         ) : null}
       </div>
       <ActiveFilterChips

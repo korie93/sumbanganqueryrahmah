@@ -1,6 +1,16 @@
 import { downloadViewerRowsAsCsv } from "@/pages/viewer/utils";
 import type { DataRowWithId } from "@/pages/viewer/types";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import {
+  buildViewerExportFilename,
+  loadViewerJsPdfModule,
+  loadViewerXlsxModule,
+  resolveViewerPotentialIcColumns,
+} from "@/pages/viewer/export-file-utils";
+import {
+  buildViewerWorksheetColumns,
+  buildViewerWorksheetData,
+} from "@/pages/viewer/excel-export-utils";
 
 interface ViewerExportParams {
   headers: string[];
@@ -8,37 +18,6 @@ interface ViewerExportParams {
   importName: string;
   exportFiltered?: boolean;
   exportSelected?: boolean;
-}
-
-let viewerJsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
-let viewerXlsxModulePromise: Promise<typeof import("xlsx")> | null = null;
-
-function loadViewerJsPdfModule() {
-  if (!viewerJsPdfModulePromise) {
-    viewerJsPdfModulePromise = import("jspdf");
-  }
-
-  return viewerJsPdfModulePromise;
-}
-
-function loadViewerXlsxModule() {
-  if (!viewerXlsxModulePromise) {
-    viewerXlsxModulePromise = import("xlsx");
-  }
-
-  return viewerXlsxModulePromise;
-}
-
-function buildViewerExportFilename(
-  importName: string,
-  extension: "csv" | "pdf" | "xlsx",
-  exportFiltered = false,
-  exportSelected = false,
-) {
-  let filename = `SQR-${importName || "export"}`;
-  if (exportFiltered) filename += "-filtered";
-  if (exportSelected) filename += "-selected";
-  return `${filename}-${new Date().toISOString().split("T")[0]}.${extension}`;
 }
 
 export function exportViewerRowsToCsv({
@@ -194,25 +173,8 @@ export async function exportViewerRowsToExcel({
 }: ViewerExportParams) {
   if (rows.length === 0) return;
 
-  const icPatterns = /^(ic|no\.?\s*kp|no\.?\s*ic|id\s*no|ic\s*no|no\s*pengenalan|kad\s*pengenalan)/i;
-  const potentialIcColumns = headers.filter((header) => icPatterns.test(header.replace(/[_-]/g, " ")));
-
-  const worksheetData = rows.map((row) => {
-    const rowData: Record<string, string | number> = {};
-    headers.forEach((header) => {
-      const value = row[header];
-      const stringValue = String(value || "");
-      const isIcColumn = potentialIcColumns.includes(header);
-      const looksLikeIc = /^\d{6,14}$/.test(stringValue.replace(/[-\s]/g, ""));
-
-      if (isIcColumn || (looksLikeIc && stringValue.length >= 6)) {
-        rowData[header] = stringValue;
-      } else {
-        rowData[header] = typeof value === "number" ? value : value == null ? "" : String(value);
-      }
-    });
-    return rowData;
-  });
+  const potentialIcColumns = resolveViewerPotentialIcColumns(headers);
+  const worksheetData = buildViewerWorksheetData(headers, rows, potentialIcColumns);
 
   const XLSX = await loadViewerXlsxModule();
   const worksheet = XLSX.utils.json_to_sheet(worksheetData);
@@ -234,13 +196,7 @@ export async function exportViewerRowsToExcel({
     }
   }
 
-  worksheet["!cols"] = headers.map((header) => {
-    const maxLength = Math.max(
-      header.length,
-      ...rows.slice(0, 100).map((row) => String(row[header] || "").length),
-    );
-    return { wch: Math.min(maxLength + 2, 50) };
-  });
+  worksheet["!cols"] = buildViewerWorksheetColumns(headers, rows);
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Data");

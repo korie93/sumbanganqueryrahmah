@@ -1,12 +1,12 @@
 import { Columns } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { buildViewerColumnSelectorLabel } from "@/pages/viewer/column-selector-utils";
+import { ViewerColumnSelectorList } from "@/pages/viewer/ViewerColumnSelectorList";
 
 interface ViewerColumnSelectorProps {
   open: boolean;
@@ -32,7 +32,7 @@ export function ViewerColumnSelector({
       <PopoverTrigger asChild>
         <Button variant="outline" data-testid="button-column-selector">
           <Columns className="w-4 h-4 mr-2" />
-          Columns ({selectedColumns.size}/{headers.length})
+          {buildViewerColumnSelectorLabel(selectedColumns.size, headers.length)}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-64" align="end">
@@ -58,21 +58,11 @@ export function ViewerColumnSelector({
               </Button>
             </div>
           </div>
-          <div className="max-h-48 overflow-y-auto space-y-2">
-            {headers.map((header) => (
-              <div key={header} className="flex items-center gap-2">
-                <Checkbox
-                  id={`col-${header}`}
-                  checked={selectedColumns.has(header)}
-                  onCheckedChange={() => onToggleColumn(header)}
-                  data-testid={`checkbox-column-${header}`}
-                />
-                <Label htmlFor={`col-${header}`} className="text-sm cursor-pointer">
-                  {header}
-                </Label>
-              </div>
-            ))}
-          </div>
+          <ViewerColumnSelectorList
+            headers={headers}
+            selectedColumns={selectedColumns}
+            onToggleColumn={onToggleColumn}
+          />
         </div>
       </PopoverContent>
     </Popover>

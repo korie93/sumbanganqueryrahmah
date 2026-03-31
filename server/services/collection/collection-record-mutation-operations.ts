@@ -9,17 +9,10 @@ import {
 } from "../../routes/collection-access";
 import { removeCollectionReceiptFile, saveCollectionReceipt } from "../../routes/collection-receipt.service";
 import {
-  COLLECTION_BATCHES,
-  COLLECTION_STAFF_NICKNAME_MIN_LENGTH,
-  type CollectionReceiptMetadataPayload,
   ensureLooseObject,
-  isFutureCollectionDate,
   isNicknameScopeAllowedForRole,
-  isValidCollectionDate,
-  isValidCollectionPhone,
   normalizeCollectionStringList,
   normalizeCollectionText,
-  parseCollectionAmount,
   type CollectionBatchValue,
   type CollectionCreatePayload,
   type CollectionDeletePayload,
@@ -34,290 +27,25 @@ import {
   parseRecordVersionTimestamp,
   resolveRecordVersionTimestamp,
 } from "./collection-record-runtime-utils";
+import { findDuplicateCollectionReceiptHashes } from "./collection-receipt-validation";
 import {
-  findDuplicateCollectionReceiptHashes,
-  normalizeCollectionReceiptDate,
-  normalizeCollectionReceiptExtractionStatus,
-  normalizeCollectionReceiptReference,
-  parseCollectionAmountToCents,
-  type CollectionReceiptValidationDraft,
-} from "./collection-receipt-validation";
-import type {
-  CollectionRecordReceipt,
-  CreateCollectionRecordReceiptInput,
-  UpdateCollectionRecordReceiptInput,
-} from "../../storage-postgres";
+  assertValidCollectionCreateFields,
+  buildCollectionRecordUpdateDraft,
+  buildCollectionAuditFieldChanges,
+  buildCollectionAuditSnapshot,
+  buildCreateReceiptInput,
+  buildReceiptUpdateInput,
+  buildValidationDraftFromExistingReceipt,
+  buildValidationDraftFromMetadata,
+  normalizeCollectionRecordFields,
+  normalizeCollectionReceiptMetadata,
+  readCollectionReceiptMetadataList,
+  readUploadedReceiptRows,
+  resolveCollectionAuditReceiptState,
+  type MultipartCollectionPayload,
+} from "./collection-record-mutation-helpers";
 
 type RequireUserFn = (user?: AuthenticatedUser) => AuthenticatedUser;
-
-type MultipartCollectionPayload = Record<string, unknown> & {
-  uploadedReceipts?: CreateCollectionRecordReceiptInput[] | null;
-};
-
-type CollectionRecordAuditSource = "relation" | "legacy" | "none";
-
-type CollectionRecordAuditSnapshot = {
-  customerName: string;
-  paymentDate: string;
-  amount: number;
-  collectionStaffNickname: string;
-  activeReceiptCount: number;
-  activeReceiptSource: CollectionRecordAuditSource;
-};
-
-function toCollectionAuditAmount(value: unknown) {
-  const parsed = Number(value || 0);
-  if (!Number.isFinite(parsed)) {
-    return 0;
-  }
-  return Math.round((parsed + Number.EPSILON) * 100) / 100;
-}
-
-function resolveCollectionAuditReceiptState(params: {
-  relationCount: number;
-  legacyReceiptFile?: string | null;
-}): {
-  count: number;
-  source: CollectionRecordAuditSource;
-} {
-  const relationCount = Math.max(0, Number(params.relationCount) || 0);
-  if (relationCount > 0) {
-    return {
-      count: relationCount,
-      source: "relation",
-    };
-  }
-
-  if (normalizeCollectionText(params.legacyReceiptFile)) {
-    return {
-      count: 1,
-      source: "legacy",
-    };
-  }
-
-  return {
-    count: 0,
-    source: "none",
-  };
-}
-
-function buildCollectionAuditSnapshot(params: {
-  customerName: unknown;
-  paymentDate: unknown;
-  amount: unknown;
-  collectionStaffNickname: unknown;
-  activeReceiptCount: number;
-  activeReceiptSource: CollectionRecordAuditSource;
-}): CollectionRecordAuditSnapshot {
-  return {
-    customerName: String(params.customerName || "").trim(),
-    paymentDate: String(params.paymentDate || "").trim(),
-    amount: toCollectionAuditAmount(params.amount),
-    collectionStaffNickname: String(params.collectionStaffNickname || "").trim(),
-    activeReceiptCount: Math.max(0, Number(params.activeReceiptCount) || 0),
-    activeReceiptSource: params.activeReceiptSource,
-  };
-}
-
-function buildCollectionAuditFieldChanges(
-  before: CollectionRecordAuditSnapshot,
-  after: CollectionRecordAuditSnapshot,
-) {
-  const changes: Record<string, { from: string | number; to: string | number }> = {};
-
-  if (before.customerName !== after.customerName) {
-    changes.customerName = {
-      from: before.customerName,
-      to: after.customerName,
-    };
-  }
-  if (before.paymentDate !== after.paymentDate) {
-    changes.paymentDate = {
-      from: before.paymentDate,
-      to: after.paymentDate,
-    };
-  }
-  if (before.amount !== after.amount) {
-    changes.amount = {
-      from: before.amount,
-      to: after.amount,
-    };
-  }
-  if (before.collectionStaffNickname !== after.collectionStaffNickname) {
-    changes.collectionStaffNickname = {
-      from: before.collectionStaffNickname,
-      to: after.collectionStaffNickname,
-    };
-  }
-
-  return changes;
-}
-
-function readUploadedReceiptRows(body: MultipartCollectionPayload): CreateCollectionRecordReceiptInput[] {
-  if (!Array.isArray(body.uploadedReceipts)) {
-    return [];
-  }
-
-  return body.uploadedReceipts
-    .map((item) => ensureLooseObject(item))
-    .filter((item): item is Record<string, unknown> => Boolean(item))
-    .map((item) => ({
-      storagePath: normalizeCollectionText(item.storagePath),
-      originalFileName: normalizeCollectionText(item.originalFileName),
-      originalMimeType: normalizeCollectionText(item.originalMimeType) || "application/octet-stream",
-      originalExtension: normalizeCollectionText(item.originalExtension),
-      fileSize: Number(item.fileSize || 0),
-      receiptAmountCents: parseCollectionAmountToCents(item.receiptAmountCents, { allowZero: true, allowEmpty: true }),
-      extractedAmountCents: parseCollectionAmountToCents(item.extractedAmountCents, { allowZero: true, allowEmpty: true }),
-      extractionStatus: normalizeCollectionReceiptExtractionStatus(item.extractionStatus ?? null),
-      extractionConfidence: normalizeExtractionConfidence(item.extractionConfidence),
-      receiptDate: normalizeCollectionReceiptDate(item.receiptDate),
-      receiptReference: normalizeCollectionReceiptReference(item.receiptReference),
-      fileHash: normalizeCollectionText(item.fileHash).toLowerCase() || null,
-    }))
-    .filter((item) => item.storagePath && item.originalFileName && Number.isFinite(item.fileSize));
-}
-
-type NormalizedCollectionReceiptMetadata = {
-  receiptId: string | null;
-  receiptAmountCents: number | null;
-  extractedAmountCents: number | null;
-  extractionStatus: CreateCollectionRecordReceiptInput["extractionStatus"];
-  extractionConfidence: number | null;
-  receiptDate: string | null;
-  receiptReference: string | null;
-  fileHash: string | null;
-};
-
-function readCollectionReceiptMetadataList(raw: unknown): CollectionReceiptMetadataPayload[] {
-  if (!raw) {
-    return [];
-  }
-
-  if (typeof raw === "string") {
-    const normalized = raw.trim();
-    if (!normalized) {
-      return [];
-    }
-    try {
-      const parsed = JSON.parse(normalized);
-      return Array.isArray(parsed)
-        ? parsed
-            .map((item) => ensureLooseObject(item))
-            .filter((item): item is Record<string, unknown> => Boolean(item))
-        : [];
-    } catch {
-      throw badRequest("Receipt metadata payload is invalid.", "COLLECTION_RECEIPT_METADATA_INVALID");
-    }
-  }
-
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-
-  return raw
-    .map((item) => ensureLooseObject(item))
-    .filter((item): item is Record<string, unknown> => Boolean(item));
-}
-
-function normalizeExtractionConfidence(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") {
-    return null;
-  }
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return null;
-  }
-  if (parsed <= 1) {
-    return parsed;
-  }
-  if (parsed <= 100) {
-    return parsed / 100;
-  }
-  return null;
-}
-
-function normalizeCollectionReceiptMetadata(
-  raw: CollectionReceiptMetadataPayload,
-): NormalizedCollectionReceiptMetadata {
-  return {
-    receiptId: normalizeCollectionText(raw.receiptId) || null,
-    receiptAmountCents: parseCollectionAmountToCents(raw.receiptAmount, { allowZero: true }),
-    extractedAmountCents: parseCollectionAmountToCents(raw.extractedAmount, { allowZero: true, allowEmpty: true }),
-    extractionStatus: normalizeCollectionReceiptExtractionStatus(raw.extractionStatus ?? null),
-    extractionConfidence: normalizeExtractionConfidence(raw.extractionConfidence),
-    receiptDate: normalizeCollectionReceiptDate(raw.receiptDate),
-    receiptReference: normalizeCollectionReceiptReference(raw.receiptReference),
-    fileHash: normalizeCollectionText(raw.fileHash).toLowerCase() || null,
-  };
-}
-
-function buildValidationDraftFromExistingReceipt(
-  receipt: CollectionRecordReceipt,
-): CollectionReceiptValidationDraft {
-  return {
-    receiptId: receipt.id,
-    fileHash: normalizeCollectionText(receipt.fileHash).toLowerCase() || null,
-    originalFileName: receipt.originalFileName,
-    receiptAmountCents: parseCollectionAmountToCents(receipt.receiptAmount, { allowZero: true, allowEmpty: true }),
-    extractedAmountCents: parseCollectionAmountToCents(receipt.extractedAmount, { allowZero: true, allowEmpty: true }),
-    extractionStatus: normalizeCollectionReceiptExtractionStatus(receipt.extractionStatus),
-    extractionConfidence:
-      receipt.extractionConfidence === null || receipt.extractionConfidence === undefined
-        ? null
-        : Number(receipt.extractionConfidence),
-    receiptDate: normalizeCollectionReceiptDate(receipt.receiptDate),
-    receiptReference: normalizeCollectionReceiptReference(receipt.receiptReference),
-  };
-}
-
-function buildValidationDraftFromMetadata(params: {
-  metadata: NormalizedCollectionReceiptMetadata;
-  originalFileName?: string | null;
-}): CollectionReceiptValidationDraft {
-  return {
-    receiptId: params.metadata.receiptId,
-    fileHash: params.metadata.fileHash,
-    originalFileName: params.originalFileName || null,
-    receiptAmountCents: params.metadata.receiptAmountCents,
-    extractedAmountCents: params.metadata.extractedAmountCents,
-    extractionStatus: params.metadata.extractionStatus,
-    extractionConfidence: params.metadata.extractionConfidence,
-    receiptDate: params.metadata.receiptDate,
-    receiptReference: params.metadata.receiptReference,
-  };
-}
-
-function buildCreateReceiptInput(
-  uploadedReceipt: CreateCollectionRecordReceiptInput,
-  metadata: NormalizedCollectionReceiptMetadata,
-): CreateCollectionRecordReceiptInput {
-  return {
-    ...uploadedReceipt,
-    receiptAmountCents: metadata.receiptAmountCents,
-    extractedAmountCents: metadata.extractedAmountCents,
-    extractionStatus: metadata.extractionStatus || normalizeCollectionReceiptExtractionStatus(uploadedReceipt.extractionStatus),
-    extractionConfidence: metadata.extractionConfidence,
-    receiptDate: metadata.receiptDate,
-    receiptReference: metadata.receiptReference,
-    fileHash: metadata.fileHash || normalizeCollectionText(uploadedReceipt.fileHash).toLowerCase() || null,
-  };
-}
-
-function buildReceiptUpdateInput(
-  receiptId: string,
-  draft: CollectionReceiptValidationDraft,
-): UpdateCollectionRecordReceiptInput {
-  return {
-    receiptId,
-    receiptAmountCents: draft.receiptAmountCents ?? null,
-    extractedAmountCents: draft.extractedAmountCents ?? null,
-    extractionStatus: draft.extractionStatus ?? null,
-    extractionConfidence: draft.extractionConfidence ?? null,
-    receiptDate: draft.receiptDate ?? null,
-    receiptReference: draft.receiptReference ?? null,
-  };
-}
 
 export class CollectionRecordMutationOperations {
   constructor(
@@ -384,6 +112,20 @@ export class CollectionRecordMutationOperations {
     }
   }
 
+  private readReceiptMetadataList(raw: unknown) {
+    try {
+      return readCollectionReceiptMetadataList(raw);
+    } catch (error) {
+      if ((error as Error)?.message === "COLLECTION_RECEIPT_METADATA_INVALID") {
+        throw badRequest(
+          "Receipt metadata payload is invalid.",
+          "COLLECTION_RECEIPT_METADATA_INVALID",
+        );
+      }
+      throw error;
+    }
+  }
+
   async createRecord(userInput: AuthenticatedUser | undefined, bodyRaw: unknown) {
     const user = this.requireUser(userInput);
     const uploadedReceipts: Array<Awaited<ReturnType<typeof saveCollectionReceipt>>> = [];
@@ -391,35 +133,18 @@ export class CollectionRecordMutationOperations {
 
     try {
       const body = (ensureLooseObject(bodyRaw) || {}) as CollectionCreatePayload & MultipartCollectionPayload;
-      const customerName = normalizeCollectionText(body.customerName);
-      const icNumber = normalizeCollectionText(body.icNumber);
-      const customerPhone = normalizeCollectionText(body.customerPhone);
-      const accountNumber = normalizeCollectionText(body.accountNumber);
-      const batch = normalizeCollectionText(body.batch).toUpperCase();
-      const paymentDate = normalizeCollectionText(body.paymentDate);
-      const collectionStaffNickname = normalizeCollectionText(body.collectionStaffNickname);
-      const amount = parseCollectionAmount(body.amount);
-      const amountCents = parseCollectionAmountToCents(body.amount);
+      const fields = normalizeCollectionRecordFields(body);
+      assertValidCollectionCreateFields(fields);
 
-      if (!customerName) throw badRequest("Customer Name is required.");
-      if (!icNumber) throw badRequest("IC Number is required.");
-      if (!isValidCollectionPhone(customerPhone)) throw badRequest("Customer Phone Number is invalid.");
-      if (!accountNumber) throw badRequest("Account Number is required.");
-      if (!COLLECTION_BATCHES.has(batch)) throw badRequest("Invalid batch value.");
-      if (!paymentDate || !isValidCollectionDate(paymentDate)) throw badRequest("Invalid payment date.");
-      if (isFutureCollectionDate(paymentDate)) throw badRequest("Payment date cannot be in the future.");
-      if (amount === null || amountCents === null) throw badRequest("Amount must be a positive number.");
-      if (collectionStaffNickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
-        throw badRequest("Staff nickname must be at least 2 characters.");
-      }
-
-      const staffNickname = await this.storage.getCollectionStaffNicknameByName(collectionStaffNickname);
+      const staffNickname = await this.storage.getCollectionStaffNicknameByName(
+        fields.collectionStaffNickname,
+      );
       if (!staffNickname?.isActive) {
         throw badRequest("Staff nickname tidak sah atau sudah inactive.");
       }
       if (user.role === "admin") {
         const allowedNicknames = await getAdminVisibleNicknameValues(this.storage, user);
-        if (!hasNicknameValue(allowedNicknames, collectionStaffNickname)) {
+        if (!hasNicknameValue(allowedNicknames, fields.collectionStaffNickname)) {
           throw forbidden("Nickname tidak dibenarkan untuk akaun admin ini.");
         }
       } else if (!isNicknameScopeAllowedForRole(staffNickname.roleScope, user.role)) {
@@ -439,7 +164,7 @@ export class CollectionRecordMutationOperations {
       for (const nextReceipt of receiptPayloads) {
         uploadedReceipts.push(await saveCollectionReceipt(nextReceipt));
       }
-      const newReceiptMetadata = readCollectionReceiptMetadataList(body.newReceiptMetadata)
+      const newReceiptMetadata = this.readReceiptMetadataList(body.newReceiptMetadata)
         .map((item) => normalizeCollectionReceiptMetadata(item));
       const newReceiptInputs = uploadedReceipts.map((receipt, index) =>
         buildCreateReceiptInput(
@@ -469,7 +194,7 @@ export class CollectionRecordMutationOperations {
           details: JSON.stringify({
             event: "collection_receipt_duplicate_rejected",
             actor: user.username,
-            customerName,
+            customerName: fields.customerName,
             duplicates: duplicateReceipts,
           }),
         });
@@ -480,16 +205,16 @@ export class CollectionRecordMutationOperations {
       }
 
       const record = await this.storage.createCollectionRecord({
-        customerName,
-        icNumber,
-        customerPhone,
-        accountNumber,
-        batch: batch as CollectionBatchValue,
-        paymentDate,
-        amount,
+        customerName: fields.customerName,
+        icNumber: fields.icNumber,
+        customerPhone: fields.customerPhone,
+        accountNumber: fields.accountNumber,
+        batch: fields.batch as CollectionBatchValue,
+        paymentDate: fields.paymentDate,
+        amount: fields.amount,
         receiptFile: null,
         createdByLogin: user.username,
-        collectionStaffNickname,
+        collectionStaffNickname: fields.collectionStaffNickname,
       });
       createdRecordId = record.id;
       if (newReceiptInputs.length > 0) {
@@ -656,65 +381,25 @@ export class CollectionRecordMutationOperations {
       }
 
       const updatePayload: Record<string, unknown> = {};
-      const customerName = normalizeCollectionText(body.customerName);
-      const icNumber = normalizeCollectionText(body.icNumber);
-      const customerPhone = normalizeCollectionText(body.customerPhone);
-      const accountNumber = normalizeCollectionText(body.accountNumber);
-      const batch = normalizeCollectionText(body.batch).toUpperCase();
-      const paymentDate = normalizeCollectionText(body.paymentDate);
-      const collectionStaffNickname = normalizeCollectionText(body.collectionStaffNickname);
-      const amount = body.amount !== undefined ? parseCollectionAmount(body.amount) : null;
-      const nextAmountCents =
-        body.amount !== undefined
-          ? parseCollectionAmountToCents(body.amount)
-          : parseCollectionAmountToCents(existing.amount, { allowZero: true });
-
-      if (body.customerName !== undefined) {
-        if (!customerName) throw badRequest("Customer Name cannot be empty.");
-        updatePayload.customerName = customerName;
-      }
-      if (body.icNumber !== undefined) {
-        if (!icNumber) throw badRequest("IC Number cannot be empty.");
-        updatePayload.icNumber = icNumber;
-      }
-      if (body.customerPhone !== undefined) {
-        if (!isValidCollectionPhone(customerPhone)) throw badRequest("Customer Phone Number is invalid.");
-        updatePayload.customerPhone = customerPhone;
-      }
-      if (body.accountNumber !== undefined) {
-        if (!accountNumber) throw badRequest("Account Number cannot be empty.");
-        updatePayload.accountNumber = accountNumber;
-      }
-      if (body.batch !== undefined) {
-        if (!COLLECTION_BATCHES.has(batch)) throw badRequest("Invalid batch value.");
-        updatePayload.batch = batch;
-      }
-      if (body.paymentDate !== undefined) {
-        if (!paymentDate || !isValidCollectionDate(paymentDate)) throw badRequest("Invalid payment date.");
-        if (isFutureCollectionDate(paymentDate)) throw badRequest("Payment date cannot be in the future.");
-        updatePayload.paymentDate = paymentDate;
-      }
-      if (body.amount !== undefined) {
-        if (amount === null || nextAmountCents === null) throw badRequest("Amount must be a positive number.");
-        updatePayload.amount = amount;
-      }
-      if (body.collectionStaffNickname !== undefined) {
-        if (collectionStaffNickname.length < COLLECTION_STAFF_NICKNAME_MIN_LENGTH) {
-          throw badRequest("Staff nickname must be at least 2 characters.");
-        }
-        const staffNickname = await this.storage.getCollectionStaffNicknameByName(collectionStaffNickname);
+      const fields = normalizeCollectionRecordFields(body);
+      const updateDraft = buildCollectionRecordUpdateDraft(body, fields);
+      Object.assign(updatePayload, updateDraft.updatePayload);
+      if (updateDraft.nextCollectionStaffNickname) {
+        const staffNickname = await this.storage.getCollectionStaffNicknameByName(
+          updateDraft.nextCollectionStaffNickname,
+        );
         if (!staffNickname?.isActive) {
           throw badRequest("Staff nickname tidak sah atau sudah inactive.");
         }
         if (user.role === "admin") {
           const allowedNicknames = await getAdminVisibleNicknameValues(this.storage, user);
-          if (!hasNicknameValue(allowedNicknames, collectionStaffNickname)) {
+          if (!hasNicknameValue(allowedNicknames, updateDraft.nextCollectionStaffNickname)) {
             throw forbidden("Nickname tidak dibenarkan untuk akaun admin ini.");
           }
         } else if (!isNicknameScopeAllowedForRole(staffNickname.roleScope, user.role)) {
           throw forbidden("Nickname ini tidak dibenarkan untuk role semasa.");
         }
-        updatePayload.collectionStaffNickname = collectionStaffNickname;
+        updatePayload.collectionStaffNickname = updateDraft.nextCollectionStaffNickname;
       }
 
       const shouldRemoveReceipt = body.removeReceipt === true;
@@ -734,9 +419,9 @@ export class CollectionRecordMutationOperations {
       for (const nextReceipt of receiptPayloads) {
         uploadedReceipts.push(await saveCollectionReceipt(nextReceipt));
       }
-      const existingReceiptMetadata = readCollectionReceiptMetadataList(body.existingReceiptMetadata)
+      const existingReceiptMetadata = this.readReceiptMetadataList(body.existingReceiptMetadata)
         .map((item) => normalizeCollectionReceiptMetadata(item));
-      const newReceiptMetadata = readCollectionReceiptMetadataList(body.newReceiptMetadata)
+      const newReceiptMetadata = this.readReceiptMetadataList(body.newReceiptMetadata)
         .map((item) => normalizeCollectionReceiptMetadata(item));
 
       const hasReceiptMutation =
