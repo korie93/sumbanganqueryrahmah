@@ -23,6 +23,19 @@ SET
 CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_record_daily_rollups_slice_unique
 ON public.collection_record_daily_rollups(payment_date, created_by_login, collection_staff_nickname);
 
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'idx_collection_record_daily_rollups_slice_unique'
+  ) THEN
+    ALTER TABLE public.collection_record_daily_rollups
+    ADD CONSTRAINT idx_collection_record_daily_rollups_slice_unique
+    PRIMARY KEY USING INDEX idx_collection_record_daily_rollups_slice_unique;
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_collection_record_daily_rollups_payment_date
 ON public.collection_record_daily_rollups(payment_date);
 

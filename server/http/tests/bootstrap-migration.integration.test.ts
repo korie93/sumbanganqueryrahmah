@@ -551,6 +551,9 @@ test(
         0,
       );
       assert.equal(await constraintExists(pool, "fk_collection_record_receipts_record_id"), true);
+      assert.equal(await constraintExists(pool, "idx_collection_record_daily_rollups_slice_unique"), true);
+      assert.equal(await constraintExists(pool, "idx_collection_rollup_refresh_queue_slice_unique"), true);
+      assert.equal(await constraintExists(pool, "idx_collection_record_monthly_rollups_slice_unique"), true);
       assert.equal(await indexExists(pool, "idx_collection_record_receipts_record_storage_unique"), true);
       assert.equal(await indexExists(pool, "idx_collection_record_daily_rollups_slice_unique"), true);
       assert.equal(await indexExists(pool, "idx_collection_rollup_refresh_queue_slice_unique"), true);
@@ -662,6 +665,9 @@ test(
       assert.equal(rollupCount.rows[0]?.count, 1);
       assert.equal(monthlyRollupCount.rows[0]?.count, 1);
       assert.equal(await constraintExists(pool, "fk_collection_record_receipts_record_id"), true);
+      assert.equal(await constraintExists(pool, "idx_collection_record_daily_rollups_slice_unique"), true);
+      assert.equal(await constraintExists(pool, "idx_collection_rollup_refresh_queue_slice_unique"), true);
+      assert.equal(await constraintExists(pool, "idx_collection_record_monthly_rollups_slice_unique"), true);
       assert.equal(await indexExists(pool, "idx_collection_records_lower_created_by_payment_created_id"), true);
       assert.equal(await indexExists(pool, "idx_collection_record_daily_rollups_slice_unique"), true);
       assert.equal(await indexExists(pool, "idx_collection_rollup_refresh_queue_slice_unique"), true);

@@ -25,6 +25,19 @@ SET
 CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_record_monthly_rollups_slice_unique
 ON public.collection_record_monthly_rollups(year, month, created_by_login, collection_staff_nickname);
 
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'idx_collection_record_monthly_rollups_slice_unique'
+  ) THEN
+    ALTER TABLE public.collection_record_monthly_rollups
+    ADD CONSTRAINT idx_collection_record_monthly_rollups_slice_unique
+    PRIMARY KEY USING INDEX idx_collection_record_monthly_rollups_slice_unique;
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_collection_record_monthly_rollups_year_month
 ON public.collection_record_monthly_rollups(year, month);
 

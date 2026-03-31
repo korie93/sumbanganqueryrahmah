@@ -31,6 +31,19 @@ SET
 CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_rollup_refresh_queue_slice_unique
 ON public.collection_record_daily_rollup_refresh_queue(payment_date, created_by_login, collection_staff_nickname);
 
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'idx_collection_rollup_refresh_queue_slice_unique'
+  ) THEN
+    ALTER TABLE public.collection_record_daily_rollup_refresh_queue
+    ADD CONSTRAINT idx_collection_rollup_refresh_queue_slice_unique
+    PRIMARY KEY USING INDEX idx_collection_rollup_refresh_queue_slice_unique;
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_collection_rollup_refresh_queue_status_next_attempt
 ON public.collection_record_daily_rollup_refresh_queue(status, next_attempt_at);
 

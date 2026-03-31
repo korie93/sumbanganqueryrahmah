@@ -8,6 +8,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  primaryKey,
   serial,
   text,
   timestamp,
@@ -421,11 +422,10 @@ export const collectionRecordDailyRollups = pgTable("collection_record_daily_rol
   totalAmount: numeric("total_amount", { precision: 14, scale: 2 }).notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
-  sliceUnique: uniqueIndex("idx_collection_record_daily_rollups_slice_unique").on(
-    table.paymentDate,
-    table.createdByLogin,
-    table.collectionStaffNickname,
-  ),
+  slicePrimaryKey: primaryKey({
+    name: "idx_collection_record_daily_rollups_slice_unique",
+    columns: [table.paymentDate, table.createdByLogin, table.collectionStaffNickname],
+  }),
   paymentDateIdx: index("idx_collection_record_daily_rollups_payment_date").on(table.paymentDate),
   createdByPaymentDateIdx: index("idx_collection_record_daily_rollups_created_by_payment_date").on(
     table.createdByLogin,
@@ -447,12 +447,10 @@ export const collectionRecordMonthlyRollups = pgTable("collection_record_monthly
   totalAmount: numeric("total_amount", { precision: 14, scale: 2 }).notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
-  sliceUnique: uniqueIndex("idx_collection_record_monthly_rollups_slice_unique").on(
-    table.year,
-    table.month,
-    table.createdByLogin,
-    table.collectionStaffNickname,
-  ),
+  slicePrimaryKey: primaryKey({
+    name: "idx_collection_record_monthly_rollups_slice_unique",
+    columns: [table.year, table.month, table.createdByLogin, table.collectionStaffNickname],
+  }),
   yearMonthIdx: index("idx_collection_record_monthly_rollups_year_month").on(table.year, table.month),
   createdByYearMonthIdx: index("idx_collection_record_monthly_rollups_created_by_year_month").on(
     table.createdByLogin,
@@ -478,11 +476,10 @@ export const collectionRecordDailyRollupRefreshQueue = pgTable("collection_recor
   attemptCount: integer("attempt_count").notNull().default(0),
   lastError: text("last_error"),
 }, (table) => ({
-  sliceUnique: uniqueIndex("idx_collection_rollup_refresh_queue_slice_unique").on(
-    table.paymentDate,
-    table.createdByLogin,
-    table.collectionStaffNickname,
-  ),
+  slicePrimaryKey: primaryKey({
+    name: "idx_collection_rollup_refresh_queue_slice_unique",
+    columns: [table.paymentDate, table.createdByLogin, table.collectionStaffNickname],
+  }),
   statusNextAttemptIdx: index("idx_collection_rollup_refresh_queue_status_next_attempt").on(
     table.status,
     table.nextAttemptAt,
