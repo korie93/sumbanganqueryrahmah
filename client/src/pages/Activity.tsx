@@ -321,7 +321,7 @@ export default function Activity() {
   const partiallySelected = selectedVisibleCount > 0 && !allVisibleSelected;
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
+    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
       <div className="max-w-6xl mx-auto">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4" data-floating-ai-avoid="true">
           <div>

@@ -150,6 +150,22 @@ ON public.admin_group_members(lower(member_nickname));
 CREATE INDEX IF NOT EXISTS idx_admin_group_members_group
 ON public.admin_group_members(admin_group_id);
 
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'fk_admin_group_members_admin_group_id'
+  ) THEN
+    ALTER TABLE public.admin_group_members
+    ADD CONSTRAINT fk_admin_group_members_admin_group_id
+    FOREIGN KEY (admin_group_id)
+    REFERENCES public.admin_groups(id)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS public.collection_nickname_sessions (
   activity_id text PRIMARY KEY,
   username text NOT NULL,
@@ -178,6 +194,13 @@ WHERE trim(COALESCE(username, '')) = ''
   OR trim(COALESCE(user_role, '')) = ''
   OR trim(COALESCE(nickname, '')) = '';
 
+DELETE FROM public.collection_nickname_sessions session
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM public.user_activity activity
+  WHERE activity.id = session.activity_id
+);
+
 CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_username
 ON public.collection_nickname_sessions(username);
 
@@ -186,6 +209,22 @@ ON public.collection_nickname_sessions(lower(nickname));
 
 CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_updated_at
 ON public.collection_nickname_sessions(updated_at DESC);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'fk_collection_nickname_sessions_activity_id'
+  ) THEN
+    ALTER TABLE public.collection_nickname_sessions
+    ADD CONSTRAINT fk_collection_nickname_sessions_activity_id
+    FOREIGN KEY (activity_id)
+    REFERENCES public.user_activity(id)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS public.admin_visible_nicknames (
   id uuid PRIMARY KEY,
@@ -235,3 +274,33 @@ ON public.admin_visible_nicknames(admin_user_id);
 
 CREATE INDEX IF NOT EXISTS idx_admin_visible_nicknames_nickname
 ON public.admin_visible_nicknames(nickname_id);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'fk_admin_visible_nicknames_nickname_id'
+  ) THEN
+    ALTER TABLE public.admin_visible_nicknames
+    ADD CONSTRAINT fk_admin_visible_nicknames_nickname_id
+    FOREIGN KEY (nickname_id)
+    REFERENCES public.collection_staff_nicknames(id)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE;
+  END IF;
+
+  IF to_regclass('public.users') IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'fk_admin_visible_nicknames_admin_user_id'
+    ) THEN
+    ALTER TABLE public.admin_visible_nicknames
+    ADD CONSTRAINT fk_admin_visible_nicknames_admin_user_id
+    FOREIGN KEY (admin_user_id)
+    REFERENCES public.users(id)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE;
+  END IF;
+END $$;

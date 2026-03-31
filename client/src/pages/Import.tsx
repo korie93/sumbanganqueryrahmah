@@ -336,7 +336,7 @@ export default function Import({ onNavigate, importUploadLimitBytes }: ImportPro
   }, []);
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
+    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Import Data</h1>

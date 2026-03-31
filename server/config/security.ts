@@ -8,9 +8,22 @@ export function getCollectionNicknameTempPassword(): string {
   return runtimeConfig.auth.collectionNicknameTempPassword;
 }
 
-export function getTwoFactorEncryptionSecret(): string {
+export function getTwoFactorEncryptionSecret(): string | null {
   const configured = String(process.env.TWO_FACTOR_ENCRYPTION_KEY || "").trim();
-  return configured || runtimeConfig.auth.sessionSecret;
+  return configured || null;
+}
+
+export function getTwoFactorDecryptionSecrets(): string[] {
+  const secrets = new Set<string>();
+  const configured = getTwoFactorEncryptionSecret();
+  if (configured) {
+    secrets.add(configured);
+  }
+  const legacySessionSecret = String(runtimeConfig.auth.sessionSecret || "").trim();
+  if (legacySessionSecret) {
+    secrets.add(legacySessionSecret);
+  }
+  return Array.from(secrets);
 }
 
 export function shouldSeedDefaultUsers(): boolean {

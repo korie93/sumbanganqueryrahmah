@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { sql } from "drizzle-orm";
+import { sql, type SQLWrapper } from "drizzle-orm";
 import { db } from "../db-postgres";
 import type {
   CollectionDailyCalendarDay,
@@ -11,6 +11,14 @@ import {
   mapCollectionDailyCalendarRow,
   mapCollectionDailyTargetRow,
 } from "./collection-repository-mappers";
+
+type CollectionDailyQueryResult = {
+  rows?: any[];
+};
+
+type CollectionDailyExecutor = {
+  execute: (query: SQLWrapper | string) => PromiseLike<CollectionDailyQueryResult>;
+};
 
 export async function listCollectionDailyUsers(): Promise<CollectionDailyUser[]> {
   const result = await db.execute(sql`
@@ -111,8 +119,8 @@ export async function upsertCollectionDailyTarget(params: {
 export async function listCollectionDailyCalendar(params: {
   year: number;
   month: number;
-}): Promise<CollectionDailyCalendarDay[]> {
-  const result = await db.execute(sql`
+}, executor: CollectionDailyExecutor = db): Promise<CollectionDailyCalendarDay[]> {
+  const result = await executor.execute(sql`
     SELECT
       id,
       year,
@@ -143,53 +151,56 @@ export async function upsertCollectionDailyCalendarDays(params: {
     isHoliday: boolean;
     holidayName?: string | null;
   }>;
-}): Promise<CollectionDailyCalendarDay[]> {
+}, executor: CollectionDailyExecutor = db): Promise<CollectionDailyCalendarDay[]> {
   if (!params.days.length) {
     return [];
   }
 
-  for (const day of params.days) {
-    await db.execute(sql`
-      INSERT INTO public.collection_daily_calendar (
-        id,
-        year,
-        month,
-        day,
-        is_working_day,
-        is_holiday,
-        holiday_name,
-        created_by,
-        updated_by,
-        created_at,
-        updated_at
-      )
-      VALUES (
-        ${randomUUID()}::uuid,
-        ${params.year},
-        ${params.month},
-        ${day.day},
-        ${day.isWorkingDay},
-        ${day.isHoliday},
-        ${day.holidayName ?? null},
-        ${params.actor},
-        ${params.actor},
-        now(),
-        now()
-      )
-      ON CONFLICT (year, month, day)
-      DO UPDATE SET
-        is_working_day = EXCLUDED.is_working_day,
-        is_holiday = EXCLUDED.is_holiday,
-        holiday_name = EXCLUDED.holiday_name,
-        updated_by = EXCLUDED.updated_by,
-        updated_at = now()
-    `);
-  }
+  const valuesSql = sql.join(
+    params.days.map((day) => sql`(
+      ${randomUUID()}::uuid,
+      ${params.year},
+      ${params.month},
+      ${day.day},
+      ${day.isWorkingDay},
+      ${day.isHoliday},
+      ${day.holidayName ?? null},
+      ${params.actor},
+      ${params.actor},
+      now(),
+      now()
+    )`),
+    sql`, `,
+  );
+
+  await executor.execute(sql`
+    INSERT INTO public.collection_daily_calendar (
+      id,
+      year,
+      month,
+      day,
+      is_working_day,
+      is_holiday,
+      holiday_name,
+      created_by,
+      updated_by,
+      created_at,
+      updated_at
+    )
+    VALUES ${valuesSql}
+    ON CONFLICT (year, month, day)
+    DO UPDATE SET
+      is_working_day = EXCLUDED.is_working_day,
+      is_holiday = EXCLUDED.is_holiday,
+      holiday_name = EXCLUDED.holiday_name,
+      updated_by = EXCLUDED.updated_by,
+      updated_at = now()
+  `);
 
   return listCollectionDailyCalendar({
     year: params.year,
     month: params.month,
-  });
+  }, executor);
 }
 
 export async function listCollectionDailyPaidCustomers(params: {

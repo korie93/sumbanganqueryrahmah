@@ -139,7 +139,7 @@ export default function SystemMonitorLayout({
 
   if (availableSections.length === 0) {
     return (
-      <div className="min-h-[calc(100vh-3.5rem)] p-6">
+      <div className="app-shell-min-height p-6">
         <Card className="glass-wrapper">
           <CardContent className="p-6 text-sm text-muted-foreground">
             No System Monitor sections are available for your current role settings.
@@ -166,7 +166,7 @@ export default function SystemMonitorLayout({
   );
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-background px-4 py-4 lg:px-6">
+    <div className="app-shell-min-height bg-background px-4 py-4 lg:px-6">
       <div className="mx-auto max-w-[1680px] space-y-4">
         <Card className="border-border/60 bg-background/75 shadow-sm">
           <CardHeader className="py-4">

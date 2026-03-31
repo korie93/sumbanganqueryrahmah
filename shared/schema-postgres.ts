@@ -123,7 +123,9 @@ export const imports = pgTable("imports", {
 
 export const dataRows = pgTable("data_rows", {
   id: text("id").primaryKey(),
-  importId: text("import_id").notNull(),
+  importId: text("import_id")
+    .notNull()
+    .references(() => imports.id, { onDelete: "cascade", onUpdate: "cascade" }),
   jsonDataJsonb: jsonb("json_data").notNull(), // guna satu column sahaja
 }, (table) => ({
   importIdIdx: index("idx_data_rows_import_id").on(table.importId),
@@ -530,7 +532,9 @@ export const adminGroups = pgTable("admin_groups", {
 
 export const adminGroupMembers = pgTable("admin_group_members", {
   id: uuid("id").primaryKey(),
-  adminGroupId: uuid("admin_group_id").notNull(),
+  adminGroupId: uuid("admin_group_id")
+    .notNull()
+    .references(() => adminGroups.id, { onDelete: "cascade", onUpdate: "cascade" }),
   memberNickname: text("member_nickname").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
@@ -547,7 +551,9 @@ export const adminGroupMembers = pgTable("admin_group_members", {
 }));
 
 export const collectionNicknameSessions = pgTable("collection_nickname_sessions", {
-  activityId: text("activity_id").primaryKey(),
+  activityId: text("activity_id")
+    .primaryKey()
+    .references(() => userActivity.id, { onDelete: "cascade", onUpdate: "cascade" }),
   username: text("username").notNull(),
   userRole: text("user_role").notNull(),
   nickname: text("nickname").notNull(),
@@ -564,8 +570,12 @@ export const collectionNicknameSessions = pgTable("collection_nickname_sessions"
 
 export const adminVisibleNicknames = pgTable("admin_visible_nicknames", {
   id: uuid("id").primaryKey(),
-  adminUserId: text("admin_user_id").notNull(),
-  nicknameId: uuid("nickname_id").notNull(),
+  adminUserId: text("admin_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
+  nicknameId: uuid("nickname_id")
+    .notNull()
+    .references(() => collectionStaffNicknames.id, { onDelete: "cascade", onUpdate: "cascade" }),
   createdBySuperuser: text("created_by_superuser"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
@@ -620,8 +630,12 @@ export const collectionDailyCalendar = pgTable("collection_daily_calendar", {
 
 export const dataEmbeddings = pgTable("data_embeddings", {
   id: text("id").primaryKey(),
-  importId: text("import_id").notNull(),
-  rowId: text("row_id").notNull(),
+  importId: text("import_id")
+    .notNull()
+    .references(() => imports.id, { onDelete: "cascade", onUpdate: "cascade" }),
+  rowId: text("row_id")
+    .notNull()
+    .references(() => dataRows.id, { onDelete: "cascade", onUpdate: "cascade" }),
   content: text("content").notNull(),
   embedding: vector("embedding", { dimensions: 768 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -639,7 +653,9 @@ export const aiConversations = pgTable("ai_conversations", {
 
 export const aiMessages = pgTable("ai_messages", {
   id: text("id").primaryKey(),
-  conversationId: text("conversation_id").notNull(),
+  conversationId: text("conversation_id")
+    .notNull()
+    .references(() => aiConversations.id, { onDelete: "cascade", onUpdate: "cascade" }),
   role: text("role").notNull(),
   content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow(),

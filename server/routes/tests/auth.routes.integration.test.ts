@@ -37,6 +37,17 @@ import {
   withDevMailOutboxFixture,
 } from "./auth-route-admin-doubles";
 
+const previousTwoFactorEncryptionKey = process.env.TWO_FACTOR_ENCRYPTION_KEY;
+process.env.TWO_FACTOR_ENCRYPTION_KEY = "test-two-factor-encryption-key";
+
+test.after(() => {
+  if (previousTwoFactorEncryptionKey === undefined) {
+    delete process.env.TWO_FACTOR_ENCRYPTION_KEY;
+    return;
+  }
+  process.env.TWO_FACTOR_ENCRYPTION_KEY = previousTwoFactorEncryptionKey;
+});
+
 test("POST /api/auth/request-password-reset stays generic for unknown accounts", async () => {
   const { storage, resetRequests, auditLogs } = createAuthStorageDouble();
   const app = createJsonTestApp();

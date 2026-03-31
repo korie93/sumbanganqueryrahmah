@@ -129,7 +129,7 @@ export default function MaintenancePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0b1220] via-[#101a2d] to-[#14213d] text-slate-100 flex items-center justify-center p-4 sm:p-6">
+    <div className="viewport-min-height bg-gradient-to-br from-[#0b1220] via-[#101a2d] to-[#14213d] text-slate-100 flex items-center justify-center p-4 sm:p-6">
       <Card className="w-full max-w-3xl border-slate-700/80 bg-slate-900/75 backdrop-blur-md shadow-2xl">
         <CardHeader className="space-y-4 border-b border-slate-800 pb-6">
           <div className="flex items-center justify-between gap-3">

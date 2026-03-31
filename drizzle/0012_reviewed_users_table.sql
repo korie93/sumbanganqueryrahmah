@@ -124,6 +124,33 @@ BEGIN
 END
 $$;
 
+DO $$
+BEGIN
+  IF to_regclass('public.admin_visible_nicknames') IS NOT NULL THEN
+    DELETE FROM public.admin_visible_nicknames avn
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM public.users usr
+      WHERE usr.id = avn.admin_user_id
+        AND usr.role = 'admin'
+    );
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'fk_admin_visible_nicknames_admin_user_id'
+    ) THEN
+      ALTER TABLE public.admin_visible_nicknames
+      ADD CONSTRAINT fk_admin_visible_nicknames_admin_user_id
+      FOREIGN KEY (admin_user_id)
+      REFERENCES public.users(id)
+      ON UPDATE CASCADE
+      ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower_unique
 ON public.users(lower(username));
 

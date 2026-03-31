@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHmac, createHash, randomBytes } from "node:crypto";
-import { getTwoFactorEncryptionSecret } from "../config/security";
+import { getTwoFactorDecryptionSecrets, getTwoFactorEncryptionSecret } from "../config/security";
 
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const TOTP_PERIOD_SECONDS = 30;
@@ -55,8 +55,20 @@ function base32Decode(value: string) {
   return Buffer.from(output);
 }
 
-function getTwoFactorCipherKey() {
-  return createHash("sha256").update(getTwoFactorEncryptionSecret()).digest();
+function getTwoFactorCipherKey(secret: string) {
+  return createHash("sha256").update(secret).digest();
+}
+
+function getTwoFactorEncryptionCipherKey() {
+  const encryptionSecret = getTwoFactorEncryptionSecret();
+  if (!encryptionSecret) {
+    throw new Error("TWO_FACTOR_ENCRYPTION_KEY is required to encrypt two-factor secrets.");
+  }
+  return getTwoFactorCipherKey(encryptionSecret);
+}
+
+function getTwoFactorDecryptionCipherKeys() {
+  return getTwoFactorDecryptionSecrets().map((secret) => getTwoFactorCipherKey(secret));
 }
 
 function generateTotpAt(secret: string, timestampMs: number) {
@@ -106,7 +118,7 @@ export function generateCurrentTwoFactorCode(secret: string) {
 
 export function encryptTwoFactorSecret(secret: string) {
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", getTwoFactorCipherKey(), iv);
+  const cipher = createCipheriv("aes-256-gcm", getTwoFactorEncryptionCipherKey(), iv);
   const ciphertext = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
   return `${iv.toString("base64url")}.${ciphertext.toString("base64url")}.${tag.toString("base64url")}`;
@@ -118,17 +130,25 @@ export function decryptTwoFactorSecret(payload: string) {
     throw new Error("Invalid 2FA secret payload.");
   }
 
-  const decipher = createDecipheriv(
-    "aes-256-gcm",
-    getTwoFactorCipherKey(),
-    Buffer.from(ivRaw, "base64url"),
-  );
-  decipher.setAuthTag(Buffer.from(tagRaw, "base64url"));
-  const plaintext = Buffer.concat([
-    decipher.update(Buffer.from(ciphertextRaw, "base64url")),
-    decipher.final(),
-  ]);
-  return plaintext.toString("utf8");
+  const iv = Buffer.from(ivRaw, "base64url");
+  const ciphertext = Buffer.from(ciphertextRaw, "base64url");
+  const tag = Buffer.from(tagRaw, "base64url");
+
+  for (const cipherKey of getTwoFactorDecryptionCipherKeys()) {
+    try {
+      const decipher = createDecipheriv("aes-256-gcm", cipherKey, iv);
+      decipher.setAuthTag(tag);
+      const plaintext = Buffer.concat([
+        decipher.update(ciphertext),
+        decipher.final(),
+      ]);
+      return plaintext.toString("utf8");
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error("Invalid 2FA secret payload.");
 }
 
 export function buildTwoFactorOtpAuthUrl(params: {

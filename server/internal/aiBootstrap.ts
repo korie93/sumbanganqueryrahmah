@@ -47,6 +47,49 @@ export class AiBootstrap {
               created_at timestamp DEFAULT now()
             )
           `);
+          await db.execute(sql`
+            DELETE FROM public.data_embeddings embedding
+            WHERE NOT EXISTS (
+              SELECT 1
+              FROM public.imports imp
+              WHERE imp.id = embedding.import_id
+            )
+            OR NOT EXISTS (
+              SELECT 1
+              FROM public.data_rows row_data
+              WHERE row_data.id = embedding.row_id
+            )
+          `);
+          await db.execute(sql`
+            DO $$
+            BEGIN
+              IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'fk_data_embeddings_import_id'
+              ) THEN
+                ALTER TABLE public.data_embeddings
+                ADD CONSTRAINT fk_data_embeddings_import_id
+                FOREIGN KEY (import_id)
+                REFERENCES public.imports(id)
+                ON UPDATE CASCADE
+                ON DELETE CASCADE;
+              END IF;
+
+              IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'fk_data_embeddings_row_id'
+              ) THEN
+                ALTER TABLE public.data_embeddings
+                ADD CONSTRAINT fk_data_embeddings_row_id
+                FOREIGN KEY (row_id)
+                REFERENCES public.data_rows(id)
+                ON UPDATE CASCADE
+                ON DELETE CASCADE;
+              END IF;
+            END $$;
+          `);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_data_embeddings_import_id ON public.data_embeddings(import_id)`);
           try {
             await db.execute(sql`
@@ -74,6 +117,31 @@ export class AiBootstrap {
             content text NOT NULL,
             created_at timestamp DEFAULT now()
           )
+        `);
+        await db.execute(sql`
+          DELETE FROM public.ai_messages msg
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM public.ai_conversations convo
+            WHERE convo.id = msg.conversation_id
+          )
+        `);
+        await db.execute(sql`
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conname = 'fk_ai_messages_conversation_id'
+            ) THEN
+              ALTER TABLE public.ai_messages
+              ADD CONSTRAINT fk_ai_messages_conversation_id
+              FOREIGN KEY (conversation_id)
+              REFERENCES public.ai_conversations(id)
+              ON UPDATE CASCADE
+              ON DELETE CASCADE;
+            END IF;
+          END $$;
         `);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation_id ON public.ai_messages(conversation_id)`);
         await db.execute(sql`

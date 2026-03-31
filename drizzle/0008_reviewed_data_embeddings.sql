@@ -39,6 +39,51 @@ BEGIN
   EXECUTE 'ALTER TABLE public.data_embeddings ADD COLUMN IF NOT EXISTS embedding vector(768)';
   EXECUTE 'ALTER TABLE public.data_embeddings ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()';
   EXECUTE 'UPDATE public.data_embeddings SET created_at = COALESCE(created_at, now())';
+  IF to_regclass('public.imports') IS NOT NULL AND to_regclass('public.data_rows') IS NOT NULL THEN
+    EXECUTE '
+      DELETE FROM public.data_embeddings embedding
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM public.imports imp
+        WHERE imp.id = embedding.import_id
+      )
+      OR NOT EXISTS (
+        SELECT 1
+        FROM public.data_rows row_data
+        WHERE row_data.id = embedding.row_id
+      )
+    ';
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'fk_data_embeddings_import_id'
+    ) THEN
+      EXECUTE '
+        ALTER TABLE public.data_embeddings
+        ADD CONSTRAINT fk_data_embeddings_import_id
+        FOREIGN KEY (import_id)
+        REFERENCES public.imports(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
+      ';
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'fk_data_embeddings_row_id'
+    ) THEN
+      EXECUTE '
+        ALTER TABLE public.data_embeddings
+        ADD CONSTRAINT fk_data_embeddings_row_id
+        FOREIGN KEY (row_id)
+        REFERENCES public.data_rows(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
+      ';
+    END IF;
+  END IF;
   EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS data_embeddings_row_id_unique ON public.data_embeddings(row_id)';
   EXECUTE 'CREATE INDEX IF NOT EXISTS idx_data_embeddings_import_id ON public.data_embeddings(import_id)';
 

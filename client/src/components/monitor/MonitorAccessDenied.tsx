@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 
 function MonitorAccessDeniedImpl() {
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-background p-6">
+    <div className="app-shell-min-height bg-background p-6">
       <div className="mx-auto max-w-7xl">
         <Card className="glass-wrapper border-red-500/30">
           <CardContent className="p-8 text-center">

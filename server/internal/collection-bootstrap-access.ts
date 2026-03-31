@@ -204,6 +204,23 @@ export async function ensureCollectionAdminGroupsTables(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_admin_group_members_group
     ON public.admin_group_members (admin_group_id)
   `);
+  await db.execute(sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_admin_group_members_admin_group_id'
+      ) THEN
+        ALTER TABLE public.admin_group_members
+        ADD CONSTRAINT fk_admin_group_members_admin_group_id
+        FOREIGN KEY (admin_group_id)
+        REFERENCES public.admin_groups(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+      END IF;
+    END $$;
+  `);
 }
 
 export async function ensureCollectionNicknameSessionsTable(): Promise<void> {
@@ -239,6 +256,14 @@ export async function ensureCollectionNicknameSessionsTable(): Promise<void> {
       OR trim(COALESCE(nickname, '')) = ''
   `);
   await db.execute(sql`
+    DELETE FROM public.collection_nickname_sessions session
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM public.user_activity activity
+      WHERE activity.id = session.activity_id
+    )
+  `);
+  await db.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_username
     ON public.collection_nickname_sessions (username)
   `);
@@ -249,6 +274,23 @@ export async function ensureCollectionNicknameSessionsTable(): Promise<void> {
   await db.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_collection_nickname_sessions_updated_at
     ON public.collection_nickname_sessions (updated_at DESC)
+  `);
+  await db.execute(sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_collection_nickname_sessions_activity_id'
+      ) THEN
+        ALTER TABLE public.collection_nickname_sessions
+        ADD CONSTRAINT fk_collection_nickname_sessions_activity_id
+        FOREIGN KEY (activity_id)
+        REFERENCES public.user_activity(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+      END IF;
+    END $$;
   `);
 }
 
@@ -304,6 +346,37 @@ export async function ensureCollectionAdminVisibleNicknamesTable(): Promise<void
   await db.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_admin_visible_nicknames_nickname
     ON public.admin_visible_nicknames(nickname_id)
+  `);
+  await db.execute(sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_admin_visible_nicknames_nickname_id'
+      ) THEN
+        ALTER TABLE public.admin_visible_nicknames
+        ADD CONSTRAINT fk_admin_visible_nicknames_nickname_id
+        FOREIGN KEY (nickname_id)
+        REFERENCES public.collection_staff_nicknames(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+      END IF;
+
+      IF to_regclass('public.users') IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'fk_admin_visible_nicknames_admin_user_id'
+        ) THEN
+        ALTER TABLE public.admin_visible_nicknames
+        ADD CONSTRAINT fk_admin_visible_nicknames_admin_user_id
+        FOREIGN KEY (admin_user_id)
+        REFERENCES public.users(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+      END IF;
+    END $$;
   `);
 
   const existingCount = await db.execute(sql`

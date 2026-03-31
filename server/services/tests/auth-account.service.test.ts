@@ -4,6 +4,17 @@ import { hashPassword } from "../../auth/passwords";
 import { encryptTwoFactorSecret, generateCurrentTwoFactorCode } from "../../auth/two-factor";
 import { AuthAccountService, AuthAccountError } from "../auth-account.service";
 
+const previousTwoFactorEncryptionKey = process.env.TWO_FACTOR_ENCRYPTION_KEY;
+process.env.TWO_FACTOR_ENCRYPTION_KEY = "test-two-factor-encryption-key";
+
+test.after(() => {
+  if (previousTwoFactorEncryptionKey === undefined) {
+    delete process.env.TWO_FACTOR_ENCRYPTION_KEY;
+    return;
+  }
+  process.env.TWO_FACTOR_ENCRYPTION_KEY = previousTwoFactorEncryptionKey;
+});
+
 function buildSuperuser(passwordHash: string) {
   const now = new Date("2026-03-20T00:00:00.000Z");
   return {

@@ -49,8 +49,8 @@ const aboutHighlights = [
 
 export default function Landing({ onLoginClick }: LandingProps) {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
+    <div className="viewport-min-height bg-slate-950 text-slate-50">
+      <div className="mx-auto flex viewport-min-height w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
         <header className="flex items-center justify-between gap-4 rounded-3xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-slate-900/80">

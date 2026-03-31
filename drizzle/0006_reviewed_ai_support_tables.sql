@@ -26,6 +26,29 @@ ALTER TABLE public.ai_messages ADD COLUMN IF NOT EXISTS created_at timestamp DEF
 UPDATE public.ai_messages
 SET created_at = COALESCE(created_at, now());
 
+DELETE FROM public.ai_messages msg
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM public.ai_conversations convo
+  WHERE convo.id = msg.conversation_id
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'fk_ai_messages_conversation_id'
+  ) THEN
+    ALTER TABLE public.ai_messages
+    ADD CONSTRAINT fk_ai_messages_conversation_id
+    FOREIGN KEY (conversation_id)
+    REFERENCES public.ai_conversations(id)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE;
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation_id
 ON public.ai_messages(conversation_id);
 

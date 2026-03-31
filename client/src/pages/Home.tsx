@@ -14,7 +14,7 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
   );
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 md:p-6">
+    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 md:p-6">
       <div className="mx-auto max-w-6xl space-y-6">
         <section className="glass-wrapper p-6 md:p-8">
           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Workspace</p>

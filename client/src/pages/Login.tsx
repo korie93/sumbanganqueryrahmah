@@ -338,14 +338,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   };
 
   return (
-    <div className="relative w-full min-h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
+    <div className="relative w-full viewport-min-height overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
       <div className="login-bg-effect absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMyMDNhNTUiIGZpbGwtb3BhY2l0eT0iMC40Ij48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-30" />
       
       <div className="login-bg-effect absolute top-20 left-20 h-56 w-56 rounded-full bg-blue-500/15 blur-3xl floating-slow" />
       <div className="login-bg-effect absolute bottom-20 right-20 h-72 w-72 rounded-full bg-purple-500/15 blur-3xl floating-slow delay-150" />
       <div className="login-bg-effect absolute top-1/2 left-1/2 h-[360px] w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-400/8 blur-3xl floating-slow delay-300" />
 
-      <div className="relative z-10 flex items-center justify-center min-h-screen px-4 login-content">
+      <div className="relative z-10 flex items-center justify-center viewport-min-height px-4 login-content">
         <div className="relative w-full max-w-md">
           <button
             type="button"

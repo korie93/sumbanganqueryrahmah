@@ -754,12 +754,36 @@
   box-shadow: 0 16px 30px rgba(0, 0, 0, 0.24);
 }
 
+.viewport-min-height {
+  min-height: 100vh;
+}
+
+.app-shell-min-height {
+  min-height: calc(100vh - 3.5rem);
+}
+
+@supports (height: 100dvh) {
+  .viewport-min-height {
+    min-height: 100dvh;
+  }
+
+  .app-shell-min-height {
+    min-height: calc(100dvh - 3.5rem);
+  }
+}
+
 .ops-page {
   min-height: calc(100vh - 3.5rem);
   padding: 1rem;
   background:
     radial-gradient(circle at top left, hsl(var(--primary) / 0.06), transparent 28%),
     linear-gradient(180deg, hsl(var(--background)), hsl(var(--background) / 0.96));
+}
+
+@supports (height: 100dvh) {
+  .ops-page {
+    min-height: calc(100dvh - 3.5rem);
+  }
 }
 
 .ops-page-frame {

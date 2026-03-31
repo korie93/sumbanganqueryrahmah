@@ -19,7 +19,7 @@ export default function GeneralSearch({
   const { actions, canExport, canSeeSourceFile, isLowSpecMode, state } = controller;
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 px-3 py-4 sm:p-6 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 px-3 py-4 sm:p-6 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
       <div className="mx-auto max-w-6xl">
         <div
           className={`mb-6 rounded-2xl border border-border/60 bg-background/70 px-4 py-4 shadow-sm sm:mb-8 sm:px-6 sm:py-6 ${

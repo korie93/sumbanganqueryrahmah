@@ -204,6 +204,7 @@ test(
 
       assert.equal(await indexExists(pool, "idx_ai_messages_conversation_created_at"), true);
       assert.equal(await indexExists(pool, "idx_ai_messages_conversation_id"), true);
+      assert.equal(await constraintExists(pool, "fk_ai_messages_conversation_id"), true);
     });
   },
 );
@@ -238,6 +239,11 @@ test(
       await applySql(pool, usersMigrationSql);
 
       assert.equal(await constraintExists(pool, "fk_user_activity_user_id"), true);
+      assert.equal(await constraintExists(pool, "fk_data_rows_import_id"), true);
+      assert.equal(await constraintExists(pool, "fk_admin_group_members_admin_group_id"), true);
+      assert.equal(await constraintExists(pool, "fk_collection_nickname_sessions_activity_id"), true);
+      assert.equal(await constraintExists(pool, "fk_admin_visible_nicknames_nickname_id"), true);
+      assert.equal(await constraintExists(pool, "fk_admin_visible_nicknames_admin_user_id"), true);
       assert.equal(await indexExists(pool, "idx_user_activity_user_id"), true);
       assert.equal(await indexExists(pool, "idx_admin_visible_nicknames_admin_nickname_unique"), true);
     });

@@ -44,8 +44,31 @@ ALTER TABLE public.data_rows ADD COLUMN IF NOT EXISTS json_data jsonb DEFAULT '{
 UPDATE public.data_rows
 SET json_data = COALESCE(json_data, '{}'::jsonb);
 
+DELETE FROM public.data_rows row_data
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM public.imports imp
+  WHERE imp.id = row_data.import_id
+);
+
 ALTER TABLE public.data_rows ALTER COLUMN import_id SET NOT NULL;
 ALTER TABLE public.data_rows ALTER COLUMN json_data SET NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'fk_data_rows_import_id'
+  ) THEN
+    ALTER TABLE public.data_rows
+    ADD CONSTRAINT fk_data_rows_import_id
+    FOREIGN KEY (import_id)
+    REFERENCES public.imports(id)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_data_rows_import_id
 ON public.data_rows(import_id);

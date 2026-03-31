@@ -24,13 +24,13 @@ export function PublicAuthLayout({
   onBackClick,
 }: PublicAuthLayoutProps) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
+    <div className="relative viewport-min-height overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMyMDNhNTUiIGZpbGwtb3BhY2l0eT0iMC40Ij48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-30" />
       <div className="absolute left-20 top-20 h-56 w-56 rounded-full bg-blue-500/15 blur-3xl" />
       <div className="absolute bottom-20 right-20 h-72 w-72 rounded-full bg-purple-500/15 blur-3xl" />
       <div className="absolute left-1/2 top-1/2 h-[360px] w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-400/8 blur-3xl" />
 
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-8">
+      <div className="relative z-10 flex viewport-min-height items-center justify-center px-4 py-8">
         <div className="w-full max-w-xl">
           {showBackButton ? (
             <button

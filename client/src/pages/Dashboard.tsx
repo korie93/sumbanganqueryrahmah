@@ -129,7 +129,7 @@ export default function Dashboard() {
   }, [exportBlockReason]);
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 sm:p-6">
+    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-5 sm:space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between" data-floating-ai-avoid="true">
           <div className="space-y-1">

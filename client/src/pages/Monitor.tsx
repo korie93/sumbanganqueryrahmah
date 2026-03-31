@@ -298,7 +298,7 @@ export default function Monitor() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-6 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-6 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       <div className="mx-auto max-w-7xl space-y-6">
         <MonitorStatusBanners
           mode={snapshot.mode}

@@ -131,7 +131,7 @@ function AppContent() {
 
   if (user.mustChangePassword) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="viewport-min-height bg-background">
         <AutoLogout
           onClientLogout={handleClientLogout}
           onLogout={handleLogout}
@@ -156,7 +156,7 @@ function AppContent() {
 
   return (
     <AIProvider>
-      <div className="min-h-screen bg-background">
+      <div className="viewport-min-height bg-background">
         <AutoLogout
           onClientLogout={handleClientLogout}
           onLogout={handleLogout}
@@ -182,7 +182,7 @@ function AppContent() {
           onNavigateHome={navigateHome}
         >
           <Suspense fallback={<PageSpinner />}>
-            <main className="min-h-[calc(100vh-3.5rem)]">
+            <main className="app-shell-min-height">
               <AppPageRenderer
                 user={user}
                 currentPage={currentPage}

@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 
 export default function Forbidden() {
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-background px-4 py-8 sm:px-6">
+    <div className="app-shell-min-height bg-background px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-3xl">
         <Card className="glass-wrapper border-red-500/35 bg-gradient-to-br from-background via-background to-red-950/10">
           <CardContent className="p-8 text-center sm:p-10">

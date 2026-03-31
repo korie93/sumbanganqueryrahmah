@@ -203,10 +203,20 @@ export class AuthAccountSelfOperations {
     await this.requireCurrentPassword(actor, input.currentPassword);
 
     const secret = generateTwoFactorSecret();
+    let encryptedSecret = "";
+    try {
+      encryptedSecret = encryptTwoFactorSecret(secret);
+    } catch {
+      throw new AuthAccountError(
+        503,
+        ERROR_CODES.TWO_FACTOR_SECRET_INVALID,
+        "Two-factor authentication setup is unavailable. Contact an administrator.",
+      );
+    }
     const updatedUser = await this.deps.storage.updateUserAccount({
       userId: actor.id,
       twoFactorEnabled: false,
-      twoFactorSecretEncrypted: encryptTwoFactorSecret(secret),
+      twoFactorSecretEncrypted: encryptedSecret,
       twoFactorConfiguredAt: null,
     });
 

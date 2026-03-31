@@ -71,8 +71,8 @@ export class AppRouteErrorBoundary extends Component<
     }
 
     return (
-      <div className={this.props.fullscreen ? "min-h-screen bg-background" : "bg-background"}>
-        <div className={this.props.fullscreen ? "flex min-h-screen items-center justify-center p-6" : "p-6"}>
+      <div className={this.props.fullscreen ? "viewport-min-height bg-background" : "bg-background"}>
+        <div className={this.props.fullscreen ? "flex viewport-min-height items-center justify-center p-6" : "p-6"}>
           <Card className="w-full max-w-2xl border-destructive/30 bg-background/95 shadow-lg">
             <CardHeader className="space-y-3">
               <div className="flex items-center gap-3">
