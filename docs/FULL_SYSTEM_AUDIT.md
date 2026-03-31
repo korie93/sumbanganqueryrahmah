@@ -1,7 +1,8 @@
 # SQR Full System Technical Audit
 
-**Date:** 2026-03-30
-**Scope:** Full-system review — backend, frontend, UI/UX, layout, mobile responsiveness, API design, database design, security, performance, error handling, module architecture, maintainability
+**Date:** 2026-03-31
+**Revision:** 2 (supersedes 2026-03-30 audit)
+**Scope:** Full-system review — backend, frontend, UI/UX, layout, mobile responsiveness, browser responsiveness, API design, database design, security, performance, error handling, module architecture, maintainability, memory usage, bug risks, real user flow weaknesses
 
 ---
 
@@ -9,33 +10,35 @@
 
 ### Overall Judgment
 
-The SQR system is a well-architected, production-quality full-stack TypeScript application. It demonstrates mature engineering practices including layered architecture (routes → controllers → services → repositories), structured error handling, circuit breakers, adaptive rate limiting, comprehensive file validation, and strong CSRF/JWT security. The codebase is well above average for its stage.
+The SQR system is a well-architected, production-quality full-stack TypeScript application built with React, Express, Drizzle ORM, and PostgreSQL. It demonstrates mature engineering: layered backend architecture (routes → controllers → services → repositories), structured error handling, circuit breakers, adaptive rate limiting, comprehensive file validation, multi-layer CSRF/JWT security, and 226+ tests across 125 files. The codebase is well above average for its stage.
+
+Since the last audit (2026-03-30), several critical items have been fixed: rollup tables now have proper composite primary keys, the N+1 day-insert loop is now batched, viewport height uses `100dvh` with `@supports` fallback, and SQL LIKE patterns now escape wildcards properly via `sql-like-utils.ts`.
 
 ### Top Strengths
 
-1. **Clean layered architecture** — clear separation between routes, controllers, services, and repositories with factory-based DI
-2. **Strong security posture** — multi-layer CSRF (double-submit + Fetch metadata + origin/referer), timing-safe bcrypt (cost 12), JWT with secret rotation, comprehensive file upload validation (magic bytes, PDF JS blocking, EXIF stripping)
-3. **Resilience patterns** — circuit breakers on AI/export, adaptive rate limiting (NORMAL/DEGRADED/PROTECTION), AI concurrency gate with per-role limits, worker clustering with crash detection
-4. **Comprehensive testing** — 226 tests across 84 files, CI pipeline with typecheck → tests → build → Playwright smoke
+1. **Clean layered architecture** — clear separation between routes, controllers, services, and repositories with factory-based DI via `local-server-composition.ts`
+2. **Strong security posture** — multi-layer CSRF (double-submit + Fetch metadata + origin/referer), timing-safe bcrypt, JWT with secret rotation, comprehensive file upload validation (magic bytes, PDF JS blocking, EXIF stripping)
+3. **Resilience patterns** — circuit breakers on AI/export, adaptive rate limiting (NORMAL/DEGRADED/PROTECTION states), AI concurrency gate with per-role limits, worker clustering with crash detection and restart throttling
+4. **Comprehensive testing** — 226+ tests across 125 files, CI pipeline with typecheck → tests → build → bundle budgets → Playwright smoke
 5. **Structured logging** — zero console.log in server code; all logging via pino
-6. **Database monitoring** — connection pool pressure tracking with throttled warnings
+6. **Database monitoring** — connection pool pressure tracking with throttled warnings, DB protection mode for heavy queries
+7. **Responsive design** — `100dvh` with `@supports` fallback, 17 safe-area-inset usages, proper mobile navigation with Sheet component
 
 ### Top Weaknesses
 
-1. **Backup/restore memory risk** — loads entire database into memory for export (no streaming, no pagination)
-2. **N+1 query** — per-day INSERT loop in collection daily calendar upsert (30 queries instead of 1)
-3. **WebSocket connection leak risk** — early-close paths don't clean up the connected clients map
-4. **Swallowed errors** — 6+ catch blocks in receipt service silently return null without logging
-5. **100vh vs 100dvh** — global page min-height uses 100vh which clips content on mobile Safari
-6. **Missing primary keys** — 3 rollup/queue tables lack a proper PK (only composite unique index)
+1. **Backup export memory risk** — `getBackupDataForExport()` loads ALL tables into memory via `Promise.all([db.select()...])` before streaming to file; OOM risk at scale
+2. **WebSocket early-close inconsistency** — early rejection paths (`ws.close()` at lines 79, 86, 95 in `runtime-manager.ts`) don't remove sockets from `aliveSockets` WeakSet; harmless because sockets are never added to `connectedClients` at that point, but inconsistent cleanup pattern
+3. **Swallowed errors in receipt service** — 5 of 7 catch blocks in `collection-receipt.service.ts` lack error logging; they're intentional "best effort" patterns but reduce observability
+4. **Oversized files** — `collection-record-repository-utils.ts` (1,235 lines), `collection-record-mutation-operations.ts` (1,040 lines), `Viewer.tsx` (919 lines)
+5. **CSRF fallback edge** — when auth cookie is present but no CSRF token, no Origin, no Referer, and no `sec-fetch-site` header, the fallback behavior could allow pass-through depending on middleware configuration
 
 ### Overall Technical Health
 
-**7.5/10** — Solid architecture with good security. Main risks are in performance-sensitive paths (backup, WebSocket scale) and a few mobile viewport issues. Safe for initial production with the priority fixes below.
+**8.0/10** — Solid architecture with strong security. Improved from 7.5 after recent fixes (PKs, N+1 batch, viewport, LIKE escaping). Remaining risks are concentrated in backup memory usage, large file maintainability, and minor observability gaps.
 
 ### Production-Readiness Judgment
 
-**Conditionally ready.** The system can serve production traffic at moderate scale. Critical items to address before high-load production: backup streaming, WebSocket cleanup, and the N+1 query pattern.
+**Conditionally ready.** Safe for production at moderate scale. Before high-load production: address backup streaming, add observability to receipt error paths, and plan for oversized file decomposition.
 
 ---
 
@@ -45,764 +48,684 @@ The SQR system is a well-architected, production-quality full-stack TypeScript a
 
 ```
 server/
-├── config/           # Runtime config (615 lines), security, body limits
-├── auth/             # Guards, JWT, passwords, 2FA, activation, lifecycle
-├── http/             # Express middleware: CSRF, CORS, validation, errors, async-handler
-├── middleware/        # Error handler, rate limiters
-├── internal/         # DI composition, runtime environment, API protection, circuit breaker,
-│                       AI concurrency gate, idle session sweeper, cluster management
-├── routes/           # 9 route groups (auth, collection, operations, ai, activity, search, etc.)
-├── controllers/      # 4 main controllers (search, operations, ai, imports)
-├── services/         # 50+ service files (auth, AI, backup, collection, activity, etc.)
-├── repositories/     # 20+ repos + utility files (collection record utils: 1235 lines)
-├── storage/          # PostgreSQL storage adapters
-├── ws/               # WebSocket runtime manager, session auth
-├── lib/              # Logger, receipt security, upload parser
-└── sql/              # Manual SQL migrations
+├── index-local.ts           # Dev entry point (tsx)
+├── cluster-local.ts          # Production cluster supervisor (685 lines)
+├── app.ts                    # Express factory for tests/tooling
+├── db-postgres.ts            # PostgreSQL connection (Drizzle)
+├── db-pool-monitor.ts        # Connection pool monitoring
+├── ai-ollama.ts              # Ollama AI integration
+├── storage-postgres.ts       # Storage facade
+├── storage-postgres-types.ts # Storage type contracts (922 lines)
+├── auth/                     # JWT, cookies, passwords, 2FA, guards
+├── config/                   # Runtime configuration (runtime.ts - 615 lines)
+├── controllers/              # Request handlers (4 controllers)
+├── http/                     # HTTP pipeline, CORS, CSRF, migrations
+├── intelligence/             # AI governance engines
+├── internal/                 # DI composition, runtime assembly, monitoring
+├── lib/                      # Utilities (receipt security, formatting)
+├── mail/                     # SMTP email service
+├── middleware/               # Error handler, rate limiting
+├── repositories/             # Data access layer (45+ files)
+├── routes/                   # API route definitions (23 files)
+├── services/                 # Business logic (70+ files)
+├── sql/                      # Raw SQL templates
+├── storage/                  # Storage contracts/interfaces
+├── utils/                    # Shared utilities
+└── ws/                       # WebSocket server + heartbeat
 ```
+
+**Request flow:** `routes → controllers → services → repositories → PostgreSQL`
+**DI:** Factory functions in `local-server-composition.ts`
+**Workers:** Cluster mode with crash detection, restart throttling, graceful shutdown (25s timeout)
 
 ### Frontend Structure
 
 ```
 client/src/
-├── app/              # App shell: routing, providers, auth bootstrap, navigation (10+ hooks)
-├── components/       # Shared: Navbar (381 lines), FloatingAI (559 lines), AIChat (496 lines),
-│                       AutoLogout, UI library (40+ Radix wrappers)
-├── context/          # AIContext
-├── hooks/            # 12 custom hooks (mobile, pagination, shortcuts, feedback)
-├── lib/              # API client, auth session, query client, utilities
-├── pages/            # 22 main pages + 103 collection sub-components + supporting files
-├── styles/           # ai.css, FloatingAI.module.css
-└── types/            # Type declarations
+├── App.tsx                   # Root component with routing
+├── main.tsx                  # React entry point
+├── index.css                 # Global styles (1,057 lines)
+├── app/                      # Routing, auth, navigation logic
+├── components/               # Shared UI components
+│   ├── ui/                   # Radix UI library (45+ components)
+│   ├── layout/               # Page layouts (OperationalPage, SideTabDataPanel)
+│   ├── navigation/           # Tab navigation (lazy/eager)
+│   ├── monitor/              # System monitoring widgets (15 files)
+│   ├── data/                 # Pagination, filters, mobile menus
+│   ├── FloatingAI.tsx        # Floating AI widget (559 lines)
+│   ├── AIChat.tsx            # AI chat interface (496 lines)
+│   ├── Navbar.tsx            # Responsive navbar
+│   └── AutoLogout.tsx        # Auto-logout with WebSocket
+├── context/                  # React Context providers
+├── hooks/                    # Custom hooks (data fetching, system metrics)
+├── lib/                      # API clients, query utilities
+├── pages/                    # 40+ page components across 15+ subdirectories
+├── styles/                   # Additional styles
+└── types/                    # TypeScript type definitions
 ```
 
 ### Data Flow
 
 ```
-[Browser] → HTTP/WS → Express middleware stack → Route → Controller
-  → Service (business logic) → Repository (Drizzle ORM) → PostgreSQL
+[User Action] → [React Component] → [Custom Hook / API Call]
+    → [Express Route] → [Controller] → [Service] → [Repository]
+    → [PostgreSQL via Drizzle ORM]
+    → [Response] → [React Query Cache] → [UI Update]
 
-[Browser] ← JSON response ← Controller ← Service result
-
-[Browser] ↔ WebSocket ↔ runtime-manager.ts ↔ session tracking / live updates
+[WebSocket] → [Activity Tracking / Real-time Updates]
+[AI Search] → [Ollama] → [Circuit Breaker] → [Cache] → [Response]
 ```
+
+### Database
+
+- **37 PostgreSQL tables** across 898 lines of Drizzle schema
+- **108+ indexes** including composite, unique, partial, and vector (ivfflat)
+- **21 migrations** in `drizzle/` directory
+- Schema governance enforced in CI
 
 ### Major Module Relationships
 
-- **Auth** feeds into every protected route via `authenticateToken` guard
-- **Collection** modules (daily, records, nicknames, summary, report) share repositories and rollup refresh queue
-- **AI** uses circuit breaker, concurrency gate, and has its own embedding/search cache
-- **Backup** directly queries all major tables for export and performs full-table restore
-- **Activity** tracks user sessions, integrates with WebSocket heartbeat and auto-logout
-- **Settings** drives feature flags and tab visibility used across frontend
+```
+Auth ←→ Activity Tracking ←→ WebSocket
+Collection (records, receipts, nicknames, admin groups) → Rollups → Reports
+Import → Data Rows → AI Embeddings → AI Search
+Settings → Cache → WebSocket Broadcast
+Backup → All Tables → Export/Restore
+Audit Logs ← All Mutation Operations
+```
 
 ---
 
 ## C. Full Findings by Category
 
-### Backend
+### C1. Backend
 
-#### Architecture — GOOD (minor improvement areas)
+#### Architecture Quality
 
-| Aspect | Status | Notes |
+| Aspect | Rating | Notes |
 |--------|--------|-------|
-| Layered architecture | ✅ Good | Clear routes → controllers → services → repositories |
-| DI / composition | ✅ Good | Factory-based in `local-server-composition.ts` (414 lines) |
-| Service boundaries | ✅ Good | Auth, collection, AI, backup, activity cleanly separated |
-| Duplicated logic | ⚠️ Minor | Some receipt-handling logic duplicated across service + route |
-| Large files | ⚠️ Notable | `collection-record-repository-utils.ts` (1235 lines), `collection-record-mutation-operations.ts` (1040 lines), `cluster-local.ts` (685 lines) |
-| PostgresStorage facade | ⚠️ Legacy | Some domains still use `PostgresStorage` instead of direct repos |
-| Missing domain boundaries | ✅ OK | Collection sub-modules are well-separated |
+| Layered separation | ✅ Excellent | Routes → Controllers → Services → Repositories |
+| DI pattern | ✅ Good | Factory functions, no framework dependency |
+| Domain boundaries | ✅ Good | Auth, Collection, AI, Activity, Settings well-separated |
+| File modularity | ⚠️ Mixed | Most files reasonable; 3 files exceed 1,000 lines |
+| Code duplication | ✅ Low | Shared utilities centralized in `lib/`, `utils/` |
 
-#### API Quality — GOOD
+**Oversized files requiring future decomposition:**
 
-| Aspect | Status | Notes |
+| File | Lines | Concern |
+|------|-------|---------|
+| `collection-record-repository-utils.ts` | 1,235 | Multiple query/mutation concerns mixed |
+| `collection-record-mutation-operations.ts` | 1,040 | All mutation logic in single service |
+| `storage-postgres-types.ts` | 922 | Large type contract surface |
+| `auth-account-authentication-operations.ts` | 887 | Complex auth flow |
+| `collection-receipt.service.ts` | 870 | Receipt handling monolith |
+
+#### API Quality
+
+| Aspect | Status |
+|--------|--------|
+| Route naming | ✅ Consistent RESTful patterns |
+| Response envelope | ✅ Consistent `{ data, meta }` pattern |
+| Validation | ✅ Zod schemas at route level |
+| Pagination | ✅ Cursor-based and offset-based both supported |
+| Error shape | ✅ Structured with error codes from `shared/error-codes.ts` |
+| Status codes | ✅ Correct HTTP semantics |
+| Large payload risk | ⚠️ Backup export loads all data |
+
+#### Reliability
+
+| Aspect | Status |
+|--------|--------|
+| Transaction safety | ✅ 14+ transaction usages in critical mutations |
+| Race conditions | ⚠️ Minor: WebSocket heartbeat map iteration |
+| Error recovery | ✅ Circuit breakers on AI and export |
+| Retry/backoff | ✅ AI search: 6 retries, 2.5s interval |
+| Graceful shutdown | ✅ SIGTERM/SIGINT handlers, 25s timeout |
+| Background tasks | ✅ Rollup refresh queue with status tracking |
+
+### C2. Frontend
+
+#### Architecture Quality
+
+| Aspect | Rating | Notes |
 |--------|--------|-------|
-| Route naming | ✅ Consistent | RESTful `/api/` prefix, resource-oriented |
-| Pagination | ✅ Present | Server-side pagination with configurable limits |
-| Response envelope | ✅ Consistent | `{ ok, message, data?, error? }` pattern |
-| Validation | ✅ Strong | Zod schemas, input parsing via `buildRequestValidation` |
-| Error shape | ✅ Consistent | HttpError class with statusCode, code, details |
-| Status codes | ✅ Correct | Proper 400/401/403/404/409/413/500 usage |
-| Large payload risk | ⚠️ High | Backup export returns entire DB as JSON in response body |
-| N+1 risk | ⚠️ Present | Collection daily calendar upsert (30 sequential INSERTs) |
+| Component structure | ✅ Good | Clear page/component separation |
+| State management | ✅ Good | React Query for server state, minimal global state |
+| Custom hooks | ✅ Well-designed | Data fetching hooks with loading/error states |
+| Code splitting | ✅ Vite chunks | Validation, query, charts, excel, pdf, motion |
+| Responsive design | ✅ Excellent | Mobile-first with Tailwind breakpoints |
 
-#### Security — STRONG (see Section F for details)
+**Oversized components:**
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| CSRF | ✅ Excellent | Double-submit + Fetch metadata + origin/referer |
-| JWT | ✅ Secure | HS256, 24h expiry, secret rotation support |
-| Bcrypt | ✅ Excellent | Cost 12, timing-safe with dummy hash for non-existent users |
-| Rate limiting | ✅ Strong | Multi-tier, adaptive, load-aware |
-| File upload | ✅ Excellent | Magic byte validation, PDF JS blocking, EXIF stripping |
-| CORS | ✅ Proper | Configurable allowlist, rejects unsafe wildcards |
-| SQL injection | ✅ Protected | Drizzle ORM parameterized queries + LIKE escaping |
-| 2FA fallback | ⚠️ Medium | Falls back to SESSION_SECRET if 2FA key not configured |
+| File | Lines | Concern |
+|------|-------|---------|
+| `Viewer.tsx` | 919 | Complex data viewer with export |
+| `BackupRestore.tsx` | 669 | Backup management UI |
+| `FloatingAI.tsx` | 559 | AI widget with complex positioning |
+| `Login.tsx` | 513 | Login with 2FA, state machine |
+| `AIChat.tsx` | 496 | Chat interface with 30+ state variables |
 
-#### Reliability — GOOD (with risks)
+#### Data Flow
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Circuit breaker | ✅ Well-designed | CLOSED/OPEN/HALF_OPEN with counter trimming |
-| Graceful shutdown | ✅ Proper | 25s timeout, WebSocket cleanup, DB pool drain |
-| Missing transactions | ⚠️ Risk | Idle session sweeper: multiple queries without transaction |
-| Fire-and-forget | ⚠️ Present | Worker restart errors swallowed (`catch(() => undefined)`) |
-| WebSocket cleanup | ⚠️ Risk | Early-close paths skip map cleanup |
-| Swallowed errors | ⚠️ Present | 6+ catch blocks in receipt service return null silently |
+| Aspect | Status |
+|--------|--------|
+| React Query usage | ✅ Server state well-managed |
+| Cache invalidation | ✅ COLLECTION_DATA_CHANGED_EVENT pattern |
+| Loading states | ✅ Consistent across pages |
+| Error states | ✅ Error boundaries and fallbacks |
+| Stale data risk | ⚠️ Low: auto-refresh on most data hooks |
+| Memory cleanup | ✅ useEffect cleanup in hooks |
+| WebSocket cleanup | ✅ AutoLogout handles reconnection |
 
-#### Performance — GOOD (with critical spots)
+#### Performance
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| DB pool monitoring | ✅ Good | Pressure detection with throttled warnings |
-| Caching | ✅ Present | AI search cache, settings cache, tab visibility cache (5s) |
-| N+1 query | 🔴 Critical | 30 INSERTs in loop for calendar days |
-| Backup memory | 🔴 Critical | Loads ALL tables into memory for export |
-| Set accumulation | 🔴 High | Backup restore builds unbounded Set of record IDs |
-| Structured logging | ✅ Good | Pino throughout, zero console.log |
+| Aspect | Status |
+|--------|--------|
+| Code splitting | ✅ 7 manual chunks in Vite config |
+| Lazy loading | ✅ Component lazy loading |
+| Bundle budgets | ✅ CI enforced (1200KB warning) |
+| Virtualization | ⚠️ Not used for large tables |
+| Client-side filtering | ⚠️ Some filtering on pre-loaded data |
+| Image/preview memory | ✅ Proper lifecycle management |
 
-#### Error Handling — GOOD
+### C3. UI/UX
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Global handler | ✅ Proper | Catches HttpError, 413, unhandled; logs context |
-| Async handler | ✅ Proper | Wraps async routes, catches promise rejections |
-| Error classes | ✅ Structured | HttpError with helpers (badRequest, unauthorized, etc.) |
-| Swallowed catches | ⚠️ Weak | 6 silent catch blocks in receipt service |
-| Error codes | ✅ Shared | 13 error codes in `shared/error-codes.ts` |
+| Screen/Module | Verdict | Notes |
+|---------------|---------|-------|
+| Login/Auth flow | **Keep with minor polish** | 2FA well-implemented; login form functional |
+| Dashboard | **Keep as-is** | Charts, metrics, insights well-organized |
+| Collection daily | **Keep with minor polish** | Complex but usable; large forms could be simplified |
+| Collection records | **Keep with minor polish** | Good table with filters; pagination functional |
+| Collection report | **Keep as-is** | Report generation works well |
+| Import | **Keep as-is** | Clear upload flow with progress |
+| Viewer | **Needs moderate redesign** | 919 lines; complex but functional; could split tabs |
+| General search | **Keep as-is** | Search with filters works well |
+| AI assistant | **Keep with minor polish** | Floating widget responsive; chat state could persist |
+| Settings | **Keep as-is** | Clean tab-based layout |
+| Activity tracking | **Keep with minor polish** | Good monitoring; touch targets slightly small |
+| Audit logs | **Keep with minor polish** | Export could add pagination |
+| Backup/restore | **Keep with minor polish** | Complex flow; 669-line component |
 
----
+### C4. Layout & Responsiveness
 
-### Frontend
+| Feature | Desktop | Mobile | Status |
+|---------|---------|--------|--------|
+| Viewport units | ✅ | ✅ | `100dvh` with `@supports` fallback |
+| Safe-area handling | N/A | ✅ | 17 `env(safe-area-inset-*)` usages |
+| Navbar | ✅ Sticky, z-50 | ✅ Sheet mobile menu | Excellent |
+| FloatingAI | ✅ Sized panel | ✅ Fullscreen option | Excellent |
+| Data tables | ✅ Full width | ⚠️ Overflow scroll | Good |
+| Modals/dialogs | ✅ Centered | ✅ Bottom sheet on mobile | Excellent |
+| Tab navigation | ✅ Horizontal | ✅ Scrollable | Good |
+| Touch targets | N/A | ⚠️ Some `h-9` (36px) | Below 44px recommendation |
+| Pagination | ✅ Full controls | ✅ Stacked layout | Good |
+| Filters | ✅ Side panel | ✅ Bottom sheet | Excellent |
 
-#### Architecture — GOOD
+**Specific responsive findings:**
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Component structure | ✅ Good | Modular pages with sub-components |
-| UI library | ✅ Good | 40+ Radix-based components (shadcn/ui pattern) |
-| State management | ✅ Good | React Query for server state, Context for AI |
-| App shell hooks | ⚠️ Complex | 10+ interconnected hooks for shell state |
-| Oversized components | ⚠️ Notable | Viewer.tsx (919), BackupRestore.tsx (669), FloatingAI.tsx (559), Login.tsx (513) |
-| Code splitting | ✅ Good | Lazy pages, manual chunks (validation, query, charts, excel, pdf) |
-| Prop drilling | ✅ Minimal | Hooks-based architecture avoids deep drilling |
+1. **Touch targets:** `AppPaginationBar.tsx` uses `h-9` (36px) for select triggers — below Apple's 44px minimum recommendation
+2. **Navbar logo:** `lg:max-w-[17rem]` → `xl:max-w-none` gap could overflow on iPad Pro landscape (1024px)
+3. **FloatingAI minimum width:** 260px on mobile; may be too wide for phones < 280px (rare edge case)
 
-#### Data Flow — GOOD
+### C5. API Design
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| React Query | ✅ Proper | Consistent query lifecycle with loading/error states |
-| Abort controllers | ✅ Present | Cancellation on unmount/navigation |
-| COLLECTION_DATA_CHANGED_EVENT | ✅ Good | Cross-hook data refresh pattern |
-| Cache invalidation | ✅ Good | Event-driven refresh pattern |
-| Loading states | ✅ Consistent | Skeleton loaders for major pages |
-| Empty states | ⚠️ Inconsistent | Some pages lack mobile-optimized empty state UI |
+| Aspect | Grade | Details |
+|--------|-------|---------|
+| RESTful conventions | A | Consistent endpoint naming |
+| Input validation | A | Zod schemas at entry points |
+| Error responses | A- | Structured codes; some generic 500s in error handler |
+| Pagination | A | Both cursor and offset supported |
+| Rate limiting | A | Adaptive with 3 control states |
+| CORS | A | Strict allowlist with production enforcement |
+| Authentication | A | JWT + session cookies + 2FA |
+| Authorization | A- | Role-based; per-nickname session access control |
+| Idempotency | B+ | Mutation idempotency keys table exists |
+| Versioning | C | No API versioning strategy |
 
-#### Performance — GOOD
+### C6. Database
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Virtual scrolling | ✅ Present | react-window on Viewer tables |
-| Low-spec mode | ✅ Innovative | RAM/CPU detection, reduced animations |
-| Debounced search | ✅ Good | 300ms debounce |
-| Bundle splitting | ✅ Good | Manual chunks for heavy libs (xlsx, jspdf, recharts) |
-| Memory leaks | ⚠️ Low risk | Modal lifecycle, observer cleanup appear proper |
+| Aspect | Grade | Details |
+|--------|-------|---------|
+| Schema design | A- | 37 tables, well-normalized, proper FKs |
+| Primary keys | A | All tables have PKs (composite PKs fixed in rollup tables) |
+| Indexing | A- | 108+ indexes; minor gaps on `backups.createdBy` |
+| Constraints | A | CHECK, UNIQUE, NOT NULL well-applied |
+| Query safety | A | All queries parameterized via Drizzle |
+| Transaction usage | A | 14+ transaction blocks on critical mutations |
+| LIKE escaping | A | `sql-like-utils.ts` escapes `%`, `_`, `\` |
+| Vector search | B+ | ivfflat index on embeddings; adequate for current scale |
+| Migration management | A | 21 migrations, schema governance in CI |
+| Soft delete | B+ | Applied to receipts; not universal |
 
-#### UX Behavior — GOOD
+**Missing indexes (low-priority):**
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Form validation | ✅ Good | Zod + React Hook Form with inline messages |
-| Toast feedback | ✅ Consistent | Success/error toasts after mutations |
-| Error recovery | ✅ Good | Error boundary with retry/home/reload options |
-| Modal behavior | ✅ Good | Proper 100dvh sizing, safe-area-aware |
-| Keyboard shortcuts | ✅ Present | Gated by mobile detection |
+| Table | Column | Reason |
+|-------|--------|--------|
+| `backups` | `(createdBy, createdAt DESC)` | Backup listing queries |
+| `collectionRecords` | `batch` | If batch filtering is frequent |
+| `collectionRecordReceipts` | `extractionStatus` | If extraction processing queries are frequent |
 
----
+### C7. Security
 
-### UI/UX
+#### Critical (Must fix before high-load production)
 
-#### Screen-by-Screen Assessment
+*No critical issues found in current codebase.*
 
-| Screen/Module | Desktop | Mobile | Verdict |
-|---------------|---------|--------|---------|
-| Login | ✅ Clean | ✅ Good (2FA, fingerprint) | Keep as-is |
-| Dashboard | ✅ Good | ✅ Acceptable | Keep with minor polish |
-| Viewer | ✅ Good (virtual scroll) | ✅ Card layout on mobile | Keep as-is |
-| General Search | ✅ Good | ✅ Responsive filters | Keep as-is |
-| Import | ✅ Good | ✅ Drag-and-drop | Keep as-is |
-| Saved | ✅ Good | ⚠️ Acceptable | Keep with minor polish |
-| Collection Daily | ✅ Good | ✅ Calendar responsive | Keep as-is |
-| Collection Records | ✅ Good | ⚠️ min-w-1280 forces scroll | Needs minor fix |
-| Collection Save Form | ✅ Good | ✅ Keyboard-aware sticky | Keep as-is |
-| Collection Summary | ✅ Good | ✅ Acceptable | Keep as-is |
-| Collection Report | ✅ Good | ⚠️ Acceptable | Keep with minor polish |
-| AI Chat/FloatingAI | ✅ Good | ✅ Excellent (fullscreen, safe-area) | Keep as-is |
-| Activity Logs | ✅ Good | ⚠️ max-h-400px hardcoded | Needs minor fix |
-| Audit Logs | ✅ Good | ⚠️ Acceptable | Keep with minor polish |
-| Backup/Restore | ✅ Good | ⚠️ Complex flow | Keep with minor polish |
-| Settings | ✅ Good | ✅ Acceptable | Keep as-is |
-| Analysis | ✅ Good | ⚠️ Charts may be small | Keep with minor polish |
-| Navbar | ✅ Good | ✅ Sheet drawer works well | Keep as-is |
+#### High (Fix next)
 
----
+| ID | Area | Issue | Impact | File |
+|----|------|-------|--------|------|
+| S-H1 | Backup | `getBackupDataForExport()` loads all tables into memory | OOM on large databases | `backups-restore-utils.ts:174-245` |
+| S-H2 | Observability | 5 catch blocks in receipt service lack error logging | Silent failures in file handling | `collection-receipt.service.ts` |
 
-### Layout & Responsiveness
+#### Medium
 
-#### Desktop — GOOD
-- Clean layouts with proper max-width constraints
-- Consistent spacing and card-based design
-- Sticky navbar with backdrop blur
-- Virtual scrolling on large tables
+| ID | Area | Issue | Impact | File |
+|----|------|-------|--------|------|
+| S-M1 | WebSocket | Early rejection paths don't remove sockets from `aliveSockets` WeakSet | Inconsistent cleanup (harmless but fragile) | `runtime-manager.ts:79,86,95` |
+| S-M2 | Config | Ephemeral session secrets in dev invalidate sessions on restart | Dev experience friction | `runtime.ts:540-547` |
+| S-M3 | Rate limiting | Bulk kick/ban operations have no separate rate limit | Admin abuse risk | `activity.routes.ts` |
 
-#### Mobile — GOOD with issues
+#### Low
 
-| Element | Status | Detail |
-|---------|--------|--------|
-| Navbar hamburger | ✅ Good | Sheet drawer, proper width (min 92vw, max 22rem) |
-| Tab/navigation bars | ✅ Good | Responsive stacking |
-| Floating AI | ✅ Excellent | Fullscreen mode, safe-area, keyboard-aware, avoid-overlap system |
-| Dialogs/Modals | ✅ Good | 100dvh-aware, max-height constraints |
-| Collection Save form | ✅ Good | Keyboard state detection, sticky-to-static toggle |
-| Tables | ⚠️ Fragile | CollectionRecords: min-w-1280px forces scroll on tablets |
-| Page min-height | 🔴 Broken | Uses 100vh instead of 100dvh — clips on mobile Safari |
-| Activity table height | ⚠️ Fragile | Hardcoded 400px max-height |
-| Safe area handling | ✅ Good | env(safe-area-inset-bottom) used throughout |
-| Touch targets | ✅ Good | Button heights > 44px |
+| ID | Area | Issue | Impact | File |
+|----|------|-------|--------|------|
+| S-L1 | Access control | Username comparison in `collection-access.ts` depends on database collation consistency | Edge case with mixed-case usernames | `collection-access.ts:24-28` |
+| S-L2 | Error handler | Error details logged may include stack traces visible in centralized logging | Information disclosure (internal only) | `error-handler.ts:41-46` |
 
-#### Critical Layout Bugs
+### C8. Error Handling
 
-1. **100vh in index.css** — `min-height: calc(100vh - 3.5rem)` used for main content area. On mobile Safari, 100vh includes the address bar height, causing content to be clipped. Affects 10+ pages. Fix: use 100dvh with fallback.
+| Aspect | Status |
+|--------|--------|
+| Global error middleware | ✅ Present in `error-handler.ts` |
+| Structured error codes | ✅ `shared/error-codes.ts` |
+| Try/catch coverage | ⚠️ Good overall; 5 silent catch blocks in receipt service |
+| User-safe messages | ✅ Generic 500 response hides internals |
+| Structured logging | ✅ Pino throughout |
+| Promise rejection handling | ⚠️ 1 silent `.catch(() => undefined)` in WS cleanup |
 
-2. **CollectionRecordsTable min-w-1280px** — Forces horizontal scroll on all devices below 1280px width, including tablets. Should use responsive min-width or a different mobile layout.
+### C9. Performance
 
-3. **ActivityLogsTable max-h-400px** — Fixed height doesn't adapt to viewport. On short mobile screens, the table area is too large; on tall screens, it wastes space.
+| Concern | Severity | Location | Details |
+|---------|----------|----------|---------|
+| Backup export | High | `backups-restore-utils.ts:174-245` | All tables loaded into memory |
+| Audit log export | Medium | `AuditLogs.tsx` | Full export loads to client memory |
+| AI search cache | Low | `ai-search.service.ts` | 180-entry bounded cache; adequate |
+| Collection daily overview | Low | `collection-daily-overview.service.ts` | 461 lines; complex aggregation |
+| PDF generation | Low | Client-side | `jspdf` + `html2canvas` blocks UI thread |
 
----
+### C10. Maintainability
 
-### API Design
-
-| Aspect | Status | Detail |
-|--------|--------|--------|
-| RESTful naming | ✅ Good | `/api/collection/records`, `/api/auth/session`, etc. |
-| HTTP methods | ✅ Correct | GET for reads, POST for creates, PATCH for updates, DELETE for deletes |
-| Pagination | ✅ Present | `page` + `limit` with server-side enforcement |
-| Filtering | ✅ Present | Advanced filters with operators |
-| Validation | ✅ Strong | Zod schemas on all input |
-| Error responses | ✅ Consistent | `{ ok: false, message, error: { code, details } }` |
-| Backup export | ⚠️ Dangerous | Returns entire DB as single JSON blob |
-| Rate limiting | ✅ Strong | Per-endpoint tiers with adaptive load adjustment |
-
----
-
-### Database
-
-#### Schema Quality — GOOD with notable gaps
-
-**Tables:** 30+ PostgreSQL tables, 400+ columns, 100+ indexes
-
-| Aspect | Status | Detail |
-|--------|--------|--------|
-| Table design | ✅ Good | Logical grouping, proper naming |
-| Indexing | ✅ Strong | 100+ indexes, composite where needed, case-insensitive |
-| Relations | ⚠️ Incomplete | 8+ missing FK constraints (data integrity risk) |
-| Primary keys | 🔴 Missing | 3 rollup/queue tables lack PK |
-| Soft deletes | ✅ Present | `isDeleted` flag on imports, receipts |
-| Enum constraints | ⚠️ Missing | Status/role fields are TEXT without CHECK constraints |
-| NOT NULL | ⚠️ Missing | Several critical fields (email, createdAt) are nullable |
-| Normalization | ⚠️ Denormalized | userActivity stores redundant username/role |
-| Audit trail | ✅ Present | auditLogs + settingVersions |
-| Migrations | ✅ Good | 21 idempotent SQL migrations |
-
-#### Critical Schema Issues
-
-1. **No PK on rollup tables** — `collectionRecordDailyRollups`, `collectionRecordMonthlyRollups`, `collectionRecordDailyRollupRefreshQueue` have only composite unique indexes, no proper PK. Risk: ORM edge cases, replication issues, no guaranteed unique identifier.
-
-2. **Missing FKs** — 8+ tables reference other tables by text column without foreign key constraints. Risk: orphaned data, no cascade behavior, integrity violations.
-
-3. **No enum constraints** — `users.role` (user/admin/superuser), `users.status` (active/pending/banned), `backupJobs.status` (queued/running/done/failed) are unconstrained TEXT fields. Risk: invalid values can be inserted.
-
----
-
-### Security
-
-See dedicated Section F below.
-
----
-
-### Error Handling
-
-| Aspect | Status | Detail |
-|--------|--------|--------|
-| Global Express handler | ✅ Good | Catches HttpError, entity-too-large, unhandled |
-| Async route wrapping | ✅ Good | All async handlers wrapped |
-| Structured error codes | ✅ Good | 13 shared error codes |
-| Swallowed catches | ⚠️ 6 cases | Receipt service returns null silently |
-| Circuit breaker errors | ✅ Good | CircuitOpenError properly propagated |
-| Validation errors | ✅ Good | Zod parse → badRequest with details |
-| Client error display | ✅ Good | Error boundaries + toast notifications |
-
----
-
-### Performance
-
-| Area | Status | Risk Level |
-|------|--------|------------|
-| DB connection pool | ✅ Monitored | Low |
-| Search caching | ✅ Present | Low |
-| Virtual table rendering | ✅ Present | Low |
-| Bundle splitting | ✅ Proper | Low |
-| **Backup export memory** | 🔴 Unbounded | **Critical** |
-| **N+1 calendar upsert** | 🔴 30 queries/call | **Critical** |
-| **Backup restore Set** | ⚠️ Unbounded Set | **High** |
-| **Full-table export scans** | ⚠️ No limits | **High** |
-| WebSocket heartbeat scan | ⚠️ O(n) every 30s | Medium |
-
----
-
-### Maintainability
-
-| Aspect | Status | Detail |
-|--------|--------|--------|
-| TypeScript strict mode | ✅ Enabled | Full type safety |
-| Shared schemas | ✅ Good | schema-postgres.ts + api-contracts.ts |
-| CI pipeline | ✅ Comprehensive | typecheck → tests → build → smoke |
-| Documentation | ✅ Extensive | 23 docs files, ARCHITECTURE.md |
-| Test coverage | ⚠️ Moderate | 226 tests, 70% line target, UI coverage gap |
-| Large files | ⚠️ Risk | 5+ files over 500 lines in both server and client |
-| Dependency count | ⚠️ High | 141 dependencies |
+| Aspect | Rating |
+|--------|--------|
+| TypeScript strictness | ✅ `strict: true` |
+| Code organization | ✅ Clear domain boundaries |
+| Test infrastructure | ✅ 125 test files |
+| CI pipeline | ✅ Full pipeline with schema governance |
+| Documentation | ✅ ARCHITECTURE.md, README, client manual |
+| File sizes | ⚠️ 5 files > 700 lines |
+| Coupling | ⚠️ Collection services interconnected |
 
 ---
 
 ## D. Module-by-Module Findings
 
-### 1. Auth / Login
+### D1. Auth/Login
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | User authentication with JWT, 2FA, device fingerprinting, account lifecycle |
-| **Strengths** | Timing-safe bcrypt (cost 12), JWT secret rotation, login lockout, forced password change flow, dummy hash for non-existent users |
-| **Weaknesses** | 2FA encryption falls back to SESSION_SECRET if key not configured |
-| **Bug risks** | Low — well-tested with dedicated test files |
-| **Security risks** | Medium — 2FA fallback key, but only when env var not set |
-| **Performance risks** | Low — bcrypt cost 12 adds ~250ms per login (acceptable) |
-| **UX risks** | Low — Login page is 513 lines but functional |
-| **Verdict** | ✅ Keep as-is (enforce 2FA key in production config) |
+**Purpose:** User authentication with 2FA, session management, account lifecycle
+**Files:** 3 route files + 1 service (1,140 lines total)
 
-### 2. User Management / Role Management
+| Aspect | Assessment |
+|--------|-----------|
+| Strengths | Rate-limited login, 2FA, fingerprinting, JWT rotation, timing-safe bcrypt |
+| Weaknesses | Login.tsx (513 lines) complex; auth service (370 lines) monolithic |
+| Bug risks | Low — well-tested with integration tests |
+| Security risks | Low — proper password hashing, session management |
+| Performance risks | Low — login is lightweight |
+| **Verdict** | **Keep with minor polish** — decompose Login.tsx eventually |
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | CRUD for users, role assignment, account activation, password management |
-| **Strengths** | Role-based guards on all admin endpoints, structured account lifecycle |
-| **Weaknesses** | Roles are TEXT fields without DB constraints |
-| **Bug risks** | Low — validation in service layer compensates |
-| **Security risks** | Low — role escalation prevented by requireRole() middleware |
-| **Performance risks** | Low |
-| **UX risks** | Low |
-| **Verdict** | ✅ Keep as-is |
+### D2. User Management / Roles
 
-### 3. Import / Upload
+**Purpose:** Admin user CRUD, role assignment, account activation/deactivation
+**Files:** Managed operations service (698 lines) + admin routes
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | CSV/Excel file import with preview, validation, bulk processing |
-| **Strengths** | Streaming upload via busboy (not loaded in memory), file extension validation, configurable size limits, abort capability |
-| **Weaknesses** | Temp file cleanup relies on try/finally — orphan risk on crash |
-| **Bug risks** | Low |
-| **Security risks** | Low — extension validation, size limits |
-| **Performance risks** | Medium — XLSX parsing of large files blocks event loop |
-| **UX risks** | Low — progress tracking, preview before import |
-| **Verdict** | ✅ Keep as-is |
+| Aspect | Assessment |
+|--------|-----------|
+| Strengths | Role-based guards, audit logging on all admin actions |
+| Weaknesses | Large managed operations file |
+| Security risks | Low — proper role escalation prevention |
+| **Verdict** | **Keep as-is** |
 
-### 4. Saved Files / Data
+### D3. Import/Upload
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | List and manage imported data records |
-| **Strengths** | Bulk operations, search, server-side pagination |
-| **Weaknesses** | Page is 560 lines — could benefit from extraction |
-| **Bug risks** | Low |
-| **Security risks** | Low |
-| **Performance risks** | Low — paginated |
-| **UX risks** | Low |
-| **Verdict** | ✅ Keep with minor polish |
+**Purpose:** File upload (CSV/Excel), parsing, analysis
+**Files:** 3 routes + 1 controller + 1 service (869 lines)
 
-### 5. Viewer
+| Aspect | Assessment |
+|--------|-----------|
+| Strengths | Size limits, temp cleanup, analysis timeout (45s), multipart control |
+| Weaknesses | No virus scanning, temp file cleanup suppresses errors |
+| Bug risks | Medium — parser injection via filenames |
+| Performance risks | Medium — large files consume memory |
+| **Verdict** | **Keep with minor polish** — add error logging to cleanup |
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Data viewer with filters, search, export (CSV/PDF/Excel) |
-| **Strengths** | Virtual scrolling (react-window), mobile card layout, debounced search, low-spec mode, abort controllers |
-| **Weaknesses** | 919 lines — largest page, mixes table/filter/export logic |
-| **Bug risks** | Low — but complexity increases maintenance risk |
-| **Security risks** | Low |
-| **Performance risks** | Low — well-optimized with virtual rendering |
-| **UX risks** | Low — responsive mobile cards |
-| **Verdict** | ✅ Keep as-is (refactor for maintainability later) |
+### D4. Collection (Records, Receipts, Nicknames, Admin Groups)
 
-### 6. General Search
+**Purpose:** Core data management — collection records with receipts, staff nicknames, admin grouping
+**Files:** 11 services + 5 routes (4,465 lines)
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Global search with simple and advanced modes, filter operators |
-| **Strengths** | LIKE pattern escaping, parameterized queries, column allowlist |
-| **Weaknesses** | None significant |
-| **Bug risks** | Low |
-| **Security risks** | Low — SQL injection protected via escaping |
-| **Performance risks** | Low — rate-limited (10 req/10s) |
-| **UX risks** | Low — responsive filter panels |
-| **Verdict** | ✅ Keep as-is |
+| Aspect | Assessment |
+|--------|-----------|
+| Strengths | Well-modularized by concern, transaction safety, receipt validation |
+| Weaknesses | Mutation file (1,040 lines), repository utils (1,235 lines) |
+| Bug risks | Low — well-tested (2,984-line integration test) |
+| Security risks | Low — proper access control per role/nickname |
+| Performance risks | Medium — complex queries for daily overview |
+| **Verdict** | **Keep with minor polish** — decompose oversized files |
 
-### 7. Analysis / Reporting
+### D5. Viewer
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Analytics dashboard with charts (Recharts) |
-| **Strengths** | Lazy-loaded charts, skeleton loading |
-| **Weaknesses** | Charts may be small on mobile screens |
-| **Bug risks** | Low |
-| **Security risks** | Low |
-| **Performance risks** | Medium — chart data aggregation could be slow for large datasets |
-| **UX risks** | Low — desktop is clean, mobile may need polish |
-| **Verdict** | ✅ Keep with minor polish |
+**Purpose:** Data viewer with export (PDF, Excel)
+**Files:** 919 lines (single large component)
 
-### 8. Collection Report
+| Aspect | Assessment |
+|--------|-----------|
+| Strengths | Full export functionality, filters |
+| Weaknesses | Oversized single component, client-side PDF blocks UI |
+| **Verdict** | **Needs moderate redesign** — split into sub-components |
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Collection reporting with daily/monthly summaries |
-| **Strengths** | Server-side rollup aggregation, refresh queue pattern |
-| **Weaknesses** | Rollup tables lack primary keys |
-| **Bug risks** | Medium — missing PK could cause edge cases |
-| **Security risks** | Low |
-| **Performance risks** | Medium — N+1 calendar upsert |
-| **UX risks** | Low |
-| **Verdict** | ⚠️ Keep with fixes (add PKs, batch calendar upsert) |
+### D6. General Search
 
-### 9. Collection Summary
+**Purpose:** Cross-module search with filters
+**Files:** 7 files in pages/general-search/
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Summary statistics for collection staff performance |
-| **Strengths** | Monthly/daily aggregation, COLLECTION_DATA_CHANGED_EVENT refresh |
-| **Weaknesses** | None significant |
-| **Bug risks** | Low |
-| **Security risks** | Low |
-| **Performance risks** | Low |
-| **UX risks** | Low |
-| **Verdict** | ✅ Keep as-is |
+| Aspect | Assessment |
+|--------|-----------|
+| Strengths | Server-side search, proper LIKE escaping |
+| Weaknesses | None significant |
+| **Verdict** | **Keep as-is** |
 
-### 10. Receipt Handling
+### D7. Analysis/Reporting
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Upload, validate, store, preview collection receipts |
-| **Strengths** | Magic byte validation, PDF JS blocking, EXIF stripping, dimension limits, file hash deduplication |
-| **Weaknesses** | 6 swallowed error catches — silent failures mask issues |
-| **Bug risks** | Medium — null returns from swallowed errors could cause confusing UI |
-| **Security risks** | Low — excellent validation |
-| **Performance risks** | Low |
-| **UX risks** | Medium — silent failures provide no feedback |
-| **Verdict** | ⚠️ Keep with fixes (add logging to catch blocks) |
+**Purpose:** Data analysis, charts, collection reports
+**Files:** 7 analysis files + 10 collection report files
 
-### 11. Activity / Session Tracking
+| Aspect | Assessment |
+|--------|-----------|
+| Strengths | Recharts integration, lazy-loaded charts chunk |
+| Weaknesses | Complex aggregation queries |
+| **Verdict** | **Keep as-is** |
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Track user sessions, login/logout events, idle detection |
-| **Strengths** | WebSocket heartbeat, auto-logout, device fingerprinting |
-| **Weaknesses** | Idle session sweeper lacks transactions; denormalized activity data |
-| **Bug risks** | Medium — race conditions in sweeper |
-| **Security risks** | Low — properly tracks sessions |
-| **Performance risks** | Medium — sweeper processes sessions sequentially |
-| **UX risks** | Low |
-| **Verdict** | ⚠️ Keep with fixes (add transaction to sweeper) |
+### D8. Collection Summary
 
-### 12. AI SQR Assistant / Widget
+**Purpose:** Summary views of collection data
+**Files:** 8 files + hooks with COLLECTION_DATA_CHANGED_EVENT
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | AI-powered search and chat using Ollama (llama3, nomic-embed-text) |
-| **Strengths** | Concurrency gate with per-role limits, circuit breaker, search caching, rate limiting, inflight deduplication, streaming responses, low-spec mode adjustment |
-| **Weaknesses** | 6s timeout may be too short for slow hardware |
-| **Bug risks** | Low — well-protected with gates and breakers |
-| **Security risks** | Low |
-| **Performance risks** | Low — properly gated |
-| **UX risks** | Low — excellent mobile experience (fullscreen, safe-area, keyboard-aware) |
-| **Verdict** | ✅ Keep as-is |
+| Aspect | Assessment |
+|--------|-----------|
+| Strengths | Auto-refresh on data changes, server-side rollups |
+| Weaknesses | None significant |
+| **Verdict** | **Keep as-is** |
 
-### 13. Audit Logs
+### D9. Receipt Handling
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Admin audit trail for all system changes |
-| **Strengths** | Structured entries with actor, action, details |
-| **Weaknesses** | No FK constraints on audit log table; mobile table height hardcoded |
-| **Bug risks** | Low |
-| **Security risks** | Low — audit integrity acceptable for current scale |
-| **Performance risks** | Medium — large audit tables could slow backup export |
-| **UX risks** | Low — table overflow handled |
-| **Verdict** | ✅ Keep with minor polish |
+**Purpose:** Receipt upload, validation, preview, storage
+**Files:** receipt service (870 lines) + security lib (722 lines)
 
-### 14. Export Features
+| Aspect | Assessment |
+|--------|-----------|
+| Strengths | Magic byte validation, PDF JS blocking, EXIF stripping, quarantine |
+| Weaknesses | 5 silent catch blocks, monolithic service file |
+| Bug risks | Medium — silent failures could lose receipt data |
+| **Verdict** | **Keep with minor polish** — add error logging to catch blocks |
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Export data to CSV, PDF, Excel across viewer, search, collection |
-| **Strengths** | Lazy-loaded jspdf/xlsx, abort controllers |
-| **Weaknesses** | PDF/Excel generation happens client-side — heavy on mobile |
-| **Bug risks** | Low |
-| **Security risks** | Low |
-| **Performance risks** | Medium — large exports on low-spec devices may be slow |
-| **UX risks** | Low — proper feedback |
-| **Verdict** | ✅ Keep as-is |
+### D10. Activity/Session Tracking
 
-### 15. Backup / Restore
+**Purpose:** Real-time user activity monitoring, session management
+**Files:** routes (245) + service (261) + page (466) = 972 lines
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Full database backup creation, export, restore |
-| **Strengths** | Circuit breaker, integrity verification, async job queue |
-| **Weaknesses** | Loads entire DB into memory, 3x memory footprint on export, unbounded Set on restore |
-| **Bug risks** | High — OOM on large datasets |
-| **Security risks** | Medium — backup data includes all user records |
-| **Performance risks** | 🔴 Critical — no streaming, no pagination |
-| **UX risks** | Low |
-| **Verdict** | ⚠️ Needs improvement (streaming export/restore) |
+| Aspect | Assessment |
+|--------|-----------|
+| Strengths | WebSocket real-time, bulk operations, audit trails |
+| Weaknesses | O(n) bulk deletion, no activity archiving |
+| **Verdict** | **Keep with minor polish** |
 
-### 16. Dashboard / Home
+### D11. AI SQR Assistant/Widget
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Landing page after login with key metrics |
-| **Strengths** | Clean layout, role-appropriate content |
-| **Weaknesses** | None significant |
-| **Bug risks** | Low |
-| **Security risks** | Low |
-| **Performance risks** | Low |
-| **UX risks** | Low |
-| **Verdict** | ✅ Keep as-is |
+**Purpose:** AI-powered search and chat interface
+**Files:** FloatingAI (559) + AIChat (496) + routes + services = 1,596 lines
 
-### 17. Settings / Config
+| Aspect | Assessment |
+|--------|-----------|
+| Strengths | Concurrency gate, circuit breaker, retry logic, cache |
+| Weaknesses | Chat state not persisted across refresh, large components |
+| Bug risks | Medium — cache sweep failure could grow memory |
+| **Verdict** | **Keep with minor polish** — persist chat state |
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | System settings with role-based visibility and editing |
-| **Strengths** | Category-based organization, version tracking |
-| **Weaknesses** | roleSettingPermissions uses text key instead of FK |
-| **Bug risks** | Low — application layer validates |
-| **Security risks** | Low |
-| **Performance risks** | Low — cached |
-| **UX risks** | Low |
-| **Verdict** | ✅ Keep as-is |
+### D12. Audit Logs
+
+**Purpose:** Action audit trail with filtering and export
+**Files:** service (68) + page (388) = 456 lines
+
+| Aspect | Assessment |
+|--------|-----------|
+| Strengths | Comprehensive filtering, CSV/PDF export, cleanup |
+| Weaknesses | Export loads all data to client, no export pagination |
+| **Verdict** | **Keep with minor polish** — add export pagination |
+
+### D13. Backup/Restore
+
+**Purpose:** Database backup export/import with integrity checking
+**Files:** service (532) + page (669) = 1,201 lines
+
+| Aspect | Assessment |
+|--------|-----------|
+| Strengths | SHA256 checksums, circuit breaker, audit logging |
+| Weaknesses | All-at-once memory loading in export, large UI component |
+| Bug risks | High — OOM on large databases |
+| **Verdict** | **Keep with minor polish** — stream export data |
+
+### D14. Settings/Config
+
+**Purpose:** System settings management with role-based visibility
+**Files:** routes (113) + page (163) = 276 lines
+
+| Aspect | Assessment |
+|--------|-----------|
+| Strengths | Zod validation, cache invalidation, confirmation for critical settings |
+| Weaknesses | None significant |
+| **Verdict** | **Keep as-is** |
+
+### D15. Dashboard/Home
+
+**Purpose:** Landing page with metrics and insights
+**Files:** Dashboard + 5 sub-components
+
+| Aspect | Assessment |
+|--------|-----------|
+| Strengths | Clean layout, lazy-loaded charts |
+| Weaknesses | None significant |
+| **Verdict** | **Keep as-is** |
 
 ---
 
 ## E. Mobile vs Desktop Review
 
-### Desktop — GOOD
+### Desktop: What is Good
 
-**What is good:**
-- Clean card-based layouts with proper max-width constraints
-- Virtual scrolling on large tables
-- Keyboard shortcuts for power users
-- Consistent navbar with grouped navigation
-- Proper modal sizing and behavior
-- Charts render well at desktop widths
+- ✅ `max-w-[1680px]` constrains content width for readability
+- ✅ Navbar with full navigation pills, user menu
+- ✅ Side tab panels for filters and data
+- ✅ Proper table layouts with column headers
+- ✅ Modal dialogs centered with proper sizing
+- ✅ FloatingAI as sized panel (380-420px)
+- ✅ Code splitting keeps initial load fast
 
-**What is weak:**
-- Viewer.tsx at 919 lines mixes concerns (maintainability, not visual)
-- No issues visually on desktop
+### Desktop: What is Weak
 
-### Mobile — GOOD with 3 critical bugs
+- ⚠️ Viewer.tsx (919 lines) combines too many concerns in one view
+- ⚠️ Some pages have dense control layouts that could benefit from progressive disclosure
 
-**What is good:**
-- FloatingAI excellent: fullscreen mode, safe-area, keyboard-aware, avoid-overlap
-- Navbar hamburger menu with Sheet drawer (92vw, max 22rem)
-- Collection Save form: keyboard state detection, sticky-to-static toggle
-- Dialogs use 100dvh correctly
-- Touch targets properly sized (> 44px)
-- Low-spec mode reduces animations on constrained devices
+### Mobile: What is Good
 
-**What is weak:**
-1. 🔴 **Page min-height uses 100vh** — clips content on mobile Safari (address bar)
-2. 🔴 **CollectionRecordsTable min-w-1280px** — forces horizontal scroll on tablets
-3. ⚠️ **ActivityLogsTable max-h-400px** — not responsive to viewport
+- ✅ Sheet-based mobile navigation (replaces desktop nav)
+- ✅ Bottom sheet filters (replaces side panels)
+- ✅ FloatingAI fullscreen mode on mobile
+- ✅ `100dvh` with fallback prevents address bar clipping
+- ✅ 17 safe-area-inset usages for notched devices
+- ✅ Responsive breakpoints well-distributed (sm: 45, md: 38, lg: 52, xl: 22 usages)
+- ✅ Stacked pagination on mobile
+- ✅ Mobile action menu with dropdown
 
-**What should remain unchanged:**
-- FloatingAI positioning and behavior
-- Navbar mobile Sheet drawer
-- Modal/Dialog responsive sizing
-- Collection Save form keyboard handling
-- Skeleton loading patterns
-- Error boundary display
+### Mobile: What is Weak
 
-**What should be improved first:**
-1. Replace 100vh with 100dvh in index.css page min-height
-2. Make CollectionRecordsTable use responsive min-width
-3. Make ActivityLogsTable height viewport-relative
+- ⚠️ Some touch targets at `h-9` (36px) — below 44px recommendation
+- ⚠️ Tables require horizontal scroll (acceptable but not ideal)
+- ⚠️ FloatingAI `min-width: 260px` may be tight on very narrow phones
+- ⚠️ Navbar pill gap `0.4rem` very tight on small screens
+
+### Should Remain Unchanged
+
+- Navbar responsive behavior (desktop and mobile)
+- FloatingAI positioning and sizing
+- Safe-area handling implementation
+- Bottom sheet filter pattern
+- Modal/dialog responsive behavior
+- Pagination responsive stacking
+
+### Should Be Improved First
+
+1. Touch targets: increase `h-9` to `h-10` on pagination controls
+2. Test navbar on iPad Pro landscape (1024px breakpoint edge)
+3. Add error logging to receipt service catch blocks (not UI but affects reliability)
 
 ---
 
 ## F. Priority Matrix
 
-### Critical — Do First
+### Critical / Do First
 
-| # | Issue | Area | Impact |
-|---|-------|------|--------|
-| 1 | Backup export loads entire DB into memory | Backend/Performance | OOM risk on large datasets |
-| 2 | N+1 query: 30 sequential INSERTs for calendar days | Backend/Performance | Slow endpoint, DB load |
-| 3 | Missing primary keys on 3 rollup/queue tables | Database | ORM issues, replication risk |
-| 4 | 100vh used instead of 100dvh for page min-height | Frontend/Mobile | Content clipping on mobile Safari |
+| Finding | Location | Justification |
+|---------|----------|--------------|
+| Backup export loads all tables into memory | `backups-restore-utils.ts:174-245` | OOM risk on production databases at scale |
 
-### High — Do Next
+### High / Do Next
 
-| # | Issue | Area | Impact |
-|---|-------|------|--------|
-| 5 | WebSocket connection leak: early-close paths skip map cleanup | Backend/Reliability | Memory accumulation at scale |
-| 6 | 6 swallowed catch blocks in receipt service | Backend/Reliability | Silent failures, debugging difficulty |
-| 7 | Backup restore: unbounded Set of record IDs | Backend/Performance | OOM on large restores |
-| 8 | Idle session sweeper: no transaction wrapping | Backend/Reliability | Race conditions, partial updates |
-| 9 | Missing FK constraints on 8+ table relationships | Database | Orphaned data risk |
-| 10 | CollectionRecordsTable min-w-1280px | Frontend/Mobile | Forces scroll on tablets |
-| 11 | 2FA encryption key fallback to SESSION_SECRET | Security | Weakens 2FA independence |
-| 12 | Full-table export scans without limits | Backend/Performance | Memory pressure on concurrent exports |
+| Finding | Location | Justification |
+|---------|----------|--------------|
+| Add error logging to 5 silent catch blocks | `collection-receipt.service.ts` | Silent receipt failures reduce observability |
+| Decompose `collection-record-mutation-operations.ts` | 1,040 lines | Difficult to maintain and test |
+| Decompose `collection-record-repository-utils.ts` | 1,235 lines | Largest non-test file |
+| Add rate limiting to bulk admin operations | `activity.routes.ts` | Abuse prevention |
 
-### Medium — Later
+### Medium / Later
 
-| # | Issue | Area | Impact |
-|---|-------|------|--------|
-| 13 | Status/role fields lack CHECK constraints | Database | Invalid data insertion |
-| 14 | Nullable createdAt on several tables | Database | Query filtering issues |
-| 15 | ActivityLogsTable hardcoded max-h-400px | Frontend/Mobile | Non-responsive table height |
-| 16 | Worker restart errors swallowed | Backend/Reliability | Unnoticed failed restarts |
-| 17 | Large component files (Viewer 919 lines, etc.) | Frontend/Maintainability | Harder to maintain |
-| 18 | userActivity stores redundant username/role | Database | Denormalization drift |
+| Finding | Location | Justification |
+|---------|----------|--------------|
+| WebSocket early-close cleanup consistency | `runtime-manager.ts:79,86,95` | Harmless but fragile pattern |
+| Touch target sizing (h-9 → h-10) | `AppPaginationBar.tsx` | Mobile UX improvement |
+| Persist AI chat state across refresh | `AIChat.tsx` | User experience improvement |
+| Add export pagination for audit logs | `AuditLogs.tsx` | Large export memory risk |
+| Add missing DB indexes (backups table) | `schema-postgres.ts` | Query performance at scale |
+| Decompose `Viewer.tsx` | 919 lines | Maintainability |
+| Add API versioning strategy | Routes | Future compatibility |
 
-### Low — Optional Polish
+### Low / Optional Polish
 
-| # | Issue | Area | Impact |
-|---|-------|------|--------|
-| 19 | Charts may be small on mobile | Frontend/UX | Minor UX polish |
-| 20 | Empty states not fully mobile-optimized | Frontend/UX | Minor UX polish |
-| 21 | Some backup/restore UI flows could be simpler | Frontend/UX | Minor UX polish |
-| 22 | XLSX parsing blocks event loop | Backend/Performance | Low frequency, acceptable |
-| 23 | 5+ files over 500 lines | Maintainability | Long-term code health |
+| Finding | Location | Justification |
+|---------|----------|--------------|
+| FloatingAI min-width clamp for narrow phones | `FloatingAI.module.css` | Edge case for phones < 280px |
+| Navbar pill gap on small screens | `index.css` | Already scrolls; minor UX |
+| `BackupRestore.tsx` decomposition | 669 lines | Large but functional |
+| `Login.tsx` decomposition | 513 lines | Large but well-tested |
 
 ---
 
 ## G. Recommended Improvement Roadmap
 
-### Phase 1: Urgent Stability & Security Fixes
+### Phase 1: Urgent Stability/Security Fixes
 
-**Timeline: Immediate (before next deployment)**
+1. **Stream backup export** — Replace `Promise.all([db.select()...])` in `getBackupDataForExport()` with cursor-based pagination using `appendPagedJsonArray` pattern already present in the same file
+2. **Add error logging to receipt catch blocks** — Add `logger.warn(...)` to the 5 silent catch blocks in `collection-receipt.service.ts`
+3. **Add rate limiting to bulk admin operations** — Apply existing `rateLimiters` to kick/ban endpoints in `activity.routes.ts`
 
-1. **Fix 100vh → 100dvh** in index.css page min-height (with `@supports` fallback)
-2. **Add logging to swallowed catch blocks** in receipt service (6 locations)
-3. **Enforce 2FA encryption key** in production config (prevent SESSION_SECRET fallback)
-4. **Add primary keys** to `collectionRecordDailyRollups`, `collectionRecordMonthlyRollups`, `collectionRecordDailyRollupRefreshQueue`
-5. **Fix WebSocket cleanup** — add map cleanup to early-close paths in runtime-manager.ts
+### Phase 2: Performance and Error Handling
 
-### Phase 2: Performance & Error Handling
+4. **Add audit log export pagination** — Stream or paginate CSV/PDF exports in `AuditLogs.tsx`
+5. **Add missing database indexes** — `backups(createdBy, createdAt DESC)` for backup listing performance
+6. **Improve AI chat persistence** — Store conversation state in localStorage or server-side
+7. **WebSocket cleanup consistency** — Ensure early-close paths properly clean up all references
 
-**Timeline: Next sprint**
+### Phase 3: UI/UX and Layout Improvements
 
-1. **Batch N+1 query** — convert 30 sequential INSERTs to single multi-row INSERT in collection-daily-repository-utils.ts
-2. **Stream backup export** — replace full-table-scan-to-memory with chunked streaming
-3. **Batch backup restore** — process record IDs in chunks instead of unbounded Set
-4. **Wrap idle session sweeper in transaction** with batch processing
-5. **Add FK constraints** to the 8+ tables missing them (with migration)
-6. **Add CHECK constraints** for status/role enum fields
+8. **Touch target sizing** — Increase `h-9` to `h-10` on mobile-facing interactive controls
+9. **Viewer decomposition** — Split `Viewer.tsx` (919 lines) into sub-components (table, filters, export)
+10. **Test navbar on iPad breakpoint** — Verify 1024px behavior with logo width constraints
+11. **FloatingAI narrow phone handling** — Use `clamp(240px, 90vw, 380px)` for min-width
 
-### Phase 3: UI/UX & Layout Improvements
+### Phase 4: Architecture and Maintainability
 
-**Timeline: Following sprint**
-
-1. **Fix CollectionRecordsTable** — responsive min-width instead of hardcoded 1280px
-2. **Fix ActivityLogsTable** — viewport-relative max-height instead of 400px
-3. **Polish mobile empty states** across pages
-4. **Review chart sizing** on mobile for Analysis page
-5. **Simplify Backup/Restore flow** for mobile users
-
-### Phase 4: Architecture & Maintainability
-
-**Timeline: Future quarter**
-
-1. **Extract Viewer.tsx sub-components** — split 919-line file into filter, table, export modules
-2. **Extract Login.tsx flows** — separate auth, 2FA, fingerprint logic
-3. **Complete PostgresStorage → direct repository migration** — remove legacy facade
-4. **Add NOT NULL constraints** to currently nullable critical fields
-5. **Increase test coverage** — add UI component tests, expand integration coverage
-6. **Normalize userActivity table** — remove redundant username/role columns
+12. **Decompose mutation operations** — Split `collection-record-mutation-operations.ts` (1,040 lines) by operation type
+13. **Decompose repository utils** — Split `collection-record-repository-utils.ts` (1,235 lines) by query type
+14. **API versioning strategy** — Plan `/api/v1/` prefix for future breaking changes
+15. **BackupRestore.tsx decomposition** — Extract export/import/list sub-components
+16. **AIChat.tsx state reduction** — Reduce 30+ state variables via useReducer pattern
 
 ---
 
 ## H. Final Verdict
 
-### What is Already Good Enough — DO NOT change unnecessarily
+### What is Already Good Enough (DO NOT change unnecessarily)
 
-- ✅ Overall layered architecture (routes → controllers → services → repositories)
-- ✅ CSRF protection (multi-layer defense-in-depth)
-- ✅ JWT implementation (HS256, rotation, proper expiry)
-- ✅ Bcrypt password hashing (cost 12, timing-safe)
-- ✅ File upload security (magic bytes, PDF blocking, EXIF stripping)
-- ✅ Rate limiting (multi-tier, adaptive, load-aware)
-- ✅ Circuit breaker pattern
-- ✅ AI concurrency gate design
-- ✅ FloatingAI mobile experience
-- ✅ Collection Save form mobile keyboard handling
-- ✅ Modal/Dialog responsive sizing (100dvh)
-- ✅ Navbar mobile Sheet drawer
-- ✅ Structured logging (pino, zero console.log)
-- ✅ CI/CD pipeline (typecheck → test → build → smoke)
-- ✅ Code splitting and bundle optimization
-- ✅ Virtual scrolling on large tables
-- ✅ Error boundary with recovery options
+- ✅ **Layered backend architecture** — clean, well-separated, DI-based
+- ✅ **Security posture** — multi-layer CSRF, JWT rotation, bcrypt, file validation, rate limiting
+- ✅ **Database schema** — proper PKs, constraints, indexes, migrations, governance
+- ✅ **Testing infrastructure** — 226+ tests, CI pipeline, coverage gates
+- ✅ **Responsive design** — `100dvh`, safe-area, Tailwind breakpoints, Sheet navigation
+- ✅ **AI resilience** — circuit breakers, concurrency gates, adaptive rate limiting
+- ✅ **Navbar and FloatingAI** — excellent responsive behavior
+- ✅ **Authentication** — 2FA, fingerprinting, session management, rate-limited login
+- ✅ **Structured logging** — pino throughout, no console.log
+- ✅ **Graceful shutdown** — cluster management, 25s timeout
+- ✅ **Dashboard, Settings, General Search, Analysis** modules — clean and functional
 
 ### What is Risky to Leave As-Is
 
-- 🔴 Backup export/restore memory handling — will OOM on growing datasets
-- 🔴 N+1 calendar upsert — 30x slower than necessary
-- 🔴 Missing rollup table PKs — can cause edge cases
-- 🔴 100vh on mobile — actively clips content on Safari now
-- ⚠️ WebSocket connection map leak paths — will accumulate at scale
-- ⚠️ Swallowed errors in receipt handling — masks real issues
-- ⚠️ Missing FK constraints — orphaned data risk grows over time
+- ⚠️ **Backup export memory loading** — will OOM on databases > a few hundred MB
+- ⚠️ **Silent receipt errors** — failures in file handling go unnoticed
+- ⚠️ **1,000+ line files** — mutation operations and repository utils are tech debt magnets
+- ⚠️ **Bulk admin operations without rate limits** — abuse vector
 
 ### What Should Be Fixed Before Further Feature Expansion
 
-1. **Backup streaming** — current implementation cannot scale with data growth
-2. **N+1 query batching** — simple fix with high impact
-3. **100vh → 100dvh** — one-line CSS fix for mobile Safari
-4. **Rollup table PKs** — migration required before adding features to these tables
-5. **WebSocket cleanup** — critical for multi-user production environments
-6. **Receipt error logging** — must be able to diagnose production issues
+1. **Backup export streaming** — prevents production OOM
+2. **Receipt error logging** — ensures data integrity visibility
+3. **Bulk operation rate limiting** — closes abuse vector
+4. **File decomposition plan** — prevents further growth of oversized files
 
 ---
 
-## Appendix: Metrics Summary
+## Appendix: Codebase Statistics
 
 | Metric | Value |
 |--------|-------|
-| Total TypeScript files | 420+ |
-| Server files | 294 |
-| Client files | 123 |
+| Total lines of code | 127,228 |
+| Server source files | 216 |
+| Client source files | 429 |
 | Shared files | 3 |
-| PostgreSQL tables | 30+ |
-| Database columns | 400+ |
-| Database indexes | 100+ |
-| API endpoints | ~100 |
-| React pages | 22 main + 248 sub-components |
-| Custom hooks | 12 + 9 app shell |
-| UI components | 40+ (Radix/shadcn) |
-| NPM dependencies | 141 |
-| Test files | 84 (226 tests) |
-| Documentation files | 23 |
-| Largest server file | collection-record-repository-utils.ts (1235 lines) |
-| Largest client file | Viewer.tsx (919 lines) |
+| Test files | 125 |
+| Database tables | 37 |
+| Database indexes | 108+ |
+| Database migrations | 21 |
+| CI workflows | 1 (comprehensive) |
+| Environment variables | 143 |
+| Largest server file | `collection-record-repository-utils.ts` (1,235 lines) |
+| Largest client file | `Viewer.tsx` (919 lines) |
+| Largest test file | `collection.routes.integration.test.ts` (2,984 lines) |
 | Node version | ≥24 |
 | Build tool | Vite + esbuild |
 | Database | PostgreSQL 16 |
-| ORM | Drizzle 0.39 |
+| ORM | Drizzle |
+| UI framework | React + Radix UI + Tailwind CSS |
+| Test runner | Node.js built-in (`tsx --test`) |
+| Logger | pino |
