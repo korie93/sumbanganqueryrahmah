@@ -14,6 +14,7 @@ import {
 } from "./backups-list-utils";
 import {
   getBackupDataForExport,
+  prepareBackupPayloadFileForCreate,
   restoreFromBackup,
 } from "./backups-restore-utils";
 import type {
@@ -21,6 +22,7 @@ import type {
   BackupListPageParams,
   BackupListPageResult,
   BackupsRepositoryOptions,
+  PreparedBackupPayloadFile,
   RestoreStats,
 } from "./backups-repository-types";
 import type {
@@ -62,6 +64,10 @@ export class BackupsRepository {
 
   async getBackupDataForExport(): Promise<BackupDataPayload> {
     return getBackupDataForExport();
+  }
+
+  async prepareBackupPayloadFileForCreate(): Promise<PreparedBackupPayloadFile> {
+    return prepareBackupPayloadFileForCreate();
   }
 
   async restoreFromBackup(backupDataRaw: BackupDataPayload): Promise<{ success: boolean; stats: RestoreStats }> {

@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { promises as fs } from "node:fs";
 import test from "node:test";
+import os from "node:os";
+import path from "node:path";
 import { BackupOperationsService } from "../backup-operations.service";
 
 type AuditEntry = {
@@ -18,6 +21,8 @@ function createBackupOperationsHarness(options?: {
   const createBackupCalls: Array<Record<string, unknown>> = [];
   const restoreCalls: unknown[] = [];
   const deleteBackupCalls: string[] = [];
+  const tempPayloadPaths: string[] = [];
+  let payloadFileCleanupCount = 0;
 
   const backups = new Map<string, any>([
     [
@@ -71,6 +76,40 @@ function createBackupOperationsHarness(options?: {
       collectionRecords: [{ id: "record-1" }],
       collectionRecordReceipts: [{ id: "receipt-1" }],
     }),
+    prepareBackupPayloadFileForCreate: async () => {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "backup-service-test-"));
+      const tempFilePath = path.join(tempDir, "payload.json");
+      tempPayloadPaths.push(tempFilePath);
+      await fs.writeFile(
+        tempFilePath,
+        JSON.stringify({
+          imports: [{ id: "import-1" }],
+          dataRows: [{ id: "row-1" }, { id: "row-2" }],
+          users: [{ username: "super.user" }],
+          auditLogs: [{ id: "audit-1" }],
+          collectionRecords: [{ id: "record-1" }],
+          collectionRecordReceipts: [{ id: "receipt-1" }],
+        }),
+        "utf8",
+      );
+      return {
+        tempFilePath,
+        payloadChecksumSha256:
+          "6b742b4b7e22f7ca0d0ff3c80457d22c3c83d3175de0b08073ec86492332e930",
+        counts: {
+          importsCount: 1,
+          dataRowsCount: 2,
+          usersCount: 1,
+          auditLogsCount: 1,
+          collectionRecordsCount: 1,
+          collectionRecordReceiptsCount: 1,
+        },
+        cleanup: async () => {
+          payloadFileCleanupCount += 1;
+          await fs.rm(tempDir, { recursive: true, force: true });
+        },
+      };
+    },
     createBackup: async (data: Record<string, unknown>) => {
       createBackupCalls.push(data);
       return {
@@ -139,6 +178,8 @@ function createBackupOperationsHarness(options?: {
     createBackupCalls,
     restoreCalls,
     deleteBackupCalls,
+    tempPayloadPaths,
+    getPayloadFileCleanupCount: () => payloadFileCleanupCount,
   };
 }
 
@@ -179,7 +220,8 @@ test("BackupOperationsService listBackups returns paginated metadata", async () 
 });
 
 test("BackupOperationsService createBackup persists backup metadata and audits export", async () => {
-  const { service, createBackupCalls, auditLogs } = createBackupOperationsHarness();
+  const { service, createBackupCalls, auditLogs, getPayloadFileCleanupCount, tempPayloadPaths } =
+    createBackupOperationsHarness();
 
   const result = await service.createBackup({
     name: "Manual Backup",
@@ -202,6 +244,12 @@ test("BackupOperationsService createBackup persists backup metadata and audits e
   assert.equal(metadata.auditLogsCount, 1);
   assert.equal(metadata.collectionRecordsCount, 1);
   assert.equal(metadata.collectionRecordReceiptsCount, 1);
+  assert.equal(getPayloadFileCleanupCount(), 1);
+  await Promise.all(
+    tempPayloadPaths.map(async (tempFilePath) => {
+      await assert.rejects(() => fs.access(tempFilePath));
+    }),
+  );
 
   const auditDetails = JSON.parse(String(auditLogs[0].details));
   assert.equal(typeof auditDetails.durationMs, "number");

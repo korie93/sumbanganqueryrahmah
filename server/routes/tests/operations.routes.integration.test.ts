@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { createOperationsController } from "../../controllers/operations.controller";
 import { AuditLogOperationsService } from "../../services/audit-log-operations.service";
@@ -36,6 +39,7 @@ function createOperationsRouteHarness(options?: {
   const createBackupCalls: Array<Record<string, unknown>> = [];
   const restoreCalls: unknown[] = [];
   const deleteBackupCalls: string[] = [];
+  const tempPayloadPaths: string[] = [];
   const sleep = (ms: number) =>
     new Promise<void>((resolve) => {
       setTimeout(resolve, ms);
@@ -159,6 +163,43 @@ function createOperationsRouteHarness(options?: {
         collectionRecordReceipts: [{ id: "receipt-1" }],
       };
     },
+    prepareBackupPayloadFileForCreate: async () => {
+      const exportDelayMs = options?.backupExportDelayMs ?? 0;
+      if (exportDelayMs > 0) {
+        await sleep(exportDelayMs);
+      }
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "backup-route-test-"));
+      const tempFilePath = path.join(tempDir, "payload.json");
+      tempPayloadPaths.push(tempFilePath);
+      await fs.writeFile(
+        tempFilePath,
+        JSON.stringify({
+          imports: [{ id: "import-1" }],
+          dataRows: [{ id: "row-1" }, { id: "row-2" }],
+          users: [{ username: "super.user" }],
+          auditLogs: [{ id: "audit-1" }],
+          collectionRecords: [{ id: "record-1" }],
+          collectionRecordReceipts: [{ id: "receipt-1" }],
+        }),
+        "utf8",
+      );
+      return {
+        tempFilePath,
+        payloadChecksumSha256:
+          "6b742b4b7e22f7ca0d0ff3c80457d22c3c83d3175de0b08073ec86492332e930",
+        counts: {
+          importsCount: 1,
+          dataRowsCount: 2,
+          usersCount: 1,
+          auditLogsCount: 1,
+          collectionRecordsCount: 1,
+          collectionRecordReceiptsCount: 1,
+        },
+        cleanup: async () => {
+          await fs.rm(tempDir, { recursive: true, force: true });
+        },
+      };
+    },
     createBackup: async (data: Record<string, unknown>) => {
       const createDelayMs = options?.backupCreateDelayMs ?? 0;
       if (createDelayMs > 0) {
@@ -269,6 +310,7 @@ function createOperationsRouteHarness(options?: {
     createBackupCalls,
     restoreCalls,
     deleteBackupCalls,
+    tempPayloadPaths,
   };
 }
 

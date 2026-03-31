@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { promises as fs } from "node:fs";
 import { readDate, readInteger, readOptionalString } from "../http/validation";
 import { logger } from "../lib/logger";
 import type { BackupsRepository } from "../repositories/backups.repository";
@@ -12,11 +13,15 @@ type BackupOperationsBackupsRepository = Pick<
   | "getBackupMetadataById"
   | "getBackupById"
   | "getBackupDataForExport"
+  | "prepareBackupPayloadFileForCreate"
   | "listBackupsPage"
   | "restoreFromBackup"
 >;
 type BackupExportData = Awaited<
   ReturnType<BackupOperationsBackupsRepository["getBackupDataForExport"]>
+>;
+type PreparedBackupPayloadFile = Awaited<
+  ReturnType<BackupOperationsBackupsRepository["prepareBackupPayloadFileForCreate"]>
 >;
 type BackupRecord = NonNullable<
   Awaited<ReturnType<BackupOperationsBackupsRepository["getBackupById"]>>
@@ -237,32 +242,38 @@ export class BackupOperationsService {
     params: CreateBackupInput,
   ): Promise<BackupOperationResponse<Awaited<ReturnType<BackupOperationsBackupsRepository["createBackup"]>> | { message: string }>> {
     let backup;
+    let preparedBackupPayload: PreparedBackupPayloadFile | null = null;
 
     try {
       backup = await this.withExportCircuit(async () => {
         const startTime = Date.now();
-        const backupData = await this.backupsRepository.getBackupDataForExport();
-        const backupPayloadJson = JSON.stringify(backupData);
-        const payloadChecksumSha256 = this.computePayloadChecksum(backupPayloadJson);
-        const metadata = this.buildBackupMetadata(backupData, payloadChecksumSha256);
-        const created = await this.backupsRepository.createBackup({
-          name: params.name,
-          createdBy: params.username,
-          backupData: backupPayloadJson,
-          metadata: JSON.stringify(metadata),
-        });
+        preparedBackupPayload = await this.backupsRepository.prepareBackupPayloadFileForCreate();
 
-        await this.storage.createAuditLog({
-          action: "CREATE_BACKUP",
-          performedBy: params.username,
-          targetResource: params.name,
-          details: JSON.stringify({
-            ...metadata,
-            durationMs: Date.now() - startTime,
-          }),
-        });
+        try {
+          const backupPayloadJson = await fs.readFile(preparedBackupPayload.tempFilePath, "utf8");
+          const metadata = this.buildBackupMetadata(preparedBackupPayload, preparedBackupPayload.payloadChecksumSha256);
+          const created = await this.backupsRepository.createBackup({
+            name: params.name,
+            createdBy: params.username,
+            backupData: backupPayloadJson,
+            metadata: JSON.stringify(metadata),
+          });
 
-        return created;
+          await this.storage.createAuditLog({
+            action: "CREATE_BACKUP",
+            performedBy: params.username,
+            targetResource: params.name,
+            details: JSON.stringify({
+              ...metadata,
+              durationMs: Date.now() - startTime,
+            }),
+          });
+
+          return created;
+        } finally {
+          await preparedBackupPayload?.cleanup();
+          preparedBackupPayload = null;
+        }
       });
     } catch (error) {
       return this.getCircuitOpenResponse(error);
@@ -410,21 +421,46 @@ export class BackupOperationsService {
     };
   }
 
-  private buildBackupMetadata(backupData: BackupExportData, payloadChecksumSha256: string) {
+  private buildBackupMetadata(
+    backupData:
+      | BackupExportData
+      | {
+          counts: {
+            importsCount: number;
+            dataRowsCount: number;
+            usersCount: number;
+            auditLogsCount: number;
+            collectionRecordsCount: number;
+            collectionRecordReceiptsCount: number;
+          };
+        },
+    payloadChecksumSha256: string,
+  ) {
+    const counts = "counts" in backupData
+      ? backupData.counts
+      : {
+          importsCount: backupData.imports.length,
+          dataRowsCount: backupData.dataRows.length,
+          usersCount: backupData.users.length,
+          auditLogsCount: backupData.auditLogs.length,
+          collectionRecordsCount: Array.isArray(backupData.collectionRecords)
+            ? backupData.collectionRecords.length
+            : 0,
+          collectionRecordReceiptsCount: Array.isArray(backupData.collectionRecordReceipts)
+            ? backupData.collectionRecordReceipts.length
+            : 0,
+        };
+
     return {
       timestamp: new Date().toISOString(),
       schemaVersion: 1,
       payloadChecksumSha256,
-      importsCount: backupData.imports.length,
-      dataRowsCount: backupData.dataRows.length,
-      usersCount: backupData.users.length,
-      auditLogsCount: backupData.auditLogs.length,
-      collectionRecordsCount: Array.isArray(backupData.collectionRecords)
-        ? backupData.collectionRecords.length
-        : 0,
-      collectionRecordReceiptsCount: Array.isArray(backupData.collectionRecordReceipts)
-        ? backupData.collectionRecordReceipts.length
-        : 0,
+      importsCount: counts.importsCount,
+      dataRowsCount: counts.dataRowsCount,
+      usersCount: counts.usersCount,
+      auditLogsCount: counts.auditLogsCount,
+      collectionRecordsCount: counts.collectionRecordsCount,
+      collectionRecordReceiptsCount: counts.collectionRecordReceiptsCount,
     };
   }
 

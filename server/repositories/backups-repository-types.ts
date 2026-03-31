@@ -85,6 +85,22 @@ export type BackupDataPayload = {
   collectionRecordReceipts?: BackupCollectionReceipt[];
 };
 
+export type BackupPayloadCounts = {
+  importsCount: number;
+  dataRowsCount: number;
+  usersCount: number;
+  auditLogsCount: number;
+  collectionRecordsCount: number;
+  collectionRecordReceiptsCount: number;
+};
+
+export type PreparedBackupPayloadFile = {
+  tempFilePath: string;
+  payloadChecksumSha256: string;
+  counts: BackupPayloadCounts;
+  cleanup: () => Promise<void>;
+};
+
 export type BackupListSort = "newest" | "oldest" | "name-asc" | "name-desc";
 
 export type BackupListPageParams = {
