@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import type { InsertUserActivity, User, UserActivity } from "../../shared/schema-postgres";
-import { userActivity, users } from "../../shared/schema-postgres";
+import { auditLogs, collectionNicknameSessions, userActivity, users } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
 
 const QUERY_PAGE_LIMIT = 1000;
@@ -95,6 +95,55 @@ export class ActivityRepository {
 
     const result = await db.select().from(userActivity).where(eq(userActivity.id, id)).limit(1);
     return result[0];
+  }
+
+  async expireIdleActivitySession(params: {
+    activityId: string;
+    idleCutoff: Date;
+    idleMinutes: number;
+  }): Promise<UserActivity | undefined> {
+    const logoutTime = new Date();
+    let expiredActivity: UserActivity | undefined;
+
+    await db.transaction(async (tx) => {
+      const updatedRows = await tx
+        .update(userActivity)
+        .set({
+          isActive: false,
+          logoutTime,
+          logoutReason: "IDLE_TIMEOUT",
+        })
+        .where(
+          and(
+            eq(userActivity.id, params.activityId),
+            eq(userActivity.isActive, true),
+            lte(userActivity.lastActivityTime, params.idleCutoff),
+          ),
+        )
+        .returning();
+
+      expiredActivity = updatedRows[0];
+      if (!expiredActivity) {
+        return;
+      }
+
+      await tx
+        .delete(collectionNicknameSessions)
+        .where(eq(collectionNicknameSessions.activityId, params.activityId));
+
+      await tx.insert(auditLogs).values({
+        id: crypto.randomUUID(),
+        action: "SESSION_IDLE_TIMEOUT",
+        performedBy: expiredActivity.username,
+        targetUser: null,
+        targetResource: null,
+        requestId: null,
+        details: `Auto logout after ${params.idleMinutes} minutes idle`,
+        timestamp: logoutTime,
+      });
+    });
+
+    return expiredActivity;
   }
 
   async getActivityById(id: string): Promise<UserActivity | undefined> {

@@ -644,6 +644,11 @@ type CategoryRule = {
   createActivity(data: InsertUserActivity): Promise<UserActivity>;
   getActiveActivitiesByUsername(username: string): Promise<UserActivity[]>;
   updateActivity(id: string, data: Partial<UserActivity>): Promise<UserActivity | undefined>;
+  expireIdleActivitySession(params: {
+    activityId: string;
+    idleCutoff: Date;
+    idleMinutes: number;
+  }): Promise<UserActivity | undefined>;
   getActivityById(id: string): Promise<UserActivity | undefined>;
   getActiveActivities(): Promise<UserActivity[]>;
   getAllActivities(): Promise<UserActivity[]>;

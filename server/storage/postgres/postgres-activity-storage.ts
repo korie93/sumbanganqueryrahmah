@@ -22,6 +22,14 @@ export class PostgresActivityStorage extends PostgresImportsSearchStorage {
     return this.activityRepository.updateActivity(id, data);
   }
 
+  async expireIdleActivitySession(params: {
+    activityId: string;
+    idleCutoff: Date;
+    idleMinutes: number;
+  }): Promise<UserActivity | undefined> {
+    return this.activityRepository.expireIdleActivitySession(params);
+  }
+
   async getActivityById(id: string): Promise<UserActivity | undefined> {
     return this.activityRepository.getActivityById(id);
   }

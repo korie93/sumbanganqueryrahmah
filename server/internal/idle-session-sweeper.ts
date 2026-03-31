@@ -11,16 +11,76 @@ type IdleSessionSweeperOptions = {
   storage: Pick<
     PostgresStorage,
     | "getActiveActivities"
-    | "getActivityById"
-    | "updateActivity"
-    | "createAuditLog"
-    | "clearCollectionNicknameSessionByActivity"
+    | "expireIdleActivitySession"
   >;
   connectedClients: Map<string, WebSocket>;
   getRuntimeSettingsCached: () => Promise<RuntimeSettings>;
   defaultSessionTimeoutMinutes: number;
   intervalMs?: number;
 };
+
+export async function runIdleSessionSweeperPass(
+  options: Pick<
+    IdleSessionSweeperOptions,
+    "storage" | "connectedClients" | "getRuntimeSettingsCached" | "defaultSessionTimeoutMinutes"
+  >,
+) {
+  const {
+    storage,
+    connectedClients,
+    getRuntimeSettingsCached,
+    defaultSessionTimeoutMinutes,
+  } = options;
+
+  const now = Date.now();
+  const activities = await storage.getActiveActivities();
+  const runtimeSettings = await getRuntimeSettingsCached();
+  const idleMinutes = Math.max(
+    1,
+    runtimeSettings.sessionTimeoutMinutes
+      || runtimeSettings.wsIdleMinutes
+      || defaultSessionTimeoutMinutes,
+  );
+  const idleMs = idleMinutes * 60 * 1000;
+  const idleCutoff = new Date(now - idleMs);
+
+  for (const activity of activities) {
+    if (!activity.lastActivityTime) {
+      continue;
+    }
+
+    const last = new Date(activity.lastActivityTime).getTime();
+    if (now - last <= idleMs) {
+      continue;
+    }
+
+    const expiredActivity = await storage.expireIdleActivitySession({
+      activityId: activity.id,
+      idleCutoff,
+      idleMinutes,
+    });
+    if (!expiredActivity) {
+      continue;
+    }
+
+    logger.info("Session expired due to inactivity", {
+      username: expiredActivity.username,
+      activityId: expiredActivity.id,
+      idleMinutes,
+    });
+
+    const socket = connectedClients.get(expiredActivity.id);
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        type: "idle_timeout",
+        reason: "Session expired due to inactivity",
+      }));
+      socket.close();
+    }
+
+    connectedClients.delete(expiredActivity.id);
+  }
+}
 
 export function startIdleSessionSweeper(options: IdleSessionSweeperOptions) {
   const {
@@ -40,69 +100,12 @@ export function startIdleSessionSweeper(options: IdleSessionSweeperOptions) {
 
     running = true;
     try {
-      const now = Date.now();
-      const activities = await storage.getActiveActivities();
-      const runtimeSettings = await getRuntimeSettingsCached();
-      const idleMinutes = Math.max(
-        1,
-        runtimeSettings.sessionTimeoutMinutes
-          || runtimeSettings.wsIdleMinutes
-          || defaultSessionTimeoutMinutes,
-      );
-      const idleMs = idleMinutes * 60 * 1000;
-
-      for (const activity of activities) {
-        if (!activity.lastActivityTime) {
-          continue;
-        }
-
-        const last = new Date(activity.lastActivityTime).getTime();
-        if (now - last <= idleMs) {
-          continue;
-        }
-
-        const freshActivity = await storage.getActivityById(activity.id);
-        if (!freshActivity || freshActivity.isActive === false) {
-          continue;
-        }
-
-        const freshLast = freshActivity.lastActivityTime
-          ? new Date(freshActivity.lastActivityTime).getTime()
-          : 0;
-        if (!freshLast || now - freshLast <= idleMs) {
-          continue;
-        }
-
-        logger.info("Session expired due to inactivity", {
-          username: activity.username,
-          activityId: activity.id,
-          idleMinutes,
-        });
-
-        await storage.updateActivity(activity.id, {
-          isActive: false,
-          logoutTime: new Date(),
-          logoutReason: "IDLE_TIMEOUT",
-        });
-
-        const socket = connectedClients.get(activity.id);
-        if (socket && socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({
-            type: "idle_timeout",
-            reason: "Session expired due to inactivity",
-          }));
-          socket.close();
-        }
-
-        connectedClients.delete(activity.id);
-        await storage.clearCollectionNicknameSessionByActivity(activity.id);
-
-        await storage.createAuditLog({
-          action: "SESSION_IDLE_TIMEOUT",
-          performedBy: activity.username,
-          details: `Auto logout after ${idleMinutes} minutes idle`,
-        });
-      }
+      await runIdleSessionSweeperPass({
+        storage,
+        connectedClients,
+        getRuntimeSettingsCached,
+        defaultSessionTimeoutMinutes,
+      });
     } catch (error) {
       logger.error("Idle session checker failed", { error });
     } finally {

@@ -22,10 +22,7 @@ type StartupStorage = Pick<
   PostgresStorage,
   | "init"
   | "getActiveActivities"
-  | "getActivityById"
-  | "updateActivity"
-  | "createAuditLog"
-  | "clearCollectionNicknameSessionByActivity"
+  | "expireIdleActivitySession"
 >;
 
 type StartLocalServerOptions = {
