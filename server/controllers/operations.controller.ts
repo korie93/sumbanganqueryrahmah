@@ -162,14 +162,24 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
     }
 
     const result = outcome.value;
-    if (result.statusCode !== 200 || !("fileName" in result.body) || !("payloadJson" in result.body)) {
+    if (
+      result.statusCode !== 200
+      || !("fileName" in result.body)
+      || !("payloadPrefixJson" in result.body)
+      || !("backupDataJson" in result.body)
+      || !("payloadSuffixJson" in result.body)
+    ) {
       return res.status(result.statusCode).json(result.body);
     }
 
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Content-Disposition", `attachment; filename="${result.body.fileName}"`);
-    return res.status(200).send(result.body.payloadJson);
+    res.status(200);
+    res.write(result.body.payloadPrefixJson);
+    res.write(result.body.backupDataJson);
+    res.end(result.body.payloadSuffixJson);
+    return;
   };
 
   const restoreBackup = async (req: AuthenticatedRequest, res: Response) => {

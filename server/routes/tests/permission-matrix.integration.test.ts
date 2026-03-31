@@ -347,6 +347,7 @@ function createActivityPermissionHarness() {
   };
   const app = createJsonTestApp();
   const connectedClients = new Map();
+  const passThroughRateLimiter: RequestHandler = (_req, _res, next) => next();
 
   registerActivityRoutes(app, {
     storage: {
@@ -406,6 +407,9 @@ function createActivityPermissionHarness() {
     requireRole: createTestRequireRole(),
     requireTabAccess: createTestRequireTabAccess(),
     connectedClients: connectedClients as any,
+    rateLimiters: {
+      adminAction: passThroughRateLimiter,
+    },
   });
 
   return {

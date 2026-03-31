@@ -290,7 +290,9 @@ test("BackupOperationsService exportBackup returns downloadable payload and audi
 
   assert.equal(result.statusCode, 200);
   assert.equal(typeof (result.body as any).fileName, "string");
-  const payload = JSON.parse(String((result.body as any).payloadJson || "{}"));
+  const payload = JSON.parse(
+    `${String((result.body as any).payloadPrefixJson || "")}${String((result.body as any).backupDataJson || "")}${String((result.body as any).payloadSuffixJson || "")}`,
+  );
   assert.equal(payload.id, "backup-1");
   assert.equal(Array.isArray(payload.backupData.imports), true);
   assert.equal(payload.integrity.verified, true);
@@ -342,6 +344,7 @@ test("BackupOperationsService restoreBackup returns restore details and audit me
   assert.equal((result.body as any).backupName, "Nightly Backup");
   assert.equal((result.body as any).integrity.verified, true);
   assert.equal(restoreCalls.length, 1);
+  assert.equal(typeof restoreCalls[0], "string");
   assert.equal(auditLogs.length, 1);
   assert.equal(auditLogs[0].action, "RESTORE_BACKUP");
   assert.equal(auditLogs[0].targetResource, "Nightly Backup");

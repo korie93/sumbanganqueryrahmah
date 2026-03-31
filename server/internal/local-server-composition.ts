@@ -16,7 +16,7 @@ import { injectChaos, getIntelligenceExplainability } from "../intelligence";
 import { logger } from "../lib/logger";
 import { CollectionRollupRefreshNotificationSubscriber } from "../lib/collection-rollup-refresh-notification";
 import { errorHandler } from "../middleware/error-handler";
-import { searchRateLimiter } from "../middleware/rate-limit";
+import { createAuthRouteRateLimiters, searchRateLimiter } from "../middleware/rate-limit";
 import { AnalyticsRepository } from "../repositories/analytics.repository";
 import { AuditRepository } from "../repositories/audit.repository";
 import { BackupJobRepository } from "../repositories/backup-job.repository";
@@ -251,6 +251,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     environmentRuntimeConfig.app.bodyLimits.imports,
     DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES,
   );
+  const authRouteRateLimiters = createAuthRouteRateLimiters();
   const backupOperationsService = new BackupOperationsService(
     storage,
     backupsRepository,
@@ -319,6 +320,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     authenticateToken,
     requireRole,
     connectedClients,
+    rateLimiters: authRouteRateLimiters,
   });
 
   registerActivityRoutes(app, {
@@ -327,6 +329,9 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     requireRole,
     requireTabAccess,
     connectedClients,
+    rateLimiters: {
+      adminAction: authRouteRateLimiters.adminAction,
+    },
   });
 
   registerImportRoutes(app, {

@@ -54,52 +54,6 @@ export class PostgresOperationsStorage extends PostgresCollectionStorage {
     return this.backupsRepository.deleteBackup(id);
   }
 
-  async getBackupDataForExport(): Promise<{
-    imports: Import[];
-    dataRows: DataRow[];
-    users: Array<{
-      username: string;
-      role: string;
-      isBanned: boolean | null;
-      passwordHash?: string;
-      twoFactorEnabled?: boolean;
-      twoFactorSecretEncrypted?: string | null;
-      twoFactorConfiguredAt?: string | Date | null;
-      failedLoginAttempts?: number;
-      lockedAt?: string | Date | null;
-      lockedReason?: string | null;
-      lockedBySystem?: boolean;
-    }>;
-    auditLogs: AuditLog[];
-    collectionRecords?: Array<{
-      id: string;
-      customerName: string;
-      icNumber: string;
-      customerPhone: string;
-      accountNumber: string;
-      batch: string;
-      paymentDate: string;
-      amount: string | number;
-      receiptFile: string | null;
-      createdByLogin: string;
-      collectionStaffNickname: string;
-      staffUsername?: string | null;
-      createdAt: string | Date;
-    }>;
-    collectionRecordReceipts?: Array<{
-      id: string;
-      collectionRecordId: string;
-      storagePath: string;
-      originalFileName: string;
-      originalMimeType: string;
-      originalExtension: string;
-      fileSize: number;
-      createdAt: string | Date;
-    }>;
-  }> {
-    return this.backupsRepository.getBackupDataForExport();
-  }
-
   async restoreFromBackup(backupData: {
     imports: Import[];
     dataRows: DataRow[];

@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { hashPassword } from "../../auth/passwords";
+import { logger } from "../../lib/logger";
 import { registerCollectionRoutes } from "../collection.routes";
 import type { PostgresStorage } from "../../storage-postgres";
 import {
@@ -1534,6 +1535,43 @@ test("GET /api/collection/:id/receipt/download returns 404 when receipt file is 
     const payload = await response.json();
     assert.equal(payload.ok, false);
     assert.match(String(payload.message), /receipt file not found/i);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/collection/:id/receipt/download logs storage access warnings for unreadable legacy receipts", async (t) => {
+  const warnMock = t.mock.method(logger, "warn", () => {});
+  const { storage } = createCoreCollectionStorageDouble({
+    sessionNickname: "Collector Alpha",
+    seedRecordOverrides: {
+      receiptFile: "/uploads/collection-receipts/missing.pdf",
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+      activityId: "activity-user-collection-receipt-2-log",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1/receipt/download`);
+    assert.equal(response.status, 404);
+
+    const storageWarning = warnMock.mock.calls.find((call) => (
+      call.arguments[0] === "Collection receipt request failed"
+      && (call.arguments[1] as Record<string, unknown> | undefined)?.reason === "receipt_storage_access_failed"
+    ));
+    assert.ok(storageWarning, "expected a receipt storage access warning to be logged");
   } finally {
     await stopTestServer(server);
   }

@@ -27,6 +27,14 @@ const viewerColumnFilterSchema = z.object({
 
 const viewerColumnFiltersSchema = z.array(viewerColumnFilterSchema).max(10);
 
+function buildImportMutationSuccessPayload<T extends Record<string, unknown>>(payload?: T) {
+  return {
+    ok: true as const,
+    success: true as const,
+    ...(payload ?? {}),
+  };
+}
+
 function parseViewerColumnFiltersQuery(value: unknown): ImportDataColumnFilter[] {
   const normalized = readNonEmptyString(value);
   if (!normalized) {
@@ -228,7 +236,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
       throw notFound("Import not found");
     }
 
-    return res.json({ success: true });
+    return res.json(buildImportMutationSuccessPayload());
   };
 
   return {

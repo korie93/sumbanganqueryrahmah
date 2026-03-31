@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { WebSocket } from "ws";
 import type { RequestHandler } from "express";
+import { ERROR_CODES } from "../../../shared/error-codes";
 import { registerActivityRoutes } from "../activity.routes";
 import type { PostgresStorage } from "../../storage-postgres";
 import {
@@ -86,6 +87,7 @@ function createMockSocket(): { socket: WebSocket; state: SocketState } {
 
 function createActivityRouteHarness(options?: {
   authenticateToken?: RequestHandler;
+  adminActionRateLimiter?: RequestHandler;
 }) {
   const auditLogs: AuditEntry[] = [];
   const clearNicknameSessionCalls: string[] = [];
@@ -266,6 +268,9 @@ function createActivityRouteHarness(options?: {
     requireRole: createTestRequireRole(),
     requireTabAccess: () => allowAllTabs(),
     connectedClients,
+    rateLimiters: {
+      adminAction: options?.adminActionRateLimiter ?? ((_req, _res, next) => next()),
+    },
   });
 
   return {
@@ -284,6 +289,54 @@ function createActivityRouteHarness(options?: {
   };
 }
 
+test("POST /api/activity/kick respects the dedicated admin action rate limiter", async () => {
+  const { app, auditLogs, socketStates, connectedClients, activities } = createActivityRouteHarness({
+    authenticateToken: createTestAuthenticateToken({
+      userId: "admin-1",
+      username: "admin.user",
+      role: "admin",
+      activityId: "activity-1",
+    }),
+    adminActionRateLimiter: (_req, res) => {
+      res.status(429).json({
+        ok: false,
+        error: {
+          code: ERROR_CODES.ADMIN_ACTION_RATE_LIMITED,
+          message: "Too many admin account actions. Please slow down and try again.",
+        },
+      });
+    },
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/activity/kick`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        activityId: "activity-2",
+      }),
+    });
+
+    assert.equal(response.status, 429);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      error: {
+        code: ERROR_CODES.ADMIN_ACTION_RATE_LIMITED,
+        message: "Too many admin account actions. Please slow down and try again.",
+      },
+    });
+    assert.equal(activities.get("activity-2")?.isActive, true);
+    assert.equal(connectedClients.has("activity-2"), true);
+    assert.equal(socketStates.get("activity-2")?.closeCalls, 0);
+    assert.equal(auditLogs.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /api/activity/logout clears the auth cookie and returns 401 when the request has no authenticated user", async () => {
   const { app } = createActivityRouteHarness({
     authenticateToken: (_req, _res, next) => next(),
@@ -300,7 +353,7 @@ test("POST /api/activity/logout clears the auth cookie and returns 401 when the 
 
     assert.equal(response.status, 401);
     assert.deepEqual(await response.json(), {
-      success: false,
+      ok: false,
     });
     const setCookie = response.headers.get("set-cookie") || "";
     assert.match(setCookie, /sqr_auth=/);
@@ -331,6 +384,7 @@ test("POST /api/activity/logout logs out the session, closes the socket, and aud
 
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {
+      ok: true,
       success: true,
     });
     assert.equal(activities.get("activity-1")?.isActive, false);
@@ -374,6 +428,7 @@ test("DELETE /api/activity/logs/bulk-delete deduplicates ids and reports missing
 
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {
+      ok: true,
       success: true,
       requestedCount: 3,
       deletedCount: 2,
@@ -412,6 +467,7 @@ test("POST /api/activity/kick returns 404 when the activity does not exist", asy
 
     assert.equal(response.status, 404);
     assert.deepEqual(await response.json(), {
+      ok: false,
       message: "Activity not found",
     });
     assert.equal(auditLogs.length, 0);
@@ -444,6 +500,7 @@ test("POST /api/activity/kick closes the target socket and writes an audit log",
 
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {
+      ok: true,
       success: true,
     });
     assert.equal(activities.get("activity-2")?.isActive, false);
@@ -477,6 +534,7 @@ test("POST /api/activity/ban rejects attempts to ban a superuser session", async
 
     assert.equal(response.status, 403);
     assert.deepEqual(await response.json(), {
+      ok: false,
       message: "Cannot ban a superuser",
     });
     assert.equal(auditLogs.length, 0);
@@ -503,6 +561,7 @@ test("POST /api/admin/ban bans the account, deactivates active sessions, and aud
 
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {
+      ok: true,
       success: true,
     });
     assert.deepEqual(updateUserBanCalls, [{

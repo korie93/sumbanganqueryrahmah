@@ -1,87 +1,27 @@
-import crypto from "crypto";
 import { promises as fs } from "node:fs";
 import { readDate, readInteger, readOptionalString } from "../http/validation";
 import { logger } from "../lib/logger";
-import type { BackupsRepository } from "../repositories/backups.repository";
-import type { PostgresStorage } from "../storage-postgres";
-
-type BackupOperationsStorage = Pick<PostgresStorage, "createAuditLog">;
-type BackupOperationsBackupsRepository = Pick<
-  BackupsRepository,
-  | "createBackup"
-  | "deleteBackup"
-  | "getBackupMetadataById"
-  | "getBackupById"
-  | "getBackupDataForExport"
-  | "prepareBackupPayloadFileForCreate"
-  | "listBackupsPage"
-  | "restoreFromBackup"
->;
-type BackupExportData = Awaited<
-  ReturnType<BackupOperationsBackupsRepository["getBackupDataForExport"]>
->;
-type PreparedBackupPayloadFile = Awaited<
-  ReturnType<BackupOperationsBackupsRepository["prepareBackupPayloadFileForCreate"]>
->;
-type BackupRecord = NonNullable<
-  Awaited<ReturnType<BackupOperationsBackupsRepository["getBackupById"]>>
->;
-type BackupMetadataRecord = NonNullable<
-  Awaited<ReturnType<BackupOperationsBackupsRepository["getBackupMetadataById"]>>
->;
-type BackupListPage = Awaited<ReturnType<BackupOperationsBackupsRepository["listBackupsPage"]>>;
-type RestoreFromBackupResult = Awaited<
-  ReturnType<BackupOperationsBackupsRepository["restoreFromBackup"]>
->;
-type BackupListResponse = {
-  backups: BackupListPage["backups"];
-  pagination: {
-    page: number;
-    pageSize: number;
-    total: number;
-    totalPages: number;
-  };
-};
-type BackupOperationResponse<T> = {
-  statusCode: number;
-  body: T;
-};
-
-type RestoreBackupSuccessBody = {
-  backupId: string;
-  backupName: string;
-  restoredAt: string;
-  durationMs: number;
-  integrity: {
-    checksumSha256: string;
-    verified: boolean;
-  };
-  message: string;
-} & RestoreFromBackupResult;
-
-type BackupIntegrityResult = {
-  ok: boolean;
-  verified: boolean;
-  storedChecksum: string | null;
-  computedChecksum: string;
-};
-
-type CreateBackupInput = {
-  name: string;
-  username: string;
-};
-
-type RestoreBackupInput = {
-  backupId: string;
-  username: string;
-};
-
-type DeleteBackupInput = {
-  backupId: string;
-  username: string;
-};
-
-type ListBackupsInput = Record<string, unknown>;
+import {
+  buildBackupExportEnvelope,
+  buildBackupMetadata,
+  createBackupDownloadFileName,
+  getBackupPayloadReadErrorResponse,
+  type BackupErrorBody,
+  type BackupIntegrityResult,
+  type BackupListResponse,
+  type BackupMetadataRecord,
+  type BackupOperationResponse,
+  type BackupOperationsBackupsRepository,
+  type BackupOperationsStorage,
+  type CreateBackupInput,
+  type DeleteBackupInput,
+  type ListBackupsInput,
+  type PreparedBackupPayloadFile,
+  type RestoreBackupInput,
+  type RestoreBackupSuccessBody,
+  type RestoreFromBackupResult,
+  verifyBackupIntegrity,
+} from "./backup-operations-utils";
 
 export class BackupOperationsService {
   constructor(
@@ -152,12 +92,22 @@ export class BackupOperationsService {
   async exportBackup(
     backupId: string,
     username: string,
-  ): Promise<BackupOperationResponse<{ fileName: string; payloadJson: string } | { message: string }>> {
+  ): Promise<
+    BackupOperationResponse<
+      | {
+          fileName: string;
+          payloadPrefixJson: string;
+          backupDataJson: string;
+          payloadSuffixJson: string;
+        }
+      | { message: string }
+    >
+  > {
     let backup: Awaited<ReturnType<BackupOperationsBackupsRepository["getBackupById"]>>;
     try {
       backup = await this.backupsRepository.getBackupById(backupId);
     } catch (error) {
-      const payloadReadFailure = this.getBackupPayloadReadErrorResponse(error);
+      const payloadReadFailure = getBackupPayloadReadErrorResponse(error);
       if (payloadReadFailure) {
         return payloadReadFailure;
       }
@@ -171,17 +121,15 @@ export class BackupOperationsService {
       };
     }
 
-    let parsedBackupData: unknown;
-    try {
-      parsedBackupData = JSON.parse(String(backup.backupData || "{}"));
-    } catch {
+    const backupDataJson = String(backup.backupData || "").trim();
+    if (!backupDataJson) {
       return {
         statusCode: 500,
         body: { message: "Backup payload is not readable." },
       };
     }
 
-    const integrity = this.verifyBackupIntegrity(backup);
+    const integrity = verifyBackupIntegrity(backup);
     if (!integrity.ok) {
       logger.warn("Backup integrity mismatch detected during export", {
         backupId: backup.id,
@@ -196,18 +144,7 @@ export class BackupOperationsService {
       };
     }
 
-    const exportPayload = {
-      id: backup.id,
-      name: backup.name,
-      createdAt: backup.createdAt,
-      createdBy: backup.createdBy,
-      metadata: backup.metadata ?? null,
-      integrity: {
-        checksumSha256: integrity.storedChecksum || integrity.computedChecksum,
-        verified: integrity.verified,
-      },
-      backupData: parsedBackupData,
-    };
+    const envelopeJson = JSON.stringify(buildBackupExportEnvelope(backup, integrity));
 
     await this.storage.createAuditLog({
       action: "DOWNLOAD_BACKUP_EXPORT",
@@ -225,15 +162,13 @@ export class BackupOperationsService {
       integrityVerified: integrity.verified,
     });
 
-    const safeNameStem = String(backup.name || "backup")
-      .trim()
-      .replace(/[^a-zA-Z0-9._-]+/g, "_")
-      .slice(0, 80) || "backup";
     return {
       statusCode: 200,
       body: {
-        fileName: `${safeNameStem}-${backup.id}.json`,
-        payloadJson: JSON.stringify(exportPayload),
+        fileName: createBackupDownloadFileName(backup.name, backup.id),
+        payloadPrefixJson: `${envelopeJson.slice(0, -1)},"backupData":`,
+        backupDataJson,
+        payloadSuffixJson: "}",
       },
     };
   }
@@ -251,7 +186,10 @@ export class BackupOperationsService {
 
         try {
           const backupPayloadJson = await fs.readFile(preparedBackupPayload.tempFilePath, "utf8");
-          const metadata = this.buildBackupMetadata(preparedBackupPayload, preparedBackupPayload.payloadChecksumSha256);
+          const metadata = buildBackupMetadata(
+            preparedBackupPayload,
+            preparedBackupPayload.payloadChecksumSha256,
+          );
           const created = await this.backupsRepository.createBackup({
             name: params.name,
             createdBy: params.username,
@@ -325,7 +263,7 @@ export class BackupOperationsService {
     try {
       result = await this.withExportCircuit(async () => {
         const startTime = Date.now();
-        const integrity = this.verifyBackupIntegrity(backup);
+        const integrity = verifyBackupIntegrity(backup);
         if (!integrity.ok) {
           return {
             error: {
@@ -335,8 +273,9 @@ export class BackupOperationsService {
           };
         }
 
-        const backupData = JSON.parse(backup.backupData);
-        const restored = await this.backupsRepository.restoreFromBackup(backupData);
+        const backupDataJson = String(backup.backupData || "");
+        backup.backupData = "";
+        const restored = await this.backupsRepository.restoreFromBackup(backupDataJson);
 
         await this.storage.createAuditLog({
           action: "RESTORE_BACKUP",
@@ -387,7 +326,7 @@ export class BackupOperationsService {
 
   async deleteBackup(
     params: DeleteBackupInput,
-  ): Promise<BackupOperationResponse<{ success: boolean } | { message: string }>> {
+  ): Promise<BackupOperationResponse<{ success: boolean } | BackupErrorBody>> {
     let backupMetadata;
     let deleted;
 
@@ -421,84 +360,6 @@ export class BackupOperationsService {
     };
   }
 
-  private buildBackupMetadata(
-    backupData:
-      | BackupExportData
-      | {
-          counts: {
-            importsCount: number;
-            dataRowsCount: number;
-            usersCount: number;
-            auditLogsCount: number;
-            collectionRecordsCount: number;
-            collectionRecordReceiptsCount: number;
-          };
-        },
-    payloadChecksumSha256: string,
-  ) {
-    const counts = "counts" in backupData
-      ? backupData.counts
-      : {
-          importsCount: backupData.imports.length,
-          dataRowsCount: backupData.dataRows.length,
-          usersCount: backupData.users.length,
-          auditLogsCount: backupData.auditLogs.length,
-          collectionRecordsCount: Array.isArray(backupData.collectionRecords)
-            ? backupData.collectionRecords.length
-            : 0,
-          collectionRecordReceiptsCount: Array.isArray(backupData.collectionRecordReceipts)
-            ? backupData.collectionRecordReceipts.length
-            : 0,
-        };
-
-    return {
-      timestamp: new Date().toISOString(),
-      schemaVersion: 1,
-      payloadChecksumSha256,
-      importsCount: counts.importsCount,
-      dataRowsCount: counts.dataRowsCount,
-      usersCount: counts.usersCount,
-      auditLogsCount: counts.auditLogsCount,
-      collectionRecordsCount: counts.collectionRecordsCount,
-      collectionRecordReceiptsCount: counts.collectionRecordReceiptsCount,
-    };
-  }
-
-  private computePayloadChecksum(payloadJson: string): string {
-    return crypto.createHash("sha256").update(String(payloadJson || ""), "utf8").digest("hex");
-  }
-
-  private readStoredChecksum(backup: BackupRecord): string | null {
-    const metadata = backup.metadata;
-    if (!metadata || typeof metadata !== "object") {
-      return null;
-    }
-    const candidate = String((metadata as Record<string, unknown>).payloadChecksumSha256 || "")
-      .trim()
-      .toLowerCase();
-    return /^[a-f0-9]{64}$/.test(candidate) ? candidate : null;
-  }
-
-  private verifyBackupIntegrity(backup: BackupRecord): BackupIntegrityResult {
-    const computedChecksum = this.computePayloadChecksum(String(backup.backupData || ""));
-    const storedChecksum = this.readStoredChecksum(backup);
-    if (!storedChecksum) {
-      return {
-        ok: true,
-        verified: false,
-        storedChecksum: null,
-        computedChecksum,
-      };
-    }
-
-    return {
-      ok: storedChecksum === computedChecksum,
-      verified: true,
-      storedChecksum,
-      computedChecksum,
-    };
-  }
-
   private getCircuitOpenResponse<T>(error: unknown): BackupOperationResponse<T | { message: string }> {
     if (this.isExportCircuitOpenError(error)) {
       return {
@@ -513,20 +374,6 @@ export class BackupOperationsService {
   private getBackupPayloadReadErrorResponse(
     error: unknown,
   ): BackupOperationResponse<{ message: string }> | null {
-    const message = String((error as { message?: string })?.message || "");
-    if (
-      /decrypt|encryption key|encrypted format|backup payload|BACKUP_ENCRYPTION_KEY/i.test(
-        message,
-      )
-    ) {
-      return {
-        statusCode: 409,
-        body: {
-          message:
-            "Backup payload cannot be decrypted with the current encryption configuration.",
-        },
-      };
-    }
-    return null;
+    return getBackupPayloadReadErrorResponse(error);
   }
 }

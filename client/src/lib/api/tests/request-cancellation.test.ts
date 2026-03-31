@@ -406,7 +406,7 @@ test("saved import API wrappers forward AbortSignal", async () => {
     }
 
     if (url === "/api/imports/import-123") {
-      return jsonResponse({ success: true });
+      return jsonResponse({ ok: true, success: true });
     }
 
     throw new Error(`Unexpected URL: ${url}`);

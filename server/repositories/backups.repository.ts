@@ -13,7 +13,6 @@ import {
   listBackupsPage,
 } from "./backups-list-utils";
 import {
-  getBackupDataForExport,
   prepareBackupPayloadFileForCreate,
   restoreFromBackup,
 } from "./backups-restore-utils";
@@ -62,15 +61,11 @@ export class BackupsRepository {
     return deleteBackup(this.options, id);
   }
 
-  async getBackupDataForExport(): Promise<BackupDataPayload> {
-    return getBackupDataForExport();
-  }
-
   async prepareBackupPayloadFileForCreate(): Promise<PreparedBackupPayloadFile> {
     return prepareBackupPayloadFileForCreate();
   }
 
-  async restoreFromBackup(backupDataRaw: BackupDataPayload): Promise<{ success: boolean; stats: RestoreStats }> {
+  async restoreFromBackup(backupDataRaw: BackupDataPayload | string): Promise<{ success: boolean; stats: RestoreStats }> {
     return restoreFromBackup(backupDataRaw);
   }
 }

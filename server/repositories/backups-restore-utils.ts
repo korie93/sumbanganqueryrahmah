@@ -1,8 +1,4 @@
 import crypto from "crypto";
-import { once } from "node:events";
-import { createWriteStream, promises as fs } from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { eq, sql } from "drizzle-orm";
 import type {
   AuditLog,
@@ -15,16 +11,19 @@ import { rebuildCollectionRecordDailyRollups } from "./collection-record-reposit
 import { parseCollectionAmountToCents } from "../services/collection/collection-receipt-validation";
 import {
   BACKUP_CHUNK_SIZE,
-  QUERY_PAGE_LIMIT,
   type BackupCollectionReceipt,
   type BackupCollectionRecord,
   type BackupDataPayload,
-  type BackupPayloadCounts,
   type BackupUserRecord,
-  type PreparedBackupPayloadFile,
   type RestoreStats,
   createRestoreDatasetStats,
 } from "./backups-repository-types";
+import {
+  createBackupPayloadSectionReader,
+  prepareBackupPayloadFileForCreate,
+} from "./backups-payload-utils";
+
+type BackupPayloadSource = BackupDataPayload | string;
 
 function toDate(value: unknown): Date | null {
   if (!value) return null;
@@ -39,105 +38,6 @@ function chunkArray<T>(rows: T[], size: number): T[][] {
     chunks.push(rows.slice(index, index + size));
   }
   return chunks;
-}
-
-async function safeSelectRows<T extends Record<string, unknown>>(query: unknown): Promise<T[]> {
-  try {
-    const result = await db.execute(query as any);
-    return (Array.isArray(result.rows) ? result.rows : []) as T[];
-  } catch (error) {
-    const message = String((error as { message?: string })?.message || "");
-    if (/relation\s+["']?[\w.]+["']?\s+does not exist/i.test(message)) {
-      return [];
-    }
-    throw error;
-  }
-}
-
-async function selectRows<T extends Record<string, unknown>>(query: unknown): Promise<T[]> {
-  const result = await db.execute(query as any);
-  return (Array.isArray(result.rows) ? result.rows : []) as T[];
-}
-
-type BackupCursorRow = {
-  id: string;
-};
-
-type BackupPageFetcher<T extends BackupCursorRow> = (lastId: string | null) => Promise<T[]>;
-
-async function writeBackupChunk(
-  writer: ReturnType<typeof createWriteStream>,
-  hash: crypto.Hash,
-  chunk: string,
-) {
-  if (!chunk) return;
-  hash.update(chunk, "utf8");
-  if (!writer.write(chunk, "utf8")) {
-    await once(writer, "drain");
-  }
-}
-
-async function closeBackupWriter(writer: ReturnType<typeof createWriteStream>) {
-  await new Promise<void>((resolve, reject) => {
-    writer.once("error", reject);
-    writer.end(() => resolve());
-  });
-}
-
-async function appendPagedJsonArray<T extends BackupCursorRow>(
-  writer: ReturnType<typeof createWriteStream>,
-  hash: crypto.Hash,
-  key: string,
-  fetchPage: BackupPageFetcher<T>,
-): Promise<number> {
-  await writeBackupChunk(writer, hash, `"${key}":[`);
-
-  let lastId: string | null = null;
-  let isFirstRow = true;
-  let total = 0;
-
-  while (true) {
-    const rows = await fetchPage(lastId);
-    if (!rows.length) {
-      break;
-    }
-
-    for (const row of rows) {
-      if (!isFirstRow) {
-        await writeBackupChunk(writer, hash, ",");
-      }
-      isFirstRow = false;
-      await writeBackupChunk(writer, hash, JSON.stringify(row));
-      total += 1;
-      lastId = row.id;
-    }
-
-    if (rows.length < QUERY_PAGE_LIMIT) {
-      break;
-    }
-  }
-
-  await writeBackupChunk(writer, hash, "]");
-  return total;
-}
-
-function createEmptyBackupPayloadCounts(): BackupPayloadCounts {
-  return {
-    importsCount: 0,
-    dataRowsCount: 0,
-    usersCount: 0,
-    auditLogsCount: 0,
-    collectionRecordsCount: 0,
-    collectionRecordReceiptsCount: 0,
-  };
-}
-
-async function createBackupTempFile() {
-  const tempDirPath = await fs.mkdtemp(path.join(os.tmpdir(), "sqr-backup-export-"));
-  return {
-    tempDirPath,
-    tempFilePath: path.join(tempDirPath, "backup-data.json"),
-  };
 }
 
 function createRestoreStats(): RestoreStats {
@@ -171,544 +71,321 @@ function updateRestoreTotals(stats: RestoreStats) {
   stats.totalReactivated = datasets.reduce((sum, item) => sum + item.reactivated, 0);
 }
 
-export async function getBackupDataForExport(): Promise<BackupDataPayload> {
-  const [allImports, allDataRows, allUsersFromDb, allAuditLogs] = await Promise.all([
-    db.select().from(imports).where(eq(imports.isDeleted, false)),
-    db.select().from(dataRows),
-    db.select().from(users),
-    db.select().from(auditLogs),
-  ]);
+export {
+  createBackupPayloadSectionReader,
+  prepareBackupPayloadFileForCreate,
+} from "./backups-payload-utils";
 
-  const [collectionRecords, collectionRecordReceipts] = await Promise.all([
-    safeSelectRows<BackupCollectionRecord>(sql`
-      SELECT
-        id,
-        customer_name as "customerName",
-        ic_number as "icNumber",
-        customer_phone as "customerPhone",
-        account_number as "accountNumber",
-        batch,
-        payment_date as "paymentDate",
-        amount,
-        receipt_file as "receiptFile",
-        receipt_total_amount as "receiptTotalAmount",
-        receipt_validation_status as "receiptValidationStatus",
-        receipt_validation_message as "receiptValidationMessage",
-        receipt_count as "receiptCount",
-        duplicate_receipt_flag as "duplicateReceiptFlag",
-        created_by_login as "createdByLogin",
-        collection_staff_nickname as "collectionStaffNickname",
-        staff_username as "staffUsername",
-        created_at as "createdAt"
-      FROM public.collection_records
-    `),
-    safeSelectRows<BackupCollectionReceipt>(sql`
-      SELECT
-        id,
-        collection_record_id as "collectionRecordId",
-        storage_path as "storagePath",
-        original_file_name as "originalFileName",
-        original_mime_type as "originalMimeType",
-        original_extension as "originalExtension",
-        file_size as "fileSize",
-        receipt_amount as "receiptAmount",
-        extracted_amount as "extractedAmount",
-        extraction_status as "extractionStatus",
-        extraction_confidence as "extractionConfidence",
-        receipt_date as "receiptDate",
-        receipt_reference as "receiptReference",
-        file_hash as "fileHash",
-        created_at as "createdAt"
-      FROM public.collection_record_receipts
-    `),
-  ]);
-
-  return {
-    imports: allImports as Import[],
-    dataRows: allDataRows as DataRow[],
-    users: (allUsersFromDb as Array<any>).map((user) => ({
-      username: user.username,
-      role: user.role,
-      isBanned: user.isBanned,
-      passwordHash: user.passwordHash,
-      twoFactorEnabled: user.twoFactorEnabled ?? false,
-      twoFactorSecretEncrypted: user.twoFactorSecretEncrypted ?? null,
-      twoFactorConfiguredAt: user.twoFactorConfiguredAt ?? null,
-      failedLoginAttempts: user.failedLoginAttempts ?? 0,
-      lockedAt: user.lockedAt ?? null,
-      lockedReason: user.lockedReason ?? null,
-      lockedBySystem: user.lockedBySystem ?? false,
-    })) as BackupUserRecord[],
-    auditLogs: allAuditLogs as AuditLog[],
-    collectionRecords,
-    collectionRecordReceipts,
-  };
-}
-
-export async function prepareBackupPayloadFileForCreate(): Promise<PreparedBackupPayloadFile> {
-  const { tempDirPath, tempFilePath } = await createBackupTempFile();
-  const writer = createWriteStream(tempFilePath, { encoding: "utf8" });
-  const hash = crypto.createHash("sha256");
-  const counts = createEmptyBackupPayloadCounts();
-
-  const cleanup = async () => {
-    await fs.rm(tempDirPath, { recursive: true, force: true });
-  };
-
-  try {
-    await writeBackupChunk(writer, hash, "{");
-
-    counts.importsCount = await appendPagedJsonArray(writer, hash, "imports", (lastId) =>
-      selectRows<Import & BackupCursorRow>(sql`
-        SELECT
-          id,
-          name,
-          filename,
-          created_at as "createdAt",
-          is_deleted as "isDeleted",
-          created_by as "createdBy"
-        FROM public.imports
-        WHERE is_deleted = false
-          ${lastId ? sql`AND id > ${lastId}` : sql``}
-        ORDER BY id ASC
-        LIMIT ${QUERY_PAGE_LIMIT}
-      `),
-    );
-
-    await writeBackupChunk(writer, hash, ",");
-
-    counts.dataRowsCount = await appendPagedJsonArray(writer, hash, "dataRows", (lastId) =>
-      selectRows<DataRow & BackupCursorRow>(sql`
-        SELECT
-          id,
-          import_id as "importId",
-          json_data as "jsonDataJsonb"
-        FROM public.data_rows
-        WHERE ${lastId ? sql`id > ${lastId}` : sql`TRUE`}
-        ORDER BY id ASC
-        LIMIT ${QUERY_PAGE_LIMIT}
-      `),
-    );
-
-    await writeBackupChunk(writer, hash, ",");
-
-    counts.usersCount = await appendPagedJsonArray(writer, hash, "users", (lastId) =>
-      selectRows<BackupUserRecord & BackupCursorRow>(sql`
-        SELECT
-          id,
-          username,
-          role,
-          is_banned as "isBanned",
-          password_hash as "passwordHash",
-          two_factor_enabled as "twoFactorEnabled",
-          two_factor_secret_encrypted as "twoFactorSecretEncrypted",
-          two_factor_configured_at as "twoFactorConfiguredAt",
-          failed_login_attempts as "failedLoginAttempts",
-          locked_at as "lockedAt",
-          locked_reason as "lockedReason",
-          locked_by_system as "lockedBySystem"
-        FROM public.users
-        WHERE ${lastId ? sql`id > ${lastId}` : sql`TRUE`}
-        ORDER BY id ASC
-        LIMIT ${QUERY_PAGE_LIMIT}
-      `),
-    );
-
-    await writeBackupChunk(writer, hash, ",");
-
-    counts.auditLogsCount = await appendPagedJsonArray(writer, hash, "auditLogs", (lastId) =>
-      selectRows<AuditLog & BackupCursorRow>(sql`
-        SELECT
-          id,
-          action,
-          performed_by as "performedBy",
-          request_id as "requestId",
-          target_user as "targetUser",
-          target_resource as "targetResource",
-          details,
-          timestamp
-        FROM public.audit_logs
-        WHERE ${lastId ? sql`id > ${lastId}` : sql`TRUE`}
-        ORDER BY id ASC
-        LIMIT ${QUERY_PAGE_LIMIT}
-      `),
-    );
-
-    await writeBackupChunk(writer, hash, ",");
-
-    counts.collectionRecordsCount = await appendPagedJsonArray(writer, hash, "collectionRecords", (lastId) =>
-      safeSelectRows<BackupCollectionRecord & BackupCursorRow>(sql`
-        SELECT
-          id,
-          customer_name as "customerName",
-          ic_number as "icNumber",
-          customer_phone as "customerPhone",
-          account_number as "accountNumber",
-          batch,
-          payment_date as "paymentDate",
-          amount,
-          receipt_file as "receiptFile",
-          receipt_total_amount as "receiptTotalAmount",
-          receipt_validation_status as "receiptValidationStatus",
-          receipt_validation_message as "receiptValidationMessage",
-          receipt_count as "receiptCount",
-          duplicate_receipt_flag as "duplicateReceiptFlag",
-          created_by_login as "createdByLogin",
-          collection_staff_nickname as "collectionStaffNickname",
-          staff_username as "staffUsername",
-          created_at as "createdAt"
-        FROM public.collection_records
-        WHERE ${lastId ? sql`id > ${lastId}` : sql`TRUE`}
-        ORDER BY id ASC
-        LIMIT ${QUERY_PAGE_LIMIT}
-      `),
-    );
-
-    await writeBackupChunk(writer, hash, ",");
-
-    counts.collectionRecordReceiptsCount = await appendPagedJsonArray(
-      writer,
-      hash,
-      "collectionRecordReceipts",
-      (lastId) =>
-        safeSelectRows<BackupCollectionReceipt & BackupCursorRow>(sql`
-          SELECT
-            id,
-            collection_record_id as "collectionRecordId",
-            storage_path as "storagePath",
-            original_file_name as "originalFileName",
-            original_mime_type as "originalMimeType",
-            original_extension as "originalExtension",
-            file_size as "fileSize",
-            receipt_amount as "receiptAmount",
-            extracted_amount as "extractedAmount",
-            extraction_status as "extractionStatus",
-            extraction_confidence as "extractionConfidence",
-            receipt_date as "receiptDate",
-            receipt_reference as "receiptReference",
-            file_hash as "fileHash",
-            created_at as "createdAt"
-          FROM public.collection_record_receipts
-          WHERE ${lastId ? sql`id > ${lastId}` : sql`TRUE`}
-          ORDER BY id ASC
-          LIMIT ${QUERY_PAGE_LIMIT}
-        `),
-    );
-
-    await writeBackupChunk(writer, hash, "}");
-    await closeBackupWriter(writer);
-
-    return {
-      tempFilePath,
-      payloadChecksumSha256: hash.digest("hex"),
-      counts,
-      cleanup,
-    };
-  } catch (error) {
-    writer.destroy();
-    await cleanup();
-    throw error;
-  }
-}
-
-export async function restoreFromBackup(backupDataRaw: BackupDataPayload): Promise<{ success: boolean; stats: RestoreStats }> {
-  const backupData = (backupDataRaw || {}) as BackupDataPayload;
+export async function restoreFromBackup(backupDataRaw: BackupPayloadSource): Promise<{ success: boolean; stats: RestoreStats }> {
+  const backupDataReader = createBackupPayloadSectionReader((backupDataRaw || {}) as BackupPayloadSource);
   const stats = createRestoreStats();
   const restoredCollectionRecordIds = new Set<string>();
 
   await db.transaction(async (tx) => {
-    const importChunks = chunkArray(backupData.imports || [], BACKUP_CHUNK_SIZE);
-    for (const chunk of importChunks) {
-      const rows = chunk.map((record) => ({
-        id: record.id,
-        name: record.name,
-        filename: record.filename,
-        createdAt: toDate((record as any).createdAt) ?? new Date(),
-        isDeleted: false,
-        createdBy: (record as any).createdBy ?? null,
-      }));
+    {
+      const importChunks = chunkArray(backupDataReader.getArray<Import>("imports"), BACKUP_CHUNK_SIZE);
+      for (const chunk of importChunks) {
+        const rows = chunk.map((record) => ({
+          id: record.id,
+          name: record.name,
+          filename: record.filename,
+          createdAt: toDate((record as any).createdAt) ?? new Date(),
+          isDeleted: false,
+          createdBy: (record as any).createdBy ?? null,
+        }));
 
-      stats.imports.processed += rows.length;
-      if (!rows.length) continue;
+        stats.imports.processed += rows.length;
+        if (!rows.length) continue;
 
-      const importIds = rows.map((row) => row.id);
-      const reactivatedResult = await tx.execute(sql`
-        UPDATE public.imports
-        SET is_deleted = false
-        WHERE id IN (${sql.join(importIds.map((value) => sql`${value}`), sql`, `)})
-          AND is_deleted = true
-        RETURNING id
-      `);
-      const reactivatedCount = reactivatedResult.rows?.length || 0;
-      const insertedRows = await tx
-        .insert(imports)
-        .values(rows)
-        .onConflictDoNothing()
-        .returning({ id: imports.id });
-      stats.imports.reactivated += reactivatedCount;
-      stats.imports.inserted += insertedRows.length;
-      stats.imports.skipped += rows.length - insertedRows.length - reactivatedCount;
-    }
-
-    const dataRowChunks = chunkArray(backupData.dataRows || [], BACKUP_CHUNK_SIZE);
-    for (const chunk of dataRowChunks) {
-      const rows = chunk.map((row) => ({
-        id: row.id ?? crypto.randomUUID(),
-        importId: row.importId,
-        jsonDataJsonb: row.jsonDataJsonb,
-      }));
-      stats.dataRows.processed += rows.length;
-      if (!rows.length) continue;
-      const insertedRows = await tx
-        .insert(dataRows)
-        .values(rows)
-        .onConflictDoNothing()
-        .returning({ id: dataRows.id });
-      stats.dataRows.inserted += insertedRows.length;
-      stats.dataRows.skipped += rows.length - insertedRows.length;
-    }
-
-    const userChunks = chunkArray(backupData.users || [], BACKUP_CHUNK_SIZE);
-    for (const chunk of userChunks) {
-      const now = new Date();
-      const rows = chunk
-        .filter((user) => Boolean(user.passwordHash))
-        .map((user) => ({
-          id: crypto.randomUUID(),
-          username: String(user.username || "").trim().toLowerCase(),
-          passwordHash: user.passwordHash!,
-          role: user.role || "user",
-          createdAt: now,
-          updatedAt: now,
-          passwordChangedAt: now,
-          isBanned: user.isBanned ?? false,
-          twoFactorEnabled: user.twoFactorEnabled === true,
-          twoFactorSecretEncrypted: user.twoFactorSecretEncrypted ?? null,
-          twoFactorConfiguredAt: toDate(user.twoFactorConfiguredAt) ?? null,
-          failedLoginAttempts: Math.max(0, Number(user.failedLoginAttempts || 0)),
-          lockedAt: toDate(user.lockedAt) ?? null,
-          lockedReason: String(user.lockedReason || "").trim() || null,
-          lockedBySystem: user.lockedBySystem === true,
-        }))
-        .filter((user) => user.username !== "");
-      stats.users.processed += rows.length;
-      const skippedInChunk = chunk.length - rows.length;
-      if (skippedInChunk > 0 && stats.warnings.length < 200) {
-        stats.warnings.push(`${skippedInChunk} user rows skipped because username/passwordHash is invalid.`);
+        const importIds = rows.map((row) => row.id);
+        const reactivatedResult = await tx.execute(sql`
+          UPDATE public.imports
+          SET is_deleted = false
+          WHERE id IN (${sql.join(importIds.map((value) => sql`${value}`), sql`, `)})
+            AND is_deleted = true
+          RETURNING id
+        `);
+        const reactivatedCount = reactivatedResult.rows?.length || 0;
+        const insertedRows = await tx
+          .insert(imports)
+          .values(rows)
+          .onConflictDoNothing()
+          .returning({ id: imports.id });
+        stats.imports.reactivated += reactivatedCount;
+        stats.imports.inserted += insertedRows.length;
+        stats.imports.skipped += rows.length - insertedRows.length - reactivatedCount;
       }
-      stats.users.skipped += skippedInChunk;
-      if (!rows.length) continue;
-      const insertedRows = await tx
-        .insert(users)
-        .values(rows)
-        .onConflictDoNothing()
-        .returning({ id: users.id });
-      stats.users.inserted += insertedRows.length;
-      stats.users.skipped += rows.length - insertedRows.length;
     }
 
-    const auditChunks = chunkArray(backupData.auditLogs || [], BACKUP_CHUNK_SIZE);
-    for (const chunk of auditChunks) {
-      const rows = chunk.map((log) => ({
-        id: (log as any).id ?? crypto.randomUUID(),
-        action: log.action,
-        performedBy: log.performedBy,
-        targetUser: log.targetUser ?? null,
-        targetResource: log.targetResource ?? null,
-        details: log.details ?? null,
-        timestamp: toDate((log as any).timestamp) ?? new Date(),
-      }));
-
-      stats.auditLogs.processed += rows.length;
-      if (!rows.length) continue;
-      const insertedRows = await tx
-        .insert(auditLogs)
-        .values(rows)
-        .onConflictDoNothing()
-        .returning({ id: auditLogs.id });
-      stats.auditLogs.inserted += insertedRows.length;
-      stats.auditLogs.skipped += rows.length - insertedRows.length;
-    }
-
-    const collectionRecords = Array.isArray(backupData.collectionRecords)
-      ? backupData.collectionRecords
-      : [];
-    const collectionRecordChunks = chunkArray(collectionRecords, BACKUP_CHUNK_SIZE);
-    for (const chunk of collectionRecordChunks) {
-      const rows = chunk
-        .map((record) => {
-          const paymentDate =
-            typeof record.paymentDate === "string"
-              ? record.paymentDate.slice(0, 10)
-              : toDate(record.paymentDate)?.toISOString().slice(0, 10) || "";
-          if (!paymentDate) {
-            return null;
-          }
-          return {
-            id: String(record.id || crypto.randomUUID()),
-            customerName: String(record.customerName || "-"),
-            icNumber: String(record.icNumber || "-"),
-            customerPhone: String(record.customerPhone || "-"),
-            accountNumber: String(record.accountNumber || "-"),
-            batch: String(record.batch || "P10"),
-            paymentDate,
-            amount: Number(record.amount || 0),
-            receiptFile: record.receiptFile || null,
-            receiptTotalAmount: parseCollectionAmountToCents(record.receiptTotalAmount, { allowZero: true }) ?? 0,
-            receiptValidationStatus: String(record.receiptValidationStatus || "needs_review"),
-            receiptValidationMessage: String(record.receiptValidationMessage || "").trim() || null,
-            receiptCount: Math.max(0, Number(record.receiptCount || 0) || 0),
-            duplicateReceiptFlag: record.duplicateReceiptFlag === true,
-            createdByLogin: String(record.createdByLogin || "system"),
-            collectionStaffNickname: String(record.collectionStaffNickname || record.staffUsername || "unknown"),
-            staffUsername: String(record.staffUsername || record.collectionStaffNickname || "unknown"),
-            createdAt: toDate(record.createdAt) ?? new Date(),
-          };
-        })
-        .filter((value): value is NonNullable<typeof value> => Boolean(value));
-
-      stats.collectionRecords.processed += rows.length;
-      if (!rows.length) continue;
-      for (const row of rows) {
-        restoredCollectionRecordIds.add(row.id);
+    {
+      const dataRowChunks = chunkArray(backupDataReader.getArray<DataRow>("dataRows"), BACKUP_CHUNK_SIZE);
+      for (const chunk of dataRowChunks) {
+        const rows = chunk.map((row) => ({
+          id: row.id ?? crypto.randomUUID(),
+          importId: row.importId,
+          jsonDataJsonb: row.jsonDataJsonb,
+        }));
+        stats.dataRows.processed += rows.length;
+        if (!rows.length) continue;
+        const insertedRows = await tx
+          .insert(dataRows)
+          .values(rows)
+          .onConflictDoNothing()
+          .returning({ id: dataRows.id });
+        stats.dataRows.inserted += insertedRows.length;
+        stats.dataRows.skipped += rows.length - insertedRows.length;
       }
-
-      const valuesSql = sql.join(
-        rows.map((row) => sql`(
-          ${row.id}::uuid,
-          ${row.customerName},
-          ${row.icNumber},
-          ${row.customerPhone},
-          ${row.accountNumber},
-          ${row.batch},
-          ${row.paymentDate}::date,
-          ${row.amount},
-          ${row.receiptFile},
-          ${row.receiptTotalAmount},
-          ${row.receiptValidationStatus},
-          ${row.receiptValidationMessage},
-          ${row.receiptCount},
-          ${row.duplicateReceiptFlag},
-          ${row.createdByLogin},
-          ${row.collectionStaffNickname},
-          ${row.staffUsername},
-          ${row.createdAt}
-        )`),
-        sql`, `,
-      );
-
-      const insertedResult = await tx.execute(sql`
-        INSERT INTO public.collection_records (
-          id,
-          customer_name,
-          ic_number,
-          customer_phone,
-          account_number,
-          batch,
-          payment_date,
-          amount,
-          receipt_file,
-          receipt_total_amount,
-          receipt_validation_status,
-          receipt_validation_message,
-          receipt_count,
-          duplicate_receipt_flag,
-          created_by_login,
-          collection_staff_nickname,
-          staff_username,
-          created_at
-        )
-        VALUES ${valuesSql}
-        ON CONFLICT (id) DO NOTHING
-        RETURNING id
-      `);
-      const insertedCount = insertedResult.rows?.length || 0;
-      stats.collectionRecords.inserted += insertedCount;
-      stats.collectionRecords.skipped += rows.length - insertedCount;
     }
 
-    const collectionReceipts = Array.isArray(backupData.collectionRecordReceipts)
-      ? backupData.collectionRecordReceipts
-      : [];
-    const collectionReceiptChunks = chunkArray(collectionReceipts, BACKUP_CHUNK_SIZE);
-    for (const chunk of collectionReceiptChunks) {
-      const rows = chunk
-        .map((receipt) => {
-          if (!receipt.collectionRecordId || !receipt.storagePath) return null;
-          return {
-            id: String(receipt.id || crypto.randomUUID()),
-            collectionRecordId: String(receipt.collectionRecordId),
-            storagePath: String(receipt.storagePath),
-            originalFileName: String(receipt.originalFileName || "receipt"),
-            originalMimeType: String(receipt.originalMimeType || "application/octet-stream"),
-            originalExtension: String(receipt.originalExtension || ""),
-            fileSize: Number(receipt.fileSize || 0),
-            receiptAmount: parseCollectionAmountToCents(receipt.receiptAmount, { allowZero: true, allowEmpty: true }),
-            extractedAmount: parseCollectionAmountToCents(receipt.extractedAmount, { allowZero: true, allowEmpty: true }),
-            extractionStatus: String(receipt.extractionStatus || "").trim() || "unprocessed",
-            extractionConfidence:
-              receipt.extractionConfidence === null || receipt.extractionConfidence === undefined || receipt.extractionConfidence === ""
-                ? null
-                : Number(receipt.extractionConfidence),
-            receiptDate:
-              typeof receipt.receiptDate === "string"
-                ? receipt.receiptDate.slice(0, 10)
-                : toDate(receipt.receiptDate)?.toISOString().slice(0, 10) || null,
-            receiptReference: String(receipt.receiptReference || "").trim() || null,
-            fileHash: String(receipt.fileHash || "").trim().toLowerCase() || null,
-            createdAt: toDate(receipt.createdAt) ?? new Date(),
-          };
-        })
-        .filter((value): value is NonNullable<typeof value> => Boolean(value));
+    {
+      const userChunks = chunkArray(backupDataReader.getArray<BackupUserRecord>("users"), BACKUP_CHUNK_SIZE);
+      for (const chunk of userChunks) {
+        const now = new Date();
+        const rows = chunk
+          .filter((user) => Boolean(user.passwordHash))
+          .map((user) => ({
+            id: crypto.randomUUID(),
+            username: String(user.username || "").trim().toLowerCase(),
+            passwordHash: user.passwordHash!,
+            role: user.role || "user",
+            createdAt: now,
+            updatedAt: now,
+            passwordChangedAt: now,
+            isBanned: user.isBanned ?? false,
+            twoFactorEnabled: user.twoFactorEnabled === true,
+            twoFactorSecretEncrypted: user.twoFactorSecretEncrypted ?? null,
+            twoFactorConfiguredAt: toDate(user.twoFactorConfiguredAt) ?? null,
+            failedLoginAttempts: Math.max(0, Number(user.failedLoginAttempts || 0)),
+            lockedAt: toDate(user.lockedAt) ?? null,
+            lockedReason: String(user.lockedReason || "").trim() || null,
+            lockedBySystem: user.lockedBySystem === true,
+          }))
+          .filter((user) => user.username !== "");
+        stats.users.processed += rows.length;
+        const skippedInChunk = chunk.length - rows.length;
+        if (skippedInChunk > 0 && stats.warnings.length < 200) {
+          stats.warnings.push(`${skippedInChunk} user rows skipped because username/passwordHash is invalid.`);
+        }
+        stats.users.skipped += skippedInChunk;
+        if (!rows.length) continue;
+        const insertedRows = await tx
+          .insert(users)
+          .values(rows)
+          .onConflictDoNothing()
+          .returning({ id: users.id });
+        stats.users.inserted += insertedRows.length;
+        stats.users.skipped += rows.length - insertedRows.length;
+      }
+    }
 
-      stats.collectionRecordReceipts.processed += rows.length;
-      if (!rows.length) continue;
+    {
+      const auditChunks = chunkArray(backupDataReader.getArray<AuditLog>("auditLogs"), BACKUP_CHUNK_SIZE);
+      for (const chunk of auditChunks) {
+        const rows = chunk.map((log) => ({
+          id: (log as any).id ?? crypto.randomUUID(),
+          action: log.action,
+          performedBy: log.performedBy,
+          targetUser: log.targetUser ?? null,
+          targetResource: log.targetResource ?? null,
+          details: log.details ?? null,
+          timestamp: toDate((log as any).timestamp) ?? new Date(),
+        }));
 
-      const valuesSql = sql.join(
-        rows.map((row) => sql`(
-          ${row.id}::uuid,
-          ${row.collectionRecordId}::uuid,
-          ${row.storagePath},
-          ${row.originalFileName},
-          ${row.originalMimeType},
-          ${row.originalExtension},
-          ${row.fileSize},
-          ${row.receiptAmount},
-          ${row.extractedAmount},
-          ${row.extractionStatus},
-          ${row.extractionConfidence},
-          ${row.receiptDate},
-          ${row.receiptReference},
-          ${row.fileHash},
-          ${row.createdAt}
-        )`),
-        sql`, `,
+        stats.auditLogs.processed += rows.length;
+        if (!rows.length) continue;
+        const insertedRows = await tx
+          .insert(auditLogs)
+          .values(rows)
+          .onConflictDoNothing()
+          .returning({ id: auditLogs.id });
+        stats.auditLogs.inserted += insertedRows.length;
+        stats.auditLogs.skipped += rows.length - insertedRows.length;
+      }
+    }
+
+    {
+      const collectionRecordChunks = chunkArray(
+        backupDataReader.getArray<BackupCollectionRecord>("collectionRecords"),
+        BACKUP_CHUNK_SIZE,
       );
-      const insertedResult = await tx.execute(sql`
-        INSERT INTO public.collection_record_receipts (
-          id,
-          collection_record_id,
-          storage_path,
-          original_file_name,
-          original_mime_type,
-          original_extension,
-          file_size,
-          receipt_amount,
-          extracted_amount,
-          extraction_status,
-          extraction_confidence,
-          receipt_date,
-          receipt_reference,
-          file_hash,
-          created_at
-        )
-        VALUES ${valuesSql}
-        ON CONFLICT (collection_record_id, storage_path) DO NOTHING
-        RETURNING id
-      `);
-      const insertedCount = insertedResult.rows?.length || 0;
-      stats.collectionRecordReceipts.inserted += insertedCount;
-      stats.collectionRecordReceipts.skipped += rows.length - insertedCount;
+      for (const chunk of collectionRecordChunks) {
+        const rows = chunk
+          .map((record) => {
+            const paymentDate =
+              typeof record.paymentDate === "string"
+                ? record.paymentDate.slice(0, 10)
+                : toDate(record.paymentDate)?.toISOString().slice(0, 10) || "";
+            if (!paymentDate) {
+              return null;
+            }
+            return {
+              id: String(record.id || crypto.randomUUID()),
+              customerName: String(record.customerName || "-"),
+              icNumber: String(record.icNumber || "-"),
+              customerPhone: String(record.customerPhone || "-"),
+              accountNumber: String(record.accountNumber || "-"),
+              batch: String(record.batch || "P10"),
+              paymentDate,
+              amount: Number(record.amount || 0),
+              receiptFile: record.receiptFile || null,
+              receiptTotalAmount: parseCollectionAmountToCents(record.receiptTotalAmount, { allowZero: true }) ?? 0,
+              receiptValidationStatus: String(record.receiptValidationStatus || "needs_review"),
+              receiptValidationMessage: String(record.receiptValidationMessage || "").trim() || null,
+              receiptCount: Math.max(0, Number(record.receiptCount || 0) || 0),
+              duplicateReceiptFlag: record.duplicateReceiptFlag === true,
+              createdByLogin: String(record.createdByLogin || "system"),
+              collectionStaffNickname: String(record.collectionStaffNickname || record.staffUsername || "unknown"),
+              staffUsername: String(record.staffUsername || record.collectionStaffNickname || "unknown"),
+              createdAt: toDate(record.createdAt) ?? new Date(),
+            };
+          })
+          .filter((value): value is NonNullable<typeof value> => Boolean(value));
+
+        stats.collectionRecords.processed += rows.length;
+        if (!rows.length) continue;
+        for (const row of rows) {
+          restoredCollectionRecordIds.add(row.id);
+        }
+
+        const valuesSql = sql.join(
+          rows.map((row) => sql`(
+            ${row.id}::uuid,
+            ${row.customerName},
+            ${row.icNumber},
+            ${row.customerPhone},
+            ${row.accountNumber},
+            ${row.batch},
+            ${row.paymentDate}::date,
+            ${row.amount},
+            ${row.receiptFile},
+            ${row.receiptTotalAmount},
+            ${row.receiptValidationStatus},
+            ${row.receiptValidationMessage},
+            ${row.receiptCount},
+            ${row.duplicateReceiptFlag},
+            ${row.createdByLogin},
+            ${row.collectionStaffNickname},
+            ${row.staffUsername},
+            ${row.createdAt}
+          )`),
+          sql`, `,
+        );
+
+        const insertedResult = await tx.execute(sql`
+          INSERT INTO public.collection_records (
+            id,
+            customer_name,
+            ic_number,
+            customer_phone,
+            account_number,
+            batch,
+            payment_date,
+            amount,
+            receipt_file,
+            receipt_total_amount,
+            receipt_validation_status,
+            receipt_validation_message,
+            receipt_count,
+            duplicate_receipt_flag,
+            created_by_login,
+            collection_staff_nickname,
+            staff_username,
+            created_at
+          )
+          VALUES ${valuesSql}
+          ON CONFLICT (id) DO NOTHING
+          RETURNING id
+        `);
+        const insertedCount = insertedResult.rows?.length || 0;
+        stats.collectionRecords.inserted += insertedCount;
+        stats.collectionRecords.skipped += rows.length - insertedCount;
+      }
+    }
+
+    {
+      const collectionReceiptChunks = chunkArray(
+        backupDataReader.getArray<BackupCollectionReceipt>("collectionRecordReceipts"),
+        BACKUP_CHUNK_SIZE,
+      );
+      for (const chunk of collectionReceiptChunks) {
+        const rows = chunk
+          .map((receipt) => {
+            if (!receipt.collectionRecordId || !receipt.storagePath) return null;
+            return {
+              id: String(receipt.id || crypto.randomUUID()),
+              collectionRecordId: String(receipt.collectionRecordId),
+              storagePath: String(receipt.storagePath),
+              originalFileName: String(receipt.originalFileName || "receipt"),
+              originalMimeType: String(receipt.originalMimeType || "application/octet-stream"),
+              originalExtension: String(receipt.originalExtension || ""),
+              fileSize: Number(receipt.fileSize || 0),
+              receiptAmount: parseCollectionAmountToCents(receipt.receiptAmount, { allowZero: true, allowEmpty: true }),
+              extractedAmount: parseCollectionAmountToCents(receipt.extractedAmount, { allowZero: true, allowEmpty: true }),
+              extractionStatus: String(receipt.extractionStatus || "").trim() || "unprocessed",
+              extractionConfidence:
+                receipt.extractionConfidence === null || receipt.extractionConfidence === undefined || receipt.extractionConfidence === ""
+                  ? null
+                  : Number(receipt.extractionConfidence),
+              receiptDate:
+                typeof receipt.receiptDate === "string"
+                  ? receipt.receiptDate.slice(0, 10)
+                  : toDate(receipt.receiptDate)?.toISOString().slice(0, 10) || null,
+              receiptReference: String(receipt.receiptReference || "").trim() || null,
+              fileHash: String(receipt.fileHash || "").trim().toLowerCase() || null,
+              createdAt: toDate(receipt.createdAt) ?? new Date(),
+            };
+          })
+          .filter((value): value is NonNullable<typeof value> => Boolean(value));
+
+        stats.collectionRecordReceipts.processed += rows.length;
+        if (!rows.length) continue;
+
+        const valuesSql = sql.join(
+          rows.map((row) => sql`(
+            ${row.id}::uuid,
+            ${row.collectionRecordId}::uuid,
+            ${row.storagePath},
+            ${row.originalFileName},
+            ${row.originalMimeType},
+            ${row.originalExtension},
+            ${row.fileSize},
+            ${row.receiptAmount},
+            ${row.extractedAmount},
+            ${row.extractionStatus},
+            ${row.extractionConfidence},
+            ${row.receiptDate},
+            ${row.receiptReference},
+            ${row.fileHash},
+            ${row.createdAt}
+          )`),
+          sql`, `,
+        );
+        const insertedResult = await tx.execute(sql`
+          INSERT INTO public.collection_record_receipts (
+            id,
+            collection_record_id,
+            storage_path,
+            original_file_name,
+            original_mime_type,
+            original_extension,
+            file_size,
+            receipt_amount,
+            extracted_amount,
+            extraction_status,
+            extraction_confidence,
+            receipt_date,
+            receipt_reference,
+            file_hash,
+            created_at
+          )
+          VALUES ${valuesSql}
+          ON CONFLICT (collection_record_id, storage_path) DO NOTHING
+          RETURNING id
+        `);
+        const insertedCount = insertedResult.rows?.length || 0;
+        stats.collectionRecordReceipts.inserted += insertedCount;
+        stats.collectionRecordReceipts.skipped += rows.length - insertedCount;
+      }
     }
 
     if (restoredCollectionRecordIds.size > 0) {

@@ -84,6 +84,7 @@ test("imports API wrappers accept payloads that match the shared contract", asyn
 
     if (url === "/api/imports/import-123") {
       return jsonResponse({
+        ok: true,
         success: true,
       });
     }
@@ -173,6 +174,7 @@ test("settings API wrappers accept payloads that match the shared contract", asy
 
     if (url === "/api/settings" && method === "PATCH") {
       return jsonResponse({
+        ok: true,
         success: true,
         status: "updated",
         message: "Updated.",

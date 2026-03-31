@@ -42,6 +42,7 @@ export const importDataPageResponseSchema = z.object({
 });
 
 export const deleteImportResponseSchema = z.object({
+  ok: z.literal(true).optional(),
   success: z.boolean(),
 });
 
@@ -80,6 +81,7 @@ export const settingsResponseSchema = z.object({
 });
 
 export const settingsUpdateResponseSchema = z.object({
+  ok: z.literal(true).optional(),
   success: z.boolean(),
   status: z.enum(["updated", "unchanged"]),
   message: z.string(),

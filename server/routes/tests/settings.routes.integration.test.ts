@@ -332,6 +332,7 @@ test("PATCH /api/settings updates a non-critical setting and broadcasts a settin
     assert.equal(response.status, 200);
     const payload = await response.json();
     assert.doesNotThrow(() => settingsUpdateResponseSchema.parse(payload));
+    assert.equal(payload.ok, true);
     assert.equal(payload.success, true);
     assert.equal(payload.status, "updated");
     assert.equal(updateCalls.length, 1);
@@ -384,6 +385,7 @@ test("PATCH /api/settings returns success for unchanged values without extra bro
     const payload = await response.json();
     assert.doesNotThrow(() => settingsUpdateResponseSchema.parse(payload));
     assert.deepEqual(payload, {
+      ok: true,
       success: true,
       status: "unchanged",
       message: "No changes detected.",
@@ -437,6 +439,7 @@ test("PATCH /api/settings broadcasts maintenance changes for broadcast-worthy up
     assert.equal(response.status, 200);
     const payload = await response.json();
     assert.doesNotThrow(() => settingsUpdateResponseSchema.parse(payload));
+    assert.equal(payload.ok, true);
     assert.equal(payload.success, true);
     assert.equal(payload.status, "updated");
     assert.equal(getInvalidateMaintenanceCacheCount(), 1);
@@ -481,6 +484,7 @@ test("PATCH /api/settings maps confirmation-required updates to HTTP 409", async
 
     assert.equal(response.status, 409);
     assert.deepEqual(await response.json(), {
+      ok: false,
       message: "Confirmation required.",
       requiresConfirmation: true,
     });
@@ -514,6 +518,7 @@ test("PATCH /api/settings maps missing settings to HTTP 404", async () => {
 
     assert.equal(response.status, 404);
     assert.deepEqual(await response.json(), {
+      ok: false,
       message: "Setting not found.",
     });
     assert.equal(auditLogs.length, 0);
@@ -546,6 +551,7 @@ test("PATCH /api/settings maps forbidden updates to HTTP 403", async () => {
 
     assert.equal(response.status, 403);
     assert.deepEqual(await response.json(), {
+      ok: false,
       message: "Forbidden setting update.",
     });
     assert.equal(auditLogs.length, 0);
@@ -578,6 +584,7 @@ test("PATCH /api/settings maps invalid setting values to HTTP 400", async () => 
 
     assert.equal(response.status, 400);
     assert.deepEqual(await response.json(), {
+      ok: false,
       message: "Invalid setting value.",
     });
     assert.equal(auditLogs.length, 0);

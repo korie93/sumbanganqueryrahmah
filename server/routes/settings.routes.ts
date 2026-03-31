@@ -27,6 +27,24 @@ type SettingsRouteDeps = {
   importUploadLimitBytes?: number;
 };
 
+function buildSettingsSuccessPayload<T extends Record<string, unknown>>(payload: T) {
+  return {
+    ok: true as const,
+    ...payload,
+  };
+}
+
+function buildSettingsErrorPayload(
+  message: string,
+  extra?: Record<string, unknown>,
+) {
+  return {
+    ok: false as const,
+    message,
+    ...(extra ?? {}),
+  };
+}
+
 export function registerSettingsRoutes(app: Express, deps: SettingsRouteDeps) {
   const {
     storage,
@@ -91,23 +109,23 @@ export function registerSettingsRoutes(app: Express, deps: SettingsRouteDeps) {
     });
 
     if (result.status === "not_found") {
-      return res.status(404).json({ message: result.message });
+      return res.status(404).json(buildSettingsErrorPayload(result.message));
     }
     if (result.status === "forbidden") {
-      return res.status(403).json({ message: result.message });
+      return res.status(403).json(buildSettingsErrorPayload(result.message));
     }
     if (result.status === "requires_confirmation") {
-      return res.status(409).json({ message: result.message, requiresConfirmation: true });
+      return res.status(409).json(buildSettingsErrorPayload(result.message, { requiresConfirmation: true }));
     }
     if (result.status === "invalid") {
-      return res.status(400).json({ message: result.message });
+      return res.status(400).json(buildSettingsErrorPayload(result.message));
     }
 
-    return res.json({
+    return res.json(buildSettingsSuccessPayload({
       success: result.status === "updated" || result.status === "unchanged",
       status: result.status,
       message: result.message,
       setting: result.setting || null,
-    });
+    }));
   }));
 }

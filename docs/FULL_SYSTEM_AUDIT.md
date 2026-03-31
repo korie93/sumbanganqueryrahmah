@@ -1,808 +1,851 @@
-# SQR Full System Technical Audit
+# FULL SYSTEM AUDIT - SQR
 
-**Date:** 2026-03-30
-**Scope:** Full-system review — backend, frontend, UI/UX, layout, mobile responsiveness, API design, database design, security, performance, error handling, module architecture, maintainability
-
----
+Date: 2026-03-31
+Scope: Full-system technical audit covering backend, frontend, UI/UX, layout and responsiveness, API design, database and query behavior, security, performance, error handling, observability, module architecture, and maintainability.
+Method: Static code inspection of the current repository state. No code, schema, configuration, or UI changes were made as part of this audit.
 
 ## A. Executive Summary
 
-### Overall Judgment
+### System Health Score
 
-The SQR system is a well-architected, production-quality full-stack TypeScript application. It demonstrates mature engineering practices including layered architecture (routes → controllers → services → repositories), structured error handling, circuit breakers, adaptive rate limiting, comprehensive file validation, and strong CSRF/JWT security. The codebase is well above average for its stage.
+Current system health score: **8.2 / 10**
 
-### Top Strengths
+This is an improvement over the previous audit baseline of 7.5/10. Several previously significant issues have been addressed in the current codebase, especially around schema integrity, search safety, mobile viewport handling, session consistency, and collection daily batching. The system is now stronger technically than the previous audit document suggested, but a few scale and hardening risks remain.
 
-1. **Clean layered architecture** — clear separation between routes, controllers, services, and repositories with factory-based DI
-2. **Strong security posture** — multi-layer CSRF (double-submit + Fetch metadata + origin/referer), timing-safe bcrypt (cost 12), JWT with secret rotation, comprehensive file upload validation (magic bytes, PDF JS blocking, EXIF stripping)
-3. **Resilience patterns** — circuit breakers on AI/export, adaptive rate limiting (NORMAL/DEGRADED/PROTECTION), AI concurrency gate with per-role limits, worker clustering with crash detection
-4. **Comprehensive testing** — 226 tests across 84 files, CI pipeline with typecheck → tests → build → Playwright smoke
-5. **Structured logging** — zero console.log in server code; all logging via pino
-6. **Database monitoring** — connection pool pressure tracking with throttled warnings
+### Overall Stability Impression
 
-### Top Weaknesses
+SQR is a real production-style operational application with a stronger-than-average architecture for its stage:
 
-1. **Backup/restore memory risk** — loads entire database into memory for export (no streaming, no pagination)
-2. **N+1 query** — per-day INSERT loop in collection daily calendar upsert (30 queries instead of 1)
-3. **WebSocket connection leak risk** — early-close paths don't clean up the connected clients map
-4. **Swallowed errors** — 6+ catch blocks in receipt service silently return null without logging
-5. **100vh vs 100dvh** — global page min-height uses 100vh which clips content on mobile Safari
-6. **Missing primary keys** — 3 rollup/queue tables lack a proper PK (only composite unique index)
+- 723 TypeScript files across `client/src`, `server`, and `shared`
+- 123 test files
+- 37 PostgreSQL tables defined in `shared/schema-postgres.ts`
+- strong CI with build, contract tests, route tests, service tests, client tests, coverage gate, DB integration, and Playwright smoke
 
-### Overall Technical Health
+The codebase shows deliberate engineering investment in:
 
-**7.5/10** — Solid architecture with good security. Main risks are in performance-sensitive paths (backup, WebSocket scale) and a few mobile viewport issues. Safe for initial production with the priority fixes below.
+- layered backend composition
+- session and auth hardening
+- file validation and safe receipt handling
+- runtime protection and adaptive throttling
+- mobile-aware UI for the most operationally sensitive surfaces
 
-### Production-Readiness Judgment
+The main risks are no longer basic correctness issues. They are mostly:
 
-**Conditionally ready.** The system can serve production traffic at moderate scale. Critical items to address before high-load production: backup streaming, WebSocket cleanup, and the N+1 query pattern.
+- scale-risk memory behavior in backup export and restore paths
+- selective admin-action hardening gaps
+- observability gaps in some best-effort receipt code paths
+- API contract inconsistency and route alias drift
+- maintainability strain from a handful of oversized multi-responsibility files
 
----
+### Biggest Strengths
+
+- Strong auth/session security stack: `server/http/csrf.ts`, `server/auth/guards.ts`, `server/auth/session-jwt.ts`, `server/auth/passwords.ts`
+- Good runtime protection primitives: `server/internal/apiProtection.ts`, `server/internal/aiConcurrencyGate.ts`, `server/internal/runtime-monitor-manager.ts`
+- Mature file validation pipeline for receipts: `server/lib/collection-receipt-security.ts`, `server/routes/collection-receipt.service.ts`
+- Improved mobile UI infrastructure: `client/src/components/FloatingAI.tsx`, `client/src/hooks/use-mobile-viewport-state.ts`, `client/src/pages/collection-records/ReceiptPreviewDialog.tsx`, `client/src/pages/collection-records/ViewAllRecordsDialog.tsx`
+- Strong CI: `.github/workflows/ci.yml`
+
+### Biggest Risks
+
+- Backup export and restore still materialize large JSON payloads in memory even after recent improvements
+- Admin moderation routes in `server/routes/activity.routes.ts` do not use dedicated admin-action rate limiting
+- Receipt service still contains several silent or near-silent catch paths that reduce operational visibility during file edge cases
+- API response envelopes and route aliases have drifted, increasing client contract complexity
+- The collection data layer remains concentrated in very large files, especially `server/repositories/collection-record-repository-utils.ts`
+
+### Comparison to the Previous Audit
+
+The previous audit is now partially stale. The following prior findings have been genuinely addressed in the current code:
+
+- rollup table composite primary keys
+- daily calendar N+1 upsert behavior
+- mobile `100vh` fallback with `100dvh`
+- SQL `LIKE` wildcard escaping
+- idle session sweeper transaction consistency
+- 2FA key separation
+
+Other previous findings were overstated or are now only partially true.
+
+### Verified Previous Findings
+
+| Prior finding | Current classification | Evidence | Notes |
+| --- | --- | --- | --- |
+| Rollup table composite PKs | FIXED | `shared/schema-postgres.ts`, `server/internal/collection-bootstrap-records.ts`, `drizzle/0014_reviewed_collection_record_daily_rollups.sql`, `drizzle/0015_reviewed_collection_record_daily_rollup_refresh_queue.sql`, `drizzle/0016_reviewed_monitor_and_monthly_rollups.sql` | Composite primary keys now exist for daily rollups, monthly rollups, and refresh queue slices. |
+| N+1 day-insert batch issue | FIXED | `server/repositories/collection-daily-repository-utils.ts`, `upsertCollectionDailyCalendarDays()` | Per-day sequential insert loop has been replaced by a batched `VALUES` upsert. |
+| 100dvh viewport fallback | FIXED | `client/src/index.css`, `client/src/App.tsx`, major page shells | Shared viewport utility classes now provide `100vh` fallback with `100dvh` support. |
+| SQL LIKE wildcard escaping | FIXED | `server/repositories/sql-like-utils.ts`, `server/repositories/search.repository.ts` | Search patterns are escaped and queries use `ESCAPE '\\'`. |
+| Backup export OOM risk from full table loading | PARTIALLY FIXED | `server/repositories/backups-restore-utils.ts`, `server/services/backup-operations.service.ts` | Create-backup path now writes paged temp payloads, but full-payload materialization still exists in helper/export/restore paths and backup storage remains one large JSON string. |
+| WebSocket early-close cleanup | FIXED | `server/ws/runtime-manager.ts`, `server/ws/tests/runtime-manager.test.ts` | Current early-close paths do not populate the map before close, so the old leak claim is not supported by current code. |
+| Silent receipt catch blocks | STILL PRESENT | `server/routes/collection-receipt.service.ts` | Several catches still return fallback values or perform best-effort cleanup without structured logging. |
+
+No regression was detected for the previous findings listed above.
+
+### New Findings
+
+- Activity moderation routes lack dedicated admin-action rate limiting even though similar auth-admin routes already use `rateLimiters.adminAction`
+- API response envelopes remain inconsistent across modules (`ok`, `success`, and raw payload styles)
+- Legacy route aliasing remains broad (`/api/login` and `/api/auth/login`, `/api/search/columns` and `/api/columns`, `/api/activity/all` and `/api/activities`)
+- Several operational files remain very large and mixed in responsibility, especially in collection and storage layers
+- Frontend still contains scattered `console.*` instrumentation outside the structured backend logging strategy
+
+### Critical Path
+
+The most important next actions, in order:
+
+1. Reduce remaining backup export and restore memory amplification
+2. Add dedicated limiter coverage for bulk moderation routes in `server/routes/activity.routes.ts`
+3. Improve logging inside receipt service catch paths that currently fail quietly
+4. Normalize API response envelopes and start reducing legacy route alias drift
+5. Split the largest collection and storage files before they become the default extension point for more logic
 
 ## B. Architecture Overview
 
-### Backend Structure
+### Backend Architecture
 
-```
-server/
-├── config/           # Runtime config (615 lines), security, body limits
-├── auth/             # Guards, JWT, passwords, 2FA, activation, lifecycle
-├── http/             # Express middleware: CSRF, CORS, validation, errors, async-handler
-├── middleware/        # Error handler, rate limiters
-├── internal/         # DI composition, runtime environment, API protection, circuit breaker,
-│                       AI concurrency gate, idle session sweeper, cluster management
-├── routes/           # 9 route groups (auth, collection, operations, ai, activity, search, etc.)
-├── controllers/      # 4 main controllers (search, operations, ai, imports)
-├── services/         # 50+ service files (auth, AI, backup, collection, activity, etc.)
-├── repositories/     # 20+ repos + utility files (collection record utils: 1235 lines)
-├── storage/          # PostgreSQL storage adapters
-├── ws/               # WebSocket runtime manager, session auth
-├── lib/              # Logger, receipt security, upload parser
-└── sql/              # Manual SQL migrations
-```
+The backend is assembled through a deliberate composition root in `server/internal/local-server-composition.ts` and an HTTP pipeline in `server/internal/local-http-pipeline.ts`.
 
-### Frontend Structure
+The overall shape is healthy:
 
-```
-client/src/
-├── app/              # App shell: routing, providers, auth bootstrap, navigation (10+ hooks)
-├── components/       # Shared: Navbar (381 lines), FloatingAI (559 lines), AIChat (496 lines),
-│                       AutoLogout, UI library (40+ Radix wrappers)
-├── context/          # AIContext
-├── hooks/            # 12 custom hooks (mobile, pagination, shortcuts, feedback)
-├── lib/              # API client, auth session, query client, utilities
-├── pages/            # 22 main pages + 103 collection sub-components + supporting files
-├── styles/           # ai.css, FloatingAI.module.css
-└── types/            # Type declarations
-```
+- routes define endpoints and permissions
+- controllers exist for major modules such as search, operations, AI, and imports
+- services own business logic
+- repositories encapsulate SQL-heavy behavior
+- storage adapters expose a common interface to application services
+
+The architecture is not perfectly uniform. Some route groups still call services directly or combine request parsing and orchestration without a distinct controller layer. This is not a correctness bug, but it does mean the advertised route -> controller -> service -> repository flow is only mostly true, not universally enforced.
+
+### Frontend Architecture
+
+The frontend is a React + TypeScript app with a central shell in `client/src/App.tsx`, lazy page loading in `client/src/app/lazy-pages.tsx`, and a modular page structure under `client/src/pages`.
+
+Strong frontend patterns observed:
+
+- lazy page and feature loading
+- dedicated hooks for mobile and viewport behavior
+- reusable UI primitives
+- explicit mobile branches where operationally necessary
+- route-level error handling through `client/src/app/AppRouteErrorBoundary.tsx`
+
+Weaknesses observed:
+
+- a few very large page and hook files remain
+- some page-level logic still mixes networking, local state, and export behavior
+- response shape inconsistency on the backend increases frontend client branching
 
 ### Data Flow
 
-```
-[Browser] → HTTP/WS → Express middleware stack → Route → Controller
-  → Service (business logic) → Repository (Drizzle ORM) → PostgreSQL
+Typical request flow:
 
-[Browser] ← JSON response ← Controller ← Service result
+1. frontend page or hook calls REST endpoint through the API client
+2. route applies auth, permissions, and sometimes rate limiting
+3. controller or route handler delegates to a service
+4. service delegates to repositories or storage adapters
+5. repository executes Drizzle SQL and returns typed payloads
+6. backend returns JSON or file response
+7. frontend updates page state, often with explicit loading and error branches
 
-[Browser] ↔ WebSocket ↔ runtime-manager.ts ↔ session tracking / live updates
-```
+The most complex flows are:
 
-### Major Module Relationships
+- auth and session lifecycle
+- collection record mutation and rollup refresh
+- receipt upload, preview, and download
+- backup, export, and restore
+- AI interaction, concurrency limits, and mobile shell behavior
 
-- **Auth** feeds into every protected route via `authenticateToken` guard
-- **Collection** modules (daily, records, nicknames, summary, report) share repositories and rollup refresh queue
-- **AI** uses circuit breaker, concurrency gate, and has its own embedding/search cache
-- **Backup** directly queries all major tables for export and performs full-table restore
-- **Activity** tracks user sessions, integrates with WebSocket heartbeat and auto-logout
-- **Settings** drives feature flags and tab visibility used across frontend
+### Notable Architectural Strengths
 
----
+- Explicit composition root
+- Good separation of security-sensitive primitives
+- Clear receipt security boundary
+- Strong CI governance
+- Reasonable lazy loading in the client
 
-## C. Full Findings by Category
+### Notable Architectural Weaknesses
+
+- Large repository and storage surfaces in collection-heavy areas
+- Some controller coverage is inconsistent
+- API contract drift increases frontend complexity
+- Backup and restore remain architecturally heavy
+
+## C. Findings by Category
 
 ### Backend
 
-#### Architecture — GOOD (minor improvement areas)
+#### 1. Backup export and restore still materialize large payloads in memory
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Layered architecture | ✅ Good | Clear routes → controllers → services → repositories |
-| DI / composition | ✅ Good | Factory-based in `local-server-composition.ts` (414 lines) |
-| Service boundaries | ✅ Good | Auth, collection, AI, backup, activity cleanly separated |
-| Duplicated logic | ⚠️ Minor | Some receipt-handling logic duplicated across service + route |
-| Large files | ⚠️ Notable | `collection-record-repository-utils.ts` (1235 lines), `collection-record-mutation-operations.ts` (1040 lines), `cluster-local.ts` (685 lines) |
-| PostgresStorage facade | ⚠️ Legacy | Some domains still use `PostgresStorage` instead of direct repos |
-| Missing domain boundaries | ✅ OK | Collection sub-modules are well-separated |
+- Severity: Critical
+- Category: Backend, Database, Performance, Reliability
+- Exact location:
+  - `server/repositories/backups-restore-utils.ts`
+  - `getBackupDataForExport()`
+  - `prepareBackupPayloadFileForCreate()`
+  - `server/services/backup-operations.service.ts`
+  - `exportBackup()`
+  - `createBackup()`
+  - `restoreBackup()`
+- What was found:
+  - `createBackup()` no longer builds the payload purely through one `Promise.all([...db.select()...])` path. It now uses `prepareBackupPayloadFileForCreate()` to page data into a temp file.
+  - However, `getBackupDataForExport()` still exists and still loads full table sets into memory.
+  - `exportBackup()` and `restoreBackup()` still call `JSON.parse(...)` or `JSON.stringify(...)` on the full backup payload.
+  - Backups are still stored as a large JSON string in `backups.backupData`.
+- Why it matters:
+  - This remains the most meaningful scale risk in the system. It is no longer as bad as the previous audit claimed, but it still amplifies memory usage on large datasets.
+- Current status: Existing - PARTIALLY FIXED
+- Recommended improvement direction:
+  - Continue moving backup export and restore away from full-string payload handling.
+  - Retire the old full-memory helper once compatibility is confirmed.
+- Priority: Fix Now
 
-#### API Quality — GOOD
+#### 2. Activity moderation routes lack dedicated admin-action rate limiting
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Route naming | ✅ Consistent | RESTful `/api/` prefix, resource-oriented |
-| Pagination | ✅ Present | Server-side pagination with configurable limits |
-| Response envelope | ✅ Consistent | `{ ok, message, data?, error? }` pattern |
-| Validation | ✅ Strong | Zod schemas, input parsing via `buildRequestValidation` |
-| Error shape | ✅ Consistent | HttpError class with statusCode, code, details |
-| Status codes | ✅ Correct | Proper 400/401/403/404/409/413/500 usage |
-| Large payload risk | ⚠️ High | Backup export returns entire DB as JSON in response body |
-| N+1 risk | ⚠️ Present | Collection daily calendar upsert (30 sequential INSERTs) |
+- Severity: Medium
+- Category: Backend, Security, API
+- Exact location:
+  - `server/routes/activity.routes.ts`
+  - `/api/activity/logs/bulk-delete`
+  - `/api/activity/kick`
+  - `/api/activity/ban`
+  - `/api/admin/ban`
+  - `/api/admin/unban`
+  - comparison point: `server/routes/auth/auth-admin-routes.ts`
+- What was found:
+  - These routes are protected by authentication and role checks.
+  - They do not use a dedicated limiter like `rateLimiters.adminAction`, even though similar sensitive auth-admin routes do.
+- Why it matters:
+  - The routes are privileged and potentially disruptive. The current protections are not absent, but they are less explicit than adjacent admin surfaces.
+- Current status: New - STILL PRESENT
+- Recommended improvement direction:
+  - Align these routes with the rest of the admin-action hardening model.
+- Priority: Fix Next
 
-#### Security — STRONG (see Section F for details)
+#### 3. Receipt service still contains silent catch paths with weak observability
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| CSRF | ✅ Excellent | Double-submit + Fetch metadata + origin/referer |
-| JWT | ✅ Secure | HS256, 24h expiry, secret rotation support |
-| Bcrypt | ✅ Excellent | Cost 12, timing-safe with dummy hash for non-existent users |
-| Rate limiting | ✅ Strong | Multi-tier, adaptive, load-aware |
-| File upload | ✅ Excellent | Magic byte validation, PDF JS blocking, EXIF stripping |
-| CORS | ✅ Proper | Configurable allowlist, rejects unsafe wildcards |
-| SQL injection | ✅ Protected | Drizzle ORM parameterized queries + LIKE escaping |
-| 2FA fallback | ⚠️ Medium | Falls back to SESSION_SECRET if 2FA key not configured |
+- Severity: Medium
+- Category: Backend, Error Handling, Observability
+- Exact location:
+  - `server/routes/collection-receipt.service.ts`
+  - `extractReceiptBuffer()`
+  - `getQuarantinedReceiptBytes()`
+  - `removeCollectionReceiptFile()`
+  - `pruneMissingRelationReceipt()`
+  - legacy preview and promotion branches
+- What was found:
+  - Several catches return `null`, suppress cleanup failures, or fall back silently.
+  - Main request-failure paths do log, but multiple best-effort branches do not.
+- Why it matters:
+  - This is less about broken functionality and more about missing evidence when edge-case file behavior occurs in production.
+- Current status: Existing - STILL PRESENT
+- Recommended improvement direction:
+  - Add structured warning-level logging for fallback and cleanup branches that currently disappear silently.
+- Priority: Fix Next
 
-#### Reliability — GOOD (with risks)
+#### 4. Backend layering is mostly good, but not fully uniform
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Circuit breaker | ✅ Well-designed | CLOSED/OPEN/HALF_OPEN with counter trimming |
-| Graceful shutdown | ✅ Proper | 25s timeout, WebSocket cleanup, DB pool drain |
-| Missing transactions | ⚠️ Risk | Idle session sweeper: multiple queries without transaction |
-| Fire-and-forget | ⚠️ Present | Worker restart errors swallowed (`catch(() => undefined)`) |
-| WebSocket cleanup | ⚠️ Risk | Early-close paths skip map cleanup |
-| Swallowed errors | ⚠️ Present | 6+ catch blocks in receipt service return null silently |
-
-#### Performance — GOOD (with critical spots)
-
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| DB pool monitoring | ✅ Good | Pressure detection with throttled warnings |
-| Caching | ✅ Present | AI search cache, settings cache, tab visibility cache (5s) |
-| N+1 query | 🔴 Critical | 30 INSERTs in loop for calendar days |
-| Backup memory | 🔴 Critical | Loads ALL tables into memory for export |
-| Set accumulation | 🔴 High | Backup restore builds unbounded Set of record IDs |
-| Structured logging | ✅ Good | Pino throughout, zero console.log |
-
-#### Error Handling — GOOD
-
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Global handler | ✅ Proper | Catches HttpError, 413, unhandled; logs context |
-| Async handler | ✅ Proper | Wraps async routes, catches promise rejections |
-| Error classes | ✅ Structured | HttpError with helpers (badRequest, unauthorized, etc.) |
-| Swallowed catches | ⚠️ Weak | 6 silent catch blocks in receipt service |
-| Error codes | ✅ Shared | 13 error codes in `shared/error-codes.ts` |
-
----
+- Severity: Low
+- Category: Backend, Architecture, Maintainability
+- Exact location:
+  - `server/routes/*`
+  - `server/controllers/*`
+  - `server/internal/local-server-composition.ts`
+- What was found:
+  - Some route groups cleanly delegate through controllers.
+  - Others still parse request details and orchestrate services directly.
+- Why it matters:
+  - This is not a runtime defect, but it makes long-term route consistency harder and increases variation in how business logic enters the service layer.
+- Current status: Existing - STILL PRESENT
+- Recommended improvement direction:
+  - Continue converging route groups toward a more uniform boundary over time, starting with the largest operational surfaces.
+- Priority: Fix Later
 
 ### Frontend
 
-#### Architecture — GOOD
+#### 5. Frontend has improved mobile-specific architecture, but several high-density surfaces remain runtime-sensitive
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Component structure | ✅ Good | Modular pages with sub-components |
-| UI library | ✅ Good | 40+ Radix-based components (shadcn/ui pattern) |
-| State management | ✅ Good | React Query for server state, Context for AI |
-| App shell hooks | ⚠️ Complex | 10+ interconnected hooks for shell state |
-| Oversized components | ⚠️ Notable | Viewer.tsx (919), BackupRestore.tsx (669), FloatingAI.tsx (559), Login.tsx (513) |
-| Code splitting | ✅ Good | Lazy pages, manual chunks (validation, query, charts, excel, pdf) |
-| Prop drilling | ✅ Minimal | Hooks-based architecture avoids deep drilling |
+- Severity: Medium
+- Category: Frontend, UI/UX, Responsiveness
+- Exact location:
+  - `client/src/components/FloatingAI.tsx`
+  - `client/src/hooks/use-mobile-viewport-state.ts`
+  - `client/src/pages/AuditLogs.tsx`
+  - `client/src/pages/activity/ActivityLogsTable.tsx`
+  - `client/src/pages/collection-records/ReceiptPreviewDialog.tsx`
+  - `client/src/pages/collection-records/ViewAllRecordsDialog.tsx`
+- What was found:
+  - The codebase now contains explicit mobile logic for AI layout, viewport changes, receipt preview fallback, collection record dialogs, and activity cards.
+  - This is a meaningful improvement over the previous audit baseline.
+  - However, these surfaces remain complex and require periodic runtime QA on real devices because browser chrome, keyboard, and dynamic viewport behavior cannot be fully proven statically.
+- Why it matters:
+  - These are user-facing operational interfaces on phones. Static code quality is good here, but runtime fidelity still depends on device behavior.
+- Current status: Existing - NOT VERIFIABLE STATICALLY
+- Recommended improvement direction:
+  - Keep mobile runtime QA as part of release discipline for high-density pages and modal-heavy flows.
+- Priority: Monitor Only
 
-#### Data Flow — GOOD
+#### 6. Several frontend files remain too large and mixed in responsibility
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| React Query | ✅ Proper | Consistent query lifecycle with loading/error states |
-| Abort controllers | ✅ Present | Cancellation on unmount/navigation |
-| COLLECTION_DATA_CHANGED_EVENT | ✅ Good | Cross-hook data refresh pattern |
-| Cache invalidation | ✅ Good | Event-driven refresh pattern |
-| Loading states | ✅ Consistent | Skeleton loaders for major pages |
-| Empty states | ⚠️ Inconsistent | Some pages lack mobile-optimized empty state UI |
+- Severity: Medium
+- Category: Frontend, Maintainability
+- Exact location:
+  - `client/src/index.css` - 919 lines
+  - `client/src/pages/Viewer.tsx` - 834 lines
+  - `client/src/hooks/useSystemMetrics.ts` - 769 lines
+- What was found:
+  - The largest frontend files combine multiple concerns such as layout, export logic, rendering modes, chart preparation, or wide global style ownership.
+- Why it matters:
+  - These files are now hard to audit safely. They are likely to become the default place for future logic because they already contain too much context.
+- Current status: New - STILL PRESENT
+- Recommended improvement direction:
+  - Split by concern rather than by arbitrary line count, starting with the most operationally risky files.
+- Priority: Fix Next
 
-#### Performance — GOOD
+#### 7. Frontend observability is weaker than backend observability
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Virtual scrolling | ✅ Present | react-window on Viewer tables |
-| Low-spec mode | ✅ Innovative | RAM/CPU detection, reduced animations |
-| Debounced search | ✅ Good | 300ms debounce |
-| Bundle splitting | ✅ Good | Manual chunks for heavy libs (xlsx, jspdf, recharts) |
-| Memory leaks | ⚠️ Low risk | Modal lifecycle, observer cleanup appear proper |
-
-#### UX Behavior — GOOD
-
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Form validation | ✅ Good | Zod + React Hook Form with inline messages |
-| Toast feedback | ✅ Consistent | Success/error toasts after mutations |
-| Error recovery | ✅ Good | Error boundary with retry/home/reload options |
-| Modal behavior | ✅ Good | Proper 100dvh sizing, safe-area-aware |
-| Keyboard shortcuts | ✅ Present | Gated by mobile detection |
-
----
+- Severity: Low
+- Category: Frontend, Observability
+- Exact location:
+  - `client/src/pages/Viewer.tsx`
+  - `client/src/pages/Dashboard.tsx`
+  - `client/src/components/AutoLogout.tsx`
+  - `client/src/pages/Import.tsx`
+  - `client/src/pages/Login.tsx`
+  - `client/src/pages/AuditLogs.tsx`
+  - `client/src/pages/Activity.tsx`
+  - `client/src/pages/BackupRestore.tsx`
+- What was found:
+  - The backend uses structured pino logging consistently.
+  - The frontend still has scattered `console.error`, `console.warn`, and one `console.log` in production code paths.
+- Why it matters:
+  - This is mostly hygiene rather than a security or correctness issue, but it creates inconsistent diagnostics across the stack.
+- Current status: New - STILL PRESENT
+- Recommended improvement direction:
+  - Standardize frontend diagnostics or narrow `console.*` usage to explicit development-only surfaces.
+- Priority: Fix Later
 
 ### UI/UX
 
-#### Screen-by-Screen Assessment
+#### 8. Mobile-focused operational UX has improved materially
 
-| Screen/Module | Desktop | Mobile | Verdict |
-|---------------|---------|--------|---------|
-| Login | ✅ Clean | ✅ Good (2FA, fingerprint) | Keep as-is |
-| Dashboard | ✅ Good | ✅ Acceptable | Keep with minor polish |
-| Viewer | ✅ Good (virtual scroll) | ✅ Card layout on mobile | Keep as-is |
-| General Search | ✅ Good | ✅ Responsive filters | Keep as-is |
-| Import | ✅ Good | ✅ Drag-and-drop | Keep as-is |
-| Saved | ✅ Good | ⚠️ Acceptable | Keep with minor polish |
-| Collection Daily | ✅ Good | ✅ Calendar responsive | Keep as-is |
-| Collection Records | ✅ Good | ⚠️ min-w-1280 forces scroll | Needs minor fix |
-| Collection Save Form | ✅ Good | ✅ Keyboard-aware sticky | Keep as-is |
-| Collection Summary | ✅ Good | ✅ Acceptable | Keep as-is |
-| Collection Report | ✅ Good | ⚠️ Acceptable | Keep with minor polish |
-| AI Chat/FloatingAI | ✅ Good | ✅ Excellent (fullscreen, safe-area) | Keep as-is |
-| Activity Logs | ✅ Good | ⚠️ max-h-400px hardcoded | Needs minor fix |
-| Audit Logs | ✅ Good | ⚠️ Acceptable | Keep with minor polish |
-| Backup/Restore | ✅ Good | ⚠️ Complex flow | Keep with minor polish |
-| Settings | ✅ Good | ✅ Acceptable | Keep as-is |
-| Analysis | ✅ Good | ⚠️ Charts may be small | Keep with minor polish |
-| Navbar | ✅ Good | ✅ Sheet drawer works well | Keep as-is |
+- Severity: Low
+- Category: UI/UX
+- Exact location:
+  - `client/src/components/FloatingAI.tsx`
+  - `client/src/pages/collection-records/ReceiptPreviewDialog.tsx`
+  - `client/src/pages/collection-records/ViewAllRecordsDialog.tsx`
+  - `client/src/pages/activity/ActivityLogsTable.tsx`
+  - `client/src/pages/AuditLogs.tsx`
+- What was found:
+  - Mobile-specific logic now exists for AI bottom-sheet behavior, collection record detail density, PDF preview fallback, and activity card presentation.
+- Why it matters:
+  - This was a weak area historically. The current code shows clear mobile-awareness rather than simple desktop shrink-to-fit behavior.
+- Current status: Fixed - FIXED
+- Recommended improvement direction:
+  - Preserve these patterns and avoid redesign churn without targeted device QA.
+- Priority: Monitor Only
 
----
+#### 9. Information density remains high on several operational pages
 
-### Layout & Responsiveness
+- Severity: Medium
+- Category: UI/UX, Maintainability
+- Exact location:
+  - `client/src/pages/AuditLogs.tsx`
+  - `client/src/pages/Monitor.tsx`
+  - `client/src/pages/Analysis.tsx`
+  - `client/src/pages/Dashboard.tsx`
+- What was found:
+  - Even after mobile improvements, these pages still carry high information density and several conditional panels.
+- Why it matters:
+  - This is not a correctness bug, but dense operational pages accumulate UX debt faster than lighter surfaces.
+- Current status: Existing - NOT VERIFIABLE STATICALLY
+- Recommended improvement direction:
+  - Continue using progressive disclosure on dense pages instead of adding more always-visible controls.
+- Priority: Monitor Only
 
-#### Desktop — GOOD
-- Clean layouts with proper max-width constraints
-- Consistent spacing and card-based design
-- Sticky navbar with backdrop blur
-- Virtual scrolling on large tables
+### API
 
-#### Mobile — GOOD with issues
+#### 10. Response envelope consistency remains uneven
 
-| Element | Status | Detail |
-|---------|--------|--------|
-| Navbar hamburger | ✅ Good | Sheet drawer, proper width (min 92vw, max 22rem) |
-| Tab/navigation bars | ✅ Good | Responsive stacking |
-| Floating AI | ✅ Excellent | Fullscreen mode, safe-area, keyboard-aware, avoid-overlap system |
-| Dialogs/Modals | ✅ Good | 100dvh-aware, max-height constraints |
-| Collection Save form | ✅ Good | Keyboard state detection, sticky-to-static toggle |
-| Tables | ⚠️ Fragile | CollectionRecords: min-w-1280px forces scroll on tablets |
-| Page min-height | 🔴 Broken | Uses 100vh instead of 100dvh — clips on mobile Safari |
-| Activity table height | ⚠️ Fragile | Hardcoded 400px max-height |
-| Safe area handling | ✅ Good | env(safe-area-inset-bottom) used throughout |
-| Touch targets | ✅ Good | Button heights > 44px |
+- Severity: Medium
+- Category: API, Maintainability
+- Exact location:
+  - `server/controllers/imports.controller.ts`
+  - `server/controllers/operations.controller.ts`
+  - `server/controllers/search.controller.ts`
+  - `server/routes/collection-receipt.service.ts`
+  - `server/routes/settings.routes.ts`
+  - `server/routes/collection/collection-route-shared.ts`
+- What was found:
+  - Some endpoints return `{ ok: true, ... }`
+  - some return `{ success: true, ... }`
+  - some return raw payload objects or arrays
+  - some return structured `result.statusCode/result.body` envelopes
+- Why it matters:
+  - The frontend has to know endpoint-specific conventions instead of benefiting from predictable API contracts.
+- Current status: New - STILL PRESENT
+- Recommended improvement direction:
+  - Define a small number of approved envelope styles and migrate gradually.
+- Priority: Fix Next
 
-#### Critical Layout Bugs
+#### 11. Legacy route aliasing increases contract drift
 
-1. **100vh in index.css** — `min-height: calc(100vh - 3.5rem)` used for main content area. On mobile Safari, 100vh includes the address bar height, causing content to be clipped. Affects 10+ pages. Fix: use 100dvh with fallback.
-
-2. **CollectionRecordsTable min-w-1280px** — Forces horizontal scroll on all devices below 1280px width, including tablets. Should use responsive min-width or a different mobile layout.
-
-3. **ActivityLogsTable max-h-400px** — Fixed height doesn't adapt to viewport. On short mobile screens, the table area is too large; on tall screens, it wastes space.
-
----
-
-### API Design
-
-| Aspect | Status | Detail |
-|--------|--------|--------|
-| RESTful naming | ✅ Good | `/api/collection/records`, `/api/auth/session`, etc. |
-| HTTP methods | ✅ Correct | GET for reads, POST for creates, PATCH for updates, DELETE for deletes |
-| Pagination | ✅ Present | `page` + `limit` with server-side enforcement |
-| Filtering | ✅ Present | Advanced filters with operators |
-| Validation | ✅ Strong | Zod schemas on all input |
-| Error responses | ✅ Consistent | `{ ok: false, message, error: { code, details } }` |
-| Backup export | ⚠️ Dangerous | Returns entire DB as single JSON blob |
-| Rate limiting | ✅ Strong | Per-endpoint tiers with adaptive load adjustment |
-
----
+- Severity: Medium
+- Category: API, Maintainability
+- Exact location:
+  - `server/routes/auth/auth-session-routes.ts`
+  - `server/routes/search.routes.ts`
+  - `server/routes/activity.routes.ts`
+- What was found:
+  - Examples:
+    - `/api/login` and `/api/auth/login`
+    - `/api/search/columns` and `/api/columns`
+    - `/api/activity/all` and `/api/activities`
+- Why it matters:
+  - Route aliases are often acceptable for backward compatibility, but too many of them increase testing surface and client drift risk.
+- Current status: Existing - STILL PRESENT
+- Recommended improvement direction:
+  - Document canonical routes and treat aliases as compatibility-only until they can be retired safely.
+- Priority: Fix Later
 
 ### Database
 
-#### Schema Quality — GOOD with notable gaps
+#### 12. Rollup primary key integrity has been corrected
 
-**Tables:** 30+ PostgreSQL tables, 400+ columns, 100+ indexes
+- Severity: Low
+- Category: Database
+- Exact location:
+  - `shared/schema-postgres.ts`
+  - `server/internal/collection-bootstrap-records.ts`
+  - `drizzle/0014_reviewed_collection_record_daily_rollups.sql`
+  - `drizzle/0015_reviewed_collection_record_daily_rollup_refresh_queue.sql`
+  - `drizzle/0016_reviewed_monitor_and_monthly_rollups.sql`
+- What was found:
+  - Composite primary keys are now defined for the rollup and queue tables previously flagged.
+- Why it matters:
+  - This removes a real schema-quality concern from the earlier audit.
+- Current status: Fixed - FIXED
+- Recommended improvement direction:
+  - Preserve the new schema discipline and keep bootstrap assertions aligned with Drizzle definitions.
+- Priority: Monitor Only
 
-| Aspect | Status | Detail |
-|--------|--------|--------|
-| Table design | ✅ Good | Logical grouping, proper naming |
-| Indexing | ✅ Strong | 100+ indexes, composite where needed, case-insensitive |
-| Relations | ⚠️ Incomplete | 8+ missing FK constraints (data integrity risk) |
-| Primary keys | 🔴 Missing | 3 rollup/queue tables lack PK |
-| Soft deletes | ✅ Present | `isDeleted` flag on imports, receipts |
-| Enum constraints | ⚠️ Missing | Status/role fields are TEXT without CHECK constraints |
-| NOT NULL | ⚠️ Missing | Several critical fields (email, createdAt) are nullable |
-| Normalization | ⚠️ Denormalized | userActivity stores redundant username/role |
-| Audit trail | ✅ Present | auditLogs + settingVersions |
-| Migrations | ✅ Good | 21 idempotent SQL migrations |
+#### 13. Daily calendar insert batching has been corrected
 
-#### Critical Schema Issues
+- Severity: Low
+- Category: Database, Performance
+- Exact location:
+  - `server/repositories/collection-daily-repository-utils.ts`
+  - `upsertCollectionDailyCalendarDays()`
+- What was found:
+  - The previous sequential insert pattern has been replaced with a single batched upsert query.
+- Why it matters:
+  - This reduces query chatter and removes a real efficiency flaw from the prior audit.
+- Current status: Fixed - FIXED
+- Recommended improvement direction:
+  - Keep this pattern as the standard for similar slice-based writes.
+- Priority: Monitor Only
 
-1. **No PK on rollup tables** — `collectionRecordDailyRollups`, `collectionRecordMonthlyRollups`, `collectionRecordDailyRollupRefreshQueue` have only composite unique indexes, no proper PK. Risk: ORM edge cases, replication issues, no guaranteed unique identifier.
+#### 14. Some soft-linked relationships remain by design
 
-2. **Missing FKs** — 8+ tables reference other tables by text column without foreign key constraints. Risk: orphaned data, no cascade behavior, integrity violations.
-
-3. **No enum constraints** — `users.role` (user/admin/superuser), `users.status` (active/pending/banned), `backupJobs.status` (queued/running/done/failed) are unconstrained TEXT fields. Risk: invalid values can be inserted.
-
----
+- Severity: Low
+- Category: Database, Maintainability
+- Exact location:
+  - `shared/schema-postgres.ts`
+  - `server/internal/collection-bootstrap-access.ts`
+- What was found:
+  - The schema now has stronger FK coverage than before, but several text-driven or compatibility-oriented relationships remain soft-linked.
+- Why it matters:
+  - This is not automatically a defect. It becomes a defect only if soft links are mistaken for strongly enforced relational guarantees.
+- Current status: Existing - NOT VERIFIABLE STATICALLY
+- Recommended improvement direction:
+  - Treat remaining soft links as deliberate design choices unless there is evidence of orphan drift or consistency bugs.
+- Priority: Monitor Only
 
 ### Security
 
-See dedicated Section F below.
+#### 15. Core session and auth hardening are strong and should be preserved
 
----
+- Severity: Low
+- Category: Security
+- Exact location:
+  - `server/http/csrf.ts`
+  - `server/auth/guards.ts`
+  - `server/auth/passwords.ts`
+  - `server/auth/session-jwt.ts`
+  - `server/config/runtime.ts`
+- What was found:
+  - Multi-layer CSRF protection
+  - secure session cookie discipline
+  - timing-aware password validation
+  - secret rotation support
+  - environment guardrails for production-like environments
+- Why it matters:
+  - These are genuine strengths and reduce common operational attack surface.
+- Current status: Fixed - FIXED
+- Recommended improvement direction:
+  - Preserve these patterns and avoid unnecessary rewrites in auth/session code.
+- Priority: Monitor Only
 
-### Error Handling
+#### 16. 2FA key separation is now in place
 
-| Aspect | Status | Detail |
-|--------|--------|--------|
-| Global Express handler | ✅ Good | Catches HttpError, entity-too-large, unhandled |
-| Async route wrapping | ✅ Good | All async handlers wrapped |
-| Structured error codes | ✅ Good | 13 shared error codes |
-| Swallowed catches | ⚠️ 6 cases | Receipt service returns null silently |
-| Circuit breaker errors | ✅ Good | CircuitOpenError properly propagated |
-| Validation errors | ✅ Good | Zod parse → badRequest with details |
-| Client error display | ✅ Good | Error boundaries + toast notifications |
-
----
+- Severity: Low
+- Category: Security
+- Exact location:
+  - `server/config/security.ts`
+  - `server/auth/two-factor.ts`
+  - `server/services/auth-account-self-operations.ts`
+- What was found:
+  - New 2FA encryption now requires `TWO_FACTOR_ENCRYPTION_KEY`.
+  - Legacy decryption fallback still supports older records encrypted with the session secret.
+- Why it matters:
+  - This resolves the earlier key-separation weakness without breaking legacy access.
+- Current status: Fixed - FIXED
+- Recommended improvement direction:
+  - Ensure operations staff treat `TWO_FACTOR_ENCRYPTION_KEY` as a first-class production secret.
+- Priority: Monitor Only
 
 ### Performance
 
-| Area | Status | Risk Level |
-|------|--------|------------|
-| DB connection pool | ✅ Monitored | Low |
-| Search caching | ✅ Present | Low |
-| Virtual table rendering | ✅ Present | Low |
-| Bundle splitting | ✅ Proper | Low |
-| **Backup export memory** | 🔴 Unbounded | **Critical** |
-| **N+1 calendar upsert** | 🔴 30 queries/call | **Critical** |
-| **Backup restore Set** | ⚠️ Unbounded Set | **High** |
-| **Full-table export scans** | ⚠️ No limits | **High** |
-| WebSocket heartbeat scan | ⚠️ O(n) every 30s | Medium |
+#### 17. Large feature chunks remain in analytics, export, PDF, and Excel paths
 
----
+- Severity: Medium
+- Category: Performance, Frontend
+- Exact location:
+  - build outputs generated from:
+    - `client/src/pages/Monitor.tsx`
+    - `client/src/pages/Analysis.tsx`
+    - `client/src/pages/Import.tsx`
+    - `client/src/pages/Viewer.tsx`
+    - chart, excel, and pdf feature bundles
+  - CI guard: `.github/workflows/ci.yml`
+- What was found:
+  - Lazy loading is present, which is good.
+  - Despite that, feature chunks for charts, Excel, PDF, and capture flows remain large.
+- Why it matters:
+  - This is mainly a low-spec device and cold-path latency concern, especially on operational networks and phones.
+- Current status: Existing - STILL PRESENT
+- Recommended improvement direction:
+  - Keep aggressive lazy-loading discipline and avoid moving heavy libraries into the main app shell.
+- Priority: Fix Later
+
+#### 18. Backup storage model remains a scaling bottleneck even after create-path improvements
+
+- Severity: High
+- Category: Performance, Database, Reliability
+- Exact location:
+  - `server/services/backup-operations.service.ts`
+  - `server/repositories/backups-restore-utils.ts`
+  - `shared/schema-postgres.ts`
+- What was found:
+  - The create path is better than before, but the backup model still centers on a single large JSON payload persisted to the database.
+- Why it matters:
+  - This limits how far backup/export can scale before memory and payload-size behavior become operationally uncomfortable.
+- Current status: Existing - PARTIALLY FIXED
+- Recommended improvement direction:
+  - Treat this as a reliability and scale problem, not just a repository optimization problem.
+- Priority: Fix Now
 
 ### Maintainability
 
-| Aspect | Status | Detail |
-|--------|--------|--------|
-| TypeScript strict mode | ✅ Enabled | Full type safety |
-| Shared schemas | ✅ Good | schema-postgres.ts + api-contracts.ts |
-| CI pipeline | ✅ Comprehensive | typecheck → tests → build → smoke |
-| Documentation | ✅ Extensive | 23 docs files, ARCHITECTURE.md |
-| Test coverage | ⚠️ Moderate | 226 tests, 70% line target, UI coverage gap |
-| Large files | ⚠️ Risk | 5+ files over 500 lines in both server and client |
-| Dependency count | ⚠️ High | 141 dependencies |
+#### 19. Collection data layer remains too concentrated in one repository utility file
 
----
+- Severity: High
+- Category: Maintainability, Architecture
+- Exact location:
+  - `server/repositories/collection-record-repository-utils.ts` - 1130 lines
+- What was found:
+  - This file contains rollup maintenance, queue management, create/list/summarize/update/delete operations, monthly summaries, and purge flows.
+- Why it matters:
+  - It is now a multi-domain file, not just a repository helper. This raises regression risk for every future change in collection logic.
+- Current status: Existing - STILL PRESENT
+- Recommended improvement direction:
+  - Split by responsibility boundary, not just by line count.
+- Priority: Fix Next
 
-## D. Module-by-Module Findings
+#### 20. Storage and service surfaces are still oversized in several core areas
 
-### 1. Auth / Login
+- Severity: Medium
+- Category: Maintainability, Architecture
+- Exact location:
+  - `server/services/collection/collection-record-mutation-operations.ts` - 975 lines
+  - `server/storage-postgres-types.ts` - 881 lines
+  - `shared/schema-postgres.ts` - 839 lines
+  - `server/services/auth-account-authentication-operations.ts` - 792 lines
+  - `server/routes/collection-receipt.service.ts` - 790 lines
+  - `server/repositories/collection-receipt-utils.ts` - 726 lines
+- What was found:
+  - Several high-value modules now sit beyond the size where safe review is easy.
+- Why it matters:
+  - Large files are not automatically wrong, but in these cases they correlate with mixed responsibilities and high operational sensitivity.
+- Current status: Existing - STILL PRESENT
+- Recommended improvement direction:
+  - Use boundary-driven decomposition on future changes rather than waiting for an all-at-once refactor.
+- Priority: Fix Next
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | User authentication with JWT, 2FA, device fingerprinting, account lifecycle |
-| **Strengths** | Timing-safe bcrypt (cost 12), JWT secret rotation, login lockout, forced password change flow, dummy hash for non-existent users |
-| **Weaknesses** | 2FA encryption falls back to SESSION_SECRET if key not configured |
-| **Bug risks** | Low — well-tested with dedicated test files |
-| **Security risks** | Medium — 2FA fallback key, but only when env var not set |
-| **Performance risks** | Low — bcrypt cost 12 adds ~250ms per login (acceptable) |
-| **UX risks** | Low — Login page is 513 lines but functional |
-| **Verdict** | ✅ Keep as-is (enforce 2FA key in production config) |
+## D. Module-by-Module Review
 
-### 2. User Management / Role Management
+### Auth, Account, and Session
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | CRUD for users, role assignment, account activation, password management |
-| **Strengths** | Role-based guards on all admin endpoints, structured account lifecycle |
-| **Weaknesses** | Roles are TEXT fields without DB constraints |
-| **Bug risks** | Low — validation in service layer compensates |
-| **Security risks** | Low — role escalation prevented by requireRole() middleware |
-| **Performance risks** | Low |
-| **UX risks** | Low |
-| **Verdict** | ✅ Keep as-is |
+Current state: Strong
 
-### 3. Import / Upload
+- Strongest backend area overall
+- Session guards in `server/auth/guards.ts` are rigorous
+- CSRF and cookie handling are mature
+- 2FA key separation is now fixed
+- Idle session consistency was improved via `expireIdleActivitySession()` in `server/repositories/activity.repository.ts`
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | CSV/Excel file import with preview, validation, bulk processing |
-| **Strengths** | Streaming upload via busboy (not loaded in memory), file extension validation, configurable size limits, abort capability |
-| **Weaknesses** | Temp file cleanup relies on try/finally — orphan risk on crash |
-| **Bug risks** | Low |
-| **Security risks** | Low — extension validation, size limits |
-| **Performance risks** | Medium — XLSX parsing of large files blocks event loop |
-| **UX risks** | Low — progress tracking, preview before import |
-| **Verdict** | ✅ Keep as-is |
+Main residual risk:
 
-### 4. Saved Files / Data
+- broad auth surface means changes here carry high blast radius
+- route alias drift remains present in login/session endpoints
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | List and manage imported data records |
-| **Strengths** | Bulk operations, search, server-side pagination |
-| **Weaknesses** | Page is 560 lines — could benefit from extraction |
-| **Bug risks** | Low |
-| **Security risks** | Low |
-| **Performance risks** | Low — paginated |
-| **UX risks** | Low |
-| **Verdict** | ✅ Keep with minor polish |
+### Collection Flows
 
-### 5. Viewer
+Current state: Functional but complexity-heavy
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Data viewer with filters, search, export (CSV/PDF/Excel) |
-| **Strengths** | Virtual scrolling (react-window), mobile card layout, debounced search, low-spec mode, abort controllers |
-| **Weaknesses** | 919 lines — largest page, mixes table/filter/export logic |
-| **Bug risks** | Low — but complexity increases maintenance risk |
-| **Security risks** | Low |
-| **Performance risks** | Low — well-optimized with virtual rendering |
-| **UX risks** | Low — responsive mobile cards |
-| **Verdict** | ✅ Keep as-is (refactor for maintainability later) |
+- Collection flows are feature-rich and operationally useful
+- Biggest technical debt concentration in the repo
+- Mutation logic and repository utilities are now very large
 
-### 6. General Search
+Main residual risk:
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Global search with simple and advanced modes, filter operators |
-| **Strengths** | LIKE pattern escaping, parameterized queries, column allowlist |
-| **Weaknesses** | None significant |
-| **Bug risks** | Low |
-| **Security risks** | Low — SQL injection protected via escaping |
-| **Performance risks** | Low — rate-limited (10 req/10s) |
-| **UX risks** | Low — responsive filter panels |
-| **Verdict** | ✅ Keep as-is |
+- future feature work is likely to pile into already oversized collection files
 
-### 7. Analysis / Reporting
+### Collection Daily, Summary, and Nickname
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Analytics dashboard with charts (Recharts) |
-| **Strengths** | Lazy-loaded charts, skeleton loading |
-| **Weaknesses** | Charts may be small on mobile screens |
-| **Bug risks** | Low |
-| **Security risks** | Low |
-| **Performance risks** | Medium — chart data aggregation could be slow for large datasets |
-| **UX risks** | Low — desktop is clean, mobile may need polish |
-| **Verdict** | ✅ Keep with minor polish |
+Current state: Improved and mostly healthy
 
-### 8. Collection Report
+- Daily batching issue is fixed
+- Rollup table key integrity is fixed
+- Refresh queue and monthly summary logic are now structurally safer than before
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Collection reporting with daily/monthly summaries |
-| **Strengths** | Server-side rollup aggregation, refresh queue pattern |
-| **Weaknesses** | Rollup tables lack primary keys |
-| **Bug risks** | Medium — missing PK could cause edge cases |
-| **Security risks** | Low |
-| **Performance risks** | Medium — N+1 calendar upsert |
-| **UX risks** | Low |
-| **Verdict** | ⚠️ Keep with fixes (add PKs, batch calendar upsert) |
+Main residual risk:
 
-### 9. Collection Summary
+- rollup and nickname flows are still operationally coupled to a broad collection domain surface
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Summary statistics for collection staff performance |
-| **Strengths** | Monthly/daily aggregation, COLLECTION_DATA_CHANGED_EVENT refresh |
-| **Weaknesses** | None significant |
-| **Bug risks** | Low |
-| **Security risks** | Low |
-| **Performance risks** | Low |
-| **UX risks** | Low |
-| **Verdict** | ✅ Keep as-is |
+### Receipt Handling
 
-### 10. Receipt Handling
+Current state: Strong security, moderate observability debt
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Upload, validate, store, preview collection receipts |
-| **Strengths** | Magic byte validation, PDF JS blocking, EXIF stripping, dimension limits, file hash deduplication |
-| **Weaknesses** | 6 swallowed error catches — silent failures mask issues |
-| **Bug risks** | Medium — null returns from swallowed errors could cause confusing UI |
-| **Security risks** | Low — excellent validation |
-| **Performance risks** | Low |
-| **UX risks** | Medium — silent failures provide no feedback |
-| **Verdict** | ⚠️ Keep with fixes (add logging to catch blocks) |
+- File validation is a standout strength
+- Receipt preview/mobile fallback architecture is materially better than before
+- Main weakness is not security but silent fallback behavior in some catch branches
 
-### 11. Activity / Session Tracking
+Main residual risk:
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Track user sessions, login/logout events, idle detection |
-| **Strengths** | WebSocket heartbeat, auto-logout, device fingerprinting |
-| **Weaknesses** | Idle session sweeper lacks transactions; denormalized activity data |
-| **Bug risks** | Medium — race conditions in sweeper |
-| **Security risks** | Low — properly tracks sessions |
-| **Performance risks** | Medium — sweeper processes sessions sequentially |
-| **UX risks** | Low |
-| **Verdict** | ⚠️ Keep with fixes (add transaction to sweeper) |
+- difficult production debugging for cleanup and edge-case preview failures
 
-### 12. AI SQR Assistant / Widget
+### General Search
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | AI-powered search and chat using Ollama (llama3, nomic-embed-text) |
-| **Strengths** | Concurrency gate with per-role limits, circuit breaker, search caching, rate limiting, inflight deduplication, streaming responses, low-spec mode adjustment |
-| **Weaknesses** | 6s timeout may be too short for slow hardware |
-| **Bug risks** | Low — well-protected with gates and breakers |
-| **Security risks** | Low |
-| **Performance risks** | Low — properly gated |
-| **UX risks** | Low — excellent mobile experience (fullscreen, safe-area, keyboard-aware) |
-| **Verdict** | ✅ Keep as-is |
+Current state: Healthy
 
-### 13. Audit Logs
+- Search routes are rate-limited
+- SQL `LIKE` escaping is fixed
+- Search controller and repository boundaries are understandable
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Admin audit trail for all system changes |
-| **Strengths** | Structured entries with actor, action, details |
-| **Weaknesses** | No FK constraints on audit log table; mobile table height hardcoded |
-| **Bug risks** | Low |
-| **Security risks** | Low — audit integrity acceptable for current scale |
-| **Performance risks** | Medium — large audit tables could slow backup export |
-| **UX risks** | Low — table overflow handled |
-| **Verdict** | ✅ Keep with minor polish |
+Main residual risk:
 
-### 14. Export Features
+- route alias duplication (`/api/search/columns` and `/api/columns`)
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Export data to CSV, PDF, Excel across viewer, search, collection |
-| **Strengths** | Lazy-loaded jspdf/xlsx, abort controllers |
-| **Weaknesses** | PDF/Excel generation happens client-side — heavy on mobile |
-| **Bug risks** | Low |
-| **Security risks** | Low |
-| **Performance risks** | Medium — large exports on low-spec devices may be slow |
-| **UX risks** | Low — proper feedback |
-| **Verdict** | ✅ Keep as-is |
+### Viewer
 
-### 15. Backup / Restore
+Current state: Functional but oversized
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Full database backup creation, export, restore |
-| **Strengths** | Circuit breaker, integrity verification, async job queue |
-| **Weaknesses** | Loads entire DB into memory, 3x memory footprint on export, unbounded Set on restore |
-| **Bug risks** | High — OOM on large datasets |
-| **Security risks** | Medium — backup data includes all user records |
-| **Performance risks** | 🔴 Critical — no streaming, no pagination |
-| **UX risks** | Low |
-| **Verdict** | ⚠️ Needs improvement (streaming export/restore) |
+- Feature-rich and supports multiple export paths
+- Still one of the largest client pages
 
-### 16. Dashboard / Home
+Main residual risk:
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | Landing page after login with key metrics |
-| **Strengths** | Clean layout, role-appropriate content |
-| **Weaknesses** | None significant |
-| **Bug risks** | Low |
-| **Security risks** | Low |
-| **Performance risks** | Low |
-| **UX risks** | Low |
-| **Verdict** | ✅ Keep as-is |
+- maintainability and low-spec performance, not immediate correctness
 
-### 17. Settings / Config
+### Activity and Audit
 
-| Aspect | Finding |
-|--------|---------|
-| **Purpose** | System settings with role-based visibility and editing |
-| **Strengths** | Category-based organization, version tracking |
-| **Weaknesses** | roleSettingPermissions uses text key instead of FK |
-| **Bug risks** | Low — application layer validates |
-| **Security risks** | Low |
-| **Performance risks** | Low — cached |
-| **UX risks** | Low |
-| **Verdict** | ✅ Keep as-is |
+Current state: Security-adequate, operationally improved, still worth watching
 
----
+- Mobile-specific rendering now exists for activity cards
+- Audit mobile state is better structured than before
+- Auth and permission boundaries are present
 
-## E. Mobile vs Desktop Review
+Main residual risk:
 
-### Desktop — GOOD
+- activity moderation routes do not use a dedicated admin limiter
+- page density still requires runtime QA on phones
 
-**What is good:**
-- Clean card-based layouts with proper max-width constraints
-- Virtual scrolling on large tables
-- Keyboard shortcuts for power users
-- Consistent navbar with grouped navigation
-- Proper modal sizing and behavior
-- Charts render well at desktop widths
+### Dashboard and Analysis
 
-**What is weak:**
-- Viewer.tsx at 919 lines mixes concerns (maintainability, not visual)
-- No issues visually on desktop
+Current state: Good feature coverage, moderate performance pressure
 
-### Mobile — GOOD with 3 critical bugs
+- Strong reporting coverage
+- Charts and export features are useful
 
-**What is good:**
-- FloatingAI excellent: fullscreen mode, safe-area, keyboard-aware, avoid-overlap
-- Navbar hamburger menu with Sheet drawer (92vw, max 22rem)
-- Collection Save form: keyboard state detection, sticky-to-static toggle
-- Dialogs use 100dvh correctly
-- Touch targets properly sized (> 44px)
-- Low-spec mode reduces animations on constrained devices
+Main residual risk:
 
-**What is weak:**
-1. 🔴 **Page min-height uses 100vh** — clips content on mobile Safari (address bar)
-2. 🔴 **CollectionRecordsTable min-w-1280px** — forces horizontal scroll on tablets
-3. ⚠️ **ActivityLogsTable max-h-400px** — not responsive to viewport
+- heavy bundles and dense information layout on smaller devices
 
-**What should remain unchanged:**
-- FloatingAI positioning and behavior
-- Navbar mobile Sheet drawer
-- Modal/Dialog responsive sizing
-- Collection Save form keyboard handling
-- Skeleton loading patterns
-- Error boundary display
+### Settings, Admin, and Security Surfaces
 
-**What should be improved first:**
-1. Replace 100vh with 100dvh in index.css page min-height
-2. Make CollectionRecordsTable use responsive min-width
-3. Make ActivityLogsTable height viewport-relative
+Current state: Strong
 
----
+- Admin auth flows are better limited than most of the rest of the system
+- Security settings and account lifecycle rules are well defended
+
+Main residual risk:
+
+- response contract inconsistency across admin-related routes
+
+### Backup, Export, and Import
+
+Current state: Mixed
+
+- Import path has improved materially through temp-file and parser hardening
+- Backup path is improved but still the largest systemic reliability concern
+
+Main residual risk:
+
+- memory amplification on large backup export or restore operations
+
+## E. Mobile vs Desktop
+
+### Mobile
+
+Mobile support is meaningfully better than the prior audit suggested.
+
+Verified strengths in code:
+
+- shared `100dvh` fallback utilities in `client/src/index.css`
+- mobile viewport handling in `client/src/hooks/use-mobile-viewport-state.ts`
+- mobile-aware Floating AI layout in `client/src/components/FloatingAI.tsx`
+- type-aware receipt preview fallback in `client/src/pages/collection-records/ReceiptPreviewDialog.tsx`
+- mobile collection-record dialog behavior in `client/src/pages/collection-records/ViewAllRecordsDialog.tsx`
+- activity card branch in `client/src/pages/activity/ActivityLogsTable.tsx`
+
+Remaining mobile concerns:
+
+- dynamic viewport, keyboard, and browser chrome behavior are only partially auditable statically
+- dense pages such as Audit, Dashboard, Analysis, and Monitor still need periodic device QA
+
+### Desktop
+
+Desktop remains the more stable and lower-risk interaction mode overall.
+
+Verified strengths:
+
+- large data surfaces still have richer room on desktop
+- operational controls are less compressed
+- most responsive complexity now lives behind mobile-specific branches
+
+Desktop risks:
+
+- none of the current major findings are desktop-specific blockers
+- maintainability and API contract issues affect both desktop and mobile equally
+
+### Floating AI Impact
+
+Current assessment:
+
+- the code now reflects a much more deliberate mobile bottom-sheet and desktop floating-panel strategy than the older audit implied
+- this surface should be treated as stabilized architecture, not as a casual redesign target
+
+Classification: NOT VERIFIABLE STATICALLY for final runtime fidelity on all devices, but no static evidence suggests a current architectural defect in the AI layout system itself
+
+### Modal and Preview Behavior
+
+Current assessment:
+
+- collection record dialogs and receipt preview flows are much more device-aware than before
+- PDF fallback logic on mobile is now explicit
+
+Classification: improved and mostly healthy, with runtime verification still recommended for real devices
 
 ## F. Priority Matrix
 
-### Critical — Do First
+### Critical
 
-| # | Issue | Area | Impact |
-|---|-------|------|--------|
-| 1 | Backup export loads entire DB into memory | Backend/Performance | OOM risk on large datasets |
-| 2 | N+1 query: 30 sequential INSERTs for calendar days | Backend/Performance | Slow endpoint, DB load |
-| 3 | Missing primary keys on 3 rollup/queue tables | Database | ORM issues, replication risk |
-| 4 | 100vh used instead of 100dvh for page min-height | Frontend/Mobile | Content clipping on mobile Safari |
+- Backup export and restore still materialize large payloads in memory
 
-### High — Do Next
+### High
 
-| # | Issue | Area | Impact |
-|---|-------|------|--------|
-| 5 | WebSocket connection leak: early-close paths skip map cleanup | Backend/Reliability | Memory accumulation at scale |
-| 6 | 6 swallowed catch blocks in receipt service | Backend/Reliability | Silent failures, debugging difficulty |
-| 7 | Backup restore: unbounded Set of record IDs | Backend/Performance | OOM on large restores |
-| 8 | Idle session sweeper: no transaction wrapping | Backend/Reliability | Race conditions, partial updates |
-| 9 | Missing FK constraints on 8+ table relationships | Database | Orphaned data risk |
-| 10 | CollectionRecordsTable min-w-1280px | Frontend/Mobile | Forces scroll on tablets |
-| 11 | 2FA encryption key fallback to SESSION_SECRET | Security | Weakens 2FA independence |
-| 12 | Full-table export scans without limits | Backend/Performance | Memory pressure on concurrent exports |
+- Backup storage model remains a scaling bottleneck
+- Collection data layer is overly concentrated in `server/repositories/collection-record-repository-utils.ts`
 
-### Medium — Later
+### Medium
 
-| # | Issue | Area | Impact |
-|---|-------|------|--------|
-| 13 | Status/role fields lack CHECK constraints | Database | Invalid data insertion |
-| 14 | Nullable createdAt on several tables | Database | Query filtering issues |
-| 15 | ActivityLogsTable hardcoded max-h-400px | Frontend/Mobile | Non-responsive table height |
-| 16 | Worker restart errors swallowed | Backend/Reliability | Unnoticed failed restarts |
-| 17 | Large component files (Viewer 919 lines, etc.) | Frontend/Maintainability | Harder to maintain |
-| 18 | userActivity stores redundant username/role | Database | Denormalization drift |
+- Activity moderation routes lack dedicated admin-action rate limiting
+- Receipt service catch blocks still weaken observability
+- API response envelopes are inconsistent
+- Route alias drift remains broad
+- Large frontend files remain hard to audit safely
+- Large feature chunks remain in charts, PDF, Excel, and export paths
 
-### Low — Optional Polish
+### Low
 
-| # | Issue | Area | Impact |
-|---|-------|------|--------|
-| 19 | Charts may be small on mobile | Frontend/UX | Minor UX polish |
-| 20 | Empty states not fully mobile-optimized | Frontend/UX | Minor UX polish |
-| 21 | Some backup/restore UI flows could be simpler | Frontend/UX | Minor UX polish |
-| 22 | XLSX parsing blocks event loop | Backend/Performance | Low frequency, acceptable |
-| 23 | 5+ files over 500 lines | Maintainability | Long-term code health |
+- Backend layering is not fully uniform
+- Frontend still contains scattered `console.*`
+- Some schema relationships remain intentionally soft-linked and should be documented as such
+- Dense mobile operational pages require ongoing runtime QA
 
----
+## G. Improvement Roadmap
 
-## G. Recommended Improvement Roadmap
+### Immediate
 
-### Phase 1: Urgent Stability & Security Fixes
+1. Finish backup/export/restore memory hardening
+2. Add dedicated rate-limit coverage to activity moderation routes
+3. Improve structured logging in receipt service fallback and cleanup catches
 
-**Timeline: Immediate (before next deployment)**
+### Short-term
 
-1. **Fix 100vh → 100dvh** in index.css page min-height (with `@supports` fallback)
-2. **Add logging to swallowed catch blocks** in receipt service (6 locations)
-3. **Enforce 2FA encryption key** in production config (prevent SESSION_SECRET fallback)
-4. **Add primary keys** to `collectionRecordDailyRollups`, `collectionRecordMonthlyRollups`, `collectionRecordDailyRollupRefreshQueue`
-5. **Fix WebSocket cleanup** — add map cleanup to early-close paths in runtime-manager.ts
+1. Normalize API envelopes across the most-used operational endpoints
+2. Document canonical routes and begin reducing alias sprawl
+3. Split the collection repository utility into responsibility-based modules
+4. Split the largest frontend operational files by feature boundary
 
-### Phase 2: Performance & Error Handling
+### Medium-term
 
-**Timeline: Next sprint**
+1. Continue reducing collection mutation/service file size
+2. Introduce clearer frontend observability discipline
+3. Reassess heavy feature bundles and keep large libraries lazy-loaded
+4. Add regular mobile QA coverage for dense operational pages
 
-1. **Batch N+1 query** — convert 30 sequential INSERTs to single multi-row INSERT in collection-daily-repository-utils.ts
-2. **Stream backup export** — replace full-table-scan-to-memory with chunked streaming
-3. **Batch backup restore** — process record IDs in chunks instead of unbounded Set
-4. **Wrap idle session sweeper in transaction** with batch processing
-5. **Add FK constraints** to the 8+ tables missing them (with migration)
-6. **Add CHECK constraints** for status/role enum fields
+### Long-term
 
-### Phase 3: UI/UX & Layout Improvements
-
-**Timeline: Following sprint**
-
-1. **Fix CollectionRecordsTable** — responsive min-width instead of hardcoded 1280px
-2. **Fix ActivityLogsTable** — viewport-relative max-height instead of 400px
-3. **Polish mobile empty states** across pages
-4. **Review chart sizing** on mobile for Analysis page
-5. **Simplify Backup/Restore flow** for mobile users
-
-### Phase 4: Architecture & Maintainability
-
-**Timeline: Future quarter**
-
-1. **Extract Viewer.tsx sub-components** — split 919-line file into filter, table, export modules
-2. **Extract Login.tsx flows** — separate auth, 2FA, fingerprint logic
-3. **Complete PostgresStorage → direct repository migration** — remove legacy facade
-4. **Add NOT NULL constraints** to currently nullable critical fields
-5. **Increase test coverage** — add UI component tests, expand integration coverage
-6. **Normalize userActivity table** — remove redundant username/role columns
-
----
+1. Revisit backup storage architecture so backup/export is not centered on a single large JSON field
+2. Continue converging backend route boundaries toward a more uniform controller pattern
+3. Review remaining soft-linked schema relationships only where real orphan or integrity evidence exists
 
 ## H. Final Verdict
 
-### What is Already Good Enough — DO NOT change unnecessarily
+### Is the system stable enough for controlled production use?
 
-- ✅ Overall layered architecture (routes → controllers → services → repositories)
-- ✅ CSRF protection (multi-layer defense-in-depth)
-- ✅ JWT implementation (HS256, rotation, proper expiry)
-- ✅ Bcrypt password hashing (cost 12, timing-safe)
-- ✅ File upload security (magic bytes, PDF blocking, EXIF stripping)
-- ✅ Rate limiting (multi-tier, adaptive, load-aware)
-- ✅ Circuit breaker pattern
-- ✅ AI concurrency gate design
-- ✅ FloatingAI mobile experience
-- ✅ Collection Save form mobile keyboard handling
-- ✅ Modal/Dialog responsive sizing (100dvh)
-- ✅ Navbar mobile Sheet drawer
-- ✅ Structured logging (pino, zero console.log)
-- ✅ CI/CD pipeline (typecheck → test → build → smoke)
-- ✅ Code splitting and bundle optimization
-- ✅ Virtual scrolling on large tables
-- ✅ Error boundary with recovery options
+Yes.
 
-### What is Risky to Leave As-Is
+The current system is stable enough for controlled production use. It is materially healthier than the previous audit suggested, and several formerly important findings are genuinely fixed in the present codebase.
 
-- 🔴 Backup export/restore memory handling — will OOM on growing datasets
-- 🔴 N+1 calendar upsert — 30x slower than necessary
-- 🔴 Missing rollup table PKs — can cause edge cases
-- 🔴 100vh on mobile — actively clips content on Safari now
-- ⚠️ WebSocket connection map leak paths — will accumulate at scale
-- ⚠️ Swallowed errors in receipt handling — masks real issues
-- ⚠️ Missing FK constraints — orphaned data risk grows over time
+### What still blocks higher confidence?
 
-### What Should Be Fixed Before Further Feature Expansion
+The main blocker to higher confidence is not general architecture quality. It is the remaining backup/export/restore memory model. That path is now improved, but not yet architecturally comfortable at larger scale.
 
-1. **Backup streaming** — current implementation cannot scale with data growth
-2. **N+1 query batching** — simple fix with high impact
-3. **100vh → 100dvh** — one-line CSS fix for mobile Safari
-4. **Rollup table PKs** — migration required before adding features to these tables
-5. **WebSocket cleanup** — critical for multi-user production environments
-6. **Receipt error logging** — must be able to diagnose production issues
+The next tier of confidence blockers:
 
----
+- missing dedicated limiter coverage on activity moderation routes
+- observability gaps in receipt fallback code
+- large collection data-layer surfaces that make future changes riskier than they need to be
 
-## Appendix: Metrics Summary
+### What is technical debt but not a blocker?
 
-| Metric | Value |
-|--------|-------|
-| Total TypeScript files | 420+ |
-| Server files | 294 |
-| Client files | 123 |
-| Shared files | 3 |
-| PostgreSQL tables | 30+ |
-| Database columns | 400+ |
-| Database indexes | 100+ |
-| API endpoints | ~100 |
-| React pages | 22 main + 248 sub-components |
-| Custom hooks | 12 + 9 app shell |
-| UI components | 40+ (Radix/shadcn) |
-| NPM dependencies | 141 |
-| Test files | 84 (226 tests) |
-| Documentation files | 23 |
-| Largest server file | collection-record-repository-utils.ts (1235 lines) |
-| Largest client file | Viewer.tsx (919 lines) |
-| Node version | ≥24 |
-| Build tool | Vite + esbuild |
-| Database | PostgreSQL 16 |
-| ORM | Drizzle 0.39 |
+- route alias drift
+- response envelope inconsistency
+- very large frontend and backend files
+- dense mobile operational pages that still need runtime QA
+- scattered frontend console logging
+
+### Final Assessment
+
+SQR is a credible production-style application with a strong security baseline, meaningful mobile and operational UX improvements, and better schema discipline than the previous audit reflected.
+
+It should now be described as:
+
+**Production-capable with focused scale and maintainability risks, not as a system in broad structural distress.**
+
+The audit priority is no longer broad stabilization. It is targeted risk reduction:
+
+1. backup/export memory path
+2. privileged moderation hardening
+3. observability in receipt edge cases
+4. controlled reduction of file and contract drift

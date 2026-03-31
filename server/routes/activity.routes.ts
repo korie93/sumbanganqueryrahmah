@@ -4,6 +4,7 @@ import type { AuthenticatedRequest } from "../auth/guards";
 import { clearAuthSessionCookie } from "../auth/session-cookie";
 import { asyncHandler } from "../http/async-handler";
 import { ensureObject, readDate, readNonEmptyString, readStringList } from "../http/validation";
+import { createAuthRouteRateLimiters, type AuthRouteRateLimiters } from "../middleware/rate-limit";
 import { ActivityService } from "../services/activity.service";
 import type { PostgresStorage } from "../storage-postgres";
 
@@ -13,7 +14,27 @@ type ActivityRouteDeps = {
   requireRole: (...roles: string[]) => RequestHandler;
   requireTabAccess: (tabId: string) => RequestHandler;
   connectedClients: Map<string, WebSocket>;
+  rateLimiters?: Pick<AuthRouteRateLimiters, "adminAction">;
 };
+
+function buildActivitySuccessPayload<T extends Record<string, unknown>>(payload?: T) {
+  return {
+    ok: true as const,
+    success: true as const,
+    ...(payload ?? {}),
+  };
+}
+
+function buildActivityErrorPayload(
+  message?: string,
+  extra?: Record<string, unknown>,
+) {
+  return {
+    ok: false as const,
+    ...(message ? { message } : {}),
+    ...(extra ?? {}),
+  };
+}
 
 function buildActivityFilters(source: Record<string, unknown>) {
   return {
@@ -29,16 +50,17 @@ function buildActivityFilters(source: Record<string, unknown>) {
 export function registerActivityRoutes(app: Express, deps: ActivityRouteDeps) {
   const { storage, authenticateToken, requireRole, requireTabAccess, connectedClients } = deps;
   const activityService = new ActivityService(storage, connectedClients);
+  const adminActionRateLimiter = deps.rateLimiters?.adminAction ?? createAuthRouteRateLimiters().adminAction;
 
   app.post("/api/activity/logout", authenticateToken, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     if (!req.user) {
       clearAuthSessionCookie(res);
-      return res.status(401).json({ success: false });
+      return res.status(401).json(buildActivityErrorPayload());
     }
 
     await activityService.logout(req.user.activityId, req.user.username);
     clearAuthSessionCookie(res);
-    return res.json({ success: true });
+    return res.json(buildActivitySuccessPayload());
   }));
 
   app.get(
@@ -69,17 +91,18 @@ export function registerActivityRoutes(app: Express, deps: ActivityRouteDeps) {
     asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
       const activityId = readNonEmptyString(req.params.id);
       if (!activityId) {
-        return res.status(400).json({ success: false, message: "Invalid activityId" });
+        return res.status(400).json(buildActivityErrorPayload("Invalid activityId"));
       }
 
       await activityService.deleteActivityLog(activityId);
-      return res.json({ success: true });
+      return res.json(buildActivitySuccessPayload());
     }),
   );
 
   app.delete(
     "/api/activity/logs/bulk-delete",
     authenticateToken,
+    adminActionRateLimiter,
     requireRole("admin", "superuser"),
     requireTabAccess("activity"),
     asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
@@ -94,101 +117,100 @@ export function registerActivityRoutes(app: Express, deps: ActivityRouteDeps) {
       ).slice(0, 500);
 
       if (activityIds.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: "activityIds is required",
-        });
+        return res.status(400).json(buildActivityErrorPayload("activityIds is required"));
       }
 
       const { deletedCount, notFoundIds } = await activityService.bulkDeleteActivityLogs(activityIds);
 
-      return res.json({
-        success: true,
+      return res.json(buildActivitySuccessPayload({
         requestedCount: activityIds.length,
         deletedCount,
         notFoundIds,
-      });
+      }));
     }),
   );
 
   app.post(
     "/api/activity/kick",
     authenticateToken,
+    adminActionRateLimiter,
     requireRole("admin", "superuser"),
     requireTabAccess("activity"),
     asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
       const body = ensureObject(req.body) || {};
       const activityId = readNonEmptyString(body.activityId);
       if (!activityId) {
-        return res.status(400).json({ success: false, message: "Invalid activityId" });
+        return res.status(400).json(buildActivityErrorPayload("Invalid activityId"));
       }
 
       const result = await activityService.kickActivity(activityId, req.user!.username);
       if (result.status === "not_found") {
-        return res.status(404).json({ message: "Activity not found" });
+        return res.status(404).json(buildActivityErrorPayload("Activity not found"));
       }
 
-      return res.json({ success: true });
+      return res.json(buildActivitySuccessPayload());
     }),
   );
 
   app.post(
     "/api/activity/ban",
     authenticateToken,
+    adminActionRateLimiter,
     requireRole("superuser"),
     requireTabAccess("activity"),
     asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
       const body = ensureObject(req.body) || {};
       const activityId = readNonEmptyString(body.activityId);
       if (!activityId) {
-        return res.status(400).json({ success: false, message: "Invalid activityId" });
+        return res.status(400).json(buildActivityErrorPayload("Invalid activityId"));
       }
 
       const result = await activityService.banActivity(activityId, req.user!.username);
       if (result.status === "not_found") {
-        return res.status(404).json({ message: "Activity not found" });
+        return res.status(404).json(buildActivityErrorPayload("Activity not found"));
       }
       if (result.status === "cannot_ban_superuser") {
-        return res.status(403).json({ message: "Cannot ban a superuser" });
+        return res.status(403).json(buildActivityErrorPayload("Cannot ban a superuser"));
       }
 
-      return res.json({ success: true });
+      return res.json(buildActivitySuccessPayload());
     }),
   );
 
-  app.post("/api/admin/ban", authenticateToken, requireRole("superuser"), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  app.post("/api/admin/ban", authenticateToken, adminActionRateLimiter, requireRole("superuser"), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const body = ensureObject(req.body) || {};
     const username = readNonEmptyString(body.username);
     if (!username) {
-      return res.status(400).json({ message: "Username required" });
+      return res.status(400).json(buildActivityErrorPayload("Username required"));
     }
 
     const result = await activityService.banAccount(username, req.user!.username);
     if (result.status === "not_found") {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json(buildActivityErrorPayload("User not found"));
     }
     if (result.status === "cannot_ban_superuser") {
-      return res.status(403).json({ message: "Cannot ban a superuser" });
+      return res.status(403).json(buildActivityErrorPayload("Cannot ban a superuser"));
     }
 
-    return res.json({ success: true });
+    return res.json(buildActivitySuccessPayload());
   }));
 
   app.post(
     "/api/admin/unban",
     authenticateToken,
+    adminActionRateLimiter,
     requireRole("superuser"),
     requireTabAccess("activity"),
     asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
       const body = ensureObject(req.body) || {};
       const banId = readNonEmptyString(body.banId);
       if (!banId) {
-        return res.status(400).json({ message: "banId required" });
+        return res.status(400).json(buildActivityErrorPayload("banId required"));
       }
 
       await activityService.unbanUser(banId, req.user!.username);
 
-      return res.json({ success: true });
+      return res.json(buildActivitySuccessPayload());
     }),
   );
 

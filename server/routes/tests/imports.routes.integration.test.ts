@@ -883,6 +883,7 @@ test("DELETE /api/imports/:id deletes an import and audits the deletion", async 
     const payload = await response.json();
     assert.doesNotThrow(() => deleteImportResponseSchema.parse(payload));
     assert.deepEqual(payload, {
+      ok: true,
       success: true,
     });
     assert.deepEqual(deleteCalls, ["import-1"]);
