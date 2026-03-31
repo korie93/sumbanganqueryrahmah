@@ -1,11 +1,16 @@
 import { memo, useMemo } from "react";
-import { ArrowDownRight, ArrowRight, ArrowUpRight, CircleHelp } from "lucide-react";
+import { CircleHelp } from "lucide-react";
+import {
+  buildSparklinePath,
+  formatMetricValue,
+  metricStatusClasses,
+  metricTrendConfig,
+  type MetricStatus,
+  type MetricTrend,
+} from "@/components/monitor/metric-panel-utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-
-export type MetricTrend = "up" | "down" | "neutral";
-export type MetricStatus = "good" | "warning" | "critical";
 
 type MetricPanelProps = {
   label: string;
@@ -18,48 +23,6 @@ type MetricPanelProps = {
   decimals?: number;
 };
 
-const statusClasses: Record<MetricStatus, string> = {
-  good: "bg-emerald-500",
-  warning: "bg-amber-500",
-  critical: "bg-red-500",
-};
-
-const trendConfig: Record<MetricTrend, { icon: typeof ArrowRight; className: string; label: string }> = {
-  up: {
-    icon: ArrowUpRight,
-    className: "text-emerald-500",
-    label: "Rising",
-  },
-  down: {
-    icon: ArrowDownRight,
-    className: "text-red-500",
-    label: "Falling",
-  },
-  neutral: {
-    icon: ArrowRight,
-    className: "text-muted-foreground",
-    label: "Flat",
-  },
-};
-
-function buildSparklinePath(values: number[], width: number, height: number): string {
-  if (values.length === 0) return "";
-  if (values.length === 1) return `M 0 ${height / 2} L ${width} ${height / 2}`;
-
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const stepX = width / Math.max(values.length - 1, 1);
-
-  return values
-    .map((value, index) => {
-      const x = index * stepX;
-      const y = height - ((value - min) / range) * height;
-      return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(" ");
-}
-
 function MetricPanelImpl({
   label,
   value,
@@ -70,10 +33,10 @@ function MetricPanelImpl({
   history,
   decimals = 1,
 }: MetricPanelProps) {
-  const trendMeta = trendConfig[trend];
+  const trendMeta = metricTrendConfig[trend];
   const TrendIcon = trendMeta.icon;
   const path = useMemo(() => buildSparklinePath(history, 140, 34), [history]);
-  const formatted = Number.isFinite(value) ? value.toFixed(decimals) : "0";
+  const formatted = formatMetricValue(value, decimals);
 
   return (
     <Card className="border-border/60 bg-background/55 backdrop-blur-md shadow-sm">
@@ -105,7 +68,7 @@ function MetricPanelImpl({
             </div>
             {description ? <p className="mt-1 text-[11px] text-muted-foreground">{description}</p> : null}
           </div>
-          <span className={`mt-1 inline-flex h-2.5 w-2.5 rounded-full ${statusClasses[status]}`} />
+          <span className={`mt-1 inline-flex h-2.5 w-2.5 rounded-full ${metricStatusClasses[status]}`} />
         </div>
 
         <div className="mt-4 flex items-center justify-between">
@@ -123,3 +86,4 @@ function MetricPanelImpl({
 }
 
 export const MetricPanel = memo(MetricPanelImpl);
+export type { MetricStatus, MetricTrend };

@@ -9,13 +9,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import {
+  buildTimeSeriesChartData,
+  formatTimeSeriesTickLabel,
+  formatTimeSeriesTooltipLabel,
+  formatTimeSeriesTooltipValue,
+  timeSeriesTooltipStyle,
+  type TimeSeriesPoint,
+} from "@/components/monitor/time-series-chart-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip as HintTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-
-type TimeSeriesPoint = {
-  ts: number;
-  value: number;
-};
 
 type TimeSeriesChartProps = {
   title: string;
@@ -25,22 +28,8 @@ type TimeSeriesChartProps = {
   data: TimeSeriesPoint[];
 };
 
-const tooltipStyle = {
-  backgroundColor: "hsl(var(--card))",
-  border: "1px solid hsl(var(--border))",
-  borderRadius: "10px",
-  color: "hsl(var(--foreground))",
-};
-
 function TimeSeriesChartImpl({ title, color, unit = "", description, data }: TimeSeriesChartProps) {
-  const chartData = useMemo(
-    () =>
-      data.map((point) => ({
-        t: point.ts,
-        v: Number.isFinite(point.value) ? point.value : 0,
-      })),
-    [data],
-  );
+  const chartData = useMemo(() => buildTimeSeriesChartData(data), [data]);
 
   return (
     <Card className="border-border/60 bg-background/40 backdrop-blur-sm">
@@ -73,12 +62,7 @@ function TimeSeriesChartImpl({ title, color, unit = "", description, data }: Tim
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.35} />
               <XAxis
                 dataKey="t"
-                tickFormatter={(value) =>
-                  new Date(Number(value)).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })
-                }
+                tickFormatter={formatTimeSeriesTickLabel}
                 tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
                 axisLine={false}
                 tickLine={false}
@@ -92,15 +76,9 @@ function TimeSeriesChartImpl({ title, color, unit = "", description, data }: Tim
               />
               <RechartsTooltip
                 isAnimationActive={false}
-                contentStyle={tooltipStyle}
-                labelFormatter={(value) =>
-                  new Date(Number(value)).toLocaleString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
-                  })
-                }
-                formatter={(value: number) => [`${Number(value).toFixed(2)} ${unit}`.trim(), title]}
+                contentStyle={timeSeriesTooltipStyle}
+                labelFormatter={formatTimeSeriesTooltipLabel}
+                formatter={(value: number) => formatTimeSeriesTooltipValue(value, unit, title)}
               />
               <Line
                 type="monotone"

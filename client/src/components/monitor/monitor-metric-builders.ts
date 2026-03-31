@@ -1,0 +1,241 @@
+import type {
+  MonitorChartSeries,
+  MonitorHistory,
+  MonitorMetricGroup,
+  MonitorSnapshot,
+  SeriesPoint,
+} from "@/components/monitor/monitor-types";
+import { getStatus } from "@/components/monitor/monitor-format-utils";
+
+export function buildMetricGroups(snapshot: MonitorSnapshot, history: MonitorHistory): MonitorMetricGroup[] {
+  return [
+    {
+      title: "Infrastructure",
+      description: "Core runtime capacity and node responsiveness.",
+      items: [
+        {
+          label: "CPU",
+          value: snapshot.cpuPercent,
+          unit: "%",
+          description: "Processor utilization across active workers.",
+          status: getStatus(snapshot.cpuPercent, 70, 85),
+          history: history.cpuPercent.map((point) => point.value),
+        },
+        {
+          label: "RAM",
+          value: snapshot.ramPercent,
+          unit: "%",
+          description: "Estimated memory consumption used by runtime processes.",
+          status: getStatus(snapshot.ramPercent, 75, 90),
+          history: history.ramPercent.map((point) => point.value),
+        },
+        {
+          label: "Event Loop Lag",
+          value: snapshot.eventLoopLagMs,
+          unit: "ms",
+          description: "Delay between scheduled and actual event-loop execution.",
+          status: getStatus(snapshot.eventLoopLagMs, 80, 150),
+          history: history.eventLoopLagMs.map((point) => point.value),
+        },
+        {
+          label: "Worker Count",
+          value: snapshot.workerCount,
+          unit: "",
+          description: "Current active worker processes handling requests.",
+          status: getStatus(snapshot.workerCount, Math.max(1, snapshot.maxWorkers - 1), snapshot.maxWorkers),
+          history: history.workerCount.map((point) => point.value),
+          decimals: 0,
+        },
+      ],
+    },
+    {
+      title: "Application",
+      description: "Request throughput, latency behavior, and request pressure.",
+      items: [
+        {
+          label: "Requests / Sec",
+          value: snapshot.requestsPerSec,
+          unit: "rps",
+          description: "Incoming request throughput per second.",
+          status: getStatus(snapshot.requestsPerSec, 80, 140),
+          history: history.requestsPerSec.map((point) => point.value),
+        },
+        {
+          label: "p95 Latency",
+          value: snapshot.p95LatencyMs,
+          unit: "ms",
+          description: "95th percentile response time for recent traffic.",
+          status: getStatus(snapshot.p95LatencyMs, 450, 900),
+          history: history.p95LatencyMs.map((point) => point.value),
+        },
+        {
+          label: "Error Rate",
+          value: snapshot.errorRate,
+          unit: "%",
+          description: "Estimated percentage of failed application operations.",
+          status: getStatus(snapshot.errorRate, 2, 5),
+          history: history.errorRate.map((point) => point.value),
+        },
+        {
+          label: "Active Requests",
+          value: snapshot.activeRequests,
+          unit: "",
+          description: "Number of requests currently being processed.",
+          status: getStatus(snapshot.activeRequests, 80, 130),
+          history: history.activeRequests.map((point) => point.value),
+          decimals: 0,
+        },
+      ],
+    },
+    {
+      title: "Database",
+      description: "Database timing, query pressure, and connection health.",
+      items: [
+        {
+          label: "Avg Query Time",
+          value: snapshot.avgQueryTimeMs,
+          unit: "ms",
+          description: "Average time spent by database operations.",
+          status: getStatus(snapshot.avgQueryTimeMs, 300, 900),
+          history: history.avgQueryTimeMs.map((point) => point.value),
+        },
+        {
+          label: "Slow Queries",
+          value: snapshot.slowQueryCount,
+          unit: "",
+          description: "Count of queries exceeding slow-query threshold.",
+          status: getStatus(snapshot.slowQueryCount, 1, 3),
+          history: history.slowQueryCount.map((point) => point.value),
+          decimals: 0,
+        },
+        {
+          label: "Connections",
+          value: snapshot.connections,
+          unit: "",
+          description: "Current database connections in use and waiting.",
+          status: getStatus(snapshot.connections, 12, 20),
+          history: history.connections.map((point) => point.value),
+          decimals: 0,
+        },
+        {
+          label: "Rollup Queue",
+          value: snapshot.rollupRefreshPendingCount,
+          unit: "",
+          description: "Pending collection summary slices waiting for background refresh.",
+          status: getStatus(snapshot.rollupRefreshPendingCount, 5, 15),
+          history: history.rollupRefreshPendingCount.map((point) => point.value),
+          decimals: 0,
+        },
+        {
+          label: "Rollup Retry",
+          value: snapshot.rollupRefreshRetryCount,
+          unit: "",
+          description: "Pending rollup slices that previously failed and are scheduled to retry.",
+          status: getStatus(snapshot.rollupRefreshRetryCount, 1, 3),
+          history: history.rollupRefreshRetryCount.map((point) => point.value),
+          decimals: 0,
+        },
+        {
+          label: "Rollup Refresh Lag",
+          value: snapshot.rollupRefreshOldestPendingAgeMs,
+          unit: "ms",
+          description: "Age of the oldest pending rollup slice in the background refresh queue.",
+          status: getStatus(snapshot.rollupRefreshOldestPendingAgeMs, 30_000, 120_000),
+          history: history.rollupRefreshOldestPendingAgeMs.map((point) => point.value),
+          decimals: 0,
+        },
+      ],
+    },
+    {
+      title: "Security & Resilience",
+      description: "Authentication pressure, rate-limit spikes, and circuit-breaker activity.",
+      items: [
+        {
+          label: "401 Spike (5s)",
+          value: snapshot.status401Count,
+          unit: "",
+          description: "Unauthorized responses observed in the latest 5-second window.",
+          status: getStatus(snapshot.status401Count, 10, 25),
+          history: history.status401Count.map((point) => point.value),
+          decimals: 0,
+        },
+        {
+          label: "403 Spike (5s)",
+          value: snapshot.status403Count,
+          unit: "",
+          description: "Forbidden responses observed in the latest 5-second window.",
+          status: getStatus(snapshot.status403Count, 10, 25),
+          history: history.status403Count.map((point) => point.value),
+          decimals: 0,
+        },
+        {
+          label: "429 Spike (5s)",
+          value: snapshot.status429Count,
+          unit: "",
+          description: "Rate-limited responses observed in the latest 5-second window.",
+          status: getStatus(snapshot.status429Count, 12, 30),
+          history: history.status429Count.map((point) => point.value),
+          decimals: 0,
+        },
+        {
+          label: "Open Circuits",
+          value: snapshot.openCircuitCount,
+          unit: "",
+          description: "Total open circuit breakers across local + cluster runtime signals.",
+          status: getStatus(snapshot.openCircuitCount, 1, 2),
+          history: history.openCircuitCount.map((point) => point.value),
+          decimals: 0,
+        },
+      ],
+    },
+    {
+      title: "AI",
+      description: "AI service response performance and queue stability.",
+      items: [
+        {
+          label: "AI Latency",
+          value: snapshot.aiLatencyMs,
+          unit: "ms",
+          description: "Average AI processing response duration.",
+          status: getStatus(snapshot.aiLatencyMs, 600, 1200),
+          history: history.aiLatencyMs.map((point) => point.value),
+        },
+        {
+          label: "Queue Size",
+          value: snapshot.queueSize,
+          unit: "",
+          description: "Pending AI-related tasks waiting for execution.",
+          status: getStatus(snapshot.queueSize, 4, 8),
+          history: history.queueSize.map((point) => point.value),
+          decimals: 0,
+        },
+        {
+          label: "Fail Rate",
+          value: snapshot.aiFailRate,
+          unit: "%",
+          description: "Percentage of AI operations ending in failure.",
+          status: getStatus(snapshot.aiFailRate, 2, 5),
+          history: history.aiFailRate.map((point) => point.value),
+        },
+      ],
+    },
+  ];
+}
+
+export function buildChartSeries(history: MonitorHistory): MonitorChartSeries[] {
+  return [
+    { title: "CPU %", description: "Rolling CPU utilization trend for runtime workers.", color: "#f59e0b", unit: "%", data: history.cpuPercent },
+    { title: "RAM %", description: "Rolling memory consumption percentage trend.", color: "#3b82f6", unit: "%", data: history.ramPercent },
+    { title: "p95 Latency", description: "Rolling 95th percentile latency trend.", color: "#64748b", unit: "ms", data: history.p95LatencyMs },
+    { title: "Error Rate", description: "Rolling failure-rate trend across system operations.", color: "#ef4444", unit: "%", data: history.errorRate },
+    { title: "DB Latency", description: "Rolling database latency trend.", color: "#8b5cf6", unit: "ms", data: history.avgQueryTimeMs },
+    { title: "AI Latency", description: "Rolling AI service latency trend.", color: "#14b8a6", unit: "ms", data: history.aiLatencyMs },
+  ];
+}
+
+export function buildForecastSeries(forecastProjection: number[], lastUpdated: number | null): SeriesPoint[] {
+  return forecastProjection.map((value, index) => ({
+    ts: (lastUpdated || 0) + (index * 5000),
+    value,
+  }));
+}
