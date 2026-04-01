@@ -1,6 +1,9 @@
 import type { SystemSnapshot } from "../intelligence/types";
 import type { CircuitState } from "./circuitBreaker";
-import type { InternalMonitorSnapshot } from "./runtime-monitor-types";
+import type {
+  InternalMonitorAlert,
+  InternalMonitorSnapshot,
+} from "./runtime-monitor-types";
 import type { WorkerControlState, WorkerMetricsPayload } from "./worker-ipc";
 import { getRamPercent, roundMetric } from "./runtime-monitor-metrics";
 
@@ -191,6 +194,60 @@ export function appendCappedHistoryValue(series: number[], value: number, maxLen
   if (series.length > maxLength) {
     series.splice(0, series.length - maxLength);
   }
+}
+
+export function blendRuntimeLatencyValue(current: number, next: number): number {
+  if (!Number.isFinite(next) || next < 0) {
+    return Math.max(0, current || 0);
+  }
+  if (!Number.isFinite(current) || current <= 0) {
+    return next;
+  }
+  return (current * 0.75) + (next * 0.25);
+}
+
+export function decayRuntimeLatencyValue(params: {
+  lastLatencyMs: number;
+  lastObservedAt: number;
+  now: number;
+  staleAfterMs: number;
+  halfLifeMs: number;
+}): number {
+  if (!Number.isFinite(params.lastLatencyMs) || params.lastLatencyMs <= 0) {
+    return 0;
+  }
+  if (params.lastObservedAt <= 0) {
+    return Math.max(0, params.lastLatencyMs);
+  }
+
+  const idleMs = Math.max(0, params.now - params.lastObservedAt);
+  if (idleMs <= params.staleAfterMs) {
+    return Math.max(0, params.lastLatencyMs);
+  }
+
+  const decayWindowMs = idleMs - params.staleAfterMs;
+  const decayFactor = Math.exp((-Math.LN2 * decayWindowMs) / params.halfLifeMs);
+  return Math.max(0, params.lastLatencyMs * decayFactor);
+}
+
+export function normalizeRuntimeRollupRefreshSnapshot(
+  nextSnapshot: Partial<RuntimeRollupRefreshSnapshot> | null | undefined,
+): RuntimeRollupRefreshSnapshot {
+  return {
+    pendingCount: Math.max(0, Number(nextSnapshot?.pendingCount || 0)),
+    runningCount: Math.max(0, Number(nextSnapshot?.runningCount || 0)),
+    retryCount: Math.max(0, Number(nextSnapshot?.retryCount || 0)),
+    oldestPendingAgeMs: Math.max(0, Number(nextSnapshot?.oldestPendingAgeMs || 0)),
+  };
+}
+
+export function buildRuntimeAlertHistorySignature(
+  alerts: InternalMonitorAlert[],
+): string {
+  return alerts
+    .map((alert) => `${alert.id}:${alert.severity}:${alert.message}`)
+    .sort()
+    .join("|");
 }
 
 export function calculateRuntimeCpuPercent(params: {

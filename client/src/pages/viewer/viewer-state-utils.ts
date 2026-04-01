@@ -1,10 +1,84 @@
 import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
 
+export type ViewerStatePatch = {
+  rows?: DataRowWithId[];
+  headers?: string[];
+  headersLocked?: boolean;
+  selectedColumns?: Set<string>;
+  columnFilters?: ColumnFilter[];
+  search?: string;
+  importName?: string;
+  emptyHint?: string;
+  isCleared?: boolean;
+  currentPage?: number;
+  currentPageSize?: number;
+  totalRows?: number;
+  nextCursor?: string | null;
+  pageCursorHistory?: Array<string | null>;
+  loading?: boolean;
+  loadingMore?: boolean;
+};
+
 export function getViewerActiveColumnFilters(columnFilters: ColumnFilter[]) {
   return columnFilters.filter((filter) => {
     const normalizedValue = filter.value.trim();
     return filter.column.trim() !== "" && normalizedValue !== "";
   });
+}
+
+export function createViewerPaginationResetState(rowsPerPage: number): ViewerStatePatch {
+  return {
+    currentPage: 1,
+    currentPageSize: rowsPerPage,
+    totalRows: 0,
+    nextCursor: null,
+    pageCursorHistory: [null],
+  };
+}
+
+export function createViewerImportResetState(
+  importName: string,
+  rowsPerPage: number,
+): ViewerStatePatch {
+  return {
+    rows: [],
+    headers: [],
+    headersLocked: false,
+    selectedColumns: new Set<string>(),
+    importName,
+    emptyHint: "",
+    isCleared: false,
+    ...createViewerPaginationResetState(rowsPerPage),
+  };
+}
+
+export function createViewerClearedState(rowsPerPage: number): ViewerStatePatch {
+  return {
+    rows: [],
+    headers: [],
+    headersLocked: false,
+    selectedColumns: new Set<string>(),
+    columnFilters: [],
+    search: "",
+    importName: "Data Viewer",
+    emptyHint: "Open file in Saved tab first to view.",
+    isCleared: true,
+    loading: false,
+    loadingMore: false,
+    ...createViewerPaginationResetState(rowsPerPage),
+  };
+}
+
+export function createViewerSearchTooShortState(rowsPerPage: number): ViewerStatePatch {
+  return {
+    rows: [],
+    totalRows: 0,
+    currentPageSize: rowsPerPage,
+    nextCursor: null,
+    pageCursorHistory: [null],
+    loading: false,
+    loadingMore: false,
+  };
 }
 
 export function getViewerVisibleHeaders(headers: string[], selectedColumns: Set<string>) {

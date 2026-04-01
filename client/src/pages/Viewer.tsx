@@ -5,11 +5,6 @@ import { getImportData } from "@/lib/api";
 import { ViewerContent } from "@/pages/viewer/ViewerContent";
 import { ViewerPageHeader } from "@/pages/viewer/ViewerPageHeader";
 import {
-  exportViewerRowsToCsv,
-  exportViewerRowsToExcel,
-  exportViewerRowsToPdf,
-} from "@/pages/viewer/export";
-import {
   appendViewerFilter,
   removeViewerFilterAt,
   updateViewerFilterAt,
@@ -19,13 +14,20 @@ import {
   normalizeViewerPageResult,
   resolveViewerImportName,
 } from "@/pages/viewer/page-utils";
-import { executeViewerExport } from "@/pages/viewer/viewer-export-actions";
+import {
+  runViewerCsvExport,
+  runViewerExcelExport,
+  runViewerPdfExport,
+} from "@/pages/viewer/viewer-export-actions";
 import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
 import {
   loadViewerPagedExportRows,
   resolveViewerImmediateExportRows,
 } from "@/pages/viewer/viewer-export-loader";
 import {
+  createViewerClearedState,
+  createViewerImportResetState,
+  createViewerSearchTooShortState,
   deselectViewerColumns,
   getViewerActiveColumnFilters,
   getViewerGridTemplateColumns,
@@ -36,6 +38,7 @@ import {
   pruneViewerSelectedRowIds,
   toggleViewerColumnSelection,
   toggleViewerRowSelection,
+  type ViewerStatePatch,
 } from "@/pages/viewer/viewer-state-utils";
 import { extractHeadersFromRows, filterViewerRows } from "@/pages/viewer/utils";
 
@@ -160,6 +163,28 @@ export default function Viewer({
     setSelectAllFiltered((previous) => (previous ? false : previous));
   }, []);
 
+  const applyViewerStatePatch = useCallback((patch: ViewerStatePatch) => {
+    if (patch.rows !== undefined) setRows(patch.rows);
+    if (patch.headers !== undefined) setHeaders(patch.headers);
+    if (patch.headersLocked !== undefined) {
+      setHeadersLocked(patch.headersLocked);
+      headersLockedRef.current = patch.headersLocked;
+    }
+    if (patch.selectedColumns !== undefined) setSelectedColumns(patch.selectedColumns);
+    if (patch.columnFilters !== undefined) setColumnFilters(patch.columnFilters);
+    if (patch.search !== undefined) setSearch(patch.search);
+    if (patch.importName !== undefined) setImportName(patch.importName);
+    if (patch.emptyHint !== undefined) setEmptyHint(patch.emptyHint);
+    if (patch.isCleared !== undefined) setIsCleared(patch.isCleared);
+    if (patch.currentPage !== undefined) setCurrentPage(patch.currentPage);
+    if (patch.currentPageSize !== undefined) setCurrentPageSize(patch.currentPageSize);
+    if (patch.totalRows !== undefined) setTotalRows(patch.totalRows);
+    if (patch.nextCursor !== undefined) setNextCursor(patch.nextCursor);
+    if (patch.pageCursorHistory !== undefined) setPageCursorHistory(patch.pageCursorHistory);
+    if (patch.loading !== undefined) setLoading(patch.loading);
+    if (patch.loadingMore !== undefined) setLoadingMore(patch.loadingMore);
+  }, []);
+
   const fetchData = useCallback(async (
     id: string,
     options?: {
@@ -244,44 +269,18 @@ export default function Viewer({
   useEffect(() => {
     if (importId) {
       cancelActiveFetch();
-      setImportName(resolveViewerImportName());
-      setRows([]);
-      setHeaders([]);
-      setHeadersLocked(false);
-      headersLockedRef.current = false;
-      setSelectedColumns(new Set());
+      applyViewerStatePatch(
+        createViewerImportResetState(resolveViewerImportName(), ROWS_PER_PAGE),
+      );
       clearSelectionState();
-      setEmptyHint("");
-      setIsCleared(false);
-      setCurrentPage(1);
-      setCurrentPageSize(ROWS_PER_PAGE);
-      setTotalRows(0);
-      setNextCursor(null);
-      setPageCursorHistory([null]);
       return;
     }
 
     cancelActiveFetch();
     activeRequestIdRef.current += 1;
-    setRows([]);
-    setHeaders([]);
-    setHeadersLocked(false);
-    headersLockedRef.current = false;
-    setSelectedColumns(new Set());
-    setColumnFilters([]);
-    setSearch("");
     clearSelectionState();
-    setImportName("Data Viewer");
-    setEmptyHint("Open file in Saved tab first to view.");
-    setIsCleared(true);
-    setCurrentPage(1);
-    setCurrentPageSize(ROWS_PER_PAGE);
-    setTotalRows(0);
-    setNextCursor(null);
-    setPageCursorHistory([null]);
-    setLoading(false);
-    setLoadingMore(false);
-  }, [ROWS_PER_PAGE, cancelActiveFetch, clearSelectionState, importId]);
+    applyViewerStatePatch(createViewerClearedState(ROWS_PER_PAGE));
+  }, [ROWS_PER_PAGE, applyViewerStatePatch, cancelActiveFetch, clearSelectionState, importId]);
 
   useEffect(() => {
     clearSelectionState();
@@ -299,13 +298,7 @@ export default function Viewer({
     if (debouncedSearch && debouncedSearch.length < MIN_SEARCH_LENGTH) {
       cancelActiveFetch();
       activeRequestIdRef.current += 1;
-      setRows([]);
-      setTotalRows(0);
-      setCurrentPageSize(ROWS_PER_PAGE);
-      setNextCursor(null);
-      setPageCursorHistory([null]);
-      setLoading(false);
-      setLoadingMore(false);
+      applyViewerStatePatch(createViewerSearchTooShortState(ROWS_PER_PAGE));
       return;
     }
 
@@ -314,6 +307,7 @@ export default function Viewer({
     void fetchData(importId, { page: 1, cursor: null });
   }, [
     ROWS_PER_PAGE,
+    applyViewerStatePatch,
     cancelActiveFetch,
     clearSelectionState,
     debouncedColumnFilters,
@@ -421,29 +415,19 @@ export default function Viewer({
     exportAbortControllerRef.current?.abort();
     exportAbortControllerRef.current = null;
     activeRequestIdRef.current += 1;
-    setRows([]);
-    setHeaders([]);
-    setHeadersLocked(false);
-    headersLockedRef.current = false;
-    setSelectedColumns(new Set());
-    setColumnFilters([]);
-    setSearch("");
     clearSelectionState();
-    setImportName("Data Viewer");
-    setEmptyHint("Open file in Saved tab first to view.");
-    setTotalRows(0);
-    setCurrentPage(1);
-    setCurrentPageSize(ROWS_PER_PAGE);
-    setNextCursor(null);
-    setPageCursorHistory([null]);
-    setLoading(false);
-    setLoadingMore(false);
-    setIsCleared(true);
-  }, [ROWS_PER_PAGE, cancelActiveFetch, clearSelectionState]);
+    applyViewerStatePatch(createViewerClearedState(ROWS_PER_PAGE));
+  }, [ROWS_PER_PAGE, applyViewerStatePatch, cancelActiveFetch, clearSelectionState]);
 
   const toggleColumn = (column: string) => {
     setSelectedColumns((previous) => toggleViewerColumnSelection(previous, column));
   };
+  const handleBackToSaved = useCallback(() => onNavigate("saved"), [onNavigate]);
+  const handleToggleFilters = useCallback(() => setShowFilters((previous) => !previous), []);
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+    setCurrentPage(1);
+  }, []);
 
   const selectAllColumns = () => {
     setSelectedColumns(new Set(headers));
@@ -515,18 +499,21 @@ export default function Viewer({
       buildViewerActiveFilterChips({
         search,
         activeColumnFilters,
-        onClearSearch: () => {
-          setSearch("");
-          setCurrentPage(1);
-        },
+        onClearSearch: () => handleSearchChange(""),
         onRemoveFilter: removeFilter,
       }),
-    [activeColumnFilters, removeFilter, search],
+    [activeColumnFilters, handleSearchChange, removeFilter, search],
   );
 
+  const startPdfExport = useCallback(() => { exportInFlightRef.current = "pdf"; setExportingPdf(true); }, []);
+  const finishPdfExport = useCallback(() => { exportInFlightRef.current = null; setExportingPdf(false); }, []);
+  const startExcelExport = useCallback(() => { exportInFlightRef.current = "excel"; setExportingExcel(true); }, []);
+  const finishExcelExport = useCallback(() => { exportInFlightRef.current = null; setExportingExcel(false); }, []);
+
   const exportToCSV = async (exportFiltered = false, exportSelected = false) => {
-    await executeViewerExport({
-      kind: "CSV",
+    await runViewerCsvExport({
+      headers: visibleHeaders,
+      importName,
       exportFiltered,
       exportSelected,
       totalRows,
@@ -536,21 +523,13 @@ export default function Viewer({
       exportingPdf,
       isAnotherExportInFlight: exportInFlightRef.current !== null,
       loadRows: loadRowsForExport,
-      performExport: (rowsToExport) => {
-        exportViewerRowsToCsv({
-          headers: visibleHeaders,
-          rows: rowsToExport,
-          importName,
-          exportFiltered,
-          exportSelected,
-        });
-      },
     });
   };
 
   const exportToPDF = async (exportFiltered = false, exportSelected = false) => {
-    await executeViewerExport({
-      kind: "PDF",
+    await runViewerPdfExport({
+      headers: visibleHeaders,
+      importName,
       exportFiltered,
       exportSelected,
       totalRows,
@@ -559,29 +538,16 @@ export default function Viewer({
       exportingExcel,
       exportingPdf,
       isAnotherExportInFlight: exportInFlightRef.current !== null,
-      beforeRun: () => {
-        exportInFlightRef.current = "pdf";
-        setExportingPdf(true);
-      },
-      afterRun: () => {
-        exportInFlightRef.current = null;
-        setExportingPdf(false);
-      },
+      beforeRun: startPdfExport,
+      afterRun: finishPdfExport,
       loadRows: loadRowsForExport,
-      performExport: (rowsToExport) =>
-        exportViewerRowsToPdf({
-          headers: visibleHeaders,
-          rows: rowsToExport,
-          importName,
-          exportFiltered,
-          exportSelected,
-        }),
     });
   };
 
   const exportToExcel = async (exportFiltered = false, exportSelected = false) => {
-    await executeViewerExport({
-      kind: "Excel",
+    await runViewerExcelExport({
+      headers: visibleHeaders,
+      importName,
       exportFiltered,
       exportSelected,
       totalRows,
@@ -590,25 +556,23 @@ export default function Viewer({
       exportingExcel,
       exportingPdf,
       isAnotherExportInFlight: exportInFlightRef.current !== null,
-      beforeRun: () => {
-        exportInFlightRef.current = "excel";
-        setExportingExcel(true);
-      },
-      afterRun: () => {
-        exportInFlightRef.current = null;
-        setExportingExcel(false);
-      },
+      beforeRun: startExcelExport,
+      afterRun: finishExcelExport,
       loadRows: loadRowsForExport,
-      performExport: (rowsToExport) =>
-        exportViewerRowsToExcel({
-          headers: visibleHeaders,
-          rows: rowsToExport,
-          importName,
-          exportFiltered,
-          exportSelected,
-        }),
     });
   };
+
+  const handleExportCsv = useCallback((exportFiltered = false, exportSelected = false) => {
+    void exportToCSV(exportFiltered, exportSelected);
+  }, [exportToCSV]);
+
+  const handleExportPdf = useCallback((exportFiltered = false, exportSelected = false) => {
+    void exportToPDF(exportFiltered, exportSelected);
+  }, [exportToPDF]);
+
+  const handleExportExcel = useCallback((exportFiltered = false, exportSelected = false) => {
+    void exportToExcel(exportFiltered, exportSelected);
+  }, [exportToExcel]);
 
   return (
     <OperationalPage width="content">
@@ -628,22 +592,16 @@ export default function Viewer({
         filteredRowsCount={filteredRows.length}
         selectedRowCount={selectedRowIds.size}
         hasFilteredSubset={hasFilteredSubset}
-        onBack={() => onNavigate("saved")}
+        onBack={handleBackToSaved}
         onShowColumnSelectorChange={setShowColumnSelector}
         onToggleColumn={toggleColumn}
         onSelectAllColumns={selectAllColumns}
         onDeselectAllColumns={deselectAllColumns}
-        onToggleFilters={() => setShowFilters((previous) => !previous)}
+        onToggleFilters={handleToggleFilters}
         onClearAllData={clearAllData}
-        onExportCsv={(exportFiltered, exportSelected) => {
-          void exportToCSV(exportFiltered, exportSelected);
-        }}
-        onExportPdf={(exportFiltered, exportSelected) => {
-          void exportToPDF(exportFiltered, exportSelected);
-        }}
-        onExportExcel={(exportFiltered, exportSelected) => {
-          void exportToExcel(exportFiltered, exportSelected);
-        }}
+        onExportCsv={handleExportCsv}
+        onExportPdf={handleExportPdf}
+        onExportExcel={handleExportExcel}
       />
 
       <ViewerContent
@@ -679,15 +637,12 @@ export default function Viewer({
         hasNextPage={hasNextPage}
         hasPreviousPage={hasPreviousPage}
         loadingMore={loadingMore}
-        onBackToSaved={() => onNavigate("saved")}
+        onBackToSaved={handleBackToSaved}
         onAddFilter={addFilter}
         onClearAllFilters={clearAllFilters}
         onUpdateFilter={updateFilter}
         onRemoveFilter={removeFilter}
-        onSearchChange={(value) => {
-          setSearch(value);
-          setCurrentPage(1);
-        }}
+        onSearchChange={handleSearchChange}
         onToggleRowSelection={toggleRowSelection}
         onToggleSelectAllFiltered={toggleSelectAllFiltered}
         onClearSelection={clearSelectionState}

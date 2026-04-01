@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  createViewerClearedState,
+  createViewerImportResetState,
+  createViewerPaginationResetState,
+  createViewerSearchTooShortState,
   deselectViewerColumns,
   getViewerActiveColumnFilters,
   getViewerGridTemplateColumns,
@@ -65,4 +69,39 @@ test("viewer selection helpers preserve immutable selection behavior", () => {
   assert.deepEqual(Array.from(deselectViewerColumns(["name", "amount"])), ["name"]);
   assert.deepEqual(Array.from(toggleViewerRowSelection(new Set([1, 2]), 2)), [1]);
   assert.deepEqual(Array.from(getViewerSelectAllFilteredRowIds(rows)), [1, 3]);
+});
+
+test("viewer reset state builders return stable defaults", () => {
+  assert.deepEqual(createViewerPaginationResetState(100), {
+    currentPage: 1,
+    currentPageSize: 100,
+    totalRows: 0,
+    nextCursor: null,
+    pageCursorHistory: [null],
+  });
+
+  const importReset = createViewerImportResetState("April Import", 100);
+  assert.equal(importReset.importName, "April Import");
+  assert.equal(importReset.emptyHint, "");
+  assert.equal(importReset.isCleared, false);
+  assert.deepEqual(importReset.rows, []);
+  assert.deepEqual(importReset.headers, []);
+  assert.equal(importReset.selectedColumns?.size, 0);
+
+  const clearedReset = createViewerClearedState(100);
+  assert.equal(clearedReset.importName, "Data Viewer");
+  assert.equal(clearedReset.emptyHint, "Open file in Saved tab first to view.");
+  assert.equal(clearedReset.isCleared, true);
+  assert.deepEqual(clearedReset.columnFilters, []);
+  assert.equal(clearedReset.search, "");
+
+  assert.deepEqual(createViewerSearchTooShortState(100), {
+    rows: [],
+    totalRows: 0,
+    currentPageSize: 100,
+    nextCursor: null,
+    pageCursorHistory: [null],
+    loading: false,
+    loadingMore: false,
+  });
 });

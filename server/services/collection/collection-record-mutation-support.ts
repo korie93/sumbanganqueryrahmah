@@ -1,9 +1,97 @@
 import { badRequest } from "../../http/errors";
 import { logger } from "../../lib/logger";
+import {
+  removeCollectionReceiptFile,
+  saveCollectionReceipt,
+} from "../../routes/collection-receipt.service";
+import {
+  ensureLooseObject,
+  type CollectionReceiptPayload,
+} from "../../routes/collection.validation";
+import type { CreateCollectionRecordReceiptInput } from "../../storage-postgres";
 import type { CollectionStoragePort } from "./collection-service-support";
-import { readCollectionReceiptMetadataList } from "./collection-record-mutation-helpers";
+import {
+  buildCreateReceiptInput,
+  buildValidationDraftFromMetadata,
+  readCollectionReceiptMetadataList,
+  readUploadedReceiptRows,
+  type MultipartCollectionPayload,
+  type NormalizedCollectionReceiptMetadata,
+} from "./collection-record-mutation-helpers";
 
 type CollectionAuditStorage = Pick<CollectionStoragePort, "createAuditLog">;
+type CollectionReceiptMutationBody = MultipartCollectionPayload & {
+  receipt?: unknown;
+  receipts?: unknown;
+};
+
+export type StoredCollectionMutationReceipt = Awaited<
+  ReturnType<typeof saveCollectionReceipt>
+>;
+
+function readCollectionReceiptPayloads(
+  body: CollectionReceiptMutationBody,
+): CollectionReceiptPayload[] {
+  const receiptPayload = ensureLooseObject(body.receipt) as CollectionReceiptPayload | null;
+
+  return [
+    ...(receiptPayload ? [receiptPayload] : []),
+    ...(Array.isArray(body.receipts)
+      ? body.receipts
+          .map((item) => ensureLooseObject(item) as CollectionReceiptPayload | null)
+          .filter((item): item is CollectionReceiptPayload => Boolean(item))
+      : []),
+  ];
+}
+
+export async function collectStoredCollectionReceipts(
+  body: CollectionReceiptMutationBody,
+): Promise<StoredCollectionMutationReceipt[]> {
+  const storedReceipts: StoredCollectionMutationReceipt[] = [...readUploadedReceiptRows(body)];
+
+  for (const receipt of readCollectionReceiptPayloads(body)) {
+    storedReceipts.push(await saveCollectionReceipt(receipt));
+  }
+
+  return storedReceipts;
+}
+
+export function buildCollectionNewReceiptInputs(
+  uploadedReceipts: CreateCollectionRecordReceiptInput[],
+  metadata: NormalizedCollectionReceiptMetadata[],
+): CreateCollectionRecordReceiptInput[] {
+  return uploadedReceipts.map((receipt, index) =>
+    buildCreateReceiptInput(receipt, metadata[index] || { receiptId: null, receiptAmountCents: null, extractedAmountCents: null, extractionStatus: null, extractionConfidence: null, receiptDate: null, receiptReference: null, fileHash: null }),
+  );
+}
+
+export function buildCollectionValidationDraftsFromNewReceipts(
+  newReceiptInputs: CreateCollectionRecordReceiptInput[],
+) {
+  return newReceiptInputs.map((receipt) =>
+    buildValidationDraftFromMetadata({
+      metadata: {
+        receiptId: null,
+        receiptAmountCents: receipt.receiptAmountCents ?? null,
+        extractedAmountCents: receipt.extractedAmountCents ?? null,
+        extractionStatus: receipt.extractionStatus ?? null,
+        extractionConfidence: receipt.extractionConfidence ?? null,
+        receiptDate: receipt.receiptDate ?? null,
+        receiptReference: receipt.receiptReference ?? null,
+        fileHash: receipt.fileHash ?? null,
+      },
+      originalFileName: receipt.originalFileName,
+    }),
+  );
+}
+
+export async function cleanupStoredCollectionReceipts(
+  receipts: Array<Pick<CreateCollectionRecordReceiptInput, "storagePath">>,
+) {
+  for (const receipt of receipts) {
+    await removeCollectionReceiptFile(receipt.storagePath);
+  }
+}
 
 export async function logRejectedCollectionPurgeAttempt(
   storage: CollectionAuditStorage,

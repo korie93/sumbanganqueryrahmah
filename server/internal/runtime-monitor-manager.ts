@@ -23,9 +23,13 @@ import {
 } from "./runtime-monitor-metrics";
 import {
   appendCappedHistoryValue,
+  blendRuntimeLatencyValue,
+  buildRuntimeAlertHistorySignature,
   buildInternalRuntimeMonitorSnapshot,
   buildWorkerMetricsPayload,
   calculateRuntimeCpuPercent,
+  decayRuntimeLatencyValue,
+  normalizeRuntimeRollupRefreshSnapshot,
   toRuntimeIntelligenceSnapshot,
 } from "./runtime-monitor-manager-utils";
 import type {
@@ -183,35 +187,23 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
 
   function observeDbLatency(ms: number) {
     if (!Number.isFinite(ms) || ms < 0) return;
-    if (lastDbLatencyMs <= 0) {
-      lastDbLatencyMs = ms;
-    } else {
-      lastDbLatencyMs = (lastDbLatencyMs * 0.75) + (ms * 0.25);
-    }
+    lastDbLatencyMs = blendRuntimeLatencyValue(lastDbLatencyMs, ms);
   }
 
   function observeAiLatency(ms: number) {
     if (!Number.isFinite(ms) || ms < 0) return;
-    if (lastAiLatencyMs <= 0) {
-      lastAiLatencyMs = ms;
-    } else {
-      lastAiLatencyMs = (lastAiLatencyMs * 0.75) + (ms * 0.25);
-    }
+    lastAiLatencyMs = blendRuntimeLatencyValue(lastAiLatencyMs, ms);
     lastAiLatencyObservedAt = Date.now();
   }
 
   function getEffectiveAiLatencyMs(now = Date.now()): number {
-    if (!Number.isFinite(lastAiLatencyMs) || lastAiLatencyMs <= 0) return 0;
-    if (lastAiLatencyObservedAt <= 0) return Math.max(0, lastAiLatencyMs);
-
-    const idleMs = Math.max(0, now - lastAiLatencyObservedAt);
-    if (idleMs <= options.aiLatencyStaleAfterMs) {
-      return Math.max(0, lastAiLatencyMs);
-    }
-
-    const decayWindowMs = idleMs - options.aiLatencyStaleAfterMs;
-    const decayFactor = Math.exp((-Math.LN2 * decayWindowMs) / options.aiLatencyDecayHalfLifeMs);
-    return Math.max(0, lastAiLatencyMs * decayFactor);
+    return decayRuntimeLatencyValue({
+      lastLatencyMs: lastAiLatencyMs,
+      lastObservedAt: lastAiLatencyObservedAt,
+      now,
+      staleAfterMs: options.aiLatencyStaleAfterMs,
+      halfLifeMs: options.aiLatencyDecayHalfLifeMs,
+    });
   }
 
   function maybeWarnPgPoolPressure(source: string) {
@@ -304,12 +296,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
 
     try {
       const nextSnapshot = await options.getCollectionRollupRefreshQueueSnapshot();
-      rollupRefreshSnapshot = {
-        pendingCount: Math.max(0, Number(nextSnapshot?.pendingCount || 0)),
-        runningCount: Math.max(0, Number(nextSnapshot?.runningCount || 0)),
-        retryCount: Math.max(0, Number(nextSnapshot?.retryCount || 0)),
-        oldestPendingAgeMs: Math.max(0, Number(nextSnapshot?.oldestPendingAgeMs || 0)),
-      };
+      rollupRefreshSnapshot = normalizeRuntimeRollupRefreshSnapshot(nextSnapshot);
       lastRollupRefreshSnapshotAt = Date.now();
     } catch (error) {
       if (options.apiDebugLogs) {
@@ -416,10 +403,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     try {
       const snapshot = computeInternalMonitorSnapshot();
       const alerts = buildInternalMonitorAlerts(snapshot);
-      const nextSignature = alerts
-        .map((alert) => `${alert.id}:${alert.severity}:${alert.message}`)
-        .sort()
-        .join("|");
+      const nextSignature = buildRuntimeAlertHistorySignature(alerts);
       if (alertHistorySyncInitialized && nextSignature === lastAlertHistorySignature) {
         lastAlertHistorySyncAt = Date.now();
         return;

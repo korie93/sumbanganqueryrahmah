@@ -7,7 +7,7 @@ import {
   getAdminVisibleNicknameValues,
   hasNicknameValue,
 } from "../../routes/collection-access";
-import { removeCollectionReceiptFile, saveCollectionReceipt } from "../../routes/collection-receipt.service";
+import { removeCollectionReceiptFile } from "../../routes/collection-receipt.service";
 import {
   ensureLooseObject,
   isNicknameScopeAllowedForRole,
@@ -16,7 +16,6 @@ import {
   type CollectionBatchValue,
   type CollectionCreatePayload,
   type CollectionDeletePayload,
-  type CollectionReceiptPayload,
   type CollectionUpdatePayload,
 } from "../../routes/collection.validation";
 import type { CollectionStoragePort } from "./collection-service-support";
@@ -33,21 +32,23 @@ import {
   buildCollectionRecordUpdateDraft,
   buildCollectionAuditFieldChanges,
   buildCollectionAuditSnapshot,
-  buildCreateReceiptInput,
   buildReceiptUpdateInput,
   buildValidationDraftFromExistingReceipt,
-  buildValidationDraftFromMetadata,
   normalizeCollectionRecordFields,
   normalizeCollectionReceiptMetadata,
-  readUploadedReceiptRows,
   resolveCollectionAuditReceiptState,
   type MultipartCollectionPayload,
 } from "./collection-record-mutation-helpers";
 import {
+  buildCollectionNewReceiptInputs,
+  buildCollectionValidationDraftsFromNewReceipts,
+  cleanupStoredCollectionReceipts,
+  collectStoredCollectionReceipts,
   logCollectionRecordVersionConflict,
   logRejectedCollectionPurgeAttempt,
   readCollectionReceiptMetadataOrThrow,
   safeCreateCollectionMutationAuditLog,
+  type StoredCollectionMutationReceipt,
 } from "./collection-record-mutation-support";
 
 type RequireUserFn = (user?: AuthenticatedUser) => AuthenticatedUser;
@@ -60,7 +61,7 @@ export class CollectionRecordMutationOperations {
 
   async createRecord(userInput: AuthenticatedUser | undefined, bodyRaw: unknown) {
     const user = this.requireUser(userInput);
-    const uploadedReceipts: Array<Awaited<ReturnType<typeof saveCollectionReceipt>>> = [];
+    const uploadedReceipts: StoredCollectionMutationReceipt[] = [];
     let createdRecordId: string | null = null;
 
     try {
@@ -83,40 +84,11 @@ export class CollectionRecordMutationOperations {
         throw forbidden("Nickname ini tidak dibenarkan untuk role semasa.");
       }
 
-      const receiptPayload = ensureLooseObject(body.receipt) as CollectionReceiptPayload | null;
-      const receiptPayloads = [
-        ...(receiptPayload ? [receiptPayload] : []),
-        ...(Array.isArray(body.receipts)
-          ? body.receipts
-              .map((item) => ensureLooseObject(item) as CollectionReceiptPayload | null)
-              .filter((item): item is CollectionReceiptPayload => Boolean(item))
-          : []),
-      ];
-      uploadedReceipts.push(...readUploadedReceiptRows(body));
-      for (const nextReceipt of receiptPayloads) {
-        uploadedReceipts.push(await saveCollectionReceipt(nextReceipt));
-      }
+      uploadedReceipts.push(...(await collectStoredCollectionReceipts(body)));
       const newReceiptMetadata = readCollectionReceiptMetadataOrThrow(body.newReceiptMetadata)
         .map((item) => normalizeCollectionReceiptMetadata(item));
-      const newReceiptInputs = uploadedReceipts.map((receipt, index) =>
-        buildCreateReceiptInput(
-          receipt,
-          newReceiptMetadata[index] || normalizeCollectionReceiptMetadata({}),
-        ));
-      const validationReceipts = newReceiptInputs.map((receipt) =>
-        buildValidationDraftFromMetadata({
-          metadata: {
-            receiptId: null,
-            receiptAmountCents: receipt.receiptAmountCents ?? null,
-            extractedAmountCents: receipt.extractedAmountCents ?? null,
-            extractionStatus: receipt.extractionStatus ?? null,
-            extractionConfidence: receipt.extractionConfidence ?? null,
-            receiptDate: receipt.receiptDate ?? null,
-            receiptReference: receipt.receiptReference ?? null,
-            fileHash: receipt.fileHash ?? null,
-          },
-          originalFileName: receipt.originalFileName,
-        }));
+      const newReceiptInputs = buildCollectionNewReceiptInputs(uploadedReceipts, newReceiptMetadata);
+      const validationReceipts = buildCollectionValidationDraftsFromNewReceipts(newReceiptInputs);
       const duplicateReceipts = findDuplicateCollectionReceiptHashes(validationReceipts);
       if (duplicateReceipts.length > 0) {
         await safeCreateCollectionMutationAuditLog(this.storage, {
@@ -211,9 +183,7 @@ export class CollectionRecordMutationOperations {
           });
         }
       }
-      for (const uploadedReceipt of uploadedReceipts) {
-        await removeCollectionReceiptFile(uploadedReceipt.storagePath);
-      }
+      await cleanupStoredCollectionReceipts(uploadedReceipts);
       throw err;
     }
   }
@@ -295,7 +265,7 @@ export class CollectionRecordMutationOperations {
       throw forbidden("Forbidden");
     }
 
-    const uploadedReceipts: Array<Awaited<ReturnType<typeof saveCollectionReceipt>>> = [];
+    const uploadedReceipts: StoredCollectionMutationReceipt[] = [];
     try {
       const body = (ensureLooseObject(bodyRaw) || {}) as CollectionUpdatePayload & MultipartCollectionPayload;
       const expectedUpdatedAt = parseRecordVersionTimestamp(body.expectedUpdatedAt);
@@ -336,22 +306,10 @@ export class CollectionRecordMutationOperations {
       }
 
       const shouldRemoveReceipt = body.removeReceipt === true;
-      const receiptPayload = ensureLooseObject(body.receipt) as CollectionReceiptPayload | null;
-      const receiptPayloads = [
-        ...(receiptPayload ? [receiptPayload] : []),
-        ...(Array.isArray(body.receipts)
-          ? body.receipts
-              .map((item) => ensureLooseObject(item) as CollectionReceiptPayload | null)
-              .filter((item): item is CollectionReceiptPayload => Boolean(item))
-          : []),
-      ];
       const removeReceiptIds = Array.isArray(body.removeReceiptIds)
         ? normalizeCollectionStringList(body.removeReceiptIds)
         : [];
-      uploadedReceipts.push(...readUploadedReceiptRows(body));
-      for (const nextReceipt of receiptPayloads) {
-        uploadedReceipts.push(await saveCollectionReceipt(nextReceipt));
-      }
+      uploadedReceipts.push(...(await collectStoredCollectionReceipts(body)));
       const existingReceiptMetadata = readCollectionReceiptMetadataOrThrow(body.existingReceiptMetadata)
         .map((item) => normalizeCollectionReceiptMetadata(item));
       const newReceiptMetadata = readCollectionReceiptMetadataOrThrow(body.newReceiptMetadata)
@@ -397,27 +355,10 @@ export class CollectionRecordMutationOperations {
         targetDraft.receiptReference = metadata.receiptReference;
         targetDraft.fileHash = metadata.fileHash || targetDraft.fileHash || null;
       }
-      const newReceiptInputs = uploadedReceipts.map((receipt, index) =>
-        buildCreateReceiptInput(
-          receipt,
-          newReceiptMetadata[index] || normalizeCollectionReceiptMetadata({}),
-        ));
+      const newReceiptInputs = buildCollectionNewReceiptInputs(uploadedReceipts, newReceiptMetadata);
       const validationReceipts = [
         ...activeExistingDrafts,
-        ...newReceiptInputs.map((receipt) =>
-          buildValidationDraftFromMetadata({
-            metadata: {
-              receiptId: null,
-              receiptAmountCents: receipt.receiptAmountCents ?? null,
-              extractedAmountCents: receipt.extractedAmountCents ?? null,
-              extractionStatus: receipt.extractionStatus ?? null,
-              extractionConfidence: receipt.extractionConfidence ?? null,
-              receiptDate: receipt.receiptDate ?? null,
-              receiptReference: receipt.receiptReference ?? null,
-              fileHash: receipt.fileHash ?? null,
-            },
-            originalFileName: receipt.originalFileName,
-          })),
+        ...buildCollectionValidationDraftsFromNewReceipts(newReceiptInputs),
       ];
       const duplicateReceipts = findDuplicateCollectionReceiptHashes(validationReceipts);
       if (duplicateReceipts.length > 0) {
@@ -457,9 +398,7 @@ export class CollectionRecordMutationOperations {
           buildReceiptUpdateInput(String(draft.receiptId || ""), draft)),
       });
       if (!updated) {
-        for (const uploadedReceipt of uploadedReceipts) {
-          await removeCollectionReceiptFile(uploadedReceipt.storagePath);
-        }
+        await cleanupStoredCollectionReceipts(uploadedReceipts);
         if (expectedUpdatedAt) {
           const freshRecord = await this.storage.getCollectionRecordById(id);
           const freshVersion = freshRecord ? resolveRecordVersionTimestamp(freshRecord) : null;
@@ -557,9 +496,7 @@ export class CollectionRecordMutationOperations {
 
       return { ok: true as const, record: updated };
     } catch (err) {
-      for (const uploadedReceipt of uploadedReceipts) {
-        await removeCollectionReceiptFile(uploadedReceipt.storagePath);
-      }
+      await cleanupStoredCollectionReceipts(uploadedReceipts);
       throw err;
     }
   }
