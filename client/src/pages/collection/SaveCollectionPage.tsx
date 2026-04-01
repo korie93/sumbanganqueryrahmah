@@ -349,6 +349,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
               value={batch}
               onChange={(event) => setBatch(event.target.value as CollectionBatch)}
               disabled={submitting}
+              aria-label="Batch"
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             >
               {COLLECTION_BATCH_OPTIONS.map((item) => (

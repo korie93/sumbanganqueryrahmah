@@ -73,6 +73,7 @@ export function CollectionRecordsFilters({
             value={nicknameFilter}
             onChange={(event) => onNicknameFilterChange(event.target.value)}
             disabled={loadingNicknames}
+            aria-label="Staff Nickname (optional)"
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
           >
             <option value="all">Semua staff</option>

@@ -57,6 +57,7 @@ export function CollectionSummaryFilters({
           id="collection-summary-year-filter"
           value={selectedYear}
           onChange={(event) => onSelectedYearChange(event.target.value)}
+          aria-label="Year"
           className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
         >
           {yearOptions.map((year) => (
