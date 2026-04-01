@@ -90,8 +90,11 @@ export function CollectionMonthDetailsDialog({
         </DialogHeader>
 
         <div
-          className={isMobile ? "border-b border-border/60 bg-background/95 px-4 py-3 shadow-sm" : ""}
-          style={isMobile ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.25rem)" } : undefined}
+          className={
+            isMobile
+              ? "border-b border-border/60 bg-background/95 px-4 py-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.25rem)] shadow-sm"
+              : ""
+          }
           data-floating-ai-avoid="true"
         >
           <CollectionPaginationBar
