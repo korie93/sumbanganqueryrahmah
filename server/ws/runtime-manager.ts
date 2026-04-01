@@ -22,6 +22,8 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const { wss, storage, secret } = options;
   const connectedClients = options.connectedClients ?? new Map<string, WebSocket>();
   const aliveSockets = new WeakSet<WebSocket>();
+  const isTrackableSocket = (ws: WebSocket) =>
+    ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING;
   const clearNicknameSession = (activityId: string) =>
     Promise.resolve(storage.clearCollectionNicknameSessionByActivity?.(activityId)).catch(() => undefined);
 
@@ -72,27 +74,92 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   });
 
   wss.on("connection", async (ws, req) => {
+    let activityId: string | null = null;
+    let cleanedUp = false;
+
+    const markSocketAlive = () => {
+      if (!cleanedUp) {
+        aliveSockets.add(ws);
+      }
+    };
+
+    const detachSocketLifecycleHandlers = () => {
+      ws.removeListener("pong", markSocketAlive);
+      ws.removeListener("close", handleSocketClose);
+      ws.removeListener("error", handleSocketError);
+    };
+
+    const cleanupSocket = () => {
+      if (cleanedUp) {
+        return;
+      }
+
+      cleanedUp = true;
+      detachSocketLifecycleHandlers();
+
+      if (activityId && connectedClients.get(activityId) === ws) {
+        connectedClients.delete(activityId);
+      }
+    };
+
+    const handleSocketClose = () => {
+      const closedActivityId = activityId;
+      cleanupSocket();
+      if (closedActivityId) {
+        logger.debug("WebSocket closed", { activityId: closedActivityId });
+      }
+    };
+
+    const handleSocketError = (error: unknown) => {
+      const erroredActivityId = activityId;
+      cleanupSocket();
+      if (erroredActivityId) {
+        logger.debug("WebSocket errored", {
+          activityId: erroredActivityId,
+          error,
+        });
+      }
+    };
+
+    const closeSocketIfNeeded = () => {
+      if (isTrackableSocket(ws)) {
+        ws.close();
+      }
+    };
+
+    ws.on("pong", markSocketAlive);
+    ws.on("close", handleSocketClose);
+    ws.on("error", handleSocketError);
+
     const url = new URL(req.url!, `http://${req.headers.host}`);
     const token = url.searchParams.get("token") || readAuthSessionTokenFromHeaders(req.headers);
 
     if (!token) {
-      ws.close();
+      cleanupSocket();
+      closeSocketIfNeeded();
       return;
     }
 
     try {
-      const activityId = extractWsActivityId(token, secret);
+      activityId = extractWsActivityId(token, secret);
       if (!activityId) {
-        ws.close();
+        cleanupSocket();
+        closeSocketIfNeeded();
         return;
       }
 
       const activity = await storage.getActivityById(activityId);
+      if (cleanedUp || !isTrackableSocket(ws)) {
+        cleanupSocket();
+        return;
+      }
+
       if (!isActiveWebSocketSession(activity)) {
         logger.debug("WebSocket rejected because the session is invalid or expired", {
           activityId,
         });
-        ws.close();
+        cleanupSocket();
+        closeSocketIfNeeded();
         return;
       }
 
@@ -101,28 +168,18 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         existingWs.close();
       }
 
-      connectedClients.set(activityId, ws);
-      aliveSockets.add(ws);
-      logger.debug("WebSocket connected", { activityId });
-
-      ws.on("pong", () => {
-        aliveSockets.add(ws);
-      });
-
-      const cleanupSocket = () => {
-        if (connectedClients.get(activityId) === ws) {
-          connectedClients.delete(activityId);
-        }
-      };
-
-      ws.on("close", () => {
+      if (cleanedUp || !isTrackableSocket(ws)) {
         cleanupSocket();
-        logger.debug("WebSocket closed", { activityId });
-      });
-      ws.on("error", cleanupSocket);
+        return;
+      }
+
+      connectedClients.set(activityId, ws);
+      markSocketAlive();
+      logger.debug("WebSocket connected", { activityId });
     } catch (error) {
+      cleanupSocket();
       logger.warn("WebSocket handshake failed", { error });
-      ws.close();
+      closeSocketIfNeeded();
     }
   });
 
