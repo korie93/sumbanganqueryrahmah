@@ -2,7 +2,6 @@ import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { CollectionStaffNickname } from "@/lib/api";
 
 export interface CollectionRecordsFiltersProps {
@@ -68,26 +67,23 @@ export function CollectionRecordsFilters({
       </div>
       {canUseNicknameFilter ? (
         <div className="space-y-1">
-          <Label>Staff Nickname (optional)</Label>
-          <Select
+          <Label htmlFor="collection-records-nickname-filter">Staff Nickname (optional)</Label>
+          <select
+            id="collection-records-nickname-filter"
             value={nicknameFilter}
-            onValueChange={onNicknameFilterChange}
+            onChange={(event) => onNicknameFilterChange(event.target.value)}
             disabled={loadingNicknames}
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Semua staff" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua staff</SelectItem>
+            <option value="all">Semua staff</option>
               {nicknameOptions
                 .filter((item) => item.isActive)
                 .map((item) => (
-                  <SelectItem key={item.id} value={item.nickname}>
+                  <option key={item.id} value={item.nickname}>
                     {item.nickname}
-                  </SelectItem>
+                  </option>
                 ))}
-            </SelectContent>
-          </Select>
+          </select>
         </div>
       ) : null}
       <div className="flex items-end">

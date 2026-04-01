@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState, type UIEvent } from "react";
 import { Eye, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,9 +9,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { GeneralSearchExportMenu } from "@/pages/general-search/GeneralSearchExportMenu";
 import type { SearchResultRow } from "@/pages/general-search/types";
 import { getCellDisplayText, getPriorityRank, highlightMatch } from "@/pages/general-search/utils";
+
+const GeneralSearchDesktopResultsTable = lazy(() =>
+  import("@/pages/general-search/GeneralSearchDesktopResultsTable").then((module) => ({
+    default: module.GeneralSearchDesktopResultsTable,
+  })),
+);
+const GeneralSearchExportMenu = lazy(() =>
+  import("@/pages/general-search/GeneralSearchExportMenu").then((module) => ({
+    default: module.GeneralSearchExportMenu,
+  })),
+);
 
 interface GeneralSearchResultsProps {
   advancedMode: boolean;
@@ -157,6 +167,10 @@ export function GeneralSearchResults({
     );
   }
 
+  const handleDesktopTableScroll = enableVirtualRows
+    ? (event: UIEvent<HTMLDivElement>) => setTableScrollTop(event.currentTarget.scrollTop)
+    : undefined;
+
   return (
     <div className="glass-wrapper p-4 sm:p-6" data-floating-ai-avoid="true">
       <div className={`mb-4 gap-3 ${isMobile ? "space-y-3" : "flex flex-wrap items-center justify-between"}`}>
@@ -187,13 +201,21 @@ export function GeneralSearchResults({
             </Select>
           </div>
           {canExport ? (
-            <GeneralSearchExportMenu
-              exportingPdf={exportingPdf}
-              totalResults={totalResults}
-              visibleResultsCount={results.length}
-              onExportCsv={onExportCsv}
-              onExportPdf={onExportPdf}
-            />
+            <Suspense
+              fallback={
+                <Button variant="outline" size="sm" disabled className="w-full sm:w-auto">
+                  Export
+                </Button>
+              }
+            >
+              <GeneralSearchExportMenu
+                exportingPdf={exportingPdf}
+                totalResults={totalResults}
+                visibleResultsCount={results.length}
+                onExportCsv={onExportCsv}
+                onExportPdf={onExportPdf}
+              />
+            </Suspense>
           ) : null}
         </div>
       </div>
@@ -297,90 +319,25 @@ export function GeneralSearchResults({
           })}
         </div>
       ) : (
-        <div
-          className="max-h-[600px] overflow-x-auto overflow-y-auto rounded-lg border border-border scrollbar-visible"
-          onScroll={enableVirtualRows ? (event) => setTableScrollTop(event.currentTarget.scrollTop) : undefined}
+        <Suspense
+          fallback={
+            <div className="rounded-lg border border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
+              Loading result table...
+            </div>
+          }
         >
-          <style>{`
-            .scrollbar-visible {
-              -ms-overflow-style: auto;
-            }
-            .scrollbar-visible::-webkit-scrollbar {
-              width: 8px;
-              height: 8px;
-            }
-            .scrollbar-visible::-webkit-scrollbar-track {
-              background: rgba(31, 41, 55, 0.1);
-              border-radius: 4px;
-            }
-            .scrollbar-visible::-webkit-scrollbar-thumb {
-              background: rgba(99, 102, 241, 0.5);
-              border-radius: 4px;
-            }
-            .scrollbar-visible::-webkit-scrollbar-thumb:hover {
-              background: rgba(99, 102, 241, 0.8);
-            }
-          `}</style>
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-muted">
-              <tr>
-                <th className="p-3 text-left font-medium text-muted-foreground">#</th>
-                <th className="p-3 text-left font-medium text-muted-foreground">Action</th>
-                {headers.map((header, index) => (
-                  <th key={index} className="whitespace-nowrap p-3 text-left font-medium text-muted-foreground">
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {enableVirtualRows && topSpacerHeight > 0 ? (
-                <tr aria-hidden="true">
-                  <td colSpan={headers.length + 2} height={topSpacerHeight} className="p-0" />
-                </tr>
-              ) : null}
-              {virtualRows.map((row, rowIndex) => {
-                const actualRowIndex = enableVirtualRows ? virtualStartRow + rowIndex : rowIndex;
-
-                return (
-                  <tr key={actualRowIndex} className="h-[52px] border-t border-border hover:bg-muted/50">
-                    <td className="p-3 text-muted-foreground">{actualRowIndex + 1}</td>
-                    <td className="p-3">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onRecordSelect(row)}
-                        data-testid={`button-view-${actualRowIndex}`}
-                      >
-                        <Eye className="mr-2 h-4 w-4" />
-                        View
-                      </Button>
-                    </td>
-                    {headers.map((header) => {
-                      const safeText = getCellDisplayText(row?.[header]);
-                      return (
-                        <td
-                          key={`${actualRowIndex}-${header}`}
-                          className={`max-w-[280px] truncate whitespace-nowrap p-3 text-foreground ${
-                            getPriorityRank(header) <= 2 ? "font-semibold" : ""
-                          }`}
-                          title={safeText}
-                        >
-                          {renderCellValue(safeText)}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-              {enableVirtualRows && bottomSpacerHeight > 0 ? (
-                <tr aria-hidden="true">
-                  <td colSpan={headers.length + 2} height={bottomSpacerHeight} className="p-0" />
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
+          <GeneralSearchDesktopResultsTable
+            bottomSpacerHeight={bottomSpacerHeight}
+            enableVirtualRows={enableVirtualRows}
+            headers={headers}
+            onRecordSelect={onRecordSelect}
+            onScroll={handleDesktopTableScroll}
+            renderCellValue={renderCellValue}
+            topSpacerHeight={topSpacerHeight}
+            virtualRows={virtualRows}
+            virtualStartRow={virtualStartRow}
+          />
+        </Suspense>
       )}
 
       <div className={`mt-4 gap-3 ${isMobile ? "space-y-3" : "flex flex-wrap items-center justify-between"}`}>

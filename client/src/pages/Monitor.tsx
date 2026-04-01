@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { MonitorAccessDenied } from "@/components/monitor/MonitorAccessDenied";
-import { MonitorMetricsSection } from "@/components/monitor/MonitorMetricsSection";
 import { MonitorOverviewSection } from "@/components/monitor/MonitorOverviewSection";
 import { MonitorStatusBanners } from "@/components/monitor/MonitorStatusBanners";
 import {
@@ -28,6 +28,11 @@ import { getStoredRole } from "@/lib/auth-session";
 const MonitorAlertsSection = lazy(() =>
   import("@/components/monitor/MonitorAlertsSection").then((module) => ({
     default: module.MonitorAlertsSection,
+  })),
+);
+const MonitorMetricsSection = lazy(() =>
+  import("@/components/monitor/MonitorMetricsSection").then((module) => ({
+    default: module.MonitorMetricsSection,
   })),
 );
 const MonitorChaosSection = lazy(() =>
@@ -96,6 +101,30 @@ function MonitorInsightsFallback() {
   );
 }
 
+function MonitorMetricsFallback() {
+  return (
+    <section
+      className="space-y-4"
+      role="status"
+      aria-live="polite"
+      aria-label="Loading key metrics"
+    >
+      <div className="space-y-2">
+        <div className="h-6 w-40 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
+        <div className="h-4 w-full max-w-xl animate-pulse rounded bg-slate-300/60 dark:bg-slate-800/70" />
+      </div>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div
+            key={index}
+            className="h-72 animate-pulse rounded-2xl border border-border/60 bg-background/35 backdrop-blur-sm"
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function MonitorSectionCardFallback({
   title,
   blocks = 2,
@@ -123,13 +152,46 @@ function MonitorSectionCardFallback({
   );
 }
 
+function MonitorMobileDeferredSectionToggle({
+  title,
+  description,
+  open,
+  onToggle,
+}: {
+  title: string;
+  description: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-background/30 p-4 backdrop-blur-sm">
+      <button
+        type="button"
+        className="flex w-full items-start justify-between gap-3 text-left"
+        onClick={onToggle}
+      >
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-foreground">{title}</h2>
+          <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+        </div>
+        <span className="shrink-0 pt-1 text-muted-foreground">
+          {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </span>
+      </button>
+    </div>
+  );
+}
+
 export default function Monitor() {
+  const initialCompactViewport = typeof window !== "undefined" && window.innerWidth < 768;
   const [alertsOpen, setAlertsOpen] = useState(true);
   const [chaosType, setChaosType] = useState<ChaosType>("cpu_spike");
   const [chaosMagnitude, setChaosMagnitude] = useState(String(CHAOS_OPTIONS[0].defaultMagnitude));
   const [chaosDurationMs, setChaosDurationMs] = useState(String(CHAOS_OPTIONS[0].defaultDurationMs));
   const [chaosLoading, setChaosLoading] = useState(false);
   const [lastChaosMessage, setLastChaosMessage] = useState<string | null>(null);
+  const [chaosSectionOpen, setChaosSectionOpen] = useState(() => !initialCompactViewport);
+  const [technicalChartsOpen, setTechnicalChartsOpen] = useState(() => !initialCompactViewport);
   const [queueActionBusy, setQueueActionBusy] = useState<"drain" | "retry-failures" | "auto-heal" | "rebuild" | null>(null);
   const [lastQueueActionMessage, setLastQueueActionMessage] = useState<string | null>(null);
   const chaosRequestRef = useRef<AbortController | null>(null);
@@ -155,6 +217,7 @@ export default function Monitor() {
 
   const canInjectChaos = userRole === "admin" || userRole === "superuser";
   const canManageRollups = userRole === "superuser";
+  const deferSecondaryMobileSections = initialCompactViewport;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -359,7 +422,9 @@ export default function Monitor() {
           rollupFreshnessSummary={rollupFreshnessSummary}
           rollupFreshnessAgeLabel={rollupFreshnessAgeLabel}
         />
-        <MonitorMetricsSection metricGroups={metricGroups} />
+        <Suspense fallback={<MonitorMetricsFallback />}>
+          <MonitorMetricsSection metricGroups={metricGroups} />
+        </Suspense>
         {canManageRollups ? (
           <Suspense fallback={<MonitorSectionCardFallback title="Loading rollup controls" />}>
             <MonitorRollupQueueControlsSection
@@ -385,24 +450,66 @@ export default function Monitor() {
         <Suspense fallback={<MonitorInsightsFallback />}>
           <MonitorInsightsSection intelligence={intelligence} lastUpdated={lastUpdated} />
         </Suspense>
-        <Suspense fallback={<MonitorSectionCardFallback title="Loading chaos lab" blocks={2} />}>
-          <MonitorChaosSection
-            canInjectChaos={canInjectChaos}
-            chaosType={chaosType}
-            selectedChaosProfile={selectedChaosProfile}
-            chaosMagnitude={chaosMagnitude}
-            chaosDurationMs={chaosDurationMs}
-            chaosLoading={chaosLoading}
-            lastChaosMessage={lastChaosMessage}
-            onChaosTypeChange={handleChaosTypeChange}
-            onChaosMagnitudeChange={setChaosMagnitude}
-            onChaosDurationChange={setChaosDurationMs}
-            onSubmit={submitChaos}
-          />
-        </Suspense>
-        <Suspense fallback={<MonitorChartsFallback />}>
-          <MonitorTechnicalChartsSection history={history} />
-        </Suspense>
+        {deferSecondaryMobileSections ? (
+          <>
+            <MonitorMobileDeferredSectionToggle
+              title="Chaos Lab"
+              description="Open controlled resilience scenarios only when you need fault-injection tools on smaller screens."
+              open={chaosSectionOpen}
+              onToggle={() => setChaosSectionOpen((previous) => !previous)}
+            />
+            {chaosSectionOpen ? (
+              <Suspense fallback={<MonitorSectionCardFallback title="Loading chaos lab" blocks={2} />}>
+                <MonitorChaosSection
+                  canInjectChaos={canInjectChaos}
+                  chaosType={chaosType}
+                  selectedChaosProfile={selectedChaosProfile}
+                  chaosMagnitude={chaosMagnitude}
+                  chaosDurationMs={chaosDurationMs}
+                  chaosLoading={chaosLoading}
+                  lastChaosMessage={lastChaosMessage}
+                  onChaosTypeChange={handleChaosTypeChange}
+                  onChaosMagnitudeChange={setChaosMagnitude}
+                  onChaosDurationChange={setChaosDurationMs}
+                  onSubmit={submitChaos}
+                />
+              </Suspense>
+            ) : null}
+
+            <MonitorMobileDeferredSectionToggle
+              title="Technical DevOps View"
+              description="Open rolling diagnostic charts only when you need deeper runtime trends on mobile."
+              open={technicalChartsOpen}
+              onToggle={() => setTechnicalChartsOpen((previous) => !previous)}
+            />
+            {technicalChartsOpen ? (
+              <Suspense fallback={<MonitorChartsFallback />}>
+                <MonitorTechnicalChartsSection history={history} />
+              </Suspense>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <Suspense fallback={<MonitorSectionCardFallback title="Loading chaos lab" blocks={2} />}>
+              <MonitorChaosSection
+                canInjectChaos={canInjectChaos}
+                chaosType={chaosType}
+                selectedChaosProfile={selectedChaosProfile}
+                chaosMagnitude={chaosMagnitude}
+                chaosDurationMs={chaosDurationMs}
+                chaosLoading={chaosLoading}
+                lastChaosMessage={lastChaosMessage}
+                onChaosTypeChange={handleChaosTypeChange}
+                onChaosMagnitudeChange={setChaosMagnitude}
+                onChaosDurationChange={setChaosDurationMs}
+                onSubmit={submitChaos}
+              />
+            </Suspense>
+            <Suspense fallback={<MonitorChartsFallback />}>
+              <MonitorTechnicalChartsSection history={history} />
+            </Suspense>
+          </>
+        )}
 
         <p className="text-right text-xs text-muted-foreground">
           {isLoading ? "Loading..." : `Last updated: ${lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : "-"}`}

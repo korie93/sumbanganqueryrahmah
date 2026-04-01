@@ -1,7 +1,7 @@
+import { Suspense, lazy } from "react";
 import { STANDARD_PAGE_SIZE_OPTIONS } from "@/components/data/AppPaginationBar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CollectionPaginationBar } from "@/pages/collection-report/CollectionPaginationBar";
 import type { CollectionMonthlySummary, CollectionRecord } from "@/lib/api";
 import { formatAmountRM } from "@/pages/collection/utils";
@@ -24,6 +24,19 @@ export type CollectionMonthDetailsDialogProps = {
 };
 
 const MONTH_PAGE_SIZE_OPTIONS = [...STANDARD_PAGE_SIZE_OPTIONS];
+const CollectionMonthDetailsDesktopTable = lazy(() =>
+  import("@/pages/collection-summary/CollectionMonthDetailsDesktopTable").then((module) => ({
+    default: module.CollectionMonthDetailsDesktopTable,
+  })),
+);
+
+function CollectionMonthDetailsDesktopTableFallback() {
+  return (
+    <div className="rounded-md border border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
+      Loading monthly records table...
+    </div>
+  );
+}
 
 export function CollectionMonthDetailsDialog({
   open,
@@ -151,50 +164,15 @@ export function CollectionMonthDetailsDialog({
               )}
             </div>
           ) : (
-            <Table className="min-w-[980px] text-sm">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="sticky top-0 z-10 bg-background">No.</TableHead>
-                  <TableHead className="sticky top-0 z-10 bg-background">Date</TableHead>
-                  <TableHead className="sticky top-0 z-10 bg-background">Customer Name</TableHead>
-                  <TableHead className="sticky top-0 z-10 bg-background">IC Number</TableHead>
-                  <TableHead className="sticky top-0 z-10 bg-background">Customer Phone</TableHead>
-                  <TableHead className="sticky top-0 z-10 bg-background">Account Number</TableHead>
-                  <TableHead className="sticky top-0 z-10 bg-background">Batch</TableHead>
-                  <TableHead className="sticky top-0 z-10 bg-background">Amount</TableHead>
-                  <TableHead className="sticky top-0 z-10 bg-background">Staff Nickname</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
-                      Loading monthly records...
-                    </TableCell>
-                  </TableRow>
-                ) : records.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
-                      Tiada rekod kutipan untuk bulan yang dipilih.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  records.map((row, index) => (
-                    <TableRow key={row.id}>
-                      <TableCell>{(page - 1) * pageSize + index + 1}</TableCell>
-                      <TableCell>{toDisplayDate(row.paymentDate)}</TableCell>
-                      <TableCell className="font-medium">{row.customerName}</TableCell>
-                      <TableCell>{row.icNumber}</TableCell>
-                      <TableCell>{row.customerPhone}</TableCell>
-                      <TableCell>{row.accountNumber}</TableCell>
-                      <TableCell>{row.batch}</TableCell>
-                      <TableCell>{formatAmountRM(row.amount)}</TableCell>
-                      <TableCell>{row.collectionStaffNickname}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+            <Suspense fallback={<CollectionMonthDetailsDesktopTableFallback />}>
+              <CollectionMonthDetailsDesktopTable
+                loading={loading}
+                records={records}
+                page={page}
+                pageSize={pageSize}
+                toDisplayDate={toDisplayDate}
+              />
+            </Suspense>
           )}
         </div>
       </DialogContent>

@@ -1,7 +1,12 @@
+import { Suspense, lazy } from "react";
 import { Label } from "@/components/ui/label";
-import { CollectionNicknameMultiSelect } from "@/pages/collection-report/CollectionNicknameMultiSelect";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { CollectionStaffNickname } from "@/lib/api";
+
+const CollectionNicknameMultiSelect = lazy(() =>
+  import("@/pages/collection-report/CollectionNicknameMultiSelect").then((module) => ({
+    default: module.CollectionNicknameMultiSelect,
+  })),
+);
 
 export interface CollectionSummaryFiltersProps {
   canFilterByNickname: boolean;
@@ -47,37 +52,46 @@ export function CollectionSummaryFilters({
       }`}
     >
       <div className="space-y-1">
-        <Label>Year</Label>
-        <Select value={selectedYear} onValueChange={onSelectedYearChange}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select year" />
-          </SelectTrigger>
-          <SelectContent>
-            {yearOptions.map((year) => (
-              <SelectItem key={year} value={String(year)}>
-                {year}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label htmlFor="collection-summary-year-filter">Year</Label>
+        <select
+          id="collection-summary-year-filter"
+          value={selectedYear}
+          onChange={(event) => onSelectedYearChange(event.target.value)}
+          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+        >
+          {yearOptions.map((year) => (
+            <option key={year} value={String(year)}>
+              {year}
+            </option>
+          ))}
+        </select>
       </div>
 
       {canFilterByNickname ? (
-        <CollectionNicknameMultiSelect
-          label="Staff Nickname (optional)"
-          open={nicknameDropdownOpen}
-          loading={loading}
-          selectedLabel={selectedNicknameLabel}
-          options={visibleNicknameOptions}
-          selectedNicknameSet={selectedNicknameSet}
-          allSelected={allSelected}
-          partiallySelected={partiallySelected}
-          selectedCount={selectedNicknamesCount}
-          onOpenChange={onNicknameDropdownOpenChange}
-          onToggleNickname={onToggleNickname}
-          onSelectAllVisible={onSelectAllVisible}
-          onClearAllSelected={onClearAllSelected}
-        />
+        <Suspense
+          fallback={
+            <div className="space-y-1">
+              <Label>Staff Nickname (optional)</Label>
+              <div className="h-10 animate-pulse rounded-xl border border-border/60 bg-muted/20" />
+            </div>
+          }
+        >
+          <CollectionNicknameMultiSelect
+            label="Staff Nickname (optional)"
+            open={nicknameDropdownOpen}
+            loading={loading}
+            selectedLabel={selectedNicknameLabel}
+            options={visibleNicknameOptions}
+            selectedNicknameSet={selectedNicknameSet}
+            allSelected={allSelected}
+            partiallySelected={partiallySelected}
+            selectedCount={selectedNicknamesCount}
+            onOpenChange={onNicknameDropdownOpenChange}
+            onToggleNickname={onToggleNickname}
+            onSelectAllVisible={onSelectAllVisible}
+            onClearAllSelected={onClearAllSelected}
+          />
+        </Suspense>
       ) : null}
     </div>
   );

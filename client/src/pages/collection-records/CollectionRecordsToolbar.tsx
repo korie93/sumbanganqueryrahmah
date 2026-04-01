@@ -1,12 +1,17 @@
+import { Suspense, lazy } from "react";
 import { Download, FileText } from "lucide-react";
 import {
   OperationalMetric,
   OperationalSummaryStrip,
 } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatAmountRM } from "@/pages/collection/utils";
+
+const CollectionRecordsPurgeSummaryCard = lazy(() =>
+  import("@/pages/collection-records/CollectionRecordsPurgeSummaryCard").then((module) => ({
+    default: module.CollectionRecordsPurgeSummaryCard,
+  })),
+);
 
 export interface CollectionRecordsToolbarProps {
   summary: { totalRecords: number; totalAmount: number };
@@ -37,6 +42,10 @@ export interface CollectionRecordsToolbarProps {
   onTablePageSizeChange: (value: number) => void;
   onPrevPage: () => void;
   onNextPage: () => void;
+}
+
+function CollectionRecordsPurgeSummaryCardFallback() {
+  return <div className="h-28 animate-pulse rounded-xl border border-border/60 bg-muted/20" />;
 }
 
 export function CollectionRecordsToolbar({
@@ -79,41 +88,15 @@ export function CollectionRecordsToolbar({
       </OperationalSummaryStrip>
 
       {canPurgeOldRecords ? (
-        <Card className="border-amber-500/40 bg-amber-500/5">
-          <CardContent className="flex flex-col gap-3 px-3 py-3 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-foreground">Manual Purge Data Lama</p>
-              <p className="text-xs text-muted-foreground">
-                Rekod collection sebelum {purgeSummary?.cutoffDate || "-"} hanya boleh dipurge oleh superuser.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Eligible:{" "}
-                <span className="font-medium text-foreground">
-                  {purgeSummaryLoading ? "Checking..." : purgeSummary?.eligibleRecords ?? 0}
-                </span>
-                {" | "}
-                Total:{" "}
-                <span className="font-medium text-foreground">
-                  {formatAmountRM(purgeSummary?.totalAmount ?? 0)}
-                </span>
-              </p>
-            </div>
-            <Button
-              variant="destructive"
-              className="w-full sm:w-auto"
-              onClick={onOpenPurgeDialog}
-              disabled={
-                loadingRecords ||
-                purgeSummaryLoading ||
-                purgingOldRecords ||
-                !purgeSummary ||
-                purgeSummary.eligibleRecords <= 0
-              }
-            >
-              {purgingOldRecords ? "Purging..." : "Purge > 6 Months"}
-            </Button>
-          </CardContent>
-        </Card>
+        <Suspense fallback={<CollectionRecordsPurgeSummaryCardFallback />}>
+          <CollectionRecordsPurgeSummaryCard
+            loadingRecords={loadingRecords}
+            purgeSummaryLoading={purgeSummaryLoading}
+            purgingOldRecords={purgingOldRecords}
+            purgeSummary={purgeSummary}
+            onOpenPurgeDialog={onOpenPurgeDialog}
+          />
+        </Suspense>
       ) : null}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end" data-floating-ai-avoid="true">
@@ -143,19 +126,19 @@ export function CollectionRecordsToolbar({
           Showing {pagedStart}-{pagedEnd} of {totalRecords} records
         </p>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-          <Select
+          <label className="sr-only" htmlFor="collection-records-page-size">
+            Records per page
+          </label>
+          <select
+            id="collection-records-page-size"
             value={String(tablePageSize)}
-            onValueChange={(value) => onTablePageSizeChange(Number(value))}
+            onChange={(event) => onTablePageSizeChange(Number(event.target.value))}
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm sm:w-[120px]"
           >
-            <SelectTrigger className="h-9 w-full sm:w-[120px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="50">50 / page</SelectItem>
-              <SelectItem value="100">100 / page</SelectItem>
-              <SelectItem value="200">200 / page</SelectItem>
-            </SelectContent>
-          </Select>
+            <option value="50">50 / page</option>
+            <option value="100">100 / page</option>
+            <option value="200">200 / page</option>
+          </select>
           <Button size="sm" variant="outline" className="w-full sm:w-auto" disabled={!hasPreviousPage} onClick={onPrevPage}>
             Prev
           </Button>

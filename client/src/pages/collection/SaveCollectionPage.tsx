@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
@@ -344,17 +343,20 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
             />
           </div>
           <div className="space-y-2">
-            <Label>Batch</Label>
-            <Select value={batch} onValueChange={(value) => setBatch(value as CollectionBatch)} disabled={submitting}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select batch" />
-              </SelectTrigger>
-              <SelectContent>
-                {COLLECTION_BATCH_OPTIONS.map((item) => (
-                  <SelectItem key={item} value={item}>{item}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="save-collection-batch">Batch</Label>
+            <select
+              id="save-collection-batch"
+              value={batch}
+              onChange={(event) => setBatch(event.target.value as CollectionBatch)}
+              disabled={submitting}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              {COLLECTION_BATCH_OPTIONS.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="space-y-2">
             <Label>Payment Date</Label>

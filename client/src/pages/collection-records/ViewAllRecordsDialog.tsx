@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,14 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { STANDARD_PAGE_SIZE_OPTIONS } from "@/components/data/AppPaginationBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionRecord } from "@/lib/api";
@@ -24,6 +16,11 @@ import { formatAmountRM } from "@/pages/collection/utils";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 
 const VIEW_ALL_PAGE_SIZE_OPTIONS = [...STANDARD_PAGE_SIZE_OPTIONS];
+const ViewAllRecordsDesktopTable = lazy(() =>
+  import("@/pages/collection-records/ViewAllRecordsDesktopTable").then((module) => ({
+    default: module.ViewAllRecordsDesktopTable,
+  })),
+);
 
 export interface ViewAllRecordsDialogProps {
   open: boolean;
@@ -40,6 +37,14 @@ export interface ViewAllRecordsDialogProps {
   onPageSizeChange: (pageSize: number) => void;
   onViewReceipt: (record: CollectionRecord) => void;
   toDisplayDate: (value: string) => string;
+}
+
+function ViewAllRecordsDesktopTableFallback() {
+  return (
+    <div className="rounded-md border border-border/60 px-4 py-6 text-center text-sm text-muted-foreground">
+      Loading full records table...
+    </div>
+  );
 }
 
 export function ViewAllRecordsDialog({
@@ -244,101 +249,15 @@ export function ViewAllRecordsDialog({
                   )}
                 </div>
               ) : (
-                <Table className="min-w-[1100px] text-sm">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="sticky top-0 z-10 bg-background">
-                        No.
-                      </TableHead>
-                      <TableHead className="sticky top-0 z-10 bg-background">
-                        Customer Name
-                      </TableHead>
-                      <TableHead className="sticky top-0 z-10 bg-background">
-                        IC Number
-                      </TableHead>
-                      <TableHead className="sticky top-0 z-10 bg-background">
-                        Account Number
-                      </TableHead>
-                      <TableHead className="sticky top-0 z-10 bg-background">
-                        Customer Phone Number
-                      </TableHead>
-                      <TableHead className="sticky top-0 z-10 bg-background">
-                        Batch
-                      </TableHead>
-                      <TableHead className="sticky top-0 z-10 bg-background">
-                        Amount
-                      </TableHead>
-                      <TableHead className="sticky top-0 z-10 bg-background">
-                        Payment Date
-                      </TableHead>
-                      <TableHead className="sticky top-0 z-10 bg-background">
-                        Receipt
-                      </TableHead>
-                      <TableHead className="sticky top-0 z-10 bg-background">
-                        Staff Nickname
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {loading ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={10}
-                          className="py-6 text-center text-muted-foreground"
-                        >
-                          Loading full records...
-                        </TableCell>
-                      </TableRow>
-                    ) : viewAllRecords.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={10}
-                          className="py-6 text-center text-muted-foreground"
-                        >
-                          Tiada rekod dalam julat tarikh yang dipilih.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      viewAllRecords.map((record, index) => (
-                        <TableRow key={`view-all-${record.id}`}>
-                          <TableCell className="py-2 text-muted-foreground">
-                            {(page - 1) * pageSize + index + 1}
-                          </TableCell>
-                          <TableCell className="py-2">{record.customerName}</TableCell>
-                          <TableCell className="py-2">{record.icNumber}</TableCell>
-                          <TableCell className="py-2">{record.accountNumber}</TableCell>
-                          <TableCell className="py-2">{record.customerPhone}</TableCell>
-                          <TableCell className="py-2">{record.batch}</TableCell>
-                          <TableCell className="py-2">
-                            {formatAmountRM(record.amount)}
-                          </TableCell>
-                          <TableCell className="py-2">{formatIsoDateToDDMMYYYY(record.paymentDate)}</TableCell>
-                          <TableCell className="py-2">
-                            {(record.receipts?.length || 0) > 0 ? (
-                              <Button
-                                type="button"
-                                variant="link"
-                                size="sm"
-                                className="h-auto px-0 text-primary"
-                                onClick={() => onViewReceipt(record)}
-                              >
-                                <Eye className="h-3.5 w-3.5" />
-                                {(record.receipts?.length || 0) > 1
-                                  ? `View (${record.receipts.length})`
-                                  : "View"}
-                              </Button>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="py-2">
-                            {record.collectionStaffNickname}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                <Suspense fallback={<ViewAllRecordsDesktopTableFallback />}>
+                  <ViewAllRecordsDesktopTable
+                    loading={loading}
+                    viewAllRecords={viewAllRecords}
+                    page={page}
+                    pageSize={pageSize}
+                    onViewReceipt={onViewReceipt}
+                  />
+                </Suspense>
               )}
             </div>
           </div>

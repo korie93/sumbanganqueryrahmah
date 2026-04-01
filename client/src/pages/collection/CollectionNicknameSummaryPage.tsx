@@ -1,17 +1,38 @@
-import { memo } from "react";
+import { lazy, memo, Suspense } from "react";
 import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { CollectionNicknameBatchSections } from "@/pages/collection-nickname-summary/CollectionNicknameBatchSections";
 import { useCollectionNicknameSummaryData } from "@/pages/collection-nickname-summary/useCollectionNicknameSummaryData";
 import { CollectionNicknameMultiSelect } from "@/pages/collection-report/CollectionNicknameMultiSelect";
+
+const CollectionNicknameBatchSections = lazy(() =>
+  import("@/pages/collection-nickname-summary/CollectionNicknameBatchSections").then((module) => ({
+    default: module.CollectionNicknameBatchSections,
+  })),
+);
 
 type CollectionNicknameSummaryPageProps = {
   role: string;
 };
+
+function CollectionNicknameSummaryIdleState() {
+  return (
+    <div className="rounded-md border border-dashed border-border/60 bg-background/40 px-4 py-6 text-sm text-muted-foreground">
+      Pilih staff nickname dan julat tarikh, kemudian tekan Apply untuk lihat ringkasan kutipan.
+    </div>
+  );
+}
+
+function CollectionNicknameSummaryLoadingState() {
+  return (
+    <div className="rounded-md border border-border/60 bg-background/40 px-4 py-6 text-sm text-muted-foreground">
+      Loading nickname summary...
+    </div>
+  );
+}
 
 function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPageProps) {
   const canAccess = role === "admin" || role === "superuser";
@@ -89,16 +110,22 @@ function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPagePr
         </div>
       </div>
 
-      <CollectionNicknameBatchSections
-        loading={summaryData.loadingSummary}
-        hasApplied={summaryData.hasApplied}
-        selectedNicknames={summaryData.selectedNicknames}
-        fromDate={summaryData.fromDate}
-        toDate={summaryData.toDate}
-        totalAmount={summaryData.totalAmount}
-        totalRecords={summaryData.totalRecords}
-        nicknameTotals={summaryData.nicknameTotals}
-      />
+      {summaryData.hasApplied || summaryData.loadingSummary ? (
+        <Suspense fallback={<CollectionNicknameSummaryLoadingState />}>
+          <CollectionNicknameBatchSections
+            loading={summaryData.loadingSummary}
+            hasApplied={summaryData.hasApplied}
+            selectedNicknames={summaryData.selectedNicknames}
+            fromDate={summaryData.fromDate}
+            toDate={summaryData.toDate}
+            totalAmount={summaryData.totalAmount}
+            totalRecords={summaryData.totalRecords}
+            nicknameTotals={summaryData.nicknameTotals}
+          />
+        </Suspense>
+      ) : (
+        <CollectionNicknameSummaryIdleState />
+      )}
     </OperationalSectionCard>
   );
 }
