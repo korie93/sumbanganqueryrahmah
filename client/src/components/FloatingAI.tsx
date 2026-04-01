@@ -343,6 +343,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     return () => {
       observer?.disconnect();
       resizeObserver?.disconnect();
+      observedElements.clear();
       window.removeEventListener("resize", scheduleSync);
       window.removeEventListener("scroll", scheduleSync);
       if (frame) {
