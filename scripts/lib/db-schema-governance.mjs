@@ -51,7 +51,7 @@ export function extractTableNames(sourceText) {
 export function classifySourceType(relativePath) {
   const normalized = normalizePath(relativePath);
 
-  if (normalized === "shared/schema-postgres.ts") {
+  if (/^shared\/schema-postgres(?:-[a-z0-9-]+)?\.ts$/i.test(normalized)) {
     return "drizzle-schema";
   }
 

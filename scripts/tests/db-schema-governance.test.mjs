@@ -19,6 +19,8 @@ test("extractTableNames discovers pgTable, create table, and alter table definit
 
 test("classifySourceType maps repository paths to governance source types", () => {
   assert.equal(classifySourceType("shared/schema-postgres.ts"), "drizzle-schema");
+  assert.equal(classifySourceType("shared/schema-postgres-core.ts"), "drizzle-schema");
+  assert.equal(classifySourceType("shared/schema-postgres-collection.ts"), "drizzle-schema");
   assert.equal(classifySourceType("drizzle/0001_example.sql"), "drizzle-migration");
   assert.equal(classifySourceType("server/sql/20260306_collection_report.sql"), "legacy-sql");
   assert.equal(classifySourceType("server/internal/coreSchemaBootstrap.ts"), "runtime-ddl");

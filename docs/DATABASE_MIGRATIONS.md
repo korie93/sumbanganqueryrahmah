@@ -4,7 +4,11 @@
 
 This repository now has first-class Drizzle migration tooling, but the database is still in a hybrid state:
 
-- Drizzle-managed schema definitions currently live in [shared/schema-postgres.ts](../shared/schema-postgres.ts).
+- Drizzle-managed schema definitions currently live in [shared/schema-postgres.ts](../shared/schema-postgres.ts) and its domain split files:
+  [shared/schema-postgres-core.ts](../shared/schema-postgres-core.ts),
+  [shared/schema-postgres-collection.ts](../shared/schema-postgres-collection.ts),
+  [shared/schema-postgres-settings.ts](../shared/schema-postgres-settings.ts),
+  and [shared/schema-postgres-ai.ts](../shared/schema-postgres-ai.ts).
 - Generated Drizzle SQL migrations live in [drizzle/](../drizzle/).
 - Legacy hand-written SQL files still exist in [server/sql/](../server/sql/).
 - Several tables are still created and normalized by idempotent bootstrap modules under `server/internal/`.
@@ -42,7 +46,7 @@ Each discovered table must be classified as one of:
 
 For Drizzle-managed tables:
 
-1. Update [shared/schema-postgres.ts](../shared/schema-postgres.ts).
+1. Update the relevant Drizzle schema module under [shared/](../shared/), usually via [shared/schema-postgres.ts](../shared/schema-postgres.ts) plus the matching domain file.
 2. Generate a migration with `npm run db:generate -- --name <migration_name>`.
 3. Review the generated SQL under [drizzle/](../drizzle/).
 4. Apply it with `npm run db:migrate`.
