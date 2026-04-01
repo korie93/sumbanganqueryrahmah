@@ -124,6 +124,18 @@ export type UpdateCollectionPayload = Partial<CreateCollectionPayload> & {
   existingReceiptMetadata?: CollectionReceiptMetadata[] | null;
 };
 
+export type CollectionPaginationMeta = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  limit: number;
+  offset: number;
+  nextCursor: string | null;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+};
+
 export type CollectionRecordListResponse = {
   ok: boolean;
   records: CollectionRecord[];
@@ -134,6 +146,26 @@ export type CollectionRecordListResponse = {
   limit: number;
   offset: number;
   nextCursor: string | null;
+  pagination: CollectionPaginationMeta;
+};
+
+export type CollectionNicknameSummaryResponse = {
+  ok: boolean;
+  nicknames: string[];
+  totalRecords: number;
+  totalAmount: number;
+  page: number;
+  pageSize: number;
+  limit: number;
+  offset: number;
+  nicknameTotals: Array<{
+    nickname: string;
+    totalRecords: number;
+    totalAmount: number;
+  }>;
+  records: CollectionRecord[];
+  freshness?: CollectionReportFreshness;
+  pagination: CollectionPaginationMeta;
 };
 
 export type CollectionPurgeSummaryResponse = {

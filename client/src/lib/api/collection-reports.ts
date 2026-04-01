@@ -1,7 +1,7 @@
 import { apiRequest } from "../queryClient";
 import type {
   CollectionMonthlySummary,
-  CollectionRecord,
+  CollectionNicknameSummaryResponse,
   CollectionReportFreshness,
 } from "./collection-types";
 
@@ -66,21 +66,5 @@ export async function getCollectionNicknameSummary(filters: {
     undefined,
     options,
   );
-  return response.json() as Promise<{
-    ok: boolean;
-    nicknames: string[];
-    totalRecords: number;
-    totalAmount: number;
-    page: number;
-    pageSize: number;
-    limit: number;
-    offset: number;
-    nicknameTotals: Array<{
-      nickname: string;
-      totalRecords: number;
-      totalAmount: number;
-    }>;
-    records: CollectionRecord[];
-    freshness?: CollectionReportFreshness;
-  }>;
+  return response.json() as Promise<CollectionNicknameSummaryResponse>;
 }

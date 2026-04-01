@@ -150,7 +150,7 @@ export function useCollectionViewAllRecords({
           requestId !== viewAllRequestIdRef.current
         ) return;
         const nextRecords = Array.isArray(response?.records) ? response.records : [];
-        const nextTotalRecords = Number(response?.total || 0);
+        const nextTotalRecords = Number((response?.pagination?.total ?? response?.total) || 0);
         const nextTotalAmount = Number(response?.totalAmount || 0);
         viewAllCacheRef.current.set(cacheKey, {
           records: nextRecords,

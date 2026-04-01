@@ -135,7 +135,7 @@ export function useCollectionSummaryMonthDialog({
 
         const cacheEntry = {
           records: Array.isArray(response?.records) ? response.records : [],
-          totalRecords: Number(response?.total || 0),
+          totalRecords: Number((response?.pagination?.total ?? response?.total) || 0),
         };
         monthRecordsCacheRef.current.set(cacheKey, cacheEntry);
         setMonthRecords(cacheEntry.records);

@@ -246,7 +246,7 @@ export function useCollectionNicknameSummaryData({
         if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
         const normalizedNicknameTotals = normalizeNicknameTotals(response?.nicknameTotals);
         const normalizedTotalAmount = Number(response?.totalAmount || 0);
-        const normalizedTotalRecords = Number(response?.totalRecords || 0);
+        const normalizedTotalRecords = Number((response?.pagination?.total ?? response?.totalRecords) || 0);
         summaryCacheRef.current.set(cacheKey, {
           nicknameTotals: normalizedNicknameTotals,
           totalAmount: normalizedTotalAmount,

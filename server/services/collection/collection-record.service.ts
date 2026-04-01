@@ -24,6 +24,18 @@ type CollectionListCursor = {
   offset: number;
 };
 
+type CollectionPaginationMeta = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  limit: number;
+  offset: number;
+  nextCursor: string | null;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+};
+
 function encodeCollectionListCursor(cursor: CollectionListCursor) {
   return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
 }
@@ -75,6 +87,31 @@ function parseCollectionReceiptValidationFilter(
     return normalized;
   }
   return undefined;
+}
+
+function buildCollectionPaginationMeta(params: {
+  page: number;
+  pageSize: number;
+  total: number;
+  offset: number;
+  nextCursor?: string | null;
+  hasNextPage?: boolean;
+}): CollectionPaginationMeta {
+  const pageSize = Math.max(1, params.pageSize);
+  const nextCursor = params.nextCursor ?? null;
+  const totalPages = Math.max(1, Math.ceil(Math.max(0, params.total) / pageSize));
+
+  return {
+    page: Math.max(1, params.page),
+    pageSize,
+    total: Math.max(0, params.total),
+    totalPages,
+    limit: pageSize,
+    offset: Math.max(0, params.offset),
+    nextCursor,
+    hasNextPage: params.hasNextPage ?? nextCursor !== null,
+    hasPreviousPage: params.offset > 0,
+  };
 }
 
 export class CollectionRecordService extends CollectionServiceSupport {
@@ -250,6 +287,14 @@ export class CollectionRecordService extends CollectionServiceSupport {
         }
         nicknameFilters = requestedNicknameFilters;
       } else if (allowedNicknames.length === 0) {
+        const pagination = buildCollectionPaginationMeta({
+          page: resolvedPage,
+          pageSize: limit,
+          total: 0,
+          offset,
+          nextCursor: null,
+          hasNextPage: false,
+        });
         return {
           ok: true as const,
           records: [],
@@ -260,6 +305,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
           limit,
           offset,
           nextCursor: null,
+          pagination,
         };
       } else {
         nicknameFilters = allowedNicknames;
@@ -283,6 +329,18 @@ export class CollectionRecordService extends CollectionServiceSupport {
         offset,
       }),
     ]);
+    const nextCursor =
+      offset + records.length < aggregate.totalRecords
+        ? encodeCollectionListCursor({ offset: offset + records.length })
+        : null;
+    const pagination = buildCollectionPaginationMeta({
+      page: resolvedPage,
+      pageSize: limit,
+      total: aggregate.totalRecords,
+      offset,
+      nextCursor,
+      hasNextPage: nextCursor !== null,
+    });
 
     return {
       ok: true as const,
@@ -293,10 +351,8 @@ export class CollectionRecordService extends CollectionServiceSupport {
       pageSize: limit,
       limit,
       offset,
-      nextCursor:
-        offset + records.length < aggregate.totalRecords
-          ? encodeCollectionListCursor({ offset: offset + records.length })
-          : null,
+      nextCursor,
+      pagination,
     };
   }
 
@@ -335,6 +391,14 @@ export class CollectionRecordService extends CollectionServiceSupport {
 
     const requestedNicknameFilters = readNicknameFiltersFromQuery(query);
     if (requestedNicknameFilters.length === 0) {
+      const pagination = buildCollectionPaginationMeta({
+        page: 1,
+        pageSize: CollectionRecordService.NICKNAME_SUMMARY_RECORD_LIMIT,
+        total: 0,
+        offset: 0,
+        nextCursor: null,
+        hasNextPage: false,
+      });
       return {
         ok: true as const,
         nicknames: [],
@@ -347,6 +411,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
         limit: CollectionRecordService.NICKNAME_SUMMARY_RECORD_LIMIT,
         offset: 0,
         freshness: await getCollectionReportFreshness(this.storage),
+        pagination,
       };
     }
 
@@ -419,6 +484,14 @@ export class CollectionRecordService extends CollectionServiceSupport {
       to: to || undefined,
       nicknames: nicknameFilters,
     });
+    const pagination = buildCollectionPaginationMeta({
+      page: resolvedPage,
+      pageSize: recordLimit,
+      total: totals.totalRecords,
+      offset: recordOffset,
+      nextCursor: null,
+      hasNextPage: !summaryOnly && recordOffset + records.length < totals.totalRecords,
+    });
 
     return {
       ok: true as const,
@@ -432,6 +505,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
       limit: recordLimit,
       offset: recordOffset,
       freshness,
+      pagination,
     };
   }
 

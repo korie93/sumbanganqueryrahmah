@@ -23,6 +23,17 @@ test("getCollectionNicknameSummary forwards query params and AbortSignal", async
         pageSize: 25,
         limit: 25,
         offset: 25,
+        pagination: {
+          page: 2,
+          pageSize: 25,
+          total: 1,
+          totalPages: 1,
+          limit: 25,
+          offset: 25,
+          nextCursor: null,
+          hasNextPage: false,
+          hasPreviousPage: true,
+        },
         nicknameTotals: [],
         records: [],
       }),
@@ -36,7 +47,7 @@ test("getCollectionNicknameSummary forwards query params and AbortSignal", async
   }) as typeof fetch;
 
   try {
-    await getCollectionNicknameSummary(
+    const payload = await getCollectionNicknameSummary(
       {
         from: "2026-03-01",
         to: "2026-03-31",
@@ -47,6 +58,8 @@ test("getCollectionNicknameSummary forwards query params and AbortSignal", async
       },
       { signal: controller.signal },
     );
+    assert.equal(payload.pagination.total, 1);
+    assert.equal(payload.pagination.pageSize, 25);
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -871,6 +871,17 @@ test("GET /api/collection/list applies pagination, receipt review filters, and u
     assert.equal(payload.pageSize, 20);
     assert.equal(payload.limit, 20);
     assert.equal(payload.offset, 40);
+    assert.deepEqual(payload.pagination, {
+      page: 3,
+      pageSize: 20,
+      total: 1,
+      totalPages: 1,
+      limit: 20,
+      offset: 40,
+      nextCursor: null,
+      hasNextPage: false,
+      hasPreviousPage: true,
+    });
     assert.equal(summaryCalls.length, 1);
     assert.equal(summaryCalls[0].createdByLogin, "staff.user");
     assert.equal(summaryCalls[0].search, "BATCH-001");
@@ -991,6 +1002,17 @@ test("GET /api/collection/list returns nextCursor and accepts cursor-based follo
     assert.equal(firstPayload.offset, 0);
     assert.equal(firstPayload.total, 3);
     assert.equal(typeof firstPayload.nextCursor, "string");
+    assert.deepEqual(firstPayload.pagination, {
+      page: 1,
+      pageSize: 2,
+      total: 3,
+      totalPages: 2,
+      limit: 2,
+      offset: 0,
+      nextCursor: firstPayload.nextCursor,
+      hasNextPage: true,
+      hasPreviousPage: false,
+    });
 
     const secondResponse = await fetch(
       `${baseUrl}/api/collection/list?pageSize=2&cursor=${encodeURIComponent(firstPayload.nextCursor)}`,
@@ -1003,6 +1025,17 @@ test("GET /api/collection/list returns nextCursor and accepts cursor-based follo
     assert.equal(secondPayload.records[0].id, "collection-3");
     assert.equal(secondPayload.offset, 2);
     assert.equal(secondPayload.nextCursor, null);
+    assert.deepEqual(secondPayload.pagination, {
+      page: 2,
+      pageSize: 2,
+      total: 3,
+      totalPages: 2,
+      limit: 2,
+      offset: 2,
+      nextCursor: null,
+      hasNextPage: false,
+      hasPreviousPage: true,
+    });
 
     assert.equal(listCalls.length, 2);
     assert.equal(listCalls[0].offset, 0);
@@ -1984,6 +2017,17 @@ test("GET /api/collection/nickname-summary honors summaryOnly and avoids loading
     assert.equal(payload.totalRecords, 3);
     assert.equal(payload.totalAmount, 450.5);
     assert.deepEqual(payload.records, []);
+    assert.deepEqual(payload.pagination, {
+      page: 1,
+      pageSize: 250,
+      total: 3,
+      totalPages: 1,
+      limit: 250,
+      offset: 0,
+      nextCursor: null,
+      hasNextPage: false,
+      hasPreviousPage: false,
+    });
     assert.deepEqual(nicknameActiveChecks, ["Collector Alpha"]);
     assert.equal(nicknameSummaryCalls.length, 1);
     assert.equal(nicknameSummaryCalls[0].from, "2026-03-01");
@@ -2026,6 +2070,17 @@ test("GET /api/collection/nickname-summary clamps detail-row loading to a safer 
     assert.equal(payload.limit, 250);
     assert.equal(payload.offset, 12);
     assert.equal(payload.records.length, 1);
+    assert.deepEqual(payload.pagination, {
+      page: 1,
+      pageSize: 250,
+      total: 3,
+      totalPages: 1,
+      limit: 250,
+      offset: 12,
+      nextCursor: null,
+      hasNextPage: false,
+      hasPreviousPage: true,
+    });
     assert.deepEqual(nicknameActiveChecks, ["Collector Alpha"]);
     assert.equal(nicknameSummaryCalls.length, 1);
     assert.equal(nicknameListCalls.length, 1);
@@ -2067,6 +2122,17 @@ test("GET /api/collection/nickname-summary returns an empty payload immediately 
     assert.equal(payload.totalRecords, 0);
     assert.equal(payload.totalAmount, 0);
     assert.deepEqual(payload.records, []);
+    assert.deepEqual(payload.pagination, {
+      page: 1,
+      pageSize: 250,
+      total: 0,
+      totalPages: 1,
+      limit: 250,
+      offset: 0,
+      nextCursor: null,
+      hasNextPage: false,
+      hasPreviousPage: false,
+    });
     assert.equal(nicknameActiveChecks.length, 0);
     assert.equal(nicknameSummaryCalls.length, 0);
     assert.equal(nicknameListCalls.length, 0);

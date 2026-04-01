@@ -101,7 +101,12 @@ export function useCollectionRecordsController({
       });
       const pageRecords = Array.isArray(response?.records) ? response.records : [];
       allRecords.push(...pageRecords);
-      nextCursor = typeof response?.nextCursor === "string" ? response.nextCursor : null;
+      nextCursor =
+        typeof response?.pagination?.nextCursor === "string"
+          ? response.pagination.nextCursor
+          : typeof response?.nextCursor === "string"
+            ? response.nextCursor
+            : null;
     } while (nextCursor);
 
     return allRecords;

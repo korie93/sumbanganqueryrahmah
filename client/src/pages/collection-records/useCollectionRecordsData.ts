@@ -218,10 +218,14 @@ export function useCollectionRecordsData({
         ) return;
 
         const nextRecords = Array.isArray(response?.records) ? response.records : [];
-        const nextTotalRecords = Number(response?.total || 0);
+        const nextTotalRecords = Number((response?.pagination?.total ?? response?.total) || 0);
         const nextTotalAmount = Number(response?.totalAmount || 0);
         const nextCursorValue =
-          typeof response?.nextCursor === "string" ? response.nextCursor : null;
+          typeof response?.pagination?.nextCursor === "string"
+            ? response.pagination.nextCursor
+            : typeof response?.nextCursor === "string"
+              ? response.nextCursor
+              : null;
 
         recordsCacheRef.current.set(cacheKey, {
           records: nextRecords,
