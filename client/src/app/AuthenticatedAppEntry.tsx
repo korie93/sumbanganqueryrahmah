@@ -14,12 +14,14 @@ type AuthenticatedAppEntryProps = {
   initialMonitorSection: MonitorSection;
   initialPage: string;
   initialUser: User;
+  onLoggedOut: () => void;
 };
 
 export default function AuthenticatedAppEntry({
   initialMonitorSection,
   initialPage,
   initialUser,
+  onLoggedOut,
 }: AuthenticatedAppEntryProps) {
   const {
     currentPage,
@@ -54,6 +56,12 @@ export default function AuthenticatedAppEntry({
     );
   }, [currentPage, monitorSection, systemName, user]);
 
+  useEffect(() => {
+    if (!user) {
+      onLoggedOut();
+    }
+  }, [onLoggedOut, user]);
+
   const navigateHome = () => {
     if (!user) {
       handleNavigate("login");
@@ -83,7 +91,7 @@ export default function AuthenticatedAppEntry({
   );
 
   if (!user) {
-    return <PageSpinner fullscreen />;
+    return null;
   }
 
   if (!isSingleTabReady) {

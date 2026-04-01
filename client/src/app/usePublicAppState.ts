@@ -129,6 +129,13 @@ export function usePublicAppState() {
     replaceHistory(buildPathForPage(nextPage));
   }, []);
 
+  const handleAuthenticatedLogout = useCallback(() => {
+    setUser(null);
+    setCurrentPage("home");
+    setMonitorSection("monitor");
+    replaceHistory("/");
+  }, []);
+
   const handleLoginSuccess = useCallback((loggedInUser: User) => {
     const route = typeof window !== "undefined"
       ? resolveRouteFromLocation(window.location.pathname, window.location.search)
@@ -245,6 +252,7 @@ export function usePublicAppState() {
 
   return {
     currentPage,
+    handleAuthenticatedLogout,
     handleLoginSuccess,
     handlePublicNavigate,
     isInitialized,

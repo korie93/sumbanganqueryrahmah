@@ -19,6 +19,7 @@ const AuthenticatedAppEntry = lazy(() => import("@/app/AuthenticatedAppEntry"));
 function AppContent() {
   const {
     currentPage,
+    handleAuthenticatedLogout,
     handleLoginSuccess,
     isInitialized,
     monitorSection,
@@ -89,6 +90,7 @@ function AppContent() {
         initialUser={user}
         initialPage={currentPage}
         initialMonitorSection={monitorSection}
+        onLoggedOut={handleAuthenticatedLogout}
       />
     </Suspense>
   );
