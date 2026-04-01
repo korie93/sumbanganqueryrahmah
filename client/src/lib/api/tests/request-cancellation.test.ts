@@ -305,6 +305,7 @@ test("getImportData forwards AbortSignal and rejects on abort", async () => {
             total: 0,
             page: 2,
             limit: 50,
+            pageSize: 50,
             nextCursor: null,
           }),
         );
@@ -334,7 +335,7 @@ test("getImportData forwards AbortSignal and rejects on abort", async () => {
   assert.equal(requests[0]?.signal, controller.signal);
   const params = new URL(`http://localhost${requests[0]?.url || ""}`).searchParams;
   assert.equal(params.get("page"), "2");
-  assert.equal(params.get("limit"), "50");
+  assert.equal(params.get("pageSize"), "50");
   assert.equal(params.get("search"), "alice");
   assert.equal(params.get("cursor"), "cursor-1");
   assert.deepEqual(JSON.parse(String(params.get("columnFilters") || "[]")), [
@@ -387,6 +388,7 @@ test("saved import API wrappers forward AbortSignal", async () => {
         imports: [],
         pagination: {
           limit: 50,
+          pageSize: 50,
           nextCursor: null,
           hasMore: false,
           total: 0,
@@ -432,7 +434,7 @@ test("saved import API wrappers forward AbortSignal", async () => {
   assert.equal(requests[2]?.signal, controller.signal);
   assert.equal(
     requests[0]?.url,
-    "/api/imports?cursor=cursor-1&limit=50&search=march&createdOn=2026-03-09",
+    "/api/imports?cursor=cursor-1&pageSize=50&search=march&createdOn=2026-03-09",
   );
   assert.equal(requests[1]?.url, "/api/imports/import-123/rename");
   assert.equal(requests[2]?.url, "/api/imports/import-123");

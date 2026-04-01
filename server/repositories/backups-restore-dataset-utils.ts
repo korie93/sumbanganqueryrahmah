@@ -20,6 +20,7 @@ import { rebuildCollectionRecordDailyRollups } from "./collection-record-reposit
 
 type BackupPayloadReader = {
   getArray<T>(key: keyof BackupDataPayload): T[];
+  iterateArrayChunks<T>(key: keyof BackupDataPayload, chunkSize: number): Generator<T[]>;
 };
 
 type BackupRestoreExecutor = {
@@ -41,6 +42,8 @@ export function chunkArray<T>(rows: T[], size: number): T[][] {
   }
   return chunks;
 }
+
+const RESTORED_COLLECTION_RECORD_IDS_TEMP_TABLE = sql.raw("sqr_restored_collection_record_ids");
 
 export function createRestoreStats(): RestoreStats {
   return {
@@ -78,8 +81,7 @@ export async function restoreImportsFromBackup(
   backupDataReader: BackupPayloadReader,
   stats: RestoreStats,
 ) {
-  const importChunks = chunkArray(backupDataReader.getArray<Import>("imports"), BACKUP_CHUNK_SIZE);
-  for (const chunk of importChunks) {
+  for (const chunk of backupDataReader.iterateArrayChunks<Import>("imports", BACKUP_CHUNK_SIZE)) {
     const rows = chunk.map((record) => ({
       id: record.id,
       name: record.name,
@@ -117,8 +119,7 @@ export async function restoreDataRowsFromBackup(
   backupDataReader: BackupPayloadReader,
   stats: RestoreStats,
 ) {
-  const dataRowChunks = chunkArray(backupDataReader.getArray<DataRow>("dataRows"), BACKUP_CHUNK_SIZE);
-  for (const chunk of dataRowChunks) {
+  for (const chunk of backupDataReader.iterateArrayChunks<DataRow>("dataRows", BACKUP_CHUNK_SIZE)) {
     const rows = chunk.map((row) => ({
       id: row.id ?? crypto.randomUUID(),
       importId: row.importId,
@@ -141,8 +142,7 @@ export async function restoreUsersFromBackup(
   backupDataReader: BackupPayloadReader,
   stats: RestoreStats,
 ) {
-  const userChunks = chunkArray(backupDataReader.getArray<BackupUserRecord>("users"), BACKUP_CHUNK_SIZE);
-  for (const chunk of userChunks) {
+  for (const chunk of backupDataReader.iterateArrayChunks<BackupUserRecord>("users", BACKUP_CHUNK_SIZE)) {
     const now = new Date();
     const rows = chunk
       .filter((user) => Boolean(user.passwordHash))
@@ -186,8 +186,7 @@ export async function restoreAuditLogsFromBackup(
   backupDataReader: BackupPayloadReader,
   stats: RestoreStats,
 ) {
-  const auditChunks = chunkArray(backupDataReader.getArray<AuditLog>("auditLogs"), BACKUP_CHUNK_SIZE);
-  for (const chunk of auditChunks) {
+  for (const chunk of backupDataReader.iterateArrayChunks<AuditLog>("auditLogs", BACKUP_CHUNK_SIZE)) {
     const rows = chunk.map((log) => ({
       id: (log as any).id ?? crypto.randomUUID(),
       action: log.action,
@@ -210,17 +209,24 @@ export async function restoreAuditLogsFromBackup(
   }
 }
 
+export async function initializeRestoreTrackingTempTable(tx: BackupRestoreExecutor) {
+  await tx.execute(sql`
+    CREATE TEMP TABLE ${RESTORED_COLLECTION_RECORD_IDS_TEMP_TABLE} (
+      id uuid PRIMARY KEY
+    )
+    ON COMMIT DROP
+  `);
+}
+
 export async function restoreCollectionRecordsFromBackup(
   tx: BackupRestoreExecutor,
   backupDataReader: BackupPayloadReader,
   stats: RestoreStats,
-  restoredCollectionRecordIds: Set<string>,
 ) {
-  const collectionRecordChunks = chunkArray(
-    backupDataReader.getArray<BackupCollectionRecord>("collectionRecords"),
+  for (const chunk of backupDataReader.iterateArrayChunks<BackupCollectionRecord>(
+    "collectionRecords",
     BACKUP_CHUNK_SIZE,
-  );
-  for (const chunk of collectionRecordChunks) {
+  )) {
     const rows = chunk
       .map((record) => {
         const paymentDate =
@@ -255,9 +261,16 @@ export async function restoreCollectionRecordsFromBackup(
 
     stats.collectionRecords.processed += rows.length;
     if (!rows.length) continue;
-    for (const row of rows) {
-      restoredCollectionRecordIds.add(row.id);
-    }
+
+    const restoredIdValuesSql = sql.join(
+      rows.map((row) => sql`(${row.id}::uuid)`),
+      sql`, `,
+    );
+    await tx.execute(sql`
+      INSERT INTO ${RESTORED_COLLECTION_RECORD_IDS_TEMP_TABLE} (id)
+      VALUES ${restoredIdValuesSql}
+      ON CONFLICT (id) DO NOTHING
+    `);
 
     const valuesSql = sql.join(
       rows.map((row) => sql`(
@@ -319,11 +332,10 @@ export async function restoreCollectionRecordReceiptsFromBackup(
   backupDataReader: BackupPayloadReader,
   stats: RestoreStats,
 ) {
-  const collectionReceiptChunks = chunkArray(
-    backupDataReader.getArray<BackupCollectionReceipt>("collectionRecordReceipts"),
+  for (const chunk of backupDataReader.iterateArrayChunks<BackupCollectionReceipt>(
+    "collectionRecordReceipts",
     BACKUP_CHUNK_SIZE,
-  );
-  for (const chunk of collectionReceiptChunks) {
+  )) {
     const rows = chunk
       .map((receipt) => {
         if (!receipt.collectionRecordId || !receipt.storagePath) return null;
@@ -406,27 +418,22 @@ export async function restoreCollectionRecordReceiptsFromBackup(
 
 export async function syncRestoredCollectionReceiptCache(
   tx: BackupRestoreExecutor,
-  restoredCollectionRecordIds: Set<string>,
 ) {
-  if (restoredCollectionRecordIds.size > 0) {
-    const recordIdSql = sql.join(
-      Array.from(restoredCollectionRecordIds).map((value) => sql`${value}::uuid`),
-      sql`, `,
-    );
-    await tx.execute(sql`
-      UPDATE public.collection_records record
-      SET receipt_file = first_receipt.storage_path
-      FROM (
-        SELECT DISTINCT ON (collection_record_id)
-          collection_record_id,
-          storage_path
-        FROM public.collection_record_receipts
-        WHERE collection_record_id IN (${recordIdSql})
-        ORDER BY collection_record_id, created_at ASC, id ASC
-      ) first_receipt
-      WHERE record.id = first_receipt.collection_record_id
-    `);
-  }
+  await tx.execute(sql`
+    UPDATE public.collection_records record
+    SET receipt_file = first_receipt.storage_path
+    FROM (
+      SELECT DISTINCT ON (collection_record_id)
+        collection_record_id,
+        storage_path
+      FROM public.collection_record_receipts
+      WHERE collection_record_id IN (
+        SELECT id FROM ${RESTORED_COLLECTION_RECORD_IDS_TEMP_TABLE}
+      )
+      ORDER BY collection_record_id, created_at ASC, id ASC
+    ) first_receipt
+    WHERE record.id = first_receipt.collection_record_id
+  `);
 }
 
 export async function finalizeRestoredCollectionRollups(tx: BackupRestoreExecutor) {

@@ -47,6 +47,33 @@ test("normalizeViewerPageResult preserves paging metadata and injects stable row
   });
 });
 
+test("normalizeViewerPageResult prefers pageSize when present", () => {
+  const normalized = normalizeViewerPageResult(
+    {
+      rows: [
+        { jsonDataJsonb: { name: "A" } },
+      ],
+      total: 11,
+      page: 2,
+      pageSize: 5,
+      limit: 99,
+      nextCursor: null,
+    },
+    1,
+    25,
+  );
+
+  assert.deepEqual(normalized, {
+    rows: [
+      { __rowId: 5, name: "A" },
+    ],
+    total: 11,
+    page: 2,
+    limit: 5,
+    nextCursor: null,
+  });
+});
+
 test("buildViewerActiveFilterChips includes search and filter chips with working removal callbacks", () => {
   let clearedSearch = false;
   let removedFilterIndex = -1;

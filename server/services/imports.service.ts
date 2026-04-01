@@ -85,6 +85,7 @@ type ImportDataPageResult = {
   total: number;
   page: number;
   limit: number;
+  pageSize: number;
   nextCursor: string | null;
 };
 
@@ -217,6 +218,7 @@ export class ImportsService {
       total: result.total || 0,
       page: effectivePage,
       limit,
+      pageSize: limit,
       nextCursor,
     };
   }

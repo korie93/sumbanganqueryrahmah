@@ -18,6 +18,7 @@ export type ViewerPageResponse = {
   total?: number;
   page?: number;
   limit?: number;
+  pageSize?: number;
   nextCursor?: string | null;
 };
 
@@ -52,8 +53,10 @@ export function normalizeViewerPageResult(
   const page = Number.isFinite(Number(response?.page))
     ? Math.max(1, Math.trunc(Number(response?.page)))
     : requestedPage;
-  const limit = Number.isFinite(Number(response?.limit))
-    ? Math.max(1, Math.trunc(Number(response?.limit)))
+  const limit = Number.isFinite(Number(response?.pageSize))
+    ? Math.max(1, Math.trunc(Number(response?.pageSize)))
+    : Number.isFinite(Number(response?.limit))
+      ? Math.max(1, Math.trunc(Number(response?.limit)))
     : fallbackLimit;
   const total = Number.isFinite(Number(response?.total))
     ? Math.max(0, Math.trunc(Number(response?.total)))

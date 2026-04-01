@@ -174,13 +174,14 @@ function createImportsRouteHarness(options?: {
   const listImportsWithCursor = (params: {
     cursor?: string | null;
     limit?: number;
+    pageSize?: number;
     search?: string | null;
     createdOn?: string | null;
   }) => {
     listImportsPageCalls.push(params);
     const search = String(params.search || "").trim().toLowerCase();
     const createdOn = String(params.createdOn || "").trim();
-    const limit = Math.max(1, Math.min(200, Number(params.limit || 100)));
+    const limit = Math.max(1, Math.min(200, Number(params.pageSize ?? params.limit ?? 100)));
     const filtered = listImportsWithCounts().filter((item) => {
       const matchesSearch = !search
         || item.name.toLowerCase().includes(search)
@@ -402,6 +403,7 @@ test("GET /api/imports returns imports with row counts", async () => {
     assert.equal(payload.imports[0].rowCount, 2);
     assert.deepEqual(payload.pagination, {
       limit: 100,
+      pageSize: 100,
       nextCursor: null,
       hasMore: false,
       total: 3,
@@ -423,7 +425,7 @@ test("GET /api/imports forwards cursor search and date filters", async () => {
 
   try {
     const response = await fetch(
-      `${baseUrl}/api/imports?limit=1&cursor=import-1&search=batch&createdOn=2026-03-09`,
+      `${baseUrl}/api/imports?pageSize=1&cursor=import-1&search=batch&createdOn=2026-03-09`,
     );
     assert.equal(response.status, 200);
 
@@ -433,6 +435,7 @@ test("GET /api/imports forwards cursor search and date filters", async () => {
     assert.equal(payload.imports[0].id, "import-2");
     assert.deepEqual(payload.pagination, {
       limit: 1,
+      pageSize: 1,
       nextCursor: null,
       hasMore: false,
       total: 1,
@@ -638,13 +641,14 @@ test("GET /api/imports/:id/data applies the protected page-size cap and forwards
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/api/imports/import-1/data?page=2&limit=400&search=Alice`);
+    const response = await fetch(`${baseUrl}/api/imports/import-1/data?page=2&pageSize=400&search=Alice`);
     assert.equal(response.status, 200);
 
     const payload = await response.json();
     assert.doesNotThrow(() => importDataPageResponseSchema.parse(payload));
     assert.equal(payload.page, 2);
     assert.equal(payload.limit, 120);
+    assert.equal(payload.pageSize, 120);
     assert.equal(payload.total, 2);
     assert.equal(searchCalls.length, 1);
     assert.deepEqual(searchCalls[0], {
@@ -729,7 +733,7 @@ test("GET /api/imports/:id/data applies dataset-wide column filters", async () =
     const filters = encodeURIComponent(JSON.stringify([
       { column: "name", operator: "equals", value: "Bob" },
     ]));
-    const response = await fetch(`${baseUrl}/api/imports/import-1/data?page=1&limit=20&columnFilters=${filters}`);
+    const response = await fetch(`${baseUrl}/api/imports/import-1/data?page=1&pageSize=20&columnFilters=${filters}`);
     assert.equal(response.status, 200);
 
     const payload = await response.json();
@@ -763,18 +767,19 @@ test("GET /api/imports/:id/data returns cursor tokens for large datasets", async
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const firstResponse = await fetch(`${baseUrl}/api/imports/import-1/data?page=1&limit=10`);
+    const firstResponse = await fetch(`${baseUrl}/api/imports/import-1/data?page=1&pageSize=10`);
     assert.equal(firstResponse.status, 200);
 
     const firstPayload = await firstResponse.json();
     assert.doesNotThrow(() => importDataPageResponseSchema.parse(firstPayload));
     assert.equal(firstPayload.page, 1);
+    assert.equal(firstPayload.pageSize, 10);
     assert.equal(firstPayload.rows.length, 10);
     assert.equal(firstPayload.rows[0]?.jsonDataJsonb?.name, "Customer 1");
     assert.equal(typeof firstPayload.nextCursor, "string");
 
     const secondResponse = await fetch(
-      `${baseUrl}/api/imports/import-1/data?page=2&limit=10&cursor=${encodeURIComponent(String(firstPayload.nextCursor || ""))}`,
+      `${baseUrl}/api/imports/import-1/data?page=2&pageSize=10&cursor=${encodeURIComponent(String(firstPayload.nextCursor || ""))}`,
     );
     assert.equal(secondResponse.status, 200);
 

@@ -10,6 +10,7 @@ import {
 type ImportRequestOptions = {
   cursor?: string;
   limit?: number;
+  pageSize?: number;
   search?: string;
   createdOn?: string;
   signal?: AbortSignal;
@@ -28,8 +29,9 @@ type ImportDataRequestOptions = ImportRequestOptions & {
 export async function getImports(options?: ImportRequestOptions) {
   const params = new URLSearchParams();
   if (options?.cursor) params.set("cursor", options.cursor);
-  if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
-    params.set("limit", String(options.limit));
+  const pageSize = options?.pageSize ?? options?.limit;
+  if (typeof pageSize === "number" && Number.isFinite(pageSize)) {
+    params.set("pageSize", String(pageSize));
   }
   if (options?.search?.trim()) params.set("search", options.search.trim());
   if (options?.createdOn?.trim()) params.set("createdOn", options.createdOn.trim());
@@ -89,13 +91,13 @@ export async function renameImport(id: string, name: string, options?: ImportReq
 export async function getImportData(
   id: string,
   page: number = 1,
-  limit: number = 100,
+  pageSize: number = 100,
   search?: string,
   options?: ImportDataRequestOptions,
 ) {
   const params = new URLSearchParams();
   params.set("page", String(page));
-  params.set("limit", String(limit));
+  params.set("pageSize", String(pageSize));
 
   if (search && search.trim() !== "") {
     params.set("search", search.trim());

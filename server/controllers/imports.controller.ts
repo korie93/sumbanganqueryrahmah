@@ -66,8 +66,10 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
 
   const listDataRows = async (req: AuthenticatedRequest, res: Response) => {
     const importId = readNonEmptyString(req.query.importId);
-    const limit = readInteger(req.query.limit, 10);
-    const offset = readInteger(req.query.offset, 0);
+    const pageSize = readInteger(req.query.pageSize ?? req.query.limit, 10);
+    const page = Math.max(1, readInteger(req.query.page, 1));
+    const offsetQuery = readNonEmptyString(req.query.offset);
+    const offset = offsetQuery ? readInteger(req.query.offset, 0) : (page - 1) * pageSize;
     const search = String(req.query.q || "").trim();
 
     if (!importId) {
@@ -77,7 +79,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     const result = await importsService.searchImportRows({
       importId,
       search: search || null,
-      limit,
+      limit: pageSize,
       offset,
     });
 
@@ -86,14 +88,14 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
 
   const listImports = async (_req: AuthenticatedRequest, res: Response) => {
     const cursor = readNonEmptyString(_req.query.cursor);
-    const limit = readInteger(_req.query.limit, 100);
+    const pageSize = readInteger(_req.query.pageSize ?? _req.query.limit, 100);
     const search = readNonEmptyString(_req.query.search);
     const createdOn = readNonEmptyString(_req.query.createdOn);
 
     try {
       const result = await importsService.listImports({
         cursor: cursor || null,
-        limit,
+        limit: pageSize,
         search: search || null,
         createdOn: createdOn || null,
       });
@@ -101,6 +103,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
         imports: result.items,
         pagination: {
           limit: result.limit,
+          pageSize: result.limit,
           nextCursor: result.nextCursor,
           hasMore: result.nextCursor !== null,
           total: result.total,
@@ -150,7 +153,10 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     const importId = readNonEmptyString(req.params.id);
     const page = Math.max(1, readInteger(req.query.page, 1));
     const cursor = readNonEmptyString(req.query.cursor);
-    const requestedLimit = readInteger(req.query.limit, runtimeSettings.viewerRowsPerPage);
+    const requestedPageSize = readInteger(
+      req.query.pageSize ?? req.query.limit,
+      runtimeSettings.viewerRowsPerPage,
+    );
     const search = String(req.query.search || "").trim();
     const columnFilters = parseViewerColumnFiltersQuery(req.query.columnFilters);
 
@@ -163,7 +169,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
         importId,
         page,
         cursor: cursor || null,
-        requestedLimit,
+        requestedLimit: requestedPageSize,
         viewerRowsPerPage: runtimeSettings.viewerRowsPerPage,
         isDbProtected: isDbProtected(),
         search,

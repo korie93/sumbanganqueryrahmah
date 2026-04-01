@@ -7,6 +7,7 @@ import {
 import {
   createRestoreStats,
   finalizeRestoredCollectionRollups,
+  initializeRestoreTrackingTempTable,
   restoreAuditLogsFromBackup,
   restoreCollectionRecordReceiptsFromBackup,
   restoreCollectionRecordsFromBackup,
@@ -31,21 +32,16 @@ export async function restoreFromBackup(
     (backupDataRaw || {}) as BackupPayloadSource,
   );
   const stats = createRestoreStats();
-  const restoredCollectionRecordIds = new Set<string>();
 
   await db.transaction(async (tx) => {
+    await initializeRestoreTrackingTempTable(tx as any);
     await restoreImportsFromBackup(tx as any, backupDataReader, stats);
     await restoreDataRowsFromBackup(tx as any, backupDataReader, stats);
     await restoreUsersFromBackup(tx as any, backupDataReader, stats);
     await restoreAuditLogsFromBackup(tx as any, backupDataReader, stats);
-    await restoreCollectionRecordsFromBackup(
-      tx as any,
-      backupDataReader,
-      stats,
-      restoredCollectionRecordIds,
-    );
+    await restoreCollectionRecordsFromBackup(tx as any, backupDataReader, stats);
     await restoreCollectionRecordReceiptsFromBackup(tx as any, backupDataReader, stats);
-    await syncRestoredCollectionReceiptCache(tx as any, restoredCollectionRecordIds);
+    await syncRestoredCollectionReceiptCache(tx as any);
     await finalizeRestoredCollectionRollups(tx as any);
   });
 

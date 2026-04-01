@@ -21,6 +21,7 @@ export const importsListResponseSchema = z.object({
   imports: z.array(importListItemSchema),
   pagination: z.object({
     limit: nonNegativeIntSchema,
+    pageSize: nonNegativeIntSchema.optional(),
     nextCursor: nullableStringSchema,
     hasMore: z.boolean(),
     total: nonNegativeIntSchema,
@@ -38,6 +39,7 @@ export const importDataPageResponseSchema = z.object({
   total: nonNegativeIntSchema,
   page: z.number().int().positive(),
   limit: z.number().int().positive(),
+  pageSize: z.number().int().positive().optional(),
   nextCursor: nullableStringSchema,
 });
 

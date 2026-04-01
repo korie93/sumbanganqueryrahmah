@@ -45,6 +45,7 @@ test("imports API wrappers accept payloads that match the shared contract", asyn
         total: 1,
         page: 1,
         limit: 50,
+        pageSize: 50,
         nextCursor: null,
       });
     }
@@ -64,6 +65,7 @@ test("imports API wrappers accept payloads that match the shared contract", asyn
         ],
         pagination: {
           limit: 100,
+          pageSize: 100,
           nextCursor: null,
           hasMore: false,
           total: 1,

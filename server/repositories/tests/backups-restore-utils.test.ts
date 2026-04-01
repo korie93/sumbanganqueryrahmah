@@ -86,3 +86,47 @@ test("createBackupPayloadSectionReader returns empty arrays for missing optional
   assert.deepEqual(reader.getArray("collectionRecords"), []);
   assert.deepEqual(reader.getArray("collectionRecordReceipts"), []);
 });
+
+test("createBackupPayloadSectionReader iterates JSON array datasets in bounded chunks", () => {
+  const reader = createBackupPayloadSectionReader(JSON.stringify({
+    imports: [],
+    dataRows: [],
+    users: [],
+    auditLogs: [],
+    collectionRecords: [
+      { id: "record-1", customerName: "Alice", paymentDate: "2026-03-31", amount: 10 },
+      { id: "record-2", customerName: "Bob", paymentDate: "2026-03-31", amount: 20 },
+      { id: "record-3", customerName: "Cara", paymentDate: "2026-03-31", amount: 30 },
+    ],
+    collectionRecordReceipts: [],
+  }));
+
+  const chunks = Array.from(reader.iterateArrayChunks<{ id: string }>("collectionRecords", 2));
+
+  assert.deepEqual(
+    chunks.map((chunk) => chunk.map((row) => row.id)),
+    [["record-1", "record-2"], ["record-3"]],
+  );
+});
+
+test("createBackupPayloadSectionReader iterates object-source datasets in bounded chunks", () => {
+  const reader = createBackupPayloadSectionReader({
+    imports: [],
+    dataRows: [],
+    users: [],
+    auditLogs: [],
+    collectionRecords: [
+      { id: "record-1", customerName: "Alice", paymentDate: "2026-03-31", amount: 10 } as any,
+      { id: "record-2", customerName: "Bob", paymentDate: "2026-03-31", amount: 20 } as any,
+      { id: "record-3", customerName: "Cara", paymentDate: "2026-03-31", amount: 30 } as any,
+    ],
+    collectionRecordReceipts: [],
+  });
+
+  const chunks = Array.from(reader.iterateArrayChunks<{ id: string }>("collectionRecords", 2));
+
+  assert.deepEqual(
+    chunks.map((chunk) => chunk.map((row) => row.id)),
+    [["record-1", "record-2"], ["record-3"]],
+  );
+});

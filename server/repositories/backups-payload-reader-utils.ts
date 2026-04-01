@@ -149,12 +149,77 @@ function parseTopLevelBackupMemberRanges(source: string): Map<string, { start: n
   return ranges;
 }
 
+function* iterateArrayChunksFromObjectSource<T>(
+  source: BackupDataPayload,
+  key: BackupDatasetKey,
+  chunkSize: number,
+): Generator<T[]> {
+  const value = source[key];
+  if (!Array.isArray(value) || value.length === 0) {
+    return;
+  }
+
+  const safeChunkSize = Math.max(1, Math.floor(chunkSize));
+  for (let index = 0; index < value.length; index += safeChunkSize) {
+    yield value.slice(index, index + safeChunkSize) as T[];
+  }
+}
+
+function* iterateArrayChunksFromStringSource<T>(
+  source: string,
+  range: { start: number; end: number } | undefined,
+  chunkSize: number,
+): Generator<T[]> {
+  if (!range) {
+    return;
+  }
+
+  const safeChunkSize = Math.max(1, Math.floor(chunkSize));
+  let index = skipWhitespace(source, range.start);
+
+  if (source[index] !== "[") {
+    throw new Error("Invalid backup payload format.");
+  }
+
+  index = skipWhitespace(source, index + 1);
+  let chunk: T[] = [];
+
+  while (index < range.end && source[index] !== "]") {
+    const valueStart = index;
+    const valueEnd = skipJsonValue(source, valueStart);
+    chunk.push(JSON.parse(source.slice(valueStart, valueEnd)) as T);
+
+    if (chunk.length >= safeChunkSize) {
+      yield chunk;
+      chunk = [];
+    }
+
+    index = skipWhitespace(source, valueEnd);
+    if (source[index] === ",") {
+      index = skipWhitespace(source, index + 1);
+      continue;
+    }
+    if (source[index] === "]") {
+      break;
+    }
+
+    throw new Error("Invalid backup payload format.");
+  }
+
+  if (chunk.length > 0) {
+    yield chunk;
+  }
+}
+
 export function createBackupPayloadSectionReader(source: BackupPayloadSource) {
   if (typeof source !== "string") {
     return {
       getArray<T>(key: BackupDatasetKey): T[] {
         const value = source[key];
         return Array.isArray(value) ? (value as T[]) : [];
+      },
+      iterateArrayChunks<T>(key: BackupDatasetKey, chunkSize: number): Generator<T[]> {
+        return iterateArrayChunksFromObjectSource<T>(source, key, chunkSize);
       },
     };
   }
@@ -173,6 +238,9 @@ export function createBackupPayloadSectionReader(source: BackupPayloadSource) {
         throw new Error(`Invalid backup payload dataset: ${key}`);
       }
       return parsed as T[];
+    },
+    iterateArrayChunks<T>(key: BackupDatasetKey, chunkSize: number): Generator<T[]> {
+      return iterateArrayChunksFromStringSource<T>(source, memberRanges.get(key), chunkSize);
     },
   };
 }
