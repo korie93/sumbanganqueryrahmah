@@ -2,71 +2,24 @@ import type { AccountSecuritySectionProps } from "@/pages/settings/AccountSecuri
 import type { ManagedSecretDialogProps } from "@/pages/settings/ManagedSecretDialog";
 import type { ManagedUserDialogProps } from "@/pages/settings/ManagedUserDialog";
 import type { ManagedUser } from "@/pages/settings/types";
-import type { DevMailOutboxPaginationState, DevMailOutboxQueryState } from "@/pages/settings/useSettingsDevMailOutbox";
-import type {
-  ManagedUsersPaginationState,
-  ManagedUsersQueryState,
-  PendingResetRequestsPaginationState,
-  PendingResetRequestsQueryState,
-} from "@/pages/settings/useSettingsManagedUserData";
 
 type SecurityViewModelArgs = {
-  clearingDevMailOutbox: boolean;
   confirmPasswordInput: string;
-  createEmailInput: string;
-  createFullNameInput: string;
-  createRoleInput: "admin" | "user";
-  createUsernameInput: string;
-  creatingManagedUser: boolean;
   currentPasswordInput: string;
   currentUserRole: string;
-  deletingDevMailOutboxId: string | null;
-  deletingManagedUserId: string | null;
-  devMailOutboxEnabled: boolean;
-  devMailOutboxEntries: AccountSecuritySectionProps["devMailOutboxEntries"];
-  devMailOutboxLoading: boolean;
-  devMailOutboxPagination: DevMailOutboxPaginationState;
-  devMailOutboxQuery: DevMailOutboxQueryState;
-  isSuperuser: boolean;
-  managedUsers: ManagedUser[];
-  managedUsersLoading: boolean;
-  managedUsersPagination: ManagedUsersPaginationState;
-  managedUsersQuery: ManagedUsersQueryState;
   newPasswordInput: string;
   onDisableTwoFactor: () => void;
   onEnableTwoFactor: () => void;
   onChangePassword: () => void;
   onChangeUsername: () => void;
-  onClearDevMailOutbox: () => void;
   onConfirmPasswordInputChange: (value: string) => void;
-  onCreateEmailInputChange: (value: string) => void;
-  onCreateFullNameInputChange: (value: string) => void;
-  onCreateManagedUser: () => void;
-  onCreateRoleInputChange: (value: "admin" | "user") => void;
-  onCreateUsernameInputChange: (value: string) => void;
   onCurrentPasswordInputChange: (value: string) => void;
-  onDeleteDevMailOutboxEntry: (previewId: string) => void;
-  onDeleteManagedUser: (user: ManagedUser) => void;
-  onDevMailOutboxRefresh: () => void;
-  onDevMailOutboxQueryChange: (query: Partial<DevMailOutboxQueryState>) => void;
-  onEditManagedUser: (user: ManagedUser) => void;
-  onManagedBanToggle: (user: ManagedUser) => void;
-  onManagedResetPassword: (user: ManagedUser) => void;
-  onManagedResendActivation: (user: ManagedUser) => void;
-  onManagedUsersRefresh: () => void;
-  onManagedUsersQueryChange: (query: Partial<ManagedUsersQueryState>) => void;
   onNewPasswordInputChange: (value: string) => void;
   onStartTwoFactorSetup: () => void;
   onTwoFactorCodeInputChange: (value: string) => void;
   onTwoFactorPasswordInputChange: (value: string) => void;
-  onPendingResetRequestsRefresh: () => void;
-  onPendingResetRequestsQueryChange: (query: Partial<PendingResetRequestsQueryState>) => void;
   onUsernameInputChange: (value: string) => void;
   passwordSaving: boolean;
-  pendingResetRequests: AccountSecuritySectionProps["pendingResetRequests"];
-  pendingResetRequestsLoading: boolean;
-  pendingResetRequestsPagination: PendingResetRequestsPaginationState;
-  pendingResetRequestsQuery: PendingResetRequestsQueryState;
   twoFactorCodeInput: string;
   twoFactorEnabled: boolean;
   twoFactorLoading: boolean;
@@ -111,62 +64,22 @@ export function buildSettingsSecurityViewModel(
   args: SecurityViewModelArgs,
 ): AccountSecuritySectionProps {
   return {
-    clearingDevMailOutbox: args.clearingDevMailOutbox,
     confirmPasswordInput: args.confirmPasswordInput,
-    createEmailInput: args.createEmailInput,
-    createFullNameInput: args.createFullNameInput,
-    createRoleInput: args.createRoleInput,
-    createUsernameInput: args.createUsernameInput,
-    creatingManagedUser: args.creatingManagedUser,
     currentPasswordInput: args.currentPasswordInput,
     currentUserRole: args.currentUserRole,
-    deletingDevMailOutboxId: args.deletingDevMailOutboxId,
-    deletingManagedUserId: args.deletingManagedUserId,
-    devMailOutboxEnabled: args.devMailOutboxEnabled,
-    devMailOutboxEntries: args.devMailOutboxEntries,
-    devMailOutboxLoading: args.devMailOutboxLoading,
-    devMailOutboxPagination: args.devMailOutboxPagination,
-    devMailOutboxQuery: args.devMailOutboxQuery,
-    isSuperuser: args.isSuperuser,
-    managedUsers: args.managedUsers,
-    managedUsersLoading: args.managedUsersLoading,
-    managedUsersPagination: args.managedUsersPagination,
-    managedUsersQuery: args.managedUsersQuery,
     newPasswordInput: args.newPasswordInput,
     onDisableTwoFactor: args.onDisableTwoFactor,
     onEnableTwoFactor: args.onEnableTwoFactor,
     onChangePassword: args.onChangePassword,
     onChangeUsername: args.onChangeUsername,
-    onClearDevMailOutbox: args.onClearDevMailOutbox,
     onConfirmPasswordInputChange: args.onConfirmPasswordInputChange,
-    onCreateEmailInputChange: args.onCreateEmailInputChange,
-    onCreateFullNameInputChange: args.onCreateFullNameInputChange,
-    onCreateManagedUser: args.onCreateManagedUser,
-    onCreateRoleInputChange: args.onCreateRoleInputChange,
-    onCreateUsernameInputChange: args.onCreateUsernameInputChange,
     onCurrentPasswordInputChange: args.onCurrentPasswordInputChange,
-    onDeleteDevMailOutboxEntry: args.onDeleteDevMailOutboxEntry,
-    onDeleteManagedUser: args.onDeleteManagedUser,
-    onDevMailOutboxRefresh: args.onDevMailOutboxRefresh,
-    onDevMailOutboxQueryChange: args.onDevMailOutboxQueryChange,
-    onEditManagedUser: args.onEditManagedUser,
-    onManagedBanToggle: args.onManagedBanToggle,
-    onManagedResetPassword: args.onManagedResetPassword,
-    onManagedResendActivation: args.onManagedResendActivation,
-    onManagedUsersRefresh: args.onManagedUsersRefresh,
-    onManagedUsersQueryChange: args.onManagedUsersQueryChange,
     onNewPasswordInputChange: args.onNewPasswordInputChange,
     onStartTwoFactorSetup: args.onStartTwoFactorSetup,
     onTwoFactorCodeInputChange: args.onTwoFactorCodeInputChange,
     onTwoFactorPasswordInputChange: args.onTwoFactorPasswordInputChange,
-    onPendingResetRequestsRefresh: args.onPendingResetRequestsRefresh,
-    onPendingResetRequestsQueryChange: args.onPendingResetRequestsQueryChange,
     onUsernameInputChange: args.onUsernameInputChange,
     passwordSaving: args.passwordSaving,
-    pendingResetRequests: args.pendingResetRequests,
-    pendingResetRequestsLoading: args.pendingResetRequestsLoading,
-    pendingResetRequestsPagination: args.pendingResetRequestsPagination,
-    pendingResetRequestsQuery: args.pendingResetRequestsQuery,
     twoFactorCodeInput: args.twoFactorCodeInput,
     twoFactorEnabled: args.twoFactorEnabled,
     twoFactorLoading: args.twoFactorLoading,

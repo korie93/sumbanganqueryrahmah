@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileText, Loader2, RefreshCw } from "lucide-react";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
@@ -7,17 +7,38 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { getAuditLogs, getAuditLogStats, cleanupAuditLogs } from "@/lib/api";
 import { getStoredRole } from "@/lib/auth-session";
 import { useToast } from "@/hooks/use-toast";
-import { AuditLogsCleanupPanel } from "@/pages/audit-logs/AuditLogsCleanupPanel";
 import { AuditLogsFiltersPanel } from "@/pages/audit-logs/AuditLogsFiltersPanel";
 import { AuditLogsRecordsList } from "@/pages/audit-logs/AuditLogsRecordsList";
 import type { AuditLogRecord, AuditLogsResponse, AuditLogStats } from "@/pages/audit-logs/types";
 import {
-  exportAuditLogsToCsv,
-  exportAuditLogsToPdf,
   getAuditDateRange,
   getLogsToDeleteCount,
 } from "@/pages/audit-logs/utils";
 import { resolveAuditLogsExportBlockReason } from "@/pages/audit-logs/export-guards";
+
+let auditLogsExportModulePromise: Promise<typeof import("@/pages/audit-logs/audit-logs-export")> | null = null;
+
+function loadAuditLogsExportModule() {
+  if (!auditLogsExportModulePromise) {
+    auditLogsExportModulePromise = import("@/pages/audit-logs/audit-logs-export");
+  }
+
+  return auditLogsExportModulePromise;
+}
+
+const AuditLogsCleanupPanel = lazy(() =>
+  import("@/pages/audit-logs/AuditLogsCleanupPanel").then((module) => ({
+    default: module.AuditLogsCleanupPanel,
+  })),
+);
+
+function AuditLogsCleanupFallback() {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-card/50 p-4 text-sm text-muted-foreground">
+      Loading cleanup tools...
+    </div>
+  );
+}
 
 export default function AuditLogs() {
   const isMobile = useIsMobile();
@@ -215,6 +236,7 @@ export default function AuditLogs() {
     exportInFlightRef.current = true;
     setExportingPdf(true);
     try {
+      const { exportAuditLogsToPdf } = await loadAuditLogsExportModule();
       await exportAuditLogsToPdf(filteredLogs);
     } catch (error: unknown) {
       console.error("Failed to export PDF:", error);
@@ -226,6 +248,24 @@ export default function AuditLogs() {
     } finally {
       exportInFlightRef.current = false;
       setExportingPdf(false);
+    }
+  };
+
+  const handleExportCsv = async () => {
+    if (filteredLogs.length === 0) {
+      return;
+    }
+
+    try {
+      const { exportAuditLogsToCsv } = await loadAuditLogsExportModule();
+      exportAuditLogsToCsv(filteredLogs);
+    } catch (error: unknown) {
+      console.error("Failed to export CSV:", error);
+      toast({
+        title: "Export Failed",
+        description: error instanceof Error ? error.message : "Failed to export CSV",
+        variant: "destructive",
+      });
     }
   };
 
@@ -267,7 +307,7 @@ export default function AuditLogs() {
                 <Button
                   variant="ghost"
                   className="w-full justify-start"
-                  onClick={() => exportAuditLogsToCsv(filteredLogs)}
+                  onClick={() => void handleExportCsv()}
                   disabled={exportingPdf}
                   data-testid="button-export-csv"
                 >
@@ -346,20 +386,24 @@ export default function AuditLogs() {
         targetUserFilter={targetUserFilter}
       />
 
-      <AuditLogsCleanupPanel
-        cleanupDays={cleanupDays}
-        cleanupDialogOpen={canCleanupLogs && cleanupDialogOpen}
-        cleanupLoading={cleanupLoading}
-        cleanupOpen={cleanupOpen}
-        canCleanupLogs={canCleanupLogs}
-        logs={logs}
-        logsToDeleteCount={logsToDeleteCount}
-        onCleanupDaysChange={setCleanupDays}
-        onCleanupDialogOpenChange={setCleanupDialogOpen}
-        onCleanupOpenChange={setCleanupOpen}
-        onConfirmCleanup={handleCleanup}
-        stats={stats}
-      />
+      {canCleanupLogs ? (
+        <Suspense fallback={<AuditLogsCleanupFallback />}>
+          <AuditLogsCleanupPanel
+            cleanupDays={cleanupDays}
+            cleanupDialogOpen={cleanupDialogOpen}
+            cleanupLoading={cleanupLoading}
+            cleanupOpen={cleanupOpen}
+            canCleanupLogs={canCleanupLogs}
+            logs={logs}
+            logsToDeleteCount={logsToDeleteCount}
+            onCleanupDaysChange={setCleanupDays}
+            onCleanupDialogOpenChange={setCleanupDialogOpen}
+            onCleanupOpenChange={setCleanupOpen}
+            onConfirmCleanup={handleCleanup}
+            stats={stats}
+          />
+        </Suspense>
+      ) : null}
 
       <AuditLogsRecordsList
         filteredLogs={filteredLogs}

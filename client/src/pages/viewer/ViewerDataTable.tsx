@@ -1,13 +1,22 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { Suspense, lazy, useLayoutEffect, useMemo, useRef } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { DataRowWithId, ViewerVirtualRowData } from "@/pages/viewer/types";
 import {
   ViewerDataTableFeedback,
   ViewerMobileCardsTable,
-  ViewerStandardTable,
-  ViewerVirtualizedTable,
 } from "@/pages/viewer/ViewerDataTableSections";
 import styles from "./ViewerDataTable.module.css";
+
+const ViewerStandardTable = lazy(() =>
+  import("@/pages/viewer/ViewerStandardTable").then((module) => ({
+    default: module.ViewerStandardTable,
+  })),
+);
+const ViewerVirtualizedTable = lazy(() =>
+  import("@/pages/viewer/ViewerVirtualizedTable").then((module) => ({
+    default: module.ViewerVirtualizedTable,
+  })),
+);
 
 interface ViewerDataTableProps {
   debouncedSearch: string;
@@ -61,6 +70,12 @@ export function ViewerDataTable({
     [filteredRows, gridTemplateColumns, onToggleRowSelection, selectedRowIds, visibleHeaders],
   );
 
+  const desktopTableFallback = (
+    <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-border/60 bg-background/60">
+      <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+    </div>
+  );
+
   return (
     <div className="ops-table-shell overflow-x-auto">
       {isMobile ? (
@@ -73,28 +88,32 @@ export function ViewerDataTable({
           visibleHeaders={visibleHeaders}
         />
       ) : enableVirtualRows ? (
-        <ViewerVirtualizedTable
-          filteredRows={filteredRows}
-          gridTemplateColumns={gridTemplateColumns}
-          onToggleRowSelection={onToggleRowSelection}
-          onToggleSelectAllFiltered={onToggleSelectAllFiltered}
-          rowHeightPx={rowHeightPx}
-          selectedRowIds={selectedRowIds}
-          selectAllFiltered={selectAllFiltered}
-          virtualRowData={virtualRowData}
-          viewportHeightPx={viewportHeightPx}
-          virtualTableWidthRef={virtualTableWidthRef}
-          visibleHeaders={visibleHeaders}
-        />
+        <Suspense fallback={desktopTableFallback}>
+          <ViewerVirtualizedTable
+            filteredRows={filteredRows}
+            gridTemplateColumns={gridTemplateColumns}
+            onToggleRowSelection={onToggleRowSelection}
+            onToggleSelectAllFiltered={onToggleSelectAllFiltered}
+            rowHeightPx={rowHeightPx}
+            selectedRowIds={selectedRowIds}
+            selectAllFiltered={selectAllFiltered}
+            virtualRowData={virtualRowData}
+            viewportHeightPx={viewportHeightPx}
+            virtualTableWidthRef={virtualTableWidthRef}
+            visibleHeaders={visibleHeaders}
+          />
+        </Suspense>
       ) : (
-        <ViewerStandardTable
-          filteredRows={filteredRows}
-          onToggleRowSelection={onToggleRowSelection}
-          onToggleSelectAllFiltered={onToggleSelectAllFiltered}
-          selectedRowIds={selectedRowIds}
-          selectAllFiltered={selectAllFiltered}
-          visibleHeaders={visibleHeaders}
-        />
+        <Suspense fallback={desktopTableFallback}>
+          <ViewerStandardTable
+            filteredRows={filteredRows}
+            onToggleRowSelection={onToggleRowSelection}
+            onToggleSelectAllFiltered={onToggleSelectAllFiltered}
+            selectedRowIds={selectedRowIds}
+            selectAllFiltered={selectAllFiltered}
+            visibleHeaders={visibleHeaders}
+          />
+        </Suspense>
       )}
 
       <ViewerDataTableFeedback

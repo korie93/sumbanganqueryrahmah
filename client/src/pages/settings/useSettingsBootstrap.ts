@@ -13,9 +13,6 @@ type UseSettingsBootstrapArgs = {
   clearSettingsState: () => void;
   hydrateCurrentUser: (nextUser: CurrentUser) => void;
   isMountedRef: MutableRefObject<boolean>;
-  loadDevMailOutbox: () => Promise<unknown>;
-  loadManagedUsers: () => Promise<unknown>;
-  loadPendingResetRequests: () => Promise<unknown>;
   loadSettings: () => Promise<void>;
   toast: ToastFn;
 };
@@ -30,9 +27,6 @@ export function useSettingsBootstrap({
   clearSettingsState,
   hydrateCurrentUser,
   isMountedRef,
-  loadDevMailOutbox,
-  loadManagedUsers,
-  loadPendingResetRequests,
   loadSettings,
   toast,
 }: UseSettingsBootstrapArgs) {
@@ -77,26 +71,6 @@ export function useSettingsBootstrap({
         } else {
           clearSettingsState();
         }
-
-        if (
-          me.role === "superuser" &&
-          isMountedRef.current &&
-          requestId === bootstrapRequestIdRef.current
-        ) {
-          await loadManagedUsers();
-          if (
-            isMountedRef.current &&
-            requestId === bootstrapRequestIdRef.current
-          ) {
-            await loadPendingResetRequests();
-            if (
-              isMountedRef.current &&
-              requestId === bootstrapRequestIdRef.current
-            ) {
-              await loadDevMailOutbox();
-            }
-          }
-        }
       } catch (error: unknown) {
         if (
           controller.signal.aborted ||
@@ -129,9 +103,6 @@ export function useSettingsBootstrap({
     clearSettingsState,
     hydrateCurrentUser,
     isMountedRef,
-    loadDevMailOutbox,
-    loadManagedUsers,
-    loadPendingResetRequests,
     loadSettings,
     toast,
   ]);

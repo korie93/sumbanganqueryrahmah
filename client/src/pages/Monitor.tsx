@@ -1,28 +1,17 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MonitorAccessDenied } from "@/components/monitor/MonitorAccessDenied";
-import { MonitorAlertsSection } from "@/components/monitor/MonitorAlertsSection";
-import { MonitorChaosSection } from "@/components/monitor/MonitorChaosSection";
-import { MonitorInsightsSection } from "@/components/monitor/MonitorInsightsSection";
 import { MonitorMetricsSection } from "@/components/monitor/MonitorMetricsSection";
 import { MonitorOverviewSection } from "@/components/monitor/MonitorOverviewSection";
-import { MonitorRollupQueueControlsSection } from "@/components/monitor/MonitorRollupQueueControlsSection";
 import { MonitorStatusBanners } from "@/components/monitor/MonitorStatusBanners";
 import {
   CHAOS_OPTIONS,
-  buildAnomalyRows,
-  buildChartSeries,
-  buildCorrelationRows,
-  buildForecastSeries,
   buildMetricGroups,
   buildRollupFreshnessSummary,
   formatMonitorDurationCompact,
-  buildSlopeRows,
-  getGovernanceClass,
   getModeBadgeClass,
   getRollupFreshnessBadgeClass,
   getRollupFreshnessStatus,
   getScoreStatus,
-  normalizeBoostedKey,
 } from "@/components/monitor/monitorData";
 import { useSystemMetrics } from "@/hooks/useSystemMetrics";
 import { useToast } from "@/hooks/use-toast";
@@ -36,9 +25,29 @@ import {
 } from "@/lib/api";
 import { getStoredRole } from "@/lib/auth-session";
 
+const MonitorAlertsSection = lazy(() =>
+  import("@/components/monitor/MonitorAlertsSection").then((module) => ({
+    default: module.MonitorAlertsSection,
+  })),
+);
+const MonitorChaosSection = lazy(() =>
+  import("@/components/monitor/MonitorChaosSection").then((module) => ({
+    default: module.MonitorChaosSection,
+  })),
+);
+const MonitorRollupQueueControlsSection = lazy(() =>
+  import("@/components/monitor/MonitorRollupQueueControlsSection").then((module) => ({
+    default: module.MonitorRollupQueueControlsSection,
+  })),
+);
 const MonitorTechnicalChartsSection = lazy(() =>
   import("@/components/monitor/MonitorTechnicalChartsSection").then((module) => ({
     default: module.MonitorTechnicalChartsSection,
+  })),
+);
+const MonitorInsightsSection = lazy(() =>
+  import("@/components/monitor/MonitorInsightsSection").then((module) => ({
+    default: module.MonitorInsightsSection,
   })),
 );
 
@@ -56,6 +65,57 @@ function MonitorChartsFallback() {
           <div
             key={index}
             className="h-64 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MonitorInsightsFallback() {
+  return (
+    <section
+      className="space-y-4 rounded-2xl border border-border/60 bg-background/30 p-4 backdrop-blur-sm"
+      role="status"
+      aria-live="polite"
+      aria-label="Loading intelligence insights"
+    >
+      <div className="space-y-2">
+        <div className="h-6 w-56 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
+        <div className="h-4 w-full max-w-2xl animate-pulse rounded bg-slate-300/60 dark:bg-slate-800/70" />
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <div
+            key={index}
+            className="h-32 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MonitorSectionCardFallback({
+  title,
+  blocks = 2,
+}: {
+  title: string;
+  blocks?: number;
+}) {
+  return (
+    <section
+      className="rounded-2xl border border-border/60 bg-background/30 p-4 backdrop-blur-sm"
+      role="status"
+      aria-live="polite"
+      aria-label={title}
+    >
+      <div className="mb-3 h-5 w-40 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
+      <div className="space-y-3">
+        {Array.from({ length: blocks }).map((_, index) => (
+          <div
+            key={index}
+            className="h-20 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
           />
         ))}
       </div>
@@ -132,23 +192,7 @@ export default function Monitor() {
     () => formatMonitorDurationCompact(snapshot.rollupRefreshOldestPendingAgeMs),
     [snapshot.rollupRefreshOldestPendingAgeMs],
   );
-  const governanceClass = useMemo(
-    () => getGovernanceClass(intelligence.governanceState),
-    [intelligence.governanceState],
-  );
   const metricGroups = useMemo(() => buildMetricGroups(snapshot, history), [history, snapshot]);
-  const chartSeries = useMemo(() => buildChartSeries(history), [history]);
-  const forecastSeries = useMemo(
-    () => buildForecastSeries(intelligence.forecastProjection, lastUpdated),
-    [intelligence.forecastProjection, lastUpdated],
-  );
-  const anomalyRows = useMemo(() => buildAnomalyRows(intelligence), [intelligence]);
-  const correlationRows = useMemo(() => buildCorrelationRows(intelligence), [intelligence]);
-  const slopeRows = useMemo(() => buildSlopeRows(intelligence), [intelligence]);
-  const boostedPairLookup = useMemo(
-    () => new Set(intelligence.correlationMatrix.boostedPairs.map(normalizeBoostedKey)),
-    [intelligence.correlationMatrix.boostedPairs],
-  );
 
   const handleChaosTypeChange = useCallback((nextType: ChaosType) => {
     setChaosType(nextType);
@@ -316,46 +360,48 @@ export default function Monitor() {
           rollupFreshnessAgeLabel={rollupFreshnessAgeLabel}
         />
         <MonitorMetricsSection metricGroups={metricGroups} />
-        <MonitorRollupQueueControlsSection
-          canManageRollups={canManageRollups}
-          snapshot={snapshot}
-          busyAction={queueActionBusy}
-          lastMessage={lastQueueActionMessage}
-          onDrain={() => void runRollupAction("drain")}
-          onRetryFailures={() => void runRollupAction("retry-failures")}
-          onAutoHeal={() => void runRollupAction("auto-heal")}
-          onRebuild={() => void runRollupAction("rebuild")}
-        />
-        <MonitorAlertsSection
-          alertsOpen={alertsOpen}
-          onAlertsOpenChange={setAlertsOpen}
-          alerts={alerts}
-          alertHistory={alertHistory}
-        />
-        <MonitorInsightsSection
-          intelligence={intelligence}
-          governanceClass={governanceClass}
-          anomalyRows={anomalyRows}
-          correlationRows={correlationRows}
-          slopeRows={slopeRows}
-          boostedPairLookup={boostedPairLookup}
-          forecastSeries={forecastSeries}
-        />
-        <MonitorChaosSection
-          canInjectChaos={canInjectChaos}
-          chaosType={chaosType}
-          selectedChaosProfile={selectedChaosProfile}
-          chaosMagnitude={chaosMagnitude}
-          chaosDurationMs={chaosDurationMs}
-          chaosLoading={chaosLoading}
-          lastChaosMessage={lastChaosMessage}
-          onChaosTypeChange={handleChaosTypeChange}
-          onChaosMagnitudeChange={setChaosMagnitude}
-          onChaosDurationChange={setChaosDurationMs}
-          onSubmit={submitChaos}
-        />
+        {canManageRollups ? (
+          <Suspense fallback={<MonitorSectionCardFallback title="Loading rollup controls" />}>
+            <MonitorRollupQueueControlsSection
+              canManageRollups={canManageRollups}
+              snapshot={snapshot}
+              busyAction={queueActionBusy}
+              lastMessage={lastQueueActionMessage}
+              onDrain={() => void runRollupAction("drain")}
+              onRetryFailures={() => void runRollupAction("retry-failures")}
+              onAutoHeal={() => void runRollupAction("auto-heal")}
+              onRebuild={() => void runRollupAction("rebuild")}
+            />
+          </Suspense>
+        ) : null}
+        <Suspense fallback={<MonitorSectionCardFallback title="Loading alerts" blocks={3} />}>
+          <MonitorAlertsSection
+            alertsOpen={alertsOpen}
+            onAlertsOpenChange={setAlertsOpen}
+            alerts={alerts}
+            alertHistory={alertHistory}
+          />
+        </Suspense>
+        <Suspense fallback={<MonitorInsightsFallback />}>
+          <MonitorInsightsSection intelligence={intelligence} lastUpdated={lastUpdated} />
+        </Suspense>
+        <Suspense fallback={<MonitorSectionCardFallback title="Loading chaos lab" blocks={2} />}>
+          <MonitorChaosSection
+            canInjectChaos={canInjectChaos}
+            chaosType={chaosType}
+            selectedChaosProfile={selectedChaosProfile}
+            chaosMagnitude={chaosMagnitude}
+            chaosDurationMs={chaosDurationMs}
+            chaosLoading={chaosLoading}
+            lastChaosMessage={lastChaosMessage}
+            onChaosTypeChange={handleChaosTypeChange}
+            onChaosMagnitudeChange={setChaosMagnitude}
+            onChaosDurationChange={setChaosDurationMs}
+            onSubmit={submitChaos}
+          />
+        </Suspense>
         <Suspense fallback={<MonitorChartsFallback />}>
-          <MonitorTechnicalChartsSection chartSeries={chartSeries} />
+          <MonitorTechnicalChartsSection history={history} />
         </Suspense>
 
         <p className="text-right text-xs text-muted-foreground">

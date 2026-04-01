@@ -1,13 +1,16 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { InfoHint } from "@/components/monitor/InfoHint";
 import { TimeSeriesChart } from "@/components/monitor/TimeSeriesChart";
-import type { MonitorChartSeries } from "@/components/monitor/monitorData";
+import { buildChartSeries } from "@/components/monitor/monitorData";
+import type { MonitorHistory } from "@/components/monitor/monitorData";
 
 type MonitorTechnicalChartsSectionProps = {
-  chartSeries: MonitorChartSeries[];
+  history: MonitorHistory;
 };
 
-function MonitorTechnicalChartsSectionImpl({ chartSeries }: MonitorTechnicalChartsSectionProps) {
+function MonitorTechnicalChartsSectionImpl({ history }: MonitorTechnicalChartsSectionProps) {
+  const chartSeries = useMemo(() => buildChartSeries(history), [history]);
+
   return (
     <section className="rounded-2xl border border-border/60 bg-slate-200/40 p-4 dark:bg-slate-900/60">
       <div className="mb-3">

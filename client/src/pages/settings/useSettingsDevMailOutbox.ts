@@ -88,6 +88,7 @@ export function useSettingsDevMailOutbox({
 
   const [devMailOutboxEntries, setDevMailOutboxEntries] = useState<DevMailOutboxPreview[]>([]);
   const [devMailOutboxEnabled, setDevMailOutboxEnabled] = useState(false);
+  const [devMailOutboxLoaded, setDevMailOutboxLoaded] = useState(false);
   const [devMailOutboxLoading, setDevMailOutboxLoading] = useState(false);
   const [deletingDevMailOutboxId, setDeletingDevMailOutboxId] = useState<string | null>(null);
   const [clearingDevMailOutbox, setClearingDevMailOutbox] = useState(false);
@@ -151,6 +152,7 @@ export function useSettingsDevMailOutbox({
         };
       }
       setDevMailOutboxEnabled(nextEnabled);
+      setDevMailOutboxLoaded(true);
       setDevMailOutboxEntries(nextEntries);
       setDevMailOutboxPagination(nextPagination);
       setDevMailOutboxQuery((previous) => {
@@ -190,6 +192,7 @@ export function useSettingsDevMailOutbox({
         fallbackDescription: parsed.message,
       }));
       setDevMailOutboxEntries([]);
+      setDevMailOutboxLoaded(true);
       setDevMailOutboxPagination({
         page: query.page,
         pageSize: query.pageSize,
@@ -280,6 +283,7 @@ export function useSettingsDevMailOutbox({
     deletingDevMailOutboxId,
     devMailOutboxEnabled,
     devMailOutboxEntries,
+    devMailOutboxLoaded,
     devMailOutboxLoading,
     devMailOutboxPagination,
     devMailOutboxQuery,

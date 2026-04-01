@@ -7,15 +7,36 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { AnalysisCategoryCard } from "@/pages/analysis/AnalysisCategoryCard";
 import { AnalysisChartsSkeleton } from "@/pages/analysis/AnalysisChartsSkeleton";
-import { AnalysisExpandableSection } from "@/pages/analysis/AnalysisExpandableSection";
 import { AnalysisLoadingSkeleton } from "@/pages/analysis/AnalysisLoadingSkeleton";
-import { AnalysisDuplicatesPanel, AnalysisFilesList } from "@/pages/analysis/AnalysisTables";
 import type { AllAnalysisResult, AnalysisData, AnalysisMode, AnalysisProps, SingleAnalysisResult } from "@/pages/analysis/types";
 import { getCategoryBarData, getGenderPieData, getPaginatedItems, TABLE_PAGE_SIZE } from "@/pages/analysis/utils";
 
 const AnalysisCharts = lazy(() =>
   import("@/pages/analysis/AnalysisCharts").then((module) => ({ default: module.AnalysisCharts })),
 );
+const AnalysisExpandableSection = lazy(() =>
+  import("@/pages/analysis/AnalysisExpandableSection").then((module) => ({
+    default: module.AnalysisExpandableSection,
+  })),
+);
+const AnalysisFilesList = lazy(() =>
+  import("@/pages/analysis/AnalysisTables").then((module) => ({
+    default: module.AnalysisFilesList,
+  })),
+);
+const AnalysisDuplicatesPanel = lazy(() =>
+  import("@/pages/analysis/AnalysisTables").then((module) => ({
+    default: module.AnalysisDuplicatesPanel,
+  })),
+);
+
+function AnalysisSectionFallback({ label }: { label: string }) {
+  return (
+    <div className="glass-wrapper mb-8 p-4 text-sm text-muted-foreground" role="status" aria-live="polite">
+      {label}
+    </div>
+  );
+}
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
@@ -308,98 +329,104 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
               analysis.passportLuarNegara.samples?.length > 0) ? (
               <>
                 <h2 className="text-lg font-semibold text-foreground mb-4">Special ID List (Click to view, up to 50 samples)</h2>
-                <div className="space-y-3 mb-8">
-                  <AnalysisExpandableSection
-                    copiedItems={copiedItems}
-                    isExpanded={expandedSections.polis || false}
-                    items={analysis.noPolis.samples || []}
-                    onCopyAll={copyAllToClipboard}
-                    onCopyItem={copyToClipboard}
-                    onPageChange={setPage}
-                    onToggle={() => toggleSection("polis")}
-                    page={specialIdPagedSections.polis.page}
-                    pagedItems={specialIdPagedSections.polis.items}
-                    sectionKey="polis"
-                    start={specialIdPagedSections.polis.start}
-                    totalPages={specialIdPagedSections.polis.totalPages}
-                    title="Police No."
-                    colorClass="text-yellow-600"
-                    icon={Shield}
-                  />
-                  <AnalysisExpandableSection
-                    copiedItems={copiedItems}
-                    isExpanded={expandedSections.tentera || false}
-                    items={analysis.noTentera.samples || []}
-                    onCopyAll={copyAllToClipboard}
-                    onCopyItem={copyToClipboard}
-                    onPageChange={setPage}
-                    onToggle={() => toggleSection("tentera")}
-                    page={specialIdPagedSections.tentera.page}
-                    pagedItems={specialIdPagedSections.tentera.items}
-                    sectionKey="tentera"
-                    start={specialIdPagedSections.tentera.start}
-                    totalPages={specialIdPagedSections.tentera.totalPages}
-                    title="Military No."
-                    colorClass="text-green-600"
-                    icon={Shield}
-                  />
-                  <AnalysisExpandableSection
-                    copiedItems={copiedItems}
-                    isExpanded={expandedSections.passportMY || false}
-                    items={analysis.passportMY.samples || []}
-                    onCopyAll={copyAllToClipboard}
-                    onCopyItem={copyToClipboard}
-                    onPageChange={setPage}
-                    onToggle={() => toggleSection("passportMY")}
-                    page={specialIdPagedSections.passportMY.page}
-                    pagedItems={specialIdPagedSections.passportMY.items}
-                    sectionKey="passportMY"
-                    start={specialIdPagedSections.passportMY.start}
-                    totalPages={specialIdPagedSections.passportMY.totalPages}
-                    title="Passport Malaysia"
-                    colorClass="text-purple-500"
-                    icon={Plane}
-                  />
-                  <AnalysisExpandableSection
-                    copiedItems={copiedItems}
-                    isExpanded={expandedSections.passportLN || false}
-                    items={analysis.passportLuarNegara.samples || []}
-                    onCopyAll={copyAllToClipboard}
-                    onCopyItem={copyToClipboard}
-                    onPageChange={setPage}
-                    onToggle={() => toggleSection("passportLN")}
-                    page={specialIdPagedSections.passportLN.page}
-                    pagedItems={specialIdPagedSections.passportLN.items}
-                    sectionKey="passportLN"
-                    start={specialIdPagedSections.passportLN.start}
-                    totalPages={specialIdPagedSections.passportLN.totalPages}
-                    title="Foreign Passport"
-                    colorClass="text-orange-500"
-                    icon={Plane}
-                  />
-                </div>
+                <Suspense fallback={<AnalysisSectionFallback label="Loading special ID lists..." />}>
+                  <div className="space-y-3 mb-8">
+                    <AnalysisExpandableSection
+                      copiedItems={copiedItems}
+                      isExpanded={expandedSections.polis || false}
+                      items={analysis.noPolis.samples || []}
+                      onCopyAll={copyAllToClipboard}
+                      onCopyItem={copyToClipboard}
+                      onPageChange={setPage}
+                      onToggle={() => toggleSection("polis")}
+                      page={specialIdPagedSections.polis.page}
+                      pagedItems={specialIdPagedSections.polis.items}
+                      sectionKey="polis"
+                      start={specialIdPagedSections.polis.start}
+                      totalPages={specialIdPagedSections.polis.totalPages}
+                      title="Police No."
+                      colorClass="text-yellow-600"
+                      icon={Shield}
+                    />
+                    <AnalysisExpandableSection
+                      copiedItems={copiedItems}
+                      isExpanded={expandedSections.tentera || false}
+                      items={analysis.noTentera.samples || []}
+                      onCopyAll={copyAllToClipboard}
+                      onCopyItem={copyToClipboard}
+                      onPageChange={setPage}
+                      onToggle={() => toggleSection("tentera")}
+                      page={specialIdPagedSections.tentera.page}
+                      pagedItems={specialIdPagedSections.tentera.items}
+                      sectionKey="tentera"
+                      start={specialIdPagedSections.tentera.start}
+                      totalPages={specialIdPagedSections.tentera.totalPages}
+                      title="Military No."
+                      colorClass="text-green-600"
+                      icon={Shield}
+                    />
+                    <AnalysisExpandableSection
+                      copiedItems={copiedItems}
+                      isExpanded={expandedSections.passportMY || false}
+                      items={analysis.passportMY.samples || []}
+                      onCopyAll={copyAllToClipboard}
+                      onCopyItem={copyToClipboard}
+                      onPageChange={setPage}
+                      onToggle={() => toggleSection("passportMY")}
+                      page={specialIdPagedSections.passportMY.page}
+                      pagedItems={specialIdPagedSections.passportMY.items}
+                      sectionKey="passportMY"
+                      start={specialIdPagedSections.passportMY.start}
+                      totalPages={specialIdPagedSections.passportMY.totalPages}
+                      title="Passport Malaysia"
+                      colorClass="text-purple-500"
+                      icon={Plane}
+                    />
+                    <AnalysisExpandableSection
+                      copiedItems={copiedItems}
+                      isExpanded={expandedSections.passportLN || false}
+                      items={analysis.passportLuarNegara.samples || []}
+                      onCopyAll={copyAllToClipboard}
+                      onCopyItem={copyToClipboard}
+                      onPageChange={setPage}
+                      onToggle={() => toggleSection("passportLN")}
+                      page={specialIdPagedSections.passportLN.page}
+                      pagedItems={specialIdPagedSections.passportLN.items}
+                      sectionKey="passportLN"
+                      start={specialIdPagedSections.passportLN.start}
+                      totalPages={specialIdPagedSections.passportLN.totalPages}
+                      title="Foreign Passport"
+                      colorClass="text-orange-500"
+                      icon={Plane}
+                    />
+                  </div>
+                </Suspense>
               </>
             ) : null}
 
             {mode === "all" && allResult ? (
-              <AnalysisFilesList
-                allResult={allResult}
-                filesListOpen={filesListOpen}
-                filesPaged={filesPaged}
-                onFilesListOpenChange={setFilesListOpen}
-                onPageChange={setPage}
-              />
+              <Suspense fallback={<AnalysisSectionFallback label="Loading analyzed files..." />}>
+                <AnalysisFilesList
+                  allResult={allResult}
+                  filesListOpen={filesListOpen}
+                  filesPaged={filesPaged}
+                  onFilesListOpenChange={setFilesListOpen}
+                  onPageChange={setPage}
+                />
+              </Suspense>
             ) : null}
 
-            <AnalysisDuplicatesPanel
-              count={analysis.duplicates.count}
-              duplicates={analysis.duplicates.items}
-              duplicatesOpen={duplicatesOpen}
-              duplicatesPaged={duplicatesPaged}
-              onCopyDuplicate={copyToClipboard}
-              onDuplicatesOpenChange={setDuplicatesOpen}
-              onPageChange={setPage}
-            />
+            <Suspense fallback={<AnalysisSectionFallback label="Loading duplicates list..." />}>
+              <AnalysisDuplicatesPanel
+                count={analysis.duplicates.count}
+                duplicates={analysis.duplicates.items}
+                duplicatesOpen={duplicatesOpen}
+                duplicatesPaged={duplicatesPaged}
+                onCopyDuplicate={copyToClipboard}
+                onDuplicatesOpenChange={setDuplicatesOpen}
+                onPageChange={setPage}
+              />
+            </Suspense>
           </>
         ) : null}
       </div>

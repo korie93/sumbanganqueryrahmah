@@ -1,11 +1,16 @@
 import type { DataRowWithId } from "@/pages/viewer/types";
 import { resolveViewerExportBlockReason } from "@/pages/viewer/export-guards";
-import {
-  exportViewerRowsToCsv,
-  exportViewerRowsToExcel,
-  exportViewerRowsToPdf,
-} from "@/pages/viewer/export";
 import { isAbortError } from "@/pages/viewer/page-utils";
+
+let viewerExportModulePromise: Promise<typeof import("@/pages/viewer/export")> | null = null;
+
+function loadViewerExportModule() {
+  if (!viewerExportModulePromise) {
+    viewerExportModulePromise = import("@/pages/viewer/export");
+  }
+
+  return viewerExportModulePromise;
+}
 
 type ExecuteViewerExportOptions = {
   kind: "CSV" | "PDF" | "Excel";
@@ -116,7 +121,8 @@ export async function runViewerCsvExport({
     exportingPdf,
     isAnotherExportInFlight,
     loadRows,
-    performExport: (rowsToExport) => {
+    performExport: async (rowsToExport) => {
+      const { exportViewerRowsToCsv } = await loadViewerExportModule();
       exportViewerRowsToCsv({
         headers,
         rows: rowsToExport,
@@ -156,14 +162,16 @@ export async function runViewerPdfExport({
     beforeRun,
     afterRun,
     loadRows,
-    performExport: (rowsToExport) =>
-      exportViewerRowsToPdf({
+    performExport: async (rowsToExport) => {
+      const { exportViewerRowsToPdf } = await loadViewerExportModule();
+      return exportViewerRowsToPdf({
         headers,
         rows: rowsToExport,
         importName,
         exportFiltered,
         exportSelected,
-      }),
+      });
+    },
   });
 }
 
@@ -195,13 +203,15 @@ export async function runViewerExcelExport({
     beforeRun,
     afterRun,
     loadRows,
-    performExport: (rowsToExport) =>
-      exportViewerRowsToExcel({
+    performExport: async (rowsToExport) => {
+      const { exportViewerRowsToExcel } = await loadViewerExportModule();
+      return exportViewerRowsToExcel({
         headers,
         rows: rowsToExport,
         importName,
         exportFiltered,
         exportSelected,
-      }),
+      });
+    },
   });
 }

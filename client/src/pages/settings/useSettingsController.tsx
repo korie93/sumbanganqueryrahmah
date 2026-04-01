@@ -1,17 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { TabVisibility } from "@/app/types";
-import type { UserAccountManagementSectionProps } from "@/pages/settings/UserAccountManagementSection";
-import { useSettingsAccountManagement } from "@/pages/settings/useSettingsAccountManagement";
 import { useSettingsBootstrap } from "@/pages/settings/useSettingsBootstrap";
-import {
-  buildManagedDialogViewModel,
-  buildManagedSecretDialogViewModel,
-  buildSettingsSecurityViewModel,
-} from "@/pages/settings/settings-controller-view-models";
+import { buildSettingsSecurityViewModel } from "@/pages/settings/settings-controller-view-models";
 import { useSettingsMyAccount } from "@/pages/settings/useSettingsMyAccount";
 import { useSettingsSystemSettings } from "@/pages/settings/useSettingsSystemSettings";
-import type { ManagedUser, SettingCategory } from "@/pages/settings/types";
+import type { SettingCategory } from "@/pages/settings/types";
 
 const ACCOUNT_MANAGEMENT_CATEGORY_ID = "account-management";
 export const BACKUP_SETTINGS_CATEGORY_ID = "backup-restore";
@@ -107,230 +101,116 @@ export function useSettingsController({
     setSelectedCategory,
   } = systemSettings;
 
-  const accountManagement = useSettingsAccountManagement({
-    isMountedRef,
-    toast,
-  });
-  const {
-    createEmailInput,
-    createFullNameInput,
-    createRoleInput,
-    createUsernameInput,
-    creatingManagedUser,
-    deletingDevMailOutboxId,
-    deletingManagedUserId,
-    devMailOutboxEnabled,
-    devMailOutboxEntries,
-    devMailOutboxLoading,
-    devMailOutboxPagination,
-    devMailOutboxQuery,
-    managedDialogOpen,
-    managedEmailInput,
-    managedFullNameInput,
-    managedIsBanned,
-    managedRoleInput,
-    managedSaving,
-    managedSecretDialogDescription,
-    managedSecretDialogOpen,
-    managedSecretDialogTitle,
-    managedSecretDialogValue,
-    managedSelectedUser,
-    managedStatusInput,
-    managedUsernameInput,
-    managedUsers,
-    managedUsersLoading,
-    managedUsersPagination,
-    managedUsersQuery,
-    pendingResetRequests,
-    pendingResetRequestsLoading,
-    pendingResetRequestsPagination,
-    pendingResetRequestsQuery,
-    clearingDevMailOutbox,
-    handleClearDevMailOutbox,
-    handleCreateManagedUser,
-    handleDeleteDevMailOutboxEntry,
-    handleDeleteManagedUser,
-    handleManagedBanToggle,
-    handleManagedDialogChange,
-    handleResendManagedUserActivation,
-    handleResetManagedUserPassword,
-    handleSaveManagedUser,
-    loadDevMailOutbox,
-    loadManagedUsers,
-    loadPendingResetRequests,
-    openManagedEditor,
-    refreshDevMailOutboxSection,
-    refreshManagedUsersSection,
-    refreshPendingResetRequestsSection,
-    updateManagedUsersQuery,
-    updatePendingResetRequestsQuery,
-    updateDevMailOutboxQuery,
-    setCreateEmailInput,
-    setCreateFullNameInput,
-    setCreateRoleInput,
-    setCreateUsernameInput,
-    setManagedEmailInput,
-    setManagedFullNameInput,
-    setManagedIsBanned,
-    setManagedRoleInput,
-    setManagedSecretDialogOpen,
-    setManagedStatusInput,
-    setManagedUsernameInput,
-  } = accountManagement;
-
   const { profileLoading } = useSettingsBootstrap({
     clearSettingsState,
     hydrateCurrentUser,
     isMountedRef,
-    loadDevMailOutbox,
-    loadManagedUsers,
-    loadPendingResetRequests,
     loadSettings,
     toast,
   });
 
-  const security = buildSettingsSecurityViewModel({
-    clearingDevMailOutbox,
-    confirmPasswordInput,
-    createEmailInput,
-    createFullNameInput,
-    createRoleInput,
-    createUsernameInput,
-    creatingManagedUser,
-    currentPasswordInput,
-    currentUserRole,
-    deletingDevMailOutboxId,
-    deletingManagedUserId,
-    devMailOutboxEnabled,
-    devMailOutboxEntries,
-    devMailOutboxLoading,
-    devMailOutboxPagination,
-    devMailOutboxQuery,
-    isSuperuser,
-    managedUsers,
-    managedUsersLoading,
-    managedUsersPagination,
-    managedUsersQuery,
-    newPasswordInput,
-    onDisableTwoFactor: () => void handleDisableTwoFactor(),
-    onEnableTwoFactor: () => void handleEnableTwoFactor(),
-    onChangePassword: () => void handleChangePassword(),
-    onChangeUsername: () => void handleChangeUsername(),
-    onClearDevMailOutbox: () => void handleClearDevMailOutbox(),
-    onConfirmPasswordInputChange: setConfirmPasswordInput,
-    onCreateEmailInputChange: setCreateEmailInput,
-    onCreateFullNameInputChange: setCreateFullNameInput,
-    onCreateManagedUser: () => void handleCreateManagedUser(),
-    onCreateRoleInputChange: setCreateRoleInput,
-    onCreateUsernameInputChange: setCreateUsernameInput,
-    onCurrentPasswordInputChange: setCurrentPasswordInput,
-    onDeleteDevMailOutboxEntry: (previewId: string) =>
-      void handleDeleteDevMailOutboxEntry(previewId),
-    onDeleteManagedUser: (user: ManagedUser) => void handleDeleteManagedUser(user),
-    onDevMailOutboxRefresh: () => void refreshDevMailOutboxSection(),
-    onDevMailOutboxQueryChange: (query) => void updateDevMailOutboxQuery(query),
-    onEditManagedUser: openManagedEditor,
-    onManagedBanToggle: (user: ManagedUser) => void handleManagedBanToggle(user),
-    onManagedResetPassword: (user: ManagedUser) => void handleResetManagedUserPassword(user),
-    onManagedResendActivation: (user: ManagedUser) =>
-      void handleResendManagedUserActivation(user),
-    onManagedUsersRefresh: () => void refreshManagedUsersSection(),
-    onManagedUsersQueryChange: (query) => void updateManagedUsersQuery(query),
-    onNewPasswordInputChange: setNewPasswordInput,
-    onStartTwoFactorSetup: () => void handleStartTwoFactorSetup(),
-    onTwoFactorCodeInputChange: setTwoFactorCodeInput,
-    onTwoFactorPasswordInputChange: setTwoFactorPasswordInput,
-    onPendingResetRequestsRefresh: () => void refreshPendingResetRequestsSection(),
-    onPendingResetRequestsQueryChange: (query) => void updatePendingResetRequestsQuery(query),
-    onUsernameInputChange: setUsernameInput,
-    passwordSaving,
-    pendingResetRequests,
-    pendingResetRequestsLoading,
-    pendingResetRequestsPagination,
-    pendingResetRequestsQuery,
-    twoFactorCodeInput,
-    twoFactorEnabled: currentUser?.twoFactorEnabled === true,
-    twoFactorLoading,
-    twoFactorPasswordInput,
-    twoFactorPendingSetup: currentUser?.twoFactorPendingSetup === true,
-    twoFactorSetupAccountName,
-    twoFactorSetupIssuer,
-    twoFactorSetupSecret,
-    twoFactorSetupUri,
-    usernameInput,
-    usernameSaving,
-  });
-
-  const accountManagementSection: UserAccountManagementSectionProps = {
-    clearingDevMailOutbox,
-    createEmailInput,
-    createFullNameInput,
-    createRoleInput,
-    createUsernameInput,
-    creatingManagedUser,
-    deletingDevMailOutboxId,
-    deletingManagedUserId,
-    devMailOutboxEnabled,
-    devMailOutboxEntries,
-    devMailOutboxLoading,
-    devMailOutboxPagination,
-    devMailOutboxQuery,
-    isSuperuser,
-    managedUsers,
-    managedUsersLoading,
-    managedUsersPagination,
-    managedUsersQuery,
-    onClearDevMailOutbox: () => void handleClearDevMailOutbox(),
-    onCreateEmailInputChange: setCreateEmailInput,
-    onCreateFullNameInputChange: setCreateFullNameInput,
-    onCreateManagedUser: () => void handleCreateManagedUser(),
-    onCreateRoleInputChange: setCreateRoleInput,
-    onCreateUsernameInputChange: setCreateUsernameInput,
-    onDeleteDevMailOutboxEntry: (previewId) => void handleDeleteDevMailOutboxEntry(previewId),
-    onDeleteManagedUser: (user) => void handleDeleteManagedUser(user),
-    onDevMailOutboxRefresh: () => void refreshDevMailOutboxSection(),
-    onDevMailOutboxQueryChange: (query) => void updateDevMailOutboxQuery(query),
-    onEditManagedUser: openManagedEditor,
-    onManagedBanToggle: (user) => void handleManagedBanToggle(user),
-    onManagedResetPassword: (user) => void handleResetManagedUserPassword(user),
-    onManagedResendActivation: (user) => void handleResendManagedUserActivation(user),
-    onManagedUsersRefresh: () => void refreshManagedUsersSection(),
-    onManagedUsersQueryChange: (query) => void updateManagedUsersQuery(query),
-    onPendingResetRequestsRefresh: () => void refreshPendingResetRequestsSection(),
-    onPendingResetRequestsQueryChange: (query) => void updatePendingResetRequestsQuery(query),
-    pendingResetRequests,
-    pendingResetRequestsLoading,
-    pendingResetRequestsPagination,
-    pendingResetRequestsQuery,
-  };
-
-  const sidebarCategories: SettingCategory[] = [
-    ...categories,
-    ...(canAccessBackupSection
-      ? [{
-          id: BACKUP_SETTINGS_CATEGORY_ID,
-          name: "Backup & Restore",
-          description: "Create, export, delete, and restore backups from one settings area.",
-          settings: [],
-        }]
-      : []),
-    ...(canAccessAccountManagement
-      ? [{
-          id: ACCOUNT_MANAGEMENT_CATEGORY_ID,
-          name: "Account Management",
-          description: "Manage user lifecycle, reset requests, and local mail outbox.",
-          settings: [],
-        }]
-      : []),
-  ];
+  const sidebarCategories: SettingCategory[] = useMemo(
+    () => [
+      ...categories,
+      ...(canAccessBackupSection
+        ? [{
+            id: BACKUP_SETTINGS_CATEGORY_ID,
+            name: "Backup & Restore",
+            description: "Create, export, delete, and restore backups from one settings area.",
+            settings: [],
+          }]
+        : []),
+      ...(canAccessAccountManagement
+        ? [{
+            id: ACCOUNT_MANAGEMENT_CATEGORY_ID,
+            name: "Account Management",
+            description: "Manage user lifecycle, reset requests, and local mail outbox.",
+            settings: [],
+          }]
+        : []),
+    ],
+    [canAccessAccountManagement, canAccessBackupSection, categories],
+  );
 
   const isAccountManagementCategory = selectedCategory === ACCOUNT_MANAGEMENT_CATEGORY_ID;
   const isBackupCategory = selectedCategory === BACKUP_SETTINGS_CATEGORY_ID;
-  const currentCategoryForDisplay = isAccountManagementCategory
-    ? sidebarCategories.find((category) => category.id === ACCOUNT_MANAGEMENT_CATEGORY_ID) || null
-    : isBackupCategory
-      ? sidebarCategories.find((category) => category.id === BACKUP_SETTINGS_CATEGORY_ID) || null
-      : currentCategory;
+  const currentCategoryForDisplay = useMemo(
+    () => (isAccountManagementCategory
+      ? sidebarCategories.find((category) => category.id === ACCOUNT_MANAGEMENT_CATEGORY_ID) || null
+      : isBackupCategory
+        ? sidebarCategories.find((category) => category.id === BACKUP_SETTINGS_CATEGORY_ID) || null
+        : currentCategory),
+    [currentCategory, isAccountManagementCategory, isBackupCategory, sidebarCategories],
+  );
+  const shouldBuildSecurityViewModel = canAccessAccountSecurity && isSecurityCategory;
+
+  const security = useMemo(
+    () => {
+      if (!shouldBuildSecurityViewModel) {
+        return null;
+      }
+
+      return buildSettingsSecurityViewModel({
+        confirmPasswordInput,
+        currentPasswordInput,
+        currentUserRole,
+        newPasswordInput,
+        onDisableTwoFactor: () => void handleDisableTwoFactor(),
+        onEnableTwoFactor: () => void handleEnableTwoFactor(),
+        onChangePassword: () => void handleChangePassword(),
+        onChangeUsername: () => void handleChangeUsername(),
+        onConfirmPasswordInputChange: setConfirmPasswordInput,
+        onCurrentPasswordInputChange: setCurrentPasswordInput,
+        onNewPasswordInputChange: setNewPasswordInput,
+        onStartTwoFactorSetup: () => void handleStartTwoFactorSetup(),
+        onTwoFactorCodeInputChange: setTwoFactorCodeInput,
+        onTwoFactorPasswordInputChange: setTwoFactorPasswordInput,
+        onUsernameInputChange: setUsernameInput,
+        passwordSaving,
+        twoFactorCodeInput,
+        twoFactorEnabled: currentUser?.twoFactorEnabled === true,
+        twoFactorLoading,
+        twoFactorPasswordInput,
+        twoFactorPendingSetup: currentUser?.twoFactorPendingSetup === true,
+        twoFactorSetupAccountName,
+        twoFactorSetupIssuer,
+        twoFactorSetupSecret,
+        twoFactorSetupUri,
+        usernameInput,
+        usernameSaving,
+      });
+    },
+    [
+      shouldBuildSecurityViewModel,
+      confirmPasswordInput,
+      currentPasswordInput,
+      currentUser?.twoFactorEnabled,
+      currentUser?.twoFactorPendingSetup,
+      currentUserRole,
+      handleChangePassword,
+      handleChangeUsername,
+      handleDisableTwoFactor,
+      handleEnableTwoFactor,
+      handleStartTwoFactorSetup,
+      newPasswordInput,
+      passwordSaving,
+      setConfirmPasswordInput,
+      setCurrentPasswordInput,
+      setNewPasswordInput,
+      setTwoFactorCodeInput,
+      setTwoFactorPasswordInput,
+      setUsernameInput,
+      twoFactorCodeInput,
+      twoFactorLoading,
+      twoFactorPasswordInput,
+      twoFactorSetupAccountName,
+      twoFactorSetupIssuer,
+      twoFactorSetupSecret,
+      twoFactorSetupUri,
+      usernameInput,
+      usernameSaving,
+    ],
+  );
 
   useEffect(() => {
     if (sidebarCategories.length === 0) return;
@@ -349,41 +229,6 @@ export function useSettingsController({
       setSelectedCategory(sidebarCategories[0].id);
     }
   }, [initialSectionId, selectedCategory, setSelectedCategory, sidebarCategories]);
-
-  const managedDialog = buildManagedDialogViewModel({
-    confirmCriticalOpen,
-    managedDialogOpen,
-    managedEmailInput,
-    managedFullNameInput,
-    managedIsBanned,
-    managedRoleInput,
-    managedSaving,
-    managedSelectedUser,
-    managedStatusInput,
-    managedUsernameInput,
-    onCloseManagedDialog: () => handleManagedDialogChange(false),
-    onConfirmCriticalOpenChange: setConfirmCriticalOpen,
-    onConfirmManagedSave: () => void handleSaveManagedUser(),
-    onManagedDialogOpenChange: handleManagedDialogChange,
-    onManagedEmailInputChange: setManagedEmailInput,
-    onManagedFullNameInputChange: setManagedFullNameInput,
-    onManagedIsBannedChange: setManagedIsBanned,
-    onManagedRoleInputChange: setManagedRoleInput,
-    onManagedStatusInputChange: setManagedStatusInput,
-    onManagedUsernameInputChange: setManagedUsernameInput,
-    onSaveCriticalSettings: async () => {
-      await persistChanges(true);
-    },
-    saving,
-  });
-
-  const managedSecretDialog = buildManagedSecretDialogViewModel({
-    description: managedSecretDialogDescription,
-    onOpenChange: setManagedSecretDialogOpen,
-    open: managedSecretDialogOpen,
-    title: managedSecretDialogTitle,
-    value: managedSecretDialogValue,
-  });
 
   return {
     currentUser,
@@ -406,15 +251,26 @@ export function useSettingsController({
     dirtyCount,
     saving,
     renderSettingCard,
-    saveBar: {
-      dirtyCount,
-      saving,
-      onSave: () => void handleSave(),
-    },
+    saveBar: useMemo(
+      () => ({
+        dirtyCount,
+        saving,
+        onSave: () => void handleSave(),
+      }),
+      [dirtyCount, handleSave, saving],
+    ),
+    criticalSaveDialog: useMemo(
+      () => ({
+        confirmCriticalOpen,
+        onConfirmCriticalOpenChange: setConfirmCriticalOpen,
+        onSaveCriticalSettings: async () => {
+          await persistChanges(true);
+        },
+        saving,
+      }),
+      [confirmCriticalOpen, persistChanges, saving, setConfirmCriticalOpen],
+    ),
     security,
-    accountManagement: accountManagementSection,
-    managedDialog,
-    managedSecretDialog,
     loadingState: {
       loading,
       profileLoading,

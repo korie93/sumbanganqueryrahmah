@@ -28,19 +28,9 @@ const SettingsRoleSections = lazy(() =>
     default: module.SettingsRoleSections,
   })),
 );
-const UserAccountManagementSection = lazy(() =>
-  import("@/pages/settings/UserAccountManagementSection").then((module) => ({
-    default: module.UserAccountManagementSection,
-  })),
-);
-const ManagedUserDialog = lazy(() =>
-  import("@/pages/settings/ManagedUserDialog").then((module) => ({
-    default: module.ManagedUserDialog,
-  })),
-);
-const ManagedSecretDialog = lazy(() =>
-  import("@/pages/settings/ManagedSecretDialog").then((module) => ({
-    default: module.ManagedSecretDialog,
+const SettingsAccountManagementBoundary = lazy(() =>
+  import("@/pages/settings/SettingsAccountManagementBoundary").then((module) => ({
+    default: module.SettingsAccountManagementBoundary,
   })),
 );
 
@@ -52,10 +42,6 @@ function SettingsSectionFallback({ label }: { label: string }) {
       </div>
     </OperationalSectionCard>
   );
-}
-
-function SettingsDialogFallback() {
-  return null;
 }
 
 export default function SettingsPage({
@@ -150,13 +136,20 @@ export default function SettingsPage({
                       <BackupRestore userRole={controller.currentUserRole} embedded />
                     </Suspense>
                   ) : controller.isSecurityCategory &&
-                    controller.canAccessAccountSecurity ? (
+                    controller.canAccessAccountSecurity &&
+                    controller.security ? (
                       <Suspense fallback={<SettingsSectionFallback label="Loading account security..." />}>
-                        <AccountSecuritySection {...controller.security} showAccountManagement={false} />
+                        <AccountSecuritySection {...controller.security} />
                       </Suspense>
                     ) : controller.isAccountManagementCategory ? (
                       <Suspense fallback={<SettingsSectionFallback label="Loading account management..." />}>
-                        <UserAccountManagementSection {...controller.accountManagement} />
+                        <SettingsAccountManagementBoundary
+                          confirmCriticalOpen={controller.criticalSaveDialog.confirmCriticalOpen}
+                          isSuperuser={controller.isSuperuser}
+                          onConfirmCriticalOpenChange={controller.criticalSaveDialog.onConfirmCriticalOpenChange}
+                          onSaveCriticalSettings={controller.criticalSaveDialog.onSaveCriticalSettings}
+                          saving={controller.criticalSaveDialog.saving}
+                        />
                       </Suspense>
                     ) : controller.isRolePermissionCategory ? (
                       <Suspense fallback={<SettingsSectionFallback label="Loading permission settings..." />}>
@@ -179,17 +172,6 @@ export default function SettingsPage({
             </div>
           </>
         )}
-
-      {controller.managedDialog.managedDialogOpen || controller.managedDialog.confirmCriticalOpen ? (
-        <Suspense fallback={<SettingsDialogFallback />}>
-          <ManagedUserDialog {...controller.managedDialog} />
-        </Suspense>
-      ) : null}
-      {controller.managedSecretDialog.open ? (
-        <Suspense fallback={<SettingsDialogFallback />}>
-          <ManagedSecretDialog {...controller.managedSecretDialog} />
-        </Suspense>
-      ) : null}
     </OperationalPage>
   );
 }

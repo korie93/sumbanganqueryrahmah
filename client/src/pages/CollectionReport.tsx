@@ -1,5 +1,7 @@
 import {
+  Suspense,
   useCallback,
+  lazy,
   useMemo,
 } from "react";
 import {
@@ -12,10 +14,15 @@ import {
   getCurrentUsername,
 } from "@/pages/collection/utils";
 import { CollectionReportContent } from "@/pages/collection-report/CollectionReportContent";
-import { CollectionNicknameDialog } from "@/pages/collection-report/CollectionNicknameDialog";
 import { CollectionSidebar } from "@/pages/collection-report/CollectionSidebar";
 import { useCollectionNicknameAccess } from "@/pages/collection-report/useCollectionNicknameAccess";
 import { useCollectionReportNavigation } from "@/pages/collection-report/useCollectionReportNavigation";
+
+const CollectionNicknameDialog = lazy(() =>
+  import("@/pages/collection-report/CollectionNicknameDialog").then((module) => ({
+    default: module.CollectionNicknameDialog,
+  })),
+);
 
 export default function CollectionReport() {
   const role = useMemo(() => getCurrentRole(), []);
@@ -74,6 +81,8 @@ export default function CollectionReport() {
         : "Checking...";
   const sectionLabel = navigation.activeSidebarItem?.label || "Choose a section";
   const subtitle = `Staff Nickname: ${nicknameAccess.staffNickname || "-"} | Section: ${sectionLabel}`;
+  const shouldRenderNicknameDialog =
+    nicknameAccess.nicknameDialogOpen || (!isSuperuser && !nicknameAccess.canAccessCollection);
 
   return (
     <OperationalPage width="wide">
@@ -105,60 +114,64 @@ export default function CollectionReport() {
         </div>
       </div>
 
-      <CollectionNicknameDialog
-        confirmNicknamePassword={nicknameAccess.confirmNicknamePassword}
-        dialogStep={nicknameAccess.dialogStep}
-        nicknameDialogOpen={nicknameAccess.nicknameDialogOpen}
-        nicknameInput={nicknameAccess.nicknameInput}
-        nicknamePassword={nicknameAccess.nicknamePassword}
-        onConfirmNicknamePasswordChange={nicknameAccess.setConfirmNicknamePassword}
-        onDialogOpenChange={handleDialogOpenChange}
-        onNicknameInputChange={nicknameAccess.setNicknameInput}
-        onNicknamePasswordChange={nicknameAccess.setNicknamePassword}
-        onPrimaryAction={() => {
-          if (nicknameAccess.dialogStep === "setup") {
-            void nicknameAccess.handleSetupNicknamePassword();
-            return;
-          }
-          if (nicknameAccess.dialogStep === "login") {
-            void nicknameAccess.handleNicknameLogin();
-            return;
-          }
-          void nicknameAccess.handleCheckNickname();
-        }}
-        onResetTemporaryValues={() => {
-          nicknameAccess.setNicknamePassword("");
-          nicknameAccess.setConfirmNicknamePassword("");
-          nicknameAccess.setResolvedNickname(
-            String(sessionStorage.getItem(COLLECTION_STAFF_NICKNAME_KEY) || "").trim(),
-          );
-          nicknameAccess.setShowLoginPassword(false);
-          nicknameAccess.setShowSetupPassword(false);
-          nicknameAccess.setShowSetupConfirmPassword(false);
-        }}
-        onReturnToSearch={redirectToSearchTab}
-        onStepChange={nicknameAccess.setDialogStep}
-        onToggleLoginPassword={() =>
-          nicknameAccess.setShowLoginPassword(!nicknameAccess.showLoginPassword)
-        }
-        onToggleSetupConfirmPassword={() =>
-          nicknameAccess.setShowSetupConfirmPassword(
-            !nicknameAccess.showSetupConfirmPassword,
-          )
-        }
-        onToggleSetupPassword={() =>
-          nicknameAccess.setShowSetupPassword(!nicknameAccess.showSetupPassword)
-        }
-        primaryLabel={primaryActionLabel}
-        primaryLoadingLabel={primaryLoadingLabel}
-        resolvedNickname={nicknameAccess.resolvedNickname}
-        setSetupModeFirstTime={() => nicknameAccess.setSetupMode("first-time")}
-        setupMode={nicknameAccess.setupMode}
-        showLoginPassword={nicknameAccess.showLoginPassword}
-        showSetupConfirmPassword={nicknameAccess.showSetupConfirmPassword}
-        showSetupPassword={nicknameAccess.showSetupPassword}
-        submittingNicknameAuth={nicknameAccess.submittingNicknameAuth}
-      />
+      {shouldRenderNicknameDialog ? (
+        <Suspense fallback={null}>
+          <CollectionNicknameDialog
+            confirmNicknamePassword={nicknameAccess.confirmNicknamePassword}
+            dialogStep={nicknameAccess.dialogStep}
+            nicknameDialogOpen={nicknameAccess.nicknameDialogOpen}
+            nicknameInput={nicknameAccess.nicknameInput}
+            nicknamePassword={nicknameAccess.nicknamePassword}
+            onConfirmNicknamePasswordChange={nicknameAccess.setConfirmNicknamePassword}
+            onDialogOpenChange={handleDialogOpenChange}
+            onNicknameInputChange={nicknameAccess.setNicknameInput}
+            onNicknamePasswordChange={nicknameAccess.setNicknamePassword}
+            onPrimaryAction={() => {
+              if (nicknameAccess.dialogStep === "setup") {
+                void nicknameAccess.handleSetupNicknamePassword();
+                return;
+              }
+              if (nicknameAccess.dialogStep === "login") {
+                void nicknameAccess.handleNicknameLogin();
+                return;
+              }
+              void nicknameAccess.handleCheckNickname();
+            }}
+            onResetTemporaryValues={() => {
+              nicknameAccess.setNicknamePassword("");
+              nicknameAccess.setConfirmNicknamePassword("");
+              nicknameAccess.setResolvedNickname(
+                String(sessionStorage.getItem(COLLECTION_STAFF_NICKNAME_KEY) || "").trim(),
+              );
+              nicknameAccess.setShowLoginPassword(false);
+              nicknameAccess.setShowSetupPassword(false);
+              nicknameAccess.setShowSetupConfirmPassword(false);
+            }}
+            onReturnToSearch={redirectToSearchTab}
+            onStepChange={nicknameAccess.setDialogStep}
+            onToggleLoginPassword={() =>
+              nicknameAccess.setShowLoginPassword(!nicknameAccess.showLoginPassword)
+            }
+            onToggleSetupConfirmPassword={() =>
+              nicknameAccess.setShowSetupConfirmPassword(
+                !nicknameAccess.showSetupConfirmPassword,
+              )
+            }
+            onToggleSetupPassword={() =>
+              nicknameAccess.setShowSetupPassword(!nicknameAccess.showSetupPassword)
+            }
+            primaryLabel={primaryActionLabel}
+            primaryLoadingLabel={primaryLoadingLabel}
+            resolvedNickname={nicknameAccess.resolvedNickname}
+            setSetupModeFirstTime={() => nicknameAccess.setSetupMode("first-time")}
+            setupMode={nicknameAccess.setupMode}
+            showLoginPassword={nicknameAccess.showLoginPassword}
+            showSetupConfirmPassword={nicknameAccess.showSetupConfirmPassword}
+            showSetupPassword={nicknameAccess.showSetupPassword}
+            submittingNicknameAuth={nicknameAccess.submittingNicknameAuth}
+          />
+        </Suspense>
+      ) : null}
     </OperationalPage>
   );
 }

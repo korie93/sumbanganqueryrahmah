@@ -1,12 +1,17 @@
-import { memo } from "react";
+import { Suspense, lazy, memo, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CollectionNicknameDialogs } from "@/pages/collection-nicknames/CollectionNicknameDialogs";
 import { GroupListPanel } from "@/pages/collection-nicknames/GroupListPanel";
 import { NicknameAssignmentPanel } from "@/pages/collection-nicknames/NicknameAssignmentPanel";
 import { buildManageCollectionNicknamePageViewModels } from "@/pages/collection-nicknames/manage-collection-nicknames-view-models";
 import { useCollectionNicknameManagementActions } from "@/pages/collection-nicknames/useCollectionNicknameManagementActions";
 import { useCollectionNicknameManagementData } from "@/pages/collection-nicknames/useCollectionNicknameManagementData";
 import { useCollectionNicknameManagementDialogs } from "@/pages/collection-nicknames/useCollectionNicknameManagementDialogs";
+
+const CollectionNicknameDialogs = lazy(() =>
+  import("@/pages/collection-nicknames/CollectionNicknameDialogs").then((module) => ({
+    default: module.CollectionNicknameDialogs,
+  })),
+);
 
 type Props = {
   role: string;
@@ -33,6 +38,21 @@ function ManageCollectionNicknamesPage({
     dialogs,
     actions,
   });
+  const hasOpenDialogs = useMemo(
+    () => Boolean(
+      viewModels.dialogs.createGroupOpen ||
+      viewModels.dialogs.changeLeaderOpen ||
+      viewModels.dialogs.addOpen ||
+      viewModels.dialogs.editingNickname ||
+      viewModels.dialogs.pendingDeactivate ||
+      viewModels.dialogs.pendingDeleteGroup ||
+      viewModels.dialogs.pendingDeleteNickname ||
+      viewModels.dialogs.pendingResetPassword ||
+      viewModels.dialogs.pendingUngroup ||
+      viewModels.dialogs.confirmSwitchOpen
+    ),
+    [viewModels.dialogs],
+  );
 
   if (!isSuperuser) {
     return (
@@ -63,7 +83,11 @@ function ManageCollectionNicknamesPage({
         </CardContent>
       </Card>
 
-      <CollectionNicknameDialogs {...viewModels.dialogs} />
+      {hasOpenDialogs ? (
+        <Suspense fallback={null}>
+          <CollectionNicknameDialogs {...viewModels.dialogs} />
+        </Suspense>
+      ) : null}
     </>
   );
 }

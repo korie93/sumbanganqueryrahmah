@@ -1,9 +1,19 @@
+import { Suspense, lazy } from "react";
 import { CollectionDailyCalendarCard } from "@/pages/collection/CollectionDailyCalendarCard";
-import { CollectionDailyDayDetailsDialog } from "@/pages/collection/CollectionDailyDayDetailsDialog";
 import { CollectionDailyFiltersCard } from "@/pages/collection/CollectionDailyFiltersCard";
 import { CollectionDailySummaryCard } from "@/pages/collection/CollectionDailySummaryCard";
-import { ReceiptPreviewDialog } from "@/pages/collection-records/ReceiptPreviewDialog";
 import { useCollectionDailyPageModel } from "@/pages/collection/useCollectionDailyPageModel";
+
+const CollectionDailyDayDetailsDialog = lazy(() =>
+  import("@/pages/collection/CollectionDailyDayDetailsDialog").then((module) => ({
+    default: module.CollectionDailyDayDetailsDialog,
+  })),
+);
+const ReceiptPreviewDialog = lazy(() =>
+  import("@/pages/collection-records/ReceiptPreviewDialog").then((module) => ({
+    default: module.ReceiptPreviewDialog,
+  })),
+);
 
 type CollectionDailyPageProps = {
   role: string;
@@ -20,10 +30,16 @@ export default function CollectionDailyPage({ role }: CollectionDailyPageProps) 
 
       <CollectionDailyCalendarCard {...model.calendarCardProps} />
 
-      <CollectionDailyDayDetailsDialog {...model.dayDetailsDialogProps} />
+      {model.dayDetailsDialogProps.open ? (
+        <Suspense fallback={null}>
+          <CollectionDailyDayDetailsDialog {...model.dayDetailsDialogProps} />
+        </Suspense>
+      ) : null}
 
       {model.receiptPreviewDialogProps.open ? (
-        <ReceiptPreviewDialog {...model.receiptPreviewDialogProps} />
+        <Suspense fallback={null}>
+          <ReceiptPreviewDialog {...model.receiptPreviewDialogProps} />
+        </Suspense>
       ) : null}
     </div>
   );

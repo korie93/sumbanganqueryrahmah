@@ -214,7 +214,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     aiStatus,
   });
   const shouldShowPanel = shouldKeepPanelMounted && isOpen && !layoutState.rootHidden;
-  const shouldTrackDomAggressively = shouldTrackFloatingAiDom({
+  const shouldTrackObstacleLayout = shouldTrackFloatingAiDom({
     isOpen,
     isThinking,
     aiStatus,
@@ -237,23 +237,27 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
         ? mobileViewportHeight
         : window.innerHeight;
 
-    const avoidRects: RectLike[] = Array.from(document.querySelectorAll(AVOID_SELECTOR))
-      .filter((element) => isVisibleElement(element))
-      .map((element) => {
-        const rect = element.getBoundingClientRect();
-        return {
-          left: rect.left,
-          top: rect.top,
-          right: rect.right,
-          bottom: rect.bottom,
-          width: rect.width,
-          height: rect.height,
-        };
-      });
+    const avoidRects: RectLike[] = shouldTrackObstacleLayout
+      ? Array.from(document.querySelectorAll(AVOID_SELECTOR))
+          .filter((element) => isVisibleElement(element))
+          .map((element) => {
+            const rect = element.getBoundingClientRect();
+            return {
+              left: rect.left,
+              top: rect.top,
+              right: rect.right,
+              bottom: rect.bottom,
+              width: rect.width,
+              height: rect.height,
+            };
+          })
+      : [];
 
-    const hasBlockingDialog = Array.from(document.querySelectorAll(DIALOG_SELECTOR)).some((element) =>
-      isVisibleElement(element),
-    );
+    const hasBlockingDialog = shouldTrackObstacleLayout
+      ? Array.from(document.querySelectorAll(DIALOG_SELECTOR)).some((element) =>
+          isVisibleElement(element),
+        )
+      : false;
 
     const nextLayout = resolveFloatingAiLayout({
       viewportWidth: window.innerWidth,
@@ -279,6 +283,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     keyboardOpen,
     mobileViewportHeight,
     preferCompactPanel,
+    shouldTrackObstacleLayout,
     viewportBottomInset,
   ]);
 
@@ -324,7 +329,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     scheduleSync();
 
     let observer: MutationObserver | null = null;
-    if (shouldTrackDomAggressively) {
+    if (shouldTrackObstacleLayout) {
       resizeObserver = new ResizeObserver(() => {
         scheduleSync();
       });
@@ -338,18 +343,22 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     }
 
     window.addEventListener("resize", scheduleSync, { passive: true });
-    window.addEventListener("scroll", scheduleSync, { passive: true });
+    if (shouldTrackObstacleLayout) {
+      window.addEventListener("scroll", scheduleSync, { passive: true });
+    }
 
     return () => {
       observer?.disconnect();
       resizeObserver?.disconnect();
       window.removeEventListener("resize", scheduleSync);
-      window.removeEventListener("scroll", scheduleSync);
+      if (shouldTrackObstacleLayout) {
+        window.removeEventListener("scroll", scheduleSync);
+      }
       if (frame) {
         window.cancelAnimationFrame(frame);
       }
     };
-  }, [hiddenForAiPage, location, shouldTrackDomAggressively, syncLayout]);
+  }, [hiddenForAiPage, location, shouldTrackObstacleLayout, syncLayout]);
 
   const minimizedStatus = resolveFloatingAIMinimizedStatus(aiStatus);
 

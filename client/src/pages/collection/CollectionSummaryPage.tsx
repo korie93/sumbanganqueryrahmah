@@ -1,13 +1,18 @@
-import { memo } from "react";
+import { Suspense, lazy, memo } from "react";
 import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
-import { CollectionMonthDetailsDialog } from "@/pages/collection-summary/CollectionMonthDetailsDialog";
 import { buildCollectionSummaryPageViewModels } from "@/pages/collection-summary/collection-summary-page-view-models";
 import { CollectionSummaryFilters } from "@/pages/collection-summary/CollectionSummaryFilters";
 import { useCollectionSummaryData } from "@/pages/collection-summary/useCollectionSummaryData";
 import { useCollectionSummaryMonthDialog } from "@/pages/collection-summary/useCollectionSummaryMonthDialog";
 import { CollectionSummaryTable } from "@/pages/collection-summary/CollectionSummaryTable";
 import { CollectionSummaryTotals } from "@/pages/collection-summary/CollectionSummaryTotals";
+
+const CollectionMonthDetailsDialog = lazy(() =>
+  import("@/pages/collection-summary/CollectionMonthDetailsDialog").then((module) => ({
+    default: module.CollectionMonthDetailsDialog,
+  })),
+);
 
 type CollectionSummaryPageProps = {
   role: string;
@@ -48,7 +53,11 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
 
       <CollectionSummaryTotals {...viewModels.totals} />
 
-      {viewModels.monthDialog ? <CollectionMonthDetailsDialog {...viewModels.monthDialog} /> : null}
+      {viewModels.monthDialog?.open ? (
+        <Suspense fallback={null}>
+          <CollectionMonthDetailsDialog {...viewModels.monthDialog} />
+        </Suspense>
+      ) : null}
     </OperationalSectionCard>
   );
 }

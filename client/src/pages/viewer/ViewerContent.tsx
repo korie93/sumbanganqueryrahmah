@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { Suspense, lazy, type RefObject } from "react";
 import { AlertCircle } from "lucide-react";
 import type { ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import {
@@ -9,11 +9,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { ViewerDataTable } from "@/pages/viewer/ViewerDataTable";
 import { ViewerEmptyState } from "@/pages/viewer/ViewerEmptyState";
-import { ViewerFiltersPanel } from "@/pages/viewer/ViewerFiltersPanel";
 import { ViewerFooter } from "@/pages/viewer/ViewerFooter";
 import { ViewerLoadingSkeleton } from "@/pages/viewer/ViewerLoadingSkeleton";
 import { ViewerSearchBar } from "@/pages/viewer/ViewerSearchBar";
 import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
+
+const ViewerFiltersPanel = lazy(() =>
+  import("@/pages/viewer/ViewerFiltersPanel").then((module) => ({
+    default: module.ViewerFiltersPanel,
+  })),
+);
 
 type ViewerContentProps = {
   rows: DataRowWithId[];
@@ -60,6 +65,16 @@ type ViewerContentProps = {
   onPrevPage: () => void;
   onNextPage: () => void;
 };
+
+function ViewerFiltersPanelFallback() {
+  return (
+    <div className="ops-toolbar mb-6 space-y-3">
+      <div className="h-5 w-40 animate-pulse rounded bg-muted/40" />
+      <div className="h-10 w-full animate-pulse rounded-xl border border-border/60 bg-muted/25" />
+      <div className="h-10 w-full animate-pulse rounded-xl border border-border/60 bg-muted/25" />
+    </div>
+  );
+}
 
 export function ViewerContent({
   rows,
@@ -129,14 +144,16 @@ export function ViewerContent({
       ) : null}
 
       {rows.length > 0 && showFilters ? (
-        <ViewerFiltersPanel
-          headers={headers}
-          columnFilters={columnFilters}
-          onAddFilter={onAddFilter}
-          onClearAllFilters={onClearAllFilters}
-          onUpdateFilter={onUpdateFilter}
-          onRemoveFilter={onRemoveFilter}
-        />
+        <Suspense fallback={<ViewerFiltersPanelFallback />}>
+          <ViewerFiltersPanel
+            headers={headers}
+            columnFilters={columnFilters}
+            onAddFilter={onAddFilter}
+            onClearAllFilters={onClearAllFilters}
+            onUpdateFilter={onUpdateFilter}
+            onRemoveFilter={onRemoveFilter}
+          />
+        </Suspense>
       ) : null}
 
       {error ? (

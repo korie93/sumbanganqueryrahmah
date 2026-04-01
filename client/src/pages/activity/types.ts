@@ -35,6 +35,23 @@ export interface ParsedBrowserInfo {
   version: string;
 }
 
+export interface ActivityLogsTableProps {
+  actionLoading: string | null;
+  activities: ActivityRecord[];
+  canModerateActivity: boolean;
+  loading: boolean;
+  logsOpen: boolean;
+  onBanClick: (activity: ActivityRecord) => void;
+  onDeleteClick: (activity: ActivityRecord) => void;
+  onKickClick: (activity: ActivityRecord) => void;
+  onLogsOpenChange: (open: boolean) => void;
+  onToggleSelected: (activityId: string, checked: boolean) => void;
+  onToggleSelectAllVisible: (checked: boolean) => void;
+  selectedActivityIds: Set<string>;
+  allVisibleSelected: boolean;
+  partiallySelected: boolean;
+}
+
 export const DEFAULT_ACTIVITY_FILTERS: ActivityFilters = {
   status: [],
   username: "",

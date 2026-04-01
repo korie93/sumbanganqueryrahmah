@@ -1,8 +1,14 @@
+import { Suspense, lazy } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OperationalPageHeader } from "@/components/layout/OperationalPage";
 import { buildViewerPageHeaderDescription } from "@/pages/viewer/page-header-utils";
-import { ViewerPageHeaderActions } from "@/pages/viewer/ViewerPageHeaderActions";
+
+const ViewerPageHeaderActions = lazy(() =>
+  import("@/pages/viewer/ViewerPageHeaderActions").then((module) => ({
+    default: module.ViewerPageHeaderActions,
+  })),
+);
 
 interface ViewerPageHeaderProps {
   importName: string;
@@ -30,6 +36,19 @@ interface ViewerPageHeaderProps {
   onExportCsv: (exportFiltered?: boolean, exportSelected?: boolean) => void;
   onExportPdf: (exportFiltered?: boolean, exportSelected?: boolean) => void;
   onExportExcel: (exportFiltered?: boolean, exportSelected?: boolean) => void;
+}
+
+function ViewerPageHeaderActionsFallback() {
+  return (
+    <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div
+          key={index}
+          className="h-10 w-full animate-pulse rounded-md border border-border/60 bg-muted/30 sm:w-28"
+        />
+      ))}
+    </div>
+  );
 }
 
 export function ViewerPageHeader({
@@ -83,29 +102,31 @@ export function ViewerPageHeader({
         totalRows,
       )}
       actions={
-        <ViewerPageHeaderActions
-          exportBusy={exportBusy}
-          filteredRowsCount={filteredRowsCount}
-          filterCount={filterCount}
-          hasFilteredSubset={hasFilteredSubset}
-          headers={headers}
-          isSuperuser={isSuperuser}
-          onClearAllData={onClearAllData}
-          onDeselectAllColumns={onDeselectAllColumns}
-          onExportCsv={onExportCsv}
-          onExportExcel={onExportExcel}
-          onExportPdf={onExportPdf}
-          onSelectAllColumns={onSelectAllColumns}
-          onShowColumnSelectorChange={onShowColumnSelectorChange}
-          onToggleColumn={onToggleColumn}
-          onToggleFilters={onToggleFilters}
-          rowsCount={rowsCount}
-          selectedColumns={selectedColumns}
-          selectedRowCount={selectedRowCount}
-          showColumnSelector={showColumnSelector}
-          showFilters={showFilters}
-          totalRows={totalRows}
-        />
+        <Suspense fallback={<ViewerPageHeaderActionsFallback />}>
+          <ViewerPageHeaderActions
+            exportBusy={exportBusy}
+            filteredRowsCount={filteredRowsCount}
+            filterCount={filterCount}
+            hasFilteredSubset={hasFilteredSubset}
+            headers={headers}
+            isSuperuser={isSuperuser}
+            onClearAllData={onClearAllData}
+            onDeselectAllColumns={onDeselectAllColumns}
+            onExportCsv={onExportCsv}
+            onExportExcel={onExportExcel}
+            onExportPdf={onExportPdf}
+            onSelectAllColumns={onSelectAllColumns}
+            onShowColumnSelectorChange={onShowColumnSelectorChange}
+            onToggleColumn={onToggleColumn}
+            onToggleFilters={onToggleFilters}
+            rowsCount={rowsCount}
+            selectedColumns={selectedColumns}
+            selectedRowCount={selectedRowCount}
+            showColumnSelector={showColumnSelector}
+            showFilters={showFilters}
+            totalRows={totalRows}
+          />
+        </Suspense>
       }
     />
   );

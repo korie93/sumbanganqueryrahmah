@@ -14,8 +14,6 @@ import {
   unbanUser,
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { ActivityBannedUsersPanel } from "@/pages/activity/ActivityBannedUsersPanel";
-import { ActivityFiltersPanel } from "@/pages/activity/ActivityFiltersPanel";
 import { ActivityLogsTable } from "@/pages/activity/ActivityLogsTable";
 import { ActivitySummaryCards } from "@/pages/activity/ActivitySummaryCards";
 import { DEFAULT_ACTIVITY_FILTERS } from "@/pages/activity/types";
@@ -32,6 +30,24 @@ const ActivityActionDialogs = lazy(() =>
     default: module.ActivityActionDialogs,
   })),
 );
+const ActivityBannedUsersPanel = lazy(() =>
+  import("@/pages/activity/ActivityBannedUsersPanel").then((module) => ({
+    default: module.ActivityBannedUsersPanel,
+  })),
+);
+const ActivityFiltersPanel = lazy(() =>
+  import("@/pages/activity/ActivityFiltersPanel").then((module) => ({
+    default: module.ActivityFiltersPanel,
+  })),
+);
+
+function ActivitySectionFallback({ label }: { label: string }) {
+  return (
+    <div className="glass-wrapper mb-6 p-4 text-sm text-muted-foreground">
+      {label}
+    </div>
+  );
+}
 
 export default function Activity() {
   const currentRole = getCurrentActivityRole();
@@ -322,6 +338,38 @@ export default function Activity() {
     () => activities.filter((activity) => selectedActivityIds.has(activity.id)).length,
     [activities, selectedActivityIds],
   );
+  const summaryCounts = useMemo(() => {
+    let onlineCount = 0;
+    let idleCount = 0;
+    let logoutCount = 0;
+    let kickedCount = 0;
+
+    for (const activity of activities) {
+      switch (activity.status) {
+        case "ONLINE":
+          onlineCount += 1;
+          break;
+        case "IDLE":
+          idleCount += 1;
+          break;
+        case "LOGOUT":
+          logoutCount += 1;
+          break;
+        case "KICKED":
+          kickedCount += 1;
+          break;
+        default:
+          break;
+      }
+    }
+
+    return {
+      idleCount,
+      kickedCount,
+      logoutCount,
+      onlineCount,
+    };
+  }, [activities]);
   const allVisibleSelected = activities.length > 0 && selectedVisibleCount === activities.length;
   const partiallySelected = selectedVisibleCount > 0 && !allVisibleSelected;
   const hasOpenActionDialog =
@@ -371,36 +419,40 @@ export default function Activity() {
         </div>
 
         {showFilters ? (
-          <ActivityFiltersPanel
-            dateFromOpen={dateFromOpen}
-            dateToOpen={dateToOpen}
-            filters={filters}
-            onApply={handleApplyFilters}
-            onClear={handleClearFilters}
-            onDateFromOpenChange={setDateFromOpen}
-            onDateToOpenChange={setDateToOpen}
-            onFieldChange={(field, value) => setFilters((previous) => ({ ...previous, [field]: value }))}
-            onToggleStatus={toggleStatusFilter}
-          />
+          <Suspense fallback={<ActivitySectionFallback label="Loading activity filters..." />}>
+            <ActivityFiltersPanel
+              dateFromOpen={dateFromOpen}
+              dateToOpen={dateToOpen}
+              filters={filters}
+              onApply={handleApplyFilters}
+              onClear={handleClearFilters}
+              onDateFromOpenChange={setDateFromOpen}
+              onDateToOpenChange={setDateToOpen}
+              onFieldChange={(field, value) => setFilters((previous) => ({ ...previous, [field]: value }))}
+              onToggleStatus={toggleStatusFilter}
+            />
+          </Suspense>
         ) : null}
 
         <ActivitySummaryCards
           bannedCount={bannedUsers.length}
-          idleCount={countActivitiesByStatus(activities, "IDLE")}
-          kickedCount={countActivitiesByStatus(activities, "KICKED")}
-          logoutCount={countActivitiesByStatus(activities, "LOGOUT")}
-          onlineCount={countActivitiesByStatus(activities, "ONLINE")}
+          idleCount={summaryCounts.idleCount}
+          kickedCount={summaryCounts.kickedCount}
+          logoutCount={summaryCounts.logoutCount}
+          onlineCount={summaryCounts.onlineCount}
         />
 
-        {canModerateActivity ? (
-          <ActivityBannedUsersPanel
-            actionLoading={actionLoading}
-            bannedUsers={bannedUsers}
-            onUnbanClick={(user) => {
-              setSelectedBannedUser(user);
-              setUnbanDialogOpen(true);
-            }}
-          />
+        {canModerateActivity && bannedUsers.length > 0 ? (
+          <Suspense fallback={<ActivitySectionFallback label="Loading banned users..." />}>
+            <ActivityBannedUsersPanel
+              actionLoading={actionLoading}
+              bannedUsers={bannedUsers}
+              onUnbanClick={(user) => {
+                setSelectedBannedUser(user);
+                setUnbanDialogOpen(true);
+              }}
+            />
+          </Suspense>
         ) : null}
 
         <ActivityLogsTable

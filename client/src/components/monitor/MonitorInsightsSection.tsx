@@ -1,32 +1,44 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { BrainCircuit } from "lucide-react";
 import { InfoHint } from "@/components/monitor/InfoHint";
 import { MonitorInsightsMetrics } from "@/components/monitor/MonitorInsightsMetrics";
 import { MonitorInsightsPanels } from "@/components/monitor/MonitorInsightsPanels";
 import { TimeSeriesChart } from "@/components/monitor/TimeSeriesChart";
-import type { AnomalyRow, CorrelationRow, SlopeRow } from "@/components/monitor/monitorData";
-import type { SeriesPoint } from "@/hooks/useSystemMetrics";
+import {
+  buildAnomalyRows,
+  buildCorrelationRows,
+  buildForecastSeries,
+  buildSlopeRows,
+  getGovernanceClass,
+  normalizeBoostedKey,
+} from "@/components/monitor/monitorData";
 import type { IntelligenceExplainPayload } from "@/lib/api";
 
 type MonitorInsightsSectionProps = {
   intelligence: IntelligenceExplainPayload;
-  governanceClass: string;
-  anomalyRows: AnomalyRow[];
-  correlationRows: CorrelationRow[];
-  slopeRows: SlopeRow[];
-  boostedPairLookup: Set<string>;
-  forecastSeries: SeriesPoint[];
+  lastUpdated: number | null;
 };
 
 function MonitorInsightsSectionImpl({
   intelligence,
-  governanceClass,
-  anomalyRows,
-  correlationRows,
-  slopeRows,
-  boostedPairLookup,
-  forecastSeries,
+  lastUpdated,
 }: MonitorInsightsSectionProps) {
+  const governanceClass = useMemo(
+    () => getGovernanceClass(intelligence.governanceState),
+    [intelligence.governanceState],
+  );
+  const anomalyRows = useMemo(() => buildAnomalyRows(intelligence), [intelligence]);
+  const correlationRows = useMemo(() => buildCorrelationRows(intelligence), [intelligence]);
+  const slopeRows = useMemo(() => buildSlopeRows(intelligence), [intelligence]);
+  const boostedPairLookup = useMemo(
+    () => new Set(intelligence.correlationMatrix.boostedPairs.map(normalizeBoostedKey)),
+    [intelligence.correlationMatrix.boostedPairs],
+  );
+  const forecastSeries = useMemo(
+    () => buildForecastSeries(intelligence.forecastProjection, lastUpdated),
+    [intelligence.forecastProjection, lastUpdated],
+  );
+
   return (
     <section className="space-y-4 rounded-2xl border border-border/60 bg-background/30 p-4 backdrop-blur-sm">
       <div>

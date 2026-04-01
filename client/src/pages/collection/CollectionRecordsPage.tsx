@@ -1,21 +1,82 @@
-import { memo, useMemo } from "react";
+import { Suspense, lazy, memo, useMemo } from "react";
 import { ActiveFilterChips, type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
-import { CollectionRecordsFilters } from "@/pages/collection-records/CollectionRecordsFilters";
 import { CollectionRecordsTable } from "@/pages/collection-records/CollectionRecordsTable";
-import { DeleteCollectionRecordDialog } from "@/pages/collection-records/DeleteCollectionRecordDialog";
-import { CollectionRecordsToolbar } from "@/pages/collection-records/CollectionRecordsToolbar";
-import { EditCollectionRecordDialog } from "@/pages/collection-records/EditCollectionRecordDialog";
-import { PurgeCollectionRecordsDialog } from "@/pages/collection-records/PurgeCollectionRecordsDialog";
-import { ReceiptPreviewDialog } from "@/pages/collection-records/ReceiptPreviewDialog";
 import { buildCollectionRecordsPageViewModel } from "@/pages/collection-records/collection-records-page-view-models";
-import { ViewAllRecordsDialog } from "@/pages/collection-records/ViewAllRecordsDialog";
 import { useCollectionRecordsController } from "@/pages/collection-records/useCollectionRecordsController";
+
+const CollectionRecordsFilters = lazy(() =>
+  import("@/pages/collection-records/CollectionRecordsFilters").then((module) => ({
+    default: module.CollectionRecordsFilters,
+  })),
+);
+const CollectionRecordsToolbar = lazy(() =>
+  import("@/pages/collection-records/CollectionRecordsToolbar").then((module) => ({
+    default: module.CollectionRecordsToolbar,
+  })),
+);
+const ReceiptPreviewDialog = lazy(() =>
+  import("@/pages/collection-records/ReceiptPreviewDialog").then((module) => ({
+    default: module.ReceiptPreviewDialog,
+  })),
+);
+const EditCollectionRecordDialog = lazy(() =>
+  import("@/pages/collection-records/EditCollectionRecordDialog").then((module) => ({
+    default: module.EditCollectionRecordDialog,
+  })),
+);
+const DeleteCollectionRecordDialog = lazy(() =>
+  import("@/pages/collection-records/DeleteCollectionRecordDialog").then((module) => ({
+    default: module.DeleteCollectionRecordDialog,
+  })),
+);
+const PurgeCollectionRecordsDialog = lazy(() =>
+  import("@/pages/collection-records/PurgeCollectionRecordsDialog").then((module) => ({
+    default: module.PurgeCollectionRecordsDialog,
+  })),
+);
+const ViewAllRecordsDialog = lazy(() =>
+  import("@/pages/collection-records/ViewAllRecordsDialog").then((module) => ({
+    default: module.ViewAllRecordsDialog,
+  })),
+);
 
 type CollectionRecordsPageProps = {
   role: string;
 };
+
+function CollectionRecordsFiltersFallback() {
+  return (
+    <div className="ops-toolbar space-y-3">
+      <div className="grid gap-3 xl:grid-cols-[170px_170px_minmax(260px,1fr)_190px_auto_auto]">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div
+            key={index}
+            className="h-16 animate-pulse rounded-xl border border-border/60 bg-muted/20"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CollectionRecordsToolbarFallback() {
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 md:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <div
+            key={index}
+            className="h-20 animate-pulse rounded-xl border border-border/60 bg-muted/20"
+          />
+        ))}
+      </div>
+      <div className="h-28 animate-pulse rounded-xl border border-border/60 bg-muted/20" />
+      <div className="h-16 animate-pulse rounded-xl border border-border/60 bg-muted/20" />
+    </div>
+  );
+}
 
 function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
   const controller = useCollectionRecordsController({ role });
@@ -71,34 +132,48 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
         contentClassName="space-y-3"
       >
         <div className="ops-toolbar">
-          <CollectionRecordsFilters {...viewModel.filters} />
+          <Suspense fallback={<CollectionRecordsFiltersFallback />}>
+            <CollectionRecordsFilters {...viewModel.filters} />
+          </Suspense>
         </div>
 
         <ActiveFilterChips items={activeFilterChips} onClearAll={viewModel.filters.onReset} />
 
-        <CollectionRecordsToolbar {...viewModel.toolbar} />
+        <Suspense fallback={<CollectionRecordsToolbarFallback />}>
+          <CollectionRecordsToolbar {...viewModel.toolbar} />
+        </Suspense>
 
         <CollectionRecordsTable {...viewModel.table} />
       </OperationalSectionCard>
 
       {viewModel.receiptPreview.open ? (
-        <ReceiptPreviewDialog {...viewModel.receiptPreview} />
+        <Suspense fallback={null}>
+          <ReceiptPreviewDialog {...viewModel.receiptPreview} />
+        </Suspense>
       ) : null}
 
       {viewModel.editDialog.open ? (
-        <EditCollectionRecordDialog {...viewModel.editDialog} />
+        <Suspense fallback={null}>
+          <EditCollectionRecordDialog {...viewModel.editDialog} />
+        </Suspense>
       ) : null}
 
       {viewModel.deleteDialog.open ? (
-        <DeleteCollectionRecordDialog {...viewModel.deleteDialog} />
+        <Suspense fallback={null}>
+          <DeleteCollectionRecordDialog {...viewModel.deleteDialog} />
+        </Suspense>
       ) : null}
 
       {viewModel.purgeDialog.open ? (
-        <PurgeCollectionRecordsDialog {...viewModel.purgeDialog} />
+        <Suspense fallback={null}>
+          <PurgeCollectionRecordsDialog {...viewModel.purgeDialog} />
+        </Suspense>
       ) : null}
 
       {viewModel.viewAll.open ? (
-        <ViewAllRecordsDialog {...viewModel.viewAll} />
+        <Suspense fallback={null}>
+          <ViewAllRecordsDialog {...viewModel.viewAll} />
+        </Suspense>
       ) : null}
     </div>
   );

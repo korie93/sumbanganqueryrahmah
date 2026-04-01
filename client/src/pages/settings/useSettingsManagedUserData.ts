@@ -153,6 +153,7 @@ export function useSettingsManagedUserData({
   );
 
   const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
+  const [managedUsersLoaded, setManagedUsersLoaded] = useState(false);
   const [managedUsersLoading, setManagedUsersLoading] = useState(false);
   const [managedUsersQuery, setManagedUsersQuery] = useState<ManagedUsersQueryState>(
     DEFAULT_MANAGED_USERS_QUERY,
@@ -161,6 +162,7 @@ export function useSettingsManagedUserData({
     DEFAULT_MANAGED_USERS_PAGINATION,
   );
   const [pendingResetRequests, setPendingResetRequests] = useState<PendingPasswordResetRequest[]>([]);
+  const [pendingResetRequestsLoaded, setPendingResetRequestsLoaded] = useState(false);
   const [pendingResetRequestsLoading, setPendingResetRequestsLoading] = useState(false);
   const [pendingResetRequestsQuery, setPendingResetRequestsQuery] = useState<PendingResetRequestsQueryState>(
     DEFAULT_PENDING_RESET_REQUESTS_QUERY,
@@ -222,6 +224,7 @@ export function useSettingsManagedUserData({
         requestId !== managedUsersRequestIdRef.current
       ) return nextUsers;
       setManagedUsers(nextUsers);
+      setManagedUsersLoaded(true);
       setManagedUsersPagination(nextPagination);
       setManagedUsersQuery((previous) => {
         const next = {
@@ -250,6 +253,7 @@ export function useSettingsManagedUserData({
         variant: "destructive",
       });
       setManagedUsers([]);
+      setManagedUsersLoaded(true);
       setManagedUsersPagination({
         page: query.page,
         pageSize: query.pageSize,
@@ -303,6 +307,7 @@ export function useSettingsManagedUserData({
         return nextRequests;
       }
       setPendingResetRequests(nextRequests);
+      setPendingResetRequestsLoaded(true);
       setPendingResetRequestsPagination(nextPagination);
       setPendingResetRequestsQuery((previous) => {
         const next = {
@@ -332,6 +337,7 @@ export function useSettingsManagedUserData({
         variant: "destructive",
       });
       setPendingResetRequests([]);
+      setPendingResetRequestsLoaded(true);
       setPendingResetRequestsPagination({
         page: query.page,
         pageSize: query.pageSize,
@@ -375,10 +381,12 @@ export function useSettingsManagedUserData({
     loadManagedUsers,
     loadPendingResetRequests,
     managedUsers,
+    managedUsersLoaded,
     managedUsersLoading,
     managedUsersPagination,
     managedUsersQuery,
     pendingResetRequests,
+    pendingResetRequestsLoaded,
     pendingResetRequestsLoading,
     pendingResetRequestsPagination,
     pendingResetRequestsQuery,
