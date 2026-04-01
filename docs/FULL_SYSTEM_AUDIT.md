@@ -1,910 +1,600 @@
-# FULL SYSTEM AUDIT — SQR
+# FULL SYSTEM AUDIT - SQR
 
-**Audit Date:** 2026-03-31
-**Previous Audit Date:** 2026-03-30
-**Scope:** Full-system review — backend, frontend, UI/UX, layout, mobile responsiveness, API design, database design, security, performance, error handling, module architecture, maintainability
-**Method:** Static code inspection, file-by-file analysis, cross-reference verification
-**Auditor:** Principal Software Auditor (automated)
-
----
+**Audit date:** 2026-04-01  
+**Method:** static code inspection only  
+**Scope:** backend, frontend, UI/UX, responsive behavior, API design, database behavior, security, performance, observability, architecture, maintainability  
+**Audit mode:** documentation-only, no implementation changes performed as part of this audit
 
 ## A. Executive Summary
 
-### System Health Score: 8.2 / 10
+### System Health Score
 
-**Change from previous audit:** +0.7 (was 7.5/10)
+**8.2 / 10**
 
-The SQR system has improved significantly since the previous audit dated 2026-03-30. Five of seven previously reported critical/high findings have been confirmed as **FIXED**. The codebase demonstrates mature engineering across architecture, security, observability, and resilience. The remaining issues are narrower in scope and lower in severity than what existed previously.
+This score is supportable for the current codebase. The system is materially healthier than the previous 7.5/10 state because the earlier high-value issues around rollup keys, batched daily inserts, mobile viewport sizing, SQL LIKE escaping, CSRF fallback behavior, receipt observability, and admin moderation rate limiting have been addressed in code.
 
-### Overall Stability Impression
+### Overall Stability
 
-The system is **production-ready for controlled deployment** at moderate scale. The architecture is clean, security is multi-layered, error handling is comprehensive, and observability is strong. The remaining technical debt is manageable and does not block production use.
+SQR is stable enough for **controlled production deployment**. The architecture is coherent, security controls are layered, and the codebase is improving in maintainability even though some heavy orchestration files still remain.
 
 ### Biggest Strengths
 
-1. **Clean layered architecture** — routes → controllers → services → repositories with factory-based DI via `local-server-composition.ts`. 37 PostgreSQL tables, 100+ indexes, clear domain boundaries.
-2. **Strong security posture** — multi-layer CSRF (double-submit + Fetch metadata + origin/referer), timing-safe bcrypt, JWT with secret rotation, comprehensive file upload validation (magic bytes, PDF JS/action blocking, EXIF/XMP/IPTC stripping), mutation idempotency keys.
-3. **Resilience patterns** — circuit breakers on AI/export, adaptive 3-state rate limiting (NORMAL/DEGRADED/PROTECTION), AI concurrency gate with per-role limits, worker clustering with crash detection and restart throttling, database protection mode.
-4. **Comprehensive testing** — 226 tests across 84 files. CI pipeline: typecheck → DB schema governance → tests → build → bundle budgets → Playwright smoke against PostgreSQL 16.
-5. **Structured logging** — pino-based structured logging with automatic redaction of 15+ sensitive field patterns, request-level context (requestId, clientIp, userAgent), slow request detection (threshold: 1500ms).
-6. **Database monitoring** — connection pool pressure tracking with throttled warnings, idle session sweeping, rollup refresh queue with retry/backoff.
-7. **Backup streaming** — backup export now uses cursor-based pagination (1000 rows/page) with file streaming and SHA256 integrity hashing. Previous OOM risk is resolved.
+- Clear backend composition through [server/internal/local-server-composition.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/internal/local-server-composition.ts).
+- Strong session, role, and CSRF protections via [server/auth/guards.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/auth/guards.ts) and [server/http/csrf.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/http/csrf.ts).
+- Centralized structured logging and error handling via [server/lib/logger.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/lib/logger.ts) and [server/middleware/error-handler.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/middleware/error-handler.ts).
+- Backup export/create path is much safer because [server/repositories/backups-payload-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-payload-utils.ts) now streams paged JSON arrays instead of materializing a single giant payload.
+- Frontend shell viewport handling is materially better through `100dvh` fallbacks in [client/src/index.css](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/index.css) and shell usage in [client/src/App.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/App.tsx).
+- Viewer, monitor, receipt, backup, and collection modules show real decomposition progress.
 
 ### Biggest Risks
 
-1. **WebSocket early-close connection lifecycle** — the only remaining issue from the previous audit's critical findings. Early `ws.close()` calls bypass cleanup handlers (low practical impact since sockets are never stored before rejection).
-2. **Oversized files** — 4 source files exceed 700 lines, with the largest at 898 lines. Maintainability risk for future development velocity.
-3. **Mixed pagination patterns** — inconsistent use of offset/limit vs page/pageSize across API endpoints. Not a runtime risk but increases frontend integration complexity.
-4. **Backup restore Set accumulation** — unbounded `Set<string>` of restored record IDs could grow large on very large restores.
+- Restore still has scale-sensitive memory behavior in [server/repositories/backups-restore-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-restore-utils.ts) and [server/repositories/backups-restore-dataset-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-restore-dataset-utils.ts), especially the unbounded `Set<string>` of restored record IDs.
+- Pagination contracts remain mixed across imports, search, audit, auth-admin, and collection flows.
+- Two non-test source files still exceed 700 lines.
+- Dense mobile/admin surfaces still require runtime verification; static inspection alone cannot prove final usability.
 
 ### Comparison to Previous Audit
 
-| Finding | Previous Status | Current Status | Change |
-|---------|----------------|----------------|--------|
-| Rollup table composite PKs | Missing | FIXED | ✅ Improved |
-| N+1 day-insert batch | 30 individual INSERTs | FIXED (sql.join batch) | ✅ Improved |
-| 100dvh viewport fallback | Missing | FIXED (@supports fallback) | ✅ Improved |
-| SQL LIKE wildcard escaping | Missing | FIXED (sql-like-utils.ts) | ✅ Improved |
-| Backup export OOM risk | All tables in memory | FIXED (streaming + pagination) | ✅ Improved |
-| WebSocket early-close | Present | STILL PRESENT (low practical risk) | ⚠️ No change |
-| Silent receipt catch blocks | 5+ silent catches | FIXED (all logged) | ✅ Improved |
-| CSRF fallback bypass | Potential bypass | FIXED (blocks by default) | ✅ Improved |
-| x-forwarded-for IP parsing | Manual parsing | FIXED (uses req.ip) | ✅ Improved |
-| Bulk admin rate limiting | Missing | FIXED (30 req/10min) | ✅ Improved |
-| Oversized files | 5 files >700 lines | 4 files >700 lines | ⬆ Slightly improved |
+- Previous critical structural issues are no longer present in the same form.
+- No issue verified in this audit currently rises to Critical.
+- The codebase is healthier, but still carries medium-priority scale and consistency debt.
 
-### Production-Readiness Judgment
+### Critical Path
 
-**Ready for controlled production use.** The system can serve production traffic at moderate to high scale. The only remaining concern from the critical path is WebSocket connection cleanup, which has low practical impact since early-rejected sockets are never stored in the connected clients map.
-
----
+1. Reduce restore-path memory pressure in backup recovery.
+2. Standardize pagination contracts by endpoint family.
+3. Continue decomposing the remaining oversized orchestration files.
+4. Keep runtime QA active on dense mobile surfaces.
 
 ## B. Architecture Overview
 
 ### Backend Architecture
 
-```
-server/
-├── config/           # Runtime config (615 lines), security, body limits
-├── auth/             # Guards, JWT, passwords, 2FA, activation, lifecycle
-├── http/             # Express middleware: CSRF, CORS, validation, errors, async-handler
-├── controllers/      # Request/response handlers
-├── services/         # Business logic (~60 files)
-├── repositories/     # Drizzle ORM data access (~40 files)
-├── routes/           # Route registration and handlers (~40 files)
-├── internal/         # Runtime assembly, bootstrapping, monitoring (~38 files)
-├── middleware/        # Express middleware (error handler, rate limit)
-├── ws/               # WebSocket server and session management
-├── intelligence/     # AI search, embedding, caching infrastructure
-├── lib/              # Shared utilities (logger, receipt security, etc.)
-├── mail/             # Email/SMTP utilities
-├── storage/          # File storage abstraction
-├── sql/              # Raw SQL helpers
-├── test-support/     # Test factories and helpers
-└── tests/            # Server test files (~51 files)
-```
+The backend is broadly aligned with the intended layering:
+
+- routes define endpoints and protection
+- controllers handle HTTP parsing and response shaping
+- services coordinate domain logic
+- repositories isolate PostgreSQL access
+- internal modules handle startup, runtime monitoring, and composition
+
+Evidence:
+
+- [server/internal/local-server-composition.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/internal/local-server-composition.ts) acts as the composition root.
+- Import flow uses [server/controllers/imports.controller.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/controllers/imports.controller.ts), services, and repositories in the expected order.
+- Backup, activity, auth, and collection domains follow the same broad pattern.
+
+Weaknesses:
+
+- Some large orchestration services remain, especially [server/services/collection/collection-record-mutation-operations.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/services/collection/collection-record-mutation-operations.ts).
+- Route naming and response envelopes are not yet fully standardized.
 
 ### Frontend Architecture
 
-```
-client/src/
-├── App.tsx              # Root component with routing
-├── main.tsx             # Entry point
-├── index.css            # Global styles (tailwind, viewport, scroll)
-├── app/                 # Core application setup
-├── components/          # Shared components (FloatingAI, Navbar, etc.)
-│   ├── ui/              # 40+ Radix-based shadcn/ui components
-│   └── monitor/         # System monitor components (26 files)
-├── context/             # AI context (single lightweight React Context)
-├── hooks/               # 14 shared hooks (system metrics, toast, pagination)
-│   └── useSystemMetrics.ts (441 lines) — metrics polling and aggregation
-├── lib/                 # API client, query client, utilities
-├── pages/               # 24 main pages + ~200 sub-components
-│   ├── viewer/          # 46 files
-│   ├── settings/        # 26 files
-│   ├── collection-records/ # 26 files
-│   └── ... (15 more page groups)
-├── styles/              # Additional style sheets
-└── types/               # TypeScript type definitions
-```
+The frontend is a React + TypeScript application centered on [client/src/App.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/App.tsx), app-shell state, and modular page domains.
+
+Strengths:
+
+- Shell concerns, providers, route rendering, and error boundaries are separated cleanly.
+- Floating AI now has dedicated layout, visibility, and scroll-lock helpers rather than ad hoc page logic.
+- Viewer and monitor are significantly more modular than before.
+
+Weaknesses:
+
+- [client/src/pages/Viewer.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Viewer.tsx) remains a large orchestration page at 764 lines.
+- Some data-heavy mobile pages still need runtime QA to validate touch ergonomics and scroll behavior.
 
 ### Data Flow
 
-```
-[Browser] → HTTP/WS → Express middleware stack → Route → Controller
-  → Service (business logic) → Repository (Drizzle ORM) → PostgreSQL
+- Cookie/JWT-authenticated browser requests hit Express APIs.
+- Input normalization uses helpers in [server/http/validation.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/http/validation.ts).
+- Repositories use Drizzle and SQL against [shared/schema-postgres.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/shared/schema-postgres.ts).
+- Real-time monitor and activity updates use WebSockets via [server/ws/runtime-manager.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/ws/runtime-manager.ts).
+
+### Architectural Judgment
+
+The system is no longer suffering from missing structure. Current risks are about scale edges, contract consistency, and maintainability, not architectural absence.
+
+## C. Verified Previous Findings
+
+### 1. Rollup table composite PKs
+
+- **Status:** FIXED
+- **Exact location:** [shared/schema-postgres.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/shared/schema-postgres.ts)
+- **What was found:** `primaryKey()` exists on all three previously flagged rollup and queue tables at the `slicePrimaryKey` declarations around lines 425, 450, and 479.
+- **Why it matters:** This resolves the earlier identity/schema concern.
+- **Recommendation direction:** Keep as-is.
+- **Priority:** Monitor
+
+### 2. N+1 day-insert batch
+
+- **Status:** FIXED
+- **Exact location:** [server/repositories/collection-daily-repository-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/collection-daily-repository-utils.ts), `upsertCollectionDailyCalendarDays`
+- **What was found:** The implementation now uses one batched `VALUES` block via `sql.join(...)`.
+- **Why it matters:** This removes the earlier serial insert inefficiency.
+- **Recommendation direction:** Keep as-is.
+- **Priority:** Monitor
+
+### 3. 100dvh viewport fallback
+
+- **Status:** FIXED
+- **Exact location:** [client/src/index.css](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/index.css), [client/src/App.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/App.tsx)
+- **What was found:** `.viewport-min-height` and `.app-shell-min-height` now use `@supports (height: 100dvh)`.
+- **Why it matters:** This resolves the earlier shell-level mobile clipping issue.
+- **Recommendation direction:** Keep applying the same shell pattern.
+- **Priority:** Monitor
+
+### 4. SQL LIKE wildcard escaping
+
+- **Status:** FIXED
+- **Exact location:** [server/repositories/sql-like-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/sql-like-utils.ts)
+- **What was found:** `escapeLikePattern` and `buildLikePattern` are reused across search, imports, audit, backups, auth-admin, collection, and AI search repositories.
+- **Why it matters:** This closes the previous wildcard correctness issue.
+- **Recommendation direction:** Keep as-is.
+- **Priority:** Monitor
+
+### 5. Backup export OOM via all-table in-memory loading
+
+- **Status:** FIXED
+- **Exact location:** [server/repositories/backups-payload-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-payload-utils.ts)
+- **What was found:** Backup payload creation now uses `appendPagedJsonArray(...)` with paged fetches rather than the earlier all-in-memory pattern.
+- **Why it matters:** This materially reduces the previous export/create backup OOM risk.
+- **Recommendation direction:** Keep export/create architecture; focus next on restore-path scale behavior.
+- **Priority:** Monitor
+
+### 6. WebSocket early-close cleanup
+
+- **Status:** LOW-RISK WATCH AREA
+- **Exact location:** [server/ws/runtime-manager.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/ws/runtime-manager.ts)
+- **What was found:** Early `ws.close()` branches still exist, but they run before `connectedClients.set(activityId, ws)`.
+- **Why it matters:** Earlier audit language overstated this as a connection-map leak. In current code, rejected sockets are closed before they are stored.
+- **Recommendation direction:** Do not prioritize unless runtime evidence shows a different socket lifecycle problem.
+- **Priority:** Monitor
+
+### 7. Silent receipt catch blocks
+
+- **Status:** FIXED
+- **Exact location:** [server/routes/collection-receipt.service.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/routes/collection-receipt.service.ts), [server/routes/collection-receipt-file-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/routes/collection-receipt-file-utils.ts)
+- **What was found:** Best-effort failures are now routed through `logCollectionReceiptBestEffortFailure(...)` and logged.
+- **Why it matters:** This closes the previous observability blind spot.
+- **Recommendation direction:** Keep as-is.
+- **Priority:** Monitor
+
+### 8. CSRF fallback bypass
+
+- **Status:** FIXED
+- **Exact location:** [server/http/csrf.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/http/csrf.ts)
+- **What was found:** Cookie-authenticated unsafe API requests now fail closed with `CSRF_SIGNAL_MISSING` when required same-origin signals are absent.
+- **Why it matters:** This closes the earlier fallback bypass concern.
+- **Recommendation direction:** Keep as-is.
+- **Priority:** Monitor
+
+### 9. Bulk admin rate limiting
+
+- **Status:** FIXED
+- **Exact location:** [server/routes/activity.routes.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/routes/activity.routes.ts), [server/middleware/rate-limit.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/middleware/rate-limit.ts)
+- **What was found:** Sensitive moderation routes now use `adminAction` limiting at 30 requests per 10 minutes.
+- **Why it matters:** This closes the previous abuse-hardening gap.
+- **Recommendation direction:** Keep as-is.
+- **Priority:** Monitor
+
+## D. New Findings
+
+### 1. Mixed pagination contracts across APIs
+
+- **Severity:** Medium
+- **Category:** API
+- **Exact location:** [server/controllers/imports.controller.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/controllers/imports.controller.ts), [shared/api-contracts.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/shared/api-contracts.ts), [client/src/lib/api/imports.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/lib/api/imports.ts), [server/services/search.service.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/services/search.service.ts)
+- **What was found:** The system currently mixes `cursor + limit`, `page + pageSize`, `page + limit`, and `offset + limit`. Imports alone expose multiple patterns.
+- **Why it matters:** This increases frontend branching, test surface, and contract drift risk.
+- **Current status:** New
+- **Recommendation direction:** converge by endpoint family, not by sweeping refactor.
+- **Priority:** Fix Next
+
+### 2. Restore path retains unbounded `Set<string>` for restored record IDs
+
+- **Severity:** Medium
+- **Category:** Database / Performance
+- **Exact location:** [server/repositories/backups-restore-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-restore-utils.ts), [server/repositories/backups-restore-dataset-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-restore-dataset-utils.ts)
+- **What was found:** Restore still tracks restored collection record IDs in `new Set<string>()`, then materializes them for receipt-cache sync.
+- **Why it matters:** Export/create backup improved, but restore still has scale-sensitive in-memory accumulation.
+- **Current status:** New
+- **Recommendation direction:** reduce retained restore working sets and avoid holding every restored record ID if not strictly necessary.
+- **Priority:** Fix Next
+
+### 3. Two non-test source files still exceed 700 lines
+
+- **Severity:** Medium
+- **Category:** Maintainability
+- **Exact location:** [shared/schema-postgres.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/shared/schema-postgres.ts), [client/src/pages/Viewer.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Viewer.tsx)
+- **What was found:** Current source line counts are 839 and 764 respectively.
+- **Why it matters:** These files are still large coordination surfaces that increase regression and onboarding cost.
+- **Current status:** Still Present
+- **Recommendation direction:** continue domain-aware decomposition, not cosmetic splitting.
+- **Priority:** Fix Later
+
+### 4. Multiple source files remain near the 700-line threshold
+
+- **Severity:** Low
+- **Category:** Maintainability
+- **Exact location:** [server/services/collection/collection-record-mutation-operations.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/services/collection/collection-record-mutation-operations.ts), [client/src/components/ui/sidebar.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/components/ui/sidebar.tsx), [server/routes/tests/operations.routes.integration.test.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/routes/tests/operations.routes.integration.test.ts), [client/src/pages/BackupRestore.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/BackupRestore.tsx), [server/http/tests/bootstrap-migration.integration.test.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/http/tests/bootstrap-migration.integration.test.ts), [server/services/auth-account-managed-operations.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/services/auth-account-managed-operations.ts)
+- **What was found:** Several files now sit in the 624-685 line range, close enough to become the next oversized hotspots.
+- **Why it matters:** This shows where maintainability pressure will reappear first.
+- **Current status:** Watch Area
+- **Recommendation direction:** use these files as the next decomposition queue when touching their domains again.
+- **Priority:** Monitor
+
+### 5. Oversized file decomposition progress is real, but not finished
+
+- **Severity:** Low
+- **Category:** Maintainability
+- **Exact location:** collection record, receipt, backup, viewer, and monitor modules
+- **What was found:** The decomposition claim is supported, and progress is better than the minimum claim. Formerly oversized operational files such as [server/repositories/collection-record-repository-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/collection-record-repository-utils.ts), [server/routes/collection-receipt.service.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/routes/collection-receipt.service.ts), [server/services/backup-operations.service.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/services/backup-operations.service.ts), [server/repositories/backups-restore-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-restore-utils.ts), and [server/services/auth-account-authentication-operations.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/services/auth-account-authentication-operations.ts) are now materially smaller at 401, 301, 340, 49, and 488 lines respectively.
+- **Why it matters:** The maintainability trend is clearly positive, but the work is not complete while Viewer and schema remain oversized.
+- **Current status:** Partially Fixed
+- **Recommendation direction:** continue opportunistic decomposition during domain work.
+- **Priority:** Monitor
+
+## E. Findings by Category
+
+### Backend
+
+#### Layered backend composition is solid
+
+- **Severity:** Low
+- **Category:** Backend
+- **Exact location:** [server/internal/local-server-composition.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/internal/local-server-composition.ts)
+- **What was found:** Composition root cleanly wires repositories, services, guards, controllers, WebSocket manager, and route registration.
+- **Why it matters:** This keeps application assembly centralized and reduces hidden coupling.
+- **Current status:** Fixed
+- **Recommendation direction:** preserve this composition-first pattern.
+- **Priority:** Monitor
+
+#### Global error handling is consistent for core API failures
+
+- **Severity:** Low
+- **Category:** Backend
+- **Exact location:** [server/middleware/error-handler.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/middleware/error-handler.ts)
+- **What was found:** The app uses a centralized JSON error handler with explicit 413 behavior, `HttpError` handling, and structured logging for unexpected failures.
+- **Why it matters:** This is a strong production baseline.
+- **Current status:** Fixed
+- **Recommendation direction:** keep route handlers throwing structured errors instead of handcrafting local error shapes.
+- **Priority:** Monitor
+
+#### Route aliasing and naming drift remain
+
+- **Severity:** Low
+- **Category:** Backend
+- **Exact location:** [server/routes/activity.routes.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/routes/activity.routes.ts)
+- **What was found:** The activity surface exposes both `/api/activity/...` and `/api/activities...` patterns.
+- **Why it matters:** This is not a correctness defect, but it increases mental overhead and API ambiguity.
+- **Current status:** Still Present
+- **Recommendation direction:** standardize naming gradually when deprecating aliases.
+- **Priority:** Fix Later
+
+### Frontend
+
+#### App shell and route boundaries are healthier than before
+
+- **Severity:** Low
+- **Category:** Frontend
+- **Exact location:** [client/src/App.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/App.tsx)
+- **What was found:** Providers, route boundaries, shell layout, auto logout, and Floating AI are separated cleanly.
+- **Why it matters:** This keeps global concerns centralized and easier to reason about.
+- **Current status:** Fixed
+- **Recommendation direction:** preserve the same shell/page separation.
+- **Priority:** Monitor
+
+#### Viewer remains a major orchestration hotspot
+
+- **Severity:** Medium
+- **Category:** Frontend
+- **Exact location:** [client/src/pages/Viewer.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Viewer.tsx)
+- **What was found:** Viewer improved through many extracted subcomponents and utilities, but the page still coordinates fetch, pagination, selection, export, and responsive rendering in one large orchestrator.
+- **Why it matters:** Viewer remains a likely future regression hotspot.
+- **Current status:** Still Present
+- **Recommendation direction:** continue extracting orchestration slices only when doing domain work.
+- **Priority:** Fix Later
+
+#### Activity page handles polling and cleanup responsibly
+
+- **Severity:** Low
+- **Category:** Frontend
+- **Exact location:** [client/src/pages/Activity.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Activity.tsx)
+- **What was found:** The page uses abort controllers, request IDs, visibility refresh, interval cleanup, and mounted guards with proper teardown.
+- **Why it matters:** This reduces stale-state and leak risk on a live operational page.
+- **Current status:** Fixed
+- **Recommendation direction:** keep this pattern for other long-lived data pages.
+- **Priority:** Monitor
+
+### UI/UX
+
+#### Audit and activity pages are operationally dense but improved
+
+- **Severity:** Medium
+- **Category:** UI/UX
+- **Exact location:** [client/src/pages/AuditLogs.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/AuditLogs.tsx), [client/src/pages/Activity.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Activity.tsx)
+- **What was found:** Both pages now contain more mobile-aware toggles and smaller sections, but they remain dense admin surfaces.
+- **Why it matters:** Static inspection cannot fully prove mobile usability or touch ergonomics here.
+- **Current status:** Runtime Verification Needed
+- **Recommendation direction:** keep validating real mobile behavior after future changes.
+- **Priority:** Monitor
+
+#### Floating AI is architecturally stable
+
+- **Severity:** Low
+- **Category:** UI/UX
+- **Exact location:** [client/src/components/FloatingAI.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/components/FloatingAI.tsx)
+- **What was found:** Floating AI now uses dedicated layout resolution, scroll lock, visibility policies, and mobile viewport awareness.
+- **Why it matters:** This is no longer a generic audit weakness. It is a sensitive but stabilized surface.
+- **Current status:** LOW-RISK WATCH AREA
+- **Recommendation direction:** avoid unnecessary redesign and keep runtime QA after shell changes.
+- **Priority:** Monitor
+
+### API
+
+#### Error envelopes are improving but not fully uniform
+
+- **Severity:** Medium
+- **Category:** API
+- **Exact location:** [server/middleware/error-handler.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/middleware/error-handler.ts), [server/routes/activity.routes.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/routes/activity.routes.ts), [server/controllers/imports.controller.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/controllers/imports.controller.ts)
+- **What was found:** There is progress toward `ok: true/false`, but some endpoints still return domain-shaped payloads without one consistent envelope across modules.
+- **Why it matters:** This increases client normalization work and schema drift risk.
+- **Current status:** Partially Fixed
+- **Recommendation direction:** continue convergence by endpoint family.
+- **Priority:** Fix Later
+
+#### Validation approach is strong and reusable
+
+- **Severity:** Low
+- **Category:** API
+- **Exact location:** [server/http/validation.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/http/validation.ts), [shared/api-contracts.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/shared/api-contracts.ts)
+- **What was found:** The codebase uses reusable readers and Zod contracts rather than ad hoc parsing everywhere.
+- **Why it matters:** This improves consistency and reduces sloppy input handling.
+- **Current status:** Fixed
+- **Recommendation direction:** keep extending existing validation primitives.
+- **Priority:** Monitor
+
+### Database
+
+#### Rollup schema correctness is materially improved
+
+- **Severity:** Low
+- **Category:** Database
+- **Exact location:** [shared/schema-postgres.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/shared/schema-postgres.ts)
+- **What was found:** Composite primary keys now exist on the rollup and rollup-refresh tables that previously lacked them.
+- **Why it matters:** This removes a meaningful schema hygiene concern from the earlier audit.
+- **Current status:** Fixed
+- **Recommendation direction:** keep reviewing schema evolution with the same discipline.
+- **Priority:** Monitor
+
+#### Restore path remains the main database-scale watch area
+
+- **Severity:** Medium
+- **Category:** Database
+- **Exact location:** [server/repositories/backups-restore-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-restore-utils.ts), [server/repositories/backups-restore-dataset-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-restore-dataset-utils.ts)
+- **What was found:** Restore is better than before, but still accumulates state in memory and performs large payload handling during recovery.
+- **Why it matters:** Disaster-recovery code does not need to be optimized first in a product, but it must remain trustworthy under realistic large datasets.
+- **Current status:** Still Present
+- **Recommendation direction:** treat restore-path scale work as reliability hardening, not optional polish.
+- **Priority:** Fix Next
+
+### Security
+
+#### Session, role, and CSRF protections are strong
+
+- **Severity:** Low
+- **Category:** Security
+- **Exact location:** [server/auth/guards.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/auth/guards.ts), [server/http/csrf.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/http/csrf.ts)
+- **What was found:** Authentication checks session validity against activity state, account bans and locks, forced password change rules, role access, and tab visibility. CSRF middleware now fails closed for cookie-authenticated unsafe API requests.
+- **Why it matters:** This is a real strength and materially supports controlled production use.
+- **Current status:** Fixed
+- **Recommendation direction:** preserve the existing security stack and avoid unnecessary churn here.
+- **Priority:** Monitor
+
+#### Admin action hardening is now acceptable
+
+- **Severity:** Low
+- **Category:** Security
+- **Exact location:** [server/routes/activity.routes.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/routes/activity.routes.ts), [server/middleware/rate-limit.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/middleware/rate-limit.ts)
+- **What was found:** Bulk delete, kick, ban, and unban admin flows now run behind a dedicated limiter keyed by IP, path, and acting username.
+- **Why it matters:** This meaningfully reduces abuse surface on sensitive moderation routes.
+- **Current status:** Fixed
+- **Recommendation direction:** keep aligned with other privileged mutation routes.
+- **Priority:** Monitor
 
-[Browser] ← JSON response ← Controller ← Service result
+### Performance
+
+#### Backup export/create is much healthier than before
 
-[Browser] ↔ WebSocket ↔ runtime-manager.ts ↔ session tracking / live updates
-```
+- **Severity:** Low
+- **Category:** Performance
+- **Exact location:** [server/repositories/backups-payload-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-payload-utils.ts), [server/services/backup-operations.service.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/services/backup-operations.service.ts)
+- **What was found:** Export/create now pages through datasets and avoids the earlier all-tables-in-memory pattern.
+- **Why it matters:** This removed the largest previously verified memory-stability issue on the backup side.
+- **Current status:** Fixed
+- **Recommendation direction:** preserve paged JSON writing and avoid regressing to eager full-table aggregation.
+- **Priority:** Monitor
 
-### Major Module Relationships
+#### Some heavy UI domains still deserve live profiling
 
-- **Auth** feeds into every protected route via `authenticateToken` guard
-- **Collection** modules (daily, records, nicknames, summary, report) share repositories and rollup refresh queue
-- **AI** uses circuit breaker, concurrency gate, and has its own embedding/search cache
-- **Backup** uses cursor-based pagination with file streaming for export; full-transaction restore
-- **Activity** tracks user sessions, integrates with WebSocket heartbeat and auto-logout
-- **Settings** drives feature flags and tab visibility used across frontend
+- **Severity:** Medium
+- **Category:** Performance
+- **Exact location:** [client/src/pages/Viewer.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Viewer.tsx), [client/src/pages/Monitor.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Monitor.tsx), [client/src/pages/BackupRestore.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/BackupRestore.tsx)
+- **What was found:** These pages orchestrate large datasets, charts, export flows, or restore controls and remain among the heaviest frontend surfaces.
+- **Why it matters:** Static inspection alone cannot guarantee low-spec device behavior, even though the code now uses virtualization, lazy loading, and decomposition in the right places.
+- **Current status:** Runtime Verification Needed
+- **Recommendation direction:** keep profiling and smoke-testing these pages on realistic devices and data volumes.
+- **Priority:** Monitor
 
-### Notable Architectural Strengths
+### Maintainability
 
-- Factory-based DI via `local-server-composition.ts` — single place wiring all dependencies
-- Centralized runtime config in `server/config/runtime.ts` (615 lines) — no scattered `process.env` reads
-- Shared HTTP pipeline in `local-http-pipeline.ts` — body limits, CSRF, CORS, logging all in one place
-- Idempotency key system for mutation duplicate prevention (`mutation-idempotency.repository.ts`)
+#### Maintainability trend is positive
 
-### Notable Architectural Weaknesses
+- **Severity:** Low
+- **Category:** Maintainability
+- **Exact location:** viewer, monitor, backup, receipt, collection record, auth service domains
+- **What was found:** Several formerly oversized domains have been split into focused helper modules and smaller components.
+- **Why it matters:** This has already reduced regression risk and improved auditability.
+- **Current status:** Partially Fixed
+- **Recommendation direction:** continue the same style of targeted decomposition.
+- **Priority:** Monitor
 
-- Some domains still use `PostgresStorage` facade while repository extraction continues (transitional)
-- Mixed pagination patterns across API endpoints (offset/limit vs page/pageSize)
-- WebSocket lifecycle has a minor gap in early-close paths (detailed in findings below)
+#### Schema file remains intentionally large
 
----
+- **Severity:** Low
+- **Category:** Maintainability
+- **Exact location:** [shared/schema-postgres.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/shared/schema-postgres.ts)
+- **What was found:** At 839 lines, the schema file is large, but this is partly a consequence of acting as the central database schema definition.
+- **Why it matters:** This is less concerning than an oversized mixed-responsibility service, but still worth watching.
+- **Current status:** Watch Area
+- **Recommendation direction:** only split if it improves real domain clarity.
+- **Priority:** Monitor
 
-## Verified Previous Findings
+## F. Module-by-Module Review
 
-This section explicitly verifies findings from the previous audit (2026-03-30).
+### Auth / Account / Session
 
-### Finding 1: Rollup Table Composite PKs — ✅ FIXED
+Strong overall. [server/auth/guards.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/auth/guards.ts), cookie/session helpers, 2FA modules, and rate limiters form a credible production auth stack. Managed-user operations remain somewhat large, but the risk is maintainability, not correctness.
 
-**Previous status:** Missing primary keys on 3 rollup/queue tables
-**Current status:** FIXED
+### Collection Flows
 
-**Evidence:** `shared/schema-postgres.ts` lines 425, 450, 479 define composite `primaryKey()` for all three tables:
+Collection remains one of the largest domains, but structure has improved. Mutation and rollup helpers are now better separated than before. The main remaining hotspot is [server/services/collection/collection-record-mutation-operations.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/services/collection/collection-record-mutation-operations.ts), which still coordinates many steps.
 
-- `collectionRecordDailyRollups` — PK on `(paymentDate, createdByLogin, collectionStaffNickname)` (line 425)
-- `collectionRecordMonthlyRollups` — PK on `(year, month, createdByLogin, collectionStaffNickname)` (line 450)
-- `collectionRecordDailyRollupRefreshQueue` — PK on `(paymentDate, createdByLogin, collectionStaffNickname)` (line 479)
+### Collection Daily
 
-Migration `0014_reviewed_collection_record_daily_rollups.sql` confirms the constraint is promoted from unique index to primary key using `ALTER TABLE ... ADD CONSTRAINT ... PRIMARY KEY USING INDEX`.
+Healthier than before. Batched day upsert removed a previous inefficiency, and rollup keying is now sound. This area is no longer a headline risk.
 
-### Finding 2: N+1 Day-Insert Batch Issue — ✅ FIXED
+### Collection Summary / Nickname Summary
 
-**Previous status:** 30 sequential INSERTs in a loop for calendar day upsert
-**Current status:** FIXED
+These flows appear structurally sound and supported by clearer repository and service separation. No new high-severity concerns surfaced statically.
 
-**Evidence:** `server/repositories/collection-daily-repository-utils.ts` lines 159-198. The function `upsertCollectionDailyCalendarDays()` now uses `sql.join()` to build a single multi-row INSERT with `ON CONFLICT DO UPDATE`:
+### Receipt Handling
 
-```typescript
-const valuesSql = sql.join(
-  params.days.map((day) => sql`(...)`),
-  sql`, `,
-);
-await executor.execute(sql`INSERT INTO ... VALUES ${valuesSql} ON CONFLICT ... DO UPDATE SET ...`);
-```
+Receipt handling is one of the better-defended backend domains. Security validation is strong, file handling is more modular, and silent best-effort failures are now logged. Large-file size risk has improved, although the receipt security module remains sizable.
 
-All days are inserted in a single batch query instead of 30 individual queries.
+### General Search
 
-### Finding 3: 100dvh Viewport Fallback — ✅ FIXED
+General search appears stable architecturally. The main risks are contract consistency and ensuring pagination conventions do not diverge further from other modules.
 
-**Previous status:** Uses 100vh without dynamic viewport height fallback
-**Current status:** FIXED
+### Viewer
 
-**Evidence:** `client/src/index.css` contains the proper fallback pattern:
+Viewer has seen substantial decomposition and is markedly healthier than before, but [client/src/pages/Viewer.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Viewer.tsx) is still a high-complexity orchestration surface. This is now a maintainability issue, not a broken-architecture issue.
 
-```css
-min-height: 100vh;
-min-height: calc(100vh - 3.5rem);
-@supports (height: 100dvh) {
-  min-height: 100dvh;
-  min-height: calc(100dvh - 3.5rem);
-}
-```
+### Activity / Audit
 
-The `@supports` fallback correctly uses 100vh for older browsers and upgrades to 100dvh for modern browsers that support it.
+Backend hardening is improved through rate limiting and stronger route patterns. Frontend pages are operationally dense but use sensible abort and polling cleanup. These are acceptable admin surfaces, with runtime mobile QA still valuable.
 
-### Finding 4: SQL LIKE Wildcard Escaping — ✅ FIXED
+### Dashboard / Analysis / Monitor
 
-**Previous status:** LIKE/ILIKE queries did not escape `%` and `_` wildcards from user input
-**Current status:** FIXED
+Monitor is now better componentized and backed by a dedicated `useSystemMetrics` hook. It remains a heavy runtime surface, but structurally it is improving.
 
-**Evidence:** `server/repositories/sql-like-utils.ts` (19 lines) provides `escapeLikePattern()` and `buildLikePattern()`. The escape function neutralizes `\`, `%`, and `_` characters:
+### Backup / Export / Restore
 
-```typescript
-export function escapeLikePattern(value: string): string {
-  return String(value).replace(/[\\%_]/g, "\\$&");
-}
-```
+This module improved the most. Export/create backup is materially safer than before. The remaining concern has shifted from "critical export OOM pattern" to "restore-path working-set scale risk," which is a better place to be, but still worth addressing.
 
-This utility is imported and used across **11+ repository files** including `search.repository.ts`, `ai-search-record-utils.ts`, `auth-managed-user-utils.ts`, `audit.repository.ts`, `backups-list-utils.ts`, `imports.repository.ts`, `collection-record-query-utils.ts`, `ai-branch-lookup-utils.ts`, and `ai-category.repository.ts`.
+### Settings / Admin / Security
 
-All ILIKE queries use the `ESCAPE '\'` clause alongside escaped patterns. Unit tests exist in `server/repositories/tests/sql-like-utils.test.ts`.
+Settings and admin surfaces appear structurally sound. The strongest engineering work here is in consistent guards, structured logging, rate limiting, and session security.
 
-### Finding 5: Backup Export OOM Risk — ✅ FIXED
+## G. Mobile vs Desktop / Responsive Review
 
-**Previous status:** `getBackupDataForExport()` loaded ALL tables into memory via `Promise.all([db.select()...])`
-**Current status:** FIXED
+### Mobile
 
-**Evidence:** The backup export has been refactored to use streaming with cursor-based pagination:
+- Main shell viewport handling is in much better shape because `100dvh` fallbacks now exist.
+- Floating AI architecture is now purpose-built for mobile instead of relying on naive fixed positioning alone.
+- Dense pages such as activity, audit, monitor, viewer, and backup/restore still need runtime verification because static inspection cannot prove touch ergonomics, scroll locking, or low-spec rendering quality.
 
-- `server/repositories/backups-payload-utils.ts` — `prepareBackupPayloadFileForCreate()` uses:
-  - `createWriteStream()` for file-based streaming
-  - `appendPagedJsonArray()` with cursor-based pagination (`LIMIT 1000` per page)
-  - Backpressure handling via `await once(writer, "drain")`
-  - Incremental SHA256 hash computation
+### Desktop
 
-The old `Promise.all([db.select()...])` pattern is no longer present. The `QUERY_PAGE_LIMIT = 1000` setting controls page size, meaning only 1000 rows are in memory at any time per table.
+- Desktop strengths remain the richer information density, wider data surfaces, and lower viewport-risk sensitivity.
+- No new desktop-specific structural problems surfaced in static inspection.
 
-**Note:** The backup restore still builds an unbounded `Set<string>` of `restoredCollectionRecordIds` (line 34 of `backups-restore-utils.ts`). At very large scale this Set could grow large, but this is far less severe than loading entire tables.
+### Responsive Consistency
 
-### Finding 6: WebSocket Early-Close Cleanup — ⚠️ STILL PRESENT (Revised Severity: Low)
-
-**Previous status:** Early `ws.close()` calls don't remove connections from connectedClients Map
-**Current status:** STILL PRESENT
-
-**Evidence:** `server/ws/runtime-manager.ts` lines 74-127. The `wss.on("connection")` handler has four early-exit paths that call `ws.close()` without cleanup:
-
-- **Line 79:** No token → `ws.close()` — no cleanup handler registered
-- **Line 86:** Invalid activityId → `ws.close()` — no cleanup handler registered
-- **Line 95:** Expired/invalid session → `ws.close()` — no cleanup handler registered
-- **Line 125:** Catch block → `ws.close()` — no cleanup handler registered
-
-**Revised assessment:** In all four early-exit cases, `connectedClients.set()` has NOT yet been called (it happens at line 104, after all early exits). Therefore the socket was never stored in the Map, and no stale entry exists. The close calls at lines 79, 86, 95, 125 are for sockets never stored in `connectedClients`. The 30-second heartbeat sweep (lines 47-67) also cleans up dead sockets.
-
-**Practical impact:** Low. The early-close pattern is not defensive best practice, but it does not cause connection leaks because the socket was never added to the Map.
-
-### Finding 7: Silent Receipt Catch Blocks — ✅ FIXED
-
-**Previous status:** 5+ catch blocks in `collection-receipt.service.ts` lacking error logging
-**Current status:** FIXED — All catch blocks now have proper error logging
-
-**Evidence:** `server/routes/collection-receipt.service.ts` (324 lines) has 5 catch blocks, all with logging:
-
-| Line | Function | Logging Method |
-|------|----------|---------------|
-| 110 | `resolveSelectedReceipt()` | `logCollectionReceiptBestEffortFailure()` |
-| 134 | `resolveSelectedReceipt()` | `logCollectionReceiptBestEffortFailure()` |
-| 174 | `pruneMissingRelationReceipt()` | `logCollectionReceiptBestEffortFailure()` |
-| 248 | `serveCollectionReceipt()` | `logCollectionReceiptWarning()` |
-| 314 | `serveCollectionReceipt()` | `logger.error()` |
-
-### Additional Previously Reported Findings
-
-#### CSRF Fallback Bypass — ✅ FIXED
-
-**Previous status:** When auth cookie present but no CSRF token, no Origin, no Referer, and no sec-fetch-site header, the request was allowed through.
-**Current status:** FIXED — `server/http/csrf.ts` line 79-83 now returns 403 `CSRF_SIGNAL_MISSING`.
-
-#### x-forwarded-for Manual IP Parsing — ✅ FIXED
-
-**Previous status:** `apiProtection.ts` manually parsed `x-forwarded-for`, bypassing Express trust proxy.
-**Current status:** FIXED — `server/internal/apiProtection.ts` line 36 uses `req.ip`. Trust proxy configured separately in `server/http/trust-proxy.ts`.
-
-#### Bulk Admin Rate Limiting — ✅ FIXED
-
-**Previous status:** Bulk admin operations (kick/ban) lacked dedicated rate limits.
-**Current status:** FIXED — `server/middleware/rate-limit.ts` defines `adminAction` rate limiter (30 req/10min). Applied to all kick/ban/bulk-delete endpoints. Bulk-delete also limits input array to 500 items.
-
-#### Oversized Files (>700 lines) — PARTIALLY FIXED
-
-| File | Previous Lines | Current Lines | Status |
-|------|---------------|---------------|--------|
-| collection-record-repository-utils.ts | 1,235 | 438 | ✅ FIXED (decomposed) |
-| collection-record-mutation-operations.ts | 1,040 | 725 | ⬆ Improved (still >700) |
-| storage-postgres-types.ts | 922 | 444 | ✅ FIXED (decomposed) |
-| Viewer.tsx | 919 | 839 | ⬆ Improved (still >700) |
-| auth-account-authentication-operations.ts | 887 | 552 | ✅ FIXED (reduced) |
-
-3 of 5 previously oversized files have been successfully decomposed below 700 lines.
-
----
-
-## New Findings
-
-### NF-1: Mixed Pagination Patterns Across API Endpoints
-
-**Severity:** Low
-**Category:** API Design
-**Status:** New
-**Location:** Multiple repository files (`imports.repository.ts`, `audit.repository.ts`, `backups-list-utils.ts`, `auth-managed-user-utils.ts`)
-
-**What was found:** The API uses two different pagination patterns inconsistently:
-- **offset/limit pattern** — imports, activity, collection endpoints
-- **page/pageSize pattern** — audit, backups, managed users endpoints
-
-**Why it matters:** Frontend developers must handle two different pagination interfaces. Increases integration complexity.
-
-**Recommended direction:** Standardize on one pattern (page/pageSize with totalPages) across all endpoints.
-**Priority:** Fix Later
-
-### NF-2: No Query-Level Timeouts on Parallel Database Operations
-
-**Severity:** Low
-**Category:** Performance / Reliability
-**Status:** New
-**Location:** `server/repositories/analytics.repository.ts`, other files using `Promise.all` with DB queries
-
-**What was found:** Parallel database operations via `Promise.all` lack individual query timeouts.
-
-**Why it matters:** If one query hangs under extreme database latency, all parallel queries block. The `connectionTimeoutMs` on the pool protects against connection acquisition but not query execution time.
-
-**Recommended direction:** Consider adding `statement_timeout` at the PostgreSQL session level or wrapping critical `Promise.all` groups with timeout guards.
-**Priority:** Monitor Only
-
-### NF-3: Backup Restore Unbounded Set of Record IDs
-
-**Severity:** Medium
-**Category:** Performance
-**Status:** Existing (carried forward)
-**Location:** `server/repositories/backups-restore-utils.ts` line 34
-
-**What was found:** The restore process builds `const restoredCollectionRecordIds = new Set<string>()` that grows linearly with backup size.
-
-**Why it matters:** For very large backups with millions of records, this Set could consume significant memory. Far less severe than the old all-tables-in-memory pattern but still unbounded.
-
-**Recommended direction:** Process receipt cache sync in batches during restore.
-**Priority:** Fix Later
-
-### NF-4: Files Approaching 700-Line Threshold
-
-**Severity:** Low
-**Category:** Maintainability
-**Status:** New
-**Location:** Multiple files between 600-700 lines
-
-**What was found:** 7 files are approaching the 700-line threshold:
-
-| File | Lines |
-|------|-------|
-| server/services/auth-account-managed-operations.ts | 698 |
-| server/cluster-local.ts | 685 |
-| server/internal/runtime-monitor-manager.ts | 675 |
-| client/src/pages/BackupRestore.tsx | 669 |
-| server/internal/coreSchemaBootstrap.ts | 644 |
-| server/routes/collection-receipt-file-utils.ts | 628 |
-| server/config/runtime.ts | 615 |
-
-**Recommended direction:** Monitor during code review. Decompose if any grows past 700 lines.
-**Priority:** Monitor Only
-
-### NF-5: Heavy Frontend Dependencies in Bundle
-
-**Severity:** Low
-**Category:** Performance
-**Status:** Existing observation
-**Location:** `package.json`
-
-**What was found:** The frontend bundle includes heavy libraries: recharts, framer-motion (~2.5MB gzipped), html2canvas, jspdf, xlsx, react-window.
-
-**Why it matters:** On low-spec mobile devices, large JavaScript bundles impact initial load time.
-
-**Recommended direction:** Existing mitigations (bundle budgets, code splitting, lazy loading, low-spec mode) are adequate. Continue monitoring.
-**Priority:** Monitor Only
-
-### NF-6: CSRF Same-Origin Sec-Fetch-Site Passthrough
-
-**Severity:** Low
-**Category:** Security
-**Status:** New (by design)
-**Location:** `server/http/csrf.ts` line 51-52
-
-**What was found:** When a cookie-authenticated request has `sec-fetch-site: same-origin` but no CSRF token, the request is allowed through.
-
-**Why it matters:** `Sec-Fetch-Site` is a browser-controlled header that cannot be spoofed by JavaScript in modern browsers (Chrome 76+, Firefox 90+, Safari 16.4+). This is a valid defense layer. On older browsers that don't send this header, the fallback chain correctly checks origin/referer and blocks if neither is present.
-
-**Recommended direction:** Acceptable as-is. Consider telemetry for how often this fallback path is used.
-**Priority:** Monitor Only
-
----
-
-## C. Findings by Category
-
-### C1. Backend
-
-#### Architecture — GOOD
-
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Layered architecture | ✅ Good | Clear routes → controllers → services → repositories |
-| DI / composition | ✅ Good | Factory-based in `local-server-composition.ts` |
-| Service boundaries | ✅ Good | Auth, collection, AI, backup, activity cleanly separated |
-| Large files | ⚠️ Improved | Worst offenders reduced; 2 source files still >700 lines |
-| PostgresStorage facade | ⚠️ Legacy | Some domains still use `PostgresStorage` instead of direct repos |
-| Idempotency | ✅ Good | Mutation idempotency keys prevent double-submit |
-
-#### API Quality — GOOD
-
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Route naming | ✅ Consistent | RESTful `/api/` prefix, resource-oriented |
-| Pagination | ⚠️ Mixed | offset/limit in some endpoints, page/pageSize in others |
-| Response envelope | ✅ Consistent | `{ ok, message, data?, error? }` pattern |
-| Validation | ✅ Strong | Zod schemas with `parseRequestBody()` utility |
-| Error shape | ✅ Consistent | HttpError class with statusCode, code, details |
-| Backup export | ✅ Fixed | Now uses streaming with pagination |
-| N+1 risk | ✅ Fixed | Calendar upsert now batched via sql.join |
-
-#### Reliability — GOOD
-
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Circuit breaker | ✅ Well-designed | CLOSED/OPEN/HALF_OPEN with counter trimming |
-| Graceful shutdown | ✅ Proper | 25s timeout, WebSocket cleanup, DB pool drain |
-| WebSocket cleanup | ⚠️ Low risk | Early-close paths before socket is stored in Map |
-| Error handling | ✅ Good | All receipt catch blocks now have logging |
-| Idle session sweeper | ⚠️ Risk | Multiple queries without transaction wrapping |
-
-#### Performance — GOOD
-
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| DB pool monitoring | ✅ Good | Pressure detection with throttled warnings |
-| Caching | ✅ Present | AI search cache, settings cache, tab visibility cache (5s) |
-| N+1 query | ✅ Fixed | Calendar upsert batched |
-| Backup memory | ✅ Fixed | Streaming with cursor-based pagination |
-| Structured logging | ✅ Good | Pino with automatic sensitive field redaction |
-| Query timeouts | ⚠️ Missing | No per-query timeout on Promise.all DB operations |
-
-#### Error Handling — GOOD
-
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Global handler | ✅ Proper | Catches HttpError, entity-too-large, unhandled; logs context |
-| Async handler | ✅ Proper | Wraps async routes, catches promise rejections |
-| Error classes | ✅ Structured | HttpError with helpers (badRequest, unauthorized, etc.) |
-| Receipt catches | ✅ Fixed | All catch blocks have structured logging |
-| Error codes | ✅ Shared | Shared error codes in `shared/error-codes.ts` |
-
----
-
-### C2. Frontend
-
-#### Architecture — GOOD
-
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Component structure | ✅ Good | Modular pages with sub-components |
-| UI library | ✅ Good | 40+ Radix-based components (shadcn/ui pattern) |
-| State management | ✅ Good | React Query for server state, Context for AI |
-| Centralized API client | ✅ Good | `apiRequest()` with CSRF, error handling, request IDs |
-| Oversized components | ⚠️ Improved | Viewer.tsx reduced from 919→839 lines |
-| Code splitting | ✅ Good | Lazy pages, manual chunks (validation, query, charts, excel, pdf) |
-| Device detection | ✅ Good | Low-spec mode: cores ≤4, RAM ≤4GB → reduced animations |
-
-#### Data Flow — GOOD
-
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| React Query | ✅ Proper | Consistent query lifecycle with loading/error states |
-| Abort controllers | ✅ Present | Cancellation on unmount/navigation via AbortSignal |
-| Cache invalidation | ✅ Good | Event-driven refresh pattern |
-| Loading states | ✅ Consistent | Skeleton loaders for major pages |
-| Request tracking | ✅ Good | UUID-based x-request-id for debugging |
-
-#### Performance — GOOD
-
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Virtual scrolling | ✅ Present | react-window on Viewer tables |
-| Low-spec mode | ✅ Innovative | RAM/CPU detection, reduced animations, longer stale times |
-| Bundle splitting | ✅ Good | Manual chunks for heavy libs; bundle budgets CI check |
-
----
-
-### C3. UI/UX
-
-#### Screen-by-Screen Assessment
-
-| Screen/Module | Desktop | Mobile | Verdict |
-|---------------|---------|--------|---------|
-| Login | ✅ Clean | ✅ Good (2FA, fingerprint) | Keep as-is |
-| Dashboard | ✅ Good | ✅ Acceptable | Keep as-is |
-| Viewer | ✅ Good (virtual scroll) | ✅ Card layout on mobile | Keep as-is |
-| General Search | ✅ Good | ✅ Responsive filters | Keep as-is |
-| Import | ✅ Good | ✅ Drag-and-drop | Keep as-is |
-| Saved | ✅ Good | ⚠️ Acceptable | Keep with minor polish |
-| Collection Daily | ✅ Good | ✅ Calendar responsive | Keep as-is |
-| Collection Records | ✅ Good | ⚠️ min-w-1280 forces scroll | Needs minor fix |
-| Collection Save Form | ✅ Good | ✅ Keyboard-aware sticky | Keep as-is |
-| Collection Summary | ✅ Good | ✅ Acceptable | Keep as-is |
-| Collection Report | ✅ Good | ⚠️ Acceptable | Keep with minor polish |
-| AI Chat/FloatingAI | ✅ Good | ✅ Excellent (fullscreen, safe-area) | Keep as-is |
-| Activity Logs | ✅ Good | ⚠️ max-h-400px hardcoded | Needs minor fix |
-| Audit Logs | ✅ Good | ⚠️ Acceptable | Keep with minor polish |
-| Backup/Restore | ✅ Good | ⚠️ Complex flow | Keep with minor polish |
-| Settings | ✅ Good | ✅ Acceptable | Keep as-is |
-| Analysis | ✅ Good | ⚠️ Charts may be small | Keep with minor polish |
-| Navbar | ✅ Good | ✅ Sheet drawer works well | Keep as-is |
-
----
-
-### C4. API Design
-
-| Aspect | Status | Detail |
-|--------|--------|--------|
-| RESTful naming | ✅ Good | `/api/collection/records`, `/api/auth/session`, etc. |
-| HTTP methods | ✅ Correct | GET for reads, POST for creates, PATCH for updates, DELETE for deletes |
-| Pagination | ⚠️ Mixed | offset/limit in some endpoints, page/pageSize in others |
-| Filtering | ✅ Present | Advanced filters with operators (contains, equals, greaterThan, etc.) |
-| Validation | ✅ Strong | Zod schemas on all input via `parseRequestBody()` |
-| Error responses | ✅ Consistent | `{ ok: false, message, error: { code, details } }` |
-| Idempotency | ✅ Good | x-idempotency-key header for mutations |
-| Rate limiting | ✅ Strong | Per-endpoint tiers with adaptive load adjustment |
-
-**Route registration** (from `local-server-composition.ts`):
-- `/api/auth/*` — session, login, recovery, admin account management
-- `/api/activity/*` — session tracking, kick/ban operations
-- `/api/imports/*` — file upload and processing
-- `/api/search/*` — global and advanced search
-- `/api/ai/*` — AI search and chat
-- `/api/settings/*` — system configuration
-- `/api/operations/*` — operational analytics
-- `/api/collection/*` — collection records, receipts, reports, nicknames
-- `/api/admin/*` — admin user management
-
----
-
-### C5. Database
-
-**Tables:** 37 PostgreSQL tables, 400+ columns, 100+ indexes
-
-| Aspect | Status | Detail |
-|--------|--------|--------|
-| Table design | ✅ Good | Logical grouping, proper naming |
-| Indexing | ✅ Strong | 100+ indexes, composite where needed, case-insensitive |
-| Primary keys | ✅ Fixed | All tables including rollup tables now have PKs |
-| Soft deletes | ✅ Present | `isDeleted` flag on imports, receipts |
-| Relations | ⚠️ Incomplete | Some tables reference others by text without FK constraints |
-| Enum constraints | ⚠️ Missing | Status/role fields are TEXT without CHECK constraints |
-| Normalization | ⚠️ Denormalized | userActivity stores redundant username/role |
-| Audit trail | ✅ Present | auditLogs + settingVersions |
-| Migrations | ✅ Good | 21 idempotent SQL migrations with `IF NOT EXISTS` |
-| Pool monitoring | ✅ Good | Pressure detection, event listeners, throttled warnings |
-| Transaction safety | ✅ Good | `db.transaction()` used for multi-step operations, some with `FOR UPDATE` locks |
-
----
-
-### C6. Security
-
-| Aspect | Status | Detail |
-|--------|--------|--------|
-| CSRF | ✅ Excellent | Double-submit token + Sec-Fetch-Site + Origin/Referer + block-by-default |
-| JWT | ✅ Secure | HS256, timing-safe verification, secret rotation via `previousSessionSecrets` |
-| Bcrypt | ✅ Excellent | Cost 12, timing-safe with dummy hash for non-existent users |
-| Rate limiting | ✅ Strong | Multi-tier (login: 15/10min, recovery: 20/10min, admin: 30/10min, search: 10/10s) + adaptive |
-| File upload | ✅ Excellent | Magic byte validation, PDF JS/action blocking, EXIF/XMP/IPTC/ICC stripping, dimension limits |
-| CORS | ✅ Proper | Configurable allowlist, rejects unsafe wildcards |
-| SQL injection | ✅ Protected | Drizzle ORM parameterized queries + LIKE escaping across all repositories |
-| Secrets | ✅ Good | .gitignore covers .env/.env.*, no hardcoded secrets, placeholder rejection in production |
-| Trust proxy | ✅ Good | Explicit proxy allowlist, prevents IP spoofing of rate limits |
-| Cookie security | ✅ Good | httpOnly, sameSite: lax, conditional secure flag, CSRF token: randomBytes(32) |
-| Role enforcement | ✅ Good | `requireRole()` middleware on all admin routes |
-| Idempotency | ✅ Good | Duplicate mutation prevention with fingerprint validation |
-| 2FA | ⚠️ Fallback | Falls back to SESSION_SECRET if `TWO_FACTOR_ENCRYPTION_KEY` not configured |
-
----
-
-### C7. Performance
-
-| Area | Status | Risk Level |
-|------|--------|------------|
-| DB connection pool | ✅ Monitored | Low — pressure detection with throttled warnings |
-| Search caching | ✅ Present | Low — AI search cache, settings cache |
-| Virtual table rendering | ✅ Present | Low — react-window on Viewer |
-| Bundle splitting | ✅ Proper | Low — manual chunks, bundle budgets |
-| Backup export | ✅ Fixed | Low — streaming with pagination (was Critical) |
-| N+1 calendar upsert | ✅ Fixed | Low — batched via sql.join (was Critical) |
-| Backup restore Set | ⚠️ Unbounded | Medium — grows linearly with backup size |
-| Heavy frontend libs | ⚠️ Present | Low — mitigated by lazy loading and code splitting |
-| Database protection mode | ✅ Good | Disables heavy queries under high DB latency |
-
----
-
-### C8. Maintainability
-
-| Aspect | Status | Detail |
-|--------|--------|--------|
-| TypeScript strict mode | ✅ Enabled | Full type safety |
-| Shared schemas | ✅ Good | schema-postgres.ts + api contracts |
-| CI pipeline | ✅ Comprehensive | typecheck → DB governance → tests → build → budgets → Playwright smoke |
-| Documentation | ✅ Extensive | 20+ docs files, ARCHITECTURE.md, deployment guides |
-| Test coverage | ✅ Good | 226 tests across 84 files, integration tests for all route families |
-| Large files | ⚠️ Improved | 2 source files still >700 lines (down from 5) |
-| Architecture docs | ✅ Good | ARCHITECTURE.md describes entry points, assembly, request flow |
-
----
-
-## D. Module-by-Module Review
-
-### 1. Auth / Account / Session
-
-| Aspect | Finding |
-|--------|---------|
-| **Files** | `server/routes/auth/` (5 files), `server/services/auth-account-*.ts` (7 files), `server/auth/` (guards, JWT, session-cookie, passwords) |
-| **Strengths** | Timing-safe bcrypt (cost 12), JWT secret rotation, login lockout with exponential backoff, forced password change flow, dummy hash for non-existent users, 2FA support, device fingerprinting |
-| **Weaknesses** | 2FA encryption key fallback to SESSION_SECRET; auth-account-authentication-operations.ts at 552 lines |
-| **Security risks** | Low — 2FA fallback only when env var not set |
-| **Verdict** | ✅ Keep as-is (enforce 2FA key in production) |
-
-### 2. Collection Flows (Records, Save, Edit, Delete)
-
-| Aspect | Finding |
-|--------|---------|
-| **Files** | `server/routes/collection/` (5 files), `server/services/collection/` (12 files), `server/repositories/collection-*.ts` (10+ files) |
-| **Strengths** | Idempotency keys for duplicate-submit prevention, event-driven refresh, role-based access |
-| **Weaknesses** | collection-record-mutation-operations.ts at 725 lines |
-| **Verdict** | ✅ Keep as-is (decompose mutation file during next feature change) |
-
-### 3. Collection Daily / Summary / Nickname
-
-| Aspect | Finding |
-|--------|---------|
-| **Files** | `server/services/collection/collection-daily-*.ts`, `collection-nickname.service.ts`, `collection-daily-repository-utils.ts` |
-| **Strengths** | Calendar upsert now batched (FIXED), rollup refresh queue with retry/backoff, nickname session management |
-| **Verdict** | ✅ Keep as-is |
-
-### 4. Receipt Handling
-
-| Aspect | Finding |
-|--------|---------|
-| **Files** | `collection-receipt.service.ts` (324 lines), `collection-receipt-file-utils.ts` (628 lines), `collection-receipt-security.ts` (722 lines) |
-| **Strengths** | Comprehensive file validation, all catch blocks now logged (FIXED), legacy compatibility bridge |
-| **Verdict** | ✅ Keep as-is — excellent security posture |
-
-### 5. General Search
-
-| Aspect | Finding |
-|--------|---------|
-| **Files** | `search.routes.ts`, `search.service.ts`, `search.repository.ts` (318 lines) |
-| **Strengths** | LIKE escaping via `buildLikePattern()`, parameterized queries, column allowlist, rate-limited |
-| **Verdict** | ✅ Keep as-is |
-
-### 6. Viewer
-
-| Aspect | Finding |
-|--------|---------|
-| **Files** | `Viewer.tsx` (839 lines), `client/src/pages/viewer/` (46 sub-components) |
-| **Strengths** | Virtual scrolling, mobile card layout, debounced search, abort controllers, low-spec mode |
-| **Weaknesses** | Still 839 lines — mixes table, filter, and export logic |
-| **Verdict** | ✅ Functional, but decompose during next feature change |
-
-### 7. Activity / Audit
-
-| Aspect | Finding |
-|--------|---------|
-| **Files** | `activity.routes.ts`, `activity.service.ts`, `activity.repository.ts` |
-| **Strengths** | Rate-limited bulk operations (FIXED), role-enforced kick/ban, structured audit logging |
-| **Weaknesses** | Idle session sweeper lacks transaction wrapping |
-| **Verdict** | ⚠️ Add transaction to sweeper when modifying this module |
-
-### 8. Dashboard / Analysis
-
-| Aspect | Finding |
-|--------|---------|
-| **Files** | `Dashboard.tsx` (197 lines), `Analysis.tsx` (389 lines) |
-| **Strengths** | Clean layout, lazy-loaded charts, skeleton loading |
-| **Verdict** | ✅ Keep as-is |
-
-### 9. Settings / Admin / Security
-
-| Aspect | Finding |
-|--------|---------|
-| **Files** | `settings.routes.ts`, `settings.service.ts`, `settings.repository.ts` (532 lines) |
-| **Strengths** | Category-based organization, version tracking, role-based visibility, cached |
-| **Verdict** | ✅ Keep as-is |
-
-### 10. Backup / Export / Import
-
-| Aspect | Finding |
-|--------|---------|
-| **Files** | `backup-operations.service.ts`, `backups-payload-utils.ts`, `backups-restore-utils.ts` (54 lines), `BackupRestore.tsx` (669 lines) |
-| **Strengths** | Streaming export with pagination (FIXED), SHA256 integrity, circuit breaker, async job queue, full-transaction restore |
-| **Weaknesses** | Restore still builds unbounded Set; BackupRestore.tsx at 669 lines |
-| **Verdict** | ✅ Keep as-is — major previous issue resolved |
-
----
-
-## E. Mobile vs Desktop / Responsive Behavior
-
-### Desktop — GOOD
-
-**Strengths:**
-- Clean card-based layouts with proper max-width constraints
-- Consistent spacing and responsive grid patterns
-- Virtual scrolling on large tables (react-window)
-- Keyboard shortcuts for power users (gated by mobile detection)
-- Proper modal sizing and behavior
-- Charts render well at desktop widths
-- Sticky navbar with backdrop blur
-
-**Desktop-specific risks:** None visual. Viewer.tsx at 839 lines is a maintainability concern, not visual.
-
-### Mobile — GOOD
-
-**Strengths:**
-- FloatingAI excellent: fullscreen mode, safe-area-aware, keyboard-aware, auto-minimize on editable focus, avoid-overlap system
-- Navbar hamburger menu with Sheet drawer (min 92vw, max 22rem)
-- Collection Save form: keyboard state detection, sticky-to-static toggle
-- Dialogs/modals use 100dvh correctly with max-height constraints
-- Touch targets properly sized (> 44px)
-- Low-spec mode reduces animations on constrained devices (cores ≤4, RAM ≤4GB)
-- `env(safe-area-inset-bottom)` used throughout for notched devices
-- 100dvh with @supports fallback properly implemented (FIXED)
-
-**Mobile-specific issues:**
-
-| Element | Status | Detail |
-|---------|--------|--------|
-| Page min-height | ✅ Fixed | Now uses 100dvh with @supports fallback |
-| Floating AI | ✅ Excellent | z-[60] only on mobile, auto-minimize, scroll lock |
-| Dialogs/Modals | ✅ Good | 100dvh-aware, max-height constraints |
-| Collection Records table | ⚠️ Fragile | min-w-1280px forces horizontal scroll on tablets |
-| Activity table height | ⚠️ Fragile | Hardcoded 400px max-height |
-| Charts (Analysis) | ⚠️ Minor | May be small on narrow screens |
+- The core responsive direction is good.
+- The remaining risk is not that responsiveness is absent, but that some data-heavy pages remain too dense to declare "fully polished" without live testing.
 
 ### Floating AI Impact
 
-The FloatingAI component (559 lines) is well-optimized for mobile with no layout interference. Uses `useIsMobile()`, conditional fullscreen, auto-minimize on editable focus, scroll lock, and viewport state awareness.
+- No current static evidence suggests Floating AI is a systemic blocker.
+- It should now be treated as a runtime-sensitive watch area, not a standing audit defect.
 
----
+## H. Priority Matrix
 
-## F. Priority Matrix
+### Critical
 
-### Critical — Fix Now
+- None verified in current static inspection.
 
-No critical issues remain. All previous Critical items have been FIXED.
+### High
 
-### High — Fix Next
+- None verified in current static inspection.
 
-| # | Issue | Area | File/Location | Impact |
-|---|-------|------|---------------|--------|
-| 1 | Backup restore unbounded Set accumulation | Performance | `backups-restore-utils.ts:34` | Memory risk on very large restores |
-| 2 | Idle session sweeper lacks transaction | Reliability | `idle-session-sweeper.ts` | Race condition risk |
-| 3 | WebSocket early-close paths lack defensive cleanup | Reliability | `runtime-manager.ts:79,86,95,125` | Low practical risk but not defensive |
+### Medium
 
-### Medium — Fix Later
+- Mixed pagination contracts across APIs
+- Backup restore retained in-memory record ID set and large restore working set
+- Viewer still oversized as a page orchestrator
+- Dense runtime-heavy surfaces still need browser and device verification
 
-| # | Issue | Area | File/Location | Impact |
-|---|-------|------|---------------|--------|
-| 4 | Mixed pagination patterns | API Design | Multiple repository files | Inconsistent developer experience |
-| 5 | CollectionRecordsTable min-w-1280px | Frontend/Mobile | Collection records page | Forces scroll on tablets |
-| 6 | ActivityLogsTable hardcoded max-h-400px | Frontend/Mobile | Activity page | Non-responsive table height |
-| 7 | Status/role fields lack CHECK constraints | Database | `schema-postgres.ts` | Invalid data insertion risk |
-| 8 | 2FA encryption key fallback | Security | `server/config/security.ts` | Weakens 2FA independence |
-| 9 | Viewer.tsx at 839 lines | Maintainability | `Viewer.tsx` | Complex to maintain |
-| 10 | collection-record-mutation-operations.ts at 725 lines | Maintainability | `collection/` | Complex to maintain |
+### Low
 
-### Low — Monitor Only
+- WebSocket early-close concern downgraded to low-risk watch area
+- Route naming aliases remain inconsistent in places
+- Several source files are near the oversized threshold
+- Schema file remains large but intentionally centralized
 
-| # | Issue | Area | File/Location | Impact |
-|---|-------|------|---------------|--------|
-| 11 | No per-query timeouts on Promise.all DB ops | Performance | Multiple repository files | Theoretical risk |
-| 12 | Heavy frontend bundle | Performance | `package.json` | Mitigated by code splitting |
-| 13 | Files approaching 700-line threshold | Maintainability | 7 files between 600-700 lines | Proactive monitoring |
-| 14 | Worker restart errors swallowed | Reliability | `cluster-local.ts` | Low-frequency edge case |
-| 15 | CSRF sec-fetch-site same-origin passthrough | Security | `csrf.ts:51-52` | By design, valid |
+## I. Improvement Roadmap
 
----
+### Immediate
 
-## System Health Score
+- Harden restore-path memory behavior in the backup and recovery domain.
+- Decide and document target pagination conventions by endpoint family.
 
-### Score: 8.2 / 10
+### Short-term
 
-| Category | Score | Weight | Weighted |
-|----------|-------|--------|----------|
-| Architecture | 9/10 | 15% | 1.35 |
-| Security | 9/10 | 20% | 1.80 |
-| Reliability | 8/10 | 15% | 1.20 |
-| Performance | 8/10 | 10% | 0.80 |
-| Error Handling | 9/10 | 10% | 0.90 |
-| Frontend/UX | 8/10 | 10% | 0.80 |
-| Database | 8/10 | 10% | 0.80 |
-| Maintainability | 7/10 | 10% | 0.70 |
-| **Total** | | **100%** | **8.35 → 8.2** |
+- Continue decomposing [client/src/pages/Viewer.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Viewer.tsx) and any next-nearest orchestration hotspots when touched.
+- Run focused runtime QA on viewer, audit, activity, monitor, and backup/restore mobile and low-spec paths.
 
----
+### Medium-term
 
-## Critical Path Summary
+- Converge route naming and response-envelope consistency across admin and data APIs.
+- Keep trimming near-threshold large source files through domain-aware helper extraction.
 
-**Most important next actions, in order:**
+### Long-term
 
-1. ✅ ~~Fix backup export OOM risk~~ — **DONE** (streaming with pagination)
-2. ✅ ~~Fix N+1 calendar upsert~~ — **DONE** (sql.join batch)
-3. ✅ ~~Fix 100dvh viewport fallback~~ — **DONE** (@supports fallback)
-4. ✅ ~~Fix SQL LIKE wildcard escaping~~ — **DONE** (sql-like-utils.ts)
-5. ✅ ~~Fix rollup table PKs~~ — **DONE** (composite primaryKey())
-6. ✅ ~~Fix silent receipt catch blocks~~ — **DONE** (all logged)
-7. ✅ ~~Fix CSRF fallback bypass~~ — **DONE** (blocks by default)
-8. ✅ ~~Fix bulk admin rate limiting~~ — **DONE** (30 req/10min)
-9. ⚠️ **Add transaction to idle session sweeper** — Prevents race conditions
-10. ⚠️ **Batch backup restore Set accumulation** — Prevents memory growth at scale
-11. ⚠️ **Add defensive cleanup to WebSocket early-close paths** — Best practice
-12. 📋 **Standardize pagination patterns** — Improves developer experience
-13. 📋 **Decompose 2 remaining oversized files** — Improves maintainability
+- Preserve decomposition discipline so future growth does not recreate the previous oversized-file pattern.
+- Continue validating heavy operational flows with production-like smoke testing rather than relying only on static correctness.
 
----
+## J. Final Verdict
 
-## G. Improvement Roadmap
+### Are no critical issues remaining?
 
-### Immediate (Before Next Deployment)
+**Yes, based on this static audit, no currently verified issue remains Critical.**
 
-No blocking issues remain. All previous Critical items have been fixed. The system is safe for deployment as-is.
+### Are previous critical issues resolved?
 
-### Short-Term (Next Sprint)
+**Yes, the previously important critical path items are resolved in their original form.**  
+The biggest former issues around rollup PKs, day-insert batching, viewport handling, SQL LIKE escaping, backup export OOM pattern, CSRF fallback behavior, silent receipt failures, and bulk admin rate limiting are no longer present as previously reported.
 
-1. **Add transaction wrapping to idle session sweeper** — wrap the sweep loop in `db.transaction()` to prevent partial updates
-2. **Add defensive cleanup to WebSocket early-close paths** — register error/close handlers before any early-exit `ws.close()` calls
-3. **Enforce 2FA encryption key in production** — reject SESSION_SECRET fallback when `NODE_ENV=production`
-4. **Standardize pagination** — choose page/pageSize across all endpoints
+### Is controlled production deployment justified?
 
-### Medium-Term (Following Sprint)
-
-1. **Batch backup restore** — process restored record IDs in chunks instead of unbounded Set
-2. **Fix CollectionRecordsTable responsive width** — responsive min-width instead of 1280px
-3. **Fix ActivityLogsTable height** — viewport-relative max-height
-4. **Add CHECK constraints for status/role fields** — migration to add enum constraints
-
-### Long-Term (Future Quarter)
-
-1. **Decompose Viewer.tsx** — extract filter, table, and export into separate components
-2. **Decompose collection-record-mutation-operations.ts** — extract sub-operations
-3. **Complete PostgresStorage → direct repository migration** — remove legacy facade
-4. **Add NOT NULL constraints** to currently nullable critical fields
-5. **Normalize userActivity table** — remove redundant denormalized columns
-
----
-
-## H. Final Verdict
-
-### Is the system stable enough for controlled production use?
-
-**Yes.** The SQR system is ready for production deployment. All previously identified Critical issues have been resolved. The architecture is sound, security is multi-layered and comprehensive, error handling is structured and observable, and performance-sensitive paths have been optimized.
+**Yes.** The current system is stable enough for controlled production deployment.
 
 ### What still blocks higher confidence?
 
-Nothing blocks deployment. The remaining issues are defensive hardening and maintainability improvements:
-
-- Idle session sweeper transaction wrapping (edge case race condition)
-- Backup restore unbounded Set (only matters at very large scale)
-- WebSocket early-close cleanup (low practical risk — sockets never stored before rejection)
-- 2FA encryption key enforcement in production config
+- Restore-path scale behavior during very large recovery operations
+- API pagination inconsistency across domains
+- Remaining oversized orchestration files
+- Need for runtime validation on the heaviest mobile and data-dense surfaces
 
 ### What is technical debt but not a blocker?
 
-- Mixed pagination patterns across API endpoints
-- 2 source files exceeding 700 lines (Viewer.tsx, collection-record-mutation-operations.ts)
-- 7 files approaching the 700-line threshold
-- Missing CHECK constraints on status/role TEXT fields
-- Denormalized userActivity table
-- PostgresStorage facade still used by some domains
+- Route alias drift
+- Partial response-envelope inconsistency
+- Near-threshold file sizes
+- Large but intentionally centralized schema definition
 
-### Comparison Summary
+### Blunt Closing Assessment
 
-The system has meaningfully improved since the previous audit:
-- **5 of 7 critical findings FIXED** (backup OOM, N+1 batch, 100dvh, LIKE escaping, receipt logging)
-- **1 finding remains with reduced severity** (WebSocket cleanup — lower risk than initially assessed)
-- **3 additional findings FIXED** (CSRF bypass, IP parsing, bulk rate limiting)
-- **3 of 5 previously oversized files decomposed** below 700 lines
-- **System health score improved from 7.5 to 8.2** out of 10
-
----
-
-## Appendix: Metrics Summary
-
-| Metric | Value |
-|--------|-------|
-| Total TypeScript/TSX files | ~791 |
-| Total lines of code | ~129,434 |
-| PostgreSQL tables | 37 |
-| Database columns | 400+ |
-| Database indexes | 100+ |
-| Database migrations | 21 |
-| API endpoints | ~100 |
-| React pages | 24 main + ~200 sub-components |
-| Custom hooks | 14 shared hooks |
-| UI components | 40+ (Radix/shadcn) |
-| NPM dependencies | 141 |
-| Test files | 84 (226 tests) |
-| Documentation files | 20+ |
-| Files >700 lines (source) | 4 (schema-postgres: 898, Viewer: 839, sidebar: 727, mutation-ops: 725) |
-| Files >700 lines (tests) | 6 (integration tests — acceptable) |
-| Largest server source file | shared/schema-postgres.ts (898 lines) |
-| Largest client source file | client/src/pages/Viewer.tsx (839 lines) |
-| Node version | ≥24 |
-| Build tool | Vite + esbuild |
-| Database | PostgreSQL 16 |
-| ORM | Drizzle 0.39 |
-| Test runner | Node.js built-in (via tsx --test) |
-| CI | GitHub Actions (typecheck → DB governance → tests → build → bundle budgets → Playwright smoke) |
+SQR is no longer held back by the serious structural issues identified in the earlier audit. The system now looks like a production-capable operational application with credible security, reasonable architectural discipline, and improving maintainability. The remaining work is important, but it is mostly about scale guardrails, consistency, and keeping complexity from growing back in the heaviest domains.
