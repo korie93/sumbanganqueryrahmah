@@ -1,53 +1,31 @@
 import { Suspense, lazy, useEffect } from "react";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { applyDocumentMetadata, resolveDocumentMetadata } from "@/app/document-metadata";
-import { AppProviders } from "@/app/AppProviders";
 import {
   ActivateAccountPage,
   BannedPage,
   ForgotPasswordPage,
-  LandingPage,
   LoginPage,
   MaintenanceRoutePage,
   ResetPasswordPage,
-  SingleTabBlockedPage,
 } from "@/app/lazy-pages";
 import { PageSpinner } from "@/app/PageSpinner";
-import { useSingleTabSession } from "@/app/useSingleTabSession";
-import { useAppShellState } from "@/app/useAppShellState";
 import { isBannedSessionFlagSet } from "@/lib/auth-session";
+import LandingPage from "@/pages/Landing";
+import { usePublicAppState } from "@/app/usePublicAppState";
 
-const AuthenticatedAppShell = lazy(() => import("@/app/AuthenticatedAppShell"));
+const AuthenticatedAppEntry = lazy(() => import("@/app/AuthenticatedAppEntry"));
 
 function AppContent() {
   const {
     currentPage,
-    featureLockdown,
-    handleClientLogout,
     handleLoginSuccess,
-    handleLogout,
-    handleMonitorSectionChange,
-    handleNavigate,
     isInitialized,
     monitorSection,
-    monitorVisibility,
-    runtimeConfig,
-    savedCount,
-    selectedImportId,
     systemName,
-    tabVisibility,
-    tabVisibilityLoaded,
+    handlePublicNavigate,
     user,
-  } = useAppShellState();
-
-  const navigateHome = () => {
-    if (!user) {
-      handleNavigate("login");
-      return;
-    }
-
-    handleNavigate(user.role === "user" ? "general-search" : "home");
-  };
+  } = usePublicAppState();
 
   useEffect(() => {
     applyDocumentMetadata(
@@ -60,18 +38,12 @@ function AppContent() {
     );
   }, [currentPage, monitorSection, systemName, user]);
 
-  const {
-    isBlocked: isSingleTabBlocked,
-    isReady: isSingleTabReady,
-    retryNow: retrySingleTabLock,
-  } = useSingleTabSession(user?.username);
-
   const renderRoutePage = (routeKey: string, node: React.ReactNode, fullscreen = true) => (
     <AppRouteErrorBoundary
       routeKey={routeKey}
       routeLabel={routeKey}
       fullscreen={fullscreen}
-      onNavigateHome={navigateHome}
+      onNavigateHome={() => handlePublicNavigate("home")}
     >
       <Suspense fallback={<PageSpinner fullscreen={fullscreen} />}>
         {node}
@@ -89,10 +61,7 @@ function AppContent() {
 
   if (!user) {
     if (currentPage === "home") {
-      return renderRoutePage(
-        "home",
-        <LandingPage onLoginClick={() => handleNavigate("login")} />,
-      );
+      return renderRoutePage("home", <LandingPage onLoginClick={() => handlePublicNavigate("login")} />);
     }
 
     if (currentPage === "maintenance") {
@@ -114,51 +83,19 @@ function AppContent() {
     return renderRoutePage("login", <LoginPage onLoginSuccess={handleLoginSuccess} />);
   }
 
-  if (!isSingleTabReady) {
-    return <PageSpinner fullscreen />;
-  }
-
-  if (isSingleTabBlocked) {
-    return renderRoutePage(
-      "single-tab-blocked",
-      <SingleTabBlockedPage onRetry={retrySingleTabLock} />,
-    );
-  }
-
-  if (currentPage === "maintenance" && user.role === "user") {
-    return renderRoutePage("maintenance", <MaintenanceRoutePage />);
-  }
-
   return (
     <Suspense fallback={<PageSpinner fullscreen />}>
-      <AuthenticatedAppShell
-        user={user}
-        currentPage={currentPage}
-        monitorSection={monitorSection}
-        selectedImportId={selectedImportId}
-        runtimeConfig={runtimeConfig}
-        tabVisibility={tabVisibility}
-        tabVisibilityLoaded={tabVisibilityLoaded}
-        monitorVisibility={monitorVisibility}
-        featureLockdown={featureLockdown}
-        savedCount={savedCount}
-        systemName={systemName}
-        onNavigate={handleNavigate}
-        onMonitorSectionChange={handleMonitorSectionChange}
-        onLogout={handleLogout}
-        onClientLogout={handleClientLogout}
-        onNavigateHome={navigateHome}
+      <AuthenticatedAppEntry
+        initialUser={user}
+        initialPage={currentPage}
+        initialMonitorSection={monitorSection}
       />
     </Suspense>
   );
 }
 
 function App() {
-  return (
-    <AppProviders>
-      <AppContent />
-    </AppProviders>
-  );
+  return <AppContent />;
 }
 
 export default App;

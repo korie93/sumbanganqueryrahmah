@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/ui/button";
+import "./Landing.css";
 
 type LandingProps = {
   onLoginClick: () => void;
@@ -197,7 +198,7 @@ export default function Landing({ onLoginClick }: LandingProps) {
             </div>
           </section>
 
-          <section id="features" className="mt-12 space-y-5">
+          <section id="features" className="landing-deferred-section mt-12 space-y-5">
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
                 Fungsi Teras
@@ -226,7 +227,10 @@ export default function Landing({ onLoginClick }: LandingProps) {
             </div>
           </section>
 
-          <section id="security" className="mt-12 rounded-3xl border border-emerald-400/15 bg-emerald-400/5 p-6">
+          <section
+            id="security"
+            className="landing-deferred-section mt-12 rounded-3xl border border-emerald-400/15 bg-emerald-400/5 p-6"
+          >
             <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
               <div>
                 <div className="flex items-center gap-2 text-emerald-200">
@@ -263,7 +267,7 @@ export default function Landing({ onLoginClick }: LandingProps) {
           </section>
         </main>
 
-        <footer className="border-t border-white/10 pt-6 text-sm text-slate-400">
+        <footer className="landing-deferred-section border-t border-white/10 pt-6 text-sm text-slate-400">
           <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
               <p className="font-medium text-slate-200">SQR dibina untuk operasi dalaman yang fokus, ringkas, dan terkawal.</p>

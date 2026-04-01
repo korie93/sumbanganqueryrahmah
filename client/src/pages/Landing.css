@@ -1,0 +1,10 @@
+.landing-deferred-section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 720px;
+}
+
+@media (max-width: 767px) {
+  .landing-deferred-section {
+    contain-intrinsic-size: auto 980px;
+  }
+}
