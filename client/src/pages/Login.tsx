@@ -14,6 +14,7 @@ import {
 } from "@/lib/auth-session";
 import { isLockedAccountFlow, normalizeLoginIdentity } from "@/pages/login-lock-state";
 import { ERROR_CODES } from "@shared/error-codes";
+import "./Login.css";
 
 interface LoginProps {
   onLoginSuccess: (user: User) => void;

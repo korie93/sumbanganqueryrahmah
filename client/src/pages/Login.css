@@ -1,0 +1,131 @@
+.login-content {
+  animation: content-fade 1.2s ease-out forwards;
+  opacity: 0;
+}
+
+@keyframes content-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 32px;
+  background: rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    0 25px 40px rgba(0, 0, 0, 0.25),
+    inset 0 0 35px rgba(255, 255, 255, 0.18);
+  animation: glass-float 7s ease-in-out infinite;
+}
+
+@keyframes glass-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.login-card::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.85),
+    rgba(220, 220, 220, 0.45),
+    rgba(255, 255, 255, 0.75)
+  );
+  background-size: 200% 200%;
+  animation: silver-move 12s ease infinite;
+  z-index: -2;
+  opacity: 0.55;
+}
+
+@keyframes silver-move {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.login-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    to bottom right,
+    rgba(255, 255, 255, 0.45),
+    rgba(255, 255, 255, 0.08) 40%,
+    rgba(255, 255, 255, 0.02)
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+@keyframes float-slow {
+  0% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-14px);
+  }
+
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.floating-slow {
+  animation: float-slow 6s ease-in-out infinite;
+}
+
+.floating-slow.delay-150 {
+  animation-delay: 1.5s;
+}
+
+.floating-slow.delay-300 {
+  animation-delay: 3s;
+}
+
+.low-spec .login-card {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+.low-spec .floating-slow,
+.low-spec .login-video-bg,
+.low-spec .login-particles,
+.low-spec .login-bg-effect {
+  display: none !important;
+}
+
+.low-spec .login-content {
+  opacity: 1 !important;
+  transform: none !important;
+}

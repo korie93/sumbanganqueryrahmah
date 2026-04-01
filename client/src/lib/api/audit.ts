@@ -1,4 +1,4 @@
-import { apiRequest } from "../queryClient";
+import { apiRequest } from "../api-client";
 
 export async function getAuditLogs(params?: {
   page?: number;

@@ -1,4 +1,4 @@
-import { apiRequest, createApiHeaders } from "../queryClient";
+import { apiRequest, createApiHeaders } from "../api-client";
 import { API_BASE, getCsrfHeader } from "./shared";
 import { ERROR_CODES } from "@shared/error-codes";
 

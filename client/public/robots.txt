@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /uploads/
+Disallow: /ws
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /activate-account
+Disallow: /reset-password
+Disallow: /change-password
+Disallow: /maintenance
+Disallow: /403
+Disallow: /banned
+Sitemap: https://sqr-system.com/sitemap.xml

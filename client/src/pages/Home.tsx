@@ -1,5 +1,6 @@
 import { memo, useMemo } from "react";
 import { getVisibleHomeItems, resolveNavigationTarget } from "@/app/navigation";
+import "./Home.css";
 
 interface HomeProps {
   onNavigate: (page: string, importId?: string) => void;

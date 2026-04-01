@@ -10,6 +10,18 @@ const DEFAULT_FRONTEND_PATHS = [
   "dist\\public",
 ];
 
+function shouldBypassSpaFallback(requestPath: string) {
+  if (!requestPath || requestPath === "/") {
+    return false;
+  }
+
+  if (requestPath.startsWith("/api") || requestPath.startsWith("/ws")) {
+    return true;
+  }
+
+  return /\.[a-z0-9]+$/i.test(path.basename(requestPath));
+}
+
 export function registerFrontendStatic(app: Express, options?: { cwd?: string; paths?: string[] }) {
   const cwd = options?.cwd || process.cwd();
   const possiblePaths = options?.paths || DEFAULT_FRONTEND_PATHS;
@@ -51,7 +63,7 @@ export function registerFrontendStatic(app: Express, options?: { cwd?: string; p
     app.use(express.static(foundPath));
 
     app.use((req, res, next) => {
-      if (req.path.startsWith("/api") || req.path.startsWith("/ws")) {
+      if (shouldBypassSpaFallback(req.path)) {
         return next();
       }
       return res.sendFile(foundIndex as string);

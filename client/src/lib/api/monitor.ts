@@ -1,4 +1,4 @@
-import { createApiHeaders } from "../queryClient";
+import { createApiHeaders } from "../api-client";
 import { getAuthHeader, getCsrfHeader } from "./shared";
 
 export type MonitorRequestState = "ok" | "unauthorized" | "forbidden" | "network_error";

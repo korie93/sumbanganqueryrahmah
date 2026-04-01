@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { AppQueryProvider } from "@/app/AppQueryProvider";
 import { Download, RefreshCw } from "lucide-react";
 import {
   getAnalyticsSummary,
@@ -35,7 +36,7 @@ function DashboardSectionFallback({ label }: { label: string }) {
   );
 }
 
-export default function Dashboard() {
+function DashboardContent() {
   const [trendDays, setTrendDays] = useState(7);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -193,5 +194,13 @@ export default function Dashboard() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <AppQueryProvider>
+      <DashboardContent />
+    </AppQueryProvider>
   );
 }

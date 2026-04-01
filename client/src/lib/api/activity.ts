@@ -1,4 +1,4 @@
-import { apiRequest, createApiHeaders } from "../queryClient";
+import { apiRequest, createApiHeaders } from "../api-client";
 import { getCsrfHeader } from "./shared";
 
 type ActivityRequestOptions = {

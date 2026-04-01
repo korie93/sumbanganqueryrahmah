@@ -37,6 +37,7 @@ import {
 import type { MonitorSection, TabVisibility } from "@/app/types";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useTheme } from "@/components/useTheme";
+import "./Navbar.css";
 
 interface NavbarProps {
   currentPage: string;

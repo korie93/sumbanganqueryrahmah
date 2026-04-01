@@ -1,12 +1,10 @@
-import { Suspense, useEffect } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { applyDocumentMetadata, resolveDocumentMetadata } from "@/app/document-metadata";
-import { AppPageRenderer } from "@/app/AppPageRenderer";
 import { AppProviders } from "@/app/AppProviders";
 import {
   ActivateAccountPage,
   BannedPage,
-  ChangePasswordPage,
   ForgotPasswordPage,
   LandingPage,
   LoginPage,
@@ -17,11 +15,9 @@ import {
 import { PageSpinner } from "@/app/PageSpinner";
 import { useSingleTabSession } from "@/app/useSingleTabSession";
 import { useAppShellState } from "@/app/useAppShellState";
-import AutoLogout from "@/components/AutoLogout";
-import FloatingAI from "@/components/FloatingAI";
-import Navbar from "@/components/Navbar";
-import { AIProvider } from "@/context/AIContext";
 import { isBannedSessionFlagSet } from "@/lib/auth-session";
+
+const AuthenticatedAppShell = lazy(() => import("@/app/AuthenticatedAppShell"));
 
 function AppContent() {
   const {
@@ -129,85 +125,31 @@ function AppContent() {
     );
   }
 
-  if (user.mustChangePassword) {
-    return (
-      <div className="viewport-min-height bg-background">
-        <AutoLogout
-          onClientLogout={handleClientLogout}
-          onLogout={handleLogout}
-          timeoutMinutes={runtimeConfig.sessionTimeoutMinutes}
-          heartbeatIntervalMinutes={runtimeConfig.heartbeatIntervalMinutes}
-          username={user.username}
-        />
-        {renderRoutePage(
-          "change-password",
-          <ChangePasswordPage
-            forced
-            username={user.username}
-          />,
-        )}
-      </div>
-    );
-  }
-
   if (currentPage === "maintenance" && user.role === "user") {
     return renderRoutePage("maintenance", <MaintenanceRoutePage />);
   }
 
   return (
-    <AIProvider>
-      <div className="viewport-min-height bg-background">
-        <AutoLogout
-          onClientLogout={handleClientLogout}
-          onLogout={handleLogout}
-          timeoutMinutes={runtimeConfig.sessionTimeoutMinutes}
-          heartbeatIntervalMinutes={runtimeConfig.heartbeatIntervalMinutes}
-          username={user.username}
-        />
-        <Navbar
-          currentPage={currentPage}
-          monitorSection={monitorSection}
-          onNavigate={handleNavigate}
-          onLogout={handleLogout}
-          userRole={user.role}
-          username={user.username}
-          systemName={systemName}
-          savedCount={savedCount}
-          tabVisibility={tabVisibility}
-          featureLockdown={featureLockdown}
-        />
-        <AppRouteErrorBoundary
-          routeKey={`${currentPage}:${monitorSection}:${selectedImportId || ""}`}
-          routeLabel={currentPage}
-          onNavigateHome={navigateHome}
-        >
-          <Suspense fallback={<PageSpinner />}>
-            <main className="app-shell-min-height">
-              <AppPageRenderer
-                user={user}
-                currentPage={currentPage}
-                monitorSection={monitorSection}
-                selectedImportId={selectedImportId}
-                runtimeConfig={runtimeConfig}
-                tabVisibility={tabVisibility}
-                tabVisibilityLoaded={tabVisibilityLoaded}
-                monitorVisibility={monitorVisibility}
-                featureLockdown={featureLockdown}
-                onNavigate={handleNavigate}
-                onMonitorSectionChange={handleMonitorSectionChange}
-              />
-            </main>
-          </Suspense>
-        </AppRouteErrorBoundary>
-        {runtimeConfig.aiEnabled ? (
-          <FloatingAI
-            timeoutMs={runtimeConfig.aiTimeoutMs}
-            aiEnabled={runtimeConfig.aiEnabled}
-            activePage={currentPage}
-          />
-        ) : null}
-      </div>
-    </AIProvider>
+    <Suspense fallback={<PageSpinner fullscreen />}>
+      <AuthenticatedAppShell
+        user={user}
+        currentPage={currentPage}
+        monitorSection={monitorSection}
+        selectedImportId={selectedImportId}
+        runtimeConfig={runtimeConfig}
+        tabVisibility={tabVisibility}
+        tabVisibilityLoaded={tabVisibilityLoaded}
+        monitorVisibility={monitorVisibility}
+        featureLockdown={featureLockdown}
+        savedCount={savedCount}
+        systemName={systemName}
+        onNavigate={handleNavigate}
+        onMonitorSectionChange={handleMonitorSectionChange}
+        onLogout={handleLogout}
+        onClientLogout={handleClientLogout}
+        onNavigateHome={navigateHome}
+      />
+    </Suspense>
   );
 }
 

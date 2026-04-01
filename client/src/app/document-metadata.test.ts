@@ -11,6 +11,7 @@ test("resolveDocumentMetadata returns public landing metadata for logged-out hom
 
   assert.equal(metadata.title, "Platform Operasi Dalaman | SQR System");
   assert.match(metadata.description, /general search/i);
+  assert.equal(metadata.robots, "index,follow,max-image-preview:large");
 });
 
 test("resolveDocumentMetadata returns login-specific metadata", () => {
@@ -22,6 +23,7 @@ test("resolveDocumentMetadata returns login-specific metadata", () => {
 
   assert.equal(metadata.title, "Log In | SQR System");
   assert.match(metadata.description, /akses/i);
+  assert.equal(metadata.robots, "noindex,nofollow,noarchive");
 });
 
 test("resolveDocumentMetadata returns monitor section metadata", () => {
@@ -33,4 +35,5 @@ test("resolveDocumentMetadata returns monitor section metadata", () => {
   });
 
   assert.equal(metadata.title, "Analysis | SQR System");
+  assert.equal(metadata.robots, "noindex,nofollow,noarchive");
 });

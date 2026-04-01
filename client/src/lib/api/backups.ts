@@ -1,4 +1,4 @@
-import { apiRequest } from "../queryClient";
+import { apiRequest } from "../api-client";
 import type { BackupJobEnqueueResponse, BackupJobRecord } from "@/pages/backup-restore/types";
 
 export async function createBackup(name: string) {

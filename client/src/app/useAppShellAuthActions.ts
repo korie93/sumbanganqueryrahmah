@@ -15,7 +15,7 @@ import {
   type ResolvedRoute,
 } from "@/app/routing";
 import type { MonitorSection, User } from "@/app/types";
-import { queryClient } from "@/lib/queryClient";
+import { clearAppQueryCache } from "@/lib/query-client-runtime";
 
 type UseAppShellAuthActionsArgs = {
   setCurrentPage: Dispatch<SetStateAction<string>>;
@@ -44,7 +44,7 @@ export function useAppShellAuthActions({
     for (const key of SESSION_STORAGE_KEYS_TO_CLEAR) {
       sessionStorage.removeItem(key);
     }
-    queryClient.clear();
+    clearAppQueryCache();
   }, []);
 
   const applyLoggedOutClientState = useCallback((redirectToLogin = true, broadcast = false) => {

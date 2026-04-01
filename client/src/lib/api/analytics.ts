@@ -1,4 +1,4 @@
-import { apiRequest } from "../queryClient";
+import { apiRequest } from "../api-client";
 
 type AnalyticsRequestOptions = {
   signal?: AbortSignal;

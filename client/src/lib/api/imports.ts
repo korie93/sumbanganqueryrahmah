@@ -1,4 +1,4 @@
-import { apiRequest } from "../queryClient";
+import { apiRequest } from "../api-client";
 import { parseApiJson } from "./contract";
 import {
   deleteImportResponseSchema,

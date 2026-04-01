@@ -1,4 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { AppQueryProvider } from "@/app/AppQueryProvider";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,7 +36,7 @@ import {
 } from "@/pages/backup-restore/utils";
 import { resolveBackupsExportBlockReason } from "@/pages/backup-restore/export-guards";
 
-export default function BackupRestore({ userRole, embedded = false }: BackupRestoreProps) {
+function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps) {
   const canManageBackups = userRole === "superuser";
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState<BackupRecord | null>(null);
@@ -537,5 +538,13 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
         showRestoreDialog={showRestoreDialog}
       />
     </div>
+  );
+}
+
+export default function BackupRestore(props: BackupRestoreProps) {
+  return (
+    <AppQueryProvider>
+      <BackupRestoreContent {...props} />
+    </AppQueryProvider>
   );
 }

@@ -1,4 +1,4 @@
-import { createApiHeaders } from "../queryClient";
+import { createApiHeaders } from "../api-client";
 import { getCsrfHeader } from "./shared";
 
 type AISearchRequestOptions = {

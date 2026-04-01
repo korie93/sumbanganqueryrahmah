@@ -1,4 +1,4 @@
-import { apiRequest, createApiHeaders } from "../queryClient";
+import { apiRequest, createApiHeaders } from "../api-client";
 import { getAuthHeader } from "./shared";
 import { parseApiJson } from "./contract";
 import {

@@ -45,13 +45,30 @@ export default defineConfig({
             return true;
           }
 
-          return !/^(assets\/(?:charts|pdf|excel|capture)-)/.test(dependency);
+          return !/^(assets\/(?:query|charts|pdf|excel|capture)-)/.test(dependency);
         });
       },
     },
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (
+            id.includes("vite/preload-helper")
+            || id.includes("node_modules/react/")
+            || id.includes("node_modules/react-dom/")
+            || id.includes("node_modules/scheduler/")
+          ) {
+            return "framework";
+          }
+
+          if (
+            id.includes("node_modules/clsx/")
+            || id.includes("node_modules/tailwind-merge/")
+            || id.includes("node_modules/class-variance-authority/")
+          ) {
+            return "ui";
+          }
+
           if (
             id.includes("node_modules/zod")
             || id.includes("shared/api-contracts.ts")

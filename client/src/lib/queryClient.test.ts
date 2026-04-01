@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { apiRequest, createApiHeaders, createApiRequestId, getQueryFn } from "./queryClient";
+import { apiRequest, createApiHeaders, createApiRequestId } from "./api-client";
+import { getQueryFn } from "./queryClient";
 
 test("createApiRequestId returns a non-empty unique identifier", () => {
   const left = createApiRequestId();
