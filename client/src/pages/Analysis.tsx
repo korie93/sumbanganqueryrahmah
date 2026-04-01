@@ -186,6 +186,25 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
     () => getPaginatedItems("duplicates-list", analysis?.duplicates.items || [], tablePages),
     [analysis?.duplicates.items, tablePages],
   );
+  const specialIdPagedSections = useMemo(
+    () => ({
+      polis: getPaginatedItems("polis", analysis?.noPolis.samples || [], tablePages),
+      tentera: getPaginatedItems("tentera", analysis?.noTentera.samples || [], tablePages),
+      passportMY: getPaginatedItems("passportMY", analysis?.passportMY.samples || [], tablePages),
+      passportLN: getPaginatedItems(
+        "passportLN",
+        analysis?.passportLuarNegara.samples || [],
+        tablePages,
+      ),
+    }),
+    [
+      analysis?.noPolis.samples,
+      analysis?.noTentera.samples,
+      analysis?.passportLuarNegara.samples,
+      analysis?.passportMY.samples,
+      tablePages,
+    ],
+  );
 
   return (
     <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 sm:p-6">
@@ -298,11 +317,11 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
                     onCopyItem={copyToClipboard}
                     onPageChange={setPage}
                     onToggle={() => toggleSection("polis")}
-                    page={getPaginatedItems("polis", analysis.noPolis.samples || [], tablePages).page}
-                    pagedItems={getPaginatedItems("polis", analysis.noPolis.samples || [], tablePages).items}
+                    page={specialIdPagedSections.polis.page}
+                    pagedItems={specialIdPagedSections.polis.items}
                     sectionKey="polis"
-                    start={getPaginatedItems("polis", analysis.noPolis.samples || [], tablePages).start}
-                    totalPages={getPaginatedItems("polis", analysis.noPolis.samples || [], tablePages).totalPages}
+                    start={specialIdPagedSections.polis.start}
+                    totalPages={specialIdPagedSections.polis.totalPages}
                     title="Police No."
                     colorClass="text-yellow-600"
                     icon={Shield}
@@ -315,11 +334,11 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
                     onCopyItem={copyToClipboard}
                     onPageChange={setPage}
                     onToggle={() => toggleSection("tentera")}
-                    page={getPaginatedItems("tentera", analysis.noTentera.samples || [], tablePages).page}
-                    pagedItems={getPaginatedItems("tentera", analysis.noTentera.samples || [], tablePages).items}
+                    page={specialIdPagedSections.tentera.page}
+                    pagedItems={specialIdPagedSections.tentera.items}
                     sectionKey="tentera"
-                    start={getPaginatedItems("tentera", analysis.noTentera.samples || [], tablePages).start}
-                    totalPages={getPaginatedItems("tentera", analysis.noTentera.samples || [], tablePages).totalPages}
+                    start={specialIdPagedSections.tentera.start}
+                    totalPages={specialIdPagedSections.tentera.totalPages}
                     title="Military No."
                     colorClass="text-green-600"
                     icon={Shield}
@@ -332,11 +351,11 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
                     onCopyItem={copyToClipboard}
                     onPageChange={setPage}
                     onToggle={() => toggleSection("passportMY")}
-                    page={getPaginatedItems("passportMY", analysis.passportMY.samples || [], tablePages).page}
-                    pagedItems={getPaginatedItems("passportMY", analysis.passportMY.samples || [], tablePages).items}
+                    page={specialIdPagedSections.passportMY.page}
+                    pagedItems={specialIdPagedSections.passportMY.items}
                     sectionKey="passportMY"
-                    start={getPaginatedItems("passportMY", analysis.passportMY.samples || [], tablePages).start}
-                    totalPages={getPaginatedItems("passportMY", analysis.passportMY.samples || [], tablePages).totalPages}
+                    start={specialIdPagedSections.passportMY.start}
+                    totalPages={specialIdPagedSections.passportMY.totalPages}
                     title="Passport Malaysia"
                     colorClass="text-purple-500"
                     icon={Plane}
@@ -349,11 +368,11 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
                     onCopyItem={copyToClipboard}
                     onPageChange={setPage}
                     onToggle={() => toggleSection("passportLN")}
-                    page={getPaginatedItems("passportLN", analysis.passportLuarNegara.samples || [], tablePages).page}
-                    pagedItems={getPaginatedItems("passportLN", analysis.passportLuarNegara.samples || [], tablePages).items}
+                    page={specialIdPagedSections.passportLN.page}
+                    pagedItems={specialIdPagedSections.passportLN.items}
                     sectionKey="passportLN"
-                    start={getPaginatedItems("passportLN", analysis.passportLuarNegara.samples || [], tablePages).start}
-                    totalPages={getPaginatedItems("passportLN", analysis.passportLuarNegara.samples || [], tablePages).totalPages}
+                    start={specialIdPagedSections.passportLN.start}
+                    totalPages={specialIdPagedSections.passportLN.totalPages}
                     title="Foreign Passport"
                     colorClass="text-orange-500"
                     icon={Plane}

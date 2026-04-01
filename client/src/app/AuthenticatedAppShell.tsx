@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { AppPageRenderer } from "@/app/AppPageRenderer";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { PageSpinner } from "@/app/PageSpinner";
@@ -54,6 +54,37 @@ export default function AuthenticatedAppShell({
   onClientLogout,
   onNavigateHome,
 }: AuthenticatedAppShellProps) {
+  const [floatingAiReady, setFloatingAiReady] = useState(false);
+
+  useEffect(() => {
+    if (!runtimeConfig.aiEnabled || floatingAiReady) return;
+
+    let cancelled = false;
+    let fallbackTimeoutId: number | null = null;
+    let idleCallbackId: number | null = null;
+
+    const markReady = () => {
+      if (cancelled) return;
+      setFloatingAiReady(true);
+    };
+
+    fallbackTimeoutId = window.setTimeout(markReady, 1200);
+
+    if (typeof window.requestIdleCallback === "function") {
+      idleCallbackId = window.requestIdleCallback(markReady, { timeout: 1500 });
+    }
+
+    return () => {
+      cancelled = true;
+      if (fallbackTimeoutId !== null) {
+        window.clearTimeout(fallbackTimeoutId);
+      }
+      if (idleCallbackId !== null && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(idleCallbackId);
+      }
+    };
+  }, [floatingAiReady, runtimeConfig.aiEnabled]);
+
   if (user.mustChangePassword) {
     return (
       <div className="viewport-min-height bg-background">
@@ -123,7 +154,7 @@ export default function AuthenticatedAppShell({
             </main>
           </Suspense>
         </AppRouteErrorBoundary>
-        {runtimeConfig.aiEnabled ? (
+        {runtimeConfig.aiEnabled && currentPage !== "ai" && floatingAiReady ? (
           <Suspense fallback={null}>
             <FloatingAI
               timeoutMs={runtimeConfig.aiTimeoutMs}

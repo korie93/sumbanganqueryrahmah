@@ -1,9 +1,19 @@
+import { Suspense, lazy } from "react";
 import { Search } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { GeneralSearchControls } from "@/pages/general-search/GeneralSearchControls";
-import { GeneralSearchRecordDialog } from "@/pages/general-search/GeneralSearchRecordDialog";
-import { GeneralSearchResults } from "@/pages/general-search/GeneralSearchResults";
 import { useGeneralSearchController } from "@/pages/general-search/useGeneralSearchController";
+
+const GeneralSearchResults = lazy(() =>
+  import("@/pages/general-search/GeneralSearchResults").then((module) => ({
+    default: module.GeneralSearchResults,
+  })),
+);
+const GeneralSearchRecordDialog = lazy(() =>
+  import("@/pages/general-search/GeneralSearchRecordDialog").then((module) => ({
+    default: module.GeneralSearchRecordDialog,
+  })),
+);
 
 interface GeneralSearchProps {
   userRole?: string;
@@ -17,6 +27,8 @@ export default function GeneralSearch({
   const isMobile = useIsMobile();
   const controller = useGeneralSearchController({ userRole, searchResultLimit });
   const { actions, canExport, canSeeSourceFile, isLowSpecMode, state } = controller;
+  const shouldShowResults = state.searched && !state.loading;
+  const shouldShowRecordDialog = state.selectedRecord !== null;
 
   return (
     <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 px-3 py-4 sm:p-6 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
@@ -56,28 +68,38 @@ export default function GeneralSearch({
           onUpdateFilter={actions.updateFilter}
         />
 
-        {state.searched && !state.loading ? (
-          <GeneralSearchResults
-            advancedMode={state.advancedMode}
-            canExport={canExport}
-            currentPage={state.currentPage}
-            exportingPdf={state.exportingPdf}
-            filtersCount={state.activeFiltersCount}
-            headers={state.headers}
-            isLowSpecMode={isLowSpecMode}
-            loading={state.loading}
-            logic={state.logic}
-            onExportCsv={actions.exportToCSV}
-            onExportPdf={actions.exportToPDF}
-            onPageChange={actions.handlePageChange}
-            onRecordSelect={actions.setSelectedRecord}
-            onRowsPerPageChange={actions.handleResultsPerPageChange}
-            pageSizeOptions={state.pageSizeOptions}
-            query={state.displayQuery}
-            results={state.results}
-            resultsPerPage={state.resultsPerPage}
-            totalResults={state.totalResults}
-          />
+        {shouldShowResults ? (
+          <Suspense
+            fallback={
+              <div className="glass-wrapper p-6" role="status" aria-live="polite">
+                <div className="flex min-h-[240px] items-center justify-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                </div>
+              </div>
+            }
+          >
+            <GeneralSearchResults
+              advancedMode={state.advancedMode}
+              canExport={canExport}
+              currentPage={state.currentPage}
+              exportingPdf={state.exportingPdf}
+              filtersCount={state.activeFiltersCount}
+              headers={state.headers}
+              isLowSpecMode={isLowSpecMode}
+              loading={state.loading}
+              logic={state.logic}
+              onExportCsv={actions.exportToCSV}
+              onExportPdf={actions.exportToPDF}
+              onPageChange={actions.handlePageChange}
+              onRecordSelect={actions.setSelectedRecord}
+              onRowsPerPageChange={actions.handleResultsPerPageChange}
+              pageSizeOptions={state.pageSizeOptions}
+              query={state.displayQuery}
+              results={state.results}
+              resultsPerPage={state.resultsPerPage}
+              totalResults={state.totalResults}
+            />
+          </Suspense>
         ) : null}
 
         {!state.searched ? (
@@ -95,13 +117,17 @@ export default function GeneralSearch({
         ) : null}
       </div>
 
-      <GeneralSearchRecordDialog
-        canSeeSourceFile={canSeeSourceFile}
-        onOpenChange={(open) => {
-          if (!open) actions.setSelectedRecord(null);
-        }}
-        record={state.selectedRecord}
-      />
+      {shouldShowRecordDialog ? (
+        <Suspense fallback={null}>
+          <GeneralSearchRecordDialog
+            canSeeSourceFile={canSeeSourceFile}
+            onOpenChange={(open) => {
+              if (!open) actions.setSelectedRecord(null);
+            }}
+            record={state.selectedRecord}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

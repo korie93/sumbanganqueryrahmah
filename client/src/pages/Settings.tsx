@@ -8,10 +8,6 @@ import {
   OperationalPageHeader,
   OperationalSectionCard,
 } from "@/components/layout/OperationalPage";
-import { AccountSecuritySection } from "@/pages/settings/AccountSecuritySection";
-import { ManagedUserDialog } from "@/pages/settings/ManagedUserDialog";
-import { ManagedSecretDialog } from "@/pages/settings/ManagedSecretDialog";
-import { SettingsRoleSections } from "@/pages/settings/SettingsRoleSections";
 import { SettingsSaveBar } from "@/pages/settings/SettingsSaveBar";
 import { SettingsSidebar } from "@/pages/settings/SettingsSidebar";
 import { useSettingsController } from "@/pages/settings/useSettingsController";
@@ -22,9 +18,29 @@ type SettingsPageProps = {
 };
 
 const BackupRestore = lazy(() => import("@/pages/BackupRestore"));
+const AccountSecuritySection = lazy(() =>
+  import("@/pages/settings/AccountSecuritySection").then((module) => ({
+    default: module.AccountSecuritySection,
+  })),
+);
+const SettingsRoleSections = lazy(() =>
+  import("@/pages/settings/SettingsRoleSections").then((module) => ({
+    default: module.SettingsRoleSections,
+  })),
+);
 const UserAccountManagementSection = lazy(() =>
   import("@/pages/settings/UserAccountManagementSection").then((module) => ({
     default: module.UserAccountManagementSection,
+  })),
+);
+const ManagedUserDialog = lazy(() =>
+  import("@/pages/settings/ManagedUserDialog").then((module) => ({
+    default: module.ManagedUserDialog,
+  })),
+);
+const ManagedSecretDialog = lazy(() =>
+  import("@/pages/settings/ManagedSecretDialog").then((module) => ({
+    default: module.ManagedSecretDialog,
   })),
 );
 
@@ -36,6 +52,10 @@ function SettingsSectionFallback({ label }: { label: string }) {
       </div>
     </OperationalSectionCard>
   );
+}
+
+function SettingsDialogFallback() {
+  return null;
 }
 
 export default function SettingsPage({
@@ -131,16 +151,20 @@ export default function SettingsPage({
                     </Suspense>
                   ) : controller.isSecurityCategory &&
                     controller.canAccessAccountSecurity ? (
-                      <AccountSecuritySection {...controller.security} showAccountManagement={false} />
+                      <Suspense fallback={<SettingsSectionFallback label="Loading account security..." />}>
+                        <AccountSecuritySection {...controller.security} showAccountManagement={false} />
+                      </Suspense>
                     ) : controller.isAccountManagementCategory ? (
                       <Suspense fallback={<SettingsSectionFallback label="Loading account management..." />}>
                         <UserAccountManagementSection {...controller.accountManagement} />
                       </Suspense>
                     ) : controller.isRolePermissionCategory ? (
-                      <SettingsRoleSections
-                        renderSettingCard={controller.renderSettingCard}
-                        roleSections={controller.roleSections}
-                      />
+                      <Suspense fallback={<SettingsSectionFallback label="Loading permission settings..." />}>
+                        <SettingsRoleSections
+                          renderSettingCard={controller.renderSettingCard}
+                          roleSections={controller.roleSections}
+                        />
+                      </Suspense>
                     ) : (
                       (controller.currentCategory?.settings || []).map(
                         controller.renderSettingCard,
@@ -156,8 +180,16 @@ export default function SettingsPage({
           </>
         )}
 
-      <ManagedUserDialog {...controller.managedDialog} />
-      <ManagedSecretDialog {...controller.managedSecretDialog} />
+      {controller.managedDialog.managedDialogOpen || controller.managedDialog.confirmCriticalOpen ? (
+        <Suspense fallback={<SettingsDialogFallback />}>
+          <ManagedUserDialog {...controller.managedDialog} />
+        </Suspense>
+      ) : null}
+      {controller.managedSecretDialog.open ? (
+        <Suspense fallback={<SettingsDialogFallback />}>
+          <ManagedSecretDialog {...controller.managedSecretDialog} />
+        </Suspense>
+      ) : null}
     </OperationalPage>
   );
 }

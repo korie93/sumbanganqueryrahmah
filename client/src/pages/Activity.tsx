@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Filter, RefreshCw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,6 @@ import {
   unbanUser,
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { ActivityActionDialogs } from "@/pages/activity/ActivityActionDialogs";
 import { ActivityBannedUsersPanel } from "@/pages/activity/ActivityBannedUsersPanel";
 import { ActivityFiltersPanel } from "@/pages/activity/ActivityFiltersPanel";
 import { ActivityLogsTable } from "@/pages/activity/ActivityLogsTable";
@@ -27,6 +26,12 @@ import {
   getCurrentActivityRole,
   hasActiveActivityFilters,
 } from "@/pages/activity/utils";
+
+const ActivityActionDialogs = lazy(() =>
+  import("@/pages/activity/ActivityActionDialogs").then((module) => ({
+    default: module.ActivityActionDialogs,
+  })),
+);
 
 export default function Activity() {
   const currentRole = getCurrentActivityRole();
@@ -319,6 +324,12 @@ export default function Activity() {
   );
   const allVisibleSelected = activities.length > 0 && selectedVisibleCount === activities.length;
   const partiallySelected = selectedVisibleCount > 0 && !allVisibleSelected;
+  const hasOpenActionDialog =
+    kickDialogOpen ||
+    banDialogOpen ||
+    unbanDialogOpen ||
+    deleteDialogOpen ||
+    bulkDeleteDialogOpen;
 
   return (
     <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
@@ -441,26 +452,30 @@ export default function Activity() {
         />
       </div>
 
-      <ActivityActionDialogs
-        banDialogOpen={banDialogOpen}
-        bulkDeleteDialogOpen={bulkDeleteDialogOpen}
-        deleteDialogOpen={deleteDialogOpen}
-        kickDialogOpen={kickDialogOpen}
-        onBanConfirm={() => void handleBanConfirm()}
-        onBanDialogOpenChange={setBanDialogOpen}
-        onDeleteConfirm={() => void handleDeleteConfirm()}
-        onDeleteDialogOpenChange={setDeleteDialogOpen}
-        onBulkDeleteConfirm={() => void handleBulkDeleteConfirm()}
-        onBulkDeleteDialogOpenChange={setBulkDeleteDialogOpen}
-        onKickConfirm={() => void handleKickConfirm()}
-        onKickDialogOpenChange={setKickDialogOpen}
-        onUnbanConfirm={() => void handleUnbanConfirm()}
-        onUnbanDialogOpenChange={setUnbanDialogOpen}
-        selectedActivity={selectedActivity}
-        selectedBannedUser={selectedBannedUser}
-        selectedBulkCount={selectedActivityIds.size}
-        unbanDialogOpen={unbanDialogOpen}
-      />
+      {hasOpenActionDialog ? (
+        <Suspense fallback={null}>
+          <ActivityActionDialogs
+            banDialogOpen={banDialogOpen}
+            bulkDeleteDialogOpen={bulkDeleteDialogOpen}
+            deleteDialogOpen={deleteDialogOpen}
+            kickDialogOpen={kickDialogOpen}
+            onBanConfirm={() => void handleBanConfirm()}
+            onBanDialogOpenChange={setBanDialogOpen}
+            onDeleteConfirm={() => void handleDeleteConfirm()}
+            onDeleteDialogOpenChange={setDeleteDialogOpen}
+            onBulkDeleteConfirm={() => void handleBulkDeleteConfirm()}
+            onBulkDeleteDialogOpenChange={setBulkDeleteDialogOpen}
+            onKickConfirm={() => void handleKickConfirm()}
+            onKickDialogOpenChange={setKickDialogOpen}
+            onUnbanConfirm={() => void handleUnbanConfirm()}
+            onUnbanDialogOpenChange={setUnbanDialogOpen}
+            selectedActivity={selectedActivity}
+            selectedBannedUser={selectedBannedUser}
+            selectedBulkCount={selectedActivityIds.size}
+            unbanDialogOpen={unbanDialogOpen}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }
