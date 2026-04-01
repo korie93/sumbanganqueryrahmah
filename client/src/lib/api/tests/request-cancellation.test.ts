@@ -190,6 +190,8 @@ test("getCollectionRecords forwards AbortSignal and rejects on abort", async () 
             records: [],
             total: 0,
             totalAmount: 0,
+            page: 1,
+            pageSize: 10,
             limit: 10,
             offset: 0,
             nextCursor: null,
@@ -207,7 +209,8 @@ test("getCollectionRecords forwards AbortSignal and rejects on abort", async () 
         search: "test",
         receiptValidationStatus: "flagged",
         duplicateOnly: true,
-        limit: 10,
+        page: 1,
+        pageSize: 10,
         offset: 0,
         cursor: "cursor-1",
       },
@@ -228,6 +231,8 @@ test("getCollectionRecords forwards AbortSignal and rejects on abort", async () 
   const params = new URL(`http://localhost${requests[0]?.url || ""}`).searchParams;
   assert.equal(params.get("receiptValidationStatus"), "flagged");
   assert.equal(params.get("duplicateOnly"), "1");
+  assert.equal(params.get("page"), "1");
+  assert.equal(params.get("pageSize"), "10");
   assert.equal(params.get("cursor"), "cursor-1");
 });
 
@@ -578,7 +583,7 @@ test("analytics API wrappers forward AbortSignal", async () => {
     if (url === "/api/analytics/login-trends?days=14") {
       return jsonResponse([]);
     }
-    if (url === "/api/analytics/top-users?limit=15") {
+    if (url === "/api/analytics/top-users?pageSize=15") {
       return jsonResponse([]);
     }
     if (url === "/api/analytics/peak-hours") {
@@ -607,7 +612,7 @@ test("analytics API wrappers forward AbortSignal", async () => {
   }
   assert.equal(requests[0]?.url, "/api/analytics/summary");
   assert.equal(requests[1]?.url, "/api/analytics/login-trends?days=14");
-  assert.equal(requests[2]?.url, "/api/analytics/top-users?limit=15");
+  assert.equal(requests[2]?.url, "/api/analytics/top-users?pageSize=15");
   assert.equal(requests[3]?.url, "/api/analytics/peak-hours");
   assert.equal(requests[4]?.url, "/api/analytics/role-distribution");
 });
@@ -841,11 +846,11 @@ test("search API wrappers forward AbortSignal", async () => {
     });
 
     const url = String(input);
-    if (url === "/api/search/global?q=test&page=2&limit=25") {
-      return jsonResponse({ results: [], total: 0 });
+    if (url === "/api/search/global?q=test&page=2&pageSize=25") {
+      return jsonResponse({ results: [], total: 0, page: 2, limit: 25, pageSize: 25 });
     }
     if (url === "/api/search/advanced") {
-      return jsonResponse({ results: [], total: 0 });
+      return jsonResponse({ results: [], total: 0, page: 1, limit: 50, pageSize: 50 });
     }
     if (url === "/api/search/columns") {
       return jsonResponse([]);
@@ -872,7 +877,7 @@ test("search API wrappers forward AbortSignal", async () => {
   for (const request of requests) {
     assert.equal(request.signal, controller.signal);
   }
-  assert.equal(requests[0]?.url, "/api/search/global?q=test&page=2&limit=25");
+  assert.equal(requests[0]?.url, "/api/search/global?q=test&page=2&pageSize=25");
   assert.equal(requests[1]?.url, "/api/search/advanced");
   assert.equal(requests[2]?.url, "/api/search/columns");
 });

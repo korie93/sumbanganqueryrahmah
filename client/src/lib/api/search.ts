@@ -8,11 +8,11 @@ type SearchRequestOptions = {
 export async function searchData(
   query: string,
   page: number = 1,
-  limit: number = 50,
+  pageSize: number = 50,
   options?: SearchRequestOptions,
 ) {
   const res = await fetch(
-    `/api/search/global?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`,
+    `/api/search/global?q=${encodeURIComponent(query)}&page=${page}&pageSize=${pageSize}`,
     {
       credentials: "include",
       headers: createApiHeaders({
@@ -40,13 +40,13 @@ export async function advancedSearchData(
   filters: SearchFilter[],
   logic: "AND" | "OR",
   page: number = 1,
-  limit: number = 50,
+  pageSize: number = 50,
   options?: SearchRequestOptions,
 ) {
   const response = await apiRequest(
     "POST",
     "/api/search/advanced",
-    { filters, logic, page, limit },
+    { filters, logic, page, pageSize },
     options,
   );
   return response.json();

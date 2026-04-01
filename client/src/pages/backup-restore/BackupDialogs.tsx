@@ -1,25 +1,5 @@
-import { Plus, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { BackupConfirmDialog } from "@/pages/backup-restore/BackupConfirmDialog";
+import { BackupCreateDialog } from "@/pages/backup-restore/BackupCreateDialog";
 import type { BackupRecord } from "@/pages/backup-restore/types";
 
 interface BackupDialogsProps {
@@ -59,99 +39,40 @@ export function BackupDialogs({
 }: BackupDialogsProps) {
   return (
     <>
-      <Dialog open={showCreateDialog} onOpenChange={(open) => (open ? undefined : onCloseCreateDialog())}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create New Backup</DialogTitle>
-            <DialogDescription>
-              The backup will save imports, data rows, users, audit logs, and collection records.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="backup-name">Backup Name</Label>
-              <Input
-                id="backup-name"
-                placeholder="Example: Daily Backup 07-12-2025"
-                value={backupName}
-                onChange={(event) => onBackupNameChange(event.target.value)}
-                data-testid="input-backup-name"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={onCloseCreateDialog} data-testid="button-cancel-create">
-              Cancel
-            </Button>
-            <Button
-              onClick={onConfirmCreate}
-              disabled={backupJobBusy || createPending || !backupName.trim()}
-              data-testid="button-confirm-create"
-            >
-              {createPending ? (
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4 mr-2" />
-              )}
-              Create Backup
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BackupCreateDialog
+        backupJobBusy={backupJobBusy}
+        backupName={backupName}
+        createPending={createPending}
+        onBackupNameChange={onBackupNameChange}
+        onCloseCreateDialog={onCloseCreateDialog}
+        onConfirmCreate={onConfirmCreate}
+        showCreateDialog={showCreateDialog}
+      />
 
-      <AlertDialog open={!!showRestoreDialog} onOpenChange={() => onRestoreDialogChange(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Restore Backup?</AlertDialogTitle>
-            <AlertDialogDescription>
-              You will restore data from backup "{showRestoreDialog?.name}".
-              Existing data will not be overwritten, only new data will be added.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-restore">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (showRestoreDialog) {
-                  onConfirmRestore(showRestoreDialog);
-                }
-              }}
-              disabled={backupJobBusy || restoringId === showRestoreDialog?.id}
-              data-testid="button-confirm-restore"
-            >
-              {restoringId === showRestoreDialog?.id ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Restore
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <BackupConfirmDialog
+        cancelTestId="button-cancel-restore"
+        confirmLabel="Restore"
+        confirmTestId="button-confirm-restore"
+        description={`You will restore data from backup "${showRestoreDialog?.name}". Existing data will not be overwritten, only new data will be added.`}
+        isPending={backupJobBusy || restoringId === showRestoreDialog?.id}
+        onConfirm={onConfirmRestore}
+        onOpenChange={() => onRestoreDialogChange(null)}
+        openBackup={showRestoreDialog}
+        title="Restore Backup?"
+      />
 
-      <AlertDialog open={!!showDeleteDialog} onOpenChange={() => onDeleteDialogChange(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Backup?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete backup "{showDeleteDialog?.name}"? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (showDeleteDialog) {
-                  onConfirmDelete(showDeleteDialog);
-                }
-              }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={backupJobBusy || deletingId === showDeleteDialog?.id}
-              data-testid="button-confirm-delete"
-            >
-              {deletingId === showDeleteDialog?.id ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <BackupConfirmDialog
+        cancelTestId="button-cancel-delete"
+        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        confirmLabel="Delete"
+        confirmTestId="button-confirm-delete"
+        description={`Are you sure you want to delete backup "${showDeleteDialog?.name}"? This action cannot be undone.`}
+        isPending={backupJobBusy || deletingId === showDeleteDialog?.id}
+        onConfirm={onConfirmDelete}
+        onOpenChange={() => onDeleteDialogChange(null)}
+        openBackup={showDeleteDialog}
+        title="Delete Backup?"
+      />
     </>
   );
 }

@@ -123,8 +123,8 @@ export function useCollectionSummaryMonthDialog({
           to: range.to,
           nickname: normalizedFilters.length === 1 ? normalizedFilters[0] : undefined,
           nicknames: normalizedFilters.length > 1 ? normalizedFilters : undefined,
-          limit: pageSize,
-          offset: (page - 1) * pageSize,
+          page,
+          pageSize,
         }, { signal: controller.signal });
 
         if (

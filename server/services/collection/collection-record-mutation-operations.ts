@@ -39,11 +39,16 @@ import {
   buildValidationDraftFromMetadata,
   normalizeCollectionRecordFields,
   normalizeCollectionReceiptMetadata,
-  readCollectionReceiptMetadataList,
   readUploadedReceiptRows,
   resolveCollectionAuditReceiptState,
   type MultipartCollectionPayload,
 } from "./collection-record-mutation-helpers";
+import {
+  logCollectionRecordVersionConflict,
+  logRejectedCollectionPurgeAttempt,
+  readCollectionReceiptMetadataOrThrow,
+  safeCreateCollectionMutationAuditLog,
+} from "./collection-record-mutation-support";
 
 type RequireUserFn = (user?: AuthenticatedUser) => AuthenticatedUser;
 
@@ -52,79 +57,6 @@ export class CollectionRecordMutationOperations {
     private readonly storage: CollectionStoragePort,
     private readonly requireUser: RequireUserFn,
   ) {}
-
-  private async logRejectedPurgeAttempt(username: string, details: string) {
-    try {
-      await this.storage.createAuditLog({
-        action: "COLLECTION_RECORDS_PURGE_REJECTED",
-        performedBy: username,
-        targetResource: "collection-records",
-        details,
-      });
-    } catch {
-      // best effort audit only
-    }
-  }
-
-  private async safeCreateAuditLog(params: {
-    action: string;
-    performedBy: string;
-    targetResource: string;
-    details: string;
-  }) {
-    try {
-      await this.storage.createAuditLog({
-        action: params.action,
-        performedBy: params.performedBy,
-        targetResource: params.targetResource,
-        details: params.details,
-      });
-    } catch (error) {
-      logger.warn("Collection mutation audit log write failed", {
-        error,
-        action: params.action,
-        targetResource: params.targetResource,
-        performedBy: params.performedBy,
-      });
-    }
-  }
-
-  private async logRecordVersionConflict(params: {
-    username: string;
-    recordId: string;
-    operation: "update" | "delete";
-    expectedUpdatedAt: Date | null;
-    currentUpdatedAt: Date | null;
-  }) {
-    try {
-      await this.storage.createAuditLog({
-        action: "COLLECTION_RECORD_VERSION_CONFLICT",
-        performedBy: params.username,
-        targetResource: params.recordId,
-        details: [
-          `Collection record ${params.operation} rejected due to stale version by ${params.username}.`,
-          `expectedUpdatedAt=${params.expectedUpdatedAt?.toISOString() || "null"}`,
-          `currentUpdatedAt=${params.currentUpdatedAt?.toISOString() || "null"}`,
-        ].join(" "),
-      });
-    } catch {
-      // best effort telemetry only
-    }
-  }
-
-  private readReceiptMetadataList(raw: unknown) {
-    try {
-      return readCollectionReceiptMetadataList(raw);
-    } catch (error) {
-      if ((error as Error)?.message === "COLLECTION_RECEIPT_METADATA_INVALID") {
-        throw badRequest(
-          "Receipt metadata payload is invalid.",
-          "COLLECTION_RECEIPT_METADATA_INVALID",
-        );
-      }
-      throw error;
-    }
-  }
 
   async createRecord(userInput: AuthenticatedUser | undefined, bodyRaw: unknown) {
     const user = this.requireUser(userInput);
@@ -164,7 +96,7 @@ export class CollectionRecordMutationOperations {
       for (const nextReceipt of receiptPayloads) {
         uploadedReceipts.push(await saveCollectionReceipt(nextReceipt));
       }
-      const newReceiptMetadata = this.readReceiptMetadataList(body.newReceiptMetadata)
+      const newReceiptMetadata = readCollectionReceiptMetadataOrThrow(body.newReceiptMetadata)
         .map((item) => normalizeCollectionReceiptMetadata(item));
       const newReceiptInputs = uploadedReceipts.map((receipt, index) =>
         buildCreateReceiptInput(
@@ -187,7 +119,7 @@ export class CollectionRecordMutationOperations {
         }));
       const duplicateReceipts = findDuplicateCollectionReceiptHashes(validationReceipts);
       if (duplicateReceipts.length > 0) {
-        await this.safeCreateAuditLog({
+        await safeCreateCollectionMutationAuditLog(this.storage, {
           action: "COLLECTION_RECEIPT_DUPLICATE_REJECTED",
           performedBy: user.username,
           targetResource: "collection-records",
@@ -229,7 +161,7 @@ export class CollectionRecordMutationOperations {
       });
 
       if (finalRecord.duplicateReceiptFlag) {
-        await this.safeCreateAuditLog({
+        await safeCreateCollectionMutationAuditLog(this.storage, {
           action: "COLLECTION_RECEIPT_DUPLICATE_WARNING",
           performedBy: user.username,
           targetResource: finalRecord.id,
@@ -242,7 +174,7 @@ export class CollectionRecordMutationOperations {
         });
       }
 
-      await this.safeCreateAuditLog({
+      await safeCreateCollectionMutationAuditLog(this.storage, {
         action: "COLLECTION_RECORD_CREATED",
         performedBy: user.username,
         targetResource: finalRecord.id,
@@ -310,7 +242,8 @@ export class CollectionRecordMutationOperations {
 
     const isValidPassword = await verifyPassword(currentPassword, actor.passwordHash);
     if (!isValidPassword) {
-      await this.logRejectedPurgeAttempt(
+      await logRejectedCollectionPurgeAttempt(
+        this.storage,
         user.username,
         `Rejected collection purge attempt due to invalid superuser password by ${user.username}`,
       );
@@ -369,7 +302,7 @@ export class CollectionRecordMutationOperations {
       if (expectedUpdatedAt) {
         const currentVersion = resolveRecordVersionTimestamp(existing);
         if (!currentVersion || currentVersion.getTime() !== expectedUpdatedAt.getTime()) {
-          await this.logRecordVersionConflict({
+          await logCollectionRecordVersionConflict(this.storage, {
             username: user.username,
             recordId: id,
             operation: "update",
@@ -419,9 +352,9 @@ export class CollectionRecordMutationOperations {
       for (const nextReceipt of receiptPayloads) {
         uploadedReceipts.push(await saveCollectionReceipt(nextReceipt));
       }
-      const existingReceiptMetadata = this.readReceiptMetadataList(body.existingReceiptMetadata)
+      const existingReceiptMetadata = readCollectionReceiptMetadataOrThrow(body.existingReceiptMetadata)
         .map((item) => normalizeCollectionReceiptMetadata(item));
-      const newReceiptMetadata = this.readReceiptMetadataList(body.newReceiptMetadata)
+      const newReceiptMetadata = readCollectionReceiptMetadataOrThrow(body.newReceiptMetadata)
         .map((item) => normalizeCollectionReceiptMetadata(item));
 
       const hasReceiptMutation =
@@ -488,7 +421,7 @@ export class CollectionRecordMutationOperations {
       ];
       const duplicateReceipts = findDuplicateCollectionReceiptHashes(validationReceipts);
       if (duplicateReceipts.length > 0) {
-        await this.safeCreateAuditLog({
+        await safeCreateCollectionMutationAuditLog(this.storage, {
           action: "COLLECTION_RECEIPT_DUPLICATE_REJECTED",
           performedBy: user.username,
           targetResource: id,
@@ -530,7 +463,7 @@ export class CollectionRecordMutationOperations {
         if (expectedUpdatedAt) {
           const freshRecord = await this.storage.getCollectionRecordById(id);
           const freshVersion = freshRecord ? resolveRecordVersionTimestamp(freshRecord) : null;
-          await this.logRecordVersionConflict({
+          await logCollectionRecordVersionConflict(this.storage, {
             username: user.username,
             recordId: id,
             operation: "update",
@@ -583,7 +516,7 @@ export class CollectionRecordMutationOperations {
       });
 
       if (updated.duplicateReceiptFlag) {
-        await this.safeCreateAuditLog({
+        await safeCreateCollectionMutationAuditLog(this.storage, {
           action: "COLLECTION_RECEIPT_DUPLICATE_WARNING",
           performedBy: user.username,
           targetResource: id,
@@ -596,7 +529,7 @@ export class CollectionRecordMutationOperations {
         });
       }
 
-      await this.safeCreateAuditLog({
+      await safeCreateCollectionMutationAuditLog(this.storage, {
         action: "COLLECTION_RECORD_UPDATED",
         performedBy: user.username,
         targetResource: id,
@@ -655,7 +588,7 @@ export class CollectionRecordMutationOperations {
     if (expectedUpdatedAt) {
       const currentVersion = resolveRecordVersionTimestamp(existing);
       if (!currentVersion || currentVersion.getTime() !== expectedUpdatedAt.getTime()) {
-        await this.logRecordVersionConflict({
+        await logCollectionRecordVersionConflict(this.storage, {
           username: user.username,
           recordId: id,
           operation: "delete",
@@ -676,7 +609,7 @@ export class CollectionRecordMutationOperations {
       if (expectedUpdatedAt) {
         const freshRecord = await this.storage.getCollectionRecordById(id);
         const freshVersion = freshRecord ? resolveRecordVersionTimestamp(freshRecord) : null;
-        await this.logRecordVersionConflict({
+        await logCollectionRecordVersionConflict(this.storage, {
           username: user.username,
           recordId: id,
           operation: "delete",
@@ -695,7 +628,7 @@ export class CollectionRecordMutationOperations {
       legacyReceiptFile: activeReceipts.length > 0 ? null : existing.receiptFile,
     });
 
-    await this.safeCreateAuditLog({
+    await safeCreateCollectionMutationAuditLog(this.storage, {
       action: "COLLECTION_RECORD_DELETED",
       performedBy: user.username,
       targetResource: existing.id,

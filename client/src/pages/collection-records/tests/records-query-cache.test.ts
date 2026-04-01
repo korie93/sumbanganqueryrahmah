@@ -19,8 +19,8 @@ test("buildCollectionRecordsCacheKey normalizes filter casing and whitespace", (
     to: "2026-03-31",
     search: " Alice Tan ",
     nickname: " Collector Alpha ",
-    limit: 1000,
-    offset: 0,
+    page: 1,
+    pageSize: 1000,
   });
   const second = buildCollectionRecordsCacheKey({
     from: "2026-03-01",

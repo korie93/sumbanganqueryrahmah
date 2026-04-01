@@ -5,6 +5,8 @@ export type CollectionRecordFilters = {
   to?: string;
   search?: string;
   nickname?: string;
+  page?: number;
+  pageSize?: number;
   limit?: number;
   offset?: number;
   cursor?: string | null;

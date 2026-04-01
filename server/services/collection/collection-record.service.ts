@@ -196,15 +196,20 @@ export class CollectionRecordService extends CollectionServiceSupport {
     const receiptValidationStatus = parseCollectionReceiptValidationFilter(query.receiptValidationStatus);
     const duplicateOnly = parseCollectionBooleanQueryValue(query.duplicateOnly);
     const requestedNicknameFilters = readNicknameFiltersFromQuery(query);
-    const limitRaw = Number.parseInt(normalizeCollectionText(query.limit), 10);
+    const limitRaw = Number.parseInt(normalizeCollectionText(query.pageSize ?? query.limit), 10);
+    const pageRaw = Number.parseInt(normalizeCollectionText(query.page), 10);
     const offsetRaw = Number.parseInt(normalizeCollectionText(query.offset), 10);
     const limit = Number.isInteger(limitRaw)
       ? Math.min(5000, Math.max(1, limitRaw))
       : 1000;
+    const page = Number.isInteger(pageRaw)
+      ? Math.max(1, pageRaw)
+      : 1;
     const requestedOffset = Number.isInteger(offsetRaw)
       ? Math.max(0, offsetRaw)
-      : 0;
+      : (page - 1) * limit;
     const offset = cursor?.offset ?? requestedOffset;
+    const resolvedPage = Math.floor(offset / limit) + 1;
     const userOwnedRecordFilters = await this.resolveUserOwnedRecordFilters(user);
 
     if (from && !isValidCollectionDate(from)) throw badRequest("Invalid from date.");
@@ -250,6 +255,8 @@ export class CollectionRecordService extends CollectionServiceSupport {
           records: [],
           total: 0,
           totalAmount: 0,
+          page: resolvedPage,
+          pageSize: limit,
           limit,
           offset,
           nextCursor: null,
@@ -282,6 +289,8 @@ export class CollectionRecordService extends CollectionServiceSupport {
       records,
       total: aggregate.totalRecords,
       totalAmount: aggregate.totalAmount,
+      page: resolvedPage,
+      pageSize: limit,
       limit,
       offset,
       nextCursor:
@@ -333,20 +342,29 @@ export class CollectionRecordService extends CollectionServiceSupport {
         totalAmount: 0,
         nicknameTotals: [],
         records: [],
+        page: 1,
+        pageSize: CollectionRecordService.NICKNAME_SUMMARY_RECORD_LIMIT,
+        limit: CollectionRecordService.NICKNAME_SUMMARY_RECORD_LIMIT,
+        offset: 0,
         freshness: await getCollectionReportFreshness(this.storage),
       };
     }
 
     const summaryOnlyRaw = normalizeCollectionText(query.summaryOnly).toLowerCase();
     const summaryOnly = summaryOnlyRaw === "1" || summaryOnlyRaw === "true" || summaryOnlyRaw === "yes";
-    const limitRaw = Number.parseInt(normalizeCollectionText(query.limit), 10);
+    const limitRaw = Number.parseInt(normalizeCollectionText(query.pageSize ?? query.limit), 10);
+    const pageRaw = Number.parseInt(normalizeCollectionText(query.page), 10);
     const offsetRaw = Number.parseInt(normalizeCollectionText(query.offset), 10);
     const recordLimit = Number.isInteger(limitRaw)
       ? Math.min(CollectionRecordService.NICKNAME_SUMMARY_RECORD_LIMIT, Math.max(1, limitRaw))
       : CollectionRecordService.NICKNAME_SUMMARY_RECORD_LIMIT;
+    const page = Number.isInteger(pageRaw)
+      ? Math.max(1, pageRaw)
+      : 1;
     const recordOffset = Number.isInteger(offsetRaw)
       ? Math.max(0, offsetRaw)
-      : 0;
+      : (page - 1) * recordLimit;
+    const resolvedPage = Math.floor(recordOffset / recordLimit) + 1;
 
     let nicknameFilters = normalizeCollectionStringList(requestedNicknameFilters);
     if (user.role === "superuser") {
@@ -409,6 +427,10 @@ export class CollectionRecordService extends CollectionServiceSupport {
       totalAmount: totals.totalAmount,
       nicknameTotals,
       records,
+      page: resolvedPage,
+      pageSize: recordLimit,
+      limit: recordLimit,
+      offset: recordOffset,
       freshness,
     };
   }

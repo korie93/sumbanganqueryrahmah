@@ -147,7 +147,7 @@ test("GET /api/search/global returns an empty payload for short queries without 
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/api/search/global?q=a&page=1&limit=50`);
+    const response = await fetch(`${baseUrl}/api/search/global?q=a&page=1&pageSize=50`);
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {
       columns: [],
@@ -169,11 +169,12 @@ test("GET /api/search/global applies the protected limit cap and formats rows wi
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/api/search/global?q=Alice&page=2&limit=150`);
+    const response = await fetch(`${baseUrl}/api/search/global?q=Alice&page=2&pageSize=150`);
     assert.equal(response.status, 200);
     const payload = await response.json();
     assert.equal(payload.page, 2);
     assert.equal(payload.limit, 80);
+    assert.equal(payload.pageSize, 80);
     assert.equal(payload.total, 25);
     assert.deepEqual(payload.columns, ["name", "ic", "Source File"]);
     assert.deepEqual(payload.rows, [
@@ -200,7 +201,7 @@ test("GET /api/search/global returns an empty page when the offset exceeds the r
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/api/search/global?q=Alice&page=4&limit=20`);
+    const response = await fetch(`${baseUrl}/api/search/global?q=Alice&page=4&pageSize=20`);
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {
       columns: [],
@@ -209,6 +210,7 @@ test("GET /api/search/global returns an empty page when the offset exceeds the r
       total: 60,
       page: 4,
       limit: 20,
+      pageSize: 20,
     });
     assert.equal(globalSearchCalls.length, 0);
   } finally {
@@ -255,7 +257,7 @@ test("POST /api/search/advanced applies runtime pagination and formats headers",
         filters: [{ field: "name", operator: "contains", value: "Bob" }],
         logic: "OR",
         page: 2,
-        limit: 50,
+        pageSize: 50,
       }),
     });
 
@@ -263,6 +265,7 @@ test("POST /api/search/advanced applies runtime pagination and formats headers",
     const payload = await response.json();
     assert.equal(payload.page, 2);
     assert.equal(payload.limit, 25);
+    assert.equal(payload.pageSize, 25);
     assert.equal(payload.total, 18);
     assert.deepEqual(payload.headers, ["name", "phone", "Source File"]);
     assert.deepEqual(payload.results, [

@@ -146,6 +146,8 @@ export async function getCollectionRecords(filters?: {
   nicknames?: string[];
   receiptValidationStatus?: "matched" | "underpaid" | "overpaid" | "unverified" | "needs_review" | "flagged";
   duplicateOnly?: boolean;
+  page?: number;
+  pageSize?: number;
   limit?: number;
   offset?: number;
   cursor?: string | null;
@@ -167,8 +169,12 @@ export async function getCollectionRecords(filters?: {
   if (filters?.duplicateOnly) {
     params.set("duplicateOnly", "1");
   }
-  if (typeof filters?.limit === "number" && Number.isFinite(filters.limit)) {
-    params.set("limit", String(filters.limit));
+  if (typeof filters?.page === "number" && Number.isFinite(filters.page)) {
+    params.set("page", String(filters.page));
+  }
+  const pageSize = filters?.pageSize ?? filters?.limit;
+  if (typeof pageSize === "number" && Number.isFinite(pageSize)) {
+    params.set("pageSize", String(pageSize));
   }
   if (typeof filters?.offset === "number" && Number.isFinite(filters.offset)) {
     params.set("offset", String(filters.offset));

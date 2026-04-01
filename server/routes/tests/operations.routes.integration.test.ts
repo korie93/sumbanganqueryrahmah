@@ -410,12 +410,12 @@ test("GET /api/analytics/summary includes stale-record conflict frequency for mo
   }
 });
 
-test("GET /api/analytics/top-users clamps limit to at least one", async () => {
+test("GET /api/analytics/top-users accepts pageSize and clamps it to at least one", async () => {
   const { app, topUserCalls } = createOperationsRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/api/analytics/top-users?limit=0`);
+    const response = await fetch(`${baseUrl}/api/analytics/top-users?pageSize=0`);
     assert.equal(response.status, 200);
     assert.deepEqual(topUserCalls, [1]);
   } finally {

@@ -19,10 +19,10 @@ export async function getLoginTrends(days: number = 7, options?: AnalyticsReques
   return response.json();
 }
 
-export async function getTopActiveUsers(limit: number = 10, options?: AnalyticsRequestOptions) {
+export async function getTopActiveUsers(pageSize: number = 10, options?: AnalyticsRequestOptions) {
   const response = await apiRequest(
     "GET",
-    `/api/analytics/top-users?limit=${limit}`,
+    `/api/analytics/top-users?pageSize=${pageSize}`,
     undefined,
     options,
   );

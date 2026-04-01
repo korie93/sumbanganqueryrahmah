@@ -1,14 +1,11 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Database, Download, FileText, Loader2, Plus, RefreshCw } from "lucide-react";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
-import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import {
   createBackupAsync,
   deleteBackup,
@@ -16,9 +13,12 @@ import {
   getBackups,
   restoreBackupAsync,
 } from "@/lib/api";
+import { BackupActiveJobCard } from "@/pages/backup-restore/BackupActiveJobCard";
 import { BackupDialogs } from "@/pages/backup-restore/BackupDialogs";
 import { BackupFiltersPanel } from "@/pages/backup-restore/BackupFiltersPanel";
 import { BackupList } from "@/pages/backup-restore/BackupList";
+import { BackupRestoreHeader } from "@/pages/backup-restore/BackupRestoreHeader";
+import { BackupRestoreResultCard } from "@/pages/backup-restore/BackupRestoreResultCard";
 import { resolveBackupMutationResponse } from "@/pages/backup-restore/backup-mutation-response";
 import type {
   BackupRecord,
@@ -403,119 +403,27 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
 
   return (
     <div className={embedded ? "space-y-6" : "space-y-6 p-6"}>
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        {embedded ? (
-          <div>
-            <p className="text-sm text-muted-foreground">
-              Create data backups, restore previous snapshots, and export the current backup register.
-            </p>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Database className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h1 className={`${embedded ? "text-xl" : "text-2xl"} font-bold`} data-testid="text-backup-title">
-                Backup & Restore
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Create data backups and restore from existing backups
-              </p>
-            </div>
-          </div>
-        )}
+      <BackupRestoreHeader
+        activeBackupJobBusy={activeBackupJobBusy}
+        canManageBackups={canManageBackups}
+        embedded={embedded}
+        exportingPdf={exportingPdf}
+        loading={loading}
+        visibleBackupsLength={visibleBackups.length}
+        onCreateBackupClick={() => setShowCreateDialog(true)}
+        onExportCsv={() => exportBackupsToCsv(visibleBackups)}
+        onExportPdf={() => {
+          void handleExportPdf();
+        }}
+        onRefresh={() => {
+          void refetch();
+        }}
+      />
 
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                className="w-full sm:w-auto"
-                variant="outline"
-                disabled={loading || visibleBackups.length === 0 || exportingPdf}
-                data-testid="button-export-backups"
-              >
-                {exportingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
-                Export
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-48" align="end">
-              <div className="space-y-1">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={() => exportBackupsToCsv(visibleBackups)}
-                  disabled={exportingPdf}
-                  data-testid="button-export-csv"
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Export CSV
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={handleExportPdf}
-                  disabled={exportingPdf}
-                  data-testid="button-export-pdf"
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  Export PDF
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-          <Button
-            className="w-full sm:w-auto"
-            variant="outline"
-            onClick={() => {
-              void refetch();
-            }}
-            disabled={loading || activeBackupJobBusy}
-            data-testid="button-refresh-backups"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-          {canManageBackups ? (
-            <Button
-              className="w-full sm:w-auto"
-              onClick={() => setShowCreateDialog(true)}
-              disabled={activeBackupJobBusy}
-              data-testid="button-create-backup"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Create Backup
-            </Button>
-          ) : null}
-        </div>
-      </div>
-
-      {activeBackupJobBusy && activeBackupJob ? (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="pt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <div className="text-sm font-medium">
-                {activeBackupJob.type === "restore" ? "Restore job in progress" : "Backup job in progress"}
-              </div>
-              <div className="text-sm text-muted-foreground">
-                Status: {activeBackupJob.status}
-                {activeBackupJob.queuePosition > 0
-                  ? ` | Queue position ${activeBackupJob.queuePosition}`
-                  : ""}
-                {activeBackupJob.backupName
-                  ? ` | ${activeBackupJob.backupName}`
-                  : activeBackupJob.backupId
-                    ? ` | ${activeBackupJob.backupId}`
-                    : ""}
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-primary">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Running in background
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
+      <BackupActiveJobCard
+        activeBackupJob={activeBackupJob}
+        activeBackupJobBusy={activeBackupJobBusy}
+      />
 
       <BackupFiltersPanel
         createdByFilter={createdByFilter}
@@ -577,43 +485,7 @@ export default function BackupRestore({ userRole, embedded = false }: BackupRest
         </Card>
       ) : null}
 
-      {lastRestoreResult ? (
-        <Card className="border-border/60">
-          <CardContent className="pt-6 space-y-3">
-            <div className="text-sm font-medium">Last Restore Result</div>
-            <div className="text-sm text-muted-foreground">
-              Backup: {lastRestoreResult.backupName || lastRestoreResult.backupId || "-"}
-              {lastRestoreResult.restoredAt
-                ? ` | Restored at ${formatDateTimeDDMMYYYY(lastRestoreResult.restoredAt, { includeSeconds: true })}`
-                : ""}
-              {typeof lastRestoreResult.durationMs === "number"
-                ? ` | Duration ${(lastRestoreResult.durationMs / 1000).toFixed(1)}s`
-                : ""}
-            </div>
-            <div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
-              <div>Imports: +{lastRestoreResult.stats.imports.inserted} inserted, {lastRestoreResult.stats.imports.reactivated} reactivated</div>
-              <div>Data rows: +{lastRestoreResult.stats.dataRows.inserted} inserted</div>
-              <div>Users: +{lastRestoreResult.stats.users.inserted} inserted</div>
-              <div>Audit logs: +{lastRestoreResult.stats.auditLogs.inserted} inserted</div>
-              <div>Collection records: +{lastRestoreResult.stats.collectionRecords.inserted} inserted</div>
-              <div>Collection receipts: +{lastRestoreResult.stats.collectionRecordReceipts.inserted} inserted</div>
-            </div>
-            <div className="text-sm text-muted-foreground">
-              Processed: {lastRestoreResult.stats.totalProcessed} | Inserted: {lastRestoreResult.stats.totalInserted} | Reactivated: {lastRestoreResult.stats.totalReactivated} | Skipped: {lastRestoreResult.stats.totalSkipped}
-            </div>
-            {lastRestoreResult.stats.warnings.length > 0 ? (
-              <div className="rounded-md border border-amber-300/40 bg-amber-50/40 p-3 text-sm">
-                <div className="font-medium text-amber-800">Warnings ({lastRestoreResult.stats.warnings.length})</div>
-                <ul className="mt-1 list-disc pl-5 text-amber-900">
-                  {lastRestoreResult.stats.warnings.slice(0, 5).map((warning, index) => (
-                    <li key={`${warning}-${index}`}>{warning}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
+      <BackupRestoreResultCard lastRestoreResult={lastRestoreResult} />
 
       <BackupList
         backupsOpen={backupsOpen}

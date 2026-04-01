@@ -74,6 +74,7 @@ export class SearchService {
         total: params.maxTotal,
         page: params.page,
         limit,
+        pageSize: limit,
       };
     }
 
@@ -103,6 +104,7 @@ export class SearchService {
       total: Math.min(result.total, params.maxTotal),
       page: params.page,
       limit: effectiveLimit,
+      pageSize: effectiveLimit,
     };
   }
 
@@ -143,6 +145,7 @@ export class SearchService {
         total: params.maxTotal,
         page: params.page,
         limit,
+        pageSize: limit,
       };
     }
 
@@ -163,6 +166,7 @@ export class SearchService {
       total: Math.min(rawResult.total || 0, params.maxTotal),
       page: params.page,
       limit: effectiveLimit,
+      pageSize: effectiveLimit,
     };
   }
 }

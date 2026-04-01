@@ -1,720 +1,96 @@
-import {
-  bigint,
-  boolean,
-  date,
-  doublePrecision,
-  index,
-  integer,
-  jsonb,
-  numeric,
-  pgTable,
-  primaryKey,
-  serial,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-  vector,
-} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
+import { relations } from "drizzle-orm";
 import { z } from "zod";
-import { relations, sql } from "drizzle-orm";
 
-export const users = pgTable("users", {
-  id: text("id").primaryKey(),
-  username: text("username").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
-  fullName: text("full_name"),
-  email: text("email"),
-  role: text("role").notNull().default("user"),
-  status: text("status").notNull().default("active"),
-  mustChangePassword: boolean("must_change_password").default(false).notNull(),
-  passwordResetBySuperuser: boolean("password_reset_by_superuser").default(false).notNull(),
-  createdBy: text("created_by"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  passwordChangedAt: timestamp("password_changed_at"),
-  activatedAt: timestamp("activated_at"),
-  lastLoginAt: timestamp("last_login_at"),
-  isBanned: boolean("is_banned").default(false),
-  twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
-  twoFactorSecretEncrypted: text("two_factor_secret_encrypted"),
-  twoFactorConfiguredAt: timestamp("two_factor_configured_at"),
-  failedLoginAttempts: integer("failed_login_attempts").default(0).notNull(),
-  lockedAt: timestamp("locked_at"),
-  lockedReason: text("locked_reason"),
-  lockedBySystem: boolean("locked_by_system").default(false).notNull(),
-}, (table) => ({
-  usernameLowerUnique: uniqueIndex("idx_users_username_lower_unique").using(
-    "btree",
-    sql`lower(${table.username})`,
-  ),
-  usernameLowerIdx: index("idx_users_username_lower").using(
-    "btree",
-    sql`lower(${table.username})`,
-  ),
-  roleIdx: index("idx_users_role").on(table.role),
-  statusIdx: index("idx_users_status").on(table.status),
-  mustChangePasswordIdx: index("idx_users_must_change_password").on(table.mustChangePassword),
-  createdByIdx: index("idx_users_created_by").on(table.createdBy),
-  passwordResetBySuperuserIdx: index("idx_users_password_reset_by_superuser").on(table.passwordResetBySuperuser),
-  twoFactorEnabledIdx: index("idx_users_two_factor_enabled").on(table.twoFactorEnabled),
-  failedLoginAttemptsIdx: index("idx_users_failed_login_attempts").on(table.failedLoginAttempts),
-  lockedAtIdx: index("idx_users_locked_at").on(table.lockedAt),
-  lockedBySystemIdx: index("idx_users_locked_by_system").on(table.lockedBySystem),
-  emailLowerUnique: uniqueIndex("idx_users_email_lower_unique")
-    .using("btree", sql`lower(${table.email})`)
-    .where(sql`${table.email} IS NOT NULL AND trim(${table.email}) <> ''`),
-}));
+import {
+  accountActivationTokens,
+  auditLogs,
+  backupJobs,
+  backups,
+  bannedSessions,
+  dataRows,
+  imports,
+  monitorAlertIncidents,
+  mutationIdempotencyKeys,
+  passwordResetRequests,
+  userActivity,
+  users,
+} from "./schema-postgres-core";
+import {
+  adminGroupMembers,
+  adminGroups,
+  adminVisibleNicknames,
+  collectionDailyCalendar,
+  collectionDailyTargets,
+  collectionNicknameSessions,
+  collectionRecordReceipts,
+  collectionRecords,
+  collectionStaffNicknames,
+  collectionRecordMonthlyRollups,
+} from "./schema-postgres-collection";
+import {
+  aeonBranchPostcodes,
+  aeonBranches,
+  aiCategoryRules,
+  aiCategoryStats,
+  aiConversations,
+  aiMessages,
+  dataEmbeddings,
+} from "./schema-postgres-ai";
+import {
+  featureFlags,
+  roleSettingPermissions,
+  settingCategories,
+  settingOptions,
+  settingVersions,
+  systemSettings,
+} from "./schema-postgres-settings";
 
-export const accountActivationTokens = pgTable("account_activation_tokens", {
-  id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  tokenHash: text("token_hash").notNull(),
-  expiresAt: timestamp("expires_at").notNull(),
-  usedAt: timestamp("used_at"),
-  createdBy: text("created_by"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (table) => ({
-  userIdIdx: index("idx_account_activation_tokens_user_id").on(table.userId),
-  expiresAtIdx: index("idx_account_activation_tokens_expires_at").on(table.expiresAt),
-  tokenHashUnique: uniqueIndex("idx_account_activation_tokens_hash_unique").on(table.tokenHash),
-}));
-
-export const passwordResetRequests = pgTable("password_reset_requests", {
-  id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  requestedByUser: text("requested_by_user"),
-  approvedBy: text("approved_by"),
-  resetType: text("reset_type").notNull().default("email_link"),
-  tokenHash: text("token_hash"),
-  expiresAt: timestamp("expires_at"),
-  usedAt: timestamp("used_at"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (table) => ({
-  userIdIdx: index("idx_password_reset_requests_user_id").on(table.userId),
-  createdAtIdx: index("idx_password_reset_requests_created_at").on(table.createdAt.desc()),
-  tokenHashUnique: uniqueIndex("idx_password_reset_requests_token_hash_unique")
-    .on(table.tokenHash)
-    .where(sql`${table.tokenHash} IS NOT NULL`),
-  expiresAtIdx: index("idx_password_reset_requests_expires_at")
-    .on(table.expiresAt)
-    .where(sql`${table.expiresAt} IS NOT NULL`),
-  pendingReviewIdx: index("idx_password_reset_requests_pending_review")
-    .on(table.userId, table.createdAt.desc())
-    .where(sql`${table.approvedBy} IS NULL AND ${table.usedAt} IS NULL`),
-}));
-
-export const imports = pgTable("imports", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  filename: text("filename").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-  isDeleted: boolean("is_deleted").default(false),
-  createdBy: text("created_by"),
-}, (table) => ({
-  createdAtIdx: index("idx_imports_created_at").on(table.createdAt),
-  isDeletedIdx: index("idx_imports_is_deleted").on(table.isDeleted),
-  createdByIdx: index("idx_imports_created_by").on(table.createdBy),
-}));
-
-export const dataRows = pgTable("data_rows", {
-  id: text("id").primaryKey(),
-  importId: text("import_id")
-    .notNull()
-    .references(() => imports.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  jsonDataJsonb: jsonb("json_data").notNull(), // guna satu column sahaja
-}, (table) => ({
-  importIdIdx: index("idx_data_rows_import_id").on(table.importId),
-}));
-
-export const userActivity = pgTable("user_activity", {
-  id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  username: text("username").notNull(),
-  role: text("role").notNull(),
-  pcName: text("pc_name"),
-  browser: text("browser"),
-  fingerprint: text("fingerprint"),
-  ipAddress: text("ip_address"),
-  loginTime: timestamp("login_time"),
-  logoutTime: timestamp("logout_time"),
-  lastActivityTime: timestamp("last_activity_time"),
-  isActive: boolean("is_active").default(true),
-  logoutReason: text("logout_reason"),
-}, (table) => ({
-  userIdIdx: index("idx_user_activity_user_id").on(table.userId),
-  usernameIdx: index("idx_user_activity_username").on(table.username),
-  isActiveIdx: index("idx_user_activity_is_active").on(table.isActive),
-  loginTimeIdx: index("idx_user_activity_login_time").on(table.loginTime),
-  logoutTimeIdx: index("idx_user_activity_logout_time").on(table.logoutTime),
-  lastActivityTimeIdx: index("idx_user_activity_last_activity_time").on(table.lastActivityTime),
-  fingerprintIdx: index("idx_user_activity_fingerprint").on(table.fingerprint),
-  ipAddressIdx: index("idx_user_activity_ip_address").on(table.ipAddress),
-}));
-
-export const bannedSessions = pgTable("banned_sessions", {
-  id: text("id").primaryKey(),
-  username: text("username").notNull(),
-  role: text("role").notNull(),
-  activityId: text("activity_id").notNull(),
-  fingerprint: text("fingerprint"),
-  ipAddress: text("ip_address"),
-  browser: text("browser"),
-  pcName: text("pc_name"),
-  bannedAt: timestamp("banned_at").defaultNow(),
-}, (table) => ({
-  fingerprintIdx: index("idx_banned_sessions_fingerprint").on(table.fingerprint),
-  ipAddressIdx: index("idx_banned_sessions_ip").on(table.ipAddress),
-}));
-
-export const auditLogs = pgTable("audit_logs", {
-  id: text("id").primaryKey(),
-  action: text("action").notNull(),
-  performedBy: text("performed_by").notNull(),
-  requestId: text("request_id"),
-  targetUser: text("target_user"),
-  targetResource: text("target_resource"),
-  details: text("details"),
-  timestamp: timestamp("timestamp").defaultNow(),
-}, (table) => ({
-  timestampIdx: index("idx_audit_logs_timestamp").on(table.timestamp),
-  actionIdx: index("idx_audit_logs_action").on(table.action),
-  performedByIdx: index("idx_audit_logs_performed_by").on(table.performedBy),
-  requestIdIdx: index("idx_audit_logs_request_id").on(table.requestId),
-}));
-
-export const mutationIdempotencyKeys = pgTable("mutation_idempotency_keys", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  scope: text("scope").notNull(),
-  actor: text("actor").notNull(),
-  idempotencyKey: text("idempotency_key").notNull(),
-  requestFingerprint: text("request_fingerprint"),
-  state: text("state").notNull().default("pending"),
-  responseStatus: integer("response_status"),
-  responseBody: jsonb("response_body"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  completedAt: timestamp("completed_at"),
-}, (table) => ({
-  scopeActorKeyUnique: uniqueIndex("idx_mutation_idempotency_scope_actor_key_unique").on(
-    table.scope,
-    table.actor,
-    table.idempotencyKey,
-  ),
-  updatedAtIdx: index("idx_mutation_idempotency_updated_at").on(table.updatedAt),
-  stateIdx: index("idx_mutation_idempotency_state").on(table.state),
-}));
-
-export const backups = pgTable("backups", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-  createdBy: text("created_by").notNull(),
-  backupData: text("backup_data").notNull(),
-  metadata: text("metadata"),
-});
-
-export const backupJobs = pgTable("backup_jobs", {
-  id: uuid("id").primaryKey(),
-  type: text("type").notNull(),
-  status: text("status").notNull().default("queued"),
-  requestedBy: text("requested_by").notNull(),
-  requestedAt: timestamp("requested_at").defaultNow().notNull(),
-  startedAt: timestamp("started_at"),
-  finishedAt: timestamp("finished_at"),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  backupId: text("backup_id"),
-  backupName: text("backup_name"),
-  result: jsonb("result"),
-  error: jsonb("error").$type<{ message: string; statusCode: number } | null>(),
-}, (table) => ({
-  statusRequestedAtIdx: index("idx_backup_jobs_status_requested_at").on(table.status, table.requestedAt),
-  updatedAtIdx: index("idx_backup_jobs_updated_at").on(table.updatedAt),
-}));
-
-export const monitorAlertIncidents = pgTable("monitor_alert_incidents", {
-  id: uuid("id").primaryKey(),
-  alertKey: text("alert_key").notNull(),
-  severity: text("severity").notNull(),
-  source: text("source"),
-  message: text("message").notNull(),
-  status: text("status").notNull().default("open"),
-  firstSeenAt: timestamp("first_seen_at").defaultNow().notNull(),
-  lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
-  resolvedAt: timestamp("resolved_at"),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => ({
-  openAlertKeyUnique: uniqueIndex("idx_monitor_alert_incidents_open_key_unique")
-    .on(table.alertKey)
-    .where(sql`${table.status} = 'open'`),
-  statusUpdatedAtIdx: index("idx_monitor_alert_incidents_status_updated_at").on(
-    table.status,
-    table.updatedAt.desc(),
-  ),
-  resolvedAtIdx: index("idx_monitor_alert_incidents_resolved_at").on(table.resolvedAt.desc()),
-}));
-
-export const settingCategories = pgTable("setting_categories", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: text("name").notNull(),
-  description: text("description"),
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => ({
-  nameUnique: uniqueIndex("setting_categories_name_unique").on(table.name),
-}));
-
-export const systemSettings = pgTable("system_settings", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  categoryId: uuid("category_id").references(() => settingCategories.id, { onDelete: "cascade" }),
-  key: text("key").notNull(),
-  label: text("label").notNull(),
-  description: text("description"),
-  type: text("type").notNull(),
-  value: text("value").notNull(),
-  defaultValue: text("default_value"),
-  isCritical: boolean("is_critical").default(false),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => ({
-  keyUnique: uniqueIndex("system_settings_key_unique").on(table.key),
-  categoryIdx: index("system_settings_category_id_idx").on(table.categoryId),
-}));
-
-export const settingOptions = pgTable("setting_options", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  settingId: uuid("setting_id").references(() => systemSettings.id, { onDelete: "cascade" }),
-  value: text("value").notNull(),
-  label: text("label").notNull(),
-}, (table) => ({
-  settingValueUnique: uniqueIndex("idx_setting_options_unique_value").on(table.settingId, table.value),
-  settingIdx: index("idx_setting_options_setting_id").on(table.settingId),
-}));
-
-export const roleSettingPermissions = pgTable("role_setting_permissions", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  role: text("role").notNull(),
-  settingKey: text("setting_key").notNull(),
-  canView: boolean("can_view").default(false),
-  canEdit: boolean("can_edit").default(false),
-}, (table) => ({
-  roleSettingUnique: uniqueIndex("idx_role_setting_permissions_unique").on(table.role, table.settingKey),
-}));
-
-export const settingVersions = pgTable("setting_versions", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  settingKey: text("setting_key").notNull(),
-  oldValue: text("old_value"),
-  newValue: text("new_value").notNull(),
-  changedBy: text("changed_by").notNull(),
-  changedAt: timestamp("changed_at").defaultNow(),
-}, (table) => ({
-  settingKeyChangedAtIdx: index("idx_setting_versions_key_time").on(table.settingKey, table.changedAt.desc()),
-}));
-
-export const featureFlags = pgTable("feature_flags", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  key: text("key").notNull(),
-  enabled: boolean("enabled").notNull().default(false),
-  description: text("description"),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => ({
-  keyUnique: uniqueIndex("feature_flags_key_unique").on(table.key),
-}));
-
-export const collectionRecords = pgTable("collection_records", {
-  id: uuid("id").primaryKey(),
-  customerName: text("customer_name").notNull(),
-  icNumber: text("ic_number").notNull(),
-  customerPhone: text("customer_phone").notNull(),
-  accountNumber: text("account_number").notNull(),
-  batch: text("batch").notNull(),
-  paymentDate: date("payment_date", { mode: "string" }).notNull(),
-  amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
-  receiptFile: text("receipt_file"),
-  receiptTotalAmount: bigint("receipt_total_amount", { mode: "number" }).notNull().default(0),
-  receiptValidationStatus: text("receipt_validation_status").notNull().default("needs_review"),
-  receiptValidationMessage: text("receipt_validation_message"),
-  receiptCount: integer("receipt_count").notNull().default(0),
-  duplicateReceiptFlag: boolean("duplicate_receipt_flag").notNull().default(false),
-  createdByLogin: text("created_by_login").notNull(),
-  collectionStaffNickname: text("collection_staff_nickname").notNull(),
-  staffUsername: text("staff_username").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => ({
-  paymentDateIdx: index("idx_collection_records_payment_date").on(table.paymentDate),
-  createdAtIdx: index("idx_collection_records_created_at").on(table.createdAt.desc()),
-  staffUsernameIdx: index("idx_collection_records_staff_username").on(table.staffUsername),
-  createdByLoginIdx: index("idx_collection_records_created_by_login").on(table.createdByLogin),
-  staffNicknameIdx: index("idx_collection_records_staff_nickname").on(table.collectionStaffNickname),
-  customerPhoneIdx: index("idx_collection_records_customer_phone").on(table.customerPhone),
-  paymentDateCreatedAtIdIdx: index("idx_collection_records_payment_created_id").on(
-    table.paymentDate,
-    table.createdAt,
-    table.id,
-  ),
-  createdByPaymentDateCreatedAtIdIdx: index("idx_collection_records_created_by_payment_created_id").on(
-    table.createdByLogin,
-    table.paymentDate,
-    table.createdAt,
-    table.id,
-  ),
-  staffNicknameLowerPaymentDateCreatedAtIdIdx: index("idx_collection_records_lower_staff_nickname_payment_created_id").using(
-    "btree",
-    sql`lower(${table.collectionStaffNickname})`,
-    table.paymentDate,
-    table.createdAt,
-    table.id,
-  ),
-  createdByLowerPaymentDateCreatedAtIdIdx: index("idx_collection_records_lower_created_by_payment_created_id").using(
-    "btree",
-    sql`lower(${table.createdByLogin})`,
-    table.paymentDate,
-    table.createdAt,
-    table.id,
-  ),
-}));
-
-export const collectionRecordReceipts = pgTable("collection_record_receipts", {
-  id: uuid("id").primaryKey(),
-  collectionRecordId: uuid("collection_record_id")
-    .notNull()
-    .references(() => collectionRecords.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  storagePath: text("storage_path").notNull(),
-  originalFileName: text("original_file_name").notNull(),
-  originalMimeType: text("original_mime_type").notNull(),
-  originalExtension: text("original_extension").notNull().default(""),
-  fileSize: bigint("file_size", { mode: "number" }).notNull().default(0),
-  receiptAmount: bigint("receipt_amount", { mode: "number" }),
-  extractedAmount: bigint("extracted_amount", { mode: "number" }),
-  extractionStatus: text("extraction_status").notNull().default("unprocessed"),
-  extractionConfidence: numeric("extraction_confidence", { precision: 5, scale: 4 }),
-  receiptDate: date("receipt_date", { mode: "string" }),
-  receiptReference: text("receipt_reference"),
-  fileHash: text("file_hash"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (table) => ({
-  recordStorageUnique: uniqueIndex("idx_collection_record_receipts_record_storage_unique").on(
-    table.collectionRecordId,
-    table.storagePath,
-  ),
-  recordFileHashUnique: uniqueIndex("idx_collection_record_receipts_record_file_hash_unique")
-    .on(table.collectionRecordId, table.fileHash),
-  fileHashIdx: index("idx_collection_record_receipts_file_hash")
-    .on(table.fileHash),
-  recordCreatedAtIdx: index("idx_collection_record_receipts_record_created_at").on(
-    table.collectionRecordId,
-    table.createdAt,
-  ),
-}));
-
-export const collectionRecordDailyRollups = pgTable("collection_record_daily_rollups", {
-  paymentDate: date("payment_date", { mode: "string" }).notNull(),
-  createdByLogin: text("created_by_login").notNull(),
-  collectionStaffNickname: text("collection_staff_nickname").notNull(),
-  totalRecords: integer("total_records").notNull().default(0),
-  totalAmount: numeric("total_amount", { precision: 14, scale: 2 }).notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => ({
-  slicePrimaryKey: primaryKey({
-    name: "idx_collection_record_daily_rollups_slice_unique",
-    columns: [table.paymentDate, table.createdByLogin, table.collectionStaffNickname],
-  }),
-  paymentDateIdx: index("idx_collection_record_daily_rollups_payment_date").on(table.paymentDate),
-  createdByPaymentDateIdx: index("idx_collection_record_daily_rollups_created_by_payment_date").on(
-    table.createdByLogin,
-    table.paymentDate,
-  ),
-  nicknameLowerPaymentDateIdx: index("idx_collection_record_daily_rollups_lower_nickname_payment_date").using(
-    "btree",
-    sql`lower(${table.collectionStaffNickname})`,
-    table.paymentDate,
-  ),
-}));
-
-export const collectionRecordMonthlyRollups = pgTable("collection_record_monthly_rollups", {
-  year: integer("year").notNull(),
-  month: integer("month").notNull(),
-  createdByLogin: text("created_by_login").notNull(),
-  collectionStaffNickname: text("collection_staff_nickname").notNull(),
-  totalRecords: integer("total_records").notNull().default(0),
-  totalAmount: numeric("total_amount", { precision: 14, scale: 2 }).notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => ({
-  slicePrimaryKey: primaryKey({
-    name: "idx_collection_record_monthly_rollups_slice_unique",
-    columns: [table.year, table.month, table.createdByLogin, table.collectionStaffNickname],
-  }),
-  yearMonthIdx: index("idx_collection_record_monthly_rollups_year_month").on(table.year, table.month),
-  createdByYearMonthIdx: index("idx_collection_record_monthly_rollups_created_by_year_month").on(
-    table.createdByLogin,
-    table.year,
-    table.month,
-  ),
-  nicknameLowerYearMonthIdx: index("idx_collection_record_monthly_rollups_lower_nickname_year_month").using(
-    "btree",
-    sql`lower(${table.collectionStaffNickname})`,
-    table.year,
-    table.month,
-  ),
-}));
-
-export const collectionRecordDailyRollupRefreshQueue = pgTable("collection_record_daily_rollup_refresh_queue", {
-  paymentDate: date("payment_date", { mode: "string" }).notNull(),
-  createdByLogin: text("created_by_login").notNull(),
-  collectionStaffNickname: text("collection_staff_nickname").notNull(),
-  status: text("status").notNull().default("queued"),
-  requestedAt: timestamp("requested_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  nextAttemptAt: timestamp("next_attempt_at").defaultNow().notNull(),
-  attemptCount: integer("attempt_count").notNull().default(0),
-  lastError: text("last_error"),
-}, (table) => ({
-  slicePrimaryKey: primaryKey({
-    name: "idx_collection_rollup_refresh_queue_slice_unique",
-    columns: [table.paymentDate, table.createdByLogin, table.collectionStaffNickname],
-  }),
-  statusNextAttemptIdx: index("idx_collection_rollup_refresh_queue_status_next_attempt").on(
-    table.status,
-    table.nextAttemptAt,
-  ),
-  updatedAtIdx: index("idx_collection_rollup_refresh_queue_updated_at").on(table.updatedAt),
-  nicknameLowerPaymentDateIdx: index("idx_collection_rollup_refresh_queue_lower_nickname_payment_date").using(
-    "btree",
-    sql`lower(${table.collectionStaffNickname})`,
-    table.paymentDate,
-  ),
-}));
-
-export const collectionStaffNicknames = pgTable("collection_staff_nicknames", {
-  id: uuid("id").primaryKey(),
-  nickname: text("nickname").notNull(),
-  isActive: boolean("is_active").notNull().default(true),
-  roleScope: text("role_scope").notNull().default("both"),
-  nicknamePasswordHash: text("nickname_password_hash"),
-  mustChangePassword: boolean("must_change_password").notNull().default(true),
-  passwordResetBySuperuser: boolean("password_reset_by_superuser").notNull().default(false),
-  passwordUpdatedAt: timestamp("password_updated_at"),
-  createdBy: text("created_by"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (table) => ({
-  nicknameLowerUnique: uniqueIndex("idx_collection_staff_nicknames_lower_unique").using(
-    "btree",
-    sql`lower(${table.nickname})`,
-  ),
-  activeIdx: index("idx_collection_staff_nicknames_active").on(table.isActive),
-  roleScopeIdx: index("idx_collection_staff_nicknames_role_scope").on(table.roleScope),
-  mustChangePasswordIdx: index("idx_collection_staff_nicknames_must_change_password").on(table.mustChangePassword),
-  passwordResetIdx: index("idx_collection_staff_nicknames_password_reset").on(table.passwordResetBySuperuser),
-}));
-
-export const adminGroups = pgTable("admin_groups", {
-  id: uuid("id").primaryKey(),
-  leaderNickname: text("leader_nickname").notNull(),
-  createdBy: text("created_by").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => ({
-  leaderNicknameLowerUnique: uniqueIndex("idx_admin_groups_leader_nickname_unique").using(
-    "btree",
-    sql`lower(${table.leaderNickname})`,
-  ),
-}));
-
-export const adminGroupMembers = pgTable("admin_group_members", {
-  id: uuid("id").primaryKey(),
-  adminGroupId: uuid("admin_group_id")
-    .notNull()
-    .references(() => adminGroups.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  memberNickname: text("member_nickname").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (table) => ({
-  groupMemberLowerUnique: uniqueIndex("idx_admin_group_members_group_member_unique").using(
-    "btree",
-    table.adminGroupId,
-    sql`lower(${table.memberNickname})`,
-  ),
-  memberLowerUnique: uniqueIndex("idx_admin_group_members_member_unique").using(
-    "btree",
-    sql`lower(${table.memberNickname})`,
-  ),
-  groupIdx: index("idx_admin_group_members_group").on(table.adminGroupId),
-}));
-
-export const collectionNicknameSessions = pgTable("collection_nickname_sessions", {
-  activityId: text("activity_id")
-    .primaryKey()
-    .references(() => userActivity.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  username: text("username").notNull(),
-  userRole: text("user_role").notNull(),
-  nickname: text("nickname").notNull(),
-  verifiedAt: timestamp("verified_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => ({
-  usernameIdx: index("idx_collection_nickname_sessions_username").on(table.username),
-  nicknameLowerIdx: index("idx_collection_nickname_sessions_nickname").using(
-    "btree",
-    sql`lower(${table.nickname})`,
-  ),
-  updatedAtIdx: index("idx_collection_nickname_sessions_updated_at").on(table.updatedAt),
-}));
-
-export const adminVisibleNicknames = pgTable("admin_visible_nicknames", {
-  id: uuid("id").primaryKey(),
-  adminUserId: text("admin_user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  nicknameId: uuid("nickname_id")
-    .notNull()
-    .references(() => collectionStaffNicknames.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  createdBySuperuser: text("created_by_superuser"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (table) => ({
-  adminNicknameUnique: uniqueIndex("idx_admin_visible_nicknames_admin_nickname_unique").on(
-    table.adminUserId,
-    table.nicknameId,
-  ),
-  adminIdx: index("idx_admin_visible_nicknames_admin").on(table.adminUserId),
-  nicknameIdx: index("idx_admin_visible_nicknames_nickname").on(table.nicknameId),
-}));
-
-export const collectionDailyTargets = pgTable("collection_daily_targets", {
-  id: uuid("id").primaryKey(),
-  username: text("username").notNull(),
-  year: integer("year").notNull(),
-  month: integer("month").notNull(),
-  monthlyTarget: numeric("monthly_target", { precision: 14, scale: 2 }).notNull().default("0"),
-  createdBy: text("created_by"),
-  updatedBy: text("updated_by"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => ({
-  userMonthLowerUnique: uniqueIndex("idx_collection_daily_targets_user_month_unique").using(
-    "btree",
-    sql`lower(${table.username})`,
-    table.year,
-    table.month,
-  ),
-  yearMonthIdx: index("idx_collection_daily_targets_year_month").on(table.year, table.month),
-}));
-
-export const collectionDailyCalendar = pgTable("collection_daily_calendar", {
-  id: uuid("id").primaryKey(),
-  year: integer("year").notNull(),
-  month: integer("month").notNull(),
-  day: integer("day").notNull(),
-  isWorkingDay: boolean("is_working_day").notNull().default(true),
-  isHoliday: boolean("is_holiday").notNull().default(false),
-  holidayName: text("holiday_name"),
-  createdBy: text("created_by"),
-  updatedBy: text("updated_by"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => ({
-  yearMonthDayUnique: uniqueIndex("idx_collection_daily_calendar_unique").on(
-    table.year,
-    table.month,
-    table.day,
-  ),
-  yearMonthIdx: index("idx_collection_daily_calendar_year_month").on(table.year, table.month),
-}));
-
-export const dataEmbeddings = pgTable("data_embeddings", {
-  id: text("id").primaryKey(),
-  importId: text("import_id")
-    .notNull()
-    .references(() => imports.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  rowId: text("row_id")
-    .notNull()
-    .references(() => dataRows.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  content: text("content").notNull(),
-  embedding: vector("embedding", { dimensions: 768 }).notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => ({
-  rowIdUnique: uniqueIndex("data_embeddings_row_id_unique").on(table.rowId),
-  importIdIdx: index("idx_data_embeddings_import_id").on(table.importId),
-  vectorIdx: index("idx_data_embeddings_vector").using("ivfflat", table.embedding.op("vector_cosine_ops")),
-}));
-
-export const aiConversations = pgTable("ai_conversations", {
-  id: text("id").primaryKey(),
-  createdBy: text("created_by").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const aiMessages = pgTable("ai_messages", {
-  id: text("id").primaryKey(),
-  conversationId: text("conversation_id")
-    .notNull()
-    .references(() => aiConversations.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  role: text("role").notNull(),
-  content: text("content").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => ({
-  conversationIdx: index("idx_ai_messages_conversation_id").on(table.conversationId),
-  conversationCreatedAtIdx: index("idx_ai_messages_conversation_created_at").on(
-    table.conversationId,
-    table.createdAt,
-  ),
-}));
-
-export const aiCategoryStats = pgTable("ai_category_stats", {
-  key: text("key").primaryKey(),
-  total: integer("total").notNull(),
-  samples: jsonb("samples").$type<Array<{ name: string; ic: string; source: string | null }>>(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => ({
-  updatedAtIdx: index("idx_ai_category_stats_updated_at").on(table.updatedAt),
-}));
-
-export const aiCategoryRules = pgTable("ai_category_rules", {
-  key: text("key").primaryKey(),
-  terms: text("terms").array().notNull().default(sql`'{}'::text[]`),
-  fields: text("fields").array().notNull().default(sql`'{}'::text[]`),
-  matchMode: text("match_mode").notNull().default("contains"),
-  enabled: boolean("enabled").notNull().default(true),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => ({
-  updatedAtIdx: index("idx_ai_category_rules_updated_at").on(table.updatedAt),
-}));
-
-export const aeonBranches = pgTable("aeon_branches", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  branchAddress: text("branch_address"),
-  phoneNumber: text("phone_number"),
-  faxNumber: text("fax_number"),
-  businessHour: text("business_hour"),
-  dayOpen: text("day_open"),
-  atmCdm: text("atm_cdm"),
-  inquiryAvailability: text("inquiry_availability"),
-  applicationAvailability: text("application_availability"),
-  aeonLounge: text("aeon_lounge"),
-  branchLat: doublePrecision("branch_lat").notNull(),
-  branchLng: doublePrecision("branch_lng").notNull(),
-}, (table) => ({
-  latLngIdx: index("idx_aeon_branches_lat_lng").on(table.branchLat, table.branchLng),
-  nameLowerUnique: uniqueIndex("idx_aeon_branches_name_unique").using(
-    "btree",
-    sql`lower(${table.name})`,
-  ),
-}));
-
-export const aeonBranchPostcodes = pgTable("aeon_branch_postcodes", {
-  postcode: text("postcode").primaryKey(),
-  lat: doublePrecision("lat").notNull(),
-  lng: doublePrecision("lng").notNull(),
-  sourceBranch: text("source_branch"),
-  state: text("state"),
-}, (table) => ({
-  postcodeIdx: index("idx_aeon_postcodes").on(table.postcode),
-}));
+export {
+  users,
+  accountActivationTokens,
+  passwordResetRequests,
+  imports,
+  dataRows,
+  userActivity,
+  bannedSessions,
+  auditLogs,
+  mutationIdempotencyKeys,
+  backups,
+  backupJobs,
+  monitorAlertIncidents,
+} from "./schema-postgres-core";
+export {
+  collectionRecords,
+  collectionRecordReceipts,
+  collectionRecordDailyRollups,
+  collectionRecordMonthlyRollups,
+  collectionRecordDailyRollupRefreshQueue,
+  collectionStaffNicknames,
+  adminGroups,
+  adminGroupMembers,
+  collectionNicknameSessions,
+  adminVisibleNicknames,
+  collectionDailyTargets,
+  collectionDailyCalendar,
+} from "./schema-postgres-collection";
+export {
+  dataEmbeddings,
+  aiConversations,
+  aiMessages,
+  aiCategoryStats,
+  aiCategoryRules,
+  aeonBranches,
+  aeonBranchPostcodes,
+} from "./schema-postgres-ai";
+export {
+  settingCategories,
+  systemSettings,
+  settingOptions,
+  roleSettingPermissions,
+  settingVersions,
+  featureFlags,
+} from "./schema-postgres-settings";
 
 export const insertUserSchema = z.object({
   username: z.string().min(1, "Username is required"),

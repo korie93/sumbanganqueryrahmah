@@ -35,6 +35,10 @@ export async function getCollectionNicknameSummary(filters: {
   to?: string;
   nicknames: string[];
   summaryOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+  limit?: number;
+  offset?: number;
 }, options?: CollectionReportRequestOptions) {
   const params = new URLSearchParams();
   if (filters.from) params.set("from", filters.from);
@@ -45,6 +49,16 @@ export async function getCollectionNicknameSummary(filters: {
   );
   if (filters.summaryOnly) {
     params.set("summaryOnly", "1");
+  }
+  if (typeof filters.page === "number" && Number.isFinite(filters.page)) {
+    params.set("page", String(filters.page));
+  }
+  const pageSize = filters.pageSize ?? filters.limit;
+  if (typeof pageSize === "number" && Number.isFinite(pageSize)) {
+    params.set("pageSize", String(pageSize));
+  }
+  if (typeof filters.offset === "number" && Number.isFinite(filters.offset)) {
+    params.set("offset", String(filters.offset));
   }
   const response = await apiRequest(
     "GET",
@@ -57,6 +71,10 @@ export async function getCollectionNicknameSummary(filters: {
     nicknames: string[];
     totalRecords: number;
     totalAmount: number;
+    page: number;
+    pageSize: number;
+    limit: number;
+    offset: number;
     nicknameTotals: Array<{
       nickname: string;
       totalRecords: number;

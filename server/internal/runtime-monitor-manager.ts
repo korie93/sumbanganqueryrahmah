@@ -18,11 +18,16 @@ import {
 import { buildInternalMonitorAlerts } from "./runtime-monitor-alerts";
 import {
   clamp,
-  getRamPercent,
   percentile,
-  roundMetric,
   sendWorkerMessage,
 } from "./runtime-monitor-metrics";
+import {
+  appendCappedHistoryValue,
+  buildInternalRuntimeMonitorSnapshot,
+  buildWorkerMetricsPayload,
+  calculateRuntimeCpuPercent,
+  toRuntimeIntelligenceSnapshot,
+} from "./runtime-monitor-manager-utils";
 import type {
   AttachProcessHandlersOptions,
   GcCapableGlobal,
@@ -329,26 +334,6 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     const exportFailureRate = clamp(circuitExport.getSnapshot().failureRate * 100, 0, 100);
     const errorRate = Math.max(aiFailureRate, dbFailureRate, exportFailureRate);
 
-    const cpu = roundMetric(cpuPercent, 2);
-    const ram = getRamPercent();
-    const dbLatency = roundMetric(lastDbLatencyMs, 2);
-    const aiLatency = roundMetric(getEffectiveAiLatencyMs(), 2);
-    const loopLag = roundMetric(getEventLoopLagMs(), 2);
-
-    let bottleneckType = "NONE";
-    const pressureScore = [
-      { type: "CPU", score: cpu / 100 },
-      { type: "RAM", score: ram / 100 },
-      { type: "DB", score: dbLatency / 1200 },
-      { type: "AI", score: aiLatency / 1500 },
-      { type: "EVENT_LOOP", score: loopLag / 180 },
-      { type: "ERRORS", score: errorRate / 10 },
-    ].sort((a, b) => b.score - a.score)[0];
-
-    if (pressureScore && pressureScore.score >= 0.5) {
-      bottleneckType = pressureScore.type;
-    }
-
     const localOpenCircuitCount = [
       circuitAi.getState(),
       circuitDb.getState(),
@@ -359,72 +344,39 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
       + Number(controlState.circuits?.dbOpenWorkers || 0)
       + Number(controlState.circuits?.exportOpenWorkers || 0);
 
-    return {
-      score: roundMetric(controlState.healthScore, 2),
-      mode: controlState.mode,
-      cpuPercent: cpu,
-      ramPercent: ram,
-      p95LatencyMs: roundMetric(p95LatencyMs, 2),
-      errorRate: roundMetric(errorRate, 2),
-      dbLatencyMs: dbLatency,
-      aiLatencyMs: aiLatency,
-      eventLoopLagMs: loopLag,
-      requestRate: roundMetric(reqRatePerSec, 2),
+    return buildInternalRuntimeMonitorSnapshot({
       activeRequests,
-      queueLength: options.getSearchQueueLength(),
-      workerCount: controlState.workerCount,
-      maxWorkers: controlState.maxWorkers,
-      dbProtection: getDbProtection(),
-      slowQueryCount,
+      aiFailureRate,
+      aiLatencyMs: getEffectiveAiLatencyMs(),
+      clusterOpenCircuitCount,
+      controlState,
+      cpuPercent,
       dbConnections: Math.max(
         0,
         Number(options.pool.totalCount || 0) + Number(options.pool.waitingCount || 0),
       ),
-      aiFailRate: roundMetric(aiFailureRate, 2),
+      dbLatencyMs: lastDbLatencyMs,
+      dbProtection: getDbProtection(),
+      errorRate,
+      eventLoopLagMs: getEventLoopLagMs(),
+      localOpenCircuitCount,
+      p95LatencyMs,
+      queueLength: options.getSearchQueueLength(),
+      requestRate: reqRatePerSec,
+      rollupRefreshSnapshot,
+      slowQueryCount,
       status401Count,
       status403Count,
       status429Count,
-      localOpenCircuitCount,
-      clusterOpenCircuitCount,
-      bottleneckType,
-      rollupRefreshPendingCount: rollupRefreshSnapshot.pendingCount,
-      rollupRefreshRunningCount: rollupRefreshSnapshot.runningCount,
-      rollupRefreshRetryCount: rollupRefreshSnapshot.retryCount,
-      rollupRefreshOldestPendingAgeMs: roundMetric(rollupRefreshSnapshot.oldestPendingAgeMs, 0),
-      updatedAt: controlState.updatedAt,
-    };
+    });
   }
 
   function appendIntelligenceValue(key: keyof SystemHistory, value: number) {
-    if (!Number.isFinite(value)) return;
-    const series = intelligenceHistory[key];
-    series.push(value);
-    if (series.length > MAX_INTELLIGENCE_HISTORY) {
-      series.splice(0, series.length - MAX_INTELLIGENCE_HISTORY);
-    }
+    appendCappedHistoryValue(intelligenceHistory[key], value, MAX_INTELLIGENCE_HISTORY);
   }
 
   function toIntelligenceSnapshot(snapshot: InternalMonitorSnapshot): SystemSnapshot {
-    return {
-      timestamp: snapshot.updatedAt || Date.now(),
-      score: snapshot.score,
-      mode: snapshot.mode,
-      cpuPercent: snapshot.cpuPercent,
-      ramPercent: snapshot.ramPercent,
-      p95LatencyMs: snapshot.p95LatencyMs,
-      errorRate: snapshot.errorRate,
-      dbLatencyMs: snapshot.dbLatencyMs,
-      aiLatencyMs: snapshot.aiLatencyMs,
-      eventLoopLagMs: snapshot.eventLoopLagMs,
-      requestRate: snapshot.requestRate,
-      activeRequests: snapshot.activeRequests,
-      queueSize: snapshot.queueLength,
-      workerCount: snapshot.workerCount,
-      maxWorkers: snapshot.maxWorkers,
-      dbConnections: snapshot.dbConnections,
-      aiFailRate: snapshot.aiFailRate,
-      bottleneckType: snapshot.bottleneckType,
-    };
+    return toRuntimeIntelligenceSnapshot(snapshot);
   }
 
   async function runIntelligenceCycle() {
@@ -577,8 +529,11 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
       const currentCpu = process.cpuUsage();
       const cpuDeltaMicros = (currentCpu.user - lastCpuUsage.user) + (currentCpu.system - lastCpuUsage.system);
       const elapsedMs = Math.max(1, now - lastCpuTs);
-      const cpuCorePercent = ((cpuDeltaMicros / 1000) / elapsedMs) * 100;
-      cpuPercent = clamp(cpuCorePercent / Math.max(1, controlState.workerCount || 1), 0, 100);
+      cpuPercent = calculateRuntimeCpuPercent({
+        cpuDeltaMicros,
+        elapsedMs,
+        workerCount: controlState.workerCount || 1,
+      });
       lastCpuUsage = currentCpu;
       lastCpuTs = now;
 
@@ -586,28 +541,28 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
         const mem = process.memoryUsage();
         sendWorkerMessage(ipcProcess, {
           type: "worker-metrics",
-          payload: {
-            workerId: Number(process.env.NODE_UNIQUE_ID || 0),
-            pid: process.pid,
-            cpuPercent,
-            reqRate: reqRatePerSec,
-            latencyP95Ms: percentile(latencySamples, 95),
-            eventLoopLagMs: getEventLoopLagMs(),
+          payload: buildWorkerMetricsPayload({
             activeRequests,
-            queueLength: options.getSearchQueueLength(),
-            heapUsedMB: mem.heapUsed / (1024 * 1024),
-            heapTotalMB: mem.heapTotal / (1024 * 1024),
-            oldSpaceMB: mem.heapUsed / (1024 * 1024),
-            gcPerMin: gcPerMinute,
-            dbLatencyMs: lastDbLatencyMs,
+            aiFailureRate: circuitAi.getSnapshot().failureRate,
             aiLatencyMs: getEffectiveAiLatencyMs(),
-            ts: Date.now(),
-            circuit: {
-              ai: { state: circuitAi.getState(), failureRate: circuitAi.getSnapshot().failureRate },
-              db: { state: circuitDb.getState(), failureRate: circuitDb.getSnapshot().failureRate },
-              export: { state: circuitExport.getState(), failureRate: circuitExport.getSnapshot().failureRate },
-            },
-          },
+            aiState: circuitAi.getState(),
+            cpuPercent,
+            dbFailureRate: circuitDb.getSnapshot().failureRate,
+            dbLatencyMs: lastDbLatencyMs,
+            dbState: circuitDb.getState(),
+            eventLoopLagMs: getEventLoopLagMs(),
+            exportFailureRate: circuitExport.getSnapshot().failureRate,
+            exportState: circuitExport.getState(),
+            gcPerMinute,
+            heapTotalMB: mem.heapTotal / (1024 * 1024),
+            heapUsedMB: mem.heapUsed / (1024 * 1024),
+            latencyP95Ms: percentile(latencySamples, 95),
+            pid: process.pid,
+            queueLength: options.getSearchQueueLength(),
+            requestRate: reqRatePerSec,
+            timestamp: Date.now(),
+            workerId: Number(process.env.NODE_UNIQUE_ID || 0),
+          }),
         });
       }
 

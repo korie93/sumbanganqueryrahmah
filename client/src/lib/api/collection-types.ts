@@ -129,6 +129,8 @@ export type CollectionRecordListResponse = {
   records: CollectionRecord[];
   total: number;
   totalAmount: number;
+  page: number;
+  pageSize: number;
   limit: number;
   offset: number;
   nextCursor: string | null;

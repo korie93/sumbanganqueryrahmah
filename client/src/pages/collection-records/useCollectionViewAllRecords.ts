@@ -91,7 +91,7 @@ export function useCollectionViewAllRecords({
   const handleOpenViewAll = useCallback(() => {
     if (viewAllLoading) return;
     setViewAllPage(1);
-    setViewAllFiltersSnapshot(buildCurrentFilters(searchInput.trim(), viewAllPageSize, 0));
+    setViewAllFiltersSnapshot(buildCurrentFilters(searchInput.trim()));
     setViewAllOpen(true);
   }, [buildCurrentFilters, searchInput, viewAllLoading, viewAllPageSize]);
 
@@ -109,9 +109,12 @@ export function useCollectionViewAllRecords({
 
     const requestId = ++viewAllRequestIdRef.current;
     const requestFilters = {
-      ...viewAllFiltersSnapshot,
-      limit: viewAllPageSize,
-      offset: (viewAllPage - 1) * viewAllPageSize,
+      from: viewAllFiltersSnapshot.from,
+      to: viewAllFiltersSnapshot.to,
+      search: viewAllFiltersSnapshot.search,
+      nickname: viewAllFiltersSnapshot.nickname,
+      page: viewAllPage,
+      pageSize: viewAllPageSize,
     };
     const cacheKey = buildCollectionRecordsCacheKey(requestFilters);
     const cachedEntry = viewAllCacheRef.current.get(cacheKey);

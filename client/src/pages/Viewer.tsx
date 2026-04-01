@@ -1,35 +1,42 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle } from "lucide-react";
-import { type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
-import {
-  OperationalMetric,
-  OperationalPage,
-  OperationalSectionCard,
-  OperationalSummaryStrip,
-} from "@/components/layout/OperationalPage";
-import { Button } from "@/components/ui/button";
+import { OperationalPage } from "@/components/layout/OperationalPage";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { getImportData } from "@/lib/api";
-import { ViewerDataTable } from "@/pages/viewer/ViewerDataTable";
-import { ViewerEmptyState } from "@/pages/viewer/ViewerEmptyState";
-import { ViewerFiltersPanel } from "@/pages/viewer/ViewerFiltersPanel";
-import { ViewerFooter } from "@/pages/viewer/ViewerFooter";
-import { ViewerLoadingSkeleton } from "@/pages/viewer/ViewerLoadingSkeleton";
+import { ViewerContent } from "@/pages/viewer/ViewerContent";
 import { ViewerPageHeader } from "@/pages/viewer/ViewerPageHeader";
-import { ViewerSearchBar } from "@/pages/viewer/ViewerSearchBar";
-import { resolveViewerExportBlockReason } from "@/pages/viewer/export-guards";
 import {
   exportViewerRowsToCsv,
   exportViewerRowsToExcel,
   exportViewerRowsToPdf,
 } from "@/pages/viewer/export";
 import {
+  appendViewerFilter,
+  removeViewerFilterAt,
+  updateViewerFilterAt,
+} from "@/pages/viewer/viewer-filter-state-utils";
+import {
   buildViewerActiveFilterChips,
-  isAbortError,
   normalizeViewerPageResult,
   resolveViewerImportName,
 } from "@/pages/viewer/page-utils";
+import { executeViewerExport } from "@/pages/viewer/viewer-export-actions";
 import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
+import {
+  loadViewerPagedExportRows,
+  resolveViewerImmediateExportRows,
+} from "@/pages/viewer/viewer-export-loader";
+import {
+  deselectViewerColumns,
+  getViewerActiveColumnFilters,
+  getViewerGridTemplateColumns,
+  getViewerPageMetrics,
+  getViewerSelectAllFilteredRowIds,
+  getViewerVirtualTableMinWidth,
+  getViewerVisibleHeaders,
+  pruneViewerSelectedRowIds,
+  toggleViewerColumnSelection,
+  toggleViewerRowSelection,
+} from "@/pages/viewer/viewer-state-utils";
 import { extractHeadersFromRows, filterViewerRows } from "@/pages/viewer/utils";
 
 interface ViewerProps {
@@ -84,7 +91,7 @@ export default function Viewer({
   const [pageCursorHistory, setPageCursorHistory] = useState<Array<string | null>>([null]);
 
   const mountedRef = useRef(true);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const rowsRef = useRef<DataRowWithId[]>([]);
   const activeRequestIdRef = useRef(0);
   const exportInFlightRef = useRef<"excel" | "pdf" | null>(null);
@@ -317,11 +324,7 @@ export default function Viewer({
   ]);
 
   const activeColumnFilters = useMemo(
-    () =>
-      columnFilters.filter((filter) => {
-        const normalizedValue = filter.value.trim();
-        return filter.column.trim() !== "" && normalizedValue !== "";
-      }),
+    () => getViewerActiveColumnFilters(columnFilters),
     [columnFilters],
   );
 
@@ -334,7 +337,7 @@ export default function Viewer({
   }, [SEARCH_DEBOUNCE_MS, activeColumnFilters]);
 
   const visibleHeaders = useMemo(
-    () => headers.filter((header) => selectedColumns.has(header)),
+    () => getViewerVisibleHeaders(headers, selectedColumns),
     [headers, selectedColumns],
   );
   const isSearchBelowMinLength =
@@ -351,36 +354,27 @@ export default function Viewer({
   const rowHeightPx = 48;
   const viewportHeightPx = 520;
   const virtualTableMinWidth = useMemo(
-    () => Math.max(900, 100 + visibleHeaders.length * 180),
+    () => getViewerVirtualTableMinWidth(visibleHeaders.length),
     [visibleHeaders.length],
   );
   const gridTemplateColumns = useMemo(
-    () => `44px 56px repeat(${Math.max(1, visibleHeaders.length)}, minmax(180px, 1fr))`,
+    () => getViewerGridTemplateColumns(visibleHeaders.length),
     [visibleHeaders.length],
   );
-  const totalPages = Math.max(1, Math.ceil(totalRows / Math.max(1, currentPageSize)));
-  const pageStart = totalRows === 0 ? 0 : (currentPage - 1) * currentPageSize + 1;
-  const pageEnd = totalRows === 0 ? 0 : Math.min(totalRows, pageStart + rows.length - 1);
-  const hasPreviousPage = currentPage > 1;
-  const hasNextPage = nextCursor !== null;
+  const { totalPages, pageStart, pageEnd, hasPreviousPage, hasNextPage } = useMemo(
+    () =>
+      getViewerPageMetrics({
+        totalRows,
+        currentPage,
+        currentPageSize,
+        loadedRowsCount: rows.length,
+        nextCursor,
+      }),
+    [currentPage, currentPageSize, nextCursor, rows.length, totalRows],
+  );
 
   useEffect(() => {
-    setSelectedRowIds((previous) => {
-      if (previous.size === 0) return previous;
-      const availableIds = new Set(rows.map((row) => row.__rowId));
-      let changed = false;
-      const next = new Set<number>();
-
-      previous.forEach((id) => {
-        if (availableIds.has(id)) {
-          next.add(id);
-        } else {
-          changed = true;
-        }
-      });
-
-      return changed ? next : previous;
-    });
+    setSelectedRowIds((previous) => pruneViewerSelectedRowIds(previous, rows));
   }, [rows]);
 
   const handlePrevPage = useCallback(() => {
@@ -405,24 +399,15 @@ export default function Viewer({
   }, [clearSelectionState, currentPage, fetchData, importId, loadingMore, nextCursor]);
 
   const addFilter = useCallback(() => {
-    if (headers.length > 0) {
-      setColumnFilters((previous) => [
-        ...previous,
-        { column: headers[0], operator: "contains", value: "" },
-      ]);
-    }
+    setColumnFilters((previous) => appendViewerFilter(previous, headers));
   }, [headers]);
 
   const updateFilter = useCallback((index: number, field: keyof ColumnFilter, value: string) => {
-    setColumnFilters((previous) =>
-      previous.map((filter, filterIndex) =>
-        filterIndex === index ? { ...filter, [field]: value } : filter,
-      ),
-    );
+    setColumnFilters((previous) => updateViewerFilterAt(previous, index, field, value));
   }, []);
 
   const removeFilter = useCallback((index: number) => {
-    setColumnFilters((previous) => previous.filter((_, filterIndex) => filterIndex !== index));
+    setColumnFilters((previous) => removeViewerFilterAt(previous, index));
   }, []);
 
   const clearAllFilters = useCallback(() => {
@@ -457,17 +442,7 @@ export default function Viewer({
   }, [ROWS_PER_PAGE, cancelActiveFetch, clearSelectionState]);
 
   const toggleColumn = (column: string) => {
-    setSelectedColumns((previous) => {
-      const next = new Set(previous);
-      if (next.has(column)) {
-        if (next.size > 1) {
-          next.delete(column);
-        }
-      } else {
-        next.add(column);
-      }
-      return next;
-    });
+    setSelectedColumns((previous) => toggleViewerColumnSelection(previous, column));
   };
 
   const selectAllColumns = () => {
@@ -475,21 +450,11 @@ export default function Viewer({
   };
 
   const deselectAllColumns = () => {
-    if (headers.length > 0) {
-      setSelectedColumns(new Set([headers[0]]));
-    }
+    setSelectedColumns(deselectViewerColumns(headers));
   };
 
   const toggleRowSelection = useCallback((rowId: number) => {
-    setSelectedRowIds((previous) => {
-      const next = new Set(previous);
-      if (next.has(rowId)) {
-        next.delete(rowId);
-      } else {
-        next.add(rowId);
-      }
-      return next;
-    });
+    setSelectedRowIds((previous) => toggleViewerRowSelection(previous, rowId));
     setSelectAllFiltered(false);
   }, []);
 
@@ -500,54 +465,44 @@ export default function Viewer({
       return;
     }
 
-    setSelectedRowIds(new Set(filteredRows.map((row) => row.__rowId)));
+    setSelectedRowIds(getViewerSelectAllFilteredRowIds(filteredRows));
     setSelectAllFiltered(true);
   }, [filteredRows, selectAllFiltered]);
 
   const loadRowsForExport = useCallback(async (exportFiltered = false, exportSelected = false) => {
-    if (exportSelected) {
-      return rows.filter((row) => selectedRowIds.has(row.__rowId));
-    }
+    const immediateRows = resolveViewerImmediateExportRows({
+      rows,
+      filteredRows,
+      selectedRowIds,
+      exportFiltered,
+      exportSelected,
+    });
 
-    if (exportFiltered) {
-      return filteredRows;
+    if (exportSelected || exportFiltered) {
+      return immediateRows;
     }
 
     if (!importId || totalRows <= rows.length) {
-      return rows;
+      return immediateRows;
     }
 
     exportAbortControllerRef.current?.abort();
     const controller = new AbortController();
     exportAbortControllerRef.current = controller;
-    const exportRows: DataRowWithId[] = [];
-    let pageToLoad = 1;
-    let cursorToLoad: string | null = null;
 
     try {
-      while (true) {
-        const response = await getImportData(importId, pageToLoad, ROWS_PER_PAGE, debouncedSearch, {
-          signal: controller.signal,
-          cursor: cursorToLoad || undefined,
-          columnFilters: debouncedColumnFilters,
-        });
-        const normalizedPage = normalizeViewerPageResult(response ?? {}, pageToLoad, ROWS_PER_PAGE);
-
-        if (normalizedPage.rows.length === 0) {
-          break;
-        }
-
-        exportRows.push(...normalizedPage.rows);
-
-        if (!normalizedPage.nextCursor) {
-          break;
-        }
-
-        cursorToLoad = normalizedPage.nextCursor;
-        pageToLoad = normalizedPage.page + 1;
-      }
-
-      return exportRows;
+      return await loadViewerPagedExportRows({
+        pageSize: ROWS_PER_PAGE,
+        search: debouncedSearch,
+        columnFilters: debouncedColumnFilters,
+        signal: controller.signal,
+        getPage: ({ page, cursor, signal, search, columnFilters }) =>
+          getImportData(importId, page, ROWS_PER_PAGE, search, {
+            signal,
+            cursor,
+            columnFilters,
+          }),
+      });
     } finally {
       if (exportAbortControllerRef.current === controller) {
         exportAbortControllerRef.current = null;
@@ -555,7 +510,7 @@ export default function Viewer({
     }
   }, [ROWS_PER_PAGE, debouncedColumnFilters, debouncedSearch, filteredRows, importId, rows, selectedRowIds, totalRows]);
 
-  const activeFilterChips = useMemo<ActiveFilterChip[]>(
+  const activeFilterChips = useMemo(
     () =>
       buildViewerActiveFilterChips({
         search,
@@ -570,124 +525,89 @@ export default function Viewer({
   );
 
   const exportToCSV = async (exportFiltered = false, exportSelected = false) => {
-    const blockReason = resolveViewerExportBlockReason({
+    await executeViewerExport({
+      kind: "CSV",
+      exportFiltered,
+      exportSelected,
       totalRows,
       filteredRowsLength: filteredRows.length,
       selectedRowsLength: selectedRowIds.size,
-      exportFiltered,
-      exportSelected,
       exportingExcel,
       exportingPdf,
+      isAnotherExportInFlight: exportInFlightRef.current !== null,
+      loadRows: loadRowsForExport,
+      performExport: (rowsToExport) => {
+        exportViewerRowsToCsv({
+          headers: visibleHeaders,
+          rows: rowsToExport,
+          importName,
+          exportFiltered,
+          exportSelected,
+        });
+      },
     });
-    if (blockReason === "busy" || exportInFlightRef.current) return;
-    if (blockReason === "no_data") return;
-
-    try {
-      const dataToExport = await loadRowsForExport(exportFiltered, exportSelected);
-      if (dataToExport.length === 0) return;
-
-      exportViewerRowsToCsv({
-        headers: visibleHeaders,
-        rows: dataToExport,
-        importName,
-        exportFiltered,
-        exportSelected,
-      });
-    } catch (exportError) {
-      if (isAbortError(exportError)) {
-        return;
-      }
-      console.error("Failed to export CSV:", exportError);
-      alert(
-        `Failed to export CSV: ${
-          exportError instanceof Error ? exportError.message : "Unknown error"
-        }`,
-      );
-    }
   };
 
   const exportToPDF = async (exportFiltered = false, exportSelected = false) => {
-    const blockReason = resolveViewerExportBlockReason({
+    await executeViewerExport({
+      kind: "PDF",
+      exportFiltered,
+      exportSelected,
       totalRows,
       filteredRowsLength: filteredRows.length,
       selectedRowsLength: selectedRowIds.size,
-      exportFiltered,
-      exportSelected,
       exportingExcel,
       exportingPdf,
+      isAnotherExportInFlight: exportInFlightRef.current !== null,
+      beforeRun: () => {
+        exportInFlightRef.current = "pdf";
+        setExportingPdf(true);
+      },
+      afterRun: () => {
+        exportInFlightRef.current = null;
+        setExportingPdf(false);
+      },
+      loadRows: loadRowsForExport,
+      performExport: (rowsToExport) =>
+        exportViewerRowsToPdf({
+          headers: visibleHeaders,
+          rows: rowsToExport,
+          importName,
+          exportFiltered,
+          exportSelected,
+        }),
     });
-    if (blockReason === "busy" || exportInFlightRef.current) return;
-    if (blockReason === "no_data") return;
-
-    exportInFlightRef.current = "pdf";
-    setExportingPdf(true);
-    try {
-      const dataToExport = await loadRowsForExport(exportFiltered, exportSelected);
-      if (dataToExport.length === 0) return;
-
-      await exportViewerRowsToPdf({
-        headers: visibleHeaders,
-        rows: dataToExport,
-        importName,
-        exportFiltered,
-        exportSelected,
-      });
-    } catch (exportError) {
-      if (isAbortError(exportError)) {
-        return;
-      }
-      console.error("Failed to export PDF:", exportError);
-      alert(
-        `Failed to export PDF: ${
-          exportError instanceof Error ? exportError.message : "Unknown error"
-        }`,
-      );
-    } finally {
-      exportInFlightRef.current = null;
-      setExportingPdf(false);
-    }
   };
 
   const exportToExcel = async (exportFiltered = false, exportSelected = false) => {
-    const blockReason = resolveViewerExportBlockReason({
+    await executeViewerExport({
+      kind: "Excel",
+      exportFiltered,
+      exportSelected,
       totalRows,
       filteredRowsLength: filteredRows.length,
       selectedRowsLength: selectedRowIds.size,
-      exportFiltered,
-      exportSelected,
       exportingExcel,
       exportingPdf,
+      isAnotherExportInFlight: exportInFlightRef.current !== null,
+      beforeRun: () => {
+        exportInFlightRef.current = "excel";
+        setExportingExcel(true);
+      },
+      afterRun: () => {
+        exportInFlightRef.current = null;
+        setExportingExcel(false);
+      },
+      loadRows: loadRowsForExport,
+      performExport: (rowsToExport) =>
+        exportViewerRowsToExcel({
+          headers: visibleHeaders,
+          rows: rowsToExport,
+          importName,
+          exportFiltered,
+          exportSelected,
+        }),
     });
-    if (blockReason === "busy" || exportInFlightRef.current) return;
-    if (blockReason === "no_data") return;
-
-    exportInFlightRef.current = "excel";
-    setExportingExcel(true);
-    try {
-      const dataToExport = await loadRowsForExport(exportFiltered, exportSelected);
-      if (dataToExport.length === 0) return;
-
-      await exportViewerRowsToExcel({
-        headers: visibleHeaders,
-        rows: dataToExport,
-        importName,
-        exportFiltered,
-        exportSelected,
-      });
-    } catch (exportError) {
-      if (isAbortError(exportError)) {
-        return;
-      }
-      console.error("Failed to export Excel:", exportError);
-      alert(
-        `Failed to export Excel: ${
-          exportError instanceof Error ? exportError.message : "Unknown error"
-        }`,
-      );
-    } finally {
-      exportInFlightRef.current = null;
-      setExportingExcel(false);
-    }
   };
 
   return (
@@ -726,114 +646,54 @@ export default function Viewer({
         }}
       />
 
-      {rows.length > 0 ? (
-        <OperationalSummaryStrip>
-          <OperationalMetric
-            label="Page rows"
-            value={rows.length}
-            supporting={totalRows > 0 ? `Rows ${pageStart}-${pageEnd} of ${totalRows}` : "No rows loaded"}
-          />
-          <OperationalMetric
-            label="Visible columns"
-            value={`${visibleHeaders.length}/${headers.length || visibleHeaders.length}`}
-            supporting="Current table layout"
-          />
-          <OperationalMetric
-            label="Selected rows"
-            value={selectedRowIds.size}
-            supporting={selectedRowIds.size > 0 ? "Ready for focused export" : "No rows selected"}
-          />
-        </OperationalSummaryStrip>
-      ) : null}
-
-      {rows.length > 0 && showFilters ? (
-        <ViewerFiltersPanel
-          headers={headers}
-          columnFilters={columnFilters}
-          onAddFilter={addFilter}
-          onClearAllFilters={clearAllFilters}
-          onUpdateFilter={updateFilter}
-          onRemoveFilter={removeFilter}
-        />
-      ) : null}
-
-      {error ? (
-        <OperationalSectionCard className="border-destructive/35 bg-destructive/5" contentClassName="space-y-0">
-          <div className="flex flex-wrap items-center gap-3 text-destructive">
-            <AlertCircle className="h-5 w-5" />
-            <span className="text-sm font-medium">{error}</span>
-            <Button variant="ghost" onClick={() => onNavigate("saved")} className="ml-auto text-destructive">
-              Back to Saved Imports
-            </Button>
-          </div>
-        </OperationalSectionCard>
-      ) : null}
-
-      {loading ? (
-        <ViewerLoadingSkeleton />
-      ) : rows.length === 0 && !error ? (
-        <ViewerEmptyState
-          emptyHint={emptyHint}
-          isSearchBelowMinLength={isSearchBelowMinLength}
-          minSearchLength={MIN_SEARCH_LENGTH}
-        />
-      ) : (
-        <OperationalSectionCard
-          title="Dataset rows"
-          description="Search the dataset, review one page at a time, and export only what you need."
-          contentClassName="space-y-4"
-        >
-          {rows.length > 0 ? (
-            <ViewerSearchBar
-              search={search}
-              filteredRowsCount={filteredRows.length}
-              rowsCount={rows.length}
-              showResultsSummary={columnFilters.length > 0 || isServerSearchActive}
-              activeFilters={activeFilterChips}
-              searchInputRef={searchInputRef}
-              onClearAllFilters={clearAllFilters}
-              onSearchChange={(value) => {
-                setSearch(value);
-                setCurrentPage(1);
-              }}
-            />
-          ) : null}
-
-          <ViewerDataTable
-            debouncedSearch={debouncedSearch}
-            enableVirtualRows={enableVirtualRows}
-            filteredRows={filteredRows}
-            gridTemplateColumns={gridTemplateColumns}
-            minSearchLength={MIN_SEARCH_LENGTH}
-            onToggleRowSelection={toggleRowSelection}
-            onToggleSelectAllFiltered={toggleSelectAllFiltered}
-            rowHeightPx={rowHeightPx}
-            selectedRowIds={selectedRowIds}
-            selectAllFiltered={selectAllFiltered}
-            virtualTableMinWidth={virtualTableMinWidth}
-            viewportHeightPx={viewportHeightPx}
-            visibleHeaders={visibleHeaders}
-          />
-
-          <ViewerFooter
-            filteredRowsCount={filteredRows.length}
-            rowsCount={rows.length}
-            totalRows={totalRows}
-            currentPage={currentPage}
-            totalPages={totalPages}
-            pageStart={pageStart}
-            pageEnd={pageEnd}
-            selectedRowCount={selectedRowIds.size}
-            hasPageFilterSubset={hasPageFilterSubset}
-            hasNextPage={hasNextPage}
-            hasPreviousPage={hasPreviousPage}
-            loadingMore={loadingMore}
-            onClearSelection={clearSelectionState}
-            onPrevPage={handlePrevPage}
-            onNextPage={handleNextPage}
-          />
-        </OperationalSectionCard>
-      )}
+      <ViewerContent
+        rows={rows}
+        headers={headers}
+        visibleHeaders={visibleHeaders}
+        selectedRowIds={selectedRowIds}
+        totalRows={totalRows}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        pageStart={pageStart}
+        pageEnd={pageEnd}
+        showFilters={showFilters}
+        columnFilters={columnFilters}
+        error={error}
+        loading={loading}
+        emptyHint={emptyHint}
+        isSearchBelowMinLength={isSearchBelowMinLength}
+        minSearchLength={MIN_SEARCH_LENGTH}
+        search={search}
+        filteredRows={filteredRows}
+        showResultsSummary={columnFilters.length > 0 || isServerSearchActive}
+        activeFilters={activeFilterChips}
+        searchInputRef={searchInputRef}
+        debouncedSearch={debouncedSearch}
+        enableVirtualRows={enableVirtualRows}
+        gridTemplateColumns={gridTemplateColumns}
+        rowHeightPx={rowHeightPx}
+        selectAllFiltered={selectAllFiltered}
+        virtualTableMinWidth={virtualTableMinWidth}
+        viewportHeightPx={viewportHeightPx}
+        hasPageFilterSubset={hasPageFilterSubset}
+        hasNextPage={hasNextPage}
+        hasPreviousPage={hasPreviousPage}
+        loadingMore={loadingMore}
+        onBackToSaved={() => onNavigate("saved")}
+        onAddFilter={addFilter}
+        onClearAllFilters={clearAllFilters}
+        onUpdateFilter={updateFilter}
+        onRemoveFilter={removeFilter}
+        onSearchChange={(value) => {
+          setSearch(value);
+          setCurrentPage(1);
+        }}
+        onToggleRowSelection={toggleRowSelection}
+        onToggleSelectAllFiltered={toggleSelectAllFiltered}
+        onClearSelection={clearSelectionState}
+        onPrevPage={handlePrevPage}
+        onNextPage={handleNextPage}
+      />
     </OperationalPage>
   );
 }

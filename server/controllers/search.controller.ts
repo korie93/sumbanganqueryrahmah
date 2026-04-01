@@ -30,7 +30,7 @@ export function createSearchController(deps: CreateSearchControllerDeps) {
     const search = String(req.query.q || "").trim();
     const runtimeSettings = await getRuntimeSettingsCached();
     const page = Math.max(1, readInteger(req.query.page, 1));
-    const requestedLimit = readInteger(req.query.limit, 50);
+    const requestedLimit = readInteger(req.query.pageSize ?? req.query.limit, 50);
 
     return res.json(await searchService.searchGlobal({
       search,
@@ -51,7 +51,7 @@ export function createSearchController(deps: CreateSearchControllerDeps) {
     const logic = body.logic === "OR" ? "OR" : "AND";
     const runtimeSettings = await getRuntimeSettingsCached();
     const page = Math.max(1, readInteger(body.page, 1));
-    const requestedLimit = readInteger(body.limit, 50);
+    const requestedLimit = readInteger(body.pageSize ?? body.limit, 50);
 
     return res.json(await searchService.advancedSearch({
       filters,

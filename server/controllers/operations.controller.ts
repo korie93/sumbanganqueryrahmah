@@ -82,7 +82,9 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
   };
 
   const getTopActiveUsers = async (req: AuthenticatedRequest, res: Response) => {
-    return res.json(await operationsAnalyticsService.getTopActiveUsers(req.query.limit));
+    return res.json(
+      await operationsAnalyticsService.getTopActiveUsers(req.query.pageSize ?? req.query.limit),
+    );
   };
 
   const getPeakHours = async (_req: AuthenticatedRequest, res: Response) => {

@@ -16,13 +16,23 @@ export function normalizeCollectionRecordFilterValue(value: unknown) {
 }
 
 export function buildCollectionRecordsCacheKey(filters?: CollectionRecordFilters) {
+  const pageSize = Number.isFinite(Number(filters?.pageSize))
+    ? Number(filters?.pageSize)
+    : Number.isFinite(Number(filters?.limit))
+      ? Number(filters?.limit)
+      : null;
+  const page = Number.isFinite(Number(filters?.page))
+    ? Number(filters?.page)
+    : pageSize && Number.isFinite(Number(filters?.offset))
+      ? Math.floor(Number(filters?.offset) / pageSize) + 1
+      : null;
   return JSON.stringify({
     from: normalizeCollectionRecordFilterValue(filters?.from),
     to: normalizeCollectionRecordFilterValue(filters?.to),
     search: normalizeCollectionRecordFilterValue(filters?.search)?.toLowerCase() || null,
     nickname: normalizeCollectionRecordFilterValue(filters?.nickname)?.toLowerCase() || null,
-    limit: Number.isFinite(Number(filters?.limit)) ? Number(filters?.limit) : null,
-    offset: Number.isFinite(Number(filters?.offset)) ? Number(filters?.offset) : null,
+    page,
+    pageSize,
     cursor: normalizeCollectionRecordFilterValue(filters?.cursor),
   });
 }

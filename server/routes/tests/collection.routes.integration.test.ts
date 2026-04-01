@@ -861,12 +861,14 @@ test("GET /api/collection/list applies pagination, receipt review filters, and u
   const { server, baseUrl } = await startTestServer(app);
   try {
     const response = await fetch(
-      `${baseUrl}/api/collection/list?from=2026-03-01&to=2026-03-31&search=BATCH-001&receiptValidationStatus=flagged&duplicateOnly=1&limit=20&offset=40`,
+      `${baseUrl}/api/collection/list?from=2026-03-01&to=2026-03-31&search=BATCH-001&receiptValidationStatus=flagged&duplicateOnly=1&page=3&pageSize=20`,
     );
 
     assert.equal(response.status, 200);
     const payload = await response.json();
     assert.equal(payload.ok, true);
+    assert.equal(payload.page, 3);
+    assert.equal(payload.pageSize, 20);
     assert.equal(payload.limit, 20);
     assert.equal(payload.offset, 40);
     assert.equal(summaryCalls.length, 1);
@@ -980,19 +982,23 @@ test("GET /api/collection/list returns nextCursor and accepts cursor-based follo
 
   const { server, baseUrl } = await startTestServer(app);
   try {
-    const firstResponse = await fetch(`${baseUrl}/api/collection/list?limit=2`);
+    const firstResponse = await fetch(`${baseUrl}/api/collection/list?page=1&pageSize=2`);
     assert.equal(firstResponse.status, 200);
     const firstPayload = await firstResponse.json();
+    assert.equal(firstPayload.page, 1);
+    assert.equal(firstPayload.pageSize, 2);
     assert.equal(firstPayload.records.length, 2);
     assert.equal(firstPayload.offset, 0);
     assert.equal(firstPayload.total, 3);
     assert.equal(typeof firstPayload.nextCursor, "string");
 
     const secondResponse = await fetch(
-      `${baseUrl}/api/collection/list?limit=2&cursor=${encodeURIComponent(firstPayload.nextCursor)}`,
+      `${baseUrl}/api/collection/list?pageSize=2&cursor=${encodeURIComponent(firstPayload.nextCursor)}`,
     );
     assert.equal(secondResponse.status, 200);
     const secondPayload = await secondResponse.json();
+    assert.equal(secondPayload.page, 2);
+    assert.equal(secondPayload.pageSize, 2);
     assert.equal(secondPayload.records.length, 1);
     assert.equal(secondPayload.records[0].id, "collection-3");
     assert.equal(secondPayload.offset, 2);
@@ -2007,7 +2013,7 @@ test("GET /api/collection/nickname-summary clamps detail-row loading to a safer 
   const { server, baseUrl } = await startTestServer(app);
   try {
     const response = await fetch(
-      `${baseUrl}/api/collection/nickname-summary?from=2026-03-01&to=2026-03-31&nicknames=Collector%20Alpha&limit=9999&offset=12`,
+      `${baseUrl}/api/collection/nickname-summary?from=2026-03-01&to=2026-03-31&nicknames=Collector%20Alpha&pageSize=9999&offset=12`,
     );
 
     assert.equal(response.status, 200);
@@ -2015,6 +2021,10 @@ test("GET /api/collection/nickname-summary clamps detail-row loading to a safer 
     assert.equal(payload.ok, true);
     assert.equal(payload.totalRecords, 3);
     assert.equal(payload.totalAmount, 450.5);
+    assert.equal(payload.page, 1);
+    assert.equal(payload.pageSize, 250);
+    assert.equal(payload.limit, 250);
+    assert.equal(payload.offset, 12);
     assert.equal(payload.records.length, 1);
     assert.deepEqual(nicknameActiveChecks, ["Collector Alpha"]);
     assert.equal(nicknameSummaryCalls.length, 1);
@@ -2165,7 +2175,7 @@ test("GET /api/collection/list returns an empty payload for admins without nickn
   const { server, baseUrl } = await startTestServer(app);
   try {
     const response = await fetch(
-      `${baseUrl}/api/collection/list?from=2026-03-01&to=2026-03-31&search=P10&limit=20&offset=40`,
+      `${baseUrl}/api/collection/list?from=2026-03-01&to=2026-03-31&search=P10&page=3&pageSize=20`,
     );
 
     assert.equal(response.status, 200);
@@ -2174,6 +2184,8 @@ test("GET /api/collection/list returns an empty payload for admins without nickn
     assert.deepEqual(payload.records, []);
     assert.equal(payload.total, 0);
     assert.equal(payload.totalAmount, 0);
+    assert.equal(payload.page, 3);
+    assert.equal(payload.pageSize, 20);
     assert.equal(payload.limit, 20);
     assert.equal(payload.offset, 40);
     assert.deepEqual(sessionActivityCalls, ["activity-admin-empty-2"]);

@@ -19,6 +19,10 @@ test("getCollectionNicknameSummary forwards query params and AbortSignal", async
         nicknames: ["Collector Alpha"],
         totalRecords: 1,
         totalAmount: 55,
+        page: 2,
+        pageSize: 25,
+        limit: 25,
+        offset: 25,
         nicknameTotals: [],
         records: [],
       }),
@@ -38,6 +42,8 @@ test("getCollectionNicknameSummary forwards query params and AbortSignal", async
         to: "2026-03-31",
         nicknames: ["Collector Alpha"],
         summaryOnly: true,
+        page: 2,
+        pageSize: 25,
       },
       { signal: controller.signal },
     );
@@ -48,7 +54,7 @@ test("getCollectionNicknameSummary forwards query params and AbortSignal", async
   assert.equal(requests.length, 1);
   assert.match(
     requests[0]?.input || "",
-    /\/api\/collection\/nickname-summary\?from=2026-03-01&to=2026-03-31&nicknames=Collector\+Alpha&summaryOnly=1$/,
+    /\/api\/collection\/nickname-summary\?from=2026-03-01&to=2026-03-31&nicknames=Collector\+Alpha&summaryOnly=1&page=2&pageSize=25$/,
   );
   assert.equal(requests[0]?.signal, controller.signal);
 });

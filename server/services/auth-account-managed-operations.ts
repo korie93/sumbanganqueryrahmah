@@ -30,15 +30,28 @@ import type {
 import { createPasswordResetTokenPayload } from "./auth-account-token-utils";
 import {
   buildLocalPaginationMeta,
-  parseManageableStatusFilter,
   readPaginationMeta,
   type PaginatedListMeta,
 } from "./auth-account-pagination-utils";
+import {
+  listManagedUsersPageOrAll,
+  listPendingPasswordResetRequestsPageOrAll,
+} from "./auth-account-managed-list-utils";
 import {
   AuthAccountError,
   type ManagedAccountActivationDelivery,
   type ManagedAccountPasswordResetDelivery,
 } from "./auth-account-types";
+import {
+  buildAccountCreatedAuditDetails,
+  buildAccountDeletedAuditDetails,
+  buildAccountStatusChangedAuditDetails,
+  buildAccountUpdatedAuditDetails,
+  buildManagedActivationDeliveryResponse,
+  buildPasswordResetApprovedAuditDetails,
+  buildPasswordResetSendFailedAuditDetails,
+  buildRoleChangedAuditDetails,
+} from "./auth-account-managed-utils";
 
 export type CreateManagedUserInput = {
   username: string;
@@ -113,47 +126,7 @@ export class AuthAccountManagedOperations {
     query: Record<string, unknown> = {},
   ): Promise<{ users: ManagedUserAccount[]; pagination: PaginatedListMeta }> {
     await this.deps.requireSuperuser(authUser);
-
-    const hasQueryFilters =
-      query.page !== undefined
-      || query.pageSize !== undefined
-      || query.search !== undefined
-      || query.role !== undefined
-      || query.status !== undefined;
-
-    if (!hasQueryFilters) {
-      const users = await this.deps.storage.getManagedUsers();
-      return {
-        users,
-        pagination: buildLocalPaginationMeta(users.length),
-      };
-    }
-
-    const { page, pageSize } = readPaginationMeta(query, {
-      pageSize: 50,
-      maxPageSize: 100,
-    });
-
-    const result = await this.deps.storage.listManagedUsersPage({
-      page,
-      pageSize,
-      search: readOptionalString(query.search),
-      role: (() => {
-        const value = String(readOptionalString(query.role) || "all").toLowerCase();
-        return value === "admin" || value === "user" ? value : "all";
-      })(),
-      status: parseManageableStatusFilter(query.status),
-    });
-
-    return {
-      users: result.users,
-      pagination: {
-        page: result.page,
-        pageSize: result.pageSize,
-        total: result.total,
-        totalPages: result.totalPages,
-      },
-    };
+    return listManagedUsersPageOrAll(this.deps.storage, query);
   }
 
   async getAccounts(authUser: AuthenticatedUser | undefined) {
@@ -272,13 +245,7 @@ export class AuthAccountManagedOperations {
       action: "ACCOUNT_DELETED",
       performedBy: actor.username,
       targetUser: target.id,
-      details: JSON.stringify({
-        metadata: {
-          deleted_role: target.role,
-          deleted_status: target.status,
-          was_banned: Boolean(target.isBanned),
-        },
-      }),
+      details: buildAccountDeletedAuditDetails({ target }),
     });
 
     return {
@@ -323,25 +290,16 @@ export class AuthAccountManagedOperations {
       action: "ACCOUNT_CREATED",
       performedBy: actor.username,
       targetUser: user.id,
-      details: JSON.stringify({
-        metadata: {
-          role: user.role,
-          status: user.status,
-          created_by: actor.username,
-        },
+      details: buildAccountCreatedAuditDetails({
+        actorUsername: actor.username,
+        user,
       }),
     });
 
     return {
       user,
       activation: {
-        deliveryMode: activation.delivery.deliveryMode,
-        errorCode: activation.delivery.errorCode,
-        errorMessage: activation.delivery.errorMessage,
-        expiresAt: activation.delivery.expiresAt,
-        previewUrl: activation.delivery.previewUrl,
-        recipientEmail: activation.delivery.recipientEmail,
-        sent: activation.delivery.sent,
+        ...buildManagedActivationDeliveryResponse(activation.delivery),
       } satisfies ManagedAccountActivationDelivery,
     };
   }
@@ -393,12 +351,10 @@ export class AuthAccountManagedOperations {
       action: "ACCOUNT_UPDATED",
       performedBy: actor.username,
       targetUser: target.id,
-      details: JSON.stringify({
-        metadata: {
-          username_changed: Boolean(nextUsername && nextUsername !== target.username),
-          email_changed: nextEmail !== undefined,
-          full_name_changed: nextFullName !== undefined,
-        },
+      details: buildAccountUpdatedAuditDetails({
+        usernameChanged: Boolean(nextUsername && nextUsername !== target.username),
+        emailChanged: nextEmail !== undefined,
+        fullNameChanged: nextFullName !== undefined,
       }),
     });
 
@@ -428,11 +384,9 @@ export class AuthAccountManagedOperations {
       action: "ROLE_CHANGED",
       performedBy: actor.username,
       targetUser: target.id,
-      details: JSON.stringify({
-        metadata: {
-          previous_role: target.role,
-          next_role: nextRole,
-        },
+      details: buildRoleChangedAuditDetails({
+        previousRole: target.role,
+        nextRole,
       }),
     });
 
@@ -486,11 +440,9 @@ export class AuthAccountManagedOperations {
         action: "ACCOUNT_STATUS_CHANGED",
         performedBy: actor.username,
         targetUser: target.id,
-        details: JSON.stringify({
-          metadata: {
-            previous_status: target.status,
-            next_status: nextStatus,
-          },
+        details: buildAccountStatusChangedAuditDetails({
+          previousStatus: target.status,
+          nextStatus,
         }),
       });
     }
@@ -531,13 +483,7 @@ export class AuthAccountManagedOperations {
     return {
       user: target,
       activation: {
-        deliveryMode: activation.delivery.deliveryMode,
-        errorCode: activation.delivery.errorCode,
-        errorMessage: activation.delivery.errorMessage,
-        expiresAt: activation.delivery.expiresAt,
-        previewUrl: activation.delivery.previewUrl,
-        recipientEmail: activation.delivery.recipientEmail,
-        sent: activation.delivery.sent,
+        ...buildManagedActivationDeliveryResponse(activation.delivery),
       } satisfies ManagedAccountActivationDelivery,
     };
   }
@@ -547,41 +493,7 @@ export class AuthAccountManagedOperations {
     query: Record<string, unknown> = {},
   ): Promise<{ requests: PendingPasswordResetRequestSummary[]; pagination: PaginatedListMeta }> {
     await this.deps.requireSuperuser(authUser);
-
-    const hasQueryFilters =
-      query.page !== undefined
-      || query.pageSize !== undefined
-      || query.search !== undefined
-      || query.status !== undefined;
-
-    if (!hasQueryFilters) {
-      const requests = await this.deps.storage.listPendingPasswordResetRequests();
-      return {
-        requests,
-        pagination: buildLocalPaginationMeta(requests.length),
-      };
-    }
-
-    const { page, pageSize } = readPaginationMeta(query, {
-      pageSize: 50,
-      maxPageSize: 100,
-    });
-    const result = await this.deps.storage.listPendingPasswordResetRequestsPage({
-      page,
-      pageSize,
-      search: readOptionalString(query.search),
-      status: parseManageableStatusFilter(query.status),
-    });
-
-    return {
-      requests: result.requests,
-      pagination: {
-        page: result.page,
-        pageSize: result.pageSize,
-        total: result.total,
-        totalPages: result.totalPages,
-      },
-    };
+    return listPendingPasswordResetRequestsPageOrAll(this.deps.storage, query);
   }
 
   async resetManagedUserPassword(authUser: AuthenticatedUser | undefined, targetUserId: string) {
@@ -628,15 +540,10 @@ export class AuthAccountManagedOperations {
         action: "PASSWORD_RESET_SEND_FAILED",
         performedBy: actor.username,
         targetUser: target.id,
-        details: JSON.stringify({
-          metadata: {
-            reset_type: "email_link",
-            delivery: "email",
-            delivery_mode: delivery.deliveryMode,
-            recipient_email: recipientEmail,
-            expires_at: reset.expiresAt.toISOString(),
-            mail_error_code: delivery.errorCode,
-          },
+        details: buildPasswordResetSendFailedAuditDetails({
+          recipientEmail,
+          reset,
+          delivery,
         }),
       });
 
@@ -676,16 +583,11 @@ export class AuthAccountManagedOperations {
       action: "PASSWORD_RESET_APPROVED",
       performedBy: actor.username,
       targetUser: target.id,
-      details: JSON.stringify({
-        metadata: {
-          reset_type: "email_link",
-          delivery: "email",
-          delivery_mode: delivery.deliveryMode,
-          recipient_email: recipientEmail,
-          expires_at: reset.expiresAt.toISOString(),
-          must_change_password: true,
-          lock_cleared: Boolean(target.lockedAt),
-        },
+      details: buildPasswordResetApprovedAuditDetails({
+        recipientEmail,
+        reset,
+        delivery,
+        targetLockedAt: target.lockedAt,
       }),
     });
 
