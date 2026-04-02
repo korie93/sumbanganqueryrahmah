@@ -2,6 +2,7 @@ import type { RefObject } from "react";
 import { Search } from "lucide-react";
 import { ActiveFilterChips, type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import { Input } from "@/components/ui/input";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { buildViewerSearchShortcutHint } from "@/pages/viewer/search-bar-utils";
 import { ViewerSearchSummary } from "@/pages/viewer/ViewerSearchSummary";
 
@@ -26,8 +27,17 @@ export function ViewerSearchBar({
   onClearAllFilters,
   onSearchChange,
 }: ViewerSearchBarProps) {
+  const isMobile = useIsMobile();
+
   return (
-    <div className="ops-toolbar mb-4 space-y-3">
+    <div
+      className={`ops-toolbar mb-4 space-y-3 ${
+        isMobile
+          ? "sticky top-2 z-20 border-border/70 bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85"
+          : ""
+      }`}
+      data-floating-ai-avoid={isMobile ? "true" : undefined}
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="relative min-w-48 max-w-xl flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

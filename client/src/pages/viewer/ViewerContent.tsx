@@ -7,6 +7,14 @@ import {
   OperationalSummaryStrip,
 } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { ViewerDataTable } from "@/pages/viewer/ViewerDataTable";
 import { ViewerEmptyState } from "@/pages/viewer/ViewerEmptyState";
 import { ViewerFooter } from "@/pages/viewer/ViewerFooter";
@@ -64,6 +72,7 @@ type ViewerContentProps = {
   onClearSelection: () => void;
   onPrevPage: () => void;
   onNextPage: () => void;
+  onShowFiltersChange: (open: boolean) => void;
 };
 
 function ViewerFiltersPanelFallback() {
@@ -120,7 +129,23 @@ export function ViewerContent({
   onClearSelection,
   onPrevPage,
   onNextPage,
+  onShowFiltersChange,
 }: ViewerContentProps) {
+  const isMobile = useIsMobile();
+
+  const filtersPanel = (
+    <Suspense fallback={<ViewerFiltersPanelFallback />}>
+      <ViewerFiltersPanel
+        headers={headers}
+        columnFilters={columnFilters}
+        onAddFilter={onAddFilter}
+        onClearAllFilters={onClearAllFilters}
+        onUpdateFilter={onUpdateFilter}
+        onRemoveFilter={onRemoveFilter}
+      />
+    </Suspense>
+  );
+
   return (
     <>
       {rows.length > 0 ? (
@@ -143,18 +168,7 @@ export function ViewerContent({
         </OperationalSummaryStrip>
       ) : null}
 
-      {rows.length > 0 && showFilters ? (
-        <Suspense fallback={<ViewerFiltersPanelFallback />}>
-          <ViewerFiltersPanel
-            headers={headers}
-            columnFilters={columnFilters}
-            onAddFilter={onAddFilter}
-            onClearAllFilters={onClearAllFilters}
-            onUpdateFilter={onUpdateFilter}
-            onRemoveFilter={onRemoveFilter}
-          />
-        </Suspense>
-      ) : null}
+      {rows.length > 0 && showFilters && !isMobile ? filtersPanel : null}
 
       {error ? (
         <OperationalSectionCard className="border-destructive/35 bg-destructive/5" contentClassName="space-y-0">
@@ -193,6 +207,24 @@ export function ViewerContent({
               onClearAllFilters={onClearAllFilters}
               onSearchChange={onSearchChange}
             />
+          ) : null}
+
+          {rows.length > 0 && isMobile ? (
+            <Sheet open={showFilters} onOpenChange={onShowFiltersChange}>
+              <SheetContent
+                side="bottom"
+                className="max-h-[88dvh] rounded-t-[1.75rem] border-border/70 bg-background/98 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] pt-4"
+                data-floating-ai-avoid="true"
+              >
+                <SheetHeader className="pr-8 text-left">
+                  <SheetTitle>Column Filters</SheetTitle>
+                  <SheetDescription>
+                    Narrow matching rows across the dataset without leaving the viewer.
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="mt-4">{filtersPanel}</div>
+              </SheetContent>
+            </Sheet>
           ) : null}
 
           <ViewerDataTable

@@ -21,6 +21,7 @@ const GeneralSearchAdvancedControls = lazy(() =>
 );
 
 interface GeneralSearchControlsProps {
+  activeFilterSummaries: string[];
   activeFiltersCount: number;
   advancedMode: boolean;
   columns: string[];
@@ -41,6 +42,7 @@ interface GeneralSearchControlsProps {
 }
 
 export function GeneralSearchControls({
+  activeFilterSummaries,
   activeFiltersCount,
   advancedMode,
   columns,
@@ -74,7 +76,10 @@ export function GeneralSearchControls({
   if (isMobile) {
     return (
       <>
-        <div className="glass-wrapper mb-6 space-y-4 p-4" data-floating-ai-avoid="true">
+        <div
+          className="glass-wrapper sticky top-2 z-20 mb-6 space-y-4 p-4 shadow-lg supports-[backdrop-filter]:bg-background/80 supports-[backdrop-filter]:backdrop-blur-xl"
+          data-floating-ai-avoid="true"
+        >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -91,6 +96,24 @@ export function GeneralSearchControls({
               </Badge>
             ) : null}
           </div>
+
+          {advancedMode && activeFilterSummaries.length > 0 ? (
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+              <Badge variant="secondary" className="shrink-0 rounded-full px-3 py-1 text-xs">
+                {logic}
+              </Badge>
+              {activeFilterSummaries.slice(0, 4).map((summary) => (
+                <Badge key={summary} variant="outline" className="shrink-0 rounded-full px-3 py-1 text-xs">
+                  {summary}
+                </Badge>
+              ))}
+              {activeFilterSummaries.length > 4 ? (
+                <Badge variant="secondary" className="shrink-0 rounded-full px-3 py-1 text-xs">
+                  +{activeFilterSummaries.length - 4} more
+                </Badge>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-2 gap-2">
             <Button
@@ -212,24 +235,24 @@ export function GeneralSearchControls({
             </SheetHeader>
 
             <div className="mt-4 space-y-3">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-start justify-between gap-3 rounded-2xl border border-border/60 bg-muted/20 p-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">
+                    {advancedMode ? "Advanced filter mode" : "Simple search mode"}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {advancedMode
+                      ? "Adjust field rules here, then search with the current logic."
+                      : "Prefer a quick keyword search? Use the compact query field below."}
+                  </p>
+                </div>
                 <Button
-                  variant={advancedMode ? "outline" : "default"}
-                  size="default"
-                  onClick={() => handleMobileModeChange(false)}
-                  className="h-11 w-full"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleMobileModeChange(!advancedMode)}
+                  className="h-10 shrink-0 rounded-xl px-3"
                 >
-                  <Search className="mr-2 h-4 w-4" />
-                  Simple
-                </Button>
-                <Button
-                  variant={advancedMode ? "default" : "outline"}
-                  size="default"
-                  onClick={() => handleMobileModeChange(true)}
-                  className="h-11 w-full"
-                >
-                  <Filter className="mr-2 h-4 w-4" />
-                  Advanced
+                  {advancedMode ? "Use Simple" : "Use Advanced"}
                 </Button>
               </div>
 

@@ -424,6 +424,9 @@ export default function Viewer({
   };
   const handleBackToSaved = useCallback(() => onNavigate("saved"), [onNavigate]);
   const handleToggleFilters = useCallback(() => setShowFilters((previous) => !previous), []);
+  const handleShowFiltersChange = useCallback((open: boolean) => {
+    setShowFilters(open);
+  }, []);
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value);
     setCurrentPage(1);
@@ -648,6 +651,7 @@ export default function Viewer({
         onClearSelection={clearSelectionState}
         onPrevPage={handlePrevPage}
         onNextPage={handleNextPage}
+        onShowFiltersChange={handleShowFiltersChange}
       />
     </OperationalPage>
   );

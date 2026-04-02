@@ -25,6 +25,34 @@ export function getActiveFiltersCount(filters: FilterRow[]) {
   ).length;
 }
 
+export function getSearchOperatorLabel(operator: string) {
+  return OPERATORS.find((option) => option.value === operator)?.label ?? operator;
+}
+
+export function buildSearchFilterSummaries(filters: FilterRow[]) {
+  return filters
+    .filter(
+      (filter) =>
+        filter.field &&
+        (filter.operator === "isEmpty" ||
+          filter.operator === "isNotEmpty" ||
+          filter.value.trim()),
+    )
+    .map((filter) => {
+      const normalizedValue = filter.value.trim().replace(/\s+/g, " ");
+      const compactValue =
+        normalizedValue.length > 28
+          ? `${normalizedValue.slice(0, 25).trimEnd()}...`
+          : normalizedValue;
+
+      if (filter.operator === "isEmpty" || filter.operator === "isNotEmpty") {
+        return `${filter.field} • ${getSearchOperatorLabel(filter.operator)}`;
+      }
+
+      return `${filter.field} • ${getSearchOperatorLabel(filter.operator)} • ${compactValue}`;
+    });
+}
+
 function normalizeKey(key: string) {
   return key.toLowerCase().replace(/[^a-z0-9]/g, "");
 }

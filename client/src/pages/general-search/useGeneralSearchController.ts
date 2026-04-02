@@ -10,6 +10,7 @@ import { advancedSearchData, getSearchColumns, searchData } from "@/lib/api";
 import type { FilterRow, SearchResultRow } from "@/pages/general-search/types";
 import { resolveGeneralSearchExportBlockReason } from "@/pages/general-search/export-guards";
 import {
+  buildSearchFilterSummaries,
   collectSearchHeaders,
   createEmptyFilterRow,
   downloadSearchResultsAsCsv,
@@ -72,6 +73,10 @@ export function useGeneralSearchController({
 
   const activeFiltersCount = useMemo(
     () => getActiveFiltersCount(filters),
+    [filters],
+  );
+  const activeFilterSummaries = useMemo(
+    () => buildSearchFilterSummaries(filters),
     [filters],
   );
 
@@ -417,6 +422,7 @@ export function useGeneralSearchController({
       columns,
       loadingColumns,
       activeFiltersCount,
+      activeFilterSummaries,
       pageSizeOptions,
     },
     actions: {

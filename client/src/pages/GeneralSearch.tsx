@@ -52,6 +52,7 @@ export default function GeneralSearch({
         </div>
 
         <GeneralSearchControls
+          activeFilterSummaries={state.activeFilterSummaries}
           activeFiltersCount={state.activeFiltersCount}
           advancedMode={state.advancedMode}
           columns={state.columns}
@@ -82,6 +83,7 @@ export default function GeneralSearch({
             }
           >
             <GeneralSearchResults
+              activeFilterSummaries={state.activeFilterSummaries}
               advancedMode={state.advancedMode}
               canExport={canExport}
               currentPage={state.currentPage}
