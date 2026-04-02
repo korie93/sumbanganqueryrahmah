@@ -942,6 +942,7 @@ const checkBackupRestoreUiFlow = async (page, context, tracker) => {
   await page.getByText("Backup & Restore").first().waitFor();
 
   if (await page.getByTestId("button-create-backup").count() === 0) {
+    consumeExpectedBackupJobRateLimit(tracker);
     tracker.assertClean("backup restore UI flow");
     tracker.clear();
     return;
@@ -968,6 +969,7 @@ const checkBackupRestoreUiFlow = async (page, context, tracker) => {
     await createdBackupItem.waitFor({ state: "hidden", timeout: 60_000 });
     backupDeleted = true;
 
+    consumeExpectedBackupJobRateLimit(tracker);
     tracker.assertClean("backup restore UI flow");
     tracker.clear();
   } finally {
@@ -1688,6 +1690,22 @@ const consumeExpectedCollectionRecordsBootstrapRateLimitNoise = (tracker, search
       continue;
     }
 
+    tracker.failedRequests.splice(index, 1);
+    consumed += 1;
+  }
+
+  return consumed;
+};
+
+const consumeExpectedBackupJobRateLimit = (tracker) => {
+  const pattern = "/api/backups/jobs/";
+  let consumed = 0;
+
+  for (let index = tracker.failedRequests.length - 1; index >= 0; index -= 1) {
+    const entry = String(tracker.failedRequests[index] || "");
+    if (!entry.includes("GET") || !entry.includes(pattern) || !entry.includes(":: 429")) {
+      continue;
+    }
     tracker.failedRequests.splice(index, 1);
     consumed += 1;
   }
