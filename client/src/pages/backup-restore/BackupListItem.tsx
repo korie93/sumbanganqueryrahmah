@@ -36,8 +36,8 @@ export function BackupListItem({
             <span data-testid={`text-backup-created-by-${backup.id}`}>{backup.createdBy}</span>
           </div>
         </div>
-        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-          <Clock className="h-4 w-4" />
+        <div className="flex items-center gap-1 text-sm text-foreground/80">
+          <Clock className="h-4 w-4 text-muted-foreground" />
           <span data-testid={`text-backup-date-${backup.id}`}>{formatBackupTime(backup.createdAt)}</span>
         </div>
       </div>

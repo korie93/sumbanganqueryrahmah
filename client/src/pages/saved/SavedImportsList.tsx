@@ -124,7 +124,7 @@ export function SavedImportsList({
                       <p className="break-words text-sm text-muted-foreground">
                         {item.filename}
                       </p>
-                      <p className="text-xs text-muted-foreground">{formatDate(item.createdAt)}</p>
+                      <p className="text-xs font-medium text-foreground/80">{formatDate(item.createdAt)}</p>
                     </div>
                   </div>
 

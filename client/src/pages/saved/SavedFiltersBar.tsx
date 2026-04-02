@@ -1,16 +1,10 @@
 import type { RefObject } from "react";
-import { CalendarIcon, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { ActiveFilterChips } from "@/components/data/ActiveFilterChips";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Calendar } from "@/components/ui/calendar";
 import { formatSavedFilterDate } from "@/pages/saved/utils";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 
 interface SavedFiltersBarProps {
   searchTerm: string;
@@ -48,6 +42,10 @@ export function SavedFiltersBar({
       : null,
   ].filter((item): item is NonNullable<typeof item> => item !== null);
 
+  const dateFilterValue = dateFilter
+    ? `${dateFilter.getFullYear()}-${String(dateFilter.getMonth() + 1).padStart(2, "0")}-${String(dateFilter.getDate()).padStart(2, "0")}`
+    : "";
+
   return (
     <div className="ops-toolbar space-y-3">
       <div className="flex items-center gap-4 flex-wrap">
@@ -65,43 +63,27 @@ export function SavedFiltersBar({
         <p className="text-xs text-muted-foreground">
           Press <span className="font-medium text-foreground">/</span> to focus search
         </p>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              aria-label="Filter saved items by date"
-              className={cn(
-                "min-w-[210px] justify-start rounded-lg border-border/80 bg-background/95 text-left font-normal shadow-sm transition-colors hover:bg-accent/50 hover:text-foreground",
-                dateFilter
-                  ? "border-primary/40 bg-primary/[0.06] text-foreground"
-                  : "text-muted-foreground",
-              )}
-              data-testid="button-date-filter"
-            >
-              <CalendarIcon
-                className={cn("mr-2 h-4 w-4", dateFilter ? "text-primary" : "text-muted-foreground")}
-              />
-              {dateFilter ? formatSavedFilterDate(dateFilter) : "Filter by date"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto rounded-xl border border-border/80 bg-popover p-0 shadow-lg" align="start">
-            <Calendar
-              mode="single"
-              selected={dateFilter}
-              onSelect={(date) => {
-                if (date) {
-                  onDateFilterChange(
-                    new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0),
-                  );
-                  return;
-                }
+        <DatePickerField
+          value={dateFilterValue}
+          onChange={(value) => {
+            if (!value) {
+              onDateFilterChange(undefined);
+              return;
+            }
 
-                onDateFilterChange(undefined);
-              }}
-              initialFocus
-            />
-          </PopoverContent>
-        </Popover>
+            const [year, month, day] = value.split("-").map((part) => Number.parseInt(part, 10));
+            if (!year || !month || !day) {
+              onDateFilterChange(undefined);
+              return;
+            }
+
+            onDateFilterChange(new Date(year, month - 1, day, 12, 0, 0));
+          }}
+          placeholder="Filter by date"
+          buttonTestId="button-date-filter"
+          ariaLabel={dateFilter ? `Filter by date, selected ${formatSavedFilterDate(dateFilter)}` : "Filter by date"}
+          className="min-w-[210px]"
+        />
         {hasActiveFilters ? (
           <Button
             variant="ghost"

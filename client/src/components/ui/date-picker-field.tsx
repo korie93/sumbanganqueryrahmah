@@ -13,6 +13,7 @@ interface DatePickerFieldProps {
   buttonTestId?: string;
   ariaLabel?: string;
   className?: string;
+  contentClassName?: string;
   disabled?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -42,6 +43,7 @@ export function DatePickerField({
   buttonTestId,
   ariaLabel,
   className,
+  contentClassName,
   disabled = false,
   open: controlledOpen,
   onOpenChange,
@@ -59,8 +61,9 @@ export function DatePickerField({
           variant="outline"
           disabled={disabled}
           aria-label={ariaLabel ?? placeholder}
+          title={ariaLabel ?? placeholder}
           className={cn(
-            "h-10 w-full justify-start rounded-lg border-border/80 bg-background/95 text-left font-normal shadow-sm transition-colors hover:bg-accent/50 hover:text-foreground",
+            "h-10 w-full justify-start rounded-lg border-border/80 bg-background/95 text-left font-normal shadow-sm transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2",
             value
               ? "border-primary/40 bg-primary/[0.06] text-foreground"
               : "text-muted-foreground",
@@ -76,7 +79,14 @@ export function DatePickerField({
           </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto rounded-xl border border-border/80 bg-popover p-0 shadow-lg" align="start">
+      <PopoverContent
+        className={cn(
+          "z-50 w-auto rounded-xl border border-border/80 bg-popover p-0 shadow-lg",
+          contentClassName,
+        )}
+        align="start"
+        data-floating-ai-avoid="true"
+      >
         <Calendar
           mode="single"
           selected={selectedDate}
