@@ -43,14 +43,25 @@ export function BackupFiltersPanel({
   sortBy,
 }: BackupFiltersPanelProps) {
   return (
-    <Card>
+    <Card data-floating-ai-avoid="true">
       <Collapsible open={filtersOpen} onOpenChange={onFiltersOpenChange}>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <CollapsibleTrigger asChild>
-              <Button variant="ghost" className="p-0 h-auto gap-2">
-                <Filter className="h-5 w-5" />
-                <CardTitle className="text-lg">Search & Filters</CardTitle>
+              <Button
+                variant="ghost"
+                className="h-auto w-full justify-between gap-3 rounded-xl px-0 py-0 text-left sm:w-auto sm:justify-start"
+                data-testid="button-toggle-backup-filters"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <Filter className="h-5 w-5 shrink-0" />
+                  <div className="min-w-0">
+                    <CardTitle className="text-lg">Search & Filters</CardTitle>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Search backups by name, creator, time period, or sorting.
+                    </p>
+                  </div>
+                </div>
                 <ChevronDown className={`h-4 w-4 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
               </Button>
             </CollapsibleTrigger>
@@ -59,7 +70,7 @@ export function BackupFiltersPanel({
                 variant="ghost"
                 size="sm"
                 onClick={onClearFilters}
-                className="text-muted-foreground"
+                className="w-full justify-center text-muted-foreground sm:w-auto sm:justify-start"
                 data-testid="button-clear-backup-filters"
               >
                 <X className="h-4 w-4 mr-1" />

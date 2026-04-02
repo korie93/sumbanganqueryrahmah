@@ -49,7 +49,7 @@ export default function AuditLogs() {
   const [logs, setLogs] = useState<AuditLogRecord[]>([]);
   const [stats, setStats] = useState<AuditLogStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filtersOpen, setFiltersOpen] = useState(() => !initialMobileViewport);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [recordsOpen, setRecordsOpen] = useState(true);
   const [cleanupOpen, setCleanupOpen] = useState(() => !initialMobileViewport);
   const [searchText, setSearchText] = useState("");
@@ -85,7 +85,6 @@ export default function AuditLogs() {
       setCleanupOpen(false);
       setRecordsOpen(true);
     } else {
-      setFiltersOpen(true);
       setCleanupOpen(true);
       setRecordsOpen(true);
     }

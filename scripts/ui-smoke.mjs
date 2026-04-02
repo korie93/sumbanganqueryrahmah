@@ -1081,6 +1081,7 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
 
     consumeExpectedCollectionPurgeSummaryRateLimit(tracker);
     consumeExpectedCollectionListRateLimit(tracker, accountNumber);
+    consumeExpectedCollectionRecordsBootstrapRateLimitNoise(tracker, accountNumber);
     tracker.assertClean("collection receipt UI flow");
     tracker.clear();
   } finally {
