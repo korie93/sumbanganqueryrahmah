@@ -53,6 +53,7 @@
   color: rgba(255, 255, 255, 0.92);
   font-size: 0.74rem;
   font-weight: 600;
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
 }
 
@@ -88,6 +89,7 @@
   border: 1px solid hsl(var(--border) / 0.72);
   background: hsl(var(--card) / 0.92);
   box-shadow: 0 18px 34px rgba(15, 23, 42, 0.08);
+  -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
 
