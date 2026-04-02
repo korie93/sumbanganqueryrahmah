@@ -1,12 +1,10 @@
-import { Calendar, Filter, X } from "lucide-react";
+import { Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import type { ActivityFilters } from "@/lib/api";
 import { STATUS_OPTIONS } from "@/pages/activity/types";
 
@@ -97,62 +95,28 @@ export function ActivityFiltersPanel({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <Label className="text-sm font-medium mb-2 block">Start Date</Label>
-            <Popover open={dateFromOpen} onOpenChange={onDateFromOpenChange}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="w-full justify-start text-left font-normal" data-testid="button-date-from">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  {filters.dateFrom ? formatIsoDateToDDMMYYYY(filters.dateFrom) : "Select date..."}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <CalendarComponent
-                  mode="single"
-                  selected={filters.dateFrom ? new Date(`${filters.dateFrom}T12:00:00`) : undefined}
-                  onSelect={(date) => {
-                    if (date) {
-                      const year = date.getFullYear();
-                      const month = String(date.getMonth() + 1).padStart(2, "0");
-                      const day = String(date.getDate()).padStart(2, "0");
-                      onFieldChange("dateFrom", `${year}-${month}-${day}`);
-                    } else {
-                      onFieldChange("dateFrom", "");
-                    }
-                    onDateFromOpenChange(false);
-                  }}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
+            <DatePickerField
+              value={filters.dateFrom || ""}
+              onChange={(value) => onFieldChange("dateFrom", value)}
+              placeholder="Select date..."
+              buttonTestId="button-date-from"
+              ariaLabel="Start date"
+              open={dateFromOpen}
+              onOpenChange={onDateFromOpenChange}
+            />
           </div>
 
           <div>
             <Label className="text-sm font-medium mb-2 block">End Date</Label>
-            <Popover open={dateToOpen} onOpenChange={onDateToOpenChange}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="w-full justify-start text-left font-normal" data-testid="button-date-to">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  {filters.dateTo ? formatIsoDateToDDMMYYYY(filters.dateTo) : "Select date..."}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <CalendarComponent
-                  mode="single"
-                  selected={filters.dateTo ? new Date(`${filters.dateTo}T12:00:00`) : undefined}
-                  onSelect={(date) => {
-                    if (date) {
-                      const year = date.getFullYear();
-                      const month = String(date.getMonth() + 1).padStart(2, "0");
-                      const day = String(date.getDate()).padStart(2, "0");
-                      onFieldChange("dateTo", `${year}-${month}-${day}`);
-                    } else {
-                      onFieldChange("dateTo", "");
-                    }
-                    onDateToOpenChange(false);
-                  }}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
+            <DatePickerField
+              value={filters.dateTo || ""}
+              onChange={(value) => onFieldChange("dateTo", value)}
+              placeholder="Select date..."
+              buttonTestId="button-date-to"
+              ariaLabel="End date"
+              open={dateToOpen}
+              onOpenChange={onDateToOpenChange}
+            />
           </div>
         </div>
 

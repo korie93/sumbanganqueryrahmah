@@ -130,6 +130,21 @@ export function formatDateTimeMalaysia(
   return formatter.format(parsed).replace(/\bam\b/gi, "AM").replace(/\bpm\b/gi, "PM");
 }
 
+export function formatOperationalDateTime(
+  value: string | number | Date | null | undefined,
+  options?: { fallback?: string },
+) {
+  return formatDateTimeMalaysia(value, { fallback: options?.fallback });
+}
+
+export function formatIsoDateRangeDDMMYYYY(
+  from: string | null | undefined,
+  to: string | null | undefined,
+  fallback = "?",
+) {
+  return `${formatIsoDateToDDMMYYYY(from, fallback)} - ${formatIsoDateToDDMMYYYY(to, fallback)}`;
+}
+
 export function formatDateKeyInMalaysia(value: string | number | Date | null | undefined, fallback = "") {
   const parsed = parseDateValue(value);
   if (!parsed) return fallback;

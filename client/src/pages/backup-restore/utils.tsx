@@ -1,5 +1,5 @@
 import { downloadBlob } from "@/lib/download";
-import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import { formatDateTimeMalaysia, formatOperationalDateTime } from "@/lib/date-format";
 import type { BackupFilters, BackupOption, BackupRecord } from "@/pages/backup-restore/types";
 
 type BackupRecordLike = Record<string, unknown>;
@@ -146,7 +146,11 @@ export function filterAndSortBackups(backups: BackupRecord[], filters: BackupFil
 }
 
 export function formatBackupTime(dateStr: string) {
-  return formatDateTimeDDMMYYYY(dateStr, { includeSeconds: true, fallback: dateStr });
+  return formatOperationalDateTime(dateStr, { fallback: dateStr });
+}
+
+function formatBackupExportTime(dateStr: string) {
+  return formatDateTimeMalaysia(dateStr, { includeSeconds: true, fallback: dateStr });
 }
 
 function escapeCsvValue(value: string) {
@@ -163,7 +167,7 @@ export function exportBackupsToCsv(backups: BackupRecord[]) {
       [
         escapeCsvValue(backup.name),
         escapeCsvValue(backup.createdBy),
-        escapeCsvValue(formatBackupTime(backup.createdAt)),
+        escapeCsvValue(formatBackupExportTime(backup.createdAt)),
         escapeCsvValue(String(backup.metadata?.importsCount || 0)),
         escapeCsvValue(String(backup.metadata?.dataRowsCount || 0)),
         escapeCsvValue(String(backup.metadata?.usersCount || 0)),
@@ -213,7 +217,7 @@ export async function exportBackupsToPdf(backups: BackupRecord[]) {
   pdf.setFontSize(10);
   pdf.setFont("helvetica", "normal");
   pdf.setTextColor(isDark ? 180 : 100);
-  pdf.text(`${backups.length} backups | Generated: ${formatDateTimeDDMMYYYY(new Date(), { includeSeconds: true })}`, margin, yPos);
+  pdf.text(`${backups.length} backups | Generated: ${formatDateTimeMalaysia(new Date(), { includeSeconds: true })}`, margin, yPos);
   yPos += 8;
 
   pdf.setDrawColor(isDark ? 100 : 200);
@@ -276,7 +280,7 @@ export async function exportBackupsToPdf(backups: BackupRecord[]) {
     const rowData = [
       backup.name,
       backup.createdBy,
-      formatBackupTime(backup.createdAt),
+      formatBackupExportTime(backup.createdAt),
       String(backup.metadata?.importsCount || 0),
       String(backup.metadata?.dataRowsCount || 0),
       String(backup.metadata?.usersCount || 0),

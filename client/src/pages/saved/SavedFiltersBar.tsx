@@ -10,6 +10,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 interface SavedFiltersBarProps {
   searchTerm: string;
@@ -68,14 +69,22 @@ export function SavedFiltersBar({
           <PopoverTrigger asChild>
             <Button
               variant="outline"
-              className={dateFilter ? "border-primary" : ""}
+              aria-label="Filter saved items by date"
+              className={cn(
+                "min-w-[210px] justify-start rounded-lg border-border/80 bg-background/95 text-left font-normal shadow-sm transition-colors hover:bg-accent/50 hover:text-foreground",
+                dateFilter
+                  ? "border-primary/40 bg-primary/[0.06] text-foreground"
+                  : "text-muted-foreground",
+              )}
               data-testid="button-date-filter"
             >
-              <CalendarIcon className="w-4 h-4 mr-2" />
+              <CalendarIcon
+                className={cn("mr-2 h-4 w-4", dateFilter ? "text-primary" : "text-muted-foreground")}
+              />
               {dateFilter ? formatSavedFilterDate(dateFilter) : "Filter by date"}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
+          <PopoverContent className="w-auto rounded-xl border border-border/80 bg-popover p-0 shadow-lg" align="start">
             <Calendar
               mode="single"
               selected={dateFilter}

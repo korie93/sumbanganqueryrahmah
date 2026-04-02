@@ -2,7 +2,7 @@ import type { ImportItem } from "@/pages/saved/types";
 import {
   formatDateDDMMYYYYMalaysia,
   formatDateKeyInMalaysia,
-  formatDateTimeMalaysia,
+  formatOperationalDateTime,
 } from "@/lib/date-format";
 
 export function filterSavedImports(
@@ -29,7 +29,7 @@ export function filterSavedImports(
 }
 
 export function formatSavedImportDate(dateStr: string) {
-  return formatDateTimeMalaysia(dateStr, { fallback: dateStr });
+  return formatOperationalDateTime(dateStr, { fallback: dateStr });
 }
 
 export function formatSavedFilterDate(date: Date) {

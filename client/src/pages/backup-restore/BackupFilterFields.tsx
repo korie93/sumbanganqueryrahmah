@@ -1,4 +1,5 @@
 import { Archive, Calendar, Search, User } from "lucide-react";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -108,20 +109,22 @@ export function BackupFilterFields({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label className="text-sm font-medium">From Date</Label>
-            <Input
-              type="date"
+            <DatePickerField
               value={dateFrom}
-              onChange={(event) => onDateFromChange(event.target.value)}
-              data-testid="input-backup-date-from"
+              onChange={onDateFromChange}
+              placeholder="Select start date..."
+              buttonTestId="input-backup-date-from"
+              ariaLabel="Backup start date"
             />
           </div>
           <div className="space-y-2">
             <Label className="text-sm font-medium">To Date</Label>
-            <Input
-              type="date"
+            <DatePickerField
               value={dateTo}
-              onChange={(event) => onDateToChange(event.target.value)}
-              data-testid="input-backup-date-to"
+              onChange={onDateToChange}
+              placeholder="Select end date..."
+              buttonTestId="input-backup-date-to"
+              ariaLabel="Backup end date"
             />
           </div>
         </div>

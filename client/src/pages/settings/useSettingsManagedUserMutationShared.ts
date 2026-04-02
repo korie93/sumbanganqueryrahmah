@@ -1,5 +1,5 @@
 import type { ActivationDeliveryPayload } from "@/lib/api";
-import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import { formatOperationalDateTime } from "@/lib/date-format";
 
 export type ToastFn = (payload: {
   title: string;
@@ -17,7 +17,7 @@ export type ManagedSecretDialogParams = {
 
 export function formatActivationExpiry(value: string | null | undefined) {
   if (!value) return "the configured expiry window";
-  return formatDateTimeDDMMYYYY(value, { fallback: value });
+  return formatOperationalDateTime(value, { fallback: value });
 }
 
 export function isDevOutboxActivation(

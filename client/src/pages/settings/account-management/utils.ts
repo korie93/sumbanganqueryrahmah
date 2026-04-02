@@ -1,8 +1,8 @@
-import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import { formatOperationalDateTime } from "@/lib/date-format";
 
 export function formatDateTime(value: string | null) {
   if (!value) return "-";
-  return formatDateTimeDDMMYYYY(value, { fallback: value });
+  return formatOperationalDateTime(value, { fallback: value });
 }
 
 export function getStatusVariant(status: string, isBanned: boolean | null) {

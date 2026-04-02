@@ -1,7 +1,7 @@
 import { Clock, Globe, Monitor, Shield, ShieldOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import { formatOperationalDateTime } from "@/lib/date-format";
 import type { BannedUser } from "@/pages/activity/types";
 import { parseActivityUserAgent } from "@/pages/activity/utils";
 
@@ -67,7 +67,11 @@ export function ActivityBannedUsersPanel({
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Clock className="w-3.5 h-3.5" />
-                    <span>Banned: {user.banInfo.bannedAt ? formatDateTimeDDMMYYYY(user.banInfo.bannedAt) : "Unknown"}</span>
+                    <span>
+                      Banned: {user.banInfo.bannedAt
+                        ? formatOperationalDateTime(user.banInfo.bannedAt, { fallback: "Unknown" })
+                        : "Unknown"}
+                    </span>
                   </div>
                 </div>
               ) : null}

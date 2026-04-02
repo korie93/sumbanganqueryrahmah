@@ -2,8 +2,10 @@ import { Calendar, Info, Search, User, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatIsoDateRangeDDMMYYYY } from "@/lib/date-format";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { auditActionOptions, auditDatePresets } from "@/pages/audit-logs/utils";
 
@@ -133,22 +135,31 @@ export function AuditLogsFilterFields({
         {datePreset === "custom" ? (
           <div className="space-y-2 lg:col-span-1">
             <Label className="text-sm font-medium">Custom Date Range</Label>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Input
-                type="date"
-                value={dateFrom}
-                onChange={(event) => onDateFromChange(event.target.value)}
-                className="flex-1"
-                data-testid="input-date-from"
-              />
-              <span className="hidden text-muted-foreground text-sm sm:inline">-</span>
-              <Input
-                type="date"
-                value={dateTo}
-                onChange={(event) => onDateToChange(event.target.value)}
-                className="flex-1"
-                data-testid="input-date-to"
-              />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  From Date
+                </Label>
+                <DatePickerField
+                  value={dateFrom}
+                  onChange={onDateFromChange}
+                  placeholder="Select start date..."
+                  buttonTestId="input-date-from"
+                  ariaLabel="Audit logs start date"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  To Date
+                </Label>
+                <DatePickerField
+                  value={dateTo}
+                  onChange={onDateToChange}
+                  placeholder="Select end date..."
+                  buttonTestId="input-date-to"
+                  ariaLabel="Audit logs end date"
+                />
+              </div>
             </div>
           </div>
         ) : null}
@@ -217,7 +228,7 @@ export function AuditLogsFilterFields({
             {datePreset !== "all" ? (
               <Badge variant="secondary" className="max-w-full gap-1 whitespace-normal break-words py-1.5 pr-1">
                 Time: {datePreset === "custom"
-                  ? `${dateFrom || "?"} - ${dateTo || "?"}`
+                  ? formatIsoDateRangeDDMMYYYY(dateFrom, dateTo)
                   : auditDatePresets.find((preset) => preset.value === datePreset)?.label}
                 <Button
                   variant="ghost"

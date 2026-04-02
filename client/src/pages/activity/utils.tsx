@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import type { ActivityFilters } from "@/lib/api";
 import { getStoredRole } from "@/lib/auth-session";
-import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import { formatOperationalDateTime } from "@/lib/date-format";
 import type { ActivityRecord, ActivityStatus, ParsedBrowserInfo } from "@/pages/activity/types";
 
 export function getCurrentActivityRole() {
@@ -32,7 +32,7 @@ export function getActivityFilterCount(filters: ActivityFilters) {
 
 export function formatActivityTime(dateStr: string) {
   if (!dateStr) return "-";
-  return formatDateTimeDDMMYYYY(dateStr, { fallback: "-" });
+  return formatOperationalDateTime(dateStr, { fallback: "-" });
 }
 
 export function getSessionDuration(loginTime: string, logoutTime?: string) {

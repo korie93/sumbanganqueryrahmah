@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import { formatOperationalDateTime } from "@/lib/date-format";
 import type { RestoreResponse } from "@/pages/backup-restore/types";
 
 interface BackupRestoreResultCardProps {
@@ -20,7 +20,7 @@ export function BackupRestoreResultCard({
         <div className="text-sm text-muted-foreground">
           Backup: {lastRestoreResult.backupName || lastRestoreResult.backupId || "-"}
           {lastRestoreResult.restoredAt
-            ? ` | Restored at ${formatDateTimeDDMMYYYY(lastRestoreResult.restoredAt, { includeSeconds: true })}`
+            ? ` | Restored at ${formatOperationalDateTime(lastRestoreResult.restoredAt)}`
             : ""}
           {typeof lastRestoreResult.durationMs === "number"
             ? ` | Duration ${(lastRestoreResult.durationMs / 1000).toFixed(1)}s`

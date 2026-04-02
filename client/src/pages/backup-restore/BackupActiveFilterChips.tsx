@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatIsoDateRangeDDMMYYYY } from "@/lib/date-format";
 import { backupDatePresets, backupSortOptions } from "@/pages/backup-restore/utils";
 
 interface BackupActiveFilterChipsProps {
@@ -68,7 +69,7 @@ export function BackupActiveFilterChips({
       {datePreset !== "all" ? (
         <Badge variant="secondary" className="gap-1">
           Time: {datePreset === "custom"
-            ? `${dateFrom || "?"} - ${dateTo || "?"}`
+            ? formatIsoDateRangeDDMMYYYY(dateFrom, dateTo)
             : backupDatePresets.find((preset) => preset.value === datePreset)?.label}
           <Button
             variant="ghost"

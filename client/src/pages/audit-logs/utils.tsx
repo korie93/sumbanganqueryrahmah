@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { formatDateTimeMalaysia } from "@/lib/date-format";
+import { formatOperationalDateTime } from "@/lib/date-format";
 import type {
   AuditActionOption,
   AuditDatePresetOption,
@@ -143,7 +143,7 @@ export function filterAuditLogs(logs: AuditLogRecord[], filters: AuditLogFilters
 }
 
 export function formatAuditTime(dateStr: string) {
-  return formatDateTimeMalaysia(dateStr, { includeSeconds: true, fallback: dateStr });
+  return formatOperationalDateTime(dateStr, { fallback: dateStr });
 }
 
 export function getAuditActionLabel(action: string) {

@@ -25,7 +25,7 @@ export function BackupListItem({
 }: BackupListItemProps) {
   return (
     <div
-      className="p-4 rounded-lg border bg-muted/30 space-y-3"
+      className="space-y-3 rounded-xl border border-border/70 bg-card/70 p-4 shadow-sm"
       data-testid={`backup-item-${backup.id}`}
     >
       <div className="flex items-center justify-between gap-4 flex-wrap">
