@@ -510,7 +510,7 @@ const applySmokeCollectionNicknameSession = async (page, nickname) => {
 
 const waitForCollectionListResponse = async (page, searchValue) => {
   const normalizedSearchValue = String(searchValue || "").trim();
-  await page.waitForResponse(
+  return page.waitForResponse(
     (response) => {
       if (response.request().method() !== "GET") {
         return false;
@@ -533,6 +533,26 @@ const waitForCollectionListResponse = async (page, searchValue) => {
   );
 };
 
+const recordMatchesCollectionSearch = (record, searchValue) => {
+  const normalizedSearchValue = String(searchValue || "").trim().toLowerCase();
+  if (!normalizedSearchValue) {
+    return false;
+  }
+
+  const candidateFields = [
+    record?.customerName,
+    record?.icNumber,
+    record?.accountNumber,
+    record?.batch,
+    record?.customerPhone,
+    record?.amount,
+  ];
+
+  return candidateFields.some((fieldValue) =>
+    String(fieldValue ?? "").trim().toLowerCase().includes(normalizedSearchValue),
+  );
+};
+
 const waitForCollectionRecordVisible = async (page, searchValue) => {
   const normalizedSearchValue = String(searchValue || "").trim();
   const desktopRow = page.locator("tr", { hasText: normalizedSearchValue }).first();
@@ -550,11 +570,33 @@ const waitForCollectionRecordVisible = async (page, searchValue) => {
 const filterCollectionRecordsBySearch = async (page, searchValue) => {
   const normalizedSearchValue = String(searchValue || "").trim();
   const searchInput = page.getByPlaceholder("Cari nama / IC / akaun / batch / telefon / jumlah bayaran");
-  await searchInput.fill(normalizedSearchValue);
-  const listResponsePromise = waitForCollectionListResponse(page, normalizedSearchValue);
-  await page.getByRole("button", { name: "Filter", exact: true }).click();
-  await listResponsePromise;
-  return waitForCollectionRecordVisible(page, normalizedSearchValue);
+  let lastListResponse = null;
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await searchInput.fill(normalizedSearchValue);
+    const listResponsePromise = waitForCollectionListResponse(page, normalizedSearchValue);
+    await page.getByRole("button", { name: "Filter", exact: true }).click();
+    const listResponse = await listResponsePromise;
+    lastListResponse = listResponse;
+    const payload = await listResponse.json().catch(() => null);
+
+    if (listResponse.status() === 429) {
+      await waitForRateLimitRecovery(payload, 1_000);
+      continue;
+    }
+
+    const records = Array.isArray(payload?.records) ? payload.records : [];
+    if (records.some((record) => recordMatchesCollectionSearch(record, normalizedSearchValue))) {
+      return waitForCollectionRecordVisible(page, normalizedSearchValue);
+    }
+
+    await page.waitForTimeout(300);
+  }
+
+  throw new Error(
+    `Collection records search did not surface "${normalizedSearchValue}" after filtering. `
+    + `Last status: ${lastListResponse ? lastListResponse.status() : "unknown"}`,
+  );
 };
 
 const fillReceiptAmountInput = async (scope, amountValue) => {

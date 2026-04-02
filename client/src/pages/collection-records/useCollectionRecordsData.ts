@@ -397,6 +397,7 @@ export function useCollectionRecordsData({
       return;
     }
 
+    skipNextAutoFetchRef.current = true;
     await loadFirstPage(buildCurrentFilters(searchInputRef.current, pageSize, 0));
   }, [
     buildCurrentFilters,
