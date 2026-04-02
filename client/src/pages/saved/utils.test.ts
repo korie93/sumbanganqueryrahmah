@@ -10,6 +10,13 @@ test("formatSavedImportDate renders saved timestamps in Malaysia time", () => {
   );
 });
 
+test("formatSavedImportDate normalizes database-style timestamps without timezone", () => {
+  assert.equal(
+    formatSavedImportDate("2026-04-02 10:27:00"),
+    "02/04/2026, 6:27 PM",
+  );
+});
+
 test("formatSavedFilterDate renders filter labels in Malaysia date format", () => {
   assert.equal(
     formatSavedFilterDate(new Date("2026-03-29T16:30:00.000Z")),

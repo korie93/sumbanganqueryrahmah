@@ -41,3 +41,10 @@ test("formatAuditTime renders audit timestamps in Malaysia time", () => {
     "30/03/2026, 12:30 AM",
   );
 });
+
+test("formatAuditTime normalizes database-style timestamps without timezone", () => {
+  assert.equal(
+    formatAuditTime("2026-04-02 10:27:00"),
+    "02/04/2026, 6:27 PM",
+  );
+});

@@ -9,6 +9,13 @@ test("formatDateTime renders managed account timestamps with AM and PM in Malays
   );
 });
 
+test("formatDateTime normalizes database-style timestamps without timezone", () => {
+  assert.equal(
+    formatDateTime("2026-04-02 10:27:00"),
+    "02/04/2026, 6:27 PM",
+  );
+});
+
 test("formatDateTime falls back safely when the timestamp is missing", () => {
   assert.equal(formatDateTime(null), "-");
 });
