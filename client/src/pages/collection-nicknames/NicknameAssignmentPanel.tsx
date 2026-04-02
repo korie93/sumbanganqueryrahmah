@@ -1,4 +1,5 @@
 import type { CollectionAdminGroup, CollectionStaffNickname } from "@/lib/api";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   NicknameAssignmentHeader,
   type NicknameAssignmentHeaderProps,
@@ -67,6 +68,7 @@ export function NicknameAssignmentPanel({
   onResetNicknamePassword,
   onDeleteNickname,
 }: NicknameAssignmentPanelProps) {
+  const isMobile = useIsMobile();
   const headerProps: NicknameAssignmentHeaderProps = {
     selectedGroup,
     selectedGroupId,
@@ -103,7 +105,9 @@ export function NicknameAssignmentPanel({
   };
 
   return (
-    <div className="rounded-xl border border-border/60 bg-background/40 p-3">
+    <div
+      className={`border border-border/60 bg-background/40 ${isMobile ? "rounded-2xl p-4" : "rounded-xl p-3"}`}
+    >
       <NicknameAssignmentHeader {...headerProps} />
       <NicknameAssignmentTable {...tableProps} />
     </div>

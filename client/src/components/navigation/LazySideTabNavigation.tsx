@@ -17,15 +17,21 @@ type LazySideTabNavigationProps = SideTabNavigationProps & {
 function SideTabNavigationFallback({
   className,
   fallbackClassName,
+  hideMobileTrigger,
   menuLabel,
   navigationLabel,
-}: Pick<LazySideTabNavigationProps, "className" | "fallbackClassName" | "menuLabel" | "navigationLabel">) {
+}: Pick<
+  LazySideTabNavigationProps,
+  "className" | "fallbackClassName" | "hideMobileTrigger" | "menuLabel" | "navigationLabel"
+>) {
   return (
     <>
-      <Button type="button" variant="outline" size="sm" className="lg:hidden" disabled>
-        <Menu className="mr-2 h-4 w-4" />
-        {menuLabel || "Menu"}
-      </Button>
+      {!hideMobileTrigger ? (
+        <Button type="button" variant="outline" size="sm" className="lg:hidden" disabled>
+          <Menu className="mr-2 h-4 w-4" />
+          {menuLabel || "Menu"}
+        </Button>
+      ) : null}
 
       <aside
         className={cn(
@@ -67,6 +73,7 @@ export function LazySideTabNavigation({
         <SideTabNavigationFallback
           className={props.className}
           fallbackClassName={fallbackClassName}
+          hideMobileTrigger={props.hideMobileTrigger}
           menuLabel={props.menuLabel}
           navigationLabel={props.navigationLabel}
         />

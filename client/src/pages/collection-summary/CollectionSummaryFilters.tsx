@@ -1,5 +1,6 @@
 import { Suspense, lazy } from "react";
 import { Label } from "@/components/ui/label";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionStaffNickname } from "@/lib/api";
 
 const CollectionNicknameMultiSelect = lazy(() =>
@@ -45,6 +46,8 @@ export function CollectionSummaryFilters({
   onSelectAllVisible,
   onClearAllSelected,
 }: CollectionSummaryFiltersProps) {
+  const isMobile = useIsMobile();
+
   return (
     <div
       className={`grid gap-3 ${
@@ -58,7 +61,9 @@ export function CollectionSummaryFilters({
           value={selectedYear}
           onChange={(event) => onSelectedYearChange(event.target.value)}
           aria-label="Year"
-          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+          className={`w-full border border-input bg-background px-3 text-sm ${
+            isMobile ? "h-12 rounded-2xl" : "h-10 rounded-md"
+          }`}
         >
           {yearOptions.map((year) => (
             <option key={year} value={String(year)}>
@@ -73,7 +78,11 @@ export function CollectionSummaryFilters({
           fallback={
             <div className="space-y-1">
               <Label>Staff Nickname (optional)</Label>
-              <div className="h-10 animate-pulse rounded-xl border border-border/60 bg-muted/20" />
+              <div
+                className={`animate-pulse border border-border/60 bg-muted/20 ${
+                  isMobile ? "h-12 rounded-2xl" : "h-10 rounded-xl"
+                }`}
+              />
             </div>
           }
         >
@@ -91,6 +100,8 @@ export function CollectionSummaryFilters({
             onToggleNickname={onToggleNickname}
             onSelectAllVisible={onSelectAllVisible}
             onClearAllSelected={onClearAllSelected}
+            triggerClassName={isMobile ? "h-12 rounded-2xl bg-background/95" : undefined}
+            popoverClassName={isMobile ? "w-[min(360px,calc(100vw-3rem))] rounded-2xl border-border/70 bg-popover/98 shadow-lg" : undefined}
           />
         </Suspense>
       ) : null}

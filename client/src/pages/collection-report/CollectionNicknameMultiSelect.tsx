@@ -4,6 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { CollectionStaffNickname } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 type CollectionNicknameMultiSelectProps = {
   label: string;
@@ -19,6 +20,8 @@ type CollectionNicknameMultiSelectProps = {
   onToggleNickname: (nickname: string, checked: boolean) => void;
   onSelectAllVisible: () => void;
   onClearAllSelected: () => void;
+  triggerClassName?: string;
+  popoverClassName?: string;
 };
 
 export function CollectionNicknameMultiSelect({
@@ -35,18 +38,28 @@ export function CollectionNicknameMultiSelect({
   onToggleNickname,
   onSelectAllVisible,
   onClearAllSelected,
+  triggerClassName,
+  popoverClassName,
 }: CollectionNicknameMultiSelectProps) {
   return (
     <div className="space-y-1">
       <Label>{label}</Label>
       <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
-          <Button variant="outline" className="w-full justify-between" disabled={loading}>
+          <Button
+            variant="outline"
+            className={cn("w-full justify-between", triggerClassName)}
+            disabled={loading}
+          >
             <span className="truncate text-left">{selectedLabel}</span>
             <ChevronDown className="h-4 w-4 shrink-0" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-[340px] p-2">
+        <PopoverContent
+          align="start"
+          className={cn("w-[min(340px,calc(100vw-2rem))] p-2", popoverClassName)}
+          data-floating-ai-avoid="true"
+        >
           {options.length === 0 ? (
             <p className="px-2 py-3 text-sm text-muted-foreground">
               Tiada nickname tersedia untuk akaun anda.

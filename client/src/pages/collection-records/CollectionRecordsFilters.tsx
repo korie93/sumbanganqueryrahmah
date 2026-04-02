@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionStaffNickname } from "@/lib/api";
 
 export interface CollectionRecordsFiltersProps {
@@ -38,6 +39,86 @@ export function CollectionRecordsFilters({
   onFilter,
   onReset,
 }: CollectionRecordsFiltersProps) {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label>From Date</Label>
+          <DatePickerField
+            value={fromDate}
+            onChange={onFromDateChange}
+            placeholder="Select from date..."
+            ariaLabel="From Date"
+            buttonTestId="collection-records-from-date"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>To Date</Label>
+          <DatePickerField
+            value={toDate}
+            onChange={onToDateChange}
+            placeholder="Select to date..."
+            ariaLabel="To Date"
+            buttonTestId="collection-records-to-date"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Search</Label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchInput}
+              onChange={(event) => onSearchInputChange(event.target.value)}
+              placeholder="Cari nama / IC / akaun / batch / telefon / jumlah bayaran"
+              className="h-12 rounded-2xl pl-9 text-base"
+            />
+          </div>
+        </div>
+
+        {canUseNicknameFilter ? (
+          <div className="space-y-2">
+            <Label htmlFor="collection-records-nickname-filter">Staff Nickname (optional)</Label>
+            <select
+              id="collection-records-nickname-filter"
+              value={nicknameFilter}
+              onChange={(event) => onNicknameFilterChange(event.target.value)}
+              disabled={loadingNicknames}
+              aria-label="Staff Nickname (optional)"
+              className="h-12 w-full rounded-2xl border border-input bg-background px-3 text-sm"
+            >
+              <option value="all">Semua staff</option>
+              {nicknameOptions
+                .filter((item) => item.isActive)
+                .map((item) => (
+                  <option key={item.id} value={item.nickname}>
+                    {item.nickname}
+                  </option>
+                ))}
+            </select>
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <Button className="h-12 w-full rounded-2xl" onClick={onFilter} disabled={loadingRecords}>
+            Filter
+          </Button>
+          <Button
+            variant="outline"
+            className="h-12 w-full rounded-2xl"
+            onClick={onReset}
+            disabled={loadingRecords}
+          >
+            Reset
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`grid gap-3 ${

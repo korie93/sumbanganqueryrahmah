@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -44,11 +45,16 @@ export function CollectionNicknameStaffFormDialogs({
   onEditRoleScopeChange,
   onSaveEditNickname,
 }: CollectionNicknameStaffFormDialogsProps) {
+  const isMobile = useIsMobile();
+
   return (
     <>
       <Dialog open={addOpen} onOpenChange={onAddOpenChange}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent
+          className={isMobile ? "max-w-md rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : "max-w-md"}
+          data-floating-ai-avoid="true"
+        >
+          <DialogHeader className={isMobile ? "pr-8 text-left" : undefined}>
             <DialogTitle>Tambah Nickname</DialogTitle>
             <DialogDescription>Tambah nickname rasmi baharu dan tetapkan role scope.</DialogDescription>
           </DialogHeader>
@@ -59,12 +65,13 @@ export function CollectionNicknameStaffFormDialogs({
               onChange={(event) => onNewNicknameChange(event.target.value)}
               placeholder="Contoh: SW.NAMA_NO"
               maxLength={64}
+              className={isMobile ? "h-12 rounded-2xl" : undefined}
             />
           </div>
           <div className="space-y-2">
             <Label>Role Scope</Label>
             <Select value={newRoleScope} onValueChange={onNewRoleScopeChange}>
-              <SelectTrigger>
+              <SelectTrigger className={isMobile ? "h-12 rounded-2xl" : undefined}>
                 <SelectValue placeholder="Pilih role scope" />
               </SelectTrigger>
               <SelectContent>
@@ -76,11 +83,20 @@ export function CollectionNicknameStaffFormDialogs({
               </SelectContent>
             </Select>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => onAddOpenChange(false)} disabled={addingNickname}>
+          <DialogFooter className={isMobile ? "gap-3 pt-2" : undefined}>
+            <Button
+              variant="outline"
+              onClick={() => onAddOpenChange(false)}
+              disabled={addingNickname}
+              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+            >
               Batal
             </Button>
-            <Button onClick={onCreateNickname} disabled={addingNickname}>
+            <Button
+              onClick={onCreateNickname}
+              disabled={addingNickname}
+              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+            >
               {addingNickname ? "Saving..." : "Simpan"}
             </Button>
           </DialogFooter>
@@ -88,19 +104,27 @@ export function CollectionNicknameStaffFormDialogs({
       </Dialog>
 
       <Dialog open={Boolean(editingNickname)} onOpenChange={onEditingNicknameOpenChange}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent
+          className={isMobile ? "max-w-md rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : "max-w-md"}
+          data-floating-ai-avoid="true"
+        >
+          <DialogHeader className={isMobile ? "pr-8 text-left" : undefined}>
             <DialogTitle>Edit Nickname</DialogTitle>
             <DialogDescription>Kemaskini nama nickname dan role scope akses nickname.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <Label>Nickname</Label>
-            <Input value={editValue} onChange={(event) => onEditValueChange(event.target.value)} maxLength={64} />
+            <Input
+              value={editValue}
+              onChange={(event) => onEditValueChange(event.target.value)}
+              maxLength={64}
+              className={isMobile ? "h-12 rounded-2xl" : undefined}
+            />
           </div>
           <div className="space-y-2">
             <Label>Role Scope</Label>
             <Select value={editRoleScope} onValueChange={onEditRoleScopeChange}>
-              <SelectTrigger>
+              <SelectTrigger className={isMobile ? "h-12 rounded-2xl" : undefined}>
                 <SelectValue placeholder="Pilih role scope" />
               </SelectTrigger>
               <SelectContent>
@@ -112,11 +136,20 @@ export function CollectionNicknameStaffFormDialogs({
               </SelectContent>
             </Select>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => onEditingNicknameOpenChange(false)} disabled={savingEdit}>
+          <DialogFooter className={isMobile ? "gap-3 pt-2" : undefined}>
+            <Button
+              variant="outline"
+              onClick={() => onEditingNicknameOpenChange(false)}
+              disabled={savingEdit}
+              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+            >
               Batal
             </Button>
-            <Button onClick={onSaveEditNickname} disabled={savingEdit}>
+            <Button
+              onClick={onSaveEditNickname}
+              disabled={savingEdit}
+              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+            >
               {savingEdit ? "Saving..." : "Simpan"}
             </Button>
           </DialogFooter>

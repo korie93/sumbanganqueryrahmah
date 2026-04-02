@@ -46,8 +46,10 @@ export function NicknameAssignmentHeader({
     <>
       <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-2">
-          <p className="text-sm font-semibold">Nickname List / Assignment</p>
-          <p className="text-xs text-muted-foreground">
+          <p className={isMobile ? "text-base font-semibold" : "text-sm font-semibold"}>
+            Nickname List / Assignment
+          </p>
+          <p className={`${isMobile ? "text-sm" : "text-xs"} text-muted-foreground`}>
             {selectedGroup ? `Group dipilih: ${selectedGroup.leaderNickname}` : "Pilih admin group dahulu."}
           </p>
           <div className="flex flex-wrap items-center gap-2">
@@ -101,6 +103,7 @@ export function NicknameAssignmentHeader({
           onChange={(event) => onNicknameSearchChange(event.target.value)}
           placeholder="Cari nickname..."
           enterKeyHint="search"
+          className={isMobile ? "h-12 rounded-2xl" : undefined}
         />
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center" data-floating-ai-avoid="true">
           <Button variant="outline" onClick={onSelectAll} disabled={!selectedGroupId} className="w-full sm:w-auto">

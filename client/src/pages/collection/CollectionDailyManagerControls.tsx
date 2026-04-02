@@ -4,6 +4,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 import type { CollectionDailyUser } from "@/lib/api";
 import type { EditableCalendarDay } from "@/pages/collection/CollectionDailyShared";
 
@@ -36,12 +38,17 @@ export function CollectionDailyUserFilterControl({
   onSelectAllUsers,
   onClearSelectedUsers,
 }: CollectionDailyUserFilterControlProps) {
+  const isMobile = useIsMobile();
+
   return (
     <Popover open={userPopoverOpen} onOpenChange={onUserPopoverOpenChange}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className="w-full justify-between"
+          className={cn(
+            "w-full justify-between",
+            isMobile ? "h-12 rounded-2xl px-4 text-left" : "",
+          )}
           disabled={loadingUsers}
           data-testid="collection-daily-user-trigger"
         >
@@ -56,7 +63,10 @@ export function CollectionDailyUserFilterControl({
       {userPopoverOpen ? (
         <PopoverContent
           align="start"
-          className="w-[min(340px,calc(100vw-1.5rem))] p-2"
+          className={cn(
+            "w-[min(340px,calc(100vw-1.5rem))] p-2",
+            isMobile ? "rounded-2xl" : "",
+          )}
           data-testid="collection-daily-user-popover"
         >
           {loadingUsers ? (
@@ -140,8 +150,15 @@ export function CollectionDailyTargetControls({
   onSaveCalendar,
   calendarDays,
 }: CollectionDailyTargetControlsProps) {
+  const isMobile = useIsMobile();
+
   return (
-    <div className="grid gap-3 rounded-xl border border-border/70 bg-background/70 p-4 md:grid-cols-[220px_auto] md:items-end">
+    <div
+      className={cn(
+        "gap-3 border border-border/70 bg-background/70 p-4",
+        isMobile ? "space-y-4 rounded-2xl" : "grid rounded-xl md:grid-cols-[220px_auto] md:items-end",
+      )}
+    >
       <div className="space-y-1">
         <Label>Monthly Target (RM)</Label>
         <Input
@@ -151,6 +168,7 @@ export function CollectionDailyTargetControls({
           value={monthlyTargetInput}
           onChange={(event) => onMonthlyTargetInputChange(event.target.value)}
           disabled={!canEditTarget}
+          className={isMobile ? "h-12 rounded-2xl" : undefined}
         />
         {!canEditTarget ? (
           <p className="text-xs text-muted-foreground">
@@ -159,10 +177,17 @@ export function CollectionDailyTargetControls({
         ) : null}
       </div>
       <div
-        className="flex flex-col gap-2 sm:flex-row sm:flex-wrap"
+        className={cn(
+          "gap-2",
+          isMobile ? "grid sm:grid-cols-2" : "flex flex-col sm:flex-row sm:flex-wrap",
+        )}
         data-floating-ai-avoid="true"
       >
-        <Button className="w-full sm:w-auto" onClick={onSaveTarget} disabled={savingTarget || !canEditTarget}>
+        <Button
+          className={cn("w-full", isMobile ? "h-12 rounded-2xl" : "sm:w-auto")}
+          onClick={onSaveTarget}
+          disabled={savingTarget || !canEditTarget}
+        >
           {savingTarget ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
@@ -172,7 +197,7 @@ export function CollectionDailyTargetControls({
         </Button>
         <Button
           variant="outline"
-          className="w-full sm:w-auto"
+          className={cn("w-full", isMobile ? "h-12 rounded-2xl" : "sm:w-auto")}
           onClick={onSaveCalendar}
           disabled={savingCalendar || calendarDays.length === 0}
         >

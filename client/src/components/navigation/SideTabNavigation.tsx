@@ -19,6 +19,7 @@ export type SideTabNavigationProps = {
   onSelect: (key: string) => void;
   mobileOpen: boolean;
   onMobileOpenChange: (open: boolean) => void;
+  hideMobileTrigger?: boolean;
   collapsed: boolean;
   onCollapsedChange: (value: boolean) => void;
   menuLabel?: string;
@@ -34,6 +35,7 @@ export function SideTabNavigation({
   onSelect,
   mobileOpen,
   onMobileOpenChange,
+  hideMobileTrigger = false,
   collapsed,
   onCollapsedChange,
   menuLabel = "Menu",
@@ -53,7 +55,7 @@ export function SideTabNavigation({
         type="button"
         variant="outline"
         size="sm"
-        className="lg:hidden"
+        className={cn("lg:hidden", hideMobileTrigger ? "hidden" : "")}
         onClick={() => onMobileOpenChange(true)}
       >
         <Menu className="mr-2 h-4 w-4" />
