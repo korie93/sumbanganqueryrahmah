@@ -1,12 +1,16 @@
 import { downloadBlob } from "@/lib/download";
 import { formatDateTimeMalaysia } from "@/lib/date-format";
 import type { AuditLogRecord } from "@/pages/audit-logs/types";
-import { formatAuditTime, getAuditActionLabel } from "@/pages/audit-logs/utils";
+import { getAuditActionLabel } from "@/pages/audit-logs/utils";
 
 let auditLogsJsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
 
 function escapeCsvValue(value: string) {
   return `"${(value || "").replace(/"/g, '""')}"`;
+}
+
+function formatAuditExportTime(value: string) {
+  return formatDateTimeMalaysia(value, { includeSeconds: true, fallback: value });
 }
 
 export function buildAuditLogsCsvContent(logs: AuditLogRecord[]) {
@@ -20,7 +24,7 @@ export function buildAuditLogsCsvContent(logs: AuditLogRecord[]) {
         escapeCsvValue(log.targetUser || ""),
         escapeCsvValue(log.targetResource || ""),
         escapeCsvValue(log.details || ""),
-        escapeCsvValue(formatAuditTime(log.timestamp)),
+        escapeCsvValue(formatAuditExportTime(log.timestamp)),
       ].join(","),
     ),
   ].join("\n");
@@ -141,7 +145,7 @@ export async function exportAuditLogsToPdf(logs: AuditLogRecord[]) {
       log.targetUser || "-",
       log.targetResource || "-",
       log.details || "-",
-      formatAuditTime(log.timestamp),
+      formatAuditExportTime(log.timestamp),
     ];
 
     rowData.forEach((cell, index) => {
