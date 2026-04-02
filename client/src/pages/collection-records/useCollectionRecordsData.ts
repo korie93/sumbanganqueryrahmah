@@ -18,6 +18,7 @@ import {
   isValidDate,
   parseApiError,
 } from "@/pages/collection/utils";
+import { buildCollectionRecordFilterSnapshot } from "@/pages/collection-records/collection-record-filters";
 import {
   buildCollectionRecordsCacheKey,
   createCollectionRecordsCache,
@@ -61,6 +62,10 @@ export function useCollectionRecordsData({
   const cursorHistoryRef = useRef<Array<string | null>>([null]);
   const skipInitialAutoFetchRef = useRef(true);
   const skipNextAutoFetchRef = useRef(false);
+  const fromDateRef = useRef("");
+  const toDateRef = useRef("");
+  const searchInputRef = useRef("");
+  const nicknameFilterRef = useRef("all");
 
   const [records, setRecords] = useState<CollectionRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
@@ -78,30 +83,42 @@ export function useCollectionRecordsData({
 
   const deferredSearchInput = useDeferredValue(searchInput);
 
+  const handleFromDateChange = useCallback((value: string) => {
+    fromDateRef.current = value;
+    setFromDate(value);
+  }, []);
+
+  const handleToDateChange = useCallback((value: string) => {
+    toDateRef.current = value;
+    setToDate(value);
+  }, []);
+
+  const handleSearchInputChange = useCallback((value: string) => {
+    searchInputRef.current = value;
+    setSearchInput(value);
+  }, []);
+
+  const handleNicknameFilterChange = useCallback((value: string) => {
+    nicknameFilterRef.current = value;
+    setNicknameFilter(value);
+  }, []);
+
   const buildCurrentFilters = useCallback(
     (
-      searchValue = searchInput.trim(),
+      searchValue = searchInputRef.current,
       limit = pageSize,
       offset = 0,
-    ): CollectionRecordFilters => ({
-      from: fromDate || undefined,
-      to: toDate || undefined,
-      search: searchValue || undefined,
-      nickname:
-        canUseNicknameFilter && nicknameFilter !== "all"
-          ? nicknameFilter
-          : undefined,
-      limit,
-      offset,
-    }),
-    [
-      canUseNicknameFilter,
-      fromDate,
-      nicknameFilter,
-      pageSize,
-      searchInput,
-      toDate,
-    ],
+    ): CollectionRecordFilters =>
+      buildCollectionRecordFilterSnapshot({
+        fromDate: fromDateRef.current,
+        toDate: toDateRef.current,
+        searchInput: searchValue,
+        canUseNicknameFilter,
+        nicknameFilter: nicknameFilterRef.current,
+        limit,
+        offset,
+      }),
+    [canUseNicknameFilter, pageSize],
   );
 
   const abortRecordsRequest = useCallback(() => {
@@ -128,11 +145,14 @@ export function useCollectionRecordsData({
       if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
       const options = Array.isArray(response?.nicknames) ? response.nicknames : [];
       setNicknameOptions(options);
-      setNicknameFilter((previous) =>
-        previous !== "all" && !options.some((item) => item.nickname === previous)
-          ? "all"
-          : previous,
-      );
+      setNicknameFilter((previous) => {
+        const nextValue =
+          previous !== "all" && !options.some((item) => item.nickname === previous)
+            ? "all"
+            : previous;
+        nicknameFilterRef.current = nextValue;
+        return nextValue;
+      });
     } catch (error: unknown) {
       if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
       toast({
@@ -349,7 +369,10 @@ export function useCollectionRecordsData({
   ]);
 
   const handleFilter = useCallback(async () => {
-    if (fromDate && !isValidDate(fromDate)) {
+    const currentFromDate = fromDateRef.current;
+    const currentToDate = toDateRef.current;
+
+    if (currentFromDate && !isValidDate(currentFromDate)) {
       toast({
         title: "Validation Error",
         description: "From Date is invalid.",
@@ -357,7 +380,7 @@ export function useCollectionRecordsData({
       });
       return;
     }
-    if (toDate && !isValidDate(toDate)) {
+    if (currentToDate && !isValidDate(currentToDate)) {
       toast({
         title: "Validation Error",
         description: "To Date is invalid.",
@@ -365,7 +388,7 @@ export function useCollectionRecordsData({
       });
       return;
     }
-    if (fromDate && toDate && fromDate > toDate) {
+    if (currentFromDate && currentToDate && currentFromDate > currentToDate) {
       toast({
         title: "Validation Error",
         description: "From Date cannot be later than To Date.",
@@ -374,25 +397,28 @@ export function useCollectionRecordsData({
       return;
     }
 
-    await loadFirstPage(buildCurrentFilters(searchInput.trim(), pageSize, 0));
+    await loadFirstPage(buildCurrentFilters(searchInputRef.current, pageSize, 0));
   }, [
     buildCurrentFilters,
-    fromDate,
     loadFirstPage,
     pageSize,
-    searchInput,
-    toDate,
     toast,
   ]);
 
   const handleResetFilter = useCallback(() => {
     skipNextAutoFetchRef.current = true;
-    setFromDate("");
-    setToDate("");
-    setSearchInput("");
-    setNicknameFilter("all");
+    handleFromDateChange("");
+    handleToDateChange("");
+    handleSearchInputChange("");
+    handleNicknameFilterChange("all");
     void loadFirstPage({});
-  }, [loadFirstPage]);
+  }, [
+    handleFromDateChange,
+    handleNicknameFilterChange,
+    handleSearchInputChange,
+    handleToDateChange,
+    loadFirstPage,
+  ]);
 
   const handlePrevPage = useCallback(() => {
     if (loadingRecords || page <= 1) {
@@ -456,10 +482,10 @@ export function useCollectionRecordsData({
     totalAmount,
     hasNextPage: nextCursor !== null,
     hasPreviousPage: page > 1,
-    setFromDate,
-    setToDate,
-    setSearchInput,
-    setNicknameFilter,
+    setFromDate: handleFromDateChange,
+    setToDate: handleToDateChange,
+    setSearchInput: handleSearchInputChange,
+    setNicknameFilter: handleNicknameFilterChange,
     buildCurrentFilters,
     loadRecords: loadFirstPage,
     handleFilter,
