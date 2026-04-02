@@ -481,6 +481,120 @@ const getInputByLabel = (page, labelText) =>
     .locator("input")
     .first();
 
+const getDatePickerButtonByLabel = (page, labelText) =>
+  page
+    .locator("label", { hasText: labelText })
+    .locator("xpath=..")
+    .locator('button[type="button"]')
+    .first();
+
+const getOrdinalSuffix = (day) => {
+  const normalizedDay = Number(day);
+  const mod100 = normalizedDay % 100;
+  if (mod100 >= 11 && mod100 <= 13) {
+    return "th";
+  }
+
+  switch (normalizedDay % 10) {
+    case 1:
+      return "st";
+    case 2:
+      return "nd";
+    case 3:
+      return "rd";
+    default:
+      return "th";
+  }
+};
+
+const parseIsoDateParts = (isoDate) => {
+  const matched = String(isoDate || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  assert(matched, `Expected an ISO date in YYYY-MM-DD format, got "${String(isoDate || "")}"`);
+  return {
+    year: Number(matched[1]),
+    month: Number(matched[2]),
+    day: Number(matched[3]),
+  };
+};
+
+const formatDatePickerDayLabel = (isoDate) => {
+  const { year, month, day } = parseIsoDateParts(isoDate);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const weekdayLabel = date.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
+  const monthLabel = date.toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
+  return `${day}${getOrdinalSuffix(day)} ${monthLabel} (${weekdayLabel})`;
+};
+
+const formatDatePickerMonthCaption = (isoDate) => {
+  const { year, month } = parseIsoDateParts(isoDate);
+  const date = new Date(Date.UTC(year, month - 1, 1));
+  const monthLabel = date.toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
+  return `${monthLabel} ${year}`;
+};
+
+const formatIsoDateForSmokeButtonLabel = (isoDate) => {
+  const { year, month, day } = parseIsoDateParts(isoDate);
+  return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year}`;
+};
+
+const readCaptionMonthIndex = async (captionLocator) => {
+  const captionText = String((await captionLocator.textContent()) || "").trim();
+  const matched = captionText.match(/^([A-Za-z]+)\s+(\d{4})$/);
+  assert(matched, `Could not parse date-picker month caption "${captionText}"`);
+  const parsedMonthDate = new Date(`${matched[1]} 1, ${matched[2]} 00:00:00 UTC`);
+  assert(!Number.isNaN(parsedMonthDate.getTime()), `Could not parse date-picker month caption "${captionText}"`);
+  return parsedMonthDate.getUTCFullYear() * 12 + parsedMonthDate.getUTCMonth();
+};
+
+const setDateFieldValue = async (page, { labelText, value, buttonTestId }) => {
+  const input = getInputByLabel(page, labelText);
+  if (await input.isVisible().catch(() => false)) {
+    await input.fill(value);
+    return;
+  }
+
+  const button = buttonTestId
+    ? page.getByTestId(buttonTestId).first()
+    : getDatePickerButtonByLabel(page, labelText);
+  await button.waitFor({ state: "visible", timeout: 15_000 });
+  await button.click();
+
+  const targetMonthIndex = (() => {
+    const { year, month } = parseIsoDateParts(value);
+    return year * 12 + (month - 1);
+  })();
+  const monthCaption = page.locator(".rdp-caption_label").last();
+  await monthCaption.waitFor({ state: "visible", timeout: 15_000 });
+
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const currentMonthIndex = await readCaptionMonthIndex(monthCaption);
+    if (currentMonthIndex === targetMonthIndex) {
+      break;
+    }
+
+    const navigateButton = currentMonthIndex < targetMonthIndex
+      ? page.getByRole("button", { name: "Go to next month" }).last()
+      : page.getByRole("button", { name: "Go to previous month" }).last();
+    await navigateButton.click();
+  }
+
+  const targetDayButton = page.getByRole("button", { name: formatDatePickerDayLabel(value), exact: true }).last();
+  await targetDayButton.waitFor({ state: "visible", timeout: 15_000 });
+  await targetDayButton.click();
+
+  if (buttonTestId) {
+    const expectedVisibleValue = formatIsoDateForSmokeButtonLabel(value);
+    await page.waitForFunction(
+      ({ testId, expectedText }) => {
+        const element = document.querySelector(`[data-testid="${testId}"]`);
+        return Boolean(element?.textContent?.includes(expectedText));
+      },
+      { testId: buttonTestId, expectedText: expectedVisibleValue },
+      { timeout: 15_000 },
+    );
+  }
+};
+
 const applySmokeCollectionNicknameSession = async (page, nickname) => {
   await page.evaluate((staffNickname) => {
     let username = String(localStorage.getItem("username") || "").trim().toLowerCase();
@@ -784,7 +898,11 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     await getInputByLabel(page, "IC Number").fill(`900101${uniqueSuffix.slice(-6)}`);
     await getInputByLabel(page, "Customer Phone Number").fill(`012${uniqueSuffix.slice(-7)}`);
     await getInputByLabel(page, "Account Number").fill(accountNumber);
-    await getInputByLabel(page, "Payment Date").fill(getLocalIsoDate());
+    await setDateFieldValue(page, {
+      labelText: "Payment Date",
+      value: getLocalIsoDate(),
+      buttonTestId: "save-collection-payment-date",
+    });
     await getInputByLabel(page, "Amount (RM)").fill("12.34");
     await page.locator('input[type="file"]').setInputFiles(saveReceiptPath);
     await page.getByText(saveReceiptName).first().waitFor({ timeout: 15_000 });
