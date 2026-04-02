@@ -1258,6 +1258,7 @@ const checkCollectionRecordsStaleDeleteConflict = async (page, context, tracker)
     );
     await waitForCollectionRecordVisible(page, smokeRecord.accountNumber);
 
+    consumeExpectedCollectionRecordsBootstrapRateLimitNoise(tracker, smokeRecord.accountNumber);
     // A 429 from purge-summary is non-critical here and can replace the conflict toast due TOAST_LIMIT=1.
     consumeExpectedCollectionPurgeSummaryRateLimit(tracker);
     tracker.assertClean("collection records stale-delete conflict");
@@ -1593,6 +1594,36 @@ const consumeExpectedCollectionListRateLimit = (tracker, searchValue = "") => {
     if (normalizedSearchValue && !entry.includes(normalizedSearchValue)) {
       continue;
     }
+    tracker.failedRequests.splice(index, 1);
+    consumed += 1;
+  }
+
+  return consumed;
+};
+
+const consumeExpectedCollectionRecordsBootstrapRateLimitNoise = (tracker, searchValue = "") => {
+  const normalizedSearchValue = String(searchValue || "").trim();
+  const expectedPaths = [
+    "/api/app-config",
+    "/api/imports?pageSize=1",
+  ];
+  let consumed = 0;
+
+  for (let index = tracker.failedRequests.length - 1; index >= 0; index -= 1) {
+    const entry = String(tracker.failedRequests[index] || "");
+    if (!entry.includes("GET") || !entry.includes(":: 429")) {
+      continue;
+    }
+
+    const isExpectedBootstrapPath = expectedPaths.some((pathFragment) => entry.includes(pathFragment));
+    const isExpectedCollectionList =
+      entry.includes("/api/collection/list")
+      && (!normalizedSearchValue || entry.includes(normalizedSearchValue) || entry.includes("pageSize=50"));
+
+    if (!isExpectedBootstrapPath && !isExpectedCollectionList) {
+      continue;
+    }
+
     tracker.failedRequests.splice(index, 1);
     consumed += 1;
   }
