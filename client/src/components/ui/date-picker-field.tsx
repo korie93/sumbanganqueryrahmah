@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
+import { Calendar, type CalendarProps } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,7 @@ interface DatePickerFieldProps {
   className?: string;
   contentClassName?: string;
   disabled?: boolean;
+  disabledDates?: CalendarProps["disabled"];
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
@@ -45,6 +46,7 @@ export function DatePickerField({
   className,
   contentClassName,
   disabled = false,
+  disabledDates,
   open: controlledOpen,
   onOpenChange,
 }: DatePickerFieldProps) {
@@ -90,6 +92,7 @@ export function DatePickerField({
         <Calendar
           mode="single"
           selected={selectedDate}
+          disabled={disabledDates}
           onSelect={(date) => {
             onChange(date ? toIsoDateValue(date) : "");
             setOpen(false);

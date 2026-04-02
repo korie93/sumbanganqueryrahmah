@@ -1,5 +1,6 @@
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { CollectionStaffNickname } from "@/lib/api";
@@ -47,11 +48,23 @@ export function CollectionRecordsFilters({
     >
       <div className="space-y-1">
         <Label>From Date</Label>
-        <Input type="date" value={fromDate} onChange={(event) => onFromDateChange(event.target.value)} />
+        <DatePickerField
+          value={fromDate}
+          onChange={onFromDateChange}
+          placeholder="Select from date..."
+          ariaLabel="From Date"
+          buttonTestId="collection-records-from-date"
+        />
       </div>
       <div className="space-y-1">
         <Label>To Date</Label>
-        <Input type="date" value={toDate} onChange={(event) => onToDateChange(event.target.value)} />
+        <DatePickerField
+          value={toDate}
+          onChange={onToDateChange}
+          placeholder="Select to date..."
+          ariaLabel="To Date"
+          buttonTestId="collection-records-to-date"
+        />
       </div>
       <div className="space-y-1">
         <Label>Search</Label>

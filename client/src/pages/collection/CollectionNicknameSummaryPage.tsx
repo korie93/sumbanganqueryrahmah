@@ -2,7 +2,7 @@ import { lazy, memo, Suspense } from "react";
 import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Label } from "@/components/ui/label";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCollectionNicknameSummaryData } from "@/pages/collection-nickname-summary/useCollectionNicknameSummaryData";
@@ -74,19 +74,23 @@ function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPagePr
 
           <div className="space-y-1">
             <Label>From Date</Label>
-            <Input
-              type="date"
+            <DatePickerField
               value={summaryData.fromDate}
-              onChange={(event) => summaryData.setFromDate(event.target.value)}
+              onChange={summaryData.setFromDate}
+              placeholder="Select from date..."
+              ariaLabel="From Date"
+              buttonTestId="collection-nickname-summary-from-date"
             />
           </div>
 
           <div className="space-y-1">
             <Label>To Date</Label>
-            <Input
-              type="date"
+            <DatePickerField
               value={summaryData.toDate}
-              onChange={(event) => summaryData.setToDate(event.target.value)}
+              onChange={summaryData.setToDate}
+              placeholder="Select to date..."
+              ariaLabel="To Date"
+              buttonTestId="collection-nickname-summary-to-date"
             />
           </div>
 

@@ -1,6 +1,7 @@
 import { memo, type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
@@ -361,12 +362,14 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           </div>
           <div className="space-y-2">
             <Label>Payment Date</Label>
-            <Input
-              type="date"
+            <DatePickerField
               value={paymentDate}
-              max={maxPaymentDate}
-              onChange={(e) => setPaymentDate(e.target.value)}
+              onChange={setPaymentDate}
               disabled={submitting}
+              placeholder="Select payment date..."
+              ariaLabel="Payment Date"
+              buttonTestId="save-collection-payment-date"
+              disabledDates={{ after: new Date(`${maxPaymentDate}T23:59:59`) }}
             />
             {isPaymentDateInFuture ? (
               <p className="text-xs text-destructive">Payment Date cannot be in the future.</p>
