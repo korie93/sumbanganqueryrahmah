@@ -36,6 +36,7 @@
     "smoke:preflight": "node scripts/smoke-preflight.mjs",
     "smoke:ui": "node scripts/ui-smoke.mjs",
     "smoke:ci-local": "node scripts/smoke-ci-local.mjs",
+    "smoke:local": "node scripts/smoke-local.mjs",
     "release:verify:local": "node scripts/release-readiness-local.mjs",
     "monitor:stale-conflicts": "node scripts/monitor-stale-conflicts.mjs",
     "dev": "npm run dev:server",

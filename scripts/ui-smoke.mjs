@@ -537,6 +537,14 @@ const formatIsoDateForSmokeButtonLabel = (isoDate) => {
   return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year}`;
 };
 
+const getDatePickerDayButton = (page, isoDate) => {
+  const { day } = parseIsoDateParts(isoDate);
+  return page
+    .locator('button[name="day"]:not(.day-outside):not([disabled])')
+    .filter({ hasText: new RegExp(`^\\s*${day}\\s*$`) })
+    .first();
+};
+
 const readCaptionMonthIndex = async (captionLocator) => {
   const captionText = String((await captionLocator.textContent()) || "").trim();
   const matched = captionText.match(/^([A-Za-z]+)\s+(\d{4})$/);
@@ -559,15 +567,44 @@ const setDateFieldValue = async (page, { labelText, value, buttonTestId }) => {
   await button.waitFor({ state: "visible", timeout: 15_000 });
   await button.click();
 
+  const targetDayButtonByLabel = page.getByRole("button", { name: formatDatePickerDayLabel(value), exact: true }).last();
+  const targetDayButton = getDatePickerDayButton(page, value);
+  const clickTargetDayIfVisible = async () => {
+    if (await targetDayButtonByLabel.isVisible().catch(() => false)) {
+      await targetDayButtonByLabel.click();
+      return true;
+    }
+    if (await targetDayButton.isVisible().catch(() => false)) {
+      await targetDayButton.click();
+      return true;
+    }
+    return false;
+  };
+
+  if (await clickTargetDayIfVisible()) {
+    return;
+  }
+
+  const targetMonthCaptionText = formatDatePickerMonthCaption(value);
+  const monthCaption = page.getByText(targetMonthCaptionText, { exact: true }).last();
+  if (await monthCaption.isVisible().catch(() => false)) {
+    if (await clickTargetDayIfVisible()) {
+      return;
+    }
+  }
+
   const targetMonthIndex = (() => {
     const { year, month } = parseIsoDateParts(value);
     return year * 12 + (month - 1);
   })();
-  const monthCaption = page.locator(".rdp-caption_label").last();
-  await monthCaption.waitFor({ state: "visible", timeout: 15_000 });
+  const visibleMonthCaption = page
+    .locator("div, span")
+    .filter({ hasText: /^[A-Za-z]+\s+\d{4}$/ })
+    .last();
+  await visibleMonthCaption.waitFor({ state: "visible", timeout: 15_000 });
 
   for (let attempt = 0; attempt < 24; attempt += 1) {
-    const currentMonthIndex = await readCaptionMonthIndex(monthCaption);
+    const currentMonthIndex = await readCaptionMonthIndex(visibleMonthCaption);
     if (currentMonthIndex === targetMonthIndex) {
       break;
     }
@@ -578,9 +615,12 @@ const setDateFieldValue = async (page, { labelText, value, buttonTestId }) => {
     await navigateButton.click();
   }
 
-  const targetDayButton = page.getByRole("button", { name: formatDatePickerDayLabel(value), exact: true }).last();
-  await targetDayButton.waitFor({ state: "visible", timeout: 15_000 });
-  await targetDayButton.click();
+  if (await targetDayButtonByLabel.isVisible().catch(() => false)) {
+    await targetDayButtonByLabel.click();
+  } else {
+    await targetDayButton.waitFor({ state: "visible", timeout: 15_000 });
+    await targetDayButton.click();
+  }
 
   if (buttonTestId) {
     const expectedVisibleValue = formatIsoDateForSmokeButtonLabel(value);
