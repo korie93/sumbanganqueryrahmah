@@ -508,13 +508,53 @@ const applySmokeCollectionNicknameSession = async (page, nickname) => {
   }, nickname);
 };
 
+const waitForCollectionListResponse = async (page, searchValue) => {
+  const normalizedSearchValue = String(searchValue || "").trim();
+  await page.waitForResponse(
+    (response) => {
+      if (response.request().method() !== "GET") {
+        return false;
+      }
+
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(response.url());
+      } catch {
+        return false;
+      }
+
+      if (parsedUrl.pathname !== "/api/collection/list") {
+        return false;
+      }
+
+      return String(parsedUrl.searchParams.get("search") || "").trim() === normalizedSearchValue;
+    },
+    { timeout: 20_000 },
+  );
+};
+
+const waitForCollectionRecordVisible = async (page, searchValue) => {
+  const normalizedSearchValue = String(searchValue || "").trim();
+  const desktopRow = page.locator("tr", { hasText: normalizedSearchValue }).first();
+  const mobileCard = page.locator("article", { hasText: normalizedSearchValue }).first();
+
+  try {
+    await desktopRow.waitFor({ state: "visible", timeout: 20_000 });
+    return desktopRow;
+  } catch (desktopError) {
+    await mobileCard.waitFor({ state: "visible", timeout: 20_000 });
+    return mobileCard;
+  }
+};
+
 const filterCollectionRecordsBySearch = async (page, searchValue) => {
+  const normalizedSearchValue = String(searchValue || "").trim();
   const searchInput = page.getByPlaceholder("Cari nama / IC / akaun / batch / telefon / jumlah bayaran");
-  await searchInput.fill(searchValue);
+  await searchInput.fill(normalizedSearchValue);
+  const listResponsePromise = waitForCollectionListResponse(page, normalizedSearchValue);
   await page.getByRole("button", { name: "Filter", exact: true }).click();
-  const targetRow = page.locator("tr", { hasText: searchValue }).first();
-  await targetRow.waitFor({ state: "visible", timeout: 20_000 });
-  return targetRow;
+  await listResponsePromise;
+  return waitForCollectionRecordVisible(page, normalizedSearchValue);
 };
 
 const fillReceiptAmountInput = async (scope, amountValue) => {
@@ -1141,13 +1181,7 @@ const checkCollectionRecordsStaleDeleteConflict = async (page, context, tracker)
     await page.goto(`${baseUrl}/collection/records`, { waitUntil: "networkidle" });
     await page.getByText("View Rekod Collection").first().waitFor();
 
-    const searchInput = page.getByPlaceholder("Cari nama / IC / akaun / batch / telefon / jumlah bayaran");
-    await searchInput.fill(smokeRecord.customerName);
-    await page.getByRole("button", { name: "Filter", exact: true }).click();
-    await page.waitForLoadState("networkidle");
-
-    const targetRow = page.locator("tr", { hasText: smokeRecord.customerName }).first();
-    await targetRow.waitFor({ state: "visible", timeout: 20_000 });
+    const targetRow = await filterCollectionRecordsBySearch(page, smokeRecord.accountNumber);
     await targetRow.getByRole("button", { name: "Delete" }).click();
 
     await page.getByText("Adakah anda pasti mahu padam rekod collection ini?").waitFor({ timeout: 15_000 });
@@ -1180,7 +1214,7 @@ const checkCollectionRecordsStaleDeleteConflict = async (page, context, tracker)
       consumedConflicts >= 1,
       `Expected at least one 409 DELETE /api/collection/${smokeRecord.id} response during stale-delete smoke flow`,
     );
-    await targetRow.waitFor({ state: "visible", timeout: 15_000 });
+    await waitForCollectionRecordVisible(page, smokeRecord.accountNumber);
 
     // A 429 from purge-summary is non-critical here and can replace the conflict toast due TOAST_LIMIT=1.
     consumeExpectedCollectionPurgeSummaryRateLimit(tracker);
