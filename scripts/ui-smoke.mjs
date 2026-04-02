@@ -508,7 +508,7 @@ const applySmokeCollectionNicknameSession = async (page, nickname) => {
   }, nickname);
 };
 
-const waitForCollectionListResponse = async (page, searchValue) => {
+const waitForCollectionListResponse = async (page, searchValue, timeoutMs = 20_000) => {
   const normalizedSearchValue = String(searchValue || "").trim();
   return page.waitForResponse(
     (response) => {
@@ -529,7 +529,7 @@ const waitForCollectionListResponse = async (page, searchValue) => {
 
       return String(parsedUrl.searchParams.get("search") || "").trim() === normalizedSearchValue;
     },
-    { timeout: 20_000 },
+    { timeout: timeoutMs },
   );
 };
 
@@ -553,44 +553,108 @@ const recordMatchesCollectionSearch = (record, searchValue) => {
   );
 };
 
-const waitForCollectionRecordVisible = async (page, searchValue) => {
+const findVisibleCollectionRecord = async (page, searchValue, timeoutMs = 20_000) => {
   const normalizedSearchValue = String(searchValue || "").trim();
   const desktopRow = page.locator("tr", { hasText: normalizedSearchValue }).first();
   const mobileCard = page.locator("article", { hasText: normalizedSearchValue }).first();
 
   try {
-    await desktopRow.waitFor({ state: "visible", timeout: 20_000 });
+    await desktopRow.waitFor({ state: "visible", timeout: timeoutMs });
     return desktopRow;
-  } catch (desktopError) {
-    await mobileCard.waitFor({ state: "visible", timeout: 20_000 });
+  }
+  catch {}
+
+  try {
+    await mobileCard.waitFor({ state: "visible", timeout: timeoutMs });
     return mobileCard;
   }
+  catch {}
+
+  return null;
+};
+
+const waitForCollectionRecordVisible = async (page, searchValue, timeoutMs = 20_000) => {
+  const target = await findVisibleCollectionRecord(page, searchValue, timeoutMs);
+  if (target) {
+    return target;
+  }
+
+  throw new Error(`Collection record "${String(searchValue || "").trim()}" did not become visible.`);
+};
+
+const waitForCollectionFilterButtonEnabled = async (filterButton, timeoutMs = 8_000) => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await filterButton.isEnabled().catch(() => false)) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return false;
 };
 
 const filterCollectionRecordsBySearch = async (page, searchValue) => {
   const normalizedSearchValue = String(searchValue || "").trim();
   const searchInput = page.getByPlaceholder("Cari nama / IC / akaun / batch / telefon / jumlah bayaran");
+  const filterButton = page.getByRole("button", { name: "Filter", exact: true });
   let lastListResponse = null;
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
+    if (attempt > 0) {
+      await searchInput.fill("");
+    }
     await searchInput.fill(normalizedSearchValue);
-    const listResponsePromise = waitForCollectionListResponse(page, normalizedSearchValue);
-    await page.getByRole("button", { name: "Filter", exact: true }).click();
-    const listResponse = await listResponsePromise;
-    lastListResponse = listResponse;
-    const payload = await listResponse.json().catch(() => null);
 
-    if (listResponse.status() === 429) {
-      await waitForRateLimitRecovery(payload, 1_000);
+    const immediateTarget = await findVisibleCollectionRecord(page, normalizedSearchValue, 1_500);
+    if (immediateTarget) {
+      return immediateTarget;
+    }
+
+    const autoResponse = await waitForCollectionListResponse(page, normalizedSearchValue, 1_500).catch(() => null);
+    if (autoResponse) {
+      lastListResponse = autoResponse;
+      const autoPayload = await autoResponse.json().catch(() => null);
+      if (autoResponse.status() === 429) {
+        await waitForRateLimitRecovery(autoPayload, 1_000);
+        continue;
+      }
+
+      const autoRecords = Array.isArray(autoPayload?.records) ? autoPayload.records : [];
+      if (autoRecords.some((record) => recordMatchesCollectionSearch(record, normalizedSearchValue))) {
+        return waitForCollectionRecordVisible(page, normalizedSearchValue, 10_000);
+      }
+    }
+
+    if (!(await waitForCollectionFilterButtonEnabled(filterButton))) {
+      const delayedTarget = await findVisibleCollectionRecord(page, normalizedSearchValue, 5_000);
+      if (delayedTarget) {
+        return delayedTarget;
+      }
       continue;
     }
 
-    const records = Array.isArray(payload?.records) ? payload.records : [];
-    if (records.some((record) => recordMatchesCollectionSearch(record, normalizedSearchValue))) {
-      return waitForCollectionRecordVisible(page, normalizedSearchValue);
+    const listResponsePromise = waitForCollectionListResponse(page, normalizedSearchValue, 5_000).catch(() => null);
+    await filterButton.click();
+    const listResponse = await listResponsePromise;
+    if (listResponse) {
+      lastListResponse = listResponse;
+      const payload = await listResponse.json().catch(() => null);
+
+      if (listResponse.status() === 429) {
+        await waitForRateLimitRecovery(payload, 1_000);
+        continue;
+      }
+
+      const records = Array.isArray(payload?.records) ? payload.records : [];
+      if (records.some((record) => recordMatchesCollectionSearch(record, normalizedSearchValue))) {
+        return waitForCollectionRecordVisible(page, normalizedSearchValue, 10_000);
+      }
     }
 
-    await page.waitForTimeout(300);
+    const delayedTarget = await findVisibleCollectionRecord(page, normalizedSearchValue, 5_000);
+    if (delayedTarget) {
+      return delayedTarget;
+    }
   }
 
   throw new Error(
