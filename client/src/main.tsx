@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import "./index.css";
+import "./public-shell.css";
+import "./theme-tokens.css";
 
 const detectLowSpecMode = () => {
   const perfOverride = localStorage.getItem("perf_mode");

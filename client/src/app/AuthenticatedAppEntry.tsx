@@ -8,6 +8,7 @@ import type { MonitorSection, User } from "@/app/types";
 import { initializeTrustedTypesRuntime } from "@/lib/trusted-types-runtime";
 import { useAuthenticatedAppState } from "@/app/useAuthenticatedAppState";
 import { useSingleTabSession } from "@/app/useSingleTabSession";
+import "../index.css";
 
 const AuthenticatedAppShell = lazy(() => import("@/app/AuthenticatedAppShell"));
 
