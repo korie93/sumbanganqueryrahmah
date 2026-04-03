@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
+import { initializeTrustedTypesRuntime } from "./lib/trusted-types-runtime";
 
 const detectLowSpecMode = () => {
   const perfOverride = localStorage.getItem("perf_mode");
@@ -23,5 +24,7 @@ if (detectLowSpecMode()) {
   document.documentElement.classList.add("low-spec");
   document.body.classList.add("low-spec");
 }
+
+initializeTrustedTypesRuntime();
 
 createRoot(document.getElementById("root")!).render(<App />);

@@ -53,7 +53,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
         objectSrc: ["'none'"],
         scriptSrc: ["'self'"],
         scriptSrcAttr: ["'none'"],
-        trustedTypes: [SQR_TRUSTED_TYPES_POLICY_NAME],
+        trustedTypes: ["default", SQR_TRUSTED_TYPES_POLICY_NAME],
         "require-trusted-types-for": ["'script'"],
       },
     },
