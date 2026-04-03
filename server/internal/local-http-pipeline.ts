@@ -5,6 +5,7 @@ import { logger } from "../lib/logger";
 import { runWithRequestContext } from "../lib/request-context";
 import { createCsrfProtectionMiddleware } from "../http/csrf";
 import { createCorsMiddleware } from "../http/cors";
+import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../shared/trusted-types";
 
 const HTTP_SLOW_REQUEST_MS = Math.max(250, Number(process.env.HTTP_SLOW_REQUEST_MS || 1500) || 1500);
 
@@ -48,6 +49,8 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
       directives: {
         imgSrc: ["'self'", "data:", "blob:"],
         frameSrc: ["'self'", "blob:"],
+        trustedTypes: [SQR_TRUSTED_TYPES_POLICY_NAME],
+        "require-trusted-types-for": ["'script'"],
       },
     },
   }));

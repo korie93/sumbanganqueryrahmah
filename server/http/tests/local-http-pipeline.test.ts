@@ -4,6 +4,7 @@ import test from "node:test";
 import express from "express";
 import { registerLocalHttpPipeline } from "../../internal/local-http-pipeline";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
+import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../../shared/trusted-types";
 
 test("registerLocalHttpPipeline allows blob receipt previews in the CSP header", async () => {
   const app = express();
@@ -29,6 +30,8 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     const csp = String(response.headers.get("content-security-policy") || "");
     assert.match(csp, /img-src 'self' data: blob:/i);
     assert.match(csp, /frame-src 'self' blob:/i);
+    assert.match(csp, /require-trusted-types-for 'script'/i);
+    assert.match(csp, new RegExp(`trusted-types ${SQR_TRUSTED_TYPES_POLICY_NAME}`, "i"));
   } finally {
     await stopTestServer(server);
   }

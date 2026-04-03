@@ -3,6 +3,7 @@
 import * as React from "react"
 import * as RechartsPrimitive from "recharts"
 
+import { toTrustedHTML } from "@/lib/trusted-types"
 import { cn } from "@/lib/utils"
 
 // Format: { THEME_NAME: CSS_SELECTOR }
@@ -24,6 +25,49 @@ type ChartContextProps = {
 
 const ChartContext = React.createContext<ChartContextProps | null>(null)
 
+function sanitizeChartToken(value: string) {
+  const normalized = String(value || "").trim().replace(/[^a-zA-Z0-9_-]/g, "-")
+  return normalized || "chart"
+}
+
+function sanitizeChartColorValue(value: string) {
+  const normalized = String(value || "").trim()
+  if (!normalized) {
+    return null
+  }
+
+  return /^[#(),.%/:\-\s\w]+$/.test(normalized) ? normalized : null
+}
+
+function buildChartStyleMarkup(id: string, config: ChartConfig) {
+  const colorConfig = Object.entries(config).filter(
+    ([, itemConfig]) => itemConfig.theme || itemConfig.color
+  )
+
+  if (!colorConfig.length) {
+    return null
+  }
+
+  const safeChartId = sanitizeChartToken(id)
+
+  const markup = Object.entries(THEMES)
+    .map(
+      ([theme, prefix]) => `\n${prefix} [data-chart="${safeChartId}"] {\n${colorConfig
+        .map(([key, itemConfig]) => {
+          const color =
+            itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
+            itemConfig.color
+          const safeColor = color ? sanitizeChartColorValue(color) : null
+          return safeColor ? `  --color-${key}: ${safeColor};` : null
+        })
+        .filter((line): line is string => Boolean(line))
+        .join("\n")}\n}\n`
+    )
+    .join("\n")
+
+  return markup || null
+}
+
 function useChart() {
   const context = React.useContext(ChartContext)
 
@@ -44,7 +88,7 @@ const ChartContainer = React.forwardRef<
   }
 >(({ id, className, children, config, ...props }, ref) => {
   const uniqueId = React.useId()
-  const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`
+  const chartId = sanitizeChartToken(`chart-${id || uniqueId.replace(/:/g, "")}`)
 
   return (
     <ChartContext.Provider value={{ config }}>
@@ -68,33 +112,16 @@ const ChartContainer = React.forwardRef<
 ChartContainer.displayName = "Chart"
 
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
-  const colorConfig = Object.entries(config).filter(
-    ([, config]) => config.theme || config.color
-  )
+  const styleMarkup = buildChartStyleMarkup(id, config)
 
-  if (!colorConfig.length) {
+  if (!styleMarkup) {
     return null
   }
 
   return (
     <style
       dangerouslySetInnerHTML={{
-        __html: Object.entries(THEMES)
-          .map(
-            ([theme, prefix]) => `
-${prefix} [data-chart=${id}] {
-${colorConfig
-  .map(([key, itemConfig]) => {
-    const color =
-      itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
-      itemConfig.color
-    return color ? `  --color-${key}: ${color};` : null
-  })
-  .join("\n")}
-}
-`
-          )
-          .join("\n"),
+        __html: toTrustedHTML(styleMarkup),
       }}
     />
   )
