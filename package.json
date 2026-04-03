@@ -32,6 +32,7 @@
     "test:coverage": "c8 --reporter=text --reporter=lcov --reporter=json-summary npm test",
     "test:coverage:gate": "c8 --reporter=text --reporter=lcov --reporter=json-summary --check-coverage --lines 70 --branches 60 --include=client/src/lib/api/contract.ts --include=client/src/lib/api/imports.ts --include=client/src/lib/api/settings.ts --include=server/controllers/imports.controller.ts --include=server/routes/imports.routes.ts --include=server/routes/settings.routes.ts --include=server/services/imports.service.ts --include=server/services/settings.service.ts --include=shared/api-contracts.ts npm run test:contracts",
     "perf:collection:baseline": "node scripts/perf-collection-baseline.mjs",
+    "perf:pagespeed:local": "node scripts/run-pagespeed-local.mjs",
     "dr:drill": "node scripts/disaster-recovery-drill.mjs",
     "smoke:preflight": "node scripts/smoke-preflight.mjs",
     "smoke:ui": "node scripts/ui-smoke.mjs",
