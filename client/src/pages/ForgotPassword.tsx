@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { ArrowLeft, LifeBuoy } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
-import { Input } from "@/components/ui/input";
 import { requestPasswordReset } from "@/lib/api/auth";
 import { getApiErrorMessage } from "@/lib/api-errors";
 
@@ -44,11 +43,10 @@ export default function ForgotPasswordPage() {
         </div>
       ) : (
         <>
-          <Input
+          <PublicAuthInput
             value={identifier}
             onChange={(event) => setIdentifier(event.target.value)}
             placeholder="Username atau emel"
-            className="border-white/10 bg-white/95 text-slate-950"
           />
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-white/75">
             Demi keselamatan, sistem hanya memaparkan status umum dan tidak mendedahkan sama ada
@@ -59,27 +57,25 @@ export default function ForgotPasswordPage() {
               {error}
             </div>
           ) : null}
-          <Button
-            className="h-11 w-full rounded-xl bg-blue-600 text-white hover:bg-blue-500"
+          <PublicAuthButton
             onClick={() => void handleSubmit()}
             disabled={loading}
           >
             {loading ? "Sedang menghantar..." : "Hantar Permintaan"}
-          </Button>
+          </PublicAuthButton>
         </>
       )}
 
-      <Button
+      <PublicAuthButton
         type="button"
         variant="ghost"
-        className="w-full rounded-xl text-slate-200 hover:bg-white/5 hover:text-white"
         onClick={() => {
           window.location.href = "/";
         }}
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
         Kembali ke log masuk
-      </Button>
+      </PublicAuthButton>
     </PublicAuthLayout>
   );
 }

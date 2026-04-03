@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock3, ShieldAlert, TimerReset, Wrench } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMaintenanceStatus } from "@/lib/api/settings";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import {
@@ -130,8 +129,8 @@ export default function MaintenancePage() {
 
   return (
     <div className="viewport-min-height bg-gradient-to-br from-[#0b1220] via-[#101a2d] to-[#14213d] text-slate-100 flex items-center justify-center p-4 sm:p-6">
-      <Card className="w-full max-w-3xl border-slate-700/80 bg-slate-900/75 backdrop-blur-md shadow-2xl">
-        <CardHeader className="space-y-4 border-b border-slate-800 pb-6">
+      <section className="w-full max-w-3xl rounded-3xl border border-slate-700/80 bg-slate-900/75 shadow-2xl backdrop-blur-md">
+        <div className="space-y-4 border-b border-slate-800 px-6 pb-6 pt-6 sm:px-8">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-amber-300">
               <ShieldAlert className="w-5 h-5" />
@@ -141,9 +140,9 @@ export default function MaintenancePage() {
               {state.type === "hard" ? "Mod Penuh" : "Mod Lembut"}
             </div>
           </div>
-          <CardTitle className="text-2xl sm:text-3xl font-bold text-slate-100">Sistem Sedang Diselenggara</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5 pt-6">
+          <h1 className="text-2xl font-bold text-slate-100 sm:text-3xl">Sistem Sedang Diselenggara</h1>
+        </div>
+        <div className="space-y-5 px-6 pb-6 pt-6 sm:px-8">
           <div className="rounded-lg border border-slate-700/90 bg-slate-800/70 p-4">
             <p className="text-slate-100 leading-relaxed">{state.message}</p>
           </div>
@@ -181,8 +180,8 @@ export default function MaintenancePage() {
             <AlertTriangle className="w-4 h-4" />
             Jika anda admin atau superuser, log masuk semula untuk akses yang dibenarkan semasa penyelenggaraan.
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </div>
   );
 }

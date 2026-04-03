@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { KeyRound, LogOut } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
-import { Input } from "@/components/ui/input";
 import { changeMyPassword } from "@/lib/api/auth";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import {
@@ -136,26 +135,23 @@ export default function ChangePasswordPage({
         seperti yang dimasukkan.
       </div>
 
-      <Input
+      <PublicAuthInput
         type="password"
         value={currentPassword}
         onChange={(event) => setCurrentPassword(event.target.value)}
         placeholder="Kata laluan semasa"
-        className="border-white/10 bg-white/95 text-slate-950"
       />
-      <Input
+      <PublicAuthInput
         type="password"
         value={newPassword}
         onChange={(event) => setNewPassword(event.target.value)}
         placeholder="Kata laluan baharu"
-        className="border-white/10 bg-white/95 text-slate-950"
       />
-      <Input
+      <PublicAuthInput
         type="password"
         value={confirmPassword}
         onChange={(event) => setConfirmPassword(event.target.value)}
         placeholder="Sahkan kata laluan baharu"
-        className="border-white/10 bg-white/95 text-slate-950"
       />
 
       {error ? (
@@ -170,23 +166,21 @@ export default function ChangePasswordPage({
         </div>
       ) : null}
 
-      <Button
-        className="h-11 w-full rounded-xl bg-blue-600 text-white hover:bg-blue-500"
+      <PublicAuthButton
         onClick={() => void handleSubmit()}
         disabled={loading}
       >
         {loading ? "Sedang mengemas kini..." : "Kemas Kini Kata Laluan"}
-      </Button>
+      </PublicAuthButton>
 
-      <Button
+      <PublicAuthButton
         type="button"
         variant="ghost"
-        className="w-full rounded-xl text-slate-200 hover:bg-white/5 hover:text-white"
         onClick={handleLogout}
       >
         <LogOut className="mr-2 h-4 w-4" />
         Log Keluar
-      </Button>
+      </PublicAuthButton>
     </PublicAuthLayout>
   );
 }

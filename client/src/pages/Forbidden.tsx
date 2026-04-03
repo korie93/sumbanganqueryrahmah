@@ -1,13 +1,10 @@
 import { ArrowLeft, Home, ShieldAlert } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 
 export default function Forbidden() {
   return (
     <div className="app-shell-min-height bg-background px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-3xl">
-        <Card className="glass-wrapper border-red-500/35 bg-gradient-to-br from-background via-background to-red-950/10">
-          <CardContent className="p-8 text-center sm:p-10">
+        <section className="glass-wrapper rounded-3xl border border-red-500/35 bg-gradient-to-br from-background via-background to-red-950/10 p-8 text-center sm:p-10">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-red-500/25 bg-red-500/10">
               <ShieldAlert className="h-8 w-8 text-red-400" />
             </div>
@@ -43,10 +40,9 @@ export default function Forbidden() {
             </div>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-              <Button
+              <button
                 type="button"
-                variant="outline"
-                className="rounded-xl"
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => {
                   if (window.history.length > 1) {
                     window.history.back();
@@ -57,20 +53,19 @@ export default function Forbidden() {
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Kembali
-              </Button>
-              <Button
+              </button>
+              <button
                 type="button"
-                className="rounded-xl bg-blue-600 text-white hover:bg-blue-500"
+                className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
                 onClick={() => {
                   window.location.href = "/";
                 }}
               >
                 <Home className="mr-2 h-4 w-4" />
                 Ke Halaman Utama
-              </Button>
+              </button>
             </div>
-          </CardContent>
-        </Card>
+        </section>
       </div>
     </div>
   );

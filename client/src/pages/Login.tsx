@@ -2,8 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { Eye, EyeOff, LogIn } from "lucide-react";
 import type { User } from "@/app/types";
 import { BrandLogo } from "@/components/BrandLogo";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { login, verifyTwoFactorLogin } from "@/lib/api/auth";
 import {
   consumeStoredAuthNotice,
@@ -381,7 +380,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div className="relative">
-                <Input
+                <PublicAuthInput
                   className="w-full px-4 py-3 rounded-xl bg-white/90 border-0 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-400 transition-all"
                   placeholder="Username"
                   value={username}
@@ -396,7 +395,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
               {twoFactorChallengeToken ? (
                 <div className="space-y-2">
-                  <Input
+                  <PublicAuthInput
                     className="w-full px-4 py-3 rounded-xl bg-white/90 border-0 text-center tracking-[0.45em] text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-400 transition-all"
                     placeholder="000000"
                     inputMode="numeric"
@@ -412,7 +411,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 </div>
               ) : (
                 <div className="relative">
-                  <Input
+                  <PublicAuthInput
                     className="w-full px-4 py-3 pr-12 rounded-xl bg-white/90 border-0 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-400 transition-all"
                     placeholder="Password"
                     type={showPassword ? "text" : "password"}
@@ -435,7 +434,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 </div>
               )}
 
-              <Button
+              <PublicAuthButton
                 type="submit"
                 className="mt-6 w-full h-12 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold shadow-lg shadow-blue-500/30 transition-all"
                 disabled={loading || lockedFlow}
@@ -452,7 +451,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     {lockedFlow ? "Akaun Dikunci" : twoFactorChallengeToken ? "Sahkan Kod" : "Log In"}
                   </div>
                 )}
-              </Button>
+              </PublicAuthButton>
             </form>
 
             {lockedFlow ? (

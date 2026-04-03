@@ -1,8 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, Home, RefreshCw, RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { reloadAppPreservingSingleTabLock } from "@/app/single-tab-session";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   resolveRouteErrorDescription,
   resolveRouteErrorTitle,
@@ -70,42 +68,51 @@ export class AppRouteErrorBoundary extends Component<
       return this.props.children;
     }
 
+    const actionClassName =
+      "inline-flex min-h-10 items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50";
+    const primaryActionClassName = `${actionClassName} border-primary bg-primary text-primary-foreground hover:bg-primary/90`;
+    const secondaryActionClassName = `${actionClassName} border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground`;
+
     return (
       <div className={this.props.fullscreen ? "viewport-min-height bg-background" : "bg-background"}>
         <div className={this.props.fullscreen ? "flex viewport-min-height items-center justify-center p-6" : "p-6"}>
-          <Card className="w-full max-w-2xl border-destructive/30 bg-background/95 shadow-lg">
-            <CardHeader className="space-y-3">
+          <section className="w-full max-w-2xl rounded-xl border border-destructive/30 bg-background/95 text-card-foreground shadow-lg">
+            <div className="flex flex-col space-y-3 p-6">
               <div className="flex items-center gap-3">
                 <div className="rounded-full bg-destructive/10 p-3 text-destructive">
                   <AlertTriangle className="h-5 w-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-xl">
+                  <h2 className="text-xl font-semibold leading-none tracking-tight">
                     {resolveRouteErrorTitle(this.props.routeLabel)}
-                  </CardTitle>
-                  <CardDescription>
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
                     {resolveRouteErrorDescription(this.state.error)}
-                  </CardDescription>
+                  </p>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-3">
-              <Button type="button" onClick={this.handleRetry}>
+            </div>
+            <div className="flex flex-wrap gap-3 p-6 pt-0">
+              <button type="button" onClick={this.handleRetry} className={primaryActionClassName}>
                 <RotateCcw className="h-4 w-4" />
                 Retry Page
-              </Button>
+              </button>
               {this.props.onNavigateHome ? (
-                <Button type="button" variant="outline" onClick={this.props.onNavigateHome}>
+                <button
+                  type="button"
+                  onClick={this.props.onNavigateHome}
+                  className={secondaryActionClassName}
+                >
                   <Home className="h-4 w-4" />
                   Go Home
-                </Button>
+                </button>
               ) : null}
-              <Button type="button" variant="outline" onClick={this.handleReload}>
+              <button type="button" onClick={this.handleReload} className={secondaryActionClassName}>
                 <RefreshCw className="h-4 w-4" />
                 Reload App
-              </Button>
-            </CardContent>
-          </Card>
+              </button>
+            </div>
+          </section>
         </div>
       </div>
     );

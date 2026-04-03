@@ -1,5 +1,4 @@
 import { ShieldX, Ban, Lock, AlertOctagon, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { clearAuthenticatedUserStorage, setBannedSessionFlag } from "@/lib/auth-session";
 
 export default function Banned() {
@@ -68,15 +67,15 @@ export default function Banned() {
               </p>
             </div>
 
-            <Button
+            <button
               onClick={handleRetry}
-              variant="outline"
-              className="mt-6 w-full border-slate-600 text-slate-300"
+              type="button"
+              className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-600 bg-transparent px-4 text-sm font-medium text-slate-300 transition-colors hover:border-slate-500 hover:bg-slate-800/70 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
               data-testid="button-retry-login"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
               Cuba Log In Semula
-            </Button>
+            </button>
 
             <div className="mt-8 pt-6 border-t border-slate-800">
               <p className="text-xs text-slate-600">

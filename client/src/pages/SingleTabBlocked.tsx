@@ -1,6 +1,6 @@
 import { AlertTriangle, RefreshCcw } from "lucide-react";
+import { PublicAuthButton } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
-import { Button } from "@/components/ui/button";
 
 interface SingleTabBlockedProps {
   onRetry?: () => void;
@@ -20,7 +20,7 @@ export default function SingleTabBlocked({ onRetry }: SingleTabBlockedProps) {
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row">
-        <Button
+        <PublicAuthButton
           type="button"
           className="flex-1"
           onClick={() => {
@@ -29,17 +29,17 @@ export default function SingleTabBlocked({ onRetry }: SingleTabBlockedProps) {
         >
           <RefreshCcw className="h-4 w-4" />
           Semak Semula
-        </Button>
-        <Button
+        </PublicAuthButton>
+        <PublicAuthButton
           type="button"
-          variant="outline"
-          className="flex-1 text-white"
+          variant="ghost"
+          className="flex-1 border border-white/15 bg-white/5 text-white/85 hover:bg-white/10 hover:text-white"
           onClick={() => {
             window.close();
           }}
         >
           Tutup Tab Ini
-        </Button>
+        </PublicAuthButton>
       </div>
 
       <p className="text-center text-xs leading-6 text-white/60">

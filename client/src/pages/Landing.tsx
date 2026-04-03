@@ -1,46 +1,11 @@
-import {
-  ArrowRight,
-  CheckCircle2,
-  Database,
-  FileText,
-  LogIn,
-  Search,
-  ShieldCheck,
-} from "lucide-react";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { ArrowRight, CheckCircle2, LogIn } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
-import { Button } from "@/components/ui/button";
 import "./Landing.css";
 
 type LandingProps = {
   onLoginClick: () => void;
 };
-
-const featureHighlights = [
-  {
-    title: "General Search",
-    description:
-      "Laksanakan carian merentas data import dengan lebih pantas untuk menyokong semakan operasi harian yang konsisten.",
-    icon: Search,
-  },
-  {
-    title: "Rekod Operasi",
-    description:
-      "Simpan, semak, dan rujuk semula rekod sumbangan serta resit melalui aliran kerja yang jelas dan tersusun.",
-    icon: FileText,
-  },
-  {
-    title: "Ruang Kerja Berstruktur",
-    description:
-      "Paparan data, ringkasan, dan laporan disusun untuk kerja dalaman yang memerlukan ketepatan dan kebolehkesanan.",
-    icon: Database,
-  },
-];
-
-const securityPoints = [
-  "Pengesahan sesi, kawalan akses mengikut peranan, dan perlindungan ke atas laluan sistem yang sensitif.",
-  "Jejak audit bagi tindakan penting untuk menyokong pemantauan dan tadbir urus dalaman.",
-  "Perlindungan CSRF, rate limiting, dan semakan request boundary pada aliran sistem utama.",
-];
 
 const aboutHighlights = [
   "Akses terhad kepada pengguna dalaman yang berdaftar.",
@@ -48,7 +13,147 @@ const aboutHighlights = [
   "Paparan direka ringkas supaya tugas harian dapat diselesaikan dengan lebih cepat.",
 ];
 
+const LandingDeferredSections = lazy(() => import("./LandingDeferredSections"));
+
+type IdleCapableWindow = Window & {
+  cancelIdleCallback?: (handle: number) => void;
+  requestIdleCallback?: (
+    callback: IdleRequestCallback,
+    options?: IdleRequestOptions,
+  ) => number;
+};
+
+type LandingDeferredSectionsFallbackProps = {
+  onLoginClick: () => void;
+  secondaryButtonClassName: string;
+};
+
+function LandingDeferredSectionsFallback({
+  onLoginClick,
+  secondaryButtonClassName,
+}: LandingDeferredSectionsFallbackProps) {
+  return (
+    <>
+      <section id="features" className="landing-deferred-section mt-12 space-y-5" aria-hidden="true">
+        <div className="space-y-3">
+          <div className="h-4 w-28 rounded-full bg-white/10" />
+          <div className="h-8 max-w-lg rounded-2xl bg-white/10" />
+          <div className="h-4 max-w-3xl rounded-full bg-white/10" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {Array.from({ length: 3 }, (_, index) => (
+            <div
+              key={`landing-feature-placeholder-${index}`}
+              className="rounded-3xl border border-white/10 bg-white/5 p-5"
+            >
+              <div className="h-11 w-11 rounded-2xl bg-white/10" />
+              <div className="mt-4 h-5 w-36 rounded-full bg-white/10" />
+              <div className="mt-3 space-y-2">
+                <div className="h-3 rounded-full bg-white/10" />
+                <div className="h-3 rounded-full bg-white/10" />
+                <div className="h-3 w-4/5 rounded-full bg-white/10" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section
+        id="security"
+        className="landing-deferred-section mt-12 rounded-3xl border border-emerald-400/15 bg-emerald-400/5 p-6"
+        aria-hidden="true"
+      >
+        <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
+          <div className="space-y-3">
+            <div className="h-5 w-52 rounded-full bg-emerald-200/15" />
+            <div className="h-3 max-w-3xl rounded-full bg-white/10" />
+            <div className="h-3 max-w-2xl rounded-full bg-white/10" />
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+            <div className="h-4 w-24 rounded-full bg-emerald-200/15" />
+            <div className="mt-3 space-y-2">
+              <div className="h-3 rounded-full bg-white/10" />
+              <div className="h-3 w-5/6 rounded-full bg-white/10" />
+            </div>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          {Array.from({ length: 3 }, (_, index) => (
+            <div
+              key={`landing-security-placeholder-${index}`}
+              className="rounded-2xl border border-white/10 bg-slate-950/35 p-4"
+            >
+              <div className="space-y-2">
+                <div className="h-3 rounded-full bg-white/10" />
+                <div className="h-3 rounded-full bg-white/10" />
+                <div className="h-3 w-4/5 rounded-full bg-white/10" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <footer className="landing-deferred-section border-t border-white/10 pt-6 text-sm text-slate-400">
+        <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <p className="font-medium text-slate-200">
+              SQR dibina untuk operasi dalaman yang fokus, ringkas, dan terkawal.
+            </p>
+            <p>
+              Halaman ini diwujudkan untuk memberi gambaran ringkas tentang fungsi utama sistem
+              tanpa elemen promosi, borang pertanyaan, atau kandungan yang tidak diperlukan.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onLoginClick}
+            className={secondaryButtonClassName}
+          >
+            <LogIn className="mr-2 h-4 w-4" />
+            Buka Login
+          </button>
+        </div>
+      </footer>
+    </>
+  );
+}
+
 export default function Landing({ onLoginClick }: LandingProps) {
+  const [shouldLoadDeferredSections, setShouldLoadDeferredSections] = useState(false);
+  const primaryButtonClassName =
+    "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-blue-500 bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70";
+  const secondaryButtonClassName =
+    "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/15 bg-slate-900/60 px-4 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25";
+
+  useEffect(() => {
+    const idleWindow = window as IdleCapableWindow;
+    let cancelled = false;
+    let idleCallbackHandle: number | null = null;
+    let timeoutHandle: number | null = null;
+
+    const loadDeferredSections = () => {
+      if (!cancelled) {
+        setShouldLoadDeferredSections(true);
+      }
+    };
+
+    if (typeof idleWindow.requestIdleCallback === "function") {
+      idleCallbackHandle = idleWindow.requestIdleCallback(loadDeferredSections, { timeout: 1200 });
+    } else {
+      timeoutHandle = window.setTimeout(loadDeferredSections, 300);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleCallbackHandle !== null && typeof idleWindow.cancelIdleCallback === "function") {
+        idleWindow.cancelIdleCallback(idleCallbackHandle);
+      }
+      if (timeoutHandle !== null) {
+        window.clearTimeout(timeoutHandle);
+      }
+    };
+  }, []);
+
   return (
     <div className="viewport-min-height bg-slate-950 text-slate-50">
       <div className="mx-auto flex viewport-min-height w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
@@ -83,14 +188,14 @@ export default function Landing({ onLoginClick }: LandingProps) {
                 Tentang
               </a>
             </nav>
-            <Button
+            <button
               type="button"
               onClick={onLoginClick}
-              className="h-10 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-500"
+              className={primaryButtonClassName}
             >
               <LogIn className="mr-2 h-4 w-4" />
               Log In
-            </Button>
+            </button>
           </div>
         </header>
 
@@ -122,14 +227,14 @@ export default function Landing({ onLoginClick }: LandingProps) {
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <Button
+                <button
                   type="button"
                   onClick={onLoginClick}
-                  className="h-11 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white hover:bg-blue-500"
+                  className={`${primaryButtonClassName} min-h-11 px-5`}
                 >
                   Log In ke Sistem
                   <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
+                </button>
                 <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
                   Halaman ini menerangkan fungsi teras sistem secara padat. Akses penuh tersedia
                   selepas log masuk.
@@ -198,95 +303,27 @@ export default function Landing({ onLoginClick }: LandingProps) {
             </div>
           </section>
 
-          <section id="features" className="landing-deferred-section mt-12 space-y-5">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-                Fungsi Teras
-              </p>
-              <h2 className="text-2xl font-semibold tracking-tight text-white">
-                Fungsi utama dipersembahkan secara padat dan mudah diimbas.
-              </h2>
-              <p className="max-w-3xl text-sm leading-7 text-slate-300">
-                Halaman awam ini hanya memaparkan gambaran ringkas tentang keupayaan sistem. Fokus
-                sebenar kekal pada pengalaman kerja selepas pengguna log masuk.
-              </p>
-            </div>
-            <div className="grid gap-4 md:grid-cols-3">
-              {featureHighlights.map((item) => (
-                <article
-                  key={item.title}
-                  className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur"
-                >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/15 text-blue-200">
-                    <item.icon className="h-5 w-5" />
-                  </div>
-                  <h2 className="mt-4 text-lg font-semibold text-white">{item.title}</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">{item.description}</p>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section
-            id="security"
-            className="landing-deferred-section mt-12 rounded-3xl border border-emerald-400/15 bg-emerald-400/5 p-6"
-          >
-            <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
-              <div>
-                <div className="flex items-center gap-2 text-emerald-200">
-                  <ShieldCheck className="h-5 w-5" />
-                  <h2 className="text-lg font-semibold text-white">Gambaran Keselamatan</h2>
-                </div>
-                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
-                  Asas keselamatan sistem ini memberi tumpuan kepada perlindungan akses, pengesahan
-                  sesi, dan kebolehkesanan tindakan penting supaya penggunaan harian kekal terkawal
-                  dan selamat.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200/80">
-                  Akses Sistem
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-200">
-                  Halaman awam hanya memberikan penerangan ringkas. Semua fungsi operasi sebenar
-                  memerlukan log masuk mengikut peranan pengguna.
-                </p>
-              </div>
-            </div>
-            <div className="mt-5 grid gap-3 md:grid-cols-3">
-              {securityPoints.map((point) => (
-                <div
-                  key={point}
-                  className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/35 p-4"
-                >
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
-                  <p className="text-sm leading-6 text-slate-200">{point}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        </main>
-
-        <footer className="landing-deferred-section border-t border-white/10 pt-6 text-sm text-slate-400">
-          <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <p className="font-medium text-slate-200">SQR dibina untuk operasi dalaman yang fokus, ringkas, dan terkawal.</p>
-              <p>
-                Halaman ini diwujudkan untuk memberi gambaran ringkas tentang fungsi utama sistem
-                tanpa elemen promosi, borang pertanyaan, atau kandungan yang tidak diperlukan.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onLoginClick}
-              className="h-10 rounded-xl border-white/15 bg-slate-900/60 px-4 text-slate-100 hover:bg-slate-800"
+          {shouldLoadDeferredSections ? (
+            <Suspense
+              fallback={(
+                <LandingDeferredSectionsFallback
+                  onLoginClick={onLoginClick}
+                  secondaryButtonClassName={secondaryButtonClassName}
+                />
+              )}
             >
-              <LogIn className="mr-2 h-4 w-4" />
-              Buka Login
-            </Button>
-          </div>
-        </footer>
+              <LandingDeferredSections
+                onLoginClick={onLoginClick}
+                secondaryButtonClassName={secondaryButtonClassName}
+              />
+            </Suspense>
+          ) : (
+            <LandingDeferredSectionsFallback
+              onLoginClick={onLoginClick}
+              secondaryButtonClassName={secondaryButtonClassName}
+            />
+          )}
+        </main>
       </div>
     </div>
   );

@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
-import { Input } from "@/components/ui/input";
 import {
   resetPasswordWithToken,
   type PasswordResetTokenValidationPayload,
@@ -137,46 +136,42 @@ export default function ResetPasswordPage() {
             <div><span className="font-semibold text-white">Peranan:</span> {reset.role}</div>
             <div><span className="font-semibold text-white">Tamat Tempoh:</span> {formatExpiry(reset.expiresAt)}</div>
           </div>
-          <Input
+          <PublicAuthInput
             type="password"
             value={newPassword}
             onChange={(event) => setNewPassword(event.target.value)}
             placeholder="Kata laluan baharu"
-            className="border-white/10 bg-white/95 text-slate-950"
           />
-          <Input
+          <PublicAuthInput
             type="password"
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
             placeholder="Sahkan kata laluan baharu"
-            className="border-white/10 bg-white/95 text-slate-950"
           />
           {error ? (
             <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100">
               {error}
             </div>
           ) : null}
-          <Button
-            className="h-11 w-full rounded-xl bg-blue-600 text-white hover:bg-blue-500"
+          <PublicAuthButton
             onClick={() => void handleResetPassword()}
             disabled={loading}
           >
             {loading ? "Sedang menetapkan semula..." : "Tetapkan Kata Laluan Baharu"}
-          </Button>
+          </PublicAuthButton>
         </>
       ) : null}
 
-      <Button
+      <PublicAuthButton
         type="button"
         variant="ghost"
-        className="w-full rounded-xl text-slate-200 hover:bg-white/5 hover:text-white"
         onClick={() => {
           window.location.href = "/";
         }}
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
         Kembali ke log masuk
-      </Button>
+      </PublicAuthButton>
     </PublicAuthLayout>
   );
 }
