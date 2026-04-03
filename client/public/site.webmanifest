@@ -1,0 +1,23 @@
+{
+  "name": "SQR System",
+  "short_name": "SQR",
+  "description": "Platform operasi dalaman untuk general search, semakan rekod, dan pengurusan data sumbangan secara tersusun dan terkawal.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "icons": [
+    {
+      "src": "/brand/sqr-logo-minimal.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/sqr-logo-minimal.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "any"
+    }
+  ]
+}
