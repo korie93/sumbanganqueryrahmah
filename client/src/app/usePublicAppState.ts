@@ -9,7 +9,6 @@ import {
   type ResolvedRoute,
 } from "@/app/routing";
 import type { MonitorSection, User } from "@/app/types";
-import { getMe } from "@/lib/api/auth";
 import {
   clearAuthenticatedUserStorage,
   getStoredAuthenticatedUser,
@@ -192,6 +191,7 @@ export function usePublicAppState() {
 
     const restoreAuthenticatedSession = async () => {
       try {
+        const { getMe } = await import("@/lib/api/auth");
         const me = await getMe();
         if (cancelled) {
           return;

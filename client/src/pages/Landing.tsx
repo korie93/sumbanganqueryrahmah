@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ArrowRight, CheckCircle2, LogIn } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import "./Landing.css";
@@ -14,14 +14,6 @@ const aboutHighlights = [
 ];
 
 const LandingDeferredSections = lazy(() => import("./LandingDeferredSections"));
-
-type IdleCapableWindow = Window & {
-  cancelIdleCallback?: (handle: number) => void;
-  requestIdleCallback?: (
-    callback: IdleRequestCallback,
-    options?: IdleRequestOptions,
-  ) => number;
-};
 
 type LandingDeferredSectionsFallbackProps = {
   onLoginClick: () => void;
@@ -85,15 +77,19 @@ function LandingDeferredSectionsFallback({
 
 export default function Landing({ onLoginClick }: LandingProps) {
   const [shouldLoadDeferredSections, setShouldLoadDeferredSections] = useState(false);
+  const deferredSectionsTriggerRef = useRef<HTMLDivElement | null>(null);
   const primaryButtonClassName =
     "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-blue-500 bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70";
   const secondaryButtonClassName =
     "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/15 bg-slate-900/60 px-4 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25";
 
   useEffect(() => {
-    const idleWindow = window as IdleCapableWindow;
+    if (shouldLoadDeferredSections) {
+      return;
+    }
+
     let cancelled = false;
-    let idleCallbackHandle: number | null = null;
+    let observer: IntersectionObserver | null = null;
     let timeoutHandle: number | null = null;
 
     const loadDeferredSections = () => {
@@ -102,22 +98,35 @@ export default function Landing({ onLoginClick }: LandingProps) {
       }
     };
 
-    if (typeof idleWindow.requestIdleCallback === "function") {
-      idleCallbackHandle = idleWindow.requestIdleCallback(loadDeferredSections, { timeout: 1200 });
+    if (typeof window.IntersectionObserver === "function" && deferredSectionsTriggerRef.current) {
+      observer = new window.IntersectionObserver(
+        (entries) => {
+          if (!entries.some((entry) => entry.isIntersecting)) {
+            return;
+          }
+
+          observer?.disconnect();
+          observer = null;
+          loadDeferredSections();
+        },
+        {
+          rootMargin: "320px 0px",
+        },
+      );
+      observer.observe(deferredSectionsTriggerRef.current);
     } else {
-      timeoutHandle = window.setTimeout(loadDeferredSections, 300);
+      timeoutHandle = window.setTimeout(loadDeferredSections, 1200);
     }
 
     return () => {
       cancelled = true;
-      if (idleCallbackHandle !== null && typeof idleWindow.cancelIdleCallback === "function") {
-        idleWindow.cancelIdleCallback(idleCallbackHandle);
-      }
+      observer?.disconnect();
+      observer = null;
       if (timeoutHandle !== null) {
         window.clearTimeout(timeoutHandle);
       }
     };
-  }, []);
+  }, [shouldLoadDeferredSections]);
 
   return (
     <div className="viewport-min-height bg-slate-950 text-slate-50">
@@ -267,6 +276,12 @@ export default function Landing({ onLoginClick }: LandingProps) {
               </div>
             </div>
           </section>
+
+          <div
+            ref={deferredSectionsTriggerRef}
+            className="h-px w-full"
+            aria-hidden="true"
+          />
 
           {shouldLoadDeferredSections ? (
             <Suspense

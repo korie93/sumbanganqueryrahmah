@@ -5,13 +5,14 @@ import {
   ActivateAccountPage,
   BannedPage,
   ForgotPasswordPage,
+  LandingPage,
   LoginPage,
   MaintenanceRoutePage,
   ResetPasswordPage,
 } from "@/app/lazy-pages";
 import { PageSpinner } from "@/app/PageSpinner";
 import { isBannedSessionFlagSet } from "@/lib/auth-session";
-import LandingPage from "@/pages/Landing";
+import LandingRouteFallback from "@/pages/LandingRouteFallback";
 import { usePublicAppState } from "@/app/usePublicAppState";
 
 const AuthenticatedAppEntry = lazy(() => import("@/app/AuthenticatedAppEntry"));
@@ -39,14 +40,19 @@ function AppContent() {
     );
   }, [currentPage, monitorSection, systemName, user]);
 
-  const renderRoutePage = (routeKey: string, node: React.ReactNode, fullscreen = true) => (
+  const renderRoutePage = (
+    routeKey: string,
+    node: React.ReactNode,
+    fullscreen = true,
+    fallback: React.ReactNode = <PageSpinner fullscreen={fullscreen} />,
+  ) => (
     <AppRouteErrorBoundary
       routeKey={routeKey}
       routeLabel={routeKey}
       fullscreen={fullscreen}
       onNavigateHome={() => handlePublicNavigate("home")}
     >
-      <Suspense fallback={<PageSpinner fullscreen={fullscreen} />}>
+      <Suspense fallback={fallback}>
         {node}
       </Suspense>
     </AppRouteErrorBoundary>
@@ -62,7 +68,12 @@ function AppContent() {
 
   if (!user) {
     if (currentPage === "home") {
-      return renderRoutePage("home", <LandingPage onLoginClick={() => handlePublicNavigate("login")} />);
+      return renderRoutePage(
+        "home",
+        <LandingPage onLoginClick={() => handlePublicNavigate("login")} />,
+        true,
+        <LandingRouteFallback onLoginClick={() => handlePublicNavigate("login")} />,
+      );
     }
 
     if (currentPage === "maintenance") {
