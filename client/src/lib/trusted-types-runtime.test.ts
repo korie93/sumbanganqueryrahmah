@@ -5,6 +5,7 @@ import { initializeTrustedTypesRuntime } from "./trusted-types-runtime"
 
 type TrustedTypesPolicyLike = {
   createHTML: (input: string) => unknown
+  createScriptURL?: (input: string) => unknown
 }
 
 type TrustedTypesFactoryLike = {
@@ -12,6 +13,7 @@ type TrustedTypesFactoryLike = {
     name: string,
     rules: {
       createHTML: (input: string) => string
+      createScriptURL?: (input: string) => string
     }
   ) => TrustedTypesPolicyLike
 }
@@ -57,6 +59,9 @@ test("initializeTrustedTypesRuntime installs a default trusted types policy once
         return {
           createHTML(input) {
             return `sanitized:${rules.createHTML(input)}`
+          },
+          createScriptURL(input) {
+            return `trusted-script:${rules.createScriptURL?.(input) ?? input}`
           },
         }
       },

@@ -1,7 +1,9 @@
 import createDOMPurify from "dompurify"
+import { getSqrTrustedTypesPolicy } from "./trusted-types"
 
 type TrustedTypesPolicyLike = {
   createHTML: (input: string) => unknown
+  createScriptURL?: (input: string) => unknown
 }
 
 type TrustedTypesFactoryLike = {
@@ -9,6 +11,7 @@ type TrustedTypesFactoryLike = {
     name: string,
     rules: {
       createHTML: (input: string) => string
+      createScriptURL?: (input: string) => string
     }
   ) => TrustedTypesPolicyLike
 }
@@ -24,8 +27,16 @@ function sanitizeTrustedTypesHtml(input: string) {
   }
 
   const purifier = createDOMPurify(window)
+  const trustedTypesPolicy = getSqrTrustedTypesPolicy()
+  const domPurifyTrustedTypesPolicy =
+    trustedTypesPolicy && typeof trustedTypesPolicy.createScriptURL === "function"
+      ? trustedTypesPolicy as unknown as TrustedTypePolicy
+      : undefined
   return purifier.sanitize(input, {
     RETURN_TRUSTED_TYPE: false,
+    ...(domPurifyTrustedTypesPolicy
+      ? { TRUSTED_TYPES_POLICY: domPurifyTrustedTypesPolicy }
+      : {}),
   })
 }
 
@@ -47,6 +58,7 @@ export function initializeTrustedTypesRuntime(
   try {
     const policy = trustedTypesFactory.createPolicy("default", {
       createHTML: (input) => sanitizeHtml(input),
+      createScriptURL: (input) => input,
     })
     trustedTypesGlobal.__sqrTrustedTypesDefaultPolicy = policy
     return policy

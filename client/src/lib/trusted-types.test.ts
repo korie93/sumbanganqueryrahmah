@@ -6,6 +6,7 @@ import { toTrustedHTML } from "./trusted-types"
 
 type TrustedTypesPolicyLike = {
   createHTML: (input: string) => unknown
+  createScriptURL?: (input: string) => unknown
 }
 
 type TrustedTypesFactoryLike = {
@@ -13,6 +14,7 @@ type TrustedTypesFactoryLike = {
     name: string,
     rules: {
       createHTML: (input: string) => string
+      createScriptURL?: (input: string) => string
     }
   ) => TrustedTypesPolicyLike
 }
@@ -48,6 +50,7 @@ test("toTrustedHTML creates and reuses the sqr trusted types policy when availab
 
   let createPolicyCalls = 0
   let createHTMLCalls = 0
+  let createScriptUrlCalls = 0
 
   try {
     delete trustedTypesGlobal.__sqrTrustedTypesPolicy
@@ -61,6 +64,10 @@ test("toTrustedHTML creates and reuses the sqr trusted types policy when availab
             createHTMLCalls += 1
             return `trusted:${rules.createHTML(input)}`
           },
+          createScriptURL(input) {
+            createScriptUrlCalls += 1
+            return `trusted-script:${rules.createScriptURL?.(input) ?? input}`
+          },
         }
       },
     }
@@ -69,6 +76,7 @@ test("toTrustedHTML creates and reuses the sqr trusted types policy when availab
     assert.equal(toTrustedHTML("<i>world</i>"), "trusted:<i>world</i>")
     assert.equal(createPolicyCalls, 1)
     assert.equal(createHTMLCalls, 2)
+    assert.equal(createScriptUrlCalls, 0)
   } finally {
     restoreTrustedTypesState(trustedTypesGlobal, previousFactory, previousPolicy)
   }
