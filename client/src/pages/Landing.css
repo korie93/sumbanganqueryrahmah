@@ -3,10 +3,23 @@
   contain-intrinsic-size: auto 720px;
 }
 
+.landing-secondary-pane {
+  min-height: 30rem;
+}
+
+.landing-about-card {
+  min-height: 27.5rem;
+}
+
 @media (max-width: 1023px) {
   .landing-secondary-pane {
+    min-height: 0;
     content-visibility: auto;
     contain-intrinsic-size: auto 540px;
+  }
+
+  .landing-about-card {
+    min-height: 0;
   }
 }
 

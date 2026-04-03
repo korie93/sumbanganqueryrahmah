@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Inbox, LifeBuoy, Menu, ShieldCheck, UserCog } from "lucide-react";
-import { SideTabNavigation } from "@/components/navigation/SideTabNavigation";
+import { LazySideTabNavigation } from "@/components/navigation/LazySideTabNavigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -63,6 +63,7 @@ export function UserAccountManagementNav({
   onSelect,
 }: UserAccountManagementNavProps) {
   const isMobile = useIsMobile();
+  const shouldRenderNavigation = !isMobile || mobileOpen;
   const items = useMemo(
     () =>
       NAV_ITEMS.map((item) => ({
@@ -152,21 +153,23 @@ export function UserAccountManagementNav({
         </div>
       ) : null}
 
-      <SideTabNavigation
-        items={items}
-        selectedKey={activeTab}
-        onSelect={(key) => onSelect(key as UserAccountManagementTabId)}
-        mobileOpen={mobileOpen}
-        onMobileOpenChange={onMobileOpenChange}
-        hideMobileTrigger={isMobile}
-        collapsed={collapsed}
-        onCollapsedChange={onCollapsedChange}
-        menuLabel="Sections"
-        navigationLabel="User Account Management"
-        expandedWidth={308}
-        collapsedWidth={88}
-        className="border-border/60 bg-background/60"
-      />
+      {shouldRenderNavigation ? (
+        <LazySideTabNavigation
+          items={items}
+          selectedKey={activeTab}
+          onSelect={(key) => onSelect(key as UserAccountManagementTabId)}
+          mobileOpen={mobileOpen}
+          onMobileOpenChange={onMobileOpenChange}
+          hideMobileTrigger={isMobile}
+          collapsed={collapsed}
+          onCollapsedChange={onCollapsedChange}
+          menuLabel="Sections"
+          navigationLabel="User Account Management"
+          expandedWidth={308}
+          collapsedWidth={88}
+          className="border-border/60 bg-background/60"
+        />
+      ) : null}
     </>
   );
 }

@@ -18,11 +18,12 @@ function SideTabNavigationFallback({
   className,
   fallbackClassName,
   hideMobileTrigger,
+  mobileOpen,
   menuLabel,
   navigationLabel,
 }: Pick<
   LazySideTabNavigationProps,
-  "className" | "fallbackClassName" | "hideMobileTrigger" | "menuLabel" | "navigationLabel"
+  "className" | "fallbackClassName" | "hideMobileTrigger" | "menuLabel" | "mobileOpen" | "navigationLabel"
 >) {
   return (
     <>
@@ -59,6 +60,36 @@ function SideTabNavigationFallback({
           ))}
         </div>
       </aside>
+
+      {mobileOpen ? (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[1px] lg:hidden" aria-hidden="true" />
+          <aside
+            className="fixed inset-y-0 left-0 z-50 w-[290px] border-r border-border/70 bg-background p-3 shadow-xl lg:hidden"
+            aria-label={`${navigationLabel || "Navigation"} loading`}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-semibold">{navigationLabel}</p>
+              <div className="h-8 w-8 rounded-md bg-muted/70" aria-hidden="true" />
+            </div>
+
+            <div className="space-y-1" role="status" aria-live="polite">
+              {[0, 1, 2, 3].map((item) => (
+                <div
+                  key={`mobile-${item}`}
+                  className="flex items-start gap-3 rounded-lg border border-border/40 bg-background/55 px-3 py-3"
+                >
+                  <div className="h-7 w-7 shrink-0 rounded-md bg-muted/70" aria-hidden="true" />
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="h-3.5 w-28 rounded bg-muted/70" aria-hidden="true" />
+                    <div className="h-3 w-44 rounded bg-muted/50" aria-hidden="true" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </aside>
+        </>
+      ) : null}
     </>
   );
 }
@@ -74,6 +105,7 @@ export function LazySideTabNavigation({
           className={props.className}
           fallbackClassName={fallbackClassName}
           hideMobileTrigger={props.hideMobileTrigger}
+          mobileOpen={props.mobileOpen}
           menuLabel={props.menuLabel}
           navigationLabel={props.navigationLabel}
         />
