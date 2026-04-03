@@ -1,3 +1,5 @@
+import "./app-shell-bootstrap.css";
+
 type PageSpinnerProps = {
   fullscreen?: boolean;
 };
@@ -5,9 +7,9 @@ type PageSpinnerProps = {
 export function PageSpinner({ fullscreen = false }: PageSpinnerProps) {
   return (
     <div
-      className={`${fullscreen ? "viewport-min-height" : "app-shell-min-height"} flex items-center justify-center bg-background`}
+      className={`page-spinner-shell ${fullscreen ? "page-spinner-shell--fullscreen" : "page-spinner-shell--app"}`}
     >
-      <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
+      <div className="page-spinner-shell__indicator" />
     </div>
   );
 }

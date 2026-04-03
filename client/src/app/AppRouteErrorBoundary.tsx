@@ -5,6 +5,7 @@ import {
   resolveRouteErrorDescription,
   resolveRouteErrorTitle,
 } from "@/app/route-error-boundary-utils";
+import "./app-shell-bootstrap.css";
 
 type AppRouteErrorBoundaryProps = {
   children: ReactNode;
@@ -68,32 +69,35 @@ export class AppRouteErrorBoundary extends Component<
       return this.props.children;
     }
 
-    const actionClassName =
-      "inline-flex min-h-10 items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50";
-    const primaryActionClassName = `${actionClassName} border-primary bg-primary text-primary-foreground hover:bg-primary/90`;
-    const secondaryActionClassName = `${actionClassName} border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground`;
-
     return (
-      <div className={this.props.fullscreen ? "viewport-min-height bg-background" : "bg-background"}>
-        <div className={this.props.fullscreen ? "flex viewport-min-height items-center justify-center p-6" : "p-6"}>
-          <section className="w-full max-w-2xl rounded-xl border border-destructive/30 bg-background/95 text-card-foreground shadow-lg">
-            <div className="flex flex-col space-y-3 p-6">
-              <div className="flex items-center gap-3">
-                <div className="rounded-full bg-destructive/10 p-3 text-destructive">
+      <div
+        className={`app-route-error-boundary ${this.props.fullscreen ? "app-route-error-boundary--fullscreen" : ""}`}
+      >
+        <div
+          className={`app-route-error-boundary__shell ${this.props.fullscreen ? "app-route-error-boundary__shell--fullscreen" : ""}`}
+        >
+          <section className="app-route-error-boundary__card">
+            <div className="app-route-error-boundary__content">
+              <div className="app-route-error-boundary__header">
+                <div className="app-route-error-boundary__icon">
                   <AlertTriangle className="h-5 w-5" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold leading-none tracking-tight">
+                  <h2 className="app-route-error-boundary__title">
                     {resolveRouteErrorTitle(this.props.routeLabel)}
                   </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <p className="app-route-error-boundary__description">
                     {resolveRouteErrorDescription(this.state.error)}
                   </p>
                 </div>
               </div>
             </div>
-            <div className="flex flex-wrap gap-3 p-6 pt-0">
-              <button type="button" onClick={this.handleRetry} className={primaryActionClassName}>
+            <div className="app-route-error-boundary__actions">
+              <button
+                type="button"
+                onClick={this.handleRetry}
+                className="app-route-error-boundary__action app-route-error-boundary__action--primary"
+              >
                 <RotateCcw className="h-4 w-4" />
                 Retry Page
               </button>
@@ -101,13 +105,17 @@ export class AppRouteErrorBoundary extends Component<
                 <button
                   type="button"
                   onClick={this.props.onNavigateHome}
-                  className={secondaryActionClassName}
+                  className="app-route-error-boundary__action app-route-error-boundary__action--secondary"
                 >
                   <Home className="h-4 w-4" />
                   Go Home
                 </button>
               ) : null}
-              <button type="button" onClick={this.handleReload} className={secondaryActionClassName}>
+              <button
+                type="button"
+                onClick={this.handleReload}
+                className="app-route-error-boundary__action app-route-error-boundary__action--secondary"
+              >
                 <RefreshCw className="h-4 w-4" />
                 Reload App
               </button>

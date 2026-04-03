@@ -4,11 +4,7 @@ module.exports = {
   content: [
     "./client/index.html",
     "./client/src/App.tsx",
-    "./client/src/app/PageSpinner.tsx",
-    "./client/src/app/AppRouteErrorBoundary.tsx",
     "./client/src/components/BrandLogo.tsx",
-    "./client/src/components/PublicAuthControls.tsx",
-    "./client/src/components/PublicAuthLayout.tsx",
     "./client/src/pages/Landing.tsx",
     "./client/src/pages/LandingDeferredSections.tsx",
     "./client/src/pages/Login.tsx",
@@ -18,7 +14,6 @@ module.exports = {
     "./client/src/pages/ChangePassword.tsx",
     "./client/src/pages/Maintenance.tsx",
     "./client/src/pages/Banned.tsx",
-    "./client/src/pages/SingleTabBlocked.tsx",
   ],
   theme: {
     extend: {
@@ -103,21 +98,7 @@ module.exports = {
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
       },
-      keyframes: {
-        "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
-        },
-        "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
-        },
-      },
-      animation: {
-        "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
-      },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [],
 };

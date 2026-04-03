@@ -1,0 +1,212 @@
+.public-auth-layout {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgb(15 23 42), rgb(30 58 138), rgb(15 23 42));
+}
+
+.public-auth-layout__pattern,
+.public-auth-layout__glow,
+.public-auth-layout__center-glow {
+  position: absolute;
+  pointer-events: none;
+}
+
+.public-auth-layout__pattern {
+  inset: 0;
+  opacity: 0.3;
+  background-image:
+    url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMyMDNhNTUiIGZpbGwtb3BhY2l0eT0iMC40Ij48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiLz48L2c+PC9nPjwvc3ZnPg==");
+}
+
+.public-auth-layout__glow {
+  display: none;
+  border-radius: 9999px;
+  filter: blur(64px);
+}
+
+.public-auth-layout__glow--top {
+  left: 5rem;
+  top: 5rem;
+  height: 14rem;
+  width: 14rem;
+  background: rgb(59 130 246 / 0.15);
+}
+
+.public-auth-layout__glow--bottom {
+  right: 5rem;
+  bottom: 5rem;
+  height: 18rem;
+  width: 18rem;
+  background: rgb(168 85 247 / 0.15);
+}
+
+.public-auth-layout__center-glow {
+  display: none;
+  left: 50%;
+  top: 50%;
+  height: 22.5rem;
+  width: 22.5rem;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  background: rgb(96 165 250 / 0.08);
+  filter: blur(64px);
+}
+
+.public-auth-layout__main {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+}
+
+.public-auth-layout__container {
+  width: 100%;
+  max-width: 36rem;
+}
+
+.public-auth-layout__back-button {
+  margin-bottom: 1rem;
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  background: rgb(255 255 255 / 0.05);
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  color: rgb(255 255 255 / 0.8);
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.public-auth-layout__back-button:hover {
+  background: rgb(255 255 255 / 0.1);
+  color: white;
+}
+
+.public-auth-layout__back-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.25);
+}
+
+.public-auth-layout__halo {
+  pointer-events: none;
+  position: absolute;
+  inset: -1rem;
+  display: none;
+  border-radius: 2rem;
+  background: rgb(96 165 250 / 0.12);
+  filter: blur(40px);
+}
+
+.public-auth-layout__card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 2rem;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(2 6 23 / 0.85);
+  padding: 1.75rem 1.25rem;
+  color: white;
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.3);
+}
+
+.public-auth-layout__brand {
+  margin-bottom: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.public-auth-layout__brand-icon {
+  display: flex;
+  height: 3.5rem;
+  width: 3.5rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  background: rgb(255 255 255 / 0.1);
+}
+
+.public-auth-layout__badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  color: rgb(219 234 254 / 0.8);
+}
+
+.public-auth-layout__brand-copy {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  color: rgb(255 255 255 / 0.7);
+}
+
+.public-auth-layout__intro {
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.public-auth-layout__intro-icon {
+  display: flex;
+  height: 4rem;
+  width: 4rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  background: rgb(255 255 255 / 0.1);
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.2);
+}
+
+.public-auth-layout__title {
+  margin-top: 1.25rem;
+  font-size: 1.875rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: white;
+}
+
+.public-auth-layout__description {
+  margin-top: 0.75rem;
+  max-width: 32rem;
+  font-size: 0.875rem;
+  line-height: 1.75;
+  color: rgb(255 255 255 / 0.75);
+}
+
+.public-auth-layout__content {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .public-auth-layout__glow,
+  .public-auth-layout__halo {
+    display: block;
+  }
+
+  .public-auth-layout__main {
+    padding-block: 2rem;
+  }
+
+  .public-auth-layout__card {
+    background: rgb(2 6 23 / 0.75);
+    padding: 2rem;
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+  }
+}
+
+@media (min-width: 768px) {
+  .public-auth-layout__center-glow {
+    display: block;
+  }
+}
