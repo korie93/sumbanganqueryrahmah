@@ -129,3 +129,28 @@
   opacity: 1 !important;
   transform: none !important;
 }
+
+@media (max-width: 640px) {
+  .login-card {
+    animation: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: rgba(15, 23, 42, 0.92);
+    border-color: rgba(255, 255, 255, 0.18);
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.24);
+  }
+
+  .login-card::before,
+  .login-card::after,
+  .login-bg-effect {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-content,
+  .login-card,
+  .floating-slow {
+    animation: none !important;
+  }
+}

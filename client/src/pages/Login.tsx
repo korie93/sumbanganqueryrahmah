@@ -4,7 +4,7 @@ import type { User } from "@/app/types";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { login, generateFingerprint, verifyTwoFactorLogin } from "@/lib/api";
+import { login, verifyTwoFactorLogin } from "@/lib/api/auth";
 import {
   consumeStoredAuthNotice,
   persistAuthenticatedUser,
@@ -12,6 +12,7 @@ import {
   setStoredActivityId,
   setStoredFingerprint,
 } from "@/lib/auth-session";
+import { generateFingerprint } from "@/lib/fingerprint";
 import { isLockedAccountFlow, normalizeLoginIdentity } from "@/pages/login-lock-state";
 import { ERROR_CODES } from "@shared/error-codes";
 import "./Login.css";
@@ -342,25 +343,25 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     <div className="relative w-full viewport-min-height overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
       <div className="login-bg-effect absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMyMDNhNTUiIGZpbGwtb3BhY2l0eT0iMC40Ij48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-30" />
       
-      <div className="login-bg-effect absolute top-20 left-20 h-56 w-56 rounded-full bg-blue-500/15 blur-3xl floating-slow" />
-      <div className="login-bg-effect absolute bottom-20 right-20 h-72 w-72 rounded-full bg-purple-500/15 blur-3xl floating-slow delay-150" />
-      <div className="login-bg-effect absolute top-1/2 left-1/2 h-[360px] w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-400/8 blur-3xl floating-slow delay-300" />
+      <div className="login-bg-effect absolute left-20 top-20 hidden h-56 w-56 rounded-full bg-blue-500/15 blur-3xl floating-slow sm:block" />
+      <div className="login-bg-effect absolute bottom-20 right-20 hidden h-72 w-72 rounded-full bg-purple-500/15 blur-3xl floating-slow delay-150 sm:block" />
+      <div className="login-bg-effect absolute left-1/2 top-1/2 hidden h-[360px] w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-400/8 blur-3xl floating-slow delay-300 md:block" />
 
-      <div className="relative z-10 flex items-center justify-center viewport-min-height px-4 login-content">
+      <main className="relative z-10 flex viewport-min-height items-center justify-center px-4 py-6 login-content sm:py-8">
         <div className="relative w-full max-w-md">
           <button
             type="button"
             onClick={() => {
               window.location.href = "/";
             }}
-            className="mb-4 inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+            className="mb-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 hover:text-white"
           >
             Kembali ke landing page
           </button>
 
-          <div className="login-bg-effect pointer-events-none absolute -inset-4 rounded-[2rem] bg-blue-400/12 blur-2xl" />
+          <div className="login-bg-effect pointer-events-none absolute -inset-4 hidden rounded-[2rem] bg-blue-400/12 blur-2xl sm:block" />
 
-          <div className="login-card px-8 py-10">
+          <div className="login-card px-5 py-7 sm:px-8 sm:py-10">
             <div className="flex flex-col items-center mb-8">
               <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center mb-4 shadow-xl border border-white/30">
                 <BrandLogo
@@ -424,7 +425,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 transition-colors"
+                    className="absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-slate-500 transition-colors hover:text-slate-700"
                     data-testid="button-toggle-password"
                     aria-label={showPassword ? "Hide password" : "Show password"}
                     title={showPassword ? "Hide password" : "Show password"}
@@ -475,7 +476,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   setError("");
                   setLockedAccountMessage("");
                 }}
-                className="mt-3 w-full text-center text-sm text-white/75 transition-colors hover:text-white"
+                className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl text-center text-sm text-white/75 transition-colors hover:bg-white/5 hover:text-white"
               >
                 Kembali ke log masuk kata laluan
               </button>
@@ -486,7 +487,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               onClick={() => {
                 window.location.href = "/forgot-password";
               }}
-              className="mt-4 w-full text-center text-sm text-white/75 transition-colors hover:text-white"
+              className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-xl text-center text-sm text-white/75 transition-colors hover:bg-white/5 hover:text-white"
             >
               Lupa kata laluan?
             </button>
@@ -508,7 +509,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

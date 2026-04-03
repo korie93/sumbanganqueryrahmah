@@ -1,5 +1,6 @@
 import { createApiHeaders } from "../api-client";
 import { getAuthHeader, getCsrfHeader } from "./shared";
+export { generateFingerprint } from "../fingerprint";
 
 export type MonitorRequestState = "ok" | "unauthorized" | "forbidden" | "network_error";
 type MonitorRequestOptions = {
@@ -361,31 +362,3 @@ export async function rebuildCollectionRollups(options?: MonitorRequestOptions) 
   return postMonitorEndpoint<RollupQueueActionPayload>("/internal/rollup-refresh/rebuild", {}, options);
 }
 
-export async function generateFingerprint(): Promise<string> {
-  const data = [
-    navigator.userAgent,
-    navigator.platform,
-    navigator.vendor,
-    screen.width + "x" + screen.height,
-    navigator.language,
-  ].join("||");
-
-  if (crypto.subtle) {
-    try {
-      const encoder = new TextEncoder();
-      const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(data));
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-    } catch {
-      // Fall through to simple hash
-    }
-  }
-
-  let hash = 0;
-  for (let i = 0; i < data.length; i++) {
-    const char = data.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash &= hash;
-  }
-  return Math.abs(hash).toString(16).padStart(16, "0");
-}

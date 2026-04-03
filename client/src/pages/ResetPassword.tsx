@@ -7,7 +7,7 @@ import {
   resetPasswordWithToken,
   type PasswordResetTokenValidationPayload,
   validatePasswordResetToken,
-} from "@/lib/api";
+} from "@/lib/api/auth";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { broadcastForcedLogout } from "@/lib/auth-session";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";

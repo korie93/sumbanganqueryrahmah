@@ -7,7 +7,7 @@ import {
   activateAccount,
   type ActivationTokenValidationPayload,
   validateActivationToken,
-} from "@/lib/api";
+} from "@/lib/api/auth";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { persistAuthNotice } from "@/lib/auth-session";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";

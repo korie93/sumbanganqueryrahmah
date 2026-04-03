@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock3, ShieldAlert, TimerReset, Wrench } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getMaintenanceStatus } from "@/lib/api";
+import { getMaintenanceStatus } from "@/lib/api/settings";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import {
   mergeMaintenancePayload,

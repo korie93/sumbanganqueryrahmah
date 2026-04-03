@@ -3,7 +3,7 @@ import { ArrowLeft, LifeBuoy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
 import { Input } from "@/components/ui/input";
-import { requestPasswordReset } from "@/lib/api";
+import { requestPasswordReset } from "@/lib/api/auth";
 import { getApiErrorMessage } from "@/lib/api-errors";
 
 export default function ForgotPasswordPage() {

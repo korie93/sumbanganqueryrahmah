@@ -3,7 +3,7 @@ import { KeyRound, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
 import { Input } from "@/components/ui/input";
-import { changeMyPassword } from "@/lib/api";
+import { changeMyPassword } from "@/lib/api/auth";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import {
   broadcastForcedLogout,
