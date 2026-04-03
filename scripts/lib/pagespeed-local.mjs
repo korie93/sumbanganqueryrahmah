@@ -7,6 +7,10 @@ export function isRetryableLighthouseRuntimeError(report) {
   return getLighthouseRuntimeErrorCode(report) === "NO_NAVSTART";
 }
 
+export function isUsableLighthouseReport(report) {
+  return getLighthouseRuntimeErrorCode(report) === null;
+}
+
 function formatMetricDisplayValue(audit) {
   if (!audit || typeof audit !== "object") {
     return "n/a";

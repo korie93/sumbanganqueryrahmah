@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   getLighthouseRuntimeErrorCode,
   isRetryableLighthouseRuntimeError,
+  isUsableLighthouseReport,
   summarizeLighthouseReport,
 } from "../lib/pagespeed-local.mjs";
 
@@ -64,4 +65,16 @@ test("summarizeLighthouseReport formats scores and key metrics", () => {
     tbt: "20 ms",
     cls: "0",
   });
+});
+
+test("isUsableLighthouseReport only accepts reports without runtime errors", () => {
+  assert.equal(isUsableLighthouseReport({}), true);
+  assert.equal(
+    isUsableLighthouseReport({
+      runtimeError: {
+        code: "NO_NAVSTART",
+      },
+    }),
+    false,
+  );
 });

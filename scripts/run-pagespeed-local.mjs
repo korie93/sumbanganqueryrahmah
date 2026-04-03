@@ -1,6 +1,6 @@
 import process from "node:process";
 import path from "node:path";
-import { copyFileSync, createWriteStream, existsSync, readFileSync } from "node:fs";
+import { copyFileSync, createWriteStream, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -8,6 +8,7 @@ import dotenv from "dotenv";
 import {
   getLighthouseRuntimeErrorCode,
   isRetryableLighthouseRuntimeError,
+  isUsableLighthouseReport,
   summarizeLighthouseReport,
 } from "./lib/pagespeed-local.mjs";
 
@@ -31,6 +32,9 @@ const retryDelayMs = Math.max(0, Number.parseInt(String(process.env.PAGESPEED_RE
 const shouldReuseServer = String(process.env.PAGESPEED_REUSE_SERVER || "").trim().toLowerCase() === "true";
 const shouldSkipBuild = String(process.env.PAGESPEED_SKIP_BUILD || "").trim().toLowerCase() === "true";
 const includeLoginDesktop = String(process.env.PAGESPEED_INCLUDE_LOGIN_DESKTOP || "true").trim().toLowerCase() !== "false";
+const softFailRetryableFailures = String(
+  process.env.PAGESPEED_SOFT_FAIL_RETRYABLE || (process.platform === "win32" ? "true" : "false"),
+).trim().toLowerCase() === "true";
 const defaultChromeFlags = process.platform === "win32"
   ? "--headless --disable-gpu --disable-dev-shm-usage"
   : "--headless=new --disable-gpu --disable-dev-shm-usage";
@@ -166,11 +170,118 @@ function summarizeForConsole(report) {
   return parts.join(", ");
 }
 
+function findLatestUsableReport(slugBase, excludedPaths = []) {
+  const excluded = new Set(excludedPaths.map((value) => path.resolve(value)));
+  const candidates = readdirSync(artifactsDir)
+    .filter((fileName) => fileName.startsWith(slugBase) && fileName.endsWith(".json"))
+    .map((fileName) => path.join(artifactsDir, fileName))
+    .filter((filePath) => !excluded.has(path.resolve(filePath)))
+    .map((filePath) => ({
+      filePath,
+      mtimeMs: statSync(filePath).mtimeMs,
+    }))
+    .sort((left, right) => right.mtimeMs - left.mtimeMs);
+
+  for (const candidate of candidates) {
+    try {
+      const report = readLighthouseReport(candidate.filePath);
+      if (!isUsableLighthouseReport(report)) {
+        continue;
+      }
+      return {
+        filePath: candidate.filePath,
+        report,
+      };
+    } catch {
+      // Ignore malformed or partially written files and keep scanning.
+    }
+  }
+
+  return null;
+}
+
+function writeSummary(results) {
+  const summaryPath = path.join(artifactsDir, "pagespeed-local-summary.json");
+  const markdownPath = path.join(artifactsDir, "pagespeed-local-summary.md");
+  const overallStatus = results.some((result) => result.status === "failed")
+    ? "failed"
+    : results.some((result) => result.status === "soft-failed")
+      ? "completed-with-retryable-failures"
+      : "success";
+
+  const payload = {
+    overallStatus,
+    generatedAt: new Date().toISOString(),
+    maxAttempts,
+    retryDelayMs,
+    settleDelayMs,
+    softFailRetryableFailures,
+    chromeFlags,
+    results: results.map((result) => ({
+      slug: result.slug,
+      url: result.url,
+      preset: result.preset,
+      status: result.status,
+      attemptsUsed: result.attemptsUsed,
+      reportPath: result.reportPath,
+      runtimeErrorCode: result.runtimeErrorCode,
+      summary: result.summary,
+      fallbackReportPath: result.fallbackReportPath || null,
+      fallbackSummary: result.fallbackSummary || null,
+    })),
+  };
+
+  writeFileSync(summaryPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+
+  const lines = [
+    `# Local PageSpeed Summary`,
+    ``,
+    `- Overall status: ${overallStatus}`,
+    `- Generated at: ${payload.generatedAt}`,
+    `- Max attempts: ${maxAttempts}`,
+    `- Soft-fail retryable failures: ${softFailRetryableFailures ? "yes" : "no"}`,
+    `- Chrome flags: \`${chromeFlags}\``,
+    ``,
+  ];
+
+  for (const result of results) {
+    lines.push(`## ${result.slug}`);
+    lines.push(`- Status: ${result.status}`);
+    lines.push(`- URL: ${result.url}`);
+    lines.push(`- Attempts used: ${result.attemptsUsed}`);
+    lines.push(`- Report: ${result.reportPath}`);
+    if (result.runtimeErrorCode) {
+      lines.push(`- Runtime error: ${result.runtimeErrorCode}`);
+    }
+    if (result.summary) {
+      lines.push(`- Metrics: ${summarizeForConsole({ categories: {}, audits: {}, ...result.report })}`);
+    }
+    if (result.fallbackReportPath) {
+      lines.push(`- Fallback report: ${result.fallbackReportPath}`);
+      lines.push(
+        `- Fallback metrics: perf ${result.fallbackSummary.performance ?? "n/a"}, a11y ${result.fallbackSummary.accessibility ?? "n/a"}, bp ${result.fallbackSummary.bestPractices ?? "n/a"}, seo ${result.fallbackSummary.seo ?? "n/a"}, FCP ${result.fallbackSummary.fcp}, LCP ${result.fallbackSummary.lcp}, TBT ${result.fallbackSummary.tbt}, CLS ${result.fallbackSummary.cls}`,
+      );
+    }
+    lines.push("");
+  }
+
+  writeFileSync(markdownPath, `${lines.join("\n")}\n`, "utf8");
+
+  return {
+    summaryPath,
+    markdownPath,
+    overallStatus,
+  };
+}
+
 async function runAudit(audit, env) {
   const latestPath = path.join(artifactsDir, `${audit.slug}.json`);
+  const slugBase = audit.slug.replace(/-latest$/, "");
+  const attemptPaths = [];
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const attemptPath = path.join(artifactsDir, `${audit.slug}-attempt-${attempt}.json`);
+    attemptPaths.push(attemptPath);
     const attemptTempDir = path.join(tempRootDir, `${audit.slug}-attempt-${attempt}`);
     await mkdir(attemptTempDir, { recursive: true });
     console.log(`[pagespeed] ${audit.slug}: attempt ${attempt}/${maxAttempts}`);
@@ -201,7 +312,17 @@ async function runAudit(audit, env) {
     if (!runtimeErrorCode) {
       copyFileSync(attemptPath, latestPath);
       console.log(`[pagespeed] ${audit.slug}: success on attempt ${attempt} (${summarizeForConsole(report)})`);
-      return report;
+      return {
+        slug: audit.slug,
+        url: audit.url,
+        preset: audit.preset,
+        status: "success",
+        attemptsUsed: attempt,
+        reportPath: latestPath,
+        report,
+        summary: summarizeLighthouseReport(report),
+        runtimeErrorCode: null,
+      };
     }
 
     if (isRetryableLighthouseRuntimeError(report) && attempt < maxAttempts) {
@@ -213,12 +334,48 @@ async function runAudit(audit, env) {
     }
 
     copyFileSync(attemptPath, latestPath);
-    throw new Error(
+    const fallback = findLatestUsableReport(slugBase, [latestPath, ...attemptPaths]);
+    const result = {
+      slug: audit.slug,
+      url: audit.url,
+      preset: audit.preset,
+      status: "failed",
+      attemptsUsed: attempt,
+      reportPath: latestPath,
+      report,
+      summary: summarizeLighthouseReport(report),
+      runtimeErrorCode,
+      fallbackReportPath: fallback?.filePath || null,
+      fallbackSummary: fallback ? summarizeLighthouseReport(fallback.report) : null,
+    };
+
+    if (softFailRetryableFailures && isRetryableLighthouseRuntimeError(report)) {
+      console.warn(
+        `[pagespeed] ${audit.slug}: soft-failing after ${runtimeErrorCode}; fallback report ${fallback?.filePath || "not found"}.`,
+      );
+      return {
+        ...result,
+        status: "soft-failed",
+      };
+    }
+
+    console.error(
       `[pagespeed] ${audit.slug} failed with runtime error ${runtimeErrorCode} after ${attempt} attempt(s).`,
     );
+    return result;
   }
 
-  throw new Error(`[pagespeed] ${audit.slug} exhausted ${maxAttempts} attempts without a valid report.`);
+  return {
+    slug: audit.slug,
+    url: audit.url,
+    preset: audit.preset,
+    status: "failed",
+    attemptsUsed: maxAttempts,
+    reportPath: latestPath,
+    report: null,
+    summary: null,
+    runtimeErrorCode: "UNKNOWN",
+  };
 }
 
 async function run() {
@@ -295,11 +452,21 @@ async function run() {
         : []),
     ];
 
+    const results = [];
+
     for (const audit of audits) {
-      await runAudit(audit, env);
+      results.push(await runAudit(audit, env));
     }
 
+    const summaryArtifacts = writeSummary(results);
     console.log(`[pagespeed] complete. Reports saved in ${artifactsDir}`);
+    console.log(`[pagespeed] summary: ${summaryArtifacts.summaryPath}`);
+
+    if (summaryArtifacts.overallStatus === "failed") {
+      throw new Error(
+        `Local PageSpeed completed with hard failures. See ${summaryArtifacts.summaryPath} for details.`,
+      );
+    }
   } finally {
     await stopServer(serverProcess);
     serverLogStream?.end();
