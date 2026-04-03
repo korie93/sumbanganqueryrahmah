@@ -34,62 +34,27 @@ function LandingDeferredSectionsFallback({
 }: LandingDeferredSectionsFallbackProps) {
   return (
     <>
-      <section id="features" className="landing-deferred-section mt-12 space-y-5" aria-hidden="true">
-        <div className="space-y-3">
-          <div className="h-4 w-28 rounded-full bg-white/10" />
-          <div className="h-8 max-w-lg rounded-2xl bg-white/10" />
-          <div className="h-4 max-w-3xl rounded-full bg-white/10" />
-        </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          {Array.from({ length: 3 }, (_, index) => (
-            <div
-              key={`landing-feature-placeholder-${index}`}
-              className="rounded-3xl border border-white/10 bg-white/5 p-5"
-            >
-              <div className="h-11 w-11 rounded-2xl bg-white/10" />
-              <div className="mt-4 h-5 w-36 rounded-full bg-white/10" />
-              <div className="mt-3 space-y-2">
-                <div className="h-3 rounded-full bg-white/10" />
-                <div className="h-3 rounded-full bg-white/10" />
-                <div className="h-3 w-4/5 rounded-full bg-white/10" />
-              </div>
-            </div>
-          ))}
+      <section
+        id="features"
+        className="landing-deferred-section mt-12 rounded-3xl border border-white/10 bg-white/[0.03] px-5 py-6"
+        aria-hidden="true"
+      >
+        <div className="max-w-3xl space-y-3">
+          <div className="h-3.5 w-24 rounded-full bg-white/10" />
+          <div className="h-7 max-w-md rounded-2xl bg-white/10" />
+          <div className="h-3 max-w-2xl rounded-full bg-white/10" />
         </div>
       </section>
 
       <section
         id="security"
-        className="landing-deferred-section mt-12 rounded-3xl border border-emerald-400/15 bg-emerald-400/5 p-6"
+        className="landing-deferred-section mt-6 rounded-3xl border border-emerald-400/15 bg-emerald-400/[0.04] px-5 py-6"
         aria-hidden="true"
       >
-        <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
-          <div className="space-y-3">
-            <div className="h-5 w-52 rounded-full bg-emerald-200/15" />
-            <div className="h-3 max-w-3xl rounded-full bg-white/10" />
-            <div className="h-3 max-w-2xl rounded-full bg-white/10" />
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
-            <div className="h-4 w-24 rounded-full bg-emerald-200/15" />
-            <div className="mt-3 space-y-2">
-              <div className="h-3 rounded-full bg-white/10" />
-              <div className="h-3 w-5/6 rounded-full bg-white/10" />
-            </div>
-          </div>
-        </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
-          {Array.from({ length: 3 }, (_, index) => (
-            <div
-              key={`landing-security-placeholder-${index}`}
-              className="rounded-2xl border border-white/10 bg-slate-950/35 p-4"
-            >
-              <div className="space-y-2">
-                <div className="h-3 rounded-full bg-white/10" />
-                <div className="h-3 rounded-full bg-white/10" />
-                <div className="h-3 w-4/5 rounded-full bg-white/10" />
-              </div>
-            </div>
-          ))}
+        <div className="max-w-3xl space-y-3">
+          <div className="h-4 w-36 rounded-full bg-emerald-200/15" />
+          <div className="h-3 max-w-3xl rounded-full bg-white/10" />
+          <div className="h-3 max-w-2xl rounded-full bg-white/10" />
         </div>
       </section>
 
@@ -270,7 +235,7 @@ export default function Landing({ onLoginClick }: LandingProps) {
 
             <div
               id="about"
-              className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+              className="landing-secondary-pane rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl shadow-black/20 backdrop-blur"
             >
               <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
