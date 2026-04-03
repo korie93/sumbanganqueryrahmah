@@ -77,76 +77,69 @@ export function GeneralSearchControls({
     return (
       <>
         <div
-          className="glass-wrapper sticky top-2 z-20 mb-6 space-y-4 p-4 shadow-lg supports-[backdrop-filter]:bg-background/80 supports-[backdrop-filter]:backdrop-blur-xl"
+          className="glass-wrapper sticky top-2 z-20 mb-3 space-y-2 p-2 shadow-lg supports-[backdrop-filter]:bg-background/80 supports-[backdrop-filter]:backdrop-blur-xl"
           data-floating-ai-avoid="true"
         >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Search Controls
-              </p>
-              <h2 className="mt-1 text-lg font-semibold text-foreground">Find records quickly</h2>
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                Use quick keyword search or open the advanced filter sheet for field-by-field matching.
-              </p>
+          <div className="flex items-center gap-2">
+            <div className="grid flex-1 grid-cols-2 gap-1 rounded-xl border border-border/60 bg-muted/25 p-1">
+              <Button
+                variant="ghost"
+                onClick={() => handleMobileModeChange(false)}
+                className={cn(
+                  "h-8.5 w-full rounded-lg px-2 text-[11px] font-medium",
+                  advancedMode
+                    ? "text-muted-foreground"
+                    : "bg-background text-foreground shadow-sm hover:bg-background",
+                )}
+                data-testid="button-simple-search"
+              >
+                <Search className="mr-1 h-3.5 w-3.5" />
+                Simple
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => handleMobileModeChange(true)}
+                className={cn(
+                  "h-8.5 w-full rounded-lg px-2 text-[11px] font-medium",
+                  advancedMode
+                    ? "bg-background text-foreground shadow-sm hover:bg-background"
+                    : "text-muted-foreground",
+                )}
+                data-testid="button-advanced-search"
+              >
+                <Filter className="mr-1 h-3.5 w-3.5" />
+                Advanced
+              </Button>
             </div>
             {(advancedMode || activeFiltersCount > 0) ? (
-              <Badge variant="secondary" className="shrink-0 rounded-full px-3 py-1 text-xs">
-                {advancedMode ? `${activeFiltersCount} filters` : "Quick search"}
+              <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-1 text-[10px]">
+                {advancedMode ? `${activeFiltersCount} filters` : "Quick"}
               </Badge>
             ) : null}
           </div>
 
           {advancedMode && activeFilterSummaries.length > 0 ? (
-            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-              <Badge variant="secondary" className="shrink-0 rounded-full px-3 py-1 text-xs">
+            <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+              <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-1 text-[10px]">
                 {logic}
               </Badge>
-              {activeFilterSummaries.slice(0, 4).map((summary) => (
-                <Badge key={summary} variant="outline" className="shrink-0 rounded-full px-3 py-1 text-xs">
+              {activeFilterSummaries.slice(0, 2).map((summary) => (
+                <Badge key={summary} variant="outline" className="shrink-0 rounded-full px-2 py-1 text-[10px]">
                   {summary}
                 </Badge>
               ))}
-              {activeFilterSummaries.length > 4 ? (
-                <Badge variant="secondary" className="shrink-0 rounded-full px-3 py-1 text-xs">
-                  +{activeFilterSummaries.length - 4} more
+              {activeFilterSummaries.length > 2 ? (
+                <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-1 text-[10px]">
+                  +{activeFilterSummaries.length - 2}
                 </Badge>
               ) : null}
             </div>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              variant={advancedMode ? "outline" : "default"}
-              size="default"
-              onClick={() => handleMobileModeChange(false)}
-              className="h-11 w-full"
-              data-testid="button-simple-search"
-            >
-              <Search className="mr-2 h-4 w-4" />
-              Simple Search
-            </Button>
-            <Button
-              variant={advancedMode ? "default" : "outline"}
-              size="default"
-              onClick={() => handleMobileModeChange(true)}
-              className="h-11 w-full"
-              data-testid="button-advanced-search"
-            >
-              <Filter className="mr-2 h-4 w-4" />
-              Advanced
-              {activeFiltersCount > 0 ? (
-                <Badge variant="secondary" className="ml-2">
-                  {activeFiltersCount}
-                </Badge>
-              ) : null}
-            </Button>
-          </div>
-
           {!advancedMode ? (
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={query}
                   onChange={(event) => onQueryChange(event.target.value)}
@@ -154,7 +147,7 @@ export function GeneralSearchControls({
                     if (event.key === "Enter") onSearch();
                   }}
                   placeholder="Enter IC No., name, or other keywords..."
-                  className="h-12 rounded-2xl pl-10 text-base"
+                  className="h-9 rounded-xl pl-9 text-sm"
                   data-testid="input-search"
                 />
               </div>
@@ -162,7 +155,7 @@ export function GeneralSearchControls({
                 <Button
                   onClick={onSearch}
                   disabled={loading}
-                  className="h-12 w-full"
+                  className="h-9 w-full rounded-xl text-xs"
                   data-testid="button-search"
                 >
                   {loading ? (
@@ -180,20 +173,20 @@ export function GeneralSearchControls({
                 <Button
                   variant="outline"
                   onClick={onReset}
-                  className="h-12 w-full"
+                  className="h-9 w-full rounded-xl text-xs"
                   data-testid="button-reset"
                 >
-                  <RotateCcw className="mr-2 h-4 w-4" />
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
                   Reset
                 </Button>
               </div>
             </div>
           ) : (
-            <div className="rounded-2xl border border-border/60 bg-muted/20 p-3">
+            <div className="rounded-xl border border-border/60 bg-muted/20 p-2">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-foreground">Advanced filters ready</p>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  <p className="text-xs font-semibold text-foreground">Advanced filters ready</p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
                     {activeFiltersCount > 0
                       ? `${activeFiltersCount} filter${activeFiltersCount === 1 ? "" : "s"} configured with ${logic} logic.`
                       : "Open the filter sheet to choose fields, operators, and values."}
@@ -203,10 +196,10 @@ export function GeneralSearchControls({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-10 shrink-0 rounded-xl px-3"
+                  className="h-8.5 shrink-0 rounded-lg px-2.5 text-[11px]"
                   onClick={() => setMobileAdvancedOpen(true)}
                 >
-                  <SlidersHorizontal className="mr-2 h-4 w-4" />
+                  <SlidersHorizontal className="mr-1 h-3.5 w-3.5" />
                   Open
                 </Button>
               </div>
@@ -214,9 +207,9 @@ export function GeneralSearchControls({
           )}
 
           {error ? (
-            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-destructive">
+            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-2.5 text-destructive">
               <AlertCircle className="h-4 w-4" />
-              <span className="text-sm">{error}</span>
+              <span className="text-xs">{error}</span>
             </div>
           ) : null}
         </div>
