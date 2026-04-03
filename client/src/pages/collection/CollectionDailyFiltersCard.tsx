@@ -1,6 +1,7 @@
 import { Suspense, lazy } from "react";
 import { CalendarDays, Loader2 } from "lucide-react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -154,27 +155,33 @@ export function CollectionDailyFiltersCard({
       }
     >
         {isMobile ? (
-          <div className="space-y-4">
-            <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-background/80 px-4 py-4 shadow-sm">
-              <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-primary/12 via-primary/6 to-transparent" />
-              <div className="relative space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  Daily Setup
-                </p>
-                <h3 className="text-lg font-semibold text-foreground">
-                  Keep month, staff, and target controls in one focused mobile flow.
-                </h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Choose the reporting period first, then adjust staff scope and save changes only when needed.
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-border/60 bg-background/80 px-3 py-3 shadow-sm">
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+                    Year {yearInput || "-"}
+                  </Badge>
+                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+                    Month {monthInput || "-"}
+                  </Badge>
+                  <Badge variant="outline" className="max-w-full rounded-full px-3 py-1 text-[11px]">
+                    <span className="truncate">
+                      {canManage ? selectedUsersLabel : currentUsername}
+                    </span>
+                  </Badge>
+                </div>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Adjust period and staff scope first, then save target or calendar only when changes are ready.
                 </p>
               </div>
             </div>
 
-            <section className="space-y-4 rounded-2xl border border-border/60 bg-muted/10 p-4">
+            <section className="space-y-3 rounded-2xl border border-border/60 bg-muted/10 p-3.5">
               <div className="space-y-1">
                 <h3 className="text-base font-semibold text-foreground">Reporting Period</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Update the month and year to refresh the daily collection status for the selected period.
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Change month or year to refresh the daily collection view.
                 </p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -217,13 +224,13 @@ export function CollectionDailyFiltersCard({
               </div>
             </section>
 
-            <section className="space-y-4 rounded-2xl border border-border/60 bg-muted/10 p-4">
+            <section className="space-y-3 rounded-2xl border border-border/60 bg-muted/10 p-3.5">
               <div className="space-y-1">
                 <h3 className="text-base font-semibold text-foreground">Staff Scope</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
+                <p className="text-xs leading-relaxed text-muted-foreground">
                   {canManage
-                    ? "Choose one or more staff nicknames before editing monthly targets or saving the working calendar."
-                    : "Your current account is used automatically for the daily collection view."}
+                    ? "Choose one or more staff nicknames before editing target or calendar."
+                    : "Your current account is used automatically for this daily view."}
                 </p>
               </div>
               <div className="space-y-2">

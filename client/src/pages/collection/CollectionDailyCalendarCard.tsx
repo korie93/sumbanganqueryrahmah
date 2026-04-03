@@ -1,6 +1,7 @@
 import { Suspense, lazy } from "react";
 import { AlertTriangle, CheckCircle2, CircleSlash, Loader2 } from "lucide-react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
+import { Badge } from "@/components/ui/badge";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionDailyOverviewDay, CollectionDailyOverviewResponse } from "@/lib/api";
 import { formatDateDDMMYYYY } from "@/lib/date-format";
@@ -57,27 +58,53 @@ export function CollectionDailyCalendarCard({
     <div data-testid="collection-daily-calendar">
       <OperationalSectionCard
         title="Monthly Daily Status"
-        description="Scan the month quickly, then click a day to inspect collection details."
+        description={
+          isMobile
+            ? "Scan the month quickly and tap a day to open its collection details."
+            : "Scan the month quickly, then click a day to inspect collection details."
+        }
         contentClassName="space-y-4"
       >
-        <div className="grid gap-2 text-xs md:grid-cols-2 xl:grid-cols-4" data-testid="collection-daily-legend">
-          <div className="flex items-center gap-2 rounded-xl border border-rose-300/60 bg-rose-50/70 px-3 py-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
-            <span>Red: No collection</span>
+        {isMobile ? (
+          <div className="space-y-2" data-testid="collection-daily-legend">
+            <div className="flex flex-wrap gap-2">
+              <Badge className="border-rose-300/70 bg-rose-50 text-rose-700 hover:bg-rose-50">
+                Red: No collection
+              </Badge>
+              <Badge className="border-amber-300/70 bg-amber-50 text-amber-700 hover:bg-amber-50">
+                Yellow: Below target
+              </Badge>
+              <Badge className="border-green-300/70 bg-green-50 text-green-700 hover:bg-green-50">
+                Green: Target achieved
+              </Badge>
+              <Badge className="border-slate-300/70 bg-slate-100 text-slate-700 hover:bg-slate-100">
+                Grey: Holiday
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Each card shows the key daily figures first so you can decide quickly which date to open.
+            </p>
           </div>
-          <div className="flex items-center gap-2 rounded-xl border border-amber-300/60 bg-amber-50/70 px-3 py-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-            <span>Yellow: Collection recorded but daily target not achieved</span>
+        ) : (
+          <div className="grid gap-2 text-xs md:grid-cols-2 xl:grid-cols-4" data-testid="collection-daily-legend">
+            <div className="flex items-center gap-2 rounded-xl border border-rose-300/60 bg-rose-50/70 px-3 py-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
+              <span>Red: No collection</span>
+            </div>
+            <div className="flex items-center gap-2 rounded-xl border border-amber-300/60 bg-amber-50/70 px-3 py-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+              <span>Yellow: Collection recorded but daily target not achieved</span>
+            </div>
+            <div className="flex items-center gap-2 rounded-xl border border-green-300/60 bg-green-50/70 px-3 py-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
+              <span>Green: Daily target achieved</span>
+            </div>
+            <div className="flex items-center gap-2 rounded-xl border border-slate-300/60 bg-slate-100/80 px-3 py-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
+              <span>Grey: Holiday / non-working day</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2 rounded-xl border border-green-300/60 bg-green-50/70 px-3 py-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
-            <span>Green: Daily target achieved</span>
-          </div>
-          <div className="flex items-center gap-2 rounded-xl border border-slate-300/60 bg-slate-100/80 px-3 py-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
-            <span>Grey: Holiday / non-working day</span>
-          </div>
-        </div>
+        )}
 
         {loadingOverview ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
@@ -90,9 +117,6 @@ export function CollectionDailyCalendarCard({
           <div className="space-y-3">
             {isMobile ? (
               <div className="space-y-3" data-testid="collection-daily-calendar-mobile-list">
-                <p className="text-xs text-muted-foreground">
-                  Tap a day to open details. Mobile view shows each day as a full card for easier scanning.
-                </p>
                 {overview.days.map((day) => {
                   const isSelected = selectedDate === day.date;
 
@@ -105,7 +129,7 @@ export function CollectionDailyCalendarCard({
                     >
                       <button
                         type="button"
-                        className="w-full rounded-[inherit] p-3 text-left transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                        className="w-full rounded-[inherit] px-3 py-3.5 text-left transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                         aria-label={`${formatDateDDMMYYYY(day.date)} - ${statusLabel(day.status)} - Collected ${formatAmountRM(day.amount)} - Target ${formatAmountRM(day.target)}${isSelected ? " - Selected" : ""}`}
                         onClick={() => onSelectDate(day.date)}
                         data-testid={`collection-daily-day-${day.day}`}
@@ -119,40 +143,41 @@ export function CollectionDailyCalendarCard({
                               {formatDateDDMMYYYY(day.date)}
                             </p>
                           </div>
-                          <div className="flex shrink-0 items-center gap-2">
-                            <DayStatusIcon status={day.status} />
-                            <span className="rounded-full border border-border/50 bg-background/75 px-2 py-1 text-[11px] font-medium text-foreground">
+                          <div className="flex shrink-0 flex-col items-end gap-2">
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-background/80 px-2.5 py-1 text-[11px] font-medium text-foreground">
+                              <DayStatusIcon status={day.status} />
                               {statusLabel(day.status)}
                             </span>
+                            <span className="text-[11px] text-muted-foreground">Tap for details</span>
                           </div>
                         </div>
 
                         <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                           <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
                             <p className="uppercase tracking-[0.12em] text-muted-foreground">Collected</p>
-                            <p className="mt-1 font-medium text-foreground">{formatAmountRM(day.amount)}</p>
+                            <p className="mt-1 text-sm font-semibold text-foreground">{formatAmountRM(day.amount)}</p>
                           </div>
                           <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
                             <p className="uppercase tracking-[0.12em] text-muted-foreground">Target</p>
-                            <p className="mt-1 font-medium text-foreground">{formatAmountRM(day.target)}</p>
-                          </div>
-                          <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
-                            <p className="uppercase tracking-[0.12em] text-muted-foreground">Customers</p>
-                            <p className="mt-1 font-medium text-foreground">{day.customerCount}</p>
-                          </div>
-                          <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
-                            <p className="uppercase tracking-[0.12em] text-muted-foreground">Status</p>
-                            <p className={`mt-1 font-medium ${statusTextClass(day.status)}`}>
-                              {statusLabel(day.status)}
-                            </p>
+                            <p className="mt-1 text-sm font-semibold text-foreground">{formatAmountRM(day.target)}</p>
                           </div>
                         </div>
 
-                        {day.isHoliday && day.holidayName ? (
-                          <div className="mt-3 rounded-xl border border-border/50 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
-                            Holiday: <span className="font-medium text-foreground">{day.holidayName}</span>
-                          </div>
-                        ) : null}
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span className="rounded-full border border-border/50 bg-background/70 px-2.5 py-1">
+                            Customers {day.customerCount}
+                          </span>
+                          <span
+                            className={`rounded-full border border-border/50 bg-background/70 px-2.5 py-1 ${statusTextClass(day.status)}`}
+                          >
+                            {statusLabel(day.status)}
+                          </span>
+                          {day.isHoliday && day.holidayName ? (
+                            <span className="rounded-full border border-border/50 bg-background/70 px-2.5 py-1 text-foreground">
+                              Holiday: {day.holidayName}
+                            </span>
+                          ) : null}
+                        </div>
                       </button>
                     </article>
                   );

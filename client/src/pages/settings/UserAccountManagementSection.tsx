@@ -1,6 +1,8 @@
 import { Suspense, lazy, useEffect, useState, useTransition } from "react";
 import { Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { CreateClosedAccountSection } from "@/pages/settings/account-management/CreateClosedAccountSection";
 import { UserAccountManagementNav } from "@/pages/settings/account-management/UserAccountManagementNav";
 import type {
@@ -126,6 +128,7 @@ export function UserAccountManagementSection({
   pendingResetRequestsPagination,
   pendingResetRequestsQuery,
 }: UserAccountManagementSectionProps) {
+  const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState<UserAccountManagementTabId>("create-closed-account");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(false);
@@ -141,18 +144,32 @@ export function UserAccountManagementSection({
 
   return (
     <Card className="border-border/60 bg-background/70">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xl">
+      <CardHeader className={isMobile ? "space-y-4 pb-4" : undefined}>
+        <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
           <Users className="h-5 w-5" />
           User Account Management
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Organize account creation, mail previews, managed users, and pending reset requests into
-          focused sections without crowding the main Security page.
+          {isMobile
+            ? "Manage closed accounts, mail previews, and reset requests in focused sections."
+            : "Organize account creation, mail previews, managed users, and pending reset requests into focused sections without crowding the main Security page."}
         </p>
+        {isMobile ? (
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="secondary" className="rounded-full px-3 py-1">
+              Accounts {managedUsersPagination.total}
+            </Badge>
+            <Badge variant="outline" className="rounded-full px-3 py-1">
+              Outbox {devMailOutboxPagination.total}
+            </Badge>
+            <Badge variant="outline" className="rounded-full px-3 py-1">
+              Reset Requests {pendingResetRequestsPagination.total}
+            </Badge>
+          </div>
+        ) : null}
       </CardHeader>
-      <CardContent>
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start">
+      <CardContent className={isMobile ? "pt-0" : undefined}>
+        <div className="relative flex flex-col gap-3 lg:flex-row lg:items-start lg:gap-4">
           <UserAccountManagementNav
             activeTab={activeTab}
             collapsed={navCollapsed}

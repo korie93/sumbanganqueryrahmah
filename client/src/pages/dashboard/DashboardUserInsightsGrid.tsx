@@ -76,7 +76,9 @@ export function DashboardUserInsightsGrid({
             Top Active Users
           </CardTitle>
           <p className="text-xs text-muted-foreground sm:text-sm">
-            Most active accounts, with login count and latest access kept readable on narrow screens.
+            {isMobile
+              ? "Most active accounts with login count and latest access."
+              : "Most active accounts, with login count and latest access kept readable on narrow screens."}
           </p>
         </CardHeader>
         <CardContent aria-live="polite">
@@ -106,7 +108,7 @@ export function DashboardUserInsightsGrid({
                         <p className="break-words text-sm font-semibold text-foreground sm:text-base">
                           {user.username}
                         </p>
-                        <Badge variant="outline" className="w-fit text-[11px] capitalize">
+                        <Badge variant="outline" className="w-fit rounded-full text-[11px] capitalize">
                           {user.role}
                         </Badge>
                       </div>
@@ -146,7 +148,9 @@ export function DashboardUserInsightsGrid({
             User Roles
           </CardTitle>
           <p className="text-xs text-muted-foreground sm:text-sm">
-            Role mix shown in a smaller donut with a clearer breakdown for phone screens.
+            {isMobile
+              ? "Role mix shown in a compact donut with quick counts."
+              : "Role mix shown in a smaller donut with a clearer breakdown for phone screens."}
           </p>
         </CardHeader>
         <CardContent className="space-y-3" aria-live="polite">

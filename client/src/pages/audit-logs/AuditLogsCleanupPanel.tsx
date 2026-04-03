@@ -1,4 +1,5 @@
 import { AlertTriangle, ChevronDown, RefreshCw, Settings, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -14,6 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { AuditLogRecord, AuditLogStats } from "@/pages/audit-logs/types";
 import { formatAuditTime } from "@/pages/audit-logs/utils";
 
@@ -46,6 +48,8 @@ export function AuditLogsCleanupPanel({
   onConfirmCleanup,
   stats,
 }: AuditLogsCleanupPanelProps) {
+  const isMobile = useIsMobile();
+
   if (!canCleanupLogs) {
     return null;
   }
@@ -68,16 +72,18 @@ export function AuditLogsCleanupPanel({
     <>
       <Card data-floating-ai-avoid="true">
         <Collapsible open={cleanupOpen} onOpenChange={onCleanupOpenChange}>
-          <CardHeader className="pb-3">
+          <CardHeader className={isMobile ? "pb-2.5" : "pb-3"}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" className="h-auto w-full justify-between gap-3 rounded-xl px-0 py-0 text-left sm:w-auto sm:justify-start">
                   <div className="flex min-w-0 items-center gap-2">
                     <Settings className="h-5 w-5 shrink-0" />
                     <div className="min-w-0">
-                      <CardTitle className="text-lg">Log Cleanup</CardTitle>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Review retention counts before deleting older audit logs.
+                      <CardTitle className={isMobile ? "text-base" : "text-lg"}>Log Cleanup</CardTitle>
+                      <p className={`mt-1 text-muted-foreground ${isMobile ? "text-xs" : "text-sm"}`}>
+                        {isMobile
+                          ? "Review retention impact before deleting older audit logs."
+                          : "Review retention counts before deleting older audit logs."}
                       </p>
                     </div>
                   </div>
@@ -88,29 +94,43 @@ export function AuditLogsCleanupPanel({
           </CardHeader>
           <CollapsibleContent>
             <CardContent className="space-y-5">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                <div className="p-4 rounded-lg bg-muted/30 space-y-1">
-                  <p className="text-sm text-muted-foreground">Total Logs</p>
-                  <p className="text-2xl font-bold" data-testid="text-total-logs">
-                    {stats?.total ?? logs.length}
-                  </p>
+              {isMobile ? (
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]" data-testid="text-total-logs">
+                    Total {stats?.total ?? logs.length}
+                  </Badge>
+                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]" data-testid="text-old-30-days">
+                    30+ days {stats?.olderThan30Days ?? 0}
+                  </Badge>
+                  <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px]" data-testid="text-old-90-days">
+                    90+ days {stats?.olderThan90Days ?? 0}
+                  </Badge>
                 </div>
-                <div className="p-4 rounded-lg bg-muted/30 space-y-1">
-                  <p className="text-sm text-muted-foreground">Older than 30 Days</p>
-                  <p className="text-2xl font-bold text-amber-600 dark:text-amber-400" data-testid="text-old-30-days">
-                    {stats?.olderThan30Days ?? 0}
-                  </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="space-y-1 rounded-lg bg-muted/30 p-4">
+                    <p className="text-sm text-muted-foreground">Total Logs</p>
+                    <p className="text-2xl font-bold" data-testid="text-total-logs">
+                      {stats?.total ?? logs.length}
+                    </p>
+                  </div>
+                  <div className="space-y-1 rounded-lg bg-muted/30 p-4">
+                    <p className="text-sm text-muted-foreground">Older than 30 Days</p>
+                    <p className="text-2xl font-bold text-amber-600 dark:text-amber-400" data-testid="text-old-30-days">
+                      {stats?.olderThan30Days ?? 0}
+                    </p>
+                  </div>
+                  <div className="space-y-1 rounded-lg bg-muted/30 p-4">
+                    <p className="text-sm text-muted-foreground">Older than 90 Days</p>
+                    <p className="text-2xl font-bold text-red-600 dark:text-red-400" data-testid="text-old-90-days">
+                      {stats?.olderThan90Days ?? 0}
+                    </p>
+                  </div>
                 </div>
-                <div className="p-4 rounded-lg bg-muted/30 space-y-1">
-                  <p className="text-sm text-muted-foreground">Older than 90 Days</p>
-                  <p className="text-2xl font-bold text-red-600 dark:text-red-400" data-testid="text-old-90-days">
-                    {stats?.olderThan90Days ?? 0}
-                  </p>
-                </div>
-              </div>
+              )}
 
               {stats?.oldestLogDate ? (
-                <p className="text-sm text-muted-foreground">
+                <p className={`text-muted-foreground ${isMobile ? "text-xs" : "text-sm"}`}>
                   Oldest log entry: {formatAuditTime(stats.oldestLogDate)}
                 </p>
               ) : null}
@@ -136,13 +156,13 @@ export function AuditLogsCleanupPanel({
                         <SelectItem value="365">1 year</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
+                    <p className={`leading-relaxed text-muted-foreground ${isMobile ? "text-xs" : "text-sm"}`}>
                       Cleanup still requires confirmation before any audit entries are removed.
                     </p>
                   </div>
 
                   <div className="w-full space-y-2 lg:max-w-xs lg:text-right">
-                    <p className="text-sm text-muted-foreground">{cleanupImpactText}</p>
+                    <p className={`text-muted-foreground ${isMobile ? "text-xs" : "text-sm"}`}>{cleanupImpactText}</p>
                     <Button
                       variant="destructive"
                       onClick={() => onCleanupDialogOpenChange(true)}

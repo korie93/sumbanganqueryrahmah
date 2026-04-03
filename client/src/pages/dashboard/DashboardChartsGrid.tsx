@@ -110,7 +110,9 @@ export function DashboardChartsGrid({
                 Login Trends
               </CardTitle>
               <p className="text-xs text-muted-foreground sm:text-sm">
-                Daily login and logout activity over the selected period.
+                {isMobile
+                  ? "Daily login and logout activity over the selected range."
+                  : "Daily login and logout activity over the selected period."}
               </p>
             </div>
             <div
@@ -123,7 +125,7 @@ export function DashboardChartsGrid({
                   key={days}
                   variant={trendDays === days ? "default" : "ghost"}
                   size="sm"
-                  className="h-9 px-3 text-xs sm:text-sm"
+                  className="h-8 px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm"
                   onClick={() => onTrendDaysChange(days)}
                   aria-pressed={trendDays === days}
                   aria-label={`Show ${days} day trends`}
@@ -240,7 +242,9 @@ export function DashboardChartsGrid({
             Peak Activity Hours
           </CardTitle>
           <p className="text-xs text-muted-foreground sm:text-sm">
-            Login volume by hour so busy periods stay easy to spot on smaller screens.
+            {isMobile
+              ? "Login volume by hour so busy periods stay easy to scan."
+              : "Login volume by hour so busy periods stay easy to spot on smaller screens."}
           </p>
         </CardHeader>
         <CardContent className="space-y-3" aria-live="polite">

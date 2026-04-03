@@ -8,6 +8,8 @@ import {
   OperationalPage,
   OperationalPageHeader,
 } from "@/components/layout/OperationalPage";
+import { Badge } from "@/components/ui/badge";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   COLLECTION_STAFF_NICKNAME_KEY,
   getCurrentRole,
@@ -25,6 +27,7 @@ const CollectionNicknameDialog = lazy(() =>
 );
 
 export default function CollectionReport() {
+  const isMobile = useIsMobile();
   const role = useMemo(() => getCurrentRole(), []);
   const currentUsername = useMemo(() => getCurrentUsername(), []);
   const isSuperuser = role === "superuser";
@@ -80,7 +83,9 @@ export default function CollectionReport() {
         ? "Signing In..."
         : "Checking...";
   const sectionLabel = navigation.activeSidebarItem?.label || "Choose a section";
-  const subtitle = `Staff Nickname: ${nicknameAccess.staffNickname || "-"} | Section: ${sectionLabel}`;
+  const subtitle = isMobile
+    ? `Staff Nickname: ${nicknameAccess.staffNickname || "-"}`
+    : `Staff Nickname: ${nicknameAccess.staffNickname || "-"} | Section: ${sectionLabel}`;
   const shouldRenderNicknameDialog =
     nicknameAccess.nicknameDialogOpen || (!isSuperuser && !nicknameAccess.canAccessCollection);
 
@@ -90,6 +95,14 @@ export default function CollectionReport() {
         title="Collection Report"
         eyebrow="Operational Workspace"
         description={subtitle}
+        badge={
+          isMobile ? (
+            <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+              {sectionLabel}
+            </Badge>
+          ) : undefined
+        }
+        className={isMobile ? "border-border/60 bg-background/92" : undefined}
       />
 
       <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start">

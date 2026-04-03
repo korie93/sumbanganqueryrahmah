@@ -1,7 +1,9 @@
 import { KeyRound } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface MyAccountSecurityCardProps {
   confirmPasswordInput: string;
@@ -62,24 +64,61 @@ export function MyAccountSecurityCard({
   usernameInput,
   usernameSaving,
 }: MyAccountSecurityCardProps) {
+  const isMobile = useIsMobile();
   const supportsTwoFactor = currentUserRole === "admin" || currentUserRole === "superuser";
   const securityBusy = usernameSaving || passwordSaving || twoFactorLoading;
+  const twoFactorStatus = twoFactorEnabled
+    ? "Enabled"
+    : twoFactorPendingSetup
+      ? "Setup pending"
+      : "Not enabled";
+  const twoFactorStatusVariant = twoFactorEnabled
+    ? "default"
+    : twoFactorPendingSetup
+      ? "secondary"
+      : "outline";
 
   return (
     <Card className="border-border/60 bg-background/70">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xl">
+      <CardHeader className={isMobile ? "space-y-4 pb-4" : undefined}>
+        <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
           <KeyRound className="h-5 w-5" />
           Account Security
         </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          {isMobile
+            ? "Update your account identity, password, and two-factor protection."
+            : "Manage your username, password, and two-factor protection for this account."}
+        </p>
+        {isMobile ? (
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="secondary" className="rounded-full px-3 py-1">
+              Role {currentUserRole}
+            </Badge>
+            {supportsTwoFactor ? (
+              <Badge
+                variant={twoFactorStatusVariant}
+                className="rounded-full px-3 py-1"
+              >
+                2FA {twoFactorStatus}
+              </Badge>
+            ) : null}
+          </div>
+        ) : null}
       </CardHeader>
-      <CardContent>
+      <CardContent className={isMobile ? "pt-0" : undefined}>
         <Card className="border-border/60 bg-background/60">
-          <CardHeader>
+          <CardHeader className={isMobile ? "pb-4" : undefined}>
             <CardTitle className="text-base">My Account</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-4 rounded-xl border border-border/60 bg-background/50 p-4 sm:p-5">
+          <CardContent className="space-y-4 sm:space-y-6">
+            <div className="space-y-4 rounded-2xl border border-border/60 bg-background/50 p-4 sm:rounded-xl sm:p-5">
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold">Identity</h3>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Keep your sign-in name current without leaving the security page.
+                </p>
+              </div>
               <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
                 <div className="space-y-2">
                   <p className="text-sm font-medium">Username</p>
@@ -108,8 +147,13 @@ export function MyAccountSecurityCard({
               </div>
             </div>
 
-            <div className="space-y-4 rounded-xl border border-border/60 bg-background/50 p-4 sm:p-5">
-              <h3 className="text-sm font-semibold">Change Password</h3>
+            <div className="space-y-4 rounded-2xl border border-border/60 bg-background/50 p-4 sm:rounded-xl sm:p-5">
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold">Change Password</h3>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Enter your current password once, then set and confirm the new password.
+                </p>
+              </div>
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                   <p className="text-sm font-medium">Current Password</p>
@@ -150,11 +194,24 @@ export function MyAccountSecurityCard({
             </div>
 
             {supportsTwoFactor ? (
-              <div className="space-y-4 rounded-xl border border-border/60 bg-background/50 p-4 sm:p-5">
-                <div className="space-y-1">
+              <div className="space-y-4 rounded-2xl border border-border/60 bg-background/50 p-4 sm:rounded-xl sm:p-5">
+                <div className="space-y-2">
                   <h3 className="text-sm font-semibold">Two-Factor Authentication</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Status: {twoFactorEnabled ? "Enabled" : twoFactorPendingSetup ? "Setup pending" : "Not enabled"}
+                  <div className="flex flex-wrap gap-2">
+                    <Badge
+                      variant={twoFactorStatusVariant}
+                      className="rounded-full px-3 py-1"
+                    >
+                      {twoFactorStatus}
+                    </Badge>
+                    {twoFactorSetupSecret ? (
+                      <Badge variant="outline" className="rounded-full px-3 py-1">
+                        Setup secret ready
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Use your authenticator app to protect this account with a second verification step.
                   </p>
                 </div>
 
@@ -184,7 +241,7 @@ export function MyAccountSecurityCard({
                 </div>
 
                 {twoFactorSetupSecret ? (
-                  <div className="space-y-3 rounded-lg border border-border/60 bg-background/50 p-4">
+                  <div className="space-y-3 rounded-xl border border-border/60 bg-background/55 p-4">
                     <p className="text-sm text-muted-foreground">
                       Add this secret to your authenticator app, then enter the 6-digit code to enable 2FA.
                     </p>

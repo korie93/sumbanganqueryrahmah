@@ -25,7 +25,7 @@ function MonitorOverviewSectionImpl({
   rollupFreshnessAgeLabel,
 }: MonitorOverviewSectionProps) {
   return (
-    <section className="glass-wrapper p-6">
+    <section className="glass-wrapper p-4 sm:p-6">
       <MonitorOverviewHero
         snapshot={snapshot}
         scoreStatus={scoreStatus}

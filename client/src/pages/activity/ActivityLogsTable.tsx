@@ -104,7 +104,7 @@ export function ActivityLogsTable({
                 return (
                   <div
                     key={activity.id}
-                    className="space-y-3 rounded-xl border border-border/70 bg-card/80 p-4 shadow-xs"
+                    className="space-y-3 rounded-2xl border border-border/70 bg-card/80 p-3.5 shadow-xs"
                     data-testid={`activity-row-${activity.id}`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -128,6 +128,9 @@ export function ActivityLogsTable({
                             </div>
                           </div>
                         </div>
+                      </div>
+                      <div className="shrink-0 rounded-full border border-border/60 bg-background/75 px-2.5 py-1 text-[11px] text-muted-foreground">
+                        {getSessionDuration(activity.loginTime, activity.logoutTime)}
                       </div>
                     </div>
 
@@ -157,7 +160,7 @@ export function ActivityLogsTable({
                     </div>
 
                     {canModerateActivity ? (
-                      <div className="flex flex-wrap gap-2">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                         {activity.isActive ? (
                           <>
                             <Button
@@ -165,6 +168,7 @@ export function ActivityLogsTable({
                               size="sm"
                               onClick={() => onKickClick(activity)}
                               disabled={actionLoading === activity.id}
+                              className="w-full"
                               data-testid={`button-kick-${activity.id}`}
                             >
                               <UserX className="mr-2 h-4 w-4" />
@@ -176,7 +180,7 @@ export function ActivityLogsTable({
                                 size="sm"
                                 onClick={() => onBanClick(activity)}
                                 disabled={actionLoading === activity.id}
-                                className="text-destructive"
+                                className="w-full text-destructive"
                                 data-testid={`button-ban-${activity.id}`}
                               >
                                 <Shield className="mr-2 h-4 w-4" />
@@ -190,7 +194,7 @@ export function ActivityLogsTable({
                           size="sm"
                           onClick={() => onDeleteClick(activity)}
                           disabled={actionLoading === activity.id}
-                          className="text-destructive"
+                          className="w-full text-destructive"
                           data-testid={`button-delete-${activity.id}`}
                         >
                           <Trash2 className="mr-2 h-4 w-4" />

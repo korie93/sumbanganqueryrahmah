@@ -13,6 +13,7 @@ import {
   getRollupFreshnessStatus,
   getScoreStatus,
 } from "@/components/monitor/monitorData";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useSystemMetrics } from "@/hooks/useSystemMetrics";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -183,6 +184,7 @@ function MonitorMobileDeferredSectionToggle({
 }
 
 export default function Monitor() {
+  const isMobile = useIsMobile();
   const initialCompactViewport = typeof window !== "undefined" && window.innerWidth < 768;
   const [alertsOpen, setAlertsOpen] = useState(true);
   const [chaosType, setChaosType] = useState<ChaosType>("cpu_spike");
@@ -405,8 +407,8 @@ export default function Monitor() {
   }
 
   return (
-    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-6 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-3 sm:p-6 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+      <div className="mx-auto max-w-7xl space-y-4 sm:space-y-6">
         <MonitorStatusBanners
           mode={snapshot.mode}
           hasNetworkFailure={hasNetworkFailure}
@@ -511,7 +513,7 @@ export default function Monitor() {
           </>
         )}
 
-        <p className="text-right text-xs text-muted-foreground">
+        <p className={isMobile ? "text-left text-xs text-muted-foreground" : "text-right text-xs text-muted-foreground"}>
           {isLoading ? "Loading..." : `Last updated: ${lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : "-"}`}
         </p>
       </div>

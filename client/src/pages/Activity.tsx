@@ -2,6 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Filter, RefreshCw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { ActivityFilters } from "@/lib/api";
 import {
   banUser,
@@ -50,6 +51,7 @@ function ActivitySectionFallback({ label }: { label: string }) {
 }
 
 export default function Activity() {
+  const isMobile = useIsMobile();
   const currentRole = getCurrentActivityRole();
   const canModerateActivity = currentRole === "admin" || currentRole === "superuser";
   const { toast } = useToast();
@@ -382,16 +384,31 @@ export default function Activity() {
   return (
     <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-4" data-floating-ai-avoid="true">
+        <div
+          className={`flex flex-wrap items-center justify-between gap-4 ${
+            isMobile ? "mb-6 rounded-[1.5rem] border border-border/60 bg-card/60 p-3.5" : "mb-8"
+          }`}
+          data-floating-ai-avoid="true"
+        >
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">Activity Monitor</h1>
-            <p className="text-muted-foreground">Monitor user activity in real-time</p>
+            {isMobile ? (
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Insights
+              </p>
+            ) : null}
+            <h1 className={`${isMobile ? "mt-1 text-xl" : "mb-2 text-3xl"} font-bold text-foreground`}>
+              Activity Monitor
+            </h1>
+            <p className={`${isMobile ? "text-xs" : ""} text-muted-foreground`}>
+              {isMobile ? "Monitor user activity and moderation events in real-time." : "Monitor user activity in real-time"}
+            </p>
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className={`flex gap-2 flex-wrap ${isMobile ? "w-full" : ""}`}>
             {canModerateActivity && selectedActivityIds.size > 0 ? (
               <Button
                 variant="destructive"
                 onClick={() => setBulkDeleteDialogOpen(true)}
+                className={isMobile ? "w-full" : undefined}
                 data-testid="button-bulk-delete-activity"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
@@ -401,6 +418,7 @@ export default function Activity() {
             <Button
               variant={showFilters ? "default" : "outline"}
               onClick={() => setShowFilters((previous) => !previous)}
+              className={isMobile ? "flex-1" : undefined}
               data-testid="button-toggle-filters"
             >
               <Filter className="w-4 h-4 mr-2" />
@@ -411,7 +429,13 @@ export default function Activity() {
                 </Badge>
               ) : null}
             </Button>
-            <Button variant="outline" onClick={() => void fetchActivities(hasActiveActivityFilters(filters))} disabled={loading} data-testid="button-refresh">
+            <Button
+              variant="outline"
+              onClick={() => void fetchActivities(hasActiveActivityFilters(filters))}
+              disabled={loading}
+              className={isMobile ? "flex-1" : undefined}
+              data-testid="button-refresh"
+            >
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
               Refresh
             </Button>

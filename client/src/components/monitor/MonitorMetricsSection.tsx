@@ -3,21 +3,28 @@ import { InfoHint } from "@/components/monitor/InfoHint";
 import { MetricPanel } from "@/components/monitor/MetricPanel";
 import { getTrend, type MonitorMetricGroup } from "@/components/monitor/monitorData";
 import { Card, CardContent } from "@/components/ui/card";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type MonitorMetricsSectionProps = {
   metricGroups: MonitorMetricGroup[];
 };
 
 function MonitorMetricsSectionImpl({ metricGroups }: MonitorMetricsSectionProps) {
+  const isMobile = useIsMobile();
+
   return (
     <section className="space-y-4">
       <div>
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold text-foreground">Key Metrics</h2>
-          <InfoHint text="KPI panels grouped by layer: Infrastructure, Application, Database, and AI." />
+          <span className="hidden sm:inline-flex">
+            <InfoHint text="KPI panels grouped by layer: Infrastructure, Application, Database, and AI." />
+          </span>
         </div>
         <p className="text-sm text-muted-foreground">
-          Each metric includes current value, status color, trend direction, and mini sparkline.
+          {isMobile
+            ? "Core KPIs grouped by infrastructure, app, database, and AI."
+            : "Each metric includes current value, status color, trend direction, and mini sparkline."}
         </p>
       </div>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
@@ -29,7 +36,7 @@ function MonitorMetricsSectionImpl({ metricGroups }: MonitorMetricsSectionProps)
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</h3>
                   <InfoHint text={group.description} />
                 </div>
-                <p className="text-xs text-muted-foreground">{group.description}</p>
+                {!isMobile ? <p className="text-xs text-muted-foreground">{group.description}</p> : null}
               </div>
               {group.items.map((metric) => (
                 <MetricPanel

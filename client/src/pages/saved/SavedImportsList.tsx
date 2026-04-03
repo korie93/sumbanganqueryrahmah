@@ -2,6 +2,7 @@ import { BarChart3, BookMarked, ChevronDown, Edit2, Eye, Search, Trash2 } from "
 import { MobileActionMenu } from "@/components/data/MobileActionMenu";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 import {
   Collapsible,
   CollapsibleContent,
@@ -62,20 +63,27 @@ export function SavedImportsList({
 
   return (
     <Collapsible open={filesOpen} onOpenChange={onFilesOpenChange}>
-      <div className="rounded-xl border border-border/70 bg-background/80 p-4 shadow-sm">
+      <div className="rounded-xl border border-border/70 bg-background/80 p-3 shadow-sm sm:p-4">
         <CollapsibleTrigger asChild>
           <Button
             variant="ghost"
-            className="w-full flex items-center justify-between gap-2 p-0 h-auto"
+            className="h-auto w-full items-start justify-between gap-3 p-0 text-left"
             data-testid="button-toggle-files"
           >
-            <div className="flex items-center gap-2">
-              <BookMarked className="w-5 h-5 text-primary" />
-              <span className="font-semibold text-foreground">Saved Files</span>
-              <span className="text-sm text-muted-foreground">({summaryLabel})</span>
+            <div className="flex min-w-0 items-start gap-2">
+              <BookMarked className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+              <div className="min-w-0 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-foreground">Saved Files</span>
+                  <span className="text-xs text-muted-foreground sm:text-sm">({summaryLabel})</span>
+                </div>
+                <p className="text-xs text-muted-foreground sm:hidden">
+                  Reopen files quickly or continue to Viewer and Analysis.
+                </p>
+              </div>
             </div>
             <ChevronDown
-              className={`w-5 h-5 text-muted-foreground transition-transform ${
+              className={`mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
                 filesOpen ? "rotate-180" : ""
               }`}
             />
@@ -100,7 +108,12 @@ export function SavedImportsList({
             {imports.map((item) => (
               <div
                 key={item.id}
-                className="rounded-xl border border-border/70 bg-background/70 p-4 shadow-sm"
+                className={cn(
+                  "rounded-xl border bg-background/70 p-3 shadow-sm transition-colors sm:p-4",
+                  selectedImportIds.has(item.id)
+                    ? "border-primary/45 bg-primary/5"
+                    : "border-border/70",
+                )}
                 data-testid={`card-import-${item.id}`}
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -117,44 +130,57 @@ export function SavedImportsList({
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
                       <BookMarked className="h-5 w-5 text-primary" />
                     </div>
-                    <div className="min-w-0 space-y-1">
-                      <h3 className="break-words text-sm font-medium text-foreground sm:text-base">
-                        {item.name}
-                      </h3>
-                      <p className="break-words text-sm text-muted-foreground">
-                        {item.filename}
-                      </p>
-                      <p className="text-xs font-medium text-foreground/80">{formatDate(item.createdAt)}</p>
+                    <div className="min-w-0 space-y-2">
+                      <div className="space-y-1">
+                        <h3 className="break-words text-sm font-medium text-foreground sm:text-base">
+                          {item.name}
+                        </h3>
+                        <p className="break-words text-sm text-muted-foreground">
+                          {item.filename}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-border/70 bg-muted/50 px-2 py-1 text-[11px] font-medium text-foreground/80">
+                          Imported {formatDate(item.createdAt)}
+                        </span>
+                        {typeof item.rowCount === "number" ? (
+                          <span className="rounded-full border border-border/70 bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                            {item.rowCount.toLocaleString()} rows
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
 
-                  {isSuperuser ? (
-                    <div className="flex items-start justify-end">
-                      <MobileActionMenu
-                        contentLabel="Saved file actions"
-                        items={[
-                          {
-                            id: `rename-${item.id}`,
-                            label: "Rename",
-                            icon: Edit2,
-                            onSelect: () => onRename(item),
-                            disabled: actionsDisabled,
-                          },
-                          {
-                            id: `delete-${item.id}`,
-                            label: "Delete",
-                            icon: Trash2,
-                            onSelect: () => onDelete(item),
-                            disabled: actionsDisabled,
-                            destructive: true,
-                          },
-                        ]}
-                      />
-                    </div>
-                  ) : null}
+                  <div className="flex items-start justify-end">
+                    {isSuperuser ? (
+                      <div className="flex items-start justify-end md:hidden">
+                        <MobileActionMenu
+                          contentLabel="Saved file actions"
+                          items={[
+                            {
+                              id: `rename-${item.id}`,
+                              label: "Rename",
+                              icon: Edit2,
+                              onSelect: () => onRename(item),
+                              disabled: actionsDisabled,
+                            },
+                            {
+                              id: `delete-${item.id}`,
+                              label: "Delete",
+                              icon: Trash2,
+                              onSelect: () => onDelete(item),
+                              disabled: actionsDisabled,
+                              destructive: true,
+                            },
+                          ]}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
 
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
                   <Button
                     variant="outline"
                     className="w-full sm:w-auto"
@@ -163,6 +189,15 @@ export function SavedImportsList({
                   >
                     <Eye className="mr-2 h-4 w-4" />
                     View
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={() => onAnalysis(item)}
+                    data-testid={`button-analysis-${item.id}`}
+                  >
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    Analysis
                   </Button>
                   {isSuperuser ? (
                     <Button
@@ -176,15 +211,6 @@ export function SavedImportsList({
                       Rename
                     </Button>
                   ) : null}
-                  <Button
-                    variant="outline"
-                    className="w-full sm:w-auto"
-                    onClick={() => onAnalysis(item)}
-                    data-testid={`button-analysis-${item.id}`}
-                  >
-                    <BarChart3 className="mr-2 h-4 w-4" />
-                    Analysis
-                  </Button>
                   {isSuperuser ? (
                     <Button
                       variant="outline"

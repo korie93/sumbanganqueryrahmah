@@ -10,6 +10,8 @@ import {
   getTopActiveUsers,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { DashboardSummaryCards } from "@/pages/dashboard/DashboardSummaryCards";
 import { resolveDashboardExportBlockReason } from "@/pages/dashboard/export-guards";
 import type { LoginTrend, PeakHour, RoleData, SummaryData, TopUser } from "@/pages/dashboard/types";
@@ -37,6 +39,7 @@ function DashboardSectionFallback({ label }: { label: string }) {
 }
 
 function DashboardContent() {
+  const isMobile = useIsMobile();
   const [trendDays, setTrendDays] = useState(7);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -131,23 +134,41 @@ function DashboardContent() {
 
   return (
     <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 sm:p-6">
-      <div className="mx-auto max-w-7xl space-y-5 sm:space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between" data-floating-ai-avoid="true">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-bold text-foreground sm:text-3xl" data-testid="text-dashboard-title">
+      <div className="mx-auto max-w-7xl space-y-4 sm:space-y-6">
+        <div
+          className={isMobile ? "rounded-[28px] border border-border/60 bg-background/80 p-4 shadow-sm" : "flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"}
+          data-floating-ai-avoid="true"
+        >
+          <div className="space-y-2">
+            {isMobile ? (
+              <p className="text-[11px] font-semibold tracking-[0.22em] text-primary/80 uppercase">
+                Insights
+              </p>
+            ) : null}
+            <h1 className="text-xl font-bold text-foreground sm:text-3xl" data-testid="text-dashboard-title">
               Dashboard Analytics
             </h1>
             <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
-              System overview and activity insights
+              {isMobile ? "System health, activity, and usage insights in one mobile-friendly view." : "System overview and activity insights"}
             </p>
+            {isMobile ? (
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary" className="rounded-full px-3 py-1">
+                  Trend {trendDays}d
+                </Badge>
+                <Badge variant="outline" className="rounded-full px-3 py-1">
+                  7 summary cards
+                </Badge>
+              </div>
+            ) : null}
           </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <div className={isMobile ? "mt-4 grid grid-cols-2 gap-2" : "flex w-full flex-col gap-2 sm:w-auto sm:flex-row"}>
             <Button
               onClick={handleExportPdf}
               variant="outline"
               disabled={exportBlockReason !== null}
               data-testid="button-export-pdf"
-              className="w-full sm:w-auto"
+              className={isMobile ? "w-full" : "w-full sm:w-auto"}
             >
               {exportingPdf ? (
                 <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
@@ -163,7 +184,7 @@ function DashboardContent() {
               variant="outline"
               disabled={refreshing}
               data-testid="button-refresh-dashboard"
-              className="w-full sm:w-auto"
+              className={isMobile ? "w-full" : "w-full sm:w-auto"}
             >
               <RefreshCw className={`w-4 h-4 mr-2${refreshing ? " animate-spin" : ""}`} />
               Refresh
@@ -171,7 +192,7 @@ function DashboardContent() {
           </div>
         </div>
 
-        <div ref={dashboardRef} className="space-y-6">
+        <div ref={dashboardRef} className="space-y-4 sm:space-y-6">
           <DashboardSummaryCards items={summaryCards} summaryLoading={summaryLoading} />
           <Suspense fallback={<DashboardSectionFallback label="Loading dashboard charts" />}>
             <DashboardChartsGrid

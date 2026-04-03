@@ -271,30 +271,39 @@ export default function AuditLogs() {
   return (
     <div className="space-y-6 p-4 sm:p-6">
       <div
-        className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card/60 p-4 sm:flex-row sm:items-start sm:justify-between"
+        className={`flex flex-col gap-4 border border-border/60 bg-card/60 ${
+          isMobile
+            ? "rounded-[1.5rem] p-3.5"
+            : "rounded-2xl p-4 sm:flex-row sm:items-start sm:justify-between"
+        }`}
         data-floating-ai-avoid="true"
       >
         <div className="flex min-w-0 items-start gap-3">
-          <div className="rounded-xl bg-primary/10 p-2.5">
+          <div className={`bg-primary/10 ${isMobile ? "rounded-lg p-2" : "rounded-xl p-2.5"}`}>
             <FileText className="h-6 w-6 text-primary" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-bold sm:text-2xl" data-testid="text-audit-logs-title">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Insights
+            </p>
+            <h1 className={`${isMobile ? "mt-1 text-lg" : "text-xl sm:text-2xl"} font-bold`} data-testid="text-audit-logs-title">
               Audit Logs
             </h1>
-            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Records of all administrator actions in the system
+            <p className={`mt-1 max-w-2xl leading-relaxed text-muted-foreground ${isMobile ? "text-xs" : "text-sm"}`}>
+              {isMobile
+                ? "Review administrator actions and investigate recent activity."
+                : "Records of all administrator actions in the system"}
             </p>
           </div>
         </div>
 
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+        <div className={`flex w-full gap-2 ${isMobile ? "grid grid-cols-2" : "flex-col sm:w-auto sm:flex-row"}`}>
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 disabled={loading || filteredLogs.length === 0 || exportingPdf}
-                className="w-full sm:w-auto"
+                className="w-full"
                 data-testid="button-export-logs"
               >
                 {exportingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
@@ -330,7 +339,7 @@ export default function AuditLogs() {
             variant="outline"
             onClick={() => setRefreshNonce((value) => value + 1)}
             disabled={loading}
-            className="w-full sm:w-auto"
+            className="w-full"
             data-testid="button-refresh-logs"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />

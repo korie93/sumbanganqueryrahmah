@@ -3,6 +3,8 @@ import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { ACTIVE_SETTINGS_SECTION_KEY } from "@/app/constants";
 import { replaceHistory } from "@/app/routing";
 import type { TabVisibility } from "@/app/types";
+import { Badge } from "@/components/ui/badge";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   OperationalPage,
   OperationalPageHeader,
@@ -48,6 +50,7 @@ export default function SettingsPage({
   tabVisibility,
   initialSectionId,
 }: SettingsPageProps) {
+  const isMobile = useIsMobile();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const requestedSection = useMemo(() => {
@@ -109,11 +112,21 @@ export default function SettingsPage({
               eyebrow="Administration"
               description={
                 controller.currentCategory?.description ||
-                "Enterprise system configuration with role-based access and audit."
+                (isMobile
+                  ? "Manage system tools and protected admin sections from one place."
+                  : "Enterprise system configuration with role-based access and audit.")
               }
+              badge={
+                isMobile ? (
+                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+                    {controller.categories.length} sections
+                  </Badge>
+                ) : null
+              }
+              className={isMobile ? "rounded-[28px] border-border/60 bg-background/85" : undefined}
             />
 
-            <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start">
+            <div className="relative flex flex-col gap-3 lg:flex-row lg:items-start lg:gap-4">
               <SettingsSidebar
                 categories={controller.categories}
                 categoryDirtyMap={controller.categoryDirtyMap}

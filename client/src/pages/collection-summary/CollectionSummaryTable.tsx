@@ -27,15 +27,15 @@ export function CollectionSummaryTable({
   }
 
   return (
-    <div className={`ops-table-shell ${isMobile ? "space-y-4 rounded-[1.5rem] p-4" : "p-3"}`}>
-      <div className="mb-3 flex items-center justify-between gap-3">
+    <div className={`ops-table-shell ${isMobile ? "space-y-3 rounded-[1.5rem] p-3" : "p-3"}`}>
+      <div className="mb-2 flex items-center justify-between gap-3">
         <div>
-          <p className={isMobile ? "text-base font-semibold" : "text-sm font-semibold"}>
+          <p className={isMobile ? "text-sm font-semibold" : "text-sm font-semibold"}>
             Monthly Navigation
           </p>
-          <p className={`${isMobile ? "text-sm" : "text-xs"} text-muted-foreground`}>
+          <p className={`${isMobile ? "text-xs" : "text-xs"} text-muted-foreground`}>
             {isMobile
-              ? "Tap a month card to open the collection details for that month."
+              ? "Tap a month to open its details."
               : "Klik nama bulan untuk buka popup senarai collection bagi bulan tersebut."}
           </p>
         </div>
@@ -50,19 +50,19 @@ export function CollectionSummaryTable({
               type="button"
               variant={active ? "default" : "outline"}
               className={`h-auto items-start justify-between gap-3 text-left ${
-                isMobile ? "rounded-2xl px-4 py-4" : "rounded-xl px-3 py-3"
+                isMobile ? "rounded-2xl px-3 py-3.5" : "rounded-xl px-3 py-3"
               }`}
               onClick={() => onSelectMonth(row.month)}
             >
               <div className="space-y-1">
-                <p className={isMobile ? "text-base font-semibold" : "text-sm font-semibold"}>
+                <p className={isMobile ? "text-sm font-semibold" : "text-sm font-semibold"}>
                   {row.monthName}
                 </p>
-                <p className={`${isMobile ? "text-sm" : "text-xs"} opacity-80`}>
+                <p className={`${isMobile ? "text-xs" : "text-xs"} opacity-80`}>
                   {row.totalRecords} record(s)
                 </p>
               </div>
-              <span className={isMobile ? "text-sm font-semibold" : "text-xs font-medium"}>
+              <span className={isMobile ? "text-xs font-semibold" : "text-xs font-medium"}>
                 {formatAmountRM(row.totalAmount)}
               </span>
             </Button>

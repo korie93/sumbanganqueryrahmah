@@ -74,21 +74,24 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
       {isMobile ? (
         <>
           <div
-            className="relative overflow-hidden rounded-[1.75rem] border border-border/60 bg-background/80 px-4 py-4 shadow-sm"
+            className="rounded-[1.5rem] border border-border/60 bg-background/80 px-3 py-3 shadow-sm"
             data-floating-ai-avoid="true"
           >
-            <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-primary/12 via-primary/6 to-transparent" />
-            <div className="relative space-y-4">
+            <div className="space-y-3">
               <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  Collection
-                </p>
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+                    Year {summaryData.selectedYear}
+                  </Badge>
+                  <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px]">
+                    {summaryData.selectedNicknames.length > 0
+                      ? summaryData.selectedNicknameLabel
+                      : "All staff nicknames"}
+                  </Badge>
+                </div>
+                <h1 className="text-lg font-bold tracking-tight text-foreground">
                   Collection Summary
                 </h1>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Review month-by-month collection totals from a calmer mobile summary view, then drill into any month when you need the details.
-                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -114,60 +117,23 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />
                   Reset
-                </Button>
+                  </Button>
               </div>
 
-              <div className="space-y-3 rounded-2xl border border-border/60 bg-muted/10 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                      Current Scope
-                    </p>
-                    <p className="text-sm font-medium text-foreground">
-                      {summaryData.selectedNicknames.length > 0
-                        ? summaryData.selectedNicknameLabel
-                        : "Showing all available staff nicknames for the selected year."}
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className="rounded-full">
-                    Year {summaryData.selectedYear}
-                  </Badge>
+              {selectedNicknamePreview.length > 0 ? (
+                <div className="flex flex-wrap gap-2 rounded-2xl border border-border/60 bg-muted/10 p-3">
+                  {selectedNicknamePreview.map((nickname) => (
+                    <Badge key={nickname} variant="secondary" className="rounded-full px-3 py-1">
+                      {nickname}
+                    </Badge>
+                  ))}
+                  {remainingNicknameCount > 0 ? (
+                    <Badge variant="outline" className="rounded-full px-3 py-1">
+                      +{remainingNicknameCount} more
+                    </Badge>
+                  ) : null}
                 </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1 rounded-2xl border border-border/60 bg-background/70 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                      Selected Year
-                    </p>
-                    <p className="text-sm font-medium text-foreground">{summaryData.selectedYear}</p>
-                  </div>
-                  <div className="space-y-1 rounded-2xl border border-border/60 bg-background/70 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                      Nickname Scope
-                    </p>
-                    <p className="text-sm leading-relaxed text-foreground">
-                      {summaryData.selectedNicknames.length > 0
-                        ? summaryData.selectedNicknameLabel
-                        : "All staff nicknames"}
-                    </p>
-                  </div>
-                </div>
-
-                {selectedNicknamePreview.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedNicknamePreview.map((nickname) => (
-                      <Badge key={nickname} variant="secondary" className="rounded-full px-3 py-1">
-                        {nickname}
-                      </Badge>
-                    ))}
-                    {remainingNicknameCount > 0 ? (
-                      <Badge variant="outline" className="rounded-full px-3 py-1">
-                        +{remainingNicknameCount} more
-                      </Badge>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
+              ) : null}
             </div>
           </div>
 

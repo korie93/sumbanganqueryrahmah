@@ -1,6 +1,7 @@
 import { Archive, Clock, Database, FileText, HardDrive, RotateCcw, Trash2, User, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { BackupRecord } from "@/pages/backup-restore/types";
 import { formatBackupTime } from "@/pages/backup-restore/utils";
 
@@ -23,27 +24,40 @@ export function BackupListItem({
   onRestoreClick,
   restoringId,
 }: BackupListItemProps) {
+  const isMobile = useIsMobile();
+
   return (
     <div
-      className="space-y-3 rounded-xl border border-border/70 bg-card/70 p-4 shadow-sm"
+      className={`space-y-3 border border-border/70 bg-card/70 shadow-sm ${
+        isMobile ? "rounded-2xl p-3.5" : "rounded-xl p-4"
+      }`}
       data-testid={`backup-item-${backup.id}`}
     >
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <Badge variant="secondary">{backup.name}</Badge>
-          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-            <User className="h-4 w-4" />
-            <span data-testid={`text-backup-created-by-${backup.id}`}>{backup.createdBy}</span>
+      <div className={`flex justify-between gap-4 flex-wrap ${isMobile ? "items-start" : "items-center"}`}>
+        <div className="flex min-w-0 flex-col gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="max-w-full">
+              <span className="truncate">{backup.name}</span>
+            </Badge>
+            <div className="flex min-w-0 items-center gap-1 text-sm text-muted-foreground">
+              <User className="h-4 w-4 shrink-0" />
+              <span className="truncate" data-testid={`text-backup-created-by-${backup.id}`}>{backup.createdBy}</span>
+            </div>
           </div>
+          {isMobile ? (
+            <span className="text-xs text-muted-foreground" data-testid={`text-backup-date-${backup.id}`}>
+              {formatBackupTime(backup.createdAt)}
+            </span>
+          ) : null}
         </div>
-        <div className="flex items-center gap-1 text-sm text-foreground/80">
+        <div className={`items-center gap-1 text-sm text-foreground/80 ${isMobile ? "hidden" : "flex"}`}>
           <Clock className="h-4 w-4 text-muted-foreground" />
           <span data-testid={`text-backup-date-${backup.id}`}>{formatBackupTime(backup.createdAt)}</span>
         </div>
       </div>
 
       {backup.metadata ? (
-        <div className="flex flex-wrap gap-4 text-sm">
+        <div className={`flex flex-wrap ${isMobile ? "gap-2 text-xs" : "gap-4 text-sm"}`}>
           <div className="flex items-center gap-1 text-muted-foreground">
             <HardDrive className="h-4 w-4" />
             <span>{backup.metadata.importsCount} imports</span>
@@ -70,13 +84,14 @@ export function BackupListItem({
       ) : null}
 
       {canManageBackups ? (
-        <div className="flex items-center gap-2 pt-2">
+        <div className={`pt-2 ${isMobile ? "grid grid-cols-2 gap-2" : "flex items-center gap-2"}`}>
           <Button
             variant="outline"
             size="sm"
             onClick={() => onRestoreClick(backup)}
             disabled={backupJobBusy || restoringId === backup.id}
             data-testid={`button-restore-${backup.id}`}
+            className={isMobile ? "w-full" : undefined}
           >
             <RotateCcw className={`h-4 w-4 mr-2 ${restoringId === backup.id ? "animate-spin" : ""}`} />
             Restore
@@ -87,6 +102,7 @@ export function BackupListItem({
             onClick={() => onDeleteClick(backup)}
             disabled={backupJobBusy || deletingId === backup.id}
             data-testid={`button-delete-backup-${backup.id}`}
+            className={isMobile ? "w-full" : undefined}
           >
             <Trash2 className={`h-4 w-4 mr-2 ${deletingId === backup.id ? "animate-spin" : ""}`} />
             Delete

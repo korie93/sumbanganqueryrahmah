@@ -1,6 +1,7 @@
 import { ChevronRight, Compass, LayoutGrid, Menu } from "lucide-react";
 import { useMemo } from "react";
 import { LazySideTabNavigation } from "@/components/navigation/LazySideTabNavigation";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CollectionSidebarItem, CollectionSubPage } from "@/pages/collection-report/types";
@@ -28,33 +29,34 @@ export function CollectionSidebar({
     () => items.find((item) => item.key === selectedSubPage) || items[0],
     [items, selectedSubPage],
   );
-  const quickItems = useMemo(() => items.slice(0, Math.min(items.length, 4)), [items]);
 
   return (
     <>
       <section
-        className="rounded-[1.75rem] border border-border/70 bg-background/92 p-4 shadow-sm lg:hidden"
+        className="rounded-[1.5rem] border border-border/70 bg-background/92 p-3 shadow-sm lg:hidden"
         data-testid="collection-mobile-launcher"
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Collection Sections
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Collection Section
             </p>
-            <h2 className="mt-1 text-lg font-semibold text-foreground">
-              {selectedItem?.label || "Collection"}
-            </h2>
-            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-              Jump between collection tasks quickly without opening the desktop-style side navigation first.
-            </p>
+            <div className="mt-1 flex items-center gap-2">
+              <h2 className="truncate text-base font-semibold text-foreground">
+                {selectedItem?.label || "Collection"}
+              </h2>
+              <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px]">
+                Active
+              </Badge>
+            </div>
           </div>
-          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
             <Compass className="h-5 w-5" />
           </span>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          {quickItems.map((item) => {
+        <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
+          {items.map((item) => {
             const Icon = item.icon;
             const active = item.key === selectedSubPage;
             return (
@@ -63,21 +65,14 @@ export function CollectionSidebar({
                 type="button"
                 onClick={() => onSelectSubPage(item.key)}
                 className={cn(
-                  "flex min-h-[5.25rem] flex-col items-start gap-2 rounded-2xl border px-3 py-3 text-left transition-colors",
+                  "inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-left text-sm font-medium transition-colors",
                   active
                     ? "border-primary/35 bg-primary/10 text-primary"
                     : "border-border/60 bg-muted/25 text-foreground hover:border-primary/20 hover:bg-accent/35",
                 )}
               >
-                <span
-                  className={cn(
-                    "inline-flex h-9 w-9 items-center justify-center rounded-xl",
-                    active ? "bg-primary/15" : "bg-background/85 text-primary",
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                </span>
-                <span className="text-sm font-semibold leading-tight">{item.label}</span>
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="whitespace-nowrap leading-tight">{item.label}</span>
               </button>
             );
           })}
@@ -85,14 +80,14 @@ export function CollectionSidebar({
 
         <Button
           type="button"
-          variant="outline"
-          className="mt-3 h-11 w-full justify-between rounded-2xl"
+          variant="ghost"
+          className="mt-2 h-10 w-full justify-between rounded-xl border border-dashed border-border/60 text-muted-foreground"
           onClick={() => onMobileOpenChange(true)}
           data-testid="button-open-collection-sections"
         >
           <span className="inline-flex items-center gap-2">
             <LayoutGrid className="h-4 w-4" />
-            All Collection Sections
+            Browse Sections
           </span>
           <span className="inline-flex items-center gap-2 text-muted-foreground">
             <Menu className="h-4 w-4" />

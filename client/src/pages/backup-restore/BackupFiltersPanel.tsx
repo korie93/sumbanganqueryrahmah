@@ -2,6 +2,7 @@ import { ChevronDown, Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { BackupActiveFilterChips } from "@/pages/backup-restore/BackupActiveFilterChips";
 import { BackupFilterFields } from "@/pages/backup-restore/BackupFilterFields";
 
@@ -42,10 +43,12 @@ export function BackupFiltersPanel({
   searchName,
   sortBy,
 }: BackupFiltersPanelProps) {
+  const isMobile = useIsMobile();
+
   return (
     <Card data-floating-ai-avoid="true">
       <Collapsible open={filtersOpen} onOpenChange={onFiltersOpenChange}>
-        <CardHeader className="pb-3">
+        <CardHeader className={isMobile ? "pb-2.5" : "pb-3"}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <CollapsibleTrigger asChild>
               <Button
@@ -56,9 +59,11 @@ export function BackupFiltersPanel({
                 <div className="flex min-w-0 items-center gap-2">
                   <Filter className="h-5 w-5 shrink-0" />
                   <div className="min-w-0">
-                    <CardTitle className="text-lg">Search & Filters</CardTitle>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Search backups by name, creator, time period, or sorting.
+                    <CardTitle className={isMobile ? "text-base" : "text-lg"}>Search & Filters</CardTitle>
+                    <p className={`mt-1 text-muted-foreground ${isMobile ? "text-xs" : "text-sm"}`}>
+                      {isMobile
+                        ? "Search by backup name, creator, date, or sort order."
+                        : "Search backups by name, creator, time period, or sorting."}
                     </p>
                   </div>
                 </div>

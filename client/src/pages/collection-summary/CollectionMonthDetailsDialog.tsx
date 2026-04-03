@@ -1,5 +1,6 @@
 import { Suspense, lazy } from "react";
 import { STANDARD_PAGE_SIZE_OPTIONS } from "@/components/data/AppPaginationBar";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CollectionPaginationBar } from "@/pages/collection-report/CollectionPaginationBar";
@@ -74,25 +75,41 @@ export function CollectionMonthDetailsDialog({
             {selectedMonthRange?.label || "Butiran collection untuk bulan yang dipilih."}
           </DialogDescription>
           {selectedMonthSummary ? (
-            <div className="grid gap-3 pt-2 md:grid-cols-2">
-              <div className="rounded-md border border-border/60 bg-background/60 px-4 py-3">
-                <p className="text-xs text-muted-foreground">Total Records</p>
-                <p className="text-lg font-semibold">{selectedMonthSummary.totalRecords}</p>
-              </div>
-              <div className="rounded-md border border-border/60 bg-background/60 px-4 py-3">
-                <p className="text-xs text-muted-foreground">Total Amount</p>
-                <p className="text-lg font-semibold">
+            isMobile ? (
+              <div className="flex flex-wrap gap-2 pt-2">
+                <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+                  {selectedMonthSummary.totalRecords} records
+                </Badge>
+                <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
                   {formatAmountRM(selectedMonthSummary.totalAmount)}
-                </p>
+                </Badge>
+                {selectedMonthRange?.label ? (
+                  <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px]">
+                    {selectedMonthRange.label}
+                  </Badge>
+                ) : null}
               </div>
-            </div>
+            ) : (
+              <div className="grid gap-3 pt-2 md:grid-cols-2">
+                <div className="rounded-md border border-border/60 bg-background/60 px-4 py-3">
+                  <p className="text-xs text-muted-foreground">Total Records</p>
+                  <p className="text-lg font-semibold">{selectedMonthSummary.totalRecords}</p>
+                </div>
+                <div className="rounded-md border border-border/60 bg-background/60 px-4 py-3">
+                  <p className="text-xs text-muted-foreground">Total Amount</p>
+                  <p className="text-lg font-semibold">
+                    {formatAmountRM(selectedMonthSummary.totalAmount)}
+                  </p>
+                </div>
+              </div>
+            )
           ) : null}
         </DialogHeader>
 
         <div
           className={
             isMobile
-              ? "border-b border-border/60 bg-background/95 px-4 py-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.25rem)] shadow-sm"
+              ? "border-b border-border/60 bg-background/95 px-3 py-2.5 shadow-sm"
               : ""
           }
           data-floating-ai-avoid="true"
@@ -109,9 +126,13 @@ export function CollectionMonthDetailsDialog({
           />
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border/60">
+        <div
+          className={`min-h-0 flex-1 overflow-auto ${
+            isMobile ? "bg-muted/10" : "rounded-md border border-border/60"
+          }`}
+        >
           {isMobile ? (
-            <div className="space-y-3 p-3">
+            <div className="space-y-2.5 p-3">
               {loading ? (
                 <div className="rounded-lg border border-border/60 bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground">
                   Loading monthly records...
@@ -124,31 +145,21 @@ export function CollectionMonthDetailsDialog({
                 records.map((row, index) => (
                   <article
                     key={row.id}
-                    className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
+                    className="space-y-3 rounded-2xl border border-border/70 bg-background/80 p-3.5 shadow-sm"
                   >
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                         Record {(page - 1) * pageSize + index + 1}
                       </p>
-                      <p className="break-words font-medium">{row.customerName}</p>
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="min-w-0 break-words font-semibold">{row.customerName}</p>
+                        <span className="shrink-0 rounded-full border border-border/50 bg-muted/15 px-2.5 py-1 text-xs font-semibold">
+                          {formatAmountRM(row.amount)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{toDisplayDate(row.paymentDate)}</p>
                     </div>
-                    <dl className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm">
-                      <div className="space-y-1">
-                        <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Date</dt>
-                        <dd>{toDisplayDate(row.paymentDate)}</dd>
-                      </div>
-                      <div className="space-y-1">
-                        <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Amount</dt>
-                        <dd>{formatAmountRM(row.amount)}</dd>
-                      </div>
-                      <div className="space-y-1">
-                        <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">IC Number</dt>
-                        <dd className="break-words">{row.icNumber}</dd>
-                      </div>
-                      <div className="space-y-1">
-                        <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Customer Phone</dt>
-                        <dd className="break-words">{row.customerPhone}</dd>
-                      </div>
+                    <dl className="grid gap-2 rounded-xl border border-border/60 bg-muted/15 p-3 text-sm sm:grid-cols-2">
                       <div className="space-y-1">
                         <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Account Number</dt>
                         <dd className="break-words">{row.accountNumber}</dd>
@@ -160,6 +171,14 @@ export function CollectionMonthDetailsDialog({
                       <div className="space-y-1">
                         <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Staff Nickname</dt>
                         <dd className="break-words">{row.collectionStaffNickname}</dd>
+                      </div>
+                      <div className="space-y-1">
+                        <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Customer Phone</dt>
+                        <dd className="break-words">{row.customerPhone}</dd>
+                      </div>
+                      <div className="space-y-1">
+                        <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">IC Number</dt>
+                        <dd className="break-words">{row.icNumber}</dd>
                       </div>
                     </dl>
                   </article>

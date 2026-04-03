@@ -3,6 +3,7 @@ import { ChevronDown, Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { AuditLogsFilterFieldsProps } from "@/pages/audit-logs/AuditLogsFilterFields";
 
 const AuditLogsFilterFields = lazy(() =>
@@ -55,19 +56,23 @@ export function AuditLogsFiltersPanel({
   searchText,
   targetUserFilter,
 }: AuditLogsFiltersPanelProps) {
+  const isMobile = useIsMobile();
+
   return (
     <Card data-floating-ai-avoid="true">
       <Collapsible open={filtersOpen} onOpenChange={onFiltersOpenChange}>
-        <CardHeader className="pb-3">
+        <CardHeader className={isMobile ? "pb-2.5" : "pb-3"}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <CollapsibleTrigger asChild>
               <Button variant="ghost" className="h-auto w-full justify-between gap-3 rounded-xl px-0 py-0 text-left sm:w-auto sm:justify-start">
                 <div className="flex min-w-0 items-center gap-2">
                   <Filter className="h-5 w-5 shrink-0" />
                   <div className="min-w-0">
-                    <CardTitle className="text-lg">Search & Filters</CardTitle>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Narrow the log list by user, action, time period, or free text.
+                    <CardTitle className={isMobile ? "text-base" : "text-lg"}>Search & Filters</CardTitle>
+                    <p className={`mt-1 text-muted-foreground ${isMobile ? "text-xs" : "text-sm"}`}>
+                      {isMobile
+                        ? "Search by user, action, date, or free text."
+                        : "Narrow the log list by user, action, time period, or free text."}
                     </p>
                   </div>
                 </div>

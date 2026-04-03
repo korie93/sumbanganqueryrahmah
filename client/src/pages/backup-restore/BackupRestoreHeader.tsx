@@ -1,6 +1,7 @@
 import { Database, Download, FileText, Loader2, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface BackupRestoreHeaderProps {
   activeBackupJobBusy: boolean;
@@ -27,8 +28,10 @@ export function BackupRestoreHeader({
   onExportPdf,
   onRefresh,
 }: BackupRestoreHeaderProps) {
+  const isMobile = useIsMobile();
+
   return (
-    <div className="flex items-center justify-between gap-4 flex-wrap">
+    <div className={`flex items-center justify-between gap-4 flex-wrap ${isMobile ? "rounded-[1.5rem] border border-border/60 bg-card/60 p-3.5" : ""}`}>
       {embedded ? (
         <div>
           <p className="text-sm text-muted-foreground">
@@ -37,25 +40,32 @@ export function BackupRestoreHeader({
         </div>
       ) : (
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10">
+          <div className={`${isMobile ? "rounded-lg p-2" : "rounded-lg p-2"} bg-primary/10`}>
             <Database className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h1 className={`${embedded ? "text-xl" : "text-2xl"} font-bold`} data-testid="text-backup-title">
+            {isMobile ? (
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Insights
+              </p>
+            ) : null}
+            <h1 className={`${embedded ? "text-xl" : isMobile ? "text-lg" : "text-2xl"} font-bold`} data-testid="text-backup-title">
               Backup & Restore
             </h1>
-            <p className="text-sm text-muted-foreground">
-              Create data backups and restore from existing backups
+            <p className={`${isMobile ? "text-xs" : "text-sm"} text-muted-foreground`}>
+              {isMobile
+                ? "Create backups, restore snapshots, and review backup history."
+                : "Create data backups and restore from existing backups"}
             </p>
           </div>
         </div>
       )}
 
-      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+      <div className={`flex w-full gap-2 ${isMobile ? "grid grid-cols-2" : "flex-col sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end"}`}>
         <Popover>
           <PopoverTrigger asChild>
             <Button
-              className="w-full sm:w-auto"
+              className="w-full"
               variant="outline"
               disabled={loading || visibleBackupsLength === 0 || exportingPdf}
               data-testid="button-export-backups"
@@ -90,7 +100,7 @@ export function BackupRestoreHeader({
           </PopoverContent>
         </Popover>
         <Button
-          className="w-full sm:w-auto"
+          className="w-full"
           variant="outline"
           onClick={onRefresh}
           disabled={loading || activeBackupJobBusy}
@@ -101,7 +111,7 @@ export function BackupRestoreHeader({
         </Button>
         {canManageBackups ? (
           <Button
-            className="w-full sm:w-auto"
+            className={isMobile ? "col-span-2 w-full" : "w-full sm:w-auto"}
             onClick={onCreateBackupClick}
             disabled={activeBackupJobBusy}
             data-testid="button-create-backup"

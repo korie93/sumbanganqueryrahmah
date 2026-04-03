@@ -1,5 +1,6 @@
 import { Eye, Loader2 } from "lucide-react";
 import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -39,6 +40,8 @@ export function CollectionDailyDayDetailsDialog({
   onChangePage,
 }: CollectionDailyDayDetailsDialogProps) {
   const isMobile = useIsMobile();
+  const balancedAmount = dayDetails ? Math.max(0, dayDetails.dailyTarget - dayDetails.amount) : 0;
+  const customerCount = selectedOverviewDay?.customerCount ?? dayDetails?.customers.length ?? 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -68,44 +71,94 @@ export function CollectionDailyDayDetailsDialog({
           <div className="py-8 text-center text-sm text-muted-foreground">No details available.</div>
         ) : (
           <div className={`flex flex-1 flex-col gap-3 overflow-hidden ${isMobile ? "px-3 py-3" : ""}`}>
-            <div className="grid gap-2 rounded-md border border-border/60 bg-background/70 p-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <div className="flex flex-col gap-2 md:col-span-2 md:flex-row md:flex-wrap md:items-center md:justify-between lg:col-span-4">
-                <div className="text-muted-foreground">
+            {isMobile ? (
+              <div className="space-y-3 rounded-2xl border border-border/60 bg-background/80 p-3.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className={`rounded-full px-3 py-1 text-[11px] ${statusTextClass(dayDetails.status)}`}
+                  >
+                    {statusLabel(dayDetails.status)}
+                  </Badge>
+                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+                    {customerCount} customers
+                  </Badge>
+                  {selectedOverviewDay?.isHoliday && selectedOverviewDay.holidayName ? (
+                    <Badge variant="outline" className="max-w-full rounded-full px-3 py-1 text-[11px]">
+                      <span className="truncate">Holiday: {selectedOverviewDay.holidayName}</span>
+                    </Badge>
+                  ) : null}
+                  <CollectionReportFreshnessBadge freshness={dayDetails.freshness} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Daily Target
+                    </p>
+                    <p className="mt-1 text-sm font-semibold">{formatAmountRM(dayDetails.dailyTarget)}</p>
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Collected
+                    </p>
+                    <p className="mt-1 text-sm font-semibold">{formatAmountRM(dayDetails.amount)}</p>
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Balanced
+                    </p>
+                    <p className="mt-1 text-sm font-semibold">{formatAmountRM(balancedAmount)}</p>
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Records
+                    </p>
+                    <p className="mt-1 text-sm font-semibold">{dayDetails.pagination.totalRecords}</p>
+                  </div>
+                </div>
+
+                <p className="text-xs leading-relaxed text-muted-foreground">
                   {dayDetails.freshness?.message || "Day details are using the latest available rollups."}
+                </p>
+                <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+                  {dayDetails.message}
                 </div>
-                <CollectionReportFreshnessBadge freshness={dayDetails.freshness} />
               </div>
-              <div>
-                Status:{" "}
-                <span className={`font-semibold ${statusTextClass(dayDetails.status)}`}>
-                  {statusLabel(dayDetails.status)}
-                </span>
-              </div>
-              <div>
-                Daily Target: <span className="font-semibold">{formatAmountRM(dayDetails.dailyTarget)}</span>
-              </div>
-              <div>
-                Collected: <span className="font-semibold">{formatAmountRM(dayDetails.amount)}</span>
-              </div>
-              <div>
-                Balanced:{" "}
-                <span className="font-semibold">
-                  {formatAmountRM(Math.max(0, dayDetails.dailyTarget - dayDetails.amount))}
-                </span>
-              </div>
-              <div>
-                Customers:{" "}
-                <span className="font-semibold">
-                  {selectedOverviewDay?.customerCount ?? dayDetails.customers.length}
-                </span>
-              </div>
-              {selectedOverviewDay?.isHoliday && selectedOverviewDay.holidayName ? (
-                <div className="break-words">
-                  Holiday: <span className="font-semibold">{selectedOverviewDay.holidayName}</span>
+            ) : (
+              <div className="grid gap-2 rounded-md border border-border/60 bg-background/70 p-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                <div className="flex flex-col gap-2 md:col-span-2 md:flex-row md:flex-wrap md:items-center md:justify-between lg:col-span-4">
+                  <div className="text-muted-foreground">
+                    {dayDetails.freshness?.message || "Day details are using the latest available rollups."}
+                  </div>
+                  <CollectionReportFreshnessBadge freshness={dayDetails.freshness} />
                 </div>
-              ) : null}
-              <div className="text-muted-foreground md:col-span-2 lg:col-span-4">{dayDetails.message}</div>
-            </div>
+                <div>
+                  Status:{" "}
+                  <span className={`font-semibold ${statusTextClass(dayDetails.status)}`}>
+                    {statusLabel(dayDetails.status)}
+                  </span>
+                </div>
+                <div>
+                  Daily Target: <span className="font-semibold">{formatAmountRM(dayDetails.dailyTarget)}</span>
+                </div>
+                <div>
+                  Collected: <span className="font-semibold">{formatAmountRM(dayDetails.amount)}</span>
+                </div>
+                <div>
+                  Balanced: <span className="font-semibold">{formatAmountRM(balancedAmount)}</span>
+                </div>
+                <div>
+                  Customers: <span className="font-semibold">{customerCount}</span>
+                </div>
+                {selectedOverviewDay?.isHoliday && selectedOverviewDay.holidayName ? (
+                  <div className="break-words">
+                    Holiday: <span className="font-semibold">{selectedOverviewDay.holidayName}</span>
+                  </div>
+                ) : null}
+                <div className="text-muted-foreground md:col-span-2 lg:col-span-4">{dayDetails.message}</div>
+              </div>
+            )}
 
             <div className="flex-1 space-y-2 overflow-auto pr-1">
               {dayDetails.records.length === 0 ? (
@@ -114,36 +167,88 @@ export function CollectionDailyDayDetailsDialog({
                 </div>
               ) : (
                 dayDetails.records.map((record) => (
-                  <div key={record.id} className="space-y-3 rounded-xl border border-border/60 bg-background/70 p-3">
-                    <div className={`grid gap-2 text-sm ${isMobile ? "grid-cols-1" : "md:grid-cols-2 xl:grid-cols-3"}`}>
-                      <div className="break-words rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
-                        Customer: <span className="font-medium">{record.customerName}</span>
+                  <div
+                    key={record.id}
+                    className={`space-y-3 border border-border/60 bg-background/70 ${
+                      isMobile ? "rounded-2xl p-3.5" : "rounded-xl p-3"
+                    }`}
+                  >
+                    {isMobile ? (
+                      <>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-1">
+                            <p className="break-words font-semibold">{record.customerName}</p>
+                            <p className="break-words text-xs text-muted-foreground">{record.accountNumber}</p>
+                          </div>
+                          <span className="shrink-0 rounded-full border border-border/50 bg-background/80 px-2.5 py-1 text-xs font-semibold">
+                            {formatAmountRM(record.amount)}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <span className="rounded-full border border-border/50 bg-muted/15 px-2.5 py-1">
+                            User {record.username}
+                          </span>
+                          <span className="rounded-full border border-border/50 bg-muted/15 px-2.5 py-1">
+                            Nickname {record.collectionStaffNickname}
+                          </span>
+                          <span className="rounded-full border border-border/50 bg-muted/15 px-2.5 py-1">
+                            Batch {record.batch}
+                          </span>
+                        </div>
+
+                        <dl className="grid gap-2 rounded-xl border border-border/50 bg-muted/15 p-3 text-sm">
+                          <div className="space-y-1">
+                            <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                              Reference
+                            </dt>
+                            <dd className="break-words">{record.paymentReference}</dd>
+                          </div>
+                          <div className="space-y-1">
+                            <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                              Payment Date
+                            </dt>
+                            <dd>{formatDateDDMMYYYY(record.paymentDate)}</dd>
+                          </div>
+                          <div className="space-y-1">
+                            <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                              Created
+                            </dt>
+                            <dd>{formatDateTimeDDMMYYYY(record.createdAt)}</dd>
+                          </div>
+                        </dl>
+                      </>
+                    ) : (
+                      <div className="grid gap-2 text-sm md:grid-cols-2 xl:grid-cols-3">
+                        <div className="break-words rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
+                          Customer: <span className="font-medium">{record.customerName}</span>
+                        </div>
+                        <div className="break-words rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
+                          Account: <span className="font-medium">{record.accountNumber}</span>
+                        </div>
+                        <div className="rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
+                          Amount: <span className="font-medium">{formatAmountRM(record.amount)}</span>
+                        </div>
+                        <div className="break-words rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
+                          User: <span className="font-medium">{record.username}</span>
+                        </div>
+                        <div className="break-words rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
+                          Nickname: <span className="font-medium">{record.collectionStaffNickname}</span>
+                        </div>
+                        <div className="break-words rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
+                          Reference: <span className="font-medium">{record.paymentReference}</span>
+                        </div>
+                        <div className="rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
+                          Batch: <span className="font-medium">{record.batch}</span>
+                        </div>
+                        <div className="rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
+                          Date: <span className="font-medium">{formatDateDDMMYYYY(record.paymentDate)}</span>
+                        </div>
+                        <div className="rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
+                          Created: <span className="font-medium">{formatDateTimeDDMMYYYY(record.createdAt)}</span>
+                        </div>
                       </div>
-                      <div className="break-words rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
-                        Account: <span className="font-medium">{record.accountNumber}</span>
-                      </div>
-                      <div className="rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
-                        Amount: <span className="font-medium">{formatAmountRM(record.amount)}</span>
-                      </div>
-                      <div className="break-words rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
-                        User: <span className="font-medium">{record.username}</span>
-                      </div>
-                      <div className="break-words rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
-                        Nickname: <span className="font-medium">{record.collectionStaffNickname}</span>
-                      </div>
-                      <div className="break-words rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
-                        Reference: <span className="font-medium">{record.paymentReference}</span>
-                      </div>
-                      <div className="rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
-                        Batch: <span className="font-medium">{record.batch}</span>
-                      </div>
-                      <div className="rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
-                        Date: <span className="font-medium">{formatDateDDMMYYYY(record.paymentDate)}</span>
-                      </div>
-                      <div className="rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
-                        Created: <span className="font-medium">{formatDateTimeDDMMYYYY(record.createdAt)}</span>
-                      </div>
-                    </div>
+                    )}
 
                     <div className="space-y-1">
                       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -188,7 +293,7 @@ export function CollectionDailyDayDetailsDialog({
               } sm:flex-row sm:items-center sm:justify-between`}
               data-floating-ai-avoid="true"
             >
-              <div className="text-muted-foreground">
+              <div className={`text-muted-foreground ${isMobile ? "text-xs" : ""}`}>
                 Page {dayDetails.pagination.page} of {dayDetails.pagination.totalPages} | Records{" "}
                 {dayDetails.pagination.totalRecords}
               </div>

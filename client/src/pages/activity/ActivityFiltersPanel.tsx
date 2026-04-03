@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePickerField } from "@/components/ui/date-picker-field";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { ActivityFilters } from "@/lib/api";
 import { STATUS_OPTIONS } from "@/pages/activity/types";
 
@@ -31,20 +32,22 @@ export function ActivityFiltersPanel({
   onFieldChange,
   onToggleStatus,
 }: ActivityFiltersPanelProps) {
+  const isMobile = useIsMobile();
+
   return (
     <Card className="mb-6 glass-wrapper border-0" data-floating-ai-avoid="true">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
+      <CardHeader className={isMobile ? "pb-2.5" : "pb-3"}>
+        <CardTitle className={`${isMobile ? "text-base" : "text-lg"} flex items-center gap-2`}>
           <Filter className="w-5 h-5" />
-          Filter Activity Logs
+          {isMobile ? "Search & Filters" : "Filter Activity Logs"}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div>
           <Label className="text-sm font-medium mb-2 block">Status</Label>
-          <div className="flex flex-wrap gap-2">
+          <div className={`flex flex-wrap ${isMobile ? "gap-3" : "gap-2"}`}>
             {STATUS_OPTIONS.map((option) => (
-              <div key={option.value} className="flex items-center gap-2">
+              <div key={option.value} className={`flex items-center gap-2 ${isMobile ? "rounded-full border border-border/60 bg-background/70 px-3 py-1.5" : ""}`}>
                 <Checkbox
                   id={`status-${option.value}`}
                   checked={filters.status?.includes(option.value)}
@@ -120,12 +123,12 @@ export function ActivityFiltersPanel({
           </div>
         </div>
 
-        <div className="flex gap-2 flex-wrap pt-2">
-          <Button onClick={onApply} data-testid="button-apply-filters">
+        <div className={`flex gap-2 flex-wrap pt-2 ${isMobile ? "grid grid-cols-2" : ""}`}>
+          <Button onClick={onApply} className={isMobile ? "w-full" : undefined} data-testid="button-apply-filters">
             <Filter className="w-4 h-4 mr-2" />
             Apply Filter
           </Button>
-          <Button variant="outline" onClick={onClear} data-testid="button-clear-filters">
+          <Button variant="outline" onClick={onClear} className={isMobile ? "w-full" : undefined} data-testid="button-clear-filters">
             <X className="w-4 h-4 mr-2" />
             Reset Filter
           </Button>

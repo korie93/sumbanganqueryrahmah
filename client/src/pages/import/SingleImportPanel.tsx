@@ -1,4 +1,5 @@
 import { AlertCircle, FileSpreadsheet, Save, Upload, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ImportRow } from "@/pages/import/types";
@@ -38,14 +39,21 @@ export function SingleImportPanel({
 }: SingleImportPanelProps) {
   return (
     <>
-      <div className="glass-wrapper p-6 mb-6">
+      <div className="glass-wrapper mb-4 p-4 sm:mb-6 sm:p-6">
         <div className="mb-4">
-          <label className="block text-sm font-medium text-foreground mb-2">Import Name</label>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <label className="block text-sm font-medium text-foreground">Import Name</label>
+            {parsedData.length > 0 ? (
+              <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[11px]">
+                {parsedData.length.toLocaleString()} rows ready
+              </Badge>
+            ) : null}
+          </div>
           <Input
             value={importName}
             onChange={(event) => onImportNameChange(event.target.value)}
             placeholder="Enter a name for this import"
-            className="max-w-md"
+            className="h-10 max-w-md"
             data-testid="input-import-name"
           />
         </div>
@@ -53,7 +61,7 @@ export function SingleImportPanel({
         <div
           onDrop={onDrop}
           onDragOver={onDragOver}
-          className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-8 text-center cursor-pointer hover:border-primary transition-colors"
+          className="cursor-pointer rounded-xl border-2 border-dashed border-slate-300 p-5 text-center transition-colors hover:border-primary dark:border-slate-600 sm:p-8"
           onClick={() => fileInputRef.current?.click()}
           data-testid="dropzone-file"
         >
@@ -67,46 +75,73 @@ export function SingleImportPanel({
             data-testid="input-file"
           />
           <div className="flex flex-col items-center gap-3">
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <Upload className="w-8 h-8 text-primary" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 sm:h-16 sm:w-16">
+              <Upload className="h-7 w-7 text-primary sm:h-8 sm:w-8" />
             </div>
             <div>
               <p className="text-foreground font-medium">Click or drag file here</p>
-              <p className="text-sm text-muted-foreground mt-1">Supported: CSV, Excel (.xlsx, .xls, .xlsb)</p>
-              <p className="text-xs text-muted-foreground mt-1">Maximum upload size per file: {maxUploadSizeLabel}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Supported: CSV, Excel (.xlsx, .xls, .xlsb)
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Maximum upload size per file: {maxUploadSizeLabel}
+              </p>
             </div>
           </div>
         </div>
 
         {file ? (
-          <div className="mt-4 flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
-            <FileSpreadsheet className="w-5 h-5 text-primary" />
-            <span className="text-sm text-foreground">{file.name}</span>
-            <button
-              type="button"
-              aria-label="Clear selected file"
-              onClick={onClear}
-              className="ml-auto text-muted-foreground hover:text-destructive transition-colors"
-              data-testid="button-clear-file"
-            >
-              <X className="w-4 h-4" />
-            </button>
+          <div className="mt-4 rounded-lg bg-primary/5 p-3">
+            <div className="flex items-start gap-3">
+              <FileSpreadsheet className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+              <div className="min-w-0 flex-1">
+                <p className="break-words text-sm font-medium text-foreground">{file.name}</p>
+                <p className="mt-1 text-xs text-muted-foreground">File selected and ready for preview.</p>
+              </div>
+              <button
+                type="button"
+                aria-label="Clear selected file"
+                onClick={onClear}
+                className="text-muted-foreground transition-colors hover:text-destructive"
+                data-testid="button-clear-file"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {parsedData.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge variant="outline" className="rounded-full">
+              {headers.length} columns
+            </Badge>
+            <Badge variant="outline" className="rounded-full">
+              Previewing first {Math.min(parsedData.length, 10)} rows
+            </Badge>
           </div>
         ) : null}
 
         {error ? (
-          <div className="mt-4 flex items-center gap-2 p-3 bg-destructive/10 rounded-lg text-destructive">
-            <AlertCircle className="w-4 h-4" />
+          <div className="mt-4 flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-destructive">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span className="text-sm">{error}</span>
           </div>
         ) : null}
       </div>
 
       {parsedData.length > 0 ? (
-        <div className="glass-wrapper p-6">
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-            <h2 className="text-lg font-semibold text-foreground">Data Preview ({parsedData.length} rows)</h2>
-            <div className="flex gap-2">
+        <div className="glass-wrapper p-4 sm:p-6">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">
+                Data Preview ({parsedData.length} rows)
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground sm:hidden">
+                Review the sample rows before saving this dataset.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:flex sm:gap-2">
               <Button variant="outline" onClick={onClear} disabled={loading} data-testid="button-cancel">
                 Cancel
               </Button>
@@ -130,9 +165,9 @@ export function SingleImportPanel({
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>
-                  <th className="text-left p-3 font-medium text-muted-foreground">#</th>
+                  <th className="p-3 text-left font-medium text-muted-foreground">#</th>
                   {headers.map((header, index) => (
-                    <th key={index} className="text-left p-3 font-medium text-muted-foreground">
+                    <th key={index} className="p-3 text-left font-medium text-muted-foreground">
                       {header}
                     </th>
                   ))}
@@ -152,7 +187,7 @@ export function SingleImportPanel({
               </tbody>
             </table>
             {parsedData.length > 10 ? (
-              <div className="p-3 text-center text-sm text-muted-foreground bg-muted/30">
+              <div className="bg-muted/30 p-3 text-center text-sm text-muted-foreground">
                 ... and {parsedData.length - 10} more rows
               </div>
             ) : null}

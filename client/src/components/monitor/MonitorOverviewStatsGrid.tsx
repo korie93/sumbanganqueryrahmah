@@ -1,6 +1,8 @@
 import { memo } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { InfoHint } from "@/components/monitor/InfoHint";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { MonitorSnapshot } from "@/hooks/useSystemMetrics";
 
 type MonitorOverviewStatsGridProps = {
@@ -14,6 +16,8 @@ function MonitorOverviewStatsGridImpl({
   rollupFreshnessSummary,
   rollupFreshnessAgeLabel,
 }: MonitorOverviewStatsGridProps) {
+  const isMobile = useIsMobile();
+
   return (
     <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <Card className="border-border/60 bg-background/45">
@@ -53,9 +57,23 @@ function MonitorOverviewStatsGridImpl({
           </div>
           <p className="mt-2 text-2xl font-semibold">{snapshot.rollupRefreshPendingCount}</p>
           <p className="mt-1 text-xs text-muted-foreground">{rollupFreshnessSummary}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {snapshot.rollupRefreshRunningCount} running, {snapshot.rollupRefreshRetryCount} retry, oldest {rollupFreshnessAgeLabel}
-          </p>
+          {isMobile ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-[10px]">
+                {snapshot.rollupRefreshRunningCount} running
+              </Badge>
+              <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[10px]">
+                {snapshot.rollupRefreshRetryCount} retry
+              </Badge>
+              <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[10px]">
+                Oldest {rollupFreshnessAgeLabel}
+              </Badge>
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {snapshot.rollupRefreshRunningCount} running, {snapshot.rollupRefreshRetryCount} retry, oldest {rollupFreshnessAgeLabel}
+            </p>
+          )}
         </CardContent>
       </Card>
       <Card className="border-border/60 bg-background/45">

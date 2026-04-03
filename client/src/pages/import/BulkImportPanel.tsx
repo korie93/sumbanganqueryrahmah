@@ -33,9 +33,11 @@ export function BulkImportPanel({
 }: BulkImportPanelProps) {
   const blockedCount = bulkResults.filter((result) => result.blocked).length;
   const hasImportableFiles = bulkResults.some((result) => !result.blocked);
+  const failedCount = bulkResults.filter((result) => result.status === "error").length;
+  const successCount = bulkResults.filter((result) => result.status === "success").length;
 
   return (
-    <div className="glass-wrapper p-6 mb-6">
+    <div className="glass-wrapper mb-4 p-4 sm:mb-6 sm:p-6">
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-foreground mb-2">Bulk Import</h2>
         <p className="text-sm text-muted-foreground">
@@ -46,7 +48,7 @@ export function BulkImportPanel({
       <div
         onDrop={onBulkDrop}
         onDragOver={onBulkDragOver}
-        className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-8 text-center cursor-pointer hover:border-primary transition-colors"
+        className="cursor-pointer rounded-xl border-2 border-dashed border-slate-300 p-5 text-center transition-colors hover:border-primary dark:border-slate-600 sm:p-8"
         onClick={() => bulkInputRef.current?.click()}
         data-testid="dropzone-bulk"
       >
@@ -61,29 +63,42 @@ export function BulkImportPanel({
           data-testid="input-bulk-files"
         />
         <div className="flex flex-col items-center gap-3">
-          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-            <FolderOpen className="w-8 h-8 text-primary" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 sm:h-16 sm:w-16">
+            <FolderOpen className="h-7 w-7 text-primary sm:h-8 sm:w-8" />
           </div>
           <div>
             <p className="text-foreground font-medium">Click or drag multiple files here</p>
-            <p className="text-sm text-muted-foreground mt-1">Select multiple CSV or Excel files at once</p>
-            <p className="text-xs text-muted-foreground mt-1">Maximum upload size per file: {maxUploadSizeLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Select multiple CSV or Excel files at once</p>
+            <p className="mt-1 text-xs text-muted-foreground">Maximum upload size per file: {maxUploadSizeLabel}</p>
           </div>
         </div>
       </div>
 
       {bulkFiles.length > 0 ? (
         <div className="mt-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-2">
               <h3 className="font-medium text-foreground">Selected Files ({bulkFiles.length})</h3>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline" className="rounded-full">
+                  {successCount} success
+                </Badge>
+                <Badge variant="outline" className="rounded-full">
+                  {failedCount} failed
+                </Badge>
+                {blockedCount > 0 ? (
+                  <Badge variant="outline" className="rounded-full border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300">
+                    {blockedCount} too large
+                  </Badge>
+                ) : null}
+              </div>
               {blockedCount > 0 ? (
                 <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
                   {blockedCount} file(s) exceed the current upload limit and will be skipped.
                 </p>
               ) : null}
             </div>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:flex sm:gap-2">
               <Button variant="outline" onClick={onClearBulk} disabled={bulkProcessing} data-testid="button-clear-bulk">
                 Clear All
               </Button>
@@ -112,11 +127,11 @@ export function BulkImportPanel({
             </div>
           ) : null}
 
-          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+          <div className="max-h-[400px] space-y-2 overflow-y-auto">
             {bulkResults.map((result, index) => (
               <div
                 key={index}
-                className={`flex items-center gap-3 p-3 rounded-lg border ${
+                className={`rounded-lg border p-3 ${
                   result.status === "success"
                     ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
                     : result.status === "error"
@@ -127,49 +142,54 @@ export function BulkImportPanel({
                 }`}
                 data-testid={`bulk-file-${index}`}
               >
-                {result.status === "success" ? (
-                  <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
-                ) : null}
-                {result.status === "error" ? (
-                  <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
-                ) : null}
-                {result.status === "processing" ? (
-                  <div className="w-5 h-5 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin flex-shrink-0" />
-                ) : null}
-                {result.status === "pending" ? (
-                  <FileSpreadsheet className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                ) : null}
+                <div className="flex items-start gap-3">
+                  {result.status === "success" ? (
+                    <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                  ) : null}
+                  {result.status === "error" ? (
+                    <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                  ) : null}
+                  {result.status === "processing" ? (
+                    <div className="mt-0.5 h-5 w-5 flex-shrink-0 rounded-full border-2 border-blue-300 border-t-blue-600 animate-spin" />
+                  ) : null}
+                  {result.status === "pending" ? (
+                    <FileSpreadsheet className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                  ) : null}
 
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{result.filename}</p>
-                  {result.status === "success" && result.rowCount ? (
-                    <p className="text-xs text-green-600 dark:text-green-400">{result.rowCount} rows imported</p>
-                  ) : null}
-                  {result.status === "error" && result.error ? (
-                    <p className="text-xs text-red-600 dark:text-red-400 break-words">{result.error}</p>
-                  ) : null}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">{result.filename}</p>
+                        {result.status === "success" && result.rowCount ? (
+                          <p className="text-xs text-green-600 dark:text-green-400">{result.rowCount} rows imported</p>
+                        ) : null}
+                        {result.status === "error" && result.error ? (
+                          <p className="text-xs text-red-600 dark:text-red-400 break-words">{result.error}</p>
+                        ) : null}
+                      </div>
+                      <Badge
+                        variant={
+                          result.status === "success"
+                            ? "default"
+                            : result.status === "error"
+                              ? "destructive"
+                              : "secondary"
+                        }
+                        className="w-fit flex-shrink-0"
+                      >
+                        {result.blocked
+                          ? "Too Large"
+                          : result.status === "success"
+                          ? "Success"
+                          : result.status === "error"
+                            ? "Failed"
+                            : result.status === "processing"
+                              ? "Processing"
+                              : "Pending"}
+                      </Badge>
+                    </div>
+                  </div>
                 </div>
-
-                <Badge
-                  variant={
-                    result.status === "success"
-                      ? "default"
-                      : result.status === "error"
-                        ? "destructive"
-                        : "secondary"
-                  }
-                  className="flex-shrink-0"
-                >
-                  {result.blocked
-                    ? "Too Large"
-                    : result.status === "success"
-                    ? "Success"
-                    : result.status === "error"
-                      ? "Failed"
-                      : result.status === "processing"
-                        ? "Processing"
-                        : "Pending"}
-                </Badge>
               </div>
             ))}
           </div>

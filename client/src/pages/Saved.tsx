@@ -381,7 +381,16 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
       <OperationalPageHeader
         title="Saved Imports"
         eyebrow="Imported Data"
-        description="Review imported files, reopen Viewer or Analysis quickly, and keep operational datasets organized."
+        description={
+          <>
+            <span className="sm:hidden">
+              Reopen Viewer or Analysis quickly and keep imported files tidy.
+            </span>
+            <span className="hidden sm:inline">
+              Review imported files, reopen Viewer or Analysis quickly, and keep operational datasets organized.
+            </span>
+          </>
+        }
         badge={
           !loading && totalImports > 0 ? (
             <Badge
@@ -400,16 +409,19 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             {isSuperuser && selectedImportIds.size > 0 ? (
               <Button
                 variant="destructive"
+                className="h-9 px-3 sm:h-10 sm:px-4"
                 onClick={() => setBulkDeleteDialogOpen(true)}
                 disabled={adminActionsDisabled}
                 data-testid="button-bulk-delete"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
-                Delete Selected ({selectedImportIds.size})
+                <span className="sm:hidden">Delete ({selectedImportIds.size})</span>
+                <span className="hidden sm:inline">Delete Selected ({selectedImportIds.size})</span>
               </Button>
             ) : null}
             <Button
               variant="outline"
+              className="h-9 px-3 sm:h-10 sm:px-4"
               onClick={() => void fetchImports({ reset: true })}
               disabled={adminActionsDisabled}
               data-testid="button-refresh"
@@ -423,8 +435,17 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
 
       {!loading && totalImports > 0 ? (
         <OperationalSectionCard
-          title="Search and Filter"
-          description="Narrow the list without losing your current page context."
+          title={
+            <>
+              <span className="sm:hidden">Filters</span>
+              <span className="hidden sm:inline">Search and Filter</span>
+            </>
+          }
+          description={
+            <span className="hidden sm:inline">
+              Narrow the list without losing your current page context.
+            </span>
+          }
           contentClassName="space-y-0"
         >
           <SavedFiltersBar
@@ -450,34 +471,32 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
         <SavedLoadingSkeleton />
       ) : !hasActiveFilters && totalImports === 0 ? (
         <OperationalSectionCard contentClassName="ops-empty-state">
-            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 sm:h-16 sm:w-16">
               <BookMarked className="w-8 h-8 text-muted-foreground" />
             </div>
-            <p className="text-foreground font-medium mb-2">No saved data</p>
-            <p className="text-sm text-muted-foreground mb-4">Import new data to get started.</p>
-            <Button onClick={() => onNavigate("import")} data-testid="button-import-new">
+            <p className="mb-2 text-foreground font-medium">No saved data yet</p>
+            <p className="mb-4 max-w-md text-sm text-muted-foreground">
+              Import a file to start building your saved workspace for Viewer and Analysis.
+            </p>
+            <Button className="w-full sm:w-auto" onClick={() => onNavigate("import")} data-testid="button-import-new">
               Import Data
             </Button>
         </OperationalSectionCard>
       ) : visibleImports.length === 0 ? (
         <OperationalSectionCard contentClassName="ops-empty-state">
-            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted sm:h-16 sm:w-16">
               <Search className="w-8 h-8 text-muted-foreground" />
             </div>
-            <p className="text-foreground font-medium mb-2">No results found</p>
-            <p className="text-sm text-muted-foreground mb-4">
-              Try adjusting your search or filter criteria.
+            <p className="mb-2 text-foreground font-medium">No matching files</p>
+            <p className="mb-4 max-w-md text-sm text-muted-foreground">
+              Try a broader search term or remove the date filter to see more saved imports.
             </p>
-            <Button variant="outline" onClick={clearFilters} data-testid="button-clear-filters-empty">
+            <Button className="w-full sm:w-auto" variant="outline" onClick={clearFilters} data-testid="button-clear-filters-empty">
               Clear Filters
             </Button>
         </OperationalSectionCard>
       ) : (
-        <OperationalSectionCard
-          title="Saved Files"
-          description="Use Viewer for inspection, open Analysis when needed, and keep destructive actions separate."
-          contentClassName="space-y-0"
-        >
+        <OperationalSectionCard contentClassName="space-y-0">
           <SavedImportsList
             imports={visibleImports}
             summaryLabel={importSummaryLabel}

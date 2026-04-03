@@ -1,4 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { formatOperationalDateTime } from "@/lib/date-format";
 import type { RestoreResponse } from "@/pages/backup-restore/types";
 
@@ -9,24 +11,44 @@ interface BackupRestoreResultCardProps {
 export function BackupRestoreResultCard({
   lastRestoreResult,
 }: BackupRestoreResultCardProps) {
+  const isMobile = useIsMobile();
+
   if (!lastRestoreResult) {
     return null;
   }
 
   return (
     <Card className="border-border/60">
-      <CardContent className="pt-6 space-y-3">
+      <CardContent className={`${isMobile ? "space-y-3 pt-4" : "space-y-3 pt-6"}`}>
         <div className="text-sm font-medium">Last Restore Result</div>
-        <div className="text-sm text-muted-foreground">
-          Backup: {lastRestoreResult.backupName || lastRestoreResult.backupId || "-"}
-          {lastRestoreResult.restoredAt
-            ? ` | Restored at ${formatOperationalDateTime(lastRestoreResult.restoredAt)}`
-            : ""}
-          {typeof lastRestoreResult.durationMs === "number"
-            ? ` | Duration ${(lastRestoreResult.durationMs / 1000).toFixed(1)}s`
-            : ""}
-        </div>
-        <div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
+        {isMobile ? (
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            <Badge variant="secondary" className="rounded-full px-3 py-1">
+              {lastRestoreResult.backupName || lastRestoreResult.backupId || "-"}
+            </Badge>
+            {lastRestoreResult.restoredAt ? (
+              <Badge variant="outline" className="rounded-full px-3 py-1">
+                {formatOperationalDateTime(lastRestoreResult.restoredAt)}
+              </Badge>
+            ) : null}
+            {typeof lastRestoreResult.durationMs === "number" ? (
+              <Badge variant="outline" className="rounded-full px-3 py-1">
+                {(lastRestoreResult.durationMs / 1000).toFixed(1)}s
+              </Badge>
+            ) : null}
+          </div>
+        ) : (
+          <div className="text-sm text-muted-foreground">
+            Backup: {lastRestoreResult.backupName || lastRestoreResult.backupId || "-"}
+            {lastRestoreResult.restoredAt
+              ? ` | Restored at ${formatOperationalDateTime(lastRestoreResult.restoredAt)}`
+              : ""}
+            {typeof lastRestoreResult.durationMs === "number"
+              ? ` | Duration ${(lastRestoreResult.durationMs / 1000).toFixed(1)}s`
+              : ""}
+          </div>
+        )}
+        <div className={`grid gap-2 text-sm ${isMobile ? "grid-cols-1" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
           <div>Imports: +{lastRestoreResult.stats.imports.inserted} inserted, {lastRestoreResult.stats.imports.reactivated} reactivated</div>
           <div>Data rows: +{lastRestoreResult.stats.dataRows.inserted} inserted</div>
           <div>Users: +{lastRestoreResult.stats.users.inserted} inserted</div>
@@ -34,7 +56,7 @@ export function BackupRestoreResultCard({
           <div>Collection records: +{lastRestoreResult.stats.collectionRecords.inserted} inserted</div>
           <div>Collection receipts: +{lastRestoreResult.stats.collectionRecordReceipts.inserted} inserted</div>
         </div>
-        <div className="text-sm text-muted-foreground">
+        <div className={`${isMobile ? "text-xs" : "text-sm"} text-muted-foreground`}>
           Processed: {lastRestoreResult.stats.totalProcessed} | Inserted: {lastRestoreResult.stats.totalInserted} | Reactivated: {lastRestoreResult.stats.totalReactivated} | Skipped: {lastRestoreResult.stats.totalSkipped}
         </div>
         {lastRestoreResult.stats.warnings.length > 0 ? (
