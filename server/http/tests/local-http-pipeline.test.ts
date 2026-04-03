@@ -28,10 +28,15 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     const response = await fetch(`${baseUrl}/healthz`);
     assert.equal(response.status, 200);
     const csp = String(response.headers.get("content-security-policy") || "");
+    assert.match(csp, /base-uri 'self'/i);
     assert.match(csp, /img-src 'self' data: blob:/i);
     assert.match(csp, /frame-src 'self' blob:/i);
+    assert.match(csp, /object-src 'none'/i);
+    assert.match(csp, /script-src 'self'/i);
+    assert.match(csp, /script-src-attr 'none'/i);
     assert.match(csp, /require-trusted-types-for 'script'/i);
     assert.match(csp, new RegExp(`trusted-types ${SQR_TRUSTED_TYPES_POLICY_NAME}`, "i"));
+    assert.doesNotMatch(csp, /script-src[^;]*unsafe-inline/i);
   } finally {
     await stopTestServer(server);
   }
