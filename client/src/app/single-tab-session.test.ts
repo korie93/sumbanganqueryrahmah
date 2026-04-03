@@ -161,3 +161,56 @@ test("reload helper preserves same-tab reclaim state before forcing a full reloa
     });
   }
 });
+
+test("reload helper refuses unsafe cross-origin navigation targets", () => {
+  const sessionStore = new Map<string, string>();
+  sessionStore.set("sqr_single_tab_seed", "tab-seed-1");
+
+  const originalWindow = globalThis.window;
+  const originalSessionStorage = globalThis.sessionStorage;
+
+  const navigatedTo: string[] = [];
+
+  const sessionStorageMock = {
+    getItem(key: string) {
+      return sessionStore.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      sessionStore.set(key, value);
+    },
+    removeItem(key: string) {
+      sessionStore.delete(key);
+    },
+    clear() {
+      sessionStore.clear();
+    },
+  } as Storage;
+
+  const windowMock = {
+    location: {
+      href: "https://example.com/current",
+      replace(url: string) {
+        navigatedTo.push(url);
+      },
+    },
+    setTimeout(callback: () => void) {
+      callback();
+      return 1;
+    },
+  } as unknown as Window & typeof globalThis;
+
+  Object.assign(globalThis, {
+    window: windowMock,
+    sessionStorage: sessionStorageMock,
+  });
+
+  try {
+    reloadAppPreservingSingleTabLock("https://evil.example/phish");
+    assert.deepEqual(navigatedTo, ["https://example.com/current"]);
+  } finally {
+    Object.assign(globalThis, {
+      window: originalWindow,
+      sessionStorage: originalSessionStorage,
+    });
+  }
+});

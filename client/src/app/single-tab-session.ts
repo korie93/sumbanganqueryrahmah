@@ -1,3 +1,5 @@
+import { resolveSafeNavigationUrl } from "@/lib/safe-url";
+
 const SINGLE_TAB_LOCK_STORAGE_PREFIX = "sqr_single_tab_lock:";
 const SINGLE_TAB_SEED_STORAGE_KEY = "sqr_single_tab_seed";
 const SINGLE_TAB_NAVIGATION_RECLAIM_STORAGE_KEY = "sqr_single_tab_navigation_reclaim";
@@ -224,7 +226,8 @@ export function reloadAppPreservingSingleTabLock(url?: string | null) {
     return;
   }
 
-  const targetUrl = normalizeStorageValue(url) || window.location.href;
+  const targetUrl =
+    resolveSafeNavigationUrl(normalizeStorageValue(url) || window.location.href) || window.location.href;
   const performReload = () => {
     markSingleTabNavigationReclaimForCurrentTab();
 

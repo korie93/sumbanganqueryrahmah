@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { resolveSafePreviewSourceUrl } from "@/lib/safe-url";
 import { cn } from "@/lib/utils";
 import type { CollectionRecord, CollectionRecordReceipt } from "@/lib/api";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
@@ -65,6 +66,8 @@ export function ReceiptPreviewDialog({
   const isMobile = useIsMobile();
   const [zoom, setZoom] = useState(1);
   const [showDetails, setShowDetails] = useState(false);
+  const safeSource = resolveSafePreviewSourceUrl(source);
+  const hasUnsafeSource = Boolean(String(source || "").trim()) && !safeSource;
 
   useEffect(() => {
     if (open) {
@@ -84,8 +87,8 @@ export function ReceiptPreviewDialog({
     kind,
     isMobile,
   });
-  const showPdfFallback = Boolean(source) && kind === "pdf" && !canRenderInlinePdfPreview;
-  const canZoom = Boolean(source) && (kind === "image" || canRenderInlinePdfPreview);
+  const showPdfFallback = Boolean(safeSource) && kind === "pdf" && !canRenderInlinePdfPreview;
+  const canZoom = Boolean(safeSource) && (kind === "image" || canRenderInlinePdfPreview);
   const zoomClassName = getReceiptPreviewZoomClass(zoom);
 
   if (!open && !record && !loading && !source && !error) {
@@ -169,7 +172,7 @@ export function ReceiptPreviewDialog({
                 asChild
                 className={isMobile ? "col-span-2 w-full" : ""}
               >
-                <a href={source} target="_blank" rel="noreferrer noopener">
+                <a href={safeSource || undefined} target="_blank" rel="noreferrer noopener">
                   <ExternalLink className="mr-2 h-4 w-4" />
                   Open PDF
                 </a>
@@ -267,11 +270,13 @@ export function ReceiptPreviewDialog({
             <div className="flex h-full min-h-[240px] items-center justify-center px-4 text-center text-sm text-muted-foreground">
               {error}
             </div>
-          ) : !source ? (
+          ) : !safeSource ? (
             <div className="flex h-full min-h-[240px] items-center justify-center px-4 text-center text-sm text-muted-foreground">
-              {kind === "pdf"
-                ? "PDF preview is unavailable. You can still download the file."
-                : "Preview not available for this file type."}
+              {hasUnsafeSource
+                ? "Preview URL was blocked for safety."
+                : kind === "pdf"
+                  ? "PDF preview is unavailable. You can still download the file."
+                  : "Preview not available for this file type."}
             </div>
           ) : showPdfFallback ? (
             <div className="flex h-full min-h-[280px] items-center justify-center">
@@ -290,7 +295,7 @@ export function ReceiptPreviewDialog({
                 </div>
                 <div className="mt-4 flex flex-col gap-2">
                   <Button className="w-full" asChild>
-                    <a href={source} target="_blank" rel="noreferrer noopener">
+                    <a href={safeSource} target="_blank" rel="noreferrer noopener">
                       <ExternalLink className="mr-2 h-4 w-4" />
                       Open PDF in Browser
                     </a>
@@ -308,7 +313,7 @@ export function ReceiptPreviewDialog({
                 className={cn("mx-auto w-full", isMobile ? "h-full" : "h-[72vh]", zoomClassName)}
               >
                 <iframe
-                  src={source}
+                  src={safeSource}
                   title="Receipt PDF Preview"
                   className="h-full w-full rounded-sm bg-white"
                   loading="lazy"
@@ -318,7 +323,7 @@ export function ReceiptPreviewDialog({
           ) : kind === "image" ? (
             <div className="flex h-full items-center justify-center overflow-auto">
               <img
-                src={source}
+                src={safeSource}
                 alt={fileName || "Receipt preview"}
                 className={cn(
                   "block rounded-sm object-contain",

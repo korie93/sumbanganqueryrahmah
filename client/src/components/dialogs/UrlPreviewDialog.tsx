@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { resolveSafeHttpUrl } from "@/lib/safe-url";
 
 type UrlPreviewDialogProps = {
   open: boolean;
@@ -27,6 +28,8 @@ export function UrlPreviewDialog({
   onClose,
 }: UrlPreviewDialogProps) {
   const isMobile = useIsMobile();
+  const safePreviewUrl = resolveSafeHttpUrl(url);
+  const hasUnsafeUrl = Boolean(String(url || "").trim()) && !safePreviewUrl;
 
   if (!open) {
     return null;
@@ -47,12 +50,20 @@ export function UrlPreviewDialog({
         </DialogHeader>
 
         <div className={`min-h-0 flex-1 overflow-hidden bg-background/40 ${isMobile ? "" : "rounded-md border border-border/60"}`}>
-          <iframe
-            key={url}
-            src={url}
-            title={title}
-            className="h-full w-full bg-white"
-          />
+          {safePreviewUrl ? (
+            <iframe
+              key={safePreviewUrl}
+              src={safePreviewUrl}
+              title={title}
+              className="h-full w-full bg-white"
+            />
+          ) : (
+            <div className="flex h-full min-h-[240px] items-center justify-center px-4 text-center text-sm text-muted-foreground">
+              {hasUnsafeUrl
+                ? "Preview URL was blocked for safety."
+                : "Preview URL is unavailable right now."}
+            </div>
+          )}
         </div>
 
         <DialogFooter
@@ -62,11 +73,17 @@ export function UrlPreviewDialog({
           }
           style={isMobile ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" } : undefined}
         >
-          <Button type="button" variant="outline" asChild>
-            <a href={url} target="_blank" rel="noreferrer">
+          {safePreviewUrl ? (
+            <Button type="button" variant="outline" asChild>
+              <a href={safePreviewUrl} target="_blank" rel="noreferrer noopener">
+                Open in New Tab
+              </a>
+            </Button>
+          ) : (
+            <Button type="button" variant="outline" disabled>
               Open in New Tab
-            </a>
-          </Button>
+            </Button>
+          )}
           <Button type="button" variant="secondary" onClick={onClose}>
             Close
           </Button>

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { CollectionRecordReceipt } from "@/lib/api";
+import { resolveSafePreviewSourceUrl } from "@/lib/safe-url";
 import { buildCollectionReceiptPanelSummary } from "@/pages/collection/collection-receipt-panel-utils";
 import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
 import {
@@ -223,96 +224,100 @@ export function CollectionReceiptPanel({
           </div>
         ) : (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {draftPreviews.map((preview, index) => (
-              <div
-                key={preview.key}
-                className="overflow-hidden rounded-md border border-border/60 bg-background/60"
-              >
-                <div className="flex h-36 items-center justify-center bg-muted/20">
-                  {preview.kind === "image" ? (
-                    preview.url ? (
-                      <img
-                        src={preview.url}
-                        alt={preview.file.name}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                        decoding="async"
-                      />
+            {draftPreviews.map((preview, index) => {
+              const safePreviewUrl = resolveSafePreviewSourceUrl(preview.url);
+
+              return (
+                <div
+                  key={preview.key}
+                  className="overflow-hidden rounded-md border border-border/60 bg-background/60"
+                >
+                  <div className="flex h-36 items-center justify-center bg-muted/20">
+                    {preview.kind === "image" ? (
+                      safePreviewUrl ? (
+                        <img
+                          src={safePreviewUrl}
+                          alt={preview.file.name}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                          <FileImage className="h-8 w-8" />
+                          <Badge variant="secondary">Image</Badge>
+                        </div>
+                      )
+                    ) : preview.kind === "pdf" ? (
+                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <FileText className="h-8 w-8" />
+                        <Badge variant="secondary">PDF</Badge>
+                      </div>
                     ) : (
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <FileImage className="h-8 w-8" />
-                        <Badge variant="secondary">Image</Badge>
+                        <Badge variant="outline">Preview unavailable</Badge>
                       </div>
-                    )
-                  ) : preview.kind === "pdf" ? (
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                      <FileText className="h-8 w-8" />
-                      <Badge variant="secondary">PDF</Badge>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                      <FileImage className="h-8 w-8" />
-                      <Badge variant="outline">Preview unavailable</Badge>
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-2 p-3">
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-medium">{preview.file.name}</p>
-                      <Badge variant="outline">Pending Upload</Badge>
-                      {summary.willReplace ? (
-                        <Badge variant="secondary">Replacement</Badge>
-                      ) : null}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {preview.file.type || "application/octet-stream"} |{" "}
-                      {formatCollectionReceiptFileSize(preview.file.size)}
-                    </p>
+                    )}
                   </div>
-                  {pendingReceiptDrafts[index] ? (
-                    <div className="grid gap-2">
-                      <Input
-                        value={pendingReceiptDrafts[index]?.receiptAmount || ""}
-                        onChange={(event) =>
-                          onPendingDraftChange?.(index, { receiptAmount: event.target.value })}
-                        placeholder="Receipt Amount (RM)"
+                  <div className="space-y-2 p-3">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-sm font-medium">{preview.file.name}</p>
+                        <Badge variant="outline">Pending Upload</Badge>
+                        {summary.willReplace ? (
+                          <Badge variant="secondary">Replacement</Badge>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {preview.file.type || "application/octet-stream"} |{" "}
+                        {formatCollectionReceiptFileSize(preview.file.size)}
+                      </p>
+                    </div>
+                    {pendingReceiptDrafts[index] ? (
+                      <div className="grid gap-2">
+                        <Input
+                          value={pendingReceiptDrafts[index]?.receiptAmount || ""}
+                          onChange={(event) =>
+                            onPendingDraftChange?.(index, { receiptAmount: event.target.value })}
+                          placeholder="Receipt Amount (RM)"
+                          disabled={disabled}
+                          inputMode="decimal"
+                        />
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <Input
+                            type="date"
+                            value={pendingReceiptDrafts[index]?.receiptDate || ""}
+                            onChange={(event) =>
+                              onPendingDraftChange?.(index, { receiptDate: event.target.value })}
+                            disabled={disabled}
+                          />
+                          <Input
+                            value={pendingReceiptDrafts[index]?.receiptReference || ""}
+                            onChange={(event) =>
+                              onPendingDraftChange?.(index, { receiptReference: event.target.value })}
+                            placeholder="Receipt Reference"
+                            disabled={disabled}
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onRemovePending(index)}
                         disabled={disabled}
-                        inputMode="decimal"
-                      />
-                      <div className="grid gap-2 md:grid-cols-2">
-                        <Input
-                          type="date"
-                          value={pendingReceiptDrafts[index]?.receiptDate || ""}
-                          onChange={(event) =>
-                            onPendingDraftChange?.(index, { receiptDate: event.target.value })}
-                          disabled={disabled}
-                        />
-                        <Input
-                          value={pendingReceiptDrafts[index]?.receiptReference || ""}
-                          onChange={(event) =>
-                            onPendingDraftChange?.(index, { receiptReference: event.target.value })}
-                          placeholder="Receipt Reference"
-                          disabled={disabled}
-                        />
-                      </div>
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Remove
+                      </Button>
                     </div>
-                  ) : null}
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => onRemovePending(index)}
-                      disabled={disabled}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Remove
-                    </Button>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

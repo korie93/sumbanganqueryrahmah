@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { resolveSafeHttpUrl } from "@/lib/safe-url";
 
 export interface ManagedSecretDialogProps {
   description: string;
@@ -25,7 +26,7 @@ export function ManagedSecretDialog({
 }: ManagedSecretDialogProps) {
   const normalizedValue = String(value || "").trim();
   const hasValue = Boolean(normalizedValue);
-  const isHttpUrl = /^https?:\/\//i.test(normalizedValue);
+  const safeOpenUrl = resolveSafeHttpUrl(normalizedValue);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -40,11 +41,11 @@ export function ManagedSecretDialog({
           </div>
         ) : null}
         <DialogFooter>
-          {hasValue && isHttpUrl ? (
+          {safeOpenUrl ? (
             <Button
               variant="outline"
               onClick={() => {
-                window.open(normalizedValue, "_blank", "noopener,noreferrer");
+                window.open(safeOpenUrl, "_blank", "noopener,noreferrer");
               }}
             >
               Open
