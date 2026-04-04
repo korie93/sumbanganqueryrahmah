@@ -1,62 +1,25 @@
-import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Suspense, lazy } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import {
   OperationalPage,
   OperationalPageHeader,
-  OperationalSectionCard,
 } from "@/components/layout/OperationalPage";
 import { MonitorAccessDenied } from "@/components/monitor/MonitorAccessDenied";
+import {
+  getMonitorSummaryToneClass,
+  MonitorChartsFallback,
+  MonitorDeferredSectionToggle,
+  MonitorInsightsFallback,
+  MonitorMetricsFallback,
+  MonitorSectionCardFallback,
+  MonitorWebVitalsInlineFallback,
+  useDeferredMonitorSectionMount,
+} from "@/components/monitor/MonitorDeferredSection";
 import { MonitorOverviewSection } from "@/components/monitor/MonitorOverviewSection";
 import { MonitorStatusBanners } from "@/components/monitor/MonitorStatusBanners";
-import {
-  buildMonitorChaosCompactSummary,
-  buildMonitorChaosSummaryFacts,
-} from "@/components/monitor/monitor-chaos-utils";
-import {
-  buildMonitorInsightsCompactSummary,
-  buildMonitorInsightsSummaryFacts,
-} from "@/components/monitor/monitor-insights-utils";
-import {
-  buildMonitorMetricsCompactSummary,
-  buildMonitorMetricsSummaryFacts,
-} from "@/components/monitor/monitor-metrics-summary-utils";
-import {
-  buildMonitorTechnicalCompactSummary,
-  buildMonitorTechnicalSummaryFacts,
-} from "@/components/monitor/monitor-technical-summary-utils";
-import {
-  buildMonitorWebVitalCompactSummary,
-  buildMonitorWebVitalSummaryFacts,
-} from "@/components/monitor/monitor-web-vitals-utils";
-import {
-  buildMonitorShellDescription,
-  buildMonitorShellFacts,
-} from "@/components/monitor/monitor-shell-utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  CHAOS_OPTIONS,
-  buildMetricGroups,
-  buildRollupFreshnessSummary,
-  formatMonitorDurationCompact,
-  getModeBadgeClass,
-  getRollupFreshnessBadgeClass,
-  getRollupFreshnessStatus,
-  getScoreStatus,
-} from "@/components/monitor/monitorData";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { useSystemMetrics } from "@/hooks/useSystemMetrics";
-import { useToast } from "@/hooks/use-toast";
-import {
-  autoHealRollupQueue,
-  deleteOldAlertHistory,
-  drainRollupQueue,
-  type ChaosType,
-  injectChaos,
-  rebuildCollectionRollups,
-  retryRollupFailures,
-} from "@/lib/api";
-import { getStoredRole } from "@/lib/auth-session";
+import { ACTIVE_ALERTS_PAGE_SIZE, ALERT_HISTORY_PAGE_SIZE, useMonitorPageState } from "@/pages/monitor/useMonitorPageState";
 
 const MonitorAlertsSection = lazy(() =>
   import("@/components/monitor/MonitorAlertsSection").then((module) => ({
@@ -94,319 +57,9 @@ const MonitorWebVitalsSection = lazy(() =>
   })),
 );
 
-const ALERT_HISTORY_PAGE_SIZE = 5;
-const ACTIVE_ALERTS_PAGE_SIZE = 5;
-
-function getMonitorSummaryToneClass(tone: "stable" | "watch" | "attention") {
-  if (tone === "attention") {
-    return "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300";
-  }
-
-  if (tone === "watch") {
-    return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
-  }
-
-  return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
-}
-
-function MonitorChartsFallback() {
-  return (
-    <OperationalSectionCard className="bg-background/80" contentClassName="space-y-4 p-4">
-      <div role="status" aria-live="polite" aria-label="Loading technical charts" className="space-y-4">
-        <div className="h-6 w-48 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div
-              key={index}
-              className="h-64 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
-            />
-          ))}
-        </div>
-      </div>
-    </OperationalSectionCard>
-  );
-}
-
-function MonitorInsightsFallback() {
-  return (
-    <OperationalSectionCard className="bg-background/80" contentClassName="space-y-4 p-4">
-      <div role="status" aria-live="polite" aria-label="Loading intelligence insights" className="space-y-4">
-        <div className="space-y-2">
-          <div className="h-6 w-56 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
-          <div className="h-4 w-full max-w-2xl animate-pulse rounded bg-slate-300/60 dark:bg-slate-800/70" />
-        </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <div
-              key={index}
-              className="h-32 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
-            />
-          ))}
-        </div>
-      </div>
-    </OperationalSectionCard>
-  );
-}
-
-function MonitorMetricsFallback() {
-  return (
-    <OperationalSectionCard className="bg-background/80" contentClassName="space-y-4 p-4">
-      <div role="status" aria-live="polite" aria-label="Loading key metrics" className="space-y-4">
-        <div className="space-y-2">
-          <div className="h-6 w-40 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
-          <div className="h-4 w-full max-w-xl animate-pulse rounded bg-slate-300/60 dark:bg-slate-800/70" />
-        </div>
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div
-              key={index}
-              className="h-72 animate-pulse rounded-2xl border border-border/60 bg-background/35 backdrop-blur-sm"
-            />
-          ))}
-        </div>
-      </div>
-    </OperationalSectionCard>
-  );
-}
-
-function MonitorSectionCardFallback({
-  title,
-  blocks = 2,
-}: {
-  title: string;
-  blocks?: number;
-}) {
-  return (
-    <OperationalSectionCard className="bg-background/80" contentClassName="space-y-3 p-4">
-      <div role="status" aria-live="polite" aria-label={title} className="space-y-3">
-        <div className="h-5 w-40 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
-        <div className="space-y-3">
-          {Array.from({ length: blocks }).map((_, index) => (
-            <div
-              key={index}
-              className="h-20 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
-            />
-          ))}
-        </div>
-      </div>
-    </OperationalSectionCard>
-  );
-}
-
-function MonitorWebVitalsInlineFallback() {
-  return (
-    <OperationalSectionCard className="bg-background/80" contentClassName="space-y-3 p-4">
-      <div
-        role="status"
-        aria-live="polite"
-        aria-label="Loading real user experience details"
-        className="space-y-3"
-      >
-        <div className="h-5 w-48 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {Array.from({ length: 2 }).map((_, index) => (
-            <div
-              key={index}
-              className="h-36 animate-pulse rounded-2xl bg-slate-300/60 dark:bg-slate-800/70"
-            />
-          ))}
-        </div>
-      </div>
-    </OperationalSectionCard>
-  );
-}
-
-type DeferredMonitorSectionOptions = {
-  enabled: boolean;
-  rootMargin?: string;
-  timeoutMs?: number;
-};
-
-function useDeferredMonitorSectionMount({
-  enabled,
-  rootMargin = "320px 0px",
-  timeoutMs = 1400,
-}: DeferredMonitorSectionOptions) {
-  const triggerRef = useRef<HTMLDivElement | null>(null);
-  const [shouldRender, setShouldRender] = useState(() => !enabled);
-
-  useEffect(() => {
-    if (!enabled) {
-      setShouldRender(true);
-      return;
-    }
-
-    if (shouldRender) {
-      return;
-    }
-
-    let cancelled = false;
-    let observer: IntersectionObserver | null = null;
-    let timeoutHandle: number | null = null;
-
-    const markReady = () => {
-      if (cancelled) {
-        return;
-      }
-
-      startTransition(() => {
-        setShouldRender(true);
-      });
-    };
-
-    if (typeof window.IntersectionObserver === "function" && triggerRef.current) {
-      observer = new window.IntersectionObserver(
-        (entries) => {
-          if (!entries.some((entry) => entry.isIntersecting)) {
-            return;
-          }
-
-          observer?.disconnect();
-          observer = null;
-          markReady();
-        },
-        {
-          rootMargin,
-        },
-      );
-      observer.observe(triggerRef.current);
-    } else {
-      timeoutHandle = window.setTimeout(markReady, timeoutMs);
-    }
-
-    return () => {
-      cancelled = true;
-      observer?.disconnect();
-      observer = null;
-      if (timeoutHandle !== null) {
-        window.clearTimeout(timeoutHandle);
-      }
-    };
-  }, [enabled, rootMargin, shouldRender, timeoutMs]);
-
-  return { shouldRender, triggerRef };
-}
-
-function MonitorDeferredSectionToggle({
-  title,
-  headline,
-  description,
-  statusBadgeLabel,
-  statusTone,
-  summaryBadges,
-  open,
-  onToggle,
-}: {
-  title: string;
-  headline?: string;
-  description: string;
-  statusBadgeLabel?: string;
-  statusTone?: "stable" | "watch" | "attention";
-  summaryBadges?: ReactNode;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  const buttonClassName = "flex w-full items-start justify-between gap-3 text-left";
-
-  return (
-    <div className="rounded-2xl border border-border/60 bg-background/30 p-4 backdrop-blur-sm">
-      {open ? (
-        <button
-          type="button"
-          className={buttonClassName}
-          onClick={onToggle}
-          aria-expanded="true"
-        >
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-base font-semibold text-foreground">{title}</h2>
-              {statusBadgeLabel ? (
-                <Badge
-                  variant="outline"
-                  className={`rounded-full px-2.5 py-0.5 text-[10px] ${getMonitorSummaryToneClass(
-                    statusTone ?? "stable",
-                  )}`}
-                >
-                  {statusBadgeLabel}
-                </Badge>
-              ) : null}
-              {summaryBadges}
-            </div>
-            {headline ? <p className="mt-2 text-sm font-semibold text-foreground">{headline}</p> : null}
-            <p className={headline ? "mt-1 text-sm text-muted-foreground" : "mt-2 text-sm text-muted-foreground"}>
-              {description}
-            </p>
-          </div>
-          <span className="shrink-0 pt-1 text-muted-foreground">
-            <ChevronUp className="h-4 w-4" />
-          </span>
-        </button>
-      ) : (
-        <button
-          type="button"
-          className={buttonClassName}
-          onClick={onToggle}
-          aria-expanded="false"
-        >
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-base font-semibold text-foreground">{title}</h2>
-              {statusBadgeLabel ? (
-                <Badge
-                  variant="outline"
-                  className={`rounded-full px-2.5 py-0.5 text-[10px] ${getMonitorSummaryToneClass(
-                    statusTone ?? "stable",
-                  )}`}
-                >
-                  {statusBadgeLabel}
-                </Badge>
-              ) : null}
-              {summaryBadges}
-            </div>
-            {headline ? <p className="mt-2 text-sm font-semibold text-foreground">{headline}</p> : null}
-            <p className={headline ? "mt-1 text-sm text-muted-foreground" : "mt-2 text-sm text-muted-foreground"}>
-              {description}
-            </p>
-          </div>
-          <span className="shrink-0 pt-1 text-muted-foreground">
-            <ChevronDown className="h-4 w-4" />
-          </span>
-        </button>
-      )}
-    </div>
-  );
-}
-
 export default function Monitor() {
-  const isMobile = useIsMobile();
-  const initialCompactViewport = typeof window !== "undefined" && window.innerWidth < 768;
-  const [metricsOpen, setMetricsOpen] = useState(() => !initialCompactViewport);
-  const [alertsOpen, setAlertsOpen] = useState(() => !initialCompactViewport);
-  const [alertHistoryOpen, setAlertHistoryOpen] = useState(false);
-  const [alertsPage, setAlertsPage] = useState(1);
-  const [alertHistoryPage, setAlertHistoryPage] = useState(1);
-  const [insightsOpen, setInsightsOpen] = useState(false);
-  const [chaosType, setChaosType] = useState<ChaosType>("cpu_spike");
-  const [chaosMagnitude, setChaosMagnitude] = useState(String(CHAOS_OPTIONS[0].defaultMagnitude));
-  const [chaosDurationMs, setChaosDurationMs] = useState(String(CHAOS_OPTIONS[0].defaultDurationMs));
-  const [chaosLoading, setChaosLoading] = useState(false);
-  const [lastChaosMessage, setLastChaosMessage] = useState<string | null>(null);
-  const [webVitalsOpen, setWebVitalsOpen] = useState(false);
-  const [chaosSectionOpen, setChaosSectionOpen] = useState(false);
-  const [technicalChartsOpen, setTechnicalChartsOpen] = useState(false);
-  const [deleteAlertHistoryBusy, setDeleteAlertHistoryBusy] = useState(false);
-  const [queueActionBusy, setQueueActionBusy] = useState<"drain" | "retry-failures" | "auto-heal" | "rebuild" | null>(null);
-  const [lastQueueActionMessage, setLastQueueActionMessage] = useState<string | null>(null);
-  const chaosRequestRef = useRef<AbortController | null>(null);
-  const chaosInFlightRef = useRef(false);
-  const deleteAlertHistoryRequestRef = useRef<AbortController | null>(null);
-  const deleteAlertHistoryInFlightRef = useRef(false);
-  const queueActionRequestRef = useRef<AbortController | null>(null);
-  const queueActionInFlightRef = useRef(false);
-  const mountedRef = useRef(true);
-  const { toast } = useToast();
-  const includeMonitorHistory = metricsOpen || technicalChartsOpen;
   const {
+    isMobile,
     isLoading,
     snapshot,
     history,
@@ -420,394 +73,69 @@ export default function Monitor() {
     hasNetworkFailure,
     lastUpdated,
     refreshNow,
-  } = useSystemMetrics({
-    includeHistory: includeMonitorHistory,
-    includeAlerts: alertsOpen,
+    metricsOpen,
+    setMetricsOpen,
+    alertsOpen,
+    setAlertsOpen,
+    alertHistoryOpen,
+    setAlertHistoryOpen,
     alertsPage,
-    alertsPageSize: ACTIVE_ALERTS_PAGE_SIZE,
-    includeAlertHistory: alertsOpen && alertHistoryOpen,
+    setAlertsPage,
     alertHistoryPage,
-    alertHistoryPageSize: ALERT_HISTORY_PAGE_SIZE,
-    includeIntelligence: insightsOpen,
-    includeWebVitalsOverview: webVitalsOpen,
-  });
-
-  const userRole = useMemo(() => getStoredRole(), []);
-
-  const canInjectChaos = userRole === "admin" || userRole === "superuser";
-  const canDeleteAlertHistory = userRole === "superuser";
-  const canManageRollups = userRole === "superuser";
-  const deferSecondaryMobileSections = initialCompactViewport;
-  const lastUpdatedLabel = useMemo(
-    () => (lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : "-"),
-    [lastUpdated],
-  );
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      chaosRequestRef.current?.abort();
-      chaosRequestRef.current = null;
-      chaosInFlightRef.current = false;
-      deleteAlertHistoryRequestRef.current?.abort();
-      deleteAlertHistoryRequestRef.current = null;
-      deleteAlertHistoryInFlightRef.current = false;
-      queueActionRequestRef.current?.abort();
-      queueActionRequestRef.current = null;
-      queueActionInFlightRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!accessDenied) return;
-    if (typeof window === "undefined") return;
-    if (window.location.pathname === "/403") return;
-    window.location.assign("/403");
-  }, [accessDenied]);
-
-  const selectedChaosProfile = useMemo(
-    () => CHAOS_OPTIONS.find((option) => option.type === chaosType) || CHAOS_OPTIONS[0],
-    [chaosType],
-  );
-  const scoreStatus = useMemo(() => getScoreStatus(snapshot.score), [snapshot.score]);
-  const modeBadgeClass = useMemo(() => getModeBadgeClass(snapshot.mode), [snapshot.mode]);
-  const rollupFreshnessStatus = useMemo(() => getRollupFreshnessStatus(snapshot), [snapshot]);
-  const rollupFreshnessBadgeClass = useMemo(
-    () => getRollupFreshnessBadgeClass(rollupFreshnessStatus),
-    [rollupFreshnessStatus],
-  );
-  const rollupFreshnessSummary = useMemo(() => buildRollupFreshnessSummary(snapshot), [snapshot]);
-  const rollupFreshnessAgeLabel = useMemo(
-    () => formatMonitorDurationCompact(snapshot.rollupRefreshOldestPendingAgeMs),
-    [snapshot.rollupRefreshOldestPendingAgeMs],
-  );
-  const webVitalsCompactSummary = useMemo(
-    () => buildMonitorWebVitalCompactSummary(webVitalsOverview),
-    [webVitalsOverview],
-  );
-  const metricsCompactSummary = useMemo(
-    () => buildMonitorMetricsCompactSummary(snapshot),
-    [snapshot],
-  );
-  const metricsSummaryFacts = useMemo(
-    () => buildMonitorMetricsSummaryFacts(snapshot),
-    [snapshot],
-  );
-  const chaosCompactSummary = useMemo(
-    () =>
-      buildMonitorChaosCompactSummary({
-        canInjectChaos,
-        selectedChaosProfile,
-        chaosDurationMs,
-        chaosLoading,
-        lastChaosMessage,
-      }),
-    [canInjectChaos, chaosDurationMs, chaosLoading, lastChaosMessage, selectedChaosProfile],
-  );
-  const chaosSummaryFacts = useMemo(
-    () =>
-      buildMonitorChaosSummaryFacts({
-        canInjectChaos,
-        selectedChaosProfile,
-        chaosDurationMs,
-        chaosLoading,
-      }),
-    [canInjectChaos, chaosDurationMs, chaosLoading, selectedChaosProfile],
-  );
-  const technicalCompactSummary = useMemo(
-    () => buildMonitorTechnicalCompactSummary(snapshot),
-    [snapshot],
-  );
-  const technicalSummaryFacts = useMemo(
-    () => buildMonitorTechnicalSummaryFacts(snapshot),
-    [snapshot],
-  );
-  const insightsCompactSummary = useMemo(
-    () => buildMonitorInsightsCompactSummary(intelligence),
-    [intelligence],
-  );
-  const insightsSummaryFacts = useMemo(
-    () => buildMonitorInsightsSummaryFacts(intelligence),
-    [intelligence],
-  );
-  const webVitalsSummaryFacts = useMemo(
-    () => buildMonitorWebVitalSummaryFacts(webVitalsOverview),
-    [webVitalsOverview],
-  );
-  const webVitalsSummaryLabel = useMemo(() => {
-    const suffix = webVitalsOpen
-      ? ""
-      : " Open Information only when you need deeper browser experience detail.";
-
-    if (!webVitalsOpen) {
-      return `${webVitalsCompactSummary.description}${suffix}`;
-    }
-
-    if (webVitalsOverview.totalSamples === 0) {
-      return webVitalsCompactSummary.description;
-    }
-
-    return webVitalsCompactSummary.description;
-  }, [webVitalsCompactSummary.description, webVitalsOpen, webVitalsOverview.totalSamples]);
-  const headerDescription = useMemo(
-    () =>
-      buildMonitorShellDescription({
-        hasNetworkFailure,
-        isLoading,
-        updatedLabel: lastUpdatedLabel,
-      }),
-    [hasNetworkFailure, isLoading, lastUpdatedLabel],
-  );
-  const headerFacts = useMemo(
-    () =>
-      buildMonitorShellFacts({
-        snapshot,
-        rollupFreshnessStatus,
-        updatedLabel: lastUpdatedLabel,
-      }),
-    [lastUpdatedLabel, rollupFreshnessStatus, snapshot],
-  );
-  const metricGroups = useMemo(
-    () => (metricsOpen ? buildMetricGroups(snapshot, history) : []),
-    [history, metricsOpen, snapshot],
-  );
+    setAlertHistoryPage,
+    insightsOpen,
+    setInsightsOpen,
+    chaosType,
+    chaosMagnitude,
+    setChaosMagnitude,
+    chaosDurationMs,
+    setChaosDurationMs,
+    chaosLoading,
+    lastChaosMessage,
+    webVitalsOpen,
+    handleWebVitalsToggle,
+    chaosSectionOpen,
+    setChaosSectionOpen,
+    technicalChartsOpen,
+    setTechnicalChartsOpen,
+    deleteAlertHistoryBusy,
+    queueActionBusy,
+    lastQueueActionMessage,
+    canInjectChaos,
+    canDeleteAlertHistory,
+    canManageRollups,
+    deferSecondaryMobileSections,
+    lastUpdatedLabel,
+    selectedChaosProfile,
+    scoreStatus,
+    modeBadgeClass,
+    rollupFreshnessStatus,
+    rollupFreshnessBadgeClass,
+    rollupFreshnessSummary,
+    rollupFreshnessAgeLabel,
+    webVitalsCompactSummary,
+    metricsCompactSummary,
+    metricsSummaryFacts,
+    chaosCompactSummary,
+    chaosSummaryFacts,
+    technicalCompactSummary,
+    technicalSummaryFacts,
+    insightsCompactSummary,
+    insightsSummaryFacts,
+    webVitalsSummaryFacts,
+    webVitalsSummaryLabel,
+    headerDescription,
+    headerFacts,
+    metricGroups,
+    handleChaosTypeChange,
+    handleDeleteOldAlertHistory,
+    submitChaos,
+    runRollupAction,
+  } = useMonitorPageState();
   const { shouldRender: shouldRenderRollupControls, triggerRef: rollupControlsTriggerRef } =
     useDeferredMonitorSectionMount({ enabled: deferSecondaryMobileSections && canManageRollups });
   const { shouldRender: shouldRenderAlerts, triggerRef: alertsTriggerRef } =
     useDeferredMonitorSectionMount({ enabled: deferSecondaryMobileSections });
-
-  useEffect(() => {
-    if (alertsPage > alertsPagination.totalPages) {
-      setAlertsPage(alertsPagination.totalPages);
-    }
-  }, [alertsPage, alertsPagination.totalPages]);
-
-  useEffect(() => {
-    if (alertHistoryPage > alertHistoryPagination.totalPages) {
-      setAlertHistoryPage(alertHistoryPagination.totalPages);
-    }
-  }, [alertHistoryPage, alertHistoryPagination.totalPages]);
-
-  useEffect(() => {
-    if (alertsOpen) {
-      return;
-    }
-
-    setAlertHistoryOpen(false);
-  }, [alertsOpen]);
-
-  const handleChaosTypeChange = useCallback((nextType: ChaosType) => {
-    setChaosType(nextType);
-    const profile = CHAOS_OPTIONS.find((option) => option.type === nextType);
-    if (!profile) return;
-    setChaosMagnitude(String(profile.defaultMagnitude));
-    setChaosDurationMs(String(profile.defaultDurationMs));
-  }, []);
-
-  const handleWebVitalsToggle = useCallback(() => {
-    startTransition(() => {
-      setWebVitalsOpen((previous) => !previous);
-    });
-  }, []);
-
-  const handleDeleteOldAlertHistory = useCallback(async (olderThanDays: number) => {
-    if (!canDeleteAlertHistory || deleteAlertHistoryInFlightRef.current) {
-      return;
-    }
-
-    if (!Number.isFinite(olderThanDays) || olderThanDays < 1) {
-      toast({
-        variant: "destructive",
-        title: "Invalid retention window",
-        description: "Choose a valid age in days before deleting old alert history.",
-      });
-      return;
-    }
-
-    deleteAlertHistoryRequestRef.current?.abort();
-    const controller = new AbortController();
-    deleteAlertHistoryRequestRef.current = controller;
-    deleteAlertHistoryInFlightRef.current = true;
-    setDeleteAlertHistoryBusy(true);
-
-    try {
-      const result = await deleteOldAlertHistory(olderThanDays, { signal: controller.signal });
-
-      if (controller.signal.aborted || !mountedRef.current) {
-        return;
-      }
-
-      if (result.state === "ok" && result.data?.ok) {
-        setAlertsPage(1);
-        setAlertHistoryPage(1);
-        toast({
-          title: "Old alert history deleted",
-          description: `Removed ${result.data.deletedCount} resolved incidents older than ${result.data.olderThanDays} days.`,
-        });
-        await refreshNow();
-        return;
-      }
-
-      if (result.state === "forbidden" || result.state === "unauthorized") {
-        toast({
-          variant: "destructive",
-          title: "Permission denied",
-          description: "Only superuser can delete old monitor alert history.",
-        });
-        return;
-      }
-
-      toast({
-        variant: "destructive",
-        title: "Cleanup failed",
-        description: result.message || "Failed to delete old alert history.",
-      });
-    } finally {
-      if (deleteAlertHistoryRequestRef.current === controller) {
-        deleteAlertHistoryRequestRef.current = null;
-      }
-      deleteAlertHistoryInFlightRef.current = false;
-      if (mountedRef.current) {
-        setDeleteAlertHistoryBusy(false);
-      }
-    }
-  }, [canDeleteAlertHistory, refreshNow, toast]);
-
-  const submitChaos = useCallback(async () => {
-    if (!canInjectChaos || chaosInFlightRef.current) return;
-
-    const magnitude = chaosMagnitude.trim() === "" ? undefined : Number(chaosMagnitude);
-    const durationMs = chaosDurationMs.trim() === "" ? undefined : Number(chaosDurationMs);
-
-    if (magnitude !== undefined && !Number.isFinite(magnitude)) {
-      toast({
-        variant: "destructive",
-        title: "Invalid magnitude",
-        description: "Magnitude must be a valid number.",
-      });
-      return;
-    }
-
-    if (durationMs !== undefined && (!Number.isFinite(durationMs) || durationMs <= 0)) {
-      toast({
-        variant: "destructive",
-        title: "Invalid duration",
-        description: "Duration must be a positive number in milliseconds.",
-      });
-      return;
-    }
-
-    chaosRequestRef.current?.abort();
-    const controller = new AbortController();
-    chaosRequestRef.current = controller;
-    chaosInFlightRef.current = true;
-    setChaosLoading(true);
-    try {
-      const result = await injectChaos({
-        type: chaosType,
-        magnitude,
-        durationMs,
-      }, { signal: controller.signal });
-
-      if (controller.signal.aborted || !mountedRef.current) {
-        return;
-      }
-
-      if (result.state === "ok" && result.data?.success) {
-        const message = `Injected ${chaosType}. Active chaos events: ${result.data.active.length}.`;
-        setLastChaosMessage(message);
-        toast({
-          title: "Chaos injected",
-          description: message,
-        });
-        return;
-      }
-
-      if (result.state === "forbidden" || result.state === "unauthorized") {
-        toast({
-          variant: "destructive",
-          title: "Permission denied",
-          description: "Only admin and superuser can inject chaos scenarios.",
-        });
-        return;
-      }
-
-      toast({
-        variant: "destructive",
-        title: "Chaos injection failed",
-        description: result.message || "Request failed.",
-      });
-    } finally {
-      if (chaosRequestRef.current === controller) {
-        chaosRequestRef.current = null;
-      }
-      chaosInFlightRef.current = false;
-      if (mountedRef.current) {
-        setChaosLoading(false);
-      }
-    }
-  }, [canInjectChaos, chaosDurationMs, chaosMagnitude, chaosType, toast]);
-
-  const runRollupAction = useCallback(async (
-    action: "drain" | "retry-failures" | "auto-heal" | "rebuild",
-  ) => {
-    if (!canManageRollups || queueActionInFlightRef.current) return;
-
-    queueActionRequestRef.current?.abort();
-    const controller = new AbortController();
-    queueActionRequestRef.current = controller;
-    queueActionInFlightRef.current = true;
-    setQueueActionBusy(action);
-
-    try {
-      const result = action === "drain"
-        ? await drainRollupQueue({ signal: controller.signal })
-        : action === "retry-failures"
-          ? await retryRollupFailures({ signal: controller.signal })
-          : action === "auto-heal"
-            ? await autoHealRollupQueue({ signal: controller.signal })
-            : await rebuildCollectionRollups({ signal: controller.signal });
-
-      if (controller.signal.aborted || !mountedRef.current) {
-        return;
-      }
-
-      if (result.state === "ok" && result.data?.ok) {
-        const message = result.data.message || "Rollup queue action completed.";
-        setLastQueueActionMessage(message);
-        toast({
-          title: "Rollup queue updated",
-          description: message,
-        });
-        await refreshNow();
-        return;
-      }
-
-      if (result.state === "forbidden" || result.state === "unauthorized") {
-        toast({
-          variant: "destructive",
-          title: "Permission denied",
-          description: "Only superuser can control collection rollup recovery actions.",
-        });
-        return;
-      }
-
-      toast({
-        variant: "destructive",
-        title: "Rollup action failed",
-        description: result.message || "Request failed.",
-      });
-    } finally {
-      if (queueActionRequestRef.current === controller) {
-        queueActionRequestRef.current = null;
-      }
-      queueActionInFlightRef.current = false;
-      if (mountedRef.current) {
-        setQueueActionBusy(null);
-      }
-    }
-  }, [canManageRollups, refreshNow, toast]);
 
   if (accessDenied) {
     return <MonitorAccessDenied />;

@@ -5,30 +5,22 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runtimeConfig } from "./config/runtime";
 import { normalizeInitialWorkerCount, shouldUseSingleProcessMode } from "./internal/cluster-mode";
+import {
+  aggregateClusterMetrics,
+  buildWorkerControlState,
+  toControlStateMessage,
+  toGracefulShutdownMessage,
+} from "./internal/cluster-control-state";
+import { shutdownClusterMasterDueToFatalError } from "./internal/cluster-master-shutdown";
 import { logger } from "./lib/logger";
 import { LoadPredictor, type LoadTrendSnapshot } from "./internal/loadPredictor";
 import {
   isWorkerFatalMessage,
   isWorkerMemoryPressureMessage,
   isWorkerMetricsMessage,
-  type ControlStateMessage,
-  type GracefulShutdownMessage,
   type WorkerControlState,
   type WorkerMetricsPayload,
 } from "./internal/worker-ipc";
-
-type Aggregate = {
-  cpuPercent: number;
-  reqRate: number;
-  p95: number;
-  eventLoopLagMs: number;
-  activeRequests: number;
-  queueLength: number;
-  dbLatencyMs: number;
-  aiLatencyMs: number;
-  heapUsedMB: number;
-  oldSpaceMB: number;
-};
 
 const SCALE_INTERVAL_MS = 5_000;
 const LOW_LOAD_HOLD_MS = 60_000;
@@ -85,11 +77,6 @@ let lastRestartBlockLogAt = 0;
 let fatalStartupLockReason: string | null = null;
 let fatalShutdownScheduled = false;
 
-function round(value: number, digits = 2): number {
-  const p = 10 ** digits;
-  return Math.round(value * p) / p;
-}
-
 // Hard-capped max workers (production safety)
 function getMaxWorkers() {
   return MAX_WORKERS_HARD_CAP;
@@ -104,184 +91,22 @@ function getWorkers(): Worker[] {
 }
 
 function shutdownMasterDueToFatalError(reason: string, metadata?: Record<string, unknown>) {
-  if (fatalShutdownScheduled) return;
-  fatalShutdownScheduled = true;
-  process.exitCode = 1;
-  logger.error("Cluster master shutting down due to unrecoverable error", {
+  shutdownClusterMasterDueToFatalError({
     reason,
-    ...metadata,
+    metadata,
+    clusterModule: cluster,
+    workers: getWorkers(),
+    logger,
+    createGracefulShutdownMessage: toGracefulShutdownMessage,
+    onSchedule: () => {
+      if (fatalShutdownScheduled) {
+        return true;
+      }
+
+      fatalShutdownScheduled = true;
+      return false;
+    },
   });
-
-  const forceExitTimer = setTimeout(() => {
-    process.exit(1);
-  }, 5_000);
-  forceExitTimer.unref();
-
-  const workers = getWorkers();
-  for (const worker of workers) {
-    if (!worker.isConnected() || worker.isDead()) {
-      continue;
-    }
-
-    try {
-      worker.send(toGracefulShutdownMessage(`master-fatal:${reason}`));
-    } catch {
-      // Ignore IPC send failures while the master is already shutting down.
-    }
-  }
-
-  if (cluster.isPrimary && workers.length > 0) {
-    try {
-      cluster.disconnect(() => {
-        clearTimeout(forceExitTimer);
-        process.exit(1);
-      });
-      return;
-    } catch (error) {
-      logger.error("Cluster master disconnect failed during fatal shutdown", {
-        reason,
-        error,
-      });
-    }
-  }
-
-  setTimeout(() => {
-    clearTimeout(forceExitTimer);
-    process.exit(1);
-  }, 50).unref();
-}
-
-function aggregateMetrics(): Aggregate {
-  const samples = Array.from(workerMetrics.values());
-  if (samples.length === 0) {
-    return {
-      cpuPercent: 0,
-      reqRate: 0,
-      p95: 0,
-      eventLoopLagMs: 0,
-      activeRequests: 0,
-      queueLength: 0,
-      dbLatencyMs: 0,
-      aiLatencyMs: 0,
-      heapUsedMB: 0,
-      oldSpaceMB: 0,
-    };
-  }
-
-  const cpuPercent = samples.reduce((s, x) => s + x.cpuPercent, 0) / samples.length;
-  const reqRate = samples.reduce((s, x) => s + x.reqRate, 0);
-  const p95 = samples.reduce((m, x) => Math.max(m, x.latencyP95Ms), 0);
-  const eventLoopLagMs = samples.reduce((m, x) => Math.max(m, x.eventLoopLagMs), 0);
-  const activeRequests = samples.reduce((s, x) => s + x.activeRequests, 0);
-  const queueLength = samples.reduce((s, x) => s + x.queueLength, 0);
-  const dbLatencyMs = samples.reduce((m, x) => Math.max(m, x.dbLatencyMs), 0);
-  const aiLatencyMs = samples.reduce((m, x) => Math.max(m, x.aiLatencyMs), 0);
-  const heapUsedMB = samples.reduce((s, x) => s + x.heapUsedMB, 0);
-  const oldSpaceMB = samples.reduce((s, x) => s + x.oldSpaceMB, 0);
-
-  return {
-    cpuPercent: round(cpuPercent),
-    reqRate: round(reqRate),
-    p95: round(p95),
-    eventLoopLagMs: round(eventLoopLagMs),
-    activeRequests,
-    queueLength,
-    dbLatencyMs: round(dbLatencyMs),
-    aiLatencyMs: round(aiLatencyMs),
-    heapUsedMB: round(heapUsedMB),
-    oldSpaceMB: round(oldSpaceMB),
-  };
-}
-
-function computeHealthScore(agg: Aggregate, workers: number, maxWorkers: number): number {
-  const cpuPenalty = Math.min(30, (agg.cpuPercent / 100) * 30);
-  const dbPenalty = agg.dbLatencyMs > 0 ? Math.min(20, (agg.dbLatencyMs / 1000) * 20) : 0;
-  const aiPenalty = agg.aiLatencyMs > 0 ? Math.min(10, (agg.aiLatencyMs / 1500) * 10) : 0;
-  const lagPenalty = Math.min(10, (agg.eventLoopLagMs / 200) * 10);
-  const queuePenalty = Math.min(10, agg.queueLength / 10);
-  const workerPressure = maxWorkers > 0 ? workers / maxWorkers : 0;
-  const workerPenalty = workerPressure > 0.85 ? (workerPressure - 0.85) * 40 : 0;
-  const raw = 100 - cpuPenalty - dbPenalty - aiPenalty - lagPenalty - queuePenalty - workerPenalty;
-  return Math.max(0, Math.min(100, round(raw)));
-}
-
-function buildControlState(agg: Aggregate, trend: LoadTrendSnapshot): WorkerControlState {
-  const workers = getWorkers();
-  const maxWorkers = getMaxWorkers();
-  const healthScore = computeHealthScore(agg, workers.length, maxWorkers);
-
-  let nextMode: WorkerControlState["mode"] = "NORMAL";
-  if (healthScore < 50 || agg.dbLatencyMs > 1000) {
-    nextMode = "PROTECTION";
-  } else if (
-    agg.cpuPercent > 70 ||
-    agg.p95 > 600 ||
-    agg.eventLoopLagMs > 120 ||
-    trend.sustainedUpward
-  ) {
-    nextMode = "DEGRADED";
-  }
-  mode = nextMode;
-
-  const rejectHeavyRoutes =
-    nextMode === "PROTECTION" ||
-    (workers.length >= maxWorkers && agg.cpuPercent > 85);
-
-  let throttleFactor = 1;
-  if (nextMode === "PROTECTION") throttleFactor = 0.4;
-  else if (workers.length >= maxWorkers && agg.cpuPercent > 85) throttleFactor = 0.5;
-  else if (nextMode === "DEGRADED") throttleFactor = 0.75;
-
-  const sampleList = Array.from(workerMetrics.values()).map((m) => ({
-    workerId: m.workerId,
-    pid: m.pid,
-    cpuPercent: round(m.cpuPercent),
-    reqRate: round(m.reqRate),
-    latencyP95Ms: round(m.latencyP95Ms),
-    eventLoopLagMs: round(m.eventLoopLagMs),
-    activeRequests: m.activeRequests,
-    heapUsedMB: round(m.heapUsedMB),
-    oldSpaceMB: round(m.oldSpaceMB),
-    dbLatencyMs: round(m.dbLatencyMs),
-    aiLatencyMs: round(m.aiLatencyMs),
-    ts: m.ts,
-  }));
-
-  const circuits = {
-    aiOpenWorkers: Array.from(workerMetrics.values()).filter((m) => m.circuit.ai.state === "OPEN").length,
-    dbOpenWorkers: Array.from(workerMetrics.values()).filter((m) => m.circuit.db.state === "OPEN").length,
-    exportOpenWorkers: Array.from(workerMetrics.values()).filter((m) => m.circuit.export.state === "OPEN").length,
-  };
-
-  return {
-    mode: nextMode,
-    healthScore,
-    dbProtection: agg.dbLatencyMs > 1000 || nextMode === "PROTECTION",
-    rejectHeavyRoutes,
-    throttleFactor,
-    predictor: trend,
-    workerCount: workers.length,
-    maxWorkers,
-    queueLength: agg.queueLength,
-    preAllocateMB: PREALLOCATE_MB > 0 && trend.sustainedUpward ? PREALLOCATE_MB : 0,
-    updatedAt: Date.now(),
-    workers: sampleList,
-    circuits,
-  };
-}
-
-function toControlStateMessage(control: WorkerControlState): ControlStateMessage {
-  return {
-    type: "control-state",
-    payload: control,
-  };
-}
-
-function toGracefulShutdownMessage(reason: string): GracefulShutdownMessage {
-  return {
-    type: "graceful-shutdown",
-    reason,
-  };
 }
 
 function broadcastControl(control: WorkerControlState) {
@@ -412,7 +237,8 @@ async function rollingRestartOne(reason: string) {
 function evaluateScale() {
   const workers = getWorkers();
   const maxWorkers = getMaxWorkers();
-  const agg = aggregateMetrics();
+  const metricSamples = Array.from(workerMetrics.values());
+  const agg = aggregateClusterMetrics(metricSamples);
   const trend = predictor.update({
     ts: Date.now(),
     requestRate: agg.reqRate,
@@ -484,7 +310,14 @@ function evaluateScale() {
     rollingRestartOne("memory-pressure").catch(() => undefined);
   }
 
-  const control = buildControlState(agg, trend);
+  const control = buildWorkerControlState({
+    workerMetrics: metricSamples,
+    trend,
+    workerCount: workers.length,
+    maxWorkers,
+    preallocateMb: PREALLOCATE_MB > 0 && trend.sustainedUpward ? PREALLOCATE_MB : 0,
+  });
+  mode = control.mode;
   broadcastControl(control);
 }
 
