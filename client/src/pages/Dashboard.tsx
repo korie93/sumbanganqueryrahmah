@@ -3,6 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { AppQueryProvider } from "@/app/AppQueryProvider";
 import { Download, RefreshCw } from "lucide-react";
 import {
+  OperationalPage,
+  OperationalPageHeader,
+  OperationalSectionCard,
+} from "@/components/layout/OperationalPage";
+import {
   getAnalyticsSummary,
   getLoginTrends,
   getPeakHours,
@@ -26,15 +31,15 @@ const DashboardUserInsightsGrid = lazy(() =>
 
 function DashboardSectionFallback({ label }: { label: string }) {
   return (
-    <div
-      className="min-h-[320px] rounded-2xl border border-border/60 bg-white/70 p-6 shadow-sm dark:bg-slate-900/70"
-      role="status"
-      aria-live="polite"
-      aria-label={label}
+    <OperationalSectionCard
+      className="bg-background/80"
+      contentClassName="space-y-4 p-6"
     >
-      <div className="h-6 w-40 animate-pulse rounded bg-slate-200/80 dark:bg-slate-700/80" />
-      <div className="mt-6 h-[220px] animate-pulse rounded-xl bg-slate-200/60 dark:bg-slate-800/70" />
-    </div>
+      <div role="status" aria-live="polite" aria-label={label} className="space-y-4">
+        <div className="h-6 w-40 animate-pulse rounded bg-slate-200/80 dark:bg-slate-700/80" />
+        <div className="h-[220px] animate-pulse rounded-xl bg-slate-200/60 dark:bg-slate-800/70" />
+      </div>
+    </OperationalSectionCard>
   );
 }
 
@@ -216,36 +221,27 @@ function DashboardContent() {
   }, [exportBlockReason]);
 
   return (
-    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 sm:p-6">
-      <div className="mx-auto max-w-7xl space-y-4 sm:space-y-6">
-        <div
-          className={isMobile ? "rounded-[28px] border border-border/60 bg-background/80 p-4 shadow-sm" : "flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"}
-          data-floating-ai-avoid="true"
-        >
-          <div className="space-y-2">
-            {isMobile ? (
-              <p className="text-[11px] font-semibold tracking-[0.22em] text-primary/80 uppercase">
-                Insights
-              </p>
-            ) : null}
-            <h1 className="text-xl font-bold text-foreground sm:text-3xl" data-testid="text-dashboard-title">
-              Dashboard Analytics
-            </h1>
-            <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
-              {isMobile ? "System health, activity, and usage insights in one mobile-friendly view." : "System overview and activity insights"}
-            </p>
-            {isMobile ? (
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary" className="rounded-full px-3 py-1">
-                  Trend {trendDays}d
-                </Badge>
-                <Badge variant="outline" className="rounded-full px-3 py-1">
-                  7 summary cards
-                </Badge>
-              </div>
-            ) : null}
+    <OperationalPage width="content">
+      <OperationalPageHeader
+        title={<span data-testid="text-dashboard-title">Dashboard Analytics</span>}
+        eyebrow="Insights"
+        description={
+          isMobile
+            ? "System health, activity, and usage insights in one mobile-friendly view."
+            : "System overview and activity insights."
+        }
+        badge={
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="secondary" className="rounded-full px-3 py-1">
+              Trend {trendDays}d
+            </Badge>
+            <Badge variant="outline" className="rounded-full px-3 py-1">
+              7 summary cards
+            </Badge>
           </div>
-          <div className={isMobile ? "mt-4 grid grid-cols-2 gap-2" : "flex w-full flex-col gap-2 sm:w-auto sm:flex-row"}>
+        }
+        actions={
+          <>
             <Button
               onClick={handleExportPdf}
               variant="outline"
@@ -272,44 +268,52 @@ function DashboardContent() {
               <RefreshCw className={`w-4 h-4 mr-2${refreshing ? " animate-spin" : ""}`} />
               Refresh
             </Button>
-          </div>
-        </div>
+          </>
+        }
+        className={isMobile ? "rounded-[28px] border-border/60 bg-background/85" : undefined}
+      />
 
-        <div ref={dashboardRef} className="space-y-4 sm:space-y-6">
+      <div ref={dashboardRef} className="space-y-4 sm:space-y-6">
+        <OperationalSectionCard
+          title="Quick Snapshot"
+          description="Core user, session, import, and conflict counts in a shared admin summary strip."
+          contentClassName="space-y-0"
+        >
           <DashboardSummaryCards items={summaryCards} summaryLoading={summaryLoading} />
-          <div ref={chartsSection.triggerRef}>
-            {chartsSection.shouldRender ? (
-              <Suspense fallback={<DashboardSectionFallback label="Loading dashboard charts" />}>
-                <DashboardChartsGrid
-                  onTrendDaysChange={setTrendDays}
-                  peakHours={peakHours}
-                  peakHoursLoading={peakHoursLoading}
-                  trendDays={trendDays}
-                  trends={trends}
-                  trendsLoading={trendsLoading}
-                />
-              </Suspense>
-            ) : (
-              <DashboardSectionFallback label="Dashboard charts will load as you scroll" />
-            )}
-          </div>
-          <div ref={userInsightsSection.triggerRef}>
-            {userInsightsSection.shouldRender ? (
-              <Suspense fallback={<DashboardSectionFallback label="Loading dashboard user insights" />}>
-                <DashboardUserInsightsGrid
-                  roleDistribution={roleDistribution}
-                  roleLoading={roleLoading}
-                  topUsers={topUsers}
-                  topUsersLoading={topUsersLoading}
-                />
-              </Suspense>
-            ) : (
-              <DashboardSectionFallback label="Dashboard user insights will load as you scroll" />
-            )}
-          </div>
+        </OperationalSectionCard>
+
+        <div ref={chartsSection.triggerRef}>
+          {chartsSection.shouldRender ? (
+            <Suspense fallback={<DashboardSectionFallback label="Loading dashboard charts" />}>
+              <DashboardChartsGrid
+                onTrendDaysChange={setTrendDays}
+                peakHours={peakHours}
+                peakHoursLoading={peakHoursLoading}
+                trendDays={trendDays}
+                trends={trends}
+                trendsLoading={trendsLoading}
+              />
+            </Suspense>
+          ) : (
+            <DashboardSectionFallback label="Dashboard charts will load as you scroll" />
+          )}
+        </div>
+        <div ref={userInsightsSection.triggerRef}>
+          {userInsightsSection.shouldRender ? (
+            <Suspense fallback={<DashboardSectionFallback label="Loading dashboard user insights" />}>
+              <DashboardUserInsightsGrid
+                roleDistribution={roleDistribution}
+                roleLoading={roleLoading}
+                topUsers={topUsers}
+                topUsersLoading={topUsersLoading}
+              />
+            </Suspense>
+          ) : (
+            <DashboardSectionFallback label="Dashboard user insights will load as you scroll" />
+          )}
         </div>
       </div>
-    </div>
+    </OperationalPage>
   );
 }
 

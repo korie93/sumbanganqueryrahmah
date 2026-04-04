@@ -1,8 +1,10 @@
 import { Clock, Shield, UserX, Users } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ActivitySummaryCardsProps {
   bannedCount: number;
+  className?: string;
   idleCount: number;
   kickedCount: number;
   logoutCount: number;
@@ -11,6 +13,7 @@ interface ActivitySummaryCardsProps {
 
 export function ActivitySummaryCards({
   bannedCount,
+  className,
   idleCount,
   kickedCount,
   logoutCount,
@@ -19,7 +22,13 @@ export function ActivitySummaryCards({
   const isMobile = useIsMobile();
 
   return (
-    <div className={`mb-6 grid gap-4 ${isMobile ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 sm:grid-cols-5"}`}>
+    <div
+      className={cn(
+        "grid gap-4",
+        isMobile ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 sm:grid-cols-5",
+        className,
+      )}
+    >
       <div className={`glass-wrapper flex items-center gap-3 ${isMobile ? "p-3.5" : "p-4"}`}>
         <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
           <Users className="w-5 h-5 text-green-500" />

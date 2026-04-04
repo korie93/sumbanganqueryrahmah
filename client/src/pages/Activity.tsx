@@ -1,5 +1,10 @@
 import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Filter, RefreshCw, Trash2 } from "lucide-react";
+import {
+  OperationalPage,
+  OperationalPageHeader,
+  OperationalSectionCard,
+} from "@/components/layout/OperationalPage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -48,9 +53,11 @@ const ActivityFiltersPanel = lazy(() =>
 
 function ActivitySectionFallback({ label }: { label: string }) {
   return (
-    <div className="glass-wrapper mb-6 p-4 text-sm text-muted-foreground">
-      {label}
-    </div>
+    <OperationalSectionCard className="bg-background/80" contentClassName="p-4 text-sm text-muted-foreground">
+      <div role="status" aria-live="polite">
+        {label}
+      </div>
+    </OperationalSectionCard>
   );
 }
 
@@ -464,28 +471,27 @@ export default function Activity() {
     bulkDeleteDialogOpen;
 
   return (
-    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div
-          className={`flex flex-wrap items-center justify-between gap-4 ${
-            isMobile ? "mb-6 rounded-[1.5rem] border border-border/60 bg-card/60 p-3.5" : "mb-8"
-          }`}
-          data-floating-ai-avoid="true"
-        >
-          <div>
-            {isMobile ? (
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Insights
-              </p>
-            ) : null}
-            <h1 className={`${isMobile ? "mt-1 text-xl" : "mb-2 text-3xl"} font-bold text-foreground`}>
-              Activity Monitor
-            </h1>
-            <p className={`${isMobile ? "text-xs" : ""} text-muted-foreground`}>
-              {isMobile ? "Monitor user activity and moderation events in real-time." : "Monitor user activity in real-time"}
-            </p>
+    <OperationalPage width="content">
+      <OperationalPageHeader
+        title="Activity Monitor"
+        eyebrow="Insights"
+        description={
+          isMobile
+            ? "Monitor user activity and moderation events in real-time."
+            : "Monitor user activity, moderation events, and session visibility in real-time."
+        }
+        badge={
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="secondary" className="rounded-full px-3 py-1">
+              {activities.length} visible logs
+            </Badge>
+            <Badge variant="outline" className="rounded-full px-3 py-1">
+              {canModerateActivity ? "Moderation enabled" : "Read-only view"}
+            </Badge>
           </div>
-          <div className={`flex gap-2 flex-wrap ${isMobile ? "w-full" : ""}`}>
+        }
+        actions={
+          <>
             {canModerateActivity && selectedActivityIds.size > 0 ? (
               <Button
                 variant="destructive"
@@ -500,7 +506,7 @@ export default function Activity() {
             <Button
               variant={showFilters ? "default" : "outline"}
               onClick={() => setShowFilters((previous) => !previous)}
-              className={isMobile ? "flex-1" : undefined}
+              className={isMobile ? "w-full" : undefined}
               data-testid="button-toggle-filters"
             >
               <Filter className="w-4 h-4 mr-2" />
@@ -515,108 +521,116 @@ export default function Activity() {
               variant="outline"
               onClick={() => void fetchActivities(hasActiveActivityFilters(filters))}
               disabled={loading}
-              className={isMobile ? "flex-1" : undefined}
+              className={isMobile ? "w-full" : undefined}
               data-testid="button-refresh"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
               Refresh
             </Button>
-          </div>
-        </div>
+          </>
+        }
+        className={isMobile ? "rounded-[28px] border-border/60 bg-background/85" : undefined}
+      />
 
-        {showFilters ? (
-          <Suspense fallback={<ActivitySectionFallback label="Loading activity filters..." />}>
-            <ActivityFiltersPanel
-              dateFromOpen={dateFromOpen}
-              dateToOpen={dateToOpen}
-              filters={filters}
-              onApply={handleApplyFilters}
-              onClear={handleClearFilters}
-              onDateFromOpenChange={setDateFromOpen}
-              onDateToOpenChange={setDateToOpen}
-              onFieldChange={(field, value) => setFilters((previous) => ({ ...previous, [field]: value }))}
-              onToggleStatus={toggleStatusFilter}
-            />
-          </Suspense>
-        ) : null}
+      {showFilters ? (
+        <Suspense fallback={<ActivitySectionFallback label="Loading activity filters..." />}>
+          <ActivityFiltersPanel
+            dateFromOpen={dateFromOpen}
+            dateToOpen={dateToOpen}
+            filters={filters}
+            onApply={handleApplyFilters}
+            onClear={handleClearFilters}
+            onDateFromOpenChange={setDateFromOpen}
+            onDateToOpenChange={setDateToOpen}
+            onFieldChange={(field, value) => setFilters((previous) => ({ ...previous, [field]: value }))}
+            onToggleStatus={toggleStatusFilter}
+          />
+        </Suspense>
+      ) : null}
 
+      <OperationalSectionCard
+        title="Quick Snapshot"
+        description="Live user presence, idle sessions, forced exits, and banned accounts in one shared admin summary strip."
+        contentClassName="space-y-0"
+      >
         <ActivitySummaryCards
           bannedCount={bannedUsers.length}
+          className="mb-0"
           idleCount={summaryCounts.idleCount}
           kickedCount={summaryCounts.kickedCount}
           logoutCount={summaryCounts.logoutCount}
           onlineCount={summaryCounts.onlineCount}
         />
+      </OperationalSectionCard>
 
-        {canModerateActivity && bannedUsers.length > 0 ? (
-          <div ref={bannedUsersSection.triggerRef}>
-            {bannedUsersSection.shouldRender ? (
-              <Suspense fallback={<ActivitySectionFallback label="Loading banned users..." />}>
-                <ActivityBannedUsersPanel
-                  actionLoading={actionLoading}
-                  bannedUsers={bannedUsers}
-                  onUnbanClick={(user) => {
-                    setSelectedBannedUser(user);
-                    setUnbanDialogOpen(true);
-                  }}
-                />
-              </Suspense>
-            ) : (
-              <ActivitySectionFallback label="Banned users will load as you scroll." />
-            )}
-          </div>
-        ) : null}
+      {canModerateActivity && bannedUsers.length > 0 ? (
+        <div ref={bannedUsersSection.triggerRef}>
+          {bannedUsersSection.shouldRender ? (
+            <Suspense fallback={<ActivitySectionFallback label="Loading banned users..." />}>
+              <ActivityBannedUsersPanel
+                actionLoading={actionLoading}
+                bannedUsers={bannedUsers}
+                onUnbanClick={(user) => {
+                  setSelectedBannedUser(user);
+                  setUnbanDialogOpen(true);
+                }}
+              />
+            </Suspense>
+          ) : (
+            <ActivitySectionFallback label="Banned users will load as you scroll." />
+          )}
+        </div>
+      ) : null}
 
-        <Suspense fallback={<ActivitySectionFallback label="Loading activity logs..." />}>
-          <ActivityLogsTable
-            actionLoading={actionLoading}
-            activities={activities}
-            canModerateActivity={canModerateActivity}
-            loading={loading}
-            logsOpen={logsOpen}
-            onBanClick={(activity) => {
-              setSelectedActivity(activity);
-              setBanDialogOpen(true);
-            }}
-            onDeleteClick={(activity) => {
-              setSelectedActivity(activity);
-              setDeleteDialogOpen(true);
-            }}
-            onKickClick={(activity) => {
-              setSelectedActivity(activity);
-              setKickDialogOpen(true);
-            }}
-            onLogsOpenChange={setLogsOpen}
-            onToggleSelected={(activityId, checked) => {
-              setSelectedActivityIds((previous) => {
-                const next = new Set(previous);
+      <Suspense fallback={<ActivitySectionFallback label="Loading activity logs..." />}>
+        <ActivityLogsTable
+          actionLoading={actionLoading}
+          activities={activities}
+          canModerateActivity={canModerateActivity}
+          loading={loading}
+          logsOpen={logsOpen}
+          onBanClick={(activity) => {
+            setSelectedActivity(activity);
+            setBanDialogOpen(true);
+          }}
+          onDeleteClick={(activity) => {
+            setSelectedActivity(activity);
+            setDeleteDialogOpen(true);
+          }}
+          onKickClick={(activity) => {
+            setSelectedActivity(activity);
+            setKickDialogOpen(true);
+          }}
+          onLogsOpenChange={setLogsOpen}
+          onToggleSelected={(activityId, checked) => {
+            setSelectedActivityIds((previous) => {
+              const next = new Set(previous);
+              if (checked) {
+                next.add(activityId);
+              } else {
+                next.delete(activityId);
+              }
+              return next;
+            });
+          }}
+          onToggleSelectAllVisible={(checked) => {
+            setSelectedActivityIds((previous) => {
+              const next = new Set(previous);
+              for (const activity of activities) {
                 if (checked) {
-                  next.add(activityId);
+                  next.add(activity.id);
                 } else {
-                  next.delete(activityId);
+                  next.delete(activity.id);
                 }
-                return next;
-              });
-            }}
-            onToggleSelectAllVisible={(checked) => {
-              setSelectedActivityIds((previous) => {
-                const next = new Set(previous);
-                for (const activity of activities) {
-                  if (checked) {
-                    next.add(activity.id);
-                  } else {
-                    next.delete(activity.id);
-                  }
-                }
-                return next;
-              });
-            }}
-            selectedActivityIds={selectedActivityIds}
-            allVisibleSelected={allVisibleSelected}
-            partiallySelected={partiallySelected}
-          />
-        </Suspense>
-      </div>
+              }
+              return next;
+            });
+          }}
+          selectedActivityIds={selectedActivityIds}
+          allVisibleSelected={allVisibleSelected}
+          partiallySelected={partiallySelected}
+        />
+      </Suspense>
 
       {hasOpenActionDialog ? (
         <Suspense fallback={null}>
@@ -642,6 +656,6 @@ export default function Activity() {
           />
         </Suspense>
       ) : null}
-    </div>
+    </OperationalPage>
   );
 }

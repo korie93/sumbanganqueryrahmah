@@ -1,5 +1,12 @@
 import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, BarChart3, FileStack, Plane, RefreshCw, RotateCcw, Shield, Users } from "lucide-react";
+import {
+  OperationalMetric,
+  OperationalPage,
+  OperationalPageHeader,
+  OperationalSectionCard,
+  OperationalSummaryStrip,
+} from "@/components/layout/OperationalPage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { analyzeAll, analyzeImport } from "@/lib/api";
@@ -8,6 +15,10 @@ import { useToast } from "@/hooks/use-toast";
 import { AnalysisCategoryCard } from "@/pages/analysis/AnalysisCategoryCard";
 import { AnalysisChartsSkeleton } from "@/pages/analysis/AnalysisChartsSkeleton";
 import { AnalysisLoadingSkeleton } from "@/pages/analysis/AnalysisLoadingSkeleton";
+import {
+  buildAnalysisHeaderDescription,
+  buildAnalysisSnapshotItems,
+} from "@/pages/analysis/analysis-shell-utils";
 import type { AllAnalysisResult, AnalysisData, AnalysisMode, AnalysisProps, SingleAnalysisResult } from "@/pages/analysis/types";
 import { getCategoryBarData, getGenderPieData, getPaginatedItems, TABLE_PAGE_SIZE } from "@/pages/analysis/utils";
 
@@ -32,9 +43,11 @@ const AnalysisDuplicatesPanel = lazy(() =>
 
 function AnalysisSectionFallback({ label }: { label: string }) {
   return (
-    <div className="glass-wrapper mb-8 p-4 text-sm text-muted-foreground" role="status" aria-live="polite">
-      {label}
-    </div>
+    <OperationalSectionCard className="bg-background/80" contentClassName="p-4 text-sm text-muted-foreground">
+      <div role="status" aria-live="polite">
+        {label}
+      </div>
+    </OperationalSectionCard>
   );
 }
 
@@ -309,40 +322,60 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
       tablePages,
     ],
   );
+  const headerDescription = useMemo(
+    () => buildAnalysisHeaderDescription({ importName, mode }),
+    [importName, mode],
+  );
+  const snapshotItems = useMemo(
+    () =>
+      buildAnalysisSnapshotItems({
+        allResult,
+        analysis,
+        mode,
+        singleResult,
+        totalRows,
+      }),
+    [allResult, analysis, mode, singleResult, totalRows],
+  );
 
   return (
-    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 sm:p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex items-start gap-3 sm:gap-4">
-            <Button variant="outline" size="icon" onClick={() => onNavigate("saved")} data-testid="button-back" className="shrink-0">
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <div className="min-w-0">
-              <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Data Analysis</h1>
-                {mode === "all" && allResult ? (
-                  <Badge variant="default" className="flex items-center gap-1" data-testid="badge-total-files">
-                    <FileStack className="w-3 h-3" />
-                    {allResult.totalImports} files
-                  </Badge>
-                ) : null}
-              </div>
-              <p className="text-muted-foreground">
-                {mode === "all" ? (
-                  <span className="font-medium text-foreground">Analysis of All Files</span>
-                ) : (
-                  <>
-                    ID Analysis for: <span className="font-medium text-foreground">{importName}</span>
-                  </>
-                )}
-              </p>
-            </div>
+    <OperationalPage width="content">
+      <OperationalPageHeader
+        title={<span data-testid="text-analysis-title">Data Analysis</span>}
+        eyebrow="Insights"
+        description={headerDescription}
+        badge={
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="secondary" className="rounded-full px-3 py-1">
+              {mode === "all" ? "All Files" : "Single File"}
+            </Badge>
+            {mode === "all" && allResult ? (
+              <Badge variant="outline" className="rounded-full px-3 py-1" data-testid="badge-total-files">
+                <FileStack className="mr-1.5 h-3 w-3" />
+                {allResult.totalImports} files
+              </Badge>
+            ) : null}
+            {analysis ? (
+              <Badge variant="outline" className="rounded-full px-3 py-1">
+                <BarChart3 className="mr-1.5 h-3 w-3" />
+                {totalRows.toLocaleString()} rows
+              </Badge>
+            ) : null}
           </div>
-
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
+        }
+        actions={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => onNavigate("saved")}
+              data-testid="button-back"
+              className={isMobile ? "w-full" : "w-full sm:w-auto"}
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Saved
+            </Button>
             {mode === "single" ? (
-              <Button variant="outline" onClick={handleReset} data-testid="button-reset" className="w-full sm:w-auto">
+              <Button variant="outline" onClick={handleReset} data-testid="button-reset" className={isMobile ? "w-full" : "w-full sm:w-auto"}>
                 <RotateCcw className="w-4 h-4 mr-2" />
                 Reset (View All)
               </Button>
@@ -354,43 +387,53 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
               }}
               disabled={loading}
               data-testid="button-refresh"
-              className="w-full sm:w-auto"
+              className={isMobile ? "w-full" : "w-full sm:w-auto"}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
               Refresh
             </Button>
-          </div>
-        </div>
+          </>
+        }
+        className={isMobile ? "rounded-[28px] border-border/60 bg-background/85" : undefined}
+      />
+
+      <div className="space-y-4 sm:space-y-6">
 
         {error ? (
-          <div className="glass-wrapper p-6 mb-6 text-center">
-            <AlertTriangle className="w-10 h-10 text-destructive mx-auto mb-3" />
-            <p className="text-destructive font-medium">{error}</p>
-            <Button className="mt-4" onClick={() => onNavigate("saved")} data-testid="button-go-saved">
+          <OperationalSectionCard
+            title="Analysis unavailable"
+            description={error}
+            className="border-destructive/30 bg-background/90"
+            contentClassName="flex flex-col items-center gap-4 py-6 text-center"
+          >
+            <AlertTriangle className="h-10 w-10 text-destructive" />
+            <Button onClick={() => onNavigate("saved")} data-testid="button-go-saved">
               Go to Saved
             </Button>
-          </div>
+          </OperationalSectionCard>
         ) : null}
 
         {loading ? <AnalysisLoadingSkeleton /> : null}
 
         {!loading && !error && analysis ? (
           <>
-            <div className="glass-wrapper p-4 mb-6">
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-primary" />
-                  <span className="text-muted-foreground">Total Rows:</span>
-                  <span className="font-bold text-foreground">{totalRows.toLocaleString()}</span>
-                </div>
-                {mode === "single" && singleResult ? (
-                  <Badge variant="outline" className={`${isMobile ? "w-full justify-start" : ""} max-w-full break-all`}>
-                    {singleResult.import.filename}
-                  </Badge>
-                ) : null}
-                {mode === "all" && allResult ? <Badge variant="outline">{allResult.totalImports} files combined</Badge> : null}
-              </div>
-            </div>
+            <OperationalSectionCard
+              title="Quick Snapshot"
+              description="Scope, row volume, duplicate pressure, and special ID totals in the shared admin summary pattern."
+              contentClassName="space-y-0"
+            >
+              <OperationalSummaryStrip className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {snapshotItems.map((item) => (
+                  <OperationalMetric
+                    key={item.label}
+                    label={item.label}
+                    value={item.value}
+                    supporting={item.supporting}
+                    tone={item.tone}
+                  />
+                ))}
+              </OperationalSummaryStrip>
+            </OperationalSectionCard>
 
             <div ref={chartsSection.triggerRef}>
               {chartsSection.shouldRender ? (
@@ -527,6 +570,6 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
           </>
         ) : null}
       </div>
-    </div>
+    </OperationalPage>
   );
 }

@@ -1,5 +1,10 @@
 import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import {
+  OperationalPage,
+  OperationalPageHeader,
+  OperationalSectionCard,
+} from "@/components/layout/OperationalPage";
 import { MonitorAccessDenied } from "@/components/monitor/MonitorAccessDenied";
 import { MonitorOverviewSection } from "@/components/monitor/MonitorOverviewSection";
 import { MonitorStatusBanners } from "@/components/monitor/MonitorStatusBanners";
@@ -23,6 +28,10 @@ import {
   buildMonitorWebVitalCompactSummary,
   buildMonitorWebVitalSummaryFacts,
 } from "@/components/monitor/monitor-web-vitals-utils";
+import {
+  buildMonitorShellDescription,
+  buildMonitorShellFacts,
+} from "@/components/monitor/monitor-shell-utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -102,70 +111,61 @@ function getMonitorSummaryToneClass(tone: "stable" | "watch" | "attention") {
 
 function MonitorChartsFallback() {
   return (
-    <section
-      className="rounded-2xl border border-border/60 bg-slate-200/40 p-4 dark:bg-slate-900/60"
-      role="status"
-      aria-live="polite"
-      aria-label="Loading technical charts"
-    >
-      <div className="mb-3 h-6 w-48 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <div
-            key={index}
-            className="h-64 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
-          />
-        ))}
+    <OperationalSectionCard className="bg-background/80" contentClassName="space-y-4 p-4">
+      <div role="status" aria-live="polite" aria-label="Loading technical charts" className="space-y-4">
+        <div className="h-6 w-48 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-64 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
+            />
+          ))}
+        </div>
       </div>
-    </section>
+    </OperationalSectionCard>
   );
 }
 
 function MonitorInsightsFallback() {
   return (
-    <section
-      className="space-y-4 rounded-2xl border border-border/60 bg-background/30 p-4 backdrop-blur-sm"
-      role="status"
-      aria-live="polite"
-      aria-label="Loading intelligence insights"
-    >
-      <div className="space-y-2">
-        <div className="h-6 w-56 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
-        <div className="h-4 w-full max-w-2xl animate-pulse rounded bg-slate-300/60 dark:bg-slate-800/70" />
+    <OperationalSectionCard className="bg-background/80" contentClassName="space-y-4 p-4">
+      <div role="status" aria-live="polite" aria-label="Loading intelligence insights" className="space-y-4">
+        <div className="space-y-2">
+          <div className="h-6 w-56 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
+          <div className="h-4 w-full max-w-2xl animate-pulse rounded bg-slate-300/60 dark:bg-slate-800/70" />
+        </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-32 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
+            />
+          ))}
+        </div>
       </div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <div
-            key={index}
-            className="h-32 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
-          />
-        ))}
-      </div>
-    </section>
+    </OperationalSectionCard>
   );
 }
 
 function MonitorMetricsFallback() {
   return (
-    <section
-      className="space-y-4"
-      role="status"
-      aria-live="polite"
-      aria-label="Loading key metrics"
-    >
-      <div className="space-y-2">
-        <div className="h-6 w-40 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
-        <div className="h-4 w-full max-w-xl animate-pulse rounded bg-slate-300/60 dark:bg-slate-800/70" />
+    <OperationalSectionCard className="bg-background/80" contentClassName="space-y-4 p-4">
+      <div role="status" aria-live="polite" aria-label="Loading key metrics" className="space-y-4">
+        <div className="space-y-2">
+          <div className="h-6 w-40 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
+          <div className="h-4 w-full max-w-xl animate-pulse rounded bg-slate-300/60 dark:bg-slate-800/70" />
+        </div>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-72 animate-pulse rounded-2xl border border-border/60 bg-background/35 backdrop-blur-sm"
+            />
+          ))}
+        </div>
       </div>
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <div
-            key={index}
-            className="h-72 animate-pulse rounded-2xl border border-border/60 bg-background/35 backdrop-blur-sm"
-          />
-        ))}
-      </div>
-    </section>
+    </OperationalSectionCard>
   );
 }
 
@@ -177,43 +177,42 @@ function MonitorSectionCardFallback({
   blocks?: number;
 }) {
   return (
-    <section
-      className="rounded-2xl border border-border/60 bg-background/30 p-4 backdrop-blur-sm"
-      role="status"
-      aria-live="polite"
-      aria-label={title}
-    >
-      <div className="mb-3 h-5 w-40 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
-      <div className="space-y-3">
-        {Array.from({ length: blocks }).map((_, index) => (
-          <div
-            key={index}
-            className="h-20 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
-          />
-        ))}
+    <OperationalSectionCard className="bg-background/80" contentClassName="space-y-3 p-4">
+      <div role="status" aria-live="polite" aria-label={title} className="space-y-3">
+        <div className="h-5 w-40 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
+        <div className="space-y-3">
+          {Array.from({ length: blocks }).map((_, index) => (
+            <div
+              key={index}
+              className="h-20 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
+            />
+          ))}
+        </div>
       </div>
-    </section>
+    </OperationalSectionCard>
   );
 }
 
 function MonitorWebVitalsInlineFallback() {
   return (
-    <div
-      className="space-y-3 rounded-2xl border border-border/60 bg-background/35 p-4"
-      role="status"
-      aria-live="polite"
-      aria-label="Loading real user experience details"
-    >
-      <div className="h-5 w-48 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {Array.from({ length: 2 }).map((_, index) => (
-          <div
-            key={index}
-            className="h-36 animate-pulse rounded-2xl bg-slate-300/60 dark:bg-slate-800/70"
-          />
-        ))}
+    <OperationalSectionCard className="bg-background/80" contentClassName="space-y-3 p-4">
+      <div
+        role="status"
+        aria-live="polite"
+        aria-label="Loading real user experience details"
+        className="space-y-3"
+      >
+        <div className="h-5 w-48 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {Array.from({ length: 2 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-36 animate-pulse rounded-2xl bg-slate-300/60 dark:bg-slate-800/70"
+            />
+          ))}
+        </div>
       </div>
-    </div>
+    </OperationalSectionCard>
   );
 }
 
@@ -404,6 +403,10 @@ export default function Monitor() {
   const canDeleteAlertHistory = userRole === "superuser";
   const canManageRollups = userRole === "superuser";
   const deferSecondaryMobileSections = initialCompactViewport;
+  const lastUpdatedLabel = useMemo(
+    () => (lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : "-"),
+    [lastUpdated],
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -512,6 +515,24 @@ export default function Monitor() {
 
     return webVitalsCompactSummary.description;
   }, [webVitalsCompactSummary.description, webVitalsOpen, webVitalsOverview.totalSamples]);
+  const headerDescription = useMemo(
+    () =>
+      buildMonitorShellDescription({
+        hasNetworkFailure,
+        isLoading,
+        updatedLabel: lastUpdatedLabel,
+      }),
+    [hasNetworkFailure, isLoading, lastUpdatedLabel],
+  );
+  const headerFacts = useMemo(
+    () =>
+      buildMonitorShellFacts({
+        snapshot,
+        rollupFreshnessStatus,
+        updatedLabel: lastUpdatedLabel,
+      }),
+    [lastUpdatedLabel, rollupFreshnessStatus, snapshot],
+  );
   const metricGroups = useMemo(
     () => (metricsOpen ? buildMetricGroups(snapshot, history) : []),
     [history, metricsOpen, snapshot],
@@ -758,8 +779,38 @@ export default function Monitor() {
   }
 
   return (
-    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-3 sm:p-6 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      <div className="mx-auto max-w-7xl space-y-4 sm:space-y-6">
+    <OperationalPage width="content" className="space-y-4 sm:space-y-6">
+      <OperationalPageHeader
+        title={<span data-testid="text-monitor-title">System Performance</span>}
+        eyebrow="Insights"
+        description={headerDescription}
+        badge={
+          <div className="flex flex-wrap gap-2">
+            {headerFacts.map((fact) => (
+              <Badge
+                key={fact.label}
+                variant="outline"
+                className={`rounded-full px-3 py-1 text-xs ${getMonitorSummaryToneClass(fact.tone)}`}
+              >
+                {fact.label} {fact.value}
+              </Badge>
+            ))}
+          </div>
+        }
+        actions={
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void refreshNow()}
+            className={isMobile ? "w-full" : "w-full sm:w-auto"}
+          >
+            {isLoading ? "Refreshing..." : "Refresh"}
+          </Button>
+        }
+        className={isMobile ? "rounded-[28px] border-border/60 bg-background/85" : undefined}
+      />
+
+      <div className="space-y-4 sm:space-y-6">
         <MonitorStatusBanners
           mode={snapshot.mode}
           hasNetworkFailure={hasNetworkFailure}
@@ -990,9 +1041,9 @@ export default function Monitor() {
         </div>
 
         <p className={isMobile ? "text-left text-xs text-muted-foreground" : "text-right text-xs text-muted-foreground"}>
-          {isLoading ? "Loading..." : `Last updated: ${lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : "-"}`}
+          {isLoading ? "Loading..." : `Last updated: ${lastUpdatedLabel}`}
         </p>
       </div>
-    </div>
+    </OperationalPage>
   );
 }
