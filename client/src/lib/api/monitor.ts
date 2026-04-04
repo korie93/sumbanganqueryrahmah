@@ -1,6 +1,8 @@
 import { createApiHeaders } from "../api-client";
 import { getAuthHeader, getCsrfHeader } from "./shared";
+import type { WebVitalOverviewPayload } from "@shared/web-vitals";
 export { generateFingerprint } from "../fingerprint";
+export type { WebVitalOverviewPayload } from "@shared/web-vitals";
 
 export type MonitorRequestState = "ok" | "unauthorized" | "forbidden" | "network_error";
 type MonitorRequestOptions = {
@@ -336,6 +338,10 @@ export async function getAlerts(options?: MonitorRequestOptions) {
 
 export async function getAlertHistory(options?: MonitorRequestOptions) {
   return fetchMonitorEndpoint<AlertHistoryPayload>("/internal/alerts/history", options);
+}
+
+export async function getWebVitalsOverview(options?: MonitorRequestOptions) {
+  return fetchMonitorEndpoint<WebVitalOverviewPayload>("/internal/web-vitals", options);
 }
 
 export async function getIntelligenceExplain(options?: MonitorRequestOptions) {

@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { initializeWebVitalsReporting } from "./lib/web-vitals";
 import "./public-shell.css";
 import "./theme-tokens.css";
 
@@ -24,5 +25,7 @@ if (detectLowSpecMode()) {
   document.documentElement.classList.add("low-spec");
   document.body.classList.add("low-spec");
 }
+
+initializeWebVitalsReporting();
 
 createRoot(document.getElementById("root")!).render(<App />);

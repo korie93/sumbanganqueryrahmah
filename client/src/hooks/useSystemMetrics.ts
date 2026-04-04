@@ -8,6 +8,7 @@ import {
   getIntelligenceExplain,
   getSystemHealth,
   getSystemMode,
+  getWebVitalsOverview,
   getWorkers,
 } from "@/lib/api";
 import type {
@@ -30,11 +31,13 @@ import {
   initialHistory,
   initialIntelligence,
   initialSnapshot,
+  initialWebVitalsOverview,
   resolveSystemMetricsPollIntervalMs,
   shouldFetchSystemMetricsDetails,
   shouldPollSystemMetricsDetails,
   snapshotsEqual,
   toFixedNumber,
+  webVitalsOverviewEqual,
 } from "@/hooks/system-metrics-utils";
 
 export type {
@@ -51,18 +54,25 @@ export {
   shouldPollSystemMetricsDetails,
 } from "@/hooks/system-metrics-utils";
 
-export function useSystemMetrics(): UseSystemMetricsResult {
+type UseSystemMetricsOptions = {
+  includeWebVitalsOverview?: boolean;
+};
+
+export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSystemMetricsResult {
+  const includeWebVitalsOverview = options.includeWebVitalsOverview ?? true;
   const [snapshot, setSnapshot] = useState<MonitorSnapshot>(initialSnapshot);
   const [history, setHistory] = useState<MonitorHistory>(initialHistory);
   const [alerts, setAlerts] = useState<MonitorAlert[]>([]);
   const [alertHistory, setAlertHistory] = useState<MonitorAlertIncident[]>([]);
   const [intelligence, setIntelligence] = useState<IntelligenceExplainPayload>(initialIntelligence);
+  const [webVitalsOverview, setWebVitalsOverview] = useState(initialWebVitalsOverview);
   const [endpointState, setEndpointState] = useState<EndpointState>({
     health: "ok",
     mode: "ok",
     workers: "ok",
     alerts: "ok",
     alertHistory: "ok",
+    webVitals: "ok",
     explain: "ok",
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -76,6 +86,9 @@ export function useSystemMetrics(): UseSystemMetricsResult {
   const alertsRef = useRef(alerts);
   const alertHistoryRef = useRef(alertHistory);
   const intelligenceRef = useRef(intelligence);
+  const webVitalsOverviewRef = useRef(webVitalsOverview);
+  const includeWebVitalsOverviewRef = useRef(includeWebVitalsOverview);
+  const previousIncludeWebVitalsOverviewRef = useRef(includeWebVitalsOverview);
   const endpointStateRef = useRef(endpointState);
   const inFlightRef = useRef(false);
   const mountedRef = useRef(true);
@@ -122,6 +135,14 @@ export function useSystemMetrics(): UseSystemMetricsResult {
   }, [intelligence]);
 
   useEffect(() => {
+    webVitalsOverviewRef.current = webVitalsOverview;
+  }, [webVitalsOverview]);
+
+  useEffect(() => {
+    includeWebVitalsOverviewRef.current = includeWebVitalsOverview;
+  }, [includeWebVitalsOverview]);
+
+  useEffect(() => {
     endpointStateRef.current = endpointState;
   }, [endpointState]);
 
@@ -156,12 +177,15 @@ export function useSystemMetrics(): UseSystemMetricsResult {
           ? Promise.all([
               getAlertHistory({ signal: controller.signal }),
               getIntelligenceExplain({ signal: controller.signal }),
+              includeWebVitalsOverviewRef.current
+                ? getWebVitalsOverview({ signal: controller.signal })
+                : Promise.resolve(null),
             ])
-          : Promise.resolve([null, null] as const),
+          : Promise.resolve([null, null, null] as const),
       ]);
 
       const [healthRes, modeRes, workersRes, alertsRes] = coreResponses;
-      const [alertHistoryRes, explainRes] = detailResponses;
+      const [alertHistoryRes, explainRes, webVitalsRes] = detailResponses;
 
       if (controller.signal.aborted || !mountedRef.current) {
         return;
@@ -280,6 +304,8 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       const alertHistoryChanged = !alertHistoryEqual(alertHistoryRef.current, nextAlertHistory);
       const nextIntelligence = explainRes?.data ?? intelligenceRef.current;
       const intelligenceChanged = !explainabilityEqual(intelligenceRef.current, nextIntelligence);
+      const nextWebVitalsOverview = webVitalsRes?.data ?? webVitalsOverviewRef.current;
+      const webVitalsChanged = !webVitalsOverviewEqual(webVitalsOverviewRef.current, nextWebVitalsOverview);
       if (snapshotChanged) {
         if (mountedRef.current) {
           setSnapshot(nextSnapshot);
@@ -300,6 +326,11 @@ export function useSystemMetrics(): UseSystemMetricsResult {
           setIntelligence(nextIntelligence);
         }
       }
+      if (webVitalsChanged) {
+        if (mountedRef.current) {
+          setWebVitalsOverview(nextWebVitalsOverview);
+        }
+      }
 
       const nextEndpointState: EndpointState = {
         health: healthRes.state,
@@ -307,6 +338,7 @@ export function useSystemMetrics(): UseSystemMetricsResult {
         workers: workersRes.state,
         alerts: alertsRes.state,
         alertHistory: alertHistoryRes?.state ?? endpointStateRef.current.alertHistory,
+        webVitals: webVitalsRes?.state ?? endpointStateRef.current.webVitals,
         explain: explainRes?.state ?? endpointStateRef.current.explain,
       };
       const endpointChanged = !endpointStatesEqual(endpointStateRef.current, nextEndpointState);
@@ -316,7 +348,7 @@ export function useSystemMetrics(): UseSystemMetricsResult {
         }
       }
 
-      if (mountedRef.current && (snapshotChanged || alertsChanged || alertHistoryChanged || intelligenceChanged || endpointChanged || historyChanged)) {
+      if (mountedRef.current && (snapshotChanged || alertsChanged || alertHistoryChanged || intelligenceChanged || webVitalsChanged || endpointChanged || historyChanged)) {
         const responseTs = Number(
           healthRes.data?.updatedAt ??
             modeRes.data?.updatedAt ??
@@ -397,6 +429,14 @@ export function useSystemMetrics(): UseSystemMetricsResult {
     scheduleNextPollRef.current?.();
   }, [clearScheduledPoll, pollMetrics]);
 
+  useEffect(() => {
+    if (includeWebVitalsOverview && !previousIncludeWebVitalsOverviewRef.current) {
+      void refreshNow();
+    }
+
+    previousIncludeWebVitalsOverviewRef.current = includeWebVitalsOverview;
+  }, [includeWebVitalsOverview, refreshNow]);
+
   const accessDenied = useMemo(
     () =>
       endpointState.health === "forbidden" ||
@@ -404,12 +444,14 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       endpointState.workers === "forbidden" ||
       endpointState.alerts === "forbidden" ||
       endpointState.alertHistory === "forbidden" ||
+      endpointState.webVitals === "forbidden" ||
       endpointState.explain === "forbidden" ||
       endpointState.health === "unauthorized" ||
       endpointState.mode === "unauthorized" ||
       endpointState.workers === "unauthorized" ||
       endpointState.alerts === "unauthorized" ||
       endpointState.alertHistory === "unauthorized" ||
+      endpointState.webVitals === "unauthorized" ||
       endpointState.explain === "unauthorized",
     [endpointState],
   );
@@ -421,6 +463,7 @@ export function useSystemMetrics(): UseSystemMetricsResult {
       endpointState.workers === "network_error" ||
       endpointState.alerts === "network_error" ||
       endpointState.alertHistory === "network_error" ||
+      endpointState.webVitals === "network_error" ||
       endpointState.explain === "network_error",
     [endpointState],
   );
@@ -433,6 +476,7 @@ export function useSystemMetrics(): UseSystemMetricsResult {
     alerts,
     alertHistory,
     intelligence,
+    webVitalsOverview,
     endpointState,
     accessDenied,
     hasNetworkFailure,

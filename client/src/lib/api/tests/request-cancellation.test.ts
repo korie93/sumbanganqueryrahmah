@@ -41,6 +41,7 @@ import {
   getIntelligenceExplain,
   getSystemHealth,
   getSystemMode,
+  getWebVitalsOverview,
   getWorkers,
   injectChaos,
   rebuildCollectionRollups,
@@ -470,6 +471,14 @@ test("monitor API wrappers forward AbortSignal", async () => {
     if (url === "/internal/alerts/history") {
       return jsonResponse({ incidents: [], updatedAt: new Date().toISOString() });
     }
+    if (url === "/internal/web-vitals") {
+      return jsonResponse({
+        windowMinutes: 15,
+        totalSamples: 0,
+        pageSummaries: [],
+        updatedAt: new Date().toISOString(),
+      });
+    }
     if (url === "/internal/intelligence/explain") {
       return jsonResponse({
         anomalyBreakdown: {
@@ -540,6 +549,7 @@ test("monitor API wrappers forward AbortSignal", async () => {
     await getWorkers({ signal: controller.signal });
     await getAlerts({ signal: controller.signal });
     await getAlertHistory({ signal: controller.signal });
+    await getWebVitalsOverview({ signal: controller.signal });
     await getIntelligenceExplain({ signal: controller.signal });
     await injectChaos({ type: "cpu_spike", magnitude: 2 }, { signal: controller.signal });
     await drainRollupQueue({ signal: controller.signal });
@@ -550,7 +560,7 @@ test("monitor API wrappers forward AbortSignal", async () => {
     restoreFetch();
   }
 
-  assert.equal(requests.length, 11);
+  assert.equal(requests.length, 12);
   for (const request of requests) {
     assert.equal(request.signal, controller.signal);
   }
@@ -559,12 +569,13 @@ test("monitor API wrappers forward AbortSignal", async () => {
   assert.equal(requests[2]?.url, "/internal/workers");
   assert.equal(requests[3]?.url, "/internal/alerts");
   assert.equal(requests[4]?.url, "/internal/alerts/history");
-  assert.equal(requests[5]?.url, "/internal/intelligence/explain");
-  assert.equal(requests[6]?.url, "/internal/chaos/inject");
-  assert.equal(requests[7]?.url, "/internal/rollup-refresh/drain");
-  assert.equal(requests[8]?.url, "/internal/rollup-refresh/retry-failures");
-  assert.equal(requests[9]?.url, "/internal/rollup-refresh/auto-heal");
-  assert.equal(requests[10]?.url, "/internal/rollup-refresh/rebuild");
+  assert.equal(requests[5]?.url, "/internal/web-vitals");
+  assert.equal(requests[6]?.url, "/internal/intelligence/explain");
+  assert.equal(requests[7]?.url, "/internal/chaos/inject");
+  assert.equal(requests[8]?.url, "/internal/rollup-refresh/drain");
+  assert.equal(requests[9]?.url, "/internal/rollup-refresh/retry-failures");
+  assert.equal(requests[10]?.url, "/internal/rollup-refresh/auto-heal");
+  assert.equal(requests[11]?.url, "/internal/rollup-refresh/rebuild");
 });
 
 test("analytics API wrappers forward AbortSignal", async () => {

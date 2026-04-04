@@ -691,6 +691,25 @@ function createSystemPermissionHarness() {
       calls.alertHistory += 1;
       return [];
     },
+    getWebVitalsOverview: () => ({
+      windowMinutes: 15,
+      totalSamples: 0,
+      pageSummaries: [
+        {
+          pageType: "public" as const,
+          sampleCount: 0,
+          latestCapturedAt: null,
+          metrics: [],
+        },
+        {
+          pageType: "authenticated" as const,
+          sampleCount: 0,
+          latestCapturedAt: null,
+          metrics: [],
+        },
+      ],
+      updatedAt: "2026-03-25T00:00:00.000Z",
+    }),
     createAuditLog: async (data) => ({
       id: "audit-1",
       ...data,

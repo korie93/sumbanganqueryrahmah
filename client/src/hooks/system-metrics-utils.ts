@@ -3,6 +3,8 @@ import type {
   MonitorAlert,
   MonitorAlertIncident,
 } from "@/lib/api";
+import type { WebVitalOverviewPayload } from "@shared/web-vitals";
+import { WEB_VITAL_NAMES, WEB_VITAL_PAGE_TYPES } from "@shared/web-vitals";
 import type {
   EndpointState,
   HistoryKey,
@@ -184,6 +186,27 @@ export const initialIntelligence: IntelligenceExplainPayload = {
   decisionReason: "No evaluation yet.",
 };
 
+export const initialWebVitalsOverview: WebVitalOverviewPayload = {
+  windowMinutes: 15,
+  totalSamples: 0,
+  pageSummaries: WEB_VITAL_PAGE_TYPES.map((pageType) => ({
+    pageType,
+    sampleCount: 0,
+    latestCapturedAt: null,
+    metrics: WEB_VITAL_NAMES.map((name) => ({
+      name,
+      sampleCount: 0,
+      p75: null,
+      p75Rating: null,
+      latestValue: null,
+      latestRating: null,
+      latestCapturedAt: null,
+      latestPath: null,
+    })),
+  })),
+  updatedAt: new Date(0).toISOString(),
+};
+
 export const toFixedNumber = (value: number, digits = 2) => {
   if (!Number.isFinite(value)) return 0;
   const p = 10 ** digits;
@@ -257,6 +280,7 @@ export const endpointStatesEqual = (a: EndpointState, b: EndpointState) =>
   a.workers === b.workers &&
   a.alerts === b.alerts &&
   a.alertHistory === b.alertHistory &&
+  a.webVitals === b.webVitals &&
   a.explain === b.explain;
 
 export const alertsEqual = (a: MonitorAlert[], b: MonitorAlert[]) => {
@@ -338,6 +362,49 @@ export const explainabilityEqual = (a: IntelligenceExplainPayload, b: Intelligen
   a.chosenStrategy.reason === b.chosenStrategy.reason &&
   a.decisionReason === b.decisionReason
 );
+
+export const webVitalsOverviewEqual = (a: WebVitalOverviewPayload, b: WebVitalOverviewPayload) => {
+  if (
+    a.windowMinutes !== b.windowMinutes ||
+    a.totalSamples !== b.totalSamples ||
+    a.updatedAt !== b.updatedAt ||
+    a.pageSummaries.length !== b.pageSummaries.length
+  ) {
+    return false;
+  }
+
+  for (let pageIndex = 0; pageIndex < a.pageSummaries.length; pageIndex += 1) {
+    const leftPage = a.pageSummaries[pageIndex];
+    const rightPage = b.pageSummaries[pageIndex];
+    if (
+      leftPage.pageType !== rightPage.pageType ||
+      leftPage.sampleCount !== rightPage.sampleCount ||
+      leftPage.latestCapturedAt !== rightPage.latestCapturedAt ||
+      leftPage.metrics.length !== rightPage.metrics.length
+    ) {
+      return false;
+    }
+
+    for (let metricIndex = 0; metricIndex < leftPage.metrics.length; metricIndex += 1) {
+      const leftMetric = leftPage.metrics[metricIndex];
+      const rightMetric = rightPage.metrics[metricIndex];
+      if (
+        leftMetric.name !== rightMetric.name ||
+        leftMetric.sampleCount !== rightMetric.sampleCount ||
+        leftMetric.p75 !== rightMetric.p75 ||
+        leftMetric.p75Rating !== rightMetric.p75Rating ||
+        leftMetric.latestValue !== rightMetric.latestValue ||
+        leftMetric.latestRating !== rightMetric.latestRating ||
+        leftMetric.latestCapturedAt !== rightMetric.latestCapturedAt ||
+        leftMetric.latestPath !== rightMetric.latestPath
+      ) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+};
 
 const getSnapshotValueByHistoryKey = (snapshot: MonitorSnapshot, key: HistoryKey) => snapshot[key];
 

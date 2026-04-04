@@ -3,6 +3,8 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { MonitorAccessDenied } from "@/components/monitor/MonitorAccessDenied";
 import { MonitorOverviewSection } from "@/components/monitor/MonitorOverviewSection";
 import { MonitorStatusBanners } from "@/components/monitor/MonitorStatusBanners";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   CHAOS_OPTIONS,
   buildMetricGroups,
@@ -54,6 +56,11 @@ const MonitorTechnicalChartsSection = lazy(() =>
 const MonitorInsightsSection = lazy(() =>
   import("@/components/monitor/MonitorInsightsSection").then((module) => ({
     default: module.MonitorInsightsSection,
+  })),
+);
+const MonitorWebVitalsSection = lazy(() =>
+  import("@/components/monitor/MonitorWebVitalsSection").then((module) => ({
+    default: module.MonitorWebVitalsSection,
   })),
 );
 
@@ -150,6 +157,27 @@ function MonitorSectionCardFallback({
         ))}
       </div>
     </section>
+  );
+}
+
+function MonitorWebVitalsInlineFallback() {
+  return (
+    <div
+      className="space-y-3 rounded-2xl border border-border/60 bg-background/35 p-4"
+      role="status"
+      aria-live="polite"
+      aria-label="Loading real user experience details"
+    >
+      <div className="h-5 w-48 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <div
+            key={index}
+            className="h-36 animate-pulse rounded-2xl bg-slate-300/60 dark:bg-slate-800/70"
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -263,6 +291,7 @@ export default function Monitor() {
   const [chaosDurationMs, setChaosDurationMs] = useState(String(CHAOS_OPTIONS[0].defaultDurationMs));
   const [chaosLoading, setChaosLoading] = useState(false);
   const [lastChaosMessage, setLastChaosMessage] = useState<string | null>(null);
+  const [webVitalsOpen, setWebVitalsOpen] = useState(false);
   const [chaosSectionOpen, setChaosSectionOpen] = useState(() => !initialCompactViewport);
   const [technicalChartsOpen, setTechnicalChartsOpen] = useState(() => !initialCompactViewport);
   const [queueActionBusy, setQueueActionBusy] = useState<"drain" | "retry-failures" | "auto-heal" | "rebuild" | null>(null);
@@ -280,11 +309,14 @@ export default function Monitor() {
     alerts,
     alertHistory,
     intelligence,
+    webVitalsOverview,
     accessDenied,
     hasNetworkFailure,
     lastUpdated,
     refreshNow,
-  } = useSystemMetrics();
+  } = useSystemMetrics({
+    includeWebVitalsOverview: webVitalsOpen,
+  });
 
   const userRole = useMemo(() => getStoredRole(), []);
 
@@ -328,6 +360,17 @@ export default function Monitor() {
     () => formatMonitorDurationCompact(snapshot.rollupRefreshOldestPendingAgeMs),
     [snapshot.rollupRefreshOldestPendingAgeMs],
   );
+  const webVitalsSummaryLabel = useMemo(() => {
+    if (!webVitalsOpen) {
+      return "Hidden by default so monitor stays light. Click Information when you want recent browser experience signals.";
+    }
+
+    if (webVitalsOverview.totalSamples === 0) {
+      return "Waiting for recent browser telemetry samples.";
+    }
+
+    return `${webVitalsOverview.totalSamples} recent samples across a ${webVitalsOverview.windowMinutes}-minute rolling window.`;
+  }, [webVitalsOpen, webVitalsOverview.totalSamples, webVitalsOverview.windowMinutes]);
   const metricGroups = useMemo(() => buildMetricGroups(snapshot, history), [history, snapshot]);
   const { shouldRender: shouldRenderMetrics, triggerRef: metricsTriggerRef } =
     useDeferredMonitorSectionMount({ enabled: deferSecondaryMobileSections });
@@ -344,6 +387,12 @@ export default function Monitor() {
     if (!profile) return;
     setChaosMagnitude(String(profile.defaultMagnitude));
     setChaosDurationMs(String(profile.defaultDurationMs));
+  }, []);
+
+  const handleWebVitalsToggle = useCallback(() => {
+    startTransition(() => {
+      setWebVitalsOpen((previous) => !previous);
+    });
   }, []);
 
   const submitChaos = useCallback(async () => {
@@ -503,6 +552,49 @@ export default function Monitor() {
           rollupFreshnessSummary={rollupFreshnessSummary}
           rollupFreshnessAgeLabel={rollupFreshnessAgeLabel}
         />
+        <section className="glass-wrapper p-4 sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-2">
+              <div className="inline-flex items-center rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-700 dark:text-sky-300">
+                Real User Experience
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+                  Browser experience details stay hidden until requested
+                </h2>
+                <p className="max-w-3xl text-sm text-muted-foreground">
+                  {webVitalsSummaryLabel}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {webVitalsOpen && webVitalsOverview.totalSamples > 0 ? (
+                <Badge variant="secondary" className="rounded-full px-3 py-1 text-xs">
+                  {webVitalsOverview.totalSamples} samples
+                </Badge>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-full px-4"
+                aria-expanded={webVitalsOpen}
+                onClick={handleWebVitalsToggle}
+              >
+                {webVitalsOpen ? "Hide information" : "Information"}
+                {webVitalsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+
+          {webVitalsOpen ? (
+            <div className="mt-6">
+              <Suspense fallback={<MonitorWebVitalsInlineFallback />}>
+                <MonitorWebVitalsSection overview={webVitalsOverview} embedded />
+              </Suspense>
+            </div>
+          ) : null}
+        </section>
         <div ref={metricsTriggerRef}>
           {shouldRenderMetrics ? (
             <Suspense fallback={<MonitorMetricsFallback />}>

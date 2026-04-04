@@ -4,6 +4,7 @@ import type {
   MonitorAlertIncident,
   MonitorRequestState,
 } from "@/lib/api";
+import type { WebVitalOverviewPayload } from "@shared/web-vitals";
 
 export type HistoryKey =
   | "cpuPercent"
@@ -41,6 +42,7 @@ export type EndpointState = {
   workers: MonitorRequestState;
   alerts: MonitorRequestState;
   alertHistory: MonitorRequestState;
+  webVitals: MonitorRequestState;
   explain: MonitorRequestState;
 };
 
@@ -82,6 +84,7 @@ export type UseSystemMetricsResult = {
   alerts: MonitorAlert[];
   alertHistory: MonitorAlertIncident[];
   intelligence: IntelligenceExplainPayload;
+  webVitalsOverview: WebVitalOverviewPayload;
   endpointState: EndpointState;
   accessDenied: boolean;
   hasNetworkFailure: boolean;

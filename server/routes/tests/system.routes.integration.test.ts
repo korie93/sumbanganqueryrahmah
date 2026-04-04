@@ -3,6 +3,7 @@ import test from "node:test";
 import type { RequestHandler } from "express";
 import { registerSystemRoutes } from "../system.routes";
 import type { StartupHealthSnapshot } from "../../internal/startup-health";
+import type { WebVitalOverviewPayload } from "../../../shared/web-vitals";
 import {
   createJsonTestApp,
   createTestAuthenticateToken,
@@ -47,6 +48,31 @@ function createRollupQueueSnapshot(overrides?: Partial<{
   };
 }
 
+function createWebVitalsOverview(
+  overrides: Partial<WebVitalOverviewPayload> = {},
+): WebVitalOverviewPayload {
+  return {
+    windowMinutes: 15,
+    totalSamples: 0,
+    pageSummaries: [
+      {
+        pageType: "public",
+        sampleCount: 0,
+        latestCapturedAt: null,
+        metrics: [],
+      },
+      {
+        pageType: "authenticated",
+        sampleCount: 0,
+        latestCapturedAt: null,
+        metrics: [],
+      },
+    ],
+    updatedAt: "2026-03-24T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 function createSystemRouteExtraDeps() {
   return {
     getCollectionRollupQueueStatus: async () => createRollupQueueSnapshot(),
@@ -75,6 +101,7 @@ function createSystemRouteExtraDeps() {
       snapshot: createRollupQueueSnapshot(),
     }),
     listMonitorAlertHistory: async () => [],
+    getWebVitalsOverview: () => createWebVitalsOverview(),
   };
 }
 
@@ -491,6 +518,129 @@ test("GET /internal/alerts/history returns recent monitor alert incidents", asyn
   }
 });
 
+test("GET /internal/web-vitals returns the recent real-user experience overview", async () => {
+  const app = createJsonTestApp();
+  registerSystemRoutes(app, {
+    authenticateToken: createTestAuthenticateToken({
+      userId: "monitor-1",
+      username: "monitor.user",
+      role: "admin",
+    }),
+    requireRole: createTestRequireRole(),
+    requireMonitorAccess: allowAll(),
+    getMaintenanceStateCached: async () => ({
+      maintenance: false,
+      message: "",
+      type: "soft",
+      startTime: null,
+      endTime: null,
+    }),
+    computeInternalMonitorSnapshot: () => createMonitorSnapshot() as any,
+    buildInternalMonitorAlerts: () => [],
+    getControlState: () => ({
+      mode: "NORMAL",
+      throttleFactor: 1,
+      rejectHeavyRoutes: false,
+      preAllocateMB: 0,
+      workerCount: 1,
+      maxWorkers: 1,
+      workers: [],
+      circuits: {},
+      predictor: null,
+      queueLength: 0,
+      updatedAt: Date.parse("2026-03-24T00:00:00.000Z"),
+    } as any),
+    getDbProtection: () => false,
+    getRequestRate: () => 0,
+    getLatencyP95: () => 0,
+    getLocalCircuitSnapshots: () => ({
+      ai: {} as any,
+      db: {} as any,
+      export: {} as any,
+    }),
+    getIntelligenceExplainability: () => ({
+      anomalyBreakdown: [],
+      correlationMatrix: [],
+      slopeValues: [],
+      forecastProjection: [],
+      governanceState: {},
+      chosenStrategy: null,
+      decisionReason: "n/a",
+    } as any),
+    injectChaos: () => ({
+      injected: {} as any,
+      active: [],
+    }),
+    ...createSystemRouteExtraDeps(),
+    getWebVitalsOverview: () => createWebVitalsOverview({
+      totalSamples: 8,
+      pageSummaries: [
+        {
+          pageType: "public",
+          sampleCount: 5,
+          latestCapturedAt: "2026-03-24T00:05:00.000Z",
+          metrics: [
+            {
+              name: "LCP",
+              sampleCount: 5,
+              p75: 2400,
+              p75Rating: "good",
+              latestValue: 2100,
+              latestRating: "good",
+              latestCapturedAt: "2026-03-24T00:05:00.000Z",
+              latestPath: "/",
+            },
+          ],
+        },
+        {
+          pageType: "authenticated",
+          sampleCount: 3,
+          latestCapturedAt: "2026-03-24T00:06:00.000Z",
+          metrics: [
+            {
+              name: "INP",
+              sampleCount: 3,
+              p75: 180,
+              p75Rating: "good",
+              latestValue: 160,
+              latestRating: "good",
+              latestCapturedAt: "2026-03-24T00:06:00.000Z",
+              latestPath: "/monitor",
+            },
+          ],
+        },
+      ],
+      updatedAt: "2026-03-24T00:06:00.000Z",
+    }),
+    createAuditLog: async (data) => ({
+      id: "audit-1",
+      ...data,
+    } as any),
+    checkDbConnectivity: async () => true,
+    getStartupHealthSnapshot: () => createStartupSnapshot(),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/internal/web-vitals`, {
+      headers: {
+        "x-test-username": "monitor.user",
+        "x-test-role": "admin",
+        "x-test-userid": "monitor-1",
+      },
+    });
+    assert.equal(response.status, 200);
+
+    const payload = await response.json();
+    assert.equal(payload.totalSamples, 8);
+    assert.equal(payload.pageSummaries[0]?.pageType, "public");
+    assert.equal(payload.pageSummaries[0]?.metrics[0]?.name, "LCP");
+    assert.equal(payload.pageSummaries[0]?.metrics[0]?.p75, 2400);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("rollup refresh control routes remain superuser-only and return snapshots", async () => {
   const app = createJsonTestApp();
   registerSystemRoutes(app, {
@@ -590,6 +740,7 @@ test("rollup refresh control routes remain superuser-only and return snapshots",
       snapshot: createRollupQueueSnapshot(),
     }),
     listMonitorAlertHistory: async () => [],
+    getWebVitalsOverview: () => createWebVitalsOverview(),
     createAuditLog: async (data) => ({
       id: "audit-1",
       ...data,

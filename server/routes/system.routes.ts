@@ -13,6 +13,7 @@ import type {
   WorkerControlState,
 } from "../internal/runtime-monitor-manager";
 import type { AuditLog, InsertAuditLog } from "../../shared/schema-postgres";
+import type { WebVitalOverviewPayload } from "../../shared/web-vitals";
 
 type LocalCircuitSnapshots = {
   ai: CircuitSnapshot;
@@ -50,6 +51,7 @@ type SystemRouteDeps = {
   autoHealCollectionRollupQueue: () => Promise<Record<string, unknown>>;
   rebuildCollectionRollups: () => Promise<Record<string, unknown>>;
   listMonitorAlertHistory: () => Promise<MonitorAlertIncident[]>;
+  getWebVitalsOverview: () => WebVitalOverviewPayload;
   createAuditLog: (data: InsertAuditLog) => Promise<AuditLog>;
   checkDbConnectivity: () => Promise<boolean>;
   getStartupHealthSnapshot: () => StartupHealthSnapshot;
@@ -76,6 +78,7 @@ export function registerSystemRoutes(app: Express, deps: SystemRouteDeps) {
     autoHealCollectionRollupQueue,
     rebuildCollectionRollups,
     listMonitorAlertHistory,
+    getWebVitalsOverview,
     createAuditLog,
     checkDbConnectivity,
     getStartupHealthSnapshot,
@@ -226,6 +229,16 @@ export function registerSystemRoutes(app: Express, deps: SystemRouteDeps) {
         updatedAt: new Date().toISOString(),
       });
     }),
+  );
+
+  app.get(
+    "/internal/web-vitals",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireMonitorAccess,
+    (_req, res) => {
+      res.json(getWebVitalsOverview());
+    },
   );
 
   app.get(

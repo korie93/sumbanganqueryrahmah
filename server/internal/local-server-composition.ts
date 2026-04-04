@@ -10,6 +10,7 @@ import { runtimeConfig as environmentRuntimeConfig } from "../config/runtime";
 import { createImportsController } from "../controllers/imports.controller";
 import { createOperationsController } from "../controllers/operations.controller";
 import { createSearchController } from "../controllers/search.controller";
+import { createWebVitalsTelemetryController } from "../controllers/web-vitals-telemetry.controller";
 import type { MaintenanceState } from "../config/system-settings";
 import { pool } from "../db-postgres";
 import { injectChaos, getIntelligenceExplainability } from "../intelligence";
@@ -34,6 +35,7 @@ import { registerOperationsRoutes } from "../routes/operations.routes";
 import { registerSearchRoutes } from "../routes/search.routes";
 import { registerSettingsRoutes } from "../routes/settings.routes";
 import { registerSystemRoutes } from "../routes/system.routes";
+import { registerTelemetryRoutes } from "../routes/telemetry.routes";
 import { AiChatService } from "../services/ai-chat.service";
 import { AiIndexService } from "../services/ai-index.service";
 import { AiIndexOperationsService } from "../services/ai-index-operations.service";
@@ -49,6 +51,7 @@ import { ImportAnalysisService } from "../services/import-analysis.service";
 import { ImportsService } from "../services/imports.service";
 import { OperationsAnalyticsService } from "../services/operations-analytics.service";
 import { SearchService } from "../services/search.service";
+import { WebVitalsTelemetryService } from "../services/web-vitals-telemetry.service";
 import type { PostgresStorage } from "../storage-postgres";
 import { createRuntimeWebSocketManager } from "../ws/runtime-manager";
 import { parseBackupMetadataSafe } from "./backupMetadata";
@@ -281,6 +284,10 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     queueService: collectionRollupRefreshQueueService,
   });
   const monitorAlertHistoryRepository = new MonitorAlertHistoryRepository();
+  const webVitalsTelemetryService = new WebVitalsTelemetryService();
+  const webVitalsTelemetryController = createWebVitalsTelemetryController({
+    webVitalsTelemetryService,
+  });
 
   registerSystemRoutes(app, {
     authenticateToken,
@@ -302,6 +309,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     autoHealCollectionRollupQueue: () => collectionRollupOperationsService.autoHealRunningSlices(),
     rebuildCollectionRollups: () => collectionRollupOperationsService.rebuildAllRollups(),
     listMonitorAlertHistory: () => monitorAlertHistoryRepository.listRecent(),
+    getWebVitalsOverview: () => webVitalsTelemetryService.getOverview(),
     createAuditLog: (data) => storage.createAuditLog(data),
     checkDbConnectivity: async () => {
       try {
@@ -321,6 +329,10 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     requireRole,
     connectedClients,
     rateLimiters: authRouteRateLimiters,
+  });
+
+  registerTelemetryRoutes(app, {
+    reportWebVital: webVitalsTelemetryController.report,
   });
 
   registerActivityRoutes(app, {
