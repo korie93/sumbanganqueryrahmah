@@ -306,38 +306,73 @@ function MonitorDeferredSectionToggle({
   open: boolean;
   onToggle: () => void;
 }) {
+  const buttonClassName = "flex w-full items-start justify-between gap-3 text-left";
+
   return (
     <div className="rounded-2xl border border-border/60 bg-background/30 p-4 backdrop-blur-sm">
-      <button
-        type="button"
-        className="flex w-full items-start justify-between gap-3 text-left"
-        onClick={onToggle}
-        aria-expanded={open ? "true" : "false"}
-      >
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold text-foreground">{title}</h2>
-            {statusBadgeLabel ? (
-              <Badge
-                variant="outline"
-                className={`rounded-full px-2.5 py-0.5 text-[10px] ${getMonitorSummaryToneClass(
-                  statusTone ?? "stable",
-                )}`}
-              >
-                {statusBadgeLabel}
-              </Badge>
-            ) : null}
-            {summaryBadges}
+      {open ? (
+        <button
+          type="button"
+          className={buttonClassName}
+          onClick={onToggle}
+          aria-expanded="true"
+        >
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-semibold text-foreground">{title}</h2>
+              {statusBadgeLabel ? (
+                <Badge
+                  variant="outline"
+                  className={`rounded-full px-2.5 py-0.5 text-[10px] ${getMonitorSummaryToneClass(
+                    statusTone ?? "stable",
+                  )}`}
+                >
+                  {statusBadgeLabel}
+                </Badge>
+              ) : null}
+              {summaryBadges}
+            </div>
+            {headline ? <p className="mt-2 text-sm font-semibold text-foreground">{headline}</p> : null}
+            <p className={headline ? "mt-1 text-sm text-muted-foreground" : "mt-2 text-sm text-muted-foreground"}>
+              {description}
+            </p>
           </div>
-          {headline ? <p className="mt-2 text-sm font-semibold text-foreground">{headline}</p> : null}
-          <p className={headline ? "mt-1 text-sm text-muted-foreground" : "mt-2 text-sm text-muted-foreground"}>
-            {description}
-          </p>
-        </div>
-        <span className="shrink-0 pt-1 text-muted-foreground">
-          {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </span>
-      </button>
+          <span className="shrink-0 pt-1 text-muted-foreground">
+            <ChevronUp className="h-4 w-4" />
+          </span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={buttonClassName}
+          onClick={onToggle}
+          aria-expanded="false"
+        >
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-semibold text-foreground">{title}</h2>
+              {statusBadgeLabel ? (
+                <Badge
+                  variant="outline"
+                  className={`rounded-full px-2.5 py-0.5 text-[10px] ${getMonitorSummaryToneClass(
+                    statusTone ?? "stable",
+                  )}`}
+                >
+                  {statusBadgeLabel}
+                </Badge>
+              ) : null}
+              {summaryBadges}
+            </div>
+            {headline ? <p className="mt-2 text-sm font-semibold text-foreground">{headline}</p> : null}
+            <p className={headline ? "mt-1 text-sm text-muted-foreground" : "mt-2 text-sm text-muted-foreground"}>
+              {description}
+            </p>
+          </div>
+          <span className="shrink-0 pt-1 text-muted-foreground">
+            <ChevronDown className="h-4 w-4" />
+          </span>
+        </button>
+      )}
     </div>
   );
 }
@@ -859,17 +894,31 @@ export default function Monitor() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="rounded-full px-4"
-                aria-expanded={webVitalsOpen ? "true" : "false"}
-                onClick={handleWebVitalsToggle}
-              >
-                {webVitalsOpen ? "Hide information" : "Information"}
-                {webVitalsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </Button>
+              {webVitalsOpen ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full px-4"
+                  aria-expanded="true"
+                  onClick={handleWebVitalsToggle}
+                >
+                  Hide information
+                  <ChevronUp className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full px-4"
+                  aria-expanded="false"
+                  onClick={handleWebVitalsToggle}
+                >
+                  Information
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
 
