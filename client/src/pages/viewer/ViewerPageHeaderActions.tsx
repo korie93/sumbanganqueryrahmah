@@ -1,8 +1,18 @@
+import { Suspense, lazy } from "react";
 import { Filter, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildViewerFiltersButtonLabel } from "@/pages/viewer/page-header-utils";
-import { ViewerColumnSelector } from "@/pages/viewer/ViewerColumnSelector";
-import { ViewerExportMenu } from "@/pages/viewer/ViewerExportMenu";
+
+const ViewerColumnSelector = lazy(() =>
+  import("@/pages/viewer/ViewerColumnSelector").then((module) => ({
+    default: module.ViewerColumnSelector,
+  })),
+);
+const ViewerExportMenu = lazy(() =>
+  import("@/pages/viewer/ViewerExportMenu").then((module) => ({
+    default: module.ViewerExportMenu,
+  })),
+);
 
 interface ViewerPageHeaderActionsProps {
   exportBusy: boolean;
@@ -26,6 +36,17 @@ interface ViewerPageHeaderActionsProps {
   showColumnSelector: boolean;
   showFilters: boolean;
   totalRows: number;
+}
+
+function ViewerHeaderButtonFallback({ label }: { label: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className="flex h-10 w-full items-center rounded-md border border-border/60 bg-muted/20 px-3 text-sm text-muted-foreground sm:w-auto"
+    >
+      <span className="truncate">{label}</span>
+    </div>
+  );
 }
 
 export function ViewerPageHeaderActions({
@@ -55,15 +76,17 @@ export function ViewerPageHeaderActions({
     <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
       {rowsCount > 0 ? (
         <>
-          <ViewerColumnSelector
-            open={showColumnSelector}
-            headers={headers}
-            selectedColumns={selectedColumns}
-            onOpenChange={onShowColumnSelectorChange}
-            onToggleColumn={onToggleColumn}
-            onSelectAllColumns={onSelectAllColumns}
-            onDeselectAllColumns={onDeselectAllColumns}
-          />
+          <Suspense fallback={<ViewerHeaderButtonFallback label="Columns" />}>
+            <ViewerColumnSelector
+              open={showColumnSelector}
+              headers={headers}
+              selectedColumns={selectedColumns}
+              onOpenChange={onShowColumnSelectorChange}
+              onToggleColumn={onToggleColumn}
+              onSelectAllColumns={onSelectAllColumns}
+              onDeselectAllColumns={onDeselectAllColumns}
+            />
+          </Suspense>
 
           <Button
             variant={showFilters ? "default" : "outline"}
@@ -89,18 +112,20 @@ export function ViewerPageHeaderActions({
       ) : null}
 
       {isSuperuser && rowsCount > 0 ? (
-        <ViewerExportMenu
-          exportBusy={exportBusy}
-          totalRows={totalRows}
-          filteredRowsCount={filteredRowsCount}
-          selectedRowCount={selectedRowCount}
-          selectedColumnsCount={selectedColumns.size}
-          headersCount={headers.length}
-          hasFilteredSubset={hasFilteredSubset}
-          onExportCsv={onExportCsv}
-          onExportPdf={onExportPdf}
-          onExportExcel={onExportExcel}
-        />
+        <Suspense fallback={<ViewerHeaderButtonFallback label="Export" />}>
+          <ViewerExportMenu
+            exportBusy={exportBusy}
+            totalRows={totalRows}
+            filteredRowsCount={filteredRowsCount}
+            selectedRowCount={selectedRowCount}
+            selectedColumnsCount={selectedColumns.size}
+            headersCount={headers.length}
+            hasFilteredSubset={hasFilteredSubset}
+            onExportCsv={onExportCsv}
+            onExportPdf={onExportPdf}
+            onExportExcel={onExportExcel}
+          />
+        </Suspense>
       ) : null}
     </div>
   );

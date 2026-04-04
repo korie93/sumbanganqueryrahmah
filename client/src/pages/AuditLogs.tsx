@@ -8,7 +8,6 @@ import { getAuditLogs, getAuditLogStats, cleanupAuditLogs } from "@/lib/api";
 import { getStoredRole } from "@/lib/auth-session";
 import { useToast } from "@/hooks/use-toast";
 import { AuditLogsFiltersPanel } from "@/pages/audit-logs/AuditLogsFiltersPanel";
-import { AuditLogsRecordsList } from "@/pages/audit-logs/AuditLogsRecordsList";
 import type { AuditLogRecord, AuditLogsResponse, AuditLogStats } from "@/pages/audit-logs/types";
 import {
   getAuditDateRange,
@@ -32,10 +31,24 @@ const AuditLogsCleanupPanel = lazy(() =>
   })),
 );
 
+const AuditLogsRecordsList = lazy(() =>
+  import("@/pages/audit-logs/AuditLogsRecordsList").then((module) => ({
+    default: module.AuditLogsRecordsList,
+  })),
+);
+
 function AuditLogsCleanupFallback() {
   return (
     <div className="rounded-2xl border border-border/60 bg-card/50 p-4 text-sm text-muted-foreground">
       Loading cleanup tools...
+    </div>
+  );
+}
+
+function AuditLogsRecordsFallback() {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-card/50 p-4 text-sm text-muted-foreground">
+      Loading activity records...
     </div>
   );
 }
@@ -413,14 +426,16 @@ export default function AuditLogs() {
         </Suspense>
       ) : null}
 
-      <AuditLogsRecordsList
-        filteredLogs={filteredLogs}
-        loading={loading}
-        onClearFilters={clearAllFilters}
-        onRecordsOpenChange={setRecordsOpen}
-        recordsOpen={recordsOpen}
-        totalLogs={pagination.total}
-      />
+      <Suspense fallback={<AuditLogsRecordsFallback />}>
+        <AuditLogsRecordsList
+          filteredLogs={filteredLogs}
+          loading={loading}
+          onClearFilters={clearAllFilters}
+          onRecordsOpenChange={setRecordsOpen}
+          recordsOpen={recordsOpen}
+          totalLogs={pagination.total}
+        />
+      </Suspense>
 
       <AppPaginationBar
         disabled={loading}

@@ -992,24 +992,11 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     await editDialog.getByText("Replacement Pending").first().waitFor({ timeout: 15_000 });
     await fillReceiptAmountInput(editDialog, "12.34");
 
-    const updateResponsePromise = page.waitForResponse(
-      (response) =>
-        response.request().method() === "PATCH"
-        && response.url().includes(`/api/collection/${recordId}`),
-    );
-    await clickAndAcceptDialogIfShown(
+    const firstUpdatePayload = await submitCollectionRecordDialogSaveWithRetry(
       page,
-      () => editDialog.getByRole("button", { name: /^Save$/ }).click(),
-    );
-    const firstUpdateResponse = await updateResponsePromise;
-    const firstUpdateRawText = await firstUpdateResponse.text();
-    const firstUpdatePayload = firstUpdateRawText ? JSON.parse(firstUpdateRawText) : {};
-    assert(
-      firstUpdateResponse.status() === 200,
-      [
-        `collection receipt UI smoke should update record with HTTP 200, got ${firstUpdateResponse.status()}`,
-        `response body: ${firstUpdateRawText || "(empty)"}`,
-      ].join("\n"),
+      editDialog,
+      recordId,
+      "collection receipt UI smoke should update record with HTTP 200,",
     );
     expectedUpdatedAt = String(
       firstUpdatePayload?.record?.updatedAt || firstUpdatePayload?.record?.createdAt || expectedUpdatedAt,
@@ -1029,24 +1016,11 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     await removeDialog.getByText(replaceReceiptName).first().waitFor({ timeout: 15_000 });
     await removeDialog.getByRole("button", { name: "Remove" }).first().click();
 
-    const removeResponsePromise = page.waitForResponse(
-      (response) =>
-        response.request().method() === "PATCH"
-        && response.url().includes(`/api/collection/${recordId}`),
-    );
-    await clickAndAcceptDialogIfShown(
+    const removePayload = await submitCollectionRecordDialogSaveWithRetry(
       page,
-      () => removeDialog.getByRole("button", { name: /^Save$/ }).click(),
-    );
-    const removeResponse = await removeResponsePromise;
-    const removeRawText = await removeResponse.text();
-    const removePayload = removeRawText ? JSON.parse(removeRawText) : {};
-    assert(
-      removeResponse.status() === 200,
-      [
-        `collection receipt UI smoke should remove receipt with HTTP 200, got ${removeResponse.status()}`,
-        `response body: ${removeRawText || "(empty)"}`,
-      ].join("\n"),
+      removeDialog,
+      recordId,
+      "collection receipt UI smoke should remove receipt with HTTP 200,",
     );
     expectedUpdatedAt = String(
       removePayload?.record?.updatedAt || removePayload?.record?.createdAt || expectedUpdatedAt,
@@ -1079,6 +1053,7 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
       postRemoveRecord.updatedAt || postRemoveRecord.createdAt || expectedUpdatedAt,
     ).trim();
 
+    consumeExpectedCollectionPatchRateLimit(tracker, recordId);
     consumeExpectedCollectionPurgeSummaryRateLimit(tracker);
     consumeExpectedCollectionListRateLimit(tracker, accountNumber);
     consumeExpectedCollectionRecordsBootstrapRateLimitNoise(tracker, accountNumber);
@@ -1101,6 +1076,7 @@ const checkBackupRestoreUiFlow = async (page, context, tracker) => {
   await page.getByText("Backup & Restore").first().waitFor();
 
   if (await page.getByTestId("button-create-backup").count() === 0) {
+    consumeExpectedBackupRestoreBootstrapRateLimitNoise(tracker);
     consumeExpectedBackupJobRateLimit(tracker);
     tracker.assertClean("backup restore UI flow");
     tracker.clear();
@@ -1735,6 +1711,51 @@ const waitForRateLimitRecovery = async (payload, fallbackMs = 1_000) => {
   await new Promise((resolve) => setTimeout(resolve, boundedRetryMs));
 };
 
+const submitCollectionRecordDialogSaveWithRetry = async (
+  page,
+  dialog,
+  recordId,
+  failureMessage,
+  maxAttempts = 4,
+) => {
+  let lastStatus = 0;
+  let lastRawText = "";
+  let lastPayload = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const responsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH"
+        && response.url().includes(`/api/collection/${recordId}`),
+    );
+    await clickAndAcceptDialogIfShown(
+      page,
+      () => dialog.getByRole("button", { name: /^Save$/ }).click(),
+    );
+    const response = await responsePromise;
+    lastStatus = response.status();
+    lastRawText = await response.text();
+    lastPayload = lastRawText ? JSON.parse(lastRawText) : {};
+
+    if (lastStatus === 429 && attempt < maxAttempts) {
+      await waitForRateLimitRecovery(lastPayload, 1_000);
+      continue;
+    }
+
+    break;
+  }
+
+  assert(
+    lastStatus === 200,
+    [
+      `${failureMessage} got ${lastStatus}`,
+      `response body: ${lastRawText || "(empty)"}`,
+    ].join("\n"),
+  );
+
+  return lastPayload;
+};
+
 const cleanupStaleDeleteConflictRecord = async (
   context,
   record,
@@ -1826,6 +1847,28 @@ const consumeExpectedCollectionListRateLimit = (tracker, searchValue = "") => {
   return consumed;
 };
 
+const consumeExpectedCollectionPatchRateLimit = (tracker, recordId) => {
+  const normalizedRecordId = String(recordId || "").trim();
+  if (!normalizedRecordId) {
+    return 0;
+  }
+
+  const pattern = `/api/collection/${normalizedRecordId}`;
+  let consumed = 0;
+
+  for (let index = tracker.failedRequests.length - 1; index >= 0; index -= 1) {
+    const entry = String(tracker.failedRequests[index] || "");
+    if (!entry.includes("PATCH") || !entry.includes(pattern) || !entry.includes(":: 429")) {
+      continue;
+    }
+
+    tracker.failedRequests.splice(index, 1);
+    consumed += 1;
+  }
+
+  return consumed;
+};
+
 const consumeExpectedCollectionRecordsBootstrapRateLimitNoise = (tracker, searchValue = "") => {
   const normalizedSearchValue = String(searchValue || "").trim();
   const expectedPaths = [
@@ -1846,6 +1889,31 @@ const consumeExpectedCollectionRecordsBootstrapRateLimitNoise = (tracker, search
       && (!normalizedSearchValue || entry.includes(normalizedSearchValue) || entry.includes("pageSize=50"));
 
     if (!isExpectedBootstrapPath && !isExpectedCollectionList) {
+      continue;
+    }
+
+    tracker.failedRequests.splice(index, 1);
+    consumed += 1;
+  }
+
+  return consumed;
+};
+
+const consumeExpectedBackupRestoreBootstrapRateLimitNoise = (tracker) => {
+  const expectedPaths = [
+    "/api/app-config",
+    "/api/imports?pageSize=1",
+  ];
+  let consumed = 0;
+
+  for (let index = tracker.failedRequests.length - 1; index >= 0; index -= 1) {
+    const entry = String(tracker.failedRequests[index] || "");
+    if (!entry.includes("GET") || !entry.includes(":: 429")) {
+      continue;
+    }
+
+    const isExpectedBootstrapPath = expectedPaths.some((pathFragment) => entry.includes(pathFragment));
+    if (!isExpectedBootstrapPath) {
       continue;
     }
 

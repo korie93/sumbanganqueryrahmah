@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +19,12 @@ import {
   buildViewerExportMenuSections,
   type ViewerExportActionKind,
 } from "@/pages/viewer/export-menu-utils";
-import { ViewerExportOptionsList } from "@/pages/viewer/ViewerExportOptionsList";
+
+const ViewerExportOptionsList = lazy(() =>
+  import("@/pages/viewer/ViewerExportOptionsList").then((module) => ({
+    default: module.ViewerExportOptionsList,
+  })),
+);
 
 interface ViewerExportMenuProps {
   exportBusy: boolean;
@@ -48,6 +53,7 @@ export function ViewerExportMenu({
 }: ViewerExportMenuProps) {
   const isMobile = useIsMobile();
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  const [desktopPopoverOpen, setDesktopPopoverOpen] = useState(false);
   const sections = buildViewerExportMenuSections({
     exportBusy,
     totalRows,
@@ -86,6 +92,17 @@ export function ViewerExportMenu({
     </Button>
   );
 
+  const exportOptionsFallback = (
+    <div aria-hidden="true" className="space-y-2">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div
+          key={index}
+          className="h-9 animate-pulse rounded-md border border-border/50 bg-muted/20"
+        />
+      ))}
+    </div>
+  );
+
   if (isMobile) {
     return (
       <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
@@ -102,14 +119,18 @@ export function ViewerExportMenu({
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4">
-            <ViewerExportOptionsList
-              headersCount={headersCount}
-              sections={sections}
-              selectedColumnsCount={selectedColumnsCount}
-              onRunExport={(kind, exportFiltered, exportSelected) =>
-                runExport(true, kind, exportFiltered, exportSelected)
-              }
-            />
+            {mobileSheetOpen ? (
+              <Suspense fallback={exportOptionsFallback}>
+                <ViewerExportOptionsList
+                  headersCount={headersCount}
+                  sections={sections}
+                  selectedColumnsCount={selectedColumnsCount}
+                  onRunExport={(kind, exportFiltered, exportSelected) =>
+                    runExport(true, kind, exportFiltered, exportSelected)
+                  }
+                />
+              </Suspense>
+            ) : null}
           </div>
         </SheetContent>
       </Sheet>
@@ -117,19 +138,23 @@ export function ViewerExportMenu({
   }
 
   return (
-    <Popover>
+    <Popover open={desktopPopoverOpen} onOpenChange={setDesktopPopoverOpen}>
       <PopoverTrigger asChild>
         {trigger}
       </PopoverTrigger>
       <PopoverContent className="w-64" align="end">
-        <ViewerExportOptionsList
-          headersCount={headersCount}
-          sections={sections}
-          selectedColumnsCount={selectedColumnsCount}
-          onRunExport={(kind, exportFiltered, exportSelected) =>
-            runExport(false, kind, exportFiltered, exportSelected)
-          }
-        />
+        {desktopPopoverOpen ? (
+          <Suspense fallback={exportOptionsFallback}>
+            <ViewerExportOptionsList
+              headersCount={headersCount}
+              sections={sections}
+              selectedColumnsCount={selectedColumnsCount}
+              onRunExport={(kind, exportFiltered, exportSelected) =>
+                runExport(false, kind, exportFiltered, exportSelected)
+              }
+            />
+          </Suspense>
+        ) : null}
       </PopoverContent>
     </Popover>
   );

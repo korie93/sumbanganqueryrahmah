@@ -30,6 +30,7 @@ export function SettingsSidebar({
   sidebarCollapsed,
 }: SettingsSidebarProps) {
   const isMobile = useIsMobile();
+  const shouldRenderNavigation = !isMobile || mobileOpen;
   const items = useMemo(
     () =>
       categories.map((category) => ({
@@ -112,21 +113,23 @@ export function SettingsSidebar({
         </div>
       ) : null}
 
-      <LazySideTabNavigation
-        items={items}
-        selectedKey={selectedCategory}
-        onSelect={onSelectCategory}
-        mobileOpen={mobileOpen}
-        onMobileOpenChange={onMobileOpenChange}
-        hideMobileTrigger={isMobile}
-        collapsed={sidebarCollapsed}
-        onCollapsedChange={onSidebarCollapsedChange}
-        menuLabel="Settings Menu"
-        navigationLabel="Settings Navigation"
-        expandedWidth={296}
-        collapsedWidth={88}
-        className="border-border/60 bg-background/75"
-      />
+      {shouldRenderNavigation ? (
+        <LazySideTabNavigation
+          items={items}
+          selectedKey={selectedCategory}
+          onSelect={onSelectCategory}
+          mobileOpen={mobileOpen}
+          onMobileOpenChange={onMobileOpenChange}
+          hideMobileTrigger={isMobile}
+          collapsed={sidebarCollapsed}
+          onCollapsedChange={onSidebarCollapsedChange}
+          menuLabel="Settings Menu"
+          navigationLabel="Settings Navigation"
+          expandedWidth={296}
+          collapsedWidth={88}
+          className="border-border/60 bg-background/75"
+        />
+      ) : null}
     </>
   );
 }

@@ -1,12 +1,14 @@
 import { Suspense, lazy, useLayoutEffect, useMemo, useRef } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { DataRowWithId, ViewerVirtualRowData } from "@/pages/viewer/types";
-import {
-  ViewerDataTableFeedback,
-  ViewerMobileCardsTable,
-} from "@/pages/viewer/ViewerDataTableSections";
+import { ViewerDataTableFeedback } from "@/pages/viewer/ViewerDataTableFeedback";
 import styles from "./ViewerDataTable.module.css";
 
+const ViewerMobileCardsTable = lazy(() =>
+  import("@/pages/viewer/ViewerMobileCardsTable").then((module) => ({
+    default: module.ViewerMobileCardsTable,
+  })),
+);
 const ViewerStandardTable = lazy(() =>
   import("@/pages/viewer/ViewerStandardTable").then((module) => ({
     default: module.ViewerStandardTable,
@@ -75,18 +77,31 @@ export function ViewerDataTable({
       <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
     </div>
   );
+  const mobileTableFallback = (
+    <div className="space-y-3">
+      <div className="h-12 animate-pulse rounded-xl border border-border/60 bg-background/60" />
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div
+          key={index}
+          className="h-40 animate-pulse rounded-2xl border border-border/60 bg-background/60"
+        />
+      ))}
+    </div>
+  );
 
   return (
     <div className="ops-table-shell overflow-x-auto">
       {isMobile ? (
-        <ViewerMobileCardsTable
-          filteredRows={filteredRows}
-          onToggleRowSelection={onToggleRowSelection}
-          onToggleSelectAllFiltered={onToggleSelectAllFiltered}
-          selectedRowIds={selectedRowIds}
-          selectAllFiltered={selectAllFiltered}
-          visibleHeaders={visibleHeaders}
-        />
+        <Suspense fallback={mobileTableFallback}>
+          <ViewerMobileCardsTable
+            filteredRows={filteredRows}
+            onToggleRowSelection={onToggleRowSelection}
+            onToggleSelectAllFiltered={onToggleSelectAllFiltered}
+            selectedRowIds={selectedRowIds}
+            selectAllFiltered={selectAllFiltered}
+            visibleHeaders={visibleHeaders}
+          />
+        </Suspense>
       ) : enableVirtualRows ? (
         <Suspense fallback={desktopTableFallback}>
           <ViewerVirtualizedTable

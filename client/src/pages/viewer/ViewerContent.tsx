@@ -15,13 +15,29 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { ViewerDataTable } from "@/pages/viewer/ViewerDataTable";
-import { ViewerEmptyState } from "@/pages/viewer/ViewerEmptyState";
-import { ViewerFooter } from "@/pages/viewer/ViewerFooter";
 import { ViewerLoadingSkeleton } from "@/pages/viewer/ViewerLoadingSkeleton";
-import { ViewerSearchBar } from "@/pages/viewer/ViewerSearchBar";
 import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
 
+const ViewerEmptyState = lazy(() =>
+  import("@/pages/viewer/ViewerEmptyState").then((module) => ({
+    default: module.ViewerEmptyState,
+  })),
+);
+const ViewerSearchBar = lazy(() =>
+  import("@/pages/viewer/ViewerSearchBar").then((module) => ({
+    default: module.ViewerSearchBar,
+  })),
+);
+const ViewerDataTable = lazy(() =>
+  import("@/pages/viewer/ViewerDataTable").then((module) => ({
+    default: module.ViewerDataTable,
+  })),
+);
+const ViewerFooter = lazy(() =>
+  import("@/pages/viewer/ViewerFooter").then((module) => ({
+    default: module.ViewerFooter,
+  })),
+);
 const ViewerFiltersPanel = lazy(() =>
   import("@/pages/viewer/ViewerFiltersPanel").then((module) => ({
     default: module.ViewerFiltersPanel,
@@ -81,6 +97,44 @@ function ViewerFiltersPanelFallback() {
       <div className="h-5 w-40 animate-pulse rounded bg-muted/40" />
       <div className="h-10 w-full animate-pulse rounded-xl border border-border/60 bg-muted/25" />
       <div className="h-10 w-full animate-pulse rounded-xl border border-border/60 bg-muted/25" />
+    </div>
+  );
+}
+
+function ViewerDataTableFallback() {
+  return (
+    <div className="ops-table-shell overflow-x-auto">
+      <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-border/60 bg-background/60">
+        <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+      </div>
+    </div>
+  );
+}
+
+function ViewerFooterFallback() {
+  return (
+    <div className="mt-4 h-[72px] animate-pulse rounded-xl border border-border/60 bg-background/70" />
+  );
+}
+
+function ViewerSearchBarFallback() {
+  return (
+    <div className="ops-toolbar mb-4 space-y-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="h-10 min-w-48 max-w-xl flex-1 animate-pulse rounded-xl border border-border/60 bg-muted/25" />
+        <div className="h-4 w-36 animate-pulse rounded bg-muted/30" />
+      </div>
+      <div className="h-8 w-full animate-pulse rounded-xl border border-border/50 bg-muted/20" />
+    </div>
+  );
+}
+
+function ViewerEmptyStateFallback() {
+  return (
+    <div className="ops-empty-state">
+      <div className="mx-auto mb-4 h-16 w-16 animate-pulse rounded-full bg-muted/35" />
+      <div className="mx-auto h-5 w-24 animate-pulse rounded bg-muted/35" />
+      <div className="mx-auto mt-3 h-4 w-56 max-w-full animate-pulse rounded bg-muted/25" />
     </div>
   );
 }
@@ -185,11 +239,13 @@ export function ViewerContent({
       {loading ? (
         <ViewerLoadingSkeleton />
       ) : rows.length === 0 && !error ? (
-        <ViewerEmptyState
-          emptyHint={emptyHint}
-          isSearchBelowMinLength={isSearchBelowMinLength}
-          minSearchLength={minSearchLength}
-        />
+        <Suspense fallback={<ViewerEmptyStateFallback />}>
+          <ViewerEmptyState
+            emptyHint={emptyHint}
+            isSearchBelowMinLength={isSearchBelowMinLength}
+            minSearchLength={minSearchLength}
+          />
+        </Suspense>
       ) : (
         <OperationalSectionCard
           title="Dataset rows"
@@ -197,69 +253,77 @@ export function ViewerContent({
           contentClassName="space-y-4"
         >
           {rows.length > 0 ? (
-            <ViewerSearchBar
-              search={search}
-              filteredRowsCount={filteredRows.length}
-              rowsCount={rows.length}
-              showResultsSummary={showResultsSummary}
-              activeFilters={activeFilters}
-              searchInputRef={searchInputRef}
-              onClearAllFilters={onClearAllFilters}
-              onSearchChange={onSearchChange}
-            />
+            <Suspense fallback={<ViewerSearchBarFallback />}>
+              <ViewerSearchBar
+                search={search}
+                filteredRowsCount={filteredRows.length}
+                rowsCount={rows.length}
+                showResultsSummary={showResultsSummary}
+                activeFilters={activeFilters}
+                searchInputRef={searchInputRef}
+                onClearAllFilters={onClearAllFilters}
+                onSearchChange={onSearchChange}
+              />
+            </Suspense>
           ) : null}
 
           {rows.length > 0 && isMobile ? (
             <Sheet open={showFilters} onOpenChange={onShowFiltersChange}>
-              <SheetContent
-                side="bottom"
-                className="max-h-[88dvh] rounded-t-[1.75rem] border-border/70 bg-background/98 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] pt-4"
-                data-floating-ai-avoid="true"
-              >
-                <SheetHeader className="pr-8 text-left">
-                  <SheetTitle>Column Filters</SheetTitle>
-                  <SheetDescription>
-                    Narrow matching rows across the dataset without leaving the viewer.
-                  </SheetDescription>
-                </SheetHeader>
-                <div className="mt-4">{filtersPanel}</div>
-              </SheetContent>
+              {showFilters ? (
+                <SheetContent
+                  side="bottom"
+                  className="max-h-[88dvh] rounded-t-[1.75rem] border-border/70 bg-background/98 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] pt-4"
+                  data-floating-ai-avoid="true"
+                >
+                  <SheetHeader className="pr-8 text-left">
+                    <SheetTitle>Column Filters</SheetTitle>
+                    <SheetDescription>
+                      Narrow matching rows across the dataset without leaving the viewer.
+                    </SheetDescription>
+                  </SheetHeader>
+                  <div className="mt-4">{filtersPanel}</div>
+                </SheetContent>
+              ) : null}
             </Sheet>
           ) : null}
 
-          <ViewerDataTable
-            debouncedSearch={debouncedSearch}
-            enableVirtualRows={enableVirtualRows}
-            filteredRows={filteredRows}
-            gridTemplateColumns={gridTemplateColumns}
-            minSearchLength={minSearchLength}
-            onToggleRowSelection={onToggleRowSelection}
-            onToggleSelectAllFiltered={onToggleSelectAllFiltered}
-            rowHeightPx={rowHeightPx}
-            selectedRowIds={selectedRowIds}
-            selectAllFiltered={selectAllFiltered}
-            virtualTableMinWidth={virtualTableMinWidth}
-            viewportHeightPx={viewportHeightPx}
-            visibleHeaders={visibleHeaders}
-          />
+          <Suspense fallback={<ViewerDataTableFallback />}>
+            <ViewerDataTable
+              debouncedSearch={debouncedSearch}
+              enableVirtualRows={enableVirtualRows}
+              filteredRows={filteredRows}
+              gridTemplateColumns={gridTemplateColumns}
+              minSearchLength={minSearchLength}
+              onToggleRowSelection={onToggleRowSelection}
+              onToggleSelectAllFiltered={onToggleSelectAllFiltered}
+              rowHeightPx={rowHeightPx}
+              selectedRowIds={selectedRowIds}
+              selectAllFiltered={selectAllFiltered}
+              virtualTableMinWidth={virtualTableMinWidth}
+              viewportHeightPx={viewportHeightPx}
+              visibleHeaders={visibleHeaders}
+            />
+          </Suspense>
 
-          <ViewerFooter
-            filteredRowsCount={filteredRows.length}
-            rowsCount={rows.length}
-            totalRows={totalRows}
-            currentPage={currentPage}
-            totalPages={totalPages}
-            pageStart={pageStart}
-            pageEnd={pageEnd}
-            selectedRowCount={selectedRowIds.size}
-            hasPageFilterSubset={hasPageFilterSubset}
-            hasNextPage={hasNextPage}
-            hasPreviousPage={hasPreviousPage}
-            loadingMore={loadingMore}
-            onClearSelection={onClearSelection}
-            onPrevPage={onPrevPage}
-            onNextPage={onNextPage}
-          />
+          <Suspense fallback={<ViewerFooterFallback />}>
+            <ViewerFooter
+              filteredRowsCount={filteredRows.length}
+              rowsCount={rows.length}
+              totalRows={totalRows}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              pageStart={pageStart}
+              pageEnd={pageEnd}
+              selectedRowCount={selectedRowIds.size}
+              hasPageFilterSubset={hasPageFilterSubset}
+              hasNextPage={hasNextPage}
+              hasPreviousPage={hasPreviousPage}
+              loadingMore={loadingMore}
+              onClearSelection={onClearSelection}
+              onPrevPage={onPrevPage}
+              onNextPage={onNextPage}
+            />
+          </Suspense>
         </OperationalSectionCard>
       )}
     </>

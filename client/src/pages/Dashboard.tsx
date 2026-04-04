@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AppQueryProvider } from "@/app/AppQueryProvider";
 import { Download, RefreshCw } from "lucide-react";
@@ -38,8 +38,81 @@ function DashboardSectionFallback({ label }: { label: string }) {
   );
 }
 
+type DeferredDashboardSectionOptions = {
+  enabled: boolean;
+  rootMargin?: string;
+  timeoutMs?: number;
+};
+
+function useDeferredDashboardSectionMount({
+  enabled,
+  rootMargin = "320px 0px",
+  timeoutMs = 1400,
+}: DeferredDashboardSectionOptions) {
+  const triggerRef = useRef<HTMLDivElement | null>(null);
+  const [shouldRender, setShouldRender] = useState(() => !enabled);
+
+  useEffect(() => {
+    if (!enabled) {
+      setShouldRender(true);
+      return;
+    }
+
+    if (shouldRender) {
+      return;
+    }
+
+    let cancelled = false;
+    let observer: IntersectionObserver | null = null;
+    let timeoutHandle: number | null = null;
+
+    const markReady = () => {
+      if (cancelled) {
+        return;
+      }
+
+      startTransition(() => {
+        setShouldRender(true);
+      });
+    };
+
+    if (typeof window.IntersectionObserver === "function" && triggerRef.current) {
+      observer = new window.IntersectionObserver(
+        (entries) => {
+          if (!entries.some((entry) => entry.isIntersecting)) {
+            return;
+          }
+
+          observer?.disconnect();
+          observer = null;
+          markReady();
+        },
+        {
+          rootMargin,
+        },
+      );
+      observer.observe(triggerRef.current);
+    } else {
+      timeoutHandle = window.setTimeout(markReady, timeoutMs);
+    }
+
+    return () => {
+      cancelled = true;
+      observer?.disconnect();
+      observer = null;
+      if (timeoutHandle !== null) {
+        window.clearTimeout(timeoutHandle);
+      }
+    };
+  }, [enabled, rootMargin, shouldRender, timeoutMs]);
+
+  return { shouldRender, triggerRef };
+}
+
 function DashboardContent() {
   const isMobile = useIsMobile();
+  const shouldDeferSecondaryMobileSections =
+    isMobile || (typeof window !== "undefined" && window.innerWidth < 768);
   const [trendDays, setTrendDays] = useState(7);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -47,6 +120,16 @@ function DashboardContent() {
   const exportInFlightRef = useRef(false);
   const refreshInFlightRef = useRef(false);
   const mountedRef = useRef(true);
+  const chartsSection = useDeferredDashboardSectionMount({
+    enabled: shouldDeferSecondaryMobileSections,
+    rootMargin: "260px 0px",
+    timeoutMs: 1200,
+  });
+  const userInsightsSection = useDeferredDashboardSectionMount({
+    enabled: shouldDeferSecondaryMobileSections,
+    rootMargin: "420px 0px",
+    timeoutMs: 1700,
+  });
 
   const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useQuery<SummaryData>({
     queryKey: ["/api/analytics/summary"],
@@ -194,24 +277,36 @@ function DashboardContent() {
 
         <div ref={dashboardRef} className="space-y-4 sm:space-y-6">
           <DashboardSummaryCards items={summaryCards} summaryLoading={summaryLoading} />
-          <Suspense fallback={<DashboardSectionFallback label="Loading dashboard charts" />}>
-            <DashboardChartsGrid
-              onTrendDaysChange={setTrendDays}
-              peakHours={peakHours}
-              peakHoursLoading={peakHoursLoading}
-              trendDays={trendDays}
-              trends={trends}
-              trendsLoading={trendsLoading}
-            />
-          </Suspense>
-          <Suspense fallback={<DashboardSectionFallback label="Loading dashboard user insights" />}>
-            <DashboardUserInsightsGrid
-              roleDistribution={roleDistribution}
-              roleLoading={roleLoading}
-              topUsers={topUsers}
-              topUsersLoading={topUsersLoading}
-            />
-          </Suspense>
+          <div ref={chartsSection.triggerRef}>
+            {chartsSection.shouldRender ? (
+              <Suspense fallback={<DashboardSectionFallback label="Loading dashboard charts" />}>
+                <DashboardChartsGrid
+                  onTrendDaysChange={setTrendDays}
+                  peakHours={peakHours}
+                  peakHoursLoading={peakHoursLoading}
+                  trendDays={trendDays}
+                  trends={trends}
+                  trendsLoading={trendsLoading}
+                />
+              </Suspense>
+            ) : (
+              <DashboardSectionFallback label="Dashboard charts will load as you scroll" />
+            )}
+          </div>
+          <div ref={userInsightsSection.triggerRef}>
+            {userInsightsSection.shouldRender ? (
+              <Suspense fallback={<DashboardSectionFallback label="Loading dashboard user insights" />}>
+                <DashboardUserInsightsGrid
+                  roleDistribution={roleDistribution}
+                  roleLoading={roleLoading}
+                  topUsers={topUsers}
+                  topUsersLoading={topUsersLoading}
+                />
+              </Suspense>
+            ) : (
+              <DashboardSectionFallback label="Dashboard user insights will load as you scroll" />
+            )}
+          </div>
         </div>
       </div>
     </div>

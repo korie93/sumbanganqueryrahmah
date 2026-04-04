@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { MonitorAccessDenied } from "@/components/monitor/MonitorAccessDenied";
 import { MonitorOverviewSection } from "@/components/monitor/MonitorOverviewSection";
@@ -153,6 +153,77 @@ function MonitorSectionCardFallback({
   );
 }
 
+type DeferredMonitorSectionOptions = {
+  enabled: boolean;
+  rootMargin?: string;
+  timeoutMs?: number;
+};
+
+function useDeferredMonitorSectionMount({
+  enabled,
+  rootMargin = "320px 0px",
+  timeoutMs = 1400,
+}: DeferredMonitorSectionOptions) {
+  const triggerRef = useRef<HTMLDivElement | null>(null);
+  const [shouldRender, setShouldRender] = useState(() => !enabled);
+
+  useEffect(() => {
+    if (!enabled) {
+      setShouldRender(true);
+      return;
+    }
+
+    if (shouldRender) {
+      return;
+    }
+
+    let cancelled = false;
+    let observer: IntersectionObserver | null = null;
+    let timeoutHandle: number | null = null;
+
+    const markReady = () => {
+      if (cancelled) {
+        return;
+      }
+
+      startTransition(() => {
+        setShouldRender(true);
+      });
+    };
+
+    if (typeof window.IntersectionObserver === "function" && triggerRef.current) {
+      observer = new window.IntersectionObserver(
+        (entries) => {
+          if (!entries.some((entry) => entry.isIntersecting)) {
+            return;
+          }
+
+          observer?.disconnect();
+          observer = null;
+          markReady();
+        },
+        {
+          rootMargin,
+        },
+      );
+      observer.observe(triggerRef.current);
+    } else {
+      timeoutHandle = window.setTimeout(markReady, timeoutMs);
+    }
+
+    return () => {
+      cancelled = true;
+      observer?.disconnect();
+      observer = null;
+      if (timeoutHandle !== null) {
+        window.clearTimeout(timeoutHandle);
+      }
+    };
+  }, [enabled, rootMargin, shouldRender, timeoutMs]);
+
+  return { shouldRender, triggerRef };
+}
+
 function MonitorMobileDeferredSectionToggle({
   title,
   description,
@@ -258,6 +329,14 @@ export default function Monitor() {
     [snapshot.rollupRefreshOldestPendingAgeMs],
   );
   const metricGroups = useMemo(() => buildMetricGroups(snapshot, history), [history, snapshot]);
+  const { shouldRender: shouldRenderMetrics, triggerRef: metricsTriggerRef } =
+    useDeferredMonitorSectionMount({ enabled: deferSecondaryMobileSections });
+  const { shouldRender: shouldRenderRollupControls, triggerRef: rollupControlsTriggerRef } =
+    useDeferredMonitorSectionMount({ enabled: deferSecondaryMobileSections && canManageRollups });
+  const { shouldRender: shouldRenderAlerts, triggerRef: alertsTriggerRef } =
+    useDeferredMonitorSectionMount({ enabled: deferSecondaryMobileSections });
+  const { shouldRender: shouldRenderInsights, triggerRef: insightsTriggerRef } =
+    useDeferredMonitorSectionMount({ enabled: deferSecondaryMobileSections });
 
   const handleChaosTypeChange = useCallback((nextType: ChaosType) => {
     setChaosType(nextType);
@@ -424,34 +503,58 @@ export default function Monitor() {
           rollupFreshnessSummary={rollupFreshnessSummary}
           rollupFreshnessAgeLabel={rollupFreshnessAgeLabel}
         />
-        <Suspense fallback={<MonitorMetricsFallback />}>
-          <MonitorMetricsSection metricGroups={metricGroups} />
-        </Suspense>
+        <div ref={metricsTriggerRef}>
+          {shouldRenderMetrics ? (
+            <Suspense fallback={<MonitorMetricsFallback />}>
+              <MonitorMetricsSection metricGroups={metricGroups} />
+            </Suspense>
+          ) : (
+            <MonitorMetricsFallback />
+          )}
+        </div>
         {canManageRollups ? (
-          <Suspense fallback={<MonitorSectionCardFallback title="Loading rollup controls" />}>
-            <MonitorRollupQueueControlsSection
-              canManageRollups={canManageRollups}
-              snapshot={snapshot}
-              busyAction={queueActionBusy}
-              lastMessage={lastQueueActionMessage}
-              onDrain={() => void runRollupAction("drain")}
-              onRetryFailures={() => void runRollupAction("retry-failures")}
-              onAutoHeal={() => void runRollupAction("auto-heal")}
-              onRebuild={() => void runRollupAction("rebuild")}
-            />
-          </Suspense>
+          <div ref={rollupControlsTriggerRef}>
+            {shouldRenderRollupControls ? (
+              <Suspense fallback={<MonitorSectionCardFallback title="Loading rollup controls" />}>
+                <MonitorRollupQueueControlsSection
+                  canManageRollups={canManageRollups}
+                  snapshot={snapshot}
+                  busyAction={queueActionBusy}
+                  lastMessage={lastQueueActionMessage}
+                  onDrain={() => void runRollupAction("drain")}
+                  onRetryFailures={() => void runRollupAction("retry-failures")}
+                  onAutoHeal={() => void runRollupAction("auto-heal")}
+                  onRebuild={() => void runRollupAction("rebuild")}
+                />
+              </Suspense>
+            ) : (
+              <MonitorSectionCardFallback title="Loading rollup controls" />
+            )}
+          </div>
         ) : null}
-        <Suspense fallback={<MonitorSectionCardFallback title="Loading alerts" blocks={3} />}>
-          <MonitorAlertsSection
-            alertsOpen={alertsOpen}
-            onAlertsOpenChange={setAlertsOpen}
-            alerts={alerts}
-            alertHistory={alertHistory}
-          />
-        </Suspense>
-        <Suspense fallback={<MonitorInsightsFallback />}>
-          <MonitorInsightsSection intelligence={intelligence} lastUpdated={lastUpdated} />
-        </Suspense>
+        <div ref={alertsTriggerRef}>
+          {shouldRenderAlerts ? (
+            <Suspense fallback={<MonitorSectionCardFallback title="Loading alerts" blocks={3} />}>
+              <MonitorAlertsSection
+                alertsOpen={alertsOpen}
+                onAlertsOpenChange={setAlertsOpen}
+                alerts={alerts}
+                alertHistory={alertHistory}
+              />
+            </Suspense>
+          ) : (
+            <MonitorSectionCardFallback title="Loading alerts" blocks={3} />
+          )}
+        </div>
+        <div ref={insightsTriggerRef}>
+          {shouldRenderInsights ? (
+            <Suspense fallback={<MonitorInsightsFallback />}>
+              <MonitorInsightsSection intelligence={intelligence} lastUpdated={lastUpdated} />
+            </Suspense>
+          ) : (
+            <MonitorInsightsFallback />
+          )}
+        </div>
         {deferSecondaryMobileSections ? (
           <>
             <MonitorMobileDeferredSectionToggle

@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { LazySideTabNavigation } from "@/components/navigation/LazySideTabNavigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import type { CollectionSidebarItem, CollectionSubPage } from "@/pages/collection-report/types";
 
@@ -25,6 +26,8 @@ export function CollectionSidebar({
   sidebarCollapsed,
   onSidebarCollapsedChange,
 }: CollectionSidebarProps) {
+  const isMobile = useIsMobile();
+  const shouldRenderNavigation = !isMobile || mobileOpen;
   const selectedItem = useMemo(
     () => items.find((item) => item.key === selectedSubPage) || items[0],
     [items, selectedSubPage],
@@ -96,18 +99,20 @@ export function CollectionSidebar({
         </Button>
       </section>
 
-      <LazySideTabNavigation
-        items={items}
-        selectedKey={selectedSubPage}
-        onSelect={(key) => onSelectSubPage(key as CollectionSubPage)}
-        mobileOpen={mobileOpen}
-        onMobileOpenChange={onMobileOpenChange}
-        hideMobileTrigger
-        collapsed={sidebarCollapsed}
-        onCollapsedChange={onSidebarCollapsedChange}
-        menuLabel="Menu"
-        navigationLabel="Collection Navigation"
-      />
+      {shouldRenderNavigation ? (
+        <LazySideTabNavigation
+          items={items}
+          selectedKey={selectedSubPage}
+          onSelect={(key) => onSelectSubPage(key as CollectionSubPage)}
+          mobileOpen={mobileOpen}
+          onMobileOpenChange={onMobileOpenChange}
+          hideMobileTrigger
+          collapsed={sidebarCollapsed}
+          onCollapsedChange={onSidebarCollapsedChange}
+          menuLabel="Menu"
+          navigationLabel="Collection Navigation"
+        />
+      ) : null}
     </>
   );
 }

@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import { Columns } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +16,12 @@ import {
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { buildViewerColumnSelectorLabel } from "@/pages/viewer/column-selector-utils";
-import { ViewerColumnSelectorList } from "@/pages/viewer/ViewerColumnSelectorList";
+
+const ViewerColumnSelectorList = lazy(() =>
+  import("@/pages/viewer/ViewerColumnSelectorList").then((module) => ({
+    default: module.ViewerColumnSelectorList,
+  })),
+);
 
 interface ViewerColumnSelectorProps {
   open: boolean;
@@ -45,6 +51,17 @@ export function ViewerColumnSelector({
     </Button>
   );
 
+  const selectorListFallback = (
+    <div aria-hidden="true" className="max-h-48 space-y-2 overflow-y-auto">
+      {Array.from({ length: Math.min(headers.length, 6) || 4 }).map((_, index) => (
+        <div
+          key={index}
+          className="h-6 animate-pulse rounded-md border border-border/50 bg-muted/20"
+        />
+      ))}
+    </div>
+  );
+
   const selectorContent = (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
@@ -68,11 +85,15 @@ export function ViewerColumnSelector({
           </Button>
         </div>
       </div>
-      <ViewerColumnSelectorList
-        headers={headers}
-        selectedColumns={selectedColumns}
-        onToggleColumn={onToggleColumn}
-      />
+      {open ? (
+        <Suspense fallback={selectorListFallback}>
+          <ViewerColumnSelectorList
+            headers={headers}
+            selectedColumns={selectedColumns}
+            onToggleColumn={onToggleColumn}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 

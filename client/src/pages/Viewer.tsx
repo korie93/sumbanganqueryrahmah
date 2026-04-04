@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { OperationalPage } from "@/components/layout/OperationalPage";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { getImportData } from "@/lib/api";
-import { ViewerContent } from "@/pages/viewer/ViewerContent";
-import { ViewerPageHeader } from "@/pages/viewer/ViewerPageHeader";
 import {
   appendViewerFilter,
   removeViewerFilterAt,
@@ -41,6 +39,64 @@ import {
   type ViewerStatePatch,
 } from "@/pages/viewer/viewer-state-utils";
 import { extractHeadersFromRows, filterViewerRows } from "@/pages/viewer/utils";
+
+const ViewerPageHeader = lazy(() =>
+  import("@/pages/viewer/ViewerPageHeader").then((module) => ({
+    default: module.ViewerPageHeader,
+  })),
+);
+
+const ViewerContent = lazy(() =>
+  import("@/pages/viewer/ViewerContent").then((module) => ({
+    default: module.ViewerContent,
+  })),
+);
+
+function ViewerPageHeaderFallback() {
+  return (
+    <div className="mb-6 space-y-3 rounded-3xl border border-border/70 bg-card/95 px-5 py-5 shadow-sm">
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 animate-pulse rounded-full border border-border/60 bg-muted/30" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="h-4 w-24 animate-pulse rounded bg-muted/30" />
+          <div className="h-7 w-56 max-w-full animate-pulse rounded bg-muted/40" />
+        </div>
+      </div>
+      <div className="h-4 w-64 max-w-full animate-pulse rounded bg-muted/25" />
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="h-10 w-full animate-pulse rounded-xl border border-border/60 bg-muted/25 sm:w-36" />
+        <div className="h-10 w-full animate-pulse rounded-xl border border-border/60 bg-muted/25 sm:w-32" />
+        <div className="h-10 w-full animate-pulse rounded-xl border border-border/60 bg-muted/25 sm:w-28" />
+      </div>
+    </div>
+  );
+}
+
+function ViewerContentFallback() {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <div
+            key={index}
+            className="h-24 animate-pulse rounded-2xl border border-border/60 bg-card/70"
+          />
+        ))}
+      </div>
+      <div className="rounded-3xl border border-border/70 bg-card/95 p-5 shadow-sm">
+        <div className="mb-4 h-11 w-full animate-pulse rounded-xl border border-border/60 bg-muted/25" />
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-12 animate-pulse rounded-xl border border-border/60 bg-muted/20"
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface ViewerProps {
   onNavigate: (page: string) => void;
@@ -579,80 +635,84 @@ export default function Viewer({
 
   return (
     <OperationalPage width="content">
-      <ViewerPageHeader
-        importName={importName}
-        rowsCount={rows.length}
-        totalRows={totalRows}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        headers={headers}
-        selectedColumns={selectedColumns}
-        showColumnSelector={showColumnSelector}
-        showFilters={showFilters}
-        filterCount={columnFilters.length}
-        isSuperuser={isSuperuser}
-        exportBusy={exportingPdf || exportingExcel}
-        filteredRowsCount={filteredRows.length}
-        selectedRowCount={selectedRowIds.size}
-        hasFilteredSubset={hasFilteredSubset}
-        onBack={handleBackToSaved}
-        onShowColumnSelectorChange={setShowColumnSelector}
-        onToggleColumn={toggleColumn}
-        onSelectAllColumns={selectAllColumns}
-        onDeselectAllColumns={deselectAllColumns}
-        onToggleFilters={handleToggleFilters}
-        onClearAllData={clearAllData}
-        onExportCsv={handleExportCsv}
-        onExportPdf={handleExportPdf}
-        onExportExcel={handleExportExcel}
-      />
+      <Suspense fallback={<ViewerPageHeaderFallback />}>
+        <ViewerPageHeader
+          importName={importName}
+          rowsCount={rows.length}
+          totalRows={totalRows}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          headers={headers}
+          selectedColumns={selectedColumns}
+          showColumnSelector={showColumnSelector}
+          showFilters={showFilters}
+          filterCount={columnFilters.length}
+          isSuperuser={isSuperuser}
+          exportBusy={exportingPdf || exportingExcel}
+          filteredRowsCount={filteredRows.length}
+          selectedRowCount={selectedRowIds.size}
+          hasFilteredSubset={hasFilteredSubset}
+          onBack={handleBackToSaved}
+          onShowColumnSelectorChange={setShowColumnSelector}
+          onToggleColumn={toggleColumn}
+          onSelectAllColumns={selectAllColumns}
+          onDeselectAllColumns={deselectAllColumns}
+          onToggleFilters={handleToggleFilters}
+          onClearAllData={clearAllData}
+          onExportCsv={handleExportCsv}
+          onExportPdf={handleExportPdf}
+          onExportExcel={handleExportExcel}
+        />
+      </Suspense>
 
-      <ViewerContent
-        rows={rows}
-        headers={headers}
-        visibleHeaders={visibleHeaders}
-        selectedRowIds={selectedRowIds}
-        totalRows={totalRows}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        pageStart={pageStart}
-        pageEnd={pageEnd}
-        showFilters={showFilters}
-        columnFilters={columnFilters}
-        error={error}
-        loading={loading}
-        emptyHint={emptyHint}
-        isSearchBelowMinLength={isSearchBelowMinLength}
-        minSearchLength={MIN_SEARCH_LENGTH}
-        search={search}
-        filteredRows={filteredRows}
-        showResultsSummary={columnFilters.length > 0 || isServerSearchActive}
-        activeFilters={activeFilterChips}
-        searchInputRef={searchInputRef}
-        debouncedSearch={debouncedSearch}
-        enableVirtualRows={enableVirtualRows}
-        gridTemplateColumns={gridTemplateColumns}
-        rowHeightPx={rowHeightPx}
-        selectAllFiltered={selectAllFiltered}
-        virtualTableMinWidth={virtualTableMinWidth}
-        viewportHeightPx={viewportHeightPx}
-        hasPageFilterSubset={hasPageFilterSubset}
-        hasNextPage={hasNextPage}
-        hasPreviousPage={hasPreviousPage}
-        loadingMore={loadingMore}
-        onBackToSaved={handleBackToSaved}
-        onAddFilter={addFilter}
-        onClearAllFilters={clearAllFilters}
-        onUpdateFilter={updateFilter}
-        onRemoveFilter={removeFilter}
-        onSearchChange={handleSearchChange}
-        onToggleRowSelection={toggleRowSelection}
-        onToggleSelectAllFiltered={toggleSelectAllFiltered}
-        onClearSelection={clearSelectionState}
-        onPrevPage={handlePrevPage}
-        onNextPage={handleNextPage}
-        onShowFiltersChange={handleShowFiltersChange}
-      />
+      <Suspense fallback={<ViewerContentFallback />}>
+        <ViewerContent
+          rows={rows}
+          headers={headers}
+          visibleHeaders={visibleHeaders}
+          selectedRowIds={selectedRowIds}
+          totalRows={totalRows}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageStart={pageStart}
+          pageEnd={pageEnd}
+          showFilters={showFilters}
+          columnFilters={columnFilters}
+          error={error}
+          loading={loading}
+          emptyHint={emptyHint}
+          isSearchBelowMinLength={isSearchBelowMinLength}
+          minSearchLength={MIN_SEARCH_LENGTH}
+          search={search}
+          filteredRows={filteredRows}
+          showResultsSummary={columnFilters.length > 0 || isServerSearchActive}
+          activeFilters={activeFilterChips}
+          searchInputRef={searchInputRef}
+          debouncedSearch={debouncedSearch}
+          enableVirtualRows={enableVirtualRows}
+          gridTemplateColumns={gridTemplateColumns}
+          rowHeightPx={rowHeightPx}
+          selectAllFiltered={selectAllFiltered}
+          virtualTableMinWidth={virtualTableMinWidth}
+          viewportHeightPx={viewportHeightPx}
+          hasPageFilterSubset={hasPageFilterSubset}
+          hasNextPage={hasNextPage}
+          hasPreviousPage={hasPreviousPage}
+          loadingMore={loadingMore}
+          onBackToSaved={handleBackToSaved}
+          onAddFilter={addFilter}
+          onClearAllFilters={clearAllFilters}
+          onUpdateFilter={updateFilter}
+          onRemoveFilter={removeFilter}
+          onSearchChange={handleSearchChange}
+          onToggleRowSelection={toggleRowSelection}
+          onToggleSelectAllFiltered={toggleSelectAllFiltered}
+          onClearSelection={clearSelectionState}
+          onPrevPage={handlePrevPage}
+          onNextPage={handleNextPage}
+          onShowFiltersChange={handleShowFiltersChange}
+        />
+      </Suspense>
     </OperationalPage>
   );
 }

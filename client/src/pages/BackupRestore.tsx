@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { AppQueryProvider } from "@/app/AppQueryProvider";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
@@ -14,12 +14,9 @@ import {
   getBackups,
   restoreBackupAsync,
 } from "@/lib/api";
-import { BackupActiveJobCard } from "@/pages/backup-restore/BackupActiveJobCard";
-import { BackupDialogs } from "@/pages/backup-restore/BackupDialogs";
 import { BackupFiltersPanel } from "@/pages/backup-restore/BackupFiltersPanel";
 import { BackupList } from "@/pages/backup-restore/BackupList";
 import { BackupRestoreHeader } from "@/pages/backup-restore/BackupRestoreHeader";
-import { BackupRestoreResultCard } from "@/pages/backup-restore/BackupRestoreResultCard";
 import { resolveBackupMutationResponse } from "@/pages/backup-restore/backup-mutation-response";
 import type {
   BackupRecord,
@@ -28,13 +25,44 @@ import type {
   BackupRestoreProps,
   RestoreResponse,
 } from "@/pages/backup-restore/types";
-import {
-  exportBackupsToCsv,
-  exportBackupsToPdf,
-  getBackupDateRange,
-  normalizeBackup,
-} from "@/pages/backup-restore/utils";
+import { getBackupDateRange, normalizeBackup } from "@/pages/backup-restore/utils";
 import { resolveBackupsExportBlockReason } from "@/pages/backup-restore/export-guards";
+
+let backupExportModulePromise: Promise<typeof import("@/pages/backup-restore/backup-export")> | null = null;
+
+function loadBackupExportModule() {
+  if (!backupExportModulePromise) {
+    backupExportModulePromise = import("@/pages/backup-restore/backup-export");
+  }
+
+  return backupExportModulePromise;
+}
+
+const LazyBackupActiveJobCard = lazy(() =>
+  import("@/pages/backup-restore/BackupActiveJobCard").then((module) => ({
+    default: module.BackupActiveJobCard,
+  })),
+);
+
+const LazyBackupRestoreResultCard = lazy(() =>
+  import("@/pages/backup-restore/BackupRestoreResultCard").then((module) => ({
+    default: module.BackupRestoreResultCard,
+  })),
+);
+
+const LazyBackupDialogs = lazy(() =>
+  import("@/pages/backup-restore/BackupDialogs").then((module) => ({
+    default: module.BackupDialogs,
+  })),
+);
+
+function BackupCardFallback({ label }: { label: string }) {
+  return (
+    <Card className="border-border/60 bg-card/60">
+      <CardContent className="pt-6 text-sm text-muted-foreground">{label}</CardContent>
+    </Card>
+  );
+}
 
 function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps) {
   const canManageBackups = userRole === "superuser";
@@ -350,6 +378,10 @@ function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps
   }, [activeBackupJob, activeBackupJobId, clearAllFilters, notifyMutationError, notifyMutationSuccess, notifyRestoreSuccess, refetch]);
 
   const loading = isLoading || isRefetching;
+  const hasActiveBackupJobCard = activeBackupJobBusy && Boolean(activeBackupJob);
+  const hasRestoreResultCard = Boolean(lastRestoreResult);
+  const hasBackupDialogs =
+    showCreateDialog || Boolean(showRestoreDialog) || Boolean(showDeleteDialog);
 
   const handleCreateBackup = () => {
     if (!backupName.trim()) {
@@ -373,6 +405,24 @@ function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps
     deleteBackupMutation.mutate(backup.id);
   };
 
+  const handleExportCsv = async () => {
+    if (visibleBackups.length === 0) {
+      return;
+    }
+
+    try {
+      const { exportBackupsToCsv } = await loadBackupExportModule();
+      exportBackupsToCsv(visibleBackups);
+    } catch (error: unknown) {
+      console.error("Failed to export CSV:", error);
+      notifyMutationError({
+        title: "Export Failed",
+        error,
+        fallbackDescription: error instanceof Error ? error.message : "Failed to export CSV",
+      });
+    }
+  };
+
   const handleExportPdf = async () => {
     const blockReason = resolveBackupsExportBlockReason({
       backupsLength: visibleBackups.length,
@@ -388,6 +438,7 @@ function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps
     exportInFlightRef.current = true;
     setExportingPdf(true);
     try {
+      const { exportBackupsToPdf } = await loadBackupExportModule();
       await exportBackupsToPdf(visibleBackups);
     } catch (error: unknown) {
       console.error("Failed to export PDF:", error);
@@ -412,7 +463,9 @@ function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps
         loading={loading}
         visibleBackupsLength={visibleBackups.length}
         onCreateBackupClick={() => setShowCreateDialog(true)}
-        onExportCsv={() => exportBackupsToCsv(visibleBackups)}
+        onExportCsv={() => {
+          void handleExportCsv();
+        }}
         onExportPdf={() => {
           void handleExportPdf();
         }}
@@ -421,10 +474,14 @@ function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps
         }}
       />
 
-      <BackupActiveJobCard
-        activeBackupJob={activeBackupJob}
-        activeBackupJobBusy={activeBackupJobBusy}
-      />
+      {hasActiveBackupJobCard ? (
+        <Suspense fallback={<BackupCardFallback label="Loading backup job status..." />}>
+          <LazyBackupActiveJobCard
+            activeBackupJob={activeBackupJob}
+            activeBackupJobBusy={activeBackupJobBusy}
+          />
+        </Suspense>
+      ) : null}
 
       <BackupFiltersPanel
         createdByFilter={createdByFilter}
@@ -486,7 +543,11 @@ function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps
         </Card>
       ) : null}
 
-      <BackupRestoreResultCard lastRestoreResult={lastRestoreResult} />
+      {hasRestoreResultCard ? (
+        <Suspense fallback={<BackupCardFallback label="Loading last restore result..." />}>
+          <LazyBackupRestoreResultCard lastRestoreResult={lastRestoreResult} />
+        </Suspense>
+      ) : null}
 
       <BackupList
         backupsOpen={backupsOpen}
@@ -517,26 +578,30 @@ function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps
         }}
       />
 
-      <BackupDialogs
-        backupName={backupName}
-        backupJobBusy={activeBackupJobBusy}
-        createPending={createBackupMutation.isPending || activeBackupJobBusy}
-        deletingId={deletingId}
-        onBackupNameChange={setBackupName}
-        onCloseCreateDialog={() => {
-          setShowCreateDialog(false);
-          setBackupName("");
-        }}
-        onConfirmCreate={handleCreateBackup}
-        onConfirmDelete={handleDeleteBackup}
-        onConfirmRestore={handleRestoreBackup}
-        onDeleteDialogChange={setShowDeleteDialog}
-        onRestoreDialogChange={setShowRestoreDialog}
-        restoringId={restoringId}
-        showCreateDialog={canManageBackups && showCreateDialog}
-        showDeleteDialog={showDeleteDialog}
-        showRestoreDialog={showRestoreDialog}
-      />
+      {hasBackupDialogs ? (
+        <Suspense fallback={null}>
+          <LazyBackupDialogs
+            backupName={backupName}
+            backupJobBusy={activeBackupJobBusy}
+            createPending={createBackupMutation.isPending || activeBackupJobBusy}
+            deletingId={deletingId}
+            onBackupNameChange={setBackupName}
+            onCloseCreateDialog={() => {
+              setShowCreateDialog(false);
+              setBackupName("");
+            }}
+            onConfirmCreate={handleCreateBackup}
+            onConfirmDelete={handleDeleteBackup}
+            onConfirmRestore={handleRestoreBackup}
+            onDeleteDialogChange={setShowDeleteDialog}
+            onRestoreDialogChange={setShowRestoreDialog}
+            restoringId={restoringId}
+            showCreateDialog={canManageBackups && showCreateDialog}
+            showDeleteDialog={showDeleteDialog}
+            showRestoreDialog={showRestoreDialog}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

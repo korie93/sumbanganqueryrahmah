@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Filter, RefreshCw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,6 @@ import {
   unbanUser,
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { ActivityLogsTable } from "@/pages/activity/ActivityLogsTable";
 import { ActivitySummaryCards } from "@/pages/activity/ActivitySummaryCards";
 import { DEFAULT_ACTIVITY_FILTERS } from "@/pages/activity/types";
 import type { ActivityRecord, ActivityStatus, BannedUser } from "@/pages/activity/types";
@@ -29,6 +28,11 @@ import {
 const ActivityActionDialogs = lazy(() =>
   import("@/pages/activity/ActivityActionDialogs").then((module) => ({
     default: module.ActivityActionDialogs,
+  })),
+);
+const ActivityLogsTable = lazy(() =>
+  import("@/pages/activity/ActivityLogsTable").then((module) => ({
+    default: module.ActivityLogsTable,
   })),
 );
 const ActivityBannedUsersPanel = lazy(() =>
@@ -50,8 +54,81 @@ function ActivitySectionFallback({ label }: { label: string }) {
   );
 }
 
+type DeferredActivitySectionOptions = {
+  enabled: boolean;
+  rootMargin?: string;
+  timeoutMs?: number;
+};
+
+function useDeferredActivitySectionMount({
+  enabled,
+  rootMargin = "280px 0px",
+  timeoutMs = 1200,
+}: DeferredActivitySectionOptions) {
+  const triggerRef = useRef<HTMLDivElement | null>(null);
+  const [shouldRender, setShouldRender] = useState(() => !enabled);
+
+  useEffect(() => {
+    if (!enabled) {
+      setShouldRender(true);
+      return;
+    }
+
+    if (shouldRender) {
+      return;
+    }
+
+    let cancelled = false;
+    let observer: IntersectionObserver | null = null;
+    let timeoutHandle: number | null = null;
+
+    const markReady = () => {
+      if (cancelled) {
+        return;
+      }
+
+      startTransition(() => {
+        setShouldRender(true);
+      });
+    };
+
+    if (typeof window.IntersectionObserver === "function" && triggerRef.current) {
+      observer = new window.IntersectionObserver(
+        (entries) => {
+          if (!entries.some((entry) => entry.isIntersecting)) {
+            return;
+          }
+
+          observer?.disconnect();
+          observer = null;
+          markReady();
+        },
+        {
+          rootMargin,
+        },
+      );
+      observer.observe(triggerRef.current);
+    } else {
+      timeoutHandle = window.setTimeout(markReady, timeoutMs);
+    }
+
+    return () => {
+      cancelled = true;
+      observer?.disconnect();
+      observer = null;
+      if (timeoutHandle !== null) {
+        window.clearTimeout(timeoutHandle);
+      }
+    };
+  }, [enabled, rootMargin, shouldRender, timeoutMs]);
+
+  return { shouldRender, triggerRef };
+}
+
 export default function Activity() {
   const isMobile = useIsMobile();
+  const shouldDeferSecondaryMobileSections =
+    isMobile || (typeof window !== "undefined" && window.innerWidth < 768);
   const currentRole = getCurrentActivityRole();
   const canModerateActivity = currentRole === "admin" || currentRole === "superuser";
   const { toast } = useToast();
@@ -78,6 +155,11 @@ export default function Activity() {
   const activeRequestIdRef = useRef(0);
   const fetchControllerRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
+  const bannedUsersSection = useDeferredActivitySectionMount({
+    enabled: shouldDeferSecondaryMobileSections,
+    rootMargin: "160px 0px",
+    timeoutMs: 700,
+  });
 
   useEffect(() => {
     mountedRef.current = true;
@@ -467,65 +549,73 @@ export default function Activity() {
         />
 
         {canModerateActivity && bannedUsers.length > 0 ? (
-          <Suspense fallback={<ActivitySectionFallback label="Loading banned users..." />}>
-            <ActivityBannedUsersPanel
-              actionLoading={actionLoading}
-              bannedUsers={bannedUsers}
-              onUnbanClick={(user) => {
-                setSelectedBannedUser(user);
-                setUnbanDialogOpen(true);
-              }}
-            />
-          </Suspense>
+          <div ref={bannedUsersSection.triggerRef}>
+            {bannedUsersSection.shouldRender ? (
+              <Suspense fallback={<ActivitySectionFallback label="Loading banned users..." />}>
+                <ActivityBannedUsersPanel
+                  actionLoading={actionLoading}
+                  bannedUsers={bannedUsers}
+                  onUnbanClick={(user) => {
+                    setSelectedBannedUser(user);
+                    setUnbanDialogOpen(true);
+                  }}
+                />
+              </Suspense>
+            ) : (
+              <ActivitySectionFallback label="Banned users will load as you scroll." />
+            )}
+          </div>
         ) : null}
 
-        <ActivityLogsTable
-          actionLoading={actionLoading}
-          activities={activities}
-          canModerateActivity={canModerateActivity}
-          loading={loading}
-          logsOpen={logsOpen}
-          onBanClick={(activity) => {
-            setSelectedActivity(activity);
-            setBanDialogOpen(true);
-          }}
-          onDeleteClick={(activity) => {
-            setSelectedActivity(activity);
-            setDeleteDialogOpen(true);
-          }}
-          onKickClick={(activity) => {
-            setSelectedActivity(activity);
-            setKickDialogOpen(true);
-          }}
-          onLogsOpenChange={setLogsOpen}
-          onToggleSelected={(activityId, checked) => {
-            setSelectedActivityIds((previous) => {
-              const next = new Set(previous);
-              if (checked) {
-                next.add(activityId);
-              } else {
-                next.delete(activityId);
-              }
-              return next;
-            });
-          }}
-          onToggleSelectAllVisible={(checked) => {
-            setSelectedActivityIds((previous) => {
-              const next = new Set(previous);
-              for (const activity of activities) {
+        <Suspense fallback={<ActivitySectionFallback label="Loading activity logs..." />}>
+          <ActivityLogsTable
+            actionLoading={actionLoading}
+            activities={activities}
+            canModerateActivity={canModerateActivity}
+            loading={loading}
+            logsOpen={logsOpen}
+            onBanClick={(activity) => {
+              setSelectedActivity(activity);
+              setBanDialogOpen(true);
+            }}
+            onDeleteClick={(activity) => {
+              setSelectedActivity(activity);
+              setDeleteDialogOpen(true);
+            }}
+            onKickClick={(activity) => {
+              setSelectedActivity(activity);
+              setKickDialogOpen(true);
+            }}
+            onLogsOpenChange={setLogsOpen}
+            onToggleSelected={(activityId, checked) => {
+              setSelectedActivityIds((previous) => {
+                const next = new Set(previous);
                 if (checked) {
-                  next.add(activity.id);
+                  next.add(activityId);
                 } else {
-                  next.delete(activity.id);
+                  next.delete(activityId);
                 }
-              }
-              return next;
-            });
-          }}
-          selectedActivityIds={selectedActivityIds}
-          allVisibleSelected={allVisibleSelected}
-          partiallySelected={partiallySelected}
-        />
+                return next;
+              });
+            }}
+            onToggleSelectAllVisible={(checked) => {
+              setSelectedActivityIds((previous) => {
+                const next = new Set(previous);
+                for (const activity of activities) {
+                  if (checked) {
+                    next.add(activity.id);
+                  } else {
+                    next.delete(activity.id);
+                  }
+                }
+                return next;
+              });
+            }}
+            selectedActivityIds={selectedActivityIds}
+            allVisibleSelected={allVisibleSelected}
+            partiallySelected={partiallySelected}
+          />
+        </Suspense>
       </div>
 
       {hasOpenActionDialog ? (

@@ -2,6 +2,7 @@ import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from "reac
 import { BarChart3, ClipboardList, FileText, Server } from "lucide-react";
 import { LazySideTabNavigation } from "@/components/navigation/LazySideTabNavigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const DashboardPage = lazy(() => import("@/pages/Dashboard"));
 const ActivityPage = lazy(() => import("@/pages/Activity"));
@@ -87,8 +88,10 @@ export default function SystemMonitorLayout({
   onSectionChange,
   onNavigate,
 }: SystemMonitorLayoutProps) {
+  const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const shouldRenderNavigation = !isMobile || sidebarOpen;
 
   const availableSections = useMemo(() => {
     const sections: MonitorSection[] = [];
@@ -178,22 +181,24 @@ export default function SystemMonitorLayout({
         </Card>
 
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start">
-          <LazySideTabNavigation
-            items={availableSections.map((section) => ({
-              key: section,
-              label: sectionMeta[section].label,
-              icon: sectionMeta[section].icon,
-              description: sectionMeta[section].description,
-            }))}
-            selectedKey={activeSection}
-            onSelect={(key) => setActiveSection(key as MonitorSection)}
-            mobileOpen={sidebarOpen}
-            onMobileOpenChange={setSidebarOpen}
-            collapsed={sidebarCollapsed}
-            onCollapsedChange={setSidebarCollapsed}
-            menuLabel="Sections"
-            navigationLabel="System Monitor"
-          />
+          {shouldRenderNavigation ? (
+            <LazySideTabNavigation
+              items={availableSections.map((section) => ({
+                key: section,
+                label: sectionMeta[section].label,
+                icon: sectionMeta[section].icon,
+                description: sectionMeta[section].description,
+              }))}
+              selectedKey={activeSection}
+              onSelect={(key) => setActiveSection(key as MonitorSection)}
+              mobileOpen={sidebarOpen}
+              onMobileOpenChange={setSidebarOpen}
+              collapsed={sidebarCollapsed}
+              onCollapsedChange={setSidebarCollapsed}
+              menuLabel="Sections"
+              navigationLabel="System Monitor"
+            />
+          ) : null}
 
           <section className="min-w-0 flex-1 overflow-hidden rounded-xl border border-border/60 bg-background/70 shadow-sm">
             <Suspense fallback={sectionFallback}>{renderActiveSection()}</Suspense>
