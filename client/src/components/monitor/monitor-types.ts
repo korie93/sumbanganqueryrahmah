@@ -27,6 +27,7 @@ export type MonitorMetricGroup = {
 };
 
 export type MonitorChartSeries = {
+  category: string;
   title: string;
   description: string;
   color: string;

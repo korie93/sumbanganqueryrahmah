@@ -2,6 +2,7 @@ import type {
   IntelligenceExplainPayload,
   MonitorAlert,
   MonitorAlertIncident,
+  MonitorPagination,
   MonitorRequestState,
 } from "@/lib/api";
 import type { WebVitalOverviewPayload } from "@shared/web-vitals";
@@ -82,7 +83,9 @@ export type UseSystemMetricsResult = {
   snapshot: MonitorSnapshot;
   history: MonitorHistory;
   alerts: MonitorAlert[];
+  alertsPagination: MonitorPagination;
   alertHistory: MonitorAlertIncident[];
+  alertHistoryPagination: MonitorPagination;
   intelligence: IntelligenceExplainPayload;
   webVitalsOverview: WebVitalOverviewPayload;
   endpointState: EndpointState;

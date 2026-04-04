@@ -1,4 +1,9 @@
-import { memo } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import {
+  buildMonitorWebVitalPrimaryMetricBadges,
+  resolveMonitorWebVitalOpenPageTypes,
+} from "@/components/monitor/monitor-web-vitals-utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -60,6 +65,10 @@ function getMetric(summary: WebVitalPageSummary, name: WebVitalMetricSummary["na
   return summary.metrics.find((metric) => metric.name === name) ?? null;
 }
 
+function arraysEqual<T>(left: T[], right: T[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
 function MonitorWebVitalsSectionImpl({
   overview,
   embedded = false,
@@ -67,6 +76,22 @@ function MonitorWebVitalsSectionImpl({
   overview: WebVitalOverviewPayload;
   embedded?: boolean;
 }) {
+  const [openPageTypes, setOpenPageTypes] = useState<WebVitalPageSummary["pageType"][]>(() => {
+    const firstPageType = overview.pageSummaries[0]?.pageType;
+    return firstPageType ? [firstPageType] : [];
+  });
+
+  const pageSummaries = useMemo(() => overview.pageSummaries, [overview.pageSummaries]);
+
+  useEffect(() => {
+    const availablePageTypes = pageSummaries.map((summary) => summary.pageType);
+
+    setOpenPageTypes((previous) => {
+      const next = resolveMonitorWebVitalOpenPageTypes(availablePageTypes, previous);
+      return arraysEqual(previous, next) ? previous : next;
+    });
+  }, [pageSummaries]);
+
   return (
     <section className={cn(embedded ? "space-y-0" : "glass-wrapper p-4 sm:p-6")}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -101,80 +126,116 @@ function MonitorWebVitalsSectionImpl({
         </Card>
       ) : (
         <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {overview.pageSummaries.map((summary) => (
-            <Card key={summary.pageType} className="border-border/60 bg-background/45">
-              <CardHeader className="space-y-3 pb-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <CardTitle className="text-base font-semibold text-foreground">
-                    {getPageSummaryLabel(summary.pageType)}
-                  </CardTitle>
-                  <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-wide">
-                    {summary.sampleCount} samples
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">{formatLastCaptured(summary.latestCapturedAt)}</p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  {PRIMARY_METRICS.map((metricName) => {
-                    const metric = getMetric(summary, metricName);
-                    return (
-                      <div
-                        key={metricName}
-                        className="rounded-2xl border border-border/60 bg-background/55 p-3"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                            {metricName}
-                          </p>
-                          <Badge
-                            variant="outline"
-                            className={`rounded-full px-2 py-0.5 text-[10px] ${getRatingBadgeClass(metric?.p75Rating ?? null)}`}
-                          >
-                            {metric?.p75Rating ?? "pending"}
-                          </Badge>
-                        </div>
-                        <p className="mt-3 text-2xl font-semibold text-foreground">
-                          {formatWebVitalValue(metricName, metric?.p75 ?? null)}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          p75 from {metric?.sampleCount ?? 0} samples
-                        </p>
+          {pageSummaries.map((summary) => {
+            const isOpen = openPageTypes.includes(summary.pageType);
+            const compactMetricBadges = buildMonitorWebVitalPrimaryMetricBadges(summary);
+
+            return (
+              <Card key={summary.pageType} className="border-border/60 bg-background/45">
+                <CardHeader className="space-y-3 pb-3">
+                  <button
+                    type="button"
+                    className="flex w-full items-start justify-between gap-3 text-left"
+                    onClick={() =>
+                      setOpenPageTypes((previous) =>
+                        previous.includes(summary.pageType)
+                          ? previous.filter((pageType) => pageType !== summary.pageType)
+                          : [...previous, summary.pageType],
+                      )
+                    }
+                    aria-expanded={isOpen}
+                  >
+                    <div className="min-w-0 space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <CardTitle className="text-base font-semibold text-foreground">
+                          {getPageSummaryLabel(summary.pageType)}
+                        </CardTitle>
+                        <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-wide">
+                          {summary.sampleCount} samples
+                        </Badge>
                       </div>
-                    );
-                  })}
-                </div>
+                      <p className="text-xs text-muted-foreground">{formatLastCaptured(summary.latestCapturedAt)}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {compactMetricBadges.map((metric) => (
+                          <Badge
+                            key={`${summary.pageType}-${metric.name}`}
+                            variant="outline"
+                            className={`rounded-full px-3 py-1 text-xs ${getRatingBadgeClass(metric.p75Rating)}`}
+                          >
+                            {metric.name} {formatWebVitalValue(metric.name, metric.p75)}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                    <span className="shrink-0 pt-1 text-muted-foreground">
+                      {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </span>
+                  </button>
+                </CardHeader>
+                {isOpen ? (
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      {PRIMARY_METRICS.map((metricName) => {
+                        const metric = getMetric(summary, metricName);
+                        return (
+                          <div
+                            key={metricName}
+                            className="rounded-2xl border border-border/60 bg-background/55 p-3"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                                {metricName}
+                              </p>
+                              <Badge
+                                variant="outline"
+                                className={`rounded-full px-2 py-0.5 text-[10px] ${getRatingBadgeClass(metric?.p75Rating ?? null)}`}
+                              >
+                                {metric?.p75Rating ?? "pending"}
+                              </Badge>
+                            </div>
+                            <p className="mt-3 text-2xl font-semibold text-foreground">
+                              {formatWebVitalValue(metricName, metric?.p75 ?? null)}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              p75 from {metric?.sampleCount ?? 0} samples
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {SECONDARY_METRICS.map((metricName) => {
-                    const metric = getMetric(summary, metricName);
-                    return (
-                      <Badge
-                        key={metricName}
-                        variant="outline"
-                        className={`rounded-full px-3 py-1 text-xs ${getRatingBadgeClass(metric?.p75Rating ?? null)}`}
-                      >
-                        {metricName} {formatWebVitalValue(metricName, metric?.p75 ?? null)}
-                      </Badge>
-                    );
-                  })}
-                </div>
+                    <div className="flex flex-wrap gap-2">
+                      {SECONDARY_METRICS.map((metricName) => {
+                        const metric = getMetric(summary, metricName);
+                        return (
+                          <Badge
+                            key={metricName}
+                            variant="outline"
+                            className={`rounded-full px-3 py-1 text-xs ${getRatingBadgeClass(metric?.p75Rating ?? null)}`}
+                          >
+                            {metricName} {formatWebVitalValue(metricName, metric?.p75 ?? null)}
+                          </Badge>
+                        );
+                      })}
+                    </div>
 
-                {summary.metrics.some((metric) => metric.latestPath) ? (
-                  <div className="rounded-2xl border border-border/60 bg-background/45 p-3 text-xs text-muted-foreground">
-                    {summary.metrics
-                      .filter((metric) => metric.latestPath)
-                      .slice(0, 2)
-                      .map((metric) => (
-                        <p key={`${summary.pageType}-${metric.name}`}>
-                          Latest {metric.name} path: <span className="font-medium text-foreground">{metric.latestPath}</span>
-                        </p>
-                      ))}
-                  </div>
+                    {summary.metrics.some((metric) => metric.latestPath) ? (
+                      <div className="rounded-2xl border border-border/60 bg-background/45 p-3 text-xs text-muted-foreground">
+                        {summary.metrics
+                          .filter((metric) => metric.latestPath)
+                          .slice(0, 2)
+                          .map((metric) => (
+                            <p key={`${summary.pageType}-${metric.name}`}>
+                              Latest {metric.name} path: <span className="font-medium text-foreground">{metric.latestPath}</span>
+                            </p>
+                          ))}
+                      </div>
+                    ) : null}
+                  </CardContent>
                 ) : null}
-              </CardContent>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       )}
     </section>

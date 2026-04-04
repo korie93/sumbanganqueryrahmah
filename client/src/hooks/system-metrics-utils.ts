@@ -2,6 +2,7 @@ import type {
   IntelligenceExplainPayload,
   MonitorAlert,
   MonitorAlertIncident,
+  MonitorPagination,
 } from "@/lib/api";
 import type { WebVitalOverviewPayload } from "@shared/web-vitals";
 import { WEB_VITAL_NAMES, WEB_VITAL_PAGE_TYPES } from "@shared/web-vitals";
@@ -207,6 +208,13 @@ export const initialWebVitalsOverview: WebVitalOverviewPayload = {
   updatedAt: new Date(0).toISOString(),
 };
 
+export const initialMonitorPagination: MonitorPagination = {
+  page: 1,
+  pageSize: 5,
+  totalItems: 0,
+  totalPages: 1,
+};
+
 export const toFixedNumber = (value: number, digits = 2) => {
   if (!Number.isFinite(value)) return 0;
   const p = 10 ** digits;
@@ -313,6 +321,13 @@ export const alertHistoryEqual = (a: MonitorAlertIncident[], b: MonitorAlertInci
   }
   return true;
 };
+
+export const monitorPaginationEqual = (a: MonitorPagination, b: MonitorPagination) => (
+  a.page === b.page &&
+  a.pageSize === b.pageSize &&
+  a.totalItems === b.totalItems &&
+  a.totalPages === b.totalPages
+);
 
 const numberArraysEqual = (a: number[], b: number[]) => {
   if (a.length !== b.length) return false;

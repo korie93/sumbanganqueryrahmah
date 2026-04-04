@@ -12,6 +12,7 @@ type MonitorOverviewHeroProps = {
   modeBadgeClass: string;
   rollupFreshnessStatus: RollupFreshnessStatus;
   rollupFreshnessBadgeClass: string;
+  compact?: boolean;
 };
 
 function MonitorOverviewHeroImpl({
@@ -20,6 +21,7 @@ function MonitorOverviewHeroImpl({
   modeBadgeClass,
   rollupFreshnessStatus,
   rollupFreshnessBadgeClass,
+  compact = false,
 }: MonitorOverviewHeroProps) {
   const isMobile = useIsMobile();
 
@@ -28,15 +30,21 @@ function MonitorOverviewHeroImpl({
       <div>
         <div className="flex items-center gap-2">
           <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Executive View</p>
-          <span className="hidden sm:inline-flex">
-            <InfoHint text="High-level health summary for fast executive review." />
-          </span>
+          {!compact ? (
+            <span className="hidden sm:inline-flex">
+              <InfoHint text="High-level health summary for fast executive review." />
+            </span>
+          ) : null}
         </div>
         <h1 className="mt-2 text-xl font-semibold text-foreground sm:text-2xl">System Monitor</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {isMobile
-            ? "Live health summary for app load, queue pressure, and runtime stability."
-            : "Premium operational summary blending business visibility and technical diagnostics."}
+          {compact
+            ? isMobile
+              ? "Live health snapshot for operators."
+              : "Condensed operational summary for quick health checks."
+            : isMobile
+              ? "Live health summary for app load, queue pressure, and runtime stability."
+              : "Premium operational summary blending business visibility and technical diagnostics."}
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Badge
@@ -51,33 +59,47 @@ function MonitorOverviewHeroImpl({
           >
             {isMobile ? "Health" : "Health Status"}
           </Badge>
-          <span className="hidden sm:inline-flex">
-            <InfoHint text="Overall system health classification based on current telemetry score." />
-          </span>
+          {!compact ? (
+            <span className="hidden sm:inline-flex">
+              <InfoHint text="Overall system health classification based on current telemetry score." />
+            </span>
+          ) : null}
           <Badge variant="outline" className={modeBadgeClass}>
             {snapshot.mode}
           </Badge>
-          <span className="hidden sm:inline-flex">
-            <InfoHint text="Current protection mode driven by runtime pressure and safety rules." />
-          </span>
+          {!compact ? (
+            <span className="hidden sm:inline-flex">
+              <InfoHint text="Current protection mode driven by runtime pressure and safety rules." />
+            </span>
+          ) : null}
           <Badge variant="outline" className={rollupFreshnessBadgeClass}>
             {isMobile ? `Rollup ${rollupFreshnessStatus}` : `Rollup SLA ${rollupFreshnessStatus.toUpperCase()}`}
           </Badge>
-          <span className="hidden sm:inline-flex">
-            <InfoHint text="Freshness signal for background collection report rollup updates." />
-          </span>
+          {!compact ? (
+            <span className="hidden sm:inline-flex">
+              <InfoHint text="Freshness signal for background collection report rollup updates." />
+            </span>
+          ) : null}
         </div>
       </div>
       <div className="text-left lg:text-right">
         <div className="flex items-center gap-2 lg:justify-end">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            {isMobile ? "Score" : "Performance Score"}
+            {compact ? (isMobile ? "Live Score" : "Health Score") : isMobile ? "Score" : "Performance Score"}
           </p>
-          <span className="hidden sm:inline-flex">
-            <InfoHint text="Composite score (0-100) summarizing load, latency, and failure pressure." />
-          </span>
+          {!compact ? (
+            <span className="hidden sm:inline-flex">
+              <InfoHint text="Composite score (0-100) summarizing load, latency, and failure pressure." />
+            </span>
+          ) : null}
         </div>
-        <p className="text-[44px] font-semibold leading-none text-foreground sm:text-[56px]">
+        <p
+          className={
+            compact
+              ? "text-[38px] font-semibold leading-none text-foreground sm:text-[48px]"
+              : "text-[44px] font-semibold leading-none text-foreground sm:text-[56px]"
+          }
+        >
           {snapshot.score.toFixed(0)}
         </p>
       </div>

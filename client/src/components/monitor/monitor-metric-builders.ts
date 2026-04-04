@@ -224,12 +224,54 @@ export function buildMetricGroups(snapshot: MonitorSnapshot, history: MonitorHis
 
 export function buildChartSeries(history: MonitorHistory): MonitorChartSeries[] {
   return [
-    { title: "CPU %", description: "Rolling CPU utilization trend for runtime workers.", color: "#f59e0b", unit: "%", data: history.cpuPercent },
-    { title: "RAM %", description: "Rolling memory consumption percentage trend.", color: "#3b82f6", unit: "%", data: history.ramPercent },
-    { title: "p95 Latency", description: "Rolling 95th percentile latency trend.", color: "#64748b", unit: "ms", data: history.p95LatencyMs },
-    { title: "Error Rate", description: "Rolling failure-rate trend across system operations.", color: "#ef4444", unit: "%", data: history.errorRate },
-    { title: "DB Latency", description: "Rolling database latency trend.", color: "#8b5cf6", unit: "ms", data: history.avgQueryTimeMs },
-    { title: "AI Latency", description: "Rolling AI service latency trend.", color: "#14b8a6", unit: "ms", data: history.aiLatencyMs },
+    {
+      category: "Infrastructure Capacity",
+      title: "CPU %",
+      description: "Rolling CPU utilization trend for runtime workers.",
+      color: "#f59e0b",
+      unit: "%",
+      data: history.cpuPercent,
+    },
+    {
+      category: "Infrastructure Capacity",
+      title: "RAM %",
+      description: "Rolling memory consumption percentage trend.",
+      color: "#3b82f6",
+      unit: "%",
+      data: history.ramPercent,
+    },
+    {
+      category: "Runtime Experience",
+      title: "p95 Latency",
+      description: "Rolling 95th percentile latency trend.",
+      color: "#64748b",
+      unit: "ms",
+      data: history.p95LatencyMs,
+    },
+    {
+      category: "Runtime Experience",
+      title: "Error Rate",
+      description: "Rolling failure-rate trend across system operations.",
+      color: "#ef4444",
+      unit: "%",
+      data: history.errorRate,
+    },
+    {
+      category: "Data And AI",
+      title: "DB Latency",
+      description: "Rolling database latency trend.",
+      color: "#8b5cf6",
+      unit: "ms",
+      data: history.avgQueryTimeMs,
+    },
+    {
+      category: "Data And AI",
+      title: "AI Latency",
+      description: "Rolling AI service latency trend.",
+      color: "#14b8a6",
+      unit: "ms",
+      data: history.aiLatencyMs,
+    },
   ];
 }
 

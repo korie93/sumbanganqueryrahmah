@@ -549,6 +549,7 @@ function createSystemPermissionHarness() {
     explain: 0,
     chaos: 0,
     alertHistory: 0,
+    alertHistoryCleanup: 0,
     rollupStatus: 0,
     rollupDrain: 0,
     rollupRetry: 0,
@@ -689,7 +690,19 @@ function createSystemPermissionHarness() {
     },
     listMonitorAlertHistory: async () => {
       calls.alertHistory += 1;
-      return [];
+      return {
+        incidents: [],
+        pagination: {
+          page: 1,
+          pageSize: 5,
+          totalItems: 0,
+          totalPages: 1,
+        },
+      };
+    },
+    deleteMonitorAlertHistoryOlderThan: async () => {
+      calls.alertHistoryCleanup += 1;
+      return 0;
     },
     getWebVitalsOverview: () => ({
       windowMinutes: 15,
@@ -1120,6 +1133,15 @@ test("system monitor routes enforce monitor-access and chaos role boundaries con
     await assertRoleMatrix(
       baseUrl,
       {
+        method: "DELETE",
+        path: "/internal/alerts/history",
+        body: { olderThanDays: 30 },
+      },
+      { anonymous: 401, user: 403, admin: 403, superuser: 200 },
+    );
+    await assertRoleMatrix(
+      baseUrl,
+      {
         method: "POST",
         path: "/internal/chaos/inject",
         body: { type: "cpu_spike", magnitude: 1.2, durationMs: 5000 },
@@ -1173,6 +1195,7 @@ test("system monitor routes enforce monitor-access and chaos role boundaries con
     assert.equal(calls.systemHealth, 3);
     assert.equal(calls.explain, 3);
     assert.equal(calls.alertHistory, 3);
+    assert.equal(calls.alertHistoryCleanup, 1);
     assert.equal(calls.chaos, 2);
     assert.equal(calls.rollupStatus, 1);
     assert.equal(calls.rollupDrain, 1);

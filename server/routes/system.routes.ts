@@ -6,7 +6,7 @@ import type { ChaosEvent, InjectChaosInput } from "../intelligence/chaos/ChaosEn
 import type { ChaosType, ExplainabilityReport } from "../intelligence/types";
 import type { StartupHealthSnapshot } from "../internal/startup-health";
 import type { CircuitSnapshot } from "../internal/circuitBreaker";
-import type { MonitorAlertIncident } from "../repositories/monitor-alert-history.repository";
+import type { MonitorAlertIncidentPage } from "../repositories/monitor-alert-history.repository";
 import type {
   InternalMonitorAlert,
   InternalMonitorSnapshot,
@@ -50,7 +50,8 @@ type SystemRouteDeps = {
   retryCollectionRollupFailures: () => Promise<Record<string, unknown>>;
   autoHealCollectionRollupQueue: () => Promise<Record<string, unknown>>;
   rebuildCollectionRollups: () => Promise<Record<string, unknown>>;
-  listMonitorAlertHistory: () => Promise<MonitorAlertIncident[]>;
+  listMonitorAlertHistory: (options?: { page?: number; pageSize?: number }) => Promise<MonitorAlertIncidentPage>;
+  deleteMonitorAlertHistoryOlderThan: (cutoffDate: Date) => Promise<number>;
   getWebVitalsOverview: () => WebVitalOverviewPayload;
   createAuditLog: (data: InsertAuditLog) => Promise<AuditLog>;
   checkDbConnectivity: () => Promise<boolean>;
@@ -78,6 +79,7 @@ export function registerSystemRoutes(app: Express, deps: SystemRouteDeps) {
     autoHealCollectionRollupQueue,
     rebuildCollectionRollups,
     listMonitorAlertHistory,
+    deleteMonitorAlertHistoryOlderThan,
     getWebVitalsOverview,
     createAuditLog,
     checkDbConnectivity,
@@ -207,11 +209,27 @@ export function registerSystemRoutes(app: Express, deps: SystemRouteDeps) {
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
-    (_req, res) => {
+    (req, res) => {
       const snapshot = computeInternalMonitorSnapshot();
       const alerts = buildInternalMonitorAlerts(snapshot);
+      const parsedPage = Number(req.query.page);
+      const parsedPageSize = Number(req.query.pageSize);
+      const page = Number.isFinite(parsedPage) ? Math.max(1, Math.floor(parsedPage)) : 1;
+      const pageSize = Number.isFinite(parsedPageSize)
+        ? Math.min(100, Math.max(1, Math.floor(parsedPageSize)))
+        : 5;
+      const totalItems = alerts.length;
+      const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+      const safePage = Math.min(page, totalPages);
+      const startIndex = (safePage - 1) * pageSize;
       res.json({
-        alerts,
+        alerts: alerts.slice(startIndex, startIndex + pageSize),
+        pagination: {
+          page: safePage,
+          pageSize,
+          totalItems,
+          totalPages,
+        },
         updatedAt: snapshot.updatedAt,
       });
     },
@@ -222,10 +240,45 @@ export function registerSystemRoutes(app: Express, deps: SystemRouteDeps) {
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
-    asyncHandler(async (_req, res) => {
-      const incidents = await listMonitorAlertHistory();
+    asyncHandler(async (req, res) => {
+      const parsedPage = Number(req.query.page);
+      const parsedPageSize = Number(req.query.pageSize);
+      const page = Number.isFinite(parsedPage) ? Math.max(1, Math.floor(parsedPage)) : 1;
+      const pageSize = Number.isFinite(parsedPageSize)
+        ? Math.min(100, Math.max(1, Math.floor(parsedPageSize)))
+        : 5;
+      const incidents = await listMonitorAlertHistory({ page, pageSize });
       res.json({
-        incidents,
+        incidents: incidents.incidents,
+        pagination: incidents.pagination,
+        updatedAt: new Date().toISOString(),
+      });
+    }),
+  );
+
+  app.delete(
+    "/internal/alerts/history",
+    authenticateToken,
+    requireRole("superuser"),
+    requireMonitorAccess,
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
+      const parsedDays = Number(req.body?.olderThanDays);
+      const olderThanDays = Number.isFinite(parsedDays)
+        ? Math.min(3650, Math.max(1, Math.floor(parsedDays)))
+        : 30;
+      const cutoffDate = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000);
+      const deletedCount = await deleteMonitorAlertHistoryOlderThan(cutoffDate);
+
+      await createAuditLog({
+        action: "MONITOR_ALERT_HISTORY_CLEANUP",
+        performedBy: req.user?.username || "system",
+        details: `Deleted ${deletedCount} resolved monitor alert incidents older than ${olderThanDays} days.`,
+      });
+
+      res.json({
+        ok: true,
+        deletedCount,
+        olderThanDays,
         updatedAt: new Date().toISOString(),
       });
     }),

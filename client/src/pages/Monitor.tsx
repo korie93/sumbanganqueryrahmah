@@ -1,8 +1,28 @@
-import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { MonitorAccessDenied } from "@/components/monitor/MonitorAccessDenied";
 import { MonitorOverviewSection } from "@/components/monitor/MonitorOverviewSection";
 import { MonitorStatusBanners } from "@/components/monitor/MonitorStatusBanners";
+import {
+  buildMonitorChaosCompactSummary,
+  buildMonitorChaosSummaryFacts,
+} from "@/components/monitor/monitor-chaos-utils";
+import {
+  buildMonitorInsightsCompactSummary,
+  buildMonitorInsightsSummaryFacts,
+} from "@/components/monitor/monitor-insights-utils";
+import {
+  buildMonitorMetricsCompactSummary,
+  buildMonitorMetricsSummaryFacts,
+} from "@/components/monitor/monitor-metrics-summary-utils";
+import {
+  buildMonitorTechnicalCompactSummary,
+  buildMonitorTechnicalSummaryFacts,
+} from "@/components/monitor/monitor-technical-summary-utils";
+import {
+  buildMonitorWebVitalCompactSummary,
+  buildMonitorWebVitalSummaryFacts,
+} from "@/components/monitor/monitor-web-vitals-utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -20,6 +40,7 @@ import { useSystemMetrics } from "@/hooks/useSystemMetrics";
 import { useToast } from "@/hooks/use-toast";
 import {
   autoHealRollupQueue,
+  deleteOldAlertHistory,
   drainRollupQueue,
   type ChaosType,
   injectChaos,
@@ -63,6 +84,21 @@ const MonitorWebVitalsSection = lazy(() =>
     default: module.MonitorWebVitalsSection,
   })),
 );
+
+const ALERT_HISTORY_PAGE_SIZE = 5;
+const ACTIVE_ALERTS_PAGE_SIZE = 5;
+
+function getMonitorSummaryToneClass(tone: "stable" | "watch" | "attention") {
+  if (tone === "attention") {
+    return "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300";
+  }
+
+  if (tone === "watch") {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  }
+
+  return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+}
 
 function MonitorChartsFallback() {
   return (
@@ -252,14 +288,22 @@ function useDeferredMonitorSectionMount({
   return { shouldRender, triggerRef };
 }
 
-function MonitorMobileDeferredSectionToggle({
+function MonitorDeferredSectionToggle({
   title,
+  headline,
   description,
+  statusBadgeLabel,
+  statusTone,
+  summaryBadges,
   open,
   onToggle,
 }: {
   title: string;
+  headline?: string;
   description: string;
+  statusBadgeLabel?: string;
+  statusTone?: "stable" | "watch" | "attention";
+  summaryBadges?: ReactNode;
   open: boolean;
   onToggle: () => void;
 }) {
@@ -269,10 +313,27 @@ function MonitorMobileDeferredSectionToggle({
         type="button"
         className="flex w-full items-start justify-between gap-3 text-left"
         onClick={onToggle}
+        aria-expanded={open}
       >
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-foreground">{title}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base font-semibold text-foreground">{title}</h2>
+            {statusBadgeLabel ? (
+              <Badge
+                variant="outline"
+                className={`rounded-full px-2.5 py-0.5 text-[10px] ${getMonitorSummaryToneClass(
+                  statusTone ?? "stable",
+                )}`}
+              >
+                {statusBadgeLabel}
+              </Badge>
+            ) : null}
+            {summaryBadges}
+          </div>
+          {headline ? <p className="mt-2 text-sm font-semibold text-foreground">{headline}</p> : null}
+          <p className={headline ? "mt-1 text-sm text-muted-foreground" : "mt-2 text-sm text-muted-foreground"}>
+            {description}
+          </p>
         </div>
         <span className="shrink-0 pt-1 text-muted-foreground">
           {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -285,29 +346,40 @@ function MonitorMobileDeferredSectionToggle({
 export default function Monitor() {
   const isMobile = useIsMobile();
   const initialCompactViewport = typeof window !== "undefined" && window.innerWidth < 768;
-  const [alertsOpen, setAlertsOpen] = useState(true);
+  const [metricsOpen, setMetricsOpen] = useState(() => !initialCompactViewport);
+  const [alertsOpen, setAlertsOpen] = useState(() => !initialCompactViewport);
+  const [alertHistoryOpen, setAlertHistoryOpen] = useState(false);
+  const [alertsPage, setAlertsPage] = useState(1);
+  const [alertHistoryPage, setAlertHistoryPage] = useState(1);
+  const [insightsOpen, setInsightsOpen] = useState(false);
   const [chaosType, setChaosType] = useState<ChaosType>("cpu_spike");
   const [chaosMagnitude, setChaosMagnitude] = useState(String(CHAOS_OPTIONS[0].defaultMagnitude));
   const [chaosDurationMs, setChaosDurationMs] = useState(String(CHAOS_OPTIONS[0].defaultDurationMs));
   const [chaosLoading, setChaosLoading] = useState(false);
   const [lastChaosMessage, setLastChaosMessage] = useState<string | null>(null);
   const [webVitalsOpen, setWebVitalsOpen] = useState(false);
-  const [chaosSectionOpen, setChaosSectionOpen] = useState(() => !initialCompactViewport);
-  const [technicalChartsOpen, setTechnicalChartsOpen] = useState(() => !initialCompactViewport);
+  const [chaosSectionOpen, setChaosSectionOpen] = useState(false);
+  const [technicalChartsOpen, setTechnicalChartsOpen] = useState(false);
+  const [deleteAlertHistoryBusy, setDeleteAlertHistoryBusy] = useState(false);
   const [queueActionBusy, setQueueActionBusy] = useState<"drain" | "retry-failures" | "auto-heal" | "rebuild" | null>(null);
   const [lastQueueActionMessage, setLastQueueActionMessage] = useState<string | null>(null);
   const chaosRequestRef = useRef<AbortController | null>(null);
   const chaosInFlightRef = useRef(false);
+  const deleteAlertHistoryRequestRef = useRef<AbortController | null>(null);
+  const deleteAlertHistoryInFlightRef = useRef(false);
   const queueActionRequestRef = useRef<AbortController | null>(null);
   const queueActionInFlightRef = useRef(false);
   const mountedRef = useRef(true);
   const { toast } = useToast();
+  const includeMonitorHistory = metricsOpen || technicalChartsOpen;
   const {
     isLoading,
     snapshot,
     history,
     alerts,
+    alertsPagination,
     alertHistory,
+    alertHistoryPagination,
     intelligence,
     webVitalsOverview,
     accessDenied,
@@ -315,12 +387,21 @@ export default function Monitor() {
     lastUpdated,
     refreshNow,
   } = useSystemMetrics({
+    includeHistory: includeMonitorHistory,
+    includeAlerts: alertsOpen,
+    alertsPage,
+    alertsPageSize: ACTIVE_ALERTS_PAGE_SIZE,
+    includeAlertHistory: alertsOpen && alertHistoryOpen,
+    alertHistoryPage,
+    alertHistoryPageSize: ALERT_HISTORY_PAGE_SIZE,
+    includeIntelligence: insightsOpen,
     includeWebVitalsOverview: webVitalsOpen,
   });
 
   const userRole = useMemo(() => getStoredRole(), []);
 
   const canInjectChaos = userRole === "admin" || userRole === "superuser";
+  const canDeleteAlertHistory = userRole === "superuser";
   const canManageRollups = userRole === "superuser";
   const deferSecondaryMobileSections = initialCompactViewport;
 
@@ -331,6 +412,9 @@ export default function Monitor() {
       chaosRequestRef.current?.abort();
       chaosRequestRef.current = null;
       chaosInFlightRef.current = false;
+      deleteAlertHistoryRequestRef.current?.abort();
+      deleteAlertHistoryRequestRef.current = null;
+      deleteAlertHistoryInFlightRef.current = false;
       queueActionRequestRef.current?.abort();
       queueActionRequestRef.current = null;
       queueActionInFlightRef.current = false;
@@ -360,26 +444,102 @@ export default function Monitor() {
     () => formatMonitorDurationCompact(snapshot.rollupRefreshOldestPendingAgeMs),
     [snapshot.rollupRefreshOldestPendingAgeMs],
   );
+  const webVitalsCompactSummary = useMemo(
+    () => buildMonitorWebVitalCompactSummary(webVitalsOverview),
+    [webVitalsOverview],
+  );
+  const metricsCompactSummary = useMemo(
+    () => buildMonitorMetricsCompactSummary(snapshot),
+    [snapshot],
+  );
+  const metricsSummaryFacts = useMemo(
+    () => buildMonitorMetricsSummaryFacts(snapshot),
+    [snapshot],
+  );
+  const chaosCompactSummary = useMemo(
+    () =>
+      buildMonitorChaosCompactSummary({
+        canInjectChaos,
+        selectedChaosProfile,
+        chaosDurationMs,
+        chaosLoading,
+        lastChaosMessage,
+      }),
+    [canInjectChaos, chaosDurationMs, chaosLoading, lastChaosMessage, selectedChaosProfile],
+  );
+  const chaosSummaryFacts = useMemo(
+    () =>
+      buildMonitorChaosSummaryFacts({
+        canInjectChaos,
+        selectedChaosProfile,
+        chaosDurationMs,
+        chaosLoading,
+      }),
+    [canInjectChaos, chaosDurationMs, chaosLoading, selectedChaosProfile],
+  );
+  const technicalCompactSummary = useMemo(
+    () => buildMonitorTechnicalCompactSummary(snapshot),
+    [snapshot],
+  );
+  const technicalSummaryFacts = useMemo(
+    () => buildMonitorTechnicalSummaryFacts(snapshot),
+    [snapshot],
+  );
+  const insightsCompactSummary = useMemo(
+    () => buildMonitorInsightsCompactSummary(intelligence),
+    [intelligence],
+  );
+  const insightsSummaryFacts = useMemo(
+    () => buildMonitorInsightsSummaryFacts(intelligence),
+    [intelligence],
+  );
+  const webVitalsSummaryFacts = useMemo(
+    () => buildMonitorWebVitalSummaryFacts(webVitalsOverview),
+    [webVitalsOverview],
+  );
   const webVitalsSummaryLabel = useMemo(() => {
+    const suffix = webVitalsOpen
+      ? ""
+      : " Open Information only when you need deeper browser experience detail.";
+
     if (!webVitalsOpen) {
-      return "Hidden by default so monitor stays light. Click Information when you want recent browser experience signals.";
+      return `${webVitalsCompactSummary.description}${suffix}`;
     }
 
     if (webVitalsOverview.totalSamples === 0) {
-      return "Waiting for recent browser telemetry samples.";
+      return webVitalsCompactSummary.description;
     }
 
-    return `${webVitalsOverview.totalSamples} recent samples across a ${webVitalsOverview.windowMinutes}-minute rolling window.`;
-  }, [webVitalsOpen, webVitalsOverview.totalSamples, webVitalsOverview.windowMinutes]);
-  const metricGroups = useMemo(() => buildMetricGroups(snapshot, history), [history, snapshot]);
-  const { shouldRender: shouldRenderMetrics, triggerRef: metricsTriggerRef } =
-    useDeferredMonitorSectionMount({ enabled: deferSecondaryMobileSections });
+    return webVitalsCompactSummary.description;
+  }, [webVitalsCompactSummary.description, webVitalsOpen, webVitalsOverview.totalSamples]);
+  const metricGroups = useMemo(
+    () => (metricsOpen ? buildMetricGroups(snapshot, history) : []),
+    [history, metricsOpen, snapshot],
+  );
   const { shouldRender: shouldRenderRollupControls, triggerRef: rollupControlsTriggerRef } =
     useDeferredMonitorSectionMount({ enabled: deferSecondaryMobileSections && canManageRollups });
   const { shouldRender: shouldRenderAlerts, triggerRef: alertsTriggerRef } =
     useDeferredMonitorSectionMount({ enabled: deferSecondaryMobileSections });
-  const { shouldRender: shouldRenderInsights, triggerRef: insightsTriggerRef } =
-    useDeferredMonitorSectionMount({ enabled: deferSecondaryMobileSections });
+
+  useEffect(() => {
+    if (alertsPage > alertsPagination.totalPages) {
+      setAlertsPage(alertsPagination.totalPages);
+    }
+  }, [alertsPage, alertsPagination.totalPages]);
+
+  useEffect(() => {
+    if (alertHistoryPage > alertHistoryPagination.totalPages) {
+      setAlertHistoryPage(alertHistoryPagination.totalPages);
+    }
+  }, [alertHistoryPage, alertHistoryPagination.totalPages]);
+
+  useEffect(() => {
+    if (alertsOpen) {
+      return;
+    }
+
+    setAlertHistoryOpen(false);
+  }, [alertsOpen]);
 
   const handleChaosTypeChange = useCallback((nextType: ChaosType) => {
     setChaosType(nextType);
@@ -394,6 +554,69 @@ export default function Monitor() {
       setWebVitalsOpen((previous) => !previous);
     });
   }, []);
+
+  const handleDeleteOldAlertHistory = useCallback(async (olderThanDays: number) => {
+    if (!canDeleteAlertHistory || deleteAlertHistoryInFlightRef.current) {
+      return;
+    }
+
+    if (!Number.isFinite(olderThanDays) || olderThanDays < 1) {
+      toast({
+        variant: "destructive",
+        title: "Invalid retention window",
+        description: "Choose a valid age in days before deleting old alert history.",
+      });
+      return;
+    }
+
+    deleteAlertHistoryRequestRef.current?.abort();
+    const controller = new AbortController();
+    deleteAlertHistoryRequestRef.current = controller;
+    deleteAlertHistoryInFlightRef.current = true;
+    setDeleteAlertHistoryBusy(true);
+
+    try {
+      const result = await deleteOldAlertHistory(olderThanDays, { signal: controller.signal });
+
+      if (controller.signal.aborted || !mountedRef.current) {
+        return;
+      }
+
+      if (result.state === "ok" && result.data?.ok) {
+        setAlertsPage(1);
+        setAlertHistoryPage(1);
+        toast({
+          title: "Old alert history deleted",
+          description: `Removed ${result.data.deletedCount} resolved incidents older than ${result.data.olderThanDays} days.`,
+        });
+        await refreshNow();
+        return;
+      }
+
+      if (result.state === "forbidden" || result.state === "unauthorized") {
+        toast({
+          variant: "destructive",
+          title: "Permission denied",
+          description: "Only superuser can delete old monitor alert history.",
+        });
+        return;
+      }
+
+      toast({
+        variant: "destructive",
+        title: "Cleanup failed",
+        description: result.message || "Failed to delete old alert history.",
+      });
+    } finally {
+      if (deleteAlertHistoryRequestRef.current === controller) {
+        deleteAlertHistoryRequestRef.current = null;
+      }
+      deleteAlertHistoryInFlightRef.current = false;
+      if (mountedRef.current) {
+        setDeleteAlertHistoryBusy(false);
+      }
+    }
+  }, [canDeleteAlertHistory, refreshNow, toast]);
 
   const submitChaos = useCallback(async () => {
     if (!canInjectChaos || chaosInFlightRef.current) return;
@@ -558,9 +781,26 @@ export default function Monitor() {
               <div className="inline-flex items-center rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-700 dark:text-sky-300">
                 Real User Experience
               </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className={`rounded-full px-3 py-1 text-xs ${getMonitorSummaryToneClass(webVitalsCompactSummary.tone)}`}
+                >
+                  {webVitalsCompactSummary.badge}
+                </Badge>
+                {webVitalsSummaryFacts.map((fact) => (
+                  <Badge
+                    key={fact.label}
+                    variant="outline"
+                    className={`rounded-full px-3 py-1 text-xs ${getMonitorSummaryToneClass(fact.tone)}`}
+                  >
+                    {fact.label} {fact.value}
+                  </Badge>
+                ))}
+              </div>
               <div className="space-y-1">
                 <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
-                  Browser experience details stay hidden until requested
+                  {webVitalsCompactSummary.headline}
                 </h2>
                 <p className="max-w-3xl text-sm text-muted-foreground">
                   {webVitalsSummaryLabel}
@@ -568,11 +808,6 @@ export default function Monitor() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {webVitalsOpen && webVitalsOverview.totalSamples > 0 ? (
-                <Badge variant="secondary" className="rounded-full px-3 py-1 text-xs">
-                  {webVitalsOverview.totalSamples} samples
-                </Badge>
-              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -595,14 +830,30 @@ export default function Monitor() {
             </div>
           ) : null}
         </section>
-        <div ref={metricsTriggerRef}>
-          {shouldRenderMetrics ? (
+        <div className="space-y-3">
+          <MonitorDeferredSectionToggle
+            title="Key Metrics"
+            statusBadgeLabel={metricsCompactSummary.badge}
+            statusTone={metricsCompactSummary.tone}
+            headline={metricsCompactSummary.headline}
+            description={metricsCompactSummary.description}
+            summaryBadges={metricsSummaryFacts.map((fact) => (
+              <Badge
+                key={fact.label}
+                variant="outline"
+                className={`rounded-full px-2.5 py-0.5 text-[10px] ${getMonitorSummaryToneClass(fact.tone)}`}
+              >
+                {fact.label} {fact.value}
+              </Badge>
+            ))}
+            open={metricsOpen}
+            onToggle={() => setMetricsOpen((previous) => !previous)}
+          />
+          {metricsOpen ? (
             <Suspense fallback={<MonitorMetricsFallback />}>
-              <MonitorMetricsSection metricGroups={metricGroups} />
+              <MonitorMetricsSection metricGroups={metricGroups} embedded />
             </Suspense>
-          ) : (
-            <MonitorMetricsFallback />
-          )}
+          ) : null}
         </div>
         {canManageRollups ? (
           <div ref={rollupControlsTriggerRef}>
@@ -630,63 +881,70 @@ export default function Monitor() {
               <MonitorAlertsSection
                 alertsOpen={alertsOpen}
                 onAlertsOpenChange={setAlertsOpen}
+                alertHistoryOpen={alertHistoryOpen}
+                onAlertHistoryOpenChange={setAlertHistoryOpen}
                 alerts={alerts}
+                alertsPage={alertsPage}
+                alertsPagination={alertsPagination}
+                onAlertsPageChange={setAlertsPage}
                 alertHistory={alertHistory}
+                alertHistoryPage={alertHistoryPage}
+                alertHistoryPagination={alertHistoryPagination}
+                onAlertHistoryPageChange={setAlertHistoryPage}
+                canDeleteHistory={canDeleteAlertHistory}
+                deleteHistoryBusy={deleteAlertHistoryBusy}
+                onDeleteOldHistory={handleDeleteOldAlertHistory}
               />
             </Suspense>
           ) : (
             <MonitorSectionCardFallback title="Loading alerts" blocks={3} />
           )}
         </div>
-        <div ref={insightsTriggerRef}>
-          {shouldRenderInsights ? (
+        <div className="space-y-3">
+          <MonitorDeferredSectionToggle
+            title="Intelligence Insights"
+            statusBadgeLabel={insightsCompactSummary.badge}
+            statusTone={insightsCompactSummary.tone}
+            headline={insightsCompactSummary.headline}
+            description={insightsCompactSummary.description}
+            summaryBadges={insightsSummaryFacts.map((fact) => (
+              <Badge
+                key={fact.label}
+                variant="outline"
+                className={`rounded-full px-2.5 py-0.5 text-[10px] ${getMonitorSummaryToneClass(fact.tone)}`}
+              >
+                {fact.label} {fact.value}
+              </Badge>
+            ))}
+            open={insightsOpen}
+            onToggle={() => setInsightsOpen((previous) => !previous)}
+          />
+          {insightsOpen ? (
             <Suspense fallback={<MonitorInsightsFallback />}>
-              <MonitorInsightsSection intelligence={intelligence} lastUpdated={lastUpdated} />
+              <MonitorInsightsSection intelligence={intelligence} lastUpdated={lastUpdated} embedded />
             </Suspense>
-          ) : (
-            <MonitorInsightsFallback />
-          )}
+          ) : null}
         </div>
-        {deferSecondaryMobileSections ? (
-          <>
-            <MonitorMobileDeferredSectionToggle
-              title="Chaos Lab"
-              description="Open controlled resilience scenarios only when you need fault-injection tools on smaller screens."
-              open={chaosSectionOpen}
-              onToggle={() => setChaosSectionOpen((previous) => !previous)}
-            />
-            {chaosSectionOpen ? (
-              <Suspense fallback={<MonitorSectionCardFallback title="Loading chaos lab" blocks={2} />}>
-                <MonitorChaosSection
-                  canInjectChaos={canInjectChaos}
-                  chaosType={chaosType}
-                  selectedChaosProfile={selectedChaosProfile}
-                  chaosMagnitude={chaosMagnitude}
-                  chaosDurationMs={chaosDurationMs}
-                  chaosLoading={chaosLoading}
-                  lastChaosMessage={lastChaosMessage}
-                  onChaosTypeChange={handleChaosTypeChange}
-                  onChaosMagnitudeChange={setChaosMagnitude}
-                  onChaosDurationChange={setChaosDurationMs}
-                  onSubmit={submitChaos}
-                />
-              </Suspense>
-            ) : null}
-
-            <MonitorMobileDeferredSectionToggle
-              title="Technical DevOps View"
-              description="Open rolling diagnostic charts only when you need deeper runtime trends on mobile."
-              open={technicalChartsOpen}
-              onToggle={() => setTechnicalChartsOpen((previous) => !previous)}
-            />
-            {technicalChartsOpen ? (
-              <Suspense fallback={<MonitorChartsFallback />}>
-                <MonitorTechnicalChartsSection history={history} />
-              </Suspense>
-            ) : null}
-          </>
-        ) : (
-          <>
+        <div className="space-y-3">
+          <MonitorDeferredSectionToggle
+            title="Chaos Lab"
+            statusBadgeLabel={chaosCompactSummary.badge}
+            statusTone={chaosCompactSummary.tone}
+            headline={chaosCompactSummary.headline}
+            description={chaosCompactSummary.description}
+            summaryBadges={chaosSummaryFacts.map((fact) => (
+              <Badge
+                key={fact.label}
+                variant="outline"
+                className={`rounded-full px-2.5 py-0.5 text-[10px] ${getMonitorSummaryToneClass(fact.tone)}`}
+              >
+                {fact.label} {fact.value}
+              </Badge>
+            ))}
+            open={chaosSectionOpen}
+            onToggle={() => setChaosSectionOpen((previous) => !previous)}
+          />
+          {chaosSectionOpen ? (
             <Suspense fallback={<MonitorSectionCardFallback title="Loading chaos lab" blocks={2} />}>
               <MonitorChaosSection
                 canInjectChaos={canInjectChaos}
@@ -700,13 +958,36 @@ export default function Monitor() {
                 onChaosMagnitudeChange={setChaosMagnitude}
                 onChaosDurationChange={setChaosDurationMs}
                 onSubmit={submitChaos}
+                embedded
               />
             </Suspense>
+          ) : null}
+        </div>
+        <div className="space-y-3">
+          <MonitorDeferredSectionToggle
+            title="Technical DevOps View"
+            statusBadgeLabel={technicalCompactSummary.badge}
+            statusTone={technicalCompactSummary.tone}
+            headline={technicalCompactSummary.headline}
+            description={technicalCompactSummary.description}
+            summaryBadges={technicalSummaryFacts.map((fact) => (
+              <Badge
+                key={fact.label}
+                variant="outline"
+                className={`rounded-full px-2.5 py-0.5 text-[10px] ${getMonitorSummaryToneClass(fact.tone)}`}
+              >
+                {fact.label} {fact.value}
+              </Badge>
+            ))}
+            open={technicalChartsOpen}
+            onToggle={() => setTechnicalChartsOpen((previous) => !previous)}
+          />
+          {technicalChartsOpen ? (
             <Suspense fallback={<MonitorChartsFallback />}>
-              <MonitorTechnicalChartsSection history={history} />
+              <MonitorTechnicalChartsSection history={history} embedded />
             </Suspense>
-          </>
-        )}
+          ) : null}
+        </div>
 
         <p className={isMobile ? "text-left text-xs text-muted-foreground" : "text-right text-xs text-muted-foreground"}>
           {isLoading ? "Loading..." : `Last updated: ${lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : "-"}`}

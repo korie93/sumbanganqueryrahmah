@@ -465,11 +465,29 @@ test("monitor API wrappers forward AbortSignal", async () => {
     if (url === "/internal/workers") {
       return jsonResponse({ count: 0, maxWorkers: 1, workers: [], updatedAt: Date.now() });
     }
-    if (url === "/internal/alerts") {
-      return jsonResponse({ alerts: [], updatedAt: Date.now() });
+    if (url === "/internal/alerts?page=2&pageSize=5") {
+      return jsonResponse({
+        alerts: [],
+        pagination: {
+          page: 2,
+          pageSize: 5,
+          totalItems: 0,
+          totalPages: 1,
+        },
+        updatedAt: Date.now(),
+      });
     }
-    if (url === "/internal/alerts/history") {
-      return jsonResponse({ incidents: [], updatedAt: new Date().toISOString() });
+    if (url === "/internal/alerts/history?page=2&pageSize=5") {
+      return jsonResponse({
+        incidents: [],
+        pagination: {
+          page: 2,
+          pageSize: 5,
+          totalItems: 0,
+          totalPages: 1,
+        },
+        updatedAt: new Date().toISOString(),
+      });
     }
     if (url === "/internal/web-vitals") {
       return jsonResponse({
@@ -547,8 +565,8 @@ test("monitor API wrappers forward AbortSignal", async () => {
     await getSystemHealth({ signal: controller.signal });
     await getSystemMode({ signal: controller.signal });
     await getWorkers({ signal: controller.signal });
-    await getAlerts({ signal: controller.signal });
-    await getAlertHistory({ signal: controller.signal });
+    await getAlerts({ signal: controller.signal, page: 2, pageSize: 5 });
+    await getAlertHistory({ signal: controller.signal, page: 2, pageSize: 5 });
     await getWebVitalsOverview({ signal: controller.signal });
     await getIntelligenceExplain({ signal: controller.signal });
     await injectChaos({ type: "cpu_spike", magnitude: 2 }, { signal: controller.signal });
@@ -567,8 +585,8 @@ test("monitor API wrappers forward AbortSignal", async () => {
   assert.equal(requests[0]?.url, "/internal/system-health");
   assert.equal(requests[1]?.url, "/internal/system-mode");
   assert.equal(requests[2]?.url, "/internal/workers");
-  assert.equal(requests[3]?.url, "/internal/alerts");
-  assert.equal(requests[4]?.url, "/internal/alerts/history");
+  assert.equal(requests[3]?.url, "/internal/alerts?page=2&pageSize=5");
+  assert.equal(requests[4]?.url, "/internal/alerts/history?page=2&pageSize=5");
   assert.equal(requests[5]?.url, "/internal/web-vitals");
   assert.equal(requests[6]?.url, "/internal/intelligence/explain");
   assert.equal(requests[7]?.url, "/internal/chaos/inject");

@@ -308,7 +308,9 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     retryCollectionRollupFailures: () => collectionRollupOperationsService.retryFailedSlices(),
     autoHealCollectionRollupQueue: () => collectionRollupOperationsService.autoHealRunningSlices(),
     rebuildCollectionRollups: () => collectionRollupOperationsService.rebuildAllRollups(),
-    listMonitorAlertHistory: () => monitorAlertHistoryRepository.listRecent(),
+    listMonitorAlertHistory: (options) => monitorAlertHistoryRepository.listRecentPage(options),
+    deleteMonitorAlertHistoryOlderThan: (cutoffDate) =>
+      monitorAlertHistoryRepository.deleteResolvedOlderThan(cutoffDate),
     getWebVitalsOverview: () => webVitalsTelemetryService.getOverview(),
     createAuditLog: (data) => storage.createAuditLog(data),
     checkDbConnectivity: async () => {

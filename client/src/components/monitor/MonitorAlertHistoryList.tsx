@@ -1,5 +1,4 @@
 import { memo } from "react";
-import { InfoHint } from "@/components/monitor/InfoHint";
 import { Badge } from "@/components/ui/badge";
 import type { MonitorAlertIncident } from "@/lib/api";
 
@@ -9,11 +8,7 @@ type MonitorAlertHistoryListProps = {
 
 function MonitorAlertHistoryListImpl({ alertHistory }: MonitorAlertHistoryListProps) {
   return (
-    <div className="pt-2">
-      <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Recent Alert History
-        <InfoHint text="Persistent incident history showing recently opened and resolved monitor alerts." />
-      </div>
+    <div>
       {alertHistory.length === 0 ? (
         <p className="rounded-lg border border-border/60 bg-background/45 p-3 text-sm text-muted-foreground">
           No recent alert history yet.

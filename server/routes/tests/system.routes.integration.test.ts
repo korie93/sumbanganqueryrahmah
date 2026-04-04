@@ -100,7 +100,16 @@ function createSystemRouteExtraDeps() {
       message: "Rebuild requested.",
       snapshot: createRollupQueueSnapshot(),
     }),
-    listMonitorAlertHistory: async () => [],
+    listMonitorAlertHistory: async () => ({
+      incidents: [],
+      pagination: {
+        page: 1,
+        pageSize: 5,
+        totalItems: 0,
+        totalPages: 1,
+      },
+    }),
+    deleteMonitorAlertHistoryOlderThan: async () => 0,
     getWebVitalsOverview: () => createWebVitalsOverview(),
   };
 }
@@ -422,8 +431,119 @@ test("GET /internal/system-health exposes rollup refresh queue metrics alongside
   }
 });
 
+test("GET /internal/alerts returns paginated live monitor alerts", async () => {
+  const app = createJsonTestApp();
+  registerSystemRoutes(app, {
+    authenticateToken: createTestAuthenticateToken({
+      userId: "monitor-1",
+      username: "monitor.user",
+      role: "admin",
+    }),
+    requireRole: createTestRequireRole(),
+    requireMonitorAccess: allowAll(),
+    getMaintenanceStateCached: async () => ({
+      maintenance: false,
+      message: "",
+      type: "soft",
+      startTime: null,
+      endTime: null,
+    }),
+    computeInternalMonitorSnapshot: () => createMonitorSnapshot() as any,
+    buildInternalMonitorAlerts: () => [
+      {
+        id: "alert-1",
+        severity: "CRITICAL",
+        message: "CPU saturation detected.",
+        timestamp: "2026-03-24T00:00:00.000Z",
+        source: "CPU",
+      },
+      {
+        id: "alert-2",
+        severity: "WARNING",
+        message: "DB latency elevated.",
+        timestamp: "2026-03-24T00:01:00.000Z",
+        source: "DB",
+      },
+      {
+        id: "alert-3",
+        severity: "INFO",
+        message: "AI queue is warming.",
+        timestamp: "2026-03-24T00:02:00.000Z",
+        source: "AI",
+      },
+    ],
+    getControlState: () => ({
+      mode: "NORMAL",
+      throttleFactor: 1,
+      rejectHeavyRoutes: false,
+      preAllocateMB: 0,
+      workerCount: 1,
+      maxWorkers: 1,
+      workers: [],
+      circuits: {},
+      predictor: null,
+      queueLength: 0,
+      updatedAt: Date.parse("2026-03-24T00:00:00.000Z"),
+    } as any),
+    getDbProtection: () => false,
+    getRequestRate: () => 0,
+    getLatencyP95: () => 0,
+    getLocalCircuitSnapshots: () => ({
+      ai: {} as any,
+      db: {} as any,
+      export: {} as any,
+    }),
+    getIntelligenceExplainability: () => ({
+      anomalyBreakdown: [],
+      correlationMatrix: [],
+      slopeValues: [],
+      forecastProjection: [],
+      governanceState: {},
+      chosenStrategy: null,
+      decisionReason: "n/a",
+    } as any),
+    injectChaos: () => ({
+      injected: {} as any,
+      active: [],
+    }),
+    ...createSystemRouteExtraDeps(),
+    createAuditLog: async (data) => ({
+      id: "audit-1",
+      ...data,
+    } as any),
+    checkDbConnectivity: async () => true,
+    getStartupHealthSnapshot: () => createStartupSnapshot(),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/internal/alerts?page=2&pageSize=2`, {
+      headers: {
+        "x-test-username": "monitor.user",
+        "x-test-role": "admin",
+        "x-test-userid": "monitor-1",
+      },
+    });
+    assert.equal(response.status, 200);
+
+    const payload = await response.json();
+    assert.equal(Array.isArray(payload.alerts), true);
+    assert.equal(payload.alerts.length, 1);
+    assert.equal(payload.alerts[0]?.id, "alert-3");
+    assert.deepEqual(payload.pagination, {
+      page: 2,
+      pageSize: 2,
+      totalItems: 3,
+      totalPages: 2,
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /internal/alerts/history returns recent monitor alert incidents", async () => {
   const app = createJsonTestApp();
+  const listCalls: Array<{ page?: number; pageSize?: number }> = [];
   registerSystemRoutes(app, {
     authenticateToken: createTestAuthenticateToken({
       userId: "monitor-1",
@@ -476,20 +596,31 @@ test("GET /internal/alerts/history returns recent monitor alert incidents", asyn
       active: [],
     }),
     ...createSystemRouteExtraDeps(),
-    listMonitorAlertHistory: async () => [
-      {
-        id: "incident-1",
-        alertKey: "rollup_queue_warning",
-        severity: "WARNING",
-        source: "ROLLUP_QUEUE",
-        message: "Collection rollup refresh backlog is growing.",
-        status: "open",
-        firstSeenAt: new Date("2026-03-24T00:00:00.000Z"),
-        lastSeenAt: new Date("2026-03-24T00:05:00.000Z"),
-        resolvedAt: null,
-        updatedAt: new Date("2026-03-24T00:05:00.000Z"),
-      },
-    ],
+    listMonitorAlertHistory: async (options) => {
+      listCalls.push(options || {});
+      return {
+        incidents: [
+          {
+            id: "incident-1",
+            alertKey: "rollup_queue_warning",
+            severity: "WARNING",
+            source: "ROLLUP_QUEUE",
+            message: "Collection rollup refresh backlog is growing.",
+            status: "open",
+            firstSeenAt: new Date("2026-03-24T00:00:00.000Z"),
+            lastSeenAt: new Date("2026-03-24T00:05:00.000Z"),
+            resolvedAt: null,
+            updatedAt: new Date("2026-03-24T00:05:00.000Z"),
+          },
+        ],
+        pagination: {
+          page: options?.page ?? 1,
+          pageSize: options?.pageSize ?? 5,
+          totalItems: 11,
+          totalPages: 3,
+        },
+      };
+    },
     createAuditLog: async (data) => ({
       id: "audit-1",
       ...data,
@@ -500,7 +631,7 @@ test("GET /internal/alerts/history returns recent monitor alert incidents", asyn
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/internal/alerts/history`, {
+    const response = await fetch(`${baseUrl}/internal/alerts/history?page=2&pageSize=5`, {
       headers: {
         "x-test-username": "monitor.user",
         "x-test-role": "admin",
@@ -513,6 +644,121 @@ test("GET /internal/alerts/history returns recent monitor alert incidents", asyn
     assert.equal(Array.isArray(payload.incidents), true);
     assert.equal(payload.incidents.length, 1);
     assert.equal(payload.incidents[0]?.alertKey, "rollup_queue_warning");
+    assert.deepEqual(payload.pagination, {
+      page: 2,
+      pageSize: 5,
+      totalItems: 11,
+      totalPages: 3,
+    });
+    assert.deepEqual(listCalls, [{ page: 2, pageSize: 5 }]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("DELETE /internal/alerts/history removes resolved incidents older than the selected age", async () => {
+  const app = createJsonTestApp();
+  const cleanupCalls: Date[] = [];
+  const auditLogs: Array<{ action: string; details: string }> = [];
+
+  registerSystemRoutes(app, {
+    authenticateToken: createTestAuthenticateToken({
+      userId: "monitor-1",
+      username: "monitor.superuser",
+      role: "superuser",
+    }),
+    requireRole: createTestRequireRole(),
+    requireMonitorAccess: allowAll(),
+    getMaintenanceStateCached: async () => ({
+      maintenance: false,
+      message: "",
+      type: "soft",
+      startTime: null,
+      endTime: null,
+    }),
+    computeInternalMonitorSnapshot: () => createMonitorSnapshot() as any,
+    buildInternalMonitorAlerts: () => [],
+    getControlState: () => ({
+      mode: "NORMAL",
+      throttleFactor: 1,
+      rejectHeavyRoutes: false,
+      preAllocateMB: 0,
+      workerCount: 1,
+      maxWorkers: 1,
+      workers: [],
+      circuits: {},
+      predictor: null,
+      queueLength: 0,
+      updatedAt: Date.parse("2026-03-24T00:00:00.000Z"),
+    } as any),
+    getDbProtection: () => false,
+    getRequestRate: () => 0,
+    getLatencyP95: () => 0,
+    getLocalCircuitSnapshots: () => ({
+      ai: {} as any,
+      db: {} as any,
+      export: {} as any,
+    }),
+    getIntelligenceExplainability: () => ({
+      anomalyBreakdown: [],
+      correlationMatrix: [],
+      slopeValues: [],
+      forecastProjection: [],
+      governanceState: {},
+      chosenStrategy: null,
+      decisionReason: "n/a",
+    } as any),
+    injectChaos: () => ({
+      injected: {} as any,
+      active: [],
+    }),
+    ...createSystemRouteExtraDeps(),
+    deleteMonitorAlertHistoryOlderThan: async (cutoffDate) => {
+      cleanupCalls.push(cutoffDate);
+      return 7;
+    },
+    createAuditLog: async (data) => {
+      auditLogs.push({
+        action: data.action,
+        details: data.details || "",
+      });
+      return {
+        id: "audit-1",
+        ...data,
+      } as any;
+    },
+    checkDbConnectivity: async () => true,
+    getStartupHealthSnapshot: () => createStartupSnapshot(),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const before = Date.now();
+    const response = await fetch(`${baseUrl}/internal/alerts/history`, {
+      method: "DELETE",
+      headers: {
+        "content-type": "application/json",
+        "x-test-username": "monitor.superuser",
+        "x-test-role": "superuser",
+        "x-test-userid": "monitor-1",
+      },
+      body: JSON.stringify({
+        olderThanDays: 45,
+      }),
+    });
+    assert.equal(response.status, 200);
+
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.deletedCount, 7);
+    assert.equal(payload.olderThanDays, 45);
+    assert.equal(cleanupCalls.length, 1);
+
+    const ageHours = (before - cleanupCalls[0].getTime()) / (1000 * 60 * 60);
+    assert.equal(ageHours > 45 * 24 - 2, true);
+    assert.equal(ageHours < 45 * 24 + 2, true);
+    assert.equal(auditLogs.length, 1);
+    assert.equal(auditLogs[0]?.action, "MONITOR_ALERT_HISTORY_CLEANUP");
   } finally {
     await stopTestServer(server);
   }
@@ -739,7 +985,16 @@ test("rollup refresh control routes remain superuser-only and return snapshots",
       message: "Rebuild requested.",
       snapshot: createRollupQueueSnapshot(),
     }),
-    listMonitorAlertHistory: async () => [],
+    listMonitorAlertHistory: async () => ({
+      incidents: [],
+      pagination: {
+        page: 1,
+        pageSize: 5,
+        totalItems: 0,
+        totalPages: 1,
+      },
+    }),
+    deleteMonitorAlertHistoryOlderThan: async () => 0,
     getWebVitalsOverview: () => createWebVitalsOverview(),
     createAuditLog: async (data) => ({
       id: "audit-1",

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildChartSeries,
   buildRollupFreshnessSummary,
   formatMonitorDurationCompact,
   getRollupFreshnessStatus,
 } from "@/components/monitor/monitorData";
+import { initialHistory } from "@/hooks/system-metrics-utils";
 
 test("getRollupFreshnessStatus reports fresh when no rollup backlog is present", () => {
   assert.equal(
@@ -83,5 +85,21 @@ test("buildRollupFreshnessSummary explains warming and stale rollup states clear
       rollupRefreshOldestPendingAgeMs: 125_000,
     }),
     "Stale: 8 pending slice(s), oldest 2m 5s. 2 slice(s) waiting to retry.",
+  );
+});
+
+test("buildChartSeries keeps technical devops charts grouped into stable categories", () => {
+  const charts = buildChartSeries(initialHistory);
+
+  assert.deepEqual(
+    charts.map((chart) => `${chart.category}:${chart.title}`),
+    [
+      "Infrastructure Capacity:CPU %",
+      "Infrastructure Capacity:RAM %",
+      "Runtime Experience:p95 Latency",
+      "Runtime Experience:Error Rate",
+      "Data And AI:DB Latency",
+      "Data And AI:AI Latency",
+    ],
   );
 });

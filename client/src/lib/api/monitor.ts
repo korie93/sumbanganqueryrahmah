@@ -9,6 +9,16 @@ type MonitorRequestOptions = {
   signal?: AbortSignal;
 };
 
+type AlertHistoryRequestOptions = MonitorRequestOptions & {
+  page?: number;
+  pageSize?: number;
+};
+
+type AlertsRequestOptions = MonitorRequestOptions & {
+  page?: number;
+  pageSize?: number;
+};
+
 export type MonitorApiResult<T> = {
   state: MonitorRequestState;
   status: number;
@@ -35,6 +45,13 @@ export type MonitorAlertIncident = {
   lastSeenAt: string;
   resolvedAt: string | null;
   updatedAt: string;
+};
+
+export type MonitorPagination = {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
 };
 
 export type SystemHealthPayload = {
@@ -103,11 +120,20 @@ export type WorkersPayload = {
 
 export type AlertsPayload = {
   alerts: MonitorAlert[];
+  pagination: MonitorPagination;
   updatedAt: number;
 };
 
 export type AlertHistoryPayload = {
   incidents: MonitorAlertIncident[];
+  pagination: MonitorPagination;
+  updatedAt: string;
+};
+
+export type AlertHistoryCleanupPayload = {
+  ok: boolean;
+  deletedCount: number;
+  olderThanDays: number;
   updatedAt: string;
 };
 
@@ -320,6 +346,68 @@ async function postMonitorEndpoint<T>(
   }
 }
 
+async function deleteMonitorEndpoint<T>(
+  endpoint: string,
+  body: unknown,
+  options?: MonitorRequestOptions,
+): Promise<MonitorApiResult<T>> {
+  try {
+    const response = await fetch(endpoint, {
+      method: "DELETE",
+      headers: createApiHeaders({
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+        ...(getCsrfHeader() as Record<string, string>),
+      }),
+      credentials: "include",
+      body: JSON.stringify(body ?? {}),
+      signal: options?.signal,
+    });
+
+    if (response.status === 401) {
+      return {
+        state: "unauthorized",
+        status: 401,
+        data: null,
+        message: await parseMonitorErrorMessage(response),
+      };
+    }
+
+    if (response.status === 403) {
+      return {
+        state: "forbidden",
+        status: 403,
+        data: null,
+        message: await parseMonitorErrorMessage(response),
+      };
+    }
+
+    if (!response.ok) {
+      return {
+        state: "network_error",
+        status: response.status,
+        data: null,
+        message: await parseMonitorErrorMessage(response),
+      };
+    }
+
+    const data = (await response.json()) as T;
+    return {
+      state: "ok",
+      status: 200,
+      data,
+      message: null,
+    };
+  } catch (error: unknown) {
+    return {
+      state: "network_error",
+      status: 0,
+      data: null,
+      message: error instanceof Error ? error.message : "Network error",
+    };
+  }
+}
+
 export async function getSystemHealth(options?: MonitorRequestOptions) {
   return fetchMonitorEndpoint<SystemHealthPayload>("/internal/system-health", options);
 }
@@ -332,12 +420,45 @@ export async function getWorkers(options?: MonitorRequestOptions) {
   return fetchMonitorEndpoint<WorkersPayload>("/internal/workers", options);
 }
 
-export async function getAlerts(options?: MonitorRequestOptions) {
-  return fetchMonitorEndpoint<AlertsPayload>("/internal/alerts", options);
+export async function getAlerts(options?: AlertsRequestOptions) {
+  const searchParams = new URLSearchParams();
+  if (Number.isFinite(options?.page) && Number(options?.page) > 0) {
+    searchParams.set("page", String(Math.floor(Number(options?.page))));
+  }
+  if (Number.isFinite(options?.pageSize) && Number(options?.pageSize) > 0) {
+    searchParams.set("pageSize", String(Math.floor(Number(options?.pageSize))));
+  }
+  const query = searchParams.toString();
+  return fetchMonitorEndpoint<AlertsPayload>(
+    query ? `/internal/alerts?${query}` : "/internal/alerts",
+    options,
+  );
 }
 
-export async function getAlertHistory(options?: MonitorRequestOptions) {
-  return fetchMonitorEndpoint<AlertHistoryPayload>("/internal/alerts/history", options);
+export async function getAlertHistory(options?: AlertHistoryRequestOptions) {
+  const searchParams = new URLSearchParams();
+  if (Number.isFinite(options?.page) && Number(options?.page) > 0) {
+    searchParams.set("page", String(Math.floor(Number(options?.page))));
+  }
+  if (Number.isFinite(options?.pageSize) && Number(options?.pageSize) > 0) {
+    searchParams.set("pageSize", String(Math.floor(Number(options?.pageSize))));
+  }
+  const query = searchParams.toString();
+  return fetchMonitorEndpoint<AlertHistoryPayload>(
+    query ? `/internal/alerts/history?${query}` : "/internal/alerts/history",
+    options,
+  );
+}
+
+export async function deleteOldAlertHistory(
+  olderThanDays: number,
+  options?: MonitorRequestOptions,
+) {
+  return deleteMonitorEndpoint<AlertHistoryCleanupPayload>(
+    "/internal/alerts/history",
+    { olderThanDays },
+    options,
+  );
 }
 
 export async function getWebVitalsOverview(options?: MonitorRequestOptions) {

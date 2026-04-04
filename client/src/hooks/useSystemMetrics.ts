@@ -30,8 +30,10 @@ import {
   explainabilityEqual,
   initialHistory,
   initialIntelligence,
+  initialMonitorPagination,
   initialSnapshot,
   initialWebVitalsOverview,
+  monitorPaginationEqual,
   resolveSystemMetricsPollIntervalMs,
   shouldFetchSystemMetricsDetails,
   shouldPollSystemMetricsDetails,
@@ -55,15 +57,47 @@ export {
 } from "@/hooks/system-metrics-utils";
 
 type UseSystemMetricsOptions = {
+  includeHistory?: boolean;
+  includeAlerts?: boolean;
+  alertsPage?: number;
+  alertsPageSize?: number;
+  includeAlertHistory?: boolean;
+  alertHistoryPage?: number;
+  alertHistoryPageSize?: number;
+  includeIntelligence?: boolean;
   includeWebVitalsOverview?: boolean;
 };
 
 export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSystemMetricsResult {
+  const includeHistory = options.includeHistory ?? true;
+  const includeAlerts = options.includeAlerts ?? true;
+  const alertsPage = Number.isFinite(options.alertsPage)
+    ? Math.max(1, Math.floor(Number(options.alertsPage)))
+    : initialMonitorPagination.page;
+  const alertsPageSize = Number.isFinite(options.alertsPageSize)
+    ? Math.max(1, Math.floor(Number(options.alertsPageSize)))
+    : initialMonitorPagination.pageSize;
+  const includeAlertHistory = options.includeAlertHistory ?? true;
+  const alertHistoryPage = Number.isFinite(options.alertHistoryPage)
+    ? Math.max(1, Math.floor(Number(options.alertHistoryPage)))
+    : initialMonitorPagination.page;
+  const alertHistoryPageSize = Number.isFinite(options.alertHistoryPageSize)
+    ? Math.max(1, Math.floor(Number(options.alertHistoryPageSize)))
+    : initialMonitorPagination.pageSize;
+  const includeIntelligence = options.includeIntelligence ?? true;
   const includeWebVitalsOverview = options.includeWebVitalsOverview ?? true;
   const [snapshot, setSnapshot] = useState<MonitorSnapshot>(initialSnapshot);
   const [history, setHistory] = useState<MonitorHistory>(initialHistory);
   const [alerts, setAlerts] = useState<MonitorAlert[]>([]);
+  const [alertsPagination, setAlertsPagination] = useState(() => ({
+    ...initialMonitorPagination,
+    pageSize: alertsPageSize,
+  }));
   const [alertHistory, setAlertHistory] = useState<MonitorAlertIncident[]>([]);
+  const [alertHistoryPagination, setAlertHistoryPagination] = useState(() => ({
+    ...initialMonitorPagination,
+    pageSize: alertHistoryPageSize,
+  }));
   const [intelligence, setIntelligence] = useState<IntelligenceExplainPayload>(initialIntelligence);
   const [webVitalsOverview, setWebVitalsOverview] = useState(initialWebVitalsOverview);
   const [endpointState, setEndpointState] = useState<EndpointState>({
@@ -84,10 +118,28 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
   const historyRef = useRef(history);
   const snapshotRef = useRef(snapshot);
   const alertsRef = useRef(alerts);
+  const alertsPaginationRef = useRef(alertsPagination);
   const alertHistoryRef = useRef(alertHistory);
+  const alertHistoryPaginationRef = useRef(alertHistoryPagination);
   const intelligenceRef = useRef(intelligence);
   const webVitalsOverviewRef = useRef(webVitalsOverview);
+  const includeHistoryRef = useRef(includeHistory);
+  const includeAlertsRef = useRef(includeAlerts);
+  const alertsPageRef = useRef(alertsPage);
+  const alertsPageSizeRef = useRef(alertsPageSize);
+  const includeAlertHistoryRef = useRef(includeAlertHistory);
+  const alertHistoryPageRef = useRef(alertHistoryPage);
+  const alertHistoryPageSizeRef = useRef(alertHistoryPageSize);
+  const includeIntelligenceRef = useRef(includeIntelligence);
   const includeWebVitalsOverviewRef = useRef(includeWebVitalsOverview);
+  const previousIncludeHistoryRef = useRef(includeHistory);
+  const previousIncludeAlertsRef = useRef(includeAlerts);
+  const previousAlertsPageRef = useRef(alertsPage);
+  const previousAlertsPageSizeRef = useRef(alertsPageSize);
+  const previousIncludeAlertHistoryRef = useRef(includeAlertHistory);
+  const previousAlertHistoryPageRef = useRef(alertHistoryPage);
+  const previousAlertHistoryPageSizeRef = useRef(alertHistoryPageSize);
+  const previousIncludeIntelligenceRef = useRef(includeIntelligence);
   const previousIncludeWebVitalsOverviewRef = useRef(includeWebVitalsOverview);
   const endpointStateRef = useRef(endpointState);
   const inFlightRef = useRef(false);
@@ -127,8 +179,16 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
   }, [alerts]);
 
   useEffect(() => {
+    alertsPaginationRef.current = alertsPagination;
+  }, [alertsPagination]);
+
+  useEffect(() => {
     alertHistoryRef.current = alertHistory;
   }, [alertHistory]);
+
+  useEffect(() => {
+    alertHistoryPaginationRef.current = alertHistoryPagination;
+  }, [alertHistoryPagination]);
 
   useEffect(() => {
     intelligenceRef.current = intelligence;
@@ -137,6 +197,38 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
   useEffect(() => {
     webVitalsOverviewRef.current = webVitalsOverview;
   }, [webVitalsOverview]);
+
+  useEffect(() => {
+    includeHistoryRef.current = includeHistory;
+  }, [includeHistory]);
+
+  useEffect(() => {
+    includeAlertsRef.current = includeAlerts;
+  }, [includeAlerts]);
+
+  useEffect(() => {
+    alertsPageRef.current = alertsPage;
+  }, [alertsPage]);
+
+  useEffect(() => {
+    alertsPageSizeRef.current = alertsPageSize;
+  }, [alertsPageSize]);
+
+  useEffect(() => {
+    includeAlertHistoryRef.current = includeAlertHistory;
+  }, [includeAlertHistory]);
+
+  useEffect(() => {
+    alertHistoryPageRef.current = alertHistoryPage;
+  }, [alertHistoryPage]);
+
+  useEffect(() => {
+    alertHistoryPageSizeRef.current = alertHistoryPageSize;
+  }, [alertHistoryPageSize]);
+
+  useEffect(() => {
+    includeIntelligenceRef.current = includeIntelligence;
+  }, [includeIntelligence]);
 
   useEffect(() => {
     includeWebVitalsOverviewRef.current = includeWebVitalsOverview;
@@ -163,6 +255,15 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
       pollCount: pollCycleRef.current,
       forceDetailed,
     });
+    const includeHistoryCurrent = includeHistoryRef.current;
+    const includeAlertsCurrent = includeAlertsRef.current;
+    const alertsPageCurrent = alertsPageRef.current;
+    const alertsPageSizeCurrent = alertsPageSizeRef.current;
+    const includeAlertHistoryCurrent = includeAlertHistoryRef.current;
+    const alertHistoryPageCurrent = alertHistoryPageRef.current;
+    const alertHistoryPageSizeCurrent = alertHistoryPageSizeRef.current;
+    const includeIntelligenceCurrent = includeIntelligenceRef.current;
+    const includeWebVitalsOverviewCurrent = includeWebVitalsOverviewRef.current;
     pollCycleRef.current += 1;
 
     try {
@@ -171,13 +272,27 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
           getSystemHealth({ signal: controller.signal }),
           getSystemMode({ signal: controller.signal }),
           getWorkers({ signal: controller.signal }),
-          getAlerts({ signal: controller.signal }),
+          includeAlertsCurrent
+            ? getAlerts({
+                signal: controller.signal,
+                page: alertsPageCurrent,
+                pageSize: alertsPageSizeCurrent,
+              })
+            : Promise.resolve(null),
         ]),
         shouldFetchDetails
           ? Promise.all([
-              getAlertHistory({ signal: controller.signal }),
-              getIntelligenceExplain({ signal: controller.signal }),
-              includeWebVitalsOverviewRef.current
+              includeAlertHistoryCurrent
+                ? getAlertHistory({
+                    signal: controller.signal,
+                    page: alertHistoryPageCurrent,
+                    pageSize: alertHistoryPageSizeCurrent,
+                  })
+                : Promise.resolve(null),
+              includeIntelligenceCurrent
+                ? getIntelligenceExplain({ signal: controller.signal })
+                : Promise.resolve(null),
+              includeWebVitalsOverviewCurrent
                 ? getWebVitalsOverview({ signal: controller.signal })
                 : Promise.resolve(null),
             ])
@@ -249,8 +364,10 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
       );
       const workerCount = Number(workersRes.data?.count ?? healthRes.data?.workerCount ?? previous.workerCount);
       const maxWorkers = Number(workersRes.data?.maxWorkers ?? healthRes.data?.maxWorkers ?? previous.maxWorkers);
-      const nextAlerts = alertsRes.data?.alerts ?? alertsRef.current;
+      const nextAlerts = alertsRes?.data?.alerts ?? alertsRef.current;
+      const nextAlertsPagination = alertsRes?.data?.pagination ?? alertsPaginationRef.current;
       const nextAlertHistory = alertHistoryRes?.data?.incidents ?? alertHistoryRef.current;
+      const nextAlertHistoryPagination = alertHistoryRes?.data?.pagination ?? alertHistoryPaginationRef.current;
       const activeAlertCount = Number(healthRes.data?.activeAlertCount ?? nextAlerts.length);
 
       const provisionalSnapshot: MonitorSnapshot = {
@@ -289,8 +406,10 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
       };
 
       const now = Date.now();
-      const nextHistory = appendHistorySnapshot(historyRef.current, nextSnapshot, now);
-      const historyChanged = nextHistory !== historyRef.current;
+      const nextHistory = includeHistoryCurrent
+        ? appendHistorySnapshot(historyRef.current, nextSnapshot, now)
+        : historyRef.current;
+      const historyChanged = includeHistoryCurrent && nextHistory !== historyRef.current;
 
       if (historyChanged) {
         historyRef.current = nextHistory;
@@ -301,7 +420,12 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
 
       const snapshotChanged = !snapshotsEqual(snapshotRef.current, nextSnapshot);
       const alertsChanged = !alertsEqual(alertsRef.current, nextAlerts);
+      const alertsPaginationChanged = !monitorPaginationEqual(alertsPaginationRef.current, nextAlertsPagination);
       const alertHistoryChanged = !alertHistoryEqual(alertHistoryRef.current, nextAlertHistory);
+      const alertHistoryPaginationChanged = !monitorPaginationEqual(
+        alertHistoryPaginationRef.current,
+        nextAlertHistoryPagination,
+      );
       const nextIntelligence = explainRes?.data ?? intelligenceRef.current;
       const intelligenceChanged = !explainabilityEqual(intelligenceRef.current, nextIntelligence);
       const nextWebVitalsOverview = webVitalsRes?.data ?? webVitalsOverviewRef.current;
@@ -316,9 +440,19 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
           setAlerts(nextAlerts);
         }
       }
+      if (alertsPaginationChanged) {
+        if (mountedRef.current) {
+          setAlertsPagination(nextAlertsPagination);
+        }
+      }
       if (alertHistoryChanged) {
         if (mountedRef.current) {
           setAlertHistory(nextAlertHistory);
+        }
+      }
+      if (alertHistoryPaginationChanged) {
+        if (mountedRef.current) {
+          setAlertHistoryPagination(nextAlertHistoryPagination);
         }
       }
       if (intelligenceChanged) {
@@ -336,10 +470,10 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
         health: healthRes.state,
         mode: modeRes.state,
         workers: workersRes.state,
-        alerts: alertsRes.state,
-        alertHistory: alertHistoryRes?.state ?? endpointStateRef.current.alertHistory,
-        webVitals: webVitalsRes?.state ?? endpointStateRef.current.webVitals,
-        explain: explainRes?.state ?? endpointStateRef.current.explain,
+        alerts: includeAlertsCurrent ? (alertsRes?.state ?? endpointStateRef.current.alerts) : "ok",
+        alertHistory: includeAlertHistoryCurrent ? (alertHistoryRes?.state ?? endpointStateRef.current.alertHistory) : "ok",
+        webVitals: includeWebVitalsOverviewCurrent ? (webVitalsRes?.state ?? endpointStateRef.current.webVitals) : "ok",
+        explain: includeIntelligenceCurrent ? (explainRes?.state ?? endpointStateRef.current.explain) : "ok",
       };
       const endpointChanged = !endpointStatesEqual(endpointStateRef.current, nextEndpointState);
       if (endpointChanged) {
@@ -348,14 +482,19 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
         }
       }
 
-      if (mountedRef.current && (snapshotChanged || alertsChanged || alertHistoryChanged || intelligenceChanged || webVitalsChanged || endpointChanged || historyChanged)) {
-        const responseTs = Number(
-          healthRes.data?.updatedAt ??
-            modeRes.data?.updatedAt ??
-            workersRes.data?.updatedAt ??
-            alertsRes.data?.updatedAt ??
-            now,
-        );
+      if (mountedRef.current && (snapshotChanged || alertsChanged || alertsPaginationChanged || alertHistoryChanged || alertHistoryPaginationChanged || intelligenceChanged || webVitalsChanged || endpointChanged || historyChanged)) {
+        const alertHistoryUpdatedAt = alertHistoryRes?.data?.updatedAt
+          ? Date.parse(alertHistoryRes.data.updatedAt)
+          : null;
+        const responseTsCandidates = [
+          healthRes.data?.updatedAt,
+          modeRes.data?.updatedAt,
+          workersRes.data?.updatedAt,
+          alertsRes?.data?.updatedAt,
+          alertHistoryUpdatedAt,
+          now,
+        ];
+        const responseTs = responseTsCandidates.find((value) => Number.isFinite(value)) ?? now;
         setLastUpdated((prev) => (prev === responseTs ? prev : responseTs));
       }
     } finally {
@@ -430,6 +569,68 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
   }, [clearScheduledPoll, pollMetrics]);
 
   useEffect(() => {
+    if (includeHistory && !previousIncludeHistoryRef.current) {
+      void refreshNow();
+    }
+
+    previousIncludeHistoryRef.current = includeHistory;
+  }, [includeHistory, refreshNow]);
+
+  useEffect(() => {
+    if (includeAlerts && !previousIncludeAlertsRef.current) {
+      void refreshNow();
+    }
+
+    previousIncludeAlertsRef.current = includeAlerts;
+  }, [includeAlerts, refreshNow]);
+
+  useEffect(() => {
+    if (
+      includeAlerts
+      && (
+        previousAlertsPageRef.current !== alertsPage
+        || previousAlertsPageSizeRef.current !== alertsPageSize
+      )
+    ) {
+      void refreshNow();
+    }
+
+    previousAlertsPageRef.current = alertsPage;
+    previousAlertsPageSizeRef.current = alertsPageSize;
+  }, [alertsPage, alertsPageSize, includeAlerts, refreshNow]);
+
+  useEffect(() => {
+    if (includeAlertHistory && !previousIncludeAlertHistoryRef.current) {
+      void refreshNow();
+    }
+
+    previousIncludeAlertHistoryRef.current = includeAlertHistory;
+  }, [includeAlertHistory, refreshNow]);
+
+  useEffect(() => {
+    if (
+      includeAlertHistory
+      && (
+        previousAlertHistoryPageRef.current !== alertHistoryPage
+        || previousAlertHistoryPageSizeRef.current !== alertHistoryPageSize
+      )
+    ) {
+      void refreshNow();
+    }
+
+    previousAlertHistoryPageRef.current = alertHistoryPage;
+    previousAlertHistoryPageSizeRef.current = alertHistoryPageSize;
+  }, [alertHistoryPage, alertHistoryPageSize, includeAlertHistory, refreshNow]);
+
+  useEffect(() => {
+    if (includeIntelligence && !previousIncludeIntelligenceRef.current) {
+      void refreshNow();
+    }
+
+    previousIncludeIntelligenceRef.current = includeIntelligence;
+  }, [includeIntelligence, refreshNow]);
+
+  useEffect(() => {
     if (includeWebVitalsOverview && !previousIncludeWebVitalsOverviewRef.current) {
       void refreshNow();
     }
@@ -474,7 +675,9 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
     snapshot,
     history,
     alerts,
+    alertsPagination,
     alertHistory,
+    alertHistoryPagination,
     intelligence,
     webVitalsOverview,
     endpointState,

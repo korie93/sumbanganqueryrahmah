@@ -16,6 +16,16 @@ export type MonitorAlertIncident = {
   updatedAt: Date;
 };
 
+export type MonitorAlertIncidentPage = {
+  incidents: MonitorAlertIncident[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+};
+
 function mapMonitorAlertIncidentRow(row: Record<string, unknown>): MonitorAlertIncident {
   return {
     id: String(row.id || ""),
@@ -112,26 +122,63 @@ export class MonitorAlertHistoryRepository {
     });
   }
 
-  async listRecent(limit = 25): Promise<MonitorAlertIncident[]> {
-    const safeLimit = Number.isFinite(limit)
-      ? Math.min(100, Math.max(1, Math.floor(limit)))
+  async listRecentPage(options?: {
+    page?: number;
+    pageSize?: number;
+  }): Promise<MonitorAlertIncidentPage> {
+    const safePage = Number.isFinite(options?.page)
+      ? Math.max(1, Math.floor(Number(options?.page)))
+      : 1;
+    const safePageSize = Number.isFinite(options?.pageSize)
+      ? Math.min(100, Math.max(1, Math.floor(Number(options?.pageSize))))
       : 25;
+    const offset = (safePage - 1) * safePageSize;
+
+    const [countResult, rowsResult] = await Promise.all([
+      db.execute(sql`
+        SELECT COUNT(*)::int AS total_items
+        FROM public.monitor_alert_incidents
+      `),
+      db.execute(sql`
+        SELECT
+          id,
+          alert_key,
+          severity,
+          source,
+          message,
+          status,
+          first_seen_at,
+          last_seen_at,
+          resolved_at,
+          updated_at
+        FROM public.monitor_alert_incidents
+        ORDER BY COALESCE(resolved_at, last_seen_at) DESC, updated_at DESC
+        LIMIT ${safePageSize}
+        OFFSET ${offset}
+      `),
+    ]);
+
+    const totalItems = Number((countResult.rows?.[0] as Record<string, unknown> | undefined)?.total_items ?? 0);
+    const totalPages = Math.max(1, Math.ceil(totalItems / safePageSize));
+
+    return {
+      incidents: (rowsResult.rows || []).map((row) => mapMonitorAlertIncidentRow(row as Record<string, unknown>)),
+      pagination: {
+        page: Math.min(safePage, totalPages),
+        pageSize: safePageSize,
+        totalItems,
+        totalPages,
+      },
+    };
+  }
+
+  async deleteResolvedOlderThan(cutoffDate: Date): Promise<number> {
     const result = await db.execute(sql`
-      SELECT
-        id,
-        alert_key,
-        severity,
-        source,
-        message,
-        status,
-        first_seen_at,
-        last_seen_at,
-        resolved_at,
-        updated_at
-      FROM public.monitor_alert_incidents
-      ORDER BY COALESCE(resolved_at, last_seen_at) DESC, updated_at DESC
-      LIMIT ${safeLimit}
+      DELETE FROM public.monitor_alert_incidents
+      WHERE status = 'resolved'
+        AND resolved_at IS NOT NULL
+        AND resolved_at < ${cutoffDate}
     `);
-    return (result.rows || []).map((row) => mapMonitorAlertIncidentRow(row as Record<string, unknown>));
+    return Number(result.rowCount ?? 0);
   }
 }
