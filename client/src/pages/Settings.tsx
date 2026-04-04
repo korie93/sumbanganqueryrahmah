@@ -12,6 +12,8 @@ import {
 } from "@/components/layout/OperationalPage";
 import { SettingsSaveBar } from "@/pages/settings/SettingsSaveBar";
 import { SettingsSidebar } from "@/pages/settings/SettingsSidebar";
+import { SettingsCriticalSaveDialog } from "@/pages/settings/SettingsCriticalSaveDialog";
+import { MaintenanceSettingsNotice } from "@/pages/settings/MaintenanceSettingsNotice";
 import { useSettingsController } from "@/pages/settings/useSettingsController";
 
 type SettingsPageProps = {
@@ -139,6 +141,13 @@ export default function SettingsPage({
               />
 
               <div className="min-w-0 flex-1 space-y-4">
+                {controller.maintenanceSettingsSummary ? (
+                  <MaintenanceSettingsNotice
+                    summary={controller.maintenanceSettingsSummary}
+                    currentUserRole={controller.currentUserRole}
+                  />
+                ) : null}
+
                 <AppRouteErrorBoundary
                   routeKey={`settings:${controller.selectedCategory}`}
                   routeLabel={controller.currentCategory?.name || "settings"}
@@ -179,7 +188,15 @@ export default function SettingsPage({
                 </AppRouteErrorBoundary>
 
                 {!controller.isAccountManagementCategory && !controller.isBackupCategory ? (
-                  <SettingsSaveBar {...controller.saveBar} />
+                  <>
+                    <SettingsSaveBar {...controller.saveBar} />
+                    <SettingsCriticalSaveDialog
+                      open={controller.criticalSaveDialog.confirmCriticalOpen}
+                      saving={controller.criticalSaveDialog.saving}
+                      onOpenChange={controller.criticalSaveDialog.onConfirmCriticalOpenChange}
+                      onConfirm={controller.criticalSaveDialog.onSaveCriticalSettings}
+                    />
+                  </>
                 ) : null}
               </div>
             </div>

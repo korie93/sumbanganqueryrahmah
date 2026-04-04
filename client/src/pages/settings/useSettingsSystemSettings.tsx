@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState, type MutableRefObject } from "react";
 import { getSettings, updateSetting } from "@/lib/api";
+import { buildMaintenanceSettingsSummary } from "@/pages/settings/maintenance-settings-summary";
 import { SettingCard } from "@/pages/settings/SettingCard";
 import type { SettingCategory, SettingItem } from "@/pages/settings/types";
 import {
@@ -174,6 +175,15 @@ export function useSettingsSystemSettings({
     [draftValues],
   );
 
+  const maintenanceSettingsSummary = useMemo(
+    () => buildMaintenanceSettingsSummary(currentCategory, (key) => {
+      const setting = settingMap.get(key);
+      if (!setting) return null;
+      return getEffectiveValue(setting);
+    }),
+    [currentCategory, getEffectiveValue, settingMap],
+  );
+
   const markDirty = useCallback(
     (key: string, value: string | number | boolean | null) => {
       const originalValue = settingMap.get(key)?.value ?? null;
@@ -297,6 +307,7 @@ export function useSettingsSystemSettings({
     isSecurityCategory,
     loadSettings,
     loading,
+    maintenanceSettingsSummary,
     persistChanges,
     renderSettingCard,
     roleSections,
