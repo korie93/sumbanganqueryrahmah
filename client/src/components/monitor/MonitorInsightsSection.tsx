@@ -48,7 +48,7 @@ function MonitorInsightsSubsectionToggle({
           type="button"
           className="flex w-full items-start justify-between gap-3 text-left"
           onClick={onToggle}
-          aria-expanded={open}
+          aria-expanded={open ? "true" : "false"}
         >
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-foreground">{title}</h3>

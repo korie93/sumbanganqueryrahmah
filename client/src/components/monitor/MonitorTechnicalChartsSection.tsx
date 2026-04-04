@@ -52,7 +52,7 @@ function MonitorChartCategoryToggle({
       type="button"
       className="flex w-full items-start justify-between gap-3 text-left"
       onClick={onToggle}
-      aria-expanded={open}
+      aria-expanded={open ? "true" : "false"}
     >
       <div className="min-w-0 space-y-2">
         <div className="flex flex-wrap items-center gap-2">

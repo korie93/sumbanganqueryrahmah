@@ -313,7 +313,7 @@ function MonitorDeferredSectionToggle({
         type="button"
         className="flex w-full items-start justify-between gap-3 text-left"
         onClick={onToggle}
-        aria-expanded={open}
+        aria-expanded={open ? "true" : "false"}
       >
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -813,7 +813,7 @@ export default function Monitor() {
                 variant="outline"
                 size="sm"
                 className="rounded-full px-4"
-                aria-expanded={webVitalsOpen}
+                aria-expanded={webVitalsOpen ? "true" : "false"}
                 onClick={handleWebVitalsToggle}
               >
                 {webVitalsOpen ? "Hide information" : "Information"}

@@ -62,7 +62,7 @@ function MonitorStatusBannersImpl({
           type="button"
           className="flex w-full items-start justify-between gap-3 text-left"
           onClick={() => setDetailsOpen((previous) => !previous)}
-          aria-expanded={detailsOpen}
+          aria-expanded={detailsOpen ? "true" : "false"}
         >
           <div className="min-w-0 space-y-2">
             <div className={`flex items-center gap-2 text-sm font-semibold ${textClass}`}>

@@ -60,7 +60,7 @@ function MonitorChaosSectionImpl({
               type="button"
               className="flex w-full items-start justify-between gap-3 text-left"
               onClick={() => setControlsOpen((previous) => !previous)}
-              aria-expanded={controlsOpen}
+              aria-expanded={controlsOpen ? "true" : "false"}
             >
               <div className="min-w-0 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">

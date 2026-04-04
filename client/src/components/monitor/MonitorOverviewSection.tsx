@@ -71,7 +71,7 @@ function MonitorOverviewSectionImpl({
             variant="outline"
             size="sm"
             className="rounded-full px-4 sm:self-start"
-            aria-expanded={detailsOpen}
+            aria-expanded={detailsOpen ? "true" : "false"}
             onClick={() => setDetailsOpen((previous) => !previous)}
           >
             {detailsOpen ? "Compact overview" : "Expand overview"}

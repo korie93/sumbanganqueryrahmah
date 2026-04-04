@@ -143,7 +143,7 @@ function MonitorWebVitalsSectionImpl({
                           : [...previous, summary.pageType],
                       )
                     }
-                    aria-expanded={isOpen}
+                    aria-expanded={isOpen ? "true" : "false"}
                   >
                     <div className="min-w-0 space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
