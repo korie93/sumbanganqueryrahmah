@@ -4,52 +4,19 @@ import {
   removeCollectionReceiptFile,
   saveMultipartCollectionReceipt,
 } from "../collection-receipt.service";
+import {
+  appendCollectionMultipartField,
+  isCollectionReceiptMultipartField,
+  type MultipartCollectionBody,
+} from "./collection-multipart-body-utils";
 
-type MultipartCollectionBody = Record<string, unknown> & {
+type CollectionMultipartRouteBody = MultipartCollectionBody & {
   uploadedReceipts?: StoredCollectionReceiptFile[];
 };
 type StoredCollectionReceiptFile = Awaited<ReturnType<typeof saveMultipartCollectionReceipt>>;
 
-function normalizeMultipartFieldName(rawName: string): string {
-  const normalized = String(rawName || "").trim();
-  return normalized.endsWith("[]") ? normalized.slice(0, -2) : normalized;
-}
-
-function appendMultipartField(body: MultipartCollectionBody, rawName: string, value: string) {
-  const fieldName = normalizeMultipartFieldName(rawName);
-  const normalizedValue = String(value || "");
-
-  if (fieldName === "removeReceipt") {
-    body.removeReceipt = normalizedValue === "true";
-    return;
-  }
-
-  if (fieldName === "removeReceiptIds") {
-    const currentValues = Array.isArray(body.removeReceiptIds)
-      ? body.removeReceiptIds.map((item) => String(item || ""))
-      : [];
-    currentValues.push(normalizedValue);
-    body.removeReceiptIds = currentValues;
-    return;
-  }
-
-  if (!Object.prototype.hasOwnProperty.call(body, fieldName)) {
-    body[fieldName] = normalizedValue;
-    return;
-  }
-
-  const currentValue = body[fieldName];
-  if (Array.isArray(currentValue)) {
-    currentValue.push(normalizedValue);
-    body[fieldName] = currentValue;
-    return;
-  }
-
-  body[fieldName] = [currentValue, normalizedValue];
-}
-
 export function createCollectionMultipartRoute(): RequestHandler {
-  return createCollectionReceiptMultipartRoute<StoredCollectionReceiptFile, MultipartCollectionBody>({
+  return createCollectionReceiptMultipartRoute<StoredCollectionReceiptFile, CollectionMultipartRouteBody>({
     attachKey: "uploadedReceipts",
     handleReceipt: saveMultipartCollectionReceipt,
     cleanupReceipts: async (receipts) => {
@@ -118,12 +85,11 @@ function createCollectionReceiptMultipartRoute<
     };
 
     parser.on("field", (fieldName, value) => {
-      appendMultipartField(body, fieldName, value);
+      appendCollectionMultipartField(body, fieldName, value);
     });
 
     parser.on("file", (fieldName, file, info) => {
-      const normalizedField = normalizeMultipartFieldName(fieldName);
-      if (!info.filename || (normalizedField !== "receipts" && normalizedField !== "receipt")) {
+      if (!info.filename || !isCollectionReceiptMultipartField(fieldName)) {
         file.resume();
         return;
       }
