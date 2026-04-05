@@ -26,8 +26,21 @@ type TopActiveUserRow = {
   username: string;
   role: string;
   loginCount: number;
-  lastLogin: Date | null;
+  lastLogin: Date | string | null;
 };
+
+export function serializeAnalyticsTimestamp(value: Date | string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toISOString();
+}
 
 export class AnalyticsRepository {
   async getDashboardSummary(): Promise<{
@@ -137,13 +150,22 @@ export class AnalyticsRepository {
   }>> {
     const result = await db.execute(sql`
       SELECT
-        username,
-        role,
+        ua.username,
+        ua.role,
         COUNT(*)::int AS "loginCount",
-        MAX(login_time) AS "lastLogin"
-      FROM public.user_activity
-      GROUP BY username, role
-      ORDER BY "loginCount" DESC
+        COALESCE(
+          GREATEST(
+            MAX((u.last_login_at AT TIME ZONE 'UTC')),
+            MAX((ua.login_time AT TIME ZONE 'UTC'))
+          ),
+          MAX((u.last_login_at AT TIME ZONE 'UTC')),
+          MAX((ua.login_time AT TIME ZONE 'UTC'))
+        ) AS "lastLogin"
+      FROM public.user_activity ua
+      LEFT JOIN public.users u
+        ON u.id = ua.user_id
+      GROUP BY ua.user_id, ua.username, ua.role
+      ORDER BY "loginCount" DESC, "lastLogin" DESC NULLS LAST, ua.username ASC
       LIMIT ${limit}
     `);
 
@@ -151,7 +173,7 @@ export class AnalyticsRepository {
       username: row.username,
       role: row.role,
       loginCount: row.loginCount,
-      lastLogin: row.lastLogin ? new Date(row.lastLogin).toISOString() : null,
+      lastLogin: serializeAnalyticsTimestamp(row.lastLogin),
     }));
   }
 
