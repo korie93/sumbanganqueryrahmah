@@ -1,5 +1,9 @@
 import { Activity, AlertTriangle, Database, FileText, LogIn, ShieldOff, Users } from "lucide-react";
-import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import {
+  formatDateDDMMYYYY,
+  formatDateTimeDDMMYYYY,
+  formatOperationalDateTime,
+} from "@/lib/date-format";
 import type { SummaryCardItem, SummaryData } from "@/pages/dashboard/types";
 
 let html2canvasLoader: Promise<typeof import("html2canvas")["default"]> | null = null;
@@ -20,6 +24,11 @@ export function formatDashboardHour(hour: number) {
 
 export function formatDashboardDate(dateStr: string) {
   return formatDateDDMMYYYY(dateStr, dateStr);
+}
+
+export function formatDashboardUserLastLogin(value: string | null | undefined) {
+  if (!value) return "Unknown";
+  return formatOperationalDateTime(value, { fallback: "Unknown" });
 }
 
 export function buildSummaryCards(summary: SummaryData | undefined): SummaryCardItem[] {

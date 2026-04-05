@@ -3,9 +3,8 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import type { RoleData, TopUser } from "@/pages/dashboard/types";
-import { ROLE_COLORS } from "@/pages/dashboard/utils";
+import { formatDashboardUserLastLogin, ROLE_COLORS } from "@/pages/dashboard/utils";
 
 interface DashboardUserInsightsGridProps {
   roleDistribution: RoleData[] | undefined;
@@ -123,9 +122,7 @@ export function DashboardUserInsightsGrid({
                   <p className="mt-3 text-xs leading-5 text-muted-foreground">
                     Last login:{" "}
                     <span className="text-foreground">
-                      {user.lastLogin
-                        ? formatDateTimeDDMMYYYY(user.lastLogin, { fallback: "Unknown" })
-                        : "Unknown"}
+                      {formatDashboardUserLastLogin(user.lastLogin)}
                     </span>
                   </p>
                 </article>
