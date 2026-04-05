@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   CollectionReceiptSecurityError,
+  sanitizeCollectionReceiptBuffer,
   type CollectionReceiptFileType,
 } from "../lib/collection-receipt-security";
 import type { CreateCollectionRecordReceiptInput } from "../storage-postgres";
@@ -9,6 +10,7 @@ import {
   mapCollectionReceiptExtensionToType,
   mapCollectionReceiptMimeToType,
 } from "./collection-receipt-file-type-utils";
+import { logCollectionReceiptSanitization } from "./collection-receipt-storage-utils";
 
 export type StoredCollectionReceiptFile = CreateCollectionRecordReceiptInput & {
   extractionMessage?: string | null;
@@ -34,6 +36,38 @@ export async function inspectCollectionReceiptBuffer(params: {
     extractionStatus: "unprocessed",
     extractionConfidence: null,
     extractionMessage: null,
+  };
+}
+
+export async function sanitizeAndInspectCollectionReceiptBuffer(params: {
+  fileName: string;
+  buffer: Buffer;
+  signatureType: CollectionReceiptFileType;
+}) {
+  const sanitized = sanitizeCollectionReceiptBuffer(params.buffer, params.signatureType);
+  logCollectionReceiptSanitization({
+    fileName: params.fileName,
+    signatureType: params.signatureType,
+    sanitizedBuffer: sanitized.buffer,
+    originalBytes: params.buffer.length,
+    removedMetadataKinds: sanitized.removedMetadataKinds,
+    imageWidth: sanitized.imageWidth,
+    imageHeight: sanitized.imageHeight,
+  });
+
+  const inspection = await inspectCollectionReceiptBuffer({
+    buffer: sanitized.buffer,
+    mimeType: resolveCanonicalReceiptMimeType(params.signatureType),
+    imageWidth: sanitized.imageWidth,
+    imageHeight: sanitized.imageHeight,
+  });
+
+  return {
+    sanitizedBuffer: sanitized.buffer,
+    inspection,
+    removedMetadataKinds: sanitized.removedMetadataKinds,
+    imageWidth: sanitized.imageWidth,
+    imageHeight: sanitized.imageHeight,
   };
 }
 

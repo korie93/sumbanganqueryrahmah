@@ -3,26 +3,20 @@ import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { logger } from "../lib/logger";
 import type {
-  CollectionRecordReceipt,
   PostgresStorage,
 } from "../storage-postgres";
-import { canUserAccessCollectionRecord } from "./collection-access";
 import {
   isCollectionReceiptInlinePreviewMimeType,
   logCollectionReceiptBestEffortFailure,
   normalizeCollectionReceiptMimeType,
-  resolveCollectionReceiptFile,
   sanitizeReceiptDownloadName,
 } from "./collection-receipt-file-utils";
+import { resolveCollectionReceiptRequestContext } from "./collection-receipt-request-context-utils";
 import {
   applyCollectionReceiptResponseHeaders,
   logCollectionReceiptWarning,
 } from "./collection-receipt-response-utils";
-import {
-  pruneMissingCollectionReceiptRelation,
-  resolveSelectedCollectionReceipt,
-} from "./collection-receipt-relation-utils";
-import { normalizeCollectionText } from "./collection.validation";
+import { resolveReadableCollectionReceiptTarget } from "./collection-receipt-target-utils";
 export {
   removeCollectionReceiptFile,
   saveCollectionReceipt,
@@ -44,138 +38,44 @@ export async function serveCollectionReceipt(
   receiptIdRaw?: string | null,
 ) {
   try {
-    if (!req.user) {
-      logCollectionReceiptWarning({ req, mode, statusCode: 401, reason: "unauthenticated" });
-      return res.status(401).json({ ok: false, message: "Unauthenticated" });
-    }
-
-    const id = normalizeCollectionText(req.params.id);
-    if (!id) {
-      logCollectionReceiptWarning({ req, mode, statusCode: 400, reason: "missing_collection_id" });
-      return res.status(400).json({ ok: false, message: "Collection id is required." });
-    }
-
-    const record = await storage.getCollectionRecordById(id);
-    if (!record) {
+    const requestContext = await resolveCollectionReceiptRequestContext(storage, req, receiptIdRaw);
+    if (!requestContext.ok) {
       logCollectionReceiptWarning({
         req,
         mode,
-        statusCode: 404,
-        reason: "record_not_found",
-        meta: { recordId: id },
+        statusCode: requestContext.statusCode,
+        reason: requestContext.reason,
+        meta: requestContext.meta,
       });
-      return res.status(404).json({ ok: false, message: "Collection record not found." });
+      return res.status(requestContext.statusCode).json({
+        ok: false,
+        message: requestContext.message,
+      });
     }
 
-    const canAccessRecord = await canUserAccessCollectionRecord(storage, req.user, {
-      createdByLogin: record.createdByLogin,
-      collectionStaffNickname: record.collectionStaffNickname,
-    });
-    if (!canAccessRecord) {
-      logCollectionReceiptWarning({
-        req,
-        mode,
-        statusCode: 403,
-        reason: "forbidden",
-        meta: { recordId: record.id },
-      });
-      return res.status(403).json({ ok: false, message: "Forbidden" });
-    }
-
-    const requestedReceiptId = normalizeCollectionText(
-      receiptIdRaw ?? req.params.receiptId ?? null,
-    );
-    let selectedReceipt = await resolveSelectedCollectionReceipt({
+    const { record, requestedReceiptId } = requestContext;
+    const resolvedTarget = await resolveReadableCollectionReceiptTarget({
       storage,
+      req,
+      mode,
       record,
-      receiptIdRaw: requestedReceiptId,
+      requestedReceiptId,
     });
-    if (requestedReceiptId && !selectedReceipt) {
+    if (!resolvedTarget.ok) {
       logCollectionReceiptWarning({
         req,
         mode,
-        statusCode: 404,
-        reason: "receipt_row_not_found",
-        meta: {
-          recordId: record.id,
-          requestedReceiptId,
-        },
+        statusCode: resolvedTarget.statusCode,
+        reason: resolvedTarget.reason,
+        meta: resolvedTarget.meta,
       });
-      return res.status(404).json({ ok: false, message: "Receipt file not found." });
-    }
-    let resolved = resolveCollectionReceiptFile(selectedReceipt?.storagePath ?? null);
-    if (!resolved && selectedReceipt) {
-      await pruneMissingCollectionReceiptRelation({
-        storage,
-        recordId: record.id,
-        receipt: selectedReceipt,
+      return res.status(resolvedTarget.statusCode).json({
+        ok: false,
+        message: resolvedTarget.message,
       });
-      if (!requestedReceiptId) {
-        const refreshedRecord = await storage.getCollectionRecordById(record.id);
-        const fallbackReceipt = await resolveSelectedCollectionReceipt({
-          storage,
-          record: refreshedRecord || record,
-          receiptIdRaw: null,
-        });
-        resolved = resolveCollectionReceiptFile(fallbackReceipt?.storagePath ?? null);
-        if (resolved) {
-          selectedReceipt = fallbackReceipt;
-        }
-      }
     }
 
-    if (resolved) {
-      try {
-        await fs.promises.access(resolved.absolutePath, fs.constants.R_OK);
-      } catch (error) {
-        logCollectionReceiptWarning({
-          req,
-          mode,
-          statusCode: 404,
-          reason: "receipt_storage_access_failed",
-          meta: {
-            recordId: record.id,
-            requestedReceiptId,
-            absolutePath: resolved.absolutePath,
-            errorCode: (error as NodeJS.ErrnoException)?.code || null,
-          },
-        });
-        await pruneMissingCollectionReceiptRelation({
-          storage,
-          recordId: record.id,
-          receipt: selectedReceipt,
-        });
-        resolved = null;
-        if (!requestedReceiptId) {
-          const refreshedRecord = await storage.getCollectionRecordById(record.id);
-          const fallbackReceipt = await resolveSelectedCollectionReceipt({
-            storage,
-            record: refreshedRecord || record,
-            receiptIdRaw: null,
-          });
-          const fallbackResolved = resolveCollectionReceiptFile(fallbackReceipt?.storagePath ?? null);
-          if (fallbackResolved) {
-            resolved = fallbackResolved;
-            selectedReceipt = fallbackReceipt;
-          }
-        }
-      }
-    }
-
-    if (!resolved) {
-      logCollectionReceiptWarning({
-        req,
-        mode,
-        statusCode: 404,
-        reason: "receipt_storage_missing",
-        meta: {
-          recordId: record.id,
-          requestedReceiptId,
-        },
-      });
-      return res.status(404).json({ ok: false, message: "Receipt file not found." });
-    }
-
+    const { resolved, selectedReceipt } = resolvedTarget;
     const responseMimeType =
       normalizeCollectionReceiptMimeType(selectedReceipt?.originalMimeType || resolved.mimeType)
       || resolved.mimeType;
