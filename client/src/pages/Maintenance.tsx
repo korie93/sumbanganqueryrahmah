@@ -128,20 +128,25 @@ export default function MaintenancePage() {
   };
 
   return (
-    <div className="viewport-min-height bg-gradient-to-br from-[#0b1220] via-[#101a2d] to-[#14213d] text-slate-100 flex items-center justify-center p-4 sm:p-6">
-      <section className="w-full max-w-3xl rounded-3xl border border-slate-700/80 bg-slate-900/75 shadow-2xl backdrop-blur-md">
-        <div className="space-y-4 border-b border-slate-800 px-6 pb-6 pt-6 sm:px-8">
+    <main className="viewport-min-height bg-gradient-to-br from-[#0b1220] via-[#101a2d] to-[#14213d] text-slate-100 flex items-center justify-center p-4 sm:p-6">
+      <section
+        className="w-full max-w-3xl rounded-3xl border border-slate-700/80 bg-slate-900/75 shadow-2xl backdrop-blur-md"
+        aria-labelledby="maintenance-page-title"
+      >
+        <header className="space-y-4 border-b border-slate-800 px-6 pb-6 pt-6 sm:px-8">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-amber-300">
+            <p className="flex items-center gap-2 text-amber-300">
               <ShieldAlert className="w-5 h-5" />
               <span className="text-xs sm:text-sm uppercase tracking-wide">Penyelenggaraan Sistem</span>
-            </div>
+            </p>
             <div className="rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1 text-xs text-slate-300">
               {state.type === "hard" ? "Mod Penuh" : "Mod Lembut"}
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-slate-100 sm:text-3xl">Sistem Sedang Diselenggara</h1>
-        </div>
+          <h1 id="maintenance-page-title" className="text-2xl font-bold text-slate-100 sm:text-3xl">
+            Sistem Sedang Diselenggara
+          </h1>
+        </header>
         <div className="space-y-5 px-6 pb-6 pt-6 sm:px-8">
           <div className="rounded-lg border border-slate-700/90 bg-slate-800/70 p-4">
             <p className="text-slate-100 leading-relaxed">{state.message}</p>
@@ -182,6 +187,6 @@ export default function MaintenancePage() {
           </div>
         </div>
       </section>
-    </div>
+    </main>
   );
 }

@@ -8,14 +8,14 @@ export default function Banned() {
     window.location.href = "/";
   };
   return (
-    <div className="viewport-min-height bg-gradient-to-br from-slate-950 via-red-950/30 to-slate-950 flex items-center justify-center p-4 overflow-hidden relative">
+    <main className="viewport-min-height bg-gradient-to-br from-slate-950 via-red-950/30 to-slate-950 flex items-center justify-center p-4 overflow-hidden relative">
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiM1NTFhMWEiIGZpbGwtb3BhY2l0eT0iMC4zIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-40" />
       
       <div className="absolute top-20 left-20 w-72 h-72 bg-red-500/10 rounded-full blur-3xl animate-pulse" />
       <div className="absolute bottom-20 right-20 w-96 h-96 rounded-full bg-red-900/20 blur-3xl animate-pulse [animation-delay:1s]" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-red-800/10 rounded-full blur-3xl" />
 
-      <div className="relative z-10 max-w-lg w-full">
+      <section className="relative z-10 max-w-lg w-full" aria-labelledby="banned-page-title">
         <div className="absolute -inset-4 rounded-[2rem] bg-red-500/10 blur-2xl pointer-events-none" />
         
         <div className="relative backdrop-blur-xl bg-gradient-to-b from-slate-900/90 to-slate-950/95 border border-red-500/20 rounded-3xl p-10 shadow-2xl shadow-red-900/20">
@@ -34,7 +34,7 @@ export default function Banned() {
               <span className="text-sm font-medium text-red-400">AKAUN DISEKAT</span>
             </div>
 
-            <h1 className="text-3xl font-bold text-white mb-4 tracking-tight">
+            <h1 id="banned-page-title" className="text-3xl font-bold text-white mb-4 tracking-tight">
               Akaun Anda Telah Disekat Oleh Pentadbir
             </h1>
 
@@ -87,7 +87,7 @@ export default function Banned() {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
