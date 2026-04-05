@@ -1,12 +1,4 @@
 import type { AuthenticatedUser } from "../auth/guards";
-import {
-  CREDENTIAL_EMAIL_REGEX,
-  CREDENTIAL_USERNAME_REGEX,
-  normalizeEmailInput,
-} from "../auth/credentials";
-import {
-  isManageableUserRole,
-} from "../auth/account-lifecycle";
 import type {
   PostgresStorage,
 } from "../storage-postgres";
@@ -21,6 +13,8 @@ import {
   type UpdateManagedStatusInput,
   type UpdateManagedUserInput,
 } from "./auth-account-managed-operations";
+import { AuthAccountDevMailOperations } from "./auth-account-dev-mail-operations";
+import { AuthAccountRecoveryOperations } from "./auth-account-recovery-operations";
 import {
   AuthAccountSelfOperations,
   type ChangePasswordInput,
@@ -30,6 +24,7 @@ import {
   type UpdateOwnCredentialsInput,
 } from "./auth-account-self-operations";
 import { AuthAccountAuthenticationOperations } from "./auth-account-authentication-operations";
+import { createAuthAccountServicePolicies } from "./auth-account-service-policies";
 export {
   type ActivationTokenValidationResult,
   type ManagedAccountActivationDelivery,
@@ -84,121 +79,44 @@ type AuthAccountStorage = Pick<
 
 export class AuthAccountService {
   private readonly authenticationOperations: AuthAccountAuthenticationOperations;
+  private readonly devMailOperations: AuthAccountDevMailOperations;
   private readonly managedOperations: AuthAccountManagedOperations;
+  private readonly recoveryOperations: AuthAccountRecoveryOperations;
   private readonly selfOperations: AuthAccountSelfOperations;
+  private readonly policyHelpers: ReturnType<typeof createAuthAccountServicePolicies>;
 
   constructor(private readonly storage: AuthAccountStorage) {
+    this.policyHelpers = createAuthAccountServicePolicies(this.storage);
     this.authenticationOperations = new AuthAccountAuthenticationOperations({
       storage: this.storage,
-      requireManagedEmail: this.requireManagedEmail.bind(this),
+    });
+    this.recoveryOperations = new AuthAccountRecoveryOperations({
+      storage: this.storage,
+      invalidateUserSessions: this.invalidateUserSessions.bind(this),
+      requireManagedEmail: this.policyHelpers.requireManagedEmail,
     });
     this.managedOperations = new AuthAccountManagedOperations({
       storage: this.storage,
-      ensureUniqueIdentity: this.ensureUniqueIdentity.bind(this),
+      ensureUniqueIdentity: this.policyHelpers.ensureUniqueIdentity,
       invalidateUserSessions: this.invalidateUserSessions.bind(this),
-      requireManageableTarget: this.requireManageableTarget.bind(this),
-      requireManagedEmail: this.requireManagedEmail.bind(this),
-      requireSuperuser: this.requireSuperuser.bind(this),
-      sendActivationEmail: this.authenticationOperations.sendActivationEmail.bind(this.authenticationOperations),
-      sendPasswordResetEmail: this.authenticationOperations.sendPasswordResetEmail.bind(this.authenticationOperations),
-      validateEmail: this.validateEmail.bind(this),
-      validateUsername: this.validateUsername.bind(this),
+      requireManageableTarget: this.policyHelpers.requireManageableTarget,
+      requireManagedEmail: this.policyHelpers.requireManagedEmail,
+      requireSuperuser: this.policyHelpers.requireSuperuser,
+      sendActivationEmail: this.recoveryOperations.sendActivationEmail.bind(this.recoveryOperations),
+      sendPasswordResetEmail: this.recoveryOperations.sendPasswordResetEmail.bind(this.recoveryOperations),
+      validateEmail: this.policyHelpers.validateEmail,
+      validateUsername: this.policyHelpers.validateUsername,
+    });
+    this.devMailOperations = new AuthAccountDevMailOperations({
+      storage: this.storage,
+      requireSuperuser: this.policyHelpers.requireSuperuser,
     });
     this.selfOperations = new AuthAccountSelfOperations({
       storage: this.storage,
-      ensureUniqueIdentity: this.ensureUniqueIdentity.bind(this),
-      requireActor: this.requireActor.bind(this),
-      validateUsername: this.validateUsername.bind(this),
+      ensureUniqueIdentity: this.policyHelpers.ensureUniqueIdentity,
+      requireActor: this.policyHelpers.requireActor,
+      validateUsername: this.policyHelpers.validateUsername,
     });
-  }
-
-  private requireManagedEmail(email: string | null, message: string) {
-    const normalizedEmail = normalizeEmailInput(email);
-    if (!normalizedEmail) {
-      throw new AuthAccountError(400, "INVALID_EMAIL", message);
-    }
-
-    this.validateEmail(normalizedEmail);
-    return normalizedEmail;
-  }
-
-  private async requireActor(authUser: AuthenticatedUser | undefined) {
-    if (!authUser) {
-      throw new AuthAccountError(401, "PERMISSION_DENIED", "Authentication required.");
-    }
-
-    const actor = authUser.userId
-      ? await this.storage.getUser(authUser.userId)
-      : await this.storage.getUserByUsername(authUser.username);
-
-    if (!actor) {
-      throw new AuthAccountError(404, "USER_NOT_FOUND", "User not found.");
-    }
-
-    return actor;
-  }
-
-  private async requireSuperuser(authUser: AuthenticatedUser | undefined) {
-    const actor = await this.requireActor(authUser);
-    if (actor.role !== "superuser") {
-      throw new AuthAccountError(403, "PERMISSION_DENIED", "Only superuser can access this resource.");
-    }
-    return actor;
-  }
-
-  private async requireManageableTarget(userId: string) {
-    const normalizedId = String(userId || "").trim();
-    if (!normalizedId) {
-      throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
-    }
-
-    const target = await this.storage.getUser(normalizedId);
-    if (!target) {
-      throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
-    }
-
-    if (!isManageableUserRole(target.role)) {
-      throw new AuthAccountError(403, "PERMISSION_DENIED", "Target role is not allowed.");
-    }
-
-    return target;
-  }
-
-  private validateUsername(username: string) {
-    if (!CREDENTIAL_USERNAME_REGEX.test(username)) {
-      throw new AuthAccountError(
-        400,
-        "USERNAME_TAKEN",
-        "Username must match ^[a-zA-Z0-9._-]{3,32}$.",
-      );
-    }
-  }
-
-  private validateEmail(email: string | null) {
-    if (!email) return;
-    if (!CREDENTIAL_EMAIL_REGEX.test(email)) {
-      throw new AuthAccountError(400, "INVALID_EMAIL", "Email address is invalid.");
-    }
-  }
-
-  private async ensureUniqueIdentity(params: {
-    username?: string;
-    email?: string | null;
-    ignoreUserId?: string;
-  }) {
-    if (params.username) {
-      const existingByUsername = await this.storage.getUserByUsername(params.username);
-      if (existingByUsername && existingByUsername.id !== params.ignoreUserId) {
-        throw new AuthAccountError(409, "USERNAME_TAKEN", "Username already exists.");
-      }
-    }
-
-    if (params.email) {
-      const existingByEmail = await this.storage.getUserByEmail(params.email);
-      if (existingByEmail && existingByEmail.id !== params.ignoreUserId) {
-        throw new AuthAccountError(409, "INVALID_EMAIL", "Email already exists.");
-      }
-    }
   }
 
   private async invalidateUserSessions(username: string, reason: string) {
@@ -221,7 +139,7 @@ export class AuthAccountService {
   }
 
   async validateActivationToken(rawTokenInput: string): Promise<ActivationTokenValidationResult> {
-    return this.authenticationOperations.validateActivationToken(rawTokenInput);
+    return this.recoveryOperations.validateActivationToken(rawTokenInput);
   }
 
   async activateAccount(params: {
@@ -230,17 +148,17 @@ export class AuthAccountService {
     newPassword: string;
     confirmPassword: string;
   }) {
-    return this.authenticationOperations.activateAccount(params);
+    return this.recoveryOperations.activateAccount(params);
   }
 
   async requestPasswordReset(identifier: string) {
-    return this.authenticationOperations.requestPasswordReset(identifier);
+    return this.recoveryOperations.requestPasswordReset(identifier);
   }
 
   async validatePasswordResetToken(
     rawTokenInput: string,
   ): Promise<PasswordResetTokenValidationResult> {
-    return this.authenticationOperations.validatePasswordResetToken(rawTokenInput);
+    return this.recoveryOperations.validatePasswordResetToken(rawTokenInput);
   }
 
   async resetPasswordWithToken(params: {
@@ -248,7 +166,7 @@ export class AuthAccountService {
     newPassword: string;
     confirmPassword: string;
   }) {
-    return this.authenticationOperations.resetPasswordWithToken(params);
+    return this.recoveryOperations.resetPasswordWithToken(params);
   }
 
   async changeOwnPassword(authUser: AuthenticatedUser | undefined, input: ChangePasswordInput) {
@@ -303,22 +221,22 @@ export class AuthAccountService {
   }
 
   async getDevMailPreviewHtml(previewId: string) {
-    return this.managedOperations.getDevMailPreviewHtml(previewId);
+    return this.devMailOperations.getDevMailPreviewHtml(previewId);
   }
 
   async listDevMailOutbox(
     authUser: AuthenticatedUser | undefined,
     query: Record<string, unknown> = {},
   ) {
-    return this.managedOperations.listDevMailOutbox(authUser, query);
+    return this.devMailOperations.listDevMailOutbox(authUser, query);
   }
 
   async deleteDevMailPreview(authUser: AuthenticatedUser | undefined, previewId: string) {
-    return this.managedOperations.deleteDevMailPreview(authUser, previewId);
+    return this.devMailOperations.deleteDevMailPreview(authUser, previewId);
   }
 
   async clearDevMailOutbox(authUser: AuthenticatedUser | undefined) {
-    return this.managedOperations.clearDevMailOutbox(authUser);
+    return this.devMailOperations.clearDevMailOutbox(authUser);
   }
 
   async deleteManagedUser(authUser: AuthenticatedUser | undefined, targetUserId: string) {
