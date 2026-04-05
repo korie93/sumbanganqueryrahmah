@@ -1,8 +1,7 @@
-import type { AuthenticatedRequest } from "../../auth/guards";
-import { serveCollectionReceipt } from "../collection-receipt.service";
 import {
   createCollectionMultipartRoute,
 } from "./collection-multipart-routes";
+import { registerCollectionReceiptRoutes } from "./collection-receipt-routes";
 import type { CollectionRouteContext } from "./collection-route-shared";
 
 export function registerCollectionReportRoutes(context: CollectionRouteContext) {
@@ -91,43 +90,7 @@ export function registerCollectionReportRoutes(context: CollectionRouteContext) 
       collectionService.getDailyDayDetails(req.user, req.query as Record<string, unknown>)),
   );
 
-  app.get(
-    "/api/collection/:id/receipt/view",
-    ...reportAccess,
-    async (req: AuthenticatedRequest, res) => serveCollectionReceipt(storage, req, res, "view"),
-  );
-
-  app.get(
-    "/api/collection/:id/receipt/download",
-    ...reportAccess,
-    async (req: AuthenticatedRequest, res) => serveCollectionReceipt(storage, req, res, "download"),
-  );
-
-  app.get(
-    "/api/collection/:id/receipts/:receiptId/view",
-    ...reportAccess,
-    async (req: AuthenticatedRequest, res) =>
-      serveCollectionReceipt(storage, req, res, "view", req.params.receiptId),
-  );
-
-  app.get(
-    "/api/collection/:id/receipts/:receiptId/download",
-    ...reportAccess,
-    async (req: AuthenticatedRequest, res) =>
-      serveCollectionReceipt(storage, req, res, "download", req.params.receiptId),
-  );
-
-  app.get(
-    "/api/receipts/:id/view",
-    ...reportAccess,
-    async (req: AuthenticatedRequest, res) => serveCollectionReceipt(storage, req, res, "view"),
-  );
-
-  app.get(
-    "/api/receipts/:id/download",
-    ...reportAccess,
-    async (req: AuthenticatedRequest, res) => serveCollectionReceipt(storage, req, res, "download"),
-  );
+  registerCollectionReceiptRoutes(context);
 
   const handleUpdateCollectionRecord = jsonMutationRoute(
     "Failed to update collection record.",
