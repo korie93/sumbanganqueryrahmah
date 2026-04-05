@@ -10,6 +10,23 @@ const DEFAULT_FRONTEND_PATHS = [
   "dist\\public",
 ];
 
+const IMMUTABLE_ASSET_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
+
+function normalizeStaticRelativePath(staticRoot: string, absoluteFilePath: string) {
+  const relativePath = path.relative(staticRoot, absoluteFilePath);
+  return relativePath.split(path.sep).join("/");
+}
+
+function isImmutableFrontendAsset(staticRoot: string, absoluteFilePath: string) {
+  const relativePath = normalizeStaticRelativePath(staticRoot, absoluteFilePath);
+  if (!relativePath.startsWith("assets/")) {
+    return false;
+  }
+
+  const assetFileName = path.posix.basename(relativePath);
+  return /-[A-Za-z0-9_-]{8,}\.[A-Za-z0-9]+$/i.test(assetFileName);
+}
+
 function shouldBypassSpaFallback(requestPath: string) {
   if (!requestPath || requestPath === "/") {
     return false;
@@ -60,7 +77,18 @@ export function registerFrontendStatic(app: Express, options?: { cwd?: string; p
 
   if (foundPath && foundIndex) {
     logger.info("Serving frontend static assets", { foundPath });
-    app.use(express.static(foundPath));
+    app.use(express.static(foundPath, {
+      setHeaders(res, servedPath) {
+        if (!isImmutableFrontendAsset(foundPath as string, servedPath)) {
+          return;
+        }
+
+        res.setHeader(
+          "Cache-Control",
+          `public, max-age=${IMMUTABLE_ASSET_MAX_AGE_SECONDS}, immutable`,
+        );
+      },
+    }));
 
     app.use((req, res, next) => {
       if (shouldBypassSpaFallback(req.path)) {

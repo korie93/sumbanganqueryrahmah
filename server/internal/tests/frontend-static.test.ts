@@ -9,6 +9,7 @@ import { registerFrontendStatic } from "../frontend-static";
 test("frontend static serves robots.txt and sitemap.xml while keeping SPA fallback for routes only", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "sqr-frontend-static-"));
   const publicDir = path.join(tempRoot, "public");
+  const assetsDir = path.join(publicDir, "assets");
   const robotsBody = "User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /uploads/\nDisallow: /ws\nDisallow: /login\nDisallow: /forgot-password\nDisallow: /activate-account\nDisallow: /reset-password\nDisallow: /change-password\nDisallow: /maintenance\nDisallow: /403\nDisallow: /banned\nSitemap: https://sqr-system.com/sitemap.xml\n";
   const sitemapBody = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -19,11 +20,14 @@ test("frontend static serves robots.txt and sitemap.xml while keeping SPA fallba
   </url>
 </urlset>
 `;
+  const immutableAssetBody = "console.log('asset');";
 
   await fs.mkdir(publicDir, { recursive: true });
+  await fs.mkdir(assetsDir, { recursive: true });
   await fs.writeFile(path.join(publicDir, "index.html"), "<!doctype html><html><body><div id=\"root\"></div></body></html>");
   await fs.writeFile(path.join(publicDir, "robots.txt"), robotsBody, "utf8");
   await fs.writeFile(path.join(publicDir, "sitemap.xml"), sitemapBody, "utf8");
+  await fs.writeFile(path.join(assetsDir, "app-ABC12345.js"), immutableAssetBody, "utf8");
 
   const app = createJsonTestApp();
   registerFrontendStatic(app, {
@@ -47,8 +51,21 @@ test("frontend static serves robots.txt and sitemap.xml while keeping SPA fallba
     assert.equal(routeResponse.status, 200);
     assert.match(await routeResponse.text(), /<div id="root"><\/div>/i);
 
+    const immutableAssetResponse = await fetch(`${baseUrl}/assets/app-ABC12345.js`);
+    assert.equal(immutableAssetResponse.status, 200);
+    assert.equal(await immutableAssetResponse.text(), immutableAssetBody);
+    assert.equal(
+      immutableAssetResponse.headers.get("cache-control"),
+      "public, max-age=31536000, immutable",
+    );
+
     const missingAssetResponse = await fetch(`${baseUrl}/missing.xml`);
     assert.equal(missingAssetResponse.status, 404);
+
+    assert.notEqual(
+      robotsResponse.headers.get("cache-control"),
+      "public, max-age=31536000, immutable",
+    );
   } finally {
     await stopTestServer(server);
     await fs.rm(tempRoot, { recursive: true, force: true });
