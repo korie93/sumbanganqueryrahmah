@@ -1,11 +1,9 @@
-import { Suspense, lazy, useEffect, useMemo, useRef } from "react";
+import { Suspense, lazy, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
-import {
-  buildManagedDialogViewModel,
-  buildManagedSecretDialogViewModel,
-} from "@/pages/settings/settings-controller-view-models";
 import { UserAccountManagementSection } from "@/pages/settings/UserAccountManagementSection";
+import { useSettingsAccountManagementPreload } from "@/pages/settings/useSettingsAccountManagementPreload";
 import { useSettingsAccountManagement } from "@/pages/settings/useSettingsAccountManagement";
+import { useSettingsManagedDialogViewModels } from "@/pages/settings/useSettingsManagedDialogViewModels";
 
 const ManagedUserDialog = lazy(() =>
   import("@/pages/settings/ManagedUserDialog").then((module) => ({
@@ -51,114 +49,26 @@ export function SettingsAccountManagementBoundary({
     toast,
   });
 
-  useEffect(() => {
-    if (!isSuperuser) {
-      return;
-    }
-
-    const pendingLoads: Promise<unknown>[] = [];
-
-    if (!accountManagement.managedUsersLoaded && !accountManagement.managedUsersLoading) {
-      pendingLoads.push(accountManagement.loadManagedUsers());
-    }
-
-    if (
-      !accountManagement.pendingResetRequestsLoaded &&
-      !accountManagement.pendingResetRequestsLoading
-    ) {
-      pendingLoads.push(accountManagement.loadPendingResetRequests());
-    }
-
-    if (!accountManagement.devMailOutboxLoaded && !accountManagement.devMailOutboxLoading) {
-      pendingLoads.push(accountManagement.loadDevMailOutbox());
-    }
-
-    if (pendingLoads.length === 0) {
-      return;
-    }
-
-    void Promise.all(pendingLoads);
-  }, [
-    accountManagement.devMailOutboxLoaded,
-    accountManagement.devMailOutboxLoading,
-    accountManagement.loadDevMailOutbox,
-    accountManagement.loadManagedUsers,
-    accountManagement.loadPendingResetRequests,
-    accountManagement.managedUsersLoaded,
-    accountManagement.managedUsersLoading,
-    accountManagement.pendingResetRequestsLoaded,
-    accountManagement.pendingResetRequestsLoading,
+  useSettingsAccountManagementPreload({
+    devMailOutboxLoaded: accountManagement.devMailOutboxLoaded,
+    devMailOutboxLoading: accountManagement.devMailOutboxLoading,
     isSuperuser,
-  ]);
+    loadDevMailOutbox: accountManagement.loadDevMailOutbox,
+    loadManagedUsers: accountManagement.loadManagedUsers,
+    loadPendingResetRequests: accountManagement.loadPendingResetRequests,
+    managedUsersLoaded: accountManagement.managedUsersLoaded,
+    managedUsersLoading: accountManagement.managedUsersLoading,
+    pendingResetRequestsLoaded: accountManagement.pendingResetRequestsLoaded,
+    pendingResetRequestsLoading: accountManagement.pendingResetRequestsLoading,
+  });
 
-  const managedDialog = useMemo(
-    () =>
-      buildManagedDialogViewModel({
-        confirmCriticalOpen,
-        managedDialogOpen: accountManagement.managedDialogOpen,
-        managedEmailInput: accountManagement.managedEmailInput,
-        managedFullNameInput: accountManagement.managedFullNameInput,
-        managedIsBanned: accountManagement.managedIsBanned,
-        managedRoleInput: accountManagement.managedRoleInput,
-        managedSaving: accountManagement.managedSaving,
-        managedSelectedUser: accountManagement.managedSelectedUser,
-        managedStatusInput: accountManagement.managedStatusInput,
-        managedUsernameInput: accountManagement.managedUsernameInput,
-        onCloseManagedDialog: () => accountManagement.handleManagedDialogChange(false),
-        onConfirmCriticalOpenChange,
-        onConfirmManagedSave: () => void accountManagement.handleSaveManagedUser(),
-        onManagedDialogOpenChange: accountManagement.handleManagedDialogChange,
-        onManagedEmailInputChange: accountManagement.setManagedEmailInput,
-        onManagedFullNameInputChange: accountManagement.setManagedFullNameInput,
-        onManagedIsBannedChange: accountManagement.setManagedIsBanned,
-        onManagedRoleInputChange: accountManagement.setManagedRoleInput,
-        onManagedStatusInputChange: accountManagement.setManagedStatusInput,
-        onManagedUsernameInputChange: accountManagement.setManagedUsernameInput,
-        onSaveCriticalSettings,
-        saving,
-      }),
-    [
-      accountManagement.handleManagedDialogChange,
-      accountManagement.handleSaveManagedUser,
-      accountManagement.managedDialogOpen,
-      accountManagement.managedEmailInput,
-      accountManagement.managedFullNameInput,
-      accountManagement.managedIsBanned,
-      accountManagement.managedRoleInput,
-      accountManagement.managedSaving,
-      accountManagement.managedSelectedUser,
-      accountManagement.managedStatusInput,
-      accountManagement.managedUsernameInput,
-      accountManagement.setManagedEmailInput,
-      accountManagement.setManagedFullNameInput,
-      accountManagement.setManagedIsBanned,
-      accountManagement.setManagedRoleInput,
-      accountManagement.setManagedStatusInput,
-      accountManagement.setManagedUsernameInput,
-      confirmCriticalOpen,
-      onConfirmCriticalOpenChange,
-      onSaveCriticalSettings,
-      saving,
-    ],
-  );
-
-  const managedSecretDialog = useMemo(
-    () =>
-      buildManagedSecretDialogViewModel({
-        description: accountManagement.managedSecretDialogDescription,
-        onOpenChange: accountManagement.setManagedSecretDialogOpen,
-        open: accountManagement.managedSecretDialogOpen,
-        title: accountManagement.managedSecretDialogTitle,
-        value: accountManagement.managedSecretDialogValue,
-      }),
-    [
-      accountManagement.managedSecretDialogDescription,
-      accountManagement.managedSecretDialogOpen,
-      accountManagement.managedSecretDialogTitle,
-      accountManagement.managedSecretDialogValue,
-      accountManagement.setManagedSecretDialogOpen,
-    ],
-  );
+  const { managedDialog, managedSecretDialog } = useSettingsManagedDialogViewModels({
+    accountManagement,
+    confirmCriticalOpen,
+    onConfirmCriticalOpenChange,
+    onSaveCriticalSettings,
+    saving,
+  });
 
   if (!isSuperuser) {
     return null;

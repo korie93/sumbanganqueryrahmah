@@ -1,14 +1,8 @@
-import { AlertTriangle, Shield, ShieldOff, Trash2 } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ActivityBanDialog } from "@/pages/activity/ActivityBanDialog";
+import { ActivityBulkDeleteDialog } from "@/pages/activity/ActivityBulkDeleteDialog";
+import { ActivityDeleteDialog } from "@/pages/activity/ActivityDeleteDialog";
+import { ActivityKickDialog } from "@/pages/activity/ActivityKickDialog";
+import { ActivityUnbanDialog } from "@/pages/activity/ActivityUnbanDialog";
 import type { ActivityRecord, BannedUser } from "@/pages/activity/types";
 
 interface ActivityActionDialogsProps {
@@ -54,121 +48,40 @@ export function ActivityActionDialogs({
 }: ActivityActionDialogsProps) {
   return (
     <>
-      <AlertDialog open={kickDialogOpen} onOpenChange={onKickDialogOpenChange}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-amber-500" />
-              Kick User?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to force logout "{selectedActivity?.username}"? The user can log in again.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={onKickConfirm} data-testid="button-confirm-kick">
-              Kick
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ActivityKickDialog
+        onConfirm={onKickConfirm}
+        onOpenChange={onKickDialogOpenChange}
+        open={kickDialogOpen}
+        selectedActivity={selectedActivity}
+      />
 
-      <AlertDialog open={banDialogOpen} onOpenChange={onBanDialogOpenChange}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-destructive" />
-              Ban User?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to ban "{selectedActivity?.username}"? The user will not be able to log in until unbanned.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={onBanConfirm}
-              className="bg-destructive text-destructive-foreground"
-              data-testid="button-confirm-ban"
-            >
-              Ban
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ActivityBanDialog
+        onConfirm={onBanConfirm}
+        onOpenChange={onBanDialogOpenChange}
+        open={banDialogOpen}
+        selectedActivity={selectedActivity}
+      />
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={onDeleteDialogOpenChange}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Trash2 className="w-5 h-5 text-destructive" />
-              Delete Activity Log?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete the activity log for "{selectedActivity?.username}"? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={onDeleteConfirm}
-              className="bg-destructive text-destructive-foreground"
-              data-testid="button-confirm-delete"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ActivityDeleteDialog
+        onConfirm={onDeleteConfirm}
+        onOpenChange={onDeleteDialogOpenChange}
+        open={deleteDialogOpen}
+        selectedActivity={selectedActivity}
+      />
 
-      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={onBulkDeleteDialogOpenChange}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Trash2 className="w-5 h-5 text-destructive" />
-              Delete Selected Logs?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete {selectedBulkCount} selected activity log(s)? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={onBulkDeleteConfirm}
-              className="bg-destructive text-destructive-foreground"
-              data-testid="button-confirm-bulk-delete"
-            >
-              Delete Selected
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ActivityBulkDeleteDialog
+        onConfirm={onBulkDeleteConfirm}
+        onOpenChange={onBulkDeleteDialogOpenChange}
+        open={bulkDeleteDialogOpen}
+        selectedBulkCount={selectedBulkCount}
+      />
 
-      <AlertDialog open={unbanDialogOpen} onOpenChange={onUnbanDialogOpenChange}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <ShieldOff className="w-5 h-5 text-green-500" />
-              Unban User?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to unban "{selectedBannedUser?.username}"? The user will be able to log in again.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={onUnbanConfirm}
-              className="bg-green-600 text-white"
-              data-testid="button-confirm-unban"
-            >
-              Unban
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ActivityUnbanDialog
+        onConfirm={onUnbanConfirm}
+        onOpenChange={onUnbanDialogOpenChange}
+        open={unbanDialogOpen}
+        selectedBannedUser={selectedBannedUser}
+      />
     </>
   );
 }

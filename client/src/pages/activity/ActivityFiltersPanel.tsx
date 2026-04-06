@@ -1,11 +1,16 @@
-import { Filter, X } from "lucide-react";
+import { Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { ActivityDateRangeFields } from "@/pages/activity/ActivityDateRangeFields";
+import { ActivityFilterActions } from "@/pages/activity/ActivityFilterActions";
+import { ActivityStatusFilterGroup } from "@/pages/activity/ActivityStatusFilterGroup";
+import { ActivityTextFiltersGrid } from "@/pages/activity/ActivityTextFiltersGrid";
+import {
+  getActivityFiltersPanelHeaderClassName,
+  getActivityFiltersPanelTitle,
+  getActivityFiltersPanelTitleClassName,
+} from "@/pages/activity/activity-filters-panel-utils";
 import type { ActivityFilters } from "@/lib/api";
 import { STATUS_OPTIONS } from "@/pages/activity/types";
 
@@ -36,103 +41,31 @@ export function ActivityFiltersPanel({
 
   return (
     <Card className="mb-6 glass-wrapper border-0" data-floating-ai-avoid="true">
-      <CardHeader className={isMobile ? "pb-2.5" : "pb-3"}>
-        <CardTitle className={`${isMobile ? "text-base" : "text-lg"} flex items-center gap-2`}>
+      <CardHeader className={getActivityFiltersPanelHeaderClassName(isMobile)}>
+        <CardTitle className={getActivityFiltersPanelTitleClassName(isMobile)}>
           <Filter className="w-5 h-5" />
-          {isMobile ? "Search & Filters" : "Filter Activity Logs"}
+          {getActivityFiltersPanelTitle(isMobile)}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div>
-          <Label className="text-sm font-medium mb-2 block">Status</Label>
-          <div className={`flex flex-wrap ${isMobile ? "gap-3" : "gap-2"}`}>
-            {STATUS_OPTIONS.map((option) => (
-              <div key={option.value} className={`flex items-center gap-2 ${isMobile ? "rounded-full border border-border/60 bg-background/70 px-3 py-1.5" : ""}`}>
-                <Checkbox
-                  id={`status-${option.value}`}
-                  checked={filters.status?.includes(option.value)}
-                  onCheckedChange={() => onToggleStatus(option.value)}
-                  data-testid={`checkbox-status-${option.value.toLowerCase()}`}
-                />
-                <Label htmlFor={`status-${option.value}`} className="text-sm cursor-pointer">
-                  {option.label}
-                </Label>
-              </div>
-            ))}
-          </div>
-        </div>
+        <ActivityStatusFilterGroup
+          filters={filters}
+          isMobile={isMobile}
+          onToggleStatus={onToggleStatus}
+        />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <Label htmlFor="filter-username" className="text-sm font-medium mb-2 block">Username</Label>
-            <Input
-              id="filter-username"
-              placeholder="Search username..."
-              value={filters.username || ""}
-              onChange={(event) => onFieldChange("username", event.target.value)}
-              data-testid="input-filter-username"
-            />
-          </div>
-          <div>
-            <Label htmlFor="filter-ip" className="text-sm font-medium mb-2 block">IP Address</Label>
-            <Input
-              id="filter-ip"
-              placeholder="Search IP..."
-              value={filters.ipAddress || ""}
-              onChange={(event) => onFieldChange("ipAddress", event.target.value)}
-              data-testid="input-filter-ip"
-            />
-          </div>
-          <div>
-            <Label htmlFor="filter-browser" className="text-sm font-medium mb-2 block">Browser</Label>
-            <Input
-              id="filter-browser"
-              placeholder="Search browser..."
-              value={filters.browser || ""}
-              onChange={(event) => onFieldChange("browser", event.target.value)}
-              data-testid="input-filter-browser"
-            />
-          </div>
-        </div>
+        <ActivityTextFiltersGrid filters={filters} onFieldChange={onFieldChange} />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <Label className="text-sm font-medium mb-2 block">Start Date</Label>
-            <DatePickerField
-              value={filters.dateFrom || ""}
-              onChange={(value) => onFieldChange("dateFrom", value)}
-              placeholder="Select date..."
-              buttonTestId="button-date-from"
-              ariaLabel="Start date"
-              open={dateFromOpen}
-              onOpenChange={onDateFromOpenChange}
-            />
-          </div>
+        <ActivityDateRangeFields
+          dateFromOpen={dateFromOpen}
+          dateToOpen={dateToOpen}
+          filters={filters}
+          onDateFromOpenChange={onDateFromOpenChange}
+          onDateToOpenChange={onDateToOpenChange}
+          onFieldChange={onFieldChange}
+        />
 
-          <div>
-            <Label className="text-sm font-medium mb-2 block">End Date</Label>
-            <DatePickerField
-              value={filters.dateTo || ""}
-              onChange={(value) => onFieldChange("dateTo", value)}
-              placeholder="Select date..."
-              buttonTestId="button-date-to"
-              ariaLabel="End date"
-              open={dateToOpen}
-              onOpenChange={onDateToOpenChange}
-            />
-          </div>
-        </div>
-
-        <div className={`flex gap-2 flex-wrap pt-2 ${isMobile ? "grid grid-cols-2" : ""}`}>
-          <Button onClick={onApply} className={isMobile ? "w-full" : undefined} data-testid="button-apply-filters">
-            <Filter className="w-4 h-4 mr-2" />
-            Apply Filter
-          </Button>
-          <Button variant="outline" onClick={onClear} className={isMobile ? "w-full" : undefined} data-testid="button-clear-filters">
-            <X className="w-4 h-4 mr-2" />
-            Reset Filter
-          </Button>
-        </div>
+        <ActivityFilterActions isMobile={isMobile} onApply={onApply} onClear={onClear} />
       </CardContent>
     </Card>
   );

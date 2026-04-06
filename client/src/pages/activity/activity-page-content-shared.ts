@@ -1,0 +1,57 @@
+import type { Dispatch, SetStateAction } from "react";
+import type { ActivityFilters } from "@/lib/api";
+import type { ActivityRecord, ActivityStatus, BannedUser } from "@/pages/activity/types";
+
+export type ActivitySummaryCounts = {
+  idleCount: number;
+  kickedCount: number;
+  logoutCount: number;
+  onlineCount: number;
+};
+
+export type ActivityPageContentProps = {
+  actionLoading: string | null;
+  activities: ActivityRecord[];
+  allVisibleSelected: boolean;
+  banDialogOpen: boolean;
+  bannedUsers: BannedUser[];
+  bulkDeleteDialogOpen: boolean;
+  canModerateActivity: boolean;
+  dateFromOpen: boolean;
+  dateToOpen: boolean;
+  deleteDialogOpen: boolean;
+  filters: ActivityFilters;
+  handleApplyFilters: () => void;
+  handleBanConfirm: () => void | Promise<void>;
+  handleBulkDeleteConfirm: () => void | Promise<void>;
+  handleClearFilters: () => void;
+  handleDeleteConfirm: () => void | Promise<void>;
+  handleKickConfirm: () => void | Promise<void>;
+  handleUnbanConfirm: () => void | Promise<void>;
+  hasOpenActionDialog: boolean;
+  kickDialogOpen: boolean;
+  loading: boolean;
+  logsOpen: boolean;
+  onBanDialogOpenChange: (open: boolean) => void;
+  onBulkDeleteDialogOpenChange: (open: boolean) => void;
+  onDateFromOpenChange: (open: boolean) => void;
+  onDateToOpenChange: (open: boolean) => void;
+  onDeleteDialogOpenChange: (open: boolean) => void;
+  onFieldChange: (field: keyof ActivityFilters, value: string) => void;
+  onKickDialogOpenChange: (open: boolean) => void;
+  onLogsOpenChange: (open: boolean) => void;
+  onSelectActivity: (activity: ActivityRecord | null) => void;
+  onSelectBannedUser: (user: BannedUser | null) => void;
+  onSetSelectedActivityIds: Dispatch<SetStateAction<Set<string>>>;
+  onToggleStatus: (status: ActivityStatus) => void;
+  onUnbanDialogOpenChange: (open: boolean) => void;
+  partiallySelected: boolean;
+  selectedActivity: ActivityRecord | null;
+  selectedActivityIds: Set<string>;
+  selectedBannedUser: BannedUser | null;
+  selectedBulkCount: number;
+  shouldDeferSecondaryMobileSections: boolean;
+  showFilters: boolean;
+  summaryCounts: ActivitySummaryCounts;
+  unbanDialogOpen: boolean;
+};
