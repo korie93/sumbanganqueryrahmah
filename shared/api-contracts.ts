@@ -36,6 +36,7 @@ export const importDataRowSchema = z.object({
 
 export const importDataPageResponseSchema = z.object({
   rows: z.array(importDataRowSchema),
+  headers: z.array(nonEmptyStringSchema),
   total: nonNegativeIntSchema,
   page: z.number().int().positive(),
   limit: z.number().int().positive(),

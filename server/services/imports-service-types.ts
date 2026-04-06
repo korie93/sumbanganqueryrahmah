@@ -78,6 +78,7 @@ export type ImportDataPageResult = {
     importId: string;
     jsonDataJsonb: unknown;
   }>;
+  headers: string[];
   total: number;
   page: number;
   limit: number;
@@ -98,7 +99,7 @@ export type RenameImportBody = {
 export type ImportsServiceStorage = ImportsStorage;
 export type ImportsServiceRepository = Pick<
   ImportsRepository,
-  "getImportsWithRowCounts" | "listImportsWithRowCountsPage"
+  "getImportColumnNames" | "getImportsWithRowCounts" | "listImportsWithRowCountsPage"
 >;
 export type ImportsServiceAnalysis = Pick<
   ImportAnalysisService,

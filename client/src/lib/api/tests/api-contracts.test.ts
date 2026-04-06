@@ -42,6 +42,7 @@ test("imports API wrappers accept payloads that match the shared contract", asyn
             jsonDataJsonb: { name: "Alice" },
           },
         ],
+        headers: ["name", "email"],
         total: 1,
         page: 1,
         limit: 50,
@@ -102,6 +103,7 @@ test("imports API wrappers accept payloads that match the shared contract", asyn
 
     assert.equal(imports.imports[0]?.rowCount, 12);
     assert.equal(importPage.rows[0]?.jsonDataJsonb?.name, "Alice");
+    assert.deepEqual(importPage.headers, ["name", "email"]);
     assert.equal(renamed.name, "Renamed Import");
     assert.equal(deleted.success, true);
   } finally {

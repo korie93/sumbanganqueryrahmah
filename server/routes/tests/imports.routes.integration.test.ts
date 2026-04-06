@@ -84,6 +84,26 @@ function applyImportColumnFilters(
   );
 }
 
+function getImportHeaders(rows: DataRow[]) {
+  const headerSet = new Set<string>();
+
+  for (const row of rows) {
+    const record = row.jsonDataJsonb;
+    if (!record || typeof record !== "object" || Array.isArray(record)) {
+      continue;
+    }
+
+    for (const key of Object.keys(record as Record<string, unknown>)) {
+      const normalized = String(key || "").trim();
+      if (normalized) {
+        headerSet.add(normalized);
+      }
+    }
+  }
+
+  return Array.from(headerSet).sort((left, right) => left.localeCompare(right));
+}
+
 function createImportsRouteHarness(options?: {
   viewerRowsPerPage?: number;
   isDbProtected?: boolean;
@@ -301,6 +321,8 @@ function createImportsRouteHarness(options?: {
       search?: string | null;
       createdOn?: string | null;
     }) => listImportsWithCursor(params),
+    getImportColumnNames: async (importId: string) =>
+      getImportHeaders(dataRowsByImport.get(importId) ?? []),
   } as unknown as ImportsRepository;
 
   const importAnalysisService = {
@@ -646,6 +668,7 @@ test("GET /api/imports/:id/data applies the protected page-size cap and forwards
 
     const payload = await response.json();
     assert.doesNotThrow(() => importDataPageResponseSchema.parse(payload));
+    assert.deepEqual(payload.headers, ["age", "name"]);
     assert.equal(payload.page, 2);
     assert.equal(payload.limit, 120);
     assert.equal(payload.pageSize, 120);
@@ -659,6 +682,37 @@ test("GET /api/imports/:id/data applies the protected page-size cap and forwards
       columnFilters: [],
       cursor: null,
     });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/imports/:id/data returns dataset-level headers for sparse imports", async () => {
+  const { app } = createImportsRouteHarness({
+    seedImportRows: [
+      ...Array.from({ length: 10 }, (_, index) => ({
+        id: `row-${String(index + 1).padStart(2, "0")}`,
+        importId: "import-1",
+        jsonDataJsonb: { name: `Customer ${index + 1}`, age: 20 + index },
+      })),
+      {
+        id: "row-11",
+        importId: "import-1",
+        jsonDataJsonb: { name: "Customer 11", email: "customer11@example.com" },
+      },
+    ],
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/imports/import-1/data?page=1&pageSize=10`);
+    assert.equal(response.status, 200);
+
+    const payload = await response.json();
+    assert.doesNotThrow(() => importDataPageResponseSchema.parse(payload));
+    assert.equal(payload.rows.length, 10);
+    assert.deepEqual(payload.rows[0]?.jsonDataJsonb, { name: "Customer 1", age: 20 });
+    assert.deepEqual(payload.headers, ["age", "email", "name"]);
   } finally {
     await stopTestServer(server);
   }
@@ -772,6 +826,7 @@ test("GET /api/imports/:id/data returns cursor tokens for large datasets", async
 
     const firstPayload = await firstResponse.json();
     assert.doesNotThrow(() => importDataPageResponseSchema.parse(firstPayload));
+    assert.deepEqual(firstPayload.headers, ["age", "name"]);
     assert.equal(firstPayload.page, 1);
     assert.equal(firstPayload.pageSize, 10);
     assert.equal(firstPayload.rows.length, 10);
@@ -785,6 +840,7 @@ test("GET /api/imports/:id/data returns cursor tokens for large datasets", async
 
     const secondPayload = await secondResponse.json();
     assert.doesNotThrow(() => importDataPageResponseSchema.parse(secondPayload));
+    assert.deepEqual(secondPayload.headers, ["age", "name"]);
     assert.equal(secondPayload.page, 2);
     assert.equal(secondPayload.rows.length, 1);
     assert.equal(secondPayload.rows[0]?.jsonDataJsonb?.name, "Customer 11");

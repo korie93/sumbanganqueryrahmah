@@ -308,6 +308,7 @@ test("getImportData forwards AbortSignal and rejects on abort", async () => {
         resolve(
           jsonResponse({
             rows: [],
+            headers: [],
             total: 0,
             page: 2,
             limit: 50,

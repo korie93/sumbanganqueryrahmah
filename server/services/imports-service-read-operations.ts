@@ -59,14 +59,17 @@ export class ImportsServiceReadOperations {
     const effectivePage = parsedCursor?.page ?? params.page;
     const offset = parsedCursor ? 0 : (params.page - 1) * limit;
     const search = String(params.search || "").trim();
-    const result = await this.storage.searchDataRows({
-      importId: params.importId,
-      search: search || null,
-      limit,
-      offset,
-      columnFilters: params.columnFilters ?? [],
-      cursor: parsedCursor?.lastRowId ?? null,
-    });
+    const [result, headers] = await Promise.all([
+      this.storage.searchDataRows({
+        importId: params.importId,
+        search: search || null,
+        limit,
+        offset,
+        columnFilters: params.columnFilters ?? [],
+        cursor: parsedCursor?.lastRowId ?? null,
+      }),
+      this.importsRepository.getImportColumnNames(params.importId),
+    ]);
 
     const nextCursor = result.nextCursorRowId
       ? encodeImportDataPageCursor({
@@ -74,6 +77,22 @@ export class ImportsServiceReadOperations {
           page: effectivePage + 1,
         })
       : null;
+    const resolvedHeaders = headers.length > 0
+      ? headers
+      : Array.from(
+          new Set(
+            (result.rows || []).flatMap((row) => {
+              const record = row?.jsonDataJsonb;
+              if (!record || typeof record !== "object" || Array.isArray(record)) {
+                return [];
+              }
+
+              return Object.keys(record as Record<string, unknown>)
+                .map((key) => String(key || "").trim())
+                .filter(Boolean);
+            }),
+          ),
+        );
 
     return {
       rows: (result.rows || []).map((row) => ({
@@ -81,6 +100,7 @@ export class ImportsServiceReadOperations {
         importId: row.importId,
         jsonDataJsonb: row.jsonDataJsonb,
       })),
+      headers: resolvedHeaders,
       total: result.total || 0,
       page: effectivePage,
       limit,

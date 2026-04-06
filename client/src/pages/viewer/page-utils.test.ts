@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildViewerActiveFilterChips,
   normalizeViewerPageResult,
+  resolveViewerPageHeaders,
   resolveViewerImportName,
 } from "@/pages/viewer/page-utils";
 
@@ -72,6 +73,31 @@ test("normalizeViewerPageResult prefers pageSize when present", () => {
     limit: 5,
     nextCursor: null,
   });
+});
+
+test("resolveViewerPageHeaders prefers dataset-level headers and falls back safely", () => {
+  assert.deepEqual(
+    resolveViewerPageHeaders(
+      {
+        headers: [" name ", "email", "name", ""],
+      },
+      [
+        { __rowId: 0, name: "Alice", age: 31 },
+      ],
+    ),
+    ["name", "email"],
+  );
+
+  assert.deepEqual(
+    resolveViewerPageHeaders(
+      {},
+      [
+        { __rowId: 0, name: "Alice", age: 31 },
+        { __rowId: 1, name: "Bob", email: "bob@example.com" },
+      ],
+    ),
+    ["name", "age", "email"],
+  );
 });
 
 test("buildViewerActiveFilterChips includes search and filter chips with working removal callbacks", () => {

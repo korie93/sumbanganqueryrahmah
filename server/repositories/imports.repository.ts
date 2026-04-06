@@ -13,6 +13,7 @@ import { buildLikePattern } from "./sql-like-utils";
 const QUERY_PAGE_LIMIT = 1000;
 const IMPORT_LIST_PAGE_DEFAULT_LIMIT = 100;
 const IMPORT_LIST_PAGE_MAX_LIMIT = 200;
+const IMPORT_COLUMN_KEYS_MAX_LIMIT = 500;
 
 export type ImportWithRowCount = Import & { rowCount: number };
 export type ImportListPage = {
@@ -296,6 +297,22 @@ export class ImportsRepository {
     }
 
     return rows;
+  }
+
+  async getImportColumnNames(importId: string): Promise<string[]> {
+    const result = await db.execute(sql`
+      SELECT DISTINCT key AS column_name
+      FROM public.data_rows dr
+      CROSS JOIN LATERAL jsonb_object_keys(dr.json_data::jsonb) AS key
+      WHERE dr.import_id = ${importId}
+        AND jsonb_typeof(dr.json_data::jsonb) = 'object'
+      ORDER BY key
+      LIMIT ${IMPORT_COLUMN_KEYS_MAX_LIMIT}
+    `);
+
+    return (result.rows || [])
+      .map((row: any) => String(row.column_name || "").trim())
+      .filter(Boolean);
   }
 
   async getDataRowsByImportPage(importId: string, limit: number, offset: number): Promise<DataRow[]> {

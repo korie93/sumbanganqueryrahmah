@@ -9,6 +9,7 @@ import {
 import {
   buildViewerActiveFilterChips,
   normalizeViewerPageResult,
+  resolveViewerPageHeaders,
   resolveViewerImportName,
 } from "@/pages/viewer/page-utils";
 import {
@@ -37,7 +38,7 @@ import {
   toggleViewerRowSelection,
   type ViewerStatePatch,
 } from "@/pages/viewer/viewer-state-utils";
-import { extractHeadersFromRows, filterViewerRows } from "@/pages/viewer/utils";
+import { filterViewerRows } from "@/pages/viewer/utils";
 
 type ViewerPageStateOptions = {
   onNavigate: (page: string) => void;
@@ -221,8 +222,8 @@ export function useViewerPageState({
 
       const normalizedPage = normalizeViewerPageResult(response ?? {}, targetPage, ROWS_PER_PAGE);
 
-      if (normalizedPage.page === 1 && normalizedPage.rows.length > 0 && !headersLockedRef.current) {
-        const detectedHeaders = extractHeadersFromRows(normalizedPage.rows);
+      if (normalizedPage.page === 1 && !headersLockedRef.current) {
+        const detectedHeaders = resolveViewerPageHeaders(response ?? {}, normalizedPage.rows);
         if (detectedHeaders.length > 0) {
           setHeaders(detectedHeaders);
           setSelectedColumns(new Set(detectedHeaders));

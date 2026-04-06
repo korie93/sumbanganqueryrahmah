@@ -1,5 +1,6 @@
 import type { ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
+import { extractHeadersFromRows } from "@/pages/viewer/utils";
 
 export const VIEWER_FILTER_OPERATOR_LABELS: Record<ColumnFilter["operator"], string> = {
   contains: "contains",
@@ -15,6 +16,7 @@ type ViewerApiRow = {
 
 export type ViewerPageResponse = {
   rows?: ViewerApiRow[];
+  headers?: string[];
   total?: number;
   page?: number;
   limit?: number;
@@ -74,6 +76,23 @@ export function normalizeViewerPageResult(
     limit,
     nextCursor: typeof response?.nextCursor === "string" ? response.nextCursor : null,
   };
+}
+
+export function resolveViewerPageHeaders(
+  response: ViewerPageResponse,
+  fallbackRows: DataRowWithId[] = [],
+) {
+  const apiHeaders = Array.isArray(response?.headers)
+    ? response.headers
+        .map((header) => (typeof header === "string" ? header.trim() : ""))
+        .filter(Boolean)
+    : [];
+
+  if (apiHeaders.length > 0) {
+    return Array.from(new Set(apiHeaders));
+  }
+
+  return extractHeadersFromRows(fallbackRows);
 }
 
 interface BuildViewerActiveFilterChipsOptions {
