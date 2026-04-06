@@ -4,7 +4,25 @@ import path from "node:path";
 import test from "node:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import * as xlsx from "xlsx";
-import { parseImportUploadFile, stripImportUploadExtension } from "../import-upload-parser";
+import {
+  parseImportUploadBuffer,
+  parseImportUploadFile,
+  stripImportUploadExtension,
+} from "../import-upload-parser";
+
+test("parseImportUploadBuffer parses CSV uploads directly from memory", () => {
+  const result = parseImportUploadBuffer(
+    "customers.csv",
+    Buffer.from("name,amount\nAlice,15\nBob,27\n", "utf8"),
+  );
+
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.headers, ["name", "amount"]);
+  assert.deepEqual(result.rows, [
+    { name: "Alice", amount: "15" },
+    { name: "Bob", amount: "27" },
+  ]);
+});
 
 test("parseImportUploadFile parses CSV uploads from a temporary file", async () => {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-parser-"));

@@ -1,0 +1,105 @@
+import type {
+  AnalyzeAllImportsResult,
+  AnalyzeImportResult,
+  ImportDataPageInput,
+  ImportDataPageResult,
+  ImportDetailsResult,
+  ImportsServiceAnalysis,
+  ImportsServiceRepository,
+  ImportsServiceStorage,
+  ListImportsInput,
+  SearchDataRowsResult,
+  SearchImportRowsInput,
+} from "./imports-service-types";
+import { encodeImportDataPageCursor, parseImportDataPageCursor } from "./imports-service-parsers";
+
+export class ImportsServiceReadOperations {
+  constructor(
+    private readonly storage: ImportsServiceStorage,
+    private readonly importsRepository: ImportsServiceRepository,
+    private readonly importAnalysisService: ImportsServiceAnalysis,
+  ) {}
+
+  async searchImportRows(params: SearchImportRowsInput): Promise<SearchDataRowsResult> {
+    return this.storage.searchDataRows({
+      importId: params.importId,
+      search: params.search ?? "",
+      limit: params.limit,
+      offset: params.offset,
+      columnFilters: params.columnFilters ?? [],
+      cursor: params.cursor ?? null,
+    });
+  }
+
+  async listImports(params: ListImportsInput = {}) {
+    return this.importsRepository.listImportsWithRowCountsPage(params);
+  }
+
+  async getImportDetails(importId: string): Promise<ImportDetailsResult | null> {
+    const importRecord = await this.storage.getImportById(importId);
+    if (!importRecord) {
+      return null;
+    }
+
+    const rows = await this.storage.getDataRowsByImport(importId);
+    return {
+      import: importRecord,
+      rows,
+    };
+  }
+
+  async getImportDataPage(params: ImportDataPageInput): Promise<ImportDataPageResult> {
+    const maxLimit = Math.min(params.isDbProtected ? 120 : 500, params.viewerRowsPerPage);
+    const limit = Math.max(10, Math.min(params.requestedLimit, maxLimit));
+    const parsedCursor = parseImportDataPageCursor(params.cursor);
+    if (params.cursor && !parsedCursor) {
+      throw new Error("Invalid import data cursor.");
+    }
+
+    const effectivePage = parsedCursor?.page ?? params.page;
+    const offset = parsedCursor ? 0 : (params.page - 1) * limit;
+    const search = String(params.search || "").trim();
+    const result = await this.storage.searchDataRows({
+      importId: params.importId,
+      search: search || null,
+      limit,
+      offset,
+      columnFilters: params.columnFilters ?? [],
+      cursor: parsedCursor?.lastRowId ?? null,
+    });
+
+    const nextCursor = result.nextCursorRowId
+      ? encodeImportDataPageCursor({
+          lastRowId: result.nextCursorRowId,
+          page: effectivePage + 1,
+        })
+      : null;
+
+    return {
+      rows: (result.rows || []).map((row) => ({
+        id: row.id,
+        importId: row.importId,
+        jsonDataJsonb: row.jsonDataJsonb,
+      })),
+      total: result.total || 0,
+      page: effectivePage,
+      limit,
+      pageSize: limit,
+      nextCursor,
+    };
+  }
+
+  async analyzeImport(importId: string): Promise<AnalyzeImportResult | null> {
+    const importRecord = await this.storage.getImportById(importId);
+    if (!importRecord) {
+      return null;
+    }
+
+    return this.importAnalysisService.analyzeImport(importRecord);
+  }
+
+  async analyzeAll(): Promise<AnalyzeAllImportsResult> {
+    const imports = await this.importsRepository.getImportsWithRowCounts();
+    return this.importAnalysisService.analyzeAll(imports);
+  }
+}

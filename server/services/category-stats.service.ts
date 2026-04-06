@@ -1,91 +1,16 @@
 import type { PostgresStorage } from "../storage-postgres";
 import { logger } from "../lib/logger";
-
-type CategoryRule = {
-  key: string;
-  terms: string[];
-  fields: string[];
-  matchMode?: string;
-  enabled?: boolean;
-};
-
-type CategoryStatsRow = Awaited<ReturnType<PostgresStorage["getCategoryStats"]>>[number];
-
-type CountQuerySummary = {
-  processing: boolean;
-  summary: string;
-  stats: CategoryStatsRow[];
-};
-
-const CATEGORY_RULES_CACHE_MS = 60_000;
-
-const DEFAULT_COUNT_GROUPS: CategoryRule[] = [
-  {
-    key: "kerajaan",
-    terms: [
-      "kerajaan", "government", "gov", "gomen", "sector awam", "public sector",
-      "kementerian", "jabatan", "agensi", "persekutuan", "negeri", "majlis",
-      "kkm", "kpm", "kpt", "moe", "moh", "state government", "federal",
-      "sekolah", "guru", "teacher", "cikgu", "pendidikan", "government",
-    ],
-    fields: [
-      "EMPLOYER NAME", "NATURE OF BUSINESS", "NOB", "EmployerName",
-      "Nature of Business", "Company", "Nama Majikan", "Majikan",
-      "Department", "Agensi",
-    ],
-    matchMode: "contains",
-  },
-  {
-    key: "polis",
-    terms: ["polis", "police", "pdrm", "polis diraja malaysia", "ipd", "ipk"],
-    fields: [
-      "EMPLOYER NAME", "NATURE OF BUSINESS", "NOB", "EmployerName",
-      "Nature of Business", "Company", "Nama Majikan", "Majikan",
-      "Department", "Agensi",
-    ],
-    matchMode: "contains",
-  },
-  {
-    key: "tentera",
-    terms: ["tentera", "army", "military", "atm", "angkatan tentera", "tldm", "tudm", "tentera darat", "tentera laut", "tentera udara"],
-    fields: [
-      "EMPLOYER NAME", "NATURE OF BUSINESS", "NOB", "EmployerName",
-      "Nature of Business", "Company", "Nama Majikan", "Majikan",
-      "Department", "Agensi",
-    ],
-    matchMode: "contains",
-  },
-  {
-    key: "hospital",
-    terms: ["hospital", "klinik", "clinic", "medical", "kesihatan", "health", "klin ik", "medical center", "healthcare"],
-    fields: [
-      "EMPLOYER NAME", "NATURE OF BUSINESS", "NOB", "EmployerName",
-      "Nature of Business", "Company", "Nama Majikan", "Majikan",
-      "Department", "Agensi",
-    ],
-    matchMode: "contains",
-  },
-  {
-    key: "hotel",
-    terms: ["hotel", "hospitality", "resort", "inn", "motel", "restaurant"],
-    fields: [
-      "EMPLOYER NAME", "NATURE OF BUSINESS", "NOB", "EmployerName",
-      "Nature of Business", "Company", "Nama Majikan", "Majikan",
-      "Department", "Agensi",
-    ],
-    matchMode: "contains",
-  },
-  {
-    key: "swasta",
-    terms: ["swasta", "private", "sdn bhd", "bhd", "enterprise", "trading", "ltd", "plc"],
-    fields: [
-      "EMPLOYER NAME", "NATURE OF BUSINESS", "NOB", "EmployerName",
-      "Nature of Business", "Company", "Nama Majikan", "Majikan",
-      "Department", "Agensi",
-    ],
-    matchMode: "complement",
-  },
-];
+import {
+  buildCategoryStatsSummary,
+  detectCategoryCountRequest,
+  normalizeCategoryStatsKeys,
+} from "./category-stats-query-utils";
+import {
+  CATEGORY_RULES_CACHE_MS,
+  CountQuerySummary,
+  CategoryRule,
+  DEFAULT_COUNT_GROUPS,
+} from "./category-stats-types";
 
 export class CategoryStatsService {
   private categoryRulesCache: { ts: number; rules: CategoryRule[] } | null = null;
@@ -95,12 +20,12 @@ export class CategoryStatsService {
 
   async resolveCountSummary(query: string, timeoutMs: number): Promise<CountQuerySummary | null> {
     const rules = await this.loadCategoryRules();
-    const countGroups = this.detectCountRequest(query, rules);
+    const countGroups = detectCategoryCountRequest(query, rules);
     if (!countGroups) {
       return null;
     }
 
-    const keys = [...countGroups.map((group) => group.key), "__all__"];
+    const keys = normalizeCategoryStatsKeys([...countGroups.map((group) => group.key), "__all__"]);
     const rulesUpdatedAt = await this.storage.getCategoryRulesMaxUpdatedAt();
     let statsRows = await this.storage.getCategoryStats(keys);
     let statsMap = new Map(statsRows.map((row) => [row.key, row]));
@@ -137,7 +62,7 @@ export class CategoryStatsService {
 
     return {
       processing: false,
-      summary: this.buildSummary(countGroups, statsMap, totalRow?.total ?? 0),
+      summary: buildCategoryStatsSummary(countGroups, statsMap, totalRow?.total ?? 0),
       stats: statsRows,
     };
   }
@@ -145,7 +70,7 @@ export class CategoryStatsService {
   async warmCategoryStats(): Promise<{ skipped: boolean; computeKeys: number }> {
     const rules = await this.loadCategoryRules();
     const enabledRuleKeys = rules.filter((rule) => rule.enabled !== false).map((rule) => rule.key);
-    const targetKeys = Array.from(new Set(["__all__", ...enabledRuleKeys]));
+    const targetKeys = normalizeCategoryStatsKeys(["__all__", ...enabledRuleKeys]);
     const rulesUpdatedAt = await this.storage.getCategoryRulesMaxUpdatedAt();
     const existing = await this.storage.getCategoryStats(targetKeys);
     const byKey = new Map(existing.map((row) => [row.key, row]));
@@ -181,24 +106,8 @@ export class CategoryStatsService {
     return DEFAULT_COUNT_GROUPS;
   }
 
-  private detectCountRequest(query: string, rules: CategoryRule[]): CategoryRule[] | null {
-    const lower = query.toLowerCase();
-    const trigger = /(berapa|jumlah|bilangan|ramai|count|how many|berapa orang)/i.test(lower);
-    if (!trigger) {
-      return null;
-    }
-
-    const enabledRules = rules.filter((rule) => rule.enabled !== false);
-    const matched = enabledRules.filter(
-      (group) =>
-        group.terms.some((term) => lower.includes(term.toLowerCase())) ||
-        lower.includes(group.key),
-    );
-    return matched.length > 0 ? matched : enabledRules;
-  }
-
   private enqueueCategoryStatsCompute(keys: string[], rules: CategoryRule[]) {
-    const normalized = Array.from(new Set(keys)).filter(Boolean).sort();
+    const normalized = normalizeCategoryStatsKeys(keys);
     if (!normalized.length) {
       return;
     }
@@ -219,32 +128,6 @@ export class CategoryStatsService {
       });
 
     this.categoryStatsInflight.set(queueKey, task);
-  }
-
-  private buildSummary(
-    countGroups: CategoryRule[],
-    statsMap: Map<string, CategoryStatsRow>,
-    total: number,
-  ): string {
-    const summaryLines = [
-      "Ringkasan Statistik (berdasarkan data import):",
-      `Jumlah rekod dianalisis: ${total}`,
-    ];
-
-    for (const group of countGroups) {
-      const row = statsMap.get(group.key);
-      const count = row?.total ?? 0;
-      summaryLines.push(`- ${group.key}: ${count}`);
-      if (row?.samples?.length) {
-        summaryLines.push("  Contoh rekod:");
-        for (const sample of row.samples.slice(0, 10)) {
-          const source = sample.source ? ` (${sample.source})` : "";
-          summaryLines.push(`  - ${sample.name} | IC: ${sample.ic}${source}`);
-        }
-      }
-    }
-
-    return summaryLines.join("\n");
   }
 
   private withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
