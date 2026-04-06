@@ -1,0 +1,126 @@
+import { sql } from "drizzle-orm";
+import { logger } from "../lib/logger";
+import type { SettingsBootstrapSqlExecutor } from "./settings-bootstrap-shared";
+
+export async function ensureSettingsSchema(database: SettingsBootstrapSqlExecutor) {
+  await database.execute(sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
+
+  await database.execute(sql`
+    CREATE TABLE IF NOT EXISTS public.setting_categories (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      name text UNIQUE NOT NULL,
+      description text,
+      created_at timestamp DEFAULT now()
+    )
+  `);
+
+  await database.execute(sql`
+    CREATE TABLE IF NOT EXISTS public.system_settings (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      category_id uuid REFERENCES public.setting_categories(id) ON DELETE CASCADE,
+      key text UNIQUE NOT NULL,
+      label text NOT NULL,
+      description text,
+      type text NOT NULL,
+      value text NOT NULL,
+      default_value text,
+      is_critical boolean DEFAULT false,
+      updated_at timestamp DEFAULT now()
+    )
+  `);
+
+  await database.execute(sql`
+    CREATE TABLE IF NOT EXISTS public.setting_options (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      setting_id uuid REFERENCES public.system_settings(id) ON DELETE CASCADE,
+      value text NOT NULL,
+      label text NOT NULL
+    )
+  `);
+
+  await cleanupDuplicateSettingOptions(database);
+  await ensureSettingOptionsIndexes(database);
+  await ensureRoleSettingPermissionsSchema(database);
+  await ensureSettingVersionsSchema(database);
+  await ensureFeatureFlagsSchema(database);
+}
+
+async function cleanupDuplicateSettingOptions(database: SettingsBootstrapSqlExecutor) {
+  try {
+    await database.execute(sql`
+      WITH ranked AS (
+        SELECT
+          ctid,
+          row_number() OVER (PARTITION BY setting_id, value ORDER BY id) AS rn
+        FROM public.setting_options
+      )
+      DELETE FROM public.setting_options so
+      USING ranked r
+      WHERE so.ctid = r.ctid
+        AND r.rn > 1
+    `);
+  } catch (dupCleanupErr: any) {
+    logger.warn("setting_options duplicate cleanup skipped", { error: dupCleanupErr });
+  }
+}
+
+async function ensureSettingOptionsIndexes(database: SettingsBootstrapSqlExecutor) {
+  try {
+    await database.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_setting_options_unique_value
+      ON public.setting_options (setting_id, value)
+    `);
+  } catch (idxErr: any) {
+    logger.warn("setting_options unique index was not created", { error: idxErr });
+  }
+
+  await database.execute(sql`
+    CREATE INDEX IF NOT EXISTS idx_setting_options_setting_id
+    ON public.setting_options (setting_id)
+  `);
+}
+
+async function ensureRoleSettingPermissionsSchema(database: SettingsBootstrapSqlExecutor) {
+  await database.execute(sql`
+    CREATE TABLE IF NOT EXISTS public.role_setting_permissions (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      role text NOT NULL,
+      setting_key text NOT NULL,
+      can_view boolean DEFAULT false,
+      can_edit boolean DEFAULT false
+    )
+  `);
+  await database.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_role_setting_permissions_unique
+    ON public.role_setting_permissions (role, setting_key)
+  `);
+}
+
+async function ensureSettingVersionsSchema(database: SettingsBootstrapSqlExecutor) {
+  await database.execute(sql`
+    CREATE TABLE IF NOT EXISTS public.setting_versions (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      setting_key text NOT NULL,
+      old_value text,
+      new_value text NOT NULL,
+      changed_by text NOT NULL,
+      changed_at timestamp DEFAULT now()
+    )
+  `);
+  await database.execute(sql`
+    CREATE INDEX IF NOT EXISTS idx_setting_versions_key_time
+    ON public.setting_versions (setting_key, changed_at DESC)
+  `);
+}
+
+async function ensureFeatureFlagsSchema(database: SettingsBootstrapSqlExecutor) {
+  await database.execute(sql`
+    CREATE TABLE IF NOT EXISTS public.feature_flags (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      key text UNIQUE NOT NULL,
+      enabled boolean NOT NULL DEFAULT false,
+      description text,
+      updated_at timestamp DEFAULT now()
+    )
+  `);
+}
