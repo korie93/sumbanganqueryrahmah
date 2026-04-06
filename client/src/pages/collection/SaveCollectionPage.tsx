@@ -1,4 +1,4 @@
-import { memo, type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DatePickerField } from "@/components/ui/date-picker-field";
@@ -6,37 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
-import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
+import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { cn } from "@/lib/utils";
-import { type CollectionBatch, type CollectionReceiptMetadata } from "@/lib/api";
-import {
-  buildCollectionMutationFingerprint,
-  buildCollectionRecordFormData,
-  createCollectionMutationIdempotencyKey,
-  createCollectionRecord,
-} from "@/lib/api/collection-records";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
-import {
-  buildCollectionReceiptMetadataPayload,
-  createEmptyCollectionReceiptDraft,
-  type CollectionReceiptDraftInput,
-} from "@/pages/collection/receipt-validation";
-import {
-  clearSaveCollectionDraft,
-  persistSaveCollectionDraft,
-  readSaveCollectionDraft,
-} from "@/pages/collection/save-collection-draft";
-import {
-  COLLECTION_BATCH_OPTIONS,
-  getTodayIsoDate,
-  isFutureDate,
-  isValidCustomerPhone,
-  isPositiveAmount,
-  isValidDate,
-  emitCollectionDataChanged,
-  validateReceiptFile,
-} from "./utils";
+import { COLLECTION_BATCH_OPTIONS } from "./utils";
+import { useSaveCollectionPageState } from "./useSaveCollectionPageState";
+import type { CollectionBatch } from "@/lib/api";
 
 type SaveCollectionPageProps = {
   staffNickname: string;
@@ -44,241 +20,23 @@ type SaveCollectionPageProps = {
 };
 
 function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps) {
-  const { notifyMutationError, notifyMutationSuccess } = useMutationFeedback();
+  const mutationFeedback = useMutationFeedback();
   const isMobile = useIsMobile();
   const keyboardOpen = useMobileKeyboardState();
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const submitInFlightRef = useRef(false);
-  const submitMutationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
-  const isMountedRef = useRef(true);
-  const [draftHydrated, setDraftHydrated] = useState(false);
-  const [draftRestoreNotice, setDraftRestoreNotice] = useState<{
-    restoredAt: string;
-    hadPendingReceipts: boolean;
-  } | null>(null);
-
-  const [customerName, setCustomerName] = useState("");
-  const [icNumber, setIcNumber] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [batch, setBatch] = useState<CollectionBatch>("P10");
-  const [paymentDate, setPaymentDate] = useState("");
-  const [amount, setAmount] = useState("");
-  const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
-  const [receiptDrafts, setReceiptDrafts] = useState<CollectionReceiptDraftInput[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const maxPaymentDate = getTodayIsoDate();
-  const isPaymentDateInFuture = paymentDate ? isFutureDate(paymentDate) : false;
-
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    const restoredDraft = readSaveCollectionDraft(staffNickname);
-    if (restoredDraft) {
-      setCustomerName(restoredDraft.customerName);
-      setIcNumber(restoredDraft.icNumber);
-      setCustomerPhone(restoredDraft.customerPhone);
-      setAccountNumber(restoredDraft.accountNumber);
-      setBatch(restoredDraft.batch);
-      setPaymentDate(restoredDraft.paymentDate);
-      setAmount(restoredDraft.amount);
-      setDraftRestoreNotice({
-        restoredAt: restoredDraft.savedAt,
-        hadPendingReceipts: restoredDraft.hadPendingReceipts,
-      });
-    } else {
-      setDraftRestoreNotice(null);
-    }
-    setDraftHydrated(true);
-  }, [staffNickname]);
-
-  useEffect(() => {
-    if (!draftHydrated) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      persistSaveCollectionDraft(staffNickname, {
-        customerName,
-        icNumber,
-        customerPhone,
-        accountNumber,
-        batch,
-        paymentDate,
-        amount,
-        hadPendingReceipts: receiptFiles.length > 0,
-      });
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [
-    accountNumber,
-    amount,
-    batch,
-    customerName,
-    draftHydrated,
-    icNumber,
-    paymentDate,
-    receiptFiles.length,
+  const state = useSaveCollectionPageState({
     staffNickname,
-    customerPhone,
-  ]);
-
-  const restoreNoticeLabel = useMemo(() => {
-    if (!draftRestoreNotice?.restoredAt) {
-      return null;
-    }
-
-    const restoredAt = new Date(draftRestoreNotice.restoredAt);
-    if (Number.isNaN(restoredAt.getTime())) {
-      return null;
-    }
-
-    return restoredAt.toLocaleString();
-  }, [draftRestoreNotice?.restoredAt]);
-
-  const clearForm = () => {
-    setCustomerName("");
-    setIcNumber("");
-    setCustomerPhone("");
-    setAccountNumber("");
-    setBatch("P10");
-    setPaymentDate("");
-    setAmount("");
-    setReceiptFiles([]);
-    setReceiptDrafts([]);
-    clearSaveCollectionDraft(staffNickname);
-    setDraftRestoreNotice(null);
-    submitMutationIntentRef.current = null;
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const handleReceiptChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] || null;
-    event.target.value = "";
-    if (!file) {
-      return;
-    }
-
-    const error = validateReceiptFile(file);
-    if (error) {
-      notifyMutationError({
-        title: "Validation Error",
-        description: error,
-      });
-      return;
-    }
-
-    const nextDraft = createEmptyCollectionReceiptDraft();
-    setReceiptFiles((previous) => [...previous, file]);
-    setReceiptDrafts((previous) => [...previous, nextDraft]);
-  };
-
-  const handleRemoveReceipt = (index: number) => {
-    setReceiptFiles((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
-    setReceiptDrafts((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
-  };
-
-  const handleClearPendingReceipts = () => {
-    setReceiptFiles([]);
-    setReceiptDrafts([]);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const validateForm = (): string | null => {
-    if (!staffNickname || staffNickname.trim().length < 2) return "Staff nickname is required.";
-    if (!customerName.trim()) return "Customer Name is required.";
-    if (!icNumber.trim()) return "IC Number is required.";
-    if (!isValidCustomerPhone(customerPhone)) return "Customer Phone Number is invalid. Use 8-20 chars with digits/space/dash/plus.";
-    if (!accountNumber.trim()) return "Account Number is required.";
-    if (!COLLECTION_BATCH_OPTIONS.includes(batch)) return "Batch is not valid.";
-    if (!isValidDate(paymentDate)) return "Payment Date is invalid.";
-    if (isFutureDate(paymentDate)) return "Payment Date cannot be in the future.";
-    if (!isPositiveAmount(amount)) return "Amount must be greater than 0.";
-    return null;
-  };
-
-  const handleSubmit = async () => {
-    if (submitting || submitInFlightRef.current) return;
-
-    const validationError = validateForm();
-    if (validationError) {
-      notifyMutationError({
-        title: "Validation Error",
-        description: validationError,
-      });
-      return;
-    }
-
-    submitInFlightRef.current = true;
-    setSubmitting(true);
-    try {
-      const newReceiptMetadata: CollectionReceiptMetadata[] = receiptDrafts.map((draft) =>
-        buildCollectionReceiptMetadataPayload(draft));
-      const mutationPayload = {
-        customerName: customerName.trim(),
-        icNumber: icNumber.trim(),
-        customerPhone: customerPhone.trim(),
-        accountNumber: accountNumber.trim(),
-        batch,
-        paymentDate,
-        amount: Number(amount),
-        collectionStaffNickname: staffNickname.trim(),
-        newReceiptMetadata,
-      };
-      const mutationFingerprint = buildCollectionMutationFingerprint({
-        operation: "create",
-        payload: mutationPayload,
-        receiptFiles,
-      });
-      if (submitMutationIntentRef.current?.fingerprint !== mutationFingerprint) {
-        submitMutationIntentRef.current = {
-          fingerprint: mutationFingerprint,
-          key: createCollectionMutationIdempotencyKey(),
-        };
-      }
-
-      await createCollectionRecord(
-        buildCollectionRecordFormData(mutationPayload, receiptFiles),
-        {
-          idempotencyFingerprint: submitMutationIntentRef.current.fingerprint,
-          idempotencyKey: submitMutationIntentRef.current.key,
-        },
-      );
-
-      notifyMutationSuccess({
-        title: "Collection Saved",
-        description: "Rekod collection berjaya disimpan.",
-      });
-      emitCollectionDataChanged();
-      clearForm();
-      onSaved?.();
-    } catch (error: unknown) {
-      notifyMutationError({
-        title: "Failed to Save Collection",
-        error,
-        fallbackDescription: "Failed to save collection.",
-      });
-    } finally {
-      submitInFlightRef.current = false;
-      setSubmitting(false);
-    }
-  };
+    onSaved,
+    mutationFeedback,
+  });
 
   usePageShortcuts([
     {
       key: "s",
       ctrlOrMeta: true,
       allowInEditable: true,
-      enabled: !submitting,
+      enabled: !state.submitting,
       handler: () => {
-        void handleSubmit();
+        void state.handleSubmit();
       },
     },
   ]);
@@ -288,18 +46,18 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       <div className="space-y-2">
         <Label>Customer Name</Label>
         <Input
-          value={customerName}
-          onChange={(e) => setCustomerName(e.target.value)}
-          disabled={submitting}
+          value={state.customerName}
+          onChange={(e) => state.setCustomerName(e.target.value)}
+          disabled={state.submitting}
           autoComplete="name"
         />
       </div>
       <div className="space-y-2">
         <Label>IC Number</Label>
         <Input
-          value={icNumber}
-          onChange={(e) => setIcNumber(e.target.value)}
-          disabled={submitting}
+          value={state.icNumber}
+          onChange={(e) => state.setIcNumber(e.target.value)}
+          disabled={state.submitting}
           inputMode="numeric"
           autoComplete="off"
         />
@@ -308,9 +66,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         <Label>Customer Phone Number</Label>
         <Input
           type="tel"
-          value={customerPhone}
-          onChange={(e) => setCustomerPhone(e.target.value)}
-          disabled={submitting}
+          value={state.customerPhone}
+          onChange={(e) => state.setCustomerPhone(e.target.value)}
+          disabled={state.submitting}
           placeholder="+60 12-345 6789"
           inputMode="tel"
           autoComplete="tel"
@@ -324,9 +82,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       <div className="space-y-2">
         <Label>Account Number</Label>
         <Input
-          value={accountNumber}
-          onChange={(e) => setAccountNumber(e.target.value)}
-          disabled={submitting}
+          value={state.accountNumber}
+          onChange={(e) => state.setAccountNumber(e.target.value)}
+          disabled={state.submitting}
           autoComplete="off"
         />
       </div>
@@ -334,9 +92,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         <Label htmlFor="save-collection-batch">Batch</Label>
         <select
           id="save-collection-batch"
-          value={batch}
-          onChange={(event) => setBatch(event.target.value as CollectionBatch)}
-          disabled={submitting}
+          value={state.batch}
+          onChange={(event) => state.setBatch(event.target.value as CollectionBatch)}
+          disabled={state.submitting}
           aria-label="Batch"
           className={cn(
             "w-full border border-input bg-background px-3 text-sm",
@@ -353,15 +111,15 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       <div className="space-y-2">
         <Label>Payment Date</Label>
         <DatePickerField
-          value={paymentDate}
-          onChange={setPaymentDate}
-          disabled={submitting}
+          value={state.paymentDate}
+          onChange={state.setPaymentDate}
+          disabled={state.submitting}
           placeholder="Select payment date..."
           ariaLabel="Payment Date"
           buttonTestId="save-collection-payment-date"
-          disabledDates={{ after: new Date(`${maxPaymentDate}T23:59:59`) }}
+          disabledDates={{ after: new Date(`${state.maxPaymentDate}T23:59:59`) }}
         />
-        {isPaymentDateInFuture ? (
+        {state.isPaymentDateInFuture ? (
           <p className="text-xs text-destructive">Payment Date cannot be in the future.</p>
         ) : null}
       </div>
@@ -371,9 +129,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           type="number"
           min="0"
           step="0.01"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          disabled={submitting}
+          value={state.amount}
+          onChange={(e) => state.setAmount(e.target.value)}
+          disabled={state.submitting}
           inputMode="decimal"
         />
       </div>
@@ -382,19 +140,14 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
 
   const receiptPanel = (
     <CollectionReceiptPanel
-      pendingFiles={receiptFiles}
-      pendingReceiptDrafts={receiptDrafts}
-      inputRef={fileInputRef}
-      disabled={submitting}
-      onFileChange={handleReceiptChange}
-      onPendingDraftChange={(index, patch) =>
-        setReceiptDrafts((previous) =>
-          previous.map((draft, draftIndex) =>
-            draftIndex === index ? { ...draft, ...patch } : draft,
-          ),
-        )}
-      onRemovePending={handleRemoveReceipt}
-      onClearPending={handleClearPendingReceipts}
+      pendingFiles={state.receiptFiles}
+      pendingReceiptDrafts={state.receiptDrafts}
+      inputRef={state.fileInputRef}
+      disabled={state.submitting}
+      onFileChange={state.handleReceiptChange}
+      onPendingDraftChange={state.handlePendingDraftChange}
+      onRemovePending={state.handleRemoveReceipt}
+      onClearPending={state.handleClearPendingReceipts}
       uploadLabel="Upload Receipt One by One"
       helperText="Tambah satu receipt pada satu masa. Status Existing, Pending Upload, dan perubahan simpan/buang akan ditunjukkan di bawah sebelum anda klik Save Collection."
     />
@@ -426,11 +179,11 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
             Use <span className="font-medium text-foreground">Ctrl/Cmd+S</span> to save quickly.
           </span>
         </div>
-        {draftRestoreNotice ? (
+        {state.draftRestoreNotice ? (
           <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-sm text-muted-foreground">
             <span className="font-medium text-foreground">Draft restored.</span>
-            {restoreNoticeLabel ? ` Last saved ${restoreNoticeLabel}.` : null}
-            {draftRestoreNotice.hadPendingReceipts
+            {state.restoreNoticeLabel ? ` Last saved ${state.restoreNoticeLabel}.` : null}
+            {state.draftRestoreNotice.hadPendingReceipts
               ? " Pending receipt files need to be uploaded again before saving."
               : null}
           </div>
@@ -490,14 +243,14 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           <Button
             type="button"
             variant="outline"
-            onClick={clearForm}
-            disabled={submitting}
+            onClick={state.clearForm}
+            disabled={state.submitting}
             className="w-full sm:w-auto"
           >
             Reset Form
           </Button>
-          <Button type="button" onClick={handleSubmit} disabled={submitting} className="w-full sm:w-auto">
-            {submitting ? "Saving..." : "Save Collection"}
+          <Button type="button" onClick={state.handleSubmit} disabled={state.submitting} className="w-full sm:w-auto">
+            {state.submitting ? "Saving..." : "Save Collection"}
           </Button>
         </div>
       </CardContent>

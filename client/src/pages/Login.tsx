@@ -1,19 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Eye, EyeOff, LogIn } from "lucide-react";
 import type { User } from "@/app/types";
 import { BrandLogo } from "@/components/BrandLogo";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
-import { login, verifyTwoFactorLogin } from "@/lib/api/auth";
-import {
-  consumeStoredAuthNotice,
-  persistAuthenticatedUser,
-  setBannedSessionFlag,
-  setStoredActivityId,
-  setStoredFingerprint,
-} from "@/lib/auth-session";
-import { generateFingerprint } from "@/lib/fingerprint";
-import { isLockedAccountFlow, normalizeLoginIdentity } from "@/pages/login-lock-state";
-import { ERROR_CODES } from "@shared/error-codes";
+import { useLoginPageState } from "@/pages/useLoginPageState";
 import "./Login.css";
 
 interface LoginProps {
@@ -21,322 +10,27 @@ interface LoginProps {
 }
 
 export default function Login({ onLoginSuccess }: LoginProps) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [lockedAccountMessage, setLockedAccountMessage] = useState("");
-  const [lockedUsername, setLockedUsername] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [twoFactorChallengeToken, setTwoFactorChallengeToken] = useState("");
-  const [twoFactorCode, setTwoFactorCode] = useState("");
-  const mountedRef = useRef(true);
-  const loginInFlightRef = useRef(false);
-  const loginAbortControllerRef = useRef<AbortController | null>(null);
-  const loginRequestIdRef = useRef(0);
-  const lockedFlow = isLockedAccountFlow({
-    lockedUsername,
-    currentUsername: username,
+  const {
+    username,
+    password,
+    error,
+    notice,
+    lockedAccountMessage,
+    loading,
+    showPassword,
     twoFactorChallengeToken,
-  });
-
-  const handleUsernameChange = (value: string) => {
-    setUsername(value);
-    if (!isLockedAccountFlow({
-      lockedUsername,
-      currentUsername: value,
-      twoFactorChallengeToken,
-    })) {
-      setError("");
-      setNotice("");
-    }
-  };
-
-  useEffect(() => {
-    const message = consumeStoredAuthNotice();
-    if (message) {
-      setNotice(message);
-    }
-  }, []);
-
-  useEffect(() => {
-    mountedRef.current = true;
-
-    return () => {
-      mountedRef.current = false;
-      loginAbortControllerRef.current?.abort();
-      loginAbortControllerRef.current = null;
-      loginInFlightRef.current = false;
-    };
-  }, []);
-
-  const handleLogin = async () => {
-    if (loginInFlightRef.current) {
-      return;
-    }
-    if (lockedFlow) {
-      return;
-    }
-
-    loginInFlightRef.current = true;
-    const requestId = loginRequestIdRef.current + 1;
-    loginRequestIdRef.current = requestId;
-    setError("");
-    setNotice("");
-    setLockedAccountMessage("");
-    setLoading(true);
-    let controller: AbortController | null = null;
-
-    try {
-      if (!username.trim() || !password) {
-        if (mountedRef.current && loginRequestIdRef.current === requestId) {
-          setError("Sila masukkan username dan password.");
-        }
-        return;
-      }
-
-      controller = new AbortController();
-      loginAbortControllerRef.current = controller;
-      const fingerprint = await generateFingerprint();
-      if (!mountedRef.current || loginRequestIdRef.current !== requestId || controller.signal.aborted) {
-        return;
-      }
-
-      const response = await login(username, password, fingerprint, {
-        signal: controller.signal,
-      });
-
-      if (!mountedRef.current || loginRequestIdRef.current !== requestId || controller.signal.aborted) {
-        return;
-      }
-
-      if ("banned" in response) {
-        setBannedSessionFlag(true);
-        window.location.href = "/banned";
-        return;
-      }
-
-      if ("twoFactorRequired" in response && response.twoFactorRequired === true) {
-        setStoredFingerprint(fingerprint);
-        setLockedUsername("");
-        setLockedAccountMessage("");
-        setTwoFactorChallengeToken(String(response.challengeToken || ""));
-        setTwoFactorCode("");
-        setNotice("Masukkan kod pengesah 6 digit untuk melengkapkan log masuk.");
-        return;
-      }
-
-      const loginSuccessResponse = response as Exclude<typeof response, { twoFactorRequired: true }>;
-      const { username: responseUsername, role, activityId } = loginSuccessResponse;
-
-      if (!responseUsername || !role) {
-        throw new Error("Maklumat log masuk daripada server tidak lengkap.");
-      }
-
-      const authenticatedUser: User = {
-        id: loginSuccessResponse?.user?.id,
-        username: String(loginSuccessResponse?.user?.username || responseUsername).toLowerCase(),
-        fullName: loginSuccessResponse?.user?.fullName ?? null,
-        email: loginSuccessResponse?.user?.email ?? null,
-        role: String(loginSuccessResponse?.user?.role || role),
-        status: String(loginSuccessResponse?.user?.status || loginSuccessResponse?.status || "active"),
-        mustChangePassword: Boolean(
-          loginSuccessResponse?.user?.mustChangePassword ?? loginSuccessResponse?.mustChangePassword ?? false,
-        ),
-        passwordResetBySuperuser: Boolean(
-          loginSuccessResponse?.user?.passwordResetBySuperuser ?? false,
-        ),
-        isBanned: loginSuccessResponse?.user?.isBanned ?? null,
-        twoFactorEnabled: Boolean(loginSuccessResponse?.user?.twoFactorEnabled ?? false),
-        twoFactorPendingSetup: Boolean(loginSuccessResponse?.user?.twoFactorPendingSetup ?? false),
-        twoFactorConfiguredAt: loginSuccessResponse?.user?.twoFactorConfiguredAt ?? null,
-      };
-
-      setBannedSessionFlag(false);
-      setStoredFingerprint(fingerprint);
-      persistAuthenticatedUser(authenticatedUser);
-      setLockedUsername("");
-      setLockedAccountMessage("");
-
-      if (activityId) {
-        setStoredActivityId(String(activityId));
-      }
-
-      const defaultTab = authenticatedUser.mustChangePassword
-        ? "change-password"
-        : role === "admin" || role === "superuser"
-          ? "home"
-          : "general-search";
-      localStorage.setItem("activeTab", defaultTab);
-      localStorage.setItem("lastPage", defaultTab);
-
-      onLoginSuccess(authenticatedUser);
-    } catch (err: any) {
-      if (
-        err instanceof DOMException &&
-        err.name === "AbortError"
-      ) {
-        return;
-      }
-      if (!mountedRef.current || loginRequestIdRef.current !== requestId) {
-        return;
-      }
-      console.error("Login failed:", err);
-      let msg = err?.message || "Login failed. Please try again.";
-      if (err?.code === ERROR_CODES.ACCOUNT_LOCKED || err?.locked === true) {
-        setLockedUsername(normalizeLoginIdentity(username));
-        setLockedAccountMessage(msg);
-        setError("");
-        return;
-      }
-      if (msg.includes("Account is banned") || msg.includes('"banned":true')) {
-        msg = "Your account has been banned. Please contact administrator.";
-      }
-      setError(msg);
-    } finally {
-      if (loginAbortControllerRef.current === controller) {
-        loginAbortControllerRef.current = null;
-      }
-      if (loginRequestIdRef.current === requestId) {
-        loginInFlightRef.current = false;
-      }
-      if (mountedRef.current && loginRequestIdRef.current === requestId) {
-        setLoading(false);
-      }
-    }
-  };
-
-  const handleVerifyTwoFactor = async () => {
-    if (loginInFlightRef.current) {
-      return;
-    }
-
-    loginInFlightRef.current = true;
-    const requestId = loginRequestIdRef.current + 1;
-    loginRequestIdRef.current = requestId;
-    setError("");
-    setNotice("");
-    setLoading(true);
-    let controller: AbortController | null = null;
-
-    try {
-      if (!twoFactorChallengeToken.trim()) {
-        throw new Error("Sesi pengesahan dua faktor tiada. Sila log masuk semula.");
-      }
-
-      const normalizedCode = twoFactorCode.replace(/\D/g, "").slice(0, 6);
-      if (normalizedCode.length !== 6) {
-        throw new Error("Sila masukkan kod pengesah 6 digit.");
-      }
-
-      controller = new AbortController();
-      loginAbortControllerRef.current = controller;
-      const response = await verifyTwoFactorLogin(
-        {
-          challengeToken: twoFactorChallengeToken,
-          code: normalizedCode,
-        },
-        { signal: controller.signal },
-      );
-
-      if (!mountedRef.current || loginRequestIdRef.current !== requestId || controller.signal.aborted) {
-        return;
-      }
-
-      const { username: responseUsername, role, activityId } = response;
-
-      if (!responseUsername || !role) {
-        throw new Error("Maklumat log masuk daripada server tidak lengkap.");
-      }
-
-      const authenticatedUser: User = {
-        id: response?.user?.id,
-        username: String(response?.user?.username || responseUsername).toLowerCase(),
-        fullName: response?.user?.fullName ?? null,
-        email: response?.user?.email ?? null,
-        role: String(response?.user?.role || role),
-        status: String(response?.user?.status || response?.status || "active"),
-        mustChangePassword: Boolean(
-          response?.user?.mustChangePassword ?? response?.mustChangePassword ?? false,
-        ),
-        passwordResetBySuperuser: Boolean(response?.user?.passwordResetBySuperuser ?? false),
-        isBanned: response?.user?.isBanned ?? null,
-        twoFactorEnabled: Boolean(response?.user?.twoFactorEnabled ?? false),
-        twoFactorPendingSetup: Boolean(response?.user?.twoFactorPendingSetup ?? false),
-        twoFactorConfiguredAt: response?.user?.twoFactorConfiguredAt ?? null,
-      };
-
-      setBannedSessionFlag(false);
-      persistAuthenticatedUser(authenticatedUser);
-      setLockedUsername("");
-      setLockedAccountMessage("");
-
-      if (activityId) {
-        setStoredActivityId(String(activityId));
-      }
-
-      const defaultTab = authenticatedUser.mustChangePassword
-        ? "change-password"
-        : role === "admin" || role === "superuser"
-          ? "home"
-          : "general-search";
-      localStorage.setItem("activeTab", defaultTab);
-      localStorage.setItem("lastPage", defaultTab);
-      setTwoFactorChallengeToken("");
-      setTwoFactorCode("");
-
-      onLoginSuccess(authenticatedUser);
-    } catch (err: any) {
-      if (
-        err instanceof DOMException &&
-        err.name === "AbortError"
-      ) {
-        return;
-      }
-      if (!mountedRef.current || loginRequestIdRef.current !== requestId) {
-        return;
-      }
-      console.error("Two-factor verification failed:", err);
-      if (err?.code === ERROR_CODES.ACCOUNT_LOCKED || err?.locked === true) {
-        setTwoFactorChallengeToken("");
-        setTwoFactorCode("");
-        setLockedUsername(normalizeLoginIdentity(username));
-        setLockedAccountMessage(err?.message || "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah.");
-        setError("");
-        return;
-      }
-      setError(err?.message || "Pengesahan dua faktor gagal. Sila cuba lagi.");
-    } finally {
-      if (loginAbortControllerRef.current === controller) {
-        loginAbortControllerRef.current = null;
-      }
-      if (loginRequestIdRef.current === requestId) {
-        loginInFlightRef.current = false;
-      }
-      if (mountedRef.current && loginRequestIdRef.current === requestId) {
-        setLoading(false);
-      }
-    }
-  };
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (lockedFlow) {
-      return;
-    }
-    void (twoFactorChallengeToken ? handleVerifyTwoFactor() : handleLogin());
-  };
-
-  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (lockedFlow) {
-        return;
-      }
-      void (twoFactorChallengeToken ? handleVerifyTwoFactor() : handleLogin());
-    }
-  };
+    twoFactorCode,
+    lockedFlow,
+    setPassword,
+    setTwoFactorCode,
+    handleUsernameChange,
+    handleSubmit,
+    handleInputKeyDown,
+    toggleShowPassword,
+    returnToPasswordLogin,
+    goToLandingPage,
+    goToForgotPassword,
+  } = useLoginPageState({ onLoginSuccess });
 
   return (
     <div className="relative w-full viewport-min-height overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
@@ -350,9 +44,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         <div className="relative w-full max-w-md">
           <button
             type="button"
-            onClick={() => {
-              window.location.href = "/";
-            }}
+            onClick={goToLandingPage}
             className="mb-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 hover:text-white"
           >
             Kembali ke landing page
@@ -385,7 +77,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   placeholder="Username"
                   value={username}
                   onChange={(e) => handleUsernameChange(e.target.value)}
-                  onKeyDown={onKeyDown}
+                  onKeyDown={handleInputKeyDown}
                   autoComplete="username"
                   data-testid="input-username"
                   autoFocus
@@ -401,7 +93,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     inputMode="numeric"
                     value={twoFactorCode}
                     onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    onKeyDown={onKeyDown}
+                    onKeyDown={handleInputKeyDown}
                     autoComplete="one-time-code"
                     data-testid="input-two-factor-code"
                   />
@@ -417,13 +109,13 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    onKeyDown={onKeyDown}
+                    onKeyDown={handleInputKeyDown}
                     autoComplete="current-password"
                     data-testid="input-password"
                   />
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
+                    onClick={toggleShowPassword}
                     className="absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-slate-500 transition-colors hover:text-slate-700"
                     data-testid="button-toggle-password"
                     aria-label={showPassword ? "Hide password" : "Show password"}
@@ -468,13 +160,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             {twoFactorChallengeToken ? (
               <button
                 type="button"
-                onClick={() => {
-                  setTwoFactorChallengeToken("");
-                  setTwoFactorCode("");
-                  setNotice("");
-                  setError("");
-                  setLockedAccountMessage("");
-                }}
+                onClick={returnToPasswordLogin}
                 className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl text-center text-sm text-white/75 transition-colors hover:bg-white/5 hover:text-white"
               >
                 Kembali ke log masuk kata laluan
@@ -483,9 +169,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
             <button
               type="button"
-              onClick={() => {
-                window.location.href = "/forgot-password";
-              }}
+              onClick={goToForgotPassword}
               className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-xl text-center text-sm text-white/75 transition-colors hover:bg-white/5 hover:text-white"
             >
               Lupa kata laluan?

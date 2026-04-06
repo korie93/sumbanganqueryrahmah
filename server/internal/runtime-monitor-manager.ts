@@ -3,9 +3,13 @@ import { logger } from "../lib/logger";
 import { hasPgPoolPressure } from "../db-pool-monitor";
 import { CircuitBreaker } from "./circuitBreaker";
 import {
+  createRuntimeControlStateManager,
+} from "./runtime-monitor-control-state";
+import {
   resolveRuntimeMonitorTaskIntervalMs,
   shouldRunRuntimeMonitorTask,
 } from "./runtime-monitor-cadence";
+import { createRuntimeRequestTracker } from "./runtime-monitor-request-tracker";
 import type {
   SystemHistory,
   SystemSnapshot,
@@ -18,17 +22,14 @@ import {
 import { buildInternalMonitorAlerts } from "./runtime-monitor-alerts";
 import {
   clamp,
-  percentile,
   sendWorkerMessage,
 } from "./runtime-monitor-metrics";
 import {
   appendCappedHistoryValue,
-  blendRuntimeLatencyValue,
   buildRuntimeAlertHistorySignature,
   buildInternalRuntimeMonitorSnapshot,
   buildWorkerMetricsPayload,
   calculateRuntimeCpuPercent,
-  decayRuntimeLatencyValue,
   normalizeRuntimeRollupRefreshSnapshot,
   toRuntimeIntelligenceSnapshot,
 } from "./runtime-monitor-manager-utils";
@@ -38,7 +39,6 @@ import type {
   InternalMonitorSnapshot,
   IpcCapableProcess,
   LocalCircuitSnapshots,
-  PoolWithOptions,
   RuntimeMonitorManagerOptions,
   StartRuntimeLoopsOptions,
 } from "./runtime-monitor-types";
@@ -49,7 +49,6 @@ export type {
   InternalMonitorSnapshot,
 } from "./runtime-monitor-types";
 
-const LATENCY_WINDOW = 400;
 const MAX_INTELLIGENCE_HISTORY = 300;
 const EMPTY_ROLLUP_REFRESH_SNAPSHOT = {
   pendingCount: 0,
@@ -61,56 +60,9 @@ const ipcProcess = process as IpcCapableProcess;
 const runtimeGlobal = globalThis as GcCapableGlobal;
 
 export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOptions) {
-  const defaultControlState: WorkerControlState = {
-    mode: "NORMAL",
-    healthScore: 100,
-    dbProtection: false,
-    rejectHeavyRoutes: false,
-    throttleFactor: 1,
-    predictor: {
-      requestRateMA: 0,
-      latencyMA: 0,
-      cpuMA: 0,
-      requestRateTrend: 0,
-      latencyTrend: 0,
-      cpuTrend: 0,
-      sustainedUpward: false,
-      lastUpdatedAt: null,
-    },
-    workerCount: 1,
-    maxWorkers: 1,
-    queueLength: 0,
-    preAllocateMB: 0,
-    updatedAt: Date.now(),
-    workers: [],
-    circuits: {
-      aiOpenWorkers: 0,
-      dbOpenWorkers: 0,
-      exportOpenWorkers: 0,
-    },
-  };
-
-  let controlState: WorkerControlState = defaultControlState;
-  let preAllocatedBuffer: Buffer | null = null;
-
-  let activeRequests = 0;
-  const latencySamples: number[] = [];
-  let requestCounter = 0;
-  let reqRatePerSec = 0;
-  let status401Window = 0;
-  let status403Window = 0;
-  let status429Window = 0;
-  let status401Count = 0;
-  let status403Count = 0;
-  let status429Count = 0;
   let lastCpuUsage = process.cpuUsage();
   let lastCpuTs = Date.now();
   let cpuPercent = 0;
-  let gcCountWindow = 0;
-  let gcPerMinute = 0;
-  let lastDbLatencyMs = 0;
-  let lastAiLatencyMs = 0;
-  let lastAiLatencyObservedAt = 0;
   let intelligenceInFlight = false;
   let lastPgPoolWarningAt = 0;
   let lastPgPoolWarningSignature = "";
@@ -166,6 +118,15 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     minRequests: 8,
     cooldownMs: 15000,
   });
+  const requestTracker = createRuntimeRequestTracker({
+    latencyWindow: 400,
+    aiLatencyStaleAfterMs: options.aiLatencyStaleAfterMs,
+    aiLatencyDecayHalfLifeMs: options.aiLatencyDecayHalfLifeMs,
+  });
+  const controlStateManager = createRuntimeControlStateManager({
+    lowMemoryMode: options.lowMemoryMode,
+    getLastDbLatencyMs: requestTracker.getLastDbLatencyMs,
+  });
 
   let gcObserver: PerformanceObserver | null = null;
   let gcObserverAttached = false;
@@ -177,40 +138,11 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     return Number.isFinite(lagMs) ? lagMs : 0;
   }
 
-  function recordLatency(ms: number) {
-    if (!Number.isFinite(ms) || ms < 0) return;
-    latencySamples.push(ms);
-    if (latencySamples.length > LATENCY_WINDOW) {
-      latencySamples.splice(0, latencySamples.length - LATENCY_WINDOW);
-    }
-  }
-
-  function observeDbLatency(ms: number) {
-    if (!Number.isFinite(ms) || ms < 0) return;
-    lastDbLatencyMs = blendRuntimeLatencyValue(lastDbLatencyMs, ms);
-  }
-
-  function observeAiLatency(ms: number) {
-    if (!Number.isFinite(ms) || ms < 0) return;
-    lastAiLatencyMs = blendRuntimeLatencyValue(lastAiLatencyMs, ms);
-    lastAiLatencyObservedAt = Date.now();
-  }
-
-  function getEffectiveAiLatencyMs(now = Date.now()): number {
-    return decayRuntimeLatencyValue({
-      lastLatencyMs: lastAiLatencyMs,
-      lastObservedAt: lastAiLatencyObservedAt,
-      now,
-      staleAfterMs: options.aiLatencyStaleAfterMs,
-      halfLifeMs: options.aiLatencyDecayHalfLifeMs,
-    });
-  }
-
   function maybeWarnPgPoolPressure(source: string) {
     const total = Number(options.pool.totalCount || 0);
     const idle = Number(options.pool.idleCount || 0);
     const waiting = Number(options.pool.waitingCount || 0);
-    const max = Number((options.pool as PoolWithOptions).options?.max || 0);
+    const max = Number(options.pool.options?.max || 0);
     const hasPressure = hasPgPoolPressure({
       total,
       idle,
@@ -243,7 +175,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
       try {
         return await operation();
       } finally {
-        observeDbLatency(Date.now() - start);
+        requestTracker.observeDbLatency(Date.now() - start);
         maybeWarnPgPoolPressure("db-circuit");
       }
     });
@@ -255,7 +187,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
       try {
         return await operation();
       } finally {
-        observeAiLatency(Date.now() - start);
+        requestTracker.observeAiLatency(Date.now() - start);
       }
     });
   }
@@ -265,28 +197,15 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
   }
 
   function getControlState(): WorkerControlState {
-    return controlState;
-  }
-
-  function applyControlState(payload: Partial<WorkerControlState>) {
-    controlState = {
-      ...defaultControlState,
-      ...payload,
-    };
-
-    const preAllocateMB = clamp(controlState.preAllocateMB, 0, options.lowMemoryMode ? 8 : 32);
-    if (preAllocateMB > 0) {
-      const targetBytes = preAllocateMB * 1024 * 1024;
-      if (!preAllocatedBuffer || preAllocatedBuffer.length !== targetBytes) {
-        preAllocatedBuffer = Buffer.alloc(targetBytes);
-      }
-    } else {
-      preAllocatedBuffer = null;
-    }
+    return controlStateManager.getControlState();
   }
 
   function getDbProtection(): boolean {
-    return controlState.dbProtection || lastDbLatencyMs > 1000;
+    return controlStateManager.getDbProtection();
+  }
+
+  function applyControlState(payload: Partial<WorkerControlState>) {
+    controlStateManager.applyControlState(payload);
   }
 
   async function refreshCollectionRollupRefreshQueueSnapshot(): Promise<void> {
@@ -306,12 +225,13 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
   }
 
   function computeInternalMonitorSnapshot(): InternalMonitorSnapshot {
+    const controlState = controlStateManager.getControlState();
     const workerSamples = controlState.workers || [];
     const maxWorkerP95 = workerSamples.reduce(
       (max, worker) => Math.max(max, Number(worker.latencyP95Ms || 0)),
       0,
     );
-    const p95LatencyMs = Math.max(percentile(latencySamples, 95), maxWorkerP95);
+    const p95LatencyMs = Math.max(requestTracker.getLatencyP95(), maxWorkerP95);
     const slowQueryCount = workerSamples.filter(
       (worker) => Number(worker.dbLatencyMs || 0) > 600,
     ).length;
@@ -332,9 +252,9 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
       + Number(controlState.circuits?.exportOpenWorkers || 0);
 
     return buildInternalRuntimeMonitorSnapshot({
-      activeRequests,
+      activeRequests: requestTracker.getActiveRequests(),
       aiFailureRate,
-      aiLatencyMs: getEffectiveAiLatencyMs(),
+      aiLatencyMs: requestTracker.getEffectiveAiLatencyMs(),
       clusterOpenCircuitCount,
       controlState,
       cpuPercent,
@@ -342,19 +262,17 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
         0,
         Number(options.pool.totalCount || 0) + Number(options.pool.waitingCount || 0),
       ),
-      dbLatencyMs: lastDbLatencyMs,
+      dbLatencyMs: requestTracker.getLastDbLatencyMs(),
       dbProtection: getDbProtection(),
       errorRate,
       eventLoopLagMs: getEventLoopLagMs(),
       localOpenCircuitCount,
       p95LatencyMs,
       queueLength: options.getSearchQueueLength(),
-      requestRate: reqRatePerSec,
+      requestRate: requestTracker.getRequestRate(),
       rollupRefreshSnapshot,
       slowQueryCount,
-      status401Count,
-      status403Count,
-      status429Count,
+      ...requestTracker.getStatusCounts(),
     });
   }
 
@@ -422,11 +340,11 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
   }
 
   function getRequestRate(): number {
-    return reqRatePerSec;
+    return requestTracker.getRequestRate();
   }
 
   function getLatencyP95(): number {
-    return percentile(latencySamples, 95);
+    return requestTracker.getLatencyP95();
   }
 
   function getLocalCircuitSnapshots(): LocalCircuitSnapshots {
@@ -438,26 +356,15 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
   }
 
   function recordGcEntries(entryCount: number) {
-    if (entryCount > 0) {
-      gcCountWindow += entryCount;
-    }
+    requestTracker.recordGcEntries(entryCount);
   }
 
   function recordRequestStarted() {
-    activeRequests += 1;
-    requestCounter += 1;
+    requestTracker.recordRequestStarted();
   }
 
   function recordRequestFinished(elapsedMs: number, statusCode = 0) {
-    activeRequests = Math.max(0, activeRequests - 1);
-    recordLatency(elapsedMs);
-    if (statusCode === 401) {
-      status401Window += 1;
-    } else if (statusCode === 403) {
-      status403Window += 1;
-    } else if (statusCode === 429) {
-      status429Window += 1;
-    }
+    requestTracker.recordRequestFinished(elapsedMs, statusCode);
   }
 
   function attachGcObserver() {
@@ -498,21 +405,13 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     if (runtimeLoopHandle) return;
 
     runtimeLoopHandle = setInterval(() => {
-      reqRatePerSec = requestCounter / 5;
-      requestCounter = 0;
-      status401Count = status401Window;
-      status403Count = status403Window;
-      status429Count = status429Window;
-      status401Window = 0;
-      status403Window = 0;
-      status429Window = 0;
-      gcPerMinute = gcCountWindow * 12;
-      gcCountWindow = 0;
+      requestTracker.rollFiveSecondWindow();
 
       const now = Date.now();
       const currentCpu = process.cpuUsage();
       const cpuDeltaMicros = (currentCpu.user - lastCpuUsage.user) + (currentCpu.system - lastCpuUsage.system);
       const elapsedMs = Math.max(1, now - lastCpuTs);
+      const controlState = controlStateManager.getControlState();
       cpuPercent = calculateRuntimeCpuPercent({
         cpuDeltaMicros,
         elapsedMs,
@@ -526,24 +425,24 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
         sendWorkerMessage(ipcProcess, {
           type: "worker-metrics",
           payload: buildWorkerMetricsPayload({
-            activeRequests,
+            activeRequests: requestTracker.getActiveRequests(),
             aiFailureRate: circuitAi.getSnapshot().failureRate,
-            aiLatencyMs: getEffectiveAiLatencyMs(),
+            aiLatencyMs: requestTracker.getEffectiveAiLatencyMs(),
             aiState: circuitAi.getState(),
             cpuPercent,
             dbFailureRate: circuitDb.getSnapshot().failureRate,
-            dbLatencyMs: lastDbLatencyMs,
+            dbLatencyMs: requestTracker.getLastDbLatencyMs(),
             dbState: circuitDb.getState(),
             eventLoopLagMs: getEventLoopLagMs(),
             exportFailureRate: circuitExport.getSnapshot().failureRate,
             exportState: circuitExport.getState(),
-            gcPerMinute,
+            gcPerMinute: requestTracker.getGcPerMinute(),
             heapTotalMB: mem.heapTotal / (1024 * 1024),
             heapUsedMB: mem.heapUsed / (1024 * 1024),
-            latencyP95Ms: percentile(latencySamples, 95),
+            latencyP95Ms: requestTracker.getLatencyP95(),
             pid: process.pid,
             queueLength: options.getSearchQueueLength(),
-            requestRate: reqRatePerSec,
+            requestRate: requestTracker.getRequestRate(),
             timestamp: Date.now(),
             workerId: Number(process.env.NODE_UNIQUE_ID || 0),
           }),
@@ -555,7 +454,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
       if (heapRatio > 0.88) {
         clearSearchCache();
         sendWorkerMessage(ipcProcess, { type: "worker-event", payload: { kind: "memory-pressure" } });
-        if (typeof runtimeGlobal.gc === "function" && activeRequests === 0) {
+        if (typeof runtimeGlobal.gc === "function" && requestTracker.getActiveRequests() === 0) {
           try {
             runtimeGlobal.gc();
           } catch {

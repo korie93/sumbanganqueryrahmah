@@ -1,318 +1,59 @@
-import {
-  useCallback,
-  useDeferredValue,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import {
-  getCollectionNicknames,
-  getCollectionRecords,
-  type CollectionRecord,
-  type CollectionStaffNickname,
-} from "@/lib/api";
-import type { CollectionRecordFilters } from "@/pages/collection-records/types";
-import {
-  COLLECTION_DATA_CHANGED_EVENT,
-  isValidDate,
-  parseApiError,
-} from "@/pages/collection/utils";
-import { buildCollectionRecordFilterSnapshot } from "@/pages/collection-records/collection-record-filters";
-import {
-  buildCollectionRecordsCacheKey,
-  createCollectionRecordsCache,
-} from "@/pages/collection-records/records-query-cache";
-
-const DEFAULT_COLLECTION_RECORDS_PAGE_SIZE = 50;
-const MAX_COLLECTION_RECORDS_PAGE_SIZE = 200;
+import type { CollectionStaffNickname } from "@/lib/api";
+import { DEFAULT_COLLECTION_RECORDS_PAGE_SIZE } from "@/pages/collection-records/collection-records-data-utils";
+import { COLLECTION_DATA_CHANGED_EVENT, isValidDate } from "@/pages/collection/utils";
+import { useCollectionRecordsFilterState } from "@/pages/collection-records/useCollectionRecordsFilterState";
+import { useCollectionRecordsQueryState } from "@/pages/collection-records/useCollectionRecordsQueryState";
 
 type UseCollectionRecordsDataArgs = {
   canUseNicknameFilter: boolean;
 };
 
-type FetchCollectionRecordsPageParams = {
-  cursor: string | null;
-  filters: CollectionRecordFilters;
-  page: number;
-  pageSize: number;
-  resetHistory?: boolean;
-};
-
-function isAbortError(error: unknown) {
-  return error instanceof DOMException
-    ? error.name === "AbortError"
-    : error instanceof Error && error.name === "AbortError";
-}
-
-function clampCollectionRecordsPageSize(value: number) {
-  return Math.max(1, Math.min(MAX_COLLECTION_RECORDS_PAGE_SIZE, Math.floor(value)));
-}
-
 export function useCollectionRecordsData({
   canUseNicknameFilter,
 }: UseCollectionRecordsDataArgs) {
   const { toast } = useToast();
-  const isMountedRef = useRef(true);
-  const recordsRequestIdRef = useRef(0);
-  const nicknamesRequestIdRef = useRef(0);
-  const recordsAbortControllerRef = useRef<AbortController | null>(null);
-  const recordsCacheRef = useRef(createCollectionRecordsCache());
-  const appliedFiltersRef = useRef<CollectionRecordFilters>({});
-  const cursorHistoryRef = useRef<Array<string | null>>([null]);
-  const skipInitialAutoFetchRef = useRef(true);
-  const skipNextAutoFetchRef = useRef(false);
-  const fromDateRef = useRef("");
-  const toDateRef = useRef("");
-  const searchInputRef = useRef("");
-  const nicknameFilterRef = useRef("all");
-
-  const [records, setRecords] = useState<CollectionRecord[]>([]);
-  const [loadingRecords, setLoadingRecords] = useState(false);
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [searchInput, setSearchInput] = useState("");
-  const [nicknameOptions, setNicknameOptions] = useState<CollectionStaffNickname[]>([]);
-  const [nicknameFilter, setNicknameFilter] = useState<string>("all");
-  const [loadingNicknames, setLoadingNicknames] = useState(false);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_COLLECTION_RECORDS_PAGE_SIZE);
-  const [totalRecords, setTotalRecords] = useState(0);
-  const [totalAmount, setTotalAmount] = useState(0);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-
-  const deferredSearchInput = useDeferredValue(searchInput);
-
-  const handleFromDateChange = useCallback((value: string) => {
-    fromDateRef.current = value;
-    setFromDate(value);
-  }, []);
-
-  const handleToDateChange = useCallback((value: string) => {
-    toDateRef.current = value;
-    setToDate(value);
-  }, []);
-
-  const handleSearchInputChange = useCallback((value: string) => {
-    searchInputRef.current = value;
-    setSearchInput(value);
-  }, []);
-
-  const handleNicknameFilterChange = useCallback((value: string) => {
-    nicknameFilterRef.current = value;
-    setNicknameFilter(value);
-  }, []);
-
-  const buildCurrentFilters = useCallback(
-    (
-      searchValue = searchInputRef.current,
-      limit = pageSize,
-      offset = 0,
-    ): CollectionRecordFilters =>
-      buildCollectionRecordFilterSnapshot({
-        fromDate: fromDateRef.current,
-        toDate: toDateRef.current,
-        searchInput: searchValue,
-        canUseNicknameFilter,
-        nicknameFilter: nicknameFilterRef.current,
-        limit,
-        offset,
-      }),
-    [canUseNicknameFilter, pageSize],
-  );
-
-  const abortRecordsRequest = useCallback(() => {
-    if (recordsAbortControllerRef.current) {
-      recordsAbortControllerRef.current.abort();
-      recordsAbortControllerRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false;
-      recordsRequestIdRef.current += 1;
-      abortRecordsRequest();
-      recordsCacheRef.current.clear();
-    };
-  }, [abortRecordsRequest]);
-
-  const loadNicknames = useCallback(async () => {
-    const requestId = ++nicknamesRequestIdRef.current;
-    setLoadingNicknames(true);
-    try {
-      const response = await getCollectionNicknames();
-      if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
-      const options = Array.isArray(response?.nicknames) ? response.nicknames : [];
-      setNicknameOptions(options);
-      setNicknameFilter((previous) => {
-        const nextValue =
-          previous !== "all" && !options.some((item) => item.nickname === previous)
-            ? "all"
-            : previous;
-        nicknameFilterRef.current = nextValue;
-        return nextValue;
-      });
-    } catch (error: unknown) {
-      if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
-      toast({
-        title: "Failed to Load Nicknames",
-        description: parseApiError(error),
-        variant: "destructive",
-      });
-    } finally {
-      if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
-      setLoadingNicknames(false);
-    }
-  }, [toast]);
-
-  const fetchRecordsPage = useCallback(
-    async ({
-      cursor,
-      filters,
-      page,
-      pageSize,
-      resetHistory = false,
-    }: FetchCollectionRecordsPageParams) => {
-      const requestId = ++recordsRequestIdRef.current;
-      const safePageSize = clampCollectionRecordsPageSize(pageSize);
-      const requestFilters: CollectionRecordFilters = {
-        from: filters.from,
-        to: filters.to,
-        search: filters.search,
-        nickname: filters.nickname,
-        limit: safePageSize,
-        cursor,
-      };
-      const cacheKey = buildCollectionRecordsCacheKey(requestFilters);
-      const cachedEntry = recordsCacheRef.current.get(cacheKey);
-
-      if (cachedEntry) {
-        abortRecordsRequest();
-        if (!isMountedRef.current || requestId !== recordsRequestIdRef.current) {
-          return;
-        }
-        appliedFiltersRef.current = {
-          from: requestFilters.from,
-          to: requestFilters.to,
-          search: requestFilters.search,
-          nickname: requestFilters.nickname,
-        };
-        cursorHistoryRef.current = cursorHistoryRef.current.slice(0, Math.max(0, page - 1));
-        cursorHistoryRef.current[page - 1] = cursor;
-        if (resetHistory) {
-          cursorHistoryRef.current = [cursor];
-        }
-        setRecords(cachedEntry.records);
-        setTotalRecords(
-          typeof cachedEntry.totalRecords === "number"
-            ? cachedEntry.totalRecords
-            : cachedEntry.records.length,
-        );
-        setTotalAmount(
-          typeof cachedEntry.totalAmount === "number"
-            ? cachedEntry.totalAmount
-            : 0,
-        );
-        setNextCursor(
-          typeof cachedEntry.nextCursor === "string" || cachedEntry.nextCursor === null
-            ? cachedEntry.nextCursor
-            : null,
-        );
-        setPage(page);
-        setPageSize(safePageSize);
-        setLoadingRecords(false);
-        return;
-      }
-
-      setLoadingRecords(true);
-      try {
-        abortRecordsRequest();
-        const controller = new AbortController();
-        recordsAbortControllerRef.current = controller;
-        const response = await getCollectionRecords(requestFilters, { signal: controller.signal });
-        if (
-          controller.signal.aborted ||
-          !isMountedRef.current ||
-          requestId !== recordsRequestIdRef.current
-        ) return;
-
-        const nextRecords = Array.isArray(response?.records) ? response.records : [];
-        const nextTotalRecords = Number((response?.pagination?.total ?? response?.total) || 0);
-        const nextTotalAmount = Number(response?.totalAmount || 0);
-        const nextCursorValue =
-          typeof response?.pagination?.nextCursor === "string"
-            ? response.pagination.nextCursor
-            : typeof response?.nextCursor === "string"
-              ? response.nextCursor
-              : null;
-
-        recordsCacheRef.current.set(cacheKey, {
-          records: nextRecords,
-          totalRecords: nextTotalRecords,
-          totalAmount: nextTotalAmount,
-          nextCursor: nextCursorValue,
-        });
-        appliedFiltersRef.current = {
-          from: requestFilters.from,
-          to: requestFilters.to,
-          search: requestFilters.search,
-          nickname: requestFilters.nickname,
-        };
-        cursorHistoryRef.current = cursorHistoryRef.current.slice(0, Math.max(0, page - 1));
-        cursorHistoryRef.current[page - 1] = cursor;
-        if (resetHistory) {
-          cursorHistoryRef.current = [cursor];
-        }
-        setRecords(nextRecords);
-        setTotalRecords(nextTotalRecords);
-        setTotalAmount(nextTotalAmount);
-        setNextCursor(nextCursorValue);
-        setPage(page);
-        setPageSize(safePageSize);
-      } catch (error: unknown) {
-        if (!isMountedRef.current || requestId !== recordsRequestIdRef.current) return;
-        if (isAbortError(error)) {
-          return;
-        }
-        toast({
-          title: "Failed to Load Records",
-          description: parseApiError(error),
-          variant: "destructive",
-        });
-      } finally {
-        if (
-          recordsAbortControllerRef.current
-          && requestId === recordsRequestIdRef.current
-        ) {
-          recordsAbortControllerRef.current = null;
-        }
-        if (!isMountedRef.current || requestId !== recordsRequestIdRef.current) return;
-        setLoadingRecords(false);
-      }
-    },
-    [abortRecordsRequest, toast],
-  );
-
-  const loadFirstPage = useCallback(
-    async (filters?: CollectionRecordFilters, nextPageSize?: number) => {
-      const resolvedPageSize = clampCollectionRecordsPageSize(nextPageSize ?? pageSize);
-      const requestFilters: CollectionRecordFilters = {
-        from: filters?.from,
-        to: filters?.to,
-        search: filters?.search,
-        nickname: filters?.nickname,
-      };
-      await fetchRecordsPage({
-        cursor: null,
-        filters: requestFilters,
-        page: 1,
-        pageSize: resolvedPageSize,
-        resetHistory: true,
-      });
-    },
-    [fetchRecordsPage, pageSize],
-  );
+  const {
+    records,
+    loadingRecords,
+    nicknameOptions,
+    loadingNicknames,
+    page,
+    pageSize,
+    totalRecords,
+    totalAmount,
+    fetchRecordsPage,
+    loadNicknames,
+    loadFirstPage,
+    handlePrevPage,
+    handleNextPage,
+    handlePageSizeChange,
+    clearRecordsCache,
+    getAppliedFilters,
+    pagination,
+  } = useCollectionRecordsQueryState();
+  const {
+    fromDate,
+    toDate,
+    searchInput,
+    nicknameFilter,
+    deferredSearchInput,
+    fromDateRef,
+    toDateRef,
+    searchInputRef,
+    handleFromDateChange,
+    handleToDateChange,
+    handleSearchInputChange,
+    handleNicknameFilterChange,
+    buildCurrentFilters,
+    markSkipNextAutoFetch,
+    consumeInitialAutoFetch,
+    consumeNextAutoFetch,
+  } = useCollectionRecordsFilterState({
+    canUseNicknameFilter,
+    pageSize,
+  });
 
   useEffect(() => {
     void fetchRecordsPage({
@@ -325,28 +66,41 @@ export function useCollectionRecordsData({
   }, [fetchRecordsPage]);
 
   useEffect(() => {
-    void loadNicknames();
-  }, [loadNicknames]);
+    void loadNicknames().then((options) => {
+      if (!Array.isArray(options)) return;
+
+      const nextValue = nicknameFilter !== "all"
+        && !options.some((item: CollectionStaffNickname) => item.nickname === nicknameFilter)
+          ? "all"
+          : nicknameFilter;
+
+      if (nextValue !== nicknameFilter) {
+        handleNicknameFilterChange(nextValue);
+      }
+    });
+  }, [
+    handleNicknameFilterChange,
+    loadNicknames,
+    nicknameFilter,
+  ]);
 
   useEffect(() => {
     const handleCollectionDataChanged = () => {
-      recordsCacheRef.current.clear();
-      void loadFirstPage(appliedFiltersRef.current);
+      clearRecordsCache();
+      void loadFirstPage(getAppliedFilters());
     };
     window.addEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
     return () => {
       window.removeEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
     };
-  }, [loadFirstPage]);
+  }, [clearRecordsCache, getAppliedFilters, loadFirstPage]);
 
   useEffect(() => {
     const trimmedSearch = deferredSearchInput.trim();
-    if (skipInitialAutoFetchRef.current) {
-      skipInitialAutoFetchRef.current = false;
+    if (consumeInitialAutoFetch()) {
       return;
     }
-    if (skipNextAutoFetchRef.current) {
-      skipNextAutoFetchRef.current = false;
+    if (consumeNextAutoFetch()) {
       return;
     }
 
@@ -360,6 +114,8 @@ export function useCollectionRecordsData({
     return () => window.clearTimeout(timer);
   }, [
     buildCurrentFilters,
+    consumeInitialAutoFetch,
+    consumeNextAutoFetch,
     deferredSearchInput,
     fromDate,
     loadFirstPage,
@@ -397,17 +153,23 @@ export function useCollectionRecordsData({
       return;
     }
 
-    skipNextAutoFetchRef.current = true;
-    await loadFirstPage(buildCurrentFilters(searchInputRef.current, pageSize, 0));
+    markSkipNextAutoFetch();
+    await loadFirstPage(
+      buildCurrentFilters(searchInputRef.current, pageSize, 0),
+    );
   }, [
     buildCurrentFilters,
+    fromDateRef,
     loadFirstPage,
+    markSkipNextAutoFetch,
     pageSize,
+    searchInputRef,
+    toDateRef,
     toast,
   ]);
 
   const handleResetFilter = useCallback(() => {
-    skipNextAutoFetchRef.current = true;
+    markSkipNextAutoFetch();
     handleFromDateChange("");
     handleToDateChange("");
     handleSearchInputChange("");
@@ -419,50 +181,8 @@ export function useCollectionRecordsData({
     handleSearchInputChange,
     handleToDateChange,
     loadFirstPage,
+    markSkipNextAutoFetch,
   ]);
-
-  const handlePrevPage = useCallback(() => {
-    if (loadingRecords || page <= 1) {
-      return;
-    }
-
-    const previousPage = page - 1;
-    const previousCursor = cursorHistoryRef.current[previousPage - 1] ?? null;
-    void fetchRecordsPage({
-      cursor: previousCursor,
-      filters: appliedFiltersRef.current,
-      page: previousPage,
-      pageSize,
-    });
-  }, [fetchRecordsPage, loadingRecords, page, pageSize]);
-
-  const handleNextPage = useCallback(() => {
-    if (loadingRecords || !nextCursor) {
-      return;
-    }
-
-    const nextPageNumber = page + 1;
-    void fetchRecordsPage({
-      cursor: nextCursor,
-      filters: appliedFiltersRef.current,
-      page: nextPageNumber,
-      pageSize,
-    });
-  }, [fetchRecordsPage, loadingRecords, nextCursor, page, pageSize]);
-
-  const handlePageSizeChange = useCallback((value: number) => {
-    const nextPageSize = clampCollectionRecordsPageSize(value);
-    if (nextPageSize === pageSize) {
-      return;
-    }
-
-    void loadFirstPage(appliedFiltersRef.current, nextPageSize);
-  }, [loadFirstPage, pageSize]);
-
-  const pageOffset = totalRecords === 0 ? 0 : (page - 1) * pageSize;
-  const pagedStart = totalRecords === 0 ? 0 : pageOffset + 1;
-  const pagedEnd = totalRecords === 0 ? 0 : Math.min(totalRecords, pageOffset + records.length);
-  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
 
   return {
     records,
@@ -475,14 +195,14 @@ export function useCollectionRecordsData({
     loadingNicknames,
     page,
     pageSize,
-    pageOffset,
-    pagedStart,
-    pagedEnd,
-    totalPages,
+    pageOffset: pagination.pageOffset,
+    pagedStart: pagination.pagedStart,
+    pagedEnd: pagination.pagedEnd,
+    totalPages: pagination.totalPages,
     totalRecords,
     totalAmount,
-    hasNextPage: nextCursor !== null,
-    hasPreviousPage: page > 1,
+    hasNextPage: pagination.hasNextPage,
+    hasPreviousPage: pagination.hasPreviousPage,
     setFromDate: handleFromDateChange,
     setToDate: handleToDateChange,
     setSearchInput: handleSearchInputChange,
@@ -494,8 +214,6 @@ export function useCollectionRecordsData({
     handlePrevPage,
     handleNextPage,
     handlePageSizeChange,
-    getAppliedFilters: () => ({
-      ...appliedFiltersRef.current,
-    }),
+    getAppliedFilters,
   };
 }
