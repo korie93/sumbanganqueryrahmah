@@ -1,40 +1,14 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { Inbox, RefreshCw, Search, Trash2 } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { Inbox, RefreshCw, Trash2 } from "lucide-react";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
-import { MobileActionMenu } from "@/components/data/MobileActionMenu";
-import { UrlPreviewDialog } from "@/components/dialogs/UrlPreviewDialog";
 import { SideTabDataPanel } from "@/components/layout/SideTabDataPanel";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { DevMailOutboxPreview } from "@/pages/settings/types";
-import type { DevMailOutboxPaginationState, DevMailOutboxQueryState } from "@/pages/settings/useSettingsDevMailOutbox";
-import { formatDateTime, normalizeSearchValue } from "@/pages/settings/account-management/utils";
-
-interface LocalMailOutboxSectionProps {
-  clearingDevMailOutbox: boolean;
-  deletingDevMailOutboxId: string | null;
-  enabled: boolean;
-  entries: DevMailOutboxPreview[];
-  loading: boolean;
-  pagination: DevMailOutboxPaginationState;
-  query: DevMailOutboxQueryState;
-  onClear: () => void;
-  onDeleteEntry: (previewId: string) => void;
-  onQueryChange: (query: Partial<DevMailOutboxQueryState>) => void;
-  onRefresh: () => void;
-}
+import { LocalMailOutboxDesktopTable } from "@/pages/settings/account-management/LocalMailOutboxDesktopTable";
+import { LocalMailOutboxDialogs } from "@/pages/settings/account-management/LocalMailOutboxDialogs";
+import { LocalMailOutboxFiltersPanel } from "@/pages/settings/account-management/LocalMailOutboxFiltersPanel";
+import { LocalMailOutboxMobileList } from "@/pages/settings/account-management/LocalMailOutboxMobileList";
+import type { LocalMailOutboxSectionProps } from "@/pages/settings/account-management/local-mail-outbox-shared";
+import { useLocalMailOutboxState } from "@/pages/settings/account-management/useLocalMailOutboxState";
 
 export function LocalMailOutboxSection({
   clearingDevMailOutbox,
@@ -50,82 +24,13 @@ export function LocalMailOutboxSection({
   onRefresh,
 }: LocalMailOutboxSectionProps) {
   const isMobile = useIsMobile();
-  const [emailQuery, setEmailQuery] = useState(query.searchEmail);
-  const [subjectQuery, setSubjectQuery] = useState(query.searchSubject);
-  const [sortDirection, setSortDirection] = useState<"desc" | "asc">(query.sortDirection);
-  const [previewToDelete, setPreviewToDelete] = useState<DevMailOutboxPreview | null>(null);
-  const [clearAllOpen, setClearAllOpen] = useState(false);
-  const [previewEntry, setPreviewEntry] = useState<DevMailOutboxPreview | null>(null);
-  const deferredEmailQuery = useDeferredValue(emailQuery);
-  const deferredSubjectQuery = useDeferredValue(subjectQuery);
-
-  const normalizedDeferredEmailQuery = useMemo(
-    () => normalizeSearchValue(deferredEmailQuery),
-    [deferredEmailQuery],
-  );
-  const normalizedDeferredSubjectQuery = useMemo(
-    () => normalizeSearchValue(deferredSubjectQuery),
-    [deferredSubjectQuery],
-  );
-  const hasSearchFilter = normalizedDeferredEmailQuery.length > 0 || normalizedDeferredSubjectQuery.length > 0;
-  const emptyMessage = loading
-    ? "Loading local mail previews..."
-    : pagination.total === 0 && !hasSearchFilter
-      ? "No local email previews captured yet."
-      : "No email previews match the current filters.";
-
-  useEffect(() => {
-    if (!previewEntry) return;
-    if (entries.some((entry) => entry.id === previewEntry.id)) return;
-    setPreviewEntry(null);
-  }, [entries, previewEntry]);
-
-  useEffect(() => {
-    const normalizedEmailFromQuery = normalizeSearchValue(query.searchEmail);
-    if (normalizeSearchValue(emailQuery) !== normalizedEmailFromQuery) {
-      setEmailQuery(query.searchEmail);
-    }
-  }, [emailQuery, query.searchEmail]);
-
-  useEffect(() => {
-    const normalizedSubjectFromQuery = normalizeSearchValue(query.searchSubject);
-    if (normalizeSearchValue(subjectQuery) !== normalizedSubjectFromQuery) {
-      setSubjectQuery(query.searchSubject);
-    }
-  }, [query.searchSubject, subjectQuery]);
-
-  useEffect(() => {
-    if (sortDirection !== query.sortDirection) {
-      setSortDirection(query.sortDirection);
-    }
-  }, [query.sortDirection, sortDirection]);
-
-  useEffect(() => {
-    if (
-      normalizedDeferredEmailQuery === normalizeSearchValue(query.searchEmail)
-      && normalizedDeferredSubjectQuery === normalizeSearchValue(query.searchSubject)
-    ) {
-      return;
-    }
-    onQueryChange({
-      page: 1,
-      searchEmail: normalizedDeferredEmailQuery,
-      searchSubject: normalizedDeferredSubjectQuery,
-    });
-  }, [
-    normalizedDeferredEmailQuery,
-    normalizedDeferredSubjectQuery,
+  const state = useLocalMailOutboxState({
+    entries,
+    loading,
     onQueryChange,
-    query.searchEmail,
-    query.searchSubject,
-  ]);
-
-  const copyPreviewLink = async (previewUrl: string) => {
-    if (!navigator.clipboard?.writeText) {
-      return;
-    }
-    await navigator.clipboard.writeText(previewUrl);
-  };
+    query,
+    total: pagination.total,
+  });
 
   return (
     <>
@@ -142,7 +47,7 @@ export function LocalMailOutboxSection({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setClearAllOpen(true)}
+              onClick={state.openClearAllDialog}
               disabled={clearingDevMailOutbox || loading || entries.length === 0}
             >
               <Trash2 className="mr-2 h-4 w-4" />
@@ -151,68 +56,14 @@ export function LocalMailOutboxSection({
           </>
         }
         filters={
-          <div className="grid gap-3 xl:grid-cols-[1fr_1fr_180px]">
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Search by email</p>
-              <div className="relative">
-                <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="search"
-                  value={emailQuery}
-                  onChange={(event) => setEmailQuery(event.target.value)}
-                  placeholder="Filter recipient email"
-                  className="pl-9"
-                  enterKeyHint="search"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Search by subject</p>
-              <div className="relative">
-                <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="search"
-                  value={subjectQuery}
-                  onChange={(event) => setSubjectQuery(event.target.value)}
-                  placeholder="Filter email subject"
-                  className="pl-9"
-                  enterKeyHint="search"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label
-                id="local-mail-outbox-sort-direction-label"
-                htmlFor="local-mail-outbox-sort-direction"
-                className="text-sm font-medium"
-              >
-                Sort by date
-              </label>
-              <select
-                id="local-mail-outbox-sort-direction"
-                name="localMailOutboxSortDirection"
-                aria-label="Sort by date"
-                aria-labelledby="local-mail-outbox-sort-direction-label"
-                title="Sort by date"
-                value={sortDirection}
-                onChange={(event) => {
-                  const nextSortDirection = event.target.value === "asc" ? "asc" : "desc";
-                  setSortDirection(nextSortDirection);
-                  onQueryChange({
-                    page: 1,
-                    sortDirection: nextSortDirection,
-                  });
-                }}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="desc">Newest first</option>
-                <option value="asc">Oldest first</option>
-              </select>
-            </div>
-          </div>
+          <LocalMailOutboxFiltersPanel
+            emailQuery={state.emailQuery}
+            sortDirection={state.sortDirection}
+            subjectQuery={state.subjectQuery}
+            onEmailQueryChange={state.onEmailQueryChange}
+            onSortDirectionChange={state.onSortDirectionChange}
+            onSubjectQueryChange={state.onSubjectQueryChange}
+          />
         }
         summary={
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm">
@@ -243,198 +94,41 @@ export function LocalMailOutboxSection({
             Local development mail outbox is disabled.
           </div>
         ) : isMobile ? (
-          <div className="space-y-3 p-3">
-            {loading || entries.length === 0 ? (
-              <div className="rounded-lg border border-border/60 bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground">
-                {emptyMessage}
-              </div>
-            ) : (
-              entries.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-1">
-                      <div className="break-words font-medium">{entry.to}</div>
-                      <div className="break-words text-sm text-muted-foreground">{entry.subject}</div>
-                    </div>
-                    <MobileActionMenu
-                      contentLabel="Email preview actions"
-                      items={[
-                        {
-                          id: `copy-${entry.id}`,
-                          label: "Copy Link",
-                          onSelect: async () => copyPreviewLink(entry.previewUrl),
-                        },
-                        {
-                          id: `delete-${entry.id}`,
-                          label: deletingDevMailOutboxId === entry.id ? "Deleting..." : "Delete",
-                          onSelect: () => setPreviewToDelete(entry),
-                          disabled: deletingDevMailOutboxId === entry.id || clearingDevMailOutbox,
-                          destructive: true,
-                        },
-                      ]}
-                    />
-                  </div>
-
-                  <dl className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm">
-                    <div className="space-y-1">
-                      <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Created</dt>
-                      <dd>{formatDateTime(entry.createdAt)}</dd>
-                    </div>
-                  </dl>
-
-                  <div className="flex flex-col gap-2 sm:flex-row" data-floating-ai-avoid="true">
-                    <Button
-                      variant="outline"
-                      className="w-full sm:w-auto"
-                      onClick={() => setPreviewEntry(entry)}
-                    >
-                      Open
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full sm:w-auto"
-                      onClick={() => {
-                        void copyPreviewLink(entry.previewUrl);
-                      }}
-                    >
-                      Copy Link
-                    </Button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+          <LocalMailOutboxMobileList
+            clearingDevMailOutbox={clearingDevMailOutbox}
+            deletingDevMailOutboxId={deletingDevMailOutboxId}
+            emptyMessage={state.emptyMessage}
+            entries={entries}
+            loading={loading}
+            onCopyPreviewLink={state.copyPreviewLink}
+            onOpenDeleteDialog={state.openDeleteDialog}
+            onOpenPreviewDialog={state.openPreviewDialog}
+          />
         ) : (
-          <Table className="min-w-[920px] text-sm">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Recipient</TableHead>
-                <TableHead>Subject</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading || entries.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
-                    {emptyMessage}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                entries.map((entry) => (
-                  <TableRow key={entry.id}>
-                    <TableCell className="font-medium">{entry.to}</TableCell>
-                    <TableCell>{entry.subject}</TableCell>
-                    <TableCell>{formatDateTime(entry.createdAt)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPreviewEntry(entry)}
-                        >
-                          Open
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            void copyPreviewLink(entry.previewUrl);
-                          }}
-                        >
-                          Copy Link
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPreviewToDelete(entry)}
-                          disabled={deletingDevMailOutboxId === entry.id || clearingDevMailOutbox}
-                        >
-                          {deletingDevMailOutboxId === entry.id ? "Deleting..." : "Delete"}
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          <LocalMailOutboxDesktopTable
+            clearingDevMailOutbox={clearingDevMailOutbox}
+            deletingDevMailOutboxId={deletingDevMailOutboxId}
+            emptyMessage={state.emptyMessage}
+            entries={entries}
+            loading={loading}
+            onCopyPreviewLink={state.copyPreviewLink}
+            onOpenDeleteDialog={state.openDeleteDialog}
+            onOpenPreviewDialog={state.openPreviewDialog}
+          />
         )}
       </SideTabDataPanel>
 
-      <AlertDialog
-        open={previewToDelete !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPreviewToDelete(null);
-          }
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Local Email Preview</AlertDialogTitle>
-            <AlertDialogDescription>
-              Delete the local mail preview for{" "}
-              <span className="font-medium">{previewToDelete?.to || "this recipient"}</span>?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={Boolean(deletingDevMailOutboxId)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={Boolean(deletingDevMailOutboxId) || !previewToDelete}
-              onClick={() => {
-                if (previewToDelete) {
-                  onDeleteEntry(previewToDelete.id);
-                }
-              }}
-            >
-              {deletingDevMailOutboxId ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={clearAllOpen} onOpenChange={setClearAllOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete All Local Email Previews</AlertDialogTitle>
-            <AlertDialogDescription>
-              This removes every email currently stored in the local development outbox.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={clearingDevMailOutbox}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={clearingDevMailOutbox}
-              onClick={() => {
-                onClear();
-              }}
-            >
-              {clearingDevMailOutbox ? "Deleting..." : "Delete All"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <UrlPreviewDialog
-        open={previewEntry !== null}
-        title="Local Email Preview"
-        description={
-          previewEntry
-            ? `${previewEntry.subject} for ${previewEntry.to}`
-            : "Preview the stored development email."
-        }
-        url={previewEntry?.previewUrl || ""}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPreviewEntry(null);
-          }
-        }}
-        onClose={() => setPreviewEntry(null)}
+      <LocalMailOutboxDialogs
+        clearAllOpen={state.clearAllOpen}
+        clearingDevMailOutbox={clearingDevMailOutbox}
+        deletingDevMailOutboxId={deletingDevMailOutboxId}
+        previewEntry={state.previewEntry}
+        previewToDelete={state.previewToDelete}
+        onClear={onClear}
+        onCloseDeleteDialog={state.closeDeleteDialog}
+        onClosePreviewDialog={state.closePreviewDialog}
+        onDeleteEntry={onDeleteEntry}
+        onSetClearAllOpen={state.setClearAllOpen}
       />
     </>
   );
