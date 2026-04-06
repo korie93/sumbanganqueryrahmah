@@ -1,21 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { type AIChatMessage, useAIContext } from "@/context/AIContext";
-import {
-  AI_CANCEL_EVENT,
-  AI_RESET_EVENT,
-  type AIChatStatus,
-} from "@/lib/ai-chat";
+import { type AIChatStatus } from "@/lib/ai-chat";
 import { resolveAiErrorMessage } from "@/lib/ai-error";
 import { searchAI } from "@/lib/api";
 
 import {
   AI_CHAT_MAX_RETRIES,
   AI_CHAT_RETRY_MS,
+  DEFAULT_AI_CHAT_ERROR_MESSAGE,
   appendAIChatMessage,
+  formatAIChatQueuedNotice,
+  getAIChatErrorDetailsFromPayload,
   getAIChatStatusMeta,
   getAIChatTypingDelayMs,
 } from "./ai-chat-utils";
+import { useAIChatExternalEffects } from "./useAIChatExternalEffects";
+import { useAIChatRuntimeRefs } from "./useAIChatRuntimeRefs";
+import { useAIChatTypingAction } from "./useAIChatTypingAction";
 
 type UseAIChatStateOptions = {
   aiEnabled: boolean;
@@ -49,42 +51,20 @@ export function useAIChatState({
 
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const requestControllerRef = useRef<AbortController | null>(null);
-  const typingIntervalRef = useRef<number | null>(null);
-  const retryTimersRef = useRef<number[]>([]);
-  const slowNoticeTimerRef = useRef<number | null>(null);
-  const sessionRef = useRef(0);
-  const processingRef = useRef(false);
-  const isMountedRef = useRef(true);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  const clearRetryTimers = useCallback(() => {
-    retryTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
-    retryTimersRef.current = [];
-  }, []);
-
-  const clearSlowNoticeTimer = useCallback(() => {
-    if (slowNoticeTimerRef.current !== null) {
-      window.clearTimeout(slowNoticeTimerRef.current);
-      slowNoticeTimerRef.current = null;
-    }
-  }, []);
-
-  const stopTyping = useCallback(() => {
-    if (typingIntervalRef.current !== null) {
-      window.clearInterval(typingIntervalRef.current);
-      typingIntervalRef.current = null;
-    }
-    if (isMountedRef.current) {
-      setIsTyping(false);
-    }
-  }, []);
+  const {
+    abortActiveRequest,
+    clearRetryTimers,
+    clearSlowNoticeTimer,
+    isMountedRef,
+    processingRef,
+    registerRetryTimer,
+    requestControllerRef,
+    sessionRef,
+    slowNoticeTimerRef,
+    stopTyping,
+    typingIntervalRef,
+    unregisterRetryTimer,
+  } = useAIChatRuntimeRefs({ setIsTyping });
 
   const appendMessage = useCallback((message: AIChatMessage) => {
     setMessages((prev) => appendAIChatMessage(prev, message));
@@ -95,11 +75,7 @@ export function useAIChatState({
       sessionRef.current += 1;
     }
 
-    if (requestControllerRef.current) {
-      requestControllerRef.current.abort();
-      requestControllerRef.current = null;
-    }
-
+    abortActiveRequest();
     clearRetryTimers();
     clearSlowNoticeTimer();
     stopTyping();
@@ -116,7 +92,7 @@ export function useAIChatState({
       setIsThinking(false);
       setAiStatus("IDLE");
     }
-  }, [clearRetryTimers, clearSlowNoticeTimer, setIsThinking, stopTyping]);
+  }, [abortActiveRequest, clearRetryTimers, clearSlowNoticeTimer, setIsThinking, stopTyping]);
 
   const resetSession = useCallback(() => {
     cancelAISearch(true);
@@ -124,68 +100,22 @@ export function useAIChatState({
     setQuery("");
   }, [cancelAISearch, setMessages]);
 
-  useEffect(() => {
-    onCancelAISearchReady?.(() => cancelAISearch(true));
-    return () => {
-      onCancelAISearchReady?.(() => undefined);
-    };
-  }, [cancelAISearch, onCancelAISearchReady]);
-
-  useEffect(() => {
-    onStatusChange?.(aiStatus);
-  }, [aiStatus, onStatusChange]);
-
-  useEffect(() => {
-    const current = messagesRef.current;
-    if (!current) {
-      return;
-    }
-    current.scrollTop = current.scrollHeight;
-  }, [messages, streamingText, aiStatus]);
-
-  const startTyping = useCallback((text: string, sessionId: number) => {
-    stopTyping();
-    setIsTyping(true);
-    setAiStatus("TYPING");
-    setStreamingText("");
-
-    let index = 0;
-    typingIntervalRef.current = window.setInterval(() => {
-      if (sessionId !== sessionRef.current) {
-        stopTyping();
-        return;
-      }
-
-      index += 1;
-      setStreamingText(text.slice(0, index));
-
-      if (index >= text.length) {
-        stopTyping();
-        if (sessionId !== sessionRef.current) {
-          return;
-        }
-
-        if (isMountedRef.current) {
-          setStreamingText("");
-        }
-
-        appendMessage({
-          role: "assistant",
-          content: text,
-          timestamp: new Date().toISOString(),
-        });
-
-        processingRef.current = false;
-        if (isMountedRef.current) {
-          setIsProcessing(false);
-          setIsThinking(false);
-          setAiStatus("IDLE");
-          setSlowNotice(false);
-        }
-        clearSlowNoticeTimer();
-      }
-    }, typingDelayMs);
-  }, [appendMessage, clearSlowNoticeTimer, setIsThinking, stopTyping, typingDelayMs]);
+  const startTyping = useAIChatTypingAction({
+    appendMessage,
+    clearSlowNoticeTimer,
+    isMountedRef,
+    processingRef,
+    sessionRef,
+    setAiStatus,
+    setIsProcessing,
+    setIsThinking,
+    setIsTyping,
+    setSlowNotice,
+    setStreamingText,
+    stopTyping,
+    typingDelayMs,
+    typingIntervalRef,
+  });
 
   const startSlowNoticeWatch = useCallback((sessionId: number) => {
     clearSlowNoticeTimer();
@@ -202,10 +132,7 @@ export function useAIChatState({
       return;
     }
 
-    if (requestControllerRef.current) {
-      requestControllerRef.current.abort();
-    }
-
+    abortActiveRequest();
     const controller = new AbortController();
     requestControllerRef.current = controller;
     let waitingRetry = false;
@@ -222,26 +149,15 @@ export function useAIChatState({
 
       const gateWaitMs = Number(response.headers.get("x-ai-gate-wait-ms") || "0");
       if (!response.ok) {
-        let responseMessage = "AI tidak dapat memproses permintaan sekarang.\nSila cuba semula.";
+        let responseMessage = DEFAULT_AI_CHAT_ERROR_MESSAGE;
         const contentType = String(response.headers.get("content-type") || "").toLowerCase();
 
         if (contentType.includes("application/json")) {
           const payload = await response.json();
-          const message = typeof payload?.message === "string" ? payload.message.trim() : "";
-          if (message) {
-            responseMessage = message;
-          }
-
-          const gate = payload?.gate;
-          if (gate && Number.isFinite(Number(gate.queueSize)) && Number.isFinite(Number(gate.queueLimit))) {
-            const queueSize = Number(gate.queueSize);
-            const queueLimit = Number(gate.queueLimit);
-            const waitMs = Number(gate.queueWaitMs || 0);
-            setGateNotice(
-              waitMs > 0
-                ? `AI queue busy (${queueSize}/${queueLimit}). Estimated wait ${Math.max(1, Math.round(waitMs / 1000))}s.`
-                : `AI queue busy (${queueSize}/${queueLimit}). Please retry shortly.`,
-            );
+          const details = getAIChatErrorDetailsFromPayload(payload);
+          responseMessage = details.message;
+          if (details.gateNotice) {
+            setGateNotice(details.gateNotice);
           }
         }
 
@@ -254,9 +170,7 @@ export function useAIChatState({
       }
 
       if (gateWaitMs > 0) {
-        setGateNotice(
-          `AI request queued for ${Math.max(1, Math.round(gateWaitMs / 1000))}s due to current traffic.`,
-        );
+        setGateNotice(formatAIChatQueuedNotice(gateWaitMs));
       }
 
       if (data?.processing) {
@@ -278,10 +192,10 @@ export function useAIChatState({
 
         waitingRetry = true;
         const timerId = window.setTimeout(() => {
-          retryTimersRef.current = retryTimersRef.current.filter((existingId) => existingId !== timerId);
+          unregisterRetryTimer(timerId);
           void executeSearch(text, sessionId, retryCount + 1);
         }, AI_CHAT_RETRY_MS + retryCount * 500);
-        retryTimersRef.current.push(timerId);
+        registerRetryTimer(timerId);
         return;
       }
 
@@ -327,7 +241,16 @@ export function useAIChatState({
         clearSlowNoticeTimer();
       }
     }
-  }, [appendMessage, clearSlowNoticeTimer, setIsThinking, startTyping, timeoutMs]);
+  }, [
+    abortActiveRequest,
+    appendMessage,
+    clearSlowNoticeTimer,
+    registerRetryTimer,
+    setIsThinking,
+    startTyping,
+    timeoutMs,
+    unregisterRetryTimer,
+  ]);
 
   const handleSend = useCallback(async () => {
     if (!aiEnabled) {
@@ -374,23 +297,16 @@ export function useAIChatState({
     startSlowNoticeWatch,
   ]);
 
-  useEffect(() => {
-    const onReset = () => {
-      resetSession();
-    };
-    const onCancel = () => {
-      cancelAISearch(true);
-    };
-
-    window.addEventListener(AI_RESET_EVENT, onReset as EventListener);
-    window.addEventListener(AI_CANCEL_EVENT, onCancel as EventListener);
-
-    return () => {
-      window.removeEventListener(AI_RESET_EVENT, onReset as EventListener);
-      window.removeEventListener(AI_CANCEL_EVENT, onCancel as EventListener);
-      cancelAISearch(true);
-    };
-  }, [cancelAISearch, resetSession]);
+  useAIChatExternalEffects({
+    aiStatus,
+    cancelAISearch,
+    messages,
+    messagesRef,
+    onCancelAISearchReady,
+    onStatusChange,
+    resetSession,
+    streamingText,
+  });
 
   const statusMeta = useMemo(() => getAIChatStatusMeta(aiStatus), [aiStatus]);
 
