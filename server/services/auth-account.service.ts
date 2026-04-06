@@ -1,7 +1,4 @@
 import type { AuthenticatedUser } from "../auth/guards";
-import type {
-  PostgresStorage,
-} from "../storage-postgres";
 import {
   type ActivationTokenValidationResult,
   type PasswordResetTokenValidationResult,
@@ -14,6 +11,7 @@ import {
   type UpdateManagedUserInput,
 } from "./auth-account-managed-operations";
 import { AuthAccountDevMailOperations } from "./auth-account-dev-mail-operations";
+import { AuthAccountAuthenticationOperations } from "./auth-account-authentication-operations";
 import { AuthAccountRecoveryOperations } from "./auth-account-recovery-operations";
 import {
   AuthAccountSelfOperations,
@@ -23,8 +21,14 @@ import {
   type StartTwoFactorSetupInput,
   type UpdateOwnCredentialsInput,
 } from "./auth-account-self-operations";
-import { AuthAccountAuthenticationOperations } from "./auth-account-authentication-operations";
-import { createAuthAccountServicePolicies } from "./auth-account-service-policies";
+import { createAuthAccountServiceOperations } from "./auth-account-service-operation-factory";
+import type {
+  ActivateAccountInput,
+  AuthAccountStorage,
+  LoginInput,
+  ResetPasswordWithTokenInput,
+  TwoFactorLoginInput,
+} from "./auth-account-service-shared";
 export {
   type ActivationTokenValidationResult,
   type ManagedAccountActivationDelivery,
@@ -33,108 +37,27 @@ export {
   AuthAccountError,
 } from "./auth-account-types";
 
-type LoginInput = {
-  username: string;
-  password: string;
-  fingerprint?: string | null;
-  browserName: string;
-  pcName?: string | null;
-  ipAddress?: string | null;
-};
-
-type AuthAccountStorage = Pick<
-  PostgresStorage,
-  | "consumeActivationTokenById"
-  | "consumePasswordResetRequestById"
-  | "createActivationToken"
-  | "createActivity"
-  | "createAuditLog"
-  | "createManagedUserAccount"
-  | "createPasswordResetRequest"
-  | "deactivateUserActivities"
-  | "deactivateUserSessionsByFingerprint"
-  | "deleteManagedUserAccount"
-  | "getActivationTokenRecordByHash"
-  | "getActiveActivitiesByUsername"
-  | "getBooleanSystemSetting"
-  | "getAccounts"
-  | "getManagedUsers"
-  | "getPasswordResetTokenRecordByHash"
-  | "getUser"
-  | "getUserByEmail"
-  | "getUserByUsername"
-  | "invalidateUnusedActivationTokens"
-  | "invalidateUnusedPasswordResetTokens"
-  | "isVisitorBanned"
-  | "listManagedUsersPage"
-  | "listPendingPasswordResetRequests"
-  | "listPendingPasswordResetRequestsPage"
-  | "recordFailedLoginAttempt"
-  | "resolvePendingPasswordResetRequestsForUser"
-  | "touchLastLogin"
-  | "updateActivitiesUsername"
-  | "updateUserAccount"
-  | "updateUserCredentials"
->;
-
 export class AuthAccountService {
   private readonly authenticationOperations: AuthAccountAuthenticationOperations;
   private readonly devMailOperations: AuthAccountDevMailOperations;
   private readonly managedOperations: AuthAccountManagedOperations;
   private readonly recoveryOperations: AuthAccountRecoveryOperations;
   private readonly selfOperations: AuthAccountSelfOperations;
-  private readonly policyHelpers: ReturnType<typeof createAuthAccountServicePolicies>;
 
-  constructor(private readonly storage: AuthAccountStorage) {
-    this.policyHelpers = createAuthAccountServicePolicies(this.storage);
-    this.authenticationOperations = new AuthAccountAuthenticationOperations({
-      storage: this.storage,
-    });
-    this.recoveryOperations = new AuthAccountRecoveryOperations({
-      storage: this.storage,
-      invalidateUserSessions: this.invalidateUserSessions.bind(this),
-      requireManagedEmail: this.policyHelpers.requireManagedEmail,
-    });
-    this.managedOperations = new AuthAccountManagedOperations({
-      storage: this.storage,
-      ensureUniqueIdentity: this.policyHelpers.ensureUniqueIdentity,
-      invalidateUserSessions: this.invalidateUserSessions.bind(this),
-      requireManageableTarget: this.policyHelpers.requireManageableTarget,
-      requireManagedEmail: this.policyHelpers.requireManagedEmail,
-      requireSuperuser: this.policyHelpers.requireSuperuser,
-      sendActivationEmail: this.recoveryOperations.sendActivationEmail.bind(this.recoveryOperations),
-      sendPasswordResetEmail: this.recoveryOperations.sendPasswordResetEmail.bind(this.recoveryOperations),
-      validateEmail: this.policyHelpers.validateEmail,
-      validateUsername: this.policyHelpers.validateUsername,
-    });
-    this.devMailOperations = new AuthAccountDevMailOperations({
-      storage: this.storage,
-      requireSuperuser: this.policyHelpers.requireSuperuser,
-    });
-    this.selfOperations = new AuthAccountSelfOperations({
-      storage: this.storage,
-      ensureUniqueIdentity: this.policyHelpers.ensureUniqueIdentity,
-      requireActor: this.policyHelpers.requireActor,
-      validateUsername: this.policyHelpers.validateUsername,
-    });
-  }
-
-  private async invalidateUserSessions(username: string, reason: string) {
-    return this.authenticationOperations.invalidateUserSessions(username, reason);
+  constructor(storage: AuthAccountStorage) {
+    const operations = createAuthAccountServiceOperations(storage);
+    this.authenticationOperations = operations.authenticationOperations;
+    this.devMailOperations = operations.devMailOperations;
+    this.managedOperations = operations.managedOperations;
+    this.recoveryOperations = operations.recoveryOperations;
+    this.selfOperations = operations.selfOperations;
   }
 
   async login(input: LoginInput) {
     return this.authenticationOperations.login(input);
   }
 
-  async verifyTwoFactorLogin(input: {
-    userId: string;
-    code: string;
-    fingerprint?: string | null;
-    browserName: string;
-    pcName?: string | null;
-    ipAddress?: string | null;
-  }) {
+  async verifyTwoFactorLogin(input: TwoFactorLoginInput) {
     return this.authenticationOperations.verifyTwoFactorLogin(input);
   }
 
@@ -142,12 +65,7 @@ export class AuthAccountService {
     return this.recoveryOperations.validateActivationToken(rawTokenInput);
   }
 
-  async activateAccount(params: {
-    username?: string;
-    token: string;
-    newPassword: string;
-    confirmPassword: string;
-  }) {
+  async activateAccount(params: ActivateAccountInput) {
     return this.recoveryOperations.activateAccount(params);
   }
 
@@ -161,11 +79,7 @@ export class AuthAccountService {
     return this.recoveryOperations.validatePasswordResetToken(rawTokenInput);
   }
 
-  async resetPasswordWithToken(params: {
-    token: string;
-    newPassword: string;
-    confirmPassword: string;
-  }) {
+  async resetPasswordWithToken(params: ResetPasswordWithTokenInput) {
     return this.recoveryOperations.resetPasswordWithToken(params);
   }
 

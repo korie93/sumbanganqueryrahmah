@@ -16,31 +16,15 @@ import {
   handleFailedPasswordAttempt,
   invalidateUserSessions,
   requiresTwoFactor,
-  sendActivationEmailOperation,
-  sendPasswordResetEmailOperation,
   verifyTwoFactorSecretCode,
 } from "./auth-account-authentication-utils";
 import {
   AuthAccountError,
 } from "./auth-account-types";
-
-type LoginInput = {
-  username: string;
-  password: string;
-  fingerprint?: string | null;
-  browserName: string;
-  pcName?: string | null;
-  ipAddress?: string | null;
-};
-
-type TwoFactorLoginInput = {
-  userId: string;
-  code: string;
-  fingerprint?: string | null;
-  browserName: string;
-  pcName?: string | null;
-  ipAddress?: string | null;
-};
+import type {
+  LoginInput,
+  TwoFactorLoginInput,
+} from "./auth-account-service-shared";
 
 type AuthAccountAuthenticationDeps = {
   storage: AuthAccountAuthenticationStorage;
