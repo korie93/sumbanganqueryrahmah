@@ -1,25 +1,20 @@
 import { Suspense, lazy, useEffect, useMemo, useState, type UIEvent } from "react";
-import { Eye, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { FileText } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { GeneralSearchMobileResultsList } from "@/pages/general-search/GeneralSearchMobileResultsList";
+import { GeneralSearchResultsPagination } from "@/pages/general-search/GeneralSearchResultsPagination";
+import { GeneralSearchResultsToolbar } from "@/pages/general-search/GeneralSearchResultsToolbar";
 import type { SearchResultRow } from "@/pages/general-search/types";
-import { getCellDisplayText, getPriorityRank, highlightMatch } from "@/pages/general-search/utils";
+import {
+  buildGeneralSearchPaginationItems,
+  buildGeneralSearchResultsRange,
+  buildGeneralSearchVirtualRowsState,
+} from "@/pages/general-search/general-search-results-utils";
+import { highlightMatch } from "@/pages/general-search/utils";
 
 const GeneralSearchDesktopResultsTable = lazy(() =>
   import("@/pages/general-search/GeneralSearchDesktopResultsTable").then((module) => ({
     default: module.GeneralSearchDesktopResultsTable,
-  })),
-);
-const GeneralSearchExportMenu = lazy(() =>
-  import("@/pages/general-search/GeneralSearchExportMenu").then((module) => ({
-    default: module.GeneralSearchExportMenu,
   })),
 );
 
@@ -75,89 +70,54 @@ export function GeneralSearchResults({
     setTableScrollTop(0);
   }, [currentPage, results, resultsPerPage]);
 
-  const enableVirtualRows = isLowSpecMode && results.length > 40;
-  const rowHeightPx = 52;
-  const viewportHeightPx = 540;
-  const overscanRows = 8;
-  const virtualStartRow = enableVirtualRows
-    ? Math.max(0, Math.floor(tableScrollTop / rowHeightPx) - overscanRows)
-    : 0;
-  const virtualVisibleRows = enableVirtualRows
-    ? Math.ceil(viewportHeightPx / rowHeightPx) + overscanRows * 2
-    : results.length;
-  const virtualEndRow = enableVirtualRows
-    ? Math.min(results.length, virtualStartRow + virtualVisibleRows)
-    : results.length;
-  const virtualRows = enableVirtualRows
-    ? results.slice(virtualStartRow, virtualEndRow)
-    : results;
-  const topSpacerHeight = enableVirtualRows ? virtualStartRow * rowHeightPx : 0;
-  const bottomSpacerHeight = enableVirtualRows ? Math.max(0, (results.length - virtualEndRow) * rowHeightPx) : 0;
-  const totalPages = Math.ceil(totalResults / resultsPerPage);
-  const rangeStart = totalResults > 0 ? (currentPage - 1) * resultsPerPage + 1 : 0;
-  const rangeEnd = Math.min(currentPage * resultsPerPage, totalResults);
-  const mobileSummaryChips = useMemo(() => {
-    if (advancedMode) {
-      return activeFilterSummaries;
-    }
-    const trimmedQuery = query.trim();
-    return trimmedQuery ? [`Keyword • ${trimmedQuery}`] : [];
-  }, [activeFilterSummaries, advancedMode, query]);
-
-  const pageButtons = useMemo(
+  const {
+    bottomSpacerHeight,
+    enableVirtualRows,
+    topSpacerHeight,
+    virtualEndRow,
+    virtualStartRow,
+  } = useMemo(
     () =>
-      Array.from({ length: totalPages }).map((_, index) => {
-        const pageNumber = index + 1;
-        const isVisible =
-          pageNumber === 1 ||
-          pageNumber === totalPages ||
-          (pageNumber >= currentPage - 1 && pageNumber <= currentPage + 1);
-
-        if (!isVisible) {
-          if (pageNumber === currentPage - 2) {
-            return <span key={pageNumber} className="text-muted-foreground">...</span>;
-          }
-          return null;
-        }
-
-        return (
-          <Button
-            key={pageNumber}
-            variant={currentPage === pageNumber ? "default" : "outline"}
-            size="sm"
-            onClick={() => onPageChange(pageNumber)}
-            disabled={loading}
-            className="w-8"
-            data-testid={`button-page-${pageNumber}`}
-          >
-            {pageNumber}
-          </Button>
-        );
-      }),
-    [currentPage, loading, onPageChange, totalPages],
+      buildGeneralSearchVirtualRowsState(
+        results.length,
+        isLowSpecMode,
+        tableScrollTop,
+      ),
+    [isLowSpecMode, results.length, tableScrollTop],
+  );
+  const { rangeEnd, rangeStart, totalPages } = useMemo(
+    () =>
+      buildGeneralSearchResultsRange(
+        currentPage,
+        resultsPerPage,
+        totalResults,
+      ),
+    [currentPage, resultsPerPage, totalResults],
+  );
+  const pageItems = useMemo(
+    () => buildGeneralSearchPaginationItems(currentPage, totalPages),
+    [currentPage, totalPages],
+  );
+  const virtualRows = useMemo(
+    () =>
+      enableVirtualRows
+        ? results.slice(virtualStartRow, virtualEndRow)
+        : results,
+    [enableVirtualRows, results, virtualEndRow, virtualStartRow],
   );
 
   const renderCellValue = (safeText: string) =>
     advancedMode || isLowSpecMode ? safeText : highlightMatch(safeText, query);
 
-  const getRowHeadersWithContent = (row: SearchResultRow) => {
-    const populatedHeaders = headers.filter((header) => {
-      const safeText = getCellDisplayText(row?.[header]).trim();
-      return safeText !== "" && safeText !== "-";
-    });
-
-    return populatedHeaders.length > 0 ? populatedHeaders : headers;
-  };
-
   if (results.length === 0) {
     return (
       <div className="glass-wrapper p-6">
-        <div className="text-center py-12">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-            <FileText className="w-8 h-8 text-muted-foreground" />
+        <div className="py-12 text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+            <FileText className="h-8 w-8 text-muted-foreground" />
           </div>
-          <p className="text-foreground font-medium mb-2">No results found</p>
-          <p className="text-sm text-muted-foreground mb-4">
+          <p className="mb-2 font-medium text-foreground">No results found</p>
+          <p className="mb-4 text-sm text-muted-foreground">
             {advancedMode
               ? "Try changing your filters, use different operators, or check if data has been imported."
               : "Try different keywords or check your spelling. Make sure data has been imported first."}
@@ -177,215 +137,38 @@ export function GeneralSearchResults({
   }
 
   const handleDesktopTableScroll = enableVirtualRows
-    ? (event: UIEvent<HTMLDivElement>) => setTableScrollTop(event.currentTarget.scrollTop)
+    ? (event: UIEvent<HTMLDivElement>) =>
+        setTableScrollTop(event.currentTarget.scrollTop)
     : undefined;
 
   return (
     <div className="glass-wrapper p-4 sm:p-6" data-floating-ai-avoid="true">
-      <div className={`mb-4 gap-3 ${isMobile ? "space-y-3" : "flex flex-wrap items-center justify-between"}`}>
-        <div className="min-w-0 space-y-3">
-          <p className="text-foreground font-medium">
-            {totalResults} result{totalResults === 1 ? "" : "s"} found
-          </p>
-          {advancedMode ? (
-            <p className="text-sm text-muted-foreground">
-              {filtersCount} active filters with {logic} logic
-            </p>
-          ) : null}
-          {isMobile && mobileSummaryChips.length > 0 ? (
-            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-              {mobileSummaryChips.slice(0, 5).map((summary) => (
-                <div
-                  key={summary}
-                  className="shrink-0 rounded-full border border-border/60 bg-muted/30 px-3 py-1 text-xs text-foreground"
-                >
-                  {summary}
-                </div>
-              ))}
-              {mobileSummaryChips.length > 5 ? (
-                <div className="shrink-0 rounded-full border border-border/60 bg-background px-3 py-1 text-xs text-muted-foreground">
-                  +{mobileSummaryChips.length - 5} more
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-        {isMobile ? (
-          <details className="rounded-2xl border border-border/60 bg-background/70">
-            <summary className="cursor-pointer list-none px-3 py-3 text-sm font-medium text-foreground">
-              Result tools
-            </summary>
-            <div className="space-y-3 border-t border-border/60 px-3 pb-3 pt-3">
-              <div className="grid grid-cols-1 gap-2 text-sm text-muted-foreground">
-                <span>Rows per page</span>
-                <Select value={String(resultsPerPage)} onValueChange={(value) => onRowsPerPageChange(Number(value))}>
-                  <SelectTrigger className="h-10 w-full" data-testid="select-rows-per-page">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pageSizeOptions.map((size) => (
-                      <SelectItem key={size} value={String(size)}>
-                        {size}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {canExport ? (
-                <Suspense
-                  fallback={
-                    <Button variant="outline" size="sm" disabled className="w-full">
-                      Export
-                    </Button>
-                  }
-                >
-                  <GeneralSearchExportMenu
-                    exportingPdf={exportingPdf}
-                    totalResults={totalResults}
-                    visibleResultsCount={results.length}
-                    onExportCsv={onExportCsv}
-                    onExportPdf={onExportPdf}
-                  />
-                </Suspense>
-              ) : null}
-            </div>
-          </details>
-        ) : (
-          <div className="flex items-center flex-wrap gap-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Rows per page</span>
-              <Select value={String(resultsPerPage)} onValueChange={(value) => onRowsPerPageChange(Number(value))}>
-                <SelectTrigger className="w-[110px]" data-testid="select-rows-per-page">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {pageSizeOptions.map((size) => (
-                    <SelectItem key={size} value={String(size)}>
-                      {size}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {canExport ? (
-              <Suspense
-                fallback={
-                  <Button variant="outline" size="sm" disabled className="w-full sm:w-auto">
-                    Export
-                  </Button>
-                }
-              >
-                <GeneralSearchExportMenu
-                  exportingPdf={exportingPdf}
-                  totalResults={totalResults}
-                  visibleResultsCount={results.length}
-                  onExportCsv={onExportCsv}
-                  onExportPdf={onExportPdf}
-                />
-              </Suspense>
-            ) : null}
-          </div>
-        )}
-      </div>
+      <GeneralSearchResultsToolbar
+        activeFilterSummaries={activeFilterSummaries}
+        advancedMode={advancedMode}
+        canExport={canExport}
+        exportingPdf={exportingPdf}
+        filtersCount={filtersCount}
+        isMobile={isMobile}
+        logic={logic}
+        onExportCsv={onExportCsv}
+        onExportPdf={onExportPdf}
+        onRowsPerPageChange={onRowsPerPageChange}
+        pageSizeOptions={pageSizeOptions}
+        query={query}
+        resultsLength={results.length}
+        resultsPerPage={resultsPerPage}
+        totalResults={totalResults}
+      />
 
       {isMobile ? (
-        <div className="space-y-3">
-          {results.map((row, rowIndex) => {
-            const resultNumber = rangeStart + rowIndex;
-            const populatedHeaders = getRowHeadersWithContent(row);
-            const headlineHeader = populatedHeaders[0];
-            const subheadlineHeader = populatedHeaders[1];
-            const visibleDetailHeaders = populatedHeaders.slice(2, 5);
-            const overflowHeaders = populatedHeaders.slice(5);
-            const headlineValue = headlineHeader ? getCellDisplayText(row?.[headlineHeader]) : "-";
-            const subheadlineValue = subheadlineHeader ? getCellDisplayText(row?.[subheadlineHeader]) : "";
-
-            return (
-              <article
-                key={`mobile-result-${resultNumber}`}
-                className="rounded-2xl border border-border/60 bg-background/80 p-3 shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 space-y-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                      Result {resultNumber}
-                    </p>
-                    <div className="break-words text-base font-semibold text-foreground">
-                      {renderCellValue(headlineValue)}
-                    </div>
-                    {subheadlineHeader && subheadlineValue && subheadlineValue !== "-" ? (
-                      <p className="break-words text-sm text-muted-foreground">
-                        <span className="font-medium text-foreground">{subheadlineHeader}:</span>{" "}
-                        {renderCellValue(subheadlineValue)}
-                      </p>
-                    ) : null}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onRecordSelect(row)}
-                    className="h-10 shrink-0 px-3"
-                    data-testid={`button-view-${rowIndex}`}
-                  >
-                    <Eye className="mr-2 h-4 w-4" />
-                    View
-                  </Button>
-                </div>
-
-                {visibleDetailHeaders.length > 0 ? (
-                  <dl className="mt-3 space-y-2">
-                    {visibleDetailHeaders.map((header) => {
-                      const safeText = getCellDisplayText(row?.[header]);
-                      return (
-                        <div
-                          key={`${resultNumber}-${header}`}
-                          className="rounded-xl border border-border/50 bg-muted/30 px-3 py-2"
-                        >
-                          <dt className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                            {header}
-                          </dt>
-                          <dd
-                            className={`mt-1 break-words text-sm text-foreground ${
-                              getPriorityRank(header) <= 2 ? "font-semibold" : ""
-                            }`}
-                          >
-                            {renderCellValue(safeText)}
-                          </dd>
-                        </div>
-                      );
-                    })}
-                  </dl>
-                ) : null}
-
-                {overflowHeaders.length > 0 ? (
-                  <details className="mt-3 rounded-xl border border-border/50 bg-background/70">
-                    <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-primary">
-                      Show {overflowHeaders.length} more field{overflowHeaders.length === 1 ? "" : "s"}
-                    </summary>
-                    <dl className="space-y-2 border-t border-border/50 px-3 py-3">
-                      {overflowHeaders.map((header) => {
-                        const safeText = getCellDisplayText(row?.[header]);
-                        return (
-                          <div
-                            key={`${resultNumber}-${header}-extra`}
-                            className="rounded-lg border border-border/40 bg-muted/20 px-3 py-2"
-                          >
-                            <dt className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                              {header}
-                            </dt>
-                            <dd className="mt-1 break-words text-sm text-foreground">
-                              {renderCellValue(safeText)}
-                            </dd>
-                          </div>
-                        );
-                      })}
-                    </dl>
-                  </details>
-                ) : null}
-              </article>
-            );
-          })}
-        </div>
+        <GeneralSearchMobileResultsList
+          headers={headers}
+          onRecordSelect={onRecordSelect}
+          rangeStart={rangeStart}
+          renderCellValue={renderCellValue}
+          results={results}
+        />
       ) : (
         <Suspense
           fallback={
@@ -408,63 +191,18 @@ export function GeneralSearchResults({
         </Suspense>
       )}
 
-      <div className={`mt-4 gap-3 ${isMobile ? "space-y-3" : "flex flex-wrap items-center justify-between"}`}>
-        <p className="text-sm text-muted-foreground">
-          Showing {rangeStart} - {rangeEnd} of {totalResults} results
-        </p>
-
-        {totalResults > resultsPerPage ? (
-          isMobile ? (
-            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onPageChange(currentPage - 1)}
-                disabled={currentPage === 1 || loading}
-                className="h-10 w-full"
-                data-testid="button-prev-page"
-              >
-                Previous
-              </Button>
-              <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-center text-sm font-medium text-foreground">
-                Page {currentPage} / {totalPages}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onPageChange(currentPage + 1)}
-                disabled={currentPage >= totalPages || loading}
-                className="h-10 w-full"
-                data-testid="button-next-page"
-              >
-                Next
-              </Button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onPageChange(currentPage - 1)}
-                disabled={currentPage === 1 || loading}
-                data-testid="button-prev-page"
-              >
-                Previous
-              </Button>
-              <div className="flex items-center gap-1">{pageButtons}</div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onPageChange(currentPage + 1)}
-                disabled={currentPage >= totalPages || loading}
-                data-testid="button-next-page"
-              >
-                Next
-              </Button>
-            </div>
-          )
-        ) : null}
-      </div>
+      <GeneralSearchResultsPagination
+        currentPage={currentPage}
+        isMobile={isMobile}
+        loading={loading}
+        onPageChange={onPageChange}
+        pageItems={pageItems}
+        rangeEnd={rangeEnd}
+        rangeStart={rangeStart}
+        resultsPerPage={resultsPerPage}
+        totalPages={totalPages}
+        totalResults={totalResults}
+      />
     </div>
   );
 }

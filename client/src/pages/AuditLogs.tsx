@@ -1,29 +1,10 @@
-import { Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy } from "react";
 import { Download, FileText, Loader2, RefreshCw } from "lucide-react";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { getAuditLogs, getAuditLogStats, cleanupAuditLogs } from "@/lib/api";
-import { getStoredRole } from "@/lib/auth-session";
-import { useToast } from "@/hooks/use-toast";
 import { AuditLogsFiltersPanel } from "@/pages/audit-logs/AuditLogsFiltersPanel";
-import type { AuditLogRecord, AuditLogsResponse, AuditLogStats } from "@/pages/audit-logs/types";
-import {
-  getAuditDateRange,
-  getLogsToDeleteCount,
-} from "@/pages/audit-logs/utils";
-import { resolveAuditLogsExportBlockReason } from "@/pages/audit-logs/export-guards";
-
-let auditLogsExportModulePromise: Promise<typeof import("@/pages/audit-logs/audit-logs-export")> | null = null;
-
-function loadAuditLogsExportModule() {
-  if (!auditLogsExportModulePromise) {
-    auditLogsExportModulePromise = import("@/pages/audit-logs/audit-logs-export");
-  }
-
-  return auditLogsExportModulePromise;
-}
+import { useAuditLogsPageState } from "@/pages/audit-logs/useAuditLogsPageState";
 
 const AuditLogsCleanupPanel = lazy(() =>
   import("@/pages/audit-logs/AuditLogsCleanupPanel").then((module) => ({
@@ -54,232 +35,50 @@ function AuditLogsRecordsFallback() {
 }
 
 export default function AuditLogs() {
-  const isMobile = useIsMobile();
-  const currentRole = getStoredRole();
-  const initialMobileViewport = typeof window !== "undefined" && window.innerWidth < 768;
-
-  const canCleanupLogs = currentRole === "superuser";
-  const [logs, setLogs] = useState<AuditLogRecord[]>([]);
-  const [stats, setStats] = useState<AuditLogStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [recordsOpen, setRecordsOpen] = useState(true);
-  const [cleanupOpen, setCleanupOpen] = useState(() => !initialMobileViewport);
-  const [searchText, setSearchText] = useState("");
-  const [performedByFilter, setPerformedByFilter] = useState("");
-  const [targetUserFilter, setTargetUserFilter] = useState("");
-  const [actionFilter, setActionFilter] = useState("all");
-  const [datePreset, setDatePreset] = useState("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [cleanupDays, setCleanupDays] = useState("30");
-  const [cleanupDialogOpen, setCleanupDialogOpen] = useState(false);
-  const [cleanupLoading, setCleanupLoading] = useState(false);
-  const [exportingPdf, setExportingPdf] = useState(false);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    pageSize: 20,
-    total: 0,
-    totalPages: 1,
-  });
-  const [refreshNonce, setRefreshNonce] = useState(0);
-  const exportInFlightRef = useRef(false);
-  const wasMobileRef = useRef(initialMobileViewport);
-  const { toast } = useToast();
-  const deferredSearchText = useDeferredValue(searchText.trim());
-
-  useEffect(() => {
-    if (isMobile === wasMobileRef.current) return;
-
-    if (isMobile) {
-      setFiltersOpen(false);
-      setCleanupOpen(false);
-      setRecordsOpen(true);
-    } else {
-      setCleanupOpen(true);
-      setRecordsOpen(true);
-    }
-
-    wasMobileRef.current = isMobile;
-  }, [isMobile]);
-
-  const fetchStats = useCallback(async () => {
-    try {
-      const response = await getAuditLogStats();
-      setStats(response);
-    } catch (error) {
-      console.error("Failed to fetch audit log stats:", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      setLoading(true);
-      try {
-        const dateRange = getAuditDateRange(datePreset, dateFrom, dateTo);
-        const response = await getAuditLogs({
-          page,
-          pageSize,
-          action: actionFilter === "all" ? undefined : actionFilter,
-          performedBy: performedByFilter.trim() || undefined,
-          targetUser: targetUserFilter.trim() || undefined,
-          search: deferredSearchText || undefined,
-          dateFrom: dateRange.from ? dateRange.from.toISOString() : undefined,
-          dateTo: dateRange.to ? dateRange.to.toISOString() : undefined,
-          sortBy: "newest",
-        }) as AuditLogsResponse;
-        if (cancelled) return;
-
-        const items = Array.isArray(response?.logs) ? response.logs : [];
-        setLogs(items);
-        setPagination({
-          page: Math.max(1, Number(response?.pagination?.page || page)),
-          pageSize: Math.max(1, Number(response?.pagination?.pageSize || pageSize)),
-          total: Math.max(0, Number(response?.pagination?.total || items.length)),
-          totalPages: Math.max(1, Number(response?.pagination?.totalPages || 1)),
-        });
-      } catch (error) {
-        if (cancelled) return;
-        console.error("Failed to fetch audit logs:", error);
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    actionFilter,
-    dateFrom,
-    datePreset,
-    dateTo,
-    deferredSearchText,
+  const {
+    isMobile,
+    filtersOpen,
+    setFiltersOpen,
+    recordsOpen,
+    setRecordsOpen,
+    cleanupOpen,
+    setCleanupOpen,
+    logs,
+    stats,
+    loading,
     page,
-    pageSize,
+    setPage,
+    pagination,
+    searchText,
     performedByFilter,
-    refreshNonce,
     targetUserFilter,
-  ]);
-
-  useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
-
-  const filteredLogs = logs;
-
-  const clearAllFilters = useCallback(() => {
-    setSearchText("");
-    setPerformedByFilter("");
-    setTargetUserFilter("");
-    setActionFilter("all");
-    setDatePreset("all");
-    setDateFrom("");
-    setDateTo("");
-    setPage(1);
-  }, []);
-
-  const hasActiveFilters =
-    Boolean(searchText) ||
-    Boolean(performedByFilter) ||
-    Boolean(targetUserFilter) ||
-    actionFilter !== "all" ||
-    datePreset !== "all";
-
-  useEffect(() => {
-    if (page > pagination.totalPages) {
-      setPage(pagination.totalPages);
-    }
-  }, [page, pagination.totalPages]);
-
-  const logsToDeleteCount = useMemo(() => getLogsToDeleteCount(stats, cleanupDays), [cleanupDays, stats]);
-
-  const handleCleanup = async () => {
-    const days = Number.parseInt(cleanupDays, 10);
-    if (Number.isNaN(days) || days < 1) {
-      toast({
-        title: "Invalid Input",
-        description: "Please enter a valid number of days.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setCleanupLoading(true);
-    try {
-      const response = await cleanupAuditLogs(days);
-      toast({
-        title: "Cleanup Complete",
-        description: `Deleted ${response.deletedCount} audit log entries older than ${days} days.`,
-      });
-      setCleanupDialogOpen(false);
-      setPage(1);
-      setRefreshNonce((value) => value + 1);
-      await fetchStats();
-    } catch (error: unknown) {
-      toast({
-        title: "Cleanup Failed",
-        description: error instanceof Error ? error.message : "Failed to cleanup audit logs.",
-        variant: "destructive",
-      });
-    } finally {
-      setCleanupLoading(false);
-    }
-  };
-
-  const handleExportPdf = async () => {
-    const blockReason = resolveAuditLogsExportBlockReason({
-      logsLength: filteredLogs.length,
-      exportingPdf,
-    });
-    if (blockReason === "busy" || exportInFlightRef.current) {
-      return;
-    }
-    if (blockReason === "no_data") {
-      return;
-    }
-
-    exportInFlightRef.current = true;
-    setExportingPdf(true);
-    try {
-      const { exportAuditLogsToPdf } = await loadAuditLogsExportModule();
-      await exportAuditLogsToPdf(filteredLogs);
-    } catch (error: unknown) {
-      console.error("Failed to export PDF:", error);
-      toast({
-        title: "Export Failed",
-        description: error instanceof Error ? error.message : "Failed to export PDF",
-        variant: "destructive",
-      });
-    } finally {
-      exportInFlightRef.current = false;
-      setExportingPdf(false);
-    }
-  };
-
-  const handleExportCsv = async () => {
-    if (filteredLogs.length === 0) {
-      return;
-    }
-
-    try {
-      const { exportAuditLogsToCsv } = await loadAuditLogsExportModule();
-      exportAuditLogsToCsv(filteredLogs);
-    } catch (error: unknown) {
-      console.error("Failed to export CSV:", error);
-      toast({
-        title: "Export Failed",
-        description: error instanceof Error ? error.message : "Failed to export CSV",
-        variant: "destructive",
-      });
-    }
-  };
+    actionFilter,
+    datePreset,
+    dateFrom,
+    dateTo,
+    hasActiveFilters,
+    clearAllFilters,
+    refreshNow,
+    setSearchText,
+    setPerformedByFilter,
+    setTargetUserFilter,
+    setActionFilter,
+    setDatePreset,
+    setDateFrom,
+    setDateTo,
+    handlePageSizeChange,
+    canCleanupLogs,
+    cleanupDays,
+    setCleanupDays,
+    cleanupDialogOpen,
+    setCleanupDialogOpen,
+    cleanupLoading,
+    logsToDeleteCount,
+    exportingPdf,
+    handleCleanup,
+    handleExportPdf,
+    handleExportCsv,
+  } = useAuditLogsPageState();
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -315,11 +114,11 @@ export default function AuditLogs() {
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                disabled={loading || filteredLogs.length === 0 || exportingPdf}
+                disabled={loading || logs.length === 0 || exportingPdf}
                 className="w-full"
                 data-testid="button-export-logs"
               >
-                {exportingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+                {exportingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                 Export
               </Button>
             </PopoverTrigger>
@@ -332,17 +131,17 @@ export default function AuditLogs() {
                   disabled={exportingPdf}
                   data-testid="button-export-csv"
                 >
-                  <Download className="w-4 h-4 mr-2" />
+                  <Download className="mr-2 h-4 w-4" />
                   Export CSV
                 </Button>
                 <Button
                   variant="ghost"
                   className="w-full justify-start"
-                  onClick={handleExportPdf}
+                  onClick={() => void handleExportPdf()}
                   disabled={exportingPdf}
                   data-testid="button-export-pdf"
                 >
-                  <FileText className="w-4 h-4 mr-2" />
+                  <FileText className="mr-2 h-4 w-4" />
                   Export PDF
                 </Button>
               </div>
@@ -350,12 +149,12 @@ export default function AuditLogs() {
           </Popover>
           <Button
             variant="outline"
-            onClick={() => setRefreshNonce((value) => value + 1)}
+            onClick={refreshNow}
             disabled={loading}
             className="w-full"
             data-testid="button-refresh-logs"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
         </div>
@@ -368,40 +167,15 @@ export default function AuditLogs() {
         dateTo={dateTo}
         filtersOpen={filtersOpen}
         hasActiveFilters={hasActiveFilters}
-        onActionFilterChange={(value) => {
-          setActionFilter(value);
-          setPage(1);
-        }}
+        onActionFilterChange={setActionFilter}
         onClearFilters={clearAllFilters}
-        onDateFromChange={(value) => {
-          setDateFrom(value);
-          setPage(1);
-        }}
-        onDatePresetChange={(value) => {
-          setDatePreset(value);
-          if (value !== "custom") {
-            setDateFrom("");
-            setDateTo("");
-          }
-          setPage(1);
-        }}
-        onDateToChange={(value) => {
-          setDateTo(value);
-          setPage(1);
-        }}
+        onDateFromChange={setDateFrom}
+        onDatePresetChange={setDatePreset}
+        onDateToChange={setDateTo}
         onFiltersOpenChange={setFiltersOpen}
-        onPerformedByFilterChange={(value) => {
-          setPerformedByFilter(value);
-          setPage(1);
-        }}
-        onSearchTextChange={(value) => {
-          setSearchText(value);
-          setPage(1);
-        }}
-        onTargetUserFilterChange={(value) => {
-          setTargetUserFilter(value);
-          setPage(1);
-        }}
+        onPerformedByFilterChange={setPerformedByFilter}
+        onSearchTextChange={setSearchText}
+        onTargetUserFilterChange={setTargetUserFilter}
         performedByFilter={performedByFilter}
         searchText={searchText}
         targetUserFilter={targetUserFilter}
@@ -420,7 +194,7 @@ export default function AuditLogs() {
             onCleanupDaysChange={setCleanupDays}
             onCleanupDialogOpenChange={setCleanupDialogOpen}
             onCleanupOpenChange={setCleanupOpen}
-            onConfirmCleanup={handleCleanup}
+            onConfirmCleanup={() => void handleCleanup()}
             stats={stats}
           />
         </Suspense>
@@ -428,7 +202,7 @@ export default function AuditLogs() {
 
       <Suspense fallback={<AuditLogsRecordsFallback />}>
         <AuditLogsRecordsList
-          filteredLogs={filteredLogs}
+          filteredLogs={logs}
           loading={loading}
           onClearFilters={clearAllFilters}
           onRecordsOpenChange={setRecordsOpen}
@@ -445,10 +219,7 @@ export default function AuditLogs() {
         totalItems={pagination.total}
         itemLabel="audit logs"
         onPageChange={setPage}
-        onPageSizeChange={(nextPageSize) => {
-          setPageSize(nextPageSize);
-          setPage(1);
-        }}
+        onPageSizeChange={handlePageSizeChange}
       />
     </div>
   );

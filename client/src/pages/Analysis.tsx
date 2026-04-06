@@ -1,5 +1,15 @@
-import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowLeft, BarChart3, FileStack, Plane, RefreshCw, RotateCcw, Shield, Users } from "lucide-react";
+import { Suspense, lazy } from "react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  BarChart3,
+  FileStack,
+  Plane,
+  RefreshCw,
+  RotateCcw,
+  Shield,
+  Users,
+} from "lucide-react";
 import {
   OperationalMetric,
   OperationalPage,
@@ -9,18 +19,14 @@ import {
 } from "@/components/layout/OperationalPage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { analyzeAll, analyzeImport } from "@/lib/api";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useToast } from "@/hooks/use-toast";
 import { AnalysisCategoryCard } from "@/pages/analysis/AnalysisCategoryCard";
 import { AnalysisChartsSkeleton } from "@/pages/analysis/AnalysisChartsSkeleton";
 import { AnalysisLoadingSkeleton } from "@/pages/analysis/AnalysisLoadingSkeleton";
-import {
-  buildAnalysisHeaderDescription,
-  buildAnalysisSnapshotItems,
-} from "@/pages/analysis/analysis-shell-utils";
-import type { AllAnalysisResult, AnalysisData, AnalysisMode, AnalysisProps, SingleAnalysisResult } from "@/pages/analysis/types";
-import { getCategoryBarData, getGenderPieData, getPaginatedItems, TABLE_PAGE_SIZE } from "@/pages/analysis/utils";
+import { useAnalysisDataState } from "@/pages/analysis/useAnalysisDataState";
+import { useAnalysisDisplayState } from "@/pages/analysis/useAnalysisDisplayState";
+import { useDeferredAnalysisSectionMount } from "@/pages/analysis/useDeferredAnalysisSectionMount";
+import type { AnalysisProps } from "@/pages/analysis/types";
 
 const AnalysisCharts = lazy(() =>
   import("@/pages/analysis/AnalysisCharts").then((module) => ({ default: module.AnalysisCharts })),
@@ -51,99 +57,21 @@ function AnalysisSectionFallback({ label }: { label: string }) {
   );
 }
 
-type DeferredAnalysisSectionOptions = {
-  enabled: boolean;
-  rootMargin?: string;
-  timeoutMs?: number;
-};
-
-function useDeferredAnalysisSectionMount({
-  enabled,
-  rootMargin = "320px 0px",
-  timeoutMs = 1400,
-}: DeferredAnalysisSectionOptions) {
-  const triggerRef = useRef<HTMLDivElement | null>(null);
-  const [shouldRender, setShouldRender] = useState(() => !enabled);
-
-  useEffect(() => {
-    if (!enabled) {
-      setShouldRender(true);
-      return;
-    }
-
-    if (shouldRender) {
-      return;
-    }
-
-    let cancelled = false;
-    let observer: IntersectionObserver | null = null;
-    let timeoutHandle: number | null = null;
-
-    const markReady = () => {
-      if (cancelled) {
-        return;
-      }
-
-      startTransition(() => {
-        setShouldRender(true);
-      });
-    };
-
-    if (typeof window.IntersectionObserver === "function" && triggerRef.current) {
-      observer = new window.IntersectionObserver(
-        (entries) => {
-          if (!entries.some((entry) => entry.isIntersecting)) {
-            return;
-          }
-
-          observer?.disconnect();
-          observer = null;
-          markReady();
-        },
-        {
-          rootMargin,
-        },
-      );
-      observer.observe(triggerRef.current);
-    } else {
-      timeoutHandle = window.setTimeout(markReady, timeoutMs);
-    }
-
-    return () => {
-      cancelled = true;
-      observer?.disconnect();
-      observer = null;
-      if (timeoutHandle !== null) {
-        window.clearTimeout(timeoutHandle);
-      }
-    };
-  }, [enabled, rootMargin, shouldRender, timeoutMs]);
-
-  return { shouldRender, triggerRef };
-}
-
-function isAbortError(error: unknown) {
-  return error instanceof DOMException && error.name === "AbortError";
-}
-
-export default function Analysis({ onNavigate }: AnalysisProps) {
+export default function Analysis(props: AnalysisProps) {
+  const { onNavigate } = props;
   const isMobile = useIsMobile();
   const shouldDeferSecondaryMobileSections =
     isMobile || (typeof window !== "undefined" && window.innerWidth < 768);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [mode, setMode] = useState<AnalysisMode>("single");
-  const [singleResult, setSingleResult] = useState<SingleAnalysisResult | null>(null);
-  const [allResult, setAllResult] = useState<AllAnalysisResult | null>(null);
-  const [importName, setImportName] = useState("");
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
-  const [copiedItems, setCopiedItems] = useState<Record<string, boolean>>({});
-  const [duplicatesOpen, setDuplicatesOpen] = useState(true);
-  const [filesListOpen, setFilesListOpen] = useState(true);
-  const [tablePages, setTablePages] = useState<Record<string, number>>({});
-  const copyTimersRef = useRef<number[]>([]);
-  const analysisAbortControllerRef = useRef<AbortController | null>(null);
-  const analysisRequestIdRef = useRef(0);
+
+  const dataState = useAnalysisDataState(props);
+  const displayState = useAnalysisDisplayState({
+    allResult: dataState.allResult,
+    analysis: dataState.analysis,
+    importName: dataState.importName,
+    mode: dataState.mode,
+    singleResult: dataState.singleResult,
+    totalRows: dataState.totalRows,
+  });
   const chartsSection = useDeferredAnalysisSectionMount({
     enabled: shouldDeferSecondaryMobileSections,
     rootMargin: "220px 0px",
@@ -154,211 +82,28 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
     rootMargin: "420px 0px",
     timeoutMs: 1500,
   });
-  const { toast } = useToast();
-
-  const toggleSection = useCallback((key: string) => {
-    setExpandedSections((previous) => ({ ...previous, [key]: !previous[key] }));
-  }, []);
-
-  const setPage = useCallback((key: string, page: number, totalItems: number) => {
-    const maxPage = Math.max(0, Math.ceil(totalItems / TABLE_PAGE_SIZE) - 1);
-    const nextPage = Math.max(0, Math.min(maxPage, page));
-    setTablePages((previous) => {
-      if (previous[key] === nextPage) return previous;
-      return { ...previous, [key]: nextPage };
-    });
-  }, []);
-
-  const fetchAllAnalysis = useCallback(async () => {
-    analysisAbortControllerRef.current?.abort();
-    const controller = new AbortController();
-    analysisAbortControllerRef.current = controller;
-    const requestId = ++analysisRequestIdRef.current;
-    setLoading(true);
-    setError("");
-    setMode("all");
-    try {
-      const data = await analyzeAll({ signal: controller.signal });
-      if (requestId !== analysisRequestIdRef.current) {
-        return;
-      }
-      if (data.totalImports === 0) {
-        setError("No saved files to analyze. Please import a file first.");
-      } else {
-        setAllResult(data);
-      }
-    } catch (fetchError: unknown) {
-      if (isAbortError(fetchError) || requestId !== analysisRequestIdRef.current) {
-        return;
-      }
-      setError(fetchError instanceof Error ? fetchError.message : "Failed to analyze data.");
-    } finally {
-      if (requestId === analysisRequestIdRef.current) {
-        setLoading(false);
-      }
-    }
-  }, []);
-
-  const fetchSingleAnalysis = useCallback(async () => {
-    const importId = localStorage.getItem("analysisImportId");
-    const name = localStorage.getItem("analysisImportName") || "Data";
-    setImportName(name);
-
-    if (!importId) {
-      await fetchAllAnalysis();
-      return;
-    }
-
-    analysisAbortControllerRef.current?.abort();
-    const controller = new AbortController();
-    analysisAbortControllerRef.current = controller;
-    const requestId = ++analysisRequestIdRef.current;
-    setLoading(true);
-    setError("");
-    setMode("single");
-    try {
-      const data = await analyzeImport(importId, { signal: controller.signal });
-      if (requestId !== analysisRequestIdRef.current) {
-        return;
-      }
-      setSingleResult(data);
-    } catch (fetchError: unknown) {
-      if (isAbortError(fetchError) || requestId !== analysisRequestIdRef.current) {
-        return;
-      }
-      setError(fetchError instanceof Error ? fetchError.message : "Failed to analyze data.");
-    } finally {
-      if (requestId === analysisRequestIdRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [fetchAllAnalysis]);
-
-  useEffect(() => {
-    void fetchSingleAnalysis();
-  }, [fetchSingleAnalysis]);
-
-  useEffect(() => {
-    return () => {
-      analysisAbortControllerRef.current?.abort();
-      copyTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
-      copyTimersRef.current = [];
-    };
-  }, []);
-
-  const markCopied = useCallback((key: string) => {
-    setCopiedItems((previous) => ({ ...previous, [key]: true }));
-    const timerId = window.setTimeout(() => {
-      setCopiedItems((previous) => ({ ...previous, [key]: false }));
-      copyTimersRef.current = copyTimersRef.current.filter((id) => id !== timerId);
-    }, 2000);
-    copyTimersRef.current.push(timerId);
-  }, []);
-
-  const copyToClipboard = useCallback((text: string, itemKey?: string) => {
-    void navigator.clipboard.writeText(text);
-    if (itemKey) {
-      markCopied(itemKey);
-    }
-    toast({
-      title: "Copied",
-      description: "Text has been copied to clipboard.",
-    });
-  }, [markCopied, toast]);
-
-  const copyAllToClipboard = useCallback((items: string[], sectionKey: string) => {
-    void navigator.clipboard.writeText(items.join("\n"));
-    markCopied(`all-${sectionKey}`);
-    toast({
-      title: "Copied",
-      description: `${items.length} items have been copied to clipboard.`,
-    });
-  }, [markCopied, toast]);
-
-  const handleReset = useCallback(() => {
-    localStorage.removeItem("analysisImportId");
-    localStorage.removeItem("analysisImportName");
-    void fetchAllAnalysis();
-  }, [fetchAllAnalysis]);
-
-  const analysis: AnalysisData | null = useMemo(() => {
-    if (mode === "single" && singleResult) return singleResult.analysis;
-    if (mode === "all" && allResult) return allResult.analysis;
-    return null;
-  }, [allResult, mode, singleResult]);
-
-  const totalRows = useMemo(() => {
-    if (mode === "single" && singleResult) return singleResult.totalRows;
-    if (mode === "all" && allResult) return allResult.totalRows;
-    return 0;
-  }, [allResult, mode, singleResult]);
-
-  const genderPieData = useMemo(() => getGenderPieData(analysis), [analysis]);
-  const categoryBarData = useMemo(() => getCategoryBarData(analysis), [analysis]);
-  const filesPaged = useMemo(
-    () => getPaginatedItems("files-list", allResult?.imports || [], tablePages),
-    [allResult?.imports, tablePages],
-  );
-  const duplicatesPaged = useMemo(
-    () => getPaginatedItems("duplicates-list", analysis?.duplicates.items || [], tablePages),
-    [analysis?.duplicates.items, tablePages],
-  );
-  const specialIdPagedSections = useMemo(
-    () => ({
-      polis: getPaginatedItems("polis", analysis?.noPolis.samples || [], tablePages),
-      tentera: getPaginatedItems("tentera", analysis?.noTentera.samples || [], tablePages),
-      passportMY: getPaginatedItems("passportMY", analysis?.passportMY.samples || [], tablePages),
-      passportLN: getPaginatedItems(
-        "passportLN",
-        analysis?.passportLuarNegara.samples || [],
-        tablePages,
-      ),
-    }),
-    [
-      analysis?.noPolis.samples,
-      analysis?.noTentera.samples,
-      analysis?.passportLuarNegara.samples,
-      analysis?.passportMY.samples,
-      tablePages,
-    ],
-  );
-  const headerDescription = useMemo(
-    () => buildAnalysisHeaderDescription({ importName, mode }),
-    [importName, mode],
-  );
-  const snapshotItems = useMemo(
-    () =>
-      buildAnalysisSnapshotItems({
-        allResult,
-        analysis,
-        mode,
-        singleResult,
-        totalRows,
-      }),
-    [allResult, analysis, mode, singleResult, totalRows],
-  );
 
   return (
     <OperationalPage width="content">
       <OperationalPageHeader
         title={<span data-testid="text-analysis-title">Data Analysis</span>}
         eyebrow="Insights"
-        description={headerDescription}
+        description={displayState.headerDescription}
         badge={
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary" className="rounded-full px-3 py-1">
-              {mode === "all" ? "All Files" : "Single File"}
+              {dataState.mode === "all" ? "All Files" : "Single File"}
             </Badge>
-            {mode === "all" && allResult ? (
+            {dataState.mode === "all" && dataState.allResult ? (
               <Badge variant="outline" className="rounded-full px-3 py-1" data-testid="badge-total-files">
                 <FileStack className="mr-1.5 h-3 w-3" />
-                {allResult.totalImports} files
+                {dataState.allResult.totalImports} files
               </Badge>
             ) : null}
-            {analysis ? (
+            {dataState.analysis ? (
               <Badge variant="outline" className="rounded-full px-3 py-1">
                 <BarChart3 className="mr-1.5 h-3 w-3" />
-                {totalRows.toLocaleString()} rows
+                {dataState.totalRows.toLocaleString()} rows
               </Badge>
             ) : null}
           </div>
@@ -367,29 +112,32 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
           <>
             <Button
               variant="outline"
-              onClick={() => onNavigate("saved")}
+              onClick={dataState.handleBackToSaved}
               data-testid="button-back"
               className={isMobile ? "w-full" : "w-full sm:w-auto"}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Saved
             </Button>
-            {mode === "single" ? (
-              <Button variant="outline" onClick={handleReset} data-testid="button-reset" className={isMobile ? "w-full" : "w-full sm:w-auto"}>
+            {dataState.mode === "single" ? (
+              <Button
+                variant="outline"
+                onClick={dataState.handleReset}
+                data-testid="button-reset"
+                className={isMobile ? "w-full" : "w-full sm:w-auto"}
+              >
                 <RotateCcw className="w-4 h-4 mr-2" />
                 Reset (View All)
               </Button>
             ) : null}
             <Button
               variant="outline"
-              onClick={() => {
-                void (mode === "single" ? fetchSingleAnalysis() : fetchAllAnalysis());
-              }}
-              disabled={loading}
+              onClick={dataState.handleRefresh}
+              disabled={dataState.loading}
               data-testid="button-refresh"
               className={isMobile ? "w-full" : "w-full sm:w-auto"}
             >
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-4 h-4 mr-2 ${dataState.loading ? "animate-spin" : ""}`} />
               Refresh
             </Button>
           </>
@@ -398,11 +146,10 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
       />
 
       <div className="space-y-4 sm:space-y-6">
-
-        {error ? (
+        {dataState.error ? (
           <OperationalSectionCard
             title="Analysis unavailable"
-            description={error}
+            description={dataState.error}
             className="border-destructive/30 bg-background/90"
             contentClassName="flex flex-col items-center gap-4 py-6 text-center"
           >
@@ -413,9 +160,9 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
           </OperationalSectionCard>
         ) : null}
 
-        {loading ? <AnalysisLoadingSkeleton /> : null}
+        {dataState.loading ? <AnalysisLoadingSkeleton /> : null}
 
-        {!loading && !error && analysis ? (
+        {!dataState.loading && !dataState.error && dataState.analysis ? (
           <>
             <OperationalSectionCard
               title="Quick Snapshot"
@@ -423,7 +170,7 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
               contentClassName="space-y-0"
             >
               <OperationalSummaryStrip className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {snapshotItems.map((item) => (
+                {displayState.snapshotItems.map((item) => (
                   <OperationalMetric
                     key={item.label}
                     label={item.label}
@@ -438,7 +185,10 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
             <div ref={chartsSection.triggerRef}>
               {chartsSection.shouldRender ? (
                 <Suspense fallback={<AnalysisChartsSkeleton />}>
-                  <AnalysisCharts categoryBarData={categoryBarData} genderPieData={genderPieData} />
+                  <AnalysisCharts
+                    categoryBarData={displayState.categoryBarData}
+                    genderPieData={displayState.genderPieData}
+                  />
                 </Suspense>
               ) : (
                 <AnalysisChartsSkeleton />
@@ -450,86 +200,124 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
                 <>
                   <h2 className="text-lg font-semibold text-foreground mb-4">ID Type Detection</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                    <AnalysisCategoryCard title="IC Male" icon={Users} category={analysis.icLelaki} colorClass="text-blue-500" onCopySample={copyToClipboard} />
-                    <AnalysisCategoryCard title="IC Female" icon={Users} category={analysis.icPerempuan} colorClass="text-pink-500" onCopySample={copyToClipboard} />
-                    <AnalysisCategoryCard title="Police No." icon={Shield} category={analysis.noPolis} colorClass="text-yellow-600" onCopySample={copyToClipboard} />
-                    <AnalysisCategoryCard title="Military No." icon={Shield} category={analysis.noTentera} colorClass="text-green-600" onCopySample={copyToClipboard} />
-                    <AnalysisCategoryCard title="Passport Malaysia" icon={Plane} category={analysis.passportMY} colorClass="text-purple-500" onCopySample={copyToClipboard} />
-                    <AnalysisCategoryCard title="Foreign Passport" icon={Plane} category={analysis.passportLuarNegara} colorClass="text-orange-500" onCopySample={copyToClipboard} />
+                    <AnalysisCategoryCard
+                      title="IC Male"
+                      icon={Users}
+                      category={dataState.analysis.icLelaki}
+                      colorClass="text-blue-500"
+                      onCopySample={displayState.copyToClipboard}
+                    />
+                    <AnalysisCategoryCard
+                      title="IC Female"
+                      icon={Users}
+                      category={dataState.analysis.icPerempuan}
+                      colorClass="text-pink-500"
+                      onCopySample={displayState.copyToClipboard}
+                    />
+                    <AnalysisCategoryCard
+                      title="Police No."
+                      icon={Shield}
+                      category={dataState.analysis.noPolis}
+                      colorClass="text-yellow-600"
+                      onCopySample={displayState.copyToClipboard}
+                    />
+                    <AnalysisCategoryCard
+                      title="Military No."
+                      icon={Shield}
+                      category={dataState.analysis.noTentera}
+                      colorClass="text-green-600"
+                      onCopySample={displayState.copyToClipboard}
+                    />
+                    <AnalysisCategoryCard
+                      title="Passport Malaysia"
+                      icon={Plane}
+                      category={dataState.analysis.passportMY}
+                      colorClass="text-purple-500"
+                      onCopySample={displayState.copyToClipboard}
+                    />
+                    <AnalysisCategoryCard
+                      title="Foreign Passport"
+                      icon={Plane}
+                      category={dataState.analysis.passportLuarNegara}
+                      colorClass="text-orange-500"
+                      onCopySample={displayState.copyToClipboard}
+                    />
                   </div>
 
-                  {(analysis.noPolis.samples?.length > 0 ||
-                    analysis.noTentera.samples?.length > 0 ||
-                    analysis.passportMY.samples?.length > 0 ||
-                    analysis.passportLuarNegara.samples?.length > 0) ? (
+                  {(dataState.analysis.noPolis.samples?.length > 0 ||
+                    dataState.analysis.noTentera.samples?.length > 0 ||
+                    dataState.analysis.passportMY.samples?.length > 0 ||
+                    dataState.analysis.passportLuarNegara.samples?.length > 0) ? (
                     <>
-                      <h2 className="text-lg font-semibold text-foreground mb-4">Special ID List (Click to view, up to 50 samples)</h2>
+                      <h2 className="text-lg font-semibold text-foreground mb-4">
+                        Special ID List (Click to view, up to 50 samples)
+                      </h2>
                       <Suspense fallback={<AnalysisSectionFallback label="Loading special ID lists..." />}>
                         <div className="space-y-3 mb-8">
                           <AnalysisExpandableSection
-                            copiedItems={copiedItems}
-                            isExpanded={expandedSections.polis || false}
-                            items={analysis.noPolis.samples || []}
-                            onCopyAll={copyAllToClipboard}
-                            onCopyItem={copyToClipboard}
-                            onPageChange={setPage}
-                            onToggle={() => toggleSection("polis")}
-                            page={specialIdPagedSections.polis.page}
-                            pagedItems={specialIdPagedSections.polis.items}
+                            copiedItems={displayState.copiedItems}
+                            isExpanded={displayState.expandedSections.polis || false}
+                            items={dataState.analysis.noPolis.samples || []}
+                            onCopyAll={displayState.copyAllToClipboard}
+                            onCopyItem={displayState.copyToClipboard}
+                            onPageChange={displayState.setPage}
+                            onToggle={() => displayState.toggleSection("polis")}
+                            page={displayState.specialIdPagedSections.polis.page}
+                            pagedItems={displayState.specialIdPagedSections.polis.items}
                             sectionKey="polis"
-                            start={specialIdPagedSections.polis.start}
-                            totalPages={specialIdPagedSections.polis.totalPages}
+                            start={displayState.specialIdPagedSections.polis.start}
+                            totalPages={displayState.specialIdPagedSections.polis.totalPages}
                             title="Police No."
                             colorClass="text-yellow-600"
                             icon={Shield}
                           />
                           <AnalysisExpandableSection
-                            copiedItems={copiedItems}
-                            isExpanded={expandedSections.tentera || false}
-                            items={analysis.noTentera.samples || []}
-                            onCopyAll={copyAllToClipboard}
-                            onCopyItem={copyToClipboard}
-                            onPageChange={setPage}
-                            onToggle={() => toggleSection("tentera")}
-                            page={specialIdPagedSections.tentera.page}
-                            pagedItems={specialIdPagedSections.tentera.items}
+                            copiedItems={displayState.copiedItems}
+                            isExpanded={displayState.expandedSections.tentera || false}
+                            items={dataState.analysis.noTentera.samples || []}
+                            onCopyAll={displayState.copyAllToClipboard}
+                            onCopyItem={displayState.copyToClipboard}
+                            onPageChange={displayState.setPage}
+                            onToggle={() => displayState.toggleSection("tentera")}
+                            page={displayState.specialIdPagedSections.tentera.page}
+                            pagedItems={displayState.specialIdPagedSections.tentera.items}
                             sectionKey="tentera"
-                            start={specialIdPagedSections.tentera.start}
-                            totalPages={specialIdPagedSections.tentera.totalPages}
+                            start={displayState.specialIdPagedSections.tentera.start}
+                            totalPages={displayState.specialIdPagedSections.tentera.totalPages}
                             title="Military No."
                             colorClass="text-green-600"
                             icon={Shield}
                           />
                           <AnalysisExpandableSection
-                            copiedItems={copiedItems}
-                            isExpanded={expandedSections.passportMY || false}
-                            items={analysis.passportMY.samples || []}
-                            onCopyAll={copyAllToClipboard}
-                            onCopyItem={copyToClipboard}
-                            onPageChange={setPage}
-                            onToggle={() => toggleSection("passportMY")}
-                            page={specialIdPagedSections.passportMY.page}
-                            pagedItems={specialIdPagedSections.passportMY.items}
+                            copiedItems={displayState.copiedItems}
+                            isExpanded={displayState.expandedSections.passportMY || false}
+                            items={dataState.analysis.passportMY.samples || []}
+                            onCopyAll={displayState.copyAllToClipboard}
+                            onCopyItem={displayState.copyToClipboard}
+                            onPageChange={displayState.setPage}
+                            onToggle={() => displayState.toggleSection("passportMY")}
+                            page={displayState.specialIdPagedSections.passportMY.page}
+                            pagedItems={displayState.specialIdPagedSections.passportMY.items}
                             sectionKey="passportMY"
-                            start={specialIdPagedSections.passportMY.start}
-                            totalPages={specialIdPagedSections.passportMY.totalPages}
+                            start={displayState.specialIdPagedSections.passportMY.start}
+                            totalPages={displayState.specialIdPagedSections.passportMY.totalPages}
                             title="Passport Malaysia"
                             colorClass="text-purple-500"
                             icon={Plane}
                           />
                           <AnalysisExpandableSection
-                            copiedItems={copiedItems}
-                            isExpanded={expandedSections.passportLN || false}
-                            items={analysis.passportLuarNegara.samples || []}
-                            onCopyAll={copyAllToClipboard}
-                            onCopyItem={copyToClipboard}
-                            onPageChange={setPage}
-                            onToggle={() => toggleSection("passportLN")}
-                            page={specialIdPagedSections.passportLN.page}
-                            pagedItems={specialIdPagedSections.passportLN.items}
+                            copiedItems={displayState.copiedItems}
+                            isExpanded={displayState.expandedSections.passportLN || false}
+                            items={dataState.analysis.passportLuarNegara.samples || []}
+                            onCopyAll={displayState.copyAllToClipboard}
+                            onCopyItem={displayState.copyToClipboard}
+                            onPageChange={displayState.setPage}
+                            onToggle={() => displayState.toggleSection("passportLN")}
+                            page={displayState.specialIdPagedSections.passportLN.page}
+                            pagedItems={displayState.specialIdPagedSections.passportLN.items}
                             sectionKey="passportLN"
-                            start={specialIdPagedSections.passportLN.start}
-                            totalPages={specialIdPagedSections.passportLN.totalPages}
+                            start={displayState.specialIdPagedSections.passportLN.start}
+                            totalPages={displayState.specialIdPagedSections.passportLN.totalPages}
                             title="Foreign Passport"
                             colorClass="text-orange-500"
                             icon={Plane}
@@ -539,27 +327,27 @@ export default function Analysis({ onNavigate }: AnalysisProps) {
                     </>
                   ) : null}
 
-                  {mode === "all" && allResult ? (
+                  {dataState.mode === "all" && dataState.allResult ? (
                     <Suspense fallback={<AnalysisSectionFallback label="Loading analyzed files..." />}>
                       <AnalysisFilesList
-                        allResult={allResult}
-                        filesListOpen={filesListOpen}
-                        filesPaged={filesPaged}
-                        onFilesListOpenChange={setFilesListOpen}
-                        onPageChange={setPage}
+                        allResult={dataState.allResult}
+                        filesListOpen={displayState.filesListOpen}
+                        filesPaged={displayState.filesPaged}
+                        onFilesListOpenChange={displayState.setFilesListOpen}
+                        onPageChange={displayState.setPage}
                       />
                     </Suspense>
                   ) : null}
 
                   <Suspense fallback={<AnalysisSectionFallback label="Loading duplicates list..." />}>
                     <AnalysisDuplicatesPanel
-                      count={analysis.duplicates.count}
-                      duplicates={analysis.duplicates.items}
-                      duplicatesOpen={duplicatesOpen}
-                      duplicatesPaged={duplicatesPaged}
-                      onCopyDuplicate={copyToClipboard}
-                      onDuplicatesOpenChange={setDuplicatesOpen}
-                      onPageChange={setPage}
+                      count={dataState.analysis.duplicates.count}
+                      duplicates={dataState.analysis.duplicates.items}
+                      duplicatesOpen={displayState.duplicatesOpen}
+                      duplicatesPaged={displayState.duplicatesPaged}
+                      onCopyDuplicate={displayState.copyToClipboard}
+                      onDuplicatesOpenChange={displayState.setDuplicatesOpen}
+                      onPageChange={displayState.setPage}
                     />
                   </Suspense>
                 </>
