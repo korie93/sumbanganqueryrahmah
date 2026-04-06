@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Brain, PencilLine, Search, type LucideIcon } from "lucide-react";
 import { type AIChatMessage, useAIContext } from "@/context/AIContext";
 import { AI_CANCEL_EVENT, AI_RESET_EVENT, type AIChatStatus } from "@/lib/ai-chat";
 import { resolveAiErrorMessage } from "@/lib/ai-error";
 import { searchAI } from "@/lib/api";
+import {
+  AI_PAGE_MAX_RETRIES,
+  AI_PAGE_RETRY_MS,
+  appendAIPageMessage,
+  formatAIQueueBusyNotice,
+  formatAIQueuedNotice,
+  getAIPageStatusContent,
+  type AIPageStatusContent,
+} from "./ai-page-controller-utils";
 
-export interface AIPageStatusContent {
-  icon: LucideIcon;
-  text: string;
-  className: string;
-}
+export type { AIPageStatusContent } from "./ai-page-controller-utils";
 
 interface UseAIPageControllerOptions {
   timeoutMs: number;
@@ -22,9 +26,6 @@ export function useAIPageController({
   aiEnabled,
   typingIntervalMs,
 }: UseAIPageControllerOptions) {
-  const MAX_CHAT_MESSAGES = 50;
-  const RETRY_MS = 2500;
-  const MAX_RETRIES = 6;
   const { messages, isThinking, setIsThinking, setMessages, resetSession } = useAIContext();
 
   const [query, setQuery] = useState("");
@@ -89,11 +90,7 @@ export function useAIPageController({
 
   const appendMessage = useCallback(
     (message: AIChatMessage) => {
-      setMessages((previous) => {
-        const next = [...previous, message];
-        if (next.length <= MAX_CHAT_MESSAGES) return next;
-        return next.slice(next.length - MAX_CHAT_MESSAGES);
-      });
+      setMessages((previous) => appendAIPageMessage(previous, message));
     },
     [setMessages],
   );
@@ -266,11 +263,7 @@ export function useAIPageController({
               const queueSize = Number(gate.queueSize);
               const queueLimit = Number(gate.queueLimit);
               const waitMs = Number(gate.queueWaitMs || 0);
-              setGateNotice(
-                waitMs > 0
-                  ? `AI queue busy (${queueSize}/${queueLimit}). Estimated wait ${Math.max(1, Math.round(waitMs / 1000))}s.`
-                  : `AI queue busy (${queueSize}/${queueLimit}). Please retry shortly.`,
-              );
+              setGateNotice(formatAIQueueBusyNotice(queueSize, queueLimit, waitMs));
             }
           } else {
             const responseText = (await response.text()).trim();
@@ -284,14 +277,12 @@ export function useAIPageController({
         if (sessionRef.current !== sessionId) return;
 
         if (!isRetry && gateWaitMs > 0) {
-          setGateNotice(
-            `AI request queued for ${Math.max(1, Math.round(gateWaitMs / 1000))}s due to current traffic.`,
-          );
+          setGateNotice(formatAIQueuedNotice(gateWaitMs));
         }
 
         if (data?.processing) {
           setAiStatus("PROCESSING");
-          if (retryCount >= MAX_RETRIES) {
+          if (retryCount >= AI_PAGE_MAX_RETRIES) {
             appendMessage({
               role: "assistant",
               content: "Sistem masih memproses. Sila klik Send sekali lagi selepas beberapa saat.",
@@ -313,7 +304,7 @@ export function useAIPageController({
           const timerId = window.setTimeout(() => {
             retryTimersRef.current = retryTimersRef.current.filter((existingId) => existingId !== timerId);
             void sendQuery(text, true, retryCount + 1, sessionId);
-          }, RETRY_MS + retryCount * 500);
+          }, AI_PAGE_RETRY_MS + retryCount * 500);
           retryTimersRef.current.push(timerId);
           return;
         }
@@ -367,32 +358,7 @@ export function useAIPageController({
   }, [aiEnabled, query, sendQuery]);
 
   const statusContent = useMemo<AIPageStatusContent>(() => {
-    if (aiStatus === "SEARCHING") {
-      return {
-        icon: Search,
-        text: "AI sedang mencari maklumat...",
-        className: "border-blue-500/35 bg-blue-500/10 text-blue-700 dark:text-blue-300",
-      };
-    }
-    if (aiStatus === "PROCESSING") {
-      return {
-        icon: Brain,
-        text: "AI sedang memproses data...",
-        className: "border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-      };
-    }
-    if (aiStatus === "TYPING") {
-      return {
-        icon: PencilLine,
-        text: "AI sedang menaip jawapan...",
-        className: "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-      };
-    }
-    return {
-      icon: Search,
-      text: "AI idle.",
-      className: "border-border bg-muted/30 text-muted-foreground",
-    };
+    return getAIPageStatusContent(aiStatus);
   }, [aiStatus]);
 
   return {

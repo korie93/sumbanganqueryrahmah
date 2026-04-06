@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { AIChatMessage } from "@/context/AIContext";
 import type { AIChatStatus } from "@/lib/ai-chat";
-import type { AIPageStatusContent } from "@/pages/ai/useAIPageController";
+import type { AIPageStatusContent } from "@/pages/ai/ai-page-controller-utils";
 
 interface AIConversationCardProps {
   aiEnabled: boolean;
