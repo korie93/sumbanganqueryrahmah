@@ -155,6 +155,13 @@
       "when": 1775557596336,
       "tag": "0021_reviewed_system_stability_patterns",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1775580438555,
+      "tag": "0022_reviewed_settings_fk_not_null",
+      "breakpoints": true
     }
   ]
 }

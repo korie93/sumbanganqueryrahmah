@@ -17,7 +17,7 @@ export async function ensureSettingsSchema(database: SettingsBootstrapSqlExecuto
   await database.execute(sql`
     CREATE TABLE IF NOT EXISTS public.system_settings (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      category_id uuid REFERENCES public.setting_categories(id) ON DELETE CASCADE,
+      category_id uuid NOT NULL REFERENCES public.setting_categories(id) ON DELETE CASCADE,
       key text UNIQUE NOT NULL,
       label text NOT NULL,
       description text,
@@ -32,17 +32,65 @@ export async function ensureSettingsSchema(database: SettingsBootstrapSqlExecuto
   await database.execute(sql`
     CREATE TABLE IF NOT EXISTS public.setting_options (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      setting_id uuid REFERENCES public.system_settings(id) ON DELETE CASCADE,
+      setting_id uuid NOT NULL REFERENCES public.system_settings(id) ON DELETE CASCADE,
       value text NOT NULL,
       label text NOT NULL
     )
   `);
 
+  await cleanupSettingsForeignKeyOrphans(database);
+  await ensureSettingsForeignKeysNotNull(database);
   await cleanupDuplicateSettingOptions(database);
   await ensureSettingOptionsIndexes(database);
   await ensureRoleSettingPermissionsSchema(database);
   await ensureSettingVersionsSchema(database);
   await ensureFeatureFlagsSchema(database);
+}
+
+async function cleanupSettingsForeignKeyOrphans(database: SettingsBootstrapSqlExecutor) {
+  try {
+    await database.execute(sql`
+      DELETE FROM public.setting_options so
+      WHERE so.setting_id IS NULL
+        OR NOT EXISTS (
+          SELECT 1
+          FROM public.system_settings s
+          WHERE s.id = so.setting_id
+        )
+    `);
+
+    await database.execute(sql`
+      DELETE FROM public.system_settings s
+      WHERE s.category_id IS NULL
+        OR NOT EXISTS (
+          SELECT 1
+          FROM public.setting_categories c
+          WHERE c.id = s.category_id
+        )
+    `);
+  } catch (fkCleanupErr) {
+    logger.warn("settings foreign-key orphan cleanup skipped", { error: fkCleanupErr });
+  }
+}
+
+async function ensureSettingsForeignKeysNotNull(database: SettingsBootstrapSqlExecutor) {
+  try {
+    await database.execute(sql`
+      ALTER TABLE public.system_settings
+      ALTER COLUMN category_id SET NOT NULL
+    `);
+  } catch (notNullErr) {
+    logger.warn("system_settings category_id NOT NULL enforcement skipped", { error: notNullErr });
+  }
+
+  try {
+    await database.execute(sql`
+      ALTER TABLE public.setting_options
+      ALTER COLUMN setting_id SET NOT NULL
+    `);
+  } catch (notNullErr) {
+    logger.warn("setting_options setting_id NOT NULL enforcement skipped", { error: notNullErr });
+  }
 }
 
 async function cleanupDuplicateSettingOptions(database: SettingsBootstrapSqlExecutor) {
