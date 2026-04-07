@@ -33,6 +33,25 @@ test("repo hygiene flags non-placeholder SMTP password assignments", () => {
   assert.match(findings[0], /potential committed SMTP secret/i);
 });
 
+test("repo hygiene allows SMTP password env key references in code", () => {
+  const findings = findPotentialCommittedSmtpSecrets({
+    filePath: "server/config/runtime-env-schema.ts",
+    text: `
+const schema = {
+  SMTP_PASSWORD: optionalEnvString("SMTP_PASSWORD", SECRET_STRING_MAX_LENGTH),
+};
+
+const runtime = {
+  smtpPassword: readOptionalString("SMTP_PASSWORD"),
+};
+
+const diagnosticEnvNames = ["MAIL_FROM", "SMTP_USER", "SMTP_PASSWORD"];
+`,
+  });
+
+  assert.deepEqual(findings, []);
+});
+
 test("repo hygiene flags hardcoded nodemailer auth passwords", () => {
   const transportCall = "createTransport";
   const authPassKey = "pass";

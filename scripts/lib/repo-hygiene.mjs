@@ -13,6 +13,10 @@ const ALLOWED_SECRET_VALUE_PATTERNS = [
   /credential/i,
   /akaun-smtp/i,
   /smtp\.provider/i,
+  /^SMTP_PASS(?:WORD)?$/i,
+  /^process\.env\.SMTP_PASS(?:WORD)?$/i,
+  /^optionalEnvString\(\s*['"`]SMTP_PASS(?:WORD)?['"`]\s*(?:,|\))/i,
+  /^readOptionalString\(\s*['"`]SMTP_PASS(?:WORD)?['"`]\s*\)/i,
 ];
 
 function isAllowedSecretValue(rawValue) {
