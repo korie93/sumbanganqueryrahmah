@@ -10,6 +10,21 @@ export function isSavedAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
+export function readSavedErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (error && typeof error === "object") {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
+  return fallback;
+}
+
 export function mergeSavedImportPages(previous: ImportItem[], nextItems: ImportItem[]) {
   const deduped = new Map(previous.map((item) => [item.id, item]));
   for (const item of nextItems) {

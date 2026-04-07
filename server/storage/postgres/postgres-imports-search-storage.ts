@@ -7,13 +7,14 @@ import type {
 import { logger } from "../../lib/logger";
 import { PostgresAuthAccountStorage } from "./postgres-auth-account-storage";
 import { STORAGE_DEBUG_LOGS } from "./postgres-storage-core";
+import type { SearchDataRow, SearchGlobalDataRow } from "../../repositories/search.repository";
 
 export class PostgresImportsSearchStorage extends PostgresAuthAccountStorage {
   async searchGlobalDataRows(params: {
     search: string;
     limit: number;
     offset: number;
-  }): Promise<{ rows: any[]; total: number }> {
+  }): Promise<{ rows: SearchGlobalDataRow[]; total: number }> {
     return this.searchRepository.searchGlobalDataRows(params);
   }
 
@@ -69,7 +70,7 @@ export class PostgresImportsSearchStorage extends PostgresAuthAccountStorage {
     offset: number;
     columnFilters?: Array<{ column: string; operator: string; value: string }>;
     cursor?: string | null;
-  }): Promise<{ rows: any[]; total: number; nextCursorRowId: string | null }> {
+  }): Promise<{ rows: SearchDataRow[]; total: number; nextCursorRowId: string | null }> {
     const trimmedSearch = params.search && params.search.trim() ? params.search.trim() : null;
 
     if (STORAGE_DEBUG_LOGS) {

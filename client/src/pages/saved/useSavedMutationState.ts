@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { deleteImport, renameImport } from "@/lib/api";
 import type { ImportItem } from "@/pages/saved/types";
-import { isSavedAbortError } from "@/pages/saved/saved-state-utils";
+import { isSavedAbortError, readSavedErrorMessage } from "@/pages/saved/saved-state-utils";
 
 type SavedToast = (options: {
   title: string;
@@ -85,14 +85,14 @@ export function useSavedMutationState({
         description: `Name has been updated to "${trimmedName}".`,
       });
       onImportRenamed(selectedImport.id, trimmedName);
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (isSavedAbortError(error) || requestId !== mutationRequestIdRef.current || !mountedRef.current) {
         return;
       }
 
       toast({
         title: "Failed",
-        description: error?.message || "Failed to update name.",
+        description: readSavedErrorMessage(error, "Failed to update name."),
         variant: "destructive",
       });
     } finally {
@@ -136,14 +136,14 @@ export function useSavedMutationState({
       });
       onImportsRemoved([targetImport.id]);
       onSingleImportSelectionRemoved(targetImport.id);
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (isSavedAbortError(error) || requestId !== mutationRequestIdRef.current || !mountedRef.current) {
         return;
       }
 
       toast({
         title: "Failed",
-        description: error?.message || "Failed to delete data.",
+        description: readSavedErrorMessage(error, "Failed to delete data."),
         variant: "destructive",
       });
     } finally {
@@ -222,14 +222,14 @@ export function useSavedMutationState({
           variant: "destructive",
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (isSavedAbortError(error) || requestId !== mutationRequestIdRef.current || !mountedRef.current) {
         return;
       }
 
       toast({
         title: "Failed",
-        description: error?.message || "Failed to delete selected files.",
+        description: readSavedErrorMessage(error, "Failed to delete selected files."),
         variant: "destructive",
       });
     } finally {

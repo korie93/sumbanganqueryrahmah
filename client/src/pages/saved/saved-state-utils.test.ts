@@ -6,6 +6,7 @@ import {
   countSavedSelectedVisibleImports,
   mergeSavedImportPages,
   pruneSavedSelectedImportIds,
+  readSavedErrorMessage,
   toggleSavedImportSelection,
   toggleSavedVisibleImportSelection,
 } from "@/pages/saved/saved-state-utils";
@@ -77,4 +78,11 @@ test("buildSavedImportSummaryLabel reflects partial and complete import loads", 
     }),
     "18 files",
   );
+});
+
+test("readSavedErrorMessage handles unknown error shapes", () => {
+  assert.equal(readSavedErrorMessage(new Error("Delete failed"), "Fallback"), "Delete failed");
+  assert.equal(readSavedErrorMessage({ message: "Rename failed" }, "Fallback"), "Rename failed");
+  assert.equal(readSavedErrorMessage({ message: "" }, "Fallback"), "Fallback");
+  assert.equal(readSavedErrorMessage(null, "Fallback"), "Fallback");
 });

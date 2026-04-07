@@ -44,16 +44,39 @@ function normalizePlainTextErrorMessage(res: Response, text: string) {
     : normalizedText;
 }
 
+type ApiErrorPayload = Record<string, unknown> & {
+  error?: { message?: unknown };
+  message?: unknown;
+};
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseJsonObject(text: string): ApiErrorPayload | null {
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    return isObjectRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function readApiMessage(payload: ApiErrorPayload | null): string {
+  const nestedMessage = payload?.error?.message;
+  if (typeof nestedMessage === "string" && nestedMessage.trim()) {
+    return nestedMessage;
+  }
+
+  const message = payload?.message;
+  return typeof message === "string" ? message : "";
+}
+
 export async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
     const requestId = String(res.headers.get("x-request-id") || "").trim();
-    let parsed: any = null;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      parsed = null;
-    }
+    const parsed = parseJsonObject(text);
 
     if (parsed?.banned) {
       setBannedSessionFlag(true);
@@ -71,7 +94,7 @@ export async function throwIfResNotOk(res: Response) {
     }
 
     if (parsed?.forceLogout) {
-      broadcastForcedLogout(parsed?.message || parsed?.error?.message || "");
+      broadcastForcedLogout(readApiMessage(parsed));
     }
 
     if (res.status === 503) {
@@ -87,7 +110,7 @@ export async function throwIfResNotOk(res: Response) {
       }
     }
 
-    const errorMessage = parsed?.error?.message || parsed?.message || normalizePlainTextErrorMessage(res, text);
+    const errorMessage = readApiMessage(parsed) || normalizePlainTextErrorMessage(res, text);
     const normalizedPayload = parsed || { message: errorMessage };
     if (requestId && !normalizedPayload.requestId) {
       normalizedPayload.requestId = requestId;

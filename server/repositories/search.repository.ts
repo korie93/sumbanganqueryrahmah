@@ -20,6 +20,37 @@ const ALLOWED_OPERATORS = new Set([
   "isNotEmpty",
 ]);
 
+type QueryRow = Record<string, unknown>;
+
+export type SearchGlobalDataRow = {
+  id: string;
+  rowId?: string | null;
+  importId: string;
+  importName: string | null;
+  importFilename: string | null;
+  jsonDataJsonb: unknown;
+};
+
+export type SearchDataRow = {
+  id: string;
+  importId: string;
+  jsonDataJsonb: unknown;
+};
+
+type AdvancedSearchDataRow = DataRow & {
+  importName?: string | null;
+  importFilename?: string | null;
+};
+
+function getTotalFromRows(rows: unknown[]): number {
+  const firstRow = rows[0];
+  if (!firstRow || typeof firstRow !== "object") {
+    return 0;
+  }
+
+  return Number((firstRow as QueryRow).total || 0);
+}
+
 function detectValueType(value: string): "number" | "date" | "string" {
   if (!value) return "string";
   if (!Number.isNaN(Number(value))) return "number";
@@ -100,7 +131,7 @@ export class SearchRepository {
     search: string;
     limit: number;
     offset: number;
-  }): Promise<{ rows: any[]; total: number }> {
+  }): Promise<{ rows: SearchGlobalDataRow[]; total: number }> {
     const { search, limit, offset } = params;
     const searchPattern = buildLikePattern(search, "contains");
 
@@ -128,15 +159,18 @@ export class SearchRepository {
         AND dr.json_data::text ILIKE ${searchPattern} ESCAPE '\'
     `);
 
-    const rows = (rowsResult.rows || []).map((row: any) => ({
-      id: row.id,
-      importId: row.import_id,
-      importName: row.import_name,
-      importFilename: row.import_filename,
-      jsonDataJsonb: normalizeJsonPayload(row.json_data_jsonb),
-    }));
+    const rows = (rowsResult.rows || []).map((row) => {
+      const record = row as QueryRow;
+      return {
+        id: String(record.id || ""),
+        importId: String(record.import_id || ""),
+        importName: typeof record.import_name === "string" ? record.import_name : null,
+        importFilename: typeof record.import_filename === "string" ? record.import_filename : null,
+        jsonDataJsonb: normalizeJsonPayload(record.json_data_jsonb),
+      };
+    });
 
-    const total = totalResult.rows?.[0] ? Number((totalResult.rows[0] as any).total) : 0;
+    const total = getTotalFromRows(totalResult.rows || []);
     return { rows, total };
   }
 
@@ -162,7 +196,7 @@ export class SearchRepository {
     offset: number;
     columnFilters?: Array<{ column: string; operator: string; value: string }>;
     cursor?: string | null;
-  }): Promise<{ rows: any[]; total: number; nextCursorRowId: string | null }> {
+  }): Promise<{ rows: SearchDataRow[]; total: number; nextCursorRowId: string | null }> {
     const { importId, search, limit, offset } = params;
     const trimmedSearch = search && search.trim() ? search.trim() : null;
     const safeLimit = Math.min(Math.max(1, limit), MAX_SEARCH_LIMIT);
@@ -221,17 +255,20 @@ export class SearchRepository {
       WHERE ${whereClause}
     `);
 
-    const rawRows = (rowsResult.rows || []).map((row: any) => ({
-      id: row.id,
-      importId: row.importId,
-      jsonDataJsonb: normalizeJsonPayload(row.jsonDataJsonb),
-    }));
+    const rawRows = (rowsResult.rows || []).map((row) => {
+      const record = row as QueryRow;
+      return {
+        id: String(record.id || ""),
+        importId: String(record.importId || ""),
+        jsonDataJsonb: normalizeJsonPayload(record.jsonDataJsonb),
+      };
+    });
     const hasMore = rawRows.length > safeLimit;
     const items = hasMore ? rawRows.slice(0, safeLimit) : rawRows;
 
     return {
       rows: items,
-      total: totalResult.rows?.[0] ? Number((totalResult.rows[0] as any).total) : 0,
+      total: getTotalFromRows(totalResult.rows || []),
       nextCursorRowId: hasMore ? String(items[items.length - 1]?.id || "") || null : null,
     };
   }
@@ -241,7 +278,7 @@ export class SearchRepository {
     logic: "AND" | "OR",
     limit: number,
     offset: number,
-  ): Promise<{ rows: Array<DataRow & { importName?: string | null; importFilename?: string | null }>; total: number }> {
+  ): Promise<{ rows: AdvancedSearchDataRow[]; total: number }> {
     const allowedColumns = new Set(await this.getAllColumnNames());
 
     const safeFilters = filters.filter((filter) =>
@@ -288,14 +325,17 @@ export class SearchRepository {
     `);
 
     return {
-      rows: (rowsResult.rows || []).map((row: any) => ({
-        id: row.id,
-        importId: row.importId,
-        jsonDataJsonb: normalizeJsonPayload(row.jsonDataJsonb),
-        importName: row.importName,
-        importFilename: row.importFilename,
-      })) as Array<DataRow & { importName?: string | null; importFilename?: string | null }>,
-      total: totalResult.rows?.[0] ? Number((totalResult.rows[0] as any).total) : 0,
+      rows: (rowsResult.rows || []).map((row) => {
+        const record = row as QueryRow;
+        return {
+          id: String(record.id || ""),
+          importId: String(record.importId || ""),
+          jsonDataJsonb: normalizeJsonPayload(record.jsonDataJsonb),
+          importName: typeof record.importName === "string" ? record.importName : null,
+          importFilename: typeof record.importFilename === "string" ? record.importFilename : null,
+        } as AdvancedSearchDataRow;
+      }),
+      total: getTotalFromRows(totalResult.rows || []),
     };
   }
 
@@ -312,7 +352,7 @@ export class SearchRepository {
     `);
 
     return (result.rows || [])
-      .map((row: any) => String(row.column_name || "").trim())
+      .map((row) => String((row as QueryRow).column_name || "").trim())
       .filter(Boolean);
   }
 }

@@ -16,12 +16,13 @@ import {
 } from "@/lib/auth-session";
 import { generateFingerprint } from "@/lib/fingerprint";
 import { logClientError } from "@/lib/client-logger";
-import { ERROR_CODES } from "@shared/error-codes";
 import { isLockedAccountFlow, normalizeLoginIdentity } from "@/pages/login-lock-state";
 import {
   buildAuthenticatedUser,
   isAbortRequestError,
+  isLockedAccountError,
   normalizeLoginErrorMessage,
+  readErrorMessage,
   resolveAuthenticatedDefaultTab,
 } from "@/pages/login-page-utils";
 
@@ -188,20 +189,20 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
       }
 
       completeAuthenticatedSession(response, { fingerprint });
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (isAbortRequestError(err) || shouldIgnoreRequest(requestId)) {
         return;
       }
 
       logClientError("Login failed:", err);
-      if (err?.code === ERROR_CODES.ACCOUNT_LOCKED || err?.locked === true) {
+      if (isLockedAccountError(err)) {
         setLockedUsername(normalizeLoginIdentity(username));
-        setLockedAccountMessage(err?.message || "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah.");
+        setLockedAccountMessage(readErrorMessage(err, "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah."));
         setError("");
         return;
       }
 
-      setError(normalizeLoginErrorMessage(err?.message || "Login failed. Please try again."));
+      setError(normalizeLoginErrorMessage(readErrorMessage(err, "Login failed. Please try again.")));
     } finally {
       finalizeRequest(requestId, controller);
     }
@@ -239,22 +240,22 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
       }
 
       completeAuthenticatedSession(response, { clearTwoFactor: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (isAbortRequestError(err) || shouldIgnoreRequest(requestId)) {
         return;
       }
 
       logClientError("Two-factor verification failed:", err);
-      if (err?.code === ERROR_CODES.ACCOUNT_LOCKED || err?.locked === true) {
+      if (isLockedAccountError(err)) {
         setTwoFactorChallengeToken("");
         setTwoFactorCode("");
         setLockedUsername(normalizeLoginIdentity(username));
-        setLockedAccountMessage(err?.message || "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah.");
+        setLockedAccountMessage(readErrorMessage(err, "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah."));
         setError("");
         return;
       }
 
-      setError(err?.message || "Pengesahan dua faktor gagal. Sila cuba lagi.");
+      setError(readErrorMessage(err, "Pengesahan dua faktor gagal. Sila cuba lagi."));
     } finally {
       finalizeRequest(requestId, controller);
     }

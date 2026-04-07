@@ -43,7 +43,7 @@ export async function getImports(options?: ImportRequestOptions) {
 export async function createImport(
   name: string,
   filename: string,
-  data: any[],
+  data: Array<Record<string, unknown>>,
   options?: ImportRequestOptions,
 ) {
   const response = await apiRequest(

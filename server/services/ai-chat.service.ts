@@ -91,7 +91,7 @@ export class AiChatService {
           timeoutMs: params.aiTimeoutMs,
         }),
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof CircuitOpenError) {
         return {
           statusCode: 503,
@@ -102,7 +102,7 @@ export class AiChatService {
         };
       }
 
-      if (error?.name === "AbortError") {
+      if (isNamedError(error, "AbortError")) {
         reply = buildAiChatQuickReply(retrievalRows);
       } else {
         throw error;
@@ -133,4 +133,8 @@ export class AiChatService {
       details: `Conversation=${conversationId}`,
     });
   }
+}
+
+function isNamedError(error: unknown, name: string): boolean {
+  return error instanceof Error && error.name === name;
 }

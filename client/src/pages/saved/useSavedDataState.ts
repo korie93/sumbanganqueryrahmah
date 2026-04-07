@@ -1,7 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { getImports } from "@/lib/api";
 import type { ImportItem } from "@/pages/saved/types";
-import { isSavedAbortError, mergeSavedImportPages } from "@/pages/saved/saved-state-utils";
+import { isSavedAbortError, mergeSavedImportPages, readSavedErrorMessage } from "@/pages/saved/saved-state-utils";
 
 type SavedFetchOptions = {
   cursor?: string | null;
@@ -65,12 +65,12 @@ export function useSavedDataState() {
         setTotalImports(nextTotal);
         setNextCursor(nextPageCursor);
         setImports((previous) => (reset ? nextItems : mergeSavedImportPages(previous, nextItems)));
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (isSavedAbortError(error) || requestId !== fetchRequestIdRef.current || !mountedRef.current) {
           return;
         }
 
-        setError(error?.message || "Failed to load data.");
+        setError(readSavedErrorMessage(error, "Failed to load data."));
         if (reset) {
           setImports([]);
           setTotalImports(0);

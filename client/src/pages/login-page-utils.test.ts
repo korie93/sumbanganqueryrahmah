@@ -3,7 +3,9 @@ import test from "node:test";
 import {
   buildAuthenticatedUser,
   isAbortRequestError,
+  isLockedAccountError,
   normalizeLoginErrorMessage,
+  readErrorMessage,
   resolveAuthenticatedDefaultTab,
 } from "./login-page-utils";
 
@@ -55,4 +57,14 @@ test("normalizeLoginErrorMessage rewrites banned-account messages", () => {
 test("isAbortRequestError detects AbortError DOMExceptions", () => {
   assert.equal(isAbortRequestError(new DOMException("Request aborted", "AbortError")), true);
   assert.equal(isAbortRequestError(new Error("Other error")), false);
+});
+
+test("login error helpers read safe fields from unknown errors", () => {
+  assert.equal(isLockedAccountError({ code: "ACCOUNT_LOCKED" }), true);
+  assert.equal(isLockedAccountError({ locked: true }), true);
+  assert.equal(isLockedAccountError({ code: "OTHER" }), false);
+
+  assert.equal(readErrorMessage(new Error("Boom"), "Fallback"), "Boom");
+  assert.equal(readErrorMessage({ message: "Plain object error" }, "Fallback"), "Plain object error");
+  assert.equal(readErrorMessage({ message: "" }, "Fallback"), "Fallback");
 });

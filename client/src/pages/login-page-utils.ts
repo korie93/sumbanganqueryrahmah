@@ -47,3 +47,27 @@ export function normalizeLoginErrorMessage(message: string): string {
 export function isAbortRequestError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }
+
+export function isLockedAccountError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const errorRecord = error as { code?: unknown; locked?: unknown };
+  return errorRecord.code === "ACCOUNT_LOCKED" || errorRecord.locked === true;
+}
+
+export function readErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (error && typeof error === "object") {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
+  return fallback;
+}
