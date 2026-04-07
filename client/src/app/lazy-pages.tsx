@@ -20,3 +20,4 @@ export const MaintenanceRoutePage = lazy(() => import("@/pages/Maintenance"));
 export const SystemMonitorLayoutPage = lazy(() => import("@/pages/SystemMonitorLayout"));
 export const CollectionReportPage = lazy(() => import("@/pages/CollectionReport"));
 export const ForbiddenPage = lazy(() => import("@/pages/Forbidden"));
+export const NotFoundPage = lazy(() => import("@/pages/NotFound"));

@@ -8,6 +8,7 @@ import {
   LandingPage,
   LoginPage,
   MaintenanceRoutePage,
+  NotFoundPage,
   ResetPasswordPage,
 } from "@/app/lazy-pages";
 import { PageSpinner } from "@/app/PageSpinner";
@@ -90,6 +91,18 @@ function AppContent() {
 
     if (currentPage === "reset-password") {
       return renderRoutePage("reset-password", <ResetPasswordPage />);
+    }
+
+    if (currentPage === "not-found") {
+      return renderRoutePage(
+        "not-found",
+        (
+          <NotFoundPage
+            onNavigateHome={() => handlePublicNavigate("home")}
+            onLoginClick={() => handlePublicNavigate("login")}
+          />
+        ),
+      );
     }
 
     return renderRoutePage("login", <LoginPage onLoginSuccess={handleLoginSuccess} />);

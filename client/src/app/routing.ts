@@ -103,6 +103,9 @@ export function resolveRouteFromLocation(pathname: string, search: string): Reso
   if (normalizedPath === "/403") {
     return { page: "forbidden" };
   }
+  if (normalizedPath === "/404") {
+    return { page: "not-found" };
+  }
 
   return null;
 }
@@ -123,6 +126,7 @@ export function buildPathForPage(page: string, monitorSection: MonitorSection = 
   if (page === "reset-password") return "/reset-password";
   if (page === "change-password") return "/change-password";
   if (page === "forbidden") return "/403";
+  if (page === "not-found") return "/404";
   if (page === "monitor") return `/monitor?section=${monitorSection}`;
   return "/";
 }

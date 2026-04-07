@@ -16,6 +16,7 @@ const ROUTE_LABELS: Record<string, string> = {
   login: "Login",
   maintenance: "Maintenance Mode",
   monitor: "System Monitor",
+  "not-found": "Not Found",
   saved: "Saved Imports",
   settings: "Settings",
   viewer: "Viewer",

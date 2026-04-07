@@ -9,11 +9,14 @@ import {
 test("resolveRouteFromLocation supports landing and login routes", () => {
   assert.deepEqual(resolveRouteFromLocation("/", ""), { page: "home" });
   assert.deepEqual(resolveRouteFromLocation("/login", ""), { page: "login" });
+  assert.deepEqual(resolveRouteFromLocation("/404", ""), { page: "not-found" });
+  assert.equal(resolveRouteFromLocation("/missing-page", ""), null);
 });
 
 test("buildPathForPage returns stable public paths", () => {
   assert.equal(buildPathForPage("home"), "/");
   assert.equal(buildPathForPage("login"), "/login");
+  assert.equal(buildPathForPage("not-found"), "/404");
 });
 
 test("isPublicAuthRoutePage identifies logged-out auth routes only", () => {

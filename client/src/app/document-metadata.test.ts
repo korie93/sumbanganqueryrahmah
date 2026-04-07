@@ -37,3 +37,15 @@ test("resolveDocumentMetadata returns monitor section metadata", () => {
   assert.equal(metadata.title, "Analysis | SQR System");
   assert.equal(metadata.robots, "noindex,nofollow,noarchive");
 });
+
+test("resolveDocumentMetadata returns noindex metadata for not found pages", () => {
+  const metadata = resolveDocumentMetadata({
+    currentPage: "not-found",
+    systemName: "SQR System",
+    user: null,
+  });
+
+  assert.equal(metadata.title, "Halaman Tidak Dijumpai | SQR System");
+  assert.match(metadata.description, /tidak dijumpai/i);
+  assert.equal(metadata.robots, "noindex,nofollow,noarchive");
+});

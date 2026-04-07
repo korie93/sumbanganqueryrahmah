@@ -46,7 +46,7 @@ function resolvePublicBootstrapState(): PublicBootstrapState {
     !isBannedSessionFlagSet() && !isAnonymousChangePasswordRoute && (Boolean(savedUser) || hasAuthHintCookie);
 
   return {
-    currentPage: isAnonymousChangePasswordRoute ? "home" : (resolvedRoute?.page || "home"),
+    currentPage: isAnonymousChangePasswordRoute ? "home" : (resolvedRoute?.page || "not-found"),
     monitorSection: resolvedRoute?.monitorSection || "monitor",
     isInitialized: !shouldRestoreSession,
     resolvedRoute: isAnonymousChangePasswordRoute ? { page: "home" } : resolvedRoute,
@@ -57,7 +57,7 @@ function resolvePublicBootstrapState(): PublicBootstrapState {
 function resolveAuthenticatedEntryPage(route: ResolvedRoute | null, user: User) {
   const savedPage = localStorage.getItem("activeTab") || localStorage.getItem("lastPage");
 
-  if (route && !isPublicAuthRoutePage(route.page)) {
+  if (route && route.page !== "not-found" && !isPublicAuthRoutePage(route.page)) {
     return {
       currentPage: route.page,
       monitorSection: route.monitorSection || "monitor",

@@ -118,6 +118,13 @@ export function resolveDocumentMetadata({
           "Sistem sedang berada dalam mod penyelenggaraan untuk memastikan kestabilan operasi dan keselamatan data.",
         robots: NOINDEX_ROBOTS,
       };
+    case "not-found":
+      return {
+        title: buildTitle(resolvedSystemName, "Halaman Tidak Dijumpai"),
+        description:
+          "Halaman yang diminta tidak dijumpai. Semak semula pautan atau kembali ke halaman utama SQR System.",
+        robots: NOINDEX_ROBOTS,
+      };
     case "monitor":
       return {
         title: buildTitle(

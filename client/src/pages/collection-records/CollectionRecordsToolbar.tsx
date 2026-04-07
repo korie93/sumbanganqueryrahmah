@@ -5,6 +5,7 @@ import {
   OperationalSummaryStrip,
 } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
+import { buildCollectionRecordsPaginationControlsState } from "@/pages/collection-records/collection-records-toolbar-utils";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 const CollectionRecordsPurgeSummaryCard = lazy(() =>
@@ -75,6 +76,11 @@ export function CollectionRecordsToolbar({
   onNextPage,
 }: CollectionRecordsToolbarProps) {
   const exportBusy = exportingExcel || exportingPdf;
+  const paginationControls = buildCollectionRecordsPaginationControlsState({
+    hasNextPage,
+    hasPreviousPage,
+    loadingRecords,
+  });
 
   return (
     <>
@@ -121,9 +127,12 @@ export function CollectionRecordsToolbar({
       <div
         className="flex flex-col gap-3 rounded-md border border-border/60 bg-background/50 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
         data-floating-ai-avoid="true"
+        aria-busy={paginationControls.paginationBusy}
       >
         <p className="text-xs text-muted-foreground">
-          Showing {pagedStart}-{pagedEnd} of {totalRecords} records
+          {paginationControls.paginationBusy
+            ? "Updating records..."
+            : `Showing ${pagedStart}-${pagedEnd} of ${totalRecords} records`}
         </p>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
           <label className="sr-only" htmlFor="collection-records-page-size">
@@ -133,19 +142,32 @@ export function CollectionRecordsToolbar({
             id="collection-records-page-size"
             value={String(tablePageSize)}
             onChange={(event) => onTablePageSizeChange(Number(event.target.value))}
+            disabled={paginationControls.pageSizeDisabled}
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm sm:w-[120px]"
           >
             <option value="50">50 / page</option>
             <option value="100">100 / page</option>
             <option value="200">200 / page</option>
           </select>
-          <Button size="sm" variant="outline" className="w-full sm:w-auto" disabled={!hasPreviousPage} onClick={onPrevPage}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full sm:w-auto"
+            disabled={paginationControls.previousDisabled}
+            onClick={onPrevPage}
+          >
             Prev
           </Button>
           <span className="text-center text-xs text-muted-foreground sm:text-left">
             Page {tablePage} / {totalPages}
           </span>
-          <Button size="sm" variant="outline" className="w-full sm:w-auto" disabled={!hasNextPage} onClick={onNextPage}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full sm:w-auto"
+            disabled={paginationControls.nextDisabled}
+            onClick={onNextPage}
+          >
             Next
           </Button>
         </div>
