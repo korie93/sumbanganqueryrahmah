@@ -41,9 +41,6 @@ export function useSettingsManagedUserAccountLifecycleActions({
     }
 
     const nextIsBanned = !Boolean(user.isBanned);
-    if (!window.confirm(`${nextIsBanned ? "Ban" : "Unban"} ${user.username}?`)) {
-      return;
-    }
 
     try {
       await updateManagedUserStatus(normalizedId, {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { activityHeartbeat } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 import { resolveAutoLogoutReconnectDelayMs } from "@/components/auto-logout-websocket";
 import {
   getStoredActivityId,
@@ -28,6 +29,16 @@ function warnAutoLogoutDiagnostic(message: string, error?: unknown) {
   }
 
   globalThis.console?.warn?.(message, error);
+}
+
+function notifyAutoLogoutNotice(reason: unknown, fallback: string) {
+  const message = String(reason || fallback).trim() || fallback;
+  persistAuthNotice(message);
+  toast({
+    title: "Sesi Dikemaskini",
+    description: message,
+    variant: "destructive",
+  });
 }
 
 export default function AutoLogout({
@@ -313,24 +324,18 @@ export default function AutoLogout({
             const message = JSON.parse(event.data);
 
             if (message.type === "kicked") {
-              if (message.reason) {
-                persistAuthNotice(String(message.reason));
-              }
-              alert(message.reason || "Anda telah dilogout oleh pentadbir.");
+              notifyAutoLogoutNotice(message.reason, "Anda telah dilogout oleh pentadbir.");
               void runClientLogout();
             }
 
             if (message.type === "logout") {
-              if (message.reason) {
-                persistAuthNotice(String(message.reason));
-                alert(String(message.reason));
-              }
+              notifyAutoLogoutNotice(message.reason, "Sesi anda telah ditamatkan.");
               void runClientLogout();
             }
 
             if (message.type === "banned") {
               setBannedSessionFlag(true);
-              alert(message.reason || "Akaun anda telah disekat.");
+              notifyAutoLogoutNotice(message.reason, "Akaun anda telah disekat.");
               window.location.href = "/";
             }
 

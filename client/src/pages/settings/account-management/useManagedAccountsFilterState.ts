@@ -25,7 +25,9 @@ export function useManagedAccountsFilterState({
   const [searchQuery, setSearchQuery] = useState(query.search);
   const [roleFilter, setRoleFilter] = useState(query.role);
   const [statusFilter, setStatusFilter] = useState(query.status);
+  const [userToBanToggle, setUserToBanToggle] = useState<ManagedUser | null>(null);
   const [userToDelete, setUserToDelete] = useState<ManagedUser | null>(null);
+  const [userToResetPassword, setUserToResetPassword] = useState<ManagedUser | null>(null);
 
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const normalizedDeferredSearch = useMemo(
@@ -126,7 +128,9 @@ export function useManagedAccountsFilterState({
     roleFilter,
     searchQuery,
     statusFilter,
+    userToBanToggle,
     userToDelete,
+    userToResetPassword,
     clearAllFilters: () => {
       setSearchQuery("");
       setRoleFilter("all");
@@ -140,6 +144,12 @@ export function useManagedAccountsFilterState({
     },
     closeDeleteDialog: () => {
       setUserToDelete(null);
+    },
+    closeBanToggleDialog: () => {
+      setUserToBanToggle(null);
+    },
+    closeResetPasswordDialog: () => {
+      setUserToResetPassword(null);
     },
     onRoleChange: (value: string) => {
       const nextRole = normalizeManagedAccountsRoleFilter(value);
@@ -162,6 +172,12 @@ export function useManagedAccountsFilterState({
     },
     openDeleteDialog: (user: ManagedUser) => {
       setUserToDelete(user);
+    },
+    openBanToggleDialog: (user: ManagedUser) => {
+      setUserToBanToggle(user);
+    },
+    openResetPasswordDialog: (user: ManagedUser) => {
+      setUserToResetPassword(user);
     },
   };
 }

@@ -16,6 +16,7 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DashboardSummaryCards } from "@/pages/dashboard/DashboardSummaryCards";
 import { resolveDashboardExportBlockReason } from "@/pages/dashboard/export-guards";
@@ -210,8 +211,13 @@ function DashboardContent() {
     try {
       await exportDashboardToPdf(dashboardRef.current);
     } catch (error: unknown) {
+      const description = error instanceof Error ? error.message : "Unknown error. Try on desktop browser.";
       console.error("Failed to export PDF:", error instanceof Error ? error.message : error);
-      alert(`Failed to export PDF: ${error instanceof Error ? error.message : "Unknown error. Try on desktop browser."}`);
+      toast({
+        title: "Export PDF Failed",
+        description,
+        variant: "destructive",
+      });
     } finally {
       exportInFlightRef.current = false;
       if (mountedRef.current) {

@@ -1,0 +1,182 @@
+import { z } from "zod";
+
+type RuntimeEnvironmentSource = Record<string, string | undefined>;
+
+const DEFAULT_STRING_MAX_LENGTH = 4_096;
+const SECRET_STRING_MAX_LENGTH = 8_192;
+const BOOLEAN_ENV_VALUES = new Set(["1", "0", "true", "false", "yes", "no", "on", "off"]);
+const AUTH_COOKIE_SECURE_VALUES = new Set(["auto", "true", "false", "1", "0"]);
+
+function normalizeOptionalEnvString(value: unknown) {
+  if (value == null) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const normalized = value.trim();
+  return normalized ? normalized : undefined;
+}
+
+function optionalEnvString(name: string, maxLength = DEFAULT_STRING_MAX_LENGTH) {
+  return z.preprocess(
+    normalizeOptionalEnvString,
+    z
+      .string({ invalid_type_error: `${name} must be a string.` })
+      .max(maxLength, `${name} must be ${maxLength} characters or fewer.`)
+      .optional(),
+  );
+}
+
+function optionalBooleanEnv(name: string) {
+  return z.preprocess(
+    normalizeOptionalEnvString,
+    z
+      .string({ invalid_type_error: `${name} must be a boolean flag.` })
+      .transform((value) => value.toLowerCase())
+      .refine(
+        (value) => BOOLEAN_ENV_VALUES.has(value),
+        `${name} must be a boolean flag (1/0, true/false, yes/no, on/off).`,
+      )
+      .optional(),
+  );
+}
+
+function optionalAuthCookieSecureEnv() {
+  return z.preprocess(
+    normalizeOptionalEnvString,
+    z
+      .string({ invalid_type_error: "AUTH_COOKIE_SECURE must be a string." })
+      .transform((value) => value.toLowerCase())
+      .refine(
+        (value) => AUTH_COOKIE_SECURE_VALUES.has(value),
+        "AUTH_COOKIE_SECURE must be one of: auto, true, false, 1, or 0.",
+      )
+      .optional(),
+  );
+}
+
+function optionalIntEnv(name: string, options: { min?: number; max?: number } = {}) {
+  return z.preprocess(
+    normalizeOptionalEnvString,
+    z
+      .string({ invalid_type_error: `${name} must be an integer.` })
+      .regex(/^-?\d+$/, `${name} must be an integer.`)
+      .transform((value) => Number.parseInt(value, 10))
+      .refine(
+        (value) => Number.isSafeInteger(value),
+        `${name} must be a safe integer.`,
+      )
+      .refine(
+        (value) => options.min == null || value >= options.min,
+        `${name} must be at least ${options.min}.`,
+      )
+      .refine(
+        (value) => options.max == null || value <= options.max,
+        `${name} must be at most ${options.max}.`,
+      )
+      .optional(),
+  );
+}
+
+const runtimeEnvironmentSchema = z.object({
+  NODE_ENV: optionalEnvString("NODE_ENV", 64),
+  HOST: optionalEnvString("HOST", 255),
+  PORT: optionalIntEnv("PORT", { min: 1, max: 65_535 }),
+  PUBLIC_APP_URL: optionalEnvString("PUBLIC_APP_URL"),
+  DEFAULT_BODY_LIMIT: optionalEnvString("DEFAULT_BODY_LIMIT", 64),
+  IMPORT_BODY_LIMIT: optionalEnvString("IMPORT_BODY_LIMIT", 64),
+  COLLECTION_BODY_LIMIT: optionalEnvString("COLLECTION_BODY_LIMIT", 64),
+  CORS_ALLOWED_ORIGINS: optionalEnvString("CORS_ALLOWED_ORIGINS"),
+  TRUSTED_PROXIES: optionalEnvString("TRUSTED_PROXIES"),
+  ALLOW_LOCAL_DEV_CORS: optionalBooleanEnv("ALLOW_LOCAL_DEV_CORS"),
+
+  PG_HOST: optionalEnvString("PG_HOST", 255),
+  PG_PORT: optionalIntEnv("PG_PORT", { min: 1, max: 65_535 }),
+  PG_USER: optionalEnvString("PG_USER", 255),
+  PG_PASSWORD: optionalEnvString("PG_PASSWORD", SECRET_STRING_MAX_LENGTH),
+  PG_DATABASE: optionalEnvString("PG_DATABASE", 255),
+  PG_MAX_CONNECTIONS: optionalIntEnv("PG_MAX_CONNECTIONS", { min: 1, max: 50 }),
+  PG_IDLE_TIMEOUT_MS: optionalIntEnv("PG_IDLE_TIMEOUT_MS", { min: 1_000 }),
+  PG_CONNECTION_TIMEOUT_MS: optionalIntEnv("PG_CONNECTION_TIMEOUT_MS", { min: 1_000 }),
+  PG_SEARCH_PATH: optionalEnvString("PG_SEARCH_PATH", 255),
+
+  SESSION_SECRET: optionalEnvString("SESSION_SECRET", SECRET_STRING_MAX_LENGTH),
+  SESSION_SECRET_PREVIOUS: optionalEnvString("SESSION_SECRET_PREVIOUS", SECRET_STRING_MAX_LENGTH),
+  COLLECTION_NICKNAME_TEMP_PASSWORD: optionalEnvString(
+    "COLLECTION_NICKNAME_TEMP_PASSWORD",
+    SECRET_STRING_MAX_LENGTH,
+  ),
+  AUTH_COOKIE_SECURE: optionalAuthCookieSecureEnv(),
+  SEED_DEFAULT_USERS: optionalBooleanEnv("SEED_DEFAULT_USERS"),
+  LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: optionalBooleanEnv(
+    "LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED",
+  ),
+  MAIL_DEV_OUTBOX_ENABLED: optionalBooleanEnv("MAIL_DEV_OUTBOX_ENABLED"),
+
+  BACKUP_ENCRYPTION_KEY: optionalEnvString("BACKUP_ENCRYPTION_KEY", SECRET_STRING_MAX_LENGTH),
+  BACKUP_ENCRYPTION_KEYS: optionalEnvString("BACKUP_ENCRYPTION_KEYS", SECRET_STRING_MAX_LENGTH),
+  BACKUP_FEATURE_ENABLED: optionalBooleanEnv("BACKUP_FEATURE_ENABLED"),
+
+  SMTP_SERVICE: optionalEnvString("SMTP_SERVICE", 255),
+  SMTP_HOST: optionalEnvString("SMTP_HOST", 255),
+  SMTP_USER: optionalEnvString("SMTP_USER", 255),
+  SMTP_PASSWORD: optionalEnvString("SMTP_PASSWORD", SECRET_STRING_MAX_LENGTH),
+  MAIL_FROM: optionalEnvString("MAIL_FROM", 255),
+
+  OLLAMA_HOST: optionalEnvString("OLLAMA_HOST"),
+  OLLAMA_CHAT_MODEL: optionalEnvString("OLLAMA_CHAT_MODEL", 255),
+  OLLAMA_EMBED_MODEL: optionalEnvString("OLLAMA_EMBED_MODEL", 255),
+  OLLAMA_TIMEOUT_MS: optionalIntEnv("OLLAMA_TIMEOUT_MS", { min: 1_000 }),
+  AI_PRECOMPUTE_ON_START: optionalBooleanEnv("AI_PRECOMPUTE_ON_START"),
+  AI_GATE_GLOBAL_LIMIT: optionalIntEnv("AI_GATE_GLOBAL_LIMIT", { min: 1 }),
+  AI_GATE_QUEUE_LIMIT: optionalIntEnv("AI_GATE_QUEUE_LIMIT", { min: 0 }),
+  AI_GATE_QUEUE_WAIT_MS: optionalIntEnv("AI_GATE_QUEUE_WAIT_MS", { min: 1_000 }),
+  AI_GATE_USER_LIMIT: optionalIntEnv("AI_GATE_USER_LIMIT", { min: 1 }),
+  AI_GATE_ADMIN_LIMIT: optionalIntEnv("AI_GATE_ADMIN_LIMIT", { min: 1 }),
+  AI_GATE_SUPERUSER_LIMIT: optionalIntEnv("AI_GATE_SUPERUSER_LIMIT", { min: 1 }),
+  AI_LATENCY_STALE_AFTER_MS: optionalIntEnv("AI_LATENCY_STALE_AFTER_MS", { min: 5_000 }),
+  AI_LATENCY_DECAY_HALF_LIFE_MS: optionalIntEnv("AI_LATENCY_DECAY_HALF_LIFE_MS", { min: 5_000 }),
+  SQR_MAX_SEARCH_CACHE_ENTRIES: optionalIntEnv("SQR_MAX_SEARCH_CACHE_ENTRIES", { min: 10 }),
+  SQR_MAX_AI_LAST_PERSON_ENTRIES: optionalIntEnv("SQR_MAX_AI_LAST_PERSON_ENTRIES", { min: 10 }),
+  SQR_AI_LAST_PERSON_TTL_MS: optionalIntEnv("SQR_AI_LAST_PERSON_TTL_MS", { min: 60_000 }),
+  SQR_LOW_MEMORY_MODE: optionalBooleanEnv("SQR_LOW_MEMORY_MODE"),
+
+  DEFAULT_SESSION_TIMEOUT_MINUTES: optionalIntEnv("DEFAULT_SESSION_TIMEOUT_MINUTES", { min: 1 }),
+  DEFAULT_WS_IDLE_MINUTES: optionalIntEnv("DEFAULT_WS_IDLE_MINUTES", { min: 1 }),
+  DEFAULT_AI_TIMEOUT_MS: optionalIntEnv("DEFAULT_AI_TIMEOUT_MS", { min: 1_000 }),
+  DEFAULT_SEARCH_RESULT_LIMIT: optionalIntEnv("DEFAULT_SEARCH_RESULT_LIMIT", { min: 10, max: 5_000 }),
+  DEFAULT_VIEWER_ROWS_PER_PAGE: optionalIntEnv("DEFAULT_VIEWER_ROWS_PER_PAGE", { min: 10, max: 500 }),
+  MAINTENANCE_CACHE_TTL_MS: optionalIntEnv("MAINTENANCE_CACHE_TTL_MS", { min: 500 }),
+  RUNTIME_SETTINGS_CACHE_TTL_MS: optionalIntEnv("RUNTIME_SETTINGS_CACHE_TTL_MS", { min: 500 }),
+  PG_POOL_WARN_COOLDOWN_MS: optionalIntEnv("PG_POOL_WARN_COOLDOWN_MS", { min: 1_000 }),
+  BACKUP_OPERATION_TIMEOUT_MS: optionalIntEnv("BACKUP_OPERATION_TIMEOUT_MS", { min: 5_000 }),
+  IMPORT_ANALYSIS_TIMEOUT_MS: optionalIntEnv("IMPORT_ANALYSIS_TIMEOUT_MS", { min: 5_000 }),
+  COLLECTION_ROLLUP_LISTEN_RECONNECT_MS: optionalIntEnv(
+    "COLLECTION_ROLLUP_LISTEN_RECONNECT_MS",
+    { min: 1_000 },
+  ),
+
+  SQR_MAX_WORKERS: optionalIntEnv("SQR_MAX_WORKERS", { min: 1 }),
+  SQR_INITIAL_WORKERS: optionalIntEnv("SQR_INITIAL_WORKERS", { min: 1 }),
+  SQR_PREALLOCATE_MB: optionalIntEnv("SQR_PREALLOCATE_MB", { min: 0 }),
+}).passthrough();
+
+function formatRuntimeEnvIssue(issue: z.ZodIssue) {
+  const envName = issue.path.join(".") || "runtime environment";
+  return `${envName}: ${issue.message}`;
+}
+
+export function validateRuntimeEnvironmentSchema(env: RuntimeEnvironmentSource = process.env) {
+  const result = runtimeEnvironmentSchema.safeParse(env);
+  if (result.success) {
+    return;
+  }
+
+  throw new Error(
+    `Invalid runtime environment configuration: ${result.error.issues
+      .map(formatRuntimeEnvIssue)
+      .join("; ")}`,
+  );
+}

@@ -45,9 +45,6 @@ export function useSettingsManagedUserCommunicationActions({
     if (!normalizedId || resetPasswordLocksRef.current.has(normalizedId)) {
       return;
     }
-    if (!window.confirm(`Send password reset email to ${user.username}?`)) {
-      return;
-    }
 
     resetPasswordLocksRef.current.add(normalizedId);
     try {

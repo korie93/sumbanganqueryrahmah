@@ -4,6 +4,7 @@ import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 
 import { cn } from "@/lib/utils"
+import { createClientRandomUnitInterval } from "@/lib/secure-id"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -223,7 +224,7 @@ function SidebarMenuSkeleton({
   showIcon?: boolean
 }) {
   const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
+    return `${Math.floor(createClientRandomUnitInterval() * 40) + 50}%`
   }, [])
 
   return (

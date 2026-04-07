@@ -4,6 +4,7 @@ import {
   isProductionLikeEnvironment,
   isStrictLocalDevelopmentEnvironment,
 } from "./runtime-environment";
+import { validateRuntimeEnvironmentSchema } from "./runtime-env-schema";
 import { DEFAULT_IMPORT_BODY_LIMIT } from "./body-limit";
 import {
   buildEphemeralSecret,
@@ -33,6 +34,8 @@ import type {
 } from "./runtime-config-types";
 
 export type { RuntimeConfigDiagnostic, RuntimeConfigValidation } from "./runtime-config-types";
+
+validateRuntimeEnvironmentSchema();
 
 const nodeEnv = resolveNodeEnv();
 const isProduction = nodeEnv === "production";

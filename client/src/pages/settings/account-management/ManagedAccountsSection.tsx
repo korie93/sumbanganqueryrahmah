@@ -4,6 +4,7 @@ import { SideTabDataPanel } from "@/components/layout/SideTabDataPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { ManagedAccountActionDialogs } from "@/pages/settings/account-management/ManagedAccountActionDialogs";
 import { DeleteManagedAccountDialog } from "@/pages/settings/account-management/DeleteManagedAccountDialog";
 import { ManagedAccountsDesktopTable } from "@/pages/settings/account-management/ManagedAccountsDesktopTable";
 import { ManagedAccountsFiltersPanel } from "@/pages/settings/account-management/ManagedAccountsFiltersPanel";
@@ -93,10 +94,10 @@ export function ManagedAccountsSection({
             emptyMessage={filterState.emptyMessage}
             loading={loading}
             managedUsers={managedUsers}
-            onBanToggle={onBanToggle}
+            onBanToggle={filterState.openBanToggleDialog}
             onEditUser={onEditUser}
             onRequestDelete={filterState.openDeleteDialog}
-            onResetPassword={onResetPassword}
+            onResetPassword={filterState.openResetPasswordDialog}
             onResendActivation={onResendActivation}
           />
         ) : (
@@ -105,14 +106,23 @@ export function ManagedAccountsSection({
             emptyMessage={filterState.emptyMessage}
             loading={loading}
             managedUsers={managedUsers}
-            onBanToggle={onBanToggle}
+            onBanToggle={filterState.openBanToggleDialog}
             onEditUser={onEditUser}
             onRequestDelete={filterState.openDeleteDialog}
-            onResetPassword={onResetPassword}
+            onResetPassword={filterState.openResetPasswordDialog}
             onResendActivation={onResendActivation}
           />
         )}
       </SideTabDataPanel>
+
+      <ManagedAccountActionDialogs
+        banToggleUser={filterState.userToBanToggle}
+        resetPasswordUser={filterState.userToResetPassword}
+        onCloseBanToggle={filterState.closeBanToggleDialog}
+        onCloseResetPassword={filterState.closeResetPasswordDialog}
+        onConfirmBanToggle={onBanToggle}
+        onConfirmResetPassword={onResetPassword}
+      />
 
       <DeleteManagedAccountDialog
         deletingManagedUserId={deletingManagedUserId}

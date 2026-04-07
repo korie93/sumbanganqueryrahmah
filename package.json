@@ -10,6 +10,7 @@
     "verify:repo-hygiene": "node scripts/verify-repo-hygiene.mjs",
     "verify:db-schema-governance": "node scripts/verify-db-schema-governance.mjs",
     "verify:bundle-budgets": "node scripts/verify-client-bundle-budgets.mjs",
+    "audit:dependencies": "node scripts/audit-dependencies.mjs",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:generate:custom": "drizzle-kit generate --config drizzle.config.ts --custom",
