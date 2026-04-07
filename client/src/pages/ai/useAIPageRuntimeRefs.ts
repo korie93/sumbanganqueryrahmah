@@ -60,3 +60,5 @@ export function useAIPageRuntimeRefs({
     typingTimerRef,
   };
 }
+
+export type AIPageRuntimeRefs = ReturnType<typeof useAIPageRuntimeRefs>;

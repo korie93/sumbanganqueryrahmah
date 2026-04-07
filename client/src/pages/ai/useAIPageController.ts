@@ -13,6 +13,7 @@ import {
   type AIPageStatusContent,
 } from "./ai-page-controller-utils";
 import { useAIPageRuntimeRefs } from "./useAIPageRuntimeRefs";
+import { useAIPageTypingAction } from "./useAIPageTypingAction";
 
 export type { AIPageStatusContent } from "./ai-page-controller-utils";
 
@@ -137,51 +138,22 @@ export function useAIPageController({
     [clearSlowNoticeTimer],
   );
 
-  const startTyping = useCallback(
-    (text: string, sessionId: number) => {
-      stopTyping();
-      setStreamingText("");
-      setStreamingTimestamp(new Date().toISOString());
-
-      if (!text.trim()) {
-        appendMessage({
-          role: "assistant",
-          content: "Tiada cadangan AI.",
-          timestamp: new Date().toISOString(),
-        });
-        stopProcessingState();
-        return;
-      }
-
-      setIsTyping(true);
-      setAiStatus("TYPING");
-      setIsThinking(true);
-      let index = 0;
-
-      typingTimerRef.current = window.setInterval(() => {
-        if (!isMountedRef.current || sessionRef.current !== sessionId) {
-          stopTyping();
-          return;
-        }
-
-        index += 1;
-        setStreamingText(text.slice(0, index));
-
-        if (index >= text.length) {
-          stopTyping();
-          if (!isMountedRef.current || sessionRef.current !== sessionId) return;
-          setStreamingText("");
-          appendMessage({
-            role: "assistant",
-            content: text,
-            timestamp: new Date().toISOString(),
-          });
-          stopProcessingState();
-        }
-      }, typingIntervalMs);
+  const startTyping = useAIPageTypingAction({
+    appendMessage,
+    runtimeRefs: {
+      isMountedRef,
+      sessionRef,
+      stopTyping,
+      typingTimerRef,
     },
-    [appendMessage, setIsThinking, stopProcessingState, stopTyping, typingIntervalMs],
-  );
+    setAiStatus,
+    setIsThinking,
+    setIsTyping,
+    setStreamingText,
+    setStreamingTimestamp,
+    stopProcessingState,
+    typingIntervalMs,
+  });
 
   const sendQuery = useCallback(
     async (text: string, isRetry = false, retryCount = 0, activeSessionId?: number) => {

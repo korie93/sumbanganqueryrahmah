@@ -5,6 +5,11 @@ import {
   resolveReceiptPreviewKind,
   shouldRenderInlineReceiptPdfPreview,
 } from "../utils";
+import {
+  clampReceiptPreviewZoom,
+  getReceiptPreviewZoomClass,
+  resolveSelectedReceipt,
+} from "../receipt-preview-dialog-utils";
 
 test("inferReceiptMimeTypeFromName recognizes webp receipt files", () => {
   assert.equal(inferReceiptMimeTypeFromName("receipt-scan.WEBP"), "image/webp");
@@ -35,4 +40,18 @@ test("shouldRenderInlineReceiptPdfPreview disables inline PDF preview on mobile"
     }),
     true,
   );
+});
+
+test("receipt preview dialog utils clamp zoom and resolve selected receipt", () => {
+  assert.equal(clampReceiptPreviewZoom(0.1), 0.5);
+  assert.equal(clampReceiptPreviewZoom(3.5), 3);
+  assert.equal(getReceiptPreviewZoomClass(1.24), "receipt-preview-zoom-12");
+
+  const receipts = [
+    { id: "first", originalFileName: "a.pdf" },
+    { id: "second", originalFileName: "b.pdf" },
+  ] as any[];
+  assert.equal(resolveSelectedReceipt(receipts, "second")?.id, "second");
+  assert.equal(resolveSelectedReceipt(receipts, "missing")?.id, "first");
+  assert.equal(resolveSelectedReceipt([], "missing"), null);
 });
