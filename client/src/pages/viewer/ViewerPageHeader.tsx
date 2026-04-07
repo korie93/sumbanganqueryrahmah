@@ -43,7 +43,7 @@ function ViewerPageHeaderActionsFallback() {
     <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
       {Array.from({ length: 3 }).map((_, index) => (
         <div
-          key={index}
+          key={`viewer-header-action-fallback-${index}`}
           className="h-10 w-full animate-pulse rounded-md border border-border/60 bg-muted/30 sm:w-28"
         />
       ))}

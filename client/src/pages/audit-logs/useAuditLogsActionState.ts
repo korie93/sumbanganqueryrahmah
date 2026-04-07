@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { cleanupAuditLogs } from "@/lib/api";
+import { logClientError } from "@/lib/client-logger";
 import { useToast } from "@/hooks/use-toast";
 import { getLogsToDeleteCount } from "@/pages/audit-logs/utils";
 import { resolveAuditLogsExportBlockReason } from "@/pages/audit-logs/export-guards";
@@ -96,7 +97,7 @@ export function useAuditLogsActionState({
       const { exportAuditLogsToPdf } = await loadAuditLogsExportModule();
       await exportAuditLogsToPdf(logs);
     } catch (error: unknown) {
-      console.error("Failed to export PDF:", error);
+      logClientError("Failed to export audit logs PDF:", error);
       toast({
         title: "Export Failed",
         description: error instanceof Error ? error.message : "Failed to export PDF",
@@ -117,7 +118,7 @@ export function useAuditLogsActionState({
       const { exportAuditLogsToCsv } = await loadAuditLogsExportModule();
       exportAuditLogsToCsv(logs);
     } catch (error: unknown) {
-      console.error("Failed to export CSV:", error);
+      logClientError("Failed to export audit logs CSV:", error);
       toast({
         title: "Export Failed",
         description: error instanceof Error ? error.message : "Failed to export CSV",

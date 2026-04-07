@@ -83,6 +83,12 @@ export async function parseCsvFile(filePath: string): Promise<ParsedImportUpload
     input: stream,
     crlfDelay: Infinity,
   });
+  let inputStreamError: unknown = null;
+  const handleInputStreamError = (error: Error) => {
+    inputStreamError = error;
+    lineReader.close();
+  };
+  stream.once("error", handleInputStreamError);
 
   const rows: ImportRow[] = [];
   let headers: string[] = [];
@@ -107,12 +113,17 @@ export async function parseCsvFile(filePath: string): Promise<ParsedImportUpload
         rows.push(row);
       }
     }
+
+    if (inputStreamError) {
+      throw inputStreamError;
+    }
   } catch (error) {
     if (isFileAccessError(error)) {
       return createUploadFileAccessError();
     }
     throw error;
   } finally {
+    stream.off("error", handleInputStreamError);
     lineReader.close();
     stream.destroy();
   }

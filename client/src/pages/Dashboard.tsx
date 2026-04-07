@@ -14,6 +14,7 @@ import {
   getRoleDistribution,
   getTopActiveUsers,
 } from "@/lib/api";
+import { logClientError } from "@/lib/client-logger";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
@@ -212,7 +213,7 @@ function DashboardContent() {
       await exportDashboardToPdf(dashboardRef.current);
     } catch (error: unknown) {
       const description = error instanceof Error ? error.message : "Unknown error. Try on desktop browser.";
-      console.error("Failed to export PDF:", error instanceof Error ? error.message : error);
+      logClientError("Failed to export dashboard PDF:", error);
       toast({
         title: "Export PDF Failed",
         description,

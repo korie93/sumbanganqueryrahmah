@@ -55,7 +55,7 @@ export function ViewerColumnSelector({
     <div aria-hidden="true" className="max-h-48 space-y-2 overflow-y-auto">
       {Array.from({ length: Math.min(headers.length, 6) || 4 }).map((_, index) => (
         <div
-          key={index}
+          key={`viewer-column-selector-fallback-${index}`}
           className="h-6 animate-pulse rounded-md border border-border/50 bg-muted/20"
         />
       ))}

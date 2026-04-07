@@ -31,8 +31,8 @@ export function ViewerStandardTable({
               />
             </th>
             <th className="w-12 p-3 text-left font-medium text-muted-foreground">#</th>
-            {visibleHeaders.map((header, index) => (
-              <th key={index} className="whitespace-nowrap p-3 text-left font-medium text-muted-foreground">
+            {visibleHeaders.map((header) => (
+              <th key={header} className="whitespace-nowrap p-3 text-left font-medium text-muted-foreground">
                 {header}
               </th>
             ))}

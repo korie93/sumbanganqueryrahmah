@@ -101,7 +101,7 @@ test("persistAuthenticatedUser stores auth session data in sessionStorage instea
   assert.equal(local.getItem("user"), null);
 });
 
-test("getStoredAuthenticatedUser migrates legacy localStorage auth data into sessionStorage", () => {
+test("getStoredAuthenticatedUser ignores and clears legacy localStorage auth data", () => {
   const { local, session } = installStorageMocks();
   local.setItem("user", JSON.stringify(sampleUser));
   local.setItem("username", "alice");
@@ -109,11 +109,13 @@ test("getStoredAuthenticatedUser migrates legacy localStorage auth data into ses
 
   const restored = getStoredAuthenticatedUser();
 
-  assert.equal(restored?.username, "alice");
-  assert.equal(getStoredUsername(), "alice");
-  assert.equal(getStoredRole(), "admin");
-  assert.equal(session.getItem("user"), JSON.stringify(sampleUser));
+  assert.equal(restored, null);
+  assert.equal(getStoredUsername(), "");
+  assert.equal(getStoredRole(), "");
+  assert.equal(session.getItem("user"), null);
   assert.equal(local.getItem("user"), null);
+  assert.equal(local.getItem("username"), null);
+  assert.equal(local.getItem("role"), null);
 });
 
 test("auth session helpers keep activity and banned flags scoped to the browser session", () => {

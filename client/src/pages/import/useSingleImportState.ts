@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createImport } from "@/lib/api";
+import { logClientError } from "@/lib/client-logger";
 import { useToast } from "@/hooks/use-toast";
 import { parseImportPreview } from "@/pages/import/parsing";
 import {
@@ -85,7 +86,7 @@ export function useSingleImportState({
         return;
       }
       setError("Failed to read file. Please ensure the file format is correct.");
-      console.error(parseError);
+      logClientError("Failed to parse single import preview:", parseError);
     }
   }, [importUploadLimitBytes]);
 

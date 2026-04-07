@@ -23,8 +23,19 @@ type ForcedLogoutPayload = {
 
 function canUseAuthStorage() {
   return typeof window !== "undefined"
-    && typeof localStorage !== "undefined"
     && typeof sessionStorage !== "undefined";
+}
+
+function removeLegacyAuthSessionValue(key: AuthSessionStorageKey) {
+  if (typeof localStorage === "undefined") {
+    return;
+  }
+
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Ignore storage access failures during best-effort legacy cleanup.
+  }
 }
 
 function readAuthSessionValue(key: AuthSessionStorageKey): string | null {
@@ -38,12 +49,7 @@ function readAuthSessionValue(key: AuthSessionStorageKey): string | null {
       return sessionValue;
     }
 
-    const legacyValue = localStorage.getItem(key);
-    if (legacyValue !== null) {
-      sessionStorage.setItem(key, legacyValue);
-      localStorage.removeItem(key);
-      return legacyValue;
-    }
+    removeLegacyAuthSessionValue(key);
   } catch {
     return null;
   }
@@ -58,7 +64,7 @@ function writeAuthSessionValue(key: AuthSessionStorageKey, value: string) {
 
   try {
     sessionStorage.setItem(key, value);
-    localStorage.removeItem(key);
+    removeLegacyAuthSessionValue(key);
   } catch {
     // Ignore storage access failures and fall back to the active in-memory session.
   }
@@ -71,7 +77,7 @@ function removeAuthSessionValue(key: AuthSessionStorageKey) {
 
   try {
     sessionStorage.removeItem(key);
-    localStorage.removeItem(key);
+    removeLegacyAuthSessionValue(key);
   } catch {
     // Ignore storage access failures during best-effort cleanup.
   }
@@ -299,11 +305,23 @@ export function clearAuthenticatedUserStorage() {
   for (const key of AUTH_SESSION_STORAGE_KEYS) {
     removeAuthSessionValue(key);
   }
-  localStorage.removeItem("token");
-  localStorage.removeItem("activeTab");
-  localStorage.removeItem("lastPage");
-  localStorage.removeItem("selectedImportId");
-  localStorage.removeItem("selectedImportName");
-  sessionStorage.removeItem("collection_staff_nickname");
-  sessionStorage.removeItem("collection_staff_nickname_auth");
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.removeItem("token");
+      localStorage.removeItem("activeTab");
+      localStorage.removeItem("lastPage");
+      localStorage.removeItem("selectedImportId");
+      localStorage.removeItem("selectedImportName");
+    } catch {
+      // Ignore storage cleanup failures.
+    }
+  }
+  if (typeof sessionStorage !== "undefined") {
+    try {
+      sessionStorage.removeItem("collection_staff_nickname");
+      sessionStorage.removeItem("collection_staff_nickname_auth");
+    } catch {
+      // Ignore storage cleanup failures.
+    }
+  }
 }

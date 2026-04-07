@@ -65,7 +65,7 @@ function CollectionRecordsFiltersFallback() {
       <div className="space-y-3">
         {Array.from({ length: 4 }).map((_, index) => (
           <div
-            key={index}
+            key={`collection-records-mobile-filter-fallback-${index}`}
             className="h-16 animate-pulse rounded-2xl border border-border/60 bg-muted/20"
           />
         ))}
@@ -82,7 +82,7 @@ function CollectionRecordsFiltersFallback() {
       <div className="grid gap-3 xl:grid-cols-[170px_170px_minmax(260px,1fr)_190px_auto_auto]">
         {Array.from({ length: 6 }).map((_, index) => (
           <div
-            key={index}
+            key={`collection-records-desktop-filter-fallback-${index}`}
             className="h-16 animate-pulse rounded-xl border border-border/60 bg-muted/20"
           />
         ))}
@@ -97,7 +97,7 @@ function CollectionRecordsToolbarFallback() {
       <div className="grid gap-3 md:grid-cols-2">
         {Array.from({ length: 2 }).map((_, index) => (
           <div
-            key={index}
+            key={`collection-records-toolbar-fallback-${index}`}
             className="h-20 animate-pulse rounded-xl border border-border/60 bg-muted/20"
           />
         ))}

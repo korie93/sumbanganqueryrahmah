@@ -255,11 +255,11 @@ input[type="search"]::-webkit-search-cancel-button {
 }
 
 .viewport-min-height {
-  min-height: 100vh;
+  min-height: 100svh;
 }
 
 .app-shell-min-height {
-  min-height: calc(100vh - 3.5rem);
+  min-height: calc(100svh - 3.5rem);
 }
 
 @supports (height: 100dvh) {

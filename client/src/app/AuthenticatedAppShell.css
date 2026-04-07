@@ -16,7 +16,7 @@
 }
 
 .ops-page {
-  min-height: calc(100vh - 3.5rem);
+  min-height: calc(100svh - 3.5rem);
   padding: 1rem;
   background:
     radial-gradient(circle at top left, hsl(var(--primary) / 0.06), transparent 28%),

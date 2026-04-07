@@ -1,5 +1,6 @@
 import type { DataRowWithId } from "@/pages/viewer/types";
 import { toast } from "@/hooks/use-toast";
+import { logClientError } from "@/lib/client-logger";
 import { resolveViewerExportBlockReason } from "@/pages/viewer/export-guards";
 import { isAbortError } from "@/pages/viewer/page-utils";
 
@@ -87,7 +88,7 @@ export async function executeViewerExport({
       return;
     }
 
-    console.error(`Failed to export ${kind}:`, exportError);
+    logClientError(`Failed to export ${kind}:`, exportError);
     toast({
       title: `${kind} Export Failed`,
       description: exportError instanceof Error ? exportError.message : "Unknown error",

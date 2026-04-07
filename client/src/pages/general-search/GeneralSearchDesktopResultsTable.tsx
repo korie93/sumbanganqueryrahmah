@@ -27,6 +27,20 @@ export function GeneralSearchDesktopResultsTable({
   virtualRows,
   virtualStartRow,
 }: GeneralSearchDesktopResultsTableProps) {
+  const buildRowKey = (row: SearchResultRow, rowNumber: number) => {
+    const explicitId = row.id ?? row.ID ?? row.recordId ?? row.record_id;
+    if (typeof explicitId === "string" || typeof explicitId === "number") {
+      return `search-result-${explicitId}`;
+    }
+
+    const visibleFingerprint = headers
+      .slice(0, 4)
+      .map((header) => getCellDisplayText(row?.[header]))
+      .join("|");
+
+    return `search-result-${rowNumber}-${visibleFingerprint}`;
+  };
+
   return (
     <div
       className="max-h-[600px] overflow-x-auto overflow-y-auto rounded-lg border border-border scrollbar-visible"
@@ -57,8 +71,8 @@ export function GeneralSearchDesktopResultsTable({
           <tr>
             <th className="p-3 text-left font-medium text-muted-foreground">#</th>
             <th className="p-3 text-left font-medium text-muted-foreground">Action</th>
-            {headers.map((header, index) => (
-              <th key={index} className="whitespace-nowrap p-3 text-left font-medium text-muted-foreground">
+            {headers.map((header) => (
+              <th key={header} className="whitespace-nowrap p-3 text-left font-medium text-muted-foreground">
                 {header}
               </th>
             ))}
@@ -74,7 +88,7 @@ export function GeneralSearchDesktopResultsTable({
             const actualRowIndex = enableVirtualRows ? virtualStartRow + rowIndex : rowIndex;
 
             return (
-              <tr key={actualRowIndex} className="h-[52px] border-t border-border hover:bg-muted/50">
+              <tr key={buildRowKey(row, actualRowIndex)} className="h-[52px] border-t border-border hover:bg-muted/50">
                 <td className="p-3 text-muted-foreground">{actualRowIndex + 1}</td>
                 <td className="p-3">
                   <Button

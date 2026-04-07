@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, Home, RefreshCw, RotateCcw } from "lucide-react";
 import { reloadAppPreservingSingleTabLock } from "@/app/single-tab-session";
+import { logClientError } from "@/lib/client-logger";
 import {
   resolveRouteErrorDescription,
   resolveRouteErrorTitle,
@@ -37,7 +38,7 @@ export class AppRouteErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("App route render failed", {
+    logClientError("App route render failed", {
       routeKey: this.props.routeKey,
       error,
       componentStack: errorInfo.componentStack,

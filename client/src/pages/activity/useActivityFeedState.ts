@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getAllActivity, getBannedUsers, getFilteredActivity } from "@/lib/api";
+import { logClientError } from "@/lib/client-logger";
 import {
   shouldAutoRefreshVisibleActivity,
   shouldUseFilteredActivityFetch,
@@ -61,7 +62,7 @@ export function useActivityFeedState({
       if (error instanceof DOMException && error.name === "AbortError") {
         return;
       }
-      console.error("Failed to fetch activities:", error);
+      logClientError("Failed to fetch activities:", error);
     } finally {
       if (fetchControllerRef.current === controller) {
         fetchControllerRef.current = null;

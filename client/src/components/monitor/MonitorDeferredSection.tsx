@@ -25,7 +25,7 @@ export function MonitorChartsFallback() {
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           {Array.from({ length: 4 }).map((_, index) => (
             <div
-              key={index}
+              key={`monitor-chart-fallback-${index}`}
               className="h-64 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
             />
           ))}
@@ -46,7 +46,7 @@ export function MonitorInsightsFallback() {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {Array.from({ length: 3 }).map((_, index) => (
             <div
-              key={index}
+              key={`monitor-insight-fallback-${index}`}
               className="h-32 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
             />
           ))}
@@ -67,7 +67,7 @@ export function MonitorMetricsFallback() {
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
             <div
-              key={index}
+              key={`monitor-metric-fallback-${index}`}
               className="h-72 animate-pulse rounded-2xl border border-border/60 bg-background/35 backdrop-blur-sm"
             />
           ))}
@@ -91,7 +91,7 @@ export function MonitorSectionCardFallback({
         <div className="space-y-3">
           {Array.from({ length: blocks }).map((_, index) => (
             <div
-              key={index}
+              key={`monitor-section-fallback-${index}`}
               className="h-20 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
             />
           ))}
@@ -114,7 +114,7 @@ export function MonitorWebVitalsInlineFallback() {
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {Array.from({ length: 2 }).map((_, index) => (
             <div
-              key={index}
+              key={`monitor-web-vital-fallback-${index}`}
               className="h-36 animate-pulse rounded-2xl bg-slate-300/60 dark:bg-slate-800/70"
             />
           ))}

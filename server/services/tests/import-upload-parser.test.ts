@@ -104,6 +104,19 @@ test("parseImportUploadFile returns a safe error when the uploaded file cannot b
   }
 });
 
+test("parseImportUploadFile returns a safe error when a CSV stream cannot be opened", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-parser-"));
+  const filePath = path.join(tempDir, "missing.csv");
+
+  try {
+    const result = await parseImportUploadFile("missing.csv", filePath);
+    assert.equal(result.error, "Cannot access the uploaded file. Please try again.");
+    assert.deepEqual(result.rows, []);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("stripImportUploadExtension removes supported spreadsheet extensions", () => {
   assert.equal(stripImportUploadExtension("report.xlsx"), "report");
   assert.equal(stripImportUploadExtension("report.csv"), "report");

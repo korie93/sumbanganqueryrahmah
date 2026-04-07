@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { advancedSearchData, getSearchColumns, searchData } from "@/lib/api";
+import { logClientError } from "@/lib/client-logger";
 import type { FilterRow, SearchResultRow } from "@/pages/general-search/types";
 import {
   buildGeneralSearchPageSizeOptions,
@@ -117,7 +118,7 @@ export function useGeneralSearchDataState({
         return;
       }
       if (!isMountedRef.current || requestId !== columnsRequestIdRef.current) return;
-      console.error("Failed to load columns:", loadError);
+      logClientError("Failed to load general-search columns:", loadError);
     } finally {
       if (columnsAbortControllerRef.current === controller) {
         columnsAbortControllerRef.current = null;

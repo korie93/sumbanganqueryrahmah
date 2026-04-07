@@ -15,6 +15,7 @@ import {
   setStoredFingerprint,
 } from "@/lib/auth-session";
 import { generateFingerprint } from "@/lib/fingerprint";
+import { logClientError } from "@/lib/client-logger";
 import { ERROR_CODES } from "@shared/error-codes";
 import { isLockedAccountFlow, normalizeLoginIdentity } from "@/pages/login-lock-state";
 import {
@@ -192,7 +193,7 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
         return;
       }
 
-      console.error("Login failed:", err);
+      logClientError("Login failed:", err);
       if (err?.code === ERROR_CODES.ACCOUNT_LOCKED || err?.locked === true) {
         setLockedUsername(normalizeLoginIdentity(username));
         setLockedAccountMessage(err?.message || "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah.");
@@ -243,7 +244,7 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
         return;
       }
 
-      console.error("Two-factor verification failed:", err);
+      logClientError("Two-factor verification failed:", err);
       if (err?.code === ERROR_CODES.ACCOUNT_LOCKED || err?.locked === true) {
         setTwoFactorChallengeToken("");
         setTwoFactorCode("");

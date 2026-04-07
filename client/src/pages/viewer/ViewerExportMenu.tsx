@@ -96,7 +96,7 @@ export function ViewerExportMenu({
     <div aria-hidden="true" className="space-y-2">
       {Array.from({ length: 4 }).map((_, index) => (
         <div
-          key={index}
+          key={`viewer-export-option-fallback-${index}`}
           className="h-9 animate-pulse rounded-md border border-border/50 bg-muted/20"
         />
       ))}

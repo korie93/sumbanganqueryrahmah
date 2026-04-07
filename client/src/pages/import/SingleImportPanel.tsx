@@ -166,8 +166,8 @@ export function SingleImportPanel({
               <thead className="bg-muted">
                 <tr>
                   <th className="p-3 text-left font-medium text-muted-foreground">#</th>
-                  {headers.map((header, index) => (
-                    <th key={index} className="p-3 text-left font-medium text-muted-foreground">
+                  {headers.map((header) => (
+                    <th key={header} className="p-3 text-left font-medium text-muted-foreground">
                       {header}
                     </th>
                   ))}
@@ -175,10 +175,10 @@ export function SingleImportPanel({
               </thead>
               <tbody>
                 {parsedData.slice(0, 10).map((row, rowIndex) => (
-                  <tr key={rowIndex} className="border-t border-border hover:bg-muted/50">
+                  <tr key={`import-preview-row-${rowIndex}-${headers.map((header) => row[header] ?? "").join("|")}`} className="border-t border-border hover:bg-muted/50">
                     <td className="p-3 text-muted-foreground">{rowIndex + 1}</td>
-                    {headers.map((header, columnIndex) => (
-                      <td key={columnIndex} className="p-3 text-foreground">
+                    {headers.map((header) => (
+                      <td key={header} className="p-3 text-foreground">
                         {row[header] || "-"}
                       </td>
                     ))}

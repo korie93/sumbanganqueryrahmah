@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { getAuditLogs, getAuditLogStats } from "@/lib/api";
+import { logClientError } from "@/lib/client-logger";
 import {
   buildAuditLogsRequestParams,
   hasActiveAuditLogFilters,
@@ -57,7 +58,7 @@ export function useAuditLogsDataState() {
       if (!mountedRef.current || requestId !== statsRequestIdRef.current) {
         return;
       }
-      console.error("Failed to fetch audit log stats:", error);
+      logClientError("Failed to fetch audit log stats:", error);
     }
   }, []);
 
@@ -82,7 +83,7 @@ export function useAuditLogsDataState() {
         if (!mountedRef.current || requestId !== logsRequestIdRef.current) {
           return;
         }
-        console.error("Failed to fetch audit logs:", error);
+        logClientError("Failed to fetch audit logs:", error);
       } finally {
         if (mountedRef.current && requestId === logsRequestIdRef.current) {
           setLoading(false);

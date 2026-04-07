@@ -24,7 +24,7 @@ export function ViewerContentFallback() {
       <div className="grid gap-3 md:grid-cols-3">
         {Array.from({ length: 3 }).map((_, index) => (
           <div
-            key={index}
+            key={`viewer-content-card-fallback-${index}`}
             className="h-24 animate-pulse rounded-2xl border border-border/60 bg-card/70"
           />
         ))}
@@ -34,7 +34,7 @@ export function ViewerContentFallback() {
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, index) => (
             <div
-              key={index}
+              key={`viewer-content-row-fallback-${index}`}
               className="h-12 animate-pulse rounded-xl border border-border/60 bg-muted/20"
             />
           ))}

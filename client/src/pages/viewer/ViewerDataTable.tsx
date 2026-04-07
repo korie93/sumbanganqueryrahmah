@@ -82,7 +82,7 @@ export function ViewerDataTable({
       <div className="h-12 animate-pulse rounded-xl border border-border/60 bg-background/60" />
       {Array.from({ length: 3 }).map((_, index) => (
         <div
-          key={index}
+          key={`viewer-mobile-card-fallback-${index}`}
           className="h-40 animate-pulse rounded-2xl border border-border/60 bg-background/60"
         />
       ))}

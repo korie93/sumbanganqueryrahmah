@@ -6,11 +6,11 @@
 }
 
 .page-spinner-shell--fullscreen {
-  min-height: 100vh;
+  min-height: 100svh;
 }
 
 .page-spinner-shell--app {
-  min-height: calc(100vh - 3.5rem);
+  min-height: calc(100svh - 3.5rem);
 }
 
 @supports (height: 100dvh) {
@@ -43,7 +43,7 @@
 }
 
 .app-route-error-boundary--fullscreen {
-  min-height: 100vh;
+  min-height: 100svh;
 }
 
 .app-route-error-boundary__shell {
@@ -52,7 +52,7 @@
 
 .app-route-error-boundary__shell--fullscreen {
   display: flex;
-  min-height: 100vh;
+  min-height: 100svh;
   align-items: center;
   justify-content: center;
 }

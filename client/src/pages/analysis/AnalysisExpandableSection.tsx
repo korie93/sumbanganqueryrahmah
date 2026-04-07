@@ -138,7 +138,7 @@ export function AnalysisExpandableSection({
                   const itemKey = `${sectionKey}-${rowIndex}`;
                   return (
                     <div
-                      key={rowIndex}
+                      key={itemKey}
                       className="grid grid-cols-[64px_1fr_96px] items-center border-t border-border text-sm hover:bg-muted/50"
                     >
                       <div className="px-3 py-2 text-muted-foreground">{rowIndex + 1}</div>

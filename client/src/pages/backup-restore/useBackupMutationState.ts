@@ -7,6 +7,7 @@ import {
   getBackupJob,
   restoreBackupAsync,
 } from "@/lib/api";
+import { logClientError } from "@/lib/client-logger";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import type {
   BackupJobRecord,
@@ -94,7 +95,7 @@ export function useBackupMutationState({
       ]);
     },
     onError: (error) => {
-      console.error("Failed to create backup:", error);
+      logClientError("Failed to create backup:", error);
       notifyMutationError({
         title: "Backup Failed",
         error,
@@ -134,7 +135,7 @@ export function useBackupMutationState({
       await queryClient.invalidateQueries({ queryKey: ["/api/backups"] });
     },
     onError: (error) => {
-      console.error("Failed to restore backup:", error);
+      logClientError("Failed to restore backup:", error);
       notifyMutationError({
         title: "Restore Failed",
         error,
@@ -156,7 +157,7 @@ export function useBackupMutationState({
       await queryClient.invalidateQueries({ queryKey: ["/api/backups"] });
     },
     onError: (error) => {
-      console.error("Failed to delete backup:", error);
+      logClientError("Failed to delete backup:", error);
       notifyMutationError({
         title: "Delete Failed",
         error,
