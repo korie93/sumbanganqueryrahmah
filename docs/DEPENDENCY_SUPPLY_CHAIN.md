@@ -38,3 +38,22 @@ tarball there and update `package.json` and `package-lock.json` in one PR.
 
 Do not add additional external tarball dependencies without updating the audit
 gate and documenting the release rationale here.
+
+## Package Overrides
+
+`package.json` cannot contain comments, so every dependency override must be
+documented here and mirrored in `scripts/lib/dependency-audit.mjs`. The audit
+gate fails if a new override is added without a documented reason.
+
+Current overrides:
+
+| Package | Reason |
+| --- | --- |
+| `qs` | Pins patched query-string parsing behavior for transitive Express middleware until all upstream packages converge. |
+| `lodash` | Pins patched lodash template handling for transitive consumers and keeps npm audit clean across nested packages. |
+| `rollup` | Pins Rollup to a patched release used by the Vite toolchain and prevents vulnerable nested Rollup versions. |
+| `dompurify` | Pins DOMPurify sanitizer fixes for transitive HTML sanitization consumers. |
+| `esbuild` | Pins patched esbuild for dev/build tooling, including older `drizzle-kit` transitive `@esbuild-kit` packages. |
+
+When removing an override, remove its entry from this table and from the audit
+helper in the same dependency-only PR.

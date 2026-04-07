@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeDependencyAuditReport, analyzePackageLockSources } from "../lib/dependency-audit.mjs";
+import {
+  analyzeDependencyAuditReport,
+  analyzePackageLockSources,
+  analyzePackageOverrides,
+} from "../lib/dependency-audit.mjs";
 
 test("dependency audit fails the old drizzle-kit dev-only moderate chain after esbuild override", () => {
   const result = analyzeDependencyAuditReport({
@@ -93,4 +97,32 @@ test("package source audit fails unexpected external tarballs", () => {
   assert.deepEqual(result.failures, [
     "example-package resolved from external source https://example.com/example-package-1.0.0.tgz",
   ]);
+});
+
+test("package override audit requires every override to be documented", () => {
+  const result = analyzePackageOverrides({
+    overrides: {
+      qs: "^6.15.0",
+      "undocumented-package": "^1.0.0",
+    },
+  });
+
+  assert.deepEqual(result.failures, [
+    "undocumented-package override is missing a documented reason",
+  ]);
+  assert.match(result.documented.qs, /query-string/);
+});
+
+test("package override audit accepts documented override set", () => {
+  const result = analyzePackageOverrides({
+    overrides: {
+      qs: "^6.15.0",
+      lodash: "^4.17.23",
+      rollup: "^4.59.0",
+      dompurify: "^3.3.3",
+      esbuild: "^0.25.4",
+    },
+  });
+
+  assert.deepEqual(result.failures, []);
 });

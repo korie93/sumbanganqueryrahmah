@@ -37,6 +37,29 @@ function isExternalPackageSource(resolved) {
   return /^https?:\/\//i.test(resolved) && !resolved.includes("registry.npmjs.org/");
 }
 
+const documentedOverrideReasons = new Map([
+  [
+    "qs",
+    "Pins patched query-string parsing behavior for transitive Express middleware until all upstream packages converge.",
+  ],
+  [
+    "lodash",
+    "Pins patched lodash template handling for transitive consumers and keeps npm audit clean across nested packages.",
+  ],
+  [
+    "rollup",
+    "Pins Rollup to a patched release used by the Vite toolchain and prevents vulnerable nested Rollup versions.",
+  ],
+  [
+    "dompurify",
+    "Pins DOMPurify sanitizer fixes for transitive HTML sanitization consumers.",
+  ],
+  [
+    "esbuild",
+    "Pins patched esbuild for dev/build tooling, including older drizzle-kit transitive @esbuild-kit packages.",
+  ],
+]);
+
 export function analyzeDependencyAuditReport(report) {
   const vulnerabilities = Object.values(report?.vulnerabilities ?? {});
   const failures = [];
@@ -48,6 +71,24 @@ export function analyzeDependencyAuditReport(report) {
   }
 
   return { allowed: [], failures };
+}
+
+export function analyzePackageOverrides(packageJson) {
+  const overrides = packageJson?.overrides && typeof packageJson.overrides === "object"
+    ? packageJson.overrides
+    : {};
+  const failures = [];
+
+  for (const packageName of Object.keys(overrides).sort()) {
+    if (!documentedOverrideReasons.has(packageName)) {
+      failures.push(`${packageName} override is missing a documented reason`);
+    }
+  }
+
+  return {
+    documented: Object.fromEntries(documentedOverrideReasons.entries()),
+    failures,
+  };
 }
 
 export function analyzePackageLockSources(packageLock) {

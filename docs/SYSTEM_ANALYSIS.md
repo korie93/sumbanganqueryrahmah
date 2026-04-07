@@ -856,10 +856,14 @@ dependency-only PR.
   "qs": "^6.15.0",
   "lodash": "^4.17.23",
   "rollup": "^4.59.0",
-  "dompurify": "^3.3.3"
+  "dompurify": "^3.3.3",
+  "esbuild": "^0.25.4"
 }
 ```
-These override vulnerable transitive dependencies — well done.
+These override vulnerable transitive dependencies. The reason for each override
+is documented in `docs/DEPENDENCY_SUPPLY_CHAIN.md`, and `npm run
+audit:dependencies` fails if a new override is introduced without a documented
+reason.
 
 ---
 
