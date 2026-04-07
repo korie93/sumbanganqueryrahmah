@@ -6,32 +6,8 @@ const severityRank = new Map([
   ["critical", 4],
 ]);
 
-const allowedModerateDevFindings = {
-  "@esbuild-kit/core-utils": new Set(["node_modules/@esbuild-kit/core-utils"]),
-  "@esbuild-kit/esm-loader": new Set(["node_modules/@esbuild-kit/esm-loader"]),
-  "drizzle-kit": new Set(["node_modules/drizzle-kit"]),
-  "esbuild": new Set(["node_modules/@esbuild-kit/core-utils/node_modules/esbuild"]),
-};
-
-const allowedExternalPackageSources = {
-  "xlsx": {
-    resolved: new Set(["https://cdn.sheetjs.com/xlsx-0.20.2/xlsx-0.20.2.tgz"]),
-    reason: "SheetJS 0.20.2 is distributed from the vendor CDN; see docs/DEPENDENCY_SUPPLY_CHAIN.md for the mirror/vendor decision path",
-  },
-};
-
 function getSeverityScore(severity) {
   return severityRank.get(String(severity || "").toLowerCase()) ?? Number.POSITIVE_INFINITY;
-}
-
-function isAllowedDrizzleKitDevFinding(vulnerability) {
-  const allowedNodes = allowedModerateDevFindings[vulnerability.name];
-  if (!allowedNodes || vulnerability.severity !== "moderate") {
-    return false;
-  }
-
-  const nodes = Array.isArray(vulnerability.nodes) ? vulnerability.nodes : [];
-  return nodes.length > 0 && nodes.every((node) => allowedNodes.has(node));
 }
 
 function formatVulnerability(vulnerability) {
@@ -63,26 +39,15 @@ function isExternalPackageSource(resolved) {
 
 export function analyzeDependencyAuditReport(report) {
   const vulnerabilities = Object.values(report?.vulnerabilities ?? {});
-  const allowed = [];
   const failures = [];
 
   for (const vulnerability of vulnerabilities) {
-    if (isAllowedDrizzleKitDevFinding(vulnerability)) {
-      allowed.push({
-        name: vulnerability.name,
-        severity: vulnerability.severity,
-        nodes: vulnerability.nodes,
-        reason: "dev-only drizzle-kit stable release still depends on deprecated @esbuild-kit packages",
-      });
-      continue;
-    }
-
     if (getSeverityScore(vulnerability.severity) >= getSeverityScore("moderate")) {
       failures.push(formatVulnerability(vulnerability));
     }
   }
 
-  return { allowed, failures };
+  return { allowed: [], failures };
 }
 
 export function analyzePackageLockSources(packageLock) {
@@ -97,16 +62,6 @@ export function analyzePackageLockSources(packageLock) {
     }
 
     const packageName = getPackageNameFromPackagePath(packagePath);
-    const allowedSource = packageName ? allowedExternalPackageSources[packageName] : undefined;
-    if (allowedSource?.resolved.has(resolved)) {
-      allowed.push({
-        name: packageName,
-        resolved,
-        reason: allowedSource.reason,
-      });
-      continue;
-    }
-
     failures.push(`${packageName || packagePath} resolved from external source ${resolved}`);
   }
 

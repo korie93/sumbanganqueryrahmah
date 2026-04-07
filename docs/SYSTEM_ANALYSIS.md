@@ -839,15 +839,16 @@ checkout → install → verify node → verify hygiene → db check → schema 
 
 ### 6.4 Dependency Management
 
-**Concern:** The `xlsx` dependency uses a CDN URL:
+**Resolved:** The `xlsx` dependency is vendored locally:
 ```json
-"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.2/xlsx-0.20.2.tgz"
+"xlsx": "file:vendor/sheetjs/xlsx-0.20.2.tgz"
 ```
 
-This is fragile — if the CDN is down, `npm ci` will fail. Consider:
-1. Hosting the tarball in your own artifact repository
-2. Using `@anthropic/sdk` style local tarballs
-3. Or accepting the risk with good CI caching
+This removes install-time dependency on the SheetJS CDN while preserving the
+same SheetJS build used by import/export flows. Keep the vendored artifact
+integrity documented in `docs/DEPENDENCY_SUPPLY_CHAIN.md`; if an internal
+artifact repository becomes available, move the same tarball there in a small
+dependency-only PR.
 
 **Dependency overrides** (good practice):
 ```json

@@ -13,20 +13,28 @@ external tarball sources. Any allowlist entry must include a reason in
 
 ## SheetJS `xlsx`
 
-`xlsx@0.20.2` is currently resolved from the SheetJS CDN:
+`xlsx@0.20.2` is vendored locally at:
+
+```text
+vendor/sheetjs/xlsx-0.20.2.tgz
+```
+
+The tarball was originally sourced from:
 
 ```text
 https://cdn.sheetjs.com/xlsx-0.20.2/xlsx-0.20.2.tgz
 ```
 
-This is allowlisted because SheetJS distributes the current community tarball
-outside the npm registry. The risk is install-time dependency on an external
-vendor CDN. Before production promotion, choose one controlled source:
+The vendored artifact must keep this integrity value:
 
-1. Mirror the tarball in the organization's internal artifact registry.
-2. Vendor the tarball through an approved release-artifact process.
-3. Replace the spreadsheet stack with a registry-hosted alternative after an
-   import/export compatibility test pass.
+```text
+sha512-+nKZ39+nvK7Qq6i0PvWWRA4j/EkfWOtkP/YhMtupm+lJIiHxUrgTr1CcKv1nBk1rHtkRRQ3O2+Ih/q/sA+FXZA==
+```
+
+This removes install-time dependency on the external vendor CDN while
+preserving the same SheetJS build used by the application import/export flows.
+If the team later introduces an internal artifact registry, move the same
+tarball there and update `package.json` and `package-lock.json` in one PR.
 
 Do not add additional external tarball dependencies without updating the audit
 gate and documenting the release rationale here.
