@@ -37,7 +37,7 @@ export function BulkImportPanel({
   const successCount = bulkResults.filter((result) => result.status === "success").length;
 
   return (
-    <div className="glass-wrapper mb-4 p-4 sm:mb-6 sm:p-6">
+    <div className="glass-wrapper mb-4 p-4 sm:mb-6 sm:p-6" aria-busy={bulkProcessing}>
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-foreground mb-2">Bulk Import</h2>
         <p className="text-sm text-muted-foreground">
@@ -48,9 +48,16 @@ export function BulkImportPanel({
       <div
         onDrop={onBulkDrop}
         onDragOver={onBulkDragOver}
-        className="cursor-pointer rounded-xl border-2 border-dashed border-slate-300 p-5 text-center transition-colors hover:border-primary dark:border-slate-600 sm:p-8"
-        onClick={() => bulkInputRef.current?.click()}
+        className={`rounded-xl border-2 border-dashed border-slate-300 p-5 text-center transition-colors dark:border-slate-600 sm:p-8 ${
+          bulkProcessing ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:border-primary"
+        }`}
+        onClick={() => {
+          if (!bulkProcessing) {
+            bulkInputRef.current?.click();
+          }
+        }}
         data-testid="dropzone-bulk"
+        aria-disabled={bulkProcessing}
       >
         <input
           ref={bulkInputRef}
@@ -61,6 +68,7 @@ export function BulkImportPanel({
           onChange={onBulkFileSelect}
           className="hidden"
           data-testid="input-bulk-files"
+          disabled={bulkProcessing}
         />
         <div className="flex flex-col items-center gap-3">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 sm:h-16 sm:w-16">
@@ -105,7 +113,7 @@ export function BulkImportPanel({
               <Button onClick={onStartBulkImport} disabled={bulkProcessing || !hasImportableFiles} data-testid="button-start-bulk">
                 {bulkProcessing ? (
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
                     Importing...
                   </div>
                 ) : (
@@ -119,7 +127,7 @@ export function BulkImportPanel({
           </div>
 
           {bulkProcessing ? (
-            <div className="mb-4">
+            <div className="mb-4" role="status" aria-live="polite">
               <Progress value={bulkProgress} className="h-2" />
               <p className="text-sm text-muted-foreground mt-2 text-center">
                 Processing: {Math.round(bulkProgress)}%
@@ -150,7 +158,7 @@ export function BulkImportPanel({
                     <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
                   ) : null}
                   {result.status === "processing" ? (
-                    <div className="mt-0.5 h-5 w-5 flex-shrink-0 rounded-full border-2 border-blue-300 border-t-blue-600 animate-spin" />
+                    <div className="mt-0.5 h-5 w-5 flex-shrink-0 rounded-full border-2 border-blue-300 border-t-blue-600 animate-spin" aria-hidden="true" />
                   ) : null}
                   {result.status === "pending" ? (
                     <FileSpreadsheet className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
@@ -195,7 +203,7 @@ export function BulkImportPanel({
           </div>
 
           {bulkResults.some((result) => result.status === "error") && !bulkProcessing ? (
-            <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+            <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800" role="alert">
               <h4 className="font-medium text-amber-800 dark:text-amber-200 mb-2">Failed Imports Summary</h4>
               <ul className="text-sm text-amber-700 dark:text-amber-300 space-y-1">
                 {bulkResults

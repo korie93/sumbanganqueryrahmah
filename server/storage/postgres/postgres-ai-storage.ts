@@ -49,7 +49,7 @@ export class PostgresAiStorage extends PostgresActivityStorage {
       score: number;
       importName: string | null;
       importFilename: string | null;
-      jsonDataJsonb: any;
+      jsonDataJsonb: unknown;
     }>
   > {
     return this.aiRepository.semanticSearch(params);
@@ -61,7 +61,7 @@ export class PostgresAiStorage extends PostgresActivityStorage {
       importId: string;
       importName: string | null;
       importFilename: string | null;
-      jsonDataJsonb: any;
+      jsonDataJsonb: unknown;
     }>
   > {
     return this.aiRepository.aiKeywordSearch(params);
@@ -73,7 +73,7 @@ export class PostgresAiStorage extends PostgresActivityStorage {
       importId: string;
       importName: string | null;
       importFilename: string | null;
-      jsonDataJsonb: any;
+      jsonDataJsonb: unknown;
     }>
   > {
     return this.aiRepository.aiNameSearch(params);
@@ -85,7 +85,7 @@ export class PostgresAiStorage extends PostgresActivityStorage {
       importId: string;
       importName: string | null;
       importFilename: string | null;
-      jsonDataJsonb: any;
+      jsonDataJsonb: unknown;
     }>
   > {
     return this.aiRepository.aiDigitsSearch(params);
@@ -97,7 +97,7 @@ export class PostgresAiStorage extends PostgresActivityStorage {
       importId: string;
       importName: string | null;
       importFilename: string | null;
-      jsonDataJsonb: any;
+      jsonDataJsonb: unknown;
       score: number;
     }>
   > {
@@ -226,9 +226,7 @@ export class PostgresAiStorage extends PostgresActivityStorage {
     importId: string,
     limit: number,
     offset: number,
-  ): Promise<Array<{ id: string; jsonDataJsonb: any }>> {
-    return this.aiRepository.getDataRowsForEmbedding(importId, limit, offset) as Promise<
-      Array<{ id: string; jsonDataJsonb: any }>
-    >;
+  ): Promise<Array<{ id: string; jsonDataJsonb: unknown }>> {
+    return this.aiRepository.getDataRowsForEmbedding(importId, limit, offset);
   }
 }

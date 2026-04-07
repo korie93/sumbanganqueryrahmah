@@ -11,6 +11,7 @@ type PublicAuthLayoutProps = {
   children: ReactNode;
   showBackButton?: boolean;
   backLabel?: string;
+  contentBusy?: boolean;
   onBackClick?: () => void;
 };
 
@@ -22,6 +23,7 @@ export function PublicAuthLayout({
   children,
   showBackButton = true,
   backLabel = "Kembali ke landing page",
+  contentBusy = false,
   onBackClick,
 }: PublicAuthLayoutProps) {
   return (
@@ -75,7 +77,9 @@ export function PublicAuthLayout({
               <p className="public-auth-layout__description">{description}</p>
             </div>
 
-            <div className="public-auth-layout__content">{children}</div>
+            <div className="public-auth-layout__content" aria-busy={contentBusy || undefined}>
+              {children}
+            </div>
           </div>
         </div>
       </main>

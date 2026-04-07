@@ -149,7 +149,7 @@ export async function resolveAiBranchLookup(
       };
     }
 
-    const coords = extractLatLng(personForBranch.jsonDataJsonb || {});
+    const coords = extractLatLng(toObjectJson(personForBranch.jsonDataJsonb) || {});
     if (isLatLng(coords)) {
       const branches = await lookups.nearestBranches(coords.lat, coords.lng, 1, branchTimeoutMs);
       nearestBranch = branches[0] || null;

@@ -36,9 +36,10 @@ export default function ForgotPasswordPage() {
       title="Permintaan Tetapan Semula Kata Laluan"
       description="Masukkan username atau emel anda untuk menghantar permintaan tetapan semula. Permintaan ini akan disemak oleh superuser sebelum pautan selamat dihantar kepada akaun yang berkaitan."
       icon={<LifeBuoy className="h-7 w-7" />}
+      contentBusy={loading}
     >
       {submitted ? (
-        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100">
+        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100" role="status" aria-live="polite">
           Jika akaun wujud, permintaan tetapan semula telah dihantar untuk semakan.
         </div>
       ) : (
@@ -47,13 +48,14 @@ export default function ForgotPasswordPage() {
             value={identifier}
             onChange={(event) => setIdentifier(event.target.value)}
             placeholder="Username atau emel"
+            disabled={loading}
           />
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-white/75">
             Demi keselamatan, sistem hanya memaparkan status umum dan tidak mendedahkan sama ada
             sesuatu akaun benar-benar wujud.
           </div>
           {error ? (
-            <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100">
+            <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100" role="alert">
               {error}
             </div>
           ) : null}

@@ -70,7 +70,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               </p>
             </div>
 
-            <form className="space-y-4" onSubmit={handleSubmit}>
+            <form className="space-y-4" onSubmit={handleSubmit} aria-busy={loading}>
               <div className="relative">
                 <PublicAuthInput
                   className="w-full px-4 py-3 rounded-xl bg-white/90 border-0 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-400 transition-all"
@@ -96,6 +96,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     onKeyDown={handleInputKeyDown}
                     autoComplete="one-time-code"
                     data-testid="input-two-factor-code"
+                    disabled={loading}
                   />
                   <p className="text-center text-xs text-white/70">
                     Masukkan kod 6 digit daripada aplikasi pengesah anda.
@@ -112,10 +113,12 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     onKeyDown={handleInputKeyDown}
                     autoComplete="current-password"
                     data-testid="input-password"
+                    disabled={loading}
                   />
                   <button
                     type="button"
                     onClick={toggleShowPassword}
+                    disabled={loading}
                     className="absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-slate-500 transition-colors hover:text-slate-700"
                     data-testid="button-toggle-password"
                     aria-label={showPassword ? "Hide password" : "Show password"}
@@ -134,7 +137,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               >
                 {loading ? (
                   <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
                     {twoFactorChallengeToken ? "Mengesahkan..." : "Sedang log masuk..."}
                   </div>
                 ) : (
@@ -147,7 +150,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             </form>
 
             {lockedFlow ? (
-              <div className="mt-4 rounded-xl border border-amber-400/40 bg-amber-500/20 px-4 py-3 text-center text-sm text-amber-50">
+              <div className="mt-4 rounded-xl border border-amber-400/40 bg-amber-500/20 px-4 py-3 text-center text-sm text-amber-50" role="alert">
                 <div className="font-medium">
                   {lockedAccountMessage || "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah."}
                 </div>
@@ -176,13 +179,13 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             </button>
 
             {error && !lockedFlow && (
-              <div className="mt-4 p-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-200 text-center text-sm">
+              <div className="mt-4 p-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-200 text-center text-sm" role="alert">
                 {error}
               </div>
             )}
 
             {notice && (
-              <div className="mt-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-100 text-center text-sm">
+              <div className="mt-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-100 text-center text-sm" role="status" aria-live="polite">
                 {notice}
               </div>
             )}

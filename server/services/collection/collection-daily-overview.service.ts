@@ -36,7 +36,7 @@ export class CollectionDailyOverviewService {
   ): Promise<DailyOverviewComputation> {
     const [users, currentNickname] = await Promise.all([
       this.listAvailableDailyUsers(user),
-      resolveCurrentCollectionNicknameFromSession(this.storage, user as any),
+      resolveCurrentCollectionNicknameFromSession(this.storage, user),
     ]);
     const selectedUsers = resolveDailySelectedUsers(
       user,

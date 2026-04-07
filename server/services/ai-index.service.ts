@@ -60,7 +60,9 @@ export class AiIndexService {
           break;
         }
 
-        const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object" ? row.jsonDataJsonb : {};
+        const data = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object"
+          ? row.jsonDataJsonb as Record<string, unknown>
+          : {};
         const content = this.buildEmbeddingText(data);
         if (!content) {
           processed += 1;
@@ -146,7 +148,7 @@ export class AiIndexService {
     };
   }
 
-  private buildEmbeddingText(data: Record<string, any>): string {
+  private buildEmbeddingText(data: Record<string, unknown>): string {
     const preferredKeys = [
       "nama",
       "name",

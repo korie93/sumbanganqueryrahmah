@@ -129,6 +129,7 @@ export default function ChangePasswordPage({
       }
       icon={<KeyRound className="h-7 w-7" />}
       showBackButton={false}
+      contentBusy={loading}
     >
       <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-white/75">
         Gunakan kata laluan baharu yang sukar diteka dan pastikan pengesahan kata laluan sama
@@ -140,28 +141,31 @@ export default function ChangePasswordPage({
         value={currentPassword}
         onChange={(event) => setCurrentPassword(event.target.value)}
         placeholder="Kata laluan semasa"
+        disabled={loading}
       />
       <PublicAuthInput
         type="password"
         value={newPassword}
         onChange={(event) => setNewPassword(event.target.value)}
         placeholder="Kata laluan baharu"
+        disabled={loading}
       />
       <PublicAuthInput
         type="password"
         value={confirmPassword}
         onChange={(event) => setConfirmPassword(event.target.value)}
         placeholder="Sahkan kata laluan baharu"
+        disabled={loading}
       />
 
       {error ? (
-        <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100">
+        <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100" role="alert">
           {error}
         </div>
       ) : null}
 
       {successMessage ? (
-        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-sm leading-7 text-emerald-100">
+        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-sm leading-7 text-emerald-100" role="status" aria-live="polite">
           {successMessage}
         </div>
       ) : null}

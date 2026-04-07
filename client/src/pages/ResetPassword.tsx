@@ -100,6 +100,7 @@ export default function ResetPasswordPage() {
       badge="Tetapan Semula Kata Laluan"
       title="Cipta Kata Laluan Baharu"
       description="Gunakan pautan selamat yang dihantar ke emel anda untuk menetapkan kata laluan baharu dan mendapatkan semula akses ke sistem."
+      contentBusy={loading || phase === "validating"}
       icon={
         phase === "invalid" ? (
           <ShieldAlert className="h-7 w-7" />
@@ -111,19 +112,19 @@ export default function ResetPasswordPage() {
       }
     >
       {phase === "validating" ? (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200" role="status" aria-live="polite">
           Sedang mengesahkan pautan tetapan semula anda...
         </div>
       ) : null}
 
       {phase === "invalid" ? (
-        <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100">
+        <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100" role="alert">
           {error || "Pautan tetapan semula tidak sah atau telah tamat tempoh."}
         </div>
       ) : null}
 
       {phase === "success" ? (
-        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100">
+        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100" role="status" aria-live="polite">
           Tetapan semula kata laluan berjaya. Anda kini boleh log masuk menggunakan username dan
           kata laluan baharu.
         </div>
@@ -141,15 +142,17 @@ export default function ResetPasswordPage() {
             value={newPassword}
             onChange={(event) => setNewPassword(event.target.value)}
             placeholder="Kata laluan baharu"
+            disabled={loading}
           />
           <PublicAuthInput
             type="password"
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
             placeholder="Sahkan kata laluan baharu"
+            disabled={loading}
           />
           {error ? (
-            <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100">
+            <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100" role="alert">
               {error}
             </div>
           ) : null}

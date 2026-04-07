@@ -2,9 +2,9 @@ import { z } from "zod";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { badRequest } from "./errors";
 
-export function ensureObject(value: unknown): Record<string, any> | null {
+export function ensureObject(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, any>;
+    return value as Record<string, unknown>;
   }
   return null;
 }

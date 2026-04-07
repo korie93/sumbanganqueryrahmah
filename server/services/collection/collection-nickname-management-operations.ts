@@ -1,4 +1,5 @@
 import type { AuthenticatedUser } from "../../auth/guards";
+import type { CollectionStaffNickname } from "../../storage-postgres";
 import { badRequest, conflict, notFound } from "../../http/errors";
 import { getAdminGroupNicknameValues } from "../../routes/collection-access";
 import {
@@ -18,7 +19,7 @@ export class CollectionNicknameManagementOperations extends CollectionServiceSup
     const user = this.requireUser(userInput);
     const includeInactive = normalizeCollectionText(includeInactiveRaw) === "1";
 
-    let nicknames;
+    let nicknames: CollectionStaffNickname[];
     if (user.role === "superuser") {
       nicknames = await this.storage.getCollectionStaffNicknames({ activeOnly: !includeInactive });
     } else if (user.role === "admin") {
@@ -27,14 +28,14 @@ export class CollectionNicknameManagementOperations extends CollectionServiceSup
         nicknames = [];
       } else {
         const activeNicknames = await this.storage.getCollectionStaffNicknames({ activeOnly: true });
-        const byName = new Map<string, any>();
+        const byName = new Map<string, CollectionStaffNickname>();
         for (const item of activeNicknames) {
           const key = normalizeCollectionText(item.nickname).toLowerCase();
           if (key && !byName.has(key)) byName.set(key, item);
         }
         nicknames = allowedValues
           .map((value) => byName.get(value.toLowerCase()))
-          .filter(Boolean);
+          .filter((item): item is CollectionStaffNickname => Boolean(item));
       }
     } else {
       nicknames = await this.storage.getCollectionStaffNicknames({

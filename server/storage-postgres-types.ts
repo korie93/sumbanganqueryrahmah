@@ -253,35 +253,35 @@ export interface IStorage extends CollectionStorageContract {
     score: number;
     importName: string | null;
     importFilename: string | null;
-    jsonDataJsonb: any;
+    jsonDataJsonb: unknown;
   }>>;
   aiKeywordSearch(params: { query: string; limit: number }): Promise<Array<{
     rowId: string;
     importId: string;
     importName: string | null;
     importFilename: string | null;
-    jsonDataJsonb: any;
+    jsonDataJsonb: unknown;
   }>>;
   aiNameSearch(params: { query: string; limit: number }): Promise<Array<{
     rowId: string;
     importId: string;
     importName: string | null;
     importFilename: string | null;
-    jsonDataJsonb: any;
+    jsonDataJsonb: unknown;
   }>>;
   aiDigitsSearch(params: { digits: string; limit: number }): Promise<Array<{
     rowId: string;
     importId: string;
     importName: string | null;
     importFilename: string | null;
-    jsonDataJsonb: any;
+    jsonDataJsonb: unknown;
   }>>;
   aiFuzzySearch(params: { query: string; limit: number }): Promise<Array<{
     rowId: string;
     importId: string;
     importName: string | null;
     importFilename: string | null;
-    jsonDataJsonb: any;
+    jsonDataJsonb: unknown;
     score: number;
   }>>;
   findBranchesByText(params: { query: string; limit: number }): Promise<Array<{

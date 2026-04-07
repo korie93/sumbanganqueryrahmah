@@ -55,7 +55,7 @@ export async function listAvailableDailyUsers(
   user: { username: string; role: string },
 ): Promise<DailyResolvedUser[]> {
   if (user.role === "user") {
-    const currentNickname = await resolveCurrentCollectionNicknameFromSession(storage, user as any);
+    const currentNickname = await resolveCurrentCollectionNicknameFromSession(storage, user);
     if (!currentNickname) {
       return [];
     }
@@ -69,7 +69,7 @@ export async function listAvailableDailyUsers(
   }
 
   if (user.role === "admin") {
-    const visibleNicknames = await getAdminVisibleNicknameValues(storage, user as any);
+    const visibleNicknames = await getAdminVisibleNicknameValues(storage, user);
     if (visibleNicknames.length === 0) {
       return [];
     }

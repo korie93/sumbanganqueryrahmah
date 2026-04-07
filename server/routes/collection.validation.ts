@@ -92,9 +92,9 @@ export type CollectionNicknameAuthPayload = {
 
 export type CollectionBatchValue = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
 
-export function ensureLooseObject(value: unknown): Record<string, any> | null {
+export function ensureLooseObject(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object") {
-    return value as Record<string, any>;
+    return value as Record<string, unknown>;
   }
   return null;
 }

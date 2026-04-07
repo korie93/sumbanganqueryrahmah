@@ -176,6 +176,7 @@ export default function ActivateAccountPage() {
       badge="Aktivasi Akaun"
       title={title}
       description="Lengkapkan persediaan akaun kali pertama menggunakan pautan aktivasi yang dihantar ke emel anda. Langkah ini diperlukan sebelum anda boleh mula menggunakan sistem."
+      contentBusy={loading || phase === "validating"}
       icon={
         phase === "invalid" ? (
           <ShieldAlert className="h-7 w-7" />
@@ -187,19 +188,19 @@ export default function ActivateAccountPage() {
       }
     >
       {phase === "validating" ? (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200" role="status" aria-live="polite">
           Sedang mengesahkan pautan aktivasi anda...
         </div>
       ) : null}
 
       {phase === "invalid" ? (
-        <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100">
+        <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100" role="alert">
           {error || "Pautan aktivasi tidak sah atau telah tamat tempoh."}
         </div>
       ) : null}
 
       {phase === "success" ? (
-        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100">
+        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100" role="status" aria-live="polite">
           Kata laluan berjaya dicipta. Anda akan dibawa semula ke halaman log masuk sebentar lagi.
         </div>
       ) : null}
@@ -218,6 +219,7 @@ export default function ActivateAccountPage() {
             onKeyDown={onPasswordKeyDown}
             placeholder="Kata laluan baharu"
             autoFocus
+            disabled={loading}
           />
           <PublicAuthInput
             type="password"
@@ -225,9 +227,10 @@ export default function ActivateAccountPage() {
             onChange={(event) => setConfirmPassword(event.target.value)}
             onKeyDown={onPasswordKeyDown}
             placeholder="Sahkan kata laluan baharu"
+            disabled={loading}
           />
           {error ? (
-            <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100">
+            <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100" role="alert">
               {error}
             </div>
           ) : null}

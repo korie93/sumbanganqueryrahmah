@@ -39,7 +39,7 @@ export function SingleImportPanel({
 }: SingleImportPanelProps) {
   return (
     <>
-      <div className="glass-wrapper mb-4 p-4 sm:mb-6 sm:p-6">
+      <div className="glass-wrapper mb-4 p-4 sm:mb-6 sm:p-6" aria-busy={loading}>
         <div className="mb-4">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <label className="block text-sm font-medium text-foreground">Import Name</label>
@@ -55,15 +55,23 @@ export function SingleImportPanel({
             placeholder="Enter a name for this import"
             className="h-10 max-w-md"
             data-testid="input-import-name"
+            disabled={loading}
           />
         </div>
 
         <div
           onDrop={onDrop}
           onDragOver={onDragOver}
-          className="cursor-pointer rounded-xl border-2 border-dashed border-slate-300 p-5 text-center transition-colors hover:border-primary dark:border-slate-600 sm:p-8"
-          onClick={() => fileInputRef.current?.click()}
+          className={`rounded-xl border-2 border-dashed border-slate-300 p-5 text-center transition-colors dark:border-slate-600 sm:p-8 ${
+            loading ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:border-primary"
+          }`}
+          onClick={() => {
+            if (!loading) {
+              fileInputRef.current?.click();
+            }
+          }}
           data-testid="dropzone-file"
+          aria-disabled={loading}
         >
           <input
             ref={fileInputRef}
@@ -73,6 +81,7 @@ export function SingleImportPanel({
             onChange={onFileChange}
             className="hidden"
             data-testid="input-file"
+            disabled={loading}
           />
           <div className="flex flex-col items-center gap-3">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 sm:h-16 sm:w-16">
@@ -102,7 +111,8 @@ export function SingleImportPanel({
                 type="button"
                 aria-label="Clear selected file"
                 onClick={onClear}
-                className="text-muted-foreground transition-colors hover:text-destructive"
+                disabled={loading}
+                className="text-muted-foreground transition-colors hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
                 data-testid="button-clear-file"
               >
                 <X className="w-4 h-4" />
@@ -123,7 +133,7 @@ export function SingleImportPanel({
         ) : null}
 
         {error ? (
-          <div className="mt-4 flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-destructive">
+          <div className="mt-4 flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-destructive" role="alert">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span className="text-sm">{error}</span>
           </div>
@@ -131,7 +141,7 @@ export function SingleImportPanel({
       </div>
 
       {parsedData.length > 0 ? (
-        <div className="glass-wrapper p-4 sm:p-6">
+        <div className="glass-wrapper p-4 sm:p-6" aria-busy={loading}>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-foreground">
@@ -148,7 +158,7 @@ export function SingleImportPanel({
               <Button onClick={onSave} disabled={loading} data-testid="button-save">
                 {loading ? (
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
                     Saving...
                   </div>
                 ) : (

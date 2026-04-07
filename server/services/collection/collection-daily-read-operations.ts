@@ -31,7 +31,7 @@ export class CollectionDailyReadOperations {
     if (!Number.isInteger(month) || month < 1 || month > 12) throw badRequest("Invalid month.");
     const computation = await this.dailyOverviewService.buildDailyOverviewComputation(user, year, month, query);
     const selectedUsernames = computation.selectedUsers.map((item) => item.username);
-    const currentNickname = await resolveCurrentCollectionNicknameFromSession(this.storage, user as any);
+    const currentNickname = await resolveCurrentCollectionNicknameFromSession(this.storage, user);
     const freshness = await getCollectionReportFreshness(this.storage, {
       from: `${year}-${String(month).padStart(2, "0")}-01`,
       to: `${year}-${String(month).padStart(2, "0")}-${String(computation.daysInMonth).padStart(2, "0")}`,
@@ -106,7 +106,7 @@ export class CollectionDailyReadOperations {
     return {
       ok: true as const,
       username: selectedUsernames[0] || normalizeCollectionText(
-        await resolveCurrentCollectionNicknameFromSession(this.storage, user as any),
+        await resolveCurrentCollectionNicknameFromSession(this.storage, user),
       ) || user.username.toLowerCase(),
       usernames: selectedUsernames,
       date,

@@ -122,14 +122,14 @@ export async function serveCollectionReceipt(
       });
       res.status(status).json({ ok: false, message });
     });
-  } catch (err: any) {
+  } catch (error) {
     logger.error("Collection receipt request crashed", {
       mode,
       username: req.user?.username || null,
       recordId: req.params.id || null,
       receiptId: req.params.receiptId || null,
-      error: err,
+      error,
     });
-    return res.status(500).json({ ok: false, message: err?.message || "Failed to load receipt file." });
+    return res.status(500).json({ ok: false, message: "Failed to load receipt file." });
   }
 }

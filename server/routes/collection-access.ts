@@ -12,9 +12,13 @@ export type CollectionNicknameAccessResolution =
   | { ok: true; profile: CollectionNicknameAuthProfile }
   | { ok: false; status: number; message: string };
 
+export type CollectionAccessUser = Pick<AuthenticatedUser, "role" | "username"> & {
+  activityId?: string | null;
+};
+
 export async function resolveCurrentCollectionNicknameFromSession(
   storage: CollectionStoragePort,
-  user: AuthenticatedUser,
+  user: CollectionAccessUser,
 ): Promise<string | null> {
   const activityId = normalizeCollectionText(user.activityId);
   if (!activityId) return null;
@@ -33,7 +37,7 @@ export async function resolveCurrentCollectionNicknameFromSession(
 
 export async function getAdminGroupNicknameValues(
   storage: CollectionStoragePort,
-  user: AuthenticatedUser,
+  user: CollectionAccessUser,
 ): Promise<string[]> {
   const currentNickname = await resolveCurrentCollectionNicknameFromSession(storage, user);
   if (!currentNickname) return [];
@@ -58,7 +62,7 @@ export async function getAdminGroupNicknameValues(
 
 export async function getAdminVisibleNicknameValues(
   storage: CollectionStoragePort,
-  user: AuthenticatedUser,
+  user: CollectionAccessUser,
 ): Promise<string[]> {
   return getAdminGroupNicknameValues(storage, user);
 }
@@ -71,7 +75,7 @@ export function hasNicknameValue(values: string[], target: string): boolean {
 
 export async function canUserAccessCollectionRecord(
   storage: CollectionStoragePort,
-  user: AuthenticatedUser,
+  user: CollectionAccessUser,
   record: {
     createdByLogin?: string | null;
     collectionStaffNickname?: string | null;
@@ -122,7 +126,7 @@ export function readNicknameFiltersFromQuery(query: Record<string, unknown>): st
 
 export async function resolveCollectionNicknameAccessForUser(
   storage: CollectionStoragePort,
-  user: AuthenticatedUser,
+  user: CollectionAccessUser,
   nicknameRaw: unknown,
 ): Promise<CollectionNicknameAccessResolution> {
   const nickname = normalizeCollectionText(nicknameRaw);
