@@ -6,6 +6,10 @@ import {
   restoreCollectionRecordsFromBackup,
   syncRestoredCollectionReceiptCache,
 } from "../backups-restore-dataset-utils";
+import {
+  normalizeBackupCollectionReceipt,
+  normalizeBackupCollectionRecord,
+} from "../backups-restore-collection-datasets-utils";
 
 function flattenSqlChunk(chunk: unknown): string {
   if (chunk === null || chunk === undefined) {
@@ -112,4 +116,85 @@ test("collection restore tracks restored record ids through a temp table before 
   assert.equal(stats.collectionRecords.processed, 1);
   assert.equal(stats.collectionRecords.inserted, 1);
   assert.equal(stats.collectionRecords.skipped, 0);
+});
+
+test("normalizeBackupCollectionRecord keeps restore fallbacks stable", () => {
+  const restoredRecord = normalizeBackupCollectionRecord({
+    id: "11111111-1111-1111-1111-111111111111",
+    customerName: "",
+    icNumber: "",
+    customerPhone: "",
+    accountNumber: "",
+    batch: "",
+    paymentDate: new Date("2026-03-31T08:00:00.000Z") as any,
+    amount: "12.50",
+    receiptFile: "",
+    receiptTotalAmount: "12.34",
+    receiptValidationStatus: "",
+    receiptValidationMessage: "  Review manually  ",
+    receiptCount: -4,
+    duplicateReceiptFlag: true,
+    createdByLogin: "",
+    collectionStaffNickname: "",
+    staffUsername: "Staff Alpha",
+    createdAt: "2026-03-30T08:00:00.000Z",
+  });
+
+  assert.ok(restoredRecord);
+  assert.equal(restoredRecord.customerName, "-");
+  assert.equal(restoredRecord.paymentDate, "2026-03-31");
+  assert.equal(restoredRecord.amount, 12.5);
+  assert.equal(restoredRecord.receiptFile, null);
+  assert.equal(restoredRecord.receiptTotalAmount, 1234);
+  assert.equal(restoredRecord.receiptValidationStatus, "needs_review");
+  assert.equal(restoredRecord.receiptValidationMessage, "Review manually");
+  assert.equal(restoredRecord.receiptCount, 0);
+  assert.equal(restoredRecord.collectionStaffNickname, "Staff Alpha");
+  assert.equal(restoredRecord.staffUsername, "Staff Alpha");
+
+  assert.equal(
+    normalizeBackupCollectionRecord({
+      paymentDate: null,
+    } as any),
+    null,
+  );
+});
+
+test("normalizeBackupCollectionReceipt keeps receipt restore fallbacks stable", () => {
+  const restoredReceipt = normalizeBackupCollectionReceipt({
+    id: "22222222-2222-2222-2222-222222222222",
+    collectionRecordId: "11111111-1111-1111-1111-111111111111",
+    storagePath: "collection-receipts/receipt.pdf",
+    originalFileName: "",
+    originalMimeType: "",
+    originalExtension: ".PDF",
+    fileSize: 1234,
+    receiptAmount: "5.05",
+    extractedAmount: "",
+    extractionStatus: "",
+    extractionConfidence: "0.42",
+    receiptDate: new Date("2026-03-31T08:00:00.000Z") as any,
+    receiptReference: "  Ref-100  ",
+    fileHash: "  ABCDEF  ",
+    createdAt: "2026-03-31T08:00:00.000Z",
+  });
+
+  assert.ok(restoredReceipt);
+  assert.equal(restoredReceipt.originalFileName, "receipt");
+  assert.equal(restoredReceipt.originalMimeType, "application/octet-stream");
+  assert.equal(restoredReceipt.receiptAmount, 505);
+  assert.equal(restoredReceipt.extractedAmount, null);
+  assert.equal(restoredReceipt.extractionStatus, "unprocessed");
+  assert.equal(restoredReceipt.extractionConfidence, 0.42);
+  assert.equal(restoredReceipt.receiptDate, "2026-03-31");
+  assert.equal(restoredReceipt.receiptReference, "Ref-100");
+  assert.equal(restoredReceipt.fileHash, "abcdef");
+
+  assert.equal(
+    normalizeBackupCollectionReceipt({
+      collectionRecordId: "11111111-1111-1111-1111-111111111111",
+      storagePath: "",
+    } as any),
+    null,
+  );
 });

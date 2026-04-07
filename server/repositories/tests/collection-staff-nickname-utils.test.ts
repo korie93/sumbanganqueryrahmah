@@ -6,6 +6,7 @@ import {
   isCollectionStaffNicknameActiveValue,
   listCollectionStaffNicknames,
   setCollectionNicknameSessionValue,
+  shouldCascadeCollectionNicknameRename,
   updateCollectionStaffNicknameValue,
   type CollectionStaffNicknameExecutor,
 } from "../collection-staff-nickname-utils";
@@ -152,6 +153,12 @@ test("updateCollectionStaffNicknameValue cascades nickname rename to related tab
   assert.match(sqlTexts[2] ?? "", /UPDATE public\.admin_groups/i);
   assert.match(sqlTexts[3] ?? "", /UPDATE public\.admin_group_members/i);
   assert.match(sqlTexts[4] ?? "", /UPDATE public\.collection_nickname_sessions/i);
+});
+
+test("shouldCascadeCollectionNicknameRename detects meaningful nickname changes", () => {
+  assert.equal(shouldCascadeCollectionNicknameRename(" Collector Alpha ", "collector alpha"), false);
+  assert.equal(shouldCascadeCollectionNicknameRename("Collector Alpha", "Collector Omega"), true);
+  assert.equal(shouldCascadeCollectionNicknameRename("", "Collector Omega"), false);
 });
 
 test("deleteCollectionStaffNicknameValue deactivates nicknames that already have collection records", async () => {

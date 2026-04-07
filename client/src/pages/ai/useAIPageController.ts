@@ -12,6 +12,7 @@ import {
   getAIPageStatusContent,
   type AIPageStatusContent,
 } from "./ai-page-controller-utils";
+import { useAIPageRuntimeRefs } from "./useAIPageRuntimeRefs";
 
 export type { AIPageStatusContent } from "./ai-page-controller-utils";
 
@@ -38,43 +39,20 @@ export function useAIPageController({
   const [isTyping, setIsTyping] = useState(false);
 
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
-  const pendingSendRef = useRef(false);
-  const processingRef = useRef(false);
-  const requestControllerRef = useRef<AbortController | null>(null);
-  const sessionRef = useRef(0);
-  const typingTimerRef = useRef<number | null>(null);
-  const slowNoticeTimerRef = useRef<number | null>(null);
-  const isMountedRef = useRef(true);
-  const retryTimersRef = useRef<number[]>([]);
-
-  const clearRetryTimers = useCallback(() => {
-    retryTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
-    retryTimersRef.current = [];
-  }, []);
-
-  const clearSlowNoticeTimer = useCallback(() => {
-    if (slowNoticeTimerRef.current !== null) {
-      window.clearTimeout(slowNoticeTimerRef.current);
-      slowNoticeTimerRef.current = null;
-    }
-  }, []);
-
-  const stopTyping = useCallback(() => {
-    if (typingTimerRef.current !== null) {
-      window.clearInterval(typingTimerRef.current);
-      typingTimerRef.current = null;
-    }
-    if (isMountedRef.current) {
-      setIsTyping(false);
-    }
-  }, []);
-
-  const abortActiveRequest = useCallback(() => {
-    if (requestControllerRef.current) {
-      requestControllerRef.current.abort();
-      requestControllerRef.current = null;
-    }
-  }, []);
+  const {
+    abortActiveRequest,
+    clearRetryTimers,
+    clearSlowNoticeTimer,
+    isMountedRef,
+    pendingSendRef,
+    processingRef,
+    requestControllerRef,
+    retryTimersRef,
+    sessionRef,
+    slowNoticeTimerRef,
+    stopTyping,
+    typingTimerRef,
+  } = useAIPageRuntimeRefs({ setIsTyping });
 
   const stopProcessingState = useCallback(() => {
     processingRef.current = false;

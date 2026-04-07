@@ -24,6 +24,11 @@ import {
   updateCollectionDailyEditableCalendarDay,
 } from "@/pages/collection/useCollectionDailyData";
 import { buildCollectionDailyReceiptKey } from "@/pages/collection/useCollectionDailyReceiptViewer";
+import {
+  inferReceiptExtension,
+  mapDailyRecordToCollectionRecord,
+  mapDailyReceiptToCollectionReceipt,
+} from "@/pages/collection/collection-daily-receipt-viewer-utils";
 
 test("parseIntegerInput returns integer values and rejects blanks", () => {
   assert.equal(parseIntegerInput("12"), 12);
@@ -253,6 +258,57 @@ test("buildCollectionDailyReceiptKey normalizes primary and specific receipt key
   assert.equal(buildCollectionDailyReceiptKey("record-1"), "record-1:primary");
   assert.equal(buildCollectionDailyReceiptKey("record-1", ""), "record-1:primary");
   assert.equal(buildCollectionDailyReceiptKey("record-1", "receipt-2"), "record-1:receipt-2");
+});
+
+test("collection daily receipt viewer utils map daily receipts into collection records", () => {
+  const receipt = {
+    id: "receipt-1",
+    storagePath: "collection-receipts/receipt-1.PDF",
+    originalFileName: "receipt-1.PDF",
+    originalMimeType: "application/pdf",
+    fileSize: 1234,
+    createdAt: "2026-03-31T08:00:00.000Z",
+  };
+
+  assert.equal(inferReceiptExtension("receipt-1.PDF"), "pdf");
+  assert.equal(inferReceiptExtension("receipt-without-extension"), "");
+
+  assert.deepEqual(mapDailyReceiptToCollectionReceipt("record-1", receipt as any), {
+    id: "receipt-1",
+    collectionRecordId: "record-1",
+    storagePath: "collection-receipts/receipt-1.PDF",
+    originalFileName: "receipt-1.PDF",
+    originalMimeType: "application/pdf",
+    originalExtension: "pdf",
+    fileSize: 1234,
+    receiptAmount: null,
+    extractedAmount: null,
+    extractionStatus: "unprocessed",
+    extractionConfidence: null,
+    receiptDate: null,
+    receiptReference: null,
+    fileHash: null,
+    createdAt: "2026-03-31T08:00:00.000Z",
+  });
+
+  const mappedRecord = mapDailyRecordToCollectionRecord({
+    id: "record-1",
+    customerName: "Alice Tan",
+    accountNumber: "ACC-1",
+    batch: "P10",
+    paymentDate: "2026-03-31",
+    amount: 25,
+    username: "staff1",
+    collectionStaffNickname: "Staff Alpha",
+    createdAt: "2026-03-31T07:00:00.000Z",
+    receipts: [receipt],
+  } as any);
+
+  assert.equal(mappedRecord.id, "record-1");
+  assert.equal(mappedRecord.amount, "25");
+  assert.equal(mappedRecord.receiptCount, 1);
+  assert.equal(mappedRecord.receipts[0]?.originalExtension, "pdf");
+  assert.match(mappedRecord.receiptValidationMessage || "", /menunggu semakan/i);
 });
 
 test("parseCollectionApiErrorDetails extracts status, code, and message from API error payloads", () => {

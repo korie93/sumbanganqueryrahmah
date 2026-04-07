@@ -1,0 +1,166 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  buildCollectionAuditFieldChanges,
+  buildCollectionAuditSnapshot,
+  buildCollectionRecordUpdateDraft,
+  normalizeCollectionReceiptMetadata,
+  normalizeCollectionRecordFields,
+  normalizeExtractionConfidence,
+  readCollectionReceiptMetadataList,
+  readUploadedReceiptRows,
+  resolveCollectionAuditReceiptState,
+} from "../collection/collection-record-mutation-helpers";
+
+test("collection audit helpers preserve receipt source precedence and changed fields", () => {
+  assert.deepEqual(
+    resolveCollectionAuditReceiptState({
+      legacyReceiptFile: "legacy.pdf",
+      relationCount: 2,
+    }),
+    { count: 2, source: "relation" },
+  );
+  assert.deepEqual(
+    resolveCollectionAuditReceiptState({
+      legacyReceiptFile: "legacy.pdf",
+      relationCount: 0,
+    }),
+    { count: 1, source: "legacy" },
+  );
+
+  const before = buildCollectionAuditSnapshot({
+    customerName: " A ",
+    paymentDate: "2026-01-01",
+    amount: "10.005",
+    collectionStaffNickname: "Collector A",
+    activeReceiptCount: -1,
+    activeReceiptSource: "none",
+  });
+  const after = buildCollectionAuditSnapshot({
+    customerName: " A ",
+    paymentDate: "2026-01-02",
+    amount: "12.10",
+    collectionStaffNickname: "Collector B",
+    activeReceiptCount: 1,
+    activeReceiptSource: "relation",
+  });
+
+  assert.equal(before.amount, 10.01);
+  assert.deepEqual(buildCollectionAuditFieldChanges(before, after), {
+    amount: { from: 10.01, to: 12.1 },
+    collectionStaffNickname: { from: "Collector A", to: "Collector B" },
+    paymentDate: { from: "2026-01-01", to: "2026-01-02" },
+  });
+});
+
+test("collection record field helpers normalize create/update payloads", () => {
+  const fields = normalizeCollectionRecordFields({
+    accountNumber: " acc-1 ",
+    amount: "12.30",
+    batch: " p10 ",
+    collectionStaffNickname: " Collector Alpha ",
+    customerName: " Customer A ",
+    customerPhone: "+60123456789",
+    icNumber: " 900101 ",
+    paymentDate: "2020-01-01",
+  });
+
+  assert.deepEqual(fields, {
+    accountNumber: "acc-1",
+    amount: 12.3,
+    amountCents: 1230,
+    batch: "P10",
+    collectionStaffNickname: "Collector Alpha",
+    customerName: "Customer A",
+    customerPhone: "+60123456789",
+    icNumber: "900101",
+    paymentDate: "2020-01-01",
+  });
+
+  const updateDraft = buildCollectionRecordUpdateDraft(
+    {
+      amount: "20.00",
+      collectionStaffNickname: " Collector Beta ",
+      customerName: "Customer B",
+    },
+    normalizeCollectionRecordFields({
+      amount: "20.00",
+      collectionStaffNickname: " Collector Beta ",
+      customerName: "Customer B",
+    }),
+  );
+
+  assert.deepEqual(updateDraft, {
+    nextCollectionStaffNickname: "Collector Beta",
+    updatePayload: {
+      amount: 20,
+      customerName: "Customer B",
+    },
+  });
+});
+
+test("collection receipt helpers normalize metadata and uploaded receipt rows", () => {
+  assert.equal(normalizeExtractionConfidence("85"), 0.85);
+  assert.equal(normalizeExtractionConfidence("0.75"), 0.75);
+  assert.equal(normalizeExtractionConfidence("-1"), null);
+
+  const metadataItems = readCollectionReceiptMetadataList(JSON.stringify([
+    {
+      extractedAmount: "12.30",
+      extractionConfidence: "87",
+      extractionStatus: "suggested",
+      fileHash: " ABC ",
+      receiptAmount: "12.30",
+      receiptDate: "2020-01-01",
+      receiptId: " receipt-1 ",
+      receiptReference: " REF-1 ",
+    },
+  ]));
+  const metadata = normalizeCollectionReceiptMetadata(metadataItems[0] || {});
+
+  assert.deepEqual(metadata, {
+    extractedAmountCents: 1230,
+    extractionConfidence: 0.87,
+    extractionStatus: "suggested",
+    fileHash: "abc",
+    receiptAmountCents: 1230,
+    receiptDate: "2020-01-01",
+    receiptId: "receipt-1",
+    receiptReference: "REF-1",
+  });
+
+  assert.throws(
+    () => readCollectionReceiptMetadataList("{not json"),
+    /COLLECTION_RECEIPT_METADATA_INVALID/,
+  );
+
+  const uploadedRows = readUploadedReceiptRows({
+    uploadedReceipts: [
+      {
+        extractedAmountCents: "5.00" as any,
+        extractionConfidence: "99" as any,
+        extractionStatus: "ambiguous",
+        fileHash: " Hash-1 ",
+        fileSize: 100,
+        originalExtension: ".pdf",
+        originalFileName: " receipt.pdf ",
+        originalMimeType: "",
+        receiptAmountCents: "5.00" as any,
+        receiptDate: "2020-01-01",
+        receiptReference: " REF ",
+        storagePath: " collection-receipts/receipt.pdf ",
+      },
+      {
+        fileSize: 10,
+        originalFileName: "",
+        storagePath: "",
+      } as any,
+    ],
+  });
+
+  assert.equal(uploadedRows.length, 1);
+  assert.equal(uploadedRows[0]?.originalMimeType, "application/octet-stream");
+  assert.equal(uploadedRows[0]?.receiptAmountCents, 500);
+  assert.equal(uploadedRows[0]?.fileHash, "hash-1");
+});
