@@ -28,6 +28,18 @@ export type SideTabNavigationProps = {
   className?: string;
 };
 
+const sideTabWidthClassByPixels = new Map<number, string>([
+  [84, "w-[5.25rem]"],
+  [88, "w-[5.5rem]"],
+  [276, "w-[17.25rem]"],
+  [296, "w-[18.5rem]"],
+  [308, "w-[19.25rem]"],
+]);
+
+function resolveSideTabWidthClass(width: number, fallbackClassName: string) {
+  return sideTabWidthClassByPixels.get(width) ?? fallbackClassName;
+}
+
 export function SideTabNavigation({
   items,
   selectedKey,
@@ -47,6 +59,9 @@ export function SideTabNavigation({
     onSelect(key);
     onMobileOpenChange(false);
   };
+  const widthClassName = collapsed
+    ? resolveSideTabWidthClass(collapsedWidth, "w-[5.25rem]")
+    : resolveSideTabWidthClass(expandedWidth, "w-[17.25rem]");
 
   return (
     <>
@@ -62,9 +77,9 @@ export function SideTabNavigation({
       </Button>
 
       <aside
-        style={{ width: collapsed ? collapsedWidth : expandedWidth }}
         className={cn(
           "sticky top-4 hidden shrink-0 overflow-hidden rounded-xl border border-border/60 bg-background/70 p-2 shadow-sm transition-[width] duration-150 ease-out motion-reduce:transition-none lg:block",
+          widthClassName,
           className,
         )}
       >
