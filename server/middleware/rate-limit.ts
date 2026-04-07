@@ -11,6 +11,7 @@ type RateLimitPayload = {
 };
 
 export type AuthRouteRateLimiters = {
+  loginIp: RequestHandler;
   login: RequestHandler;
   publicRecovery: RequestHandler;
   authenticatedAuth: RequestHandler;
@@ -82,6 +83,13 @@ export const searchRateLimiter = createJsonRateLimiter({
 
 export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
   return {
+    loginIp: createJsonRateLimiter({
+      windowMs: 10 * 60 * 1000,
+      max: 50,
+      code: ERROR_CODES.AUTH_RATE_LIMITED,
+      message: "Too many login attempts from this network. Please try again shortly.",
+      keyGenerator: (req) => buildRateLimitKey(req, "auth-login-ip"),
+    }),
     login: createJsonRateLimiter({
       windowMs: 10 * 60 * 1000,
       max: 15,

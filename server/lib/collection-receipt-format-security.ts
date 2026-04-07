@@ -14,6 +14,8 @@ const DANGEROUS_PDF_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /\/importdata\b/i, reason: "contains import-data actions" },
 ];
 
+export const COLLECTION_RECEIPT_SIGNATURE_SCAN_BYTES = 64;
+
 export function validatePdfCollectionReceiptBuffer(buffer: Buffer) {
   if (buffer.length < 8 || buffer.toString("latin1", 0, 5) !== "%PDF-") {
     throw createCollectionReceiptSecurityError("Receipt PDF header is invalid.", "pdf-header-invalid");
@@ -84,7 +86,7 @@ export function detectCollectionReceiptSignature(buffer: Buffer): CollectionRece
   }
 
   if (
-    buffer.length >= 12
+    buffer.length >= 16
     && buffer[0] === 0x52
     && buffer[1] === 0x49
     && buffer[2] === 0x46
@@ -93,6 +95,10 @@ export function detectCollectionReceiptSignature(buffer: Buffer): CollectionRece
     && buffer[9] === 0x45
     && buffer[10] === 0x42
     && buffer[11] === 0x50
+    && buffer[12] === 0x56
+    && buffer[13] === 0x50
+    && buffer[14] === 0x38
+    && (buffer[15] === 0x20 || buffer[15] === 0x4c || buffer[15] === 0x58)
   ) {
     return "webp";
   }

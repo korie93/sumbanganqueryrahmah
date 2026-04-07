@@ -3,6 +3,7 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import {
   CollectionReceiptSecurityError,
+  COLLECTION_RECEIPT_SIGNATURE_SCAN_BYTES,
   detectCollectionReceiptSignature,
   type CollectionReceiptFileType,
 } from "../lib/collection-receipt-security";
@@ -64,8 +65,8 @@ export async function saveMultipartCollectionReceipt(
         return;
       }
 
-      if (signatureBytesCaptured < 16) {
-        const remainingBytes = 16 - signatureBytesCaptured;
+      if (signatureBytesCaptured < COLLECTION_RECEIPT_SIGNATURE_SCAN_BYTES) {
+        const remainingBytes = COLLECTION_RECEIPT_SIGNATURE_SCAN_BYTES - signatureBytesCaptured;
         signatureChunks.push(bufferChunk.subarray(0, remainingBytes));
         signatureBytesCaptured += Math.min(bufferChunk.length, remainingBytes);
       }

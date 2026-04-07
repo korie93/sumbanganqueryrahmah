@@ -792,6 +792,81 @@ test("POST /api/auth/login keeps unknown usernames generic without leaking accou
   }
 });
 
+test("POST /api/auth/login is rate limited by IP before username-specific buckets", async () => {
+  const auditLogs: Array<{ action: string; performedBy?: string; details?: string }> = [];
+  const storage = {
+    getUserByUsername: async () => null,
+    isVisitorBanned: async () => false,
+    createAuditLog: async (entry: { action: string; performedBy?: string; details?: string }) => {
+      auditLogs.push(entry);
+      return { id: `audit-${auditLogs.length}`, ...entry };
+    },
+  } as unknown as PostgresStorage;
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: (_req, _res, next) => next(),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+    rateLimiters: {
+      loginIp: rateLimit({
+        windowMs: 60 * 1000,
+        max: 1,
+        standardHeaders: true,
+        legacyHeaders: false,
+        handler: (_req, res) => {
+          res.status(429).json({
+            ok: false,
+            error: {
+              code: ERROR_CODES.AUTH_RATE_LIMITED,
+              message: "Too many login attempts from this network. Please try again shortly.",
+            },
+          });
+        },
+      }),
+    },
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const headers = { "Content-Type": "application/json" };
+    const firstResponse = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        username: "missing.one",
+        password: "WrongPassword!",
+        fingerprint: "fingerprint-one",
+        browser: "Mozilla/5.0",
+      }),
+    });
+    const secondResponse = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        username: "missing.two",
+        password: "WrongPassword!",
+        fingerprint: "fingerprint-two",
+        browser: "Mozilla/5.0",
+      }),
+    });
+
+    assert.equal(firstResponse.status, 401);
+    assert.equal(secondResponse.status, 429);
+    assert.deepEqual(await secondResponse.json(), {
+      ok: false,
+      error: {
+        code: ERROR_CODES.AUTH_RATE_LIMITED,
+        message: "Too many login attempts from this network. Please try again shortly.",
+      },
+    });
+    assert.equal(auditLogs.length, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /api/auth/login rejects malformed request bodies with a validation error code", async () => {
   const { storage, auditLogs } = await createLoginStorageDouble();
   const app = createJsonTestApp();

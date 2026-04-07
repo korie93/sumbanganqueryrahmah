@@ -6,6 +6,7 @@ import {
   type CollectionReceiptSecurityResult,
 } from "./collection-receipt-security-shared";
 import {
+  COLLECTION_RECEIPT_SIGNATURE_SCAN_BYTES,
   detectCollectionReceiptSignature,
   validatePdfCollectionReceiptBuffer,
 } from "./collection-receipt-format-security";
@@ -19,6 +20,7 @@ export {
   type CollectionReceiptSecurityResult,
 };
 export { detectCollectionReceiptSignature } from "./collection-receipt-format-security";
+export { COLLECTION_RECEIPT_SIGNATURE_SCAN_BYTES } from "./collection-receipt-format-security";
 
 export function validateCollectionReceiptSecurity(
   buffer: Buffer,

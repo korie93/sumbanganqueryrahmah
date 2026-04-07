@@ -80,11 +80,12 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
     };
   });
 
-  app.post("/api/login", rateLimiters.login, handleLogin);
-  app.post("/api/auth/login", rateLimiters.login, handleLogin);
+  app.post("/api/login", rateLimiters.loginIp, rateLimiters.login, handleLogin);
+  app.post("/api/auth/login", rateLimiters.loginIp, rateLimiters.login, handleLogin);
 
   app.post(
     "/api/auth/verify-two-factor-login",
+    rateLimiters.loginIp,
     rateLimiters.login,
     jsonRoute(async (req, res) => {
       const body = readTwoFactorChallengeBody(req.body);
