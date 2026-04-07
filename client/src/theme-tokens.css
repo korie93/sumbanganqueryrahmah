@@ -27,7 +27,7 @@
   --secondary: 214 25% 86%;
   --secondary-foreground: 222 47% 11%;
   --muted: 214 20% 90%;
-  --muted-foreground: 215 16% 47%;
+  --muted-foreground: 215 18% 38%;
   --accent: 214 25% 92%;
   --accent-foreground: 222 47% 11%;
   --destructive: 0 84% 60%;
@@ -232,7 +232,7 @@ input[type="search"]::-webkit-search-cancel-button {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  z-index: 999;
+  z-index: 1;
 }
 
 .hover-elevate:hover:not(.no-default-hover-elevate)::after,

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import express from "express";
@@ -73,5 +75,34 @@ test("registerLocalHttpPipeline preserves caller-provided request ids", async ()
     assert.equal(response.headers.get("x-request-id"), "req-test-123");
   } finally {
     await stopTestServer(server);
+  }
+});
+
+test("registerLocalHttpPipeline serves generic uploads as attachments", async () => {
+  const uploadsRootDir = await mkdtemp(path.join(os.tmpdir(), "sqr-uploads-"));
+  await writeFile(path.join(uploadsRootDir, "sample report.txt"), "example upload", "utf8");
+
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir,
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/uploads/sample%20report.txt`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-disposition"), 'attachment; filename="sample_report.txt"');
+    assert.equal(await response.text(), "example upload");
+  } finally {
+    await stopTestServer(server);
+    await rm(uploadsRootDir, { recursive: true, force: true });
   }
 });

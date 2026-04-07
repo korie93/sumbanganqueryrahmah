@@ -5,6 +5,8 @@ export type BackupPayloadReader = {
   iterateArrayChunks<T>(key: keyof BackupDataPayload, chunkSize: number): Generator<T[]>;
 };
 
+export type BackupPayloadChunkReader = Pick<BackupPayloadReader, "iterateArrayChunks">;
+
 export type BackupRestoreExecutor = {
   execute: (query: unknown) => Promise<{ rows?: Array<Record<string, unknown>> }>;
   insert: (...args: any[]) => any;

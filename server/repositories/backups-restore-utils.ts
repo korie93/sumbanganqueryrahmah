@@ -1,6 +1,7 @@
 import { db } from "../db-postgres";
 import type { BackupDataPayload, RestoreStats } from "./backups-repository-types";
 import {
+  createBackupPayloadChunkReader,
   createBackupPayloadSectionReader,
   prepareBackupPayloadFileForCreate,
 } from "./backups-payload-utils";
@@ -21,6 +22,7 @@ import {
 type BackupPayloadSource = BackupDataPayload | string;
 
 export {
+  createBackupPayloadChunkReader,
   createBackupPayloadSectionReader,
   prepareBackupPayloadFileForCreate,
 } from "./backups-payload-utils";
@@ -28,7 +30,7 @@ export {
 export async function restoreFromBackup(
   backupDataRaw: BackupPayloadSource,
 ): Promise<{ success: boolean; stats: RestoreStats }> {
-  const backupDataReader = createBackupPayloadSectionReader(
+  const backupDataReader = createBackupPayloadChunkReader(
     (backupDataRaw || {}) as BackupPayloadSource,
   );
   const stats = createRestoreStats();

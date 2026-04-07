@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import express, { type Express, type RequestHandler } from "express";
 import helmet from "helmet";
 import { logger } from "../lib/logger";
@@ -16,6 +17,12 @@ function normalizeRequestUserAgent(rawUserAgent: unknown): string | undefined {
   }
 
   return normalized.slice(0, 180);
+}
+
+function resolveAttachmentFilename(filePath: string): string {
+  const basename = path.basename(filePath).replace(/[^\w.!#$&+^`|~-]+/g, "_");
+  const trimmed = basename.replace(/^\.+/, "").slice(0, 180);
+  return trimmed || "download";
 }
 
 type LocalHttpPipelineOptions = {
@@ -82,7 +89,11 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
   app.use("/uploads/collection-receipts", (_req, res) => {
     return res.status(404).json({ ok: false, message: "Not found." });
   });
-  app.use("/uploads", express.static(uploadsRootDir));
+  app.use("/uploads", express.static(uploadsRootDir, {
+    setHeaders: (res, filePath) => {
+      res.setHeader("Content-Disposition", `attachment; filename="${resolveAttachmentFilename(filePath)}"`);
+    },
+  }));
 
   app.use((req, res, next) => {
     const incomingRequestId = String(req.headers["x-request-id"] || "").trim();

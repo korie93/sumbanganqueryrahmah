@@ -277,7 +277,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 30px;
+  min-height: 44px;
+  padding-inline: 10px;
   color: rgb(148 163 184);
 }
 

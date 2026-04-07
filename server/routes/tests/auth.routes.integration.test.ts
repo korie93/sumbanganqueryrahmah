@@ -639,6 +639,106 @@ test("PATCH /api/me/credentials updates the current username without forcing log
   }
 });
 
+test("POST /api/auth/change-password clears auth and CSRF cookies when forcing logout", async () => {
+  const passwordHash = await hashPassword("Password123!");
+  const {
+    storage,
+    user,
+    auditLogs,
+    accountUpdates,
+  } = createOwnCredentialsStorageDouble({
+    user: {
+      passwordHash,
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: authenticateAs(user),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/change-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        currentPassword: "Password123!",
+        newPassword: "BetterPassword123!",
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.forceLogout, true);
+    assert.equal(accountUpdates.length, 1);
+    assert.equal(auditLogs[0]?.action, "USER_PASSWORD_CHANGED");
+    assert.equal(await verifyPassword("BetterPassword123!", user.passwordHash), true);
+
+    const setCookie = response.headers.get("set-cookie") || "";
+    assert.match(setCookie, /sqr_auth=;/);
+    assert.match(setCookie, /sqr_auth_hint=;/);
+    assert.match(setCookie, /sqr_csrf=;/);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/me/credentials clears auth and CSRF cookies when password updates force logout", async () => {
+  const passwordHash = await hashPassword("Password123!");
+  const {
+    storage,
+    user,
+    accountUpdates,
+  } = createOwnCredentialsStorageDouble({
+    user: {
+      passwordHash,
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: authenticateAs(user),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/me/credentials`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        currentPassword: "Password123!",
+        newPassword: "BetterPassword123!",
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.forceLogout, true);
+    assert.equal(accountUpdates.length, 1);
+    assert.equal(await verifyPassword("BetterPassword123!", user.passwordHash), true);
+
+    const setCookie = response.headers.get("set-cookie") || "";
+    assert.match(setCookie, /sqr_auth=;/);
+    assert.match(setCookie, /sqr_auth_hint=;/);
+    assert.match(setCookie, /sqr_csrf=;/);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /api/auth/login keeps unknown usernames generic without leaking account existence", async () => {
   const auditLogs: Array<{ action: string; performedBy?: string; details?: string }> = [];
   const storage = {

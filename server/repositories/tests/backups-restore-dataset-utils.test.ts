@@ -59,7 +59,7 @@ test("collection restore tracks restored record ids through a temp table before 
   };
   const backupDataReader = {
     getArray() {
-      return [];
+      throw new Error("restore helpers must not eagerly parse backup datasets.");
     },
     *iterateArrayChunks<T>(key: string): Generator<T[]> {
       if (key !== "collectionRecords") {

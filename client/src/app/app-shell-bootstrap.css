@@ -116,7 +116,7 @@
 
 .app-route-error-boundary__action {
   display: inline-flex;
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
@@ -135,7 +135,7 @@
 
 .app-route-error-boundary__action:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 1px hsl(var(--ring) / 1);
+  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.42);
 }
 
 .app-route-error-boundary__action--primary {

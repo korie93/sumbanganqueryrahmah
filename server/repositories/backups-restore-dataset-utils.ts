@@ -1,4 +1,5 @@
 export type {
+  BackupPayloadChunkReader,
   BackupPayloadReader,
   BackupRestoreExecutor,
 } from "./backups-restore-shared-utils";

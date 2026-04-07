@@ -12,14 +12,14 @@ import {
   type RestoreStats,
 } from "./backups-repository-types";
 import {
-  type BackupPayloadReader,
+  type BackupPayloadChunkReader,
   type BackupRestoreExecutor,
   toDate,
 } from "./backups-restore-shared-utils";
 
 export async function restoreImportsFromBackup(
   tx: BackupRestoreExecutor,
-  backupDataReader: BackupPayloadReader,
+  backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
   for (const chunk of backupDataReader.iterateArrayChunks<Import>("imports", BACKUP_CHUNK_SIZE)) {
@@ -57,7 +57,7 @@ export async function restoreImportsFromBackup(
 
 export async function restoreDataRowsFromBackup(
   tx: BackupRestoreExecutor,
-  backupDataReader: BackupPayloadReader,
+  backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
   for (const chunk of backupDataReader.iterateArrayChunks<DataRow>("dataRows", BACKUP_CHUNK_SIZE)) {
@@ -80,7 +80,7 @@ export async function restoreDataRowsFromBackup(
 
 export async function restoreUsersFromBackup(
   tx: BackupRestoreExecutor,
-  backupDataReader: BackupPayloadReader,
+  backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
   for (const chunk of backupDataReader.iterateArrayChunks<BackupUserRecord>("users", BACKUP_CHUNK_SIZE)) {
@@ -124,7 +124,7 @@ export async function restoreUsersFromBackup(
 
 export async function restoreAuditLogsFromBackup(
   tx: BackupRestoreExecutor,
-  backupDataReader: BackupPayloadReader,
+  backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
   for (const chunk of backupDataReader.iterateArrayChunks<AuditLog>("auditLogs", BACKUP_CHUNK_SIZE)) {

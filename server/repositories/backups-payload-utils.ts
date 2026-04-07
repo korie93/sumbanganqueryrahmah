@@ -18,7 +18,10 @@ import {
   type BackupUserRecord,
   type PreparedBackupPayloadFile,
 } from "./backups-repository-types";
-export { createBackupPayloadSectionReader } from "./backups-payload-reader-utils";
+export {
+  createBackupPayloadChunkReader,
+  createBackupPayloadSectionReader,
+} from "./backups-payload-reader-utils";
 
 async function safeSelectRows<T extends Record<string, unknown>>(query: unknown): Promise<T[]> {
   try {

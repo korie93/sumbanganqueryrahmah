@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createBackupPayloadSectionReader } from "../backups-restore-utils";
+import {
+  createBackupPayloadChunkReader,
+  createBackupPayloadSectionReader,
+} from "../backups-restore-utils";
 
 test("createBackupPayloadSectionReader reads top-level backup arrays from a raw JSON string", () => {
   const payloadJson = JSON.stringify({
@@ -128,5 +131,29 @@ test("createBackupPayloadSectionReader iterates object-source datasets in bounde
   assert.deepEqual(
     chunks.map((chunk) => chunk.map((row) => row.id)),
     [["record-1", "record-2"], ["record-3"]],
+  );
+});
+
+test("createBackupPayloadChunkReader hides eager array parsing for restore paths", () => {
+  const reader = createBackupPayloadChunkReader(JSON.stringify({
+    imports: [],
+    dataRows: [],
+    users: [],
+    auditLogs: [],
+    collectionRecords: Array.from({ length: 5 }, (_, index) => ({
+      id: `record-${index + 1}`,
+      customerName: "Restore Row",
+      paymentDate: "2026-03-31",
+      amount: 10 + index,
+    })),
+    collectionRecordReceipts: [],
+  }));
+
+  assert.equal("getArray" in reader, false);
+  const chunks = Array.from(reader.iterateArrayChunks<{ id: string }>("collectionRecords", 2));
+
+  assert.deepEqual(
+    chunks.map((chunk) => chunk.map((row) => row.id)),
+    [["record-1", "record-2"], ["record-3", "record-4"], ["record-5"]],
   );
 });

@@ -9,7 +9,7 @@ import {
 } from "./backups-repository-types";
 import { rebuildCollectionRecordDailyRollups } from "./collection-record-repository-utils";
 import {
-  type BackupPayloadReader,
+  type BackupPayloadChunkReader,
   type BackupRestoreExecutor,
   toDate,
 } from "./backups-restore-shared-utils";
@@ -129,7 +129,7 @@ export async function initializeRestoreTrackingTempTable(tx: BackupRestoreExecut
 
 export async function restoreCollectionRecordsFromBackup(
   tx: BackupRestoreExecutor,
-  backupDataReader: BackupPayloadReader,
+  backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
   for (const chunk of backupDataReader.iterateArrayChunks<BackupCollectionRecord>(
@@ -210,7 +210,7 @@ export async function restoreCollectionRecordsFromBackup(
 
 export async function restoreCollectionRecordReceiptsFromBackup(
   tx: BackupRestoreExecutor,
-  backupDataReader: BackupPayloadReader,
+  backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
   for (const chunk of backupDataReader.iterateArrayChunks<BackupCollectionReceipt>(

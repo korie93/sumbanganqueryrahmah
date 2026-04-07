@@ -1,4 +1,5 @@
 import type { BackupDataPayload } from "./backups-repository-types";
+import type { BackupPayloadChunkReader } from "./backups-restore-shared-utils";
 
 type BackupDatasetKey = keyof BackupDataPayload;
 type BackupPayloadSource = BackupDataPayload | string;
@@ -241,6 +242,15 @@ export function createBackupPayloadSectionReader(source: BackupPayloadSource) {
     },
     iterateArrayChunks<T>(key: BackupDatasetKey, chunkSize: number): Generator<T[]> {
       return iterateArrayChunksFromStringSource<T>(source, memberRanges.get(key), chunkSize);
+    },
+  };
+}
+
+export function createBackupPayloadChunkReader(source: BackupPayloadSource): BackupPayloadChunkReader {
+  const reader = createBackupPayloadSectionReader(source);
+  return {
+    iterateArrayChunks<T>(key: BackupDatasetKey, chunkSize: number): Generator<T[]> {
+      return reader.iterateArrayChunks<T>(key, chunkSize);
     },
   };
 }

@@ -5,6 +5,7 @@ import {
   readTwoFactorDisableBody,
   readTwoFactorSetupBody,
 } from "./auth-request-parsers";
+import { clearAuthSessionCookie } from "../../auth/session-cookie";
 import type { AuthRouteContext } from "./auth-route-shared";
 
 export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
@@ -90,7 +91,7 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
     "/api/auth/change-password",
     authenticateToken,
     rateLimiters.authenticatedAuth,
-    jsonRoute(async (req) => {
+    jsonRoute(async (req, res) => {
       const body = readPasswordChangeBody(req.body);
       const result = await authAccountService.changeOwnPassword(req.user, body);
 
@@ -98,6 +99,7 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
         result.closedSessionIds,
         "Password changed. Please login again.",
       );
+      clearAuthSessionCookie(res);
 
       return {
         ok: true,
@@ -111,7 +113,7 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
     "/api/me/credentials",
     authenticateToken,
     rateLimiters.authenticatedAuth,
-    jsonRoute(async (req) => {
+    jsonRoute(async (req, res) => {
       const parsed = readOwnCredentialPatchBody(req.body);
       const result = await authAccountService.updateOwnCredentials(req.user, parsed);
       if (result.forceLogout) {
@@ -119,6 +121,7 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
           result.closedSessionIds,
           "Password changed. Please login again.",
         );
+        clearAuthSessionCookie(res);
       }
 
       return {

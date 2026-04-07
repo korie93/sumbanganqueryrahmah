@@ -7,8 +7,15 @@ export function createOwnCredentialsStorageDouble(options?: {
 }) {
   const auditLogs: AuditEntry[] = [];
   const credentialUpdates: Array<Record<string, unknown>> = [];
+  const accountUpdates: Array<Record<string, unknown>> = [];
   const activityUsernameUpdates: Array<{ previousUsername: string; nextUsername: string }> = [];
-  const user = {
+  const user: Record<string, any> & {
+    id: string;
+    username: string;
+    role: string;
+    mustChangePassword: boolean;
+    passwordHash: string;
+  } = {
     id: "credential-user-1",
     username: "credential.user",
     fullName: "Credential User",
@@ -30,6 +37,36 @@ export function createOwnCredentialsStorageDouble(options?: {
   const storage = {
     getUser: async (userId: string) => (userId === user.id ? user : null),
     getUserByUsername: async (username: string) => usersByUsername.get(username) ?? null,
+    updateUserAccount: async (params: Record<string, any>) => {
+      accountUpdates.push(params);
+
+      if (params.passwordHash) {
+        user.passwordHash = params.passwordHash;
+      }
+      if (Object.prototype.hasOwnProperty.call(params, "passwordChangedAt")) {
+        user.passwordChangedAt = params.passwordChangedAt;
+      }
+      if (Object.prototype.hasOwnProperty.call(params, "mustChangePassword")) {
+        user.mustChangePassword = params.mustChangePassword;
+      }
+      if (Object.prototype.hasOwnProperty.call(params, "passwordResetBySuperuser")) {
+        user.passwordResetBySuperuser = params.passwordResetBySuperuser;
+      }
+      if (Object.prototype.hasOwnProperty.call(params, "failedLoginAttempts")) {
+        user.failedLoginAttempts = params.failedLoginAttempts;
+      }
+      if (Object.prototype.hasOwnProperty.call(params, "lockedAt")) {
+        user.lockedAt = params.lockedAt;
+      }
+      if (Object.prototype.hasOwnProperty.call(params, "lockedReason")) {
+        user.lockedReason = params.lockedReason;
+      }
+      if (Object.prototype.hasOwnProperty.call(params, "lockedBySystem")) {
+        user.lockedBySystem = params.lockedBySystem;
+      }
+
+      return user;
+    },
     updateUserCredentials: async (params: Record<string, any>) => {
       credentialUpdates.push(params);
 
@@ -59,5 +96,5 @@ export function createOwnCredentialsStorageDouble(options?: {
     },
   } as unknown as PostgresStorage;
 
-  return { storage, user, auditLogs, credentialUpdates, activityUsernameUpdates };
+  return { storage, user, auditLogs, credentialUpdates, accountUpdates, activityUsernameUpdates };
 }
