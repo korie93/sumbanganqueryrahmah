@@ -6,6 +6,7 @@ import { CoreSchemaBootstrap } from "../../internal/coreSchemaBootstrap";
 import { SettingsBootstrap } from "../../internal/settingsBootstrap";
 import { SpatialBootstrap } from "../../internal/spatialBootstrap";
 import { UsersBootstrap } from "../../internal/usersBootstrap";
+import { isProductionLikeEnvironment } from "../../config/runtime-environment";
 import { ActivityRepository } from "../../repositories/activity.repository";
 import { AiCategoryRepository } from "../../repositories/ai-category.repository";
 import { AiRepository } from "../../repositories/ai.repository";
@@ -20,7 +21,7 @@ import { SearchRepository } from "../../repositories/search.repository";
 import { SettingsRepository } from "../../repositories/settings.repository";
 
 export const QUERY_PAGE_LIMIT = 1000;
-export const STORAGE_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
+export const STORAGE_DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1" && !isProductionLikeEnvironment();
 
 export class PostgresStorageCore {
   protected readonly authRepository = new AuthRepository();

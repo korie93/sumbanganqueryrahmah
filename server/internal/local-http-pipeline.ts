@@ -44,6 +44,15 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
   } = options;
 
   app.use(helmet({
+    frameguard: {
+      action: "sameorigin",
+    },
+    hsts: {
+      maxAge: 15552000,
+      includeSubDomains: true,
+      preload: false,
+    },
+    noSniff: true,
     contentSecurityPolicy: {
       useDefaults: true,
       directives: {

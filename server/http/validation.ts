@@ -40,12 +40,27 @@ export function parseRequestBody<TSchema extends z.ZodTypeAny>(
   );
 }
 
-export function readNonEmptyString(value: unknown): string {
-  return String(value ?? "").trim();
+export const DEFAULT_READ_STRING_MAX_LENGTH = 2_048;
+
+export function readNonEmptyString(
+  value: unknown,
+  maxLength = DEFAULT_READ_STRING_MAX_LENGTH,
+): string {
+  const normalized = String(value ?? "").trim();
+  if (normalized.length > maxLength) {
+    throw badRequest(
+      `String value exceeds maximum length of ${maxLength} characters.`,
+      ERROR_CODES.REQUEST_BODY_INVALID,
+    );
+  }
+  return normalized;
 }
 
-export function readOptionalString(value: unknown): string | undefined {
-  const normalized = readNonEmptyString(value);
+export function readOptionalString(
+  value: unknown,
+  maxLength = DEFAULT_READ_STRING_MAX_LENGTH,
+): string | undefined {
+  const normalized = readNonEmptyString(value, maxLength);
   return normalized || undefined;
 }
 

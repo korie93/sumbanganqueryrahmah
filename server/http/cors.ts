@@ -20,6 +20,7 @@ type CorsErrorPayload = {
 
 type CorsEnvironment = {
   NODE_ENV?: string;
+  ALLOW_LOCAL_DEV_CORS?: string;
   PUBLIC_APP_URL?: string;
   CORS_ALLOWED_ORIGINS?: string;
 };
@@ -42,6 +43,7 @@ export function normalizeCorsOrigin(value: string | null | undefined): string | 
 function buildDefaultCorsEnvironment(): CorsEnvironmentSource {
   return {
     NODE_ENV: runtimeConfig.app.nodeEnv,
+    ALLOW_LOCAL_DEV_CORS: process.env.ALLOW_LOCAL_DEV_CORS,
     PUBLIC_APP_URL: runtimeConfig.app.publicAppUrl ?? undefined,
     CORS_ALLOWED_ORIGINS: runtimeConfig.app.corsAllowedOrigins.join(","),
   };
@@ -67,7 +69,10 @@ export function resolveAllowedCorsOrigins(env: CorsEnvironmentSource = buildDefa
 
   addOrigin(env.PUBLIC_APP_URL);
 
-  if (String(env.NODE_ENV || "development") !== "production") {
+  if (
+    String(env.NODE_ENV || "development") !== "production"
+    && String(env.ALLOW_LOCAL_DEV_CORS || "").trim() === "1"
+  ) {
     for (const origin of LOCAL_DEV_ORIGINS) {
       addOrigin(origin);
     }

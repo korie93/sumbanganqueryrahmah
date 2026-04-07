@@ -69,11 +69,14 @@ test("runtime config accepts production startup when required hardening env vars
       ...productionBaseOverrides,
       BACKUP_ENCRYPTION_KEY: "A".repeat(32),
       BACKUP_FEATURE_ENABLED: "1",
+      DEBUG_LOGS: "1",
     },
     async () => {
       const runtimeModule = await importRuntimeFresh();
       assert.equal(runtimeModule.runtimeConfig.app.nodeEnv, "production");
       assert.equal(runtimeModule.runtimeConfig.auth.seedDefaultUsers, false);
+      assert.equal(runtimeModule.runtimeConfig.app.debugLogs, false);
+      assert.equal(runtimeModule.runtimeConfig.ai.debugLogs, false);
     },
   );
 });
@@ -188,11 +191,13 @@ test("runtime config normalizes missing PG_PASSWORD to an empty string in strict
       SEED_DEFAULT_USERS: "0",
       LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
       MAIL_DEV_OUTBOX_ENABLED: "0",
+      PG_MAX_CONNECTIONS: null,
     },
     async () => {
       const runtimeModule = await importRuntimeFresh();
       assert.equal(runtimeModule.runtimeConfig.app.isStrictLocalDevelopment, true);
       assert.equal(runtimeModule.runtimeConfig.database.password, "");
+      assert.equal(runtimeModule.runtimeConfig.database.maxConnections >= 10, true);
       assert.equal(runtimeModule.runtimeConfigValidation.warningCount > 0, true);
     },
   );

@@ -18,6 +18,18 @@ interface AutoLogoutProps {
   username?: string;
 }
 
+function isAutoLogoutDiagnosticsEnabled() {
+  return Boolean(import.meta.env?.DEV || import.meta.env?.VITE_AUTO_LOGOUT_DEBUG === "1");
+}
+
+function warnAutoLogoutDiagnostic(message: string, error?: unknown) {
+  if (!isAutoLogoutDiagnosticsEnabled()) {
+    return;
+  }
+
+  globalThis.console?.warn?.(message, error);
+}
+
 export default function AutoLogout({
   onClientLogout,
   onLogout,
@@ -109,7 +121,6 @@ export default function AutoLogout({
     clearIdleTimeout();
 
     timeoutRef.current = window.setTimeout(() => {
-      console.log("Auto-logout due to inactivity");
       void runLogout();
     }, timeoutMs);
   }, [clearIdleTimeout, runLogout, timeoutMs]);
@@ -143,7 +154,7 @@ export default function AutoLogout({
       ) {
         return;
       }
-      console.warn("Heartbeat failed:", error);
+      warnAutoLogoutDiagnostic("Heartbeat failed:", error);
     } finally {
       if (heartbeatAbortControllerRef.current === controller) {
         heartbeatAbortControllerRef.current = null;
@@ -342,7 +353,7 @@ export default function AutoLogout({
               window.dispatchEvent(new CustomEvent("settings-updated", { detail: message }));
             }
           } catch (error) {
-            console.warn("Failed to parse WebSocket message:", error);
+            warnAutoLogoutDiagnostic("Failed to parse WebSocket message:", error);
           }
         };
 
@@ -354,10 +365,10 @@ export default function AutoLogout({
         };
 
         socket.onerror = (error) => {
-          console.warn("WebSocket error:", error);
+          warnAutoLogoutDiagnostic("WebSocket error:", error);
         };
       } catch (error) {
-        console.warn("Failed to connect WebSocket:", error);
+        warnAutoLogoutDiagnostic("Failed to connect WebSocket:", error);
         scheduleReconnect();
       }
     };

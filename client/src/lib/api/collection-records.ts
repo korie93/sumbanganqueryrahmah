@@ -1,4 +1,5 @@
 import { apiRequest } from "../api-client";
+import { createClientRandomId } from "../secure-id";
 import type {
   CollectionPurgeResponse,
   CollectionPurgeSummaryResponse,
@@ -102,11 +103,7 @@ function buildCollectionMutationHeaders(options?: CollectionMutationRequestOptio
 }
 
 export function createCollectionMutationIdempotencyKey() {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `collection-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return createClientRandomId("collection");
 }
 
 export function buildCollectionMutationFingerprint(params: {

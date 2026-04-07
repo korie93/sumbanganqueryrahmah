@@ -30,13 +30,20 @@ type CreateLocalRuntimeEnvironmentOptions = {
 };
 
 const DB_METHOD_WRAP_EXCLUDE = new Set<string>(["constructor"]);
+const WEBSOCKET_MAX_PAYLOAD_BYTES = 100 * 1024;
+const HTTP_SERVER_TIMEOUT_MS = 120_000;
 
 export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnvironmentOptions = {}) {
   const storage = new PostgresStorage();
   const app = express();
   applyTrustedProxies(app, runtimeConfig.app.trustedProxies);
   const server = createServer(app);
-  const wss = new WebSocketServer({ server, path: "/ws" });
+  server.setTimeout(HTTP_SERVER_TIMEOUT_MS);
+  const wss = new WebSocketServer({
+    server,
+    path: "/ws",
+    maxPayload: WEBSOCKET_MAX_PAYLOAD_BYTES,
+  });
   const notifyFatalStartup = options.notifyFatalStartup ?? (() => undefined);
 
   wss.on("error", (err: NodeJS.ErrnoException) => {

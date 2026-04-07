@@ -3,8 +3,18 @@ import test from "node:test";
 import jwt from "jsonwebtoken";
 import {
   SESSION_JWT_ALGORITHM,
+  signSessionJwt,
   verifyJwtWithAnySecret,
 } from "../session-jwt";
+
+test("signSessionJwt applies the default session expiry when omitted", () => {
+  const token = signSessionJwt({ username: "alice", role: "admin" });
+  const decoded = jwt.decode(token) as { iat?: number; exp?: number } | null;
+
+  assert.ok(decoded?.iat);
+  assert.ok(decoded?.exp);
+  assert.equal(decoded.exp - decoded.iat, 24 * 60 * 60);
+});
 
 test("verifyJwtWithAnySecret accepts a token signed with a previous manual rotation secret", () => {
   const token = jwt.sign(

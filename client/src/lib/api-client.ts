@@ -4,13 +4,10 @@ import {
   setBannedSessionFlag,
   setStoredForcePasswordChange,
 } from "./auth-session";
+import { createClientRandomId } from "./secure-id";
 
 export function createApiRequestId() {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `api-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return createClientRandomId("api");
 }
 
 export function createApiHeaders(headers?: HeadersInit): Record<string, string> {

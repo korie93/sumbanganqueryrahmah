@@ -20,6 +20,8 @@ export function registerAuthAdminMutationRoutes(context: AuthRouteContext) {
     buildUserPayload,
     buildDeliveryPayload,
   } = context;
+  const adminDestructiveActionRateLimiter =
+    rateLimiters.adminDestructiveAction ?? rateLimiters.adminAction;
 
   const handleCreateManagedUser = jsonRoute(async (req) => {
     const result = await authAccountService.createManagedUser(req.user, readManagedUserBody(req.body));
@@ -62,7 +64,7 @@ export function registerAuthAdminMutationRoutes(context: AuthRouteContext) {
     "/api/admin/users/:id",
     authenticateToken,
     requireRole("superuser"),
-    rateLimiters.adminAction,
+    adminDestructiveActionRateLimiter,
     jsonRoute(async (req) => {
       const result = await authAccountService.deleteManagedUser(req.user, req.params.id);
       closeActivitySockets(

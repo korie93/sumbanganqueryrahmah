@@ -15,6 +15,7 @@ export type AuthRouteRateLimiters = {
   publicRecovery: RequestHandler;
   authenticatedAuth: RequestHandler;
   adminAction: RequestHandler;
+  adminDestructiveAction: RequestHandler;
 };
 
 type JsonRateLimiterOptions = {
@@ -119,6 +120,16 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
       keyGenerator: (req) => {
         const authReq = req as AuthenticatedLikeRequest;
         return buildRateLimitKey(req, `admin-action:${req.path}`, authReq.user?.username);
+      },
+    }),
+    adminDestructiveAction: createJsonRateLimiter({
+      windowMs: 10 * 60 * 1000,
+      max: 10,
+      code: ERROR_CODES.ADMIN_ACTION_RATE_LIMITED,
+      message: "Too many destructive admin actions. Please slow down and try again.",
+      keyGenerator: (req) => {
+        const authReq = req as AuthenticatedLikeRequest;
+        return buildRateLimitKey(req, `admin-destructive:${req.path}`, authReq.user?.username);
       },
     }),
   };

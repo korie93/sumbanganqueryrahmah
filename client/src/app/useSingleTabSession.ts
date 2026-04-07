@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createClientRandomId } from "@/lib/secure-id";
 import {
   buildSingleTabLockStorageKey,
   canClaimSingleTabLock,
@@ -34,7 +35,7 @@ function canUseSingleTabLockStorage() {
 }
 
 function createRuntimeId(): string {
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return createClientRandomId("single-tab");
 }
 
 function consumeSingleTabNavigationReclaim(tabSeed: string): boolean {

@@ -11,7 +11,7 @@ export type ActivityRouteDeps = {
   requireRole: (...roles: string[]) => RequestHandler;
   requireTabAccess: (tabId: string) => RequestHandler;
   connectedClients: Map<string, WebSocket>;
-  rateLimiters?: Pick<AuthRouteRateLimiters, "adminAction">;
+  rateLimiters?: Partial<Pick<AuthRouteRateLimiters, "adminAction" | "adminDestructiveAction">>;
 };
 
 export type ActivityRouteContext = {
@@ -20,6 +20,7 @@ export type ActivityRouteContext = {
   requireRole: (...roles: string[]) => RequestHandler;
   requireTabAccess: (tabId: string) => RequestHandler;
   adminActionRateLimiter: RequestHandler;
+  adminDestructiveActionRateLimiter: RequestHandler;
   activityService: ActivityService;
 };
 
@@ -61,13 +62,17 @@ export function createActivityRouteContext(
   app: Express,
   deps: ActivityRouteDeps,
 ): ActivityRouteContext {
+  const defaultRateLimiters = createAuthRouteRateLimiters();
   return {
     app,
     authenticateToken: deps.authenticateToken,
     requireRole: deps.requireRole,
     requireTabAccess: deps.requireTabAccess,
     adminActionRateLimiter:
-      deps.rateLimiters?.adminAction ?? createAuthRouteRateLimiters().adminAction,
+      deps.rateLimiters?.adminAction ?? defaultRateLimiters.adminAction,
+    adminDestructiveActionRateLimiter:
+      deps.rateLimiters?.adminDestructiveAction
+      ?? defaultRateLimiters.adminDestructiveAction,
     activityService: new ActivityService(deps.storage, deps.connectedClients),
   };
 }

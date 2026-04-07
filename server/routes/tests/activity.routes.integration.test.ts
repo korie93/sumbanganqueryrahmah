@@ -88,6 +88,7 @@ function createMockSocket(): { socket: WebSocket; state: SocketState } {
 function createActivityRouteHarness(options?: {
   authenticateToken?: RequestHandler;
   adminActionRateLimiter?: RequestHandler;
+  adminDestructiveActionRateLimiter?: RequestHandler;
 }) {
   const auditLogs: AuditEntry[] = [];
   const clearNicknameSessionCalls: string[] = [];
@@ -270,6 +271,8 @@ function createActivityRouteHarness(options?: {
     connectedClients,
     rateLimiters: {
       adminAction: options?.adminActionRateLimiter ?? ((_req, _res, next) => next()),
+      adminDestructiveAction:
+        options?.adminDestructiveActionRateLimiter ?? ((_req, _res, next) => next()),
     },
   });
 
@@ -332,6 +335,74 @@ test("POST /api/activity/kick respects the dedicated admin action rate limiter",
     assert.equal(connectedClients.has("activity-2"), true);
     assert.equal(socketStates.get("activity-2")?.closeCalls, 0);
     assert.equal(auditLogs.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("DELETE /api/activity/:id respects the destructive admin action rate limiter", async () => {
+  const { app } = createActivityRouteHarness({
+    adminDestructiveActionRateLimiter: (_req, res) => {
+      res.status(429).json({
+        ok: false,
+        error: {
+          code: ERROR_CODES.ADMIN_ACTION_RATE_LIMITED,
+          message: "Too many destructive admin actions. Please slow down and try again.",
+        },
+      });
+    },
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/activity/activity-1`, {
+      method: "DELETE",
+    });
+
+    assert.equal(response.status, 429);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      error: {
+        code: ERROR_CODES.ADMIN_ACTION_RATE_LIMITED,
+        message: "Too many destructive admin actions. Please slow down and try again.",
+      },
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("DELETE /api/activity/logs/bulk-delete respects the destructive admin action rate limiter", async () => {
+  const { app } = createActivityRouteHarness({
+    adminDestructiveActionRateLimiter: (_req, res) => {
+      res.status(429).json({
+        ok: false,
+        error: {
+          code: ERROR_CODES.ADMIN_ACTION_RATE_LIMITED,
+          message: "Too many destructive admin actions. Please slow down and try again.",
+        },
+      });
+    },
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/activity/logs/bulk-delete`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ activityIds: ["activity-1"] }),
+    });
+
+    assert.equal(response.status, 429);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      error: {
+        code: ERROR_CODES.ADMIN_ACTION_RATE_LIMITED,
+        message: "Too many destructive admin actions. Please slow down and try again.",
+      },
+    });
   } finally {
     await stopTestServer(server);
   }

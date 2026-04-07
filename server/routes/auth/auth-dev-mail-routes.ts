@@ -23,6 +23,8 @@ export function registerAuthDevMailRoutes(context: AuthRouteContext) {
     rateLimiters,
     jsonRoute,
   } = context;
+  const adminDestructiveActionRateLimiter =
+    rateLimiters.adminDestructiveAction ?? rateLimiters.adminAction;
 
   app.get(
     "/dev/mail-preview/:previewId",
@@ -70,7 +72,7 @@ export function registerAuthDevMailRoutes(context: AuthRouteContext) {
     "/api/admin/dev-mail-outbox/:previewId",
     authenticateToken,
     requireRole("superuser"),
-    rateLimiters.adminAction,
+    adminDestructiveActionRateLimiter,
     jsonRoute(async (req) => {
       const result = await authAccountService.deleteDevMailPreview(req.user, req.params.previewId);
       return {
@@ -84,7 +86,7 @@ export function registerAuthDevMailRoutes(context: AuthRouteContext) {
     "/api/admin/dev-mail-outbox",
     authenticateToken,
     requireRole("superuser"),
-    rateLimiters.adminAction,
+    adminDestructiveActionRateLimiter,
     jsonRoute(async (req) => {
       const result = await authAccountService.clearDevMailOutbox(req.user);
       return {

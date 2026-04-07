@@ -1,4 +1,5 @@
 import path from "node:path";
+import os from "node:os";
 import {
   isProductionLikeEnvironment,
   isStrictLocalDevelopmentEnvironment,
@@ -37,12 +38,20 @@ const nodeEnv = resolveNodeEnv();
 const isProduction = nodeEnv === "production";
 const isStrictLocalDevelopment = isStrictLocalDevelopmentEnvironment();
 const isProductionLike = isProductionLikeEnvironment();
-const debugLogs = readBoolean("DEBUG_LOGS", false);
+const debugLogs = readBoolean("DEBUG_LOGS", false) && !isProductionLike;
 const lowMemoryMode = readBoolean("SQR_LOW_MEMORY_MODE", true);
 const seedDefaultUsers = readBoolean("SEED_DEFAULT_USERS", false);
 const backupFeatureEnabled = readBoolean("BACKUP_FEATURE_ENABLED", true);
 const localSuperuserCredentialsFileEnabled = readBoolean("LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED", false);
 const mailDevOutboxEnabled = readBoolean("MAIL_DEV_OUTBOX_ENABLED", false);
+
+function resolveDefaultPgMaxConnections() {
+  const cpuCount = typeof os.availableParallelism === "function"
+    ? os.availableParallelism()
+    : os.cpus().length;
+  const normalizedCpuCount = Math.max(1, Number.isFinite(cpuCount) ? Math.trunc(cpuCount) : 1);
+  return Math.min(50, Math.max(10, normalizedCpuCount * 2));
+}
 
 const configuredSessionSecret = readOptionalString("SESSION_SECRET");
 const configuredPreviousSessionSecrets = resolvePreviousSessionSecrets(
@@ -129,7 +138,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       return "";
     })(),
     database: readString("PG_DATABASE", "sqr_db"),
-    maxConnections: readInt("PG_MAX_CONNECTIONS", 5, { min: 1, max: 50 }),
+    maxConnections: readInt("PG_MAX_CONNECTIONS", resolveDefaultPgMaxConnections(), { min: 1, max: 50 }),
     idleTimeoutMs: readInt("PG_IDLE_TIMEOUT_MS", 30_000, { min: 1_000 }),
     connectionTimeoutMs: readInt("PG_CONNECTION_TIMEOUT_MS", 5_000, { min: 1_000 }),
     searchPath: readString("PG_SEARCH_PATH", "public"),

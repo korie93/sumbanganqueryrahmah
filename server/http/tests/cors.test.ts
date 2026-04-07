@@ -19,6 +19,7 @@ function createCorsTestApp(allowedOrigins?: string[]) {
 test("resolveAllowedCorsOrigins includes configured and local dev origins", () => {
   const allowed = resolveAllowedCorsOrigins({
     NODE_ENV: "development",
+    ALLOW_LOCAL_DEV_CORS: "1",
     PUBLIC_APP_URL: "http://localhost:5000/app",
     CORS_ALLOWED_ORIGINS: "https://app.example.com, https://admin.example.com",
   });
@@ -27,6 +28,19 @@ test("resolveAllowedCorsOrigins includes configured and local dev origins", () =
   assert.ok(allowed.includes("https://admin.example.com"));
   assert.ok(allowed.includes("http://localhost:5000"));
   assert.ok(allowed.includes("http://localhost:5173"));
+});
+
+test("resolveAllowedCorsOrigins keeps local dev origins opt-in outside production", () => {
+  const allowed = resolveAllowedCorsOrigins({
+    NODE_ENV: "development",
+    PUBLIC_APP_URL: "https://staging.example.com",
+    CORS_ALLOWED_ORIGINS: "https://admin.example.com",
+  });
+
+  assert.ok(allowed.includes("https://staging.example.com"));
+  assert.ok(allowed.includes("https://admin.example.com"));
+  assert.equal(allowed.includes("http://localhost:5000"), false);
+  assert.equal(allowed.includes("http://localhost:5173"), false);
 });
 
 test("allowed origins receive an exact Access-Control-Allow-Origin header", async () => {

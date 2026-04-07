@@ -1,7 +1,8 @@
 import pino from "pino";
 import { getRequestContext } from "./request-context";
+import { isProductionLikeEnvironment } from "../config/runtime-environment";
 
-const DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1";
+const DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1" && !isProductionLikeEnvironment();
 const DEFAULT_LOG_LEVEL = process.env.LOG_LEVEL || (DEBUG_LOGS ? "debug" : "info");
 
 const REDACT_KEYS = [

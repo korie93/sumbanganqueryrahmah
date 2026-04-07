@@ -1,5 +1,6 @@
 import type { Metric } from "web-vitals";
 import type { WebVitalTelemetryPayload } from "@shared/web-vitals";
+import { createClientRandomId } from "@/lib/secure-id";
 
 const WEB_VITALS_ENDPOINT = "/telemetry/web-vitals";
 const PUBLIC_PATHS = new Set([
@@ -29,11 +30,7 @@ function isProductionBuild() {
 }
 
 function createTelemetryRequestId() {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `rum-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return createClientRandomId("rum");
 }
 
 export function classifyWebVitalPageType(pathname: string) {

@@ -1,4 +1,5 @@
 import type { User } from "@/app/types";
+import { createClientRandomId } from "@/lib/secure-id";
 
 const AUTH_SESSION_HINT_COOKIE_NAME = "sqr_auth_hint";
 const AUTH_NOTICE_STORAGE_KEY = "auth_notice";
@@ -166,7 +167,7 @@ export function broadcastForcedLogout(message?: string | null | undefined) {
   const payload = normalizedMessage
     ? JSON.stringify({
       message: normalizedMessage,
-      nonce: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      nonce: createClientRandomId("force-logout"),
     })
     : "true";
 

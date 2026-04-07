@@ -26,6 +26,7 @@ export function signSessionJwt<TPayload extends object>(
 ): string {
   return jwt.sign(payload, runtimeConfig.auth.sessionSecret, {
     algorithm: SESSION_JWT_ALGORITHM,
+    expiresIn: SESSION_JWT_DEFAULT_EXPIRY,
     ...options,
   });
 }

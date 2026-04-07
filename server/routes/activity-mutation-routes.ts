@@ -16,12 +16,14 @@ export function registerActivityMutationRoutes(context: ActivityRouteContext) {
     requireRole,
     requireTabAccess,
     adminActionRateLimiter,
+    adminDestructiveActionRateLimiter,
     activityService,
   } = context;
 
   app.delete(
     "/api/activity/:id",
     authenticateToken,
+    adminDestructiveActionRateLimiter,
     requireRole("admin", "superuser"),
     requireTabAccess("activity"),
     asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
@@ -38,7 +40,7 @@ export function registerActivityMutationRoutes(context: ActivityRouteContext) {
   app.delete(
     "/api/activity/logs/bulk-delete",
     authenticateToken,
-    adminActionRateLimiter,
+    adminDestructiveActionRateLimiter,
     requireRole("admin", "superuser"),
     requireTabAccess("activity"),
     asyncHandler(async (req: AuthenticatedRequest, res: Response) => {

@@ -2,6 +2,7 @@ import type {
   CollectionReceiptMetadata,
   CollectionRecordReceipt,
 } from "@/lib/api";
+import { createClientRandomId } from "@/lib/secure-id";
 
 export type CollectionReceiptDraftInput = {
   draftLocalId: string;
@@ -13,11 +14,7 @@ export type CollectionReceiptDraftInput = {
 };
 
 function createReceiptDraftLocalId() {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `receipt-draft-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return createClientRandomId("receipt-draft");
 }
 
 export function createEmptyCollectionReceiptDraft(
