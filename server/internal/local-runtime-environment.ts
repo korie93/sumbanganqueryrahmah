@@ -154,6 +154,7 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
   });
   registerLocalServerRoutes({
     app,
+    server,
     composition,
     runtimeConfig: {
       getRuntimeSettingsCached,

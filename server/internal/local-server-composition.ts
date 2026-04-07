@@ -1,4 +1,5 @@
 import type { Express, RequestHandler, Response } from "express";
+import type { Server } from "http";
 import type { WebSocket, WebSocketServer } from "ws";
 import { getOllamaConfig } from "../ai-ollama";
 import { createAuthGuards, type AuthenticatedRequest } from "../auth/guards";
@@ -126,6 +127,7 @@ export type LocalServerComposition = {
 
 type RegisterLocalServerRoutesOptions = {
   app: Express;
+  server: Server;
   composition: LocalServerComposition;
   runtimeConfig: RuntimeConfigRouteDeps;
   runtimeMonitor: RuntimeMonitorRouteDeps;
@@ -208,6 +210,7 @@ export function createLocalServerComposition(
 export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOptions) {
   const {
     app,
+    server,
     composition,
     runtimeConfig,
     runtimeMonitor,
@@ -278,6 +281,11 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
   });
   void collectionRollupRefreshQueueService.start().catch((error) => {
     logger.error("Failed to start collection rollup refresh queue", { error });
+  });
+  server.once("close", () => {
+    void collectionRollupRefreshQueueService.stop().catch((error) => {
+      logger.warn("Failed to stop collection rollup refresh queue cleanly", { error });
+    });
   });
   const collectionRollupOperationsService = new CollectionRollupOperationsService({
     ensureReady: () => storage.ensureCollectionRecordsReady(),

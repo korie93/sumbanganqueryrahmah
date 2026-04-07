@@ -181,6 +181,7 @@ export class CollectionRollupRefreshNotificationSubscriber
       this.reconnectTimer = null;
       void this.ensureConnected();
     }, this.reconnectDelayMs);
+    this.reconnectTimer.unref?.();
   }
 
   private async safeCloseClient(client: PgNotificationClientLike): Promise<void> {

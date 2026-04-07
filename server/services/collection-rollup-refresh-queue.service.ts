@@ -42,6 +42,7 @@ export class CollectionRollupRefreshQueueService {
   private runPromise: Promise<void> | null = null;
   private nextTimer: NodeJS.Timeout | null = null;
   private notificationSubscriberStarted = false;
+  private stopped = false;
 
   constructor(private readonly deps: CollectionRollupRefreshQueueDeps = {}) {
     this.repository = deps.repository || {
@@ -56,14 +57,36 @@ export class CollectionRollupRefreshQueueService {
   }
 
   async start(): Promise<void> {
+    this.stopped = false;
     await this.ensureStarted();
+    if (this.stopped) {
+      return;
+    }
     await this.ensureNotificationSubscriberStarted();
+    if (this.stopped) {
+      return;
+    }
     this.scheduleRun(0);
   }
 
   async wake(): Promise<void> {
+    if (this.stopped) {
+      return;
+    }
     await this.ensureStarted();
     this.scheduleRun(0);
+  }
+
+  async stop(): Promise<void> {
+    this.stopped = true;
+    if (this.nextTimer) {
+      clearTimeout(this.nextTimer);
+      this.nextTimer = null;
+    }
+    if (this.notificationSubscriberStarted) {
+      await this.stopNotificationSubscriber();
+    }
+    this.notificationSubscriberStarted = false;
   }
 
   private async ensureStarted(): Promise<void> {
@@ -79,6 +102,9 @@ export class CollectionRollupRefreshQueueService {
       if (this.deps.ensureReady) {
         await this.deps.ensureReady();
       }
+      if (this.stopped) {
+        return;
+      }
       await this.repository.markRunningSlicesQueued();
       this.started = true;
     })();
@@ -91,7 +117,7 @@ export class CollectionRollupRefreshQueueService {
   }
 
   private async ensureNotificationSubscriberStarted(): Promise<void> {
-    if (this.notificationSubscriberStarted || !this.deps.notificationSubscriber) {
+    if (this.stopped || this.notificationSubscriberStarted || !this.deps.notificationSubscriber) {
       return;
     }
 
@@ -99,6 +125,10 @@ export class CollectionRollupRefreshQueueService {
       await this.deps.notificationSubscriber.start(() => {
         this.scheduleRun(0);
       });
+      if (this.stopped) {
+        await this.stopNotificationSubscriber();
+        return;
+      }
       this.notificationSubscriberStarted = true;
     } catch (error) {
       logger.warn("Collection rollup notification subscriber failed to start; polling fallback remains active", {
@@ -108,6 +138,9 @@ export class CollectionRollupRefreshQueueService {
   }
 
   private scheduleRun(delayMs: number): void {
+    if (this.stopped) {
+      return;
+    }
     if (this.runPromise) {
       return;
     }
@@ -124,14 +157,20 @@ export class CollectionRollupRefreshQueueService {
   }
 
   private async runLoop(): Promise<void> {
+    if (this.stopped) {
+      return;
+    }
     if (this.runPromise) {
       return this.runPromise;
     }
 
     this.runPromise = (async () => {
       await this.ensureStarted();
+      if (this.stopped) {
+        return;
+      }
 
-      while (true) {
+      while (!this.stopped) {
         const nextSlice = await this.repository.claimNextSlice(new Date());
         if (!nextSlice) {
           break;
@@ -158,9 +197,25 @@ export class CollectionRollupRefreshQueueService {
       }
     })().finally(() => {
       this.runPromise = null;
-      this.scheduleRun(this.idlePollMs);
+      if (!this.stopped) {
+        this.scheduleRun(this.idlePollMs);
+      }
     });
 
     return this.runPromise;
+  }
+
+  private async stopNotificationSubscriber(): Promise<void> {
+    if (!this.deps.notificationSubscriber?.stop) {
+      return;
+    }
+
+    try {
+      await this.deps.notificationSubscriber.stop();
+    } catch (error) {
+      logger.warn("Collection rollup notification subscriber failed to stop cleanly", {
+        error,
+      });
+    }
   }
 }

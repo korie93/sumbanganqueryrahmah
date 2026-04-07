@@ -157,3 +157,76 @@ test("CollectionRollupRefreshQueueService wakes immediately when the notificatio
 
   assert.deepEqual(completed, ["2026-03-27:Collector Gamma"]);
 });
+
+test("CollectionRollupRefreshQueueService stops polling and closes the notification subscriber", async () => {
+  let claimCount = 0;
+  let subscriberStops = 0;
+
+  const service = new CollectionRollupRefreshQueueService({
+    repository: {
+      claimNextSlice: async () => {
+        claimCount += 1;
+        return null;
+      },
+      completeSlice: async () => undefined,
+      failSlice: async () => undefined,
+      refreshSlice: async () => undefined,
+      markRunningSlicesQueued: async () => undefined,
+    },
+    notificationSubscriber: {
+      start: async () => undefined,
+      stop: async () => {
+        subscriberStops += 1;
+      },
+    },
+    idlePollMs: 25,
+  });
+
+  await service.start();
+  await waitFor(() => claimCount === 1);
+  await service.stop();
+  await new Promise((resolve) => setTimeout(resolve, 80));
+
+  assert.equal(subscriberStops, 1);
+  assert.equal(claimCount, 1);
+});
+
+test("CollectionRollupRefreshQueueService closes the notification subscriber when stopped during start", async () => {
+  let subscriberStarts = 0;
+  let subscriberStops = 0;
+  const subscriberStart = {
+    release: null as (() => void) | null,
+  };
+
+  const service = new CollectionRollupRefreshQueueService({
+    repository: {
+      claimNextSlice: async () => null,
+      completeSlice: async () => undefined,
+      failSlice: async () => undefined,
+      refreshSlice: async () => undefined,
+      markRunningSlicesQueued: async () => undefined,
+    },
+    notificationSubscriber: {
+      start: async () => {
+        subscriberStarts += 1;
+        await new Promise<void>((resolve) => {
+          subscriberStart.release = resolve;
+        });
+      },
+      stop: async () => {
+        subscriberStops += 1;
+      },
+    },
+    idlePollMs: 25,
+  });
+
+  const startPromise = service.start();
+  await waitFor(() => subscriberStarts === 1);
+  await service.stop();
+  const releaseStart = subscriberStart.release;
+  assert.ok(releaseStart);
+  releaseStart();
+  await startPromise;
+
+  assert.equal(subscriberStops, 1);
+});
