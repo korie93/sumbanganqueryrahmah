@@ -6,17 +6,22 @@ function readInt(name: string, fallback: number) {
   return Number.isFinite(value) ? value : fallback;
 }
 
-export default defineConfig({
-  dialect: "postgresql",
-  schema: "./shared/schema-postgres.ts",
-  out: "./drizzle",
-  dbCredentials: {
+const databaseUrl = String(process.env.DATABASE_URL || "").trim();
+const dbCredentials = databaseUrl
+  ? { url: databaseUrl }
+  : {
     host: process.env.PG_HOST ?? "localhost",
     port: readInt("PG_PORT", 5432),
     user: process.env.PG_USER ?? "postgres",
     password: process.env.PG_PASSWORD,
     database: process.env.PG_DATABASE ?? "sqr_db",
-  },
+  };
+
+export default defineConfig({
+  dialect: "postgresql",
+  schema: "./shared/schema-postgres.ts",
+  out: "./drizzle",
+  dbCredentials,
   migrations: {
     table: "__drizzle_migrations",
     schema: "public",

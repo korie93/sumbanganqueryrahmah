@@ -9,6 +9,7 @@ type LegacyWebSocketOptions = {
   secret?: string | readonly string[];
 };
 
+const WEBSOCKET_MAX_PAYLOAD_BYTES = 100 * 1024;
 const defaultStorage = new PostgresStorage();
 const defaultSessionSecrets = getSessionJwtVerificationSecrets();
 
@@ -17,7 +18,11 @@ export const connectedClients = new Map<string, WebSocket>();
 export function setupWebSocket(server: Server, options: LegacyWebSocketOptions = {}) {
   const storage = options.storage ?? defaultStorage;
   const sessionSecret = options.secret ?? defaultSessionSecrets;
-  const wss = new WebSocketServer({ server, path: "/ws" });
+  const wss = new WebSocketServer({
+    server,
+    path: "/ws",
+    maxPayload: WEBSOCKET_MAX_PAYLOAD_BYTES,
+  });
 
   createRuntimeWebSocketManager({
     wss,

@@ -19,19 +19,22 @@ export function buildBulkImportSelectionResults(
   files: File[],
   importUploadLimitBytes: number,
 ): BulkFileResult[] {
-  return files.map((selectedFile) => (
-    isImportFileTooLarge(selectedFile, importUploadLimitBytes)
+  return files.map((selectedFile, index) => {
+    const id = `${selectedFile.name}:${selectedFile.size}:${selectedFile.lastModified}:${index}`;
+    return isImportFileTooLarge(selectedFile, importUploadLimitBytes)
       ? {
+          id,
           filename: selectedFile.name,
           status: "error",
           blocked: true,
           error: buildImportFileTooLargeMessage(selectedFile.size, importUploadLimitBytes),
         }
       : {
+          id,
           filename: selectedFile.name,
           status: "pending",
-        }
-  ));
+        };
+  });
 }
 
 export function resolveNextImportName(currentImportName: string, filename: string) {

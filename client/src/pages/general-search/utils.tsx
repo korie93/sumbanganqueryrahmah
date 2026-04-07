@@ -128,17 +128,21 @@ export function highlightMatch(text: string, query: string): JSX.Element {
   if (!query) return <>{text}</>;
 
   const parts = text.split(new RegExp(`(${escapeRegExp(query)})`, "gi"));
+  let cursor = 0;
+
   return (
     <>
-      {parts.map((part, index) =>
-        part.toLowerCase() === query.toLowerCase() ? (
-          <mark key={index} className="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded">
+      {parts.map((part) => {
+        const key = `${cursor}:${part}`;
+        cursor += part.length;
+        return part.toLowerCase() === query.toLowerCase() ? (
+          <mark key={key} className="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded">
             {part}
           </mark>
         ) : (
           part
-        ),
-      )}
+        );
+      })}
     </>
   );
 }

@@ -70,6 +70,21 @@ function normalizeIdempotencyHeaderValue(value: unknown, options?: { maxLength?:
   return normalized;
 }
 
+function normalizeIdempotencyFingerprintHeaderValue(value: unknown): string | null {
+  const normalized = normalizeIdempotencyHeaderValue(value, { maxLength: 512 });
+  if (!normalized) {
+    return null;
+  }
+
+  try {
+    JSON.parse(normalized);
+  } catch {
+    throw badRequest("Idempotency fingerprint must be valid JSON.");
+  }
+
+  return normalized;
+}
+
 function toSerializableMutationBody(payload: unknown): unknown {
   if (payload === undefined) {
     return null;
@@ -85,9 +100,8 @@ async function reserveCollectionMutationIdempotency(params: {
 }) {
   const { req, storage, scopeResolver } = params;
   const idempotencyKey = normalizeIdempotencyHeaderValue(req.header("x-idempotency-key"));
-  const requestFingerprint = normalizeIdempotencyHeaderValue(
+  const requestFingerprint = normalizeIdempotencyFingerprintHeaderValue(
     req.header("x-idempotency-fingerprint"),
-    { maxLength: 2048 },
   );
 
   if (!idempotencyKey || !req.user?.username) {

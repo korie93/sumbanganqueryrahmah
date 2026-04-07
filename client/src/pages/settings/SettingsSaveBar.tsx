@@ -22,8 +22,7 @@ export function SettingsSaveBar({ dirtyCount, onSave, saving }: SettingsSaveBarP
       data-floating-ai-avoid="true"
     >
       <CardContent
-        className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
+        className="flex flex-col gap-3 p-4 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] sm:flex-row sm:items-center sm:justify-between"
       >
         <div className="flex items-center gap-2 text-sm">
           {dirtyCount > 0 ? (

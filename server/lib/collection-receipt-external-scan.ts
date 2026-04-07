@@ -1,4 +1,5 @@
 import path from "node:path";
+import fs from "node:fs";
 import { spawn } from "node:child_process";
 import { readBooleanEnvFlag } from "../config/runtime-environment";
 import { logger } from "./logger";
@@ -7,6 +8,8 @@ import { CollectionReceiptSecurityError } from "./collection-receipt-security";
 const DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS = 15_000;
 const DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES = "1";
 const EXTERNAL_SCAN_OUTPUT_LIMIT = 2_000;
+const BARE_COMMAND_PATTERN = /^[a-zA-Z0-9._-]+$/;
+const UNSAFE_ENV_VALUE_PATTERN = /[\0\r\n]/;
 
 function readOptionalString(name: string): string | null {
   const value = process.env[name];
@@ -46,12 +49,39 @@ function parseScannerArgsJson(): string[] {
     if (!Array.isArray(parsed) || parsed.some((entry) => typeof entry !== "string")) {
       throw new Error("must be a JSON array of strings");
     }
+    for (const entry of parsed) {
+      if (UNSAFE_ENV_VALUE_PATTERN.test(entry)) {
+        throw new Error("must not contain control characters");
+      }
+    }
     return parsed as string[];
   } catch (error) {
     throw new Error(
       `COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON ${error instanceof Error ? error.message : "is invalid"}.`,
     );
   }
+}
+
+function validateExternalScanCommand(command: string): string {
+  const normalized = command.trim();
+  if (!normalized || UNSAFE_ENV_VALUE_PATTERN.test(normalized)) {
+    throw new Error("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND is invalid.");
+  }
+
+  if (path.isAbsolute(normalized)) {
+    if (!fs.existsSync(normalized) || !fs.statSync(normalized).isFile()) {
+      throw new Error("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND must point to an existing scanner executable.");
+    }
+    return normalized;
+  }
+
+  if (!BARE_COMMAND_PATTERN.test(normalized) || normalized !== path.basename(normalized)) {
+    throw new Error(
+      "COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND must be a bare executable name or an absolute scanner path.",
+    );
+  }
+
+  return normalized;
 }
 
 function summarizeOutput(output: string): string | null {
@@ -138,11 +168,27 @@ export async function scanCollectionReceiptWithExternalScanner(filePath: string)
     return;
   }
 
+  let scannerCommand: string;
+  try {
+    scannerCommand = validateExternalScanCommand(config.command);
+  } catch (error) {
+    const operational = createOperationalScanError(
+      config,
+      filePath,
+      "external-scan-command-invalid",
+      error instanceof Error ? error.message : "invalid scanner command",
+    );
+    if (operational) {
+      throw operational;
+    }
+    return;
+  }
+
   const args = buildScanArgs(config, filePath);
   const fileName = path.basename(filePath);
 
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(config.command as string, args, {
+    const child = spawn(scannerCommand, args, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });

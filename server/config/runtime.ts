@@ -63,6 +63,7 @@ const configuredPreviousSessionSecrets = resolvePreviousSessionSecrets(
 );
 const configuredCollectionNicknameTempPassword = readOptionalString("COLLECTION_NICKNAME_TEMP_PASSWORD");
 const configuredPgPassword = readOptionalString("PG_PASSWORD");
+const configuredTwoFactorEncryptionKey = readOptionalString("TWO_FACTOR_ENCRYPTION_KEY");
 const configuredBackupEncryptionKey = readOptionalString("BACKUP_ENCRYPTION_KEY");
 const configuredBackupEncryptionKeys = readOptionalString("BACKUP_ENCRYPTION_KEYS");
 const publicAppUrl = normalizeHttpUrl("PUBLIC_APP_URL", readOptionalString("PUBLIC_APP_URL"));
@@ -103,6 +104,9 @@ assertNoPlaceholderSecrets({
   configuredSessionSecret,
   configuredPreviousSessionSecrets,
   configuredPgPassword,
+  configuredTwoFactorEncryptionKey,
+  configuredBackupEncryptionKey,
+  configuredBackupEncryptionKeys,
 });
 
 export const runtimeConfig: RuntimeConfig = Object.freeze({

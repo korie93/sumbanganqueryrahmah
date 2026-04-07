@@ -104,9 +104,9 @@ export function AIConversationCard({
             </div>
           ) : null}
 
-          {messages.map((message, index) => (
+          {messages.map((message) => (
             <div
-              key={`${message.timestamp}-${index}`}
+              key={message.id ?? `${message.timestamp}-${message.role}-${message.content.slice(0, 80)}`}
               className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm ${
                 message.role === "user"
                   ? "ml-auto bg-primary text-primary-foreground"
@@ -127,7 +127,12 @@ export function AIConversationCard({
           ) : null}
 
           {isThinking && !streamingText ? (
-            <div className="mr-auto max-w-[70%] rounded-2xl bg-muted px-4 py-3 text-sm text-foreground">
+            <div
+              className="mr-auto max-w-[70%] rounded-2xl bg-muted px-4 py-3 text-sm text-foreground"
+              role="status"
+              aria-label="AI sedang berfikir"
+              aria-live="polite"
+            >
               <span className="inline-flex items-center gap-2">
                 <span className="h-2 w-2 animate-bounce rounded-full bg-foreground/70" />
                 <span className="h-2 w-2 animate-bounce rounded-full bg-foreground/70 [animation-delay:150ms]" />

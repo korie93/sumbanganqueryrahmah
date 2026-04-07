@@ -4,6 +4,7 @@ export interface ImportProps {
 }
 
 export interface BulkFileResult {
+  id: string;
   filename: string;
   status: "pending" | "processing" | "success" | "error";
   error?: string;

@@ -30,6 +30,15 @@ Thumbs.db
 
 # Old database artifacts
 *.db
+*.dump
+*.sql
+!drizzle/*.sql
+!server/sql/**/*.sql
+pgdata/
+
+# Editor swap/project files
+.idea/
+*.swp
 
 # Temporary files
 *.tmp

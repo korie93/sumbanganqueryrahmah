@@ -3,6 +3,7 @@ import { runtimeConfig } from "../config/runtime";
 
 const DEFAULT_ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
 const DEFAULT_ALLOWED_HEADERS = "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-CSRF-Token, X-Request-Id";
+const DEFAULT_PREFLIGHT_MAX_AGE_SECONDS = "600";
 const LOCAL_DEV_ORIGINS = [
   "http://localhost:5000",
   "http://127.0.0.1:5000",
@@ -114,6 +115,8 @@ export function createCorsMiddleware(
 
     if (allowedOriginSet.has(requestOrigin)) {
       res.header("Access-Control-Allow-Origin", requestOrigin);
+      res.header("Access-Control-Allow-Credentials", "true");
+      res.header("Access-Control-Max-Age", DEFAULT_PREFLIGHT_MAX_AGE_SECONDS);
       if (req.method === "OPTIONS") {
         return res.sendStatus(204);
       }

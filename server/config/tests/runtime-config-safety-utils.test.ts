@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  assertNoPlaceholderSecrets,
   assertRuntimeSafetyGuards,
   resolveCookieSecure,
   resolveCorsAllowedOrigins,
@@ -58,5 +59,21 @@ test("assertRuntimeSafetyGuards rejects production-like backups without encrypti
         mailDevOutboxEnabled: false,
       }),
     /BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS is required/i,
+  );
+});
+
+test("assertNoPlaceholderSecrets rejects production-like generated placeholders", () => {
+  assert.throws(
+    () =>
+      assertNoPlaceholderSecrets({
+        isProductionLike: true,
+        configuredSessionSecret: "GENERATE_ME_AT_LEAST_32_CHARS_DO_NOT_USE_IN_PRODUCTION",
+        configuredPreviousSessionSecrets: [],
+        configuredPgPassword: "GENERATE_ME_DB_PASSWORD_DO_NOT_USE_IN_PRODUCTION",
+        configuredTwoFactorEncryptionKey: "GENERATE_ME_DISTINCT_2FA_KEY_DO_NOT_REUSE_SESSION_SECRET",
+        configuredBackupEncryptionKey: "GENERATE_ME_BACKUP_KEY_AND_STORE_OFFLINE",
+        configuredBackupEncryptionKeys: null,
+      }),
+    /SESSION_SECRET is using the default placeholder value/i,
   );
 });

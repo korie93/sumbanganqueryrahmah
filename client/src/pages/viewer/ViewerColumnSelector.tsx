@@ -103,8 +103,7 @@ export function ViewerColumnSelector({
         <SheetTrigger asChild>{trigger}</SheetTrigger>
         <SheetContent
           side="bottom"
-          className="max-h-[80dvh] rounded-t-[24px] border-border/70 bg-background/98"
-          style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}
+          className="max-h-[80dvh] rounded-t-[24px] border-border/70 bg-background/98 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]"
           data-floating-ai-avoid="true"
         >
           <SheetHeader className="pr-8 text-left">

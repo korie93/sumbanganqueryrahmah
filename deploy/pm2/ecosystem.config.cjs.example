@@ -6,6 +6,9 @@ module.exports = {
       script: "npm",
       args: "start",
       interpreter: "none",
+      user: "www-data",
+      uid: "www-data",
+      gid: "www-data",
       env: {
         NODE_ENV: "production",
       },

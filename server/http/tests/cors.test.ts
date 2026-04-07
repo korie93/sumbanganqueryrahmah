@@ -56,6 +56,8 @@ test("allowed origins receive an exact Access-Control-Allow-Origin header", asyn
 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("access-control-allow-origin"), "https://app.example.com");
+    assert.equal(response.headers.get("access-control-allow-credentials"), "true");
+    assert.equal(response.headers.get("access-control-max-age"), "600");
     assert.equal((await response.json()).ok, true);
   } finally {
     await stopTestServer(server);

@@ -71,3 +71,28 @@ test("frontend static serves robots.txt and sitemap.xml while keeping SPA fallba
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test("frontend static skips configured paths outside the working directory", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "sqr-frontend-static-root-"));
+  const siblingRoot = await fs.mkdtemp(path.join(os.tmpdir(), "sqr-frontend-static-outside-"));
+  const publicDir = path.join(siblingRoot, "public");
+  await fs.mkdir(publicDir, { recursive: true });
+  await fs.writeFile(path.join(publicDir, "index.html"), "<!doctype html><html><body>outside</body></html>");
+
+  const app = createJsonTestApp();
+  registerFrontendStatic(app, {
+    cwd: tempRoot,
+    paths: [path.relative(tempRoot, publicDir)],
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/`);
+    assert.equal(response.status, 404);
+    assert.doesNotMatch(await response.text(), /outside/);
+  } finally {
+    await stopTestServer(server);
+    await fs.rm(tempRoot, { recursive: true, force: true });
+    await fs.rm(siblingRoot, { recursive: true, force: true });
+  }
+});

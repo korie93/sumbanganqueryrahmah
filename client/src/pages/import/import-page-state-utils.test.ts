@@ -31,6 +31,8 @@ test("buildBulkImportSelectionResults blocks oversized import files and keeps su
   Object.defineProperty(bigFile, "size", { value: 10_000_000 });
 
   const results = buildBulkImportSelectionResults([smallFile, bigFile], 1_000_000);
+  assert.match(results[0].id, /^small\.csv:/);
+  assert.match(results[1].id, /^big\.csv:/);
   assert.equal(results[0].status, "pending");
   assert.equal(results[0].blocked, undefined);
   assert.equal(results[1].status, "error");
@@ -46,9 +48,9 @@ test("resolveNextImportName preserves manual names and otherwise strips file ext
 test("summarizeBulkImportResults keeps success, failure, and blocked counts separate", () => {
   assert.deepEqual(
     summarizeBulkImportResults([
-      { filename: "a.csv", status: "success" },
-      { filename: "b.csv", status: "error", error: "nope" },
-      { filename: "c.csv", status: "error", blocked: true, error: "too large" },
+      { id: "a", filename: "a.csv", status: "success" },
+      { id: "b", filename: "b.csv", status: "error", error: "nope" },
+      { id: "c", filename: "c.csv", status: "error", blocked: true, error: "too large" },
     ]),
     {
       successCount: 1,

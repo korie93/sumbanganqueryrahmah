@@ -47,13 +47,16 @@ test("decryptTwoFactorSecret supports payloads encrypted with the dedicated key"
   }
 });
 
-test("decryptTwoFactorSecret still supports legacy payloads encrypted with the session secret", () => {
+test("decryptTwoFactorSecret rejects legacy payloads encrypted with the session secret", () => {
   const previousKey = process.env.TWO_FACTOR_ENCRYPTION_KEY;
   process.env.TWO_FACTOR_ENCRYPTION_KEY = "test-two-factor-encryption-key";
 
   try {
     const encrypted = encryptLegacyTwoFactorSecret("JBSWY3DPEHPK3PXP");
-    assert.equal(decryptTwoFactorSecret(encrypted), "JBSWY3DPEHPK3PXP");
+    assert.throws(
+      () => decryptTwoFactorSecret(encrypted),
+      /Invalid 2FA secret payload/i,
+    );
   } finally {
     if (previousKey === undefined) {
       delete process.env.TWO_FACTOR_ENCRYPTION_KEY;

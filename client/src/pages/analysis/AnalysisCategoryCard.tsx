@@ -18,6 +18,8 @@ export function AnalysisCategoryCard({
   onCopySample,
   title,
 }: AnalysisCategoryCardProps) {
+  const testIdTitle = title.toLowerCase().replace(/\s/g, "-");
+
   return (
     <Card className="glass-wrapper border-0">
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
@@ -32,11 +34,11 @@ export function AnalysisCategoryCard({
             <div className="flex flex-wrap gap-1">
               {category.samples.slice(0, 5).map((sample, index) => (
                 <Badge
-                  key={index}
+                  key={`${title}:${sample}`}
                   variant="secondary"
                   className="text-xs cursor-pointer"
                   onClick={() => onCopySample(sample)}
-                  data-testid={`badge-sample-${title.toLowerCase().replace(/\s/g, "-")}-${index}`}
+                  data-testid={`badge-sample-${testIdTitle}-${index}`}
                 >
                   {sample}
                   <Copy className="w-3 h-3 ml-1 opacity-50" />

@@ -51,10 +51,37 @@ function createWsToken(activityId: string) {
 }
 
 function createConnectionRequest(token?: string) {
+  const headers: Record<string, string> = {
+    host: "example.test",
+    origin: "http://example.test",
+  };
+  if (token) {
+    headers.cookie = `sqr_auth=${encodeURIComponent(token)}`;
+  }
+
   return {
-    url: token ? `/ws?token=${encodeURIComponent(token)}` : "/ws",
+    url: "/ws",
+    headers,
+  } as any;
+}
+
+function createQueryTokenConnectionRequest(token: string) {
+  return {
+    url: `/ws?token=${encodeURIComponent(token)}`,
     headers: {
       host: "example.test",
+      origin: "http://example.test",
+    },
+  } as any;
+}
+
+function createCrossOriginConnectionRequest(token: string) {
+  return {
+    url: "/ws",
+    headers: {
+      cookie: `sqr_auth=${encodeURIComponent(token)}`,
+      host: "example.test",
+      origin: "https://evil.example",
     },
   } as any;
 }
@@ -178,6 +205,76 @@ test("runtime manager rejects sockets before registration without leaving tracke
   }
 });
 
+test("runtime manager rejects query-string session tokens before lookup", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  let lookupCalls = 0;
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => {
+        lookupCalls += 1;
+        return undefined;
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      socket as unknown as WebSocket,
+      createQueryTokenConnectionRequest(createWsToken("activity-query-token")),
+    );
+    await flushAsyncWork();
+
+    assert.equal(lookupCalls, 0);
+    assert.equal(providedMap.size, 0);
+    assert.equal(socket.closeCalls, 1);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager rejects cross-origin browser handshakes", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  let lookupCalls = 0;
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => {
+        lookupCalls += 1;
+        return undefined;
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      socket as unknown as WebSocket,
+      createCrossOriginConnectionRequest(createWsToken("activity-cross-origin")),
+    );
+    await flushAsyncWork();
+
+    assert.equal(lookupCalls, 0);
+    assert.equal(providedMap.size, 0);
+    assert.equal(socket.closeCalls, 1);
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("runtime manager does not register sockets that close during async session validation", async () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();
@@ -274,6 +371,44 @@ test("runtime manager removes registered sockets cleanly on close", async () => 
     assert.equal(socket.listenerCount("close"), 0);
     assert.equal(socket.listenerCount("error"), 0);
     assert.equal(socket.listenerCount("pong"), 0);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager enforces a per-user connection limit", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const sockets = Array.from({ length: 6 }, () => new FakeWebSocket());
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async (activityId: string) => ({
+        ...createActiveSession(activityId),
+        userId: "user-shared",
+        username: "same.user",
+      }),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    for (let index = 0; index < sockets.length; index += 1) {
+      const activityId = `activity-user-limit-${index}`;
+      wss.emit(
+        "connection",
+        sockets[index] as unknown as WebSocket,
+        createConnectionRequest(createWsToken(activityId)),
+      );
+      await flushAsyncWork();
+    }
+
+    assert.equal(providedMap.size, 5);
+    assert.equal(providedMap.has("activity-user-limit-5"), false);
+    assert.equal(sockets[5].closeCalls, 1);
   } finally {
     wss.emit("close");
   }

@@ -109,8 +109,7 @@ export function ViewerExportMenu({
         <SheetTrigger asChild>{trigger}</SheetTrigger>
         <SheetContent
           side="bottom"
-          className="max-h-[80dvh] rounded-t-[24px]"
-          style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}
+          className="max-h-[80dvh] rounded-t-[24px] pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]"
         >
           <SheetHeader className="pr-8 text-left">
             <SheetTitle>Export Dataset</SheetTitle>

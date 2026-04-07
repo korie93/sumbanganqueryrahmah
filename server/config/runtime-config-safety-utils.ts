@@ -2,8 +2,20 @@ import type { MailConfigurationAssessment, RuntimeConfigDiagnostic } from "./run
 import { normalizeCorsOrigin } from "./runtime-config-read-utils";
 
 const AUTO_COOKIE_SECURE_VALUES = new Set(["", "auto", "1", "true", "0", "false"]);
-const PLACEHOLDER_SESSION_SECRETS = new Set(["change-this-session-secret"]);
-const PLACEHOLDER_DATABASE_PASSWORDS = new Set(["change-this-db-password"]);
+const PLACEHOLDER_SESSION_SECRETS = new Set([
+  "change-this-session-secret",
+  "GENERATE_ME_AT_LEAST_32_CHARS_DO_NOT_USE_IN_PRODUCTION",
+]);
+const PLACEHOLDER_DATABASE_PASSWORDS = new Set([
+  "change-this-db-password",
+  "GENERATE_ME_DB_PASSWORD_DO_NOT_USE_IN_PRODUCTION",
+]);
+const PLACEHOLDER_TWO_FACTOR_ENCRYPTION_KEYS = new Set([
+  "GENERATE_ME_DISTINCT_2FA_KEY_DO_NOT_REUSE_SESSION_SECRET",
+]);
+const PLACEHOLDER_BACKUP_ENCRYPTION_KEYS = new Set([
+  "GENERATE_ME_BACKUP_KEY_AND_STORE_OFFLINE",
+]);
 const UNSAFE_TRUST_PROXY_VALUES = new Set(["*", "all", "true", "1"]);
 
 export function resolveTrustedProxies(rawValues: string[]): string[] {
@@ -243,6 +255,9 @@ export function assertNoPlaceholderSecrets(params: {
   configuredSessionSecret: string | null;
   configuredPreviousSessionSecrets: readonly string[];
   configuredPgPassword: string | null;
+  configuredTwoFactorEncryptionKey: string | null;
+  configuredBackupEncryptionKey: string | null;
+  configuredBackupEncryptionKeys: string | null;
 }) {
   if (!params.isProductionLike) {
     return;
@@ -260,5 +275,30 @@ export function assertNoPlaceholderSecrets(params: {
 
   if (params.configuredPgPassword && PLACEHOLDER_DATABASE_PASSWORDS.has(params.configuredPgPassword)) {
     throw new Error("PG_PASSWORD is using the default placeholder value and must be replaced before non-local startup.");
+  }
+
+  if (
+    params.configuredTwoFactorEncryptionKey
+    && PLACEHOLDER_TWO_FACTOR_ENCRYPTION_KEYS.has(params.configuredTwoFactorEncryptionKey)
+  ) {
+    throw new Error(
+      "TWO_FACTOR_ENCRYPTION_KEY is using the default placeholder value and must be replaced before non-local startup.",
+    );
+  }
+
+  const configuredBackupKeys = [
+    params.configuredBackupEncryptionKey,
+    ...String(params.configuredBackupEncryptionKeys || "")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+  ].filter((entry): entry is string => Boolean(entry));
+
+  for (const backupKey of configuredBackupKeys) {
+    if (PLACEHOLDER_BACKUP_ENCRYPTION_KEYS.has(backupKey)) {
+      throw new Error(
+        "BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS contains a placeholder value and must be replaced before non-local startup.",
+      );
+    }
   }
 }

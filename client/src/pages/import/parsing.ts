@@ -96,7 +96,7 @@ function parseExcelBuffer(
   xlsx: XlsxModule,
   arrayBuffer: ArrayBuffer,
 ): { headers: string[]; rows: ImportRow[]; error?: string } {
-  let workbook;
+  let workbook: ReturnType<XlsxModule["read"]> | null;
   try {
     workbook = xlsx.read(arrayBuffer, { type: "array", cellDates: true, cellNF: false, cellText: false });
   } catch (error: unknown) {
@@ -119,9 +119,9 @@ function parseExcelBuffer(
   const jsonData = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: "", raw: false }) as unknown[][];
 
   // Null out workbook references early to allow GC to reclaim memory
-  (workbook as any).SheetNames = null;
-  (workbook as any).Sheets = null;
-  workbook = null as any;
+  workbook.SheetNames = [];
+  workbook.Sheets = {};
+  workbook = null;
 
   if (jsonData.length === 0) {
     return { headers: [], rows: [], error: "Excel file is empty." };

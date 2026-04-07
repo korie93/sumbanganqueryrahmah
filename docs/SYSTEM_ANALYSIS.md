@@ -39,7 +39,7 @@ The system is **surprisingly mature** for its stage. Several areas are well abov
 
 1. **Testing coverage gaps** — Critical services lack tests
 2. **Frontend state complexity** — Auth state split across 6+ hooks needs simplification
-3. **Bundle size** — Heavy dependencies (xlsx, jspdf, html2canvas, recharts, framer-motion)
+3. **Bundle size** — Heavy dependencies (xlsx, jspdf, html2canvas, recharts)
 4. **API documentation** — No OpenAPI/Swagger specification
 5. **Internationalization** — Hardcoded mix of English/Malay strings
 6. **Database query optimization** — Some N+1 patterns and missing query result caching
@@ -481,12 +481,11 @@ Your current vendor chunks total is significant. Some libraries are only used on
 | jspdf | ~130KB | Report export only | ✅ Already chunked |
 | html2canvas | ~50KB | Report capture only | ✅ Already chunked |
 | recharts | ~90KB | Dashboard/Monitor only | ✅ Already chunked |
-| framer-motion | ~30KB | Animations throughout | Consider `motion/react` (tree-shakeable) |
 | react-icons | Variable | Icons throughout | Switch fully to Lucide (already primary) |
 
 **Recommendation:**
 1. Remove `react-icons` — you already use `lucide-react` as your primary icon library. Having both creates confusion and duplicate SVGs.
-2. Consider `motion/react` instead of full `framer-motion` if you only use simple animations.
+2. Keep simple route and tab transitions in CSS before adding another animation dependency.
 
 ---
 
@@ -681,7 +680,7 @@ Even if you only support Malay, extracting strings into a translation file makes
 **H2. Improve loading states and perceived performance**
 
 - Replace full-page `PageSpinner` with page-specific skeleton layouts
-- Add transition animations between pages using `framer-motion` (which you already have)
+- Add lightweight CSS transition animations between pages where they improve perceived performance
 - Show stale data while refetching (React Query's `placeholderData` option)
 
 ---

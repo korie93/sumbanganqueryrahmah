@@ -73,9 +73,9 @@ export default function AIChat({
           </div>
         ) : null}
 
-        {messages.map((msg, idx) => (
+        {messages.map((msg) => (
           <AIMessage
-            key={`${msg.timestamp}-${idx}`}
+            key={msg.id ?? `${msg.timestamp}-${msg.role}-${msg.content.slice(0, 80)}`}
             role={msg.role}
             content={msg.content}
           />
@@ -83,7 +83,12 @@ export default function AIChat({
 
         {(aiStatus === "SEARCHING" || aiStatus === "PROCESSING") ? (
           <div className="ai-message-row ai-message-row-assistant">
-            <div className="ai-bubble ai-bubble-assistant ai-typing-bubble">
+            <div
+              className="ai-bubble ai-bubble-assistant ai-typing-bubble"
+              role="status"
+              aria-label="AI sedang berfikir"
+              aria-live="polite"
+            >
               <Loader2 className="ai-typing-spinner" />
               <span className="ai-typing-label">AI sedang menaip...</span>
               <span className="ai-typing-dots" aria-hidden="true">

@@ -2,6 +2,7 @@ import { Brain, PencilLine, Search, type LucideIcon } from "lucide-react";
 
 import type { AIChatMessage } from "@/context/AIContext";
 import type { AIChatStatus } from "@/lib/ai-chat";
+import { createClientRandomId } from "@/lib/secure-id";
 
 export const AI_PAGE_MAX_CHAT_MESSAGES = 50;
 export const AI_PAGE_RETRY_MS = 2500;
@@ -18,7 +19,11 @@ export function appendAIPageMessage(
   message: AIChatMessage,
   maxMessages = AI_PAGE_MAX_CHAT_MESSAGES,
 ) {
-  const next = [...messages, message];
+  const normalizedMessage = message.id ? message : {
+    ...message,
+    id: createClientRandomId("ai-msg"),
+  };
+  const next = [...messages, normalizedMessage];
   if (next.length <= maxMessages) return next;
   return next.slice(next.length - maxMessages);
 }

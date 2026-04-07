@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
+import { isPathInsideDirectory } from "../config/upload-paths";
 import { logger } from "../lib/logger";
 
 const DEFAULT_FRONTEND_PATHS = [
@@ -50,6 +51,11 @@ export function registerFrontendStatic(app: Express, options?: { cwd?: string; p
 
   for (const relPath of possiblePaths) {
     const fullPath = path.resolve(cwd, relPath);
+    if (!isPathInsideDirectory({ parentDir: cwd, candidatePath: fullPath })) {
+      logger.warn("Skipping frontend static path outside the working directory", { fullPath });
+      continue;
+    }
+
     const indexFile = path.join(fullPath, "index.html");
 
     logger.debug("Checking frontend static path", { fullPath });

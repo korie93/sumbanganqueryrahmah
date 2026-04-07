@@ -1,3 +1,4 @@
+import type { IncomingHttpHeaders } from "node:http";
 import { WebSocket, type WebSocketServer } from "ws";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import { logger } from "../lib/logger";
@@ -5,6 +6,7 @@ import type { PostgresStorage } from "../storage-postgres";
 import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
+const MAX_CONNECTIONS_PER_USER = 5;
 
 type RuntimeManagerOptions = {
   wss: WebSocketServer;
@@ -15,32 +17,115 @@ type RuntimeManagerOptions = {
   connectedClients?: Map<string, WebSocket>;
 };
 
+type RuntimeWebSocketActivity = {
+  id?: string | null;
+  userId?: string | number | null;
+  username?: string | null;
+};
+
+function firstHeaderValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return String(value[0] || "");
+  }
+  return String(value || "");
+}
+
+function firstForwardedValue(value: string | string[] | undefined): string {
+  return firstHeaderValue(value).split(",")[0]?.trim() || "";
+}
+
+function readWebSocketRequestHost(headers: IncomingHttpHeaders): string {
+  return (firstForwardedValue(headers["x-forwarded-host"]) || firstHeaderValue(headers.host))
+    .trim()
+    .toLowerCase();
+}
+
+function readWebSocketRequestProto(headers: IncomingHttpHeaders): string {
+  return firstForwardedValue(headers["x-forwarded-proto"]).toLowerCase();
+}
+
+function isSameOriginWebSocketRequest(headers: IncomingHttpHeaders): boolean {
+  const origin = firstHeaderValue(headers.origin).trim();
+  if (!origin) {
+    return true;
+  }
+
+  const requestHost = readWebSocketRequestHost(headers);
+  if (!requestHost) {
+    return false;
+  }
+
+  try {
+    const originUrl = new URL(origin);
+    if (originUrl.host.toLowerCase() !== requestHost) {
+      return false;
+    }
+
+    const requestProto = readWebSocketRequestProto(headers);
+    return !requestProto || originUrl.protocol === `${requestProto}:`;
+  } catch {
+    return false;
+  }
+}
+
+function getActivityUserKey(activity: RuntimeWebSocketActivity): string | null {
+  const userId = String(activity.userId ?? "").trim();
+  if (userId) {
+    return `id:${userId}`;
+  }
+
+  const username = String(activity.username || "").trim().toLowerCase();
+  return username ? `username:${username}` : null;
+}
+
 export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   connectedClients: Map<string, WebSocket>;
   broadcastWsMessage: (payload: Record<string, unknown>) => void;
 } {
   const { wss, storage, secret } = options;
   const connectedClients = options.connectedClients ?? new Map<string, WebSocket>();
+  const socketUserKeys = new Map<string, string>();
   const aliveSockets = new WeakSet<WebSocket>();
   const isTrackableSocket = (ws: WebSocket) =>
     ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING;
   const clearNicknameSession = (activityId: string) =>
     Promise.resolve(storage.clearCollectionNicknameSessionByActivity?.(activityId)).catch(() => undefined);
+  const removeTrackedSocket = (activityId: string) => {
+    connectedClients.delete(activityId);
+    socketUserKeys.delete(activityId);
+  };
+  const countTrackedUserConnections = (userKey: string, excludedActivityId?: string) => {
+    let count = 0;
+    for (const [trackedActivityId, trackedUserKey] of socketUserKeys.entries()) {
+      if (trackedActivityId === excludedActivityId || trackedUserKey !== userKey) {
+        continue;
+      }
+      const trackedSocket = connectedClients.get(trackedActivityId);
+      if (
+        trackedSocket
+        && (trackedSocket.readyState === WebSocket.OPEN || trackedSocket.readyState === WebSocket.CONNECTING)
+      ) {
+        count += 1;
+      }
+    }
+    return count;
+  };
 
   const broadcastWsMessage = (payload: Record<string, unknown>) => {
     const message = JSON.stringify(payload);
 
     for (const [activityId, ws] of connectedClients.entries()) {
       if (!ws || ws.readyState !== WebSocket.OPEN) {
-        connectedClients.delete(activityId);
+        removeTrackedSocket(activityId);
         void clearNicknameSession(activityId);
         continue;
       }
 
       try {
         ws.send(message);
-      } catch {
-        connectedClients.delete(activityId);
+      } catch (error) {
+        logger.warn("WebSocket broadcast failed", { activityId, error });
+        removeTrackedSocket(activityId);
         void clearNicknameSession(activityId);
       }
     }
@@ -49,7 +134,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const heartbeatHandle = setInterval(() => {
     for (const [activityId, ws] of connectedClients.entries()) {
       if (!ws || (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING)) {
-        connectedClients.delete(activityId);
+        removeTrackedSocket(activityId);
         continue;
       }
 
@@ -58,7 +143,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
 
       if (!aliveSockets.has(ws)) {
-        connectedClients.delete(activityId);
+        removeTrackedSocket(activityId);
         ws.terminate();
         continue;
       }
@@ -71,6 +156,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
   wss.once("close", () => {
     clearInterval(heartbeatHandle);
+    socketUserKeys.clear();
   });
 
   wss.on("connection", async (ws, req) => {
@@ -98,7 +184,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       detachSocketLifecycleHandlers();
 
       if (activityId && connectedClients.get(activityId) === ws) {
-        connectedClients.delete(activityId);
+        removeTrackedSocket(activityId);
       }
     };
 
@@ -132,7 +218,26 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     ws.on("error", handleSocketError);
 
     const url = new URL(req.url!, `http://${req.headers.host}`);
-    const token = url.searchParams.get("token") || readAuthSessionTokenFromHeaders(req.headers);
+    if (url.searchParams.has("token")) {
+      logger.warn("WebSocket rejected query-string session token", {
+        origin: req.headers.origin || null,
+      });
+      cleanupSocket();
+      closeSocketIfNeeded();
+      return;
+    }
+
+    if (!isSameOriginWebSocketRequest(req.headers)) {
+      logger.warn("WebSocket rejected cross-origin handshake", {
+        origin: req.headers.origin || null,
+        host: req.headers.host || null,
+      });
+      cleanupSocket();
+      closeSocketIfNeeded();
+      return;
+    }
+
+    const token = readAuthSessionTokenFromHeaders(req.headers);
 
     if (!token) {
       cleanupSocket();
@@ -163,6 +268,16 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         return;
       }
 
+      const userKey = getActivityUserKey(activity);
+      if (userKey && countTrackedUserConnections(userKey, activityId) >= MAX_CONNECTIONS_PER_USER) {
+        logger.warn("WebSocket rejected because the user connection limit was reached", {
+          activityId,
+        });
+        cleanupSocket();
+        closeSocketIfNeeded();
+        return;
+      }
+
       const existingWs = connectedClients.get(activityId);
       if (existingWs && existingWs.readyState === WebSocket.OPEN) {
         existingWs.close();
@@ -174,6 +289,11 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
 
       connectedClients.set(activityId, ws);
+      if (userKey) {
+        socketUserKeys.set(activityId, userKey);
+      } else {
+        socketUserKeys.delete(activityId);
+      }
       markSocketAlive();
       logger.debug("WebSocket connected", { activityId });
     } catch (error) {

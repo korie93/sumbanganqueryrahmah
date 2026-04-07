@@ -3,6 +3,7 @@ import { z } from "zod";
 const nonEmptyStringSchema = z.string().trim().min(1);
 const nullableStringSchema = z.string().nullable();
 const nonNegativeIntSchema = z.number().int().nonnegative();
+const paginationLimitSchema = z.number().int().positive().max(1000);
 
 export const importRecordSchema = z.object({
   id: nonEmptyStringSchema,
@@ -20,8 +21,8 @@ export const importListItemSchema = importRecordSchema.extend({
 export const importsListResponseSchema = z.object({
   imports: z.array(importListItemSchema),
   pagination: z.object({
-    limit: nonNegativeIntSchema,
-    pageSize: nonNegativeIntSchema.optional(),
+    limit: paginationLimitSchema,
+    pageSize: paginationLimitSchema.optional(),
     nextCursor: nullableStringSchema,
     hasMore: z.boolean(),
     total: nonNegativeIntSchema,
@@ -39,8 +40,8 @@ export const importDataPageResponseSchema = z.object({
   headers: z.array(nonEmptyStringSchema),
   total: nonNegativeIntSchema,
   page: z.number().int().positive(),
-  limit: z.number().int().positive(),
-  pageSize: z.number().int().positive().optional(),
+  limit: paginationLimitSchema,
+  pageSize: paginationLimitSchema.optional(),
   nextCursor: nullableStringSchema,
 });
 

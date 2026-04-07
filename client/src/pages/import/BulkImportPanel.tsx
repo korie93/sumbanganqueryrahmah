@@ -130,7 +130,7 @@ export function BulkImportPanel({
           <div className="max-h-[400px] space-y-2 overflow-y-auto">
             {bulkResults.map((result, index) => (
               <div
-                key={index}
+                key={result.id}
                 className={`rounded-lg border p-3 ${
                   result.status === "success"
                     ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
@@ -200,8 +200,8 @@ export function BulkImportPanel({
               <ul className="text-sm text-amber-700 dark:text-amber-300 space-y-1">
                 {bulkResults
                   .filter((result) => result.status === "error")
-                  .map((result, index) => (
-                    <li key={index} className="break-words">
+                  .map((result) => (
+                    <li key={result.id} className="break-words">
                       <span className="font-medium">{result.filename}</span>: {result.error}
                     </li>
                   ))}

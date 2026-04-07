@@ -38,6 +38,7 @@ type CreateAuthGuardsOptions = {
 };
 
 const TAB_VISIBILITY_CACHE_TTL_MS = 5_000;
+const TAB_VISIBILITY_CACHE_MAX_SIZE = 100;
 const FORCED_PASSWORD_CHANGE_ALLOWLIST = new Set([
   "GET:/api/auth/me",
   "GET:/api/me",
@@ -83,6 +84,12 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     }
 
     const tabs = await storage.getRoleTabVisibility(role);
+    if (tabVisibilityCache.size >= TAB_VISIBILITY_CACHE_MAX_SIZE) {
+      const oldestKey = tabVisibilityCache.keys().next().value;
+      if (oldestKey) {
+        tabVisibilityCache.delete(oldestKey);
+      }
+    }
     tabVisibilityCache.set(role, { tabs, cachedAt: now });
     return tabs;
   }

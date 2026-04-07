@@ -80,7 +80,7 @@ flowchart TD
     F --> G[Masuk dashboard/tab ikut role]
 
     G --> H[Request API /api/* + token]
-    G --> I[WebSocket connect /ws?token=...]
+    G --> I[WebSocket connect /ws<br/>cookie session + same-origin check]
     H --> J{Auth + Role check}
     J -- Gagal --> K[403 / 401]
     J -- Lulus --> L[Business logic + DB query]

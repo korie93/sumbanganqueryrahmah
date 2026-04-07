@@ -19,10 +19,6 @@ export function getTwoFactorDecryptionSecrets(): string[] {
   if (configured) {
     secrets.add(configured);
   }
-  const legacySessionSecret = String(runtimeConfig.auth.sessionSecret || "").trim();
-  if (legacySessionSecret) {
-    secrets.add(legacySessionSecret);
-  }
   return Array.from(secrets);
 }
 

@@ -98,10 +98,7 @@ export const SettingCard = memo(function SettingCard({
   };
 
   return (
-    <Card
-      className="border-border/60 bg-background/70"
-      style={{ contentVisibility: "auto", containIntrinsicSize: "140px" }}
-    >
+    <Card className="border-border/60 bg-background/70 [contain-intrinsic-size:140px] [content-visibility:auto]">
       <CardContent className="p-4 sm:p-5">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div className="space-y-1.5">

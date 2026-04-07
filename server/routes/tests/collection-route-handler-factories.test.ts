@@ -129,3 +129,50 @@ test("collection mutation handler releases idempotency reservations when the mut
     await stopTestServer(server);
   }
 });
+
+test("collection mutation handler rejects malformed idempotency fingerprints", async () => {
+  let mutationCalls = 0;
+
+  const storage: CollectionMutationHandlerStorage = {
+    acquireMutationIdempotency: async () => ({ status: "acquired" as const }),
+    completeMutationIdempotency: async () => undefined,
+    releaseMutationIdempotency: async () => undefined,
+  };
+
+  const app = createJsonTestApp();
+  app.post(
+    "/api/test-collection-mutation",
+    createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    createCollectionJsonMutationRouteHandler({
+      fallbackMessage: "Mutation failed.",
+      handler: async () => {
+        mutationCalls += 1;
+        return { ok: true };
+      },
+      scopeResolver: () => "collection:test:bad-fingerprint",
+      storage,
+    }),
+  );
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/test-collection-mutation`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-idempotency-key": "collection-test-key",
+        "x-idempotency-fingerprint": "not-json",
+      },
+      body: JSON.stringify({ recordId: "record-1" }),
+    });
+
+    assert.equal(response.status, 400);
+    assert.equal(mutationCalls, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});

@@ -25,6 +25,11 @@ viteLogger.warnOnce = (msg, options) => {
   originalWarnOnce(msg, options);
 };
 
+const enableSourceMaps =
+  process.env.VITE_ENABLE_SOURCEMAPS === "1"
+  || process.env.DEPLOY_ENV === "staging"
+  || process.env.APP_ENV === "staging";
+
 export default defineConfig({
   customLogger: viteLogger,
   plugins: [react()],
@@ -32,8 +37,8 @@ export default defineConfig({
   build: {
     outDir: "../dist-local/public",
     emptyOutDir: true,
-    sourcemap: false,
-    chunkSizeWarningLimit: 1200,
+    sourcemap: enableSourceMaps,
+    chunkSizeWarningLimit: 600,
     modulePreload: {
       resolveDependencies(_filename, dependencies, context) {
         if (context.hostType !== "html") {
@@ -86,7 +91,6 @@ export default defineConfig({
           if (id.includes("xlsx")) return "excel";
           if (id.includes("jspdf")) return "pdf";
           if (id.includes("html2canvas")) return "capture";
-          if (id.includes("framer-motion")) return "motion";
 
           return undefined;
         },
