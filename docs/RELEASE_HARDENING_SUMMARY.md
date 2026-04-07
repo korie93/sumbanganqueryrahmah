@@ -36,6 +36,7 @@ Run these in order.
 
 - [ ] confirm `.env` values are complete and production-safe
 - [ ] confirm PostgreSQL credentials and backup encryption config are correct
+- [ ] confirm `docs/SECRET_ROTATION.md` matches the active secret-management process
 - [ ] confirm `PUBLIC_APP_URL`, cookie config, and CORS origins match deployment
 - [ ] confirm latest reviewed migrations are committed and present in `drizzle/`
 

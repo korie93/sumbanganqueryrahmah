@@ -1,0 +1,180 @@
+# Secret Rotation Runbook
+
+Use this runbook when rotating production secrets for SQR. Keep real values in
+the deployment secret store only. Do not paste secrets into tickets, commits,
+chat logs, CI logs, or screenshots.
+
+## Scope
+
+This covers:
+
+- `SESSION_SECRET`
+- `SESSION_SECRET_PREVIOUS`
+- `TWO_FACTOR_ENCRYPTION_KEY`
+- `BACKUP_ENCRYPTION_KEY`
+- `BACKUP_ENCRYPTION_KEYS`
+- `BACKUP_ENCRYPTION_KEY_ID`
+- SMTP credentials
+- external API keys such as AI/provider credentials
+
+## Generate New Secrets
+
+Use one of these commands on a trusted operator machine:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
+node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+```
+
+Store the generated value in the production secret manager or private server
+environment file only.
+
+## `SESSION_SECRET`
+
+`SESSION_SECRET` signs session JWTs. New sessions are always signed with the
+active `SESSION_SECRET`. Existing sessions can remain valid during a planned
+rotation window through `SESSION_SECRET_PREVIOUS`.
+
+### Planned Rotation
+
+1. Generate a new `SESSION_SECRET`.
+2. Move the current `SESSION_SECRET` into `SESSION_SECRET_PREVIOUS`.
+3. Set the generated value as the new `SESSION_SECRET`.
+4. Deploy or restart all app processes together.
+5. Verify login, logout, WebSocket connection, and protected API access.
+6. Keep `SESSION_SECRET_PREVIOUS` only for the intended session TTL window.
+7. Remove the old value from `SESSION_SECRET_PREVIOUS`.
+8. Redeploy or restart all app processes.
+
+### Emergency Rotation
+
+If the old secret may be compromised, skip the compatibility window:
+
+1. Generate a new `SESSION_SECRET`.
+2. Set `SESSION_SECRET_PREVIOUS=` empty.
+3. Deploy or restart immediately.
+4. Expect all existing sessions to be logged out.
+5. Verify login and account recovery flows.
+
+Never include the active secret in `SESSION_SECRET_PREVIOUS`; startup safety
+guards reject that configuration.
+
+## `TWO_FACTOR_ENCRYPTION_KEY`
+
+`TWO_FACTOR_ENCRYPTION_KEY` encrypts stored TOTP secrets. The current runtime
+uses the configured key for both encryption and decryption, so rotation is more
+sensitive than session secret rotation.
+
+### Safe Options
+
+- Preferred: add a dedicated migration/re-encryption task before rotating this
+  key.
+- Emergency: disable and re-enroll 2FA for affected users after replacing the
+  key.
+
+### Planned Rotation Requirements
+
+Do not replace `TWO_FACTOR_ENCRYPTION_KEY` in production unless one of these is
+true:
+
+- all encrypted 2FA secrets have been re-encrypted with the new key, or
+- affected users have had 2FA disabled and will re-enroll.
+
+After rotation, verify:
+
+- starting 2FA setup works
+- confirming 2FA setup works
+- login with 2FA works for a re-enrolled user
+- disabling 2FA works
+
+## Backup Encryption Keys
+
+Backups support key IDs through `BACKUP_ENCRYPTION_KEYS` and
+`BACKUP_ENCRYPTION_KEY_ID`.
+
+Recommended format:
+
+```text
+BACKUP_ENCRYPTION_KEYS=primary:<base64-key>,previous:<base64-key>
+BACKUP_ENCRYPTION_KEY_ID=primary
+```
+
+### Planned Rotation
+
+1. Generate a new 32-byte backup encryption key.
+2. Add the new key to `BACKUP_ENCRYPTION_KEYS` with a new key ID.
+3. Keep existing key IDs in `BACKUP_ENCRYPTION_KEYS` so older backups remain
+   restorable.
+4. Set `BACKUP_ENCRYPTION_KEY_ID` to the new key ID.
+5. Deploy or restart all app processes.
+6. Create a new backup.
+7. Restore-test a backup encrypted with the new key.
+8. Restore-test an older backup encrypted with the previous key.
+9. Remove old keys only after every backup encrypted with them has expired or
+   been re-encrypted.
+
+If `BACKUP_ENCRYPTION_KEY_ID` references a missing key, startup fails.
+
+## SMTP Credentials
+
+For SMTP exposure or planned password rotation, follow:
+
+```text
+docs/SMTP_SECRET_INCIDENT_RESPONSE.md
+```
+
+Minimum planned rotation:
+
+1. Create a new SMTP credential or app password at the mail provider.
+2. Update `SMTP_USER` and `SMTP_PASSWORD` in the deployment secret store.
+3. Deploy or restart the app.
+4. Send a password-reset or activation test email.
+5. Revoke the old SMTP credential.
+6. Confirm mail delivery still works.
+
+If SMTP credentials were ever committed, treat them as compromised even if later
+removed from the working tree.
+
+## External API Keys
+
+For AI/provider credentials:
+
+1. Create a new key in the provider console.
+2. Add the new value to the deployment secret store.
+3. Deploy or restart the app.
+4. Verify the feature that uses the key.
+5. Revoke the old key.
+6. Review provider usage logs for unexpected access.
+
+## Validation Commands
+
+Run these before and after the change when possible:
+
+```bash
+npm run verify:repo-hygiene
+npm run audit:dependencies
+npm run typecheck
+npm run build
+```
+
+For a full local release gate:
+
+```bash
+npm run release:verify:local
+```
+
+## Rollback
+
+Rollback depends on the secret:
+
+- `SESSION_SECRET`: restore the previous secret or add it to
+  `SESSION_SECRET_PREVIOUS` if a compatibility window is acceptable.
+- `TWO_FACTOR_ENCRYPTION_KEY`: restore the previous key unless all secrets were
+  re-encrypted or users were re-enrolled.
+- backup keys: keep old key IDs in `BACKUP_ENCRYPTION_KEYS`; do not remove keys
+  required by existing backups.
+- SMTP/API keys: restore the old key only if it was not compromised; otherwise
+  create another new key.
+
+After rollback, verify login, 2FA, backup create/restore, and mail delivery as
+applicable.

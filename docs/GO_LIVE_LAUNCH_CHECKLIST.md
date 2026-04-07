@@ -7,6 +7,7 @@ This checklist is the final gate before controlled production launch.
 - [ ] Environment validation passes in production-like mode.
 - [ ] Missing critical secrets fail fast at startup.
 - [ ] `BACKUP_ENCRYPTION_KEY` (or `BACKUP_ENCRYPTION_KEYS`) is configured when backups are enabled.
+- [ ] Secret rotation runbook has been reviewed: `docs/SECRET_ROTATION.md`.
 - [ ] Dev-only bootstrap/mail-preview behavior is disabled in production-like mode.
 - [ ] Session/auth cookie configuration is production-safe.
 - [ ] Backup routes are superuser-protected.
