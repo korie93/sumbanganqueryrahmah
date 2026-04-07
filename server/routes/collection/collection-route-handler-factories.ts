@@ -1,4 +1,4 @@
-import type { RequestHandler } from "express";
+import type { RequestHandler, Response } from "express";
 import type { AuthenticatedRequest } from "../../auth/guards";
 import { badRequest, HttpError } from "../../http/errors";
 import { logger } from "../../lib/logger";
@@ -26,17 +26,20 @@ const OBSERVED_COLLECTION_ROUTE_PATHS = new Set([
   "/api/collection/daily/day-details",
 ]);
 
-function sendCollectionError(res: any, err: unknown, fallbackMessage: string) {
+function sendCollectionError(res: Response, err: unknown, fallbackMessage: string) {
   if (err instanceof HttpError) {
+    const message = err.expose ? err.message : fallbackMessage;
     return res.status(err.statusCode).json({
       ok: false,
-      message: err.message,
-      ...(err.code ? { error: { code: err.code, message: err.message } } : {}),
+      message,
+      ...(err.expose && err.code ? { error: { code: err.code, message } } : {}),
     });
   }
 
-  const message = (err as { message?: string })?.message || fallbackMessage;
-  return res.status(500).json({ ok: false, message });
+  logger.error("Unhandled collection route error", {
+    message: (err as { message?: string })?.message,
+  });
+  return res.status(500).json({ ok: false, message: fallbackMessage });
 }
 
 function logSlowCollectionRoute(req: AuthenticatedRequest, elapsedMs: number, statusCode: number) {
@@ -257,6 +260,19 @@ export function createCollectionJsonMutationRouteHandler(params: {
             scope: reservation.scope,
             actor: reservation.actor,
           });
+          try {
+            await storage.releaseMutationIdempotency({
+              scope: reservation.scope,
+              actor: reservation.actor,
+              idempotencyKey: reservation.key,
+            });
+          } catch (releaseError) {
+            logger.warn("Failed to release collection mutation idempotency reservation after persist failure", {
+              error: releaseError,
+              scope: reservation.scope,
+              actor: reservation.actor,
+            });
+          }
         }
       }
 
