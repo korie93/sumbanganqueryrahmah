@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getInvalidatedSessionMessage } from "../guards";
+import { createAuthGuards, getInvalidatedSessionMessage } from "../guards";
 
 test("getInvalidatedSessionMessage returns reset-specific messaging for password reset invalidation", () => {
   assert.equal(
@@ -36,4 +36,52 @@ test("getInvalidatedSessionMessage falls back to generic session expiry messagin
     getInvalidatedSessionMessage(null),
     "Session expired. Please login again.",
   );
+});
+
+function createMockResponse() {
+  return {
+    statusCode: 200,
+    body: undefined as unknown,
+    status(code: number) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload: unknown) {
+      this.body = payload;
+      return this;
+    },
+  };
+}
+
+test("tab visibility guard caches role visibility and allows explicit cache clearing", async () => {
+  let visibilityLookupCount = 0;
+  const guards = createAuthGuards({
+    storage: {
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => {
+        visibilityLookupCount += 1;
+        return { monitor: true };
+      },
+    },
+    secret: "guard-test-secret",
+  });
+  const handler = guards.requireTabAccess("monitor");
+  const request = { user: { role: "admin" } };
+  const response = createMockResponse();
+  let nextCalls = 0;
+  const next = () => {
+    nextCalls += 1;
+  };
+
+  await handler(request as never, response as never, next);
+  await handler(request as never, response as never, next);
+  guards.clearTabVisibilityCache();
+  await handler(request as never, response as never, next);
+
+  assert.equal(visibilityLookupCount, 2);
+  assert.equal(nextCalls, 3);
 });

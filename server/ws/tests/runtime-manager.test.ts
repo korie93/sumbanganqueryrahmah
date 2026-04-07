@@ -4,6 +4,7 @@ import test from "node:test";
 import jwt from "jsonwebtoken";
 import { WebSocket } from "ws";
 import type { UserActivity } from "../../../shared/schema-postgres";
+import { logger } from "../../lib/logger";
 import { createRuntimeWebSocketManager } from "../runtime-manager";
 
 class FakeWebSocketServer extends EventEmitter {}
@@ -172,6 +173,45 @@ test("broadcastWsMessage removes closed sockets from the shared client map", () 
     manager.broadcastWsMessage({ type: "ping" });
     assert.equal(providedMap.size, 0);
   } finally {
+    wss.emit("close");
+  }
+});
+
+test("broadcastWsMessage logs send failures before removing the socket", () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const failingSocket = new FakeWebSocket();
+  const originalLoggerWarn = logger.warn;
+  const warnings: Array<{ message: string; payload: unknown }> = [];
+  let clearSessionCalls = 0;
+  failingSocket.send = () => {
+    throw new Error("send exploded");
+  };
+  providedMap.set("activity-send-failure", failingSocket as unknown as WebSocket);
+  logger.warn = ((message: string, payload: unknown) => {
+    warnings.push({ message, payload });
+  }) as typeof logger.warn;
+
+  const manager = createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => undefined,
+      clearCollectionNicknameSessionByActivity: async () => {
+        clearSessionCalls += 1;
+      },
+    },
+    secret: "test-secret",
+    connectedClients: providedMap,
+  });
+
+  try {
+    manager.broadcastWsMessage({ type: "ping" });
+    assert.equal(providedMap.has("activity-send-failure"), false);
+    assert.equal(clearSessionCalls, 1);
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0].message, "WebSocket broadcast failed");
+  } finally {
+    logger.warn = originalLoggerWarn;
     wss.emit("close");
   }
 });

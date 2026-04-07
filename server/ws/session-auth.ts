@@ -19,7 +19,11 @@ export function extractWsActivityId(token: string, secret: string | readonly str
     const activityId = String(decoded?.activityId || "").trim();
     return activityId || null;
   } catch (error) {
-    logger.warn("WebSocket session token verification failed", { error });
+    const authError = error as Error;
+    logger.warn("WebSocket session token verification failed", {
+      errorName: authError?.name,
+      errorMessage: authError?.message,
+    });
     return null;
   }
 }
