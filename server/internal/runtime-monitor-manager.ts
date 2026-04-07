@@ -92,7 +92,10 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
   let gcObserver: PerformanceObserver | null = null;
   let gcObserverAttached = false;
   let processHandlersAttached = false;
+  let processControlStateHandler: ((message: unknown) => void) | null = null;
+  let processGracefulShutdownHandler: ((message: unknown) => void) | null = null;
   let runtimeLoopHandle: NodeJS.Timeout | null = null;
+  let stopped = false;
 
   function getEventLoopLagMs(): number {
     const lagMs = Number(eventLoopHistogram.mean) / 1_000_000;
@@ -185,6 +188,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
   }
 
   function attachGcObserver() {
+    stopped = false;
     if (gcObserverAttached) return;
     gcObserverAttached = true;
 
@@ -199,29 +203,38 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
   }
 
   function attachProcessMessageHandlers({ onGracefulShutdown }: AttachProcessHandlersOptions) {
+    stopped = false;
     if (processHandlersAttached || typeof process.on !== "function") {
       return;
     }
 
     processHandlersAttached = true;
 
-    process.on("message", (message: unknown) => {
+    processControlStateHandler = (message: unknown) => {
       if (!isControlStateMessage(message)) return;
       applyControlState(message.payload);
-    });
+    };
 
-    process.on("message", (message: unknown) => {
+    processGracefulShutdownHandler = (message: unknown) => {
       if (!isGracefulShutdownMessage(message)) return;
       setTimeout(() => {
         onGracefulShutdown();
       }, 50);
-    });
+    };
+
+    process.on("message", processControlStateHandler);
+    process.on("message", processGracefulShutdownHandler);
   }
 
   function startRuntimeLoops({ clearSearchCache }: StartRuntimeLoopsOptions) {
+    stopped = false;
+    eventLoopHistogram.enable();
     if (runtimeLoopHandle) return;
 
     runtimeLoopHandle = setInterval(() => {
+      if (stopped) {
+        return;
+      }
       requestTracker.rollFiveSecondWindow();
 
       const now = Date.now();
@@ -311,6 +324,34 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     void syncState.runIntelligenceCycle(computeInternalMonitorSnapshot);
   }
 
+  function stop() {
+    stopped = true;
+
+    if (runtimeLoopHandle) {
+      clearInterval(runtimeLoopHandle);
+      runtimeLoopHandle = null;
+    }
+
+    if (gcObserver) {
+      gcObserver.disconnect();
+      gcObserver = null;
+    }
+    gcObserverAttached = false;
+    eventLoopHistogram.disable();
+
+    if (processHandlersAttached && typeof process.off === "function") {
+      if (processControlStateHandler) {
+        process.off("message", processControlStateHandler);
+      }
+      if (processGracefulShutdownHandler) {
+        process.off("message", processGracefulShutdownHandler);
+      }
+    }
+    processHandlersAttached = false;
+    processControlStateHandler = null;
+    processGracefulShutdownHandler = null;
+  }
+
   return {
     attachGcObserver,
     attachProcessMessageHandlers,
@@ -324,6 +365,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     recordRequestFinished,
     recordRequestStarted,
     startRuntimeLoops,
+    stop,
     withAiCircuit: circuitRuntime.withAiCircuit,
     withDbCircuit: circuitRuntime.withDbCircuit,
     withExportCircuit: circuitRuntime.withExportCircuit,

@@ -11,6 +11,7 @@ type RuntimeGlueOptions = {
   attachGcObserver: () => void;
   attachProcessMessageHandlers: (options: { onGracefulShutdown: () => void }) => void;
   startRuntimeLoops: (options: { clearSearchCache: () => void }) => void;
+  stopRuntimeMonitor: () => void;
   sweepAdaptiveRateState: (now: number) => void;
 };
 
@@ -25,6 +26,7 @@ export function attachLocalRuntimeGlue(options: RuntimeGlueOptions) {
     attachGcObserver,
     attachProcessMessageHandlers,
     startRuntimeLoops,
+    stopRuntimeMonitor,
     sweepAdaptiveRateState,
   } = options;
 
@@ -50,5 +52,6 @@ export function attachLocalRuntimeGlue(options: RuntimeGlueOptions) {
   cacheSweepHandle.unref();
   server.once("close", () => {
     clearInterval(cacheSweepHandle);
+    stopRuntimeMonitor();
   });
 }

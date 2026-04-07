@@ -79,6 +79,7 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     recordRequestFinished,
     recordRequestStarted,
     startRuntimeLoops,
+    stop,
     withAiCircuit,
     withDbCircuit,
     withExportCircuit,
@@ -138,6 +139,7 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     attachGcObserver,
     attachProcessMessageHandlers,
     startRuntimeLoops,
+    stopRuntimeMonitor: stop,
     sweepAdaptiveRateState,
   });
 
