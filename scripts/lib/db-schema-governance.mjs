@@ -4,7 +4,7 @@ import path from "node:path";
 export const DEFAULT_DISCOVERY_ROOTS = ["shared", "server", "scripts", "drizzle"];
 
 const TABLE_PATTERNS = [
-  /CREATE TABLE IF NOT EXISTS\s+(?:public\.)?([a-zA-Z0-9_]+)/gi,
+  /CREATE TABLE(?: IF NOT EXISTS)?\s+(?:public\.)?["']?([a-zA-Z0-9_]+)["']?/gi,
   /ALTER TABLE(?: IF EXISTS)?\s+(?:public\.)?([a-zA-Z0-9_]+)/gi,
   /pgTable\("([a-zA-Z0-9_]+)"/g,
 ];
@@ -128,6 +128,60 @@ export function discoverSchemaTables({ cwd = process.cwd(), roots = DEFAULT_DISC
   );
 }
 
+const GOVERNANCE_MODES = new Set([
+  "drizzle-reviewed",
+  "hybrid-managed",
+  "runtime-managed",
+  "runtime-transitional",
+]);
+
+const GOVERNANCE_AUTHORITIES = new Set([
+  "drizzle-schema",
+  "runtime-ddl",
+]);
+
+function validateManifestEntryMetadata(table, entry, failures) {
+  if (!GOVERNANCE_MODES.has(entry.mode)) {
+    failures.push(`Manifest entry "${table}" has unsupported governance mode "${entry.mode}".`);
+  }
+
+  if (!GOVERNANCE_AUTHORITIES.has(entry.authority)) {
+    failures.push(`Manifest entry "${table}" has unsupported authority "${entry.authority}".`);
+  }
+
+  if (!Array.isArray(entry.allowedSources) || entry.allowedSources.length === 0) {
+    failures.push(`Manifest entry "${table}" must declare at least one allowed schema source.`);
+  }
+
+  if (typeof entry.notes !== "string" || entry.notes.trim().length < 24) {
+    failures.push(`Manifest entry "${table}" must include a specific governance note.`);
+  }
+
+  if (entry.mode === "drizzle-reviewed") {
+    if (entry.authority !== "drizzle-schema") {
+      failures.push(`Manifest entry "${table}" is drizzle-reviewed but does not use drizzle-schema as authority.`);
+    }
+    if (!entry.allowedSources?.includes("drizzle-schema")) {
+      failures.push(`Manifest entry "${table}" is drizzle-reviewed but does not allow drizzle-schema.`);
+    }
+    if (!entry.allowedSources?.includes("drizzle-migration")) {
+      failures.push(`Manifest entry "${table}" is drizzle-reviewed but does not allow drizzle-migration.`);
+    }
+  }
+
+  if (entry.mode === "runtime-managed" || entry.mode === "runtime-transitional") {
+    if (entry.authority !== "runtime-ddl") {
+      failures.push(`Manifest entry "${table}" is ${entry.mode} but does not use runtime-ddl as authority.`);
+    }
+    const nonRuntimeSources = entry.allowedSources?.filter((sourceType) => sourceType !== "runtime-ddl") ?? [];
+    if (nonRuntimeSources.length > 0) {
+      failures.push(
+        `Manifest entry "${table}" is ${entry.mode} but allows non-runtime sources: ${nonRuntimeSources.join(", ")}.`,
+      );
+    }
+  }
+}
+
 function validateModeRequirements(table, entry, failures) {
   if (entry.mode === "drizzle-reviewed") {
     if (!entry.sourceTypes.includes("drizzle-schema")) {
@@ -144,6 +198,10 @@ export function validateSchemaGovernance({ discoveredTables, manifest }) {
   const warnings = [];
   const manifestTables = manifest.tables ?? {};
   const modeCounts = {};
+
+  for (const [table, entry] of Object.entries(manifestTables)) {
+    validateManifestEntryMetadata(table, entry, failures);
+  }
 
   for (const [table, entry] of discoveredTables.entries()) {
     const governance = manifestTables[table];

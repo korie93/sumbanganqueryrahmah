@@ -5,6 +5,8 @@ import { mkdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import "dotenv/config";
+import { assertPostgresConnection } from "./lib/postgres-preflight.mjs";
+import { waitForServer } from "./lib/server-readiness.mjs";
 
 const npmCliPath = String(process.env.npm_execpath || "").trim();
 const npmCommand = npmCliPath ? process.execPath : (process.platform === "win32" ? "npm.cmd" : "npm");
@@ -41,23 +43,6 @@ const runNpm = (args, options = {}) =>
     npmCliPath ? [npmCliPath, ...args] : args,
     options,
   );
-
-const waitForServer = async (url, timeoutMs = 120_000) => {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      const response = await fetch(url, { redirect: "manual" });
-      if (response.status >= 200 && response.status < 500) {
-        return;
-      }
-    } catch {
-      // keep polling until timeout
-    }
-    await sleep(2_000);
-  }
-
-  throw new Error(`Server did not become ready at ${url} within ${timeoutMs}ms`);
-};
 
 const stopServer = async (serverProcess) => {
   if (!serverProcess || serverProcess.killed) {
@@ -129,6 +114,9 @@ const run = async () => {
     NODE_ENV: "production",
   };
 
+  console.log("Release readiness: checking PostgreSQL connectivity...");
+  await assertPostgresConnection(env, { context: "Release readiness" });
+
   console.log("Release readiness: running fast regression gates...");
   await runNpm(["run", "verify:db-schema-governance"], { env });
   await runNpm(["run", "test:client"], { env });
@@ -156,7 +144,10 @@ const run = async () => {
   serverProcess.stderr?.pipe(serverLogStream);
 
   try {
-    await waitForServer(baseUrl);
+    await waitForServer(baseUrl, {
+      logPath: serverLogPath,
+      serverProcess,
+    });
     console.log("Release readiness: running smoke preflight + UI smoke...");
     await runNpm(["run", "smoke:preflight"], { env });
     await runNpm(["run", "smoke:ui"], { env });

@@ -11,6 +11,8 @@ import {
   isUsableLighthouseReport,
   summarizeLighthouseReport,
 } from "./lib/pagespeed-local.mjs";
+import { assertPostgresConnection } from "./lib/postgres-preflight.mjs";
+import { waitForServer } from "./lib/server-readiness.mjs";
 
 const smokeEnvPath = path.resolve(process.cwd(), ".env.smoke.local");
 if (existsSync(smokeEnvPath)) {
@@ -73,23 +75,6 @@ const runNpm = (args, options = {}) =>
     npmCliPath ? [npmCliPath, ...args] : args,
     options,
   );
-
-const waitForServer = async (url, timeoutMs = 120_000) => {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      const response = await fetch(url, { redirect: "manual" });
-      if (response.status >= 200 && response.status < 500) {
-        return;
-      }
-    } catch {
-      // Keep polling until timeout.
-    }
-    await sleep(2_000);
-  }
-
-  throw new Error(`Server did not become ready at ${url} within ${timeoutMs}ms`);
-};
 
 const stopServer = async (serverProcess) => {
   if (!serverProcess || serverProcess.killed) {
@@ -403,6 +388,11 @@ async function run() {
   assert(env.PG_PASSWORD, "PG_PASSWORD is required for perf:pagespeed:local. Put it in .env.smoke.local or export it in your shell.");
   assert(env.PG_DATABASE, "PG_DATABASE is required for perf:pagespeed:local. Put it in .env.smoke.local or export it in your shell.");
 
+  if (!shouldReuseServer) {
+    console.log("Pagespeed local: checking PostgreSQL connectivity...");
+    await assertPostgresConnection(env, { context: "Pagespeed local" });
+  }
+
   if (!shouldReuseServer && !shouldSkipBuild) {
     await runNpm(["run", "build"], { env });
   }
@@ -426,7 +416,10 @@ async function run() {
       serverProcess.stdout?.pipe(serverLogStream);
       serverProcess.stderr?.pipe(serverLogStream);
 
-      await waitForServer(baseUrl);
+      await waitForServer(baseUrl, {
+        logPath: serverLogPath,
+        serverProcess,
+      });
       await sleep(settleDelayMs);
     }
 

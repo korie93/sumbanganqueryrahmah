@@ -1,10 +1,10 @@
-import path from "node:path";
 import os from "node:os";
 import {
   isProductionLikeEnvironment,
   isStrictLocalDevelopmentEnvironment,
 } from "./runtime-environment";
 import { validateRuntimeEnvironmentSchema } from "./runtime-env-schema";
+import { resolveUploadsRootDir } from "./upload-paths";
 import { DEFAULT_IMPORT_BODY_LIMIT } from "./body-limit";
 import {
   buildEphemeralSecret,
@@ -115,7 +115,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     host: readString("HOST", "0.0.0.0"),
     publicAppUrl,
     debugLogs,
-    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    uploadsRootDir: resolveUploadsRootDir(),
     bodyLimits: {
       default: readString("DEFAULT_BODY_LIMIT", "2mb"),
       imports: readString("IMPORT_BODY_LIMIT", DEFAULT_IMPORT_BODY_LIMIT),

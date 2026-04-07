@@ -11,10 +11,15 @@ test("extractTableNames discovers pgTable, create table, and alter table definit
   const sourceText = `
     export const auditLogs = pgTable("audit_logs", {});
     CREATE TABLE IF NOT EXISTS public.banned_sessions (id text primary key);
+    CREATE TABLE "system_stability_patterns" (id bigserial primary key);
     ALTER TABLE public.banned_sessions ADD COLUMN IF NOT EXISTS fingerprint text;
   `;
 
-  assert.deepEqual(extractTableNames(sourceText), ["audit_logs", "banned_sessions"]);
+  assert.deepEqual(extractTableNames(sourceText), [
+    "audit_logs",
+    "banned_sessions",
+    "system_stability_patterns",
+  ]);
 });
 
 test("classifySourceType maps repository paths to governance source types", () => {
@@ -53,6 +58,7 @@ test("validateSchemaGovernance rejects unmanaged tables and missing reviewed mig
         authority: "drizzle-schema",
         mode: "drizzle-reviewed",
         allowedSources: ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+        notes: "Session-ban persistence has reviewed Drizzle coverage while runtime DDL remains idempotent compatibility.",
       },
     },
   };
@@ -61,6 +67,53 @@ test("validateSchemaGovernance rejects unmanaged tables and missing reviewed mig
 
   assert.match(validation.failures.join("\n"), /banned_sessions.+missing a reviewed Drizzle SQL migration/i);
   assert.match(validation.failures.join("\n"), /mystery_table.+not declared/i);
+});
+
+test("validateSchemaGovernance rejects weak manifest metadata", () => {
+  const discoveredTables = new Map([
+    [
+      "runtime_table",
+      {
+        table: "runtime_table",
+        sourceTypes: ["runtime-ddl"],
+        sourceFiles: ["server/internal/runtime-table.ts"],
+      },
+    ],
+    [
+      "reviewed_table",
+      {
+        table: "reviewed_table",
+        sourceTypes: ["drizzle-schema", "drizzle-migration"],
+        sourceFiles: ["shared/schema-postgres.ts", "drizzle/0001_reviewed.sql"],
+      },
+    ],
+  ]);
+
+  const manifest = {
+    tables: {
+      runtime_table: {
+        authority: "drizzle-schema",
+        mode: "runtime-managed",
+        allowedSources: ["runtime-ddl", "drizzle-schema"],
+        notes: "",
+      },
+      reviewed_table: {
+        authority: "runtime-ddl",
+        mode: "drizzle-reviewed",
+        allowedSources: ["drizzle-schema"],
+        notes: "Reviewed table intentionally lacks a full migration declaration for this test.",
+      },
+    },
+  };
+
+  const validation = validateSchemaGovernance({ discoveredTables, manifest });
+  const failures = validation.failures.join("\n");
+
+  assert.match(failures, /runtime_table.+specific governance note/i);
+  assert.match(failures, /runtime_table.+runtime-managed.+runtime-ddl as authority/i);
+  assert.match(failures, /runtime_table.+runtime-managed.+non-runtime sources/i);
+  assert.match(failures, /reviewed_table.+drizzle-reviewed.+drizzle-schema as authority/i);
+  assert.match(failures, /reviewed_table.+drizzle-reviewed.+does not allow drizzle-migration/i);
 });
 
 test("formatSchemaGovernanceReport summarizes successful checks", () => {
@@ -81,6 +134,7 @@ test("formatSchemaGovernanceReport summarizes successful checks", () => {
         authority: "runtime-ddl",
         mode: "runtime-managed",
         allowedSources: ["runtime-ddl"],
+        notes: "Adaptive learning storage remains runtime-managed until it is modeled in shared Drizzle schema.",
       },
     },
   };

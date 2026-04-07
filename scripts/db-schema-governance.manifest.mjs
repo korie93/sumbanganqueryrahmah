@@ -172,8 +172,9 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "drizzle-migration", "legacy-sql", "runtime-ddl"],
       "System settings now have a reviewed Drizzle migration while runtime bootstrap remains additive for seeding and normalization compatibility.",
     ),
-    system_stability_patterns: runtimeManaged(
-      "Adaptive system-learning storage still belongs to runtime DDL because it is not yet part of the shared application schema.",
+    system_stability_patterns: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Adaptive system-learning storage now has reviewed Drizzle coverage while runtime DDL remains idempotent so learning writes never break runtime flow.",
     ),
     user_activity: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],

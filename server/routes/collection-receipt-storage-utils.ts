@@ -31,11 +31,34 @@ type QuarantineCollectionReceiptInput = {
   filePath?: string | null;
 };
 
+const PRIVATE_UPLOAD_DIRECTORY_MODE = 0o750;
+
 export function logCollectionReceiptBestEffortFailure(
   message: string,
   meta?: Record<string, unknown>,
 ) {
   logger.warn(message, meta);
+}
+
+async function ensurePrivateUploadDirectory(directoryPath: string): Promise<void> {
+  await fs.promises.mkdir(directoryPath, {
+    recursive: true,
+    mode: PRIVATE_UPLOAD_DIRECTORY_MODE,
+  });
+
+  if (process.platform === "win32") {
+    return;
+  }
+
+  try {
+    await fs.promises.chmod(directoryPath, PRIVATE_UPLOAD_DIRECTORY_MODE);
+  } catch (error) {
+    logCollectionReceiptBestEffortFailure("Failed to enforce private upload directory permissions", {
+      directoryPath,
+      mode: "750",
+      error,
+    });
+  }
 }
 
 export function extractReceiptBuffer(receipt: CollectionReceiptPayload): Buffer | null {
@@ -117,7 +140,7 @@ export async function quarantineRejectedCollectionReceipt(
 
   try {
     const quarantineDir = getCollectionReceiptQuarantineDir();
-    await fs.promises.mkdir(quarantineDir, { recursive: true });
+    await ensurePrivateUploadDirectory(quarantineDir);
 
     const quarantineId = `${Date.now()}-${randomUUID()}`;
     const fallbackExtension = params.signatureType
@@ -177,7 +200,7 @@ export async function persistCollectionReceiptFile(params: {
   storedReceipt: ReturnType<typeof buildStoredCollectionReceiptMetadata>;
   temporaryFilePath: string;
 }> {
-  await fs.promises.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
+  await ensurePrivateUploadDirectory(COLLECTION_RECEIPT_DIR);
 
   const storedReceipt = buildStoredCollectionReceiptMetadata({
     fileName: params.fileName,

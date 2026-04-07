@@ -1,4 +1,6 @@
 import {
+  bigint,
+  bigserial,
   boolean,
   index,
   integer,
@@ -250,4 +252,22 @@ export const monitorAlertIncidents = pgTable("monitor_alert_incidents", {
     table.updatedAt.desc(),
   ),
   resolvedAtIdx: index("idx_monitor_alert_incidents_resolved_at").on(table.resolvedAt.desc()),
+}));
+
+export const systemStabilityPatterns = pgTable("system_stability_patterns", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  metricSignature: text("metric_signature").notNull(),
+  hour: integer("hour").notNull(),
+  weekday: integer("weekday").notNull(),
+  severity: text("severity").notNull(),
+  actionTaken: text("action_taken").notNull(),
+  durationMs: bigint("duration_ms", { mode: "number" }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  signatureWindowIdx: index("idx_stability_patterns_signature_window").on(
+    table.metricSignature,
+    table.hour,
+    table.weekday,
+    table.severity,
+  ),
 }));

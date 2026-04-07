@@ -1,8 +1,9 @@
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { resolveUploadsRootDir } from "../config/upload-paths";
 
-export const COLLECTION_UPLOADS_ROOT_DIR = path.resolve(process.cwd(), "uploads");
+export const COLLECTION_UPLOADS_ROOT_DIR = resolveUploadsRootDir();
 export const COLLECTION_RECEIPT_DIR = path.resolve(COLLECTION_UPLOADS_ROOT_DIR, "collection-receipts");
 export const COLLECTION_RECEIPT_PUBLIC_PREFIX = "/uploads/collection-receipts";
 const DEFAULT_COLLECTION_RECEIPT_QUARANTINE_DIR = path.resolve(

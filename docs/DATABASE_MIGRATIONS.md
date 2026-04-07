@@ -41,6 +41,7 @@ Each discovered table must be classified as one of:
 - a discovered table is missing from the manifest
 - a table starts using an undeclared schema source
 - a `drizzle-reviewed` table no longer has both typed schema coverage and a reviewed Drizzle SQL migration
+- a manifest entry is missing a specific governance note, has an unsupported mode/authority, or marks runtime-owned tables as allowing non-runtime schema sources
 
 ## Recommended Workflow
 

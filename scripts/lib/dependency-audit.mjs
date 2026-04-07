@@ -16,7 +16,7 @@ const allowedModerateDevFindings = {
 const allowedExternalPackageSources = {
   "xlsx": {
     resolved: new Set(["https://cdn.sheetjs.com/xlsx-0.20.2/xlsx-0.20.2.tgz"]),
-    reason: "SheetJS 0.20.2 is distributed from the vendor CDN; replace with an internal mirror/vendor tarball when available",
+    reason: "SheetJS 0.20.2 is distributed from the vendor CDN; see docs/DEPENDENCY_SUPPLY_CHAIN.md for the mirror/vendor decision path",
   },
 };
 

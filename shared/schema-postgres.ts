@@ -13,6 +13,7 @@ import {
   monitorAlertIncidents,
   mutationIdempotencyKeys,
   passwordResetRequests,
+  systemStabilityPatterns,
   userActivity,
   users,
 } from "./schema-postgres-core";
@@ -59,6 +60,7 @@ export {
   backups,
   backupJobs,
   monitorAlertIncidents,
+  systemStabilityPatterns,
 } from "./schema-postgres-core";
 export {
   collectionRecords,
@@ -246,6 +248,7 @@ export type InsertBackup = z.infer<typeof insertBackupSchema>;
 export type Backup = typeof backups.$inferSelect;
 export type BackupJobRow = typeof backupJobs.$inferSelect;
 export type MonitorAlertIncidentRow = typeof monitorAlertIncidents.$inferSelect;
+export type SystemStabilityPatternRow = typeof systemStabilityPatterns.$inferSelect;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type AccountActivationToken = typeof accountActivationTokens.$inferSelect;
 export type PasswordResetRequest = typeof passwordResetRequests.$inferSelect;
