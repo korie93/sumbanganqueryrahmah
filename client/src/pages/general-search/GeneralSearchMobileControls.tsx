@@ -87,7 +87,7 @@ export function GeneralSearchMobileControls({
               variant="ghost"
               onClick={() => handleMobileModeChange(false)}
               className={cn(
-                "h-8.5 w-full rounded-lg px-2 text-[11px] font-medium",
+                "h-11 w-full rounded-lg px-2 text-xs font-medium",
                 advancedMode
                   ? "text-muted-foreground"
                   : "bg-background text-foreground shadow-sm hover:bg-background",
@@ -101,7 +101,7 @@ export function GeneralSearchMobileControls({
               variant="ghost"
               onClick={() => handleMobileModeChange(true)}
               className={cn(
-                "h-8.5 w-full rounded-lg px-2 text-[11px] font-medium",
+                "h-11 w-full rounded-lg px-2 text-xs font-medium",
                 advancedMode
                   ? "bg-background text-foreground shadow-sm hover:bg-background"
                   : "text-muted-foreground",
@@ -148,7 +148,7 @@ export function GeneralSearchMobileControls({
                   if (event.key === "Enter") onSearch();
                 }}
                 placeholder="Enter IC No., name, or other keywords..."
-                className="h-9 rounded-xl pl-9 text-sm"
+                className="h-11 rounded-xl pl-9 text-sm"
                 data-testid="input-search"
               />
             </div>
@@ -156,7 +156,7 @@ export function GeneralSearchMobileControls({
               <Button
                 onClick={onSearch}
                 disabled={loading}
-                className="h-9 w-full rounded-xl text-xs"
+                className="h-11 w-full rounded-xl text-xs"
                 data-testid="button-search"
               >
                 {loading ? (
@@ -174,7 +174,7 @@ export function GeneralSearchMobileControls({
               <Button
                 variant="outline"
                 onClick={onReset}
-                className="h-9 w-full rounded-xl text-xs"
+                className="h-11 w-full rounded-xl text-xs"
                 data-testid="button-reset"
               >
                 <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
@@ -195,7 +195,7 @@ export function GeneralSearchMobileControls({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8.5 shrink-0 rounded-lg px-2.5 text-[11px]"
+                className="h-11 shrink-0 rounded-lg px-3 text-xs"
                 onClick={() => setMobileAdvancedOpen(true)}
               >
                 <SlidersHorizontal className="mr-1 h-3.5 w-3.5" />

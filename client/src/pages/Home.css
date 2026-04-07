@@ -215,19 +215,11 @@
 .home-card-text h3 {
   font-weight: 600;
   margin-bottom: 0.1rem;
-  color: #111827;
-}
-
-.dark .home-card-text h3 {
-  color: #f1f5f9;
+  color: hsl(var(--foreground));
 }
 
 .home-card-text p {
   font-size: 0.85rem;
   opacity: 0.8;
-  color: #4b5563;
-}
-
-.dark .home-card-text p {
-  color: #94a3b8;
+  color: hsl(var(--muted-foreground));
 }
