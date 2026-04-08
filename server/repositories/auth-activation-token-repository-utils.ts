@@ -76,7 +76,7 @@ export async function consumeActivationTokenById(
     SET used_at = ${consumption.nowIso}
     WHERE id = ${consumption.id}
       AND used_at IS NULL
-      AND (expires_at AT TIME ZONE 'UTC') > ${consumption.nowIso}
+      AND expires_at > ${consumption.nowIso}
     RETURNING id
   `);
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildBackupMetadata,
   createBackupDownloadFileName,
   getBackupPayloadReadErrorResponse,
   verifyBackupIntegrity,
@@ -41,4 +42,26 @@ test("createBackupDownloadFileName sanitizes unsafe backup names", () => {
     createBackupDownloadFileName("April Backup / Ops", "backup-1"),
     "April_Backup_Ops-backup-1.json",
   );
+});
+
+test("buildBackupMetadata includes payload size and temp encryption flags", () => {
+  const metadata = buildBackupMetadata(
+    {
+      counts: {
+        importsCount: 1,
+        dataRowsCount: 2,
+        usersCount: 3,
+        auditLogsCount: 4,
+        collectionRecordsCount: 5,
+        collectionRecordReceiptsCount: 6,
+      },
+      payloadBytes: 1024,
+      tempPayloadEncrypted: true,
+    },
+    "a".repeat(64),
+  );
+
+  assert.equal(metadata.payloadBytes, 1024);
+  assert.equal(metadata.tempPayloadEncrypted, true);
+  assert.equal(metadata.collectionRecordReceiptsCount, 6);
 });

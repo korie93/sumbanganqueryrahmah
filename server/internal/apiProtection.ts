@@ -6,6 +6,16 @@ type ApiProtectionOptions = {
   getDbProtection: () => boolean;
 };
 
+const ADAPTIVE_RATE_WINDOW_MS = 10_000;
+const ADAPTIVE_RATE_STALE_GRACE_MS = 10_000;
+const ADAPTIVE_RATE_SWEEP_INTERVAL_MS = 30_000;
+const ADAPTIVE_RATE_MAX_BUCKETS = 5_000;
+
+type AdaptiveRateBucket = {
+  count: number;
+  resetAt: number;
+};
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -30,7 +40,41 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
   systemProtectionMiddleware: RequestHandler;
   sweepAdaptiveRateState: (now?: number) => void;
 } {
-  const adaptiveRateState = new Map<string, { count: number; resetAt: number }>();
+  const adaptiveRateState = new Map<string, AdaptiveRateBucket>();
+  let lastAdaptiveSweepAt = 0;
+
+  function setAdaptiveRateBucket(bucketKey: string, bucket: AdaptiveRateBucket) {
+    if (adaptiveRateState.has(bucketKey)) {
+      adaptiveRateState.delete(bucketKey);
+    }
+    adaptiveRateState.set(bucketKey, bucket);
+
+    while (adaptiveRateState.size > ADAPTIVE_RATE_MAX_BUCKETS) {
+      const oldestBucketKey = adaptiveRateState.keys().next().value;
+      if (!oldestBucketKey) {
+        break;
+      }
+      adaptiveRateState.delete(oldestBucketKey);
+    }
+  }
+
+  const sweepAdaptiveRateState = (now = Date.now()) => {
+    for (const [bucketKey, bucket] of adaptiveRateState.entries()) {
+      if (now >= bucket.resetAt + ADAPTIVE_RATE_STALE_GRACE_MS) {
+        adaptiveRateState.delete(bucketKey);
+      }
+    }
+    lastAdaptiveSweepAt = now;
+  };
+
+  function maybeSweepAdaptiveRateState(now: number) {
+    if (
+      adaptiveRateState.size >= ADAPTIVE_RATE_MAX_BUCKETS
+      || now - lastAdaptiveSweepAt >= ADAPTIVE_RATE_SWEEP_INTERVAL_MS
+    ) {
+      sweepAdaptiveRateState(now);
+    }
+  }
 
   function resolveRateLimitClientIp(req: Request): string {
     const ip = String(req.ip || req.socket.remoteAddress || "unknown").trim();
@@ -79,22 +123,26 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     if (!req.path.startsWith("/api/")) return next();
     if (isSessionControlRoute(req)) return next();
 
-    const windowMs = 10_000;
     const now = Date.now();
+    maybeSweepAdaptiveRateState(now);
     const { bucketKey, dynamicLimit } = resolveAdaptiveRateBucket(req);
     const bucket = adaptiveRateState.get(bucketKey);
 
     if (!bucket || now >= bucket.resetAt) {
-      adaptiveRateState.set(bucketKey, { count: 1, resetAt: now + windowMs });
+      setAdaptiveRateBucket(bucketKey, { count: 1, resetAt: now + ADAPTIVE_RATE_WINDOW_MS });
       return next();
     }
 
-    bucket.count += 1;
-    if (bucket.count > dynamicLimit) {
+    const nextBucket = {
+      count: bucket.count + 1,
+      resetAt: bucket.resetAt,
+    };
+    setAdaptiveRateBucket(bucketKey, nextBucket);
+    if (nextBucket.count > dynamicLimit) {
       return res.status(429).json({
         message: "Too many requests under current system load.",
         limit: dynamicLimit,
-        retryAfterMs: Math.max(0, bucket.resetAt - now),
+        retryAfterMs: Math.max(0, nextBucket.resetAt - now),
         mode: controlState.mode,
       });
     }
@@ -137,15 +185,6 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
 
     return next();
   };
-
-  const sweepAdaptiveRateState = (now = Date.now()) => {
-    for (const [bucketKey, bucket] of adaptiveRateState.entries()) {
-      if (now >= bucket.resetAt + 60_000) {
-        adaptiveRateState.delete(bucketKey);
-      }
-    }
-  };
-
   return {
     adaptiveRateLimit,
     systemProtectionMiddleware,

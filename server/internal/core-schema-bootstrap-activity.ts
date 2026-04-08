@@ -14,9 +14,9 @@ export async function ensureCoreUserActivityTable(
       browser text,
       fingerprint text,
       ip_address text,
-      login_time timestamp,
-      logout_time timestamp,
-      last_activity_time timestamp,
+      login_time timestamp with time zone,
+      logout_time timestamp with time zone,
+      last_activity_time timestamp with time zone,
       is_active boolean DEFAULT true,
       logout_reason text
     )
@@ -28,9 +28,9 @@ export async function ensureCoreUserActivityTable(
   await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS browser text`);
   await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS fingerprint text`);
   await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS ip_address text`);
-  await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS login_time timestamp`);
-  await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS logout_time timestamp`);
-  await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS last_activity_time timestamp`);
+  await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS login_time timestamp with time zone`);
+  await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS logout_time timestamp with time zone`);
+  await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS last_activity_time timestamp with time zone`);
   await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true`);
   await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS logout_reason text`);
   await database.execute(sql`
@@ -86,7 +86,7 @@ export async function ensureCoreAuditLogsTable(
       target_user text,
       target_resource text,
       details text,
-      timestamp timestamp DEFAULT now()
+      timestamp timestamp with time zone DEFAULT now() NOT NULL
     )
   `);
   await database.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS action text`);
@@ -95,11 +95,12 @@ export async function ensureCoreAuditLogsTable(
   await database.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS target_user text`);
   await database.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS target_resource text`);
   await database.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS details text`);
-  await database.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS timestamp timestamp DEFAULT now()`);
+  await database.execute(sql`ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS timestamp timestamp with time zone DEFAULT now()`);
   await database.execute(sql`
     UPDATE public.audit_logs
     SET timestamp = COALESCE(timestamp, now())
   `);
+  await database.execute(sql`ALTER TABLE public.audit_logs ALTER COLUMN timestamp SET NOT NULL`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON public.audit_logs(timestamp DESC)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON public.audit_logs(action)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_performed_by ON public.audit_logs(performed_by)`);
@@ -119,9 +120,15 @@ export async function ensureCoreBannedSessionsTable(
       ip_address text,
       browser text,
       pc_name text,
-      banned_at timestamp DEFAULT now()
+      banned_at timestamp with time zone DEFAULT now() NOT NULL
     )
   `);
+  await database.execute(sql`ALTER TABLE public.banned_sessions ADD COLUMN IF NOT EXISTS banned_at timestamp with time zone DEFAULT now()`);
+  await database.execute(sql`
+    UPDATE public.banned_sessions
+    SET banned_at = COALESCE(banned_at, now())
+  `);
+  await database.execute(sql`ALTER TABLE public.banned_sessions ALTER COLUMN banned_at SET NOT NULL`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_banned_sessions_fingerprint ON public.banned_sessions(fingerprint)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_banned_sessions_ip ON public.banned_sessions(ip_address)`);
 }

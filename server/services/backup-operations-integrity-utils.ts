@@ -9,7 +9,7 @@ import type {
 } from "./backup-operations-types";
 
 export function buildBackupMetadata(
-  backupData: Pick<PreparedBackupPayloadFile, "counts">,
+  backupData: Pick<PreparedBackupPayloadFile, "counts" | "payloadBytes" | "tempPayloadEncrypted">,
   payloadChecksumSha256: string,
 ) {
   const counts = backupData.counts;
@@ -24,6 +24,8 @@ export function buildBackupMetadata(
     auditLogsCount: counts.auditLogsCount,
     collectionRecordsCount: counts.collectionRecordsCount,
     collectionRecordReceiptsCount: counts.collectionRecordReceiptsCount,
+    payloadBytes: backupData.payloadBytes,
+    tempPayloadEncrypted: backupData.tempPayloadEncrypted,
   };
 }
 

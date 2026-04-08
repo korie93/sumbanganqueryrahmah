@@ -115,7 +115,7 @@ export class AnalyticsRepository {
       ),
       logins AS (
         SELECT
-          (login_time AT TIME ZONE 'UTC' AT TIME ZONE ${ANALYTICS_TZ})::date AS day,
+          (login_time AT TIME ZONE ${ANALYTICS_TZ})::date AS day,
           COUNT(*)::int AS logins
         FROM public.user_activity
         WHERE login_time IS NOT NULL
@@ -123,7 +123,7 @@ export class AnalyticsRepository {
       ),
       logouts AS (
         SELECT
-          (logout_time AT TIME ZONE 'UTC' AT TIME ZONE ${ANALYTICS_TZ})::date AS day,
+          (logout_time AT TIME ZONE ${ANALYTICS_TZ})::date AS day,
           COUNT(*)::int AS logouts
         FROM public.user_activity
         WHERE logout_time IS NOT NULL
@@ -155,11 +155,11 @@ export class AnalyticsRepository {
         COUNT(*)::int AS "loginCount",
         COALESCE(
           GREATEST(
-            MAX((u.last_login_at AT TIME ZONE 'UTC')),
-            MAX((ua.login_time AT TIME ZONE 'UTC'))
+            MAX(u.last_login_at),
+            MAX(ua.login_time)
           ),
-          MAX((u.last_login_at AT TIME ZONE 'UTC')),
-          MAX((ua.login_time AT TIME ZONE 'UTC'))
+          MAX(u.last_login_at),
+          MAX(ua.login_time)
         ) AS "lastLogin"
       FROM public.user_activity ua
       LEFT JOIN public.users u
@@ -180,7 +180,7 @@ export class AnalyticsRepository {
   async getPeakHours(): Promise<Array<{ hour: number; count: number }>> {
     const result = await db.execute(sql`
       SELECT
-        EXTRACT(HOUR FROM (login_time AT TIME ZONE 'UTC' AT TIME ZONE ${ANALYTICS_TZ}))::int AS hour,
+        EXTRACT(HOUR FROM (login_time AT TIME ZONE ${ANALYTICS_TZ}))::int AS hour,
         COUNT(*)::int AS count
       FROM public.user_activity
       WHERE login_time IS NOT NULL

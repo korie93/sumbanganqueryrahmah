@@ -20,7 +20,7 @@ export class BackupsBootstrap {
           CREATE TABLE IF NOT EXISTS public.backups (
             id text PRIMARY KEY,
             name text NOT NULL,
-            created_at timestamp DEFAULT now(),
+            created_at timestamp with time zone DEFAULT now() NOT NULL,
             created_by text NOT NULL,
             backup_data text NOT NULL,
             metadata text
@@ -30,27 +30,32 @@ export class BackupsBootstrap {
           CREATE TABLE IF NOT EXISTS backups (
             id text PRIMARY KEY,
             name text NOT NULL,
-            created_at timestamp DEFAULT now(),
+            created_at timestamp with time zone DEFAULT now() NOT NULL,
             created_by text NOT NULL,
             backup_data text NOT NULL,
             metadata text
           )
         `);
         await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS name text`);
-        await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS created_at timestamp`);
+        await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
         await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS created_by text`);
         await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS backup_data text`);
         await db.execute(sql`ALTER TABLE public.backups ADD COLUMN IF NOT EXISTS metadata text`);
+        await db.execute(sql`
+          UPDATE public.backups
+          SET created_at = COALESCE(created_at, now())
+        `);
+        await db.execute(sql`ALTER TABLE public.backups ALTER COLUMN created_at SET NOT NULL`);
         await db.execute(sql`
           CREATE TABLE IF NOT EXISTS public.backup_jobs (
             id uuid PRIMARY KEY,
             type text NOT NULL,
             status text NOT NULL DEFAULT 'queued',
             requested_by text NOT NULL,
-            requested_at timestamp DEFAULT now() NOT NULL,
-            started_at timestamp,
-            finished_at timestamp,
-            updated_at timestamp DEFAULT now() NOT NULL,
+            requested_at timestamp with time zone DEFAULT now() NOT NULL,
+            started_at timestamp with time zone,
+            finished_at timestamp with time zone,
+            updated_at timestamp with time zone DEFAULT now() NOT NULL,
             backup_id text,
             backup_name text,
             result jsonb,
@@ -60,10 +65,10 @@ export class BackupsBootstrap {
         await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS type text`);
         await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS status text DEFAULT 'queued'`);
         await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS requested_by text`);
-        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS requested_at timestamp DEFAULT now()`);
-        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS started_at timestamp`);
-        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS finished_at timestamp`);
-        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS requested_at timestamp with time zone DEFAULT now()`);
+        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS started_at timestamp with time zone`);
+        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS finished_at timestamp with time zone`);
+        await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`);
         await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS backup_id text`);
         await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS backup_name text`);
         await db.execute(sql`ALTER TABLE public.backup_jobs ADD COLUMN IF NOT EXISTS result jsonb`);
@@ -98,7 +103,7 @@ export class BackupsBootstrap {
             CREATE TABLE IF NOT EXISTS public.backups_new (
               id text PRIMARY KEY,
               name text NOT NULL,
-              created_at timestamp DEFAULT now(),
+              created_at timestamp with time zone DEFAULT now() NOT NULL,
               created_by text NOT NULL,
               backup_data text NOT NULL,
               metadata text

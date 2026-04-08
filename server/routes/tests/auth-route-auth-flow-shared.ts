@@ -62,6 +62,8 @@ export type TestAuthRouteUser = {
   lockedBySystem?: boolean;
 } & Record<string, unknown>;
 
+export type TestAuthRouteUserSeed = Partial<TestAuthRouteUser> & Pick<TestAuthRouteUser, "id" | "username" | "role">;
+
 export type TestAuthRouteActivity = {
   id: string;
   username: string;
@@ -93,7 +95,7 @@ export function authenticateAs(user: {
 }) {
   return (req: MutableAuthenticatedRequest, _res: Response, next: NextFunction) => {
     req.user = {
-      userId: user.id,
+      ...(user.id ? { userId: user.id } : {}),
       username: user.username,
       role: user.role,
       activityId: "activity-auth-test-1",

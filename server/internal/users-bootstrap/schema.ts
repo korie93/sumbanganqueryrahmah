@@ -33,18 +33,18 @@ export async function ensureUsersBootstrapSchema(
       password_reset_by_superuser boolean NOT NULL DEFAULT false,
       two_factor_enabled boolean NOT NULL DEFAULT false,
       two_factor_secret_encrypted text,
-      two_factor_configured_at timestamp,
+      two_factor_configured_at timestamp with time zone,
       failed_login_attempts integer NOT NULL DEFAULT 0,
-      locked_at timestamp,
+      locked_at timestamp with time zone,
       locked_reason text,
       locked_by_system boolean NOT NULL DEFAULT false,
       created_by text,
       is_banned boolean DEFAULT false,
-      created_at timestamp DEFAULT now(),
-      updated_at timestamp DEFAULT now(),
-      password_changed_at timestamp,
-      activated_at timestamp,
-      last_login_at timestamp
+      created_at timestamp with time zone DEFAULT now(),
+      updated_at timestamp with time zone DEFAULT now(),
+      password_changed_at timestamp with time zone,
+      activated_at timestamp with time zone,
+      last_login_at timestamp with time zone
     )
   `);
   await database.execute(sql`
@@ -52,10 +52,10 @@ export async function ensureUsersBootstrapSchema(
       id text PRIMARY KEY,
       user_id text NOT NULL,
       token_hash text NOT NULL,
-      expires_at timestamp NOT NULL,
-      used_at timestamp,
+      expires_at timestamp with time zone NOT NULL,
+      used_at timestamp with time zone,
       created_by text,
-      created_at timestamp DEFAULT now()
+      created_at timestamp with time zone DEFAULT now()
     )
   `);
   await database.execute(sql`
@@ -66,9 +66,9 @@ export async function ensureUsersBootstrapSchema(
       approved_by text,
       reset_type text NOT NULL DEFAULT 'temporary_password',
       token_hash text,
-      expires_at timestamp,
-      used_at timestamp,
-      created_at timestamp DEFAULT now()
+      expires_at timestamp with time zone,
+      used_at timestamp with time zone,
+      created_at timestamp with time zone DEFAULT now()
     )
   `);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS full_name text`);
@@ -80,27 +80,27 @@ export async function ensureUsersBootstrapSchema(
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_reset_by_superuser boolean DEFAULT false`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS two_factor_enabled boolean DEFAULT false`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS two_factor_secret_encrypted text`);
-  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS two_factor_configured_at timestamp`);
+  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS two_factor_configured_at timestamp with time zone`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS failed_login_attempts integer DEFAULT 0`);
-  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS locked_at timestamp`);
+  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS locked_at timestamp with time zone`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS locked_reason text`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS locked_by_system boolean DEFAULT false`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_by text`);
   await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_banned boolean DEFAULT false`);
-  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
-  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_changed_at timestamp`);
-  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS activated_at timestamp`);
-  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS last_login_at timestamp`);
+  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
+  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`);
+  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_changed_at timestamp with time zone`);
+  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS activated_at timestamp with time zone`);
+  await database.execute(sql`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS last_login_at timestamp with time zone`);
   await database.execute(sql`ALTER TABLE public.account_activation_tokens ADD COLUMN IF NOT EXISTS created_by text`);
-  await database.execute(sql`ALTER TABLE public.account_activation_tokens ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+  await database.execute(sql`ALTER TABLE public.account_activation_tokens ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
   await database.execute(sql`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS requested_by_user text`);
   await database.execute(sql`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS approved_by text`);
   await database.execute(sql`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS reset_type text DEFAULT 'temporary_password'`);
   await database.execute(sql`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS token_hash text`);
-  await database.execute(sql`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS expires_at timestamp`);
-  await database.execute(sql`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS used_at timestamp`);
-  await database.execute(sql`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+  await database.execute(sql`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS expires_at timestamp with time zone`);
+  await database.execute(sql`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS used_at timestamp with time zone`);
+  await database.execute(sql`ALTER TABLE public.password_reset_requests ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
 
   const legacyPasswordColumn = await database.execute(sql`
     SELECT EXISTS (

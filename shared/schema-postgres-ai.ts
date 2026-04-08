@@ -13,6 +13,8 @@ import {
 import { sql } from "drizzle-orm";
 import { dataRows, imports } from "./schema-postgres-core";
 
+const utcTimestamp = (name: string) => timestamp(name, { withTimezone: true });
+
 export const dataEmbeddings = pgTable("data_embeddings", {
   id: text("id").primaryKey(),
   importId: text("import_id")
@@ -23,7 +25,7 @@ export const dataEmbeddings = pgTable("data_embeddings", {
     .references(() => dataRows.id, { onDelete: "cascade", onUpdate: "cascade" }),
   content: text("content").notNull(),
   embedding: vector("embedding", { dimensions: 768 }).notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   rowIdUnique: uniqueIndex("data_embeddings_row_id_unique").on(table.rowId),
   importIdIdx: index("idx_data_embeddings_import_id").on(table.importId),
@@ -33,7 +35,7 @@ export const dataEmbeddings = pgTable("data_embeddings", {
 export const aiConversations = pgTable("ai_conversations", {
   id: text("id").primaryKey(),
   createdBy: text("created_by").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
 });
 
 export const aiMessages = pgTable("ai_messages", {
@@ -43,7 +45,7 @@ export const aiMessages = pgTable("ai_messages", {
     .references(() => aiConversations.id, { onDelete: "cascade", onUpdate: "cascade" }),
   role: text("role").notNull(),
   content: text("content").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   conversationIdx: index("idx_ai_messages_conversation_id").on(table.conversationId),
   conversationCreatedAtIdx: index("idx_ai_messages_conversation_created_at").on(
@@ -56,7 +58,7 @@ export const aiCategoryStats = pgTable("ai_category_stats", {
   key: text("key").primaryKey(),
   total: integer("total").notNull(),
   samples: jsonb("samples").$type<Array<{ name: string; ic: string; source: string | null }>>(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   updatedAtIdx: index("idx_ai_category_stats_updated_at").on(table.updatedAt),
 }));
@@ -67,7 +69,7 @@ export const aiCategoryRules = pgTable("ai_category_rules", {
   fields: text("fields").array().notNull().default(sql`'{}'::text[]`),
   matchMode: text("match_mode").notNull().default("contains"),
   enabled: boolean("enabled").notNull().default(true),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   updatedAtIdx: index("idx_ai_category_rules_updated_at").on(table.updatedAt),
 }));

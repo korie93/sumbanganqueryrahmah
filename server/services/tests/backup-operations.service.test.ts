@@ -16,6 +16,8 @@ function createBackupOperationsHarness(options?: {
   exportCircuitOpen?: boolean;
   corruptChecksum?: boolean;
   backupReadErrorMessage?: string;
+  preparedPayloadEncrypted?: boolean;
+  createBackupErrorMessage?: string;
 }) {
   const auditLogs: AuditEntry[] = [];
   const createBackupCalls: Array<Record<string, unknown>> = [];
@@ -80,18 +82,21 @@ function createBackupOperationsHarness(options?: {
       const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "backup-service-test-"));
       const tempFilePath = path.join(tempDir, "payload.json");
       tempPayloadPaths.push(tempFilePath);
-      await fs.writeFile(
-        tempFilePath,
-        JSON.stringify({
-          imports: [{ id: "import-1" }],
-          dataRows: [{ id: "row-1" }, { id: "row-2" }],
-          users: [{ username: "super.user" }],
-          auditLogs: [{ id: "audit-1" }],
-          collectionRecords: [{ id: "record-1" }],
-          collectionRecordReceipts: [{ id: "receipt-1" }],
-        }),
-        "utf8",
-      );
+      const payloadJson = JSON.stringify({
+        imports: [{ id: "import-1" }],
+        dataRows: [{ id: "row-1" }, { id: "row-2" }],
+        users: [{ username: "super.user" }],
+        auditLogs: [{ id: "audit-1" }],
+        collectionRecords: [{ id: "record-1" }],
+        collectionRecordReceipts: [{ id: "receipt-1" }],
+      });
+
+      if (options?.preparedPayloadEncrypted) {
+        await fs.writeFile(tempFilePath, Buffer.from("encrypted-temp-payload", "utf8"));
+      } else {
+        await fs.writeFile(tempFilePath, payloadJson, "utf8");
+      }
+
       return {
         tempFilePath,
         payloadChecksumSha256:
@@ -104,6 +109,14 @@ function createBackupOperationsHarness(options?: {
           collectionRecordsCount: 1,
           collectionRecordReceiptsCount: 1,
         },
+        payloadBytes: (await fs.stat(tempFilePath)).size,
+        tempPayloadEncrypted: Boolean(options?.preparedPayloadEncrypted),
+        ...(options?.preparedPayloadEncrypted
+          ? {
+            tempPayloadStoragePrefix:
+              "enc:v2:primary.iv-base64.auth-tag-base64.",
+          }
+          : {}),
         cleanup: async () => {
           payloadFileCleanupCount += 1;
           await fs.rm(tempDir, { recursive: true, force: true });
@@ -111,6 +124,9 @@ function createBackupOperationsHarness(options?: {
       };
     },
     createBackup: async (data: Record<string, unknown>) => {
+      if (options?.createBackupErrorMessage) {
+        throw new Error(options.createBackupErrorMessage);
+      }
       createBackupCalls.push(data);
       return {
         id: "backup-2",
@@ -253,6 +269,60 @@ test("BackupOperationsService createBackup persists backup metadata and audits e
 
   const auditDetails = JSON.parse(String(auditLogs[0].details));
   assert.equal(typeof auditDetails.durationMs, "number");
+});
+
+test("BackupOperationsService createBackup stores encrypted temp payloads without re-reading plaintext JSON", async () => {
+  const { service, createBackupCalls, getPayloadFileCleanupCount, tempPayloadPaths } =
+    createBackupOperationsHarness({
+      preparedPayloadEncrypted: true,
+    });
+
+  const result = await service.createBackup({
+    name: "Encrypted Temp Backup",
+    username: "super.user",
+  });
+
+  assert.equal(result.statusCode, 200);
+  assert.equal(createBackupCalls.length, 1);
+  assert.match(String(createBackupCalls[0].backupData || ""), /^enc:v2:primary\./);
+  assert.equal(
+    String(createBackupCalls[0].backupData || "").includes("\"imports\""),
+    false,
+  );
+  assert.equal(
+    String(createBackupCalls[0].backupData || "").endsWith(
+      Buffer.from("encrypted-temp-payload", "utf8").toString("base64"),
+    ),
+    true,
+  );
+  assert.equal(getPayloadFileCleanupCount(), 1);
+  await Promise.all(
+    tempPayloadPaths.map(async (tempFilePath) => {
+      await assert.rejects(() => fs.access(tempFilePath));
+    }),
+  );
+});
+
+test("BackupOperationsService createBackup cleans up temp payload files when storage persistence fails", async () => {
+  const { service, getPayloadFileCleanupCount, tempPayloadPaths } = createBackupOperationsHarness({
+    createBackupErrorMessage: "backup insert failed",
+  });
+
+  await assert.rejects(
+    () =>
+      service.createBackup({
+        name: "Manual Backup",
+        username: "super.user",
+      }),
+    /backup insert failed/i,
+  );
+
+  assert.equal(getPayloadFileCleanupCount(), 1);
+  await Promise.all(
+    tempPayloadPaths.map(async (tempFilePath) => {
+      await assert.rejects(() => fs.access(tempFilePath));
+    }),
+  );
 });
 
 test("BackupOperationsService restoreBackup returns 404 when the backup does not exist", async () => {

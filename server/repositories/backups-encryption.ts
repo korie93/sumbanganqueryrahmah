@@ -10,6 +10,12 @@ export type BackupEncryptionConfig = {
   keysById: Map<string, Buffer>;
 };
 
+export function isEncodedBackupDataForStorage(rawPayload: string): boolean {
+  const normalized = String(rawPayload || "");
+  return normalized.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V1)
+    || normalized.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V2);
+}
+
 function parseEncryptionKey(raw: string): Buffer | null {
   const normalized = String(raw || "").trim();
   if (!normalized) return null;
@@ -125,6 +131,10 @@ export function assertBackupEncryptionConfig(config: BackupEncryptionConfig) {
 }
 
 export function encodeBackupDataForStorage(rawPayload: string, config: BackupEncryptionConfig): string {
+  if (isEncodedBackupDataForStorage(rawPayload)) {
+    return String(rawPayload || "");
+  }
+
   const primaryKey = getPrimaryBackupEncryptionKey(config);
   if (!primaryKey) {
     if (config.requireEncryption) {

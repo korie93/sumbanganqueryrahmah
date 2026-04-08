@@ -10,13 +10,13 @@ export async function ensureCollectionAdminVisibleNicknamesTable(): Promise<void
       admin_user_id text NOT NULL,
       nickname_id uuid NOT NULL,
       created_by_superuser text,
-      created_at timestamp NOT NULL DEFAULT now()
+      created_at timestamp with time zone NOT NULL DEFAULT now()
     )
   `);
   await db.execute(sql`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS admin_user_id text`);
   await db.execute(sql`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS nickname_id uuid`);
   await db.execute(sql`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS created_by_superuser text`);
-  await db.execute(sql`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+  await db.execute(sql`ALTER TABLE public.admin_visible_nicknames ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
   await db.execute(sql`
     UPDATE public.admin_visible_nicknames
     SET created_at = COALESCE(created_at, now())

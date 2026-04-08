@@ -89,7 +89,12 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const isTrackableSocket = (ws: WebSocket) =>
     ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING;
   const clearNicknameSession = (activityId: string) =>
-    Promise.resolve(storage.clearCollectionNicknameSessionByActivity?.(activityId)).catch(() => undefined);
+    Promise.resolve(storage.clearCollectionNicknameSessionByActivity?.(activityId)).catch((error) => {
+      logger.warn("Failed to clear nickname session after WebSocket cleanup", {
+        activityId,
+        error,
+      });
+    });
   const removeTrackedSocket = (activityId: string) => {
     connectedClients.delete(activityId);
     socketUserKeys.delete(activityId);
@@ -144,7 +149,9 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
       if (!aliveSockets.has(ws)) {
         removeTrackedSocket(activityId);
-        ws.terminate();
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.terminate();
+        }
         continue;
       }
 
@@ -279,15 +286,6 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
 
       const existingWs = connectedClients.get(activityId);
-      if (existingWs && existingWs.readyState === WebSocket.OPEN) {
-        existingWs.close();
-      }
-
-      if (cleanedUp || !isTrackableSocket(ws)) {
-        cleanupSocket();
-        return;
-      }
-
       connectedClients.set(activityId, ws);
       if (userKey) {
         socketUserKeys.set(activityId, userKey);
@@ -295,6 +293,16 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         socketUserKeys.delete(activityId);
       }
       markSocketAlive();
+
+      if (cleanedUp || !isTrackableSocket(ws)) {
+        cleanupSocket();
+        return;
+      }
+
+      if (existingWs && existingWs !== ws && isTrackableSocket(existingWs)) {
+        existingWs.close();
+      }
+
       logger.debug("WebSocket connected", { activityId });
     } catch (error) {
       cleanupSocket();

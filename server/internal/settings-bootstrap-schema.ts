@@ -10,9 +10,15 @@ export async function ensureSettingsSchema(database: SettingsBootstrapSqlExecuto
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       name text UNIQUE NOT NULL,
       description text,
-      created_at timestamp DEFAULT now()
+      created_at timestamp with time zone DEFAULT now() NOT NULL
     )
   `);
+  await database.execute(sql`ALTER TABLE public.setting_categories ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
+  await database.execute(sql`
+    UPDATE public.setting_categories
+    SET created_at = COALESCE(created_at, now())
+  `);
+  await database.execute(sql`ALTER TABLE public.setting_categories ALTER COLUMN created_at SET NOT NULL`);
 
   await database.execute(sql`
     CREATE TABLE IF NOT EXISTS public.system_settings (
@@ -25,9 +31,15 @@ export async function ensureSettingsSchema(database: SettingsBootstrapSqlExecuto
       value text NOT NULL,
       default_value text,
       is_critical boolean DEFAULT false,
-      updated_at timestamp DEFAULT now()
+      updated_at timestamp with time zone DEFAULT now() NOT NULL
     )
   `);
+  await database.execute(sql`ALTER TABLE public.system_settings ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`);
+  await database.execute(sql`
+    UPDATE public.system_settings
+    SET updated_at = COALESCE(updated_at, now())
+  `);
+  await database.execute(sql`ALTER TABLE public.system_settings ALTER COLUMN updated_at SET NOT NULL`);
 
   await database.execute(sql`
     CREATE TABLE IF NOT EXISTS public.setting_options (
@@ -152,9 +164,15 @@ async function ensureSettingVersionsSchema(database: SettingsBootstrapSqlExecuto
       old_value text,
       new_value text NOT NULL,
       changed_by text NOT NULL,
-      changed_at timestamp DEFAULT now()
+      changed_at timestamp with time zone DEFAULT now() NOT NULL
     )
   `);
+  await database.execute(sql`ALTER TABLE public.setting_versions ADD COLUMN IF NOT EXISTS changed_at timestamp with time zone DEFAULT now()`);
+  await database.execute(sql`
+    UPDATE public.setting_versions
+    SET changed_at = COALESCE(changed_at, now())
+  `);
+  await database.execute(sql`ALTER TABLE public.setting_versions ALTER COLUMN changed_at SET NOT NULL`);
   await database.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_setting_versions_key_time
     ON public.setting_versions (setting_key, changed_at DESC)
@@ -168,7 +186,13 @@ async function ensureFeatureFlagsSchema(database: SettingsBootstrapSqlExecutor) 
       key text UNIQUE NOT NULL,
       enabled boolean NOT NULL DEFAULT false,
       description text,
-      updated_at timestamp DEFAULT now()
+      updated_at timestamp with time zone DEFAULT now() NOT NULL
     )
   `);
+  await database.execute(sql`ALTER TABLE public.feature_flags ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`);
+  await database.execute(sql`
+    UPDATE public.feature_flags
+    SET updated_at = COALESCE(updated_at, now())
+  `);
+  await database.execute(sql`ALTER TABLE public.feature_flags ALTER COLUMN updated_at SET NOT NULL`);
 }

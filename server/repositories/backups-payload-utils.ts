@@ -18,6 +18,7 @@ import {
   type BackupUserRecord,
   type PreparedBackupPayloadFile,
 } from "./backups-repository-types";
+import type { BackupEncryptionConfig } from "./backups-encryption";
 export {
   createBackupPayloadChunkReader,
   createBackupPayloadSectionReader,
@@ -47,16 +48,42 @@ type BackupCursorRow = {
 
 type BackupPageFetcher<T extends BackupCursorRow> = (lastId: string | null) => Promise<T[]>;
 
-async function writeBackupChunk(
+type PreparedBackupWriteState = {
   writer: ReturnType<typeof createWriteStream>,
   hash: crypto.Hash,
+  cipher?: crypto.CipherGCM,
+};
+
+async function writeBackupStreamChunk(
+  writer: ReturnType<typeof createWriteStream>,
+  chunk: string | Buffer,
+) {
+  if ((typeof chunk === "string" && !chunk) || (chunk instanceof Buffer && chunk.length === 0)) {
+    return;
+  }
+
+  const wrote = typeof chunk === "string"
+    ? writer.write(chunk, "utf8")
+    : writer.write(chunk);
+  if (!wrote) {
+    await once(writer, "drain");
+  }
+}
+
+async function writeBackupChunk(
+  state: PreparedBackupWriteState,
   chunk: string,
 ) {
   if (!chunk) return;
-  hash.update(chunk, "utf8");
-  if (!writer.write(chunk, "utf8")) {
-    await once(writer, "drain");
+  state.hash.update(chunk, "utf8");
+
+  if (!state.cipher) {
+    await writeBackupStreamChunk(state.writer, chunk);
+    return;
   }
+
+  const encryptedChunk = state.cipher.update(chunk, "utf8");
+  await writeBackupStreamChunk(state.writer, encryptedChunk);
 }
 
 async function closeBackupWriter(writer: ReturnType<typeof createWriteStream>) {
@@ -67,12 +94,11 @@ async function closeBackupWriter(writer: ReturnType<typeof createWriteStream>) {
 }
 
 async function appendPagedJsonArray<T extends BackupCursorRow>(
-  writer: ReturnType<typeof createWriteStream>,
-  hash: crypto.Hash,
+  state: PreparedBackupWriteState,
   key: string,
   fetchPage: BackupPageFetcher<T>,
 ): Promise<number> {
-  await writeBackupChunk(writer, hash, `"${key}":[`);
+  await writeBackupChunk(state, `"${key}":[`);
 
   let lastId: string | null = null;
   let isFirstRow = true;
@@ -86,10 +112,10 @@ async function appendPagedJsonArray<T extends BackupCursorRow>(
 
     for (const row of rows) {
       if (!isFirstRow) {
-        await writeBackupChunk(writer, hash, ",");
+        await writeBackupChunk(state, ",");
       }
       isFirstRow = false;
-      await writeBackupChunk(writer, hash, JSON.stringify(row));
+      await writeBackupChunk(state, JSON.stringify(row));
       total += 1;
       lastId = row.id;
     }
@@ -99,7 +125,7 @@ async function appendPagedJsonArray<T extends BackupCursorRow>(
     }
   }
 
-  await writeBackupChunk(writer, hash, "]");
+  await writeBackupChunk(state, "]");
   return total;
 }
 
@@ -116,16 +142,36 @@ function createEmptyBackupPayloadCounts(): BackupPayloadCounts {
 
 async function createBackupTempFile() {
   const tempDirPath = await fs.mkdtemp(path.join(os.tmpdir(), "sqr-backup-export-"));
+  await fs.chmod(tempDirPath, 0o700).catch(() => {});
   return {
     tempDirPath,
     tempFilePath: path.join(tempDirPath, "backup-data.json"),
   };
 }
 
-export async function prepareBackupPayloadFileForCreate(): Promise<PreparedBackupPayloadFile> {
+export async function prepareBackupPayloadFileForCreate(
+  backupEncryption?: BackupEncryptionConfig,
+): Promise<PreparedBackupPayloadFile> {
   const { tempDirPath, tempFilePath } = await createBackupTempFile();
-  const writer = createWriteStream(tempFilePath, { encoding: "utf8" });
-  const hash = crypto.createHash("sha256");
+  const primaryEncryptionKeyId = backupEncryption?.primaryKeyId ?? null;
+  const primaryEncryptionKey = primaryEncryptionKeyId
+    ? backupEncryption?.keysById.get(primaryEncryptionKeyId) ?? null
+    : null;
+  const tempPayloadEncrypted = Boolean(primaryEncryptionKeyId && primaryEncryptionKey);
+  const iv = tempPayloadEncrypted ? crypto.randomBytes(12) : null;
+  const cipher = tempPayloadEncrypted
+    ? crypto.createCipheriv("aes-256-gcm", primaryEncryptionKey as Buffer, iv as Buffer)
+    : undefined;
+  const writer = createWriteStream(tempFilePath, {
+    flags: "wx",
+    mode: 0o600,
+    ...(tempPayloadEncrypted ? {} : { encoding: "utf8" as const }),
+  });
+  const state: PreparedBackupWriteState = {
+    writer,
+    hash: crypto.createHash("sha256"),
+    ...(cipher ? { cipher } : {}),
+  };
   const counts = createEmptyBackupPayloadCounts();
 
   const cleanup = async () => {
@@ -133,9 +179,9 @@ export async function prepareBackupPayloadFileForCreate(): Promise<PreparedBacku
   };
 
   try {
-    await writeBackupChunk(writer, hash, "{");
+    await writeBackupChunk(state, "{");
 
-    counts.importsCount = await appendPagedJsonArray(writer, hash, "imports", (lastId) =>
+    counts.importsCount = await appendPagedJsonArray(state, "imports", (lastId) =>
       selectRows<Import & BackupCursorRow>(sql`
         SELECT
           id,
@@ -152,9 +198,9 @@ export async function prepareBackupPayloadFileForCreate(): Promise<PreparedBacku
       `),
     );
 
-    await writeBackupChunk(writer, hash, ",");
+    await writeBackupChunk(state, ",");
 
-    counts.dataRowsCount = await appendPagedJsonArray(writer, hash, "dataRows", (lastId) =>
+    counts.dataRowsCount = await appendPagedJsonArray(state, "dataRows", (lastId) =>
       selectRows<DataRow & BackupCursorRow>(sql`
         SELECT
           id,
@@ -167,9 +213,9 @@ export async function prepareBackupPayloadFileForCreate(): Promise<PreparedBacku
       `),
     );
 
-    await writeBackupChunk(writer, hash, ",");
+    await writeBackupChunk(state, ",");
 
-    counts.usersCount = await appendPagedJsonArray(writer, hash, "users", (lastId) =>
+    counts.usersCount = await appendPagedJsonArray(state, "users", (lastId) =>
       selectRows<BackupUserRecord & BackupCursorRow>(sql`
         SELECT
           id,
@@ -191,9 +237,9 @@ export async function prepareBackupPayloadFileForCreate(): Promise<PreparedBacku
       `),
     );
 
-    await writeBackupChunk(writer, hash, ",");
+    await writeBackupChunk(state, ",");
 
-    counts.auditLogsCount = await appendPagedJsonArray(writer, hash, "auditLogs", (lastId) =>
+    counts.auditLogsCount = await appendPagedJsonArray(state, "auditLogs", (lastId) =>
       selectRows<AuditLog & BackupCursorRow>(sql`
         SELECT
           id,
@@ -211,9 +257,9 @@ export async function prepareBackupPayloadFileForCreate(): Promise<PreparedBacku
       `),
     );
 
-    await writeBackupChunk(writer, hash, ",");
+    await writeBackupChunk(state, ",");
 
-    counts.collectionRecordsCount = await appendPagedJsonArray(writer, hash, "collectionRecords", (lastId) =>
+    counts.collectionRecordsCount = await appendPagedJsonArray(state, "collectionRecords", (lastId) =>
       safeSelectRows<BackupCollectionRecord & BackupCursorRow>(sql`
         SELECT
           id,
@@ -241,11 +287,10 @@ export async function prepareBackupPayloadFileForCreate(): Promise<PreparedBacku
       `),
     );
 
-    await writeBackupChunk(writer, hash, ",");
+    await writeBackupChunk(state, ",");
 
     counts.collectionRecordReceiptsCount = await appendPagedJsonArray(
-      writer,
-      hash,
+      state,
       "collectionRecordReceipts",
       (lastId) =>
         safeSelectRows<BackupCollectionReceipt & BackupCursorRow>(sql`
@@ -272,17 +317,28 @@ export async function prepareBackupPayloadFileForCreate(): Promise<PreparedBacku
         `),
     );
 
-    await writeBackupChunk(writer, hash, "}");
-    await closeBackupWriter(writer);
+    await writeBackupChunk(state, "}");
+    if (state.cipher) {
+      const finalChunk = state.cipher.final();
+      await writeBackupStreamChunk(state.writer, finalChunk);
+    }
+    await closeBackupWriter(state.writer);
+    const tempFileStats = await fs.stat(tempFilePath);
+    const tempPayloadStoragePrefix = tempPayloadEncrypted
+      ? `enc:v2:${primaryEncryptionKeyId}.${(iv as Buffer).toString("base64")}.${(state.cipher as crypto.CipherGCM).getAuthTag().toString("base64")}.`
+      : undefined;
 
     return {
       tempFilePath,
-      payloadChecksumSha256: hash.digest("hex"),
+      payloadChecksumSha256: state.hash.digest("hex"),
       counts,
+      payloadBytes: tempFileStats.size,
+      tempPayloadEncrypted,
+      ...(tempPayloadStoragePrefix ? { tempPayloadStoragePrefix } : {}),
       cleanup,
     };
   } catch (error) {
-    writer.destroy();
+    state.writer.destroy();
     await cleanup();
     throw error;
   }

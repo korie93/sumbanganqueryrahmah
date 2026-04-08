@@ -1,7 +1,7 @@
 import "dotenv/config";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -55,6 +55,15 @@ const usersMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", "0012_reviewed_users_table.sql"),
   "utf8",
 );
+const timezoneMigrationFileName = "0024_stormy_mockingbird.sql";
+const timezoneMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", timezoneMigrationFileName),
+  "utf8",
+);
+const preTimezoneMigrationSqlTexts = readdirSync(path.join(repoRoot, "drizzle"))
+  .filter((name) => name.endsWith(".sql") && name !== timezoneMigrationFileName)
+  .sort((left, right) => left.localeCompare(right))
+  .map((name) => readFileSync(path.join(repoRoot, "drizzle", name), "utf8"));
 
 const pgBaseConfig = {
   host: process.env.PG_HOST || "127.0.0.1",
@@ -194,6 +203,20 @@ async function columnIsNotNull(pool: pg.Pool, table: string, column: string): Pr
   return Boolean(result.rows[0]?.is_not_null);
 }
 
+async function columnDataType(pool: pg.Pool, table: string, column: string): Promise<string | null> {
+  const result = await pool.query<{ data_type: string | null }>(
+    `
+      SELECT data_type
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = $1
+        AND column_name = $2
+    `,
+    [table, column],
+  );
+  return result.rows[0]?.data_type ?? null;
+}
+
 test(
   "reviewed AI migrations remain compatible on a fresh database even when the early index migration runs first",
   { skip: skipReason || false },
@@ -246,6 +269,38 @@ test(
       assert.equal(await constraintExists(pool, "fk_admin_visible_nicknames_admin_user_id"), true);
       assert.equal(await indexExists(pool, "idx_user_activity_user_id"), true);
       assert.equal(await indexExists(pool, "idx_admin_visible_nicknames_admin_nickname_unique"), true);
+    });
+  },
+);
+
+test(
+  "reviewed timezone migration upgrades active schema timestamps to timestamptz without shifting UTC values",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      for (const migrationSql of preTimezoneMigrationSqlTexts) {
+        await applySql(pool, migrationSql);
+      }
+
+      await pool.query(`
+        INSERT INTO public.audit_logs (id, action, performed_by, "timestamp")
+        VALUES ('audit-utc-preservation', 'TEST', 'system', TIMESTAMP '2026-04-08 09:10:11')
+      `);
+
+      await applySql(pool, timezoneMigrationSql);
+
+      assert.equal(await columnDataType(pool, "users", "created_at"), "timestamp with time zone");
+      assert.equal(await columnDataType(pool, "audit_logs", "timestamp"), "timestamp with time zone");
+      assert.equal(await columnDataType(pool, "collection_records", "created_at"), "timestamp with time zone");
+      assert.equal(await columnDataType(pool, "ai_messages", "created_at"), "timestamp with time zone");
+      assert.equal(await columnDataType(pool, "system_settings", "updated_at"), "timestamp with time zone");
+
+      const preservedTimestamp = await pool.query<{ utc_value: string }>(`
+        SELECT to_char("timestamp" AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') AS utc_value
+        FROM public.audit_logs
+        WHERE id = 'audit-utc-preservation'
+      `);
+      assert.equal(preservedTimestamp.rows[0]?.utc_value, "2026-04-08 09:10:11");
     });
   },
 );

@@ -12,8 +12,8 @@ export async function ensureCollectionDailyTables(): Promise<void> {
       monthly_target numeric(14,2) NOT NULL DEFAULT 0,
       created_by text,
       updated_by text,
-      created_at timestamp NOT NULL DEFAULT now(),
-      updated_at timestamp NOT NULL DEFAULT now()
+      created_at timestamp with time zone NOT NULL DEFAULT now(),
+      updated_at timestamp with time zone NOT NULL DEFAULT now()
     )
   `);
   await db.execute(sql`ALTER TABLE public.collection_daily_targets ADD COLUMN IF NOT EXISTS username text`);
@@ -22,8 +22,8 @@ export async function ensureCollectionDailyTables(): Promise<void> {
   await db.execute(sql`ALTER TABLE public.collection_daily_targets ADD COLUMN IF NOT EXISTS monthly_target numeric(14,2) DEFAULT 0`);
   await db.execute(sql`ALTER TABLE public.collection_daily_targets ADD COLUMN IF NOT EXISTS created_by text`);
   await db.execute(sql`ALTER TABLE public.collection_daily_targets ADD COLUMN IF NOT EXISTS updated_by text`);
-  await db.execute(sql`ALTER TABLE public.collection_daily_targets ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-  await db.execute(sql`ALTER TABLE public.collection_daily_targets ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+  await db.execute(sql`ALTER TABLE public.collection_daily_targets ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
+  await db.execute(sql`ALTER TABLE public.collection_daily_targets ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`);
   await db.execute(sql`
     UPDATE public.collection_daily_targets
     SET
@@ -53,8 +53,8 @@ export async function ensureCollectionDailyTables(): Promise<void> {
       holiday_name text,
       created_by text,
       updated_by text,
-      created_at timestamp NOT NULL DEFAULT now(),
-      updated_at timestamp NOT NULL DEFAULT now()
+      created_at timestamp with time zone NOT NULL DEFAULT now(),
+      updated_at timestamp with time zone NOT NULL DEFAULT now()
     )
   `);
   await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS year integer`);
@@ -65,8 +65,8 @@ export async function ensureCollectionDailyTables(): Promise<void> {
   await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS holiday_name text`);
   await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS created_by text`);
   await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS updated_by text`);
-  await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-  await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+  await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
+  await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`);
   await db.execute(sql`
     UPDATE public.collection_daily_calendar
     SET

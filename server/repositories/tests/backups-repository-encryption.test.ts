@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
+import { promises as fs } from "node:fs";
 import test from "node:test";
 import { BackupsRepository } from "../backups.repository";
 import { db } from "../../db-postgres";
+import { decodeBackupDataFromStorage } from "../backups-encryption";
 
 type EnvOverrides = Record<string, string | null>;
 
@@ -150,6 +152,57 @@ test("BackupsRepository decodes encrypted v2 payloads when reading backup data",
         assert.equal(backup?.backupData, payloadJson);
       } finally {
         dbAny.execute = originalExecute;
+      }
+    },
+  );
+});
+
+test("BackupsRepository prepares encrypted temp backup payload files when an encryption key is configured", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: `primary:${"A".repeat(32)}`,
+      BACKUP_ENCRYPTION_KEY_ID: "primary",
+    },
+    async () => {
+      const repository = new BackupsRepository(repoOptions);
+
+      const dbAny = db as any;
+      const originalExecute = dbAny.execute;
+      dbAny.execute = async () => ({
+        rows: [],
+      });
+
+      let prepared: Awaited<ReturnType<BackupsRepository["prepareBackupPayloadFileForCreate"]>> | null =
+        null;
+
+      try {
+        prepared = await repository.prepareBackupPayloadFileForCreate();
+        assert.equal(prepared.tempPayloadEncrypted, true);
+        assert.equal(typeof prepared.tempPayloadStoragePrefix, "string");
+        assert.match(String(prepared.tempPayloadStoragePrefix || ""), /^enc:v2:primary\./);
+        assert.ok(prepared.payloadBytes > 0);
+
+        const encryptedPayload = await fs.readFile(prepared.tempFilePath);
+        const storagePayload = `${String(prepared.tempPayloadStoragePrefix || "")}${encryptedPayload.toString("base64")}`;
+        const decryptedPayload = decodeBackupDataFromStorage(storagePayload, {
+          requireEncryption: true,
+          primaryKeyId: "primary",
+          keysById: new Map([["primary", Buffer.from("A".repeat(32), "utf8")]]),
+        });
+        const parsed = JSON.parse(decryptedPayload) as Record<string, unknown>;
+        assert.deepEqual(Object.keys(parsed), [
+          "imports",
+          "dataRows",
+          "users",
+          "auditLogs",
+          "collectionRecords",
+          "collectionRecordReceipts",
+        ]);
+      } finally {
+        dbAny.execute = originalExecute;
+        await prepared?.cleanup();
       }
     },
   );

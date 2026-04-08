@@ -18,7 +18,7 @@ function createStorageMock(overrides: Partial<ActivityStorage> = {}): ActivitySt
         performedBy: "tester",
         details: null,
         targetUser: null,
-        timestamp: null,
+        timestamp: new Date("2026-04-08T00:00:00.000Z"),
         requestId: null,
         targetResource: null,
       }) as AuditRecord,
@@ -163,7 +163,7 @@ test("banAccount closes all active sessions and writes audit log", async () => {
           performedBy: String(entry.performedBy),
           details: (entry.details ?? null) as string | null,
           targetUser: (entry.targetUser ?? null) as string | null,
-          timestamp: null,
+          timestamp: new Date("2026-04-08T00:00:00.000Z"),
           requestId: (entry.requestId ?? null) as string | null,
           targetResource: (entry.targetResource ?? null) as string | null,
         } as AuditRecord;

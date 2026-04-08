@@ -49,7 +49,7 @@ export type ConsumePasswordResetRequestParams = {
 };
 
 export function asUtcTimestamp(columnSql: ReturnType<typeof sql>) {
-  return sql`(${columnSql} AT TIME ZONE 'UTC')`;
+  return sql`${columnSql}`;
 }
 
 export function normalizeAuthTokenHash(tokenHash: string): string {

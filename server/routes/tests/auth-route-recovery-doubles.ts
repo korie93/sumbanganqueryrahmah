@@ -5,11 +5,12 @@ import type {
   AuditEntry,
   PasswordResetRecord,
   TestAuthRouteUser,
+  TestAuthRouteUserSeed,
 } from "./auth-route-auth-flow-shared";
 
 export function createAuthStorageDouble(options?: {
-  userByUsername?: Record<string, TestAuthRouteUser>;
-  userByEmail?: Record<string, TestAuthRouteUser>;
+  userByUsername?: Record<string, TestAuthRouteUserSeed>;
+  userByEmail?: Record<string, TestAuthRouteUserSeed>;
 }) {
   const resetRequests: Array<{ userId: string; requestedByUser: string }> = [];
   const auditLogs: AuditEntry[] = [];

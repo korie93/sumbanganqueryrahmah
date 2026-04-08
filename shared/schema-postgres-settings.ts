@@ -8,11 +8,13 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+const utcTimestamp = (name: string) => timestamp(name, { withTimezone: true });
+
 export const settingCategories = pgTable("setting_categories", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   nameUnique: uniqueIndex("setting_categories_name_unique").on(table.name),
 }));
@@ -27,7 +29,7 @@ export const systemSettings = pgTable("system_settings", {
   value: text("value").notNull(),
   defaultValue: text("default_value"),
   isCritical: boolean("is_critical").default(false),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   keyUnique: uniqueIndex("system_settings_key_unique").on(table.key),
   categoryIdx: index("system_settings_category_id_idx").on(table.categoryId),
@@ -59,7 +61,7 @@ export const settingVersions = pgTable("setting_versions", {
   oldValue: text("old_value"),
   newValue: text("new_value").notNull(),
   changedBy: text("changed_by").notNull(),
-  changedAt: timestamp("changed_at").defaultNow(),
+  changedAt: utcTimestamp("changed_at").defaultNow().notNull(),
 }, (table) => ({
   settingKeyChangedAtIdx: index("idx_setting_versions_key_time").on(table.settingKey, table.changedAt.desc()),
 }));
@@ -69,7 +71,7 @@ export const featureFlags = pgTable("feature_flags", {
   key: text("key").notNull(),
   enabled: boolean("enabled").notNull().default(false),
   description: text("description"),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   keyUnique: uniqueIndex("feature_flags_key_unique").on(table.key),
 }));

@@ -98,6 +98,9 @@ export type PreparedBackupPayloadFile = {
   tempFilePath: string;
   payloadChecksumSha256: string;
   counts: BackupPayloadCounts;
+  payloadBytes: number;
+  tempPayloadEncrypted: boolean;
+  tempPayloadStoragePrefix?: string;
   cleanup: () => Promise<void>;
 };
 

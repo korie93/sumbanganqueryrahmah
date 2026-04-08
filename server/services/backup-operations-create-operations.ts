@@ -25,7 +25,10 @@ export async function executeCreateBackup(
       preparedBackupPayload = await deps.backupsRepository.prepareBackupPayloadFileForCreate();
 
       try {
-        const backupPayloadJson = await fs.readFile(preparedBackupPayload.tempFilePath, "utf8");
+        const backupPayloadJson = preparedBackupPayload.tempPayloadEncrypted
+          && typeof preparedBackupPayload.tempPayloadStoragePrefix === "string"
+          ? `${preparedBackupPayload.tempPayloadStoragePrefix}${(await fs.readFile(preparedBackupPayload.tempFilePath)).toString("base64")}`
+          : await fs.readFile(preparedBackupPayload.tempFilePath, "utf8");
         const metadata = buildBackupMetadata(
           preparedBackupPayload,
           preparedBackupPayload.payloadChecksumSha256,

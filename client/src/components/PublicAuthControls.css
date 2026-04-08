@@ -15,7 +15,7 @@
 .public-auth-button:focus-visible,
 .public-auth-input:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgb(96 165 250 / 0.72);
+  box-shadow: 0 0 0 3px var(--public-auth-input-focus);
 }
 
 .public-auth-button:disabled,
@@ -25,46 +25,46 @@
 }
 
 .public-auth-button-primary {
-  background: rgb(37 99 235);
-  color: white;
+  background: var(--public-auth-primary-bg);
+  color: var(--public-auth-text-strong);
 }
 
 .public-auth-button-primary:hover {
-  background: rgb(59 130 246);
+  background: var(--public-auth-primary-bg-hover);
 }
 
 .public-auth-button-primary:focus-visible {
-  box-shadow: 0 0 0 3px rgb(147 197 253 / 0.72);
+  box-shadow: 0 0 0 3px var(--public-auth-primary-ring);
 }
 
 .public-auth-button-ghost {
-  color: rgb(226 232 240);
+  color: var(--public-auth-ghost-text);
 }
 
 .public-auth-button-ghost:hover {
-  background: rgb(255 255 255 / 0.05);
-  color: white;
+  background: var(--public-auth-ghost-hover-bg);
+  color: var(--public-auth-text-strong);
 }
 
 .public-auth-button-ghost:focus-visible {
-  box-shadow: 0 0 0 3px rgb(255 255 255 / 0.38);
+  box-shadow: 0 0 0 3px var(--public-auth-ghost-ring);
 }
 
 .public-auth-input {
   width: 100%;
   border-radius: 0.75rem;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  background: rgb(255 255 255 / 0.95);
+  border: 1px solid var(--public-auth-input-border);
+  background: var(--public-auth-input-bg);
   padding: 0.75rem 1rem;
-  color: rgb(15 23 42);
+  color: var(--public-auth-input-text);
   transition: border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
 }
 
 .public-auth-input::placeholder {
-  color: rgb(148 163 184);
+  color: var(--public-auth-input-placeholder);
 }
 
 .public-auth-input:focus {
-  border-color: rgb(96 165 250);
-  box-shadow: 0 0 0 2px rgb(96 165 250 / 0.7);
+  border-color: var(--public-auth-primary-bg-hover);
+  box-shadow: 0 0 0 2px var(--public-auth-input-focus);
 }

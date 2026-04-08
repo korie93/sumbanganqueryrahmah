@@ -13,6 +13,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
+const utcTimestamp = (name: string) => timestamp(name, { withTimezone: true });
+
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -24,17 +26,17 @@ export const users = pgTable("users", {
   mustChangePassword: boolean("must_change_password").default(false).notNull(),
   passwordResetBySuperuser: boolean("password_reset_by_superuser").default(false).notNull(),
   createdBy: text("created_by"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  passwordChangedAt: timestamp("password_changed_at"),
-  activatedAt: timestamp("activated_at"),
-  lastLoginAt: timestamp("last_login_at"),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
+  passwordChangedAt: utcTimestamp("password_changed_at"),
+  activatedAt: utcTimestamp("activated_at"),
+  lastLoginAt: utcTimestamp("last_login_at"),
   isBanned: boolean("is_banned").default(false),
   twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
   twoFactorSecretEncrypted: text("two_factor_secret_encrypted"),
-  twoFactorConfiguredAt: timestamp("two_factor_configured_at"),
+  twoFactorConfiguredAt: utcTimestamp("two_factor_configured_at"),
   failedLoginAttempts: integer("failed_login_attempts").default(0).notNull(),
-  lockedAt: timestamp("locked_at"),
+  lockedAt: utcTimestamp("locked_at"),
   lockedReason: text("locked_reason"),
   lockedBySystem: boolean("locked_by_system").default(false).notNull(),
 }, (table) => ({
@@ -66,10 +68,10 @@ export const accountActivationTokens = pgTable("account_activation_tokens", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
   tokenHash: text("token_hash").notNull(),
-  expiresAt: timestamp("expires_at").notNull(),
-  usedAt: timestamp("used_at"),
+  expiresAt: utcTimestamp("expires_at").notNull(),
+  usedAt: utcTimestamp("used_at"),
   createdBy: text("created_by"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   userIdIdx: index("idx_account_activation_tokens_user_id").on(table.userId),
   expiresAtIdx: index("idx_account_activation_tokens_expires_at").on(table.expiresAt),
@@ -85,9 +87,9 @@ export const passwordResetRequests = pgTable("password_reset_requests", {
   approvedBy: text("approved_by"),
   resetType: text("reset_type").notNull().default("email_link"),
   tokenHash: text("token_hash"),
-  expiresAt: timestamp("expires_at"),
-  usedAt: timestamp("used_at"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: utcTimestamp("expires_at"),
+  usedAt: utcTimestamp("used_at"),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   userIdIdx: index("idx_password_reset_requests_user_id").on(table.userId),
   createdAtIdx: index("idx_password_reset_requests_created_at").on(table.createdAt.desc()),
@@ -106,7 +108,7 @@ export const imports = pgTable("imports", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   filename: text("filename").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
   isDeleted: boolean("is_deleted").default(false),
   createdBy: text("created_by"),
 }, (table) => ({
@@ -136,9 +138,9 @@ export const userActivity = pgTable("user_activity", {
   browser: text("browser"),
   fingerprint: text("fingerprint"),
   ipAddress: text("ip_address"),
-  loginTime: timestamp("login_time"),
-  logoutTime: timestamp("logout_time"),
-  lastActivityTime: timestamp("last_activity_time"),
+  loginTime: utcTimestamp("login_time"),
+  logoutTime: utcTimestamp("logout_time"),
+  lastActivityTime: utcTimestamp("last_activity_time"),
   isActive: boolean("is_active").default(true),
   logoutReason: text("logout_reason"),
 }, (table) => ({
@@ -161,7 +163,7 @@ export const bannedSessions = pgTable("banned_sessions", {
   ipAddress: text("ip_address"),
   browser: text("browser"),
   pcName: text("pc_name"),
-  bannedAt: timestamp("banned_at").defaultNow(),
+  bannedAt: utcTimestamp("banned_at").defaultNow().notNull(),
 }, (table) => ({
   fingerprintIdx: index("idx_banned_sessions_fingerprint").on(table.fingerprint),
   ipAddressIdx: index("idx_banned_sessions_ip").on(table.ipAddress),
@@ -175,7 +177,7 @@ export const auditLogs = pgTable("audit_logs", {
   targetUser: text("target_user"),
   targetResource: text("target_resource"),
   details: text("details"),
-  timestamp: timestamp("timestamp").defaultNow(),
+  timestamp: utcTimestamp("timestamp").defaultNow().notNull(),
 }, (table) => ({
   timestampIdx: index("idx_audit_logs_timestamp").on(table.timestamp),
   actionIdx: index("idx_audit_logs_action").on(table.action),
@@ -192,9 +194,9 @@ export const mutationIdempotencyKeys = pgTable("mutation_idempotency_keys", {
   state: text("state").notNull().default("pending"),
   responseStatus: integer("response_status"),
   responseBody: jsonb("response_body"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  completedAt: timestamp("completed_at"),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
+  completedAt: utcTimestamp("completed_at"),
 }, (table) => ({
   scopeActorKeyUnique: uniqueIndex("idx_mutation_idempotency_scope_actor_key_unique").on(
     table.scope,
@@ -208,7 +210,7 @@ export const mutationIdempotencyKeys = pgTable("mutation_idempotency_keys", {
 export const backups = pgTable("backups", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
   createdBy: text("created_by").notNull(),
   backupData: text("backup_data").notNull(),
   metadata: text("metadata"),
@@ -219,10 +221,10 @@ export const backupJobs = pgTable("backup_jobs", {
   type: text("type").notNull(),
   status: text("status").notNull().default("queued"),
   requestedBy: text("requested_by").notNull(),
-  requestedAt: timestamp("requested_at").defaultNow().notNull(),
-  startedAt: timestamp("started_at"),
-  finishedAt: timestamp("finished_at"),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  requestedAt: utcTimestamp("requested_at").defaultNow().notNull(),
+  startedAt: utcTimestamp("started_at"),
+  finishedAt: utcTimestamp("finished_at"),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
   backupId: text("backup_id"),
   backupName: text("backup_name"),
   result: jsonb("result"),
@@ -239,10 +241,10 @@ export const monitorAlertIncidents = pgTable("monitor_alert_incidents", {
   source: text("source"),
   message: text("message").notNull(),
   status: text("status").notNull().default("open"),
-  firstSeenAt: timestamp("first_seen_at").defaultNow().notNull(),
-  lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
-  resolvedAt: timestamp("resolved_at"),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  firstSeenAt: utcTimestamp("first_seen_at").defaultNow().notNull(),
+  lastSeenAt: utcTimestamp("last_seen_at").defaultNow().notNull(),
+  resolvedAt: utcTimestamp("resolved_at"),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   openAlertKeyUnique: uniqueIndex("idx_monitor_alert_incidents_open_key_unique")
     .on(table.alertKey)
@@ -262,7 +264,7 @@ export const systemStabilityPatterns = pgTable("system_stability_patterns", {
   severity: text("severity").notNull(),
   actionTaken: text("action_taken").notNull(),
   durationMs: bigint("duration_ms", { mode: "number" }).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   signatureWindowIdx: index("idx_stability_patterns_signature_window").on(
     table.metricSignature,

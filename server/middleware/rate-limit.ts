@@ -42,8 +42,24 @@ function normalizeKeyPart(value: unknown): string | null {
   return normalized ? normalized.slice(0, 160) : null;
 }
 
+export function buildRequestRateLimitFingerprint(req: Request): string[] {
+  const parts: string[] = [normalizeKeyPart(req.ip) ?? "unknown"];
+  const userAgent = normalizeKeyPart(req.get("user-agent"));
+  const acceptLanguage = normalizeKeyPart(req.get("accept-language"));
+
+  if (userAgent) {
+    parts.push(`ua:${userAgent}`);
+  }
+
+  if (acceptLanguage) {
+    parts.push(`lang:${acceptLanguage}`);
+  }
+
+  return parts;
+}
+
 function buildRateLimitKey(req: Request, scope: string, ...parts: Array<unknown>): string {
-  const keyParts = [scope, req.ip];
+  const keyParts = [scope, ...buildRequestRateLimitFingerprint(req)];
   for (const part of parts) {
     const normalized = normalizeKeyPart(part);
     if (normalized) {

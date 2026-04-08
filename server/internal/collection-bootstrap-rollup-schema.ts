@@ -19,7 +19,7 @@ async function ensureCollectionDailyRollupSchema(database: BootstrapSqlExecutor)
         collection_staff_nickname text NOT NULL,
         total_records integer NOT NULL DEFAULT 0,
         total_amount numeric(14,2) NOT NULL,
-        updated_at timestamp NOT NULL DEFAULT now()
+        updated_at timestamp with time zone NOT NULL DEFAULT now()
       )
     `,
     sql`ALTER TABLE public.collection_record_daily_rollups ADD COLUMN IF NOT EXISTS payment_date date`,
@@ -27,7 +27,7 @@ async function ensureCollectionDailyRollupSchema(database: BootstrapSqlExecutor)
     sql`ALTER TABLE public.collection_record_daily_rollups ADD COLUMN IF NOT EXISTS collection_staff_nickname text`,
     sql`ALTER TABLE public.collection_record_daily_rollups ADD COLUMN IF NOT EXISTS total_records integer DEFAULT 0`,
     sql`ALTER TABLE public.collection_record_daily_rollups ADD COLUMN IF NOT EXISTS total_amount numeric(14,2)`,
-    sql`ALTER TABLE public.collection_record_daily_rollups ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`,
+    sql`ALTER TABLE public.collection_record_daily_rollups ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`,
     sql`
       UPDATE public.collection_record_daily_rollups
       SET
@@ -112,7 +112,7 @@ async function ensureCollectionMonthlyRollupSchema(database: BootstrapSqlExecuto
         collection_staff_nickname text NOT NULL,
         total_records integer NOT NULL DEFAULT 0,
         total_amount numeric(14,2) NOT NULL,
-        updated_at timestamp NOT NULL DEFAULT now()
+        updated_at timestamp with time zone NOT NULL DEFAULT now()
       )
     `,
     sql`ALTER TABLE public.collection_record_monthly_rollups ADD COLUMN IF NOT EXISTS year integer`,
@@ -121,7 +121,7 @@ async function ensureCollectionMonthlyRollupSchema(database: BootstrapSqlExecuto
     sql`ALTER TABLE public.collection_record_monthly_rollups ADD COLUMN IF NOT EXISTS collection_staff_nickname text`,
     sql`ALTER TABLE public.collection_record_monthly_rollups ADD COLUMN IF NOT EXISTS total_records integer DEFAULT 0`,
     sql`ALTER TABLE public.collection_record_monthly_rollups ADD COLUMN IF NOT EXISTS total_amount numeric(14,2)`,
-    sql`ALTER TABLE public.collection_record_monthly_rollups ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`,
+    sql`ALTER TABLE public.collection_record_monthly_rollups ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`,
     sql`
       UPDATE public.collection_record_monthly_rollups
       SET
@@ -207,9 +207,9 @@ async function ensureCollectionRollupRefreshQueueSchema(database: BootstrapSqlEx
         created_by_login text NOT NULL,
         collection_staff_nickname text NOT NULL,
         status text NOT NULL DEFAULT 'queued',
-        requested_at timestamp NOT NULL DEFAULT now(),
-        updated_at timestamp NOT NULL DEFAULT now(),
-        next_attempt_at timestamp NOT NULL DEFAULT now(),
+        requested_at timestamp with time zone NOT NULL DEFAULT now(),
+        updated_at timestamp with time zone NOT NULL DEFAULT now(),
+        next_attempt_at timestamp with time zone NOT NULL DEFAULT now(),
         attempt_count integer NOT NULL DEFAULT 0,
         last_error text
       )
@@ -218,9 +218,9 @@ async function ensureCollectionRollupRefreshQueueSchema(database: BootstrapSqlEx
     sql`ALTER TABLE public.collection_record_daily_rollup_refresh_queue ADD COLUMN IF NOT EXISTS created_by_login text`,
     sql`ALTER TABLE public.collection_record_daily_rollup_refresh_queue ADD COLUMN IF NOT EXISTS collection_staff_nickname text`,
     sql`ALTER TABLE public.collection_record_daily_rollup_refresh_queue ADD COLUMN IF NOT EXISTS status text DEFAULT 'queued'`,
-    sql`ALTER TABLE public.collection_record_daily_rollup_refresh_queue ADD COLUMN IF NOT EXISTS requested_at timestamp DEFAULT now()`,
-    sql`ALTER TABLE public.collection_record_daily_rollup_refresh_queue ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`,
-    sql`ALTER TABLE public.collection_record_daily_rollup_refresh_queue ADD COLUMN IF NOT EXISTS next_attempt_at timestamp DEFAULT now()`,
+    sql`ALTER TABLE public.collection_record_daily_rollup_refresh_queue ADD COLUMN IF NOT EXISTS requested_at timestamp with time zone DEFAULT now()`,
+    sql`ALTER TABLE public.collection_record_daily_rollup_refresh_queue ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`,
+    sql`ALTER TABLE public.collection_record_daily_rollup_refresh_queue ADD COLUMN IF NOT EXISTS next_attempt_at timestamp with time zone DEFAULT now()`,
     sql`ALTER TABLE public.collection_record_daily_rollup_refresh_queue ADD COLUMN IF NOT EXISTS attempt_count integer DEFAULT 0`,
     sql`ALTER TABLE public.collection_record_daily_rollup_refresh_queue ADD COLUMN IF NOT EXISTS last_error text`,
     sql`

@@ -15,6 +15,8 @@ import {
 import { sql } from "drizzle-orm";
 import { userActivity, users } from "./schema-postgres-core";
 
+const utcTimestamp = (name: string) => timestamp(name, { withTimezone: true });
+
 export const collectionRecords = pgTable("collection_records", {
   id: uuid("id").primaryKey(),
   customerName: text("customer_name").notNull(),
@@ -33,8 +35,8 @@ export const collectionRecords = pgTable("collection_records", {
   createdByLogin: text("created_by_login").notNull(),
   collectionStaffNickname: text("collection_staff_nickname").notNull(),
   staffUsername: text("staff_username").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   paymentDateIdx: index("idx_collection_records_payment_date").on(table.paymentDate),
   createdAtIdx: index("idx_collection_records_created_at").on(table.createdAt.desc()),
@@ -86,7 +88,7 @@ export const collectionRecordReceipts = pgTable("collection_record_receipts", {
   receiptDate: date("receipt_date", { mode: "string" }),
   receiptReference: text("receipt_reference"),
   fileHash: text("file_hash"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   recordStorageUnique: uniqueIndex("idx_collection_record_receipts_record_storage_unique").on(
     table.collectionRecordId,
@@ -107,7 +109,7 @@ export const collectionRecordDailyRollups = pgTable("collection_record_daily_rol
   collectionStaffNickname: text("collection_staff_nickname").notNull(),
   totalRecords: integer("total_records").notNull().default(0),
   totalAmount: numeric("total_amount", { precision: 14, scale: 2 }).notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   slicePrimaryKey: primaryKey({
     name: "idx_collection_record_daily_rollups_slice_unique",
@@ -132,7 +134,7 @@ export const collectionRecordMonthlyRollups = pgTable("collection_record_monthly
   collectionStaffNickname: text("collection_staff_nickname").notNull(),
   totalRecords: integer("total_records").notNull().default(0),
   totalAmount: numeric("total_amount", { precision: 14, scale: 2 }).notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   slicePrimaryKey: primaryKey({
     name: "idx_collection_record_monthly_rollups_slice_unique",
@@ -157,9 +159,9 @@ export const collectionRecordDailyRollupRefreshQueue = pgTable("collection_recor
   createdByLogin: text("created_by_login").notNull(),
   collectionStaffNickname: text("collection_staff_nickname").notNull(),
   status: text("status").notNull().default("queued"),
-  requestedAt: timestamp("requested_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  nextAttemptAt: timestamp("next_attempt_at").defaultNow().notNull(),
+  requestedAt: utcTimestamp("requested_at").defaultNow().notNull(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
+  nextAttemptAt: utcTimestamp("next_attempt_at").defaultNow().notNull(),
   attemptCount: integer("attempt_count").notNull().default(0),
   lastError: text("last_error"),
 }, (table) => ({
@@ -187,9 +189,9 @@ export const collectionStaffNicknames = pgTable("collection_staff_nicknames", {
   nicknamePasswordHash: text("nickname_password_hash"),
   mustChangePassword: boolean("must_change_password").notNull().default(true),
   passwordResetBySuperuser: boolean("password_reset_by_superuser").notNull().default(false),
-  passwordUpdatedAt: timestamp("password_updated_at"),
+  passwordUpdatedAt: utcTimestamp("password_updated_at"),
   createdBy: text("created_by"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   nicknameLowerUnique: uniqueIndex("idx_collection_staff_nicknames_lower_unique").using(
     "btree",
@@ -205,8 +207,8 @@ export const adminGroups = pgTable("admin_groups", {
   id: uuid("id").primaryKey(),
   leaderNickname: text("leader_nickname").notNull(),
   createdBy: text("created_by").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   leaderNicknameLowerUnique: uniqueIndex("idx_admin_groups_leader_nickname_unique").using(
     "btree",
@@ -220,7 +222,7 @@ export const adminGroupMembers = pgTable("admin_group_members", {
     .notNull()
     .references(() => adminGroups.id, { onDelete: "cascade", onUpdate: "cascade" }),
   memberNickname: text("member_nickname").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   groupMemberLowerUnique: uniqueIndex("idx_admin_group_members_group_member_unique").using(
     "btree",
@@ -241,8 +243,8 @@ export const collectionNicknameSessions = pgTable("collection_nickname_sessions"
   username: text("username").notNull(),
   userRole: text("user_role").notNull(),
   nickname: text("nickname").notNull(),
-  verifiedAt: timestamp("verified_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  verifiedAt: utcTimestamp("verified_at").defaultNow().notNull(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   usernameIdx: index("idx_collection_nickname_sessions_username").on(table.username),
   nicknameLowerIdx: index("idx_collection_nickname_sessions_nickname").using(
@@ -261,7 +263,7 @@ export const adminVisibleNicknames = pgTable("admin_visible_nicknames", {
     .notNull()
     .references(() => collectionStaffNicknames.id, { onDelete: "cascade", onUpdate: "cascade" }),
   createdBySuperuser: text("created_by_superuser"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   adminNicknameUnique: uniqueIndex("idx_admin_visible_nicknames_admin_nickname_unique").on(
     table.adminUserId,
@@ -279,8 +281,8 @@ export const collectionDailyTargets = pgTable("collection_daily_targets", {
   monthlyTarget: numeric("monthly_target", { precision: 14, scale: 2 }).notNull().default("0"),
   createdBy: text("created_by"),
   updatedBy: text("updated_by"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   userMonthLowerUnique: uniqueIndex("idx_collection_daily_targets_user_month_unique").using(
     "btree",
@@ -301,8 +303,8 @@ export const collectionDailyCalendar = pgTable("collection_daily_calendar", {
   holidayName: text("holiday_name"),
   createdBy: text("created_by"),
   updatedBy: text("updated_by"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   yearMonthDayUnique: uniqueIndex("idx_collection_daily_calendar_unique").on(
     table.year,

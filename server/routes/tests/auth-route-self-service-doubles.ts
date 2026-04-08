@@ -1,12 +1,12 @@
 import type { PostgresStorage } from "../../storage-postgres";
-import type { AuditEntry, TestAuthRouteUser } from "./auth-route-auth-flow-shared";
+import type { AuditEntry, TestAuthRouteUser, TestAuthRouteUserSeed } from "./auth-route-auth-flow-shared";
 
 type UpdateUserAccountParams = Parameters<PostgresStorage["updateUserAccount"]>[0];
 type UpdateUserCredentialsParams = Parameters<PostgresStorage["updateUserCredentials"]>[0];
 
 export function createOwnCredentialsStorageDouble(options?: {
   user?: Partial<TestAuthRouteUser>;
-  existingUsersByUsername?: Record<string, TestAuthRouteUser>;
+  existingUsersByUsername?: Record<string, TestAuthRouteUserSeed>;
 }) {
   const auditLogs: AuditEntry[] = [];
   const credentialUpdates: UpdateUserCredentialsParams[] = [];
@@ -28,7 +28,7 @@ export function createOwnCredentialsStorageDouble(options?: {
     lastLoginAt: null,
     ...options?.user,
   };
-  const usersByUsername = new Map<string, TestAuthRouteUser>(Object.entries(options?.existingUsersByUsername || {}));
+  const usersByUsername = new Map<string, TestAuthRouteUserSeed>(Object.entries(options?.existingUsersByUsername || {}));
   usersByUsername.set(user.username, user);
 
   const storage = {
@@ -40,25 +40,25 @@ export function createOwnCredentialsStorageDouble(options?: {
       if (params.passwordHash) {
         user.passwordHash = params.passwordHash;
       }
-      if (Object.prototype.hasOwnProperty.call(params, "passwordChangedAt")) {
+      if (params.passwordChangedAt !== undefined) {
         user.passwordChangedAt = params.passwordChangedAt;
       }
-      if (Object.prototype.hasOwnProperty.call(params, "mustChangePassword")) {
+      if (params.mustChangePassword !== undefined) {
         user.mustChangePassword = params.mustChangePassword;
       }
-      if (Object.prototype.hasOwnProperty.call(params, "passwordResetBySuperuser")) {
+      if (params.passwordResetBySuperuser !== undefined) {
         user.passwordResetBySuperuser = params.passwordResetBySuperuser;
       }
-      if (Object.prototype.hasOwnProperty.call(params, "failedLoginAttempts")) {
+      if (params.failedLoginAttempts !== undefined) {
         user.failedLoginAttempts = params.failedLoginAttempts;
       }
-      if (Object.prototype.hasOwnProperty.call(params, "lockedAt")) {
+      if (params.lockedAt !== undefined) {
         user.lockedAt = params.lockedAt;
       }
-      if (Object.prototype.hasOwnProperty.call(params, "lockedReason")) {
+      if (params.lockedReason !== undefined) {
         user.lockedReason = params.lockedReason;
       }
-      if (Object.prototype.hasOwnProperty.call(params, "lockedBySystem")) {
+      if (params.lockedBySystem !== undefined) {
         user.lockedBySystem = params.lockedBySystem;
       }
 

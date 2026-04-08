@@ -416,6 +416,39 @@ test("runtime manager removes registered sockets cleanly on close", async () => 
   }
 });
 
+test("runtime manager registers the replacement socket before closing the previous connection", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const previousSocket = new FakeWebSocket();
+  const replacementSocket = new FakeWebSocket();
+  const activityId = "activity-reconnect";
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", previousSocket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+    assert.equal(providedMap.get(activityId), previousSocket as unknown as WebSocket);
+
+    wss.emit("connection", replacementSocket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    assert.equal(previousSocket.closeCalls, 1);
+    assert.equal(providedMap.get(activityId), replacementSocket as unknown as WebSocket);
+    assert.equal(providedMap.has(activityId), true);
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("runtime manager enforces a per-user connection limit", async () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();

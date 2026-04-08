@@ -21,9 +21,15 @@ export async function ensureAiCoreTables(): Promise<void> {
         row_id text NOT NULL UNIQUE,
         content text NOT NULL,
         embedding vector(768) NOT NULL,
-        created_at timestamp DEFAULT now()
+        created_at timestamp with time zone DEFAULT now() NOT NULL
       )
     `);
+    await db.execute(sql`ALTER TABLE public.data_embeddings ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
+    await db.execute(sql`
+      UPDATE public.data_embeddings
+      SET created_at = COALESCE(created_at, now())
+    `);
+    await db.execute(sql`ALTER TABLE public.data_embeddings ALTER COLUMN created_at SET NOT NULL`);
     await db.execute(sql`
       DELETE FROM public.data_embeddings embedding
       WHERE NOT EXISTS (
@@ -83,18 +89,30 @@ export async function ensureAiCoreTables(): Promise<void> {
     CREATE TABLE IF NOT EXISTS public.ai_conversations (
       id text PRIMARY KEY,
       created_by text NOT NULL,
-      created_at timestamp DEFAULT now()
+      created_at timestamp with time zone DEFAULT now() NOT NULL
     )
   `);
+  await db.execute(sql`ALTER TABLE public.ai_conversations ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
+  await db.execute(sql`
+    UPDATE public.ai_conversations
+    SET created_at = COALESCE(created_at, now())
+  `);
+  await db.execute(sql`ALTER TABLE public.ai_conversations ALTER COLUMN created_at SET NOT NULL`);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS public.ai_messages (
       id text PRIMARY KEY,
       conversation_id text NOT NULL,
       role text NOT NULL,
       content text NOT NULL,
-      created_at timestamp DEFAULT now()
+      created_at timestamp with time zone DEFAULT now() NOT NULL
     )
   `);
+  await db.execute(sql`ALTER TABLE public.ai_messages ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
+  await db.execute(sql`
+    UPDATE public.ai_messages
+    SET created_at = COALESCE(created_at, now())
+  `);
+  await db.execute(sql`ALTER TABLE public.ai_messages ALTER COLUMN created_at SET NOT NULL`);
   await db.execute(sql`
     DELETE FROM public.ai_messages msg
     WHERE NOT EXISTS (
@@ -134,9 +152,15 @@ export async function ensureAiCategoryStatsSchema(): Promise<void> {
       key text PRIMARY KEY,
       total integer NOT NULL,
       samples jsonb,
-      updated_at timestamp DEFAULT now()
+      updated_at timestamp with time zone DEFAULT now() NOT NULL
     )
   `);
+  await db.execute(sql`ALTER TABLE public.ai_category_stats ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`);
+  await db.execute(sql`
+    UPDATE public.ai_category_stats
+    SET updated_at = COALESCE(updated_at, now())
+  `);
+  await db.execute(sql`ALTER TABLE public.ai_category_stats ALTER COLUMN updated_at SET NOT NULL`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ai_category_stats_updated_at ON public.ai_category_stats(updated_at)`);
 }
 
@@ -149,9 +173,15 @@ export async function ensureAiCategoryRulesSchema(): Promise<void> {
       fields text[] NOT NULL DEFAULT '{}',
       match_mode text NOT NULL DEFAULT 'contains',
       enabled boolean NOT NULL DEFAULT true,
-      updated_at timestamp DEFAULT now()
+      updated_at timestamp with time zone DEFAULT now() NOT NULL
     )
   `);
+  await db.execute(sql`ALTER TABLE public.ai_category_rules ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`);
+  await db.execute(sql`
+    UPDATE public.ai_category_rules
+    SET updated_at = COALESCE(updated_at, now())
+  `);
+  await db.execute(sql`ALTER TABLE public.ai_category_rules ALTER COLUMN updated_at SET NOT NULL`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ai_category_rules_updated_at ON public.ai_category_rules(updated_at)`);
 
   for (const rule of defaultAiCategoryRules) {

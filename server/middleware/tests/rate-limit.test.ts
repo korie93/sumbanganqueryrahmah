@@ -1,0 +1,35 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import type { Request } from "express";
+import { buildRequestRateLimitFingerprint } from "../rate-limit";
+
+function createRequest(headers: Record<string, string | undefined> = {}, ip = "203.0.113.10") {
+  return {
+    ip,
+    get(name: string) {
+      return headers[name.toLowerCase()];
+    },
+  } as Request;
+}
+
+test("buildRequestRateLimitFingerprint keeps the network identity and normalized client hints", () => {
+  const req = createRequest({
+    "user-agent": " Mozilla/5.0  ",
+    "accept-language": " en-US,en;q=0.9 ",
+  });
+
+  assert.deepEqual(buildRequestRateLimitFingerprint(req), [
+    "203.0.113.10",
+    "ua:mozilla/5.0",
+    "lang:en-us,en;q=0.9",
+  ]);
+});
+
+test("buildRequestRateLimitFingerprint omits empty headers safely", () => {
+  const req = createRequest({
+    "user-agent": "   ",
+    "accept-language": undefined,
+  }, "198.51.100.8");
+
+  assert.deepEqual(buildRequestRateLimitFingerprint(req), ["198.51.100.8"]);
+});

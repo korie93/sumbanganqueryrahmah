@@ -9,14 +9,14 @@ export async function ensureCoreImportsTable(
       id text PRIMARY KEY,
       name text NOT NULL,
       filename text NOT NULL,
-      created_at timestamp DEFAULT now(),
+      created_at timestamp with time zone DEFAULT now() NOT NULL,
       is_deleted boolean DEFAULT false,
       created_by text
     )
   `);
   await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS name text`);
   await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS filename text`);
-  await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+  await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
   await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS is_deleted boolean DEFAULT false`);
   await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS created_by text`);
   await database.execute(sql`
@@ -29,6 +29,7 @@ export async function ensureCoreImportsTable(
   `);
   await database.execute(sql`ALTER TABLE public.imports ALTER COLUMN name SET NOT NULL`);
   await database.execute(sql`ALTER TABLE public.imports ALTER COLUMN filename SET NOT NULL`);
+  await database.execute(sql`ALTER TABLE public.imports ALTER COLUMN created_at SET NOT NULL`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_created_at ON public.imports(created_at DESC)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_is_deleted ON public.imports(is_deleted)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_created_by ON public.imports(created_by)`);

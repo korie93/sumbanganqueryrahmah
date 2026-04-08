@@ -21,7 +21,6 @@ import {
 } from "./http-test-utils";
 import {
   authenticateAs,
-  type AuditEntry,
   createActivationStorageDouble,
   createAuthStorageDouble,
   createCookieAuthStorageDouble,
@@ -29,6 +28,7 @@ import {
   createOwnCredentialsStorageDouble,
   createPasswordResetStorageDouble,
 } from "./auth-route-auth-flow-doubles";
+import type { AuditEntry } from "./auth-route-auth-flow-shared";
 import { ERROR_CODES } from "../../../shared/error-codes";
 import {
   createAccountsStorageDouble,

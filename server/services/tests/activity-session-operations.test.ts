@@ -17,7 +17,7 @@ function createStorageMock(overrides: Partial<ActivityStorage> = {}): ActivitySt
         performedBy: "tester",
         details: null,
         targetUser: null,
-        timestamp: null,
+        timestamp: new Date("2026-04-08T00:00:00.000Z"),
         requestId: null,
         targetResource: null,
       }) as AuditRecord,

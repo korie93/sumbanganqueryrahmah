@@ -47,13 +47,13 @@
 .floatingMobileBackdrop {
   position: absolute;
   inset: 0;
-  background: rgba(2, 6, 23, 0.72);
+  background: var(--floating-ai-backdrop);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
 
 .aiThinkingRing {
-  box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  box-shadow: 0 0 0 0 var(--floating-ai-thinking-ring);
   animation: pulseRing 1.5s infinite;
 }
 
@@ -67,7 +67,7 @@
 }
 
 @keyframes pulseRing {
-  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
-  70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+  0% { box-shadow: 0 0 0 0 var(--floating-ai-thinking-ring); }
+  70% { box-shadow: 0 0 0 10px var(--floating-ai-thinking-ring-clear); }
+  100% { box-shadow: 0 0 0 0 var(--floating-ai-thinking-ring-clear); }
 }

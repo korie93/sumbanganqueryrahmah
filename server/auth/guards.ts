@@ -37,7 +37,7 @@ type CreateAuthGuardsOptions = {
   secret?: string;
 };
 
-const TAB_VISIBILITY_CACHE_TTL_MS = 5_000;
+const TAB_VISIBILITY_CACHE_TTL_MS = 5 * 60 * 1000;
 const TAB_VISIBILITY_CACHE_MAX_SIZE = 100;
 const FORCED_PASSWORD_CHANGE_ALLOWLIST = new Set([
   "GET:/api/auth/me",
@@ -75,22 +75,33 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
   const secret = options.secret || getSessionSecret();
   const tabVisibilityCache = new Map<string, { tabs: Record<string, boolean>; cachedAt: number }>();
 
+  function setRoleTabVisibilityCache(role: string, tabs: Record<string, boolean>, cachedAt: number) {
+    if (tabVisibilityCache.has(role)) {
+      tabVisibilityCache.delete(role);
+    }
+
+    while (tabVisibilityCache.size >= TAB_VISIBILITY_CACHE_MAX_SIZE) {
+      const oldestKey = tabVisibilityCache.keys().next().value;
+      if (!oldestKey) {
+        break;
+      }
+      tabVisibilityCache.delete(oldestKey);
+    }
+
+    tabVisibilityCache.set(role, { tabs, cachedAt });
+  }
+
   async function getRoleTabVisibilityCached(role: string): Promise<Record<string, boolean>> {
     if (role === "superuser") return {};
     const now = Date.now();
     const cached = tabVisibilityCache.get(role);
     if (cached && now - cached.cachedAt < TAB_VISIBILITY_CACHE_TTL_MS) {
+      setRoleTabVisibilityCache(role, cached.tabs, now);
       return cached.tabs;
     }
 
     const tabs = await storage.getRoleTabVisibility(role);
-    if (tabVisibilityCache.size >= TAB_VISIBILITY_CACHE_MAX_SIZE) {
-      const oldestKey = tabVisibilityCache.keys().next().value;
-      if (oldestKey) {
-        tabVisibilityCache.delete(oldestKey);
-      }
-    }
-    tabVisibilityCache.set(role, { tabs, cachedAt: now });
+    setRoleTabVisibilityCache(role, tabs, now);
     return tabs;
   }
 

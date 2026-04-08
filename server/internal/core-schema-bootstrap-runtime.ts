@@ -14,9 +14,9 @@ export async function ensureCoreMutationIdempotencyTable(
       state text NOT NULL DEFAULT 'pending',
       response_status integer,
       response_body jsonb,
-      created_at timestamp DEFAULT now() NOT NULL,
-      updated_at timestamp DEFAULT now() NOT NULL,
-      completed_at timestamp
+      created_at timestamp with time zone DEFAULT now() NOT NULL,
+      updated_at timestamp with time zone DEFAULT now() NOT NULL,
+      completed_at timestamp with time zone
     )
   `);
   await database.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS scope text`);
@@ -26,9 +26,9 @@ export async function ensureCoreMutationIdempotencyTable(
   await database.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS state text DEFAULT 'pending'`);
   await database.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS response_status integer`);
   await database.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS response_body jsonb`);
-  await database.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-  await database.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
-  await database.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS completed_at timestamp`);
+  await database.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
+  await database.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`);
+  await database.execute(sql`ALTER TABLE public.mutation_idempotency_keys ADD COLUMN IF NOT EXISTS completed_at timestamp with time zone`);
   await database.execute(sql`
     UPDATE public.mutation_idempotency_keys
     SET
@@ -66,10 +66,10 @@ export async function ensureCoreMonitorAlertHistoryTable(
       source text,
       message text NOT NULL,
       status text NOT NULL DEFAULT 'open',
-      first_seen_at timestamp NOT NULL DEFAULT now(),
-      last_seen_at timestamp NOT NULL DEFAULT now(),
-      resolved_at timestamp,
-      updated_at timestamp NOT NULL DEFAULT now()
+      first_seen_at timestamp with time zone NOT NULL DEFAULT now(),
+      last_seen_at timestamp with time zone NOT NULL DEFAULT now(),
+      resolved_at timestamp with time zone,
+      updated_at timestamp with time zone NOT NULL DEFAULT now()
     )
   `);
   await database.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS alert_key text`);
@@ -77,10 +77,10 @@ export async function ensureCoreMonitorAlertHistoryTable(
   await database.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS source text`);
   await database.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS message text`);
   await database.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS status text DEFAULT 'open'`);
-  await database.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS first_seen_at timestamp DEFAULT now()`);
-  await database.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS last_seen_at timestamp DEFAULT now()`);
-  await database.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS resolved_at timestamp`);
-  await database.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+  await database.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS first_seen_at timestamp with time zone DEFAULT now()`);
+  await database.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS last_seen_at timestamp with time zone DEFAULT now()`);
+  await database.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS resolved_at timestamp with time zone`);
+  await database.execute(sql`ALTER TABLE public.monitor_alert_incidents ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`);
   await database.execute(sql`
     UPDATE public.monitor_alert_incidents
     SET

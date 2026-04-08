@@ -62,7 +62,7 @@ export class BackupsRepository {
   }
 
   async prepareBackupPayloadFileForCreate(): Promise<PreparedBackupPayloadFile> {
-    return prepareBackupPayloadFileForCreate();
+    return prepareBackupPayloadFileForCreate(this.backupEncryption);
   }
 
   async restoreFromBackup(backupDataRaw: BackupDataPayload | string): Promise<{ success: boolean; stats: RestoreStats }> {

@@ -8,8 +8,8 @@ export async function ensureCollectionAdminGroupsTables(): Promise<void> {
       id uuid PRIMARY KEY,
       leader_nickname text NOT NULL,
       created_by text NOT NULL,
-      created_at timestamp NOT NULL DEFAULT now(),
-      updated_at timestamp NOT NULL DEFAULT now()
+      created_at timestamp with time zone NOT NULL DEFAULT now(),
+      updated_at timestamp with time zone NOT NULL DEFAULT now()
     )
   `);
   await db.execute(sql`
@@ -17,18 +17,18 @@ export async function ensureCollectionAdminGroupsTables(): Promise<void> {
       id uuid PRIMARY KEY,
       admin_group_id uuid NOT NULL,
       member_nickname text NOT NULL,
-      created_at timestamp NOT NULL DEFAULT now()
+      created_at timestamp with time zone NOT NULL DEFAULT now()
     )
   `);
 
   await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS leader_nickname text`);
   await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_by text`);
-  await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
-  await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`);
+  await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
+  await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`);
 
   await db.execute(sql`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS admin_group_id uuid`);
   await db.execute(sql`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS member_nickname text`);
-  await db.execute(sql`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+  await db.execute(sql`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
 
   await db.execute(sql`
     UPDATE public.admin_groups

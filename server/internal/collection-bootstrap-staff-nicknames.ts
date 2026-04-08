@@ -13,9 +13,9 @@ export async function ensureCollectionStaffNicknamesTable(): Promise<void> {
       nickname_password_hash text,
       must_change_password boolean NOT NULL DEFAULT true,
       password_reset_by_superuser boolean NOT NULL DEFAULT false,
-      password_updated_at timestamp,
+      password_updated_at timestamp with time zone,
       created_by text,
-      created_at timestamp NOT NULL DEFAULT now()
+      created_at timestamp with time zone NOT NULL DEFAULT now()
     )
   `);
   await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS nickname text`);
@@ -24,9 +24,9 @@ export async function ensureCollectionStaffNicknamesTable(): Promise<void> {
   await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS nickname_password_hash text`);
   await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS must_change_password boolean DEFAULT true`);
   await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS password_reset_by_superuser boolean DEFAULT false`);
-  await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS password_updated_at timestamp`);
+  await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS password_updated_at timestamp with time zone`);
   await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_by text`);
-  await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`);
+  await db.execute(sql`ALTER TABLE public.collection_staff_nicknames ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
   await db.execute(sql`
     UPDATE public.collection_staff_nicknames
     SET

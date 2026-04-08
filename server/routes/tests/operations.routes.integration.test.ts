@@ -192,6 +192,8 @@ function createOperationsRouteHarness(options?: {
           collectionRecordsCount: 1,
           collectionRecordReceiptsCount: 1,
         },
+        payloadBytes: (await fs.stat(tempFilePath)).size,
+        tempPayloadEncrypted: false,
         cleanup: async () => {
           await fs.rm(tempDir, { recursive: true, force: true });
         },

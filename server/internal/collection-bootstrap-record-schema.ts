@@ -28,8 +28,8 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
         created_by_login text NOT NULL,
         collection_staff_nickname text NOT NULL,
         staff_username text NOT NULL,
-        created_at timestamp DEFAULT now() NOT NULL,
-        updated_at timestamp DEFAULT now() NOT NULL
+        created_at timestamp with time zone DEFAULT now() NOT NULL,
+        updated_at timestamp with time zone DEFAULT now() NOT NULL
       )
     `,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name text`,
@@ -48,8 +48,8 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_by_login text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS collection_staff_nickname text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS staff_username text`,
-    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`,
-    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`,
     sql`UPDATE public.collection_records SET customer_phone = COALESCE(NULLIF(customer_phone, ''), '-')`,
     sql`
       UPDATE public.collection_records
@@ -115,8 +115,8 @@ export async function ensureCollectionReceiptSchema(database: BootstrapSqlExecut
         receipt_date date,
         receipt_reference text,
         file_hash text,
-        deleted_at timestamp,
-        created_at timestamp NOT NULL DEFAULT now()
+        deleted_at timestamp with time zone,
+        created_at timestamp with time zone NOT NULL DEFAULT now()
       )
     `,
     sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS collection_record_id uuid`,
@@ -132,8 +132,8 @@ export async function ensureCollectionReceiptSchema(database: BootstrapSqlExecut
     sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS receipt_date date`,
     sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS receipt_reference text`,
     sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS file_hash text`,
-    sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS deleted_at timestamp`,
-    sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`,
+    sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS deleted_at timestamp with time zone`,
+    sql`ALTER TABLE public.collection_record_receipts ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`,
     sql`
       UPDATE public.collection_record_receipts
       SET
