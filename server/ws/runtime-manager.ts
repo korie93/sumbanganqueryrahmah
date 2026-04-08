@@ -8,6 +8,7 @@ import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const MAX_CONNECTIONS_PER_USER = 5;
 const MAX_RUNTIME_WS_MESSAGE_BYTES = 64 * 1024;
+const MAX_RUNTIME_WS_BUFFERED_BYTES = 256 * 1024;
 
 type RuntimeManagerOptions = {
   wss: WebSocketServer;
@@ -119,6 +120,18 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     connectedClients.delete(activityId);
     socketUserKeys.delete(activityId);
   };
+  const dropBackpressuredSocket = (activityId: string, ws: WebSocket) => {
+    logger.warn("WebSocket client dropped because the send buffer exceeded the runtime limit", {
+      activityId,
+      bufferedAmount: ws.bufferedAmount,
+      maxBufferedBytes: MAX_RUNTIME_WS_BUFFERED_BYTES,
+    });
+    removeTrackedSocket(activityId);
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.terminate();
+    }
+    void clearNicknameSession(activityId);
+  };
   const countTrackedUserConnections = (userKey: string, excludedActivityId?: string) => {
     let count = 0;
     for (const [trackedActivityId, trackedUserKey] of socketUserKeys.entries()) {
@@ -149,8 +162,16 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         continue;
       }
 
+      if (ws.bufferedAmount > MAX_RUNTIME_WS_BUFFERED_BYTES) {
+        dropBackpressuredSocket(activityId, ws);
+        continue;
+      }
+
       try {
         ws.send(message);
+        if (ws.bufferedAmount > MAX_RUNTIME_WS_BUFFERED_BYTES) {
+          dropBackpressuredSocket(activityId, ws);
+        }
       } catch (error) {
         logger.warn("WebSocket broadcast failed", { activityId, error });
         removeTrackedSocket(activityId);

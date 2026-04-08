@@ -5,14 +5,14 @@
   backdrop-filter: blur(10px);
   border: 1px solid hsl(var(--border) / 0.8);
   border-radius: 20px;
-  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.07);
+  box-shadow: var(--app-shell-glass-shadow);
 }
 
 .dark .glass-wrapper {
   background:
     linear-gradient(180deg, hsl(var(--background) / 0.94), hsl(var(--card) / 0.9));
   border: 1px solid hsl(var(--border) / 0.78);
-  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.24);
+  box-shadow: var(--app-shell-glass-shadow-dark);
 }
 
 .ops-page {
@@ -41,14 +41,14 @@
   border: 1px solid hsl(var(--border) / 0.68);
   background:
     linear-gradient(180deg, hsl(var(--background) / 0.94), hsl(var(--card) / 0.78));
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--app-shell-section-shadow);
 }
 
 .dark .ops-header-card,
 .dark .ops-section-card {
   background:
     linear-gradient(180deg, hsl(var(--background) / 0.96), hsl(var(--card) / 0.86));
-  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--app-shell-section-shadow-dark);
 }
 
 .ops-eyebrow {

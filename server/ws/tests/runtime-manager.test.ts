@@ -13,6 +13,7 @@ class FakeWebSocket extends EventEmitter {
   closeCalls = 0;
   terminateCalls = 0;
   pingCalls = 0;
+  bufferedAmount = 0;
   sentMessages: string[] = [];
 
   send(payload: string) {
@@ -278,6 +279,50 @@ test("broadcastWsMessage skips oversized payloads before sending to sockets", ()
     assert.equal(socket.sentMessages.length, 0);
     assert.equal(providedMap.size, 1);
     assert.deepEqual(warnings, ["WebSocket broadcast skipped because the payload is too large"]);
+  } finally {
+    logger.warn = originalLoggerWarn;
+    wss.emit("close");
+  }
+});
+
+test("broadcastWsMessage drops sockets whose send buffer exceeds the runtime limit", () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const slowSocket = new FakeWebSocket();
+  const originalLoggerWarn = logger.warn;
+  const warnings: Array<{ message: string; payload: unknown }> = [];
+  let clearSessionCalls = 0;
+
+  slowSocket.send = (payload: string) => {
+    slowSocket.sentMessages.push(String(payload));
+    slowSocket.bufferedAmount = 300 * 1024;
+  };
+
+  providedMap.set("activity-backpressure", slowSocket as unknown as WebSocket);
+  logger.warn = ((message: string, payload: unknown) => {
+    warnings.push({ message, payload });
+  }) as typeof logger.warn;
+
+  const manager = createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => undefined,
+      clearCollectionNicknameSessionByActivity: async () => {
+        clearSessionCalls += 1;
+      },
+    },
+    secret: "test-secret",
+    connectedClients: providedMap,
+  });
+
+  try {
+    manager.broadcastWsMessage({ type: "ping" });
+    assert.equal(slowSocket.sentMessages.length, 1);
+    assert.equal(slowSocket.terminateCalls, 1);
+    assert.equal(providedMap.has("activity-backpressure"), false);
+    assert.equal(clearSessionCalls, 1);
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0].message, "WebSocket client dropped because the send buffer exceeded the runtime limit");
   } finally {
     logger.warn = originalLoggerWarn;
     wss.emit("close");

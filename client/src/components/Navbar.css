@@ -14,7 +14,7 @@
   border: 1px solid hsl(var(--border) / 0.9);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--nav-surface-shadow);
   transition:
     box-shadow 0.2s ease,
     background 0.3s ease;
@@ -53,7 +53,7 @@
 .nav-pill:not(.nav-pill-active):hover {
   background: hsl(var(--accent) / 0.9);
   border-color: hsl(var(--border) / 0.8);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--nav-hover-shadow);
 }
 
 .nav-pill:focus-visible,
@@ -63,14 +63,14 @@
   border-color: hsl(var(--ring));
   box-shadow:
     0 0 0 3px hsl(var(--ring) / 0.42),
-    0 10px 20px rgba(15, 23, 42, 0.1);
+    var(--nav-focus-shadow);
 }
 
 .nav-pill-active {
   background: hsl(var(--foreground)) !important;
   color: hsl(var(--background)) !important;
   border-color: hsl(var(--foreground)) !important;
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.14);
+  box-shadow: var(--nav-active-shadow);
 }
 
 .nav-pill-active .nav-pill-icon svg {
@@ -100,7 +100,7 @@
 }
 
 .nav-home-pill {
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--nav-home-shadow);
 }
 
 .nav-mobile-trigger,
@@ -114,7 +114,7 @@
   border: 1px solid hsl(var(--border) / 0.75);
   background: hsl(var(--card) / 0.75);
   color: hsl(var(--foreground));
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--nav-trigger-shadow);
   cursor: pointer;
   transition:
     color 0.2s ease,
@@ -127,7 +127,7 @@
 .user-menu-trigger:hover {
   background: hsl(var(--accent) / 0.92);
   border-color: hsl(var(--border) / 0.95);
-  box-shadow: 0 14px 24px rgba(15, 23, 42, 0.1);
+  box-shadow: var(--nav-trigger-hover-shadow);
 }
 
 .user-menu-copy {
@@ -153,7 +153,7 @@
 .dark .navbar-premium-glass {
   background: hsl(var(--card) / 0.82);
   border: 1px solid hsl(var(--border) / 0.85);
-  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--nav-surface-shadow-dark);
 }
 
 .dark .nav-pill {
@@ -173,7 +173,7 @@
 .dark .user-menu-trigger {
   background: hsl(var(--card) / 0.82);
   border-color: hsl(var(--border) / 0.85);
-  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--nav-trigger-shadow-dark);
 }
 
 .dark .nav-mobile-trigger:hover,
