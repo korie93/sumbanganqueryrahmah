@@ -5,7 +5,10 @@ import test from "node:test";
 import { BackupsRepository } from "../backups.repository";
 import { db } from "../../db-postgres";
 import { decodeBackupDataFromStorage } from "../backups-encryption";
-import { readPreparedBackupPayloadForStorage } from "../backups-payload-utils";
+import {
+  iteratePreparedBackupPayloadStorageChunks,
+  readPreparedBackupPayloadForStorage,
+} from "../backups-payload-utils";
 import { BACKUP_MAX_SERIALIZED_ROW_BYTES } from "../backups-repository-types";
 
 type EnvOverrides = Record<string, string | null>;
@@ -228,6 +231,45 @@ test("BackupsRepository prepares encrypted temp backup payload files when an enc
           "collectionRecords",
           "collectionRecordReceipts",
         ]);
+      } finally {
+        dbAny.execute = originalExecute;
+        await prepared?.cleanup();
+      }
+    },
+  );
+});
+
+test("BackupsRepository iterates encrypted temp backup payload storage chunks without rebuilding one giant string", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: `primary:${"A".repeat(32)}`,
+      BACKUP_ENCRYPTION_KEY_ID: "primary",
+    },
+    async () => {
+      const repository = new BackupsRepository(repoOptions);
+
+      const dbAny = db as any;
+      const originalExecute = dbAny.execute;
+      dbAny.execute = async () => ({
+        rows: [],
+      });
+
+      let prepared: Awaited<ReturnType<BackupsRepository["prepareBackupPayloadFileForCreate"]>> | null =
+        null;
+
+      try {
+        prepared = await repository.prepareBackupPayloadFileForCreate();
+        const iteratedChunks: string[] = [];
+        for await (const chunk of iteratePreparedBackupPayloadStorageChunks(prepared)) {
+          iteratedChunks.push(chunk);
+        }
+
+        assert.equal(iteratedChunks[0], prepared.tempPayloadStoragePrefix);
+        assert.ok(iteratedChunks.length >= 2);
+        const manualStoragePayload = `${String(prepared.tempPayloadStoragePrefix || "")}${(await fs.readFile(prepared.tempFilePath)).toString("base64")}`;
+        assert.equal(iteratedChunks.join(""), manualStoragePayload);
       } finally {
         dbAny.execute = originalExecute;
         await prepared?.cleanup();

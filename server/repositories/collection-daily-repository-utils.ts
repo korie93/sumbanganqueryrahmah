@@ -11,6 +11,7 @@ import {
   mapCollectionDailyCalendarRow,
   mapCollectionDailyTargetRow,
 } from "./collection-repository-mappers";
+import { resolveCollectionPiiFieldValue } from "../lib/collection-pii-encryption";
 
 type CollectionDailyQueryResult = {
   rows?: any[];
@@ -206,12 +207,14 @@ export async function upsertCollectionDailyCalendarDays(params: {
 export async function listCollectionDailyPaidCustomers(params: {
   username: string;
   date: string;
-}): Promise<CollectionDailyPaidCustomer[]> {
-  const result = await db.execute(sql`
+}, executor: CollectionDailyExecutor = db): Promise<CollectionDailyPaidCustomer[]> {
+  const result = await executor.execute(sql`
     SELECT
       id,
       customer_name,
+      customer_name_encrypted,
       account_number,
+      account_number_encrypted,
       amount,
       collection_staff_nickname
     FROM public.collection_records
@@ -221,8 +224,14 @@ export async function listCollectionDailyPaidCustomers(params: {
   `);
   return (result.rows || []).map((row: any) => ({
     id: String(row.id),
-    customerName: String(row.customer_name || ""),
-    accountNumber: String(row.account_number || ""),
+    customerName: resolveCollectionPiiFieldValue({
+      plaintext: row.customer_name,
+      encrypted: row.customer_name_encrypted,
+    }),
+    accountNumber: resolveCollectionPiiFieldValue({
+      plaintext: row.account_number,
+      encrypted: row.account_number_encrypted,
+    }),
     amount: Number(row.amount || 0),
     collectionStaffNickname: String(row.collection_staff_nickname || ""),
   }));

@@ -5,6 +5,7 @@ export type BackupOperationsStorage = Pick<PostgresStorage, "createAuditLog">;
 export type BackupOperationsBackupsRepository = Pick<
   BackupsRepository,
   | "createBackup"
+  | "createBackupFromPreparedPayload"
   | "deleteBackup"
   | "getBackupMetadataById"
   | "getBackupById"

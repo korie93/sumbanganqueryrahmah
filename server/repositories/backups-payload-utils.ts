@@ -12,6 +12,7 @@ import type {
 import { db } from "../db-postgres";
 import {
   BACKUP_MAX_SERIALIZED_ROW_BYTES,
+  BACKUP_STORAGE_APPEND_CHUNK_BYTES,
   QUERY_PAGE_LIMIT,
   type BackupCollectionReceipt,
   type BackupCollectionRecord,
@@ -226,23 +227,28 @@ async function createBackupTempFile() {
   };
 }
 
-async function readUtf8FileViaStream(filePath: string): Promise<string> {
-  let contents = "";
-  const stream = createReadStream(filePath, { encoding: "utf8" });
+async function* iterateUtf8FileViaStream(filePath: string): AsyncGenerator<string, void, void> {
+  const stream = createReadStream(filePath, {
+    encoding: "utf8",
+    highWaterMark: BACKUP_STORAGE_APPEND_CHUNK_BYTES,
+  });
+
   try {
     for await (const chunk of stream) {
-      contents += chunk;
+      if (typeof chunk === "string" && chunk.length > 0) {
+        yield chunk;
+      }
     }
-    return contents;
   } finally {
     stream.destroy();
   }
 }
 
-async function readBase64FileViaStream(filePath: string): Promise<string> {
-  let encoded = "";
+async function* iterateBase64FileViaStream(filePath: string): AsyncGenerator<string, void, void> {
   let remainder = Buffer.alloc(0);
-  const stream = createReadStream(filePath);
+  const stream = createReadStream(filePath, {
+    highWaterMark: BACKUP_STORAGE_APPEND_CHUNK_BYTES,
+  });
 
   try {
     for await (const chunk of stream) {
@@ -251,7 +257,7 @@ async function readBase64FileViaStream(filePath: string): Promise<string> {
       const safeLength = combined.length - (combined.length % 3);
 
       if (safeLength > 0) {
-        encoded += combined.subarray(0, safeLength).toString("base64");
+        yield combined.subarray(0, safeLength).toString("base64");
       }
 
       remainder = safeLength < combined.length
@@ -260,13 +266,29 @@ async function readBase64FileViaStream(filePath: string): Promise<string> {
     }
 
     if (remainder.length > 0) {
-      encoded += remainder.toString("base64");
+      yield remainder.toString("base64");
     }
-
-    return encoded;
   } finally {
     stream.destroy();
   }
+}
+
+export async function* iteratePreparedBackupPayloadStorageChunks(
+  preparedBackupPayload: Pick<
+    PreparedBackupPayloadFile,
+    "tempFilePath" | "tempPayloadEncrypted" | "tempPayloadStoragePrefix"
+  >,
+): AsyncGenerator<string, void, void> {
+  if (
+    preparedBackupPayload.tempPayloadEncrypted
+    && typeof preparedBackupPayload.tempPayloadStoragePrefix === "string"
+  ) {
+    yield preparedBackupPayload.tempPayloadStoragePrefix;
+    yield* iterateBase64FileViaStream(preparedBackupPayload.tempFilePath);
+    return;
+  }
+
+  yield* iterateUtf8FileViaStream(preparedBackupPayload.tempFilePath);
 }
 
 export async function readPreparedBackupPayloadForStorage(
@@ -275,14 +297,11 @@ export async function readPreparedBackupPayloadForStorage(
     "tempFilePath" | "tempPayloadEncrypted" | "tempPayloadStoragePrefix"
   >,
 ): Promise<string> {
-  if (
-    preparedBackupPayload.tempPayloadEncrypted
-    && typeof preparedBackupPayload.tempPayloadStoragePrefix === "string"
-  ) {
-    return `${preparedBackupPayload.tempPayloadStoragePrefix}${await readBase64FileViaStream(preparedBackupPayload.tempFilePath)}`;
+  let payload = "";
+  for await (const chunk of iteratePreparedBackupPayloadStorageChunks(preparedBackupPayload)) {
+    payload += chunk;
   }
-
-  return readUtf8FileViaStream(preparedBackupPayload.tempFilePath);
+  return payload;
 }
 
 export async function prepareBackupPayloadFileForCreate(

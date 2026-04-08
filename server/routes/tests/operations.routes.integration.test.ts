@@ -27,7 +27,9 @@ type BackupOperationsBackupsRepository = ConstructorParameters<typeof BackupOper
 type OperationsAnalyticsRepository = ConstructorParameters<typeof OperationsAnalyticsService>[0];
 type AuditEntry = Parameters<AuditLogOperationsStorage["createAuditLog"]>[0];
 type AuditRow = Awaited<ReturnType<AuditLogOperationsRepository["getAuditLogs"]>>[number];
-type CreateBackupData = Parameters<BackupOperationsBackupsRepository["createBackup"]>[0];
+type CreateBackupData = Parameters<BackupOperationsBackupsRepository["createBackupFromPreparedPayload"]>[0] & {
+  backupData?: string;
+};
 type BackupRow = NonNullable<Awaited<ReturnType<BackupOperationsBackupsRepository["getBackupById"]>>>;
 
 function createAuditRow(overrides: Partial<AuditRow> = {}): AuditRow {
@@ -200,14 +202,25 @@ function createOperationsRouteHarness(options?: {
         },
       };
     },
-    readPreparedBackupPayloadForStorage: async (preparedPayload) =>
-      fs.readFile(preparedPayload.tempFilePath, "utf8"),
-    createBackup: async (data: CreateBackupData) => {
+    readPreparedBackupPayloadForStorage: async () => {
+      throw new Error("Legacy prepared backup payload read path should not be used.");
+    },
+    createBackup: async () => {
+      throw new Error("Legacy createBackup path should not be used.");
+    },
+    createBackupFromPreparedPayload: async (data: CreateBackupData) => {
       const createDelayMs = options?.backupCreateDelayMs ?? 0;
       if (createDelayMs > 0) {
         await sleep(createDelayMs);
       }
-      createBackupCalls.push(data);
+      const backupData = data.preparedBackupPayload.tempPayloadEncrypted
+        && typeof data.preparedBackupPayload.tempPayloadStoragePrefix === "string"
+        ? `${data.preparedBackupPayload.tempPayloadStoragePrefix}${(await fs.readFile(data.preparedBackupPayload.tempFilePath)).toString("base64")}`
+        : await fs.readFile(data.preparedBackupPayload.tempFilePath, "utf8");
+      createBackupCalls.push({
+        ...data,
+        backupData,
+      });
       return createBackupRow({
         id: "backup-2",
         name: data.name,

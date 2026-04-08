@@ -6,6 +6,7 @@ import {
 } from "./backups-encryption";
 import {
   createBackup,
+  createBackupFromPreparedPayload,
   deleteBackup,
   getBackupById,
   getBackupMetadataById,
@@ -40,6 +41,12 @@ export class BackupsRepository {
 
   async createBackup(data: InsertBackup): Promise<Backup> {
     return createBackup(this.options, this.backupEncryption, data);
+  }
+
+  async createBackupFromPreparedPayload(
+    data: Omit<InsertBackup, "backupData"> & { preparedBackupPayload: PreparedBackupPayloadFile },
+  ): Promise<Backup> {
+    return createBackupFromPreparedPayload(this.options, data);
   }
 
   async getBackups(): Promise<Backup[]> {

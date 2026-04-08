@@ -4,6 +4,49 @@ type UseAIChatRuntimeRefsOptions = {
   setIsTyping: Dispatch<SetStateAction<boolean>>;
 };
 
+type RuntimeMutableRef<T> = {
+  current: T;
+};
+
+type CleanupAIChatRuntimeRefsParams = {
+  requestControllerRef: RuntimeMutableRef<AbortController | null>;
+  typingIntervalRef: RuntimeMutableRef<number | null>;
+  retryTimersRef: RuntimeMutableRef<number[]>;
+  slowNoticeTimerRef: RuntimeMutableRef<number | null>;
+  processingRef: RuntimeMutableRef<boolean>;
+  isMountedRef: RuntimeMutableRef<boolean>;
+};
+
+export function cleanupAIChatRuntimeRefs({
+  requestControllerRef,
+  typingIntervalRef,
+  retryTimersRef,
+  slowNoticeTimerRef,
+  processingRef,
+  isMountedRef,
+}: CleanupAIChatRuntimeRefsParams) {
+  isMountedRef.current = false;
+  processingRef.current = false;
+
+  if (requestControllerRef.current) {
+    requestControllerRef.current.abort();
+    requestControllerRef.current = null;
+  }
+
+  if (typingIntervalRef.current !== null) {
+    globalThis.clearInterval(typingIntervalRef.current);
+    typingIntervalRef.current = null;
+  }
+
+  retryTimersRef.current.forEach((timerId) => globalThis.clearTimeout(timerId));
+  retryTimersRef.current = [];
+
+  if (slowNoticeTimerRef.current !== null) {
+    globalThis.clearTimeout(slowNoticeTimerRef.current);
+    slowNoticeTimerRef.current = null;
+  }
+}
+
 export function useAIChatRuntimeRefs({
   setIsTyping,
 }: UseAIChatRuntimeRefsOptions) {
@@ -18,9 +61,16 @@ export function useAIChatRuntimeRefs({
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
-      isMountedRef.current = false;
+      cleanupAIChatRuntimeRefs({
+        requestControllerRef,
+        typingIntervalRef,
+        retryTimersRef,
+        slowNoticeTimerRef,
+        processingRef,
+        isMountedRef,
+      });
     };
-  }, [isMountedRef]);
+  }, []);
 
   const abortActiveRequest = useCallback(() => {
     if (requestControllerRef.current) {
@@ -30,13 +80,13 @@ export function useAIChatRuntimeRefs({
   }, []);
 
   const clearRetryTimers = useCallback(() => {
-    retryTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+    retryTimersRef.current.forEach((timerId) => globalThis.clearTimeout(timerId));
     retryTimersRef.current = [];
   }, []);
 
   const clearSlowNoticeTimer = useCallback(() => {
     if (slowNoticeTimerRef.current !== null) {
-      window.clearTimeout(slowNoticeTimerRef.current);
+      globalThis.clearTimeout(slowNoticeTimerRef.current);
       slowNoticeTimerRef.current = null;
     }
   }, []);
@@ -51,7 +101,7 @@ export function useAIChatRuntimeRefs({
 
   const stopTyping = useCallback(() => {
     if (typingIntervalRef.current !== null) {
-      window.clearInterval(typingIntervalRef.current);
+      globalThis.clearInterval(typingIntervalRef.current);
       typingIntervalRef.current = null;
     }
     if (isMountedRef.current) {

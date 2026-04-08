@@ -5,7 +5,10 @@ import type {
   CollectionNicknameDailyAggregate,
   CollectionReceiptValidationStatus,
 } from "../storage-postgres";
-import { hashCollectionPiiSearchValue } from "../lib/collection-pii-encryption";
+import {
+  hashCollectionPiiSearchValue,
+  hasCollectionPiiEncryptionConfigured,
+} from "../lib/collection-pii-encryption";
 import { buildLikePattern } from "./sql-like-utils";
 
 const COLLECTION_MONTH_NAMES = [
@@ -57,12 +60,16 @@ export function buildCollectionRecordConditions(filters?: CollectionRecordFilter
     const like = buildLikePattern(search, "contains");
     const searchConditions: SQL[] = [
       sql`customer_name ILIKE ${like} ESCAPE '\'`,
-      sql`ic_number ILIKE ${like} ESCAPE '\'`,
-      sql`account_number ILIKE ${like} ESCAPE '\'`,
       sql`batch ILIKE ${like} ESCAPE '\'`,
-      sql`customer_phone ILIKE ${like} ESCAPE '\'`,
       sql`amount::text ILIKE ${like} ESCAPE '\'`,
     ];
+    if (!hasCollectionPiiEncryptionConfigured()) {
+      searchConditions.push(
+        sql`ic_number ILIKE ${like} ESCAPE '\'`,
+        sql`account_number ILIKE ${like} ESCAPE '\'`,
+        sql`customer_phone ILIKE ${like} ESCAPE '\'`,
+      );
+    }
     const customerNameSearchHash = hashCollectionPiiSearchValue("customerName", search);
     if (customerNameSearchHash) {
       searchConditions.push(sql`customer_name_search_hash = ${customerNameSearchHash}`);

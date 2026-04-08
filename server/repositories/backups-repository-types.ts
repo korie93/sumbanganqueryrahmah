@@ -11,6 +11,7 @@ export const QUERY_PAGE_LIMIT = 1000;
 export const BACKUP_LIST_DEFAULT_PAGE_SIZE = 25;
 export const BACKUP_LIST_MAX_PAGE_SIZE = 100;
 export const BACKUP_MAX_SERIALIZED_ROW_BYTES = 512 * 1024;
+export const BACKUP_STORAGE_APPEND_CHUNK_BYTES = 128 * 1024;
 
 export type BackupsRepositoryOptions = {
   ensureBackupsTable: () => Promise<void>;

@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { pathToFileURL } from "node:url";
 import { pool } from "../server/db-postgres";
 import {
   hasCollectionPiiEncryptionConfigured,
@@ -21,9 +22,19 @@ type CollectionPiiRow = {
   account_number_search_hash: string | null;
 };
 
+const REDACTABLE_COLLECTION_PII_FIELDS = [
+  "customerName",
+  "icNumber",
+  "customerPhone",
+  "accountNumber",
+] as const;
+
+type RedactableCollectionPiiField = (typeof REDACTABLE_COLLECTION_PII_FIELDS)[number];
+
 type CliOptions = {
   apply: boolean;
   batchSize: number;
+  fields: ReadonlySet<RedactableCollectionPiiField>;
   maxRows: number | null;
 };
 
@@ -35,9 +46,32 @@ function parsePositiveInteger(value: string, flagName: string): number {
   return parsed;
 }
 
-function parseCliOptions(argv: string[]): CliOptions {
+export function parseRedactableCollectionPiiFields(rawValue: string): ReadonlySet<RedactableCollectionPiiField> {
+  const values = rawValue
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (values.length === 0) {
+    throw new Error("--fields requires at least one known collection PII field.");
+  }
+
+  const nextFields = new Set<RedactableCollectionPiiField>();
+  for (const value of values) {
+    if (!REDACTABLE_COLLECTION_PII_FIELDS.includes(value as RedactableCollectionPiiField)) {
+      throw new Error(
+        `Unknown collection PII field '${value}'. Expected one of: ${REDACTABLE_COLLECTION_PII_FIELDS.join(", ")}`,
+      );
+    }
+    nextFields.add(value as RedactableCollectionPiiField);
+  }
+
+  return nextFields;
+}
+
+export function parseCliOptions(argv: string[]): CliOptions {
   let apply = false;
   let batchSize = 500;
+  let fields = new Set<RedactableCollectionPiiField>(REDACTABLE_COLLECTION_PII_FIELDS);
   let maxRows: number | null = null;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -52,6 +86,15 @@ function parseCliOptions(argv: string[]): CliOptions {
         throw new Error("--batch-size requires a value.");
       }
       batchSize = parsePositiveInteger(nextValue, "--batch-size");
+      index += 1;
+      continue;
+    }
+    if (arg === "--fields") {
+      const nextValue = argv[index + 1];
+      if (!nextValue) {
+        throw new Error("--fields requires a value.");
+      }
+      fields = new Set(parseRedactableCollectionPiiFields(nextValue));
       index += 1;
       continue;
     }
@@ -70,47 +113,63 @@ function parseCliOptions(argv: string[]): CliOptions {
   return {
     apply,
     batchSize,
+    fields,
     maxRows,
   };
 }
 
-function getRedactionPlan(row: CollectionPiiRow) {
+export type CollectionPiiRedactionPlan = Record<RedactableCollectionPiiField, boolean>;
+
+export function getRedactionPlan(
+  row: CollectionPiiRow,
+  fields: ReadonlySet<RedactableCollectionPiiField>,
+): CollectionPiiRedactionPlan {
   return {
-    customerName: shouldRedactCollectionPiiPlaintextValue({
-      field: "customerName",
-      plaintext: row.customer_name,
-      encrypted: row.customer_name_encrypted,
-      hash: row.customer_name_search_hash,
-    }),
-    icNumber: shouldRedactCollectionPiiPlaintextValue({
-      field: "icNumber",
-      plaintext: row.ic_number,
-      encrypted: row.ic_number_encrypted,
-      hash: row.ic_number_search_hash,
-    }),
-    customerPhone: shouldRedactCollectionPiiPlaintextValue({
-      field: "customerPhone",
-      plaintext: row.customer_phone,
-      encrypted: row.customer_phone_encrypted,
-      hash: row.customer_phone_search_hash,
-    }),
-    accountNumber: shouldRedactCollectionPiiPlaintextValue({
-      field: "accountNumber",
-      plaintext: row.account_number,
-      encrypted: row.account_number_encrypted,
-      hash: row.account_number_search_hash,
-    }),
+    customerName: fields.has("customerName")
+      && shouldRedactCollectionPiiPlaintextValue({
+        field: "customerName",
+        plaintext: row.customer_name,
+        encrypted: row.customer_name_encrypted,
+        hash: row.customer_name_search_hash,
+      }),
+    icNumber: fields.has("icNumber")
+      && shouldRedactCollectionPiiPlaintextValue({
+        field: "icNumber",
+        plaintext: row.ic_number,
+        encrypted: row.ic_number_encrypted,
+        hash: row.ic_number_search_hash,
+      }),
+    customerPhone: fields.has("customerPhone")
+      && shouldRedactCollectionPiiPlaintextValue({
+        field: "customerPhone",
+        plaintext: row.customer_phone,
+        encrypted: row.customer_phone_encrypted,
+        hash: row.customer_phone_search_hash,
+      }),
+    accountNumber: fields.has("accountNumber")
+      && shouldRedactCollectionPiiPlaintextValue({
+        field: "accountNumber",
+        plaintext: row.account_number,
+        encrypted: row.account_number_encrypted,
+        hash: row.account_number_search_hash,
+      }),
   };
 }
 
-function countPlannedFields(plan: ReturnType<typeof getRedactionPlan>): number {
-  return Number(plan.customerName)
-    + Number(plan.icNumber)
-    + Number(plan.customerPhone)
-    + Number(plan.accountNumber);
+function countPlannedFields(plan: CollectionPiiRedactionPlan): number {
+  return REDACTABLE_COLLECTION_PII_FIELDS.reduce(
+    (count, field) => count + Number(plan[field]),
+    0,
+  );
 }
 
-async function main() {
+function formatFieldSummary(prefix: string, counts: Record<RedactableCollectionPiiField, number>): string {
+  return REDACTABLE_COLLECTION_PII_FIELDS
+    .map((field) => `${prefix}${field}=${counts[field]}`)
+    .join(" ");
+}
+
+export async function main() {
   const options = parseCliOptions(process.argv.slice(2));
 
   if (!hasCollectionPiiEncryptionConfigured()) {
@@ -125,6 +184,18 @@ async function main() {
   let redactedRows = 0;
   let redactedFields = 0;
   let lastId: string | null = null;
+  const candidateFieldCounts: Record<RedactableCollectionPiiField, number> = {
+    customerName: 0,
+    icNumber: 0,
+    customerPhone: 0,
+    accountNumber: 0,
+  };
+  const redactedFieldCounts: Record<RedactableCollectionPiiField, number> = {
+    customerName: 0,
+    icNumber: 0,
+    customerPhone: 0,
+    accountNumber: 0,
+  };
 
   try {
     while (true) {
@@ -166,7 +237,7 @@ async function main() {
       for (const row of result.rows) {
         processedRows += 1;
         lastId = row.id;
-        const redactionPlan = getRedactionPlan(row);
+        const redactionPlan = getRedactionPlan(row, options.fields);
         const plannedFieldCount = countPlannedFields(redactionPlan);
         if (plannedFieldCount === 0) {
           continue;
@@ -174,6 +245,11 @@ async function main() {
 
         candidateRows += 1;
         candidateFields += plannedFieldCount;
+        for (const field of REDACTABLE_COLLECTION_PII_FIELDS) {
+          if (redactionPlan[field]) {
+            candidateFieldCounts[field] += 1;
+          }
+        }
         if (!options.apply) {
           continue;
         }
@@ -198,6 +274,11 @@ async function main() {
         );
         redactedRows += 1;
         redactedFields += plannedFieldCount;
+        for (const field of REDACTABLE_COLLECTION_PII_FIELDS) {
+          if (redactionPlan[field]) {
+            redactedFieldCounts[field] += 1;
+          }
+        }
       }
 
       if (result.rows.length < remainingLimit) {
@@ -211,7 +292,10 @@ async function main() {
       `candidateFields=${candidateFields}`,
       `redactedRows=${redactedRows}`,
       `redactedFields=${redactedFields}`,
+      `fields=${Array.from(options.fields).join(",")}`,
       `mode=${options.apply ? "apply" : "dry-run"}`,
+      formatFieldSummary("candidate", candidateFieldCounts),
+      formatFieldSummary("redacted", redactedFieldCounts),
     ].join(" ");
 
     if (!options.apply && candidateRows > 0) {
@@ -225,7 +309,13 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});
+const isDirectExecution = process.argv[1]
+  ? import.meta.url === pathToFileURL(process.argv[1]).href
+  : false;
+
+if (isDirectExecution) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}

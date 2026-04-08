@@ -66,12 +66,34 @@ test("buildCollectionRecordConditions adds blind-index exact-match clauses when 
     const sqlText = collectSqlText(searchCondition);
     const boundValues = collectBoundValues(searchCondition);
 
+    assert.match(sqlText, /customer_name ILIKE /);
+    assert.doesNotMatch(sqlText, /ic_number ILIKE /);
+    assert.doesNotMatch(sqlText, /account_number ILIKE /);
+    assert.doesNotMatch(sqlText, /customer_phone ILIKE /);
     assert.match(sqlText, /customer_name_search_hash = /);
     assert.match(sqlText, /ic_number_search_hash = /);
     assert.match(sqlText, /customer_phone_search_hash = /);
     assert.match(sqlText, /account_number_search_hash = /);
     assert.ok(boundValues.includes(hashCollectionPiiSearchValue("customerPhone", "0123000001")));
     assert.ok(boundValues.includes(hashCollectionPiiSearchValue("customerName", "0123 000 001")));
+  });
+});
+
+test("buildCollectionRecordConditions keeps plaintext numeric PII fallback when collection PII encryption is disabled", () => {
+  withCollectionPiiKey(null, () => {
+    const [searchCondition] = buildCollectionRecordConditions({
+      search: "0123 000 001",
+    });
+    const sqlText = collectSqlText(searchCondition);
+
+    assert.match(sqlText, /customer_name ILIKE /);
+    assert.match(sqlText, /ic_number ILIKE /);
+    assert.match(sqlText, /account_number ILIKE /);
+    assert.match(sqlText, /customer_phone ILIKE /);
+    assert.doesNotMatch(sqlText, /customer_name_search_hash = /);
+    assert.doesNotMatch(sqlText, /ic_number_search_hash = /);
+    assert.doesNotMatch(sqlText, /customer_phone_search_hash = /);
+    assert.doesNotMatch(sqlText, /account_number_search_hash = /);
   });
 });
 

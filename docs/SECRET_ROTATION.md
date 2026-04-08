@@ -109,8 +109,10 @@ through `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS` for decryption only.
    `npm run collection:redact-plaintext-pii`, then
    `npm run collection:redact-plaintext-pii -- --apply`, to clear plaintext
    collection PII for rows that already have current encrypted shadows and
-   blind-index hashes. Only do this after confirming the team accepts the
-   tighter exact-match search behavior for redacted rows.
+   blind-index hashes. Safer staged rollout: start with
+   `--fields icNumber,customerPhone,accountNumber` first, then decide later
+   whether `customerName` can also be redacted after the team accepts the
+   tighter exact-match search behavior for redacted name rows.
 7. Verify collection create, edit, list, summary, backup export, and backup
    restore paths.
 8. Keep `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS` only for the intended

@@ -10,6 +10,7 @@ import {
   encodeBackupDataForStorage,
   type BackupEncryptionConfig,
 } from "./backups-encryption";
+import { iteratePreparedBackupPayloadStorageChunks } from "./backups-payload-utils";
 import {
   BACKUP_LIST_DEFAULT_PAGE_SIZE,
   BACKUP_LIST_MAX_PAGE_SIZE,
@@ -17,6 +18,7 @@ import {
   type BackupListPageParams,
   type BackupListPageResult,
   type BackupsRepositoryOptions,
+  type PreparedBackupPayloadFile,
 } from "./backups-repository-types";
 import { buildLikePattern } from "./sql-like-utils";
 
@@ -55,6 +57,50 @@ export async function createBackup(
   `);
 
   return result.rows[0] as Backup;
+}
+
+type PreparedBackupInsert = Omit<InsertBackup, "backupData"> & {
+  preparedBackupPayload: Pick<
+    PreparedBackupPayloadFile,
+    "tempFilePath" | "tempPayloadEncrypted" | "tempPayloadStoragePrefix"
+  >;
+};
+
+export async function createBackupFromPreparedPayload(
+  options: BackupsRepositoryOptions,
+  data: PreparedBackupInsert,
+): Promise<Backup> {
+  await options.ensureBackupsTable();
+  const id = crypto.randomUUID();
+  const createdAt = new Date();
+
+  return db.transaction(async (tx) => {
+    const insertResult = await tx.execute(sql`
+      INSERT INTO public.backups (id, name, created_at, created_by, backup_data, metadata)
+      VALUES (${id}, ${data.name}, ${createdAt}, ${data.createdBy}, ''::text, ${data.metadata ?? null})
+      RETURNING
+        id,
+        name,
+        created_at as "createdAt",
+        created_by as "createdBy",
+        ''::text as "backupData",
+        metadata
+    `);
+
+    for await (const chunk of iteratePreparedBackupPayloadStorageChunks(data.preparedBackupPayload)) {
+      if (!chunk) {
+        continue;
+      }
+
+      await tx.execute(sql`
+        UPDATE public.backups
+        SET backup_data = backup_data || ${chunk}
+        WHERE id = ${id}
+      `);
+    }
+
+    return insertResult.rows[0] as Backup;
+  });
 }
 
 export async function getBackups(

@@ -28,6 +28,18 @@ function createBackupOperationsHarness(options?: {
   let payloadFileCleanupCount = 0;
   let readPreparedPayloadCallCount = 0;
 
+  const buildStoragePayloadFromPreparedPayload = async (preparedPayload: {
+    tempFilePath: string;
+    tempPayloadEncrypted: boolean;
+    tempPayloadStoragePrefix?: string;
+  }) => {
+    if (preparedPayload.tempPayloadEncrypted && typeof preparedPayload.tempPayloadStoragePrefix === "string") {
+      const fileBuffer = await fs.readFile(preparedPayload.tempFilePath);
+      return `${preparedPayload.tempPayloadStoragePrefix}${fileBuffer.toString("base64")}`;
+    }
+    return fs.readFile(preparedPayload.tempFilePath, "utf8");
+  };
+
   const backups = new Map<string, any>([
     [
       "backup-1",
@@ -128,23 +140,44 @@ function createBackupOperationsHarness(options?: {
         },
       };
     },
-    readPreparedBackupPayloadForStorage: async (preparedPayload: {
-      tempFilePath: string;
-      tempPayloadEncrypted: boolean;
-      tempPayloadStoragePrefix?: string;
-    }) => {
+    readPreparedBackupPayloadForStorage: async () => {
       readPreparedPayloadCallCount += 1;
-      if (preparedPayload.tempPayloadEncrypted && typeof preparedPayload.tempPayloadStoragePrefix === "string") {
-        const fileBuffer = await fs.readFile(preparedPayload.tempFilePath);
-        return `${preparedPayload.tempPayloadStoragePrefix}${fileBuffer.toString("base64")}`;
-      }
-      return fs.readFile(preparedPayload.tempFilePath, "utf8");
+      throw new Error("Legacy prepared backup payload read path should not be used.");
     },
     createBackup: async (data: Record<string, unknown>) => {
       if (options?.createBackupErrorMessage) {
         throw new Error(options.createBackupErrorMessage);
       }
       createBackupCalls.push(data);
+      return {
+        id: "backup-2",
+        name: data.name,
+        createdAt: new Date("2026-03-20T01:00:00.000Z").toISOString(),
+        createdBy: data.createdBy,
+        backupData: "",
+        metadata: JSON.parse(String(data.metadata || "{}")),
+      };
+    },
+    createBackupFromPreparedPayload: async (data: {
+      name: string;
+      createdBy: string;
+      metadata?: string | null;
+      preparedBackupPayload: {
+        tempFilePath: string;
+        tempPayloadEncrypted: boolean;
+        tempPayloadStoragePrefix?: string;
+      };
+    }) => {
+      if (options?.createBackupErrorMessage) {
+        throw new Error(options.createBackupErrorMessage);
+      }
+
+      const backupData = await buildStoragePayloadFromPreparedPayload(data.preparedBackupPayload);
+      createBackupCalls.push({
+        ...data,
+        backupData,
+      });
+
       return {
         id: "backup-2",
         name: data.name,
@@ -293,7 +326,7 @@ test("BackupOperationsService createBackup persists backup metadata and audits e
   assert.equal(typeof metadata.maxSerializedRowBytes, "number");
   assert.equal(typeof metadata.memoryRssBytes, "number");
   assert.equal(typeof metadata.memoryHeapUsedBytes, "number");
-  assert.equal(getReadPreparedPayloadCallCount(), 1);
+  assert.equal(getReadPreparedPayloadCallCount(), 0);
   assert.equal(getPayloadFileCleanupCount(), 1);
   await Promise.all(
     tempPayloadPaths.map(async (tempFilePath) => {
@@ -338,7 +371,7 @@ test("BackupOperationsService createBackup stores encrypted temp payloads withou
     ),
     true,
   );
-  assert.equal(getReadPreparedPayloadCallCount(), 1);
+  assert.equal(getReadPreparedPayloadCallCount(), 0);
   assert.equal(getPayloadFileCleanupCount(), 1);
   await Promise.all(
     tempPayloadPaths.map(async (tempFilePath) => {

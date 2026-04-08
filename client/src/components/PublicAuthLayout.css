@@ -54,7 +54,7 @@
 
 .public-auth-layout__main {
   position: relative;
-  z-index: 10;
+  z-index: var(--z-public-auth-main);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   listCollectionDailyCalendar,
+  listCollectionDailyPaidCustomers,
   upsertCollectionDailyCalendarDays,
 } from "../collection-daily-repository-utils";
 import { collectBoundValues, collectSqlText, createSequenceExecutor } from "./sql-test-utils";
+import { buildEncryptedCollectionRecordPiiValues } from "../../lib/collection-pii-encryption";
 
 test("upsertCollectionDailyCalendarDays batches multiple days into one upsert query", async () => {
   const { executor, queries } = createSequenceExecutor([
@@ -106,4 +108,57 @@ test("listCollectionDailyCalendar maps rows using the provided executor", async 
   assert.equal(rows[0]?.day, 7);
   assert.equal(queries.length, 1);
   assert.match(collectSqlText(queries[0]), /FROM public\.collection_daily_calendar/i);
+});
+
+test("listCollectionDailyPaidCustomers falls back to encrypted PII when plaintext has been redacted", async () => {
+  const previousKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  process.env.COLLECTION_PII_ENCRYPTION_KEY = "collection-daily-test-key";
+
+  try {
+    const encrypted = buildEncryptedCollectionRecordPiiValues({
+      customerName: "Alice Tan",
+      icNumber: "900101015555",
+      customerPhone: "0123000001",
+      accountNumber: "ACC-1001",
+    });
+
+    const { executor, queries } = createSequenceExecutor([
+      {
+        rows: [
+          {
+            id: "record-1",
+            customer_name: "",
+            customer_name_encrypted: encrypted?.customerNameEncrypted,
+            account_number: "",
+            account_number_encrypted: encrypted?.accountNumberEncrypted,
+            amount: "150.25",
+            collection_staff_nickname: "Collector Alpha",
+          },
+        ],
+      },
+    ]);
+
+    const rows = await listCollectionDailyPaidCustomers(
+      {
+        username: "alpha.user",
+        date: "2026-04-08",
+      },
+      executor,
+    );
+
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.customerName, "Alice Tan");
+    assert.equal(rows[0]?.accountNumber, "ACC-1001");
+    assert.equal(rows[0]?.amount, 150.25);
+    assert.equal(queries.length, 1);
+    const queryText = collectSqlText(queries[0]);
+    assert.match(queryText, /customer_name_encrypted/i);
+    assert.match(queryText, /account_number_encrypted/i);
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    } else {
+      process.env.COLLECTION_PII_ENCRYPTION_KEY = previousKey;
+    }
+  }
 });

@@ -13,7 +13,7 @@ import {
 import type { BackupOperationsMutationDeps } from "./backup-operations-mutation-shared";
 
 type CreatedBackupRecord = Awaited<
-  ReturnType<BackupOperationsMutationDeps["backupsRepository"]["createBackup"]>
+  ReturnType<BackupOperationsMutationDeps["backupsRepository"]["createBackupFromPreparedPayload"]>
 >;
 type BackupCreateEarlyResponse = BackupOperationResponse<{ message: string }>;
 
@@ -53,18 +53,15 @@ export async function executeCreateBackup(
           };
         }
 
-        const backupPayloadJson = await deps.backupsRepository.readPreparedBackupPayloadForStorage(
-          preparedBackupPayload,
-        );
         const metadata = buildBackupMetadata(
           preparedBackupPayload,
           preparedBackupPayload.payloadChecksumSha256,
         );
-        const created = await deps.backupsRepository.createBackup({
+        const created = await deps.backupsRepository.createBackupFromPreparedPayload({
           name: params.name,
           createdBy: params.username,
-          backupData: backupPayloadJson,
           metadata: JSON.stringify(metadata),
+          preparedBackupPayload,
         });
 
         await deps.storage.createAuditLog({
