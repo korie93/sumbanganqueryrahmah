@@ -1933,7 +1933,6 @@ test("GET /api/collection/summary scopes admin requests to the visible nickname 
       {
         year: 2026,
         nicknames: allowedNicknames,
-        createdByLogin: undefined,
       },
     ]);
     assert.equal(staffNicknameLookups.length, 0);
