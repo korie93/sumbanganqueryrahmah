@@ -19,6 +19,8 @@
     "db:check": "drizzle-kit check --config drizzle.config.ts",
     "db:studio": "drizzle-kit studio --config drizzle.config.ts",
     "db:introspect": "drizzle-kit introspect --config drizzle.config.ts",
+    "collection:pii-status": "tsx scripts/collection-pii-status.ts",
+    "collection:verify-pii-sensitive-retirement": "tsx scripts/collection-pii-status.ts --fields icNumber,customerPhone,accountNumber --require-zero-plaintext --require-zero-redactable --require-zero-rewrite",
     "collection:reencrypt-pii": "tsx scripts/reencrypt-collection-pii.ts",
     "collection:redact-plaintext-pii": "tsx scripts/redact-collection-pii-plaintext.ts",
     "test:client": "node scripts/run-client-tests.mjs",

@@ -144,7 +144,7 @@ export function AnalysisFilesList({
             ) : (
               <div className="overflow-x-auto rounded-lg border border-border">
                 <table className="w-full text-sm">
-                  <thead className="bg-muted sticky top-0 z-10">
+                  <thead className="bg-muted sticky top-0 z-[var(--z-sticky-header)]">
                     <tr>
                       <th className="text-left p-3 font-medium text-muted-foreground">#</th>
                       <th className="text-left p-3 font-medium text-muted-foreground">Name</th>
@@ -270,7 +270,7 @@ export function AnalysisDuplicatesPanel({
               ) : (
                 <div className="overflow-x-auto rounded-lg border border-border">
                   <table className="w-full text-sm">
-                    <thead className="bg-muted sticky top-0">
+                  <thead className="bg-muted sticky top-0 z-[var(--z-sticky-header)]">
                       <tr>
                         <th className="text-left p-3 font-medium text-muted-foreground">#</th>
                         <th className="text-left p-3 font-medium text-muted-foreground">Value</th>

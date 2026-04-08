@@ -28,6 +28,7 @@ import {
   updateCollectionRecordReceiptRows,
 } from "./collection-receipt-utils";
 import { mapCollectionRecordRow } from "./collection-repository-mappers";
+import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
 import { buildTextArraySql } from "./sql-array-utils";
 
 function resolveExpectedCollectionRecordUpdatedAt(
@@ -167,14 +168,14 @@ export async function updateCollectionRecord(
       WHERE ${sql.join(whereClauses, sql` AND `)}
       RETURNING
         id,
-        customer_name,
+        ${buildProtectedCollectionPiiSelect("customer_name", "customer_name_encrypted")},
         customer_name_encrypted,
         customer_name_search_hashes,
-        ic_number,
+        ${buildProtectedCollectionPiiSelect("ic_number", "ic_number_encrypted")},
         ic_number_encrypted,
-        customer_phone,
+        ${buildProtectedCollectionPiiSelect("customer_phone", "customer_phone_encrypted")},
         customer_phone_encrypted,
-        account_number,
+        ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted")},
         account_number_encrypted,
         batch,
         payment_date,

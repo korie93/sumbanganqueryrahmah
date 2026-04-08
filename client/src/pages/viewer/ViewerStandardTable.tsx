@@ -21,7 +21,7 @@ export function ViewerStandardTable({
   return (
     <div className="max-h-[560px] overflow-y-auto">
       <table className="ops-data-table w-full text-sm">
-        <thead className="sticky top-0 z-10 bg-muted">
+        <thead className="sticky top-0 z-[var(--z-sticky-header)] bg-muted">
           <tr>
             <th className="w-10 p-3 text-left font-medium text-muted-foreground">
               <Checkbox

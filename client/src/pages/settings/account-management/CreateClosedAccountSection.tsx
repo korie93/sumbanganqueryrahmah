@@ -106,7 +106,7 @@ export function CreateClosedAccountSection({
         <div
           className={cn(
             "-mx-6 flex flex-col gap-2 border-t border-border/60 bg-background/95 px-6 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] pt-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:static sm:mx-0 sm:flex-row sm:justify-end sm:border-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none sm:backdrop-blur-0",
-            keyboardOpen ? "static" : "sticky bottom-0 z-10",
+            keyboardOpen ? "static" : "sticky bottom-0 z-[var(--z-sticky-content)]",
           )}
           data-floating-ai-avoid="true"
         >

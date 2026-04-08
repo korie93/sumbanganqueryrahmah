@@ -15,7 +15,7 @@ export default function Banned() {
       <div className="absolute bottom-20 right-20 w-96 h-96 rounded-full bg-red-900/20 blur-3xl animate-pulse [animation-delay:1s]" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-red-800/10 rounded-full blur-3xl" />
 
-      <section className="relative z-10 max-w-lg w-full" aria-labelledby="banned-page-title">
+      <section className="relative z-[var(--z-public-auth-main)] max-w-lg w-full" aria-labelledby="banned-page-title">
         <div className="absolute -inset-4 rounded-[2rem] bg-red-500/10 blur-2xl pointer-events-none" />
         
         <div className="relative backdrop-blur-xl bg-gradient-to-b from-slate-900/90 to-slate-950/95 border border-red-500/20 rounded-3xl p-10 shadow-2xl shadow-red-900/20">

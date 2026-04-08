@@ -78,7 +78,7 @@ export function GeneralSearchMobileControls({
   return (
     <>
       <div
-        className="glass-wrapper sticky top-2 z-20 mb-3 space-y-2 p-2 shadow-lg supports-[backdrop-filter]:bg-background/80 supports-[backdrop-filter]:backdrop-blur-xl"
+        className="glass-wrapper sticky top-2 z-[var(--z-sticky-content)] mb-3 space-y-2 p-2 shadow-lg supports-[backdrop-filter]:bg-background/80 supports-[backdrop-filter]:backdrop-blur-xl"
         data-floating-ai-avoid="true"
       >
         <div className="flex items-center gap-2">

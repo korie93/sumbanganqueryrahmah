@@ -19,6 +19,7 @@ import {
 } from "./collection-record-query-utils";
 import { hasPendingCollectionRecordDailyRollupSlices } from "./collection-record-rollup-utils";
 import { attachCollectionReceipts } from "./collection-receipt-utils";
+import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
 import { mapCollectionRecordRow } from "./collection-repository-mappers";
 
 export async function listCollectionRecords(
@@ -37,13 +38,13 @@ export async function listCollectionRecords(
   const result = await db.execute(sql`
     SELECT
       id,
-      customer_name,
+      ${buildProtectedCollectionPiiSelect("customer_name", "customer_name_encrypted")},
       customer_name_encrypted,
-      ic_number,
+      ${buildProtectedCollectionPiiSelect("ic_number", "ic_number_encrypted")},
       ic_number_encrypted,
-      customer_phone,
+      ${buildProtectedCollectionPiiSelect("customer_phone", "customer_phone_encrypted")},
       customer_phone_encrypted,
-      account_number,
+      ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted")},
       account_number_encrypted,
       batch,
       payment_date,
@@ -279,13 +280,13 @@ export async function getCollectionRecordById(id: string): Promise<CollectionRec
   const result = await db.execute(sql`
     SELECT
       id,
-      customer_name,
+      ${buildProtectedCollectionPiiSelect("customer_name", "customer_name_encrypted")},
       customer_name_encrypted,
-      ic_number,
+      ${buildProtectedCollectionPiiSelect("ic_number", "ic_number_encrypted")},
       ic_number_encrypted,
-      customer_phone,
+      ${buildProtectedCollectionPiiSelect("customer_phone", "customer_phone_encrypted")},
       customer_phone_encrypted,
-      account_number,
+      ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted")},
       account_number_encrypted,
       batch,
       payment_date,

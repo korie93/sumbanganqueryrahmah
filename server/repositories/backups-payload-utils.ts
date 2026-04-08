@@ -22,6 +22,7 @@ import {
 } from "./backups-repository-types";
 import type { BackupEncryptionConfig } from "./backups-encryption";
 import { resolveCollectionPiiFieldValue } from "../lib/collection-pii-encryption";
+import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
 export {
   createBackupPayloadChunkReader,
   createBackupPayloadSectionReader,
@@ -425,14 +426,14 @@ export async function prepareBackupPayloadFileForCreate(
       safeSelectRows<(BackupCollectionRecord & BackupCursorRow) & Record<string, unknown>>(sql`
         SELECT
           id,
-          customer_name as "customerName",
+          ${buildProtectedCollectionPiiSelect("customer_name", "customer_name_encrypted", "customerName")},
           customer_name_encrypted as "customerNameEncrypted",
           customer_name_search_hashes as "customerNameSearchHashes",
-          ic_number as "icNumber",
+          ${buildProtectedCollectionPiiSelect("ic_number", "ic_number_encrypted", "icNumber")},
           ic_number_encrypted as "icNumberEncrypted",
-          customer_phone as "customerPhone",
+          ${buildProtectedCollectionPiiSelect("customer_phone", "customer_phone_encrypted", "customerPhone")},
           customer_phone_encrypted as "customerPhoneEncrypted",
-          account_number as "accountNumber",
+          ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted", "accountNumber")},
           account_number_encrypted as "accountNumberEncrypted",
           batch,
           payment_date as "paymentDate",

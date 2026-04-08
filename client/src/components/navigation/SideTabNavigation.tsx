@@ -151,12 +151,12 @@ export function SideTabNavigation({
         <>
           <button
             type="button"
-            className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[1px] lg:hidden"
+            className="fixed inset-0 z-[var(--z-mobile-nav-overlay)] bg-black/45 backdrop-blur-[1px] lg:hidden"
             aria-label="Close navigation menu"
             onClick={() => onMobileOpenChange(false)}
           />
           <aside
-            className="fixed inset-y-0 left-0 z-50 w-[290px] border-r border-border/70 bg-background p-3 shadow-xl lg:hidden"
+            className="fixed inset-y-0 left-0 z-[var(--z-mobile-nav-panel)] w-[290px] border-r border-border/70 bg-background p-3 shadow-xl lg:hidden"
           >
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-semibold">{navigationLabel}</p>

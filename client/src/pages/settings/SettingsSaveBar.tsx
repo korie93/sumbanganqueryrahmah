@@ -17,7 +17,7 @@ export function SettingsSaveBar({ dirtyCount, onSave, saving }: SettingsSaveBarP
     <Card
       className={cn(
         "border-primary/40 bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:static sm:shadow-sm sm:backdrop-blur-0",
-        keyboardOpen ? "static shadow-sm backdrop-blur-0" : "sticky bottom-0 z-20",
+        keyboardOpen ? "static shadow-sm backdrop-blur-0" : "sticky bottom-0 z-[var(--z-sticky-content)]",
       )}
       data-floating-ai-avoid="true"
     >

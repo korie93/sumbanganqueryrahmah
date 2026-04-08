@@ -23,17 +23,17 @@ export function CollectionRecordsDesktopTable({
       <Table className="min-w-[1280px] text-sm">
         <TableHeader>
           <TableRow>
-            <TableHead className="sticky top-0 bg-background z-10 w-[72px]">No.</TableHead>
-            <TableHead className="sticky top-0 bg-background z-10">Customer Name</TableHead>
-            <TableHead className="sticky top-0 bg-background z-10">IC Number</TableHead>
-            <TableHead className="sticky top-0 bg-background z-10">Account Number</TableHead>
-            <TableHead className="sticky top-0 bg-background z-10">Customer Phone Number</TableHead>
-            <TableHead className="sticky top-0 bg-background z-10">Batch</TableHead>
-            <TableHead className="sticky top-0 bg-background z-10">Amount</TableHead>
-            <TableHead className="sticky top-0 bg-background z-10">Payment Date</TableHead>
-            <TableHead className="sticky top-0 bg-background z-10">Receipt</TableHead>
-            <TableHead className="sticky top-0 bg-background z-10">Staff Nickname</TableHead>
-            <TableHead className="sticky top-0 bg-background z-10 text-right">Actions</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background w-[72px]">No.</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Customer Name</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">IC Number</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Account Number</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Customer Phone Number</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Batch</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Amount</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Payment Date</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Receipt</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Staff Nickname</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

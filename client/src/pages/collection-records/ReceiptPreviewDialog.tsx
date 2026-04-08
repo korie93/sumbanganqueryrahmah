@@ -147,7 +147,7 @@ export function ReceiptPreviewDialog({
           className={cn(
             "gap-2 border-t border-border/60 bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85",
             isMobile
-              ? "sticky bottom-0 z-10 flex-col-reverse px-4 py-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)]"
+              ? "sticky bottom-0 z-[var(--z-sticky-content)] flex-col-reverse px-4 py-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)]"
               : "flex-row items-center justify-end px-0 py-0",
           )}
           data-floating-ai-avoid="true"

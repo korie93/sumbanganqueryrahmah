@@ -14,6 +14,7 @@ import {
   resolveStoredCollectionPiiPlaintextValue,
 } from "../lib/collection-pii-encryption";
 import { buildTextArraySql } from "./sql-array-utils";
+import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
 import {
   attachCollectionReceipts,
 } from "./collection-receipt-utils";
@@ -114,13 +115,13 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
     const result = await tx.execute(sql`
       SELECT
         id,
-        customer_name,
+        ${buildProtectedCollectionPiiSelect("customer_name", "customer_name_encrypted")},
         customer_name_encrypted,
-        ic_number,
+        ${buildProtectedCollectionPiiSelect("ic_number", "ic_number_encrypted")},
         ic_number_encrypted,
-        customer_phone,
+        ${buildProtectedCollectionPiiSelect("customer_phone", "customer_phone_encrypted")},
         customer_phone_encrypted,
-        account_number,
+        ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted")},
         account_number_encrypted,
         batch,
         payment_date,

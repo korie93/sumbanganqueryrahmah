@@ -33,7 +33,7 @@ export function ViewerVirtualizedTable({
 }: ViewerVirtualizedTableProps) {
   return (
     <div ref={virtualTableWidthRef} className={styles.virtualTableWidth}>
-      <div className="sticky top-0 z-10 border-b border-border bg-muted">
+      <div className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border bg-muted">
         <ViewerGridShell gridTemplateColumns={gridTemplateColumns} className="h-12 items-center">
           <div className="px-3">
             <Checkbox

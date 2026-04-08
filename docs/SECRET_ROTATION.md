@@ -101,11 +101,14 @@ through `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS` for decryption only.
 2. Move the current key into `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS`.
 3. Set the generated value as the new `COLLECTION_PII_ENCRYPTION_KEY`.
 4. Deploy or restart all app processes together.
-5. Run `npm run collection:reencrypt-pii` to measure how many rows still need
+5. Run `npm run collection:pii-status` to measure remaining plaintext,
+   redactable rows, and shadow-column rewrite work. You can add `-- --json`
+   for machine-readable output.
+6. Run `npm run collection:reencrypt-pii` to measure how many rows still need
    shadow-column rewrites, then run
    `npm run collection:reencrypt-pii -- --apply` to re-encrypt them with the
    active key.
-6. Optional after rollout verification: run
+7. Optional after rollout verification: run
    `npm run collection:redact-plaintext-pii`, then
    `npm run collection:redact-plaintext-pii -- --apply`, to clear plaintext
    collection PII for legacy rows that already have current encrypted shadows
@@ -115,13 +118,18 @@ through `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS` for decryption only.
    `--fields icNumber,customerPhone,accountNumber` first, then add
    `customerName` after the team confirms the token-prefix blind-index search
    behavior is sufficient for live operations.
-7. Verify collection create, edit, list, summary, backup export, and backup
+8. Re-run `npm run collection:pii-status` and confirm plaintext/redaction
+   counts move in the expected direction before removing the previous key. For
+   the first staged retirement gate, `npm run collection:verify-pii-sensitive-retirement`
+   now fails if `icNumber`, `customerPhone`, or `accountNumber` still have
+   plaintext, redactable legacy rows, or pending rewrite work.
+9. Verify collection create, edit, list, summary, backup export, and backup
    restore paths.
-8. Keep `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS` only for the intended
+10. Keep `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS` only for the intended
    compatibility window while older encrypted rows and backups are being
    rewritten or phased out.
-9. Remove the old value from `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS`.
-10. Redeploy or restart all app processes.
+11. Remove the old value from `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS`.
+12. Redeploy or restart all app processes.
 
 ### Emergency Rotation
 

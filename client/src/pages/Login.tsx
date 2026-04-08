@@ -64,7 +64,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       <div className="login-bg-effect absolute bottom-20 right-20 hidden h-72 w-72 rounded-full bg-purple-500/15 blur-3xl floating-slow delay-150 sm:block" />
       <div className="login-bg-effect absolute left-1/2 top-1/2 hidden h-[360px] w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-400/8 blur-3xl floating-slow delay-300 md:block" />
 
-      <main className="relative z-10 flex viewport-min-height items-center justify-center px-4 py-6 login-content sm:py-8">
+      <main className="relative z-[var(--z-public-auth-main)] flex viewport-min-height items-center justify-center px-4 py-6 login-content sm:py-8">
         <div className="relative w-full max-w-md">
           <button
             type="button"

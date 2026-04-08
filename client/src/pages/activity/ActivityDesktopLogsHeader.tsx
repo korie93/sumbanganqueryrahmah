@@ -14,7 +14,7 @@ export function ActivityDesktopLogsHeader({
   partiallySelected,
 }: ActivityDesktopLogsHeaderProps) {
   return (
-    <thead className="bg-muted sticky top-0 z-10">
+    <thead className="bg-muted sticky top-0 z-[var(--z-sticky-header)]">
       <tr>
         {canModerateActivity ? (
           <th className="text-left p-3 font-medium text-muted-foreground w-[50px]">

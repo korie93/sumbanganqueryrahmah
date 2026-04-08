@@ -32,16 +32,16 @@ export function ViewAllRecordsDesktopTable({
     <Table className="min-w-[1100px] text-sm">
       <TableHeader>
         <TableRow>
-          <TableHead className="sticky top-0 z-10 bg-background">No.</TableHead>
-          <TableHead className="sticky top-0 z-10 bg-background">Customer Name</TableHead>
-          <TableHead className="sticky top-0 z-10 bg-background">IC Number</TableHead>
-          <TableHead className="sticky top-0 z-10 bg-background">Account Number</TableHead>
-          <TableHead className="sticky top-0 z-10 bg-background">Customer Phone Number</TableHead>
-          <TableHead className="sticky top-0 z-10 bg-background">Batch</TableHead>
-          <TableHead className="sticky top-0 z-10 bg-background">Amount</TableHead>
-          <TableHead className="sticky top-0 z-10 bg-background">Payment Date</TableHead>
-          <TableHead className="sticky top-0 z-10 bg-background">Receipt</TableHead>
-          <TableHead className="sticky top-0 z-10 bg-background">Staff Nickname</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">No.</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Customer Name</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">IC Number</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Account Number</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Customer Phone Number</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Batch</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Amount</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Payment Date</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Receipt</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Staff Nickname</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>

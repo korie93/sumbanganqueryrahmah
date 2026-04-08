@@ -33,7 +33,7 @@ export function ViewerSearchBar({
     <div
       className={`ops-toolbar mb-4 space-y-3 ${
         isMobile
-          ? "sticky top-2 z-20 border-border/70 bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85"
+          ? "sticky top-2 z-[var(--z-sticky-content)] border-border/70 bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85"
           : ""
       }`}
       data-floating-ai-avoid={isMobile ? "true" : undefined}

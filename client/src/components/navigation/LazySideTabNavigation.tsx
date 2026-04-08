@@ -63,9 +63,12 @@ function SideTabNavigationFallback({
 
       {mobileOpen ? (
         <>
-          <div className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[1px] lg:hidden" aria-hidden="true" />
+          <div
+            className="fixed inset-0 z-[var(--z-mobile-nav-overlay)] bg-black/45 backdrop-blur-[1px] lg:hidden"
+            aria-hidden="true"
+          />
           <aside
-            className="fixed inset-y-0 left-0 z-50 w-[290px] border-r border-border/70 bg-background p-3 shadow-xl lg:hidden"
+            className="fixed inset-y-0 left-0 z-[var(--z-mobile-nav-panel)] w-[290px] border-r border-border/70 bg-background p-3 shadow-xl lg:hidden"
             aria-label={`${navigationLabel || "Navigation"} loading`}
           >
             <div className="mb-3 flex items-center justify-between">
