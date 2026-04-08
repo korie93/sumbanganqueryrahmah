@@ -78,7 +78,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
       className={cn(
         "pointer-events-none fixed transition-opacity duration-200",
         styles.floatingRoot,
-        isMobile && shouldShowPanel ? "z-[60]" : "",
+        isMobile && shouldShowPanel ? styles.floatingRootModal : "",
         layoutState.rootHidden || (hideForFocusedEditable && !isOpen)
           ? "translate-y-2 opacity-0"
           : "opacity-100",

@@ -30,6 +30,7 @@ export async function ensureCoreImportsTable(
   await database.execute(sql`ALTER TABLE public.imports ALTER COLUMN name SET NOT NULL`);
   await database.execute(sql`ALTER TABLE public.imports ALTER COLUMN filename SET NOT NULL`);
   await database.execute(sql`ALTER TABLE public.imports ALTER COLUMN created_at SET NOT NULL`);
+  await database.execute(sql`ALTER TABLE public.imports ALTER COLUMN is_deleted SET NOT NULL`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_created_at ON public.imports(created_at DESC)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_is_deleted ON public.imports(is_deleted)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_created_by ON public.imports(created_by)`);

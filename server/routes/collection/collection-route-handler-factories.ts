@@ -25,6 +25,8 @@ const OBSERVED_COLLECTION_ROUTE_PATHS = new Set([
   "/api/collection/daily/overview",
   "/api/collection/daily/day-details",
 ]);
+const IDEMPOTENCY_FINGERPRINT_PARSE_CACHE_LIMIT = 256;
+const idempotencyFingerprintValidationCache = new Map<string, true>();
 
 function sendCollectionError(res: Response, err: unknown, fallbackMessage: string) {
   if (err instanceof HttpError) {
@@ -73,19 +75,36 @@ function normalizeIdempotencyHeaderValue(value: unknown, options?: { maxLength?:
   return normalized;
 }
 
-function normalizeIdempotencyFingerprintHeaderValue(value: unknown): string | null {
+export function normalizeIdempotencyFingerprintHeaderValue(value: unknown): string | null {
   const normalized = normalizeIdempotencyHeaderValue(value, { maxLength: 512 });
   if (!normalized) {
     return null;
   }
 
-  try {
-    JSON.parse(normalized);
-  } catch {
-    throw badRequest("Idempotency fingerprint must be valid JSON.");
+  if (!idempotencyFingerprintValidationCache.has(normalized)) {
+    try {
+      JSON.parse(normalized);
+    } catch {
+      throw badRequest("Idempotency fingerprint must be valid JSON.");
+    }
+
+    idempotencyFingerprintValidationCache.set(normalized, true);
+    if (idempotencyFingerprintValidationCache.size > IDEMPOTENCY_FINGERPRINT_PARSE_CACHE_LIMIT) {
+      const oldestKey = idempotencyFingerprintValidationCache.keys().next().value;
+      if (oldestKey) {
+        idempotencyFingerprintValidationCache.delete(oldestKey);
+      }
+    }
+  } else {
+    idempotencyFingerprintValidationCache.delete(normalized);
+    idempotencyFingerprintValidationCache.set(normalized, true);
   }
 
   return normalized;
+}
+
+export function clearIdempotencyFingerprintValidationCacheForTests() {
+  idempotencyFingerprintValidationCache.clear();
 }
 
 function normalizeMutationResponseBody(payload: unknown): unknown {

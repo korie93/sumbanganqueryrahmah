@@ -1,8 +1,15 @@
 import { resolveSafeNavigationUrl } from "@/lib/safe-url";
+import {
+  safeGetStorageItem,
+  safeRemoveStorageItem,
+  safeSetStorageItem,
+  type BrowserStorageLike,
+} from "@/lib/browser-storage";
 
 const SINGLE_TAB_LOCK_STORAGE_PREFIX = "sqr_single_tab_lock:";
 const SINGLE_TAB_SEED_STORAGE_KEY = "sqr_single_tab_seed";
 const SINGLE_TAB_NAVIGATION_RECLAIM_STORAGE_KEY = "sqr_single_tab_navigation_reclaim";
+const MAX_SINGLE_TAB_LOCK_STORAGE_ENTRIES = 32;
 
 export const SINGLE_TAB_LOCK_TTL_MS = 12_000;
 export const SINGLE_TAB_LOCK_HEARTBEAT_MS = 4_000;
@@ -201,20 +208,78 @@ export function getSingleTabNavigationReclaimStorageKey(): string {
   return SINGLE_TAB_NAVIGATION_RECLAIM_STORAGE_KEY;
 }
 
+export function pruneSingleTabBrowserStorage(
+  localStorageLike: BrowserStorageLike | null | undefined,
+  sessionStorageLike: Pick<Storage, "getItem" | "removeItem"> | null | undefined,
+  now = Date.now(),
+): void {
+  if (localStorageLike) {
+    const lockKeys: string[] = [];
+    for (let index = 0; index < localStorageLike.length; index += 1) {
+      const key = String(localStorageLike.key(index) || "");
+      if (key.startsWith(SINGLE_TAB_LOCK_STORAGE_PREFIX)) {
+        lockKeys.push(key);
+      }
+    }
+
+    const validLocks: Array<{ key: string; updatedAt: number }> = [];
+    for (const key of lockKeys) {
+      const parsed = parseSingleTabLock(safeGetStorageItem(localStorageLike, key));
+      if (!parsed || isSingleTabLockExpired(parsed, now)) {
+        safeRemoveStorageItem(localStorageLike, key);
+        continue;
+      }
+
+      validLocks.push({ key, updatedAt: parsed.updatedAt });
+    }
+
+    validLocks
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+      .slice(MAX_SINGLE_TAB_LOCK_STORAGE_ENTRIES)
+      .forEach((entry) => {
+        safeRemoveStorageItem(localStorageLike, entry.key);
+      });
+  }
+
+  if (!sessionStorageLike) {
+    return;
+  }
+
+  const reclaim = parseSingleTabNavigationReclaim(
+    safeGetStorageItem(sessionStorageLike, SINGLE_TAB_NAVIGATION_RECLAIM_STORAGE_KEY),
+  );
+  if (!reclaim || !isSingleTabNavigationReclaimActive(reclaim, reclaim.tabSeed, now)) {
+    safeRemoveStorageItem(sessionStorageLike, SINGLE_TAB_NAVIGATION_RECLAIM_STORAGE_KEY);
+  }
+}
+
 export function markSingleTabNavigationReclaimForCurrentTab() {
   if (typeof sessionStorage === "undefined") {
     return;
   }
 
   try {
-    const tabSeed = normalizeStorageValue(sessionStorage.getItem(getSingleTabSeedStorageKey()));
+    pruneSingleTabBrowserStorage(
+      typeof localStorage !== "undefined" ? (localStorage as BrowserStorageLike) : null,
+      sessionStorage,
+    );
+    const tabSeed = normalizeStorageValue(safeGetStorageItem(sessionStorage, getSingleTabSeedStorageKey()));
     if (!tabSeed) {
       return;
     }
 
-    sessionStorage.setItem(
+    safeSetStorageItem(
+      sessionStorage,
       getSingleTabNavigationReclaimStorageKey(),
       serializeSingleTabNavigationReclaim(createSingleTabNavigationReclaim(tabSeed)),
+      {
+        onQuotaExceeded: () => {
+          pruneSingleTabBrowserStorage(
+            typeof localStorage !== "undefined" ? (localStorage as BrowserStorageLike) : null,
+            sessionStorage,
+          );
+        },
+      },
     );
   } catch {
     // Ignore best-effort session reclaim persistence failures.

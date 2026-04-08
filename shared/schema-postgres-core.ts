@@ -109,7 +109,7 @@ export const imports = pgTable("imports", {
   name: text("name").notNull(),
   filename: text("filename").notNull(),
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
-  isDeleted: boolean("is_deleted").default(false),
+  isDeleted: boolean("is_deleted").default(false).notNull(),
   createdBy: text("created_by"),
 }, (table) => ({
   createdAtIdx: index("idx_imports_created_at").on(table.createdAt),

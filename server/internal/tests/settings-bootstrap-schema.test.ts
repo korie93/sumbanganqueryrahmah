@@ -44,8 +44,8 @@ test("settings bootstrap enforces reviewed foreign keys as not null after legacy
   await ensureSettingsSchema(executor);
 
   const joinedQueries = executedQueries.join("\n");
-  assert.match(joinedQueries, /category_id uuid NOT NULL REFERENCES public\.setting_categories\(id\) ON DELETE CASCADE/);
-  assert.match(joinedQueries, /setting_id uuid NOT NULL REFERENCES public\.system_settings\(id\) ON DELETE CASCADE/);
+  assert.match(joinedQueries, /category_id uuid NOT NULL REFERENCES public\.setting_categories\(id\) ON DELETE CASCADE ON UPDATE CASCADE/);
+  assert.match(joinedQueries, /setting_id uuid NOT NULL REFERENCES public\.system_settings\(id\) ON DELETE CASCADE ON UPDATE CASCADE/);
 
   const settingOptionCleanupIndex = executedQueries.findIndex((query) =>
     query.includes("DELETE FROM public.setting_options so WHERE so.setting_id IS NULL"),
@@ -59,11 +59,19 @@ test("settings bootstrap enforces reviewed foreign keys as not null after legacy
   const systemSettingsNotNullIndex = executedQueries.findIndex((query) =>
     query.includes("ALTER TABLE public.system_settings ALTER COLUMN category_id SET NOT NULL"),
   );
+  const systemSettingsForeignKeyUpdateIndex = executedQueries.findIndex((query) =>
+    query.includes("ADD CONSTRAINT fk_system_settings_category_id FOREIGN KEY (category_id) REFERENCES public.setting_categories(id) ON DELETE CASCADE ON UPDATE CASCADE"),
+  );
+  const settingOptionsForeignKeyUpdateIndex = executedQueries.findIndex((query) =>
+    query.includes("ADD CONSTRAINT fk_setting_options_setting_id FOREIGN KEY (setting_id) REFERENCES public.system_settings(id) ON DELETE CASCADE ON UPDATE CASCADE"),
+  );
 
   assert.ok(settingOptionCleanupIndex >= 0);
   assert.ok(settingOptionNotNullIndex > settingOptionCleanupIndex);
   assert.ok(systemSettingsCleanupIndex >= 0);
   assert.ok(systemSettingsNotNullIndex > systemSettingsCleanupIndex);
+  assert.ok(systemSettingsForeignKeyUpdateIndex > systemSettingsNotNullIndex);
+  assert.ok(settingOptionsForeignKeyUpdateIndex > settingOptionNotNullIndex);
 });
 
 test("settings bootstrap backfills timestamp defaults before enforcing not null", async () => {

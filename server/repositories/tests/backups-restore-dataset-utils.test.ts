@@ -118,6 +118,76 @@ test("collection restore tracks restored record ids through a temp table before 
   assert.equal(stats.collectionRecords.skipped, 0);
 });
 
+test("collection restore batches temp-table tracking and inserts for large restore chunks", async () => {
+  const executedQueries: string[] = [];
+  const tx = {
+    async execute(query: unknown) {
+      const sqlText = normalizeSqlText(query);
+      executedQueries.push(sqlText);
+
+      if (sqlText.includes("INSERT INTO public.collection_records")) {
+        const insertedRows = (sqlText.match(/::uuid/g) ?? []).length;
+        return {
+          rows: Array.from({ length: insertedRows }, (_, index) => ({ id: `record-${index + 1}` })),
+        };
+      }
+
+      return { rows: [] };
+    },
+    insert() {
+      throw new Error("Unexpected insert() call during collection restore batching test.");
+    },
+  };
+  const largeChunk = Array.from({ length: 205 }, (_, index) => ({
+    id: `11111111-1111-1111-1111-${String(index + 1).padStart(12, "0")}`,
+    customerName: `Customer ${index + 1}`,
+    icNumber: `90010101${String(index + 1).padStart(4, "0")}`,
+    customerPhone: `012300${String(index + 1).padStart(4, "0")}`,
+    accountNumber: `ACC-${index + 1}`,
+    batch: "P10",
+    paymentDate: "2026-03-31",
+    amount: 100,
+    receiptFile: null,
+    receiptTotalAmount: "100.00",
+    receiptValidationStatus: "matched",
+    receiptValidationMessage: null,
+    receiptCount: 1,
+    duplicateReceiptFlag: false,
+    createdByLogin: "system",
+    collectionStaffNickname: "Collector Alpha",
+    staffUsername: "Collector Alpha",
+    createdAt: "2026-03-31T08:00:00.000Z",
+  }));
+  const backupDataReader = {
+    getArray() {
+      throw new Error("restore helpers must not eagerly parse backup datasets.");
+    },
+    *iterateArrayChunks<T>(key: string): Generator<T[]> {
+      if (key !== "collectionRecords") {
+        return;
+      }
+
+      yield largeChunk as T[];
+    },
+  };
+  const stats = createRestoreStats();
+
+  await initializeRestoreTrackingTempTable(tx as any);
+  await restoreCollectionRecordsFromBackup(tx as any, backupDataReader as any, stats);
+
+  assert.equal(
+    executedQueries.filter((query) => query.includes("INSERT INTO sqr_restored_collection_record_ids")).length,
+    2,
+  );
+  assert.equal(
+    executedQueries.filter((query) => query.includes("INSERT INTO public.collection_records")).length,
+    2,
+  );
+  assert.equal(stats.collectionRecords.processed, 205);
+  assert.equal(stats.collectionRecords.inserted, 205);
+  assert.equal(stats.collectionRecords.skipped, 0);
+});
+
 test("normalizeBackupCollectionRecord keeps restore fallbacks stable", () => {
   const restoredRecord = normalizeBackupCollectionRecord({
     id: "11111111-1111-1111-1111-111111111111",

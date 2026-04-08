@@ -1,10 +1,20 @@
 import { useEffect, useState } from "react";
+import {
+  safeGetStorageItem,
+  safeRemoveStorageItem,
+  safeSetStorageItem,
+} from "@/lib/browser-storage";
 
 export type AppTheme = "light" | "dark";
+const THEME_STORAGE_KEY = "theme";
 
 function getStoredTheme(): AppTheme | null {
   if (typeof window === "undefined") return null;
-  const saved = localStorage.getItem("theme");
+  const saved = safeGetStorageItem(localStorage, THEME_STORAGE_KEY);
+  if (saved !== "dark" && saved !== "light" && saved !== null) {
+    safeRemoveStorageItem(localStorage, THEME_STORAGE_KEY);
+    return null;
+  }
   return saved === "dark" || saved === "light" ? saved : null;
 }
 
@@ -24,7 +34,13 @@ export function applyTheme(theme: AppTheme) {
   } else {
     root.classList.remove("dark");
   }
-  localStorage.setItem("theme", theme);
+  if (typeof localStorage !== "undefined") {
+    safeSetStorageItem(localStorage, THEME_STORAGE_KEY, theme, {
+      onQuotaExceeded: () => {
+        safeRemoveStorageItem(localStorage, THEME_STORAGE_KEY);
+      },
+    });
+  }
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("app-theme-change", { detail: { theme } }));
   }
@@ -47,7 +63,7 @@ export function useTheme() {
     };
 
     const onStorage = (event: StorageEvent) => {
-      if (event.key === "theme") {
+      if (event.key === THEME_STORAGE_KEY) {
         syncTheme(event.newValue);
       }
     };

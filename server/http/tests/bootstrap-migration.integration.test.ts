@@ -8,6 +8,8 @@ import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { ensureCollectionRecordsTables } from "../../internal/collection-bootstrap-records";
+import { ensureCoreImportsTable } from "../../internal/core-schema-bootstrap-imports";
+import { ensureSettingsSchema } from "../../internal/settings-bootstrap-schema";
 import { ensureUsersBootstrapSchema } from "../../internal/users-bootstrap/schema";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -60,8 +62,19 @@ const timezoneMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", timezoneMigrationFileName),
   "utf8",
 );
-const preTimezoneMigrationSqlTexts = readdirSync(path.join(repoRoot, "drizzle"))
-  .filter((name) => name.endsWith(".sql") && name !== timezoneMigrationFileName)
+const migrationSqlFileNames = readdirSync(path.join(repoRoot, "drizzle"))
+  .filter((name) => name.endsWith(".sql"))
+  .sort((left, right) => left.localeCompare(right));
+const schemaIntegrityMigrationFileName = migrationSqlFileNames.find((name) => /^0025_.*\.sql$/.test(name));
+if (!schemaIntegrityMigrationFileName) {
+  throw new Error("Expected a 0025 schema integrity migration file in drizzle/");
+}
+const schemaIntegrityMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", schemaIntegrityMigrationFileName),
+  "utf8",
+);
+const preTimezoneMigrationSqlTexts = migrationSqlFileNames
+  .filter((name) => name.localeCompare(timezoneMigrationFileName) < 0)
   .sort((left, right) => left.localeCompare(right))
   .map((name) => readFileSync(path.join(repoRoot, "drizzle", name), "utf8"));
 
@@ -217,6 +230,35 @@ async function columnDataType(pool: pg.Pool, table: string, column: string): Pro
   return result.rows[0]?.data_type ?? null;
 }
 
+async function foreignKeyRules(
+  pool: pg.Pool,
+  table: string,
+  column: string,
+): Promise<Array<{ constraint_name: string; update_rule: string; delete_rule: string }>> {
+  const result = await pool.query<{
+    constraint_name: string;
+    update_rule: string;
+    delete_rule: string;
+  }>(
+    `
+      SELECT
+        rc.constraint_name,
+        rc.update_rule,
+        rc.delete_rule
+      FROM information_schema.referential_constraints rc
+      INNER JOIN information_schema.key_column_usage kcu
+        ON rc.constraint_schema = kcu.constraint_schema
+       AND rc.constraint_name = kcu.constraint_name
+      WHERE kcu.table_schema = 'public'
+        AND kcu.table_name = $1
+        AND kcu.column_name = $2
+      ORDER BY rc.constraint_name
+    `,
+    [table, column],
+  );
+  return result.rows;
+}
+
 test(
   "reviewed AI migrations remain compatible on a fresh database even when the early index migration runs first",
   { skip: skipReason || false },
@@ -301,6 +343,207 @@ test(
         WHERE id = 'audit-utc-preservation'
       `);
       assert.equal(preservedTimestamp.rows[0]?.utc_value, "2026-04-08 09:10:11");
+    });
+  },
+);
+
+test(
+  "reviewed schema integrity migration remains compatible with legacy imports, settings, and collection bootstrap flows",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.imports (
+          id text PRIMARY KEY,
+          name text,
+          filename text,
+          created_at timestamp DEFAULT now(),
+          is_deleted boolean,
+          created_by text
+        );
+
+        CREATE TABLE public.setting_categories (
+          id uuid PRIMARY KEY,
+          name text NOT NULL,
+          description text,
+          created_at timestamp DEFAULT now()
+        );
+
+        CREATE TABLE public.system_settings (
+          id uuid PRIMARY KEY,
+          category_id uuid,
+          key text NOT NULL,
+          label text NOT NULL,
+          description text,
+          type text NOT NULL,
+          value text NOT NULL,
+          default_value text,
+          is_critical boolean DEFAULT false,
+          updated_at timestamp DEFAULT now(),
+          CONSTRAINT system_settings_category_id_fkey
+            FOREIGN KEY (category_id)
+            REFERENCES public.setting_categories(id)
+            ON DELETE CASCADE
+        );
+
+        CREATE TABLE public.setting_options (
+          id uuid PRIMARY KEY,
+          setting_id uuid,
+          value text NOT NULL,
+          label text NOT NULL,
+          CONSTRAINT setting_options_setting_id_fkey
+            FOREIGN KEY (setting_id)
+            REFERENCES public.system_settings(id)
+            ON DELETE CASCADE
+        );
+
+        CREATE TABLE public.collection_records (
+          id uuid PRIMARY KEY,
+          customer_name text,
+          ic_number text,
+          customer_phone text,
+          account_number text,
+          batch text,
+          payment_date date,
+          amount numeric(14,2),
+          receipt_file text,
+          receipt_validation_status text,
+          created_by_login text,
+          collection_staff_nickname text,
+          staff_username text,
+          created_at timestamp DEFAULT now(),
+          updated_at timestamp
+        );
+
+        CREATE TABLE public.collection_record_receipts (
+          id uuid PRIMARY KEY,
+          collection_record_id uuid,
+          storage_path text,
+          original_file_name text,
+          original_mime_type text,
+          original_extension text,
+          file_size bigint,
+          extraction_status text,
+          receipt_date date,
+          created_at timestamp
+        );
+      `);
+
+      await pool.query(`
+        INSERT INTO public.imports (id, name, filename, created_at, is_deleted, created_by)
+        VALUES ('legacy-import', 'Legacy Import', 'legacy.csv', now(), NULL, 'system');
+
+        INSERT INTO public.setting_categories (id, name, description)
+        VALUES ('11111111-1111-1111-1111-111111111111'::uuid, 'General', 'Legacy category');
+
+        INSERT INTO public.system_settings (
+          id, category_id, key, label, type, value, updated_at
+        )
+        VALUES (
+          '22222222-2222-2222-2222-222222222222'::uuid,
+          '11111111-1111-1111-1111-111111111111'::uuid,
+          'site_name',
+          'Site Name',
+          'text',
+          'SQR',
+          now()
+        );
+
+        INSERT INTO public.setting_options (id, setting_id, value, label)
+        VALUES (
+          '33333333-3333-3333-3333-333333333333'::uuid,
+          '22222222-2222-2222-2222-222222222222'::uuid,
+          'enabled',
+          'Enabled'
+        );
+
+        INSERT INTO public.collection_records (
+          id,
+          customer_name,
+          ic_number,
+          customer_phone,
+          account_number,
+          batch,
+          payment_date,
+          amount,
+          receipt_file,
+          receipt_validation_status,
+          created_by_login,
+          collection_staff_nickname,
+          staff_username,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          '44444444-4444-4444-4444-444444444444'::uuid,
+          'Customer',
+          '900101-01-1234',
+          '0123456789',
+          '1234567890',
+          'B1',
+          DATE '2026-04-08',
+          50.00,
+          NULL,
+          'matched',
+          'admin',
+          'Collector Alpha',
+          'staff.user',
+          now(),
+          now()
+        );
+
+        INSERT INTO public.collection_record_receipts (
+          id,
+          collection_record_id,
+          storage_path,
+          original_file_name,
+          original_mime_type,
+          original_extension,
+          file_size,
+          extraction_status,
+          receipt_date,
+          created_at
+        )
+        VALUES (
+          '55555555-5555-5555-5555-555555555555'::uuid,
+          '44444444-4444-4444-4444-444444444444'::uuid,
+          '/uploads/collection-receipts/legacy-proof.jpg',
+          'legacy-proof.jpg',
+          'image/jpeg',
+          '.jpg',
+          1024,
+          'processed',
+          DATE '2026-04-08',
+          now()
+        );
+      `);
+
+      await applySql(pool, schemaIntegrityMigrationSql);
+      await ensureCoreImportsTable(drizzle(pool));
+      await ensureSettingsSchema(drizzle(pool));
+      await ensureCollectionRecordsTables(drizzle(pool));
+
+      assert.equal(await columnIsNotNull(pool, "imports", "is_deleted"), true);
+      assert.equal(
+        await pool
+          .query<{ is_deleted: boolean }>(`SELECT is_deleted FROM public.imports WHERE id = 'legacy-import'`)
+          .then((result) => result.rows[0]?.is_deleted),
+        false,
+      );
+
+      const settingsCategoryRules = await foreignKeyRules(pool, "system_settings", "category_id");
+      const settingOptionRules = await foreignKeyRules(pool, "setting_options", "setting_id");
+
+      assert.equal(settingsCategoryRules.length, 1);
+      assert.equal(settingsCategoryRules[0]?.update_rule, "CASCADE");
+      assert.equal(settingsCategoryRules[0]?.delete_rule, "CASCADE");
+      assert.equal(settingOptionRules.length, 1);
+      assert.equal(settingOptionRules[0]?.update_rule, "CASCADE");
+      assert.equal(settingOptionRules[0]?.delete_rule, "CASCADE");
+
+      assert.equal(await indexExists(pool, "idx_collection_records_receipt_validation_status"), true);
+      assert.equal(await indexExists(pool, "idx_collection_record_receipts_extraction_status"), true);
+      assert.equal(await indexExists(pool, "idx_collection_record_receipts_receipt_date"), true);
     });
   },
 );

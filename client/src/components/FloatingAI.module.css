@@ -1,27 +1,31 @@
 .floatingRoot {
   inset: 0;
-  z-index: 40;
+  z-index: var(--z-floating-ai-root);
   overflow: clip;
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.floatingRootModal {
+  z-index: var(--z-floating-ai-overlay);
 }
 
 .floatingTriggerShell {
   position: absolute;
   left: var(--floating-ai-trigger-left, auto);
-  right: var(--floating-ai-trigger-right, 24px);
-  bottom: var(--floating-ai-trigger-bottom, 24px);
+  right: var(--floating-ai-trigger-right, var(--floating-ai-edge-gap));
+  bottom: var(--floating-ai-trigger-bottom, var(--floating-ai-edge-gap));
 }
 
 .floatingPanelShell {
   position: absolute;
   left: var(--floating-ai-panel-left, auto);
-  right: var(--floating-ai-panel-right, 24px);
-  bottom: var(--floating-ai-panel-bottom, 24px);
-  width: var(--floating-ai-panel-width, 380px);
+  right: var(--floating-ai-panel-right, var(--floating-ai-edge-gap));
+  bottom: var(--floating-ai-panel-bottom, var(--floating-ai-edge-gap));
+  width: min(var(--floating-ai-panel-width, 380px), calc(100vw - (var(--floating-ai-edge-gap) * 2)));
   height: var(--floating-ai-panel-height, 420px);
-  min-width: 260px;
+  min-width: min(260px, calc(100vw - (var(--floating-ai-edge-gap) * 2)));
   min-height: 200px;
-  max-width: calc(100vw - 1rem);
+  max-width: calc(100vw - (var(--floating-ai-edge-gap) * 2));
   max-height: calc(100dvh - 5rem);
 }
 
@@ -53,21 +57,40 @@
 }
 
 .aiThinkingRing {
-  box-shadow: 0 0 0 0 var(--floating-ai-thinking-ring);
-  animation: pulseRing 1.5s infinite;
+  position: relative;
+  isolation: isolate;
+}
+
+.aiThinkingRing::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  border: 2px solid var(--floating-ai-thinking-ring);
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.92);
+  animation: pulseOutline 1.5s infinite;
 }
 
 @media (min-width: 768px) {
   .floatingPanelShell {
-    min-width: 360px;
+    min-width: min(360px, calc(100vw - (var(--floating-ai-edge-gap) * 2)));
     min-height: 452px;
-    max-width: min(420px, calc(100vw - 2rem));
+    max-width: min(420px, calc(100vw - (var(--floating-ai-edge-gap) * 2)));
     max-height: calc(100dvh - 6rem);
   }
 }
 
-@keyframes pulseRing {
-  0% { box-shadow: 0 0 0 0 var(--floating-ai-thinking-ring); }
-  70% { box-shadow: 0 0 0 10px var(--floating-ai-thinking-ring-clear); }
-  100% { box-shadow: 0 0 0 0 var(--floating-ai-thinking-ring-clear); }
+@keyframes pulseOutline {
+  0% {
+    opacity: 0.72;
+    transform: scale(0.92);
+  }
+
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.14);
+  }
 }

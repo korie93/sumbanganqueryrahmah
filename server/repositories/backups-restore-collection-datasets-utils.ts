@@ -9,12 +9,14 @@ import {
 } from "./backups-repository-types";
 import { rebuildCollectionRecordDailyRollups } from "./collection-record-repository-utils";
 import {
+  chunkArray,
   type BackupPayloadChunkReader,
   type BackupRestoreExecutor,
   toDate,
 } from "./backups-restore-shared-utils";
 
 const RESTORED_COLLECTION_RECORD_IDS_TEMP_TABLE = sql.raw("sqr_restored_collection_record_ids");
+const RESTORE_INSERT_BATCH_SIZE = 200;
 
 export type RestorableCollectionRecordRow = {
   id: string;
@@ -143,68 +145,70 @@ export async function restoreCollectionRecordsFromBackup(
     stats.collectionRecords.processed += rows.length;
     if (!rows.length) continue;
 
-    const restoredIdValuesSql = sql.join(
-      rows.map((row) => sql`(${row.id}::uuid)`),
-      sql`, `,
-    );
-    await tx.execute(sql`
-      INSERT INTO ${RESTORED_COLLECTION_RECORD_IDS_TEMP_TABLE} (id)
-      VALUES ${restoredIdValuesSql}
-      ON CONFLICT (id) DO NOTHING
-    `);
+    for (const insertBatch of chunkArray(rows, RESTORE_INSERT_BATCH_SIZE)) {
+      const restoredIdValuesSql = sql.join(
+        insertBatch.map((row) => sql`(${row.id}::uuid)`),
+        sql`, `,
+      );
+      await tx.execute(sql`
+        INSERT INTO ${RESTORED_COLLECTION_RECORD_IDS_TEMP_TABLE} (id)
+        VALUES ${restoredIdValuesSql}
+        ON CONFLICT (id) DO NOTHING
+      `);
 
-    const valuesSql = sql.join(
-      rows.map((row) => sql`(
-        ${row.id}::uuid,
-        ${row.customerName},
-        ${row.icNumber},
-        ${row.customerPhone},
-        ${row.accountNumber},
-        ${row.batch},
-        ${row.paymentDate}::date,
-        ${row.amount},
-        ${row.receiptFile},
-        ${row.receiptTotalAmount},
-        ${row.receiptValidationStatus},
-        ${row.receiptValidationMessage},
-        ${row.receiptCount},
-        ${row.duplicateReceiptFlag},
-        ${row.createdByLogin},
-        ${row.collectionStaffNickname},
-        ${row.staffUsername},
-        ${row.createdAt}
-      )`),
-      sql`, `,
-    );
+      const valuesSql = sql.join(
+        insertBatch.map((row) => sql`(
+          ${row.id}::uuid,
+          ${row.customerName},
+          ${row.icNumber},
+          ${row.customerPhone},
+          ${row.accountNumber},
+          ${row.batch},
+          ${row.paymentDate}::date,
+          ${row.amount},
+          ${row.receiptFile},
+          ${row.receiptTotalAmount},
+          ${row.receiptValidationStatus},
+          ${row.receiptValidationMessage},
+          ${row.receiptCount},
+          ${row.duplicateReceiptFlag},
+          ${row.createdByLogin},
+          ${row.collectionStaffNickname},
+          ${row.staffUsername},
+          ${row.createdAt}
+        )`),
+        sql`, `,
+      );
 
-    const insertedResult = await tx.execute(sql`
-      INSERT INTO public.collection_records (
-        id,
-        customer_name,
-        ic_number,
-        customer_phone,
-        account_number,
-        batch,
-        payment_date,
-        amount,
-        receipt_file,
-        receipt_total_amount,
-        receipt_validation_status,
-        receipt_validation_message,
-        receipt_count,
-        duplicate_receipt_flag,
-        created_by_login,
-        collection_staff_nickname,
-        staff_username,
-        created_at
-      )
-      VALUES ${valuesSql}
-      ON CONFLICT (id) DO NOTHING
-      RETURNING id
-    `);
-    const insertedCount = insertedResult.rows?.length || 0;
-    stats.collectionRecords.inserted += insertedCount;
-    stats.collectionRecords.skipped += rows.length - insertedCount;
+      const insertedResult = await tx.execute(sql`
+        INSERT INTO public.collection_records (
+          id,
+          customer_name,
+          ic_number,
+          customer_phone,
+          account_number,
+          batch,
+          payment_date,
+          amount,
+          receipt_file,
+          receipt_total_amount,
+          receipt_validation_status,
+          receipt_validation_message,
+          receipt_count,
+          duplicate_receipt_flag,
+          created_by_login,
+          collection_staff_nickname,
+          staff_username,
+          created_at
+        )
+        VALUES ${valuesSql}
+        ON CONFLICT (id) DO NOTHING
+        RETURNING id
+      `);
+      const insertedCount = insertedResult.rows?.length || 0;
+      stats.collectionRecords.inserted += insertedCount;
+      stats.collectionRecords.skipped += insertBatch.length - insertedCount;
+    }
   }
 }
 
@@ -224,51 +228,53 @@ export async function restoreCollectionRecordReceiptsFromBackup(
     stats.collectionRecordReceipts.processed += rows.length;
     if (!rows.length) continue;
 
-    const valuesSql = sql.join(
-      rows.map((row) => sql`(
-        ${row.id}::uuid,
-        ${row.collectionRecordId}::uuid,
-        ${row.storagePath},
-        ${row.originalFileName},
-        ${row.originalMimeType},
-        ${row.originalExtension},
-        ${row.fileSize},
-        ${row.receiptAmount},
-        ${row.extractedAmount},
-        ${row.extractionStatus},
-        ${row.extractionConfidence},
-        ${row.receiptDate},
-        ${row.receiptReference},
-        ${row.fileHash},
-        ${row.createdAt}
-      )`),
-      sql`, `,
-    );
-    const insertedResult = await tx.execute(sql`
-      INSERT INTO public.collection_record_receipts (
-        id,
-        collection_record_id,
-        storage_path,
-        original_file_name,
-        original_mime_type,
-        original_extension,
-        file_size,
-        receipt_amount,
-        extracted_amount,
-        extraction_status,
-        extraction_confidence,
-        receipt_date,
-        receipt_reference,
-        file_hash,
-        created_at
-      )
-      VALUES ${valuesSql}
-      ON CONFLICT (collection_record_id, storage_path) DO NOTHING
-      RETURNING id
-    `);
-    const insertedCount = insertedResult.rows?.length || 0;
-    stats.collectionRecordReceipts.inserted += insertedCount;
-    stats.collectionRecordReceipts.skipped += rows.length - insertedCount;
+    for (const insertBatch of chunkArray(rows, RESTORE_INSERT_BATCH_SIZE)) {
+      const valuesSql = sql.join(
+        insertBatch.map((row) => sql`(
+          ${row.id}::uuid,
+          ${row.collectionRecordId}::uuid,
+          ${row.storagePath},
+          ${row.originalFileName},
+          ${row.originalMimeType},
+          ${row.originalExtension},
+          ${row.fileSize},
+          ${row.receiptAmount},
+          ${row.extractedAmount},
+          ${row.extractionStatus},
+          ${row.extractionConfidence},
+          ${row.receiptDate},
+          ${row.receiptReference},
+          ${row.fileHash},
+          ${row.createdAt}
+        )`),
+        sql`, `,
+      );
+      const insertedResult = await tx.execute(sql`
+        INSERT INTO public.collection_record_receipts (
+          id,
+          collection_record_id,
+          storage_path,
+          original_file_name,
+          original_mime_type,
+          original_extension,
+          file_size,
+          receipt_amount,
+          extracted_amount,
+          extraction_status,
+          extraction_confidence,
+          receipt_date,
+          receipt_reference,
+          file_hash,
+          created_at
+        )
+        VALUES ${valuesSql}
+        ON CONFLICT (collection_record_id, storage_path) DO NOTHING
+        RETURNING id
+      `);
+      const insertedCount = insertedResult.rows?.length || 0;
+      stats.collectionRecordReceipts.inserted += insertedCount;
+      stats.collectionRecordReceipts.skipped += insertBatch.length - insertedCount;
+    }
   }
 }
 

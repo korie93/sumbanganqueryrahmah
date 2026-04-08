@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClientRandomId } from "@/lib/secure-id";
+import { safeGetStorageItem, safeRemoveStorageItem, safeSetStorageItem } from "@/lib/browser-storage";
 import {
   buildSingleTabLockStorageKey,
   canClaimSingleTabLock,
@@ -11,6 +12,7 @@ import {
   isSingleTabLockOwner,
   parseSingleTabNavigationReclaim,
   parseSingleTabLock,
+  pruneSingleTabBrowserStorage,
   serializeSingleTabNavigationReclaim,
   serializeSingleTabLock,
   SINGLE_TAB_LOCK_HEARTBEAT_MS,
@@ -46,8 +48,9 @@ function consumeSingleTabNavigationReclaim(tabSeed: string): boolean {
   const storageKey = getSingleTabNavigationReclaimStorageKey();
 
   try {
-    const reclaim = parseSingleTabNavigationReclaim(sessionStorage.getItem(storageKey));
-    sessionStorage.removeItem(storageKey);
+    pruneSingleTabBrowserStorage(localStorage, sessionStorage);
+    const reclaim = parseSingleTabNavigationReclaim(safeGetStorageItem(sessionStorage, storageKey));
+    safeRemoveStorageItem(sessionStorage, storageKey);
     return isSingleTabNavigationReclaimActive(reclaim, tabSeed);
   } catch {
     return false;
@@ -62,9 +65,16 @@ function markSingleTabNavigationReclaim(tabSeed: string) {
   const storageKey = getSingleTabNavigationReclaimStorageKey();
 
   try {
-    sessionStorage.setItem(
+    pruneSingleTabBrowserStorage(localStorage, sessionStorage);
+    safeSetStorageItem(
+      sessionStorage,
       storageKey,
       serializeSingleTabNavigationReclaim(createSingleTabNavigationReclaim(tabSeed)),
+      {
+        onQuotaExceeded: () => {
+          pruneSingleTabBrowserStorage(localStorage, sessionStorage);
+        },
+      },
     );
   } catch {
     // Ignore best-effort navigation reclaim persistence failures.
@@ -79,13 +89,18 @@ function getOrCreateTabSeed(): string {
   const storageKey = getSingleTabSeedStorageKey();
 
   try {
-    const existing = String(sessionStorage.getItem(storageKey) || "").trim();
+    pruneSingleTabBrowserStorage(localStorage, sessionStorage);
+    const existing = String(safeGetStorageItem(sessionStorage, storageKey) || "").trim();
     if (existing) {
       return existing;
     }
 
     const nextSeed = `tab-${createRuntimeId()}`;
-    sessionStorage.setItem(storageKey, nextSeed);
+    safeSetStorageItem(sessionStorage, storageKey, nextSeed, {
+      onQuotaExceeded: () => {
+        pruneSingleTabBrowserStorage(localStorage, sessionStorage);
+      },
+    });
     return nextSeed;
   } catch {
     return `memory-${createRuntimeId()}`;
@@ -147,9 +162,9 @@ export function useSingleTabSession(username: string | null | undefined) {
 
     const releaseLockIfOwned = () => {
       try {
-        const existing = parseSingleTabLock(localStorage.getItem(storageKey));
+        const existing = parseSingleTabLock(safeGetStorageItem(localStorage, storageKey));
         if (isSingleTabLockOwner(existing, normalizedUsername, tabSeed, instanceId)) {
-          localStorage.removeItem(storageKey);
+          safeRemoveStorageItem(localStorage, storageKey);
         }
       } catch {
         // Ignore best-effort ownership release failures during unload/logout transitions.
@@ -162,8 +177,9 @@ export function useSingleTabSession(username: string | null | undefined) {
       }
 
       try {
+        pruneSingleTabBrowserStorage(localStorage, sessionStorage);
         const now = Date.now();
-        const existing = parseSingleTabLock(localStorage.getItem(storageKey));
+        const existing = parseSingleTabLock(safeGetStorageItem(localStorage, storageKey));
 
         if (
           canClaimSingleTabLock(
@@ -177,10 +193,14 @@ export function useSingleTabSession(username: string | null | undefined) {
           )
         ) {
           const nextLock = createSingleTabLock(normalizedUsername, tabSeed, instanceId, now);
-          localStorage.setItem(storageKey, serializeSingleTabLock(nextLock));
+          safeSetStorageItem(localStorage, storageKey, serializeSingleTabLock(nextLock), {
+            onQuotaExceeded: () => {
+              pruneSingleTabBrowserStorage(localStorage, sessionStorage);
+            },
+          });
         }
 
-        const confirmed = parseSingleTabLock(localStorage.getItem(storageKey));
+        const confirmed = parseSingleTabLock(safeGetStorageItem(localStorage, storageKey));
         const ownsLock = isSingleTabLockOwner(confirmed, normalizedUsername, tabSeed, instanceId);
         updateState(!ownsLock);
       } catch {

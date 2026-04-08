@@ -1,11 +1,21 @@
 import type { AiSearchJsonRecord, AiSearchRowLike } from "./ai-search-query-shared";
 import { toObjectJson } from "./ai-search-query-shared";
 
+const MAX_AI_SEARCH_ROW_JSON_BYTES = 64 * 1024;
+
 function normalizeToObject(value: unknown): AiSearchJsonRecord {
   if (value && typeof value === "object") {
     return value as AiSearchJsonRecord;
   }
   return {};
+}
+
+function toLimitedObjectJson(value: unknown): AiSearchJsonRecord | null {
+  if (typeof value === "string" && Buffer.byteLength(value, "utf8") > MAX_AI_SEARCH_ROW_JSON_BYTES) {
+    return null;
+  }
+
+  return toObjectJson(value);
 }
 
 export function rowScore(
@@ -58,7 +68,7 @@ export function scoreRowDigits(
   row: AiSearchRowLike,
   digits: string,
 ): { score: number; parsed: AiSearchJsonRecord } {
-  const data = toObjectJson(row.jsonDataJsonb) || {};
+  const data = toLimitedObjectJson(row.jsonDataJsonb) || {};
 
   const keyGroups: Array<{ keys: string[]; score: number }> = [
     { keys: ["No. MyKad", "ID No", "No Pengenalan", "IC", "NRIC", "MyKad"], score: 20 },
@@ -94,6 +104,10 @@ export function scoreRowDigits(
 
 export function ensureJsonRow<T extends AiSearchRowLike>(row: T): T {
   if (typeof row?.jsonDataJsonb === "string") {
+    if (Buffer.byteLength(row.jsonDataJsonb, "utf8") > MAX_AI_SEARCH_ROW_JSON_BYTES) {
+      return row;
+    }
+
     try {
       row.jsonDataJsonb = JSON.parse(row.jsonDataJsonb);
     } catch {

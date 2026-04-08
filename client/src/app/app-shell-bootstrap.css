@@ -74,6 +74,14 @@
   box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.12), 0 8px 10px -6px rgb(0 0 0 / 0.12);
 }
 
+.app-route-error-boundary__card:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px hsl(var(--ring) / 0.35),
+    0 20px 25px -5px rgb(0 0 0 / 0.12),
+    0 8px 10px -6px rgb(0 0 0 / 0.12);
+}
+
 .app-route-error-boundary__content {
   display: flex;
   flex-direction: column;
@@ -97,13 +105,14 @@
 .app-route-error-boundary__title {
   font-size: 1.25rem;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: var(--line-height-tight);
   letter-spacing: -0.025em;
 }
 
 .app-route-error-boundary__description {
   margin-top: 0.25rem;
   font-size: 0.875rem;
+  line-height: var(--line-height-normal);
   color: hsl(var(--muted-foreground) / 1);
 }
 

@@ -15,8 +15,8 @@
 @media print {
   html,
   body {
-    background: #fff !important;
-    color: #000 !important;
+    background: hsl(var(--print-background) / 1) !important;
+    color: hsl(var(--print-foreground) / 1) !important;
   }
 
   *,

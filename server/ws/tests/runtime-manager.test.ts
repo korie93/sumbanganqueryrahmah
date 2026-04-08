@@ -216,6 +216,39 @@ test("broadcastWsMessage logs send failures before removing the socket", () => {
   }
 });
 
+test("broadcastWsMessage skips oversized payloads before sending to sockets", () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const originalLoggerWarn = logger.warn;
+  const warnings: string[] = [];
+
+  providedMap.set("activity-oversized", socket as unknown as WebSocket);
+  logger.warn = ((message: string) => {
+    warnings.push(message);
+  }) as typeof logger.warn;
+
+  const manager = createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => undefined,
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: "test-secret",
+    connectedClients: providedMap,
+  });
+
+  try {
+    manager.broadcastWsMessage({ type: "ping", payload: "x".repeat(70 * 1024) });
+    assert.equal(socket.sentMessages.length, 0);
+    assert.equal(providedMap.size, 1);
+    assert.deepEqual(warnings, ["WebSocket broadcast skipped because the payload is too large"]);
+  } finally {
+    logger.warn = originalLoggerWarn;
+    wss.emit("close");
+  }
+});
+
 test("runtime manager rejects sockets before registration without leaving tracked state or listeners", async () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();

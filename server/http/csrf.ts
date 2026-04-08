@@ -4,6 +4,7 @@ import {
   readAuthSessionCsrfTokenFromHeaders,
   readCookieValueFromHeader,
 } from "../auth/session-cookie";
+import { logger } from "../lib/logger";
 import { normalizeCorsOrigin, resolveAllowedCorsOrigins } from "./cors";
 
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -11,6 +12,18 @@ const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 type CsrfMiddlewareOptions = {
   allowedOrigins?: string[];
 };
+
+function logCsrfRejection(req: Parameters<RequestHandler>[0], code: string, details?: Record<string, unknown>) {
+  logger.warn("CSRF request rejected", {
+    code,
+    method: req.method,
+    path: req.path,
+    origin: req.headers.origin || null,
+    referer: req.headers.referer || null,
+    fetchSite: req.headers["sec-fetch-site"] || null,
+    ...details,
+  });
+}
 
 export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = {}): RequestHandler {
   const allowedOrigins = new Set(
@@ -42,6 +55,7 @@ export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = 
     // Browser fallback checks: block cross-site fetch metadata and invalid origin/referrer.
     const fetchSite = String(req.headers["sec-fetch-site"] || "").trim().toLowerCase();
     if (fetchSite === "cross-site") {
+      logCsrfRejection(req, "CSRF_REJECTED");
       return res.status(403).json({
         ok: false,
         message: "CSRF protection blocked a cross-site request.",
@@ -57,6 +71,7 @@ export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = 
       if (allowedOrigins.has(requestOrigin)) {
         return next();
       }
+      logCsrfRejection(req, "CSRF_ORIGIN_REJECTED", { requestOrigin });
       return res.status(403).json({
         ok: false,
         message: "CSRF protection blocked a request with invalid origin.",
@@ -69,6 +84,7 @@ export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = 
       if (allowedOrigins.has(requestReferer)) {
         return next();
       }
+      logCsrfRejection(req, "CSRF_REFERER_REJECTED", { requestReferer });
       return res.status(403).json({
         ok: false,
         message: "CSRF protection blocked a request with invalid referrer.",
@@ -76,6 +92,7 @@ export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = 
       });
     }
 
+    logCsrfRejection(req, "CSRF_SIGNAL_MISSING");
     return res.status(403).json({
       ok: false,
       message: "CSRF protection requires a valid same-origin signal or CSRF token.",

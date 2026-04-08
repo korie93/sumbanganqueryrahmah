@@ -23,7 +23,7 @@ export async function ensureSettingsSchema(database: SettingsBootstrapSqlExecuto
   await database.execute(sql`
     CREATE TABLE IF NOT EXISTS public.system_settings (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      category_id uuid NOT NULL REFERENCES public.setting_categories(id) ON DELETE CASCADE,
+      category_id uuid NOT NULL REFERENCES public.setting_categories(id) ON DELETE CASCADE ON UPDATE CASCADE,
       key text UNIQUE NOT NULL,
       label text NOT NULL,
       description text,
@@ -44,7 +44,7 @@ export async function ensureSettingsSchema(database: SettingsBootstrapSqlExecuto
   await database.execute(sql`
     CREATE TABLE IF NOT EXISTS public.setting_options (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      setting_id uuid NOT NULL REFERENCES public.system_settings(id) ON DELETE CASCADE,
+      setting_id uuid NOT NULL REFERENCES public.system_settings(id) ON DELETE CASCADE ON UPDATE CASCADE,
       value text NOT NULL,
       label text NOT NULL
     )
@@ -52,6 +52,7 @@ export async function ensureSettingsSchema(database: SettingsBootstrapSqlExecuto
 
   await cleanupSettingsForeignKeyOrphans(database);
   await ensureSettingsForeignKeysNotNull(database);
+  await ensureSettingsForeignKeyActions(database);
   await cleanupDuplicateSettingOptions(database);
   await ensureSettingOptionsIndexes(database);
   await ensureRoleSettingPermissionsSchema(database);
@@ -102,6 +103,58 @@ async function ensureSettingsForeignKeysNotNull(database: SettingsBootstrapSqlEx
     `);
   } catch (notNullErr) {
     logger.warn("setting_options setting_id NOT NULL enforcement skipped", { error: notNullErr });
+  }
+}
+
+async function ensureSettingsForeignKeyActions(database: SettingsBootstrapSqlExecutor) {
+  try {
+    await database.execute(sql`
+      ALTER TABLE public.system_settings
+      DROP CONSTRAINT IF EXISTS system_settings_category_id_fkey
+    `);
+    await database.execute(sql`
+      ALTER TABLE public.system_settings
+      DROP CONSTRAINT IF EXISTS system_settings_category_id_setting_categories_id_fk
+    `);
+    await database.execute(sql`
+      ALTER TABLE public.system_settings
+      DROP CONSTRAINT IF EXISTS fk_system_settings_category_id
+    `);
+    await database.execute(sql`
+      ALTER TABLE public.system_settings
+      ADD CONSTRAINT fk_system_settings_category_id
+      FOREIGN KEY (category_id)
+      REFERENCES public.setting_categories(id)
+      ON DELETE CASCADE
+      ON UPDATE CASCADE
+    `);
+  } catch (fkErr) {
+    logger.warn("system_settings foreign-key action enforcement skipped", { error: fkErr });
+  }
+
+  try {
+    await database.execute(sql`
+      ALTER TABLE public.setting_options
+      DROP CONSTRAINT IF EXISTS setting_options_setting_id_fkey
+    `);
+    await database.execute(sql`
+      ALTER TABLE public.setting_options
+      DROP CONSTRAINT IF EXISTS setting_options_setting_id_system_settings_id_fk
+    `);
+    await database.execute(sql`
+      ALTER TABLE public.setting_options
+      DROP CONSTRAINT IF EXISTS fk_setting_options_setting_id
+    `);
+    await database.execute(sql`
+      ALTER TABLE public.setting_options
+      ADD CONSTRAINT fk_setting_options_setting_id
+      FOREIGN KEY (setting_id)
+      REFERENCES public.system_settings(id)
+      ON DELETE CASCADE
+      ON UPDATE CASCADE
+    `);
+  } catch (fkErr) {
+    logger.warn("setting_options foreign-key action enforcement skipped", { error: fkErr });
   }
 }
 

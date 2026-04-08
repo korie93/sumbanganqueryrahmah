@@ -7,6 +7,7 @@ import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const MAX_CONNECTIONS_PER_USER = 5;
+const MAX_RUNTIME_WS_MESSAGE_BYTES = 64 * 1024;
 
 type RuntimeManagerOptions = {
   wss: WebSocketServer;
@@ -78,6 +79,25 @@ function getActivityUserKey(activity: RuntimeWebSocketActivity): string | null {
   return username ? `username:${username}` : null;
 }
 
+function serializeRuntimeWsPayload(payload: Record<string, unknown>): string | null {
+  try {
+    const message = JSON.stringify(payload);
+    if (Buffer.byteLength(message, "utf8") > MAX_RUNTIME_WS_MESSAGE_BYTES) {
+      logger.warn("WebSocket broadcast skipped because the payload is too large", {
+        maxBytes: MAX_RUNTIME_WS_MESSAGE_BYTES,
+      });
+      return null;
+    }
+
+    return message;
+  } catch (error) {
+    logger.warn("WebSocket broadcast skipped because the payload could not be serialized", {
+      error,
+    });
+    return null;
+  }
+}
+
 export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   connectedClients: Map<string, WebSocket>;
   broadcastWsMessage: (payload: Record<string, unknown>) => void;
@@ -117,7 +137,10 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   };
 
   const broadcastWsMessage = (payload: Record<string, unknown>) => {
-    const message = JSON.stringify(payload);
+    const message = serializeRuntimeWsPayload(payload);
+    if (!message) {
+      return;
+    }
 
     for (const [activityId, ws] of connectedClients.entries()) {
       if (!ws || ws.readyState !== WebSocket.OPEN) {

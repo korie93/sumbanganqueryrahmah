@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, createRef, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, Home, RefreshCw, RotateCcw } from "lucide-react";
 import { reloadAppPreservingSingleTabLock } from "@/app/single-tab-session";
 import { logClientError } from "@/lib/client-logger";
@@ -25,6 +25,8 @@ export class AppRouteErrorBoundary extends Component<
   AppRouteErrorBoundaryProps,
   AppRouteErrorBoundaryState
 > {
+  private readonly errorCardRef = createRef<HTMLElement>();
+
   constructor(props: AppRouteErrorBoundaryProps) {
     super(props);
     this.state = {
@@ -45,12 +47,20 @@ export class AppRouteErrorBoundary extends Component<
     });
   }
 
-  componentDidUpdate(prevProps: AppRouteErrorBoundaryProps) {
+  componentDidUpdate(
+    prevProps: AppRouteErrorBoundaryProps,
+    prevState: AppRouteErrorBoundaryState,
+  ) {
     if (prevProps.routeKey !== this.props.routeKey && this.state.error) {
       this.setState({
         error: null,
         routeKey: this.props.routeKey,
       });
+      return;
+    }
+
+    if (!prevState.error && this.state.error) {
+      this.errorCardRef.current?.focus();
     }
   }
 
@@ -77,7 +87,13 @@ export class AppRouteErrorBoundary extends Component<
         <div
           className={`app-route-error-boundary__shell ${this.props.fullscreen ? "app-route-error-boundary__shell--fullscreen" : ""}`}
         >
-          <section className="app-route-error-boundary__card">
+          <section
+            ref={this.errorCardRef}
+            className="app-route-error-boundary__card"
+            tabIndex={-1}
+            role="alert"
+            aria-live="assertive"
+          >
             <div className="app-route-error-boundary__content">
               <div className="app-route-error-boundary__header">
                 <div className="app-route-error-boundary__icon">

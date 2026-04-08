@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import express from "express";
 import { createCsrfProtectionMiddleware } from "../csrf";
+import { logger } from "../../lib/logger";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 
 function createCsrfTestApp() {
@@ -21,6 +22,11 @@ function createCsrfTestApp() {
 test("csrf middleware rejects cross-site mutation requests when session cookie is present", async () => {
   const app = createCsrfTestApp();
   const { server, baseUrl } = await startTestServer(app);
+  const originalWarn = logger.warn;
+  const warnings: Array<{ message: string; payload: unknown }> = [];
+  logger.warn = ((message: string, payload: unknown) => {
+    warnings.push({ message, payload });
+  }) as typeof logger.warn;
 
   try {
     const response = await fetch(`${baseUrl}/api/mutate`, {
@@ -34,7 +40,10 @@ test("csrf middleware rejects cross-site mutation requests when session cookie i
     assert.equal(response.status, 403);
     const payload = await response.json();
     assert.equal(payload.code, "CSRF_REJECTED");
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0].message, "CSRF request rejected");
   } finally {
+    logger.warn = originalWarn;
     await stopTestServer(server);
   }
 });
@@ -62,6 +71,11 @@ test("csrf middleware accepts session mutations with a valid double-submit token
 test("csrf middleware rejects cookie-authenticated mutations that omit all CSRF validation signals", async () => {
   const app = createCsrfTestApp();
   const { server, baseUrl } = await startTestServer(app);
+  const originalWarn = logger.warn;
+  const warnings: Array<{ message: string; payload: unknown }> = [];
+  logger.warn = ((message: string, payload: unknown) => {
+    warnings.push({ message, payload });
+  }) as typeof logger.warn;
 
   try {
     const response = await fetch(`${baseUrl}/api/mutate`, {
@@ -74,7 +88,41 @@ test("csrf middleware rejects cookie-authenticated mutations that omit all CSRF 
     assert.equal(response.status, 403);
     const payload = await response.json();
     assert.equal(payload.code, "CSRF_SIGNAL_MISSING");
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0].message, "CSRF request rejected");
   } finally {
+    logger.warn = originalWarn;
+    await stopTestServer(server);
+  }
+});
+
+test("csrf middleware logs invalid origin rejections with the normalized origin", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+  const originalWarn = logger.warn;
+  const warnings: Array<{ message: string; payload: Record<string, unknown> }> = [];
+  logger.warn = ((message: string, payload: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  }) as typeof logger.warn;
+
+  try {
+    const response = await fetch(`${baseUrl}/api/mutate`, {
+      method: "POST",
+      headers: {
+        Cookie: "sqr_auth=token-value; sqr_csrf=csrf-token",
+        Origin: "https://evil.example",
+      },
+    });
+
+    assert.equal(response.status, 403);
+    const payload = await response.json();
+    assert.equal(payload.code, "CSRF_ORIGIN_REJECTED");
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0].message, "CSRF request rejected");
+    assert.equal(warnings[0].payload.code, "CSRF_ORIGIN_REJECTED");
+    assert.equal(warnings[0].payload.requestOrigin, "https://evil.example");
+  } finally {
+    logger.warn = originalWarn;
     await stopTestServer(server);
   }
 });

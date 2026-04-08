@@ -21,7 +21,10 @@ export const settingCategories = pgTable("setting_categories", {
 
 export const systemSettings = pgTable("system_settings", {
   id: uuid("id").defaultRandom().primaryKey(),
-  categoryId: uuid("category_id").notNull().references(() => settingCategories.id, { onDelete: "cascade" }),
+  categoryId: uuid("category_id").notNull().references(() => settingCategories.id, {
+    onDelete: "cascade",
+    onUpdate: "cascade",
+  }),
   key: text("key").notNull(),
   label: text("label").notNull(),
   description: text("description"),
@@ -37,7 +40,10 @@ export const systemSettings = pgTable("system_settings", {
 
 export const settingOptions = pgTable("setting_options", {
   id: uuid("id").defaultRandom().primaryKey(),
-  settingId: uuid("setting_id").notNull().references(() => systemSettings.id, { onDelete: "cascade" }),
+  settingId: uuid("setting_id").notNull().references(() => systemSettings.id, {
+    onDelete: "cascade",
+    onUpdate: "cascade",
+  }),
   value: text("value").notNull(),
   label: text("label").notNull(),
 }, (table) => ({

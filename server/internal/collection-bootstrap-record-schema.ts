@@ -79,6 +79,10 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`,
     sql`
+      CREATE INDEX IF NOT EXISTS idx_collection_records_receipt_validation_status
+      ON public.collection_records(receipt_validation_status)
+    `,
+    sql`
       CREATE INDEX IF NOT EXISTS idx_collection_records_payment_created_id
       ON public.collection_records(payment_date, created_at, id)
     `,
@@ -184,6 +188,15 @@ export async function ensureCollectionReceiptSchema(database: BootstrapSqlExecut
       CREATE INDEX IF NOT EXISTS idx_collection_record_receipts_file_hash
       ON public.collection_record_receipts (file_hash)
       WHERE file_hash IS NOT NULL
+    `,
+    sql`
+      CREATE INDEX IF NOT EXISTS idx_collection_record_receipts_extraction_status
+      ON public.collection_record_receipts (extraction_status)
+    `,
+    sql`
+      CREATE INDEX IF NOT EXISTS idx_collection_record_receipts_receipt_date
+      ON public.collection_record_receipts (receipt_date)
+      WHERE receipt_date IS NOT NULL
     `,
     sql`
       CREATE INDEX IF NOT EXISTS idx_collection_record_receipts_record_created_at

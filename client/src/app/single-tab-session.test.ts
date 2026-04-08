@@ -10,6 +10,7 @@ import {
   isSingleTabLockOwner,
   parseSingleTabNavigationReclaim,
   parseSingleTabLock,
+  pruneSingleTabBrowserStorage,
   reloadAppPreservingSingleTabLock,
   serializeSingleTabNavigationReclaim,
   serializeSingleTabLock,
@@ -94,6 +95,49 @@ test("single-tab navigation reclaim round-trips and validates recent same-tab na
   assert.equal(isSingleTabNavigationReclaimActive(parsed, "tab-seed-1", 6_000, 15_000), true);
   assert.equal(isSingleTabNavigationReclaimActive(parsed, "tab-seed-2", 6_000, 15_000), false);
   assert.equal(isSingleTabNavigationReclaimActive(parsed, "tab-seed-1", 21_000, 15_000), false);
+});
+
+test("single-tab browser storage cleanup removes malformed and expired lock entries", () => {
+  const localStore = new Map<string, string>([
+    ["sqr_single_tab_lock:alice", serializeSingleTabLock(createSingleTabLock("alice", "tab-a", "instance-a", 10_000))],
+    ["sqr_single_tab_lock:bob", serializeSingleTabLock(createSingleTabLock("bob", "tab-b", "instance-b", 1_000))],
+    ["sqr_single_tab_lock:broken", "not-json"],
+  ]);
+  const sessionStore = new Map<string, string>([
+    ["sqr_single_tab_navigation_reclaim", serializeSingleTabNavigationReclaim(createSingleTabNavigationReclaim("tab-a", 1_000))],
+  ]);
+
+  const localStorageMock = {
+    get length() {
+      return localStore.size;
+    },
+    getItem(key: string) {
+      return localStore.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      localStore.set(key, value);
+    },
+    removeItem(key: string) {
+      localStore.delete(key);
+    },
+    key(index: number) {
+      return Array.from(localStore.keys())[index] ?? null;
+    },
+  } as Storage;
+
+  const sessionStorageMock = {
+    getItem(key: string) {
+      return sessionStore.get(key) ?? null;
+    },
+    removeItem(key: string) {
+      sessionStore.delete(key);
+    },
+  } as Pick<Storage, "getItem" | "removeItem">;
+
+  pruneSingleTabBrowserStorage(localStorageMock, sessionStorageMock, 20_000);
+
+  assert.deepEqual(Array.from(localStore.keys()).sort(), ["sqr_single_tab_lock:alice"]);
+  assert.equal(sessionStore.has("sqr_single_tab_navigation_reclaim"), false);
 });
 
 test("reload helper preserves same-tab reclaim state before forcing a full reload", () => {

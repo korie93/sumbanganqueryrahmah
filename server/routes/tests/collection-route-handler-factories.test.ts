@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCollectionJsonMutationRouteHandler } from "../collection/collection-route-handler-factories";
+import {
+  clearIdempotencyFingerprintValidationCacheForTests,
+  createCollectionJsonMutationRouteHandler,
+  normalizeIdempotencyFingerprintHeaderValue,
+} from "../collection/collection-route-handler-factories";
 import {
   createJsonTestApp,
   createTestAuthenticateToken,
@@ -225,5 +229,26 @@ test("collection mutation handler rejects malformed idempotency fingerprints", a
     assert.equal(mutationCalls, 0);
   } finally {
     await stopTestServer(server);
+  }
+});
+
+test("collection mutation handler caches repeated idempotency fingerprint JSON validation", async () => {
+  clearIdempotencyFingerprintValidationCacheForTests();
+  const originalParse = JSON.parse;
+  let parseCalls = 0;
+
+  JSON.parse = ((text: string, reviver?: (this: unknown, key: string, value: unknown) => unknown) => {
+    parseCalls += 1;
+    return originalParse(text, reviver);
+  }) as typeof JSON.parse;
+
+  try {
+    const fingerprint = "{\"recordId\":\"collection-1\",\"mode\":\"create\"}";
+    assert.equal(normalizeIdempotencyFingerprintHeaderValue(fingerprint), fingerprint);
+    assert.equal(normalizeIdempotencyFingerprintHeaderValue(fingerprint), fingerprint);
+    assert.equal(parseCalls, 1);
+  } finally {
+    JSON.parse = originalParse;
+    clearIdempotencyFingerprintValidationCacheForTests();
   }
 });

@@ -44,6 +44,9 @@ export const collectionRecords = pgTable("collection_records", {
   createdByLoginIdx: index("idx_collection_records_created_by_login").on(table.createdByLogin),
   staffNicknameIdx: index("idx_collection_records_staff_nickname").on(table.collectionStaffNickname),
   customerPhoneIdx: index("idx_collection_records_customer_phone").on(table.customerPhone),
+  receiptValidationStatusIdx: index("idx_collection_records_receipt_validation_status").on(
+    table.receiptValidationStatus,
+  ),
   paymentDateCreatedAtIdIdx: index("idx_collection_records_payment_created_id").on(
     table.paymentDate,
     table.createdAt,
@@ -97,6 +100,12 @@ export const collectionRecordReceipts = pgTable("collection_record_receipts", {
   recordFileHashUnique: uniqueIndex("idx_collection_record_receipts_record_file_hash_unique")
     .on(table.collectionRecordId, table.fileHash),
   fileHashIdx: index("idx_collection_record_receipts_file_hash").on(table.fileHash),
+  extractionStatusIdx: index("idx_collection_record_receipts_extraction_status").on(
+    table.extractionStatus,
+  ),
+  receiptDateIdx: index("idx_collection_record_receipts_receipt_date")
+    .on(table.receiptDate)
+    .where(sql`${table.receiptDate} IS NOT NULL`),
   recordCreatedAtIdx: index("idx_collection_record_receipts_record_created_at").on(
     table.collectionRecordId,
     table.createdAt,

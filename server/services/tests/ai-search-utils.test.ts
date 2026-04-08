@@ -112,6 +112,19 @@ test("matching and scoring helpers rank likely fields without mutating behavior"
   ]);
 });
 
+test("JSON row helpers ignore oversized serialized payloads safely", () => {
+  const oversizedRow = ensureJsonRow({
+    rowId: "row-oversized",
+    jsonDataJsonb: JSON.stringify({ payload: "x".repeat(70 * 1024) }),
+  });
+
+  assert.equal(typeof oversizedRow.jsonDataJsonb, "string");
+
+  const digitsScore = scoreRowDigits(oversizedRow, "123456");
+  assert.equal(digitsScore.score, 0);
+  assert.deepEqual(digitsScore.parsed, {});
+});
+
 test("summary and explanation helpers produce compact AI-ready text", () => {
   const person = toObjectJson({
     Nama: "Ali Bin Abu",

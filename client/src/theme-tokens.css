@@ -28,7 +28,7 @@
   --secondary-foreground: 222 47% 11%;
   --muted: 214 20% 90%;
   --muted-foreground: 215 18% 38%;
-  --accent: 214 25% 92%;
+  --accent: 214 24% 86%;
   --accent-foreground: 222 47% 11%;
   --destructive: 0 84% 45%;
   --destructive-foreground: 210 40% 98%;
@@ -71,19 +71,19 @@
   --public-auth-badge: hsl(214 95% 93% / 0.8);
   --public-auth-shadow: hsl(0 0% 0% / 0.3);
   --public-auth-shadow-soft: hsl(0 0% 0% / 0.2);
-  --public-auth-focus-ring: hsl(0 0% 100% / 0.25);
+  --public-auth-focus-ring: hsl(var(--ring) / 0.32);
   --public-auth-halo: hsl(217 91% 70% / 0.12);
   --public-auth-primary-bg: hsl(217 91% 54%);
   --public-auth-primary-bg-hover: hsl(217 91% 60%);
-  --public-auth-primary-ring: hsl(214 95% 77% / 0.72);
+  --public-auth-primary-ring: hsl(var(--ring) / 0.56);
   --public-auth-ghost-text: hsl(214 32% 91%);
   --public-auth-ghost-hover-bg: hsl(0 0% 100% / 0.05);
-  --public-auth-ghost-ring: hsl(0 0% 100% / 0.38);
+  --public-auth-ghost-ring: hsl(var(--ring) / 0.4);
   --public-auth-input-bg: hsl(0 0% 100% / 0.95);
   --public-auth-input-border: hsl(0 0% 100% / 0.1);
   --public-auth-input-text: hsl(222 47% 11%);
   --public-auth-input-placeholder: hsl(215 20% 65%);
-  --public-auth-input-focus: hsl(217 91% 70% / 0.7);
+  --public-auth-input-focus: hsl(var(--ring) / 0.48);
   --ai-surface-bg: linear-gradient(180deg, hsl(0 0% 100% / 0.98) 0%, hsl(210 40% 98% / 0.96) 100%);
   --ai-surface-border: hsl(var(--border) / 0.85);
   --ai-surface-inset-shadow: hsl(215 20% 65% / 0.08);
@@ -107,6 +107,14 @@
   --floating-ai-backdrop: hsl(222 47% 11% / 0.72);
   --floating-ai-thinking-ring: hsl(217 91% 60% / 0.7);
   --floating-ai-thinking-ring-clear: hsl(217 91% 60% / 0);
+  --floating-ai-edge-gap: clamp(0.5rem, 2vw, 1.5rem);
+  --z-floating-ai-root: 40;
+  --z-floating-ai-overlay: 60;
+  --print-background: 0 0% 100%;
+  --print-foreground: 222 47% 11%;
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.5;
+  --line-height-loose: 1.75;
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
@@ -156,7 +164,7 @@
   --sidebar-border: 217 19% 23%;
   --sidebar-primary: 217 91% 50%;
   --sidebar-primary-foreground: 210 40% 98%;
-  --sidebar-accent: 217 20% 20%;
+  --sidebar-accent: 217 20% 21%;
   --sidebar-accent-foreground: 210 40% 98%;
   --sidebar-ring: 217 91% 60%;
   --popover: 222 47% 17%;
@@ -168,7 +176,7 @@
   --secondary-foreground: 210 40% 98%;
   --muted: 217 19% 21%;
   --muted-foreground: 215 20% 65%;
-  --accent: 217 20% 19%;
+  --accent: 217 20% 21%;
   --accent-foreground: 210 40% 98%;
   --destructive: 0 62% 30%;
   --destructive-foreground: 210 40% 98%;
@@ -207,19 +215,19 @@
   --public-auth-badge: hsl(214 95% 93% / 0.82);
   --public-auth-shadow: hsl(0 0% 0% / 0.34);
   --public-auth-shadow-soft: hsl(0 0% 0% / 0.24);
-  --public-auth-focus-ring: hsl(0 0% 100% / 0.25);
+  --public-auth-focus-ring: hsl(var(--ring) / 0.34);
   --public-auth-halo: hsl(217 91% 70% / 0.14);
   --public-auth-primary-bg: hsl(217 91% 60%);
   --public-auth-primary-bg-hover: hsl(217 91% 65%);
-  --public-auth-primary-ring: hsl(214 95% 77% / 0.72);
+  --public-auth-primary-ring: hsl(var(--ring) / 0.6);
   --public-auth-ghost-text: hsl(214 32% 91%);
   --public-auth-ghost-hover-bg: hsl(0 0% 100% / 0.08);
-  --public-auth-ghost-ring: hsl(0 0% 100% / 0.38);
+  --public-auth-ghost-ring: hsl(var(--ring) / 0.44);
   --public-auth-input-bg: hsl(0 0% 100% / 0.95);
   --public-auth-input-border: hsl(0 0% 100% / 0.12);
   --public-auth-input-text: hsl(222 47% 11%);
   --public-auth-input-placeholder: hsl(215 20% 65%);
-  --public-auth-input-focus: hsl(217 91% 70% / 0.72);
+  --public-auth-input-focus: hsl(var(--ring) / 0.56);
   --ai-surface-bg: linear-gradient(180deg, hsl(222 47% 11% / 0.94) 0%, hsl(222 47% 11% / 0.88) 100%);
   --ai-surface-border: hsl(var(--border) / 0.7);
   --ai-surface-inset-shadow: hsl(0 0% 100% / 0.04);
@@ -243,6 +251,9 @@
   --floating-ai-backdrop: hsl(222 47% 11% / 0.72);
   --floating-ai-thinking-ring: hsl(217 91% 60% / 0.7);
   --floating-ai-thinking-ring-clear: hsl(217 91% 60% / 0);
+  --floating-ai-edge-gap: clamp(0.5rem, 2vw, 1.5rem);
+  --z-floating-ai-root: 40;
+  --z-floating-ai-overlay: 60;
 
   /* Fallback for older browsers */
   --sidebar-primary-border: hsl(var(--sidebar-primary));
@@ -279,11 +290,12 @@
 
 body {
   font-family: var(--font-sans);
+  line-height: var(--line-height-normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: hsl(var(--background) / 1);
   color: hsl(var(--foreground) / 1);
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* Hide ugly search cancel button in Chrome until we can style it properly */
