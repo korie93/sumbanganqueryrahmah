@@ -6,7 +6,10 @@ import type {
   UpdateCollectionRecordInput,
   UpdateCollectionRecordOptions,
 } from "../storage-postgres";
-import { encryptCollectionPiiFieldValue } from "../lib/collection-pii-encryption";
+import {
+  encryptCollectionPiiFieldValue,
+  hashCollectionPiiSearchValue,
+} from "../lib/collection-pii-encryption";
 import {
   getCollectionRecordById,
 } from "./collection-record-read-utils";
@@ -45,6 +48,7 @@ export async function updateCollectionRecord(
     if (customerNameEncrypted !== null) {
       updateChunks.push(sql`customer_name_encrypted = ${customerNameEncrypted}`);
     }
+    updateChunks.push(sql`customer_name_search_hash = ${hashCollectionPiiSearchValue("customerName", data.customerName)}`);
   }
   if (data.icNumber !== undefined) {
     updateChunks.push(sql`ic_number = ${data.icNumber}`);
@@ -52,6 +56,7 @@ export async function updateCollectionRecord(
     if (icNumberEncrypted !== null) {
       updateChunks.push(sql`ic_number_encrypted = ${icNumberEncrypted}`);
     }
+    updateChunks.push(sql`ic_number_search_hash = ${hashCollectionPiiSearchValue("icNumber", data.icNumber)}`);
   }
   if (data.customerPhone !== undefined) {
     updateChunks.push(sql`customer_phone = ${data.customerPhone}`);
@@ -59,6 +64,7 @@ export async function updateCollectionRecord(
     if (customerPhoneEncrypted !== null) {
       updateChunks.push(sql`customer_phone_encrypted = ${customerPhoneEncrypted}`);
     }
+    updateChunks.push(sql`customer_phone_search_hash = ${hashCollectionPiiSearchValue("customerPhone", data.customerPhone)}`);
   }
   if (data.accountNumber !== undefined) {
     updateChunks.push(sql`account_number = ${data.accountNumber}`);
@@ -66,6 +72,7 @@ export async function updateCollectionRecord(
     if (accountNumberEncrypted !== null) {
       updateChunks.push(sql`account_number_encrypted = ${accountNumberEncrypted}`);
     }
+    updateChunks.push(sql`account_number_search_hash = ${hashCollectionPiiSearchValue("accountNumber", data.accountNumber)}`);
   }
   if (data.batch !== undefined) {
     updateChunks.push(sql`batch = ${data.batch}`);

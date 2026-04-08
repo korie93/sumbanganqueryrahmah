@@ -136,6 +136,20 @@ export class CollectionRecordListReadOperations extends CollectionServiceSupport
       hasNextPage: nextCursor !== null,
     });
 
+    await this.auditCollectionPiiAccess({
+      action: "READ_COLLECTION_PII_LIST",
+      user,
+      targetResource: "collection:list",
+      recordCount: records.length,
+      totalRecords: aggregate.totalRecords,
+      page: resolvedPage,
+      pageSize: limit,
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+      ...(Array.isArray(baseFilters.nicknames) ? { nicknameCount: baseFilters.nicknames.length } : {}),
+      searchPresent: Boolean(search),
+    });
+
     return {
       ok: true as const,
       records,

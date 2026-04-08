@@ -18,6 +18,13 @@ export function getCollectionPiiEncryptionSecret(): string | null {
   return configured || null;
 }
 
+function getCollectionPiiPreviousSecrets(): string[] {
+  return String(process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 export function getTwoFactorDecryptionSecrets(): string[] {
   const secrets = new Set<string>();
   const configured = getTwoFactorEncryptionSecret();
@@ -32,6 +39,9 @@ export function getCollectionPiiDecryptionSecrets(): string[] {
   const configured = getCollectionPiiEncryptionSecret();
   if (configured) {
     secrets.add(configured);
+  }
+  for (const previousSecret of getCollectionPiiPreviousSecrets()) {
+    secrets.add(previousSecret);
   }
   return Array.from(secrets);
 }

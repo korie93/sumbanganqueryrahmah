@@ -57,6 +57,72 @@ type PreparedBackupWriteState = {
   cipher?: crypto.CipherGCM,
 };
 
+function hasNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function buildCollectionRecordBackupPiiFields(
+  row: Record<string, unknown>,
+): Pick<
+  BackupCollectionRecord,
+  | "customerName"
+  | "customerNameEncrypted"
+  | "icNumber"
+  | "icNumberEncrypted"
+  | "customerPhone"
+  | "customerPhoneEncrypted"
+  | "accountNumber"
+  | "accountNumberEncrypted"
+> {
+  const customerNameEncrypted = hasNonEmptyString(row.customerNameEncrypted)
+    ? row.customerNameEncrypted
+    : null;
+  const icNumberEncrypted = hasNonEmptyString(row.icNumberEncrypted)
+    ? row.icNumberEncrypted
+    : null;
+  const customerPhoneEncrypted = hasNonEmptyString(row.customerPhoneEncrypted)
+    ? row.customerPhoneEncrypted
+    : null;
+  const accountNumberEncrypted = hasNonEmptyString(row.accountNumberEncrypted)
+    ? row.accountNumberEncrypted
+    : null;
+
+  return {
+    ...(customerNameEncrypted
+      ? { customerNameEncrypted }
+      : {
+        customerName: resolveCollectionPiiFieldValue({
+          plaintext: row.customerName,
+          encrypted: null,
+        }),
+      }),
+    ...(icNumberEncrypted
+      ? { icNumberEncrypted }
+      : {
+        icNumber: resolveCollectionPiiFieldValue({
+          plaintext: row.icNumber,
+          encrypted: null,
+        }),
+      }),
+    ...(customerPhoneEncrypted
+      ? { customerPhoneEncrypted }
+      : {
+        customerPhone: resolveCollectionPiiFieldValue({
+          plaintext: row.customerPhone,
+          encrypted: null,
+        }),
+      }),
+    ...(accountNumberEncrypted
+      ? { accountNumberEncrypted }
+      : {
+        accountNumber: resolveCollectionPiiFieldValue({
+          plaintext: row.accountNumber,
+          encrypted: null,
+        }),
+      }),
+  };
+}
+
 async function writeBackupStreamChunk(
   writer: ReturnType<typeof createWriteStream>,
   chunk: string | Buffer,
@@ -361,31 +427,35 @@ export async function prepareBackupPayloadFileForCreate(
         LIMIT ${QUERY_PAGE_LIMIT}
       `).then((rows) =>
         rows.map((row) => {
-          const {
-            customerNameEncrypted,
-            icNumberEncrypted,
-            customerPhoneEncrypted,
-            accountNumberEncrypted,
-            ...rest
-          } = row;
           return {
-            ...rest,
-            customerName: resolveCollectionPiiFieldValue({
-              plaintext: row.customerName,
-              encrypted: customerNameEncrypted,
-            }),
-            icNumber: resolveCollectionPiiFieldValue({
-              plaintext: row.icNumber,
-              encrypted: icNumberEncrypted,
-            }),
-            customerPhone: resolveCollectionPiiFieldValue({
-              plaintext: row.customerPhone,
-              encrypted: customerPhoneEncrypted,
-            }),
-            accountNumber: resolveCollectionPiiFieldValue({
-              plaintext: row.accountNumber,
-              encrypted: accountNumberEncrypted,
-            }),
+            id: String(row.id || ""),
+            ...buildCollectionRecordBackupPiiFields(row),
+            batch: String(row.batch || ""),
+            paymentDate: String(row.paymentDate || ""),
+            amount: row.amount as BackupCollectionRecord["amount"],
+            receiptFile:
+              typeof row.receiptFile === "string" && row.receiptFile.trim().length > 0
+                ? row.receiptFile
+                : null,
+            receiptTotalAmountCents: row.receiptTotalAmountCents as BackupCollectionRecord["receiptTotalAmountCents"],
+            receiptValidationStatus:
+              row.receiptValidationStatus as BackupCollectionRecord["receiptValidationStatus"],
+            receiptValidationMessage:
+              typeof row.receiptValidationMessage === "string" && row.receiptValidationMessage.trim().length > 0
+                ? row.receiptValidationMessage
+                : null,
+            receiptCount:
+              typeof row.receiptCount === "number"
+                ? row.receiptCount
+                : Number(row.receiptCount || 0),
+            duplicateReceiptFlag: row.duplicateReceiptFlag === true,
+            createdByLogin: String(row.createdByLogin || ""),
+            collectionStaffNickname: String(row.collectionStaffNickname || ""),
+            staffUsername:
+              typeof row.staffUsername === "string" && row.staffUsername.trim().length > 0
+                ? row.staffUsername
+                : null,
+            createdAt: row.createdAt as BackupCollectionRecord["createdAt"],
           };
         }),
       ),

@@ -39,9 +39,11 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
   adaptiveRateLimit: RequestHandler;
   systemProtectionMiddleware: RequestHandler;
   sweepAdaptiveRateState: (now?: number) => void;
+  stopAdaptiveRateStateSweep: () => void;
 } {
   const adaptiveRateState = new Map<string, AdaptiveRateBucket>();
   let lastAdaptiveSweepAt = 0;
+  let adaptiveRateSweepStopped = false;
 
   function setAdaptiveRateBucket(bucketKey: string, bucket: AdaptiveRateBucket) {
     if (adaptiveRateState.has(bucketKey)) {
@@ -74,6 +76,19 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     ) {
       sweepAdaptiveRateState(now);
     }
+  }
+
+  const adaptiveRateSweepHandle = setInterval(() => {
+    sweepAdaptiveRateState(Date.now());
+  }, ADAPTIVE_RATE_SWEEP_INTERVAL_MS);
+  adaptiveRateSweepHandle.unref();
+
+  function stopAdaptiveRateStateSweep() {
+    if (adaptiveRateSweepStopped) {
+      return;
+    }
+    adaptiveRateSweepStopped = true;
+    clearInterval(adaptiveRateSweepHandle);
   }
 
   function resolveRateLimitClientIp(req: Request): string {
@@ -189,5 +204,6 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     adaptiveRateLimit,
     systemProtectionMiddleware,
     sweepAdaptiveRateState,
+    stopAdaptiveRateStateSweep,
   };
 }

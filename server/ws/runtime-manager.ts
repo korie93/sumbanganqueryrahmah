@@ -186,6 +186,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
   wss.once("close", () => {
     clearInterval(heartbeatHandle);
+    connectedClients.clear();
     socketUserKeys.clear();
   });
 

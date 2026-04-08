@@ -13,6 +13,7 @@ import {
   mapCollectionMonthlySummaryRows,
   sumCollectionRowAmounts,
 } from "../collection-record-query-utils";
+import { hashCollectionPiiSearchValue } from "../../lib/collection-pii-encryption";
 import {
   mapCollectionAdminGroupRow,
   mapCollectionAdminUserRow,
@@ -24,6 +25,26 @@ import {
   validateCollectionAdminGroupComposition,
   type CollectionRepositoryExecutor,
 } from "../collection-nickname-utils";
+import { collectBoundValues, collectSqlText } from "./sql-test-utils";
+
+function withCollectionPiiKey<T>(value: string | null, fn: () => T): T {
+  const previous = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  if (value === null) {
+    delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  } else {
+    process.env.COLLECTION_PII_ENCRYPTION_KEY = value;
+  }
+
+  try {
+    return fn();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    } else {
+      process.env.COLLECTION_PII_ENCRYPTION_KEY = previous;
+    }
+  }
+}
 
 test("buildCollectionRecordConditions includes each filter category once and normalizes nickname duplicates", () => {
   const conditions = buildCollectionRecordConditions({
@@ -35,6 +56,23 @@ test("buildCollectionRecordConditions includes each filter category once and nor
   });
 
   assert.equal(conditions.length, 5);
+});
+
+test("buildCollectionRecordConditions adds blind-index exact-match clauses when collection PII encryption is enabled", () => {
+  withCollectionPiiKey("collection-search-hash-secret", () => {
+    const [searchCondition] = buildCollectionRecordConditions({
+      search: " 0123 000 001 ",
+    });
+    const sqlText = collectSqlText(searchCondition);
+    const boundValues = collectBoundValues(searchCondition);
+
+    assert.match(sqlText, /customer_name_search_hash = /);
+    assert.match(sqlText, /ic_number_search_hash = /);
+    assert.match(sqlText, /customer_phone_search_hash = /);
+    assert.match(sqlText, /account_number_search_hash = /);
+    assert.ok(boundValues.includes(hashCollectionPiiSearchValue("customerPhone", "0123000001")));
+    assert.ok(boundValues.includes(hashCollectionPiiSearchValue("customerName", "0123 000 001")));
+  });
 });
 
 test("buildCollectionMonthlySummaryWhereSql clamps out-of-range years", () => {

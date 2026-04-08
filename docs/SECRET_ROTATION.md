@@ -11,6 +11,8 @@ This covers:
 - `SESSION_SECRET`
 - `SESSION_SECRET_PREVIOUS`
 - `TWO_FACTOR_ENCRYPTION_KEY`
+- `COLLECTION_PII_ENCRYPTION_KEY`
+- `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS`
 - `BACKUP_ENCRYPTION_KEY`
 - `BACKUP_ENCRYPTION_KEYS`
 - `BACKUP_ENCRYPTION_KEY_ID`
@@ -86,6 +88,50 @@ After rotation, verify:
 - confirming 2FA setup works
 - login with 2FA works for a re-enrolled user
 - disabling 2FA works
+
+## `COLLECTION_PII_ENCRYPTION_KEY`
+
+`COLLECTION_PII_ENCRYPTION_KEY` encrypts the collection PII shadow columns used
+for at-rest protection. The runtime now supports a manual compatibility window
+through `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS` for decryption only.
+
+### Planned Rotation
+
+1. Generate a new `COLLECTION_PII_ENCRYPTION_KEY`.
+2. Move the current key into `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS`.
+3. Set the generated value as the new `COLLECTION_PII_ENCRYPTION_KEY`.
+4. Deploy or restart all app processes together.
+5. Run `npm run collection:reencrypt-pii` to measure how many rows still need
+   shadow-column rewrites, then run
+   `npm run collection:reencrypt-pii -- --apply` to re-encrypt them with the
+   active key.
+6. Optional after rollout verification: run
+   `npm run collection:redact-plaintext-pii`, then
+   `npm run collection:redact-plaintext-pii -- --apply`, to clear plaintext
+   collection PII for rows that already have current encrypted shadows and
+   blind-index hashes. Only do this after confirming the team accepts the
+   tighter exact-match search behavior for redacted rows.
+7. Verify collection create, edit, list, summary, backup export, and backup
+   restore paths.
+8. Keep `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS` only for the intended
+   compatibility window while older encrypted rows and backups are being
+   rewritten or phased out.
+9. Remove the old value from `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS`.
+10. Redeploy or restart all app processes.
+
+### Emergency Rotation
+
+If the old key may be compromised, skip the compatibility window:
+
+1. Generate a new `COLLECTION_PII_ENCRYPTION_KEY`.
+2. Set `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS=` empty.
+3. Deploy or restart immediately.
+4. Expect encrypted-only historical values and encrypted-only backups that
+   still depend on the old key to become unreadable until they are restored
+   with the old key in a controlled environment.
+
+Never include the active key in `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS`;
+startup safety guards reject that configuration.
 
 ## Backup Encryption Keys
 

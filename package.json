@@ -19,6 +19,8 @@
     "db:check": "drizzle-kit check --config drizzle.config.ts",
     "db:studio": "drizzle-kit studio --config drizzle.config.ts",
     "db:introspect": "drizzle-kit introspect --config drizzle.config.ts",
+    "collection:reencrypt-pii": "tsx scripts/reencrypt-collection-pii.ts",
+    "collection:redact-plaintext-pii": "tsx scripts/redact-collection-pii-plaintext.ts",
     "test:client": "node scripts/run-client-tests.mjs",
     "test:contracts": "tsx --test server/routes/tests/imports.routes.integration.test.ts server/routes/tests/settings.routes.integration.test.ts client/src/lib/api/tests/api-contracts.test.ts",
     "test:scripts": "node --test scripts/tests/*.test.mjs",

@@ -21,12 +21,16 @@ export const collectionRecords = pgTable("collection_records", {
   id: uuid("id").primaryKey(),
   customerName: text("customer_name").notNull(),
   customerNameEncrypted: text("customer_name_encrypted"),
+  customerNameSearchHash: text("customer_name_search_hash"),
   icNumber: text("ic_number").notNull(),
   icNumberEncrypted: text("ic_number_encrypted"),
+  icNumberSearchHash: text("ic_number_search_hash"),
   customerPhone: text("customer_phone").notNull(),
   customerPhoneEncrypted: text("customer_phone_encrypted"),
+  customerPhoneSearchHash: text("customer_phone_search_hash"),
   accountNumber: text("account_number").notNull(),
   accountNumberEncrypted: text("account_number_encrypted"),
+  accountNumberSearchHash: text("account_number_search_hash"),
   batch: text("batch").notNull(),
   paymentDate: date("payment_date", { mode: "string" }).notNull(),
   // Primary payment total is stored in MYR using a fixed decimal numeric column.
@@ -50,6 +54,18 @@ export const collectionRecords = pgTable("collection_records", {
   createdByLoginIdx: index("idx_collection_records_created_by_login").on(table.createdByLogin),
   staffNicknameIdx: index("idx_collection_records_staff_nickname").on(table.collectionStaffNickname),
   customerPhoneIdx: index("idx_collection_records_customer_phone").on(table.customerPhone),
+  customerNameSearchHashIdx: index("idx_collection_records_customer_name_search_hash").on(
+    table.customerNameSearchHash,
+  ),
+  icNumberSearchHashIdx: index("idx_collection_records_ic_number_search_hash").on(
+    table.icNumberSearchHash,
+  ),
+  customerPhoneSearchHashIdx: index("idx_collection_records_customer_phone_search_hash").on(
+    table.customerPhoneSearchHash,
+  ),
+  accountNumberSearchHashIdx: index("idx_collection_records_account_number_search_hash").on(
+    table.accountNumberSearchHash,
+  ),
   receiptValidationStatusIdx: index("idx_collection_records_receipt_validation_status").on(
     table.receiptValidationStatus,
   ),

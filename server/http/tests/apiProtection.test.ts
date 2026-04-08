@@ -155,3 +155,45 @@ test("adaptive API protection ignores spoofed x-forwarded-for headers when trust
     await stopTestServer(server);
   }
 });
+
+test("adaptive API protection registers and clears its background sweep interval", (t) => {
+  let capturedIntervalMs = 0;
+  let unrefCalled = false;
+  const fakeHandle = {
+    unref() {
+      unrefCalled = true;
+      return this;
+    },
+  } as unknown as NodeJS.Timeout;
+
+  const setIntervalMock = t.mock.method(
+    globalThis,
+    "setInterval",
+    (((handler: TimerHandler, delay?: number) => {
+      assert.equal(typeof handler, "function");
+      capturedIntervalMs = Number(delay ?? 0);
+      return fakeHandle;
+    }) as unknown) as typeof setInterval,
+  );
+  const clearIntervalMock = t.mock.method(
+    globalThis,
+    "clearInterval",
+    (((handle?: NodeJS.Timeout) => {
+      assert.equal(handle, fakeHandle);
+    }) as unknown) as typeof clearInterval,
+  );
+
+  const { stopAdaptiveRateStateSweep } = createApiProtectionMiddleware({
+    getControlState: () => createControlState(),
+    getDbProtection: () => false,
+  });
+
+  assert.equal(setIntervalMock.mock.callCount(), 1);
+  assert.equal(capturedIntervalMs, 30_000);
+  assert.equal(unrefCalled, true);
+
+  stopAdaptiveRateStateSweep();
+  stopAdaptiveRateStateSweep();
+
+  assert.equal(clearIntervalMock.mock.callCount(), 1);
+});

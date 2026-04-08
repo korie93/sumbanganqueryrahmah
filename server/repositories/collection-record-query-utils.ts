@@ -5,6 +5,7 @@ import type {
   CollectionNicknameDailyAggregate,
   CollectionReceiptValidationStatus,
 } from "../storage-postgres";
+import { hashCollectionPiiSearchValue } from "../lib/collection-pii-encryption";
 import { buildLikePattern } from "./sql-like-utils";
 
 const COLLECTION_MONTH_NAMES = [
@@ -54,13 +55,33 @@ export function buildCollectionRecordConditions(filters?: CollectionRecordFilter
   const search = String(filters?.search || "").trim();
   if (search) {
     const like = buildLikePattern(search, "contains");
+    const searchConditions: SQL[] = [
+      sql`customer_name ILIKE ${like} ESCAPE '\'`,
+      sql`ic_number ILIKE ${like} ESCAPE '\'`,
+      sql`account_number ILIKE ${like} ESCAPE '\'`,
+      sql`batch ILIKE ${like} ESCAPE '\'`,
+      sql`customer_phone ILIKE ${like} ESCAPE '\'`,
+      sql`amount::text ILIKE ${like} ESCAPE '\'`,
+    ];
+    const customerNameSearchHash = hashCollectionPiiSearchValue("customerName", search);
+    if (customerNameSearchHash) {
+      searchConditions.push(sql`customer_name_search_hash = ${customerNameSearchHash}`);
+    }
+    const icNumberSearchHash = hashCollectionPiiSearchValue("icNumber", search);
+    if (icNumberSearchHash) {
+      searchConditions.push(sql`ic_number_search_hash = ${icNumberSearchHash}`);
+    }
+    const customerPhoneSearchHash = hashCollectionPiiSearchValue("customerPhone", search);
+    if (customerPhoneSearchHash) {
+      searchConditions.push(sql`customer_phone_search_hash = ${customerPhoneSearchHash}`);
+    }
+    const accountNumberSearchHash = hashCollectionPiiSearchValue("accountNumber", search);
+    if (accountNumberSearchHash) {
+      searchConditions.push(sql`account_number_search_hash = ${accountNumberSearchHash}`);
+    }
     conditions.push(sql`(
-      customer_name ILIKE ${like} ESCAPE '\'
-      OR ic_number ILIKE ${like} ESCAPE '\'
-      OR account_number ILIKE ${like} ESCAPE '\'
-      OR batch ILIKE ${like} ESCAPE '\'
-      OR customer_phone ILIKE ${like} ESCAPE '\'
-      OR amount::text ILIKE ${like} ESCAPE '\'
+      ${sql.join(searchConditions, sql`
+      OR `)}
     )`);
   }
 

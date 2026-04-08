@@ -139,6 +139,19 @@ export class CollectionRecordNicknameSummaryOperations extends CollectionService
       hasNextPage: !summaryOnly && recordOffset + records.length < totals.totalRecords,
     });
 
+    await this.auditCollectionPiiAccess({
+      action: "READ_COLLECTION_PII_NICKNAME_SUMMARY",
+      user,
+      targetResource: "collection:nickname-summary",
+      recordCount: records.length,
+      totalRecords: totals.totalRecords,
+      page: resolvedPage,
+      pageSize: recordLimit,
+      ...(fromFilter ? { from: fromFilter } : {}),
+      ...(toFilter ? { to: toFilter } : {}),
+      nicknameCount: nicknameFilters.length,
+    });
+
     return {
       ok: true as const,
       nicknames: nicknameFilters,

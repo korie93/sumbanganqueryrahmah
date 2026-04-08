@@ -59,6 +59,26 @@ export function resolvePreviousSessionSecrets(
   return rawValues;
 }
 
+export function resolvePreviousCollectionPiiSecrets(
+  rawValues: string[],
+  currentCollectionPiiSecret: string | null,
+): string[] {
+  if (rawValues.length === 0) {
+    return [];
+  }
+
+  const normalizedCurrent = String(currentCollectionPiiSecret || "").trim();
+  for (const value of rawValues) {
+    if (normalizedCurrent && value === normalizedCurrent) {
+      throw new Error(
+        "COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS must not include the active COLLECTION_PII_ENCRYPTION_KEY value.",
+      );
+    }
+  }
+
+  return rawValues;
+}
+
 export function resolveCookieSecure(
   rawValue: string | null,
   params: { isProduction: boolean; publicAppUrl: string | null },
@@ -102,6 +122,12 @@ export function hasBackupEncryptionKeyConfigured(params: {
     params.configuredBackupEncryptionKey
     || params.configuredBackupEncryptionKeys,
   );
+}
+
+export function hasCollectionPiiEncryptionKeyConfigured(params: {
+  configuredCollectionPiiEncryptionKey: string | null;
+}): boolean {
+  return Boolean(params.configuredCollectionPiiEncryptionKey);
 }
 
 export function assessMailConfiguration(params: {
@@ -148,6 +174,7 @@ export function assertRuntimeSafetyGuards(params: {
   mailConfiguration: MailConfigurationAssessment;
   backupFeatureEnabled: boolean;
   hasBackupEncryptionKeyConfigured: boolean;
+  hasCollectionPiiEncryptionKeyConfigured: boolean;
   seedDefaultUsers: boolean;
   localSuperuserCredentialsFileEnabled: boolean;
   mailDevOutboxEnabled: boolean;
@@ -157,6 +184,12 @@ export function assertRuntimeSafetyGuards(params: {
   if (isProductionLike && params.backupFeatureEnabled && !params.hasBackupEncryptionKeyConfigured) {
     throw new Error(
       "BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS is required when backups are enabled outside strict local development.",
+    );
+  }
+
+  if (isProductionLike && !params.hasCollectionPiiEncryptionKeyConfigured) {
+    throw new Error(
+      "COLLECTION_PII_ENCRYPTION_KEY is required outside strict local development to protect collection PII shadow columns at rest.",
     );
   }
 
@@ -190,6 +223,7 @@ export function buildRuntimeConfigWarnings(params: {
   publicAppUrl: string | null;
   configuredSessionSecret: string | null;
   configuredCollectionNicknameTempPassword: string | null;
+  configuredCollectionPiiEncryptionKey: string | null;
   configuredPgPassword: string | null;
   mailConfiguration: MailConfigurationAssessment;
 }): RuntimeConfigDiagnostic[] {
@@ -199,6 +233,7 @@ export function buildRuntimeConfigWarnings(params: {
     publicAppUrl,
     configuredSessionSecret,
     configuredCollectionNicknameTempPassword,
+    configuredCollectionPiiEncryptionKey,
     configuredPgPassword,
     mailConfiguration,
   } = params;
@@ -239,6 +274,15 @@ export function buildRuntimeConfigWarnings(params: {
     });
   }
 
+  if (isStrictLocalDevelopment && !configuredCollectionPiiEncryptionKey) {
+    warnings.push({
+      code: "COLLECTION_PII_ENCRYPTION_KEY_EMPTY_LOCAL",
+      envNames: ["COLLECTION_PII_ENCRYPTION_KEY"],
+      message: "COLLECTION_PII_ENCRYPTION_KEY is not set, so collection PII shadow columns stay plaintext-only in strict local development.",
+      severity: "warning",
+    });
+  }
+
   if (mailConfiguration.isIncomplete) {
     warnings.push({
       code: "MAIL_CONFIGURATION_INCOMPLETE",
@@ -260,6 +304,7 @@ export function assertNoPlaceholderSecrets(params: {
   configuredPgPassword: string | null;
   configuredTwoFactorEncryptionKey: string | null;
   configuredCollectionPiiEncryptionKey: string | null;
+  configuredPreviousCollectionPiiEncryptionKeys: readonly string[];
   configuredBackupEncryptionKey: string | null;
   configuredBackupEncryptionKeys: string | null;
 }) {
@@ -297,6 +342,14 @@ export function assertNoPlaceholderSecrets(params: {
     throw new Error(
       "COLLECTION_PII_ENCRYPTION_KEY is using the default placeholder value and must be replaced before non-local startup.",
     );
+  }
+
+  for (const previousCollectionPiiKey of params.configuredPreviousCollectionPiiEncryptionKeys) {
+    if (PLACEHOLDER_COLLECTION_PII_ENCRYPTION_KEYS.has(previousCollectionPiiKey)) {
+      throw new Error(
+        "COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS contains a placeholder value and must be replaced before non-local startup.",
+      );
+    }
   }
 
   const configuredBackupKeys = [

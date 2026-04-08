@@ -7,23 +7,30 @@ import {
 } from "../../routes/collection.validation";
 import { getCollectionDailyStatusMessage } from "./collection-daily-utils";
 import { CollectionDailyOverviewService } from "./collection-daily-overview.service";
-import type { CollectionStoragePort, ListQuery } from "./collection-service-support";
+import {
+  CollectionServiceSupport,
+  type CollectionStoragePort,
+  type ListQuery,
+} from "./collection-service-support";
 import { getCollectionReportFreshness } from "./collection-report-freshness";
 
 type RequireUserFn = (user?: AuthenticatedUser) => AuthenticatedUser;
 
-export class CollectionDailyReadOperations {
+export class CollectionDailyReadOperations extends CollectionServiceSupport {
   private readonly dailyOverviewService: CollectionDailyOverviewService;
+  private readonly requireUserFn: RequireUserFn;
 
   constructor(
-    private readonly storage: CollectionStoragePort,
-    private readonly requireUser: RequireUserFn,
+    storage: CollectionStoragePort,
+    requireUser: RequireUserFn,
   ) {
+    super(storage);
+    this.requireUserFn = requireUser;
     this.dailyOverviewService = new CollectionDailyOverviewService(this.storage);
   }
 
   async getDailyOverview(userInput: AuthenticatedUser | undefined, query: ListQuery) {
-    const user = this.requireUser(userInput);
+    const user = this.requireUserFn(userInput);
     const year = Number.parseInt(normalizeCollectionText(query.year), 10);
     const month = Number.parseInt(normalizeCollectionText(query.month), 10);
 
@@ -57,7 +64,7 @@ export class CollectionDailyReadOperations {
   }
 
   async getDailyDayDetails(userInput: AuthenticatedUser | undefined, query: ListQuery) {
-    const user = this.requireUser(userInput);
+    const user = this.requireUserFn(userInput);
     const date = normalizeCollectionText(query.date);
     if (!date || !isValidCollectionDate(date)) throw badRequest("Invalid date.");
 
@@ -101,6 +108,18 @@ export class CollectionDailyReadOperations {
       from: date,
       to: date,
       nicknames: selectedUsernames,
+    });
+
+    await this.auditCollectionPiiAccess({
+      action: "READ_COLLECTION_PII_DAY_DETAILS",
+      user,
+      targetResource: "collection:day-details",
+      recordCount: pagedRecords.length,
+      totalRecords,
+      page,
+      pageSize,
+      date,
+      nicknameCount: selectedUsernames.length,
     });
 
     return {

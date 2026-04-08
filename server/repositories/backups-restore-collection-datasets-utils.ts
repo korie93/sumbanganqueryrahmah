@@ -1,6 +1,10 @@
 import crypto from "crypto";
 import { sql } from "drizzle-orm";
-import { buildEncryptedCollectionRecordPiiValues } from "../lib/collection-pii-encryption";
+import {
+  buildCollectionRecordPiiSearchHashes,
+  buildEncryptedCollectionRecordPiiValues,
+  resolveCollectionPiiFieldValue,
+} from "../lib/collection-pii-encryption";
 import { parseCollectionAmountToCents } from "../services/collection/collection-receipt-validation";
 import {
   BACKUP_CHUNK_SIZE,
@@ -89,12 +93,34 @@ export function normalizeBackupCollectionRecord(
   if (!paymentDate) {
     return null;
   }
+
+  const customerName = resolveCollectionPiiFieldValue({
+    plaintext: record.customerName,
+    encrypted: record.customerNameEncrypted,
+    fallback: "-",
+  }) || "-";
+  const icNumber = resolveCollectionPiiFieldValue({
+    plaintext: record.icNumber,
+    encrypted: record.icNumberEncrypted,
+    fallback: "-",
+  }) || "-";
+  const customerPhone = resolveCollectionPiiFieldValue({
+    plaintext: record.customerPhone,
+    encrypted: record.customerPhoneEncrypted,
+    fallback: "-",
+  }) || "-";
+  const accountNumber = resolveCollectionPiiFieldValue({
+    plaintext: record.accountNumber,
+    encrypted: record.accountNumberEncrypted,
+    fallback: "-",
+  }) || "-";
+
   return {
     id: String(record.id || crypto.randomUUID()),
-    customerName: String(record.customerName || "-"),
-    icNumber: String(record.icNumber || "-"),
-    customerPhone: String(record.customerPhone || "-"),
-    accountNumber: String(record.accountNumber || "-"),
+    customerName,
+    icNumber,
+    customerPhone,
+    accountNumber,
     batch: String(record.batch || "P10"),
     paymentDate,
     amount: Number(record.amount || 0),
@@ -193,16 +219,26 @@ export async function restoreCollectionRecordsFromBackup(
             customerPhone: row.customerPhone,
             accountNumber: row.accountNumber,
           });
+          const piiSearchHashes = buildCollectionRecordPiiSearchHashes({
+            customerName: row.customerName,
+            icNumber: row.icNumber,
+            customerPhone: row.customerPhone,
+            accountNumber: row.accountNumber,
+          });
           return sql`(
             ${row.id}::uuid,
             ${row.customerName},
             ${encryptedPii?.customerNameEncrypted ?? null},
+            ${piiSearchHashes?.customerNameSearchHash ?? null},
             ${row.icNumber},
             ${encryptedPii?.icNumberEncrypted ?? null},
+            ${piiSearchHashes?.icNumberSearchHash ?? null},
             ${row.customerPhone},
             ${encryptedPii?.customerPhoneEncrypted ?? null},
+            ${piiSearchHashes?.customerPhoneSearchHash ?? null},
             ${row.accountNumber},
             ${encryptedPii?.accountNumberEncrypted ?? null},
+            ${piiSearchHashes?.accountNumberSearchHash ?? null},
             ${row.batch},
             ${row.paymentDate}::date,
             ${row.amount},
@@ -226,12 +262,16 @@ export async function restoreCollectionRecordsFromBackup(
           id,
           customer_name,
           customer_name_encrypted,
+          customer_name_search_hash,
           ic_number,
           ic_number_encrypted,
+          ic_number_search_hash,
           customer_phone,
           customer_phone_encrypted,
+          customer_phone_search_hash,
           account_number,
           account_number_encrypted,
+          account_number_search_hash,
           batch,
           payment_date,
           amount,

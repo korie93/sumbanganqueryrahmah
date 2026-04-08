@@ -12,7 +12,6 @@ type RuntimeGlueOptions = {
   attachProcessMessageHandlers: (options: { onGracefulShutdown: () => void }) => void;
   startRuntimeLoops: (options: { clearSearchCache: () => void }) => void;
   stopRuntimeMonitor: () => void;
-  sweepAdaptiveRateState: (now: number) => void;
 };
 
 export function getSearchQueueLength(): number {
@@ -27,7 +26,6 @@ export function attachLocalRuntimeGlue(options: RuntimeGlueOptions) {
     attachProcessMessageHandlers,
     startRuntimeLoops,
     stopRuntimeMonitor,
-    sweepAdaptiveRateState,
   } = options;
 
   attachGcObserver();
@@ -44,9 +42,7 @@ export function attachLocalRuntimeGlue(options: RuntimeGlueOptions) {
   });
 
   const cacheSweepHandle = setInterval(() => {
-    const now = Date.now();
-    sweepAdaptiveRateState(now);
-    aiSearchService.sweepCaches(now);
+    aiSearchService.sweepCaches(Date.now());
   }, 30_000);
 
   cacheSweepHandle.unref();

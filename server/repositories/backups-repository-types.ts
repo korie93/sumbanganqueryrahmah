@@ -43,10 +43,14 @@ export type BackupUserRecord = {
 
 export type BackupCollectionRecord = {
   id: string;
-  customerName: string;
-  icNumber: string;
-  customerPhone: string;
-  accountNumber: string;
+  customerName?: string | null;
+  customerNameEncrypted?: string | null;
+  icNumber?: string | null;
+  icNumberEncrypted?: string | null;
+  customerPhone?: string | null;
+  customerPhoneEncrypted?: string | null;
+  accountNumber?: string | null;
+  accountNumberEncrypted?: string | null;
   batch: string;
   paymentDate: string;
   amount: BackupAmountMyr;

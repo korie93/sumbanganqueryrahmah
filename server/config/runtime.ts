@@ -23,8 +23,10 @@ import {
   assertRuntimeSafetyGuards,
   buildRuntimeConfigWarnings,
   hasBackupEncryptionKeyConfigured,
+  hasCollectionPiiEncryptionKeyConfigured,
   resolveCookieSecure,
   resolveCorsAllowedOrigins,
+  resolvePreviousCollectionPiiSecrets,
   resolvePreviousSessionSecrets,
   resolveTrustedProxies,
 } from "./runtime-config-safety-utils";
@@ -65,6 +67,10 @@ const configuredCollectionNicknameTempPassword = readOptionalString("COLLECTION_
 const configuredPgPassword = readOptionalString("PG_PASSWORD");
 const configuredTwoFactorEncryptionKey = readOptionalString("TWO_FACTOR_ENCRYPTION_KEY");
 const configuredCollectionPiiEncryptionKey = readOptionalString("COLLECTION_PII_ENCRYPTION_KEY");
+const configuredPreviousCollectionPiiEncryptionKeys = resolvePreviousCollectionPiiSecrets(
+  readCommaSeparatedList("COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS"),
+  configuredCollectionPiiEncryptionKey,
+);
 const configuredBackupEncryptionKey = readOptionalString("BACKUP_ENCRYPTION_KEY");
 const configuredBackupEncryptionKeys = readOptionalString("BACKUP_ENCRYPTION_KEYS");
 const publicAppUrl = normalizeHttpUrl("PUBLIC_APP_URL", readOptionalString("PUBLIC_APP_URL"));
@@ -95,6 +101,9 @@ assertRuntimeSafetyGuards({
     configuredBackupEncryptionKey,
     configuredBackupEncryptionKeys,
   }),
+  hasCollectionPiiEncryptionKeyConfigured: hasCollectionPiiEncryptionKeyConfigured({
+    configuredCollectionPiiEncryptionKey,
+  }),
   seedDefaultUsers,
   localSuperuserCredentialsFileEnabled,
   mailDevOutboxEnabled,
@@ -107,6 +116,7 @@ assertNoPlaceholderSecrets({
   configuredPgPassword,
   configuredTwoFactorEncryptionKey,
   configuredCollectionPiiEncryptionKey,
+  configuredPreviousCollectionPiiEncryptionKeys,
   configuredBackupEncryptionKey,
   configuredBackupEncryptionKeys,
 });
@@ -224,6 +234,7 @@ const runtimeWarnings = buildRuntimeConfigWarnings({
   publicAppUrl,
   configuredSessionSecret,
   configuredCollectionNicknameTempPassword,
+  configuredCollectionPiiEncryptionKey,
   configuredPgPassword,
   mailConfiguration,
 });

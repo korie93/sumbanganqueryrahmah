@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { encryptCollectionPiiFieldValue } from "../../lib/collection-pii-encryption";
 import {
   createRestoreStats,
   initializeRestoreTrackingTempTable,
@@ -36,6 +37,20 @@ function flattenSqlChunk(chunk: unknown): string {
 
 function normalizeSqlText(query: unknown): string {
   return flattenSqlChunk(query).replace(/\s+/g, " ").trim();
+}
+
+async function withCollectionPiiEncryptionKey<T>(secret: string, fn: () => Promise<T> | T): Promise<T> {
+  const previous = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  process.env.COLLECTION_PII_ENCRYPTION_KEY = secret;
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    } else {
+      process.env.COLLECTION_PII_ENCRYPTION_KEY = previous;
+    }
+  }
 }
 
 test("collection restore tracks restored record ids through a temp table before receipt cache sync", async () => {
@@ -229,6 +244,37 @@ test("normalizeBackupCollectionRecord keeps restore fallbacks stable", () => {
     } as any),
     null,
   );
+});
+
+test("normalizeBackupCollectionRecord can recover PII from encrypted backup fields", async () => {
+  await withCollectionPiiEncryptionKey("collection-pii-secret-2026", async () => {
+    const restoredRecord = normalizeBackupCollectionRecord({
+      id: "33333333-3333-3333-3333-333333333333",
+      customerName: "",
+      customerNameEncrypted: encryptCollectionPiiFieldValue("Encrypted Alice"),
+      icNumber: "",
+      icNumberEncrypted: encryptCollectionPiiFieldValue("900101019999"),
+      customerPhone: "",
+      customerPhoneEncrypted: encryptCollectionPiiFieldValue("0123999999"),
+      accountNumber: "",
+      accountNumberEncrypted: encryptCollectionPiiFieldValue("ACC-ENC-1"),
+      batch: "P10",
+      paymentDate: "2026-03-31",
+      amount: "25.50",
+      receiptFile: null,
+      receiptTotalAmountCents: 2550,
+      createdByLogin: "system",
+      collectionStaffNickname: "Collector Alpha",
+      staffUsername: "staff.alpha",
+      createdAt: "2026-03-31T08:00:00.000Z",
+    });
+
+    assert.ok(restoredRecord);
+    assert.equal(restoredRecord?.customerName, "Encrypted Alice");
+    assert.equal(restoredRecord?.icNumber, "900101019999");
+    assert.equal(restoredRecord?.customerPhone, "0123999999");
+    assert.equal(restoredRecord?.accountNumber, "ACC-ENC-1");
+  });
 });
 
 test("normalizeBackupCollectionReceipt keeps receipt restore fallbacks stable", () => {

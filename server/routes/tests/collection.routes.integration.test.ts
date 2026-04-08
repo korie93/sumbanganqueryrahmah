@@ -845,7 +845,7 @@ test("POST /api/collection rejects future payment dates", async () => {
 });
 
 test("GET /api/collection/list applies pagination, receipt review filters, and user-scoped filters", async () => {
-  const { storage, listCalls, summaryCalls } = createCoreCollectionStorageDouble();
+  const { storage, listCalls, summaryCalls, auditLogs } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -894,6 +894,20 @@ test("GET /api/collection/list applies pagination, receipt review filters, and u
     assert.equal(listCalls[0].createdByLogin, "staff.user");
     assert.equal(listCalls[0].receiptValidationStatus, "flagged");
     assert.equal(listCalls[0].duplicateOnly, true);
+    assert.equal(auditLogs.length, 1);
+    assert.equal(auditLogs[0].action, "READ_COLLECTION_PII_LIST");
+    assert.equal(auditLogs[0].performedBy, "staff.user");
+    assert.equal(auditLogs[0].targetResource, "collection:list");
+    assert.deepEqual(parseAuditDetails(auditLogs[0]), {
+      role: "user",
+      recordCount: 1,
+      totalRecords: 1,
+      page: 3,
+      pageSize: 20,
+      from: "2026-03-01",
+      to: "2026-03-31",
+      searchPresent: true,
+    });
   } finally {
     await stopTestServer(server);
   }
@@ -978,6 +992,7 @@ test("GET /api/collection/list returns nextCursor and accepts cursor-based follo
       const offset = Number.isFinite(Number(filters?.offset)) ? Number(filters?.offset) : 0;
       return records.slice(offset, offset + limit);
     },
+    createAuditLog: async () => ({ id: "audit-list-cursor-1" }),
   } as unknown as PostgresStorage;
 
   const app = createJsonTestApp();
@@ -1053,6 +1068,7 @@ test("GET /api/collection/list rejects invalid cursor values", async () => {
       totalAmount: 0,
     }),
     listCollectionRecords: async () => [],
+    createAuditLog: async () => ({ id: "audit-list-invalid-cursor-1" }),
   } as unknown as PostgresStorage;
 
   const app = createJsonTestApp();
@@ -2040,7 +2056,7 @@ test("GET /api/collection/nickname-summary honors summaryOnly and avoids loading
 });
 
 test("GET /api/collection/nickname-summary clamps detail-row loading to a safer pagination cap", async () => {
-  const { storage, nicknameActiveChecks, nicknameSummaryCalls, nicknameListCalls } = createCollectionSummaryStorageDouble();
+  const { storage, nicknameActiveChecks, nicknameSummaryCalls, nicknameListCalls, auditLogs } = createCollectionSummaryStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -2090,6 +2106,20 @@ test("GET /api/collection/nickname-summary clamps detail-row loading to a safer 
       nicknames: ["Collector Alpha"],
       limit: 250,
       offset: 12,
+    });
+    assert.equal(auditLogs.length, 1);
+    assert.equal(auditLogs[0].action, "READ_COLLECTION_PII_NICKNAME_SUMMARY");
+    assert.equal(auditLogs[0].performedBy, "superuser");
+    assert.equal(auditLogs[0].targetResource, "collection:nickname-summary");
+    assert.deepEqual(parseAuditDetails(auditLogs[0]), {
+      role: "superuser",
+      recordCount: 1,
+      totalRecords: 3,
+      page: 1,
+      pageSize: 250,
+      from: "2026-03-01",
+      to: "2026-03-31",
+      nicknameCount: 1,
     });
   } finally {
     await stopTestServer(server);

@@ -112,11 +112,12 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     categoryStatsService,
     connectedClients,
   } = composition;
-  const { adaptiveRateLimit, systemProtectionMiddleware, sweepAdaptiveRateState } =
+  const { adaptiveRateLimit, systemProtectionMiddleware, stopAdaptiveRateStateSweep } =
     createApiProtectionMiddleware({
       getControlState,
       getDbProtection,
     });
+  server.once("close", stopAdaptiveRateStateSweep);
 
   const { withAiConcurrencyGate } = createAiConcurrencyGate({
     globalLimit: runtimeConfig.ai.gate.globalLimit,
@@ -147,7 +148,6 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     attachProcessMessageHandlers,
     startRuntimeLoops,
     stopRuntimeMonitor: stop,
-    sweepAdaptiveRateState,
   });
 
   registerLocalHttpPipeline(app, {

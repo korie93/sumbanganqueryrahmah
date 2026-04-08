@@ -3,6 +3,7 @@ import type { AuthenticatedUser } from "../../auth/guards";
 import type { CollectionNicknameAuthProfile, PostgresStorage } from "../../storage-postgres";
 import { resolveCollectionNicknameAccessForUser } from "../../routes/collection-access";
 import { COLLECTION_SUMMARY_MONTH_NAMES } from "../../routes/collection.validation";
+import { logger } from "../../lib/logger";
 
 export type SummaryQuery = Record<string, unknown>;
 export type ListQuery = Record<string, unknown>;
@@ -58,6 +59,24 @@ export type CollectionStoragePort = Pick<
   | "syncCollectionRecordReceiptValidation"
   | "updateCollectionStaffNickname"
 >;
+
+type CollectionPiiAccessAuditParams = {
+  action:
+    | "READ_COLLECTION_PII_LIST"
+    | "READ_COLLECTION_PII_NICKNAME_SUMMARY"
+    | "READ_COLLECTION_PII_DAY_DETAILS";
+  user: AuthenticatedUser;
+  targetResource: string;
+  recordCount: number;
+  totalRecords: number;
+  page: number;
+  pageSize: number;
+  from?: string;
+  to?: string;
+  date?: string;
+  nicknameCount?: number;
+  searchPresent?: boolean;
+};
 
 export class CollectionServiceSupport {
   constructor(protected readonly storage: CollectionStoragePort) {}
@@ -133,5 +152,38 @@ export class CollectionServiceSupport {
       throw badRequest("Invalid nickname ids.");
     }
     throw err;
+  }
+
+  protected async auditCollectionPiiAccess(params: CollectionPiiAccessAuditParams): Promise<void> {
+    if (params.recordCount <= 0) {
+      return;
+    }
+
+    try {
+      await this.storage.createAuditLog({
+        action: params.action,
+        performedBy: params.user.username,
+        targetResource: params.targetResource,
+        details: JSON.stringify({
+          role: params.user.role,
+          recordCount: params.recordCount,
+          totalRecords: params.totalRecords,
+          page: params.page,
+          pageSize: params.pageSize,
+          ...(params.from ? { from: params.from } : {}),
+          ...(params.to ? { to: params.to } : {}),
+          ...(params.date ? { date: params.date } : {}),
+          ...(typeof params.nicknameCount === "number" ? { nicknameCount: params.nicknameCount } : {}),
+          ...(typeof params.searchPresent === "boolean" ? { searchPresent: params.searchPresent } : {}),
+        }),
+      });
+    } catch (error) {
+      logger.warn("Collection PII access audit logging failed", {
+        action: params.action,
+        targetResource: params.targetResource,
+        username: params.user.username,
+        error,
+      });
+    }
   }
 }

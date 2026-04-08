@@ -50,6 +50,12 @@ function buildCalendarMonth(year: number, month: number, workingDays: number[]) 
 }
 
 function createCollectionDailyService() {
+  const auditLogs: Array<{
+    action: string;
+    performedBy?: string;
+    targetResource?: string;
+    details?: string;
+  }> = [];
   const recordsByNickname = new Map<string, RecordShape[]>([
     [
       "collector alpha",
@@ -231,9 +237,21 @@ function createCollectionDailyService() {
       const offset = Number.isFinite(Number(filters?.offset)) ? Number(filters?.offset) : 0;
       return matched.slice(offset, offset + limit);
     },
+    createAuditLog: async (entry: {
+      action: string;
+      performedBy?: string;
+      targetResource?: string;
+      details?: string;
+    }) => {
+      auditLogs.push(entry);
+      return { id: `audit-${auditLogs.length}`, ...entry };
+    },
   };
 
-  return new CollectionRecordService(storage as any);
+  return {
+    service: new CollectionRecordService(storage as any),
+    auditLogs,
+  };
 }
 
 function createAggregateOptimizedCollectionDailyService() {
@@ -490,6 +508,7 @@ function createPaginatedDayDetailsCollectionDailyService() {
       const offset = Number.isFinite(Number(filters?.offset)) ? Number(filters?.offset) : 0;
       return matched.slice(offset, offset + limit);
     },
+    createAuditLog: async () => ({ id: "audit-day-details-pagination-1" }),
   };
 
   return {
@@ -636,6 +655,7 @@ function createNicknameSummaryPaginationService() {
       const offset = Number.isFinite(Number(filters?.offset)) ? Number(filters?.offset) : 0;
       return records.slice(offset, offset + limit);
     },
+    createAuditLog: async () => ({ id: "audit-nickname-summary-pagination-1" }),
   };
 
   return {
@@ -1108,7 +1128,7 @@ function createMutableCollectionSummaryService() {
 }
 
 test("Collection daily overview supports multi-staff aggregation", async () => {
-  const service = createCollectionDailyService();
+  const { service } = createCollectionDailyService();
   const response = await service.getDailyOverview(
     { username: "superuser", role: "superuser", userId: "superuser-1" } as any,
     { year: "2026", month: "3", usernames: "Collector Alpha,Collector Beta" },
@@ -1136,7 +1156,7 @@ test("Collection daily overview supports multi-staff aggregation", async () => {
 });
 
 test("Collection daily day-details returns paginated records with receipt metadata", async () => {
-  const service = createCollectionDailyService();
+  const { service, auditLogs } = createCollectionDailyService();
   const pageOne = await service.getDailyDayDetails(
     { username: "superuser", role: "superuser", userId: "superuser-1" } as any,
     { date: "2026-03-01", usernames: "Collector Alpha,Collector Beta", page: "1", pageSize: "1" },
@@ -1160,6 +1180,32 @@ test("Collection daily day-details returns paginated records with receipt metada
   assert.equal(pageTwo.records[0].id, "beta-1");
   assert.equal(pageTwo.records[0].username, "diviya.user");
   assert.equal(pageTwo.records[0].receipts.length, 0);
+
+  assert.equal(auditLogs.length, 2);
+  assert.equal(auditLogs[0].action, "READ_COLLECTION_PII_DAY_DETAILS");
+  assert.equal(auditLogs[0].performedBy, "superuser");
+  assert.equal(auditLogs[0].targetResource, "collection:day-details");
+  assert.deepEqual(JSON.parse(auditLogs[0].details || "{}"), {
+    role: "superuser",
+    recordCount: 1,
+    totalRecords: 2,
+    page: 1,
+    pageSize: 1,
+    date: "2026-03-01",
+    nicknameCount: 2,
+  });
+  assert.equal(auditLogs[1].action, "READ_COLLECTION_PII_DAY_DETAILS");
+  assert.equal(auditLogs[1].performedBy, "superuser");
+  assert.equal(auditLogs[1].targetResource, "collection:day-details");
+  assert.deepEqual(JSON.parse(auditLogs[1].details || "{}"), {
+    role: "superuser",
+    recordCount: 1,
+    totalRecords: 2,
+    page: 2,
+    pageSize: 1,
+    date: "2026-03-01",
+    nicknameCount: 2,
+  });
 });
 
 test("Collection daily overview prefers aggregate summaries over full record loading when available", async () => {
@@ -1252,7 +1298,7 @@ test("Collection daily overview fallback paginates record loading when aggregate
 });
 
 test("Collection daily user role cannot request other staff nicknames", async () => {
-  const service = createCollectionDailyService();
+  const { service } = createCollectionDailyService();
 
   await assert.rejects(
     service.getDailyOverview(

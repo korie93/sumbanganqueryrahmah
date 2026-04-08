@@ -3,6 +3,12 @@ import type { PostgresStorage } from "../../storage-postgres";
 export function createCollectionSummaryStorageDouble(options?: {
   sessionNickname?: string | null;
 }) {
+  const auditLogs: Array<{
+    action: string;
+    performedBy?: string;
+    targetResource?: string;
+    details?: string;
+  }> = [];
   const monthlySummaryCalls: Array<Record<string, unknown>> = [];
   const nicknameActiveChecks: string[] = [];
   const nicknameSummaryCalls: Array<Record<string, unknown>> = [];
@@ -96,10 +102,20 @@ export function createCollectionSummaryStorageDouble(options?: {
         },
       ];
     },
+    createAuditLog: async (entry: {
+      action: string;
+      performedBy?: string;
+      targetResource?: string;
+      details?: string;
+    }) => {
+      auditLogs.push(entry);
+      return { id: `audit-${auditLogs.length}`, ...entry };
+    },
   } as unknown as PostgresStorage;
 
   return {
     storage,
+    auditLogs,
     monthlySummaryCalls,
     nicknameActiveChecks,
     nicknameSummaryCalls,
@@ -108,6 +124,12 @@ export function createCollectionSummaryStorageDouble(options?: {
 }
 
 export function createAdminCollectionSummaryStorageDouble() {
+  const auditLogs: Array<{
+    action: string;
+    performedBy?: string;
+    targetResource?: string;
+    details?: string;
+  }> = [];
   const monthlySummaryCalls: Array<Record<string, unknown>> = [];
   const nicknameSummaryCalls: Array<Record<string, unknown>> = [];
   const nicknameListCalls: Array<Record<string, unknown>> = [];
@@ -194,10 +216,20 @@ export function createAdminCollectionSummaryStorageDouble() {
         },
       ];
     },
+    createAuditLog: async (entry: {
+      action: string;
+      performedBy?: string;
+      targetResource?: string;
+      details?: string;
+    }) => {
+      auditLogs.push(entry);
+      return { id: `audit-${auditLogs.length}`, ...entry };
+    },
   } as unknown as PostgresStorage;
 
   return {
     storage,
+    auditLogs,
     allowedNicknames,
     monthlySummaryCalls,
     nicknameSummaryCalls,
@@ -209,6 +241,12 @@ export function createAdminCollectionSummaryStorageDouble() {
 }
 
 export function createAdminCollectionNoVisibilityStorageDouble() {
+  const auditLogs: Array<{
+    action: string;
+    performedBy?: string;
+    targetResource?: string;
+    details?: string;
+  }> = [];
   const monthlySummaryCalls: Array<Record<string, unknown>> = [];
   const nicknameSummaryCalls: Array<Record<string, unknown>> = [];
   const nicknameListCalls: Array<Record<string, unknown>> = [];
@@ -267,10 +305,20 @@ export function createAdminCollectionNoVisibilityStorageDouble() {
         },
       ];
     },
+    createAuditLog: async (entry: {
+      action: string;
+      performedBy?: string;
+      targetResource?: string;
+      details?: string;
+    }) => {
+      auditLogs.push(entry);
+      return { id: `audit-${auditLogs.length}`, ...entry };
+    },
   } as unknown as PostgresStorage;
 
   return {
     storage,
+    auditLogs,
     monthlySummaryCalls,
     nicknameSummaryCalls,
     nicknameListCalls,

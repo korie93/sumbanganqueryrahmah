@@ -125,6 +125,41 @@ function createActiveSession(activityId: string): UserActivity {
   };
 }
 
+function interceptHeartbeatRegistration() {
+  const originalSetInterval = global.setInterval;
+  let heartbeatCallback: (() => void) | null = null;
+
+  global.setInterval = (((
+    callback: TimerHandler,
+    delay?: number,
+    ...args: unknown[]
+  ) => {
+    heartbeatCallback = () => {
+      if (typeof callback === "function") {
+        callback(...args);
+        return;
+      }
+      throw new Error(`Unexpected string timer callback: ${String(callback)} with delay ${String(delay)}`);
+    };
+
+    const handle = originalSetInterval(() => undefined, 60_000);
+    handle.unref();
+    return handle;
+  }) as unknown as typeof global.setInterval);
+
+  return {
+    getHeartbeatCallback() {
+      if (!heartbeatCallback) {
+        throw new Error("Expected heartbeat interval to be registered.");
+      }
+      return heartbeatCallback;
+    },
+    restore() {
+      global.setInterval = originalSetInterval;
+    },
+  };
+}
+
 test("createRuntimeWebSocketManager reuses the provided connected clients map", () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();
@@ -550,6 +585,65 @@ test("runtime manager tolerates repeated terminal lifecycle signals without dupl
     assert.equal(socket.listenerCount("error"), 0);
     assert.equal(socket.listenerCount("pong"), 0);
   } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager clears tracked client state when the WebSocket server closes", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-server-close";
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+  await flushAsyncWork();
+
+  assert.equal(providedMap.get(activityId), socket as unknown as WebSocket);
+
+  wss.emit("close");
+
+  assert.equal(providedMap.size, 0);
+});
+
+test("runtime manager heartbeat does not terminate sockets that are still connecting", async () => {
+  const heartbeat = interceptHeartbeatRegistration();
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-heartbeat-connecting";
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    socket.readyState = WebSocket.CONNECTING;
+    heartbeat.getHeartbeatCallback()();
+
+    assert.equal(socket.terminateCalls, 0);
+    assert.equal(socket.pingCalls, 0);
+    assert.equal(providedMap.get(activityId), socket as unknown as WebSocket);
+  } finally {
+    heartbeat.restore();
     wss.emit("close");
   }
 });

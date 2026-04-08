@@ -17,10 +17,17 @@ const REDACT_KEYS = [
   "email",
   "fullname",
   "phone",
+  "phonenumber",
+  "contactnumber",
+  "mobilenumber",
   "customerphone",
   "customername",
   "staffname",
   "amount",
+  "customernamesearchhash",
+  "icnumbersearchhash",
+  "customerphonesearchhash",
+  "accountnumbersearchhash",
   "creditcard",
   "bankaccount",
   "secretkey",
@@ -29,9 +36,18 @@ const REDACT_KEYS = [
   "refreshtoken",
 ];
 
-function sanitize(value: unknown): unknown {
+function normalizeSensitiveLogKey(key: string): string {
+  return key.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function isSensitiveLogKey(key: string): boolean {
+  const normalizedKey = normalizeSensitiveLogKey(key);
+  return REDACT_KEYS.some((sensitive) => normalizedKey.includes(sensitive));
+}
+
+export function sanitizeForLog(value: unknown): unknown {
   if (value instanceof Error) {
-    return sanitize({
+    return sanitizeForLog({
       name: value.name,
       message: value.message,
       stack: value.stack,
@@ -43,7 +59,7 @@ function sanitize(value: unknown): unknown {
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => sanitize(item));
+    return value.map((item) => sanitizeForLog(item));
   }
 
   if (!value || typeof value !== "object") {
@@ -52,12 +68,11 @@ function sanitize(value: unknown): unknown {
 
   const output: Record<string, unknown> = {};
   for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-    const normalizedKey = key.toLowerCase();
-    if (REDACT_KEYS.some((sensitive) => normalizedKey.includes(sensitive))) {
+    if (isSensitiveLogKey(key)) {
       output[key] = "[REDACTED]";
       continue;
     }
-    output[key] = sanitize(nested);
+    output[key] = sanitizeForLog(nested);
   }
   return output;
 }
@@ -77,14 +92,14 @@ type LogLevel = "info" | "warn" | "error" | "debug";
 
 function write(level: LogLevel, message: string, meta?: Record<string, unknown>) {
   const requestContext = getRequestContext();
-  const payload = meta ? sanitize(meta) : undefined;
+  const payload = meta ? sanitizeForLog(meta) : undefined;
   const hasPayload =
     payload &&
     typeof payload === "object" &&
     !Array.isArray(payload) &&
     Object.keys(payload as Record<string, unknown>).length > 0;
   const contextPayload = requestContext
-    ? sanitize({
+    ? sanitizeForLog({
       requestId: requestContext.requestId,
       ...(requestContext.httpMethod ? { httpMethod: requestContext.httpMethod } : {}),
       ...(requestContext.httpPath ? { httpPath: requestContext.httpPath } : {}),

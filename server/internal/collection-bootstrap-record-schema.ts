@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { sql } from "drizzle-orm";
-import { buildEncryptedCollectionRecordPiiValues, hasCollectionPiiEncryptionConfigured } from "../lib/collection-pii-encryption";
+import {
+  buildCollectionRecordPiiSearchHashes,
+  buildEncryptedCollectionRecordPiiValues,
+  hasCollectionPiiEncryptionConfigured,
+  resolveCollectionPiiFieldValue,
+} from "../lib/collection-pii-encryption";
 import {
   executeBootstrapStatements,
   inferMimeTypeFromReceiptPath,
@@ -17,12 +22,16 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
         id uuid PRIMARY KEY,
         customer_name text NOT NULL,
         customer_name_encrypted text,
+        customer_name_search_hash text,
         ic_number text NOT NULL,
         ic_number_encrypted text,
+        ic_number_search_hash text,
         customer_phone text NOT NULL,
         customer_phone_encrypted text,
+        customer_phone_search_hash text,
         account_number text NOT NULL,
         account_number_encrypted text,
+        account_number_search_hash text,
         batch text NOT NULL,
         payment_date date NOT NULL,
         amount numeric(14,2) NOT NULL,
@@ -41,12 +50,16 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     `,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name_encrypted text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name_search_hash text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number_encrypted text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number_search_hash text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_phone text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_phone_encrypted text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_phone_search_hash text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number_encrypted text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number_search_hash text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS batch text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS payment_date date`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS amount numeric(14,2)`,
@@ -89,6 +102,10 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_by_login ON public.collection_records(created_by_login)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`,
+    sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_name_search_hash ON public.collection_records(customer_name_search_hash)`,
+    sql`CREATE INDEX IF NOT EXISTS idx_collection_records_ic_number_search_hash ON public.collection_records(ic_number_search_hash)`,
+    sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone_search_hash ON public.collection_records(customer_phone_search_hash)`,
+    sql`CREATE INDEX IF NOT EXISTS idx_collection_records_account_number_search_hash ON public.collection_records(account_number_search_hash)`,
     sql`
       CREATE INDEX IF NOT EXISTS idx_collection_records_receipt_validation_status
       ON public.collection_records(receipt_validation_status)
@@ -120,6 +137,7 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
   ]);
 
   await backfillCollectionRecordEncryptedPii(database);
+  await backfillCollectionRecordPiiSearchHashes(database);
 }
 
 export async function ensureCollectionReceiptSchema(database: BootstrapSqlExecutor): Promise<void> {
@@ -406,6 +424,84 @@ async function backfillCollectionRecordEncryptedPii(database: BootstrapSqlExecut
         ic_number_encrypted = COALESCE(ic_number_encrypted, ${encryptedPii.icNumberEncrypted}),
         customer_phone_encrypted = COALESCE(customer_phone_encrypted, ${encryptedPii.customerPhoneEncrypted}),
         account_number_encrypted = COALESCE(account_number_encrypted, ${encryptedPii.accountNumberEncrypted})
+      WHERE id = ${recordId}::uuid
+    `);
+  }
+}
+
+async function backfillCollectionRecordPiiSearchHashes(database: BootstrapSqlExecutor): Promise<void> {
+  if (!hasCollectionPiiEncryptionConfigured()) {
+    return;
+  }
+
+  const result = await database.execute(sql`
+    SELECT
+      id,
+      customer_name,
+      customer_name_encrypted,
+      customer_name_search_hash,
+      ic_number,
+      ic_number_encrypted,
+      ic_number_search_hash,
+      customer_phone,
+      customer_phone_encrypted,
+      customer_phone_search_hash,
+      account_number,
+      account_number_encrypted,
+      account_number_search_hash
+    FROM public.collection_records
+    WHERE (
+      NULLIF(trim(COALESCE(customer_name, '')), '') IS NOT NULL
+      AND NULLIF(trim(COALESCE(customer_name_search_hash, '')), '') IS NULL
+    ) OR (
+      NULLIF(trim(COALESCE(ic_number, '')), '') IS NOT NULL
+      AND NULLIF(trim(COALESCE(ic_number_search_hash, '')), '') IS NULL
+    ) OR (
+      NULLIF(trim(COALESCE(customer_phone, '')), '') IS NOT NULL
+      AND NULLIF(trim(COALESCE(customer_phone_search_hash, '')), '') IS NULL
+    ) OR (
+      NULLIF(trim(COALESCE(account_number, '')), '') IS NOT NULL
+      AND NULLIF(trim(COALESCE(account_number_search_hash, '')), '') IS NULL
+    )
+    ORDER BY created_at ASC NULLS FIRST, id ASC
+    LIMIT ${COLLECTION_PII_BACKFILL_BATCH_SIZE}
+  `);
+
+  for (const row of result.rows as Array<Record<string, unknown>>) {
+    const recordId = String(row.id || "").trim();
+    if (!recordId) {
+      continue;
+    }
+
+    const searchHashes = buildCollectionRecordPiiSearchHashes({
+      customerName: resolveCollectionPiiFieldValue({
+        plaintext: row.customer_name,
+        encrypted: row.customer_name_encrypted,
+      }),
+      icNumber: resolveCollectionPiiFieldValue({
+        plaintext: row.ic_number,
+        encrypted: row.ic_number_encrypted,
+      }),
+      customerPhone: resolveCollectionPiiFieldValue({
+        plaintext: row.customer_phone,
+        encrypted: row.customer_phone_encrypted,
+      }),
+      accountNumber: resolveCollectionPiiFieldValue({
+        plaintext: row.account_number,
+        encrypted: row.account_number_encrypted,
+      }),
+    });
+    if (!searchHashes) {
+      return;
+    }
+
+    await database.execute(sql`
+      UPDATE public.collection_records
+      SET
+        customer_name_search_hash = COALESCE(customer_name_search_hash, ${searchHashes.customerNameSearchHash}),
+        ic_number_search_hash = COALESCE(ic_number_search_hash, ${searchHashes.icNumberSearchHash}),
+        customer_phone_search_hash = COALESCE(customer_phone_search_hash, ${searchHashes.customerPhoneSearchHash}),
+        account_number_search_hash = COALESCE(account_number_search_hash, ${searchHashes.accountNumberSearchHash})
       WHERE id = ${recordId}::uuid
     `);
   }

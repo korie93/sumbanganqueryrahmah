@@ -8,7 +8,10 @@ import type {
 import {
   enqueueCollectionRecordDailyRollupSlices,
 } from "./collection-record-rollup-utils";
-import { buildEncryptedCollectionRecordPiiValues } from "../lib/collection-pii-encryption";
+import {
+  buildCollectionRecordPiiSearchHashes,
+  buildEncryptedCollectionRecordPiiValues,
+} from "../lib/collection-pii-encryption";
 import {
   attachCollectionReceipts,
 } from "./collection-receipt-utils";
@@ -22,18 +25,28 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
     customerPhone: data.customerPhone,
     accountNumber: data.accountNumber,
   });
+  const piiSearchHashes = buildCollectionRecordPiiSearchHashes({
+    customerName: data.customerName,
+    icNumber: data.icNumber,
+    customerPhone: data.customerPhone,
+    accountNumber: data.accountNumber,
+  });
   return db.transaction(async (tx) => {
     await tx.execute(sql`
       INSERT INTO public.collection_records (
         id,
         customer_name,
         customer_name_encrypted,
+        customer_name_search_hash,
         ic_number,
         ic_number_encrypted,
+        ic_number_search_hash,
         customer_phone,
         customer_phone_encrypted,
+        customer_phone_search_hash,
         account_number,
         account_number_encrypted,
+        account_number_search_hash,
         batch,
         payment_date,
         amount,
@@ -48,12 +61,16 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
         ${id}::uuid,
         ${data.customerName},
         ${encryptedPii?.customerNameEncrypted ?? null},
+        ${piiSearchHashes?.customerNameSearchHash ?? null},
         ${data.icNumber},
         ${encryptedPii?.icNumberEncrypted ?? null},
+        ${piiSearchHashes?.icNumberSearchHash ?? null},
         ${data.customerPhone},
         ${encryptedPii?.customerPhoneEncrypted ?? null},
+        ${piiSearchHashes?.customerPhoneSearchHash ?? null},
         ${data.accountNumber},
         ${encryptedPii?.accountNumberEncrypted ?? null},
+        ${piiSearchHashes?.accountNumberSearchHash ?? null},
         ${data.batch},
         ${data.paymentDate}::date,
         ${data.amount},
