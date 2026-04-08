@@ -12,14 +12,6 @@ export interface DuplicateItem {
   count: number;
 }
 
-export interface AnalysisVirtualRowData {
-  copiedItems: Record<string, boolean>;
-  copyToClipboard: (text: string, itemKey?: string) => void;
-  items: string[];
-  sectionKey: string;
-  startIndex: number;
-}
-
 export interface AnalysisData {
   icLelaki: AnalysisCategory;
   icPerempuan: AnalysisCategory;

@@ -38,6 +38,9 @@ export function SingleImportPanel({
   parsedData,
 }: SingleImportPanelProps) {
   const loadingBusyProps = loading ? { "aria-busy": "true" as const } : {};
+  const loadingDropzoneDisabledProps = loading
+    ? { "aria-disabled": "true" as const }
+    : {};
 
   return (
     <>
@@ -73,7 +76,7 @@ export function SingleImportPanel({
             }
           }}
           data-testid="dropzone-file"
-          aria-disabled={loading}
+          {...loadingDropzoneDisabledProps}
         >
           <input
             ref={fileInputRef}

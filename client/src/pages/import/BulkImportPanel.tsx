@@ -36,6 +36,9 @@ export function BulkImportPanel({
   const failedCount = bulkResults.filter((result) => result.status === "error").length;
   const successCount = bulkResults.filter((result) => result.status === "success").length;
   const bulkBusyProps = bulkProcessing ? { "aria-busy": "true" as const } : {};
+  const bulkDropzoneDisabledProps = bulkProcessing
+    ? { "aria-disabled": "true" as const }
+    : {};
 
   return (
     <div className="glass-wrapper mb-4 p-4 sm:mb-6 sm:p-6" {...bulkBusyProps}>
@@ -58,7 +61,7 @@ export function BulkImportPanel({
           }
         }}
         data-testid="dropzone-bulk"
-        aria-disabled={bulkProcessing}
+        {...bulkDropzoneDisabledProps}
       >
         <input
           ref={bulkInputRef}
